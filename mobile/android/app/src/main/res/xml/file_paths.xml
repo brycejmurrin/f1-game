@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider roots: ONLY the cache folder js/core/native-download.js shares
+     from (Filesystem Directory.CACHE + EXPORT_DIR, handed to @capacitor/share).
+     Pinned by tests/unit/mobile-native-download.test.mjs. Capacitor's camera
+     capture for <input capture> would need external-files-path Pictures; the
+     game has no such input, so it is not exposed. -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <cache-path name="apex26_downloads" path="apex26-downloads/v2/" />
 </paths>

@@ -1037,7 +1037,7 @@ Two always-judged checks give the PR verdict fixed names:
 - `Renderer specs on a real GPU (macos-latest, Metal)` when the diff reaches `js/render/**`
 - `Emulated VR (IWER / xr-emulated)` when the diff reaches XR paths
 - `Pack smoke (ubuntu-latest)` (`desktop.yml`, packaging paths only)
-- `Golden menus on a runner (trial, non-blocking)` (nightly/dispatch only, advisory)
+- `Golden menus on a runner (nightly)` (nightly/dispatch only; blocks those runs: ci-verdict needs it)
 
 Heavy jobs use one shared skip expression on deploy pushes and draft PRs (`github.event.pull_request.draft` inside `ci.yml`; `desktop.yml` uses `draft == false`). `ready_for_review` is listed on every `pull_request` trigger so marking ready starts the full tier on the same `head_sha` (draft fast runs may cancel — AGENTS.md rule 8 dedupe).
 | **Ship push** | push to deploy branch | Starts `pages.yml` directly (2026-10-16): no ci.yml run of its own. |

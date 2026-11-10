@@ -135,7 +135,8 @@
         "tests/unit/apex-bridge.test.mjs"
       ],
       "handle": [
-        "tests/unit/apex-bridge.test.mjs"
+        "tests/unit/apex-bridge.test.mjs",
+        "tests/unit/bridge-link.test.mjs"
       ],
       "issueOf": [
         "tests/unit/apex-bridge.test.mjs"
@@ -255,6 +256,26 @@
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
         "tests/unit/wgx-labels.test.mjs"
+      ]
+    },
+    "js/agent/bridge-link.js": {
+      "forget": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "link": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "parseIssue": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "unlink": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "view": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "*": [
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/audio/announcer-recorded.js": {
@@ -5238,6 +5259,7 @@
         "tests/unit/metrics.test.mjs"
       ],
       "*": [
+        "tests/unit/bridge-link.test.mjs",
         "tests/unit/stage-minify.test.mjs",
         "tests/unit/verify-live.test.mjs"
       ]
@@ -19200,7 +19222,6 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "isDefault": [
-        "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "move": [

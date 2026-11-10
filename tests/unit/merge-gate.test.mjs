@@ -633,22 +633,30 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   const at = spawnSync("bash", ["-c", `${atLine}; echo "$at"`], { encoding: "utf8" }).stdout.trim();
   assert.equal(new Date(at).toISOString().replace(".000Z", "Z"), at, "ISO-8601 in whole seconds, like created_at");
   const postRun = LAND.jobs.post.steps.find((s) => s.id === "post").run;
-  const start = postRun.indexOf("write_gate() {");
-  const fn = postRun.slice(start, postRun.indexOf("\n}\n", start) + 3);
+  const start = postRun.indexOf("land_run() {");
+  const fn = postRun.slice(start, postRun.indexOf("\n}\n", postRun.indexOf("write_gate() {")) + 3);
   const atS = postRun.split("\n").find((l) => l.startsWith("AT_S="));
-  const stub = `gh() { local q="" a; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
-  const runGate = (created, url) => {
-    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created, target_url: url }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
-    const script = ["set -uo pipefail", "R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null", stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
-    const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake } });
+  const stub = `gh() { local q="" a; case "$*" in *actions/runs/*) echo "$FAKE_RUN"; return 0 ;; esac; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
+  const LAND_RUN = JSON.stringify({ path: ".github/workflows/land.yml", event: "pull_request_target", head_branch: "cursor/x" });
+  const runGate = (created, url, creator = "github-actions[bot]", run = LAND_RUN) => {
+    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created, target_url: url, creator: { login: creator } }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
+    const script = ["set -uo pipefail", `R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null; DEPLOY_BRANCH=${DEPLOY_BRANCH}`, stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
+    const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake, FAKE_RUN: run } });
     assert.equal(r.status, 0, r.stderr);
     return r.stdout.trim().split("\n").at(-1);
   };
   assert.equal(runGate(null), "POSTED", "no gate status yet");
   assert.equal(runGate("2026-10-27T10:00:04Z"), "POSTED", "an older status is replaced");
   assert.equal(runGate("2026-10-27T10:00:05Z"), "POSTED", "same second as AT: the old string compare kept it (`Z` > `.`)");
-  assert.notEqual(runGate("2026-10-27T10:00:06Z"), "POSTED", "a status newer than this run's read is kept");
-  assert.notEqual(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2"), "POSTED", "another run's newer status is kept");
+  assert.notEqual(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2"), "POSTED", "another land.yml run's newer status is kept");
+  // A newer status counts only when a land.yml run on the deploy branch posted it as the Actions bot (2026-11-10).
+  assert.equal(runGate("2026-10-27T10:00:06Z"), "POSTED", "a newer status naming no run is replaced");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2", "someone"), "POSTED", "a newer status by another author is replaced");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://evil.test/o/r/actions/runs/2"), "POSTED", "a URL off this repository is replaced");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2", "github-actions[bot]", JSON.stringify({ path: ".github/workflows/ci.yml", event: "pull_request" })),
+    "POSTED", "a newer status from another workflow's run is replaced");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2", "github-actions[bot]", JSON.stringify({ path: ".github/workflows/land.yml", event: "workflow_dispatch", head_branch: "cursor/x" })),
+    "POSTED", "a land.yml dispatched on another branch is not this workflow's deploy-branch copy");
   assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/1"), "POSTED",
     "this run's own earlier attempt is replaced (a re-run reuses AT: run 40740152111, #4110)");
 });
@@ -689,6 +697,7 @@ function runStep(script, env, files = {}) {
         `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
     `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
+    `    *"/actions/runs/"*) data=\${FAKE_RUN:-'{}'} ;;`,
     `    *) data=\${FAKE_PR:-'{}'}`,
     `       if [[ " \${args[*]} " == *"/pulls/"* ]] && [ "$(grep -c '/pulls/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pr ] || return 31; data=\${FAKE_PR_AFTER-$data}; fi`,
     `       if [ -n "\${FAKE_PRS:-}" ]; then data=$(jq -c --arg n "$(sed -n 's#.*/pulls/\\([0-9]*\\).*#\\1#p' <<<"\${args[*]}")" '.[$n] // {}' <<<"$FAKE_PRS"); fi ;;`,
@@ -704,6 +713,7 @@ function runStep(script, env, files = {}) {
   }
   const r = spawnSync("bash", ["-c", `${stub}\nexport -f gh\n${script}`], { encoding: "utf8", cwd: dir,
     env: { ...process.env, GH_TOKEN: "fixture-read-token", GITHUB_TOKEN: "fixture-read-token", LAND_TOKEN: "", GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
+      GITHUB_WORKFLOW_REF: `o/r/.github/workflows/land.yml@refs/heads/${DEPLOY_BRANCH}`,
       POST_DEADLINE: String(Math.floor(Date.now() / 1000) + 600), RETRY_MAX: String(LAND.env.RETRY_MAX), ...logs, ...env } });
   const out = Object.fromEntries(fs.readFileSync(logs.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   const calls = fs.readFileSync(logs.GH_LOG, "utf8").split("\n").filter(Boolean);
@@ -713,6 +723,8 @@ function runStep(script, env, files = {}) {
 }
 fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
 const HEAD7 = "a".repeat(40), TIP_A = "b".repeat(40), TIP_B = "c".repeat(40);
+// The `gate` arm requires on the head: the success this run (GITHUB_RUN_ID 1) posted, as the Actions bot.
+const OWN_GATE = JSON.stringify([{ context: "gate", state: "success", creator: { login: "github-actions[bot]" }, target_url: "https://github.com/o/r/actions/runs/1" }]);
 const pr7 = (o = {}) => JSON.stringify({ number: 7, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: HEAD7 }, auto_merge: null, created_at: "2026-10-27T10:00:00Z", labels: [{ name: "land" }], ...o });
 
 test("land.yml retry: workflow_dispatch on the deploy branch only, in the PR's own group, never cancelling", () => {
@@ -770,7 +782,7 @@ function postThenArm(postEnv = {}, armEnv = {}, files) {
   const post = LAND.jobs.post.steps.find(s => s.id === "post"), arm = LAND.jobs.post.steps.find(s => s.id === "arm");
   const p = runStep(post.run, postEnv, files);
   const shouldArm = ghExpr(arm.if, { success: p.status === 0, steps: { post: { outputs: { arm: p.out.arm || "" } } } });
-  const a = shouldArm ? runStep(arm.run, { GITHUB_TOKEN: "read-token", LAND_TOKEN: "land-token", ...armEnv, ARM: p.out.arm }) : null;
+  const a = shouldArm ? runStep(arm.run, { GITHUB_TOKEN: "read-token", LAND_TOKEN: "land-token", FAKE_STATUSES: OWN_GATE, ...armEnv, ARM: p.out.arm }) : null;
   return { post: p, arm: a, retry: p.out.retry || "", arm_retry: a?.out.retry || "", result: p.status === 0 && (!a || a.status === 0) ? "success" : "failure" };
 }
 
@@ -906,7 +918,7 @@ test("land.yml combined outputs: retries survive a skipped or failed arm and sta
 test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other veto is not", () => {
   const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
   const ARM = JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A });
-  const go = (pr, now) => runStep(run, { ARM, FAKE_PR: pr, NOW_TIP: now, LAND_TOKEN: "", GITHUB_TOKEN: "t" });
+  const go = (pr, now, extra = {}) => runStep(run, { ARM, FAKE_PR: pr, NOW_TIP: now, LAND_TOKEN: "", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ...extra });
   let r = go(pr7(), TIP_B);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 });
@@ -919,6 +931,19 @@ test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other
   r = go(pr7(), TIP_A);
   assert.equal(r.out.retry, undefined);
   assert.ok(r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`)), "same tip: arms as before");
+  // 2026-11-10: the newest `gate` on the head must be this run's own success, and this run the deploy branch's land.yml.
+  for (const [extra, why] of [
+    [{ FAKE_STATUSES: "[]" }, "no gate status"],
+    [{ FAKE_STATUSES: JSON.stringify([{ context: "gate", state: "success", creator: { login: "someone" }, target_url: "https://github.com/o/r/actions/runs/1" }]) }, "a success by another author"],
+    [{ FAKE_STATUSES: JSON.stringify([{ context: "gate", state: "success", creator: { login: "github-actions[bot]" }, target_url: "https://github.com/o/r/actions/runs/2" }]) }, "another run's success"],
+    [{ FAKE_STATUSES: JSON.stringify([{ context: "gate", state: "pending", creator: { login: "github-actions[bot]" }, target_url: "https://github.com/o/r/actions/runs/1" }]) }, "this run's status, not a success"],
+    [{ GITHUB_WORKFLOW_REF: "o/r/.github/workflows/land.yml@refs/heads/cursor/x" }, "a land.yml from another branch"],
+  ]) {
+    r = go(pr7(), TIP_A, extra);
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(!r.calls.some((c) => / pr merge /.test(c)), `${why}: never arms`);
+    assert.match(r.summary, /not arming #7/, why);
+  }
 });
 
 test("land.yml arm: only a proven base-modified race re-gates after a failed single merge call", () => {
@@ -926,7 +951,7 @@ test("land.yml arm: only a proven base-modified race re-gates after a failed sin
   const error = "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)";
   const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
   const go = (extra = {}) => runStep(run, {
-    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A,
+    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A, FAKE_STATUSES: OWN_GATE,
     NOW_TIP_AFTER: TIP_B, ...auth,
     GH_MERGE_RC: "17", GH_MERGE_STDERR: error, ...extra,
   });
@@ -969,7 +994,7 @@ test("land.yml arm: clean-status auto-merge refusal re-checks vetoes and tip, th
   const cleanErr = "GraphQL: Pull request Pull request is in clean status (enablePullRequestAutoMerge)";
   const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
   const go = (extra = {}) => runStep(run, {
-    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A,
+    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A, FAKE_STATUSES: OWN_GATE,
     GH_MERGE_RC: "1", GH_MERGE_STDERR: cleanErr, GH_MERGE_RC2: "0", GH_MERGE_STDERR2: "", GH_CLEAN_PATH: "true",
     ...auth, ...extra,
   });
@@ -1076,8 +1101,9 @@ test("land.yml post (STALE TIP): success only onto the tip the gate measured; a 
   assert.equal(r.out.retry, "[]", "missing rows cannot turn a gen/ratchet refusal into a retry");
   assert.equal(r.out.arm, "");
 
-  r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_STATUSES: JSON.stringify([{ context: "gate", created_at: "2026-10-27T10:00:09Z" }]) }), verdict());
-  assert.deepEqual(bodies(r), [], "a newer verdict on the head is kept");
+  r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_RUN: JSON.stringify({ path: ".github/workflows/land.yml", event: "workflow_run", head_branch: DEPLOY_BRANCH }),
+    FAKE_STATUSES: JSON.stringify([{ context: "gate", created_at: "2026-10-27T10:00:09Z", target_url: "https://github.com/o/r/actions/runs/2", creator: { login: "github-actions[bot]" } }]) }), verdict());
+  assert.deepEqual(bodies(r), [], "a newer verdict on the head from another land.yml run is kept");
   assert.equal(disarmed(r), false, "and its run owns the arm state");
 });
 
