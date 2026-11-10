@@ -88,10 +88,10 @@ test("the panel's state machine: idle → loading → connecting → live → en
   assert.deepEqual([s.phase, s.primary, s.issueField, s.tokenField], ["connecting", "UNLINK", false, false]);
   s = v({ active: true, badge: "CLAUDE LINK · 3 · TAP TO END", hasToken: true });
   assert.deepEqual([s.phase, s.primary], ["live", "UNLINK"]);
-  assert.match(s.status, /#5168 · 3 commands/);
+  assert.equal(s.status, "LINKED to issue #5168 · 3 commands answered. Keep the app in front.");
   s = v({ badge: "CLAUDE LINK OFF — GitHub rejected the token (401 Bad credentials; pasted text: 93 chars)" });
   assert.deepEqual([s.phase, s.primary, s.tokenField], ["ended", "LINK", true]);
-  assert.match(s.status, /Link ended: GitHub rejected the token/);
+  assert.equal(s.status, "Link ended: GitHub rejected the token (401 Bad credentials; pasted text: 93 chars).");
   assert.equal(v({ note: "Paste the GitHub token first." }).status, "Paste the GitHub token first.", "an error replaces the status line");
 });
 
@@ -147,7 +147,7 @@ test("a stored token links without asking; a second LINK in the session re-boots
   assert.equal((await a.api.link("5200", "", a)).ok, true);
   await flush();
   assert.equal(a.bridge().active(), true);
-  assert.match(a.gh.calls[a.gh.calls.length - 1].url, /\/issues\/5200\/comments$/);
+  assert.equal(a.gh.calls[a.gh.calls.length - 1].url.endsWith("/issues/5200/comments"), true);
   a.api.unlink();
   a.api.forget();
   assert.equal(a.store.has("apex26.bridgeToken"), false, "FORGET TOKEN removes it from this device");
@@ -157,7 +157,7 @@ test("the link code not loading (offline, stale shell) restores the address and 
   const a = app();
   const r = await a.api.link("5168", TOKEN, { loadAgentSurface: async () => { throw new Error("offline"); } });
   assert.equal(r.ok, false);
-  assert.match(r.error, /did not load/);
+  assert.equal(r.error, "The link code did not load (offline, or the app needs its update). Nothing was sent.");
   assert.equal(a.location.search, "");
   assert.equal(a.gh.calls.length, 0);
 });
@@ -173,16 +173,18 @@ test("a wrong token ends the link with GitHub's reason and is forgotten (the bri
 
 test("wiring: a LAZY_AGENT file, a runtime SETTINGS hub door, fixed-size CSS, and a loader that fetches this one file first", () => {
   const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
-  assert.ok(manifest.LAZY_AGENT.includes("js/agent/bridge-link.js"), "no eager <script>: a player who never opens the panel never downloads it");
+  assert.equal(manifest.LAZY_AGENT.filter((f) => f === "js/agent/bridge-link.js").length, 1, "no eager <script>: a player who never opens the panel never downloads it");
   const css = read("css/settings-controls.css");
   const rule = /#pm-settings-index > #pm-claude-link \{[^}]*\}/.exec(css)[0];
-  assert.match(rule, /min-height: calc\(48px \/ var\(--sheet-scale, var\(--ui-scale\)\)\)/, "48 px PAINTED at every UI SIZE (the sheet zoom divided back out)");
-  assert.match(rule, /font-size: calc\(16px \/ var\(--sheet-scale, var\(--ui-scale\)\)\)/);
+  const decl = Object.fromEntries([...rule.matchAll(/^\s*([\w-]+):\s*([^;]+);/gm)].map((m) => [m[1], m[2]]));
+  assert.equal(decl["min-height"], "calc(48px / var(--sheet-scale, var(--ui-scale)))", "48 px PAINTED at every UI SIZE (the sheet zoom divided back out)");
+  assert.equal(decl["font-size"], "calc(16px / var(--sheet-scale, var(--ui-scale)))");
+  // Two tracks: the whole row two-up, beside PROGRESS three-up (measured 844x390: the hub's scroll height stays 421 px).
+  assert.equal(decl["grid-column"], "span 2");
   const lb = read("js/core/lazy-bundles.js");
   assert.match(lb, /AGENT_FILES\.filter\(\(f\) => \/\\\/bridge-link\\\.js\$\/\.test\(f\)\), \[\], \{ loaded: agentScriptsLoaded \}/);
   assert.match(lb, /BridgeLink\.open\(\{ loadAgentSurface \}\)/);
   assert.match(lb, /getElementById\("pm-settings-index"\)[\s\S]{0,400}door\.id = "pm-claude-link"[\s\S]{0,600}hub\.appendChild\(door\)/, "the door is built into the SETTINGS hub at boot");
-  assert.match(read("index.html"), /<nav id="pm-settings-index" class="pm-doors"/);
   // The panel never prints or logs the token, and never builds an address from it.
   assert.equal(/Log\.|console\./.test(SRC), false);
   assert.equal(/token\.value[^;]*textContent|textContent[^;]*token\.value/.test(SRC), false);

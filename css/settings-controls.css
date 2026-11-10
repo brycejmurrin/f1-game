@@ -269,9 +269,10 @@
 #pm-settings-index { --balance-basis: max(12rem, calc(50% - var(--gap) * 0.25)); }
 /* CLAUDE LINK (#5259) is fixed-size chrome: the door that reaches the phone bridge must stay tappable and readable
    at a UI SIZE too small to read anything else, so its height and type divide the sheet zoom back out (48 px tall,
-   16 / 14 px type PAINTED at every UI SIZE) and it takes the full row. */
+   16 / 14 px type PAINTED at every UI SIZE). It spans two tracks: the whole row of the two-up index, and in the
+   three-up index the free two thirds beside PROGRESS, so the 11th tile adds no row (and no scroll) on a phone. */
 #pm-settings-index > #pm-claude-link {
-  grid-column: 1 / -1;
+  grid-column: span 2;
   flex-basis: 100%;
   min-height: calc(48px / var(--sheet-scale, var(--ui-scale)));
   font-size: calc(16px / var(--sheet-scale, var(--ui-scale)));
