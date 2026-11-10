@@ -234,8 +234,10 @@
     // control flow only (top level or a uniform If): it takes dFdx/dFdy.
     function ssaoTerm(vUV, d) {
         const res = float(1.0).toVar();
-        // Derivatives BEFORE the sky depth gate — non-uniform If around dFdx/dFdy
-        // is a hard WGSL compile error on TLX-WebGPU (same class as WGX fwidth).
+        // Derivatives BEFORE the sky depth gate: dFdx/dFdy under a non-uniform If
+        // is undefined in WGSL. r187 prepends `diagnostic(off, derivative_uniformity)`
+        // to every fragment module except on Firefox/Deno (WGSLNodeBuilder), so it
+        // is a hard compile error only there; elsewhere the values are garbage.
         const P0 = vec3(ssaoViewPosFromD(vUV, d)).toVar();
         const crN0 = cross(dFdx(P0), dFdy(P0)).toVar();
         If(d.lessThan(0.99999), () => {          // sky -> 1.0

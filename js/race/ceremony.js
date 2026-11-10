@@ -39,7 +39,10 @@ var RaceCeremony = (function () {
     _want = !!v;
     return _want;
   }
-  function resetLive() { if (_api) _api.reset(); }
+  // …and DISARMS: a natural flag arms `_want` (game.js update), but endRace returns before afterClassify
+  // in qualifying and time trial, so the arm outlived the session and the next race's SKIP TO RESULTS
+  // (endRace with no arm of its own) played the cooldown lap and podium it was pressed to skip.
+  function resetLive() { _want = false; if (_api) _api.reset(); }
   /** __apex.ceremony(arg) — status, seek, or skip. */
   function apexCall(arg) {
     if (!_api) return arg === undefined ? { phase: "idle", age: 0, eligible: false, skipped: false } : false;
