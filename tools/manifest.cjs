@@ -348,7 +348,6 @@ const FULL = [
   "js/fx/grade-tint.js",       // GradeTint: car-paint bases + hue/sat (game.js destructures it at eval)
   "js/fx/skidmarks.js",
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
-  "js/race/wx-hash.js",        // WxHash.fnv01: the forecast / rain-cell draw (before rain-cells and forecast)
   "js/race/storm.js",          // Storm: the weather above rain — lightning schedule, SC timings, rain/spray scale (pure; before race-control)
   "js/race/wind.js",           // Wind: per-race seeded wind + gusts on the race clock; head/tail drag, crosswind (game.js calls Wind.setLevel at eval)
   "js/race/race-control.js",
@@ -405,7 +404,6 @@ const FULL = [
   "js/camera/cockpit-finishes.js",
   "js/camera/cockpit-preview.js",
   "js/camera/fov-mode.js",         // CamFov: shared speed-FOV curve (before feel.js forwards it)
-  "js/camera/drive-lens.js",       // DriveLens: chase / broadcast / onboard FOV deltas (before feel.js)
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/cvd-palette.js",   // CvdPalette: semantic colours; AppearanceOpts.setCvdMode calls set()
@@ -426,7 +424,6 @@ const FULL = [
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
-  "js/ui/debris-opts.js",
   "js/ui/post-fx-opts.js",   // PostFxOpts: GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS (game.js reads them per frame)
   "js/perf/metrics-overlay.js",
   "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated; before game.js binds it)
@@ -739,7 +736,6 @@ const HARD_EDGES = [
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
-  ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
   ["js/core/store.js", "js/ui/post-fx-opts.js"],   // binds GameStore.store at eval
   ["js/core/i18n-pseudo.js", "js/core/i18n.js"],
   ["js/core/store.js", "js/core/i18n.js"],
@@ -894,8 +890,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/race/real-race.js"],   // RealRace binds M4.clamp at eval
   ["js/core/hash32.js", "js/race/storm.js"],    // Storm.h01 finalises with Hash32.mix
   ["js/core/hash32.js", "js/race/wind.js"],     // Wind.h01 finalises with Hash32.mix
-  ["js/race/wx-hash.js", "js/race/rain-cells.js"], // RainCells.h01 is WxHash.fnv01
-  ["js/race/wx-hash.js", "js/race/forecast.js"],   // Forecast.h01 is WxHash.fnv01
+  ["js/race/rain-cells.js", "js/race/forecast.js"], // Forecast.h01 is RainCells.h01 (the former WxHash.fnv01)
   ["js/race/session-phys.js", "js/race/setup-trial-session.js"], // the trial reads SessionPhys.PHYS at eval
   ["js/race/real-race.js", "js/game.js"],      // game.js calls RealRace.create(G) at eval time
   ["js/race/session-entry.js", "js/game.js"], // game.js creates the shared start/quali entry coordinator
@@ -1050,6 +1045,7 @@ const LAZY_AGENT = [
   "js/perf/three-inspector.js", // ThreeInspector: opt-in (?inspector=1) dev panel; apex.js boots it at eval (#4978 row 4)
   "js/agent/apex.js",
   "js/agent/apex-bridge.js", // ApexBridge: apex-cmd comments on one GitHub issue (?bridge=<n> + device token), reads __apex at call time
+  "js/agent/bridge-link.js", // BridgeLink: SETTINGS > CLAUDE LINK panel; links the bridge in place from an installed Home Screen app (#5259)
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
@@ -1567,6 +1563,9 @@ const isCircuitDefFile = (name) => typeof name === "string" && name.endsWith(".j
 // tools/ci/deploy.mjs can name the new path when another session's edit to the
 // old one conflicts. Prune entries once every in-flight branch has rebased.
 const MOVED = {
+  "js/race/wx-hash.js": "js/race/rain-cells.js",     // folded: WxHash.fnv01 is RainCells.h01 (2026-11-10, boot headroom)
+  "js/camera/drive-lens.js": "js/camera/feel.js",     // folded: DriveLens is CamFeel.lens
+  "js/ui/debris-opts.js": "js/ui/post-fx-opts.js",    // folded: DebrisOpts is PostFxOpts.debris
   "tools/capture/probe-page.mjs": "tools/shot/probe-page.mjs",         // tools/capture/ folded into tools/shot/ 2026-09-10
   "tools/capture/garage-interior.mjs": "tools/shot/garage-interior.mjs",
   "tools/capture/apex-capture.mjs": "tools/shot/apex-capture.mjs",

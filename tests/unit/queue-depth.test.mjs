@@ -185,12 +185,7 @@ test("the written status file is gitignored and the docs cite the tool and JOBS"
   assert.match(rule, /tools\/ci\/queue-depth\.mjs/);
   assert.doesNotMatch(rule, />15 runs/);
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8"), />15 runs/);
-  for (const f of ["cursor-plugins/apex-f1-game/skills/apex-ci-and-pages-watch/SKILL.md",
-    "cursor-plugins/apex-f1-game/skills/apex-cloud-agent-launch/SKILL.md"]) {
-    const s = fs.readFileSync(path.join(ROOT, f), "utf8");
-    assert.match(s, /queue-depth\.mjs/, f);
-    assert.doesNotMatch(s, />15 runs/, f);
-  }
+  // The cursor-plugins/ copies this loop also read were deleted 2026-11-10 (W17: loaded by nothing).
 });
 
 // #2266: on 2026-10-15 ~17:30Z only 7–12 Linux jobs ran while 25–36 sat queued

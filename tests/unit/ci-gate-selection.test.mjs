@@ -61,9 +61,10 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // `schedule` too: the nightly's change-aware lane (every spec the last day
   // of merges routed; tools/ci/ci-resolve-before.sh).
   // 2026-10-15: the job also plans the node slices (was unit-plan), so it runs whenever the node
-  // matrix does (`fast_tier_run == ''`); the spec selection keeps its own event test on the step.
-  assert.ok(selectJob.includes(`if: \${{ (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}`),
-    "the select job carries only its own clause (no draft/label/edit gate since 2026-11-03)");
+  // matrix does: always (the dead fast_tier_run input went 2026-11-10); the spec selection keeps its own
+  // event test on the step.
+  assert.equal(parseYAML(ciWorkflow).jobs.select.if, undefined,
+    "the select job always runs (no draft/label/edit gate since 2026-11-03, no fast_tier_run since 2026-11-10)");
   // The JOB and the selection STEP never exclude the deploy gate; the ship
   // filter step inside the same job legitimately sits out the fast tier.
   const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
@@ -281,7 +282,7 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.ok(plan, "the node-slice plan step is gone from select");
   assert.match(plan.run, /node tools\/ci\/pick-unit-slices\.mjs/);
   assert.match(plan.run, /--github-output/);
-  assert.equal(plan.if, "${{ inputs.fast_tier_run == '' }}", "the plan runs exactly when the node matrix does");
+  assert.equal(plan.if, undefined, "the plan always runs, as the node matrix does");
   // A draft asks for the needed rows only; every other event keeps all six.
   assert.match(String(plan.env.NEEDED_ONLY), /github\.event_name == 'pull_request'/);
   assert.match(plan.run, /FLAG="--needed-only"/);
@@ -310,7 +311,8 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.equal(setup.length, 3, "checkout, setup-apex and the plan step");
   assert.doesNotMatch(node, /reuse-draft-fast\.sh|steps\.reuse\./, "no draft run exists to reuse, so node-suites asks no reuse question");
   for (const st of setup) assert.match(st, /\n        if: matrix\.needed != 'false'/, "an unneeded row skips: " + st.split("\n")[0]);
-  assert.match(node, /if \[ "\$\{\{ matrix\.needed \}\}" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
+  assert.match(node, /NEEDED: \$\{\{ matrix\.needed \}\}/, "matrix.needed reaches the suites step through env");
+  assert.match(node, /if \[ "\$NEEDED" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
   assert.match(node, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
   const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(driving, /^    needs: \[select\]$/m);
@@ -323,7 +325,7 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "sweeps-parts", "driving-model"]) {
     const st = jobs[id].steps.find((x) => x.id === "reuse");
     assert.ok(st && /reuse-draft-fast\.sh/.test(st.run), `${id} asks the reuse question itself`);
-    assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read" }, `${id} needs actions:read for the runs lookup`);
+    assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read", checks: "read" }, `${id} needs actions:read for the runs lookup and checks:read for the draft run's guards record`);
   }
   assert.equal(jobs.guards.steps.length, 1, "the aggregator only joins the halves (no checkout, no npm ci)");
   assert.deepEqual(jobs.guards.needs, ["guards-a", "guards-b", "guards-c", "guards-d"]);

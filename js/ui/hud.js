@@ -38,7 +38,14 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
   const vv = window.visualViewport;
   if (vv && typeof vv.addEventListener === "function") vv.addEventListener("resize", stale, { passive: true });
 }
-function vpSync() { if (_vp.stale) { _vp.w = window.innerWidth; _vp.h = window.innerHeight; _vp.stale = _vp.live || _vpNow() < _vp.until; } }
+// THE SOURCE IS THE ICB (documentElement.clientWidth/Height: what CSS lays out in and every rect here is measured in).
+// inner* is the visual viewport on iOS and can hold the portrait pair at a landscape launch (#5201). No layout: inner*.
+function vpSync() {
+  if (!_vp.stale) return;
+  const r = typeof document !== "undefined" && document.documentElement, w = r ? r.clientWidth : 0, h = r ? r.clientHeight : 0, icb = w > 0 && h > 0;
+  if (icb) { _vp.w = w; _vp.h = h; } else { _vp.w = window.innerWidth; _vp.h = window.innerHeight; }
+  _vp.stale = _vp.live || _vpNow() < _vp.until;
+}
 const vpW = () => { vpSync(); return _vp.w; };
 const vpH = () => { vpSync(); return _vp.h; };
 
@@ -596,8 +603,8 @@ function layoutRect(el) {
     ? { ...r, left: r.left - clearX, right: r.right - clearX, top: r.top - clearY, bottom: r.bottom - clearY, width: r.width, height: r.height } : r;
   const st = el.style, s = +st.getPropertyValue("--hl-s") || 1;
   const w = r.width / s, h = r.height / s;
-  let left = r.left - clearX - (+st.getPropertyValue("--hl-x") || 0) * window.innerWidth / 100;
-  let top = r.top - clearY - (+st.getPropertyValue("--hl-y") || 0) * window.innerHeight / 100;
+  let left = r.left - clearX - (+st.getPropertyValue("--hl-x") || 0) * vpW() / 100;
+  let top = r.top - clearY - (+st.getPropertyValue("--hl-y") || 0) * vpH() / 100;
   if (s !== 1) {
     let fx = 0.5, fy = 0.5, dx = 0, dy = 0;
     for (const k of String(st.getPropertyValue("--hl-o") || "").trim().split(/\s+/)) {
@@ -636,7 +643,7 @@ let _mirEl;
 function mirrorClear(root) {
   if (_mirEl === undefined) _mirEl = document.getElementById("hud-mirror");
   const on = _mirEl && !_mirEl.hidden && document.body.classList.contains("hud-mirror-on");
-  const r = on ? _mirEl.getBoundingClientRect() : null, cx = window.innerWidth / 2;
+  const r = on ? _mirEl.getBoundingClientRect() : null, cx = vpW() / 2;
   const b = r && r.width && r.left < cx + MIR_COL && r.right > cx - MIR_COL ? r.bottom : 0;
   hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
 }
@@ -652,7 +659,7 @@ function _boostOnRightHalf() {
   if (!boost || boost.hidden) return null;
   const br = boost.getBoundingClientRect();
   if (!(br.width && br.height)) return null;
-  if ((br.left + br.right) / 2 < window.innerWidth / 2) return null;
+  if ((br.left + br.right) / 2 < vpW() / 2) return null;
   return boost;
 }
 let _hudGaps = null;
@@ -759,9 +766,9 @@ function phoneFitStampSync(scale, force) {
     const z = Math.min(zTop, live) || 1;
     let sarPx = 0;
     try { sarPx = parseFloat(getComputedStyle(root).getPropertyValue("--sar")) || 0; } catch (_) { /* */ }
-    const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
+    const midCap = Math.max(0, (vpW() / 2) / z - 10 - sarPx / z);
     const need = Math.min(
-      Math.max(0, (window.innerWidth - br.left) / z - 10 - sarPx / z + DOCK_AIR / z),
+      Math.max(0, (vpW() - br.left) / z - 10 - sarPx / z + DOCK_AIR / z),
       midCap
     );
     setDockRW(root, need);
@@ -1005,7 +1012,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--hud-btn-floor")); if (Number.isFinite(v) && v > 0 && v <= 1) btnFloor = v; } catch (_) { /* mini-dom */ }
   zDockPub = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));   // the CSS min()
   zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));
-  const half = window.innerWidth / 2;
+  const half = vpW() / 2;
   const map = wide(els.minimap, zTopPub), gaps = wide(els.gapA && els.gapA.parentNode, zTopPub);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
   // pushed right by `--sal` (and `#hud-sectors` left by `--sar`) in UNSCALED
@@ -1045,7 +1052,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // not readable (a bare engine, the unit fixtures: "env(...)") the plate's own edge is still measured.
   let sarTok = null;
   try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--sar")); if (Number.isFinite(v) && v >= 0) sarTok = v; } catch (_) { /* mini-dom / detached root */ }
-  const sarM = sarTok != null ? sarTok : (scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null);
+  const sarM = sarTok != null ? sarTok : (scR && scR.width ? Math.max(0, vpW() - scR.right - 10 * sz) : null);
   const sal = salM != null ? salM : (sarM != null ? sarM : 0);
   const sar = sarM != null ? sarM : (salM != null ? salM : 0);
   // WITH the gap strip and WITHOUT it. When the band fits at the player's own
@@ -1079,10 +1086,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     && typeof window !== "undefined" && window.matchMedia
     && window.matchMedia("(orientation: portrait) and (max-width: 500px)").matches;
   const capFor = (l) => (bcast
-    ? (window.innerWidth - sal - sar) / Math.max(Math.max(top, l) + right, 1)
+    ? (vpW() - sal - sar) / Math.max(Math.max(top, l) + right, 1)
     : portraitPhone
-      ? Math.min((window.innerWidth - sal - sar - 2 * FIT_AIR) / Math.max(top, 1),
-                 (window.innerWidth - sar - FIT_AIR) / Math.max(right, 1))
+      ? Math.min((vpW() - sal - sar - 2 * FIT_AIR) / Math.max(top, 1),
+                 (vpW() - sar - FIT_AIR) / Math.max(right, 1))
       : Math.min((half - sal) / Math.max(l + top / 2, 1),
                  (half - sar) / Math.max(right + top / 2, 1)));
   // EACH RUNG IS JUDGED AGAINST THE SPELLING IT DECIDES, NOT THE ONE ON SCREEN.
@@ -1151,7 +1158,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // #hud-aero off-screen at 1280x800 @175% — with the cap in place and no overlap
   // reported anywhere, which is how a wrong measurement hides.
   const bottom = span(_hudBottom, zBotPub);
-  let capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
+  let capBot = bottom ? (vpW() - 2 * FIT_AIR) / bottom : Infinity;
   // THE DOCKS GET THE SAME TREATMENT — they were the one cluster outside the
   // fit budget (this comment block's own "bottom: one centred row" never
   // counted them), and the dock zooms by the RAW slider, so at HUD SIZE 150%
@@ -1336,7 +1343,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   };
   const gL = groups(_dockL), gR = groups(_dockR);
   const dockH = Math.max(gL.h, gR.h);
-  let capDock = Infinity, capDockS = Infinity;
+  let capDock = Infinity, capDockS = Infinity, capKeepS = Infinity;
   const DOCK_MIN_Z = 24 / 48;   // emergency fit floor: narrow-tier taps must still paint 24 CSS px
   const READABLE_Z = 10 / 14;   // 10 CSS px over --fs-micro 14: the gap-chip clamp's and PR #1734's label floor
   if (dockH) {
@@ -1344,7 +1351,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     const barR = hudDockEl ? hudDockEl.getBoundingClientRect() : null;
     let sat = 0, sab = 0;
     try { const cs = getComputedStyle(root); sat = parseFloat(cs.getPropertyValue("--sat")) || 0; sab = parseFloat(cs.getPropertyValue("--sab")) || 0; } catch (_) { /* mini-dom */ }
-    const controlsRoom = window.innerHeight - sat - sab - 4 * FIT_AIR;
+    const controlsRoom = vpH() - sat - sab - 4 * FIT_AIR;
     // Dock and CAM/PAUSE share one effective size. Solve their joint height
     // budget so increasing BUTTON SIZE can plateau, never shrink the pedals.
     // CAM tops out at 150%; PAUSE above the right dock can reach 200%.
@@ -1390,8 +1397,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       // Read discs via the dock trees (no dynamic getElementById — ratchet).
       if (typeof window !== "undefined" && window.matchMedia
           && window.matchMedia("(orientation: portrait)").matches && bottom > 0) {
-        let leftEdge = 0, rightEdge = window.innerWidth;
-        const mid = window.innerWidth / 2;
+        let leftEdge = 0, rightEdge = vpW();
+        const mid = vpW() / 2;
         for (const dock of [_dockL, _dockR]) {
           if (!dock) continue;
           const nodes = dock.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn");
@@ -1410,7 +1417,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         if (room > 0) capBot = Math.min(capBot, room / bottom);
       }
     }
-    const barW = barR && barR.width ? barR.width : window.innerWidth;
+    const barW = barR && barR.width ? barR.width : vpW();
     const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
     const controlsW = gL.w + gR.w;
     capDock = Math.min(heightCap(gL.h), heightCap(gR.h, 2),
@@ -1420,12 +1427,15 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     // dock and its top button at their CAPS (never the slider: monotonic), >= capDock, and the gear/speed
     // cluster keeps its SHIPPED size (or a smaller HUD SIZE): budgeting it at the 10 px floor let BUTTON 245
     // paint SPEED at 10.1 px whatever HUD SIZE said (UI hunt #3, owner's export). Portrait: the shared cap.
-    if (window.innerWidth > window.innerHeight) {
+    if (vpW() > vpH()) {
       const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
       const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
-      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom * Math.ceil(Math.min(scale, 1) * 100) / 100;   // set() ceils --hud-z-bot
-      capDockS = Math.max(capDock, Math.min(gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity, gS.w ? roomS / gS.w : Infinity));
-    } else capDockS = capDock;
+      // The cluster is budgeted at its SHIPPED size: a smaller HUD SIZE used to GROW the steer pad (#5206).
+      // capKeepS also leaves a HUD SIZE above 100 % its cluster: BUTTON SIZE's slider stops there.
+      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom, hS = gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity;
+      capDockS = Math.max(capDock, Math.min(hS, gS.w ? roomS / gS.w : Infinity));
+      capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot)) - 1)) / gS.w : Infinity));
+    } else capDockS = capKeepS = capDock;
     const zS = Math.min(want, Math.max(DOCK_MIN_Z, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
     // Readouts adapt to the stable controls, never the reverse.
@@ -1433,7 +1443,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (bottom && roomW > 0) capBot = Math.min(capBot, roomW / bottom);
     // Broadcast stacks its tower/map/messages above the left controls. Fit
     // that readout column to the remaining height without resizing controls.
-    if (bcast && phone && window.innerWidth > window.innerHeight) {
+    if (bcast && phone && vpW() > vpH()) {
       const stack = [_hudTop, els.minimap, gapsEl, els.flag, els.announce, els.tyre];
       const height = stack.reduce((sum, el) => {
         if (!el || manualHud(el) || el.hidden) return sum;
@@ -1475,7 +1485,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       }
       let sabPx = 0;
       try { sabPx = parseFloat(getComputedStyle(root).getPropertyValue("--sab")) || 0; } catch (_) { /* */ }
-      const avail = window.innerHeight - sabPx - ceilY;
+      const avail = vpH() - sabPx - ceilY;
       const denom = 112 + stackR.height / zNowP + 48;
       if (avail > 0 && denom > 0) capPortrait = avail / denom;
     }
@@ -1509,6 +1519,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
+  // What this window can paint: "top bot pedals steer steerKeep btnFloor" zooms, 9 = no limit (UiScale, #5206).
+  hStyle(root, "--hud-cap", [capTop, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
   // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
   // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
   // The paint pass measured it under the zoom the cap pass published, so it is
@@ -1560,7 +1572,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (!boost || boost.hidden) return NaN;
     const br = boost.getBoundingClientRect();
     if (!(br.width && br.height)) return NaN;
-    if ((br.left + br.right) / 2 < window.innerWidth / 2) return NaN;
+    if ((br.left + br.right) / 2 < vpW() / 2) return NaN;
     return br.left;
   };
   const dockLeftOf = () => {
@@ -1593,8 +1605,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   const DOCK_AIR = 12;
   const insetFor = (left, z) => {
     if (!Number.isFinite(left) || !(z > 0)) return 0;
-    const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
-    const need = Math.max(0, (window.innerWidth - left) / z - 10 - sarPx / z + DOCK_AIR / z);
+    const midCap = Math.max(0, (vpW() / 2) / z - 10 - sarPx / z);
+    const need = Math.max(0, (vpW() - left) / z - 10 - sarPx / z + DOCK_AIR / z);
     // Cap so S3 cannot walk past mid into #minimap / #announce.
     return Math.min(need, midCap);
   };
@@ -2346,6 +2358,7 @@ return {
   create,
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
+  vp: () => [vpW(), vpH()],   // the layout viewport (ICB) every HUD rect is measured in; never inner* (#5201)
   vpKey: () => vpW() + "x" + vpH(),   // the cached viewport, for 10 Hz keys that must not force a layout (#2151)
 };
 })();
