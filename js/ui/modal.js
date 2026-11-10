@@ -442,18 +442,20 @@ window.TopModal = (function () {
      script's el.click() (untrusted) and automation (navigator.webdriver,
      whose bot-speed clicks are deliberate, as loading-card.js treats it)
      always pass; tests/unit/menu-a11y-audit.test.mjs covers the guard.
-     Pointer down/up too (W34): the designer canvas acts on pointerup. Only a
-     click opens a window; pointer detail is always 0, so detail-0 is click-only. */
-  const SHIELD_MS = 350, SHIELD_PX = 32;
+     Pointer down/up too (W34); only a click opens a window. */
+  const SHIELD_MS = 350, SHIELD_PX = 32, SHOW_LATE_MS = 5000;
   let lastTap = null, shield = null;
+  // Time an event by its input stamp: a slow build queues the ghost (W34).
+  const evtAt = (e) => (e && e.timeStamp > 0 && typeof performance !== "undefined" && performance.timeOrigin > 0
+    ? performance.timeOrigin + e.timeStamp : Date.now());
   function shieldLayer(layer) {
-    if (lastTap && Date.now() - lastTap.at < SHIELD_MS) shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y };
+    if (lastTap && Date.now() - lastTap.at < SHOW_LATE_MS) shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y };
   }
   function onClickShield(e) {
     const isClick = e.type === "click";
     if (!e.isTrusted || (isClick && e.detail === 0)) return;
     if (typeof navigator !== "undefined" && navigator && navigator.webdriver === true) return;
-    const s = shield, now = Date.now();
+    const s = shield, now = evtAt(e);
     if (s && now < s.until && s.layer.contains(e.target) &&
         Math.hypot(e.clientX - s.x, e.clientY - s.y) <= SHIELD_PX) {
       e.preventDefault();
