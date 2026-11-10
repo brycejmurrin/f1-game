@@ -56,7 +56,7 @@ test("ownerStore splits the export into the json and raw lanes and drops unset k
 test("mismatches: [] when the page reports the preset, one line per difference otherwise", () => {
   const p = brycePhone({ profile: "legacy" });
   const got = { viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, insets: { top: 0, left: 59, bottom: 21, right: 59 }, coarse: true, stored: { hudBtnScale: "245", uiScale: null } };
-  assert.match(mismatches(brycePhone(), got).join(" | "), /^stored uiScale = null, seeded 61$/, "the live profile seeds UI SIZE 61");
+  assert.deepEqual(mismatches(brycePhone(), got), ["stored uiScale = null, seeded 61"], "the live profile seeds UI SIZE 61");
   assert.deepEqual(mismatches(p, got), []);
   const bad = mismatches(p, { ...got, viewport: { width: 844, height: 390 }, insets: { top: 0, left: 0, bottom: 0, right: 0 }, stored: { hudBtnScale: "100" } });
   assert.equal(bad.length, 5, bad.join(" | "));

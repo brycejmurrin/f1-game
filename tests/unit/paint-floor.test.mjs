@@ -23,7 +23,7 @@ test("summarisePaint judges what the SCREEN shows: 52x24.5 is under 44, 7.14 px 
   assert.deepEqual(p.taps.worst, ["button.sel-chip 52x24.5"]);
   assert.equal(p.text.smallest.px, 7.14);
   assert.equal(p.taps.n, 3);
-  assert.match(paintLine(p), /^taps under 44px 1\/3 \(smallest 24\.5px button\.sel-chip\); text under 12px 1\/3 \(smallest 7\.14px span\.a\); outside safe box 1; blocked 0; page scroll no$/);
+  assert.equal(paintLine(p), "taps under 44px 1/3 (smallest 24.5px button.sel-chip); text under 12px 1/3 (smallest 7.14px span.a); outside safe box 1; blocked 0; page scroll no");
   assert.equal(summarisePaint({ ...RAW, scroll: { x: 0, y: 40, left: 0, top: 0 } }).scroll.under, 1, "a document taller than the window scrolls");
   assert.equal(summarisePaint({ ...RAW, scroll: { x: 0, y: 1, left: 0, top: 0 } }).scroll.under, 0, "one px of rounding does not");
   assert.deepEqual(paintCounts(summarisePaint({})), { taps: 0, text: 0, outside: 0, blocked: 0, scroll: 0 });
@@ -34,7 +34,7 @@ test("judgePaint is a ratchet: above the ceiling is a regression, below it is a 
   assert.deepEqual(judgePaint(p, { taps: 1, text: 1, outside: 1 }, "c"), []);
   const hard = judgePaint(p, {}, "standalone@61 select");
   assert.equal(hard.length, 3);
-  assert.match(hard[0], /^standalone@61 select: 1 tap target\(s\) paint under 44px, ceiling 0 — button\.sel-chip 52x24\.5$/);
+  assert.equal(hard[0], "standalone@61 select: 1 tap target(s) paint under 44px, ceiling 0 — button.sel-chip 52x24.5");
   assert.match(hard[1], /1 text node\(s\) paint under 12px, ceiling 0 — span\.a 7\.14px "MONZA"/);
   assert.match(hard[2], /1 item\(s\) cross the safe box, ceiling 0/);
   const stale = judgePaint(p, { taps: 4, text: 1, outside: 1 }, "c");
