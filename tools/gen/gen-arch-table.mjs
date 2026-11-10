@@ -58,7 +58,11 @@ export const SENTENCE_MAX = 160;
 export function headerSentence(src) {
   const lines = src.split("\n");
   let i = 0;
-  while (i < lines.length && (/^\s*$/.test(lines[i]) || /^\s*"use strict";\s*$/.test(lines[i]))) i++;
+  // Skip what is not prose: blanks, `"use strict";`, a shebang, and a bare
+  // `// @ts-check` / `// @ts-nocheck` pragma — 164 coverage rows read "@ts-check"
+  // (alone or as a prefix) before this skip (audit W27, 2026-11-09).
+  const skip = (l) => /^\s*$/.test(l) || /^\s*"use strict";\s*$/.test(l) || /^#!/.test(l) || /^\s*\/\/\s*@ts-(?:no)?check\s*$/.test(l);
+  while (i < lines.length && skip(lines[i])) i++;
   let text;
   if (/^\s*\/\*/.test(lines[i] || "")) {
     const rest = lines.slice(i).join("\n");
@@ -70,7 +74,8 @@ export function headerSentence(src) {
     text = buf.join("\n");
   } else return null;
   text = text.split("\n").map((l) => l.replace(/^\s*\*+ ?/, "")).join(" ").replace(/\s+/g, " ").trim();
-  text = text.replace(/^Apex 26 — /, "").replace(/^js\/[\w/.-]+\.js — /, "");
+  text = text.replace(/^@ts-(?:no)?check\s+/, "").replace(/^Apex 26 — /, "").replace(/^js\/[\w/.-]+\.js — /, "")
+    .replace(/^[\w.-]+\.(?:test|spec)\.(?:mjs|cjs|js) — /, "");
   const m = /^(.*?[.!?])(?:\s+(?=[A-Z(`"[])|$)/.exec(text);
   let s = (m ? m[1] : text).trim();
   if (!s) return null;

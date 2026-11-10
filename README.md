@@ -34,8 +34,8 @@ Night races run under floodlights.
   and lifting.
 - **Active Aero** — in MANUAL, press **Z** (or **AERO** on screen) inside an
   activation zone to open the wings (**STRAIGHT MODE**): less drag and grip;
-  braking or leaving the zone closes them. **SETTINGS › CONTROLS › ACTIVE
-  AERO: AUTO** handles the wings; the HUD shows mode and zone status. Some
+  braking or leaving the zone closes them. **SETTINGS › DRIVING AIDS ›
+  ACTIVE AERO: AUTO** handles the wings; the HUD shows mode and zone status. Some
   circuits have no zones.
 - **Overtake Mode** — stay within one second of the car ahead at the circuit's
   detection line to earn it; the allowance arms at the start/finish line for
@@ -50,7 +50,7 @@ Night races run under floodlights.
   in the pit lane at the entry for about half a second to call the stop.
 - **Race control** — yellow flags, virtual safety car, safety car and red flag
   are **off** by default. Turn them on in **RACE SETTINGS › CAUTIONS**.
-- **Manual gearbox** (optional, SETTINGS › CONTROLS › GEARS: MANUAL) — an
+- **Manual gearbox** (optional, SETTINGS › DRIVING AIDS › GEARS: MANUAL) — an
   8-speed 'box with a live gear readout and tachometer. Shift up near the
   redline, down for corner exits; the limiter makes you upshift to reach top
   speed. Auto mode shifts for you.
@@ -108,7 +108,7 @@ link. The designer's HOW TO tab walks through it; the long form is
   is drag-to-steer from where the finger lands, with automatic gas: use
   **BRAKE** to slow down, and a tap alone does not steer. Stuck or
   facing the wrong way? Pause, then **RECOVER CAR**.
-- Manual gears (**SETTINGS › CONTROLS › GEARS: MANUAL**) work on desktop
+- Manual gears (**SETTINGS › DRIVING AIDS › GEARS: MANUAL**) work on desktop
   and with **TILT**. **BUTTONS** and **TOUCH** keep gears automatic.
 - Rebind keyboard and controller actions in **SETTINGS › CONTROLS**.
 
@@ -124,12 +124,16 @@ a corner and the front washes wide (understeer); loosen the rear and it steps ou
 (oversteer). Brake for the corners; the car rewards a tidy line.
 
 **SETTINGS** (from the pause menu or title) opens pages for **CONTROLS**,
-**DRIVING**, **DRIVING AIDS**, **DISPLAY**, **APPEARANCE**, **MUSIC &
-SOUND**, and **BACKUP & RESTORE**. **DRIVING AIDS** has **RELAX /
-STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**, **DRIVING
-HELP**, **RACING LINE**, and **ADAPTIVE BUTTONS** (keys / on-screen arrows;
-default ON) — with lock, speed steer and the rest tucked behind an
-**ADVANCED** disclosure. **BRAKE CUE** lives under **SETTINGS › DRIVING**.
+**DRIVING AIDS**, **HUD & CAMERA**, **APPEARANCE**, **ACCESSIBILITY**,
+**MUSIC & SOUND**, **SAVES & DATA**, **GRAPHICS**, **VISUAL STUDIO** and
+**PROGRESS** (the page list is `SettingsNav` in `js/ui/settings-tabs.js`).
+**CONTROLS** holds **STEERING INPUT**, **STEERING** feel, **TILT
+SENSITIVITY**, **THROTTLE** and the keyboard and controller bindings, with
+lock, speed steer and the fine curves on its **ADVANCED INPUT & HANDLING**
+page. **DRIVING AIDS** has the **ROOKIE / RELAX / STANDARD / PRO** presets,
+**DRIVING HELP**, **STEER ASSIST**, **ADAPTIVE BUTTONS**, **GEARS**,
+**ACTIVE AERO**, **DRIVING COACH** and the **BRAKING CUES** (**PREDICTIVE
+CUE**, **LINE-SPEED CUE**).
 
 ### Car Setup
 
@@ -151,8 +155,8 @@ your car across **12 upgrade categories** before each race:
 | **COCKPIT** | Halo, mirrors and driver furniture |
 | **WHEELS** | Rim and wheel-cover treatment |
 
-Budget is **780 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
-screen to remove the cap for testing. Some parts are **factory/supplier-exclusive**
+Free play starts with **FREE BUILD** on (no credit cap); tap it in the setup
+screen to race within the credit budget (`Parts.BUDGET` in `js/car/parts.js`). Some parts are **factory/supplier-exclusive**
 and only appear when your team uses that power unit (Mercedes, Ferrari, Red Bull
 Ford, Honda, or Audi).
 

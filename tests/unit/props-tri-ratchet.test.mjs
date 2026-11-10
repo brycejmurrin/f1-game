@@ -37,6 +37,9 @@ const require = createRequire(import.meta.url);
 // 2026-10-05: Buddh 210980 -> 190604 (sparse field-boundary scatter) and
 // Korea 264747 -> 235195 (tree:"none" on the salt fill) after the fold-clear
 // chord samples. Fuji 612418 stays inside the 612361 ±0.5 % band.
+// 2026-11-10 W5 (#5279): Magny-Cours 249802 -> 240416 (-3.8 %): the Adelaide and
+// Lycée kits moved onto their corners and three treeline/poplar runs were trimmed
+// clear of the relocated stands.
 // 2026-10-09: Silverstone 398229 -> 422978 (+6.2 %): Racing Kit light posts, banner towers,
 // camera pods and radar (baked CC0 models), generic lamp posts (furniture.lamp "post")
 // and far-hedgerow understorey bushes — the survey found the circuit using 7 of 77 models.

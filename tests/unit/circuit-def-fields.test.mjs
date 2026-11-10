@@ -204,9 +204,9 @@ test("gpLaps is the circuit's real race distance, not a flat number", () => {
   near("monza", 53);
   near("silverstone", 52);
 
-  // lengthKm's one decimal puts five circuits a lap off the real race, so they
+  // lengthKm's rounding puts six circuits a lap off the real race, so they
   // carry an authored `gpLaps` (def.js fromRaw). Exact, not ±1.
-  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66]])
+  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66], ["madrid", 57]])
     assert.equal(at(id).gpLaps, laps, `${id} race distance`);
 
   // The defect this replaced: one number for every circuit. Monaco and Spa must
@@ -239,7 +239,7 @@ test("the title's meta stubs carry the menu fields their hydrated defs do (gpLap
   const stubs = vm.runInContext("Tracks", sb).LIST;
   const full = buildContext().LIST;
   const at = (id) => stubs.find((t) => t.id === id);
-  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66]]) {
+  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66], ["madrid", 57]]) {
     assert.ok(at(id) && at(id)._metaOnly, `${id} boots as a meta stub`);
     assert.equal(at(id).gpLaps, laps, `${id}: the title's FULL race distance`);
   }
