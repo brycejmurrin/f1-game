@@ -81,3 +81,4 @@ var RetiredCard = (function () {
 
   return { wanted, tick, tickG, hide: () => show(false), get shown() { return shown; } };
 })();
+Object.freeze(RetiredCard);

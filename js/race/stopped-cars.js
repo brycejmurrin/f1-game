@@ -60,3 +60,4 @@ var StoppedCars = (function () {
   }
   return { scan, create, STOP_V, STOP_DWELL, STOP_VSC, STOP_RECOVER };
 })();
+Object.freeze(StoppedCars);

@@ -1040,5 +1040,5 @@ body[data-retired-wait] .dock-grp, body[data-retired-wait] .touchbtn { display: 
 #retired-card b { font-size: 1.35rem; letter-spacing: .12em; }
 #retired-card span { font-size: .85rem; opacity: .8; }
 #retired-card button { min-height: 44px; min-width: 44px; padding: 0 calc(var(--gap) * 1.5); font: inherit; font-weight: 700;
-  border-radius: 8px; border: 0; background: var(--accent); color: var(--text); touch-action: manipulation; }
+  border-radius: 8px; border: 0; background: var(--red); color: var(--text); touch-action: manipulation; }
 } /* @layer overlays */
