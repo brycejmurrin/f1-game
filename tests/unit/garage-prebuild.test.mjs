@@ -1074,3 +1074,29 @@ test('night pit frontage receives lighting without a whole-mesh emissive overrid
   const h=exteriorHarness();await h.ext.request(h.selection('a','rain','night'));h.ext.draw();
   assert.equal(h.draws[2].opts.emissive,0);h.ext.release();
 });
+
+test('#4964: closing a mid-race pit garage frees the bay on the next tick (the race does not carry it)', () => {
+  const src = read('js/game.js');
+  const at = src.indexOf('function closePitWork() {');
+  assert.ok(at > 0, 'closePitWork moved — re-point this test');
+  const fn = src.slice(at, src.indexOf('\n}\n', at) + 2);
+  const timers = [], calls = [];
+  const carsetup = { hidden: false };
+  const sb = {
+    leaveGarage() { carsetup.hidden = true; sb.setupPreviewOn = false; calls.push('leave'); },
+    pitWorkSpec: null, carSpecKey: () => '', pits: { addWork: () => 0 }, player: {}, announce() {},
+    paused: true, netPlay: { active: () => true }, holdRaceWake() {}, lastFrame: 0, performance: { now: () => 1 },
+    soundOn: false, setupPreviewOn: true, $: () => carsetup,
+    setTimeout: (f) => { timers.push(f); return timers.length; },
+    garagePre: { release() { calls.push('release'); return true; } },
+  };
+  vm.runInNewContext(fn + '\nclosePitWork();', sb, { filename: absSrc('js/game.js') });
+  assert.deepEqual(calls, ['leave'], 'release must wait for the next tick (it refuses while the garage shows)');
+  for (const f of timers) f();
+  assert.deepEqual(calls, ['leave', 'release'], 'the bay is released after the pit visit');
+  // A garage reopened before the tick keeps its bay.
+  calls.length = 0; timers.length = 0; carsetup.hidden = false;
+  vm.runInNewContext(fn + '\nclosePitWork(); $().hidden = false;', sb, { filename: absSrc('js/game.js') });
+  for (const f of timers) f();
+  assert.deepEqual(calls, ['leave'], 'a garage back on screen is not released');
+});

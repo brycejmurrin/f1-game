@@ -2040,6 +2040,15 @@ body[data-ga-bars]::after { bottom: 0; }
   #carsetup:has(.cs-liv-editor) {
     --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 720px / var(--ui-scale)), 520px));
   }
+  /* #4923: the look-pw rule above rebuilt the cap from 420px, so PANEL WIDTH
+     105-130 % made the sheet NARROWER than the shipped 560px here. Scale this
+     block's own cap and reserve instead (later source, same specificity). */
+  :root[data-look-garage-pw] #carsetup {
+    --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 640px / var(--ui-scale)), calc(560px * var(--look-garage-pw, 1))));
+  }
+  :root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
+    --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 720px / var(--ui-scale)), calc(520px * var(--look-garage-pw, 1))));
+  }
 }
 
 } /* @layer components */
