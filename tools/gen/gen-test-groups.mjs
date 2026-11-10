@@ -43,17 +43,21 @@ export function nodeFlags(def) {
   return flags.some((f) => f.startsWith("--test-timeout")) ? flags : [`--test-timeout=${NODE_TEST_TIMEOUT_MS}`, ...flags];
 }
 
-/** The command line one group runs, rebuilt from its definition. */
+/** The command line one group runs, rebuilt from its definition.
+ *
+ * EVERY node group goes through tools/ci/run-node-group.mjs (W25 row 13, 2026-11), not only the ones holding an
+ * isolated benchmark: a bare `node --test` exits 0 when a test file calls process.exit(0) mid-run (the file reads
+ * as one passing test and every test after the exit never runs), so 17 groups could go green on a file that never
+ * finished. The wrapper is the one place a per-file verdict check lives; it reads the group's flags from
+ * tests/groups.json itself. Keep the roster visible to coverage audits: npm's forwarded arguments follow `--` and
+ * the wrapper passes them to every phase. */
 export function commandFor(def, isolatedFiles = [], name) {
   if (def.kind === "command") return def.cmd;
-  if (def.kind === "node" && (def.files || []).some((file) => isolatedFiles.includes(file))) {
-    if (!name) throw new Error("an isolated node group needs its manifest name");
-    // Keep the generated roster visible to coverage audits. npm's forwarded
-    // arguments follow -- and the wrapper passes them to every phase.
-    return ["node tools/ci/run-node-group.mjs", name, ...def.files, "--"].join(" ");
+  if (def.kind === "node") {
+    if (!name) throw new Error("a node group needs its manifest name (it runs through tools/ci/run-node-group.mjs)");
+    return ["node tools/ci/run-node-group.mjs", name, ...(def.files || []), "--"].join(" ");
   }
-  const head = def.kind === "browser" ? "node tools/ci/run-playwright.mjs" : "node --test";
-  return [head, ...(def.kind === "node" ? nodeFlags(def) : def.flags || []), ...(def.files || [])].join(" ");
+  return ["node tools/ci/run-playwright.mjs", ...(def.flags || []), ...(def.files || [])].join(" ");
 }
 
 /** package.json with every `test:*` script rebuilt, key order preserved. */

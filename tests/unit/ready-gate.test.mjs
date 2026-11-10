@@ -242,12 +242,36 @@ test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label ca
   let [rc, text] = go(["--pr", "7"], 0);
   assert.equal(rc, 0);
   assert.deepEqual(seen.at(-1), ["--pr", "7"]);
-  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "10 min", "re-run ready-gate", "gh api -X POST repos/brycejmurrin/f1-game/issues/7/labels -f 'labels[]=land'"];
-  assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls and the receipt-age note are printed");
+  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "a later push: re-run ship-pr", "gh api -X POST repos/brycejmurrin/f1-game/issues/7/labels -f 'labels[]=land'"];
+  assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls and the re-run note are printed");
   [rc, text] = go(["--pr", "7"], 1);
   assert.equal(rc, 1);
   assert.deepEqual(parts.filter((x) => text.includes(x)), [], "a refusal prints neither call");
   [rc] = go(["--pr", "x; rm"], 0);
   assert.equal(rc, 1, "a non-numeric PR is a usage error");
   assert.equal(nextCalls(9, "o/r").length, 3);
+});
+
+test("ready-gate / ship-pr text does not claim a hook requires the ready receipt (W25 row 13)", () => {
+  // Both headers said the hooks (merge_policy.py via github-mcp-guard.sh / bash-guard.sh) require a fresh ok
+  // receipt before draft→ready. merge_policy.py left with the 2026-11-03 hook reset; no hook reads a receipt.
+  const hooks = fs.readdirSync(path.join(ROOT, ".claude/hooks"));
+  assert.ok(!hooks.includes("merge_policy.py"), "merge_policy.py is back: re-check what the gate texts say");
+  for (const h of hooks) {
+    const src = fs.readFileSync(path.join(ROOT, ".claude/hooks", h), "utf8");
+    assert.doesNotMatch(src, /gate-receipt|artifacts\/ready-gate|readReceipt/, `${h} reads a gate receipt now: re-check the texts`);
+  }
+  for (const f of ["tools/ci/ready-gate.mjs", "tools/ci/ship-pr.mjs"]) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    assert.doesNotMatch(src, /hooks?\b[^.\n]*\brequire\b[^.\n]*\b(receipt|flip)|which the hooks require|the hooks gate on|receipt good for/i, `${f} still claims a hook-gated receipt`);
+  }
+});
+
+test("a body with no ## Plan: ready-gate and the merge gate agree (both pass; ready-gate warns)", async () => {
+  // The audit said the merge gate now FAILS a Plan-less body; on this base merge-gate.mjs planRow passes it, so
+  // ready-gate keeps passing with a warning. This pins the two to the same answer either way.
+  const { planRow } = await import("../../tools/ci/merge-gate.mjs");
+  const body = "## Goal\nx";
+  const gate = planRow(body), ready = withPlan(GREEN, body);
+  assert.equal(ready.code === 0, gate.ok, `ready-gate code ${ready.code} vs merge-gate plan row ok=${gate.ok}`);
 });
