@@ -1,7 +1,5 @@
 # Hooks, guards and permissions — security pass (2026-10-26)
 
-Summary: Hooks, guards and permissions security pass (lane S5 of the 2026-10-26 system-audit implementation, PR #3785).
-
 Lane S5 of the 2026-10-26 system-audit implementation (PR #3785). Grant: Bryce, typed
 2026-10-26 ~23:00 PT — "Fix hook or guard or perm", "Implement all ideas and improvements
 now". Source findings: the audit artifact §4 (hooks table) and §10 (authority and security),

@@ -1,7 +1,5 @@
 # Testing — operational field notes
 
-Summary: The operational field notes carved out of `TESTING.md`: boot walls on this box, the two-worker factor, the instruments that lie here, the real-GPU runs. Cited from `AGENTS.md` as "TESTING field notes".
-
 > Carved out of [`../TESTING.md`](../TESTING.md) on 2026-09-03 (tree restructure
 > Phase 5). These are DATED MEASUREMENTS of this container and of CI, not rules:
 > the rule they support is in `AGENTS.md` §Verification or in `TESTING.md` §1.

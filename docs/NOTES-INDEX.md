@@ -18,9 +18,10 @@ table flags it superseded — `docs-integrity.test.mjs` holds the pair, so an ag
 (open `docs/` as a vault, "Use [[Wikilinks]]" OFF; `.obsidian/` is gitignored):
 [notes/SECOND-BRAIN-2026-10-14.md](notes/SECOND-BRAIN-2026-10-14.md).
 
-The per-note table (kind, re-measure date, cited or not, one-line summary) is
-BUILT, never committed: `node tools/docs/knowledge-gc.mjs --index` writes it to
-`artifacts/NOTES-TABLE.md` (gitignored). A committed copy sorted newest-first
+**The notes table:** run `node tools/docs/knowledge-gc.mjs --index`, then open `artifacts/NOTES-TABLE.md`.
+
+It lists each note's kind, re-measure date, cited or not and a one-line summary.
+It is built, never committed (the artifact is gitignored). A committed copy sorted newest-first
 made every note-adding PR conflict with every other (issue #5347). A note's
 row comes from its own header lines: `Kind:`, `Re-measure-by:` and an optional
 `Summary:` (the H1 otherwise), so a new note touches no shared file.
