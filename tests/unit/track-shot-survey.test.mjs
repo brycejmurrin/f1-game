@@ -417,9 +417,12 @@ test('every circuit exposes authored turn locations usable by named shot plans',
 });
 test('named scenery catalog accounts for every registered hero and targets emitted geometry', async () => {
  const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
- const { default: { scenerySourceDigest } } = await import('../../tools/shot/scenery-source-hash.cjs');
  const catalog = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8'));
- assert.equal(catalog.sourceDigest,scenerySourceDigest(path.resolve('.')),'catalog must be regenerated after scenery or projection source changes');
+ // No committed input digest (it made every garage/scenery PR conflict on one line): the generator rebuilds and
+ // compares (about a minute), or answers at once from its receipt under artifacts/ when inputs and bytes are unchanged.
+ assert.equal(catalog.sourceDigest,undefined,'the catalog carries no input fingerprint; staleness is gen-scenery-locations.cjs --check');
+ const fresh = spawnSync(process.execPath,['tools/shot/gen-scenery-locations.cjs','--check','--cached'],{encoding:'utf8',timeout:480_000});
+ assert.equal(fresh.status,0,`catalog must be regenerated after scenery or projection source changes: ${fresh.error?.message||fresh.stderr||fresh.stdout}`);
  const registryDir = 'tests/data/landmarks';
  const registryFiles = fs.readdirSync(registryDir).filter(f=>f.endsWith('.json'));
  const { createRequire } = await import('node:module');

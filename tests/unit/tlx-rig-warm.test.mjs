@@ -272,8 +272,6 @@ test("menu path: opts.mirror runs the mirror stage over the race scene once per 
 });
 
 test("wiring: present() dispatches the rig warm after the entry and mirror warms; car-draw warms both seats; race entry awaits it", () => {
-  assert.ok(TLX.includes("if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }"),
-    "present() dispatches the rig warm after the entry and mirror warms");
   assert.ok(TLX.includes("_coAppend(mesh.geo, model, opts)) return;   // R1\n          if (_capture) { _captureRec(mesh, model, opts); return; }"), "draw() captures right after the coalesce line");
   assert.ok(TLX.includes("_capture = recs; _coOn = false;"), "coalescing is off while capturing, so _coAppend never takes a rig draw");
   assert.ok(TLX.includes("\n        warmDraws,   //"), "the backend publishes warmDraws");

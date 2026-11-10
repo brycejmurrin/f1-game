@@ -244,9 +244,7 @@ const Particles = (function () {
 
   // RAIN SPRAY: a lingering plume, not a puff — and THE wet-race visibility
   // problem: most of an F1 car's spray comes off the floor and diffuser, not
-  // the tyres (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/),
-  // and F1 24's was reviewed as "particularly average"
-  // (https://traxion.gg/time-to-box-box-box-f1-24-review/). Three layers per call:
+  // the tyres. Three layers per call:
   //  · PLUME — drop-clouds living 1.1-1.9 s, buoyant, growing to ~3.5 m;
   //  · ROOSTER TAIL — a tight jet thrown UP and BACK off the diffuser, its
   //    height and life scaling with strength (speed × wetness × Storm.sprayK);

@@ -899,6 +899,12 @@ export function sweepParallel({ cats, M, vis, workers, teamId } = {}) {
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────
+/** The sweep's verdict over ALL rows (not the --only view): 1 when any row is
+ *  INVISIBLE or BROKEN. Set before the --json return, which used to skip it. */
+export function sweepExitCode(rows) {
+  return rows.some((r) => r.cls === "INVISIBLE" || r.cls === "BROKEN") ? 1 : 0;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
@@ -921,7 +927,8 @@ Exits non-zero when any row is INVISIBLE or BROKEN.`);
 
   const vis = !has("novis");
   const M = loadParts();
-  if (cats && cats.some((id) => !M.Parts.CATALOG.some((c) => c.id === id))) throw new Error("unknown part category");
+  const badCats = (cats || []).filter((id) => !M.Parts.CATALOG.some((c) => c.id === id));
+  if (badCats.length) throw new Error(`unknown part category ${badCats.join(", ")}`);
   if (teamId != null && !M.Teams.LIST.some((t) => t.id === teamId)) throw new Error(`unknown team ${teamId}`);
   if (teamId && has("clamp-scan")) throw new Error("--team is not supported by --clamp-scan");
 
@@ -977,6 +984,7 @@ Exits non-zero when any row is INVISIBLE or BROKEN.`);
   }
 
   const show = only ? rows.filter((r) => only.includes(r.cls)) : rows;
+  process.exitCode = sweepExitCode(rows) || process.exitCode;
   if (has("json")) { console.log(JSON.stringify(show, null, 1)); return; }
 
   const F = (v, w) => String(v).padEnd(w);
@@ -994,7 +1002,6 @@ Exits non-zero when any row is INVISIBLE or BROKEN.`);
   for (const r of rows) tally[r.cls] = (tally[r.cls] || 0) + 1;
   console.log("\n" + rows.length + " rows: " +
     Object.entries(tally).sort((a, b) => b[1] - a[1]).map(([k, v]) => v + " " + k).join(" · "));
-  if (rows.some((r) => r.cls === "INVISIBLE" || r.cls === "BROKEN")) process.exitCode = 1;
 }
 
 if (!isMainThread && workerData && workerData.role === WORKER_ROLE) {

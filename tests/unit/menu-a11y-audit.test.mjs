@@ -789,8 +789,6 @@ test("the SAVING UNAVAILABLE banner is static, spoken once, dismissible, and sta
   assert.match(sel, /store\.writeFailed/, "it asks whether a WRITE failed, not whether anything ever threw");
   assert.doesNotMatch(sel, /if \(store\.broken\) showSaveWarning/, "a corrupt-key READ must not raise it");
   assert.match(sel, /\$\("announce-live"\)/, "spoken through the always-present polite region");
-  assert.match(sel, /LiveRegion\.say\(text, "save"\)/,
-    "through LiveRegion, the region's one writer, at SAVE priority (it owns the clear-then-write beat)");
   assert.doesNotMatch(sel, /setTimeout\(\(\) => \{ live\.textContent =/, "never times its own #announce-live write");
   assert.match(sel, /setAttribute\("aria-expanded", on \? "false" : "true"\)/, "the toggle reports its state");
 

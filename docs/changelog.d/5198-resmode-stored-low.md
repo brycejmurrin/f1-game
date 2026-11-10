@@ -1,0 +1,1 @@
+Fixed: a phone that still had RESOLUTION stored as LOW from when LOW was the phone default (or from an older settings file) now opens at the MED default once, so the 3D view is no longer blocky; a LOW you pick afterwards is kept
