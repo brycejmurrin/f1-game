@@ -983,7 +983,9 @@ const AiDrive = (function () {
   // because nothing about a stopped car will make room.
   const HAZARD_V_FRAC = 0.06;
   function stoppedHazard(o, vTop) {
-    return !!o && !o.retired && !o.finished && !o.inPit && !o.inPitLane && Math.abs(o.speed || 0) < HAZARD_V_FRAC * (vTop > 0 ? vTop : 72);
+    if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
+    const frac = Math.abs(o.speed || 0) / (vTop > 0 ? vTop : 72);   // a share of the top speed, so PACE-scaled
+    return frac < HAZARD_V_FRAC;
   }
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
   // A PARKED PLAYER IS RETIRED (W26 row 5). stallStep accumulates the seconds
