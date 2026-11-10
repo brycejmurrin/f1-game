@@ -3879,7 +3879,8 @@
     },
     "js/career/career-planning-ui.js": {
       "append": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-planning-ui-download.test.mjs"
       ],
       "cashNote": [
         "tests/unit/career-cross-tab.test.mjs"
