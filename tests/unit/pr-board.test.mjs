@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  fullTierPassed, DEPLOY, ALARM_HOURS, stalled, alarmLines, SUGGESTIONS, hasMergeHold, laneOf, handoffOwner, ageLabel, ciState, decide, suggest, evaluate, render, measure,
+  brief, fullTierPassed, DEPLOY, ALARM_HOURS, stalled, alarmLines, SUGGESTIONS, hasMergeHold, laneOf, handoffOwner, ageLabel, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -434,4 +434,20 @@ test("pr-snapshot: the ETag store round-trips through artifacts/ and a 304 reuse
     assert.ok(loadStore(file).has(url));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   assert.deepEqual([...runsByHead([{ head_sha: "a", id: 1 }, { head_sha: "a", id: 2 }, { id: 3 }]).get("a")].map((r) => r.id), [1, 2]);
+});
+
+test("--brief: one line per PR with the fields an orchestrator acts on, then a tally line", () => {
+  const rows = [
+    { number: 7, draft: true, land: false, ci: "success", gate: "passed", suggest: "SYNC", sha: "1234567" + SHA(1), owner: "claude:session_01ABC", title: "garage: works sheet", mergeableState: "dirty", failing: [],
+      why: "merge conflict with the deploy branch", plan: { state: "open", items: 14, open: ["Close #1 as stale", "**now:** hold the sync push until #2 merges"] } },
+    { number: 8, draft: false, land: true, hold: true, ci: "failure", gate: "pending", suggest: "FIX", sha: "7654321" + SHA(2), owner: null, title: "t", mergeableState: "blocked", failing: ["Structural guards"], why: "", plan: { state: "none" } },
+  ];
+  const out = brief({ rows }, { sync: { 7: { ok: true, verdict: "conflict" } } }).split("\n");
+  assert.equal(out.length, 3);
+  assert.equal(out[0], "#7 draft ci=success gate=passed → SYNC | 1234567 | plan 12/14 | session_01ABC | garage: works sheet | conflict; sync conflict | merge conflict with the deploy branch | now: hold the sync push until #2 merges");
+  assert.equal(out[1], "#8 ready+land ci=failure gate=pending → FIX | 7654321 | plan - | - | t | HOLD; red: Structural guards");
+  assert.equal(out[2], "= pr-board: 2 open (1 SYNC, 1 FIX)");
+  assert.equal(brief({ rows: [] }), "= pr-board: 0 open");
+  const cli = (...a) => { try { execFileSync(process.execPath, [path.join(ROOT, "tools/ci/pr-board.mjs"), ...a], { encoding: "utf8", stdio: "pipe" }); return 0; } catch (e) { return e.status; } };
+  assert.equal(cli("--brief", "--json"), 2, "--brief with --json is a usage error, before any request");
 });
