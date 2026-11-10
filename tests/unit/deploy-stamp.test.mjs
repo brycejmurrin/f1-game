@@ -12,7 +12,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { STAGE_ROOT_FILES } from "../../tools/desktop/stage-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const pages = fs.readFileSync(path.join(ROOT, ".github/workflows/pages.yml"), "utf8");
@@ -178,4 +180,123 @@ test("staged title CSS preloads carry the same SHA-256 integrity as their styles
     assert.ok(/rel="stylesheet" href="fx\/a\.css\?v=[0-9a-f]{12}"/.test(html) && html.includes(`integrity="${want}"`));
     assert.equal(run("--check").status, 0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---- Coverage (2026-11-09 audit, W1): the stamp must cover EVERY lazy file the page can inject and EVERY root page
+// that carries `?v=` tags. js/core/script-loader.js refuses a lazy file a present apex-lazy-integrity map lacks, so a
+// roster the stamp forgot is dead live: LAZY_GARAGE_EXTERIOR and LAZY_DEV were, and overlay.html deployed `?v=dev`
+// keys with no SRI while --check passed.
+const M = createRequire(import.meta.url)("../../tools/manifest.cjs");
+const runAt = (dir, ...args) => spawnSync(process.execPath, ["tools/ci/bump-cache.mjs", ...args, "--root", dir, "--json"], { cwd: ROOT, encoding: "utf8" });
+const stageDir = (tag) => { fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true }); return fs.mkdtempSync(path.join(ROOT, "scratch", tag)); };
+const put = (dir, rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+const shell = (dir) => {
+  put(dir, "fx/shell.js", "// shell\n");
+  put(dir, "index.html", `<head><meta name="apex-build" content="1695"><script src="fx/shell.js?v=dev"></script></head>`);
+  put(dir, "version.json", '{"build":1695}');
+};
+
+test("loaderRosters() is every LAZY_* file list (no *_EDGES) plus DEFERRED", () => {
+  const rosters = M.loaderRosters();
+  const want = Object.keys(M).filter((k) => /^LAZY_[A-Z_]+$/.test(k) && !/_EDGES$/.test(k) && Array.isArray(M[k]));
+  for (const k of want) assert.ok(k in rosters, `${k} is a lazy file list the stamp must cover`);
+  assert.ok("DEFERRED" in rosters);
+  assert.ok(!Object.keys(rosters).some((k) => /_EDGES$/.test(k)), "edge lists are pairs, not files");
+  for (const k of ["LAZY_GARAGE_EXTERIOR", "LAZY_DEV"]) assert.ok(rosters[k] && rosters[k].length, `${k} (the W1 omission) is covered`);
+  const files = M.loaderRosterFiles();
+  assert.deepEqual(files, [...new Set(files)].sort());
+  for (const f of files) assert.equal(typeof f, "string");
+});
+
+test("every roster js/ hands the lazy loader is one the deploy stamp covers", () => {
+  // ApexRoster.<NAME> reads in js/ (lazy-bundles.js above all) that name a file list: each must be a loader roster.
+  const rosters = M.loaderRosters();
+  const seen = new Map();
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".js") && p !== path.join(ROOT, "js", "roster.js")) {
+        for (const m of fs.readFileSync(p, "utf8").matchAll(/ApexRoster\.((?:LAZY_[A-Z_]+|DEFERRED))\b/g)) {
+          if (!/_EDGES$/.test(m[1])) seen.set(m[1], path.relative(ROOT, p));
+        }
+      }
+    }
+  };
+  walk(path.join(ROOT, "js"));
+  const bundles = fs.readFileSync(path.join(ROOT, "js/core/lazy-bundles.js"), "utf8");
+  for (const name of ["LAZY_GARAGE_EXTERIOR", "LAZY_DEV"]) assert.match(bundles, new RegExp(`ApexRoster\\.${name}\\b`), `lazy-bundles.js still loads ${name}`);
+  assert.ok(seen.size >= 10, `read the loader's rosters (${seen.size})`);
+  const missing = [...seen].filter(([name]) => !(name in rosters)).map(([name, file]) => `${name} (${file})`);
+  assert.deepEqual(missing, [], "a roster the loader injects is absent from the deploy stamp");
+});
+
+test("--apply stamps the garage exterior and gfx-debug files into both lazy maps", () => {
+  const dir = stageDir("lazy-cover-");
+  const files = [...M.LAZY_GARAGE_EXTERIOR, ...M.LAZY_DEV];
+  try {
+    shell(dir);
+    for (const f of files) put(dir, f, `// fixture ${f}\n`);
+    const apply = runAt(dir, "--apply");
+    assert.equal(apply.status, 0, apply.stdout + apply.stderr);
+    const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    const v = JSON.parse(html.match(/id="apex-lazy-v">([^<]+)</)[1]);
+    const sri = JSON.parse(html.match(/id="apex-lazy-integrity">([^<]+)</)[1]);
+    for (const f of files) {
+      assert.match(v[f] || "", /^[0-9a-f]{12}$/, `${f} has a ?v= key`);
+      assert.match(sri[f] || "", /^sha256-[A-Za-z0-9+/]{43}=$/, `${f} has SRI`);
+    }
+    assert.equal(runAt(dir, "--check").status, 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("every staged root .html page is stamped (overlay.html included) and --check fails on a staged ?v=dev", () => {
+  const dir = stageDir("pages-cover-");
+  try {
+    shell(dir);
+    put(dir, "fx/a.js", "console.log('a');\n");
+    const pages = STAGE_ROOT_FILES.filter((f) => f.endsWith(".html") && f !== "index.html");
+    assert.ok(pages.includes("overlay.html"));
+    for (const p of pages) put(dir, p, `<script src="fx/a.js?v=dev"></script>\n`);
+    assert.equal(runAt(dir, "--apply").status, 0);
+    for (const p of pages) {
+      const text = fs.readFileSync(path.join(dir, p), "utf8");
+      assert.doesNotMatch(text, /\?v=dev/, `${p} was stamped`);
+      assert.match(text, /integrity="sha256-/, `${p} carries SRI`);
+    }
+    assert.equal(runAt(dir, "--check").status, 0);
+    // A root page outside the allow-list, staged with a dev key: --check names it.
+    put(dir, "stray.html", `<script src="fx/a.js?v=dev"></script>\n`);
+    const check = runAt(dir, "--check");
+    assert.equal(check.status, 1);
+    assert.ok(JSON.parse(check.stdout).assetMismatches.some((m) => m.page === "stray.html" && m.actual === "dev"));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the repo check still reads overlay.html (its tags stay ?v=dev in the tree)", () => {
+  const r = spawnSync(process.execPath, ["tools/ci/bump-cache.mjs", "--json"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const overlayTags = (fs.readFileSync(path.join(ROOT, "overlay.html"), "utf8").match(/\?v=dev"/g) || []).length;
+  assert.ok(overlayTags > 0);
+  const indexTags = (fs.readFileSync(path.join(ROOT, "index.html"), "utf8").match(/\b(?:src|href)="[^"?#]+\?v=[A-Za-z0-9._-]+"/g) || []).length;
+  assert.ok(JSON.parse(r.stdout).tagCount >= indexTags + overlayTags, "overlay.html's tags are counted");
+});
+
+test("ScriptLoader logs a warning when the deploy's integrity map lacks a lazy file", async () => {
+  const loader = fs.readFileSync(path.join(ROOT, "js/core/script-loader.js"), "utf8");
+  const warnings = [], appended = [];
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED_EDGES: [] }, window: { __APEX_BUILD: 1 }, setTimeout, clearTimeout,
+    Log: { warn: (_cat, msg) => warnings.push(msg) },
+    document: {
+      getElementById: (id) => id === "apex-lazy-integrity" ? { tagName: "SCRIPT", type: "application/json", textContent: "{}" } : null,
+      createElement: () => ({ dataset: {}, remove() {} }),
+      head: { appendChild: (el) => appended.push(el) },
+    },
+  });
+  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;", ctx, { filename: path.join(ROOT, "js/core/script-loader.js") });
+  const ok = await ctx.ScriptLoader.create().load(["js/garage/exterior.js"], [], { strict: true });
+  assert.equal(ok, false);
+  assert.equal(appended.length, 0, "a refused file is never injected");
+  assert.ok(warnings.some((w) => /integrity map/.test(w) && w.includes("js/garage/exterior.js")), JSON.stringify(warnings));
 });

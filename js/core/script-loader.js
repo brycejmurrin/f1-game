@@ -224,7 +224,11 @@ function loadBackendScripts(files, edges, opts) {
       return Promise.resolve({ ok: false, retry: false });
     }
     const sri = integrity(src);
-    if (sri === false) return Promise.resolve({ ok: false, retry: false });
+    if (sri === false) {
+      // A deployed SRI map without this file: the deploy stamp missed its roster (tools/manifest.cjs loaderRosters).
+      if (typeof Log !== "undefined") Log.warn("game", "lazy load refused, not in the deploy's integrity map: " + src);
+      return Promise.resolve({ ok: false, retry: false });
+    }
     let href = url(src);
     if (cacheBust) href += (href.indexOf("?") >= 0 ? "&" : "?") + "retry=" + cacheBust;
     return browserAttempt(src, href, sri, opts, () => {

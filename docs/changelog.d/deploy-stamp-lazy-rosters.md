@@ -1,0 +1,1 @@
+Fixed: on the live site the garage now shows the real-circuit exterior and `?gfxdebug=1` opens its overlay (the deploy stamp left their files out of its integrity map, so the loader refused them), and the stream overlay page now loads this build's scripts instead of a cached older copy

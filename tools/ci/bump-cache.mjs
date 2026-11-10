@@ -40,6 +40,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { strictFlags } from "../lib/cli-args.mjs";
+import { STAGE_ROOT_FILES } from "../desktop/stage-files.mjs";
 import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
@@ -58,10 +59,16 @@ const ROOT = STAGED ? path.resolve(opt("--root")) : path.resolve(path.dirname(fi
 const INDEX = path.join(ROOT, "index.html");
 const VERSION = path.join(ROOT, "version.json");
 // Every other ROOT page whose tags carry `?v=` — hashed like the shell, no
-// generation meta of its own. Optional: a staged copy that lacks one is a
-// pages.yml `cp` omission tests/unit/ci-coverage.test.mjs reports, not this
-// tool's failure.
-const EXTRA_PAGES = ["controller.html", "cockpit-view.html"].map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
+// generation meta of its own. DERIVED, never hand-kept: every root .html the
+// stage allow-list ships (tools/desktop/stage-files.mjs STAGE_ROOT_FILES) and,
+// in a staged copy, every root .html it actually holds — a hand list once left
+// overlay.html deploying `?v=dev` keys with no SRI while --check passed. A page
+// with no tags (bench.html) is a no-op. Optional: a staged copy that lacks one
+// is a pages.yml `cp` omission tests/unit/ci-coverage.test.mjs reports.
+const EXTRA_PAGES = [...new Set([
+  ...STAGE_ROOT_FILES.filter((f) => f.endsWith(".html")),
+  ...(STAGED ? fs.readdirSync(ROOT).filter((f) => f.endsWith(".html")) : []),
+])].filter((f) => f !== "index.html").sort().map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
 export const DEV_TOKEN = "dev";
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
 // Initial <script src> and <link rel="stylesheet"> tags also carry the file's FULL sha256 SRI once staged (#2312):
@@ -80,14 +87,12 @@ const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/
 const LAZY_V_ID = "apex-lazy-v";
 const LAZY_INTEGRITY_ID = "apex-lazy-integrity";
 
-// Every file the page injects WITHOUT a tag, from the roster's own source (the bitmap worker included since
-// audit4 I3 B6: its client takes the key from ScriptLoader.url like every other lazy file).
+// Every file the page injects WITHOUT a tag: tools/manifest.cjs loaderRosters(), i.e. every LAZY_* file list
+// and DEFERRED (the bitmap worker included since audit4 I3 B6: its client takes the key from ScriptLoader.url).
+// A hand-kept list here once omitted LAZY_GARAGE_EXTERIOR and LAZY_DEV, and the loader refuses a lazy file a
+// present SRI map lacks, so the garage exterior and ?gfxdebug=1 never loaded live (2026-11-09 audit, W1).
 function lazyFiles() {
-  const M = createRequire(import.meta.url)("../manifest.cjs");
-  const lists = [...Object.values(M.DEFERRED || {}), M.LAZY_AGENT, M.LAZY_RACE, M.LAZY_RACE_SESSION, M.LAZY_AUDIO,
-    M.LAZY_DATA, M.LAZY_NET, M.LAZY_EDITOR, M.LAZY_XR, M.LAZY_CAM_EDITOR, M.LAZY_CAREER_UI, M.LAZY_UI_PRESETS, M.LAZY_RESULTS_SHEET, M.LAZY_TRACK_BUILD, M.LAZY_CIRCUIT, M.LAZY_SCENERY,
-    (M.LAZY_WORKER || [])];
-  return [...new Set(lists.flat().filter((f) => typeof f === "string"))].sort();
+  return createRequire(import.meta.url)("../manifest.cjs").loaderRosterFiles();
 }
 // The map for the files this root actually holds (a fixture shell holds none).
 function lazyMap(integrity = false) {
