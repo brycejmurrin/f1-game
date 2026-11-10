@@ -29,6 +29,10 @@ const GripSteer = (function () {
     braking: false, shaped: 0, capSm: 0, dt: 0,
   };
   const _out = { delta: 0, capSm: 0 };
+  // apply()'s return bag: ONE shared object, overwritten each call (read it
+  // before the next call; copy fields to keep them).
+  const _res = { delta: 0, capSm: 0 };
+  function res(delta, capSm) { _res.delta = delta; _res.capSm = capSm; return _res; }
 
   // Notch 1 = OFF (k = 0); notch 10 = full (k = 1).
   function assistK(n) {
@@ -65,17 +69,17 @@ const GripSteer = (function () {
    * @param {number} driverDelta  shaped lock before ROAD_FOLLOW / line assist
    * @param {object} state  { vLat, yawRate, speed, muF, csFront, af, ar, braking, shaped, capSm, dt }
    * @param {number} [kk]   assist strength; defaults to the live slider level
-   * @returns {{ delta: number, capSm: number }}
+   * @returns {{ delta: number, capSm: number }}  shared bag, overwritten by the next call
    */
   function apply(driverDelta, state, kk) {
     const strength = kk == null ? k : +kk || 0;
-    if (!(strength > 0) || !state) return { delta: driverDelta, capSm: state && state.capSm || 0 };
+    if (!(strength > 0) || !state) return res(driverDelta, state && state.capSm || 0);
 
     const speed = +state.speed || 0;
-    if (!(speed > 0)) return { delta: driverDelta, capSm: state.capSm || 0 };   // rest + reverse
+    if (!(speed > 0)) return res(driverDelta, state.capSm || 0);   // rest + reverse
 
     const blend = strength * smoothstep(V_LO, V_HI, speed);
-    if (!(blend > 0)) return { delta: driverDelta, capSm: state.capSm || 0 };
+    if (!(blend > 0)) return res(driverDelta, state.capSm || 0);
 
     const vx = Math.max(Math.abs(speed), VX_FLOOR);
     const r = +state.yawRate || 0;
@@ -101,7 +105,10 @@ const GripSteer = (function () {
 
     const dt = Math.max(+state.dt || 1 / 60, 1e-4);
     const a = 1 - Math.exp(-dt / TAU);
-    const capSm = (state.capSm || 0) + (cap - (state.capSm || 0)) * a;
+    // Unset (0) filter state seeds at the target cap, not at 0 (which crushed
+    // lock for the first frames); cap >= 0.25*alphaPk > 0 so a seed is never 0.
+    const prev = state.capSm > 0 ? state.capSm : cap;
+    const capSm = prev + (cap - prev) * a;
 
     const deltaCap = s * Math.min(Math.abs(driverDelta), capSm);
     const shaped = Math.abs(+state.shaped || 0);
@@ -110,7 +117,7 @@ const GripSteer = (function () {
     let self = clamp(-betaR * 0.35, -0.5 * alphaPk, 0.5 * alphaPk) - r * 0.012;
     self *= (1 - 0.7 * Math.min(shaped, 1));
 
-    return { delta: lerp(driverDelta, deltaCap + self, blend), capSm };
+    return res(lerp(driverDelta, deltaCap + self, blend), capSm);
   }
 
   /** Call-site helper for updateCar: identity when the slider is OFF. */
