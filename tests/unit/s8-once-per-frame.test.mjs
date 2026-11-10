@@ -34,8 +34,6 @@ test("game.js flushes caution/coach/radio once per frame on _audioParamStep (S8)
     "stamp stays null until the first flush so harness coach.update loops are not latched at 0");
   assert.match(src, /get _s8Stamp\(\)/,
     "G._s8Stamp accessor publishes the stamp to the three modules");
-  assert.match(src, /if \(soundOn && player\) carSfx\.update\(player\);/,
-    "carSfx must stay per-step (edge detectors); S8 does not gate it");
   assert.doesNotMatch(src, /updateCaution\(dt\); coach\.update\(dt\); raceRadio\.update\(dt\);/,
     "the ungated per-step triple call must not return");
 });

@@ -37,7 +37,7 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // unique run_id group (the nightly must not share the tip's group —
   // run 2758). The train is not in this group: pages.yml passes a unique
   // concurrency_key. PR branches keep newest-wins cancel on pull_request.
-  assert.ok(ciWorkflow.includes(`group: ci-\${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}`),
+  assert.ok(ciWorkflow.includes(`group: ci-\${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)) || format('ref-{0}', github.ref_name) }}`),
     "PR runs of one branch share a group; dispatched/scheduled runs keep run_id (no ship-fast since 2026-10-16, no label/edit noise groups since 2026-11-03)");
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
     "newest wins on PR only; ship pushes must not cancel each other");
@@ -76,8 +76,9 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
   // and the hazard the old tip check guarded — moving the site backwards — by
   // an ancestry check against the LIVE shell's apex-sha, before the environment
   // and again under the Pages lock.
-  const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  deploy:")[0];
-  const deploy = pagesWorkflow.split("\n  deploy:")[1];
+  const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  stage:")[0];
+  const stageJob = pagesWorkflow.split("\n  stage:")[1].split("\n  deploy:")[0];
+  const deploy = pagesWorkflow.split("\n  deploy:")[1].split("\n  verify-live:")[0];
   assert.doesNotMatch(preflight, /^\s+environment:/m,
     "the cheap publishability check must not create a github-pages deployment record");
   assert.match(preflight, /deploy: \$\{\{ steps\.pub\.outputs\.publish \}\}/);
@@ -86,13 +87,15 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
   assert.match(preflight, /tools\/ci\/pages-publishable\.sh "\$GITHUB_SHA"/,
     "the pre-environment check asks the one question that matters: may THIS commit still be published?");
 
-  assert.match(deploy, /needs: publishable/);
+  assert.match(deploy, /needs: \[publishable, stage\]/);
+  assert.match(stageJob, /needs: publishable/);
   // `!cancelled()` plus an explicit result check: a job's implicit success()
   // looks at every job upstream TRANSITIVELY, so with the gate skipped (nothing
   // new / reused pass) deploy was skipped even though publishable said yes
   // (run 2237). The result check keeps a failed or skipped publishable fatal.
-  assert.match(deploy, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' \}\}/,
+  assert.match(deploy, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' && needs\.stage\.result == 'success' \}\}/,
     "a run that cannot publish must skip the environment job entirely; a reused gate must not");
+  assert.match(stageJob, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' \}\}/);
   const verifyLive = pagesWorkflow.split("\n  verify-live:")[1];
   assert.match(verifyLive, /if: \$\{\{ !cancelled\(\) && needs\.deploy\.result == 'success' \}\}/,
     "verify-live must run exactly when deploy succeeded, whatever was skipped upstream");
@@ -104,21 +107,28 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
   assert.doesNotMatch(deploy, /TIP=\$\(git rev-parse/);
   assert.doesNotMatch(deploy, /refs\/remotes\/origin/);
 
-  // Order: confirm publishable under the lock, then stage, then publish.
-  // Anchor on the STEP DECLARATIONS, not bare phrases (a comment names "Stage
-  // site" in prose, and a loose indexOf once reported the steps out of order).
+  // Staging and stamping run in the unprivileged stage job (2026-11-10); the
+  // privileged deploy job confirms publishable under the lock, then publishes,
+  // and runs no npm ci and no staging script. Anchor on STEP DECLARATIONS.
   const recheck = deploy.indexOf("- name: Confirm this commit may still be published (under the Pages lock)");
-  const stage = deploy.indexOf("- name: Stage site");
   // Pinned to a commit sha since 2026-09-22 (`@<sha> # v4.x.y`), so match the
   // action name, not the moving tag.
   const publish = deploy.search(/uses: actions\/deploy-pages@/);
-  assert.ok(recheck >= 0 && stage > recheck, "the in-lock check must precede staging");
-  assert.ok(publish > stage, "staging must precede publication");
+  assert.ok(recheck >= 0 && publish > recheck, "the in-lock check must precede publication");
+  assert.doesNotMatch(deploy, /setup-apex|npm ci|stage\.mjs/, "the job holding the Pages token runs no npm ci and no staging");
+  assert.ok(stageJob.indexOf("- name: Stage site") >= 0 && stageJob.search(/uses: actions\/upload-pages-artifact@/) > stageJob.indexOf("- name: Stage site"),
+    "the stage job stages, then uploads the Pages artifact");
+  assert.match(deploy, /id: deployment-retry\n\s+if: \$\{\{ steps\.deployment\.outcome == 'failure' \}\}/, "one retry of the publish step");
+  assert.match(deploy, /failed=deploy-pages/, "a Pages-side failure is named apart from a gate failure");
+  // The REST-visible marker the dispatcher reads (steps[].name / conclusion): its name is a contract.
+  const marker = parseYAML(pagesWorkflow).jobs.deploy.steps.find((st) => st.name === "Pages publish failed (platform)");
+  assert.equal(marker?.if, "${{ always() && steps.recheck.outcome == 'success' && steps.deployment.outcome == 'failure' && steps.deployment-retry.outcome == 'failure' }}",
+    "the platform-failure step runs only when both publish attempts failed after the recheck passed");
 
   // apex-sha is the provenance record AND the input to the next run's
   // monotonic check, so it must name the commit actually published: GITHUB_SHA.
-  assert.match(deploy, /PUBLISH_SHA="\$GITHUB_SHA"/);
-  assert.match(deploy, /name=\\"apex-sha\\" content=\\"\$PUBLISH_SHA\\"/,
+  assert.match(stageJob, /PUBLISH_SHA="\$GITHUB_SHA"/);
+  assert.match(stageJob, /name=\\"apex-sha\\" content=\\"\$PUBLISH_SHA\\"/,
     "apex-sha must name the commit actually published");
   assert.doesNotMatch(deploy, /echo "deploy=false"/,
     "once the environment job starts, unpublishable must fail rather than report success");
@@ -225,7 +235,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, "gh"),
     '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\nurl="$2"\n' +
-    'case "$url" in */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit 0;; esac\n' +
+    'case "$url" in */annotations*) id="${url%/annotations*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_ANN||"{}");const v=m[process.argv[1]];console.log(JSON.stringify(v===undefined?[{title:"apex-guards",message:"mode=full base=none"}]:v))\' "$id"; exit 0;;\n' +
+    '  */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit 0;; esac\n' +
     'sha="${url#*head_sha=}"; sha="${sha%%&*}"\n' +
     'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:(m[process.argv[1]]||[]).map((r)=>({head_sha:process.argv[1],...r}))}))\' "$sha"\n');
   fs.chmodSync(path.join(bin, "gh"), 0o755);
@@ -239,7 +250,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     ["Smoke (page boots, __apex responds) (1)", "success"], ["Structural guards", "success"],
     ["Structural guards (tooling A)", "success"], ["Structural guards (tooling B)", "success"],
     ["Pure-node unit suites (vm-a1)", "success"], ["Pure-node unit suites (page-a)", "success"], ["Pure-node unit suites (page-b)", "success"], ["Driving model (characterization traces)", "skipped"],
-  ].map(([name, conclusion]) => ({ name: prefix + name, status: "completed", conclusion: name in over ? over[name] : conclusion }));
+  ].map(([name, conclusion]) => ({ name: prefix + name, status: "completed", conclusion: name in over ? over[name] : conclusion,
+    ...(name === "Structural guards (tooling A)" ? { id: 500 } : {}) }));
   const fullJobs = {
     7: gateJobs(),
     // Pages run 3112 (37689226760): smoke-only, sweeps/selection/guards skipped.
@@ -317,6 +329,13 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
+  // FULL GUARDS, FIRST ATTEMPT (2026-11-10).
+  assert.equal(verdict(M2, { [D]: [run({ run_attempt: 2 })] }).reuse, "false",
+    "a run that passed only on a re-run failed on this tree once: not a gate (run 42730286157)");
+  assert.equal(verdict(M2, { [D]: [run({ run_attempt: 1 })] }).reuse, "true", "a first-attempt pass is");
+  for (const [ann, why] of [[[{ title: "apex-guards", message: "mode=changed base=none" }], "narrowed guards"],
+    [[{ title: "apex-guards", message: "mode=unknown base=none" }], "an unknown scope"], [[], "no record at all"]])
+    assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_ANN: JSON.stringify({ 500: ann }) }).reuse, "false", `${why} is not a full gate`);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

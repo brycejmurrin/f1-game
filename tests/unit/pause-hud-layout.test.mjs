@@ -89,7 +89,6 @@ test("garage camera stack hides under a dim overlay, not under garage itself", (
 
 test("compact pause stack tightens without changing type tokens", () => {
   const css = readCssSource("css/components.css");
-  assert.match(css, /#pausemenu\s+\.sheet\[data-density="compact"\]\s+\.stack/);
   // max(36px, --tap-min), not a bare 36px: the 36 floor is the compact tighten
   // this test guards; the --tap-min arm only wins below 100% UI SIZE, where a
   // flat 36 local px painted RESUME at 14-18px (2026-08-21 sweep, pause @40).

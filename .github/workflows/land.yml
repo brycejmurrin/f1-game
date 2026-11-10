@@ -434,6 +434,11 @@ jobs:
     runs-on: ubuntu-latest
     # One runner replaces the old post (10 min) + arm (3 min) job boundary.
     timeout-minutes: 13
+    # LAND_TOKEN can live in this environment, restricted to the deploy branch (every trigger of this file runs on
+    # it). Until it is moved there the repository secret serves. `deployment: false`: no deployment record per run.
+    environment:
+      name: land
+      deployment: false
     permissions:
       statuses: write
       checks: read
@@ -490,15 +495,31 @@ jobs:
           # Not a check run: an API-made check run on a PR head joins an arbitrary Actions suite, and a newer run of that
           # suite's workflow then hides it from the ruleset ("Expected", #3914 2026-10-27).
           # WROTE is the state write_gate posted ("" when it posted nothing).
+          # land_run <target_url>: true when the URL names a run of THIS workflow file (land.yml) on the deploy
+          # branch. Every land.yml trigger but workflow_dispatch runs the default branch's copy; a dispatch must name
+          # the deploy branch too. The status author must also be the Actions bot (checked by the caller).
+          land_run() {
+            local id
+            [[ "$1" =~ ^"${GITHUB_SERVER_URL}/${R}/actions/runs/"([0-9]+)$ ]] || return 1
+            id=${BASH_REMATCH[1]}
+            gh api "repos/$R/actions/runs/$id" | jq -e --arg b "$DEPLOY_BRANCH" \
+              '((.path // "") | sub("@.*$"; "")) == ".github/workflows/land.yml" and (.event != "workflow_dispatch" or .head_branch == $b)' >/dev/null
+          }
           write_gate() {
-            local head=$1 st=$2 c=$3 title=$4 summary=$5 seen state body
+            local head=$1 st=$2 c=$3 title=$4 summary=$5 seen seen_t seen_u seen_c state body
             WROTE=""
             # A newer status from THIS run (an earlier attempt: a re-run reuses resolve's AT) is not a newer verdict;
             # run 40740152111 kept its own attempt-1 error over its attempt-2 pass on #4110 (2026-10-28).
             seen=$(gh api "repos/$R/commits/$head/statuses?per_page=100" --jq \
-              '[.[] | select(.context == "gate")] | first | if . == null then "" else "\(.created_at | fromdateiso8601 | floor) \(.target_url // "")" end') || return 1
-            if [ -n "$seen" ] && [ "${seen%% *}" -gt "$AT_S" ] && [ "${seen#* }" != "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" ]; then
-              echo "gate on ${head:0:12}: kept the newer verdict (posted at epoch ${seen%% *} > $AT_S = $AT)"; return 0
+              '[.[] | select(.context == "gate")] | first | if . == null then "" else "\(.created_at | fromdateiso8601 | floor) \(.target_url // "-") \(.creator.login // "-")" end') || return 1
+            read -r seen_t seen_u seen_c <<<"$seen"
+            if [ -n "$seen" ] && [ "$seen_t" -gt "$AT_S" ] && [ "$seen_u" != "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" ]; then
+              # A newer verdict is kept only when another land.yml run on the deploy branch posted it, as the Actions
+              # bot; any other newer `gate` status is replaced by this run's verdict.
+              if [ "$seen_c" = "github-actions[bot]" ] && land_run "$seen_u"; then
+                echo "gate on ${head:0:12}: kept the newer verdict (posted at epoch $seen_t > $AT_S = $AT by $seen_u)"; return 0
+              fi
+              echo "::warning::gate on ${head:0:12}: a newer status ($seen_c, $seen_u) was not posted by a land.yml run on $DEPLOY_BRANCH; posting this run's verdict over it"
             fi
             case "$st/$c" in completed/success) state=success ;; completed/*) state=failure ;; *) state=pending ;; esac
             body=$(jq -n --arg st "$state" --arg t "$title" --arg u "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" \
@@ -650,6 +671,15 @@ jobs:
           [ "$(jq -r .head.sha <<<"$pr")" = "$head" ] || skip="head moved past ${head:0:12}"
           jq -e '[.labels[].name] | index("land") and (index("hold") | not)' <<<"$pr" >/dev/null || skip="\`land\` gone or \`hold\` set"
           [ -n "$tip" ] || skip="the verdict names no deploy tip"
+          # THE `gate` THIS RUN POSTED IS THE ONE ON THE HEAD (2026-11-10). The ruleset requires a `gate` status, and any
+          # token with statuses: write can post one. Arm only when this run is the deploy branch's land.yml and the
+          # newest `gate` on the head is the success this run's post step just wrote, as the Actions bot.
+          self="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          [ "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/land.yml@refs/heads/$DEPLOY_BRANCH" ] \
+            || skip="this run is not the deploy branch's land.yml ($GITHUB_WORKFLOW_REF)"
+          gate=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/statuses?per_page=100" \
+            --jq '[.[] | select(.context == "gate")] | first | "\(.state) \(.creator.login // "-") \(.target_url // "-")"') || gate="unreadable"
+          [ "$gate" = "success github-actions[bot] $self" ] || skip="the newest gate status on ${head:0:12} is not this run's success ($gate)"
           if [ -n "$skip" ]; then
             echo "::notice::not arming #$n: $skip" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
           fi

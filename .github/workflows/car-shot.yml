@@ -50,8 +50,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: car-shot-${{ github.ref }}
-  cancel-in-progress: true
+  # One group per dispatch: two requests for different shots on one branch both
+  # finish instead of the second cancelling the first.
+  group: car-shot-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   shot:

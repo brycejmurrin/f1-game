@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // tools/perf/cpuprofile-summary.mjs — self time by file and by function (url:line) and inclusive time by function
-// for a V8 .cpuprofile (DevTools / CDP Profiler.stop; tools/perf/race-entry-timer.mjs APEX_PROFILE). Self time =
+// for a V8 .cpuprofile (DevTools / CDP Profiler.stop; the race-entry timer that wrote them left 2026-11-10, git keeps it). Self time =
 // samples attributed to the node itself; inclusive = the node and its descendants, each function counted once per
 // sample. B·H14 2026-10-21 (docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md, I5 is the diff of two of these).
 // @doc Summarise a .cpuprofile: self ms by file, top-N self and inclusive ms by function url:line.

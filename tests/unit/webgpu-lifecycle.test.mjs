@@ -416,10 +416,12 @@ function makeGpuHarness(opts = {}) {
                 Object.defineProperty(o, "device", { value: "", enumerable: false });
                 return o;
               })()
+            // Chrome 140+: the fallback flag lives on GPUAdapterInfo only (GPUAdapter.isFallbackAdapter removed).
             : (opts.softAdapter
-              ? {}
+              ? { isFallbackAdapter: true }
               : { vendor: "test", architecture: "test", device: "mock-gpu" }),
-          isFallbackAdapter: !!(opts.softAdapter || opts.softAdapterNonEnum),
+          // Pre-140 Chrome kept it on the adapter; opts.legacyFallback keeps that shape covered.
+          ...(opts.legacyFallback ? { isFallbackAdapter: true } : {}),
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
@@ -1926,7 +1928,13 @@ test("software / empty-info adapter boots WGX (soft-present, MSAA 1)", async () 
   const gfx = await h.create();
   assert.ok(gfx, "SETTINGS ▸ WEBGPU must stay on WGX on software adapters");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+  assert.equal(gfx.softPresent(), true, "adapter.info.isFallbackAdapter (Chrome 140 shape) marks it software");
   assert.equal(h.WGX.lastFailure(), null);
+  const legacy = makeGpuHarness({ legacyFallback: true });
+  const g2 = await legacy.create();
+  assert.equal(g2.softPresent(), true, "the pre-140 GPUAdapter.isFallbackAdapter still counts");
+  const hw = makeGpuHarness({});
+  assert.equal((await hw.create()).softPresent(), false, "a hardware adapter is not soft");
 });
 
 test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", async () => {

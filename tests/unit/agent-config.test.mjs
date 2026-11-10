@@ -736,7 +736,7 @@ test("every skill reference is linked from its SKILL.md and, past 100 lines, ope
 // rule. Nothing any agent reads may tell it to squash again.
 test("no agent-facing file tells an agent to arm or merge with SQUASH", () => {
   const files = spawnSync("git", ["ls-files", "AGENTS.md", ".claude/agents", ".claude/skills", ".claude/rules",
-    ".cursor", "cursor-plugins", ".codex", ".agents", "docs/notes/APEX-STEWARD-CARD-2026-10-05.md", "tools/ci/deploy.mjs"],
+    ".cursor", ".codex", ".agents", "docs/notes/APEX-STEWARD-CARD-2026-10-05.md", "tools/ci/deploy.mjs"],
     { cwd: ROOT, encoding: "utf8" }).stdout.split("\n").filter(Boolean)
     .filter((f) => !fs.lstatSync(path.join(ROOT, f)).isSymbolicLink());
   assert.ok(files.length > 20, "the agent-facing file listing came back nearly empty");

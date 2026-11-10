@@ -571,8 +571,14 @@ function _applyRaceBody() {
     // (Spa 0.0043) under the per-track fogDensityMul ~2 was a white wall without a
     // ceiling. Clamp the EFFECTIVE density (divide the preset multiplier back out), both
     // ends scaled by the FOG BOOST knob (1 = no extra haze stays honest).
+    // Divide out the SHIPPED multiplier, not the live one: the renderers multiply by the
+    // live LT.fogDensityMul each frame, so the player's FOG DENSITY scales the clamped
+    // band (ratio live/shipped) and survives every re-apply and a reload. Dividing the
+    // live value made the clamp swallow the slider at the next applyRaceSettings.
     {
-      const _dm = LT.fogDensityMul > 0 ? LT.fogDensityMul : 1;
+      const _sh = typeof LightStore !== "undefined" && LightStore.shipped ? LightStore.shipped("fogDensityMul") : undefined;
+      const _dmv = typeof _sh === "number" ? _sh : LT.fogDensityMul;
+      const _dm = _dmv > 0 ? _dmv : 1;
       const _k = _fogMul / FOG_WX_DEF_BOOST;
       const _eff = (G.frame.fogDensity || 0.0017) * _fogMul * _dm;
       G.frame.fogDensity = clamp(_eff, FOG_WX_MIN_DENSITY * _k, FOG_WX_MAX_DENSITY * _k) / _dm;
@@ -721,6 +727,7 @@ function _applyRaceBody() {
 // leave the glowing-glass towers reading as dark boxes. Dusk/dawn ramp by the
 // (genuinely low) sun elevation; day stays dark. min(1): glsl-lit.js mix()
 // EXTRAPOLATES past 1. The ONE formula: game.js's frame and the resolve above.
+// The twilight factor peaks at 0.05 + 0.58 = 0.63, so its 0.70 cap never binds.
 function floodEmit(sunY) {
   const tod = G.raceTimeOfDay;
   const night = tod === "night" || (tod === "default" && !!(G.track && G.track.def && G.track.def.night));

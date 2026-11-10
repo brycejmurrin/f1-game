@@ -2,7 +2,6 @@
 /* Apex 26 — the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live through __apex.flybyCam(), reorder the list and copy it out as window.FlybyShots for tools/gen/bake-flyby.mjs. */
 const FlybyPanel = (function () {
 
-// ---- the shot language, as an editable registry --------------------------
 //
 // js/camera/flyby-seq.js owns the MEANING of these fields; this table owns how
 // far a slider may push each one. The ranges are authoring bounds, not physical
@@ -52,7 +51,6 @@ const CORNER_NS = ["first", "mid", "late", "slowest", "fastest", "lore", "1", "2
 const DUR = { min: 0.01, max: 1, step: 0.005, unit: "" };
 const FOV = { min: 15, max: 90, step: 0.5, unit: "°" };
 
-// ---- pure list operations -------------------------------------------------
 //
 // Everything below this line is data in, data out: no DOM, no globals, no
 // FlybySeq. That is deliberate — it is the half a node test can hold, and
@@ -271,7 +269,6 @@ const ops = {
   clone, poseFields, fieldLabel, metricValue, switchPoseAt, uniqueId, blankShot, savedForm, fromSaved,
   addShot, duplicateShot, deleteShot, moveShot, normaliseDurs, shotErrors, validateShots, toBlob,
 };
-
 
 let _camEdLoad = null;
 // Files that evaluated on an earlier (failed) attempt: re-injecting a const-declaring one throws "already declared".

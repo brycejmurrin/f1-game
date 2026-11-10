@@ -181,7 +181,6 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   assert.match(hud, /#game-metrics[\s\S]*z-index:\s*11/);
   assert.match(hud, /#game-metrics\[data-pos="left"\]/);
   assert.match(hud, /#game-metrics\[data-pos="right"\]/);
-  assert.match(hud, /#game-metrics-bar/);
   assert.match(hud, /#game-metrics-bar > button[\s\S]*min-height:\s*var\(--tap-sm\)/);
   assert.match(hud, /#game-metrics\[data-size="m"\]/);
   assert.match(hud, /#game-metrics\[data-size="l"\]/);

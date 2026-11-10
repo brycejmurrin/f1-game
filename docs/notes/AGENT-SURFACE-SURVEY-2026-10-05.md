@@ -1,5 +1,7 @@
 # Agent surface survey — 2026-10-05
 
+Summary: Fifth pass: every skill, subagent, hook, rule and MCP catalog graded against the October 2026 Claude Code docs, the Agent Skills spec and the MCP tools spec — what the tests already pin, the gaps (no MCP annotations or outputSchema, two skills the routing eval never measured, a two-level reference chain, a broken index table), what was withdrawn as covered, and a ranked one-PR-each list.
+
 Fifth pass over the agent surface (after `AGENT-TOOLING-RESEARCH-2026-09-22.md`,
 whose §5 gap list this re-measures). The method this time: read every
 skill, subagent, hook, rule and MCP catalog in the tree, then grade each

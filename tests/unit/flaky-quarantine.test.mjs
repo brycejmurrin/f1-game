@@ -201,7 +201,8 @@ test("the selected gate honours the quarantine: its specs get a leg of their own
   const run = yml.slice(from, yml.indexOf("- name: Spec timings (junit", from));
   assert.ok(from > 0 && run.length > 0, "the selected job's run step is gone");
   assert.match(run, /APEX_FAIL_ON_FLAKY: 1/);
-  assert.match(run, /--retries=\$\{\{ matrix\.retries \|\| 0 \}\}/);
+  assert.match(run, /RETRIES: \$\{\{ matrix\.retries \|\| 0 \}\}/);
+  assert.match(run, /--retries="\$RETRIES"/);
 });
 
 // Fixture ledgers: the policy is pinned on rows these tests own, so retiring,

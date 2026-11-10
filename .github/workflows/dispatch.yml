@@ -7,8 +7,10 @@ name: Dispatch
 # read 2026-11-03). The two secrets are the task's own API-trigger URL and token (tools/ci/worker-prompt.md).
 #
 # Trust model, in five lines:
-# 1. `ref:` pins the deploy branch, so a PR's edit of dispatch.mjs or this file never runs here before it lands.
-# 2. `pull_request` (never pull_request_target): a fork's run gets a read-only token and its writes fail closed.
+# 1. `ref:` pins the deploy branch's dispatch.mjs. Every trigger below runs the default branch's copy of this
+#    file, so a PR's edit of either file runs only once it lands. No `pull_request` trigger: that event runs the
+#    PR's own copy of this file. PR label and draft changes are picked up by the next comment, issue event or tick.
+# 2. The job runs in the `dispatch` environment, so its two secrets can be scoped to the deploy branch.
 # 3. The job skips runs the bot caused itself (its labels and comments), so a write never re-triggers a cycle.
 # 4. Only the deploy branch's checkout runs; no npm install, no PR code, no browser: node builtins + repo libs.
 # 5. One concurrency group, never cancelled: two overlapping events serialise instead of double-launching.
@@ -18,10 +20,6 @@ on:
     - cron: "17 * * * *"
   issues:
     types: [labeled, unlabeled, closed, reopened]
-  pull_request:
-    types: [labeled, unlabeled, closed, ready_for_review, converted_to_draft]
-  check_suite:
-    types: [completed]
   # zizmor: ignore[dangerous-triggers] the comment body is never interpolated or run: dispatch.mjs reads it as data over REST, from the deploy branch's own checkout
   issue_comment:
     types: [created]
@@ -49,6 +47,11 @@ jobs:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Secrets resolve from this environment first, then the repository. `deployment: false`: no deployment record
+    # per cycle. https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax (read 2026-11-10)
+    environment:
+      name: dispatch
+      deployment: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,3 +73,27 @@ jobs:
           else
             node tools/ci/dispatch.mjs --apply --fire
           fi
+      # .github/labels.json is the label list; nothing applies it. This step only REPORTS drift (a missing label,
+      # or a colour or description that differs) as warnings; it changes no label and never fails the cycle.
+      - name: Labels drift (report only)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh label list --repo "$GITHUB_REPOSITORY" --limit 500 --json name,color,description > "$RUNNER_TEMP/labels-live.json"
+          # shellcheck disable=SC2016 # the single-quoted text is JavaScript, not shell
+          node -e '
+            const fs = require("fs");
+            const want = JSON.parse(fs.readFileSync(".github/labels.json", "utf8"));
+            const have = new Map(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).map((l) => [l.name, l]));
+            let n = 0;
+            for (const l of want) {
+              const h = have.get(l.name);
+              const why = !h ? "missing" : h.color.toLowerCase() !== l.color.toLowerCase() ? `color ${h.color} != ${l.color}`
+                : (h.description || "") !== l.description ? "description differs" : "";
+              if (why) { n++; console.log(`::warning title=labels.json drift::${l.name}: ${why}`); }
+            }
+            console.log(`labels.json: ${want.length} labels, ${n} drifted`);
+          ' "$RUNNER_TEMP/labels-live.json"

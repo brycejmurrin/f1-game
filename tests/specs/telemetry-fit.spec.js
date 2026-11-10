@@ -207,3 +207,62 @@ for (const v of HEAD_WINDOWS) {
     });
   });
 }
+
+/* ── THE TELEMETRY PLAYER'S ✕ on a phone held sideways (#5069) ──
+ * The player's only exit painted 37x52 at 844x390 (a compact `width: 34px` rule
+ * outranked the hub's --tap-paint ✕). At the owner's export and at UI SIZE 200%
+ * it is a 44 px target on both axes, and the trace is reachable: the popup body
+ * is the scroller, so the chart's bottom scrolls inside it.
+ * Measured 2026-11-10 (probe at the export): ✕ 52x52 at every cell; body
+ * scrollHeight 738 / clientHeight 213 at 200%. */
+async function openFastestLap(page) {
+  await page.waitForFunction(() => typeof F1API !== "undefined" && document.getElementById("dh-tab-telemetry"), null, { polling: 100 });
+  await page.evaluate(() => {
+    const SESSION = { sessionKey: 9999, meetingKey: 1234, year: 2026, name: "Race", type: "Race", circuit: "Singapore", country: "Singapore" };
+    const t0 = 1e12, dur = 95.1, car = [], loc = [];
+    for (let i = 0; i * 0.1 <= dur; i++) { const t = i * 0.1, a = (t / dur) * 2 * Math.PI;
+      car.push({ t, date: t0 + t * 1000, speed: 200 + 90 * Math.sin(a * 3), throttle: 50 + 50 * Math.sin(a * 2), brake: 0, gear: 6, rpm: 11000, drs: 8 }); }
+    for (let i = 0; i * 0.27 <= dur; i++) { const t = i * 0.27, a = (t / dur) * 2 * Math.PI;
+      loc.push({ x: 3000 + 1600 * Math.cos(a), y: 4000 + 1400 * Math.sin(a), date: t0 + t * 1000 }); }
+    const none = () => Promise.resolve([]);
+    Object.assign(F1API, {
+      schedule: none, driverStandings: none, constructorStandings: none, sessionResult: none, stints: none, pits: none,
+      latestSession: () => Promise.resolve(SESSION),
+      meetings: () => Promise.resolve([{ meetingKey: 1234, name: "Singapore GP", year: 2026 }]),
+      sessionsForMeeting: () => Promise.resolve([SESSION]),
+      sessionDrivers: () => Promise.resolve([{ num: 4, code: "NOR", name: "Lando Norris", color: "F47600", team: "McLaren" }]),
+      fastestLap: () => Promise.resolve({ lapNumber: 60, lapDuration: dur, s1: 28.792, s2: 41.089, s3: 27.174, dateStart: new Date(t0).toISOString() }),
+      carData: () => Promise.resolve(car), locationData: () => Promise.resolve(loc),
+    });
+    document.getElementById("dh-tab-telemetry").click();
+  });
+  await page.locator(".dh-dchip").filter({ hasText: "NOR" }).first().click();
+  await page.locator(".dh-livebtn", { hasText: "LOAD FASTEST LAP" }).evaluate((b) => b.click());
+  await expect(page.locator(".dh-tpopup[open] canvas[aria-label^='Telemetry trace chart']")).toBeVisible();
+}
+
+for (const v of [HEAD_WINDOWS[2], HEAD_WINDOWS[0]]) {
+  test.describe(`telemetry player ✕ · ${v.name}`, () => {
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    for (const ui of [null, 200]) {
+      test(`the close ✕ is ≥ 44 px on both axes and the trace is reachable · UI ${ui ?? "export"}`, async ({ page }) => {
+        await openHubAtExport(page, v);
+        if (ui != null) await setKnobs(page, "large", ui);
+        await openFastestLap(page);
+        const r = await page.evaluate(() => {
+          const close = document.querySelector(".dh-tpopup[open] .dh-close").getBoundingClientRect();
+          const body = document.querySelector(".dh-tpopup[open] .dh-tpopup-body");
+          const chart = document.querySelector(".dh-tpopup[open] canvas[aria-label^='Telemetry trace chart']");
+          chart.scrollIntoView({ block: "end" });
+          const c = chart.getBoundingClientRect(), b = body.getBoundingClientRect();
+          return { w: close.width, h: close.height, chartBottom: c.bottom, bodyBottom: b.bottom, chartTop: c.top, bodyTop: b.top };
+        });
+        const cell = `${v.name} · UI ${ui ?? "export"}`;
+        expect(r.w, cell + ": ✕ width").toBeGreaterThanOrEqual(44);
+        expect(r.h, cell + ": ✕ height").toBeGreaterThanOrEqual(44);
+        expect(r.chartBottom, cell + ": the trace's bottom scrolls into the popup body").toBeLessThanOrEqual(r.bodyBottom + 1);
+        expect(r.chartBottom, cell + ": and is on screen").toBeGreaterThan(r.bodyTop);
+      });
+    }
+  });
+}

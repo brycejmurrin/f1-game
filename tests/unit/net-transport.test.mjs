@@ -815,6 +815,42 @@ function pcHarness() {
   return { ep, state, event, pcClosed: () => closed, done };
 }
 
+// NetPlay.stop() sends BYE and closes in one breath. shutdown("local") emptied
+// the backpressure queue and called pc.close() at once, which aborts SCTP with
+// the BYE still buffered: the peer kept a ghost rival until its own timeout.
+test("a local close under backpressure sends the queued BYE before pc.close(), within a cap", async () => {
+  const h = pcHarness();
+  try {
+    const sent = [];
+    h.event.bufferedAmount = 1e6;                 // the SCTP buffer is backed up
+    h.event.send = (d) => { sent.push(JSON.parse(d).t); };
+    const reasons = [];
+    h.ep.onClose((r) => reasons.push(r));
+    assert.equal(h.ep.send("event", JSON.stringify({ t: "bye", d: {} })), true, "a critical BYE queues under backpressure");
+    assert.deepEqual(sent, [], "fixture: nothing reached the channel yet");
+    h.ep.close();
+    assert.deepEqual(reasons, ["local"], "the close is reported at once, as before");
+    assert.equal(h.ep.status, "closed");
+    assert.equal(h.ep.send("event", JSON.stringify({ t: "lap", d: {} })), false, "nothing new is accepted");
+    assert.deepEqual(sent, ["bye"], "the queued BYE is handed to the channel");
+    assert.equal(h.pcClosed(), 0, "pc.close() waits while the buffer drains");
+    h.event.bufferedAmount = 0;                   // it drained
+    await new Promise((r) => setTimeout(r, 60));
+    assert.equal(h.pcClosed(), 1, "…then the pc is released");
+    // A buffer that never drains is capped.
+    const g = pcHarness();
+    try {
+      g.event.bufferedAmount = 1e6; g.event.send = () => {};
+      g.ep.send("event", JSON.stringify({ t: "bye", d: {} }));
+      g.ep.close();
+      await new Promise((r) => setTimeout(r, 200));
+      assert.equal(g.pcClosed(), 0);
+      await new Promise((r) => setTimeout(r, 450));
+      assert.equal(g.pcClosed(), 1, "released by the ~500 ms cap");
+    } finally { g.done(); }
+  } finally { h.done(); }
+});
+
 test("a peer channel close releases the RTCPeerConnection, exactly once", () => {
   const h = pcHarness();
   try {
@@ -1084,6 +1120,39 @@ test("ICE failed after connecting rides the grace and restarts ICE through the c
     assert.equal(h.a.status, "open", "a recovered connection outlives the grace");
     assert.equal(h.b.status, "open");
     assert.ok(!h.a.pc.calls.includes("close"));
+  } finally { h.done(); }
+});
+
+test("a courier offer that fails (no_relay mid network switch) does not end ICE restarts for the outage (#4998)", async () => {
+  const board = boardCourier();
+  let failNext = true;
+  const courier = {
+    ...board,
+    offer: (code, sdp, token) => {
+      if (failNext) { failNext = false; board.offers.push({ code, sdp, token, failed: true }); return Promise.resolve({ ok: false, error: "no_relay" }); }
+      return board.offer(code, sdp, token);
+    },
+  };
+  const h = restartPair(courier);
+  try {
+    await h.connect();
+    h.a.setDisconnectGrace(25000);
+    h.b.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.set(h.b, "failed");
+    h.advance(0);
+    assert.equal(await h.until(() => board.offers.length === 1), true, "the first restart offer went out");
+    await h.flush();
+    assert.equal(h.a.stats().iceRestarts, 1);
+    // The network is back a few seconds later; nothing else changes state.
+    for (let i = 0; i < 4 && h.a.stats().iceRestarts < 2; i++) { h.advance(1000); await h.flush(); }
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 2 && h.a.pc.signalingState === "stable" &&
+      !!h.a.pc.currentRemoteDescription && h.a.pc.currentRemoteDescription.sdp === h.b.pc.currentLocalDescription.sdp), true,
+      "the offerer tries again inside the grace and the answer lands (restarts: " + h.a.stats().iceRestarts + ")");
+    assert.equal(board.offers[1].code, board.offers[0].code, "the retry stays on the attempt the answerer is listening for");
+    h.set(h.a, "connected"); h.set(h.b, "connected");
+    h.advance(30000);
+    await h.flush();
+    assert.equal(h.a.status, "open", "the recovered wire outlives the grace");
   } finally { h.done(); }
 });
 

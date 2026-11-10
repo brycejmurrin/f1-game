@@ -615,17 +615,7 @@ test("Baku races in daylight by default, so its identity line is a day line and 
   assert.doesNotMatch(line, /\b(night|floodlit|floodlights?|dark|after dark|moon)\b/i, "Baku's identity line is a night line");
 });
 
-// The Istanbul `corner` line IS voiced (voice-pack.test.mjs fails on any reworded line), so its fix ships with a re-bake of that line.
-test("no lore line states a duration the circuit does not have (Istanbul turn eight is seconds, not a minute)", () => {
-  const { CircuitLore } = load();
-  assert.ok(CircuitLore.LORE.istanbul.corner, "Istanbul lost its turn-eight line");
-  assert.doesNotMatch(CircuitLore.LORE.istanbul.corner, /most of a minute/i);
-  for (const [id, row] of Object.entries(CircuitLore.LORE)) {
-    for (const [slot, text] of Object.entries(row)) {
-      assert.doesNotMatch(text, /\b(lasts?|for) (most of |nearly |almost )?(a|one|two|\d+) minutes?\b/i, `${id}.${slot} gives a corner a minute-long duration`);
-    }
-  }
-});
+// Lore-duration assertion dropped by Bryce's decision on #5340 (option b); the lore rewrite + voice-pack re-bake is #5372.
 
 test("the circuit's own line is spoken, and outranks the numbers when the budget is tight", () => {
   const spa = info({ track: { id: "spa", name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 }, turns: 19 });

@@ -8,7 +8,7 @@
 //        tlx-m8-singapore-night-{tlx,glx}.png shafts / glow / bloom
 //        tlx-m8-monza-viz-ssao.png            SSAO bisect blit (TLX)
 // Runs SEQUENTIALLY (one browser at a time) — shared-box etiquette.
-// Patterns follow spike/capture.mjs (free-port server, preinstalled Chromium).
+// Patterns follow the deleted spike/capture.mjs (free-port server, preinstalled Chromium; git history).
 
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync, createReadStream, statSync, writeFileSync } from "node:fs";
@@ -45,7 +45,7 @@ async function startServer() {
   const port = await freePort();
   // Containment compares against ROOT + sep, never the bare prefix: without the
   // separator a sibling directory that merely SHARES the prefix (…/f1-game-extra)
-  // passes the check. spike/capture.mjs already guards it this way.
+  // passes the check. The deleted spike/capture.mjs guarded it this way.
   const root = ROOT + sep;
   const server = createHttpServer((req, res) => {
     try {

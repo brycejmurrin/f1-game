@@ -40,11 +40,21 @@ const PitCrewAnim = (function () {
     rigs.set(key, r);
     return r;
   }
+  const ready = () => typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.has("pit") && typeof GarageCrewMotion !== "undefined" && typeof GarageCrew !== "undefined" && !!GarageCrew.helmet;
+  /** Build the player's rig ahead of the stop (car-draw.js drainDeferredCarWarm, under the start lights), so the
+   *  frame the car reaches its box draws a rig that exists instead of building its meshes (#5051). False when
+   *  there is nothing to build yet (an AI car, the clip data not loaded): draw() still builds on demand. */
+  function warm(G, c) {
+    if (!on || !c || !c.isPlayer || !G || !G.gfx || !ready()) return false;
+    if (G.gfx !== gfx) { gfx = G.gfx; rigs.clear(); }
+    rigFor(c);
+    return true;
+  }
   /** Draw the animated crew round car c in its grounded basis `base`; false
    *  leaves the stop to the static crew mesh. */
   function draw(G, c, base, opts) {
     if (!on || !c || !c.isPlayer || c.pitState !== "box" || !G || !G.gfx || !G.pits || !G.pits.stopAnim) return false;
-    if (typeof GarageCrewChoreo === "undefined" || !GarageCrewChoreo.has("pit") || typeof GarageCrewMotion === "undefined" || typeof GarageCrew === "undefined" || !GarageCrew.helmet) return false;
+    if (!ready()) return false;
     const eye = G.camEye;
     if (eye) {
       const dx = base[12] - eye[0], dy = base[13] - eye[1], dz = base[14] - eye[2];
@@ -62,5 +72,5 @@ const PitCrewAnim = (function () {
   function setEnabled(v) { if (v != null) on = !!v; return on; }
   /** Frames drawn and their CPU submit ms since the last read (clears). */
   function stats() { const out = { frames, ms }; frames = 0; ms = 0; return out; }
-  return Object.freeze({ draw, phase, setEnabled, stats, NEAR_M, STEPS });
+  return Object.freeze({ draw, warm, phase, setEnabled, stats, NEAR_M, STEPS });
 })();
