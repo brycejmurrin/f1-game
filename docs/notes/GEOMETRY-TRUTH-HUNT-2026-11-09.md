@@ -67,8 +67,17 @@ comment, doc, test name or note counts as evidence; only a number read off a run
   has changed since, by his own report), or the deployed build differs from this tree, or the real window is not
   one of the contract cells. Emulation cannot say which. Every "at his profile" number in the repo (this note
   included) inherits this.
-- Fix: a fresh export from his phone and one `geom` + `display` bridge reading (this PR adds `geom`). Issue filed
-  with `needs-decision` because only Bryce can produce either.
+- **Best lead (static proof, not device-verified): a stored `apex26.uiScale` ≈ 51 on his phone.** The pause (#5200)
+  and title (#5199) owners each reproduce his screenshots only at UI SIZE ≈ 51 % (420 px pause card × 0.51 = 214 px;
+  393 / 0.51 ≥ 600 flips body to `normal`). `--ui-scale` has exactly three sources: `css/tokens.css:718` (1),
+  `css/tokens.css:745` (1.09 under `pointer: coarse`) and the inline write from the stored key in
+  `js/ui/scale.js` `applyScale` (slider, `__apex.uiScale`, settings import). Nothing derives it from the viewport,
+  the insets or `visualViewport`, and `SheetShape.classifyFit` (`js/ui/sheet-shape.js:176-207`) floors at
+  `min(1, desired)`, so no fit can turn 1.09 into 0.51. The live `apex-sha` equals this tree. So the export is
+  stale, not the geometry: it is not a fit clamp, not doubled insets, not textSize.
+- Fix: a fresh export from his phone and one `geom` + `display` bridge reading (this PR adds `geom`; `display`
+  already returns `vars.root["--ui-scale"]` on the live site). To undo on the phone: SETTINGS › UI SIZE › reset, or
+  delete `localStorage["apex26.uiScale"]`. Issue filed with `needs-decision` because only Bryce can produce either.
 
 ### F4 — The Safari-tab cell has two different definitions in the repo (confirmed, static)
 - `docs/notes/UI-CONTRACT-2026-11-06.md` §2: C = 852×283, insets **59 / 0 / 59**. `tests/helpers/title-fit.mjs:28`:
