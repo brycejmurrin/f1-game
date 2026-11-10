@@ -8,8 +8,8 @@ node tools/shot/motion-capture.mjs <track> [seconds] [speed] [outdir]
 node tools/shot/motion-capture.mjs monaco 4 50
 ```
 
-**No start-frac CLI** — always `jump(0.05, speed)`. Eau Rouge is ~0.078 on Spa;
-look up corners first (`__apex.corners()` / `trackInfo({what:"corners"})`).
+**No start-frac CLI** — the start `jump()` is fixed in the tool's source. Look up
+corners first (`turns:` in `js/circuits/<id>.js`, `__apex.corners()` / `trackInfo({what:"corners"})`).
 Trust **p90** (typical-frame floor). `mean`/`max` are noisy scene-cut spikes.
 Output: `scratch/captures/motion-capture/<track>/`.
 
@@ -19,16 +19,15 @@ below.
 
 ## Kerb / surface shimmer at a known place (Monaco kerbs)
 
-Two more tools, neither a driven clip. `motion-capture.mjs` always starts at
-`jump(0.05)` (BROWSER; ~4 s @ 50 covers Monaco T1 at `turns[0]` 0.0666), so it
+Two more tools, neither a driven clip. `motion-capture.mjs` always starts at its
+fixed `jump()` (BROWSER; the default clip reaches Monaco T1, `turns[0]` in `monaco.js`), so it
 cannot dwell on a later kerb.
 
 1. No browser first: `node tools/track/coplanar-audit.cjs monaco --why`
    (same-facing coplanar faces = z-fight candidates; ~2 s, VM; needs load < 4).
    Kerb geometry: `buildKerbs` in `js/track/core/mesh.js`.
 2. BROWSER, still camera: `node tools/shot/flicker-gate.mjs --list` (no
-   browser) prints the fixed SITES (monaco has only the tunnel ones; a kerb
-   site means adding an entry to `SITES` in that file, then
+   browser) prints the fixed SITES (a kerb site not listed there means adding an entry to `SITES` in that file, then
    `--site <id> --png`; exit 1 = over the ceiling). Then confirm in motion
    with `motion-capture.mjs monaco 4 50` twice per side and compare p90.
 

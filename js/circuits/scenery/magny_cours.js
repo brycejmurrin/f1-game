@@ -25,6 +25,13 @@
       const poplar = (k, side, dist, h) => {
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
+        // All-or-nothing (#5082): the engine guards each primitive on its own
+        // footprint, so on a folded stretch the r 1.5 crown tiers were dropped
+        // over the parallel road while the r 0.2 trunk passed and shipped
+        // alone. Test the crown footprint + 2 m at the foot and at the tip
+        // (a.u leans with the ground) before emitting anything.
+        const tip = vadd(a.c, a.u, h * 1.06);
+        if (onTrack(a.c[0], a.c[2], 3.5) || onTrack(tip[0], tip[2], 3.5)) return;
         out._mat = MAT.WOOD;
         addCyl(out, a.c, 0.20, h * 0.22, [0.44, 0.38, 0.30], 5, b);
         out._mat = MAT.FOLIAGE;
@@ -37,8 +44,8 @@
       for (const [s0, s1, side, dist, h] of [
         [0.10, 0.30, -1, 30, 17],
         [0.12, 0.32,  1, 34, 16],
-        [0.34, 0.40,  1, 30, 18],
-        [0.52, 0.55, -1, 32, 17],   // ends where the Adelaide vault stand (0.556) begins: its back rows reach gap ~30
+        [0.34, 0.395, 1, 30, 18],   // stops short of the T6 hairpin (0.413): its exit leg runs through the inside
+        [0.52, 0.55, -1, 32, 17],
         [0.55, 0.66,  1, 36, 16],
         [0.72, 0.88, -1, 30, 18],
         [0.74, 0.90,  1, 34, 17],
@@ -116,7 +123,7 @@
 
       // Midfield densify (sheet-07 overview was empty green between loops).
       // Cheap service-road ribbons, grass variety, low tech sheds, tree clumps.
-      // Keep clear of the ferme yard (s≈0.34) and Adelaide stands (s≈0.58).
+      // Keep clear of the ferme yard (s≈0.34); 0.54-0.62 stays open farmland.
       (function midfieldCampus() {
         // No extra groundPatch ribbons here — they shared horizontal tops with
         // the field-patch band (flatCoplanar +1 vs baseline). Densify with
@@ -347,11 +354,13 @@
         out._mat = 0;
       }
       broadcastCompound(K(0.916), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
-      // French GP signage — blue boards on the main straight + Adelaide approach.
+      // French GP signage — blue boards on the main straight.
       for (const s of [0.970, 0.985, 0.01, 0.025, 0.04])
         billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.32, 0.66]);
-      for (const s of [0.540, 0.560, 0.595])
+      // White boards on the Adelaide approach (Golf straight, 180-285 m before T6).
+      for (const s of [0.348, 0.360, 0.372])
         billboard(K(s), 1, 9, 10, 4.0, [0.88, 0.88, 0.86]);
+
       billboard(K(0.172), -1, 9, 10, 4.0, [0.20, 0.32, 0.66]);
       billboard(K(0.920), 1, 9, 10, 4.0, [0.78, 0.22, 0.20]);
 
@@ -480,11 +489,14 @@
         });
       };
 
-      groundPatch(K(0.580), 1, 6, [34, 0.18, 44], GRAVEL,
+      // Corner kits sit on the BUILT apex (def.turns, _sceneryShift 0), run-off and
+      // stands on the OUTSIDE (+k = left: these are all right-handers, outside = -1).
+      // Adelaide = T6 (0.413, R≈12 m); was keyed 0.556-0.606, ~600 m down the road.
+      groundPatch(K(0.413), -1, 6, [34, 0.18, 44], GRAVEL,
         { id: "magny-adelaide-gravel", samples: 8 });
-      tyreWall(0.564, 0.598, 1, 5, [0.86, 0.20, 0.18]);
-      vaultStand(0.556, 0.606, -1, 20, { rows: 8, step: 9 });        // Adelaide hairpin
-      marshalPost(K(0.574), -1, 10);
+      tyreWall(0.404, 0.422, -1, 5, [0.86, 0.20, 0.18]);
+      vaultStand(0.400, 0.426, -1, 20, { rows: 8, step: 9 });        // Adelaide hairpin
+      marshalPost(K(0.398), -1, 10);
 
       groundPatch(K(0.172), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "magny-estoril-gravel", samples: 6 });
@@ -492,11 +504,12 @@
       vaultStand(0.152, 0.194, 1, 20, { rows: 6, span: 5.6, step: 9 });   // Estoril
       marshalPost(K(0.166), 1, 9);
 
-      groundPatch(K(0.920), 1, 5, [24, 0.18, 32], GRAVEL,
+      // Lycée = T15-T17 (0.954-0.984); was keyed 0.902-0.942, up to 200 m early.
+      groundPatch(K(0.954), -1, 5, [24, 0.18, 32], GRAVEL,
         { id: "magny-lycee-gravel", samples: 6 });
-      tyreWall(0.906, 0.936, 1, 4, [0.85, 0.78, 0.20]);
-      vaultStand(0.902, 0.942, -1, 19, { rows: 7, step: 9 });        // Lycée, onto the pits
-      marshalPost(K(0.914), -1, 9);
+      tyreWall(0.946, 0.964, -1, 4, [0.85, 0.78, 0.20]);
+      vaultStand(0.941, 0.967, -1, 19, { rows: 7, step: 9 });        // Lycée, onto the pits
+      marshalPost(K(0.943), -1, 9);
 
       spectatorHill(0.24, 0.34, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
       spectatorHill(0.70, 0.80, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
@@ -628,26 +641,30 @@
         });
       }
       // Signage and broadcast towers.
-      signBoard(K(0.172), 1, 8, "corner", 5);
-      signBoard(K(0.580), -1, 8, "corner", 12);
-      signBoard(K(0.920), -1, 8, "corner", 16);
-      for (let i = 0; i < 3; i++) signBoard(K(0.530 + i * 0.011), 1, 7.5, "braking", 3 - i);
+      // Corner numbers are this def's turns[] indices (Estoril T3, Adelaide T6, Lycée T15).
+      signBoard(K(0.172), 1, 8, "corner", 3);
+      signBoard(K(0.400), -1, 8, "corner", 6);
+      signBoard(K(0.948), -1, 8, "corner", 15);
+      // Adelaide braking boards 3-2-1, ~150/100/50 m before the T6 apex (0.413).
+      for (let i = 0; i < 3; i++) signBoard(K(0.379 + i * 0.011), 1, 7.5, "braking", 3 - i);
       // Hoarding behind the main-straight stand (gap 14) so panels do not share
       // a plane with the crowdBand (gap raised 3.4→7.5 had added a coplanar spot).
       sponsorHoarding(0.948, 0.995, -1, 14, { h: 1.15, step: 12 });
       sponsorHoarding(0.018, 0.048, -1, 14, { h: 1.15, step: 12 });
       cameraTower(K(0.030), -1, 26, { h: 16 });
       cameraTower(K(0.172), 1, 28, { h: 15 });
-      cameraTower(K(0.580), -1, 30, { h: 17 });
-      cameraTower(K(0.920), -1, 26, { h: 15 });
+      cameraTower(K(0.413), -1, 30, { h: 17 });
+      cameraTower(K(0.954), -1, 26, { h: 15 });
       // Split forestEdge so the ferme (s≈0.34 R) and Adelaide stands stay clear.
       // Measured on clip-audit: the R run past 0.48 put crowns 3.3 m into the
-      // ferme silos, and the L run from 0.62 reached the Adelaide stand.
+      // ferme silos; the L run starts past the Adelaide stand (0.400-0.426, gap 20).
       forestEdge(0.10, 0.28, -1, 32, { density: 0.38, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.10, 0.28, 1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
-      forestEdge(0.38, 0.50, -1, 32, { density: 0.36, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.434, 0.50, -1, 32, { density: 0.36, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.38, 0.48, 1, 36, { density: 0.34, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
-      forestEdge(0.64, 0.88, -1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      // Gap 0.785-0.812: that stretch of the back leg runs ~40 m behind the 0.400-0.426 vault stand (clip-audit 2026-11-10).
+      forestEdge(0.64, 0.785, -1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.812, 0.88, -1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.62, 0.88, 1, 36, { density: 0.34, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
       // bakedModel is a pure enhancement (false when the pack lacks the id) and

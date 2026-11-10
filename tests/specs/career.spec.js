@@ -407,7 +407,9 @@ test.describe.parallel("Career — hub", () => {
     await expect(page.locator("#career")).toBeVisible();
     const meters = await page.locator(".cr-meter-lbl").allTextContents();
     expect(meters).toEqual(["BALANCE", "REPUTATION", "ROUND"]);
-    await expect(page.locator("#cr-meters")).toContainText("1 / 24");
+    // The career's own calendar length (2026 REAL: 23; the 24-ROUND list: 24).
+    const rounds = await page.evaluate(() => window.__apex.careerState().rounds);
+    await expect(page.locator("#cr-meters")).toContainText("1 / " + rounds);
   });
 
   test("the hub replaces #select — GO RACING goes straight to race settings", async ({ page }) => {
@@ -455,7 +457,7 @@ test.describe.parallel("Career — a round", () => {
     // NEXT takes you back to the hub, not straight into the next race.
     await page.locator("#res-next").click();
     await expect(page.locator("#career")).toBeVisible();
-    await expect(page.locator("#cr-meters")).toContainText("2 / 24");
+    await expect(page.locator("#cr-meters")).toContainText("2 / " + st.rounds);   // the save's calendar length
   });
 
   test("the player takes the contracted seat on the grid", async ({ page }) => {

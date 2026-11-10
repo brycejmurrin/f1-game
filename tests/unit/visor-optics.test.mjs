@@ -543,3 +543,29 @@ test("adaptive visor clears profile attributes on every exit from each pressure 
     }
   }
 });
+
+test("#5018 visor projects through the lens the world was drawn with: the fitted FOV (G.lens.fovY) and the camera roll", () => {
+  const DEG = Math.PI / 180, fitted = 46.62, raw = 64;
+  const G = { camEye: DAY.eye, camTgt: DAY.tgt, camFov: raw, camRoll: 0, lens: { fovY: fitted * DEG }, _lastFloodEmit: 0,
+    frame: { sunDir: [0.3, 0.2, -0.93], sunColor: DAY.sunColor, exposure: 1, ambientSky: DAY.ambientSky, lights: null, tailStart: 0 } };
+  const { V } = load({ apex: null, G });
+  const scene = V.sceneFromG(G);
+  assert.ok(Math.abs(scene.fov - fitted) < 1e-9, "the fitted FOV, not the raw camFov");
+  const sun = V.lightMap(scene, 844, 390, { level: 1 }).sun, old = V.lightMap({ ...scene, fov: raw }, 844, 390, { level: 1 }).sun;
+  // The pinhole the renderer uses: x = w/2 + (h/2)/tan(fovY/2) * right·d / fwd·d  (camera looks down -z, right = +x).
+  const want = 422 + (195 / Math.tan(fitted * DEG / 2)) * 0.3 / 0.93;
+  assert.ok(Math.abs(sun.x - want) < 0.5, `glint at the M4 projection (${sun.x.toFixed(1)} vs ${want.toFixed(1)})`);
+  const k = (old.x - 422) / (sun.x - 422);
+  assert.ok(Math.abs(k - Math.tan(fitted * DEG / 2) / Math.tan(raw * DEG / 2)) < 0.01, `the raw camFov sat ${(100 - k * 100).toFixed(0)} % too near the centre`);
+  // Before the first rendered frame (lens.fovY 0) the raw FOV is the fallback.
+  assert.equal(V.sceneFromG({ ...G, lens: { fovY: 0 } }).fov, raw);
+  // Roll: game.js tilts up by right·sin(roll); a sun dead ahead and above then leans off the centre line.
+  const up = { ...scene, sunDir: [0, 0.3, -0.954] };
+  const level = V.lightMap(up, 844, 390, { level: 1 }).sun;
+  const rolled = V.lightMap({ ...up, roll: 0.2 }, 844, 390, { level: 1 }).sun;
+  assert.ok(Math.abs(level.x - 422) < 0.5);
+  const r = Math.hypot(level.x - 422, level.y - 195), ang = Math.atan(Math.sin(0.2));   // the view matrix's actual tilt
+  assert.ok(Math.abs(rolled.x - (422 - r * Math.sin(ang))) < 0.5 && Math.abs(rolled.y - (195 - r * Math.cos(ang))) < 0.5,
+    `the glint rolls with the horizon (${rolled.x.toFixed(1)}, ${rolled.y.toFixed(1)})`);
+  assert.equal(V.sceneFromG({ ...G, camRoll: 0.2 }).roll, 0.2);
+});

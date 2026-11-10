@@ -83,7 +83,40 @@ function paintRenderer(rb) {
     : ("RENDERER: " + backendLabel(pref));
   paintRendererSummary(pref, fallback ? live : null);
 }
+// THE RETIREMENT NOTICE (#4995). renderer-boot.js's boot canary rewrites the
+// pick to webgl2 after two starts in a row that never presented, and records
+// "<backend>:<build>" in apex26.gfxRetired. Without a notice the next launch
+// showed WEBGL2 as the player's own choice. Null unless the record still
+// matches a stored webgl2 pick.
+function readRetired() {
+  const m = /^(three|webgpu):(\d+)$/.exec(GameStore.store.raw("apex26.gfxRetired") || "");
+  if (!m || GameStore.store.raw("apex26.gfxBackend") !== "webgl2") return null;
+  return { from: m[1], build: +m[2] };
+}
+function paintRetired() {
+  if (typeof document === "undefined" || typeof document.createElement !== "function") return;
+  const host = document.getElementById("pm-display-adv-body");
+  let note = document.getElementById("pm-renderer-retired");
+  let btn = document.getElementById("pm-renderer-retry");
+  const r = readRetired();
+  if (!r || !host) { if (note) note.hidden = true; if (btn) btn.hidden = true; return; }
+  if (!note) {
+    note = document.createElement("p"); note.id = "pm-renderer-retired"; note.className = "adv-help";
+    note.setAttribute("role", "status");
+    btn = document.createElement("button"); btn.id = "pm-renderer-retry"; btn.type = "button";
+    const first = host.firstChild || null;
+    if (typeof host.insertBefore === "function") { host.insertBefore(note, first); host.insertBefore(btn, first); }
+    else { host.appendChild(note); host.appendChild(btn); }
+  }
+  note.hidden = btn.hidden = false;
+  const name = backendLabel(r.from);
+  note.textContent = "Switched to WEBGL2 automatically: " + name + " did not finish starting twice in a row" +
+    (r.build ? " (build " + r.build + ")" : "") + ". The phone closing the app during a race load counts, so " + name + " itself may be fine.";
+  btn.textContent = "TRY " + name + " AGAIN";
+  btn.onclick = () => { uiSelect(); applyBackend(r.from, document.getElementById("pm-renderer")); };
+}
 function paintRendererSummary(pref, liveFallback) {
+  paintRetired();
   const sum = typeof document !== "undefined"
     ? document.getElementById("pm-renderer-details-sum")
     : null;
@@ -92,7 +125,7 @@ function paintRendererSummary(pref, liveFallback) {
     ? '<span data-fold="sep"> · </span><span data-fold="val">WEBGL2</span>'
     : (liveFallback
       ? '<span data-fold="sep"> · </span><span data-fold="val">' + backendLabel(liveFallback) + "</span>"
-      : "");
+      : (readRetired() ? '<span data-fold="sep"> · </span><span data-fold="val">AUTO-SWITCHED</span>' : ""));
   sum.innerHTML = '<span data-fold="k">RENDERER</span><span data-fold="sep"> · </span><span data-fold="val">' +
     backendLabel(pref) + "</span>" + fallbackChip;
   paintPostHealth(sum);
@@ -207,6 +240,8 @@ const RENDERER_LS_KEYS = [
   // next boot a strike it did not earn, and retire the pick on its first
   // real failure.
   "apex26.gfxProbeStrikes",
+  // The canary's retirement record (#4995): RESET returns to the default renderer, so the notice goes too.
+  "apex26.gfxRetired",
   // The last boot's bound backend (renderer-boot.js): only steers the next boot's early preload.
   "apex26.gfxBootBound",
   // assets.js remembers the last pack's model file+md5 so the next visit can
@@ -432,6 +467,7 @@ function applyBackend(next, rb) {
   // for it — and a strike another backend earned must never follow the
   // player onto this one (#3547 / Merlin).
   GameStore.store.rawDel("apex26.gfxProbeStrikes");
+  GameStore.store.rawDel("apex26.gfxRetired");   // a hand pick answers the retirement notice (#4995)
   markReloading(rb, next);
   reloadSoon();
   return true;
@@ -634,6 +670,7 @@ function paintPresent() {
   if (envBtn) envBtn.textContent = "CAR REFLECTIONS: " + envProbeLabel(readEnvProbe());
   const st = typeof document !== "undefined" ? document.getElementById("pm-gfx-status") : null;
   if (st) st.textContent = presentStatus();
+  paintRetired();   // the fold body may not have existed at init's first paint
 }
 function hrefFromPixels(cap) {
   if (!cap || typeof document === "undefined" || typeof document.createElement !== "function") return null;

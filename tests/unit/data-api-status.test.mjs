@@ -1403,7 +1403,7 @@ test("driverStandings refuses a body whose StandingsLists season disagrees with 
   assert.ok(warns.some((w) => /standings season mismatch/.test(String(w[1]))));
   body.MRData.StandingsTable.StandingsLists[0].season = "2026";
   // Same URL was cached with the mismatched body — drop it so the OK season is fetched.
-  const driverUrl = "https://api.jolpi.ca/ergast/f1/2026/driverstandings.json";
+  const driverUrl = "https://api.jolpi.ca/ergast/f1/2026/driverstandings.json?limit=100";
   context.api.forget(driverUrl);
   const ok = await context.api.driverStandings(2026);
   assert.equal(ok.length, 1);
@@ -1413,6 +1413,30 @@ test("driverStandings refuses a body whose StandingsLists season disagrees with 
   context.api.forget(driverUrl);
   const legacy = await context.api.driverStandings(2026);
   assert.equal(legacy.length, 1);
+});
+
+test("driverStandings names a mid-season mover's CURRENT team (the last Constructors entry)", async () => {
+  // Jolpica 2025: Lawson ["Red Bull", "RB F1 Team"], Tsunoda the reverse — move order.
+  const body = { MRData: { StandingsTable: { StandingsLists: [{ season: "2025", DriverStandings: [
+    { position: "10", points: "38", wins: "0", Driver: { givenName: "Liam", familyName: "Lawson", code: "LAW" },
+      Constructors: [{ name: "Red Bull" }, { name: "RB F1 Team" }] },
+    { position: "17", points: "30", wins: "0", Driver: { givenName: "Yuki", familyName: "Tsunoda", code: "TSU" },
+      Constructors: [{ name: "RB F1 Team" }, { name: "Red Bull" }] },
+    { position: "20", points: "0", wins: "0", Driver: { givenName: "No", familyName: "Team", code: "NOT" } },
+  ] }] } } };
+  const context = vm.createContext({
+    fetch: async () => ({ ok: true, status: 200, headers: { get: () => null },
+      json: async () => body, text: async () => JSON.stringify(body) }),
+    AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} }
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  const rows = await context.api.driverStandings(2025);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].team, "RB F1 Team", "Lawson drives for RB now, not the team he left");
+  assert.equal(rows[1].team, "Red Bull", "Tsunoda moved up to Red Bull");
+  assert.equal(rows[2].team, null, "no Constructors still yields no team");
 });
 
 test("constructorStandings also refuses a mismatched StandingsLists season", async () => {
@@ -1438,7 +1462,7 @@ test("constructorStandings also refuses a mismatched StandingsLists season", asy
   vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
   assert.equal((await context.api.constructorStandings(2026)).length, 0);
   body.MRData.StandingsTable.StandingsLists[0].season = "2026";
-  context.api.forget("https://api.jolpi.ca/ergast/f1/2026/constructorstandings.json");
+  context.api.forget("https://api.jolpi.ca/ergast/f1/2026/constructorstandings.json?limit=100");
   const ok = await context.api.constructorStandings(2026);
   assert.equal(ok[0].name, "McLaren");
 });
@@ -1525,4 +1549,74 @@ test("transport instances own independent cancellation scopes and late bodies ca
   assert.equal(records[1].listeners.size, 0);
   assert.equal(h.timers.size, 0);
   assert.equal(sibling.cancelAll(), 0);
+});
+
+// W23 #3: no Jolpica URL carried `limit`, and MRData.total was never read, so a
+// list past Jolpica's default page of 30 rows was cut off without a word. The
+// fixture server pages like Jolpica (limit/offset/total) with a page cap, so a
+// 31-row table needs a second page even when the cap ignores ?limit=100.
+function jolpicaServer(rowsFor, cap) {
+  const calls = [];
+  const fetch = async (url) => {
+    const u = new URL(String(url));
+    calls.push(u.pathname + u.search);
+    const all = rowsFor(u.pathname);
+    const limit = Math.min(Number(u.searchParams.get("limit") || 30), cap);
+    const offset = Number(u.searchParams.get("offset") || 0);
+    const page = all.rows.slice(offset, offset + limit);
+    const body = { MRData: { limit: String(limit), offset: String(offset), total: String(all.rows.length), ...all.wrap(page) } };
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) };
+  };
+  const store = new Map();
+  const context = vm.createContext({ fetch, AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i] ?? null,
+      getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) } });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  return { api: context.api, calls, store };
+}
+
+const DRIVERS31 = Array.from({ length: 31 }, (_, i) => ({ position: String(i + 1), points: String(100 - i), wins: "0",
+  Driver: { givenName: "D", familyName: "N" + (i + 1), code: "D" + (i + 1) }, Constructors: [{ name: "T" }] }));
+const standingsTable = (rows) => ({ StandingsTable: { StandingsLists: [{ season: "2026", DriverStandings: rows }] } });
+
+test("driverStandings asks for limit=100 and pages a 31-row table by MRData.total", async () => {
+  const s = jolpicaServer(() => ({ rows: DRIVERS31, wrap: standingsTable }), 30);
+  const rows = await s.api.driverStandings(2026);
+  assert.equal(rows.length, 31, "the 31st driver is not cut off");
+  assert.equal(rows[30].code, "D31");
+  assert.equal(s.calls[0], "/ergast/f1/2026/driverstandings.json?limit=100");
+  assert.equal(s.calls[1], "/ergast/f1/2026/driverstandings.json?limit=100&offset=30");
+  assert.equal(s.calls.length, 2);
+  const again = await s.api.driverStandings(2026);
+  assert.equal(again.length, 31, "a cached first page is never mutated into a 62-row table");
+});
+
+test("a table that fits one page is one request", async () => {
+  const s = jolpicaServer(() => ({ rows: DRIVERS31.slice(0, 2), wrap: standingsTable }), 100);
+  assert.equal((await s.api.driverStandings(2026)).length, 2);
+  assert.deepEqual(s.calls, ["/ergast/f1/2026/driverstandings.json?limit=100"]);
+});
+
+const raceRow = (i) => ({ season: "2026", round: String(i + 1), raceName: "GP " + (i + 1), date: "2026-03-01", time: "12:00:00Z",
+  Circuit: { circuitId: "c" + (i + 1), circuitName: "C" + (i + 1), Location: { locality: "L", country: "X" } } });
+
+test("schedule pages past 30 races and carries season + circuitId", async () => {
+  const races = Array.from({ length: 31 }, (_, i) => raceRow(i));
+  const s = jolpicaServer(() => ({ rows: races, wrap: (page) => ({ RaceTable: { season: "2026", Races: page } }) }), 30);
+  const items = await s.api.schedule(2026);
+  assert.equal(items.length, 31);
+  assert.equal(items[30].circuitId, "c31");
+  assert.equal(items[0].season, 2026);
+  assert.equal(s.calls[0], "/ergast/f1/2026.json?limit=100");
+});
+
+// W23 #2: an EMPTY calendar (next year not published yet) used to be cached for
+// 24 h, so the day it was published the tab still read "No calendar data".
+test("an empty calendar answer is not kept in the cache", async () => {
+  const s = jolpicaServer(() => ({ rows: [], wrap: (page) => ({ RaceTable: { season: "2027", Races: page } }) }), 100);
+  assert.equal((await s.api.schedule(2027)).length, 0);
+  assert.equal([...s.store.keys()].filter((k) => k.includes("2027.json")).length, 0, "no stored empty calendar");
+  await s.api.schedule(2027);
+  assert.equal(s.calls.length, 2, "the next load asks again");
 });

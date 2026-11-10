@@ -46,6 +46,18 @@ test("phaseStep is angle += v/R·dt; fronts freeze under full lock", () => {
   assert.ok(Math.abs(half.front - d.rear * 0.5) < 1e-12);
 });
 
+test("phaseStep reuses one scratch: no per-car-per-frame object (#5057 row 3)", () => {
+  const a = W.phaseStep(40, 1 / 60, W.WHEEL_R, 0);
+  const aRear = a.rear;
+  const b = W.phaseStep(20, 1 / 60, W.WHEEL_R, 1);
+  assert.equal(b, a, "same out-object identity across calls");
+  assert.ok(Math.abs(b.rear - aRear / 2) < 1e-12, "values are the latest call's");
+  assert.equal(b.front, 0);
+  const seen = new Set();
+  for (let i = 0; i < 1320; i++) seen.add(W.phaseStep(i, 1 / 60, W.WHEEL_R, 0.5));
+  assert.equal(seen.size, 1, "a 22-car second of frames returns one object");
+});
+
 test("phaseStep integrates: N frames at constant v cover v·N·dt / R radians", () => {
   const R = W.WHEEL_R, dt = 0.016, v = 55, N = 120;
   let rear = 0, front = 0;

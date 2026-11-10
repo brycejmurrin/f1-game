@@ -898,6 +898,10 @@ const SceneryNature = (function () {
           (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], riser); },
           { kind: "crowdRiser", k, side }, { unguarded: true });
         out._mat = MAT.FABRIC;
+        // The seated crowd reaches ~0.35 m over the riser rejBox passed as
+        // "below the road": shanghai's 0.095 straight had 8 bodies 0.2-0.3 m
+        // under its asphalt (#5086). Guard their envelope too.
+        if (rejBox(vadd(vadd(a.c, a.u, up + 0.55), a.r, side * back), [1.3, 1.1, len], b)) continue;
         for (let s2 = 0; s2 < perRow; s2++) {
           if (s2 % 10 === 9) continue;                       // aisle / vomitory gap
           const h1 = hash(k * 2.7 + r * 5.3 + s2 * 1.9 + side * 3.1);
@@ -1327,7 +1331,13 @@ const SceneryNature = (function () {
           // jitter, stays on its tread rather than hanging past the ends.
           const bodyW = 0.5, bodyD = 0.46, edge = 0.03;
           const originalCount = Math.max(2, Math.round(spacing / 1.8));
-          const perRow = treadSpan >= bodyD + 2 * edge && depth >= bodyW + 2 * edge
+          // The crowd stands ~1.1 m above a tread rejBox passed as "below the
+          // road" — under ANOTHER section (estoril's Parabolica bank reaches
+          // the 0.48 straight) its heads came to 0.1-0.3 m under the asphalt,
+          // where they poke through (#5086). Guard the crowd's own envelope.
+          const crowdC = vadd(vadd(ac, a.u, up + rise + 0.55), a.r, side * back);
+          const crowdOK = !rejBox(crowdC, [depth, 1.1, treadSpan], b);
+          const perRow = crowdOK && treadSpan >= bodyD + 2 * edge && depth >= bodyW + 2 * edge
             ? Math.min(originalCount, Math.max(1, Math.floor(treadSpan / 0.6))) : 0;
           const slotSpan = perRow ? treadSpan / perRow : 0;
           const alongJitter = Math.min(0.25, Math.max(0, slotSpan / 2 - bodyD / 2 - edge));

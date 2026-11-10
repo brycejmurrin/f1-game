@@ -1,0 +1,2 @@
+Fixed: running wide just past the pit exit (or at the pit-entry mouth) no longer opens a 4–8 m pocket of run-off for one barrier segment and then snaps the car sideways; the barrier follows the pit lane's wall through the taper on 24 circuits
+Fixed: at Silverstone, Suzuka, Magny-Cours, Monaco, Mexico and Hockenheim the pit-entry road is at least 60 m, so the AI (and the pit-lane assist line) no longer makes a 7 m sideways jink in 15 m to reach the lane
