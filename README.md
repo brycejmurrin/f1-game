@@ -16,7 +16,9 @@ Recent merges: [CHANGELOG.md](CHANGELOG.md).
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-across a **24-round season** of low-poly 3D tracks. The season rounds:
+on low-poly 3D tracks, across a season on the real 2026 calendar (23 rounds,
+Albert Park to Abu Dhabi), with the original 24-round calendar still
+available. The season rounds:
 Bahrain, Monaco, Silverstone, Spa, Monza, Suzuka, Singapore, COTA,
 Interlagos, Las Vegas, Madrid, Jeddah, Albert Park, Shanghai, Miami,
 Montreal, Red Bull Ring, Hungaroring, Baku, Mexico City, Qatar, Abu Dhabi,
