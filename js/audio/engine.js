@@ -31,7 +31,6 @@ var GameAudio = (function () {
   let lfo = null, lfoG = null;                    // offroad pitch wobble (8 Hz)
   let skidSrc = null, skidFilter = null, skidGain = null, skidLfo = null, skidLfoGain = null;
   let voiceFormant = null;                       // per-manufacturer peaking EQ
-  let ersOsc = null, ersHp = null, ersGain = null; // continuous ERS deploy whine
   let windSrc = null, windFilter = null, windGain = null; // airflow over the car
   let subOctOsc = null, subOctGain = null;        // sub-octave weight under the sample core
   let tiltEq = null;                              // rev-compensating high shelf (see setEngine)
@@ -321,7 +320,6 @@ var GameAudio = (function () {
   let rebuildTries = 0;
   let lastFailedResume = 0;
   let deviceRebuildTimer = null;
-  let deviceRebuildTimerWhy = "";
   let deviceRebuildPending = "";    // why a request waits (hidden tab / no gesture yet); "" = none
   let deviceRebuildBusy = false;
   let deviceRebuildStamps = [];     // Date.now() of recent device-driven rebuilds (the cap below)
@@ -392,7 +390,7 @@ var GameAudio = (function () {
   }
 
   // These services are functions so a rebuild never leaves a module holding the old context.
-  const signal = GameAudioSignal.create({ context: () => ctx, bus: () => sfxBus, sfxOk, now });
+  const signal = GameAudioSignal.create({ context: () => ctx, bus: () => sfxBus, sfxOk, oneShotOk, now });
   const { env, blip, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise } = signal;
   const { detectPeriod, findStableLoop } = GameAudioSignal;
   const soundtrack = GameAudioSoundtrack.create({
@@ -503,15 +501,17 @@ var GameAudio = (function () {
       }
       if (ctx.state === "running") {
         ctxSampleRate = ctx.sampleRate;
-        // A quick hide -> show: the context came back before the rebuild the
-        // "suspended" event armed. Healthy, so nothing to rebuild.
-        if (deviceRebuildTimer && staleStateRebuild(deviceRebuildTimerWhy)) { clearTimeout(deviceRebuildTimer); deviceRebuildTimer = null; }
-        if (staleStateRebuild(deviceRebuildPending)) deviceRebuildPending = "";
         applyMusicDuck(); refreshFocus();
       }
-      if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
-        scheduleOutputDeviceRebuild("state-" + ctx.state);
-      }
+      // A STATE CHANGE NEVER REBUILDS THE CONTEXT. "interrupted" is iOS holding
+      // the audio session (a call, Siri, an alarm) and it hands it back with a
+      // statechange to "running" when the interruption ends; a close-and-recreate
+      // armed on a timer here ran mid-interruption, gated only on sticky
+      // activation, and threw away the decoded engine, music and voice buffers
+      // for a context that was about to come back by itself. So: ask for a
+      // resume (below; a no-op until the session is free), and let the next
+      // activation gesture retry it. resumeIfNeeded rebuilds only once a resume
+      // made inside a gesture has visibly FAILED (lastFailedResume).
       if (ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
     };
     wireMasterBuses();
@@ -632,27 +632,13 @@ var GameAudio = (function () {
     } catch (e) { return false; }
   }
 
-  // A state-* request is about a context that was not running; one that has
-  // since resumed needs no rebuild (the hide -> show race: suspend()'s statechange
-  // lands after the page is visible again). devicechange / sampleRate still do.
-  function staleStateRebuild(why) {
-    return typeof why === "string" && why.startsWith("state-") && !!ctx && ctx.state === "running";
-  }
-
-  // A state-* request while hidden is our own suspend() (onVisibility), never a
-  // fault: only a device change is worth remembering for the show.
-  function deferWhileHidden(why) {
-    if (!String(why).startsWith("state-")) deviceRebuildPending = why;
-  }
-
   function scheduleOutputDeviceRebuild(why) {
     if (!ctx || deviceRebuildBusy) return;
     // HIDDEN: remember it. The rebuild must wait for the tab (a hidden tab cannot
     // be unlocked), but dropping the request lost a headset swap made while
     // backgrounded for good — onVisibility's show branch picks this up.
-    if (document.hidden) { deferWhileHidden(why); return; }
+    if (document.hidden) { deviceRebuildPending = why; return; }
     if (deviceRebuildTimer) clearTimeout(deviceRebuildTimer);
-    deviceRebuildTimerWhy = why;
     deviceRebuildTimer = setTimeout(() => {
       deviceRebuildTimer = null;
       requestOutputDeviceRebuild(why);
@@ -661,8 +647,7 @@ var GameAudio = (function () {
 
   function requestOutputDeviceRebuild(why) {
     if (!ctx || deviceRebuildBusy) return;
-    if (staleStateRebuild(why)) return;
-    if (document.hidden) { deferWhileHidden(why); return; }
+    if (document.hidden) { deviceRebuildPending = why; return; }
     if (!stickyUserActivation()) {
       deviceRebuildPending = why;
       Log.debug("audio", "output-device rebuild deferred (" + why + ") until the next gesture");
@@ -673,7 +658,6 @@ var GameAudio = (function () {
 
   function performOutputDeviceRebuild(why) {
     if (!ctx || document.hidden || deviceRebuildBusy) return;
-    if (staleStateRebuild(why)) { deviceRebuildPending = ""; return; }
     deviceRebuildPending = "";
     const t = Date.now();
     deviceRebuildStamps = deviceRebuildStamps.filter((s) => t - s < DEVICE_REBUILD_WINDOW_MS);
@@ -766,6 +750,25 @@ var GameAudio = (function () {
     }
   }
 
+  // ONLY AN ACTIVATION-TRIGGERING EVENT IS A GESTURE (HTML: keydown other than
+  // Escape, mousedown / a mouse's pointerdown, a non-mouse pointerup, touchend —
+  // https://html.spec.whatwg.org/multipage/interaction.html#activation-triggering-input-event).
+  // A finger's pointerdown is not one: WebKit will not resume a context inside
+  // it, so counting it armed lastFailedResume on a touch held past 700 ms and the
+  // touchend that followed REBUILT a context it could simply have resumed. The
+  // same table as platform-session.js isActivation and radio-voice.js's prime.
+  // `true` (init(), called from game.js's own activation handler) passes; an
+  // untrusted (scripted) event never does.
+  function isActivationGesture(e) {
+    if (!e) return false;
+    if (e === true) return true;
+    if (e.isTrusted === false) return false;
+    if (e.type === "keydown") return e.key !== "Escape";
+    if (e.type === "pointerdown") return e.pointerType === "mouse";
+    if (e.type === "pointerup") return e.pointerType !== "mouse";
+    return true;   // touchend, click
+  }
+
   /*
    * Resume the context if it isn't running. ctx.resume() is async and
    * slow on iOS, so never tear the context down on a timer — a context
@@ -777,10 +780,10 @@ var GameAudio = (function () {
   function resumeIfNeeded(gestureEv) {
     if (!ctx || document.hidden) return;
     if (mutedSuspended && !isEnabled) return;   // muted on purpose: a tap must not wake the render thread
-    const isGesture = !!gestureEv;
-    if (isGesture && gestureEv.isTrusted !== false) soundtrack.retryStreamUnlock();
-    if (isGesture && deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) {
-      if (performOutputDeviceRebuild(String(deviceRebuildPending).startsWith("state-") ? deviceRebuildPending : "deferred-gesture")) return;
+    const isGesture = isActivationGesture(gestureEv);
+    if (isGesture) soundtrack.retryStreamUnlock();
+    if (isGesture && deviceRebuildPending) {
+      if (performOutputDeviceRebuild("deferred-gesture")) return;
     }
     if (ctx.state === "running") {
       rebuildTries = 0;
@@ -906,7 +909,7 @@ var GameAudio = (function () {
       // A devicechange / sampleRate request that arrived while hidden (see
       // scheduleOutputDeviceRebuild): the tab is back, so serve it now, before
       // the music / engine restarts below land on the context it would replace.
-      if (deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) requestOutputDeviceRebuild(deviceRebuildPending);
+      if (deviceRebuildPending) requestOutputDeviceRebuild(deviceRebuildPending);
       resumeIfNeeded();
       if (resumeMusic !== null && resumeMusic === soundtrack.musicPlaybackGeneration()) soundtrack.resumeMusic(soundtrack.lastTrack());
       if (resumeEngine !== null && resumeEngine === engineActionGeneration) startEngineGraph();
@@ -967,6 +970,18 @@ var GameAudio = (function () {
   function sfxOk() {
     return !!ctx && isEnabled && sfxEnabled;
   }
+  // ONE-SHOTS NEED A MOVING CLOCK. A blip, pop, rattle or whoosh is scheduled at
+  // ctx.currentTime, which stands still while the context is suspended or
+  // interrupted (https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-currenttime):
+  // every shot fired then lands on the same frozen instant and they all play AT
+  // ONCE on resume, and past the 8 pooled noise voices each one built a fresh
+  // graph. Continuous layers (engine, rain, crowd) keep sfxOk(): they must be
+  // wired before the resume so the race is not silent until the next start. An
+  // OfflineAudioContext is "suspended" until startRendering and is the one
+  // context whose frozen clock is the point (the offline render tests).
+  function oneShotOk() {
+    return sfxOk() && (ctx.state === "running" || typeof ctx.startRendering === "function");
+  }
 
   // THE PITCH CURVE IS A FUNCTION OF RPM ALONE. playbackRate = (IDLE + rev*SPAN)
   // x the trims. There was a per-gear multiplier on top (LOW_GEAR_RATE 0.60 /
@@ -982,6 +997,10 @@ var GameAudio = (function () {
   // (IDLE 0.5 x PITCH 0.6) the rate must stay over 0.05, which the old 1st gear
   // already broke (0.045) where no check looked.
   const RATE_IDLE = 0.17, RATE_SPAN = 0.5115;
+  // The oscillator fallback's own curve, Hz: the gearless values it always used
+  // when no gear was passed, now for every gear (shipped voice: ~81 Hz idle,
+  // ~854 Hz limiter).
+  const SYNTH_IDLE_HZ = 95, SYNTH_SPAN_HZ = 700;
   // ONE rate curve for the player and for a rival (before PITCH, boost and the
   // maker's trim). Rivals had their own (0.25 + 0.45*rev), the pre-RATE_IDLE
   // numbers: an identical car idled 6-9 semitones above your own.
@@ -1280,19 +1299,6 @@ var GameAudio = (function () {
     harvGain.gain.value = 0;
     harvSrc.connect(harvFilter).connect(harvGain).connect(focusBus);
 
-    // ERS deploy whine: electric-motor rise while the battery is actually
-    // deploying. A soft lower-register sine also covers the lazy-module fallback.
-    ersOsc = ctx.createOscillator();
-    ersHp = ctx.createBiquadFilter();
-    ersGain = ctx.createGain();
-    ersOsc.type = "sine";
-    ersOsc.frequency.value = 720;
-    ersHp.type = "lowpass";
-    ersHp.frequency.value = 1800;
-    ersHp.Q.value = 0.5;
-    ersGain.gain.value = 0;
-    ersOsc.connect(ersHp).connect(ersGain).connect(focusBus);
-
     // offroad wobble: 8 Hz LFO into oscillator detune (cents)
     lfo = ctx.createOscillator();
     lfoG = ctx.createGain();
@@ -1418,7 +1424,6 @@ var GameAudio = (function () {
     if (subOctOsc) subOctOsc.start();
     for (const v of rivalVoices) v.start();
     harvSrc.start();
-    ersOsc.start();
     lfo.start();
     skidLfo.start();
     skidSrc.start();
@@ -1512,7 +1517,6 @@ var GameAudio = (function () {
     if (engGain) { engGain.gain.cancelScheduledValues(t0); engGain.gain.setTargetAtTime(0, t0, 0.06); }
     if (whineGain) whineGain.gain.setTargetAtTime(0, t0, 0.06);
     if (harvGain) harvGain.gain.setTargetAtTime(0, t0, 0.06);
-    if (ersGain) ersGain.gain.setTargetAtTime(0, t0, 0.04);
     if (typeof ErsLayer !== "undefined" && ErsLayer.silence) ErsLayer.silence(t0);
     if (typeof RivalAudio !== "undefined" && RivalAudio.silence) RivalAudio.silence(t0);   // pass-by whoosh (#2187)
     if (windGain) windGain.gain.setTargetAtTime(0, t0, 0.06);
@@ -1565,7 +1569,6 @@ var GameAudio = (function () {
       try { v.gain.gain.setTargetAtTime(0, t0, 0.04); stopAt(v.osc, t0 + 0.35); } catch (e) { /* already stopped */ }
     }
     stopAt(harvSrc, t0 + 0.35);
-    stopAt(ersOsc, t0 + 0.35);
     stopAt(windSrc, t0 + 0.35);
     stopAt(lfo, t0 + 0.35);
     stopAt(skidSrc, t0 + 0.35);
@@ -1577,7 +1580,6 @@ var GameAudio = (function () {
     engA = engB = engC = null;
     whineOsc = null;
     harvSrc = null;
-    ersOsc = null;
     windSrc = null;
     brakeSrc = null;
     lfo = null;
@@ -1597,7 +1599,7 @@ var GameAudio = (function () {
     // AudioParam, not a node — which is why it is invisible when you read the
     // graph for outputs.
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, skidLfo, skidLfoGain, lfoG,
-                  voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
+                  voiceFormant, windFilter, windGain, deadSub, subOctGain,
                   deadIdleGain, deadLimGain, deadLimPitch, deadGravGain, brakeFilter, brakeGain,
                   revSend, convolver, revReturn, deadPitLim, deadCylCut, scrubFilter, scrubGain, lockFilter, lockGain,
                   surfFilter, surfGain, kerbFilter, kerbGain, sprayFilter, sprayGain];
@@ -1605,7 +1607,7 @@ var GameAudio = (function () {
     for (const v of contactVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = skidLfo = skidLfoGain = lfoG = null;
-    voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
+    voiceFormant = windFilter = windGain = tiltEq = null;
     brakeFilter = brakeGain = null;
     scrubFilter = scrubGain = lockFilter = lockGain = surfFilter = surfGain = null;
     kerbFilter = kerbGain = sprayFilter = sprayGain = null;
@@ -1667,13 +1669,8 @@ var GameAudio = (function () {
     // historical default; an explicit 0 is a closed pedal.
     const thr = clamp01(ph.throttle != null ? ph.throttle : 1);
 
-    let g01 = 0.3, gIdle = 95, gSpan = 700;
-    if (typeof gear === "number" && isFinite(gear)) {
-      const gi = Math.max(1, Math.min(8, Math.round(gear)));
-      g01 = (gi - 1) / 7;
-      gIdle = 130 - g01 * 70;             // 130 Hz (1st) -> 60 Hz (8th)
-      gSpan = 900 - g01 * 460;            // span 900 (1st) -> 440 (8th)
-    }
+    let g01 = 0.3;
+    if (typeof gear === "number" && isFinite(gear)) g01 = (Math.max(1, Math.min(8, Math.round(gear))) - 1) / 7;
 
     // transient gain dip from a recent gear shift (rev-cut), decays ~120 ms
     if (shiftDuck > 0.0001) {
@@ -1732,11 +1729,13 @@ var GameAudio = (function () {
         // direct .value, or the voice snaps in instead of fading over the 0.05 s tau.
         if (!idleGainRamped && engGainIdle) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
       } else {
-        // synth fallback: detuned saws + sub follow the per-gear frequency.
+        // synth fallback: detuned saws + sub follow RPM ALONE, like the sample
+        // core's baseRate. A per-gear idle/span (130 -> 60 Hz idle, 900 -> 440
+        // span) put the same limiter at 1105 Hz in 1st and 537 Hz in 8th.
         // Mirror lastRate so a later sample upgrade seeds the BufferSource at
         // the note the synth was already singing, not at 1.0.
         lastRate = rate;
-        const base = (gIdle * tune.idle + revC * gSpan * tune.revRange) * (1 + 0.12 * b * tune.boostPitch) * voice.rateTrim * tune.pitch;
+        const base = (SYNTH_IDLE_HZ * tune.idle + revC * SYNTH_SPAN_HZ * tune.revRange) * (1 + 0.12 * b * tune.boostPitch) * voice.rateTrim * tune.pitch;
         if (gearChanged) {
           snapParam(engA.frequency, base * 0.994, t);
           snapParam(engB.frequency, base * (1 + (voice.synthSpread - 1) * tune.detune), t);
@@ -1970,10 +1969,10 @@ var GameAudio = (function () {
     }
     aimGain(harvGain, layers.harvest ? harvLevel * harvGainScale * tune.harvest : 0, t, 0.06);
 
-    // ERS deploy whine: only while the battery is actually deploying (game.js
-    // passes deploy/energy through the physics arg). Level scales with charge —
-    // a full pack screams, a sagging one fades — and below 20% the pitch drops
-    // ~12% so the driver HEARS the pack die before the HUD bar empties. The
+    // ERS deploy whine (ErsLayer, below): only while the battery is actually
+    // deploying (game.js passes deploy/energy through the physics arg). Level
+    // scales with charge and below 20% the pitch drops ~12% (ers-layer.js
+    // deployHz) so the driver HEARS the pack die before the HUD bar empties. The
     // fitted ERS part's deploy bias (ersDeploy 0..1) adds ±20% character.
     // Music sits under the ENGINE, not the reverse: a flat musicVol·MUSIC_FULL
     // competed with the note at redline. A gentle rev-keyed duck (−25% at
@@ -1983,10 +1982,12 @@ var GameAudio = (function () {
     // inaudible, so re-scheduling buys nothing and costs a cross-thread
     // timeline insertion per physics step.
     soundtrack.duckForEngine(rev, t);
-    const low = energy < 0.2 ? energy / 0.2 : 1;
     const partBias = ph.ersDeploy != null ? 0.8 + 0.4 * clamp01(ph.ersDeploy) : 1;
-    // Electric MGU-K + boost cue live in ErsLayer (fixed nodes). When the
-    // module is loaded, mute the legacy ersOsc so the two never stack.
+    // Electric MGU-K + boost cue live in ErsLayer (fixed nodes). It is always
+    // defined: js/audio/ers-layer.js loads in LAZY_AUDIO beside this file and
+    // js/audio/stub.js stands in before that (silent). The old in-engine
+    // ersOsc/ersHp/ersGain whine was built, started and torn down every race
+    // but only ever rendered at gain 0 behind this branch; it is gone.
     if (typeof ErsLayer !== "undefined" && ErsLayer.update) {
       // One record rewritten in place (the _scrubArg pattern): this runs every frame.
       const e = _ersArg;
@@ -1995,24 +1996,13 @@ var GameAudio = (function () {
       e.boost = deploy > 0 || !!ph.boostOn || !!ph.otOn; e.otOn = !!ph.otOn;
       e.boostTune = tune.boost; e.partBias = partBias;
       ErsLayer.update(e);
-      if (ersGain && ersGain._apexErsTgt !== 0) {
-        ersGain.gain.setTargetAtTime(0, t, 0.10);
-        ersGain._apexErsTgt = 0;
-      }
-    } else {
-      const ersLvl = (deploy > 0 && layers.ers)
-        ? (0.005 + 0.010 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
-          * (0.42 + 0.58 * Math.max(s, 0.04))
-        : 0;
-      if (layerMoving(ersGain, layers.ers, t, 0.10) && deploy > 0)
-        aimParam(ersOsc.frequency, (720 + deploy * 600) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
-      if (ersGain._apexErsTgt !== ersLvl) {
-        ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
-        ersGain._apexErsTgt = ersLvl;
-      }
     }
 
-    // Part-throttle ICE harvest and full-pack regen clip: a shallow ignition cut.
+    // Part-throttle ICE harvest and full-pack regen clip: a shallow ignition-cut
+    // TEXTURE, nothing more. packClip is an audio cue keyed to a full battery
+    // (energy > 0.97) off the throttle; no physics sits behind it — the car is
+    // not slowed and no energy is lost with a full pack (the help text says
+    // the same). Only the sound changes.
     const partThr = thr > 0.1 && thr < 0.72 && deploy < 0.05 && s > 0.08;
     const packClip = packFull && deploy < 0.05 && (coastTarget > 0.04 || decelTarget > 0.08 || brkDem > 0.12);
     const cylOn = layers.ers && (partThr || packClip);
@@ -2340,7 +2330,7 @@ var GameAudio = (function () {
   // higher and shorter.
   function pitGun(tighten) {
     pitGunFired++;
-    if (!sfxOk()) return;
+    if (!oneShotOk()) return;
     const lag = [0, 0.05, 0.11, 0.08];
     for (let i = 0; i < 4; i++) {
       const w = lag[i] + Math.random() * 0.03;   // noise() takes a delay from the current audio clock
@@ -2363,7 +2353,7 @@ var GameAudio = (function () {
   // (lower heel-and-toe throttle blip). Safe to call rapidly; never restarts
   // the engine. Triggers a brief gain dip in the live engine via shiftDuck.
   function shift(up) {
-    if (!sfxOk()) return;
+    if (!oneShotOk()) return;
     const isUp = up !== false;
     const t0 = now();
 
@@ -2753,7 +2743,7 @@ var GameAudio = (function () {
   function deployBoost() {
     boostPeak = layers.ers ? 0.14 * tune.boost : 0;
     boostFired++;
-    if (!sfxOk() || !(boostPeak > 0)) return;   // BOOST at 0 is a silent deploy, not a zero-height envelope
+    if (!oneShotOk() || !(boostPeak > 0)) return;   // BOOST at 0 is a silent deploy, not a zero-height envelope
     const t0 = now();
     if (typeof ErsLayer !== "undefined" && ErsLayer.cueBoost) ErsLayer.cueBoost(t0, tune.boost);
     const src = ctx.createBufferSource();
@@ -2934,7 +2924,7 @@ var GameAudio = (function () {
   let uiEnabled = true, uiLast = -1e9;
   const UI_GAP_MS = 60;
   function uiOk() {
-    if (!uiEnabled || !sfxOk()) return false;
+    if (!uiEnabled || !oneShotOk()) return false;
     const t = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (t - uiLast < UI_GAP_MS) return false;
     uiLast = t;
@@ -3223,8 +3213,7 @@ var GameAudio = (function () {
     // The cut's pitch sag, in cents of swing, and the levels behind the trims.
     limiterCents() { return limPitch ? +limPitch.gain.value.toFixed(3) : 0; },
     ersLevel() {
-      if (typeof ErsLayer !== "undefined" && ErsLayer.attached && ErsLayer.attached()) return ErsLayer.deployLevel();
-      return ersGain ? +ersGain.gain.value : 0;
+      return typeof ErsLayer !== "undefined" && ErsLayer.deployLevel ? +ErsLayer.deployLevel() || 0 : 0;
     },
     ersAudio() { return (typeof ErsLayer !== "undefined" && ErsLayer.inspect) ? ErsLayer.inspect() : null; },
     harvestLevel() { return harvGain ? +harvGain.gain.value : 0; },

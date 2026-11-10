@@ -151,7 +151,7 @@ test("a delayed account check cannot overwrite a replacement Spotify session", a
   await SpotifyMusic.connect();
   assert.equal(SpotifyMusic.status().state, "connected");
 
-  resolveAccount(jsonResponse({ product: "free", display_name: "Old account" }));
+  resolveAccount(jsonResponse({ display_name: "Old account" }));
   const result = await checking;
   assert.equal(result.reason, "stale");
   assert.equal(SpotifyMusic.status().state, "connected");
@@ -174,7 +174,7 @@ test("a token response whose body stalls settles as a retryable refresh failure"
       signal = opts.signal;
       return Promise.resolve({ ok: true, status: 200, json: () => body });
     }
-    return Promise.resolve(jsonResponse({ product: "premium" }));
+    return Promise.resolve(jsonResponse({ display_name: "Player" }));
   }, { globals: { AbortController } });
   const checking = SpotifyMusic.check();
   await settle();
@@ -206,7 +206,7 @@ test("an account response whose body stalls settles as a network failure", async
   const result = await checking;
   assert.equal(signal.aborted, true, "the stalled account body must be aborted");
   assert.equal(result.reason, "network");
-  resolveBody({ product: "premium" });
+  resolveBody({ display_name: "Player" });
   await Promise.resolve();
 });
 
@@ -239,7 +239,7 @@ test("concurrent callers share one rotating refresh request", async () => {
         expires_in: 3600, scope: "streaming",
       }));
     }
-    return Promise.resolve(jsonResponse({ product: "premium", display_name: "Player" }));
+    return Promise.resolve(jsonResponse({ display_name: "Player" }));
   });
 
   await Promise.all([SpotifyMusic.check(), SpotifyMusic.check()]);
@@ -252,7 +252,7 @@ test("a stale invalid_grant cannot erase a replacement refresh token", async () 
   const held = new Promise((resolve) => { resolveRefresh = resolve; });
   const { SpotifyMusic, disk } = load((url) => {
     if (String(url).includes("/api/token")) return held;
-    return Promise.resolve(jsonResponse({ product: "premium" }));
+    return Promise.resolve(jsonResponse({ display_name: "Player" }));
   });
 
   const checking = SpotifyMusic.check();
@@ -685,7 +685,7 @@ test("a transient refresh failure on a connected remote session keeps it connect
         : Promise.resolve(jsonResponse({ access_token: "fresh", refresh_token: "r-1", expires_in: 3600,
                                          scope: "user-modify-playback-state" }));
     }
-    return Promise.resolve(jsonResponse({ devices: [], items: [], product: "premium" }));
+    return Promise.resolve(jsonResponse({ devices: [], items: [], display_name: "Player" }));
   }, {
     search: "?code=auth-code&state=st-1",
     session: [["apex26.spotify.verifier", "v-1"], ["apex26.spotify.state", "st-1"]],
@@ -715,7 +715,7 @@ test("switching play mode tears the OLD transport down before the stored mode fl
     seen.push(((o && o.method) || "GET") + " " + String(url));
     return Promise.resolve(String(url).includes("/api/token")
       ? jsonResponse({ access_token: "fresh", refresh_token: "r-1", expires_in: 3600, scope: "user-modify-playback-state" })
-      : jsonResponse({ devices: [], items: [], product: "premium" }));
+      : jsonResponse({ devices: [], items: [], display_name: "Player" }));
   }, {
     search: "?code=auth-code&state=st-1",
     session: [["apex26.spotify.verifier", "v-1"], ["apex26.spotify.state", "st-1"]],
@@ -817,4 +817,55 @@ test("disconnect does not pause Spotify when the local soundtrack already owns m
   SpotifyMusic.disconnect();
   await settle();
   assert.deepEqual(seen, []);
+});
+
+// ── audit W19 (2026-11-09): GET /me lost `product` for Development Mode apps ──
+// developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide
+// ("Removed fields": GET /me country, email, explicit_content, followers, product).
+// The fixtures above now answer /me the way Spotify does today: no `product`.
+const LIVE = () => JSON.stringify({ access_token: "live", refresh_token: "r-1", expires_at: Date.now() + 3600000, scope: "streaming user-modify-playback-state" });
+
+test("a /me without `product` is an unknown plan, not \"not-premium\"", async () => {
+  const { SpotifyMusic } = load(() => Promise.resolve(jsonResponse({ display_name: "Player", id: "p1" })), { disk: [[TOKEN_KEY, LIVE()]] });
+  const r = await SpotifyMusic.check();
+  assert.equal(r.reason, "ok", "a 200 with no plan field must not fail the check");
+  assert.equal(r.premium, null);
+  assert.doesNotMatch(SpotifyMusic.status().message, /not Premium|"unknown"/);
+});
+
+test("an app that still gets `product` keeps the old verdicts", async () => {
+  for (const [product, reason, premium] of [["free", "not-premium", "no"], ["premium", "ok", "yes"]]) {
+    const { SpotifyMusic } = load(() => Promise.resolve(jsonResponse({ display_name: "Player", product })), { disk: [[TOKEN_KEY, LIVE()]] });
+    const r = await SpotifyMusic.check();
+    assert.equal(r.reason, reason, product);
+    assert.equal(r.premium, premium, product);
+  }
+});
+
+test("a playback 403 PREMIUM_REQUIRED is what tells check() the account is not Premium", async () => {
+  const { SpotifyMusic } = load((url, o) => {
+    if (String(url).includes("/me/player/play")) return Promise.resolve(jsonResponse({ error: { status: 403, message: "Player command failed: Premium required", reason: "PREMIUM_REQUIRED" } }, 403));
+    return Promise.resolve(jsonResponse({ display_name: "Player", devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, LIVE()]] });
+  await SpotifyMusic.play();
+  await settle();
+  assert.equal(SpotifyMusic.lastPlayError().reason, "PREMIUM_REQUIRED", "precondition: the refusal was read");
+  const r = await SpotifyMusic.check();
+  assert.equal(r.reason, "not-premium");
+  assert.equal(r.premium, "no");
+  assert.match(SpotifyMusic.status().message, /Premium required/);
+});
+
+test("check() after an authentication_error does not paint a clean account over the real cause", () => {
+  const authBlock = SRC.slice(SRC.indexOf('player.addListener("authentication_error"'), SRC.indexOf('player.addListener("account_error"'));
+  assert.match(authBlock, /check\(\{ after: "authentication_error" \}\)/, "the SDK refusal tells check() why it runs");
+});
+
+test("an authentication_error check with a clean account reports the player refusal, not \"Account OK\"", async () => {
+  const { SpotifyMusic } = load(() => Promise.resolve(jsonResponse({ display_name: "Player" })), { disk: [[TOKEN_KEY, LIVE()]] });
+  const r = await SpotifyMusic.check({ after: "authentication_error" });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "auth-error");
+  assert.doesNotMatch(SpotifyMusic.status().message, /Account OK/);
+  assert.match(SpotifyMusic.status().message, /rejected the session/);
 });

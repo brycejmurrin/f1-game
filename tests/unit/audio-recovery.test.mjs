@@ -881,3 +881,75 @@ test("AudioContext constructor throw leaves GameAudio without a context (no over
   assert.equal(A.context(), null);
   assert.ok(warns.some((w) => /AudioContext unavailable/.test(w)), "warn names the refusal");
 });
+
+// ── audit W19 (2026-11-09): interruption, activation and frozen-clock one-shots ──
+
+// Row 1: "interrupted" while VISIBLE is iOS holding the session (a call, Siri,
+// an alarm) and it ends with a statechange back to "running". A close-and-
+// recreate armed on a 280 ms timer from that statechange dropped the decoded
+// engine/music/voice state for a context about to come back by itself.
+test("a visible interruption never schedules a rebuild; the context resumes in place", async () => {
+  for (const st of ["interrupted", "suspended"]) {
+    const { A, contexts } = boot({ userActivation: sticky });
+    A.init(); await flush();
+    const ctx = contexts[0];
+    ctx.state = st; ctx.onstatechange();
+    await wait(DEVICE_REBUILD_DEBOUNCE_MS + 80); await flush();
+    assert.equal(contexts.length, 1, st + ": no timer rebuild while the interruption lasts");
+    ctx.state = "running"; ctx.onstatechange();
+    await wait(DEVICE_REBUILD_DEBOUNCE_MS + 80); await flush();
+    assert.equal(contexts.length, 1, st + ": the interruption ended and the same context carries on");
+    assert.equal(ctx.state, "running");
+  }
+});
+
+// Row 2: a finger's pointerdown is not activation-triggering (HTML
+// #activation-triggering-input-event); WebKit will not resume inside it. Counting
+// it armed the failed-resume path, so a touch held over 700 ms made its own
+// touchend rebuild a context it could simply have resumed.
+test("a touch pointerdown never arms the failed-resume rebuild; a failed real resume still does", async () => {
+  let now = 10000;
+  const h = boot({ clock: () => now });
+  h.A.init(); await flush();
+  const ctx = h.contexts[0];
+  ctx.state = "interrupted";
+  h.listeners.pointerdown({ type: "pointerdown", pointerType: "touch", isTrusted: true });
+  now += 900;                                         // the finger is held
+  ctx.resume = () => { ctx.state = "running"; return Promise.resolve(); };   // the touchend resume works
+  h.listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
+  assert.equal(h.contexts.length, 1, "the touchend resumed the context instead of rebuilding it");
+  assert.equal(ctx.state, "running");
+  // A resume made inside a REAL gesture that leaves the context stuck is the
+  // one case a later gesture rebuilds.
+  ctx.state = "interrupted"; ctx.resume = () => Promise.resolve();
+  h.listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
+  now += 900;
+  h.listeners.keydown({ type: "keydown", key: "a", isTrusted: true }); await flush();
+  assert.equal(h.contexts.length, 2, "a failed activation-gesture resume rebuilds on the next gesture");
+  // A mouse's pointerdown IS activation (it starts the count like a tap).
+  const m = boot({ clock: () => now });
+  m.A.init(); await flush();
+  m.contexts[0].state = "interrupted";
+  m.listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  now += 900;
+  m.listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  assert.equal(m.contexts.length, 2, "two mouse presses on a stuck context rebuild it");
+});
+
+// Row 3: ctx.currentTime stands still while the context is not running, so every
+// one-shot scheduled then lands on one instant and they all fire on resume.
+test("one-shot SFX are dropped, not stacked, while the context's clock is frozen", async () => {
+  const h = boot();
+  h.A.setUiEnabled(false);
+  h.A.init(); await flush();
+  const ctx = h.contexts[0];
+  ctx.state = "suspended";
+  const nodes0 = h.nodes.length, blips0 = h.blipFires();
+  for (let i = 0; i < 20; i++) { h.A.shift(true); h.A.pitGun(false); h.A.lightsOut(); h.A.deployBoost(); }
+  assert.equal(h.blipFires(), blips0, "no blip queued on a frozen clock");
+  assert.equal(h.nodes.length, nodes0, "no shift crack, rattle or whoosh graph built on a frozen clock");
+  ctx.state = "running";
+  h.A.shift(true); h.A.lightsOut();
+  assert.ok(h.nodes.length > nodes0, "a running context plays the shift crack again");
+  assert.ok(h.blipFires() > blips0, "and the start-light blips");
+});

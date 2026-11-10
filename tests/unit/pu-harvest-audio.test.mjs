@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
+// ers-layer.js: the MGU-K whine lives there (the engine's legacy ersOsc chain is gone, audit W19).
+const SRC = ["js/audio/ers-layer.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const SR = 44100;
 
@@ -142,4 +143,14 @@ test("braking harvest still follows hard deceleration", async () => {
   brakeHarv = A.harvestBrakeLevel();
   assert.ok(brakeHarv > 0.35, `braking decel harvest (${brakeHarv})`);
   assert.ok(A.harvestLevel() > 0.01, "braking harvest is audible on the bus");
+});
+
+// Audit W19 (2026-11-09): the full-pack clip is an AUDIO cue only (the cut above
+// stays); its comment must not claim the car slows or loses energy with a full pack.
+test("the full-pack regen clip is documented as sound only, never as a slowdown", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
+  const at = src.indexOf("const packClip =");
+  const note = src.slice(src.lastIndexOf("// Part-throttle ICE harvest", at), at);
+  assert.match(note, /no physics/i, "the comment says no physics sits behind it");
+  assert.match(note, /not slowed/i);
 });
