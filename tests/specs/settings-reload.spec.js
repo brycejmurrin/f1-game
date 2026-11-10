@@ -86,7 +86,8 @@ const TRANSIENT = {
   "ps-grid-select": "Photo Studio framing aid, per shot",
   "ps-postcard": "Photo Studio framing aid, per shot",
 };
-const DOORS = "#pm-settings-index button[id]";
+// CLAUDE LINK (#5259) sits in the hub but opens the bridge dialog, not a settings page: it has no rows to visit.
+const DOORS = "#pm-settings-index button[id]:not(#pm-claude-link)";
 async function visitPages(page) {
   await page.evaluate(() => document.getElementById("mb-settings").click());
   const doors = await page.evaluate((sel) => [...document.querySelectorAll(sel)].map((b) => b.id), DOORS);

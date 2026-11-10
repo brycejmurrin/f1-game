@@ -70,6 +70,26 @@ const DataExport = (function () {
       }
       function sleepCk(ms) { ck(); return sleep(ms).then(ck); }
 
+      // F1API.cancelAll() is global: TELEMETRY's COMPARE abort, leaving WATCH
+      // mid-load, any tab's own reset all reject THIS gather's request too.
+      // While the hub is still open that cancel was not meant for the export:
+      // retry the step (a cached answer makes the retry cheap). A closed hub
+      // fails ck() and stops the gather as before.
+      const FOREIGN_CANCEL_RETRIES = 3;
+      function again(fn, what) {
+        let left = FOREIGN_CANCEL_RETRIES;
+        function run() {
+          return fn().catch(function (e) {
+            if (e && e.cancelled && hubOpen() && left-- > 0) {
+              log("· " + what + " interrupted by another Data Hub tab — retrying");
+              return sleepCk(1000).then(run);
+            }
+            throw e;
+          });
+        }
+        return run();
+      }
+
       // OpenF1 reuses circuit_short_name across Pre-Season Testing weekends
       // (and Testing vs the Bahrain GP: both "Sakhir"). One ZIP entry per
       // circuit: keep a Grand Prix lap over a testing one, and never spend a
@@ -170,13 +190,14 @@ const DataExport = (function () {
         list.forEach(function (m, i) {
           chain = chain.then(function () {
             log("Circuit " + (i + 1) + "/" + list.length + " · " + (m.circuit || m.name || "unknown"));
-            return tryMeeting(m, false).then(function (ok) { if (!ok) missed.push(m); });
+            return again(function () { return tryMeeting(m, false); }, m.circuit || m.name || "circuit")
+              .then(function (ok) { if (!ok) missed.push(m); });
           }).then(function () { return i < list.length - 1 ? sleepCk(GAP) : null; });
         });
         return chain.then(function () { return missed; });
       }
 
-      return F1API.meetings(year).then(function (ms) {
+      return again(function () { return F1API.meetings(year); }, "meetings list").then(function (ms) {
         log("meetings: " + ms.length + " — gathering (~10 min, paced to avoid rate limits)…");
         return pass(ms).then(function (missed) {
           if (!missed.length) return;
@@ -290,7 +311,12 @@ const DataExport = (function () {
           log("Ready to download.");
           Log.info("data", "export gather done");
         }).catch(function (e) {
-          if (e && e.cancelled) { log("Cancelled — data hub closed."); Log.info("data", "export gather cancelled"); return; }
+          if (e && e.cancelled) {
+            log(hubOpen() ? "Stopped — another Data Hub tab kept cancelling requests. Press Gather to try again."
+              : "Cancelled — data hub closed.");
+            Log.info("data", "export gather cancelled");
+            return;
+          }
           log("ERROR: " + (e && e.message || e));
           Log.warn("data", "export gather fail");
         }).then(function () { running = false; gatherBtn.textContent = "Gather"; });

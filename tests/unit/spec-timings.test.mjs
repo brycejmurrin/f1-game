@@ -24,7 +24,7 @@ import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseJunit, parseLiveLog, mergeRows, emptyDb, serialise, saveDb, loadDb,
-  growth, steps, bestSplit, mad, median, envBucket, isoSecond, normaliseSpec, defaultSources,
+  growth, steps, bestSplit, mad, median, envBucket, isoSecond, normaliseSpec, defaultSources, validName,
   KEEP, BUCKETS, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
 import { specSecPerTest, billing, MEASURED, MIN_SAMPLES, CI_BUCKETS,
   timings } from "../../tools/ci/select-budget.mjs";
@@ -225,18 +225,66 @@ test("serialisation is deterministic and small — sorted, one line per series",
     assert.ok(!/^\s+\d+(\.\d+)?,?$/.test(line), `a sample was exploded across lines: ${line}`);
 });
 
-test("saveDb/loadDb round-trip, and a missing or corrupt file is an EMPTY history", () => {
+test("saveDb/loadDb round-trip; a MISSING file is an empty history", () => {
   const dir = tmpdir();
   try {
     const file = path.join(dir, "nested", "spec-timings.json");
-    assert.deepEqual(loadDb(file).specs, {}, "absent file: no history, not a crash");
+    assert.deepEqual(Object.keys(loadDb(file).specs), [], "absent file: no history, not a crash");
     const db = emptyDb();
     mergeRows(db, parseJunit(JUNIT), { env: "swiftshader" });
     saveDb(db, file);
     assert.equal(serialise(loadDb(file)), serialise(db));
-    fs.writeFileSync(file, "{ not json");
-    assert.deepEqual(loadDb(file).specs, {},
-      "a half-written file from a killed CI job must not take the budget tool down with it");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a CORRUPT or wrong-shape history THROWS — the merge would write it back as empty", () => {
+  /* spec-timings.yml merges into the side branch's record and force-pushes the
+     result, so an unparseable record read as {} replaced every accumulated
+     sample. Only a missing file is an empty history. */
+  const dir = tmpdir();
+  try {
+    const file = path.join(dir, "spec-timings.json");
+    for (const bad of ["{ not json", "[]", "null", '{"specs": []}', '{"keep": 10}',
+      '{"specs": {"tests/specs/smoke.spec.js": {"s": {}, "t": {}}}}',
+      '{"specs": {"tests/specs/smoke.spec.js": {"s": [], "t": {"x": 1}}}}']) {
+      fs.writeFileSync(file, bad);
+      assert.throws(() => loadDb(file, { strict: true }), /not a valid history/, `the merge must refuse ${bad}`);
+      assert.deepEqual(Object.keys(loadDb(file).specs), [],
+        "a read-only planner estimates from an empty history instead of stopping");
+    }
+    fs.writeFileSync(file, '{"specs": {}}');
+    assert.deepEqual(Object.keys(loadDb(file, { strict: true }).specs), [], "a valid empty record loads");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a test or spec named `__proto__` is a plain key, and invalid names are dropped", () => {
+  const db = emptyDb();
+  const ts = "2026-09-01T00:00:00Z", spec = "tests/specs/smoke.spec.js";
+  const row = (title, s = spec) => ({ ts, spec: s, title, sec: 1 });
+  const r = mergeRows(db, [row("ok"), row("__proto__"), row("constructor"), row("prototype"),
+    row(""), row(42), row("x".repeat(501)), row("bell\u0007"), row("line\nbreak"),
+    row("fine", "__proto__"), row("fine", "constructor")], { env: "llvmpipe" });
+  assert.equal(r.added, 1);
+  assert.equal(r.rejected, 9, "every invalid name is counted, none throws");
+  assert.deepEqual(Object.keys(db.specs), [spec]);
+  assert.deepEqual(Object.keys(db.specs[spec].t), ["ok"]);
+  assert.equal(Object.getPrototypeOf({}).s, undefined, "nothing was written onto Object.prototype");
+  assert.ok(validName("Smoke › second & last") && validName("x".repeat(500)));
+  for (const bad of ["__proto__", "constructor", "prototype", "", null, 7, "a\tb", "x".repeat(501)])
+    assert.equal(validName(bad), false, `validName(${JSON.stringify(bad)})`);
+  // A junit row titled __proto__ goes through parseJunit and the merge without throwing.
+  const xml = JUNIT.replace('name="Smoke › first"', 'name="__proto__"');
+  const db2 = emptyDb();
+  assert.doesNotThrow(() => mergeRows(db2, parseJunit(xml), { env: "llvmpipe" }));
+  assert.deepEqual(Object.keys(db2.specs["tests/specs/smoke.spec.js"].t), ["Smoke › second & last"]);
+  // A stored record that already holds such a key round-trips as data.
+  const dir = tmpdir();
+  try {
+    const file = path.join(dir, "t.json");
+    fs.writeFileSync(file, `{"specs": {"${spec}": {"s": [], "t": {"__proto__": [["${ts}", "llvmpipe", 2]]}}}}`);
+    const loaded = loadDb(file);
+    assert.ok(Array.isArray(loaded.specs[spec].t["__proto__"]));
+    assert.doesNotThrow(() => mergeRows(loaded, [row("ok")], { env: "llvmpipe" }));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
