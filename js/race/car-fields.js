@@ -78,6 +78,8 @@ const CarFields = (function () {
     ["netplay wire id: game.js wireId() caches it on the first G.wireId call, which a host makes for every car on its " +
       "first tick (perf hunt 9: a late add per car per online race)",
       ["_wireId"]],
+    ["stationary-player retirement timer (game.js checkRetirements, AiDrive.stallStep; W26 row 5)",
+      ["stallT"]],
   ];
 
   const KEYS = [];
@@ -109,7 +111,7 @@ const CarFields = (function () {
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
       "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT",
-      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV"]],
+      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV", "stallT"]],
   ];
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
@@ -237,6 +239,7 @@ const CarFields = (function () {
     if (!("_coastHeld" in c)) c._coastHeld = undefined;
     if (!("classified" in c)) c.classified = undefined;
     if (!("_wireId" in c)) c._wireId = undefined;
+    if (!("stallT" in c)) c.stallT = undefined;
     return c;
   }
 

@@ -980,6 +980,15 @@ const AiDrive = (function () {
   function stallStep(t, speed, dt, live) {
     return live && Math.abs(speed || 0) < STALL_V ? (t || 0) + dt : 0;
   }
+  // One sweep per frame over the LOCAL cars (game.js checkRetirements): `green` is the race-wide
+  // live state; a car in the pits is never stalled. Calls onRetire(c) once, at STALL_RETIRE_S.
+  function stallSweep(cars, dt, green, onRetire) {
+    for (const c of cars) {
+      if (!c.local || c.retired || c.finished) continue;
+      c.stallT = stallStep(c.stallT, c.speed, dt || 0, green && !c.inPit && !c.inPitLane);
+      if (c.stallT >= STALL_RETIRE_S) onRetire(c);
+    }
+  }
   // IS THE PASS LANE STILL REACHABLE? Dropping the latch whenever less than a
   // car width (WCAR) of road is left beyond the passing car — checked every
   // frame, INCLUDING after it arrives in the lane (passTarget allows 0.6 m from
@@ -1649,7 +1658,7 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, stallStep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

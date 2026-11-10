@@ -142,7 +142,7 @@ test("no game.js path ends a race past the G.endRace façade", () => {
   // game.js's own segment of the union (each file is headed `// ==== <file>`); ceremony.js
   // calls an INJECTED endRace (apex.js's finishRace dev hook), which is not this path.
   const all = gameSource(), head = "// ==== js/game.js\n", i = all.indexOf(head), j = all.indexOf("\n// ==== ", i + head.length);
-  assert.ok(i === 0 && j > i, "the union no longer starts with game.js");
+  assert.ok(i === 0 && j > i, "the union no longer starts with the game.js segment");
   const src = all.slice(i, j).replace(/\/\/[^\n]*/g, "");
   const bare = [...src.matchAll(/(^|[^.\w])endRace\(/g)].length;
   // `function endRace(` is the one bare match allowed: every caller goes through G.endRace

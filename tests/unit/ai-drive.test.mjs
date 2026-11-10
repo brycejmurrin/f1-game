@@ -1710,7 +1710,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
   const clamp = (x, lo, hi) => x < lo ? lo : x > hi ? hi : x;
   const damp = (a, b, rate, dt) => a + (b - a) * (1 - Math.exp(-rate * dt));
   const control = new Function("v", "deps", `
-    const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer } = v;
+    const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer, hw } = v;
     const { AiDrive, gripMult, tyres, dirtyAirMul, aeroDfMult, clamp, damp, K, aiT } = deps;
     const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
     const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
@@ -1735,7 +1735,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const original = { ...c };
     const weatherGrip = [1, 0.72, 0.45][i % 3], tyreGrip = 0.4 + rnd() * 0.6;
     const air = (wake, velocity) => 1 - 0.2 * wake * Math.min(1, Math.abs(velocity) / (K.VMAX * Math.max(PACE, 0.05))) ** 2;
-    const v = { c, PACE, dt: [1 / 120, 1 / 60, 1 / 30][i % 3], desiredX: rnd() * 10 - 5,
+    const v = { c, PACE, hw: 6 + (i % 3), dt: [1 / 120, 1 / 60, 1 / 30][i % 3], desiredX: rnd() * 10 - 5,
       tanT: rnd() * 0.2 - 0.1, unstuckActive: mode === "unstuck", rubClamp: mode === "rub", inputSteer: 0.23 };
     const calls = { weather: 0, tyre: 0, air: 0, lateral: 0, yaw: 0 };
     const deps = { K, clamp, damp, aiT: mid,
@@ -1761,8 +1761,8 @@ test("AI heading reuses current grip without changing normal or recovery steerin
       const vl = steer * K.STEER_VMAX * latFac;
       head = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX) : 0;
     } else if (!c.human) {
-      const want = clamp(Math.atan(v.tanT) + Math.atan(K.AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX);
       const max = Math.min(K.AI_YAW_MAX, K.AI_YAW_LAT * K.LAT_MAX * A.yawScale(speed, original.aeroLoad, grip, PACE, K.VMAX) / vAbs);
+      const want = A.edgeHead(clamp(Math.atan(v.tanT) + Math.atan(K.AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX), original.x, v.hw, v.desiredX, vAbs, max);
       head = (head || 0) + clamp(want - (head || 0), -max * v.dt, max * v.dt);
       steer = sm = clamp(vAbs * Math.sin(head) / Math.max(K.STEER_VMAX * latFac * lateral, 1), -1, 1);
     }

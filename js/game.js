@@ -4584,7 +4584,7 @@ function update(dt) {
   }
   wxArc.tick(dt);   // dynamic weather progression (no-op unless an arc is armed)
   _atmo.tick(dt);   // the lighting cross-fade a weather-arc step started (no-op otherwise)
-  checkRetirements();
+  checkRetirements(dt);
   // ranks by progress (reuse module-scope buffer, no per-step allocation).
   // RETIREMENTS ARE NOT IN THE FIELD. Dropping them here is one exclusion that
   // does four jobs: the HUD position stops counting a parked car, the AI stops
@@ -5658,10 +5658,8 @@ function updateCarLongitudinal(c, dt, ranked, S) {
         if (c.isPlayer) { announce("LAP INVALIDATED", 1.2, "penalty-warn"); if (soundOn) GameAudio.offtrack(); }
       } else if (c.cutWarn >= 4) {
         c.penalty += 5; Log[c.isPlayer ? "info" : "debug"]("game", "Penalty track-limits car=" + c.code + " +5s total=" + c.penalty + "s lap=" + c.lap);
-        if (c.isPlayer) {
-          announce("+5s TRACK LIMITS PENALTY", 2, "penalty-hit");
-          if (soundOn) GameAudio.penalty();
-        }
+        if (!c.penaltyWhy) c.penaltyWhy = "track limits"; else if (c.penaltyWhy.indexOf("track limits") < 0) c.penaltyWhy += "; track limits";   // the results sheet's reason (was null)
+        if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2, "penalty-hit"); if (soundOn) GameAudio.penalty(); }
       } else if (c.isPlayer) {
         announce("TRACK LIMITS " + c.cutWarn + "/4" + (c.cutWarn === 3 ? " — BLACK & WHITE FLAG" : ""), 1.2, "penalty-warn");
         if (soundOn) GameAudio.offtrack();
@@ -5706,7 +5704,7 @@ function updateCarLateral(c, dt, ranked, S) {
   let steer, gripScale;
   S.pvB = paceVmax(c);
   if (c.human) {
-    steer = inp ? (inp.steer ?? 0) : Input.steer(dt);
+    steer = inp ? clamp(+inp.steer || 0, -1, 1) : Input.steer(dt);   // a scripted/network steer is clamped at the read (W26 row 8)
     if (S.recordInput) S.recordInput.steer = steer;   // dt: ramps advance per physics step
   }
   else {
@@ -5865,7 +5863,7 @@ function updateCarLateral(c, dt, ranked, S) {
       // commitment is what parked pairs side by side at monaco (standoffs
       // 0 -> 6 in the bench with the zone gate alone). Impatient equal-pace
       // passes go through otWant + the latch above once corridor finds a side.
-      if (!c.passOf) overtake = moveOn && (!c.passPlan || c.passPlan.side) ? AiDrive.otPull(_aiOtPull) : 0;
+      if (!c.passOf) overtake = moveOn && AiCorridor.planAllows(c.passPlan, blocker) ? AiDrive.otPull(_aiOtPull) : 0;   // a plan speaks only for its own blocker (AiCorridor.planAllows)
     }
     else c.atkOn = c.atkWant = false;
     if (c.passOf && raceCtl.level >= 2) c.passOf = null;   // a move under way when the SC/VSC comes out is abandoned
@@ -5929,7 +5927,8 @@ function updateCarLateral(c, dt, ranked, S) {
       desiredX = clamp(targetX + c.holdOff, -(hw - 0.5), hw - 0.5);
     } else c.holdOff = null;
     const pk = parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null;   // a car parked on the road (#2162): pass it a lane clear
-    if (pk && Math.abs(desiredX - pk.x) < CLEAR) desiredX = clamp(pk.x > 0 ? pk.x - CLEAR : pk.x + CLEAR, -(hw - 0.5), hw - 0.5);
+    const hz = pk || (blocker && blockerGap < AiDrive.hazardReach(c.speed) && AiDrive.stoppedHazard(blocker, vT) ? blocker : null);   // a STOPPED car ahead is a hazard too (AiDrive.stoppedHazard)
+    if (hz && Math.abs(desiredX - hz.x) < CLEAR) desiredX = clamp(hz.x > 0 ? hz.x - CLEAR : hz.x + CLEAR, -(hw - 0.5), hw - 0.5);
     // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
     // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
     // anything under 0.3 m, while the shared racing line pulls the outer car up
@@ -6019,8 +6018,8 @@ function updateCarLateral(c, dt, ranked, S) {
       // (grip taper, kerb, contact give, off-track fade) still applies.
       // These inputs stay fixed through the heading and lateral-authority calculations.
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
-      const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
+      const headWant = AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax);   // stop before the edge (AiDrive.edgeHead)
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
       gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // X-mode costs the AI its wings too
@@ -6623,8 +6622,9 @@ function retireCar(c, reason) {
 // Retirements arrive by race DISTANCE, not by clock: the moment was drawn as a
 // fraction of the full race at the green light (see armReliability), so a 3-lap
 // blast and a 25-lap race lose their cars at the same points of the story.
-function checkRetirements() {
+function checkRetirements(dt) {
   const dist = Math.max(1, lapsTarget * track.total);
+  AiDrive.stallSweep(cars, dt, state === "race" && raceCtl.level === 0 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s under green
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its
@@ -6643,7 +6643,7 @@ function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.
 function cooldownDrives() { const rc = RaceCeremony.get(); return state === "results" && !!rc && rc.status().inputOwner === "player"; }
 function cooldownDrive(c, dt) {
   const inp = inputOf(c), thr = inp ? !!inp.throttle : Input.throttle(), brk = inp ? !!inp.brake : Input.brakeLevel() > 0;
-  const steer = inp ? (inp.steer ?? 0) : Input.steer(dt), vMax = vTop() * 0.55;
+  const steer = inp ? clamp(+inp.steer || 0, -1, 1) : Input.steer(dt), vMax = vTop() * 0.55;
   c.speed = clamp(c.speed + (thr ? 18 : brk ? -40 : -6) * dt, 0, vMax); c._coastHeld = false;
   c.s = wrapS(c.s + c.speed * dt); c.prog += c.speed * dt;
   Tracks.sample(track, c.s, smp);
