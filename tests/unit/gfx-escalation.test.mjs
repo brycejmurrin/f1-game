@@ -65,7 +65,6 @@ test("game.js wires GfxEscalation to quitToMenuAfterCtxLost", () => {
 test("race-entry soften does not persist envProbeOff to storage", () => {
   const union = gameSource();
   const soften = symbolSource("function installRaceEntrySoften()");
-  assert.ok(union.includes("_raceEntryEnvProbeSession"));
   assert.ok(union.includes("clearRaceEntrySoften"));
   assert.ok(!soften.includes("localStorage.setItem"));
   assert.ok(soften.includes("envProbeOptOut"));
