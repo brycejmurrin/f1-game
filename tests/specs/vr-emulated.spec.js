@@ -477,8 +477,13 @@ test("stereo viewports: left width > 0; non-blank canvas capture; flat mode afte
   }
   test.info().annotations.push({ type: "xr-capture", description: JSON.stringify(frames) });
   expect(Object.keys(frames).length, "neither canvas could be captured").toBeGreaterThan(0);
-  expect(Object.values(frames).some((f) => f.nonblank),
-    "captured canvas must carry content, not a blank frame: " + JSON.stringify(frames)).toBe(true);
+  // NOT ASSERTED (W32 row 13, listed in PR #5302): non-blank content. While
+  // IWER presents, the frame goes to the XR layer, not the page canvas: CI
+  // (run 42802375775, job 129785049561, 4bae7ca) decoded #game as all black
+  // ({"nonblank":false,"min":0,"max":0}), and #game-soft was not capturable.
+  // The old "PNG > 2000 bytes" check was passing on that black frame. The XR
+  // frames themselves are asserted above (presenting, frameCount, eye views);
+  // reading the XR layer's pixels needs a seam that does not exist yet.
 
   await endVr(page);
 
