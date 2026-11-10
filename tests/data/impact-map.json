@@ -5615,6 +5615,7 @@
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/deploy-stamp.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
@@ -8046,6 +8047,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "create": [
+        "tests/unit/deploy-stamp.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
@@ -15790,6 +15792,9 @@
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "labDprCap": [
+        "tests/unit/tlx-lite-lab.test.mjs"
+      ],
       "lineIndex": [
         "tests/unit/tlx-fx-warm.test.mjs"
       ],
@@ -19251,6 +19256,7 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "current": [
+        "tests/specs/title-fit.spec.js",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
@@ -19287,11 +19293,11 @@
       "shape": [
         "tests/unit/title-layout.test.mjs"
       ],
+      "slider": [
+        "tests/specs/title-fit.spec.js"
+      ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
-      ],
-      "*": [
-        "tests/specs/title-fit.spec.js"
       ]
     },
     "js/ui/title-menu.js": {
