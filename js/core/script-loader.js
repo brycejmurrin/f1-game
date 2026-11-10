@@ -96,11 +96,9 @@ function warm(hrefs) {
     } catch (_) { return 0; }
   })).then((xs) => xs.reduce((a, b) => a + b, 0));
 }
-// A hung lazy file (a stalled phone connection) never fires load OR error, so
-// the caller's loading card waited forever (#2582). After SLOW_MS `opts.onSlow`
-// fires (the UI may say "still loading"); after DEADLINE_MS of main-thread-responsive time the file counts as
-// failed, exactly like onerror, so every caller's existing fallback and its
-// memo-clear-on-failure retry path run. Overridable per load: opts.slowMs / deadlineMs.
+// A hung lazy file fires neither load nor error (#2582): after SLOW_MS
+// opts.onSlow fires; after DEADLINE_MS of responsive time it fails like onerror,
+// so callers' fallbacks and retries run. Per load: opts.slowMs / deadlineMs.
 const SLOW_MS = 10000, DEADLINE_MS = 25000;
 // Transient github.io 5xx on a lazy <script>: retry the SAME file with a fresh
 // query key before the bundle gives up (Data Hub, grip-steer, results-sheet, …).
@@ -116,8 +114,7 @@ const evaluated = new Set();
 // bundle. Both are strict loads of the same top-level const, so they must
 // share the pending insertion as well as the completed evaluation.
 const evaluating = new Map();
-// A strict file whose attempt hit the deadline but whose fetch may still land
-// and evaluate: src -> Promise<boolean> of that late outcome.
+// src -> Promise<ready> of a timed-out strict file that may still evaluate.
 const stranded = new Map();
 // One admitted browser attempt owns only its element and responsive-time timers.
 // It knows nothing about bundles, strict sharing, evaluated scripts or retries.
@@ -129,11 +126,8 @@ function browserAttempt(src, href, sri, opts, onLoad) {
     if (sri) el.integrity = sri;
     el.src = href;
     el.crossOrigin = "anonymous";
-    // MARKED so index.html's broken-install repair (sweeps every SW cache and
-    // reloads) leaves it alone: that repair is right for a shell tag the CDN
-    // has not published yet, but a load error here already RESOLVES (a missing
-    // global IS the fallback), so a reload would throw away a working
-    // degradation path — and loop, since the one-shot guard already cleared.
+    // MARKED so index.html's broken-install repair (sweep + reload) skips it:
+    // a lazy load error already resolves to its fallback, and a reload would loop.
     if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
     const slowMs = (opts && opts.slowMs) || SLOW_MS, deadlineMs = (opts && opts.deadlineMs) || DEADLINE_MS;
     let slowT = null, deadT = null;
@@ -143,13 +137,8 @@ function browserAttempt(src, href, sri, opts, onLoad) {
     slowT = W.setTimeout(() => {
       try { if (opts && opts.onSlow) opts.onSlow(src); } catch (_) { /* UI hook only */ }
     }, slowMs);
-    // THE DEADLINE COUNTS RESPONSIVE TIME, NOT WALL CLOCK (#3157). One 25 s
-    // timer fires on a starved main thread (TLX right after a race on a slow
-    // GPU, minutes of long tasks) in the same stall in which the fetched
-    // script's load event is still queued, so a file that ARRIVED was counted
-    // failed. A heartbeat adds at most two ticks per beat: a stall that
-    // swallowed many beats buys the file its load task, a real hang still
-    // reaches deadlineMs of live beats.
+    // THE DEADLINE COUNTS RESPONSIVE TIME (#3157): a starved main thread must
+    // not fail a file whose load event is queued. Each beat adds at most two ticks.
     const tickMs = Math.max(10, Math.min(1000, Math.floor(deadlineMs / 10)));
     let budget = 0, last = Date.now();
     const beat = () => {
@@ -158,14 +147,12 @@ function browserAttempt(src, href, sri, opts, onLoad) {
       last = t;
       if (budget < deadlineMs) { deadT = W.setTimeout(beat, tickMs); return; }
       if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
-      // A REMOVED <script> STILL RUNS WHEN ITS FETCH LANDS (HTML "execute the
-      // script element" checks only the preparation-time document). Its late
-      // load still reports readiness, and `late` lets the caller wait for it
-      // instead of injecting a second copy whose top-level const would throw.
-      let lateDone = null;
-      const late = new Promise((r) => { lateDone = r; });
-      el.onload = () => { let ok = false; try { ok = !!onLoad(); } catch (_) { /* readiness hook */ } lateDone(ok); };
-      el.onerror = () => lateDone(false);
+      // A removed <script> still runs when its fetch lands: report it, so a
+      // retry waits instead of redeclaring its top-level const.
+      let done;
+      const late = new Promise((r) => { done = r; });
+      el.onload = () => { let ok = false; try { ok = !!onLoad(); } catch (_) { /* readiness hook */ } done(ok); };
+      el.onerror = () => done(false);
       if (el.remove) el.remove();
       settle(false, false, late);
     };
@@ -254,17 +241,13 @@ function loadBackendScripts(files, edges, opts) {
       return r;
     });
   };
-  // A strict retry of a file that timed out waits up to one more deadline for
-  // the stranded copy; only a fetch still silent after that gets a second tag.
+  // A strict retry waits up to one more deadline for a stranded copy.
   const awaitStranded = async (src) => {
-    const late = stranded.get(src);
-    if (!late) return;
-    const W = typeof window !== "undefined" ? window : null;
-    let t = null;
-    const wait = (opts && opts.deadlineMs) || DEADLINE_MS;
-    const expired = new Promise((r) => { if (W && typeof W.setTimeout === "function") t = W.setTimeout(r, wait); });
-    await Promise.race([late, expired]);
-    if (t !== null) W.clearTimeout(t);
+    const late = stranded.get(src), W = typeof window !== "undefined" ? window : null;
+    if (!late || !W || typeof W.setTimeout !== "function") return;
+    let t;
+    await Promise.race([late, new Promise((r) => { t = W.setTimeout(r, (opts && opts.deadlineMs) || DEADLINE_MS); })]);
+    W.clearTimeout(t);
     stranded.delete(src);
   };
   // Strict bundles with a `loaded` set (ensureDataHub / ensureNet / …) keep one inject

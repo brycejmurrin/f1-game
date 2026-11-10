@@ -327,8 +327,7 @@ const Assets = (function () {
       }
       return _scratchGl;
     }
-    // OffscreenCanvas first, then a DOM canvas: Safari 16.4-16.x ships
-    // OffscreenCanvas with 2D only, so its webgl2 context is null there.
+    // A DOM canvas when OffscreenCanvas has no webgl2 (Safari 16.4-16.x).
     const attrs = { premultipliedAlpha: false, antialias: false };
     const tryCanvas = (make) => {
       try { const c = make(); const g = c && c.getContext("webgl2", attrs); return g ? { cv: c, gl: g } : null; }
