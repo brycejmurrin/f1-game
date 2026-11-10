@@ -1,0 +1,1 @@
+Improved: on phones RESOLUTION now defaults to AUTO, capped at MED's sharpness — the picture starts exactly as sharp as before, and the game may lower the 3D resolution to hold the frame rate before it cuts effects. A RESOLUTION you picked yourself (LOW, MED, HIGH) is kept.

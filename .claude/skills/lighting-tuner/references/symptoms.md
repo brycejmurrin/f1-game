@@ -63,7 +63,7 @@ A timing sleep alone does not prove presented pixels.
 |---|---|---|
 | Night looks like day | `ambientSky` too bright, `numLights` = 0 | Inspect shipped `LightPresets["track\|tod\|weather"]` first; then `lightTune({ambientMul})` / night ambient cap. Track may not trigger a dark rebuild |
 | Floodlights not firing | `numLights === 0` AND `perChunkLights`/`bakedLights` 0 on a dark track | No `def.night` guard in `buildTrackLights` (every circuit gets lamps). The gate is `isFloodActiveSession()` (game.js: tod night/dusk/dawn, or `default` + `def.night`) `\|\| LT.floodDay > 0`; `raceTimeOfDay` must be set BEFORE `applyRaceSettings`. On TLX after a night→day race, read `lightState().tlxLampGrid`: the previous track's lamp cells can stay pinned. |
-| Floodlights dim at dusk/dawn | `numLights` > 0 but pools weak | Then dusk/dawn level = `lampLevel` x max(`twilightFloor`, 1-sunY*`twilightRamp`); a shipped `"<track>\|dusk\|<wx>"` row with low `lampLevel` or `twilightFloor` reads as off. Caps: `lampCull`, `lampDensity`, `lampBake`. `slider-effect.mjs --group LAMPS` lists them (no browser) |
+| Floodlights dim at dusk/dawn | `numLights` > 0 but pools weak | Dusk/dawn level scales `lampLevel` by `twilightFloor`/`twilightRamp` against `sunY` (game.js); a shipped `"<track>\|dusk\|<wx>"` row with low `lampLevel` or `twilightFloor` reads as off. Caps: `lampCull`, `lampDensity`, `lampBake`. `slider-effect.mjs --group LAMPS` lists them (no browser) |
 | Floodlight masts invisible | `floodEmit === 0` | Night emissive in `buildProps`; `lightTune({floodEmitMul})` |
 | Dawn sun too high | `sunY` close to 1.0 | `lightTune({sunElev: -N})`; structural default in `applyRaceSettings` |
 | Washed out / bloom too strong | `exposure` / bloom knobs hot | `lightTune({exposureMul, bloomMul, threshOff, bloomKnee})`; check shipped presets |
@@ -71,23 +71,22 @@ A timing sleep alone does not prove presented pixels.
 | Night washed out: which knob | night knob order | Pull `nightAmbLift` ("how dark is night" master; read the RESOLVED value with `lightTune()` — higher = a lifted night), then `mistDensity`/`fogDensityMul`, `bloomMul`/`bloomKnee`, `cityGlowMul`/`cityGlowTint`, `exposureMul`. `node tools/lighting/slider-effect.mjs --gate night` lists the night knobs (no browser) |
 | Ambient wash | `ambientGround` too bright | `lightTune({ambientMul})`; night branch caps ambient |
 | Lamps too bright / dim | pool blow-out or dark valleys | `lightTune({lampLevel, poolEnergy, bleedMul})` |
-| Sun/moon too warm/cold | `sunColor` skew | `lightTune({sunTemp: ±N})` — key light only, `-2..2` |
+| Sun/moon too warm/cold | `sunColor` skew | `lightTune({sunTemp: ±N})` — key light only; range in `TUNE_DEFS` |
 | Shadow/ambient too warm/cold | hemisphere skew | `lightTune({ambTemp: ±N})` — independent of `sunTemp` |
 | Lamps the wrong colour | lamp tint fights the scene | `lightTune({lampTemp: ±N})` over `LAMP_KINDS` |
 | Night skyglow wrong hue | city dome + bloom-adjacent ambient | `lightTune({cityGlowWarm: ±N})`; 0 = per-theme tint |
 | Fog too warm/cold | distance-haze tint | `lightTune({fogTint: ±N})` |
 | Overall image cast | final grade, not scene lights | `lightTune({tint: ±N})` — do not use this to fix a lamp or sun |
 
-A shipped stacking example: `LightPresets["jeddah|dawn|dry"]` in
-`js/lighting/presets.js` sets `sunTemp`, `tint`, `sunElev`, `ambTemp`, and
-the lamp/mist/star knobs together.
+A shipped stacking example: `LightPresets["*|dawn|dry"]` in `js/lighting/presets.js`
+stamps the fleet's dawn knobs together; `"jeddah|dawn|dry"` keeps only its exceptions.
 
 ## Contract tests
 
-Day/night **light counts and exposure**: `tests/specs/lighting-ab.spec.js` (how to run it and the
-whole group: SKILL.md).
+Day/night **light counts and exposure**: `tests/specs/lighting-ab.spec.js`, in the CI `gfx` group
+(SKILL.md Workflow step 8).
 
 `tests/specs/lighting-tuner-grade.spec.js` is **IMAGE & COLOUR UI grading
 only** — it does not check `numLights` or day/night ambient. After any
-`applyRaceSettings` edit, run `lighting-ab` first (accidentally lighting the
-night scene like day).
+`applyRaceSettings` edit, `lighting-ab` is the one that catches lighting the
+night scene like day.

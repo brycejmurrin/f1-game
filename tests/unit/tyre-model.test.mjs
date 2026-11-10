@@ -111,9 +111,14 @@ test("wear OFF: a car on its own garage slick is fitted the weather's tread at t
   const car = { human: true, tyreOpt: slick, tread: 0 };
   s.fit(car, s.startRecord(car, 2));
   assert.equal(car.tread, 2);
-  // Wear ON keeps the driver's choice: the stop is the recourse.
+  // Wear ON fits the weather's tread at the lights too (#5251, Bryce's decision 2026-11-10). This
+  // assertion REPLACES one that pinned the opposite as intended ("wear on: the player's own set,
+  // whatever the sky"): a slick on a wet grid was a forced stop on lap 1 against 21 AI on wets.
   s.setLevel("real");
-  assert.equal(s.startRecord(player, 2).id, slick.id, "wear on: the player's own set, whatever the sky");
+  assert.equal(s.startRecord(player, 2).tread, 2, "wear on, rain: full wets at the lights, as the field");
+  assert.equal(s.startRecord(player, 1).tread, 1, "wear on, damp: intermediates");
+  assert.equal(s.startRecord(player, 0).id, slick.id, "wear on, dry: the garage set");
+  if (inter) assert.equal(s.startRecord({ human: true, tyreOpt: inter }, 2).id, inter.id, "wear on: a treaded set of their own stays theirs");
 });
 
 test("an AI car starts a WET race on the tread the weather wants, not the plan's slick", () => {

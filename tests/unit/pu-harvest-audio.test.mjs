@@ -143,3 +143,32 @@ test("braking harvest still follows hard deceleration", async () => {
   assert.ok(brakeHarv > 0.35, `braking decel harvest (${brakeHarv})`);
   assert.ok(A.harvestLevel() > 0.01, "braking harvest is audible on the bus");
 });
+
+// #5052: AudioParam writes that never settle. Each setTargetAtTime is a message to the audio
+// render thread; at a steady cruise the sub-octave pitch re-aimed on 599 of 600 frames (exact
+// compare against the engine period) and at full throttle the harvest bandpass chased speed
+// while its gain target was 0.
+function paramSets(kind, field) {
+  return [...live].filter((nd) => nd.kind === kind && nd[field]).map((nd) => nd[field].sets);
+}
+async function cruise(frames, at) {
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init(); await release(); A.startEngine(); A.setTune(TUNE_ID);
+  const run = (k0, k1) => { for (let i = k0; i < k1; i++) { ctxTime(1 / 60); A.setEngine(...at(i)); } };
+  run(0, 60);
+  const b0 = paramSets("osc", "frequency"), f0 = paramSets("biquad", "frequency");
+  run(60, 60 + frames);
+  const d = (now, was) => now.map((v, i) => v - (was[i] || 0));
+  return { osc: d(paramSets("osc", "frequency"), b0), biquad: d(paramSets("biquad", "frequency"), f0) };
+}
+test("a steady cruise and a full-throttle pull leave the sub-octave and harvest params settled (#5052)", async () => {
+  live.clear();
+  const steady = await cruise(600, (i) => [0.9 + 0.002 * Math.sin(i * 0.7), 0, false, 0.8, 6, { throttle: 0.7, deploy: 0, energy: 0.6 }]);
+  live.clear();
+  const pull = await cruise(600, (i) => [0.9, 0, false, Math.min(1, 0.4 + i / 1200), 6, { throttle: 1, brake: 0, deploy: 0, energy: 0.6 }]);
+  const busy = (a) => a.filter((n) => n > 60).length;   // re-aimed on > 10 % of frames
+  // Before #5052: steady 2 busy oscillators (the sub-octave at 600/600), pull 3 busy filters
+  // (the silent harvest bandpass at 600/600). What remains follows a real, audible change.
+  assert.equal(busy(steady.osc), 1, `steady cruise: only the rev-tracking tone stays busy (${steady.osc})`);
+  assert.equal(busy(pull.biquad), 2, `full throttle: the silent harvest filter settles (${pull.biquad})`);
+});

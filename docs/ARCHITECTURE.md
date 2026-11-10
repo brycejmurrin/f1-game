@@ -174,7 +174,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots + session when-variants. |
 | `garage-entrance-motion.js` | `GarageEntranceMotionData` | LAZY_RACE | Blender evaluated entrance curves. |
 | `garage-departure-motion.js` | `GarageDepartureMotion` | LAZY_RACE_SESSION | Blender-authored departure transforms. |
-| `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
+| `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors, lane identity counts and the OpenF1 live-window test. |
 | `api-transport.js` | `F1Transport` | LAZY_DATA | paced API transport: bounded bodies, cache, timeouts, retries and cancellation. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
 | `telemetry-model.js` | `DataTelemetryModel` | LAZY_DATA | telemetry channels, lane identities and GPS/distance interpolation. |
@@ -263,7 +263,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
-| `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `post-fx-opts.js` | `PostFxOpts` | tag | PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent player settings (GRAPHICS). |
 | `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
 | `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
@@ -348,7 +347,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
 | `setup-trial-session.js` | `SetupTrialSession` | tag | Fresh solo setup trials use normal race construction; never restore a world checkpoint. |
-| `wx-hash.js` | `WxHash` | tag | WX HASH (WxHash): the FNV-1a unit draw shared by Forecast and RainCells. |
 | `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
@@ -600,14 +598,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
-| `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.5 MB / 24 cars, under a 0.7 MB cap). |
+| `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.6 MB / 24 cars, under a 0.7 MB cap). |
 | `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a short highlights montage from the solo ReplayBuf tags. |
 | `cam-tuner-boot.js` | `CamTunerPanel` | tag | CAMERA TUNER boot stub (FULL). |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `cockpit-finishes.js` | `CockpitFinishes` | tag | first-person finish preferences. |
 | `cockpit-preview.js` | `CockpitPreview` | tag | isolated cockpit option preview. |
 | `fov-mode.js` | `CamFov` | tag | one speed-FOV curve for every player camera. vantage.js asks CamFeel.modeFov, which forwards here, so the recipe is not buried in look-back and shake. |
-| `drive-lens.js` | `DriveLens` | tag | lens-only FOV delta for every live camera family. |
 | `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
 | `cam-groups.js` | `CamGroups` | tag | CamGroups: the ONE table of which player cameras count as "onboard" and which take the cockpit HUD layout, by CamModes id. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
@@ -1376,23 +1373,31 @@ Jolpica `https://api.jolpi.ca/ergast/f1/` + OpenF1 `https://api.openf1.org/v1`.
 All methods return Promises of SIMPLIFIED plain objects (not raw API shapes).
 Separate OpenF1 and Jolpica queues: min 400 ms between requests per provider, localStorage cache
 (`apex26.api.<url>` -> `{t, data}`), TTLs: schedule 24 h, standings/results
-1 h, openf1 latest-session 10 min, finished session data 7 d. On 429 or
-network error: serve stale cache if present, else reject. Never auto-poll.
+1 h, openf1 latest-session 10 min, finished session data 7 d (an EMPTY calendar
+is not cached). On 429, 5xx or network error: serve stale cache if present, else
+reject — never on 401/403, OpenF1's live window (30 min before a session until
+30 min after it ends), where `ensureSession` falls back to the stored latest
+session and the session tabs show a LIVE SESSION IN PROGRESS card
+(`DataTabUtils.liveLockout(err)`, keyed on `err.status`). Every Jolpica list asks
+`?limit=100` and pages by `MRData.total` (the default page is 30 rows). Never auto-poll.
 
 ```
-F1API.schedule()              -> [{round, name, circuit, locality, country, date, time, hasSprint}]
-F1API.driverStandings()       -> [{pos, points, wins, name, code, number, team}]
-F1API.constructorStandings()  -> [{pos, points, wins, name}]
-F1API.latestSession()         -> {sessionKey, name, type, circuit, country, dateStart} | null
+F1API.schedule(year?)         -> [{season, round, circuitId, name, circuit, locality, country, date, time, hasSprint, sessions}]
+F1API.driverStandings(year?)  -> [{pos, points, wins, name, code, number, team}]
+F1API.constructorStandings(year?) -> [{pos, points, wins, name}]
+F1API.latestSession(ttl?)     -> {sessionKey, name, type, circuit, country, dateStart, dateEnd} | null
 F1API.weather(sessionKey)     -> {airT, trackT, humidity, rainfall, windSpeed} | null
 F1API.positions(sessionKey)   -> [{num, pos}] | null      // folded latest per driver
+F1API.sessionPositions / sessionIntervals(sessionKey) -> {values, cursor}  // cached whole session
+F1API.livePositions / liveIntervals(sessionKey, sinceISO) -> {values, cursor}  // uncached delta
 F1API.sessionDrivers(sessionKey) -> [{num, code, name, team, color}] | null
 F1API.locationData(sessionKey, driverNumber, startISO, endISO, options?) -> [{x, y, date}]
      options.cache=false bypasses raw-response reads/writes and stale fallback.
 F1API.sessionResult(sessionKey)  -> [{pos, num, laps, points, dnf, dns, dsq, duration, gap}]
      duration/gap are a NUMBER for practice/sprint/race and a [Q1,Q2,Q3] ARRAY for
      qualifying; a lapped finisher's gap can be a string ("+1 LAP"). Empty [] when the
-     session has published nothing yet — OpenF1 answers 200 {detail:"No results found."}.
+     session has published nothing yet — OpenF1 answers HTTP 404 {detail:"No results found."},
+     which the transport resolves as [].
 ```
 
 ## js/data/ — the hub and its tabs
@@ -1417,7 +1422,7 @@ global directly and load before hub.js.
 | `schedule.js` | `DataSchedule` | SCHEDULE |
 | `standings.js` | `DataStandings` | STANDINGS (drivers + constructors) |
 | `results.js` | `DataResults` | RESULTS (any session of any 2023+ weekend, via the shared picker; qualifying adds OVERALL / Q1 / Q2 / Q3 round views) |
-| `live.js` | `DataLive` | LIVE (30 s refresh loop) |
+| `live.js` | `DataLive` | LIVE (30 s refresh loop; a COMPLETED session's first build reads the cached whole-session snapshots, then deltas) |
 | `telemetry.js` | `DataTelemetry` | TELEMETRY (trace viewer/map/playback; also returns `closeTelemPopup` — the shell closes the popup on tab switch / hub close) |
 | `export.js` | `DataExport` | EXPORT dev tool (GPS traces → ZIP) |
 

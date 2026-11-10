@@ -7,7 +7,8 @@ description: "Use when crashes or race control misbehave: debris, cars flipping 
 
 Incidents are split by authority: `DebrisWorld` never moves cars,
 `IncidentSim` may move cars only inside bounded takeover windows, and
-`RaceControl` reads hazards to set flags without touching car pose or speed.
+`RaceControl` sets flags (from hazards, a storm or a scripted hold) without
+touching car pose or speed.
 
 ## When to Use
 
@@ -39,7 +40,7 @@ Do **not** use this for:
 |---|---|
 | `js/physics/debris-world.js` | Rapier side-world for render/cosmetic-plus debris; never writes car pose, `(s,x)`, speed, or heading |
 | `js/physics/incident-sim.js` | High-risk layer; may move cars only inside finite, bounded takeover windows with fallback |
-| `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()`; host-owned in multiplayer |
+| `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()`, plus the storm SC (`stormTick`) and scripted `hold()`; host-owned in multiplayer |
 | `js/race/reliability.js` | Staged DNF/retirement plan; deterministic and career-aware |
 
 **What `hazards()` counts** (`DebrisWorld.hazards`, read its body): only SLEEPING debris shards, disturbed
@@ -51,23 +52,23 @@ threshold: sample `caution({hazards:true})` every 0.25 s through the settle wind
 (recipe: references/workflow.md §SC never deploys).
 
 **Marbles are not cosmetic.** AI cars drop marbles through `DebrisWorld.tyreMarble`, and
-`marbleGrip` then cuts the player's grip in the force path (`js/physics/player-forces.js`, floor
-0.93). Arc-rule class: **surface** (pass-4 audit DECISIONS #4): the drop signal must be the AI
-car's own measured lateral acceleration / tyre slip, never curvature or the racing line. Classify
-changes against the marble row of docs/PHYSICS.md's legitimate-columns table (do not copy it); a
+`marbleGrip` then cuts the player's grip in the force path (`js/physics/player-forces.js`). Arc-rule
+class: **surface**: the drop signal must be the AI car's own measured lateral slip / lock, never
+curvature or the racing line. Classify changes against the marble row of `docs/PHYSICS.md`
+§Curvature channels (do not copy it); a
 marble change is a physics change: tune-physics' arc check and agent `physics-contract-auditor`.
 
 Flags / storage:
 
 | Key | Meaning |
 |---|---|
-| `apex26.debris` | Rapier debris side-world; default OFF, only `"1"` enables (read once at boot) |
+| `apex26.debris` | Rapier debris side-world; opt-in, `"1"` enables (read once at boot; default: `SettingsDefaults`) |
 | `apex26.breakBarriers` | Breakable barrier panels (`"0"` disables; likewise the keys below) |
 | `apex26.marbleGrip` | Marble grip scalar — reaches the PLAYER's grip (see Marbles above) |
 | `apex26.r2Airborne` | Airborne/rollover takeover |
 | `apex26.r3Contact` | Heavy car-car contact takeover |
 | `apex26.c1Pileup` | Multi-car pile-up takeover |
-| `apex26.caution` | Race-control cautions (default off) |
+| `apex26.caution` | Race-control cautions (default: `readCaution` in `race-control.js`) |
 
 Hooks:
 
@@ -88,8 +89,7 @@ node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # diff-aware; the fu
 node --test tests/unit/race-control.test.mjs   # flags/caution rules, <1 s; also reliability, debris-*.test.mjs
 node --test tests/unit/incident-gate.test.mjs  # R2/R3/C1 takeovers: promote, window, handback, release
 APEX_VM_PAGE_GROUP=b node --test tests/unit/adapted-specs.test.mjs   # race-control.spec (flags only, no IncidentSim) VM-adapted, NO browser (test:vm-page-b)
-node tools/ci/test-bg.mjs --spec tests/specs/debris.spec.js   # BROWSER, one spec, backgrounded (AGENTS.md rule 4); a subagent reports it not run
-node tools/ci/remote-group.mjs physics-core     # the whole group, pushed branch only
+node tools/ci/remote-group.mjs physics-core     # BROWSER specs (debris/race-control.spec): CI, pushed branch only (AGENTS.md rule 5; group: pick-tests.mjs)
 ```
 
 ## Load on demand

@@ -382,6 +382,11 @@ function driverLabel(d, placeholderNum) {
   return (placeholderNum && !(d.num > 1)) ? last : "#" + d.num + " " + last;
 }
 
+/** Team-tile crest bitmap edge for a device pixel ratio: 32 CSS px x dpr x 1.5, never under 48 or over 128. */
+function swatchPx(dpr) {
+  const d = +dpr > 0 ? +dpr : 1;
+  return Math.max(48, Math.min(128, Math.round(32 * 1.5 * d)));
+}
 function teamSwatch(t) {
   const sw = document.createElement("span");
   sw.className = "tm-colour";
@@ -399,7 +404,10 @@ function teamSwatch(t) {
   // wall and the car share.
   if (typeof LiveryTex !== "undefined" && LiveryTex.paintSwatch) {
     const c = document.createElement("canvas");
-    c.width = 48; c.height = 48;
+    // Backing store follows the panel: .tm-colour is a 32 CSS px box (css/select.css), so the fixed 48 px
+    // this used to be put 48 texels on 99 device px on a DPR-3 phone (measured 0.49 px per device px,
+    // docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F4). x1.5 covers a zoomed sheet; 128 bounds 22 tiles.
+    c.width = c.height = swatchPx(typeof window !== "undefined" ? window.devicePixelRatio : 1);
     c.setAttribute("aria-hidden", "true");
     LiveryTex.paintSwatch(c.getContext("2d"), crestId, liv || { c1, c2 }, c.width, c.height);
     sw.appendChild(c);
@@ -1140,6 +1148,15 @@ watchHero(document.getElementById("sel-hero"));
 // glyph; a circuit with no still keeps the hero's own gradient. The token
 // guards a slow decode landing after the player has already moved on.
 let stillToken = 0;
+// Hero ~ full width: a DPR-3 phone takes the 1600 px file (#5223). STILL_1X_ONLY have no 2x file.
+const STILL_SIZES = "100vw";
+const STILL_1X_ONLY = ["baku", "estoril", "imola", "watkins_glen", "zolder"];
+/** "" = the 800 px file only (no 2x file, Save-Data, 2G). */
+function stillSrcset(id, conn) {
+  if (STILL_1X_ONLY.includes(id) || (conn && (conn.saveData || /2g$/.test(conn.effectiveType || "")))) return "";
+  const base = "assets/stills/" + id;
+  return base + ".webp 800w, " + base + "-1600.webp 1600w";
+}
 function showStill(t) {
   const img = document.getElementById("sel-still");
   if (!img) return;
@@ -1152,7 +1169,15 @@ function showStill(t) {
   img.hidden = true;
   img.dataset.id = t.id;
   img.onload = () => { if (token === stillToken) img.hidden = false; };
-  img.onerror = () => { if (token === stillToken) img.hidden = true; };
+  // A failed 2x load retries the 800 px file once; only a second failure hides the still.
+  img.onerror = () => {
+    if (token !== stillToken) return;
+    if (img.getAttribute("srcset")) { img.removeAttribute("srcset"); img.removeAttribute("sizes"); img.src = src; return; }
+    img.hidden = true;
+  };
+  const set = stillSrcset(t.id, typeof navigator !== "undefined" ? navigator.connection : null);
+  if (set) { img.sizes = STILL_SIZES; img.srcset = set; }
+  else { img.removeAttribute("srcset"); img.removeAttribute("sizes"); }
   img.src = src;
 }
 

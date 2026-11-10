@@ -86,7 +86,7 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
 
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
 - A test timed out / hangs / a CI shard passes solo but not loaded (or vice versa) —
-  step 0 (read-only load + log anchors), the decision tree and `test-solo.mjs` → [`references/triage.md`](references/triage.md)
+  step 0 (read-only shard-log anchors), the decision tree and the `remote-group.mjs` re-run → [`references/triage.md`](references/triage.md)
 - No cache bump after a `js/`/`css/` edit (`?v=dev`; the deploy stamps hashes); `gen-shell` after a manifest change (last
   edit before commit) → [`references/bump.md`](references/bump.md)
 - Engine / physics / `js/game.js` change: which two groups, the master gate, ratchets, vstd-lint →

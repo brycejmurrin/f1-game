@@ -1,14 +1,12 @@
 ---
 name: tune-physics
-paths:
-  - "js/physics/**"
 description: "Use when the car handles wrong: understeer, oversteer, running wide, lazy or snappy turn-in, grip, braking, pace, GRIP STEER maths, or a physics A/B. Not for: shake → game-feel; steering sliders → input-controls; camera lag → playwright-probe; AI → ai-racecraft."
 ---
 
 # Tune the physics
 
 Per-axle bicycle model + combined-slip friction ellipse. Compare speeds through `vStd()`/`vTop()`
-(`tools/check/vstd-lint.mjs` enforces it in code). Tune the way the
+(the gate is `tests/unit/vstd-invariant.test.mjs`; `tools/check/vstd-lint.mjs` is a report that always exits 0). Tune the way the
 suite does: **headless, deterministic, relative assertions** — never brittle
 absolute magnitudes.
 
@@ -21,7 +19,7 @@ absolute magnitudes.
 | `maxSlip` (`STEER_MAX_SLIP`, rad) | max steer lock | sharper low-speed |
 | `speedRef` (`STEER_SPEED_REF`, m/s) | lock taper | keeps lock at speed |
 | `drift` (`DRIFT`) | rear looseness | more tail-out (debug) |
-| `roadFollow` (`ROAD_FOLLOW`, ships **0** = OFF) | curvature assist | more auto-drive |
+| `roadFollow` (`ROAD_FOLLOW`, ships **OFF**) | curvature assist | more auto-drive |
 | `frontGrip` (`FRONT_GRIP`) | front friction bias | less understeer |
 | `playerGrip` (`PLAYER_GRIP`) | player vs AI headroom | more forgiving |
 | `yawDamp` (`YAW_DAMP`) | yaw damping | calmer |
@@ -31,20 +29,20 @@ absolute magnitudes.
 
 `expo` / `maxSlip` / `speedRef` are also the player's STEER sliders (LINEARITY / STEER LOCK /
 SPEED STEER): the slider UI, defaults and migration are **input-controls**; here they are A/B knobs.
-There is no "steer gain" knob: `updateCar` (js/game.js) steers `sign(s)·|s|^expo · maxSlip · lockTaper`, where
-`lockTaper` is 1.06 up to vStd 15 (a slight low-speed boost), `1/(1 + vStd/speedRef)` from vStd 30, and a linear blend between, so slow corners
+There is no "steer gain" knob: `updateCarBicycle` (js/game.js) steers `sign(s)·|s|^expo · maxSlip · lockTaper`, where
+`lockTaper` is a slight low-speed boost, `1/(1 + vStd/speedRef)` at speed, and a linear blend between (thresholds: that source), so slow corners
 sit in the blend. These are STANDARD-scale speeds (`vStd(v) = v·VMAX/vTop`, js/race/pace-math.js): at a shipped PACE below 1
-a ground 30 m/s is already past the blend, so pick rows by vStd, not ground m/s. A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
+a ground speed reads higher in vStd, so pick rows by vStd, not ground m/s. A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
 moves with `frontGrip` and `yawInertia`.
 
 Numbers are not quoted here (they drift): read the live values with `__apex.tuning()` (js/agent/apex.js). The tunable
 state bag and its literal defaults are `js/physics/drive-tune.js` (`DriveTune.create`); boot-effective values come from
 `js/input/steer-tuning.js` `applySteerTuning()` (slider defaults in `js/ui/settings-export.js`), which overwrites them.
 
-**Which car?** CAR WEIGHT is device-aware: `applySteerTuning()` boots `carWeight` 10 on a `(pointer: coarse)` PHONE and 5 on
+**Which car?** CAR WEIGHT is device-aware: `applySteerTuning()` boots a heavier `carWeight` (`heavyDefault`) on a `(pointer: coarse)` PHONE than on
 desktop, and sets BOTH `YAW_INERTIA` (`weightFromSlider`) and `YAW_DAMP` (`yawDampFromSlider`) from it — the phone car is
 the heavy, lazier one Bryce drives. The VM stubs `matchMedia` as desktop, so a turn-in complaint from a phone is measured
-with `storage: { carWeight: 10 }` (both cars, labelled). **Rule out assists and input first:** read `tuning()` and the
+with `storage: { carWeight: <the phone default> }` (both cars, labelled). **Rule out assists and input first:** read `tuning()` and the
 reporter's store (`gripSteer`, `drivingHelp`, `carWeight`, touch rows); a touch range / DRAG AT SPEED cause → input-controls.
 Speed scaling and the no-curvature-assist contract live in
 [AGENTS.md §Physics](../../../AGENTS.md#physics) and `docs/PHYSICS.md` §Curvature channels.
@@ -56,15 +54,14 @@ contract says, not the raw stick; an `expo` A/B is exactly what makes the two di
 `node --test tests/unit/grip-steer.test.mjs`. `player-dyn.mjs` measures a bare seat (GRIP STEER off), so A/B it
 with `--seat shipped` plus a GRIP STEER on/off pair and say which seat each row came from.
 
-DRIVING HELP maps notch 1..10 to `ROAD_FOLLOW` `0..0.70`; raising its OFF default is a design reversal, not a tweak — flag it.
+DRIVING HELP maps its notch to `ROAD_FOLLOW` (`helpFromSlider`, js/input/steer-tuning.js); raising its OFF default is a design reversal, not a tweak — flag it.
 
 Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
-```sh
-node tools/ci/test-bg.mjs --spec tests/specs/understeer-cue.spec.js   # BROWSER verify: ONE spec (or physics-characterization.spec.js), backgrounded (AGENTS.md rule 4); a subagent reports it not run
-node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (launchChromium) — stability probe, not an A/B
-```
+Browser proof is CI's, not a local run (AGENTS.md rule 5): `node tools/ci/pick-tests.mjs` names the groups for the
+tree — a player-path edit maps to `physics-core` (holds `physics-characterization.spec.js`); `understeer-cue.spec.js` is
+in `aero`. On the pushed branch request one with `node tools/ci/remote-group.mjs physics-core` (or `aero`).
 
 No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop for an A/B):
 
@@ -72,6 +69,8 @@ No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop f
 TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shipped]   # skidpad, step-steer, trail-brake, midCorner_*
 # --seat pin (default) = the bare driving model; --seat shipped = the car a fresh browser boots. Say which seat an A/B measured.
 node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SHAPES
+node tools/check/lockup-bench.mjs [--json]                       # braking: straight-line sweep, wheelLock, flat spots
+node tools/check/brake-cue-calibrate.mjs [--json] [--track id] [--notch n]   # brake cue vs AiDrive.brakeTarget
 ```
 
 `player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, copy the sweep script in

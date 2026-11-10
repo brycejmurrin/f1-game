@@ -396,12 +396,6 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   min-height: var(--tap-paint); height: auto; max-height: none;
 }
-@media (max-height: 460px) {
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { --_3305: clamp(0, calc((var(--ui-compact-text, 1) - 1.001) * 999), 1); }
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero,#menu-retention,#menu-garage) .bigbtn {
-    min-height: max(var(--tap-min), var(--tap-paint), calc(40px + (2.75em - 40px) * var(--_3305))) !important;
-  }
-}
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
 /* Tall live Home: two-band grid + menu row (all widths; was duplicated 699/700). */
 html[data-home-live] :where(body[data-shape="tall"]) #overlay {

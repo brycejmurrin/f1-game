@@ -47,7 +47,7 @@ Targets: `Name` (a global such as `GameHud`), `Head.member` (`Liveries.forTeam`)
 a contract type (`TrackModel`, found in `types/*.d.ts`),
 an IIFE-local function (most of `js/game.js`: `updateCar`, `dashKph`; not on GameCtx, so
 `G.updateCar` misses): the bare name (`lsp_definition {symbol: "updateCar"}`) or `file` + `line`,
-or `file` + `line` [+ `column`] (ONE-based; shell `js/ui/hud.js:237:15`).
+or `file` + `line` [+ `column`] (ONE-based; shell `js/ui/hud.js:<line>:<col>`).
 
 On a miss (`has no member`, `not found`): `lsp_symbols {query: <member>}`, then retry with the
 bare name or the `file` + `line` it lists. Never guess a neighbour or fall back to grep.
@@ -60,11 +60,11 @@ bare JS symbol. Take it for the next lookup.
 
 1. **Understand a module.** `lsp_outline {symbol: "Ghost", limit: 40}` lists the exports,
    then `lsp_definition {symbol: "Ghost.snapshot", body: true, maxLines: 60}` gives the body
-   (the default cap is 40 lines, max 400; pass `maxLines` for a longer one).
+   (capped by default; pass `maxLines` for a longer one, bounds in the tool schema).
    That's two calls and no full-file Read.
 2. **Before changing a shared function.** `lsp_callers {symbol, limit: 40}` lists the functions that
-   use it. Read those, not every grep hit. For a façade member, `files: true`
-   first: `G.player` has hundreds of uses across dozens of files.
+   use it. Read those, not every grep hit. For a façade member (`G.player`),
+   `files: true` first: its uses span much of `js/`.
 3. **After an edit, before the test run.** `lsp_diagnostics {file}` gives only the
    errors the edit **introduced**: per-file `// @ts-check`, high-signal codes
    (unknown name, "did you mean" typo, too many arguments, assign to const,
@@ -84,5 +84,5 @@ Row tags (`[def]`/`[export]`/`[alias]`/`[use]`), refused ambiguous names, text-m
 ```sh
 node --test tests/unit/lsp-mcp.test.mjs   # MCP client on the real tree
 node --test tests/unit/lsp-mcp-fixture.test.mjs # hermetic fixture workspaces
-node tools/mcp/lsp-eval.mjs               # 12 pinned questions, apex-lsp vs grep
+node tools/mcp/lsp-eval.mjs               # pinned questions (`QUESTIONS`), apex-lsp vs grep
 ```

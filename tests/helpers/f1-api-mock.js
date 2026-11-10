@@ -329,6 +329,12 @@ export function openF1Fixture(url) {
   return [];
 }
 
+/** The season calendar, any year, any query (`?limit=100`, `&offset=`). */
+export const JOLPICA_SCHEDULE_ROUTE = /^https:\/\/api\.jolpi\.ca\/ergast\/f1\/\d{4}\.json(\?|$)/;
+
+/** The clock the schedule fixture is written for (its races run through 2026-12-06). */
+export const MOCK_NOW = new Date("2026-06-15T12:00:00Z");
+
 /**
  * Intercept all F1 API requests and return mock data.
  * Must be called before page.goto() to ensure routes are registered first.
@@ -336,7 +342,10 @@ export function openF1Fixture(url) {
  */
 export async function setupApiMocks(page) {
   // ── Jolpica (Ergast) ──────────────────────────────────────────────────────
-  await page.route("**api.jolpi.ca**/2026.json**", route =>
+  // ANY season's calendar: a hard-coded /2026.json fell through to the empty
+  // stub from 2027-01-01 (the URL is the clock year) and the screen still
+  // "passed". Specs that render the dates pin the clock to 2026 as well.
+  await page.route(JOLPICA_SCHEDULE_ROUTE, route =>
     route.fulfill({ contentType: "application/json", body: JSON.stringify(SCHEDULE) }));
 
   await page.route("**api.jolpi.ca**/driverstandings**", route =>

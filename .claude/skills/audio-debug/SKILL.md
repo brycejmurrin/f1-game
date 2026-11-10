@@ -25,7 +25,7 @@ These run in a live page: main session via skill `mcp-probe` (or `apex_eval`); i
 GameAudio._stub                     // true = LAZY_AUDIO not landed: every call is a stub (diagnose.md step 3)
 GameAudio.context()?.state          // "running" | "suspended" — the live AudioContext (null before init)
 GameAudio.enabled()
-GameAudio.setEnabled(true)          // master gain → 0.8
+GameAudio.setEnabled(true)          // master gain up
 GameAudio.setSfxEnabled(false)      // engine/SFX off; music can stay
 GameAudio.setMusicEnabled(false)    // soundtrack off; engine keeps humming
 GameAudio.debug()                   // contextState, samplesReady, usingSamples, engineOn, loop
@@ -34,15 +34,15 @@ GameAudio.centroidHz()              // spectral centroid of live engine
 ```
 
 ```sh
-node tools/ci/test-bg.mjs --spec tests/specs/audio-smoke.spec.js  # focused browser check, backgrounded (AGENTS.md rule 4; rule 10 for subagents)
-node tools/ci/test-bg.mjs --spec tests/specs/engine-audio-offline.spec.js  # after an engine.js context/rebuild or lifecycle edit
-# Add music-library.spec.js for library behavior; ui is a broader group.
-node tools/check/audio-test.cjs     # LAUNCHES CHROMIUM, objective pitch probe; starts its own static server (a <baseURL> arg reuses one)
+node tools/ci/pick-tests.mjs js/audio/engine.js   # the groups an audio edit needs (the PR runs them)
+node --test tests/unit/audio-tune.test.mjs        # one Node file locally; CI runs the whole `npm run test:audio-unit`
+node tools/ci/remote-group.mjs ui                 # on the PUSHED branch: the browser group holding the audio specs (`test:ui`)
 ```
 
-`tests/specs/audio-smoke.spec.js` covers init, re-enable during a race, and a
-user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
-`centroidHz() > 50`). Shell/cache after an edit: **check-changes**.
+No local browser runs (AGENTS.md rule 5): the audio specs (`tests/specs/audio-smoke.spec.js`,
+`engine-audio-offline.spec.js`, `music-library.spec.js`) run on CI, and the Chromium pitch probe
+`tools/check/audio-test.cjs` is not a pre-push step (`tests/unit/audio-tune.test.mjs` pins its
+invariants in Node). Shell/cache after an edit: **check-changes**.
 
 **Context rebuild** (`engine.js` `rebuildCtx`): a failed resume or a device
 change rebuilds the AudioContext; device-driven rebuilds are debounced and
@@ -60,7 +60,7 @@ context; a sound that dies after a device switch is this path.
 | `panel.js` / `race-mix-audition.js` | MUSIC & SOUND mixer page (switches, sliders, source row) / its bounded sample button |
 | `ers-layer.js` / `rivals.js` / `crowd.js` | MGU-K and boost layer / field around you / crowd bed |
 | `driving-cues.js` / `battle-earcon.js` | assist-gated brake tone + corner calls / gap motifs |
-| `radio-*.js`, `voice-pack.js`, `announcer*.js` | team radio speech and FX, recorded clips, pre-race announcer |
+| `radio-*.js`, `voice-pack.js`, `announcer*.js`, `mix-duck.js` | team radio speech and FX, recorded clips, pre-race announcer, the radio duck |
 | `signal.js` / `tone-model.js` / `stub.js` | sample analysis and SFX primitives / manufacturer timbre presets / pre-load stubs (LAZY_AUDIO) |
 
 ## Load on demand
