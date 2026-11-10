@@ -908,8 +908,10 @@ now transformed). Qatar's verges were two-thirds footprint-rejected, Baku's
 kit fired the swapped-dimensions warning 13× per boot, Imola's ground read was
 half a lap away, four circuits emitted-then-culled up to 295 backdrops per
 build. `api.K` and `api.lapBounds()` replace 37 local `K` helpers and 30
-centroid loops; `bakedModels` left the contract (112 members). Madrid, Estoril
-and Indianapolis carried wrong `lengthKm` (Madrid raced 56 laps instead of 57).
+centroid loops; `bakedModels` left the contract (112 members). Estoril and
+Indianapolis carried wrong `lengthKm`. Madrid's was NOT fixed then (5.47 still
+derived 56 laps, not the 57 it races); fixed 2026-11-10: `lengthKm` 5.416 and an
+authored `gpLaps: 57`.
 
 *UI / PWA / data / storage.* The service worker returned a browser error page
 for any navigation that lost a 3 s race while online; a primitive ghost blob

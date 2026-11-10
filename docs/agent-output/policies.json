@@ -2741,6 +2741,11 @@
       "presentation": "native",
       "preserve": "@c7"
     },
+    "tools/track/corner-frames.cjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every offender row with its circuit, kind, stable key and offset metres; --baseline JSON is the test's shrink-only allowlist."
+    },
     "tools/track/designer-code.mjs": {
       "action": "keep-native",
       "presentation": "native",

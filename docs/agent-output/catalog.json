@@ -3887,6 +3887,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/track/corner-frames.cjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/track/designer-code.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
