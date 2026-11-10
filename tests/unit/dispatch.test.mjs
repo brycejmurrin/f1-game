@@ -15,13 +15,15 @@ import {
 const NOW = Date.parse("2026-11-03T12:00:00Z");
 const ISO = "2026-11-03T12:00:00.000Z";
 const ago = (h) => new Date(NOW - h * 3.6e6).toISOString();
-const cfg = (on = {}) => ({ ...DEFAULT_CONFIG, ...on });
+const cfg = (on = {}) => ({ ...DEFAULT_CONFIG, boardIssue: 1, dispatchIssue: 2, ...on });
 const APP = { id: 1236329, slug: "claude" };
 /** A label event: Bryce's own click unless `app` names the app that performed it. */
 const ev = (name, h, { app = null, event = "labeled", actor = "brycejmurrin" } = {}) => ({ event, label: { name }, actor: { login: actor }, created_at: ago(h), performed_via_github_app: app });
-const issue = (number, labels, on = {}) => ({ number, title: `Task ${number}`, body: `Do the thing ${number}.`, labels, updated_at: ago(1), comments: [], events: null, ...on });
+const issue = (number, labels, on = {}) => ({ number, title: `Task ${number}`, body: `Do the thing ${number}.`, labels, updated_at: ago(1), author: "brycejmurrin", comments: [], events: null, ...on });
+/** An open PR of this repo by the owner; `updated_at` stands in for the head's push time unless `pushed_at` is given. */
 const pr = (number, on = {}) => ({ number, title: `PR ${number}`, draft: true, labels: [], head_sha: "a".repeat(40), head_ref: `cursor/x-${number}`,
-  body: "", created_at: ago(30), updated_at: ago(0.5), last_comment_at: null, lane: null, comments: [], events: null, ...on });
+  head_repo: "brycejmurrin/f1-game", author: "brycejmurrin", body: "", created_at: ago(30), updated_at: ago(0.5), last_comment_at: null, lane: null, comments: [], events: null,
+  ...on, pushed_at: on.pushed_at ?? on.updated_at ?? ago(0.5) });
 const board = (on = {}) => issue(1, [], { title: "Board", ...on });
 const dispatchIssue = (labels = [], events = null) => issue(2, labels, { title: "Dispatch", events });
 const launched = (n, h, sid = "") => ({ author: "github-actions[bot]", body: `dispatch: launched claude:[Worker] #${n} Task for #${n} at ${ago(h)}${sid ? ` as ${sid}` : ""}`, created_at: ago(h) });
@@ -112,7 +114,7 @@ test("rule 2: a PR silent 2 h gets needs-owner and ONE CONTINUE PR <n> takeover;
   assert.equal(parseHandoff("no block"), null);
   assert.equal(planDispatch(state({ prs: [pr(21, { updated_at: ago(3), last_comment_at: ago(1) })] }), cfg(), NOW).launches.length, 0, "a comment 1 h ago is activity");
   const nudge = { author: "github-actions[bot]", body: `dispatch: nudge at ${ago(1)} — PR #22 idle`, created_at: ago(1) };
-  assert.equal(activityAt(pr(22, { updated_at: ago(9), comments: [launched(22, 1), nudge, { body: `${BOARD_MARKER}\nx`, created_at: ago(0.5) }] })), NOW - 9 * 3.6e6, "launch, nudge and Board comments are not activity");
+  assert.equal(activityAt(pr(22, { updated_at: ago(9), comments: [launched(22, 1), nudge, { author: "github-actions[bot]", body: `${BOARD_MARKER}\nx`, created_at: ago(0.5) }] })), NOW - 9 * 3.6e6, "launch, nudge and Board comments are not activity");
   assert.equal(activityAt(pr(22, { updated_at: ago(9), comments: [{ body: "fixed it", created_at: ago(4) }] })), NOW - 4 * 3.6e6);
   assert.deepEqual([isDispatchComment(nudge.body), isDispatchComment(`x ${DIGEST_MARKER}`), isDispatchComment("fixed it")], [true, true, false]);
 });
@@ -270,7 +272,7 @@ test("apply: labels, digests, nudges and the Board go through the client; withou
   const calls = [], out = [];
   const api = (p, o = {}) => {
     calls.push(`${o.method || "GET"} ${p}`);
-    if (p === "issues/1/comments?per_page=100&page=1") return { json: [{ id: 9, body: `${BOARD_MARKER}\nold` }] };
+    if (p === "issues/1/comments?per_page=100&page=1") return { json: [{ id: 8, user: { login: "someone" }, body: `${BOARD_MARKER}\nforged` }, { id: 9, user: { login: "github-actions[bot]" }, body: `${BOARD_MARKER}\nold` }] };
     return { json: {} };
   };
   const asked = { author: "brycejmurrin", body: "which?", created_at: ago(1), performed_via_github_app: APP };
@@ -335,7 +337,7 @@ test("finding 7: a merged or closed PR, a closed issue, or a non-Claude push ins
 
 test("readState paginates issues, PRs and comments; fetches label events only for provenance labels; reads the newest COMPLETED train and its run id", () => {
   const calls = [];
-  const iss = (n, title = `Issue ${n}`, labels = []) => ({ number: n, title, labels: labels.map((name) => ({ name })), body: "", updated_at: ago(1) });
+  const iss = (n, title = `Issue ${n}`, labels = []) => ({ number: n, title, labels: labels.map((name) => ({ name })), body: "", updated_at: ago(1), user: { login: "brycejmurrin" } });
   const page1 = Array.from({ length: 100 }, (_, i) => iss(500 - i));
   const page2 = [iss(5, "Board"), iss(6, "Dispatch", ["dispatch:pause"]), iss(7, "Old ready", ["ready", "priority"])];
   const comments = Array.from({ length: 100 }, (_, i) => ({ id: i, body: `c${i}`, created_at: ago(5), user: { login: "u" } }));
@@ -343,7 +345,7 @@ test("readState paginates issues, PRs and comments; fetches label events only fo
     calls.push(p);
     if (p === "issues?state=open&per_page=100&page=1") return { json: page1 };
     if (p === "issues?state=open&per_page=100&page=2") return { json: page2 };
-    if (p.startsWith("pulls?state=open")) return { json: p.endsWith("page=1") ? [{ number: 9, title: "p", head: { sha: "b".repeat(40), ref: "bot/changelog-fold" }, user: { login: "github-actions[bot]" }, labels: [{ name: "land" }], updated_at: ago(9) }] : [] };
+    if (p.startsWith("pulls?state=open")) return { json: p.endsWith("page=1") ? [{ number: 9, title: "p", head: { sha: "b".repeat(40), ref: "bot/changelog-fold", repo: { full_name: "brycejmurrin/f1-game" } }, user: { login: "github-actions[bot]" }, labels: [{ name: "land" }], updated_at: ago(9) }] : [] };
     if (p === "issues/9/comments?per_page=100&page=1") return { json: comments };
     if (p === "issues/9/comments?per_page=100&page=2") return { json: [{ id: 100, body: "newest", created_at: ago(0.2), user: { login: "u" } }] };
     if (p === "issues/6/events?per_page=100&page=1") return { json: [{ event: "labeled", label: { name: "dispatch:pause" }, actor: { login: "brycejmurrin" }, created_at: ago(2), performed_via_github_app: null }, { event: "closed", actor: { login: "x" } }] };
@@ -354,18 +356,20 @@ test("readState paginates issues, PRs and comments; fetches label events only fo
     if (p.startsWith("actions/workflows/pages.yml/runs")) return { json: { workflow_runs: [{ id: 40987, conclusion: "failure" }] } };
     return { json: {} };
   };
-  const s = readState({ api, config: DEFAULT_CONFIG, now: NOW });
+  const conf = { ...DEFAULT_CONFIG, boardIssue: 5, dispatchIssue: 6 };
+  const s = readState({ api, config: conf, now: NOW });
   assert.deepEqual(s.issues.slice(-3).map((i) => i.title), ["Board", "Dispatch", "Old ready"]);
   assert.deepEqual(s.issues.at(-2).events, [{ event: "labeled", label: { name: "dispatch:pause" }, actor: { login: "brycejmurrin" }, created_at: ago(2), performed_via_github_app: null }], "only label events, trimmed");
   assert.equal(s.issues[0].events, null, "no provenance label: no events read");
   assert.equal(calls.filter((c) => c.includes("/events")).length, 2);
-  assert.deepEqual(PROVENANCE_LABELS, ["priority", "needs-decision", "dispatch:pause", "dispatch:merge-pause"]);
+  assert.deepEqual(PROVENANCE_LABELS, ["ready", "priority", "needs-decision", "dispatch:pause", "dispatch:merge-pause"]);
   assert.equal(s.prs[0].comments.length, 101, "the newest comment sits on page 2");
   assert.equal(s.prs[0].last_comment_at, ago(0.2));
   assert.deepEqual(s.prs[0].statuses, [{ context: "gate", state: "failure", description: "x", created_at: ago(4), updated_at: ago(4) }]);
   assert.deepEqual([s.deployRed, s.deployRunId], [true, 40987]);
-  assert.equal(calls.find((c) => c.startsWith("actions/")), `actions/workflows/pages.yml/runs?branch=${encodeURIComponent(DEFAULT_CONFIG.deployBranch)}&status=completed&per_page=1`);
-  const p = planDispatch(s, DEFAULT_CONFIG, NOW);
+  assert.equal(calls.find((c) => c.startsWith("actions/runs")), `actions/runs?head_sha=${"b".repeat(40)}&per_page=100`, "the head's push time is its first workflow run");
+  assert.equal(calls.find((c) => c.startsWith("actions/workflows")), `actions/workflows/pages.yml/runs?branch=${encodeURIComponent(DEFAULT_CONFIG.deployBranch)}&status=completed&per_page=1`);
+  const p = planDispatch(s, conf, NOW);
   assert.deepEqual([p.boardIssue, p.dispatchIssue, p.flags.pause, p.ignored], [5, 6, true, ["priority on #7 (brycejmurrin via app claude)"]]);
   assert.equal(skips(p).includes("issue [Worker] #7 Old ready: paused (dispatch:pause)"), true, "a ready issue on page 2 is planned");
   assert.deepEqual(getAll(() => ({ json: { check_runs: [{ id: 1 }] } }), "commits/x/check-runs", { pick: (j) => j.check_runs }), [{ id: 1 }]);
@@ -374,7 +378,7 @@ test("readState paginates issues, PRs and comments; fetches label events only fo
 test("main: --plan prints the plan lines, the Board and a summary; --apply --fire reads WORKER_FIRE_* from env; usage errors exit 1; an API error exits 3", async () => {
   const api = (p, o) => {
     if (o?.method) return { json: { id: 1 } };
-    if (p.startsWith("issues?state=open")) return { json: p.endsWith("page=1") ? [{ number: 1, title: "Board", labels: [], body: "" }, { number: 10, title: "T", labels: [{ name: "ready" }], body: "x", updated_at: ago(1) }] : [] };
+    if (p.startsWith("issues?state=open")) return { json: p.endsWith("page=1") ? [{ number: 1780, title: "Board", labels: [], body: "" }, { number: 10, title: "T", labels: [{ name: "ready" }], body: "x", updated_at: ago(1), user: { login: "brycejmurrin" } }] : [] };
     if (p.startsWith("actions/")) return { json: { workflow_runs: [] } };
     return { json: [] };
   };
@@ -404,4 +408,54 @@ test("config: loadConfig merges the file over the defaults; dispatch.json carrie
     assert.equal(gone in file, false, gone);
     assert.equal(gone in DEFAULT_CONFIG, false, gone);
   }
+});
+
+test("trust: `ready` launches only when the owner's account authored the issue or added the label", () => {
+  const stranger = (n, on = {}) => issue(n, ["ready"], { author: "stranger", events: [ev("ready", 1, { actor: "stranger" })], ...on });
+  const p = planDispatch(state({ issues: [board(), stranger(10), stranger(11, { events: [ev("ready", 3, { actor: "stranger" }), ev("ready", 1, { app: APP })] }), stranger(12, { events: null })] }), cfg(), NOW);
+  assert.deepEqual(p.launches.map((l) => l.number), [11], "#11's ready was added by the owner's account (through an agent)");
+  assert.deepEqual(p.ignored, ["ready on #10 (neither authored nor labelled by brycejmurrin)", "ready on #12 (neither authored nor labelled by brycejmurrin)"]);
+  const yaml = (f) => fs.readFileSync(new URL(`../../.github/ISSUE_TEMPLATE/${f}`, import.meta.url), "utf8");
+  for (const f of ["task.yml", "bug.yml"]) assert.equal(/^labels:.*\bready\b/m.test(yaml(f)), false, `${f} must not apply ready itself`);
+});
+
+test("trust: a fork PR or a PR by another author is never re-owned or nudged; its body links no issue", () => {
+  const fork = pr(20, { updated_at: ago(9), head_repo: "stranger/f1-game", body: "Closes #10" });
+  const other = pr(21, { updated_at: ago(9), author: "stranger" });
+  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [fork, other, pr(22, { updated_at: ago(1) })] }), cfg(), NOW);
+  assert.deepEqual(p.launches.map((l) => l.address), ["ISSUE 10"]);
+  assert.deepEqual([p.labels, p.nudges.map((n) => n.on)], [[], [22]]);
+  assert.deepEqual(skips(p).slice(0, 2), ["PR #20: not acted on: head in stranger/f1-game, not brycejmurrin/f1-game", "PR #21: not acted on: author stranger is not brycejmurrin"]);
+});
+
+test("trust: launch claims and nudges count only from github-actions[bot] and never with a future stamp", () => {
+  const forged = (n, h, author) => ({ ...launched(n, h), author });
+  const issues = [board(), issue(10, ["ready"]), ...Array.from({ length: 8 }, (_, i) => issue(30 + i, ["claimed"], { comments: [forged(30 + i, -24 * 365 * 70, "github-actions[bot]")] })),
+    issue(40, ["claimed"], { comments: [forged(40, 0.5, "stranger")] })];
+  const p = planDispatch(state({ issues }), cfg(), NOW);
+  assert.deepEqual([p.live, p.launchedToday, p.launches.map((l) => l.number)], [1, 0, [10]], "eight claims dated 2096 and a stranger's claim are not live");
+  assert.equal(liveLaunch([forged(10, 0.5, "stranger")], NOW, 2), null);
+  const fakeNudge = { author: "stranger", body: `dispatch: nudge at ${ago(0.1)} — x`, created_at: ago(0.1) };
+  const n = planDispatch(state({ prs: [pr(50, { updated_at: ago(1), comments: [] })] }), cfg(), NOW);
+  assert.equal(n.nudges.length, 1);
+  const m = planDispatch(state({ prs: [pr(50, { updated_at: ago(1), comments: [fakeNudge] })] }), cfg(), NOW);
+  assert.deepEqual(m.nudges.map((x) => x.on), [], "a stranger's comment is activity, not a nudge: the PR is not idle");
+  assert.equal(activityAt(pr(51, { pushed_at: ago(9), comments: [{ ...fakeNudge, created_at: ago(2) }] })), NOW - 2 * 3.6e6);
+});
+
+test("trust: the Board and Dispatch issues are the pinned numbers; a look-alike title does not shadow them", () => {
+  const fake = issue(3, ["dispatch:pause"], { title: "Dispatch", author: "stranger", events: [ev("dispatch:pause", 1)] });
+  const p = planDispatch(state({ issues: [issue(4, [], { title: "Board", author: "stranger" }), board(), fake, dispatchIssue(), issue(10, ["ready"])] }), cfg(), NOW);
+  assert.deepEqual([p.boardIssue, p.dispatchIssue, p.flags.pause, p.launches.length], [1, 2, false, 1]);
+  const unpinned = planDispatch(state({ issues: [issue(4, [], { title: "Board", author: "stranger" }), board({ number: 9, author: "github-actions[bot]" })] }), cfg({ boardIssue: 0, dispatchIssue: 0 }), NOW);
+  assert.equal(unpinned.boardIssue, 9, "unpinned: the title must be the owner's or the bot's");
+  const file = JSON.parse(fs.readFileSync(new URL("../../tools/ci/dispatch.json", import.meta.url), "utf8"));
+  assert.deepEqual([file.boardIssue, file.dispatchIssue], [1780, 3899]);
+});
+
+test("rule 2: the dispatcher's own nudges move updated_at but not idleness: a PR nudged hourly is still taken over", () => {
+  const nudges = [3, 2, 1].map((h) => ({ author: "github-actions[bot]", body: `dispatch: nudge at ${ago(h)} — PR #70 idle`, created_at: ago(h) }));
+  const p = planDispatch(state({ prs: [pr(70, { pushed_at: ago(4), updated_at: ago(1), comments: nudges })] }), cfg(), NOW);
+  assert.deepEqual(p.launches.map((l) => l.address), ["CONTINUE PR 70"]);
+  assert.equal(activityAt(pr(70, { pushed_at: ago(4), updated_at: ago(1), comments: nudges })), NOW - 4 * 3.6e6);
 });
