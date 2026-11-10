@@ -571,7 +571,6 @@ function getCockpitDash() {
   cockpitDashMesh = _gfx.createMesh(_rigMaterials(out));
   return cockpitDashMesh;
 }
-// --- COCKPIT INTERIORS (js/camera/cockpit-opts.js INTERIOR) ------------------
 // The bodywork an interior adds around its seat, CAR-LOCAL (the frame the body
 // is drawn in: y up from the road, z forward, x across) and never rolled with
 // the wheel (CockpitOpts INTERIOR). TEAM: padding in the team's colours. CLASSIC:

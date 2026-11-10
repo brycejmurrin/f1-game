@@ -39,7 +39,6 @@ window.FlybyOverrides = (function () {
   // Session catalog extras — not circuit patches. Same ids as DEFAULT; select()
   // replaces the unconditional shot when the session matches.
   const WHEN = Object.freeze([
-    // ---- night: closer, lower so nearby lamps fill the frame -----------------
     Object.freeze({
       id: "wide", dur: 0.09, ease: "inOut", sway: 0.2, when: Object.freeze({ night: true }),
       eye: [{ at: "centre", bear: -0.30, distR: 0.72, yR: 0.18 },
@@ -85,7 +84,6 @@ window.FlybyOverrides = (function () {
              { at: "corner", n: "fastest", off: 36, x: 0, y: 0.6 }],
       fov: [44, 46],
     }),
-    // ---- wet: slightly lower and tighter so spray and reflections read -------
     Object.freeze({
       id: "wide", dur: 0.09, ease: "inOut", sway: 0.2, when: Object.freeze({ wet: true }),
       eye: [{ at: "centre", bear: -0.28, distR: 0.95, yR: 0.24 },

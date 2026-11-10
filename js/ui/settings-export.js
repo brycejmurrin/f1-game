@@ -1113,7 +1113,6 @@ function create(G) {
     otherFiles.setAttribute("data-help", "keep");
     otherFiles.textContent = "Separate backups: GARAGE → TEAM → SAVE GARAGE FILE saves parts, setups, liveries and your team. CAREER → CAREER MODES → SAVE CAREER FILE saves all six career slots. The same separate file controls are on the Save and Restore pages here. LOAD asks twice and replaces only the corresponding data, then reloads. Settings, garage and career remain separate files. Photos, personal backgrounds, ghosts, replays and accounts are not included in these backups. STORAGE HEALTH & RESTORE POINTS below reports browser storage and local career history; local history is not an exported backup.";
 
-
     const shareNote = document.createElement("p");
     shareNote.id = "pm-share-code-help";
     shareNote.className = "adv-help";

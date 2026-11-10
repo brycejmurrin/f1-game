@@ -114,8 +114,6 @@ const FlybySeq = (function () {
   function groundAt(track, x, z, y) { return FlybyClear.groundAt(track, x, z, y); }
   function floorEye(track, eye) { return FlybyClear.floorEye(track, eye); }
 
-  // ---- what this circuit looks like ----------------------------------------
-
   /* TERRAIN IS NOT A LANDMARK. Ranked by raw volume the answer is always the
      scenery nobody came to see: Spa's biggest props are 240 m mountains and
      Monza's are ridges. The shot that says "this is Bahrain" frames the tower,
@@ -246,8 +244,6 @@ const FlybySeq = (function () {
     track._fbBounds = { x: cx, y: cy, z: cz, rad: rad, pts: pts, face: face };
     return track._fbBounds;
   }
-
-  // ---- anchors -------------------------------------------------------------
 
   function wrapS(track, s) {
     const total = track.total || 1;
@@ -585,7 +581,6 @@ const FlybySeq = (function () {
     return out;
   }
 
-  // ---- the inverse: a world point back to a pose ---------------------------
   //
   // THE FREE CAMERA'S "COPY AS FLYBY POSE". A camera flown to a good spot is a
   // world point, and a world point is exactly what a shot list must not hold
@@ -732,8 +727,6 @@ const FlybySeq = (function () {
     };
   }
 
-  // ---- easing --------------------------------------------------------------
-
   const EASE = {
     linear: (u) => u,
     in: (u) => u * u,
@@ -780,8 +773,6 @@ const FlybySeq = (function () {
   }
   const _pa = [0, 0, 0], _pb = [0, 0, 0];
 
-  // ---- the shipped sequence ------------------------------------------------
-
   /* NINE SHOTS OVER FLY_MS (24 s), ~2.4-3.1 s each. Durations stay fractions
      so retuning the budget rebalances all of them rather than truncating the
      last.
@@ -802,7 +793,6 @@ const FlybySeq = (function () {
        grid        up the aisle between the columns, ending among the front
                    rows with the start gantry ahead */
   const DEFAULT = [
-    // ---- establish: where are we -------------------------------------------
     {
       id: "wide", dur: 0.09, ease: "inOut", sway: 0.35,
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
@@ -817,7 +807,6 @@ const FlybySeq = (function () {
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 39],
     },
-    // ---- this circuit in particular ----------------------------------------
     {
       id: "landmark1", dur: 0.09, ease: "inOut",
       eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
@@ -832,7 +821,6 @@ const FlybySeq = (function () {
       look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
       fov: [38, 41],
     },
-    // ---- the corners you will actually drive --------------------------------
     {
       id: "turn-first", dur: 0.09, ease: "inOut",
       eye: [{ at: "corner", n: "first", off: -60, x: 16, y: 9 },
@@ -862,7 +850,6 @@ const FlybySeq = (function () {
              { at: "corner", n: "fastest", off: 45, x: 0, y: 0.6 }],
       fov: [40, 43],
     },
-    // ---- and then the grid you start from ------------------------------------
     // The road draws without slope-scaled depth bias (PR #248), so the grid can
     // be filmed from ahead of pole.
     {
@@ -922,8 +909,6 @@ const FlybySeq = (function () {
     const lit = Math.max(1, Math.min(3, lightsLit | 0));
     return (lit - 0.5) / 3;
   }
-
-  // ---- solve ---------------------------------------------------------------
 
   const _eye = [0, 0, 0], _tgt = [0, 0, 0];
   const _out = { eye: _eye, tgt: _tgt, fov: 50, index: 0, id: "", cut: false, lift: 0, corner: 0 };
