@@ -537,6 +537,9 @@ const TrackBuildProps = (function () {
       // true = clear; false = on the road; "pit" = inside the pit complex, which
       // modelGroup records as superseded rather than as a required failure.
       preflight: (bounds) => (!rejBox(bounds.center, bounds.size, bounds.basis) ? true : (guards.pitRejected() ? "pit" : false)),
+      // HEIGHT-BLIND: is (x, z) within `margin` of the road's edge, at any
+      // height? groundPatch asks it per cell of a patch the road hit (#5080).
+      onRoad: (x, z, margin) => onTrack(x, z, margin),
       emitBox: (buf, c, size, col, basis) => raw.addBox(buf, c, size, col, basis),
       // A grounded point (node, side, metres beyond the edge, half-width)
       // inside the pit complex: the RAW landform emitters ask this chord by
