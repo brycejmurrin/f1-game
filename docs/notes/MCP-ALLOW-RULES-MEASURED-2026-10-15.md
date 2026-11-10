@@ -1,5 +1,7 @@
 # MCP allow rules in cloud sessions, measured (2026-10-15)
 
+Summary: Which `permissions.allow` shapes pre-approve which MCP servers in cloud sessions, read off `permission_decision` in `list_events` (a repo cannot pre-approve its own `.mcp.json` servers, so auto mode's classifier does; auto siblings need an auto parent; MDN/BrowserStack are a claude.ai connector setting); spawning siblings needs `source_url` and a quoted user grant.
+
 What `.claude/settings.json` `permissions.allow` entries actually pre-approve
 in a claude.ai cloud session, how to measure it, and what no repo setting can
 change. Evidence for AGENTS.md §Agent extensions, skill `agent-fleet`

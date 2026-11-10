@@ -3627,10 +3627,11 @@ position with second-gaps, compact (team is an id string, one row per car):
 ```js
 __apex.field({ detail: "brief" })
 // { raceState, of, lapsTarget, player:{pos,lap,gapToLeaderS,intervalS},
-//   positions:[{ pos, id, code, team, isPlayer, lap, gapToLeaderS, intervalS }, …] }
+//   positions:[{ pos, id, code, team, isPlayer, retired, inPit, lap, gapToLeaderS, intervalS }, …] }
 ```
 
-`detail:"full"` adds `frac`, `speedKph`, `gapToLeaderM`, `finished` per row.
+`inPit` is true while the car is anywhere in the pit lane (`pitState` lane, box or
+out). `detail:"full"` adds `frac`, `speedKph`, `gapToLeaderM`, `finished` per row.
 `world().rivals` is the egocentric nearest-few for the driving decision; `field()`
 answers "where is everyone". Part of agent view being the **text-native mirror of
 the whole `__apex` toolkit** — see `agentHelp()`, whose `read` section names the

@@ -29,7 +29,18 @@ let g = null, PHYS0 = null;
 // steerMode "touch" is inert until a test also makes Input report a coarse
 // pointer — the other cases drive through setInput(), which bypasses it.
 before(async () => { g = await createGame({ track: "monza", storage: { steerMode: "touch" } }); PHYS0 = { ...g.apex.tuning() }; });
-after(() => { if (g) g.close(); });
+// A second, lazily booted game with TYRE WEAR "real" (the harness pins it off,
+// which closes the pit feature and makes the tyre's speed-cap term exactly 1):
+// the pit-lane overtake scan, the tow and the worn-rubber top speed below.
+let gw = null;
+async function wearRace() {
+  if (!gw) gw = await createGame({ track: "monza", carMeshes: false, storage: { tyreWear: "real" } });
+  await gw.race("monza", "day", "dry");
+  const G = gw.G, p = G.player;
+  for (const c of G.cars) if (c !== p) c.retired = true;   // out of every scan until a test un-retires its rival
+  return { h: gw, G, p, a: gw.apex, L: G.track.total, ai: G.cars.find((c) => !c.human) };
+}
+after(() => { if (g) g.close(); if (gw) gw.close(); });
 
 async function startRace() {
   g.apex.setPhysics(PHYS0); g.apex.headless(false);
@@ -244,19 +255,49 @@ test("an AI car advances its arc at speed·dt ÷ the Frenet stretch: no free dis
 // verify-physics #15: a car in the PIT LANE (or retired) is not the car ahead
 // ON THE ROAD. The default detection line (0.9 of the lap) is often where pit
 // entry is, so diving into the pits within 1 s of a rival handed them the
-// allowance. A source pin: the pit state is owned by PitLane.update, which
-// clears a hand-set pitState outside the lane window, so a VM pose cannot hold a
-// car "in the lane" at monza's detection line without driving the whole stop.
-test("the overtake scan skips pit-lane and retired cars", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const scan = src.slice(src.indexOf("let ahead = null, gapAhead = Infinity"), src.indexOf("gapAhead = ahead && c.speed > 1"));
-  assert.ok(scan.length > 50 && scan.length < 1200, "anti-vacuity: found the detection scan");
-  assert.match(scan, /Collide\.scanOtAhead/);
-  assert.match(scan, /_otSkipLane/);
-  const collide = readFileSync(join(ROOT, "js/physics/collide.js"), "utf8");
-  const onOt = collide.slice(collide.indexOf("function _onOtO"), collide.indexOf("function scanOtAhead"));
-  assert.match(onOt, /o\.finished \|\| o\.retired/);
-  assert.match(onOt, /s\.skip && s\.skip\(o\)/);
+// allowance. Behavioural: the REAL detection scan (Collide.scanOtAhead with
+// game.js's _otSkipLane), observed through a pass-through spy, run for the
+// player with a rival 15 m up the road — on the road (the control), in its box
+// and on the lane (PitLane.inLane), and retired. A held allowance (otE > 0)
+// makes updateCar run the scan anywhere, so the pose sits mid pit window,
+// where PitLane.update keeps a hand-set lane/box state instead of clearing it
+// (which it does outside the window — why this used to be a source pin).
+// The wear-on boot (wearRace): the pit feature is closed with TYRE WEAR off.
+test("the overtake scan skips pit-lane and retired cars", async () => {
+  const { h, G, p, a, L, ai } = await wearRace();
+  const C = h.sandbox.Collide, pit = G.track.pit;
+  assert.ok(pit && !pit.painted, "anti-vacuity: monza has a pit window");
+  const sMid = pit.sIn < pit.sOut ? (pit.sIn + pit.sOut) / 2 : ((pit.sIn + pit.sOut + L) / 2) % L;
+  const orig = C.scanOtAhead, seen = [];
+  C.scanOtAhead = function (c, ...rest) { const o = orig.call(this, c, ...rest); if (c === p) seen.push(o.ahead); return o; };
+  const run = (mode) => {
+    a.jump(((sMid - 15) % L + L) % L / L, 30, 0);
+    a.setInput({ throttle: true, steer: 0 });
+    Object.assign(ai, { retired: false, pitState: "none", pitArmed: false, pitT: 0 });
+    ai.s = (p.s + 15) % L; ai.prog = p.prog + 15; ai.x = p.x; ai.speed = 30; ai._prevS = ai.s;
+    if (mode === "box" || mode === "lane") Object.assign(ai, { pitState: mode, pitArmed: true, pitT: 100, pitFitted: false });
+    if (mode === "retired") ai.retired = true;
+    const lane = G.pits.inLane(ai);
+    p.otE = 1;   // a held allowance: the scan runs whatever the detection line says
+    seen.length = 0;
+    h.step(1);
+    return { lane, scans: seen.length, aheadIsRival: seen.length > 0 && seen[seen.length - 1] === ai };
+  };
+  try {
+    const road = run("road");
+    assert.equal(road.scans, 1, "anti-vacuity: the player's detection scan ran");
+    assert.equal(road.lane, false);
+    assert.equal(road.aheadIsRival, true, "control: a rival 15 m up the ROAD is the car ahead");
+    for (const mode of ["box", "lane"]) {
+      const r = run(mode);
+      assert.equal(r.lane, true, `anti-vacuity: the rival reads as in the pit lane (${mode})`);
+      assert.equal(r.scans, 1, `the scan ran (${mode})`);
+      assert.equal(r.aheadIsRival, false, `a rival in the pit lane (${mode}) is not the car ahead on the road`);
+    }
+    const ret = run("retired");
+    assert.equal(ret.scans, 1, "the scan ran (retired)");
+    assert.equal(ret.aheadIsRival, false, "a retired rival is not the car ahead");
+  } finally { C.scanOtAhead = orig; a.clearInput(); }
 });
 
 // ---------------------------------------------------------------------------
@@ -506,4 +547,81 @@ test("low grip halves the active-aero trade and switches Overtake off; the dry c
   assert.ok(Math.abs(wet.xDfLoss - dry.xDfLoss / 2) < 1e-4, `downforce loss halved (${dry.xDfLoss} -> ${wet.xDfLoss})`);
   assert.equal(g.G.otEnabled(), false, "Overtake is disabled in low grip");
   await g.race("monza", "day", "dry");
+});
+
+// ---------------------------------------------------------------------------
+// The PLAYER's speed target, executed (wear-on boot). The tow gate is DRIVER
+// state (not braking, wheel near straight) and car positions — never the arc
+// (AGENTS.md §Physics): the same two-car pose and input on a dead straight and
+// at the tightest node of the lap give the same c.towing; a gate reading the
+// static curvature table zeroes the corner. And updateCar's human branch takes
+// `vmax *= trMul`, so the TERMINAL speed drops on a worn set, as the AI's does
+// (perfMul only slows the climb to vmax, never the cap, so a converged run
+// isolates the cap).
+// ---------------------------------------------------------------------------
+test("the player tows on car positions only: a straight and a corner give the same c.towing", async () => {
+  const { h, G, p, a, L, ai } = await wearRace();
+  const T = h.sandbox.Tracks;
+  const k = (s) => Math.abs(T.curvature(G.track, ((s % L) + L) % L));
+  // The tightest node of the lap, and the flattest 60 m window, both from the table.
+  let sCorner = 0, sStraight = 0, kCorner = 0, kStraight = Infinity;
+  for (let s = 0; s < L; s += 1) {
+    if (k(s) > kCorner) { kCorner = k(s); sCorner = s; }
+    let m = 0; for (let d = -30; d <= 30; d += 2) m = Math.max(m, k(s + d));
+    if (m < kStraight) { kStraight = m; sStraight = s; }
+  }
+  assert.ok(kCorner > 0.03 && kStraight < 1e-3, `anti-vacuity: a real corner (k ${kCorner}) and a real straight (k ${kStraight})`);
+  const towAt = (s) => {
+    a.jump(s / L, 50, 0);
+    a.setInput({ throttle: true, steer: 0 });
+    ai.retired = false;
+    ai.s = (p.s + 12) % L; ai.prog = p.prog + 12; ai.x = p.x; ai.speed = 50; ai._prevS = ai.s;
+    h.step(1);
+    const out = { towing: p.towing, wake: p.wake, k: k(p.s) };
+    ai.retired = true;
+    return out;
+  };
+  try {
+    const straight = towAt(sStraight), corner = towAt(sCorner);
+    assert.ok(corner.k > 0.03, `the corner pose is still in the corner after the step (k ${corner.k})`);
+    assert.ok(straight.towing > 0, `anti-vacuity: 12 m behind on a straight tows (${straight.towing})`);
+    assert.equal(corner.wake, straight.wake, "the wake is positions-only");
+    assert.equal(corner.towing, straight.towing,
+      `same positions, same input: the tow must not see the arc (straight ${straight.towing}, corner ${corner.towing})`);
+  } finally { a.clearInput(); }
+});
+
+test("the player's top speed pays for worn rubber, as the AI's does", async () => {
+  // Terminal speed on the flattest stretch: hold full throttle, and every
+  // second put the car back at the same s with the speed it carried, so the
+  // run never meets a corner. Wear is re-pinned each second (the model wears
+  // it on, by a few thousandths).
+  const terminal = async (wear) => {
+    const { h, G, p, a, L } = await wearRace();
+    const T = h.sandbox.Tracks;
+    let sFlat = 0, best = Infinity;
+    for (let s = 0; s < L; s += 2) {
+      let m = 0; for (let d = 0; d <= 120; d += 4) m = Math.max(m, Math.abs(T.curvature(G.track, (s + d) % L)));
+      if (m < best) { best = m; sFlat = s; }
+    }
+    a.setInput({ throttle: true, steer: 0 });
+    let v = 80; const trace = [];
+    try {
+      for (let i = 0; i < 25; i++) {
+        a.jump(sFlat / L, v, 0);
+        p.tyreWear = wear;
+        if (p.tyreWearF != null) { p.tyreWearF = wear; p.tyreWearR = wear; }
+        h.step(60);
+        v = p.speed; trace.push(v);
+      }
+    } finally { a.clearInput(); }
+    const last = trace[trace.length - 1], prev = trace[trace.length - 2];
+    assert.ok(Math.abs(last - prev) < 0.05, `wear ${wear}: converged (${trace.map((x) => x.toFixed(2)).join(" ")})`);
+    return last;
+  };
+  const fresh = await terminal(0), worn = await terminal(1);
+  assert.ok(fresh > 40, `anti-vacuity: a real terminal speed (${fresh.toFixed(2)} m/s)`);
+  // Measured: fresh 62.22, worn 60.84 m/s (-2.2 %); with the cap term dropped both read 62.38.
+  assert.ok(worn < fresh * 0.99,
+    `a worn set must lower the player's terminal speed (fresh ${fresh.toFixed(2)}, worn ${worn.toFixed(2)} m/s)`);
 });

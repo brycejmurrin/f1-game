@@ -1,5 +1,7 @@
 # CI clog survey, 2026-10-15 (00:00 to 05:30 UTC)
 
+Summary: The 2026-10-15 jam measured: 401 PR runs by 05:30 UTC, 73 % cancelled by sweeps under the owner's account and re-pushed, half the pushes base-merge syncs, 10-14 min queue waits on five serial plumbing hops. What changed: the plumbing jobs folded into `select`, needed-only node rows on drafts, the push hold and the run-cancel refusal enforced in the hooks; what is left to the owner (one required check, Docs guards off the required list, a Support ticket for the 40-job limit was an open support item at survey time).
+
 Measured from the Actions REST API through the repo's own `ready-full-cap (deleted, #3013)` `api()` helper
 (300 newest ci.yml runs, the jobs of 30 of them, per-day `created=` counts for 8 days, the last 100 runs of
 every other workflow, check-run annotations on three cancelled runs), plus `.github/workflows/*.yml`,

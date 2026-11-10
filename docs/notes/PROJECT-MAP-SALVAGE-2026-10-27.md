@@ -1,5 +1,7 @@
 # Project map salvage, 2026-10-27
 
+Summary: 2026-10-27: what the closed project-map PR #3922 held (a read-attestation ledger, no generator), 24 claims spot-checked, and its one durable product: ~125 comment-vs-code drifts plus the non-`js/` top-level directories
+
 What was worth keeping from the closed project-map PR #3922 (branch
 `cursor/project-map-a84f`, head `b075ac28`, 325 commits, +723,832 lines in 495
 files, all but one under `docs/project-map/`). The branch is kept; any file

@@ -383,6 +383,7 @@ const AgentView = (function () {
           team: teamIdOf(c),
           isPlayer: !!c.isPlayer,
           retired: !!c.retired,
+          inPit: !!(c.pitState && c.pitState !== "none"),   // lane, box or out lane
           lap: c.lap || 0,
           gapToLeaderS: i === 0 ? 0 : r2(gapLeadM / Math.max(leader.speed || v, 5)),
           intervalS: i === 0 ? 0 : r2(intervalM / v),
