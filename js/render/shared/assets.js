@@ -327,7 +327,7 @@ const Assets = (function () {
       }
       return _scratchGl;
     }
-    // A DOM canvas when OffscreenCanvas has no webgl2 (Safari 16.4-16.x).
+    // DOM canvas if OffscreenCanvas lacks webgl2 (Safari 16.x)
     const attrs = { premultipliedAlpha: false, antialias: false };
     const tryCanvas = (make) => {
       try { const c = make(); const g = c && c.getContext("webgl2", attrs); return g ? { cv: c, gl: g } : null; }

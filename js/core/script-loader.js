@@ -114,7 +114,7 @@ const evaluated = new Set();
 // bundle. Both are strict loads of the same top-level const, so they must
 // share the pending insertion as well as the completed evaluation.
 const evaluating = new Map();
-// src -> Promise<ready> of a timed-out strict file that may still evaluate.
+// src -> Promise<ready>: timed out, may still evaluate
 const stranded = new Map();
 // One admitted browser attempt owns only its element and responsive-time timers.
 // It knows nothing about bundles, strict sharing, evaluated scripts or retries.
@@ -147,8 +147,7 @@ function browserAttempt(src, href, sri, opts, onLoad) {
       last = t;
       if (budget < deadlineMs) { deadT = W.setTimeout(beat, tickMs); return; }
       if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
-      // A removed <script> still runs when its fetch lands: report it, so a
-      // retry waits instead of redeclaring its top-level const.
+      // A removed tag still runs when its fetch lands: report it (no 2nd const).
       let done;
       const late = new Promise((r) => { done = r; });
       el.onload = () => { let ok = false; try { ok = !!onLoad(); } catch (_) { /* readiness hook */ } done(ok); };
@@ -233,15 +232,9 @@ function loadBackendScripts(files, edges, opts) {
       catch (_) { ready = false; }
       if (ready) evaluated.add(src);
       return ready;
-    }).then((r) => {
-      if (r.late) {
-        const late = r.late.finally(() => { if (stranded.get(src) === late) stranded.delete(src); });
-        stranded.set(src, late);
-      }
-      return r;
-    });
+    }).then((r) => { if (r.late) stranded.set(src, r.late); return r; });
   };
-  // A strict retry waits up to one more deadline for a stranded copy.
+  // A strict retry waits one more deadline for it.
   const awaitStranded = async (src) => {
     const late = stranded.get(src), W = typeof window !== "undefined" ? window : null;
     if (!late || !W || typeof W.setTimeout !== "function") return;

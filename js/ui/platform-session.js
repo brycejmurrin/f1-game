@@ -88,18 +88,18 @@ if ($("pm-fullscreen")) {
   const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
     (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
   const standalone = !!(nav.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
-  // Wake lock is a no-op in Home Screen apps on iOS 16.4-18.3 (WebKit 254545): say so once.
-  const v = /OS (\d+)_(\d+)/.exec(nav.userAgent || "") || /Version\/(\d+)\.(\d+)/.exec(nav.userAgent || "");
-  const ver = v ? Number(v[1]) * 100 + Number(v[2]) : 0;
+  // No wake lock in Home Screen apps on iOS 16.4-18.3 (WebKit 254545).
+  const v = /OS (\d+)_(\d+)|Version\/(\d+)\.(\d+)/.exec(nav.userAgent || "") || [];
+  const ver = (v[1] || v[3]) * 100 + +(v[2] || v[4]);
   const wakeBroken = ver >= 1604 && ver < 1804;
-  const NOTE = "On iOS 16.4\u201318.3 the Home Screen app cannot keep the screen awake, so it may dim mid-race. Update to iOS 18.4 or later to fix it.";
+  const NOTE = "On iOS 16.4\u201318.3 the screen may dim mid-race in the Home Screen app. Update to iOS 18.4 or later to fix it.";
   const msg = $("ios-install-msg");
   if (!ios) return;
   if (standalone) {
     if (!wakeBroken || !msg || store.get("iosWakeNoteSeen", false)) return;
     msg.textContent = NOTE;
   } else if (store.get("iosInstallSeen", false)) return;
-  else if (wakeBroken && msg && typeof msg.append === "function") msg.append(" " + NOTE);
+  else if (wakeBroken && msg) msg.append(" " + NOTE);
   const dismiss = () => {
     el.hidden = true;
     if (!standalone) store.set("iosInstallSeen", true);
