@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 
@@ -121,8 +122,33 @@ test("game.js wiring: the prep's current() accepts a title warm, and the poll is
   const at = GAME.indexOf("const current = prep.current = ");
   const cur = GAME.slice(at, GAME.indexOf("\n  const prepare = ", at));
   assert.ok(cur.includes('|| (typeof titleWarm !== "undefined" && titleWarm.wants())'), "scheduleFlybyTrack's liveness includes the title warm (typeof: canary sandboxes lift it alone)");
-  assert.ok(GAME.includes("schedule: () => scheduleFlybyTrack(true)") && GAME.includes("titleWarm.start();"), "created and started");
+  assert.ok(GAME.includes("schedule: () => scheduleFlybyTrack(true)"), "created with the menu prep as its schedule (started: the game-VM test below)");
   assert.ok(GAME.includes("p.world && p.done && p.warmed && p.warmFrames === 0 && !p.warming"), "done = census-entry menuPrepReady's test");
   assert.ok(read("tools/manifest.cjs").includes('"js/perf/title-warm.js"'), "loaded");
   assert.ok(read("js/core/save-schema-registry.js").includes('"titleWarm": entry('), "store key registered");
+});
+
+test("the booted game starts the title-warm poll: its state() advances when the VM's timers run", async () => {
+  // The real js/game.js in the game VM. TitleWarm.create is wrapped as the module
+  // lands (onSandbox runs before any game script), so the test holds the very
+  // instance game.js created. start() arms the 1 s poll; without it no timer
+  // exists and state().last never leaves null however long the title idles.
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const made = [];
+  const g = await createGame({ carMeshes: false, onSandbox(sandbox) {
+    let mod;
+    Object.defineProperty(sandbox, "TitleWarm", { configurable: true, enumerable: true, get: () => mod,
+      set: (v) => { mod = v && { ...v, create(G, d) { const w = v.create(G, d); made.push(w); return w; } }; } });
+  } });
+  try {
+    assert.equal(made.length, 1, "game.js created exactly one TitleWarm");
+    const w = made[0];
+    assert.equal(g.G.state, "menu");
+    assert.equal(w.state().last, null, "no poll has run before the VM's timers fire");
+    g.flushTimers();
+    const s1 = w.state().last;
+    assert.ok(s1 && Number.isFinite(s1.at) && Array.isArray(s1.why), "the poll ran and recorded why it may or may not start: " + JSON.stringify(s1));
+    g.flushTimers();
+    assert.notStrictEqual(w.state().last, s1, "the poll re-arms: a second timer pass polls again");
+  } finally { g.close(); }
 });

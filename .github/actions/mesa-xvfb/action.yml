@@ -36,10 +36,39 @@ runs:
           if [ "$cap" -gt "$remaining" ]; then cap=$remaining; fi
           sudo timeout "$cap" apt-get "$@" $APT_OPTS
         }
+        # REPAIR AN INTERRUPTED DPKG (2026-11-10). The cap above kills apt-get, and a
+        # kill that lands mid-dpkg leaves the database "interrupted": every later
+        # apt call then exits at once with "E: dpkg was interrupted, you must
+        # manually run 'sudo dpkg --configure -a'", so attempts 2 and 3 could never
+        # succeed. Job 129623589272 (run 42753449133): attempt 1 was killed at 180 s
+        # while processing its last trigger, attempts 2 and 3 failed in 12 s each on
+        # that message, and the shard went red with 113 s of budget left and no spec
+        # run (four jobs that night). After a failed attempt: finish the half-done
+        # configure inside the same budget, and if the packages are then installed
+        # the setup is done.
+        MESA_PKGS="mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb"
+        mesa_installed() {
+          local p
+          for p in $MESA_PKGS; do
+            dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q '^install ok installed$' || return 1
+          done
+        }
+        repair_dpkg() {
+          local remaining=$((mesa_deadline - SECONDS))
+          local cap=60
+          if [ "$remaining" -le 0 ]; then return 0; fi
+          if [ "$cap" -gt "$remaining" ]; then cap=$remaining; fi
+          sudo timeout "$cap" dpkg --configure -a || true
+        }
         ok=0
         for attempt in 1 2 3; do
           if apt_with_budget 120 update -qq \
-             && apt_with_budget 180 install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb; then
+             && apt_with_budget 180 install -y -qq --no-install-recommends $MESA_PKGS; then
+            ok=1; break
+          fi
+          repair_dpkg
+          if mesa_installed; then
+            echo "::warning::mesa-xvfb: apt attempt $attempt was cut short; dpkg --configure -a finished the install"
             ok=1; break
           fi
           remaining=$((mesa_deadline - SECONDS))

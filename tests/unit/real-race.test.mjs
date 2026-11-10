@@ -25,6 +25,8 @@ import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { evalRealRace } from "../helpers/eval-real-race.mjs";
+import { createRequire } from "node:module";
+const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -639,8 +641,10 @@ test("the review's fixes: a filled cum row, a DSQ that saw the flag, the kept st
 
 // #3287: a script DSQ that saw the flag must get c.dsq (like watch mode), and
 // driven endRace must take the published-classification path (status().watch)
-// so SportingRegs.applyCompoundRule cannot wipe those markers.
-test("arm marks a DSQ finisher with c.dsq; endRace sees published classification", () => {
+// so SportingRegs.applyCompoundRule cannot wipe those markers. This unit half
+// pins the director's side (arm's marker, the status flip for the wrapped call);
+// the classification itself is game.js's, run for real in the VM tests below.
+test("arm marks a DSQ finisher with c.dsq; the wrapped endRace call reads published classification", () => {
   const { R, script, Teams } = load();
   const odd = host(script);
   const rus = odd.drivers.find((d) => d.num === 63);
@@ -648,12 +652,7 @@ test("arm marks a DSQ finisher with c.dsq; endRace sees published classification
   const cars = makeCars(Teams, "ferrari:0");
   const { G } = makeG(Teams, cars);
   let during = null, car = null, rr = null;
-  G.endRace = function () {
-    // Mirror game.js endRace's DSQ branch: watch → keep c.dsq; else compound wipe.
-    const st = rr.status();
-    during = { watch: !!st.watch, isWatch: rr.isWatch(), dsq: car.dsq };
-    if (!st.watch) delete car.dsq;
-  };
+  G.endRace = function () { const st = rr.status(); during = { watch: !!st.watch, isWatch: rr.isWatch() }; };   // a spy: reads, decides nothing
   rr = R.create(G);
   rr.stage(odd, { seat: "LEC" });
   G.state = "count"; rr.update(1 / 60);
@@ -667,21 +666,67 @@ test("arm marks a DSQ finisher with c.dsq; endRace sees published classification
   G.endRace();
   assert.equal(during.watch, true, "endRace sees published classification");
   assert.equal(during.isWatch, false, "isWatch() stays false (audio/camera gates)");
-  assert.equal(during.dsq, "real race classification");
-  assert.equal(car.dsq, "real race classification", "markers survive endRace");
   assert.ok(!cars.find((c) => c.code === "LEC").dsq, "the seat car is not a script DSQ");
   rr.stop();
-  // After stop the wrap is gone: endRace no longer forces the watch path.
   during = null;
-  car.dsq = "real race classification";
-  G.endRace = function () {
-    const st = rr.status();
-    during = { watch: !!st.watch };
-    if (!st.watch) delete car.dsq;
-  };
   G.endRace();
-  assert.equal(during.watch, false);
-  assert.equal(car.dsq, undefined);
+  assert.equal(during.watch, false, "after stop the wrap is gone: endRace no longer forces the watch path");
+});
+
+// THE REAL endRace (js/game.js) in a DRIVEN (non-watch) real race on the real
+// Baku build: the script's DSQ survives classification and is placed last.
+async function drivenDsqRace() {
+  const g = await createGame({ track: "baku", carMeshes: false });
+  const { G } = g;
+  G.daily.stop(); G.timeTrial = false; G.practice = false;
+  evalRealRace(g.ctx);
+  const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
+  const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
+  const script = Data.build(host(FIXTURE), (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+  const rus = script.drivers.find((d) => d.num === 63);
+  rus.dnf = true; rus.dsq = true; rus.dns = false; rus.pos = null; rus.lapsDone = script.laps;
+  Real.launch(script, { seat: "LEC", laps: 3 });
+  await g.settle(() => G.track?.def?.id === "baku" && ["count", "race"].includes(G.state), 8000);
+  g.step(2);   // the countdown frame arms the director
+  const car = G.cars.find((c) => c.code === "RUS");
+  assert.ok(car, "Russell is on the field");
+  assert.equal(car.dsq, "real race classification", "arm set the script DSQ");
+  assert.equal(Real.status().watch, false, "a driven race, not WATCH");
+  assert.equal(Real.isWatch(), false);
+  g.apex.go(); g.step(60);
+  return { g, G, car };
+}
+function assertDsqKept(g, G, car) {
+  assert.equal(G.state, "results");
+  assert.equal(car.dsq, "real race classification", "the published DSQ survives game.js endRace");
+  assert.equal(car.finPos, G.cars.length, "the DSQ is classified last");
+  assert.ok(g.sandbox.Log.records({ ns: "game" }).some((r) => r.msg === "DSQ car=RUS why=real race classification"), "endRace logged the DSQ");
+}
+
+test("a driven real race: game.js endRace (the façade call) keeps the script DSQ, classified last", async () => {
+  const { g, G, car } = await drivenDsqRace();
+  try {
+    G.endRace();
+    assertDsqKept(g, G, car);
+  } finally { g.close(); }
+});
+
+// REAL BUG (W29 audit, 2026-11-10): RealRace's #3287 preserve wraps G.endRace,
+// but game.js ends a driven race through its LOCAL endRace() (the natural flag
+// at the results countdown, skipToResults), never through the façade — so
+// status().watch reads false, SportingRegs.applyCompoundRule deletes every
+// c.dsq, and the script DSQ is classified as a runner. Remove `todo` once fixed.
+test("a driven real race: SKIP after the player retires (game.js's own endRace, not the façade) keeps the script DSQ too", { todo: "driven real race: local endRace() bypasses RealRace's G.endRace wrap, so applyCompoundRule wipes the script DSQ (RUS c.dsq undefined after SKIP)" }, async () => {
+  const { g, G, car } = await drivenDsqRace();
+  try {
+    g.apex.retire(null);   // the only human retires: the post-finish wait opens SKIP
+    g.step(2);
+    G.els.pausebtn.onclick();
+    const skip = g.sandbox.document.getElementById("pm-skip-results");
+    assert.equal(skip.hidden, false, "a retired solo driver can settle the remaining field");
+    skip.onclick();   // skipToResults() → endRace(): the local call, not G.endRace
+    assertDsqKept(g, G, car);
+  } finally { g.close(); }
 });
 
 test("a JUMP IN records the clock it seeded, so the race's hard cap counts from the join (RaceControl.finishDelay)", () => {

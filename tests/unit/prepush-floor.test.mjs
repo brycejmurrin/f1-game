@@ -9,7 +9,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   GENERATED_FILES, GENERATED_SEED_TESTS, generatedOnlyPaths, isGenShellOnlyChange, selectSyncMerge, selectToolingFastChanged,
-  stripGenShellBlocks, syncMergePaths, runToolingFast,
+  stripGenShellBlocks, syncMergePaths, syncMergeScope, SYNC_REGEN_SUBJECT, runToolingFast,
 } from "../../tools/ci/tooling-fast.mjs";
 import {
   NEW_MODULE_CHECKLIST, addedGlobals, extraSpecs, newModuleTriggers, sharedUiSpecs, standaloneSpecs,
@@ -97,6 +97,48 @@ test("selectSyncMerge: gen:check + docs-integrity only", () => {
   assert.equal(r.genCheck, true);
   assert.equal(r.changed, 3);
   assert.deepEqual([...r.files].sort(), [...GENERATED_SEED_TESTS].sort());
+});
+
+test("syncMergeScope: names what the MERGE decided — both-sides paths and non-tip content — through a regen commit", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sync-scope-"));
+  const git = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const put = (f, t) => fs.writeFileSync(path.join(dir, f), t);
+  try {
+    git("init", "-q", "-b", "tip"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+    put("a.txt", "1\n"); put("digest.json", "base\n"); put("shared.txt", "l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n"); git("add", "."); git("commit", "-qm", "base");
+    git("checkout", "-qb", "work");
+    put("mine.txt", "m\n"); put("digest.json", "mine\n"); put("shared.txt", "MINE\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n"); git("add", "."); git("commit", "-qm", "mine");
+    assert.equal(syncMergeScope(dir, { tipRef: "tip" }), null, "a plain commit is not a sync");
+    git("checkout", "-q", "tip");
+    put("a.txt", "2\n"); put("b.txt", "b\n"); put("digest.json", "theirs\n"); put("shared.txt", "l1\nl2\nl3\nl4\nl5\nl6\nl7\nTHEIRS\n"); git("add", "."); git("commit", "-qm", "tip moves");
+    git("checkout", "-q", "work");
+    try { git("merge", "-q", "--no-edit", "tip"); } catch (_) { /* digest.json conflicts, as scenery-locations.json does */ }
+    put("digest.json", "regenerated\n"); git("add", "."); git("commit", "-q", "--no-edit");
+    const s = syncMergeScope(dir, { tipRef: "tip" });
+    assert.deepEqual(s.paths.sort(), ["a.txt", "b.txt", "digest.json", "shared.txt"]);
+    assert.deepEqual(s.impure, ["digest.json", "shared.txt"], "the regenerated file and the auto-merged file; a.txt and b.txt hold the tip's content");
+    assert.equal(syncMergePaths(dir, { tipRef: "tip" }), null, "the strict shortcut (CI) still refuses an impure sync");
+    put("gen.txt", "g\n"); git("add", "."); git("commit", "-qm", SYNC_REGEN_SUBJECT);
+    assert.deepEqual(syncMergeScope(dir, { tipRef: "tip" }).impure, ["digest.json", "gen.txt", "shared.txt"], "deploy.mjs's regen commit on top is part of the sync");
+    put("more.txt", "x\n"); git("add", "."); git("commit", "-qm", "authored after the sync");
+    assert.equal(syncMergeScope(dir, { tipRef: "tip" }), null, "an authored commit on top is not a sync");
+    git("reset", "-q", "--hard", "HEAD~1"); put("dirty.txt", "x\n");
+    assert.equal(syncMergeScope(dir, { tipRef: "tip" }), null, "a dirty tree is authored work");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const deploy = fs.readFileSync(new URL("../../tools/ci/deploy.mjs", import.meta.url), "utf8");
+  assert.equal(deploy.includes(`REGEN_MESSAGE = ${JSON.stringify(SYNC_REGEN_SUBJECT)}`), true, "SYNC_REGEN_SUBJECT is deploy.mjs's REGEN_MESSAGE");
+});
+
+test("selectSyncMerge: impure paths add only their own tests; a run-all impure path still widens", () => {
+  const gen = selectSyncMerge(["a", "tools/shot/scenery-locations.json"], { allFiles: ALL, scripts: {}, pinIndex: new Map(), impure: ["tools/shot/scenery-locations.json"] });
+  assert.equal(gen.reason, "sync-merge+generated-only");
+  assert.equal(gen.genCheck, true);
+  assert.equal(gen.changed, 2);
+  assert.equal(gen.impure, 1);
+  assert.deepEqual([...gen.files].sort(), [...GENERATED_SEED_TESTS].sort(), "a regenerated digest costs gen:check and the seeds, not the branch diff");
+  const wide = selectSyncMerge(["a"], { allFiles: ALL, scripts: {}, pinIndex: new Map(), impure: [fake("tests", "helpers", "whatever.mjs")] });
+  assert.equal(wide.files.length, ALL.length, "an impure path that forces the floor still forces it");
+  assert.ok(wide.widened);
 });
 
 test("--quiet ends a red run with the failing file names and the log path", async () => {

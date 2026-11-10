@@ -9157,6 +9157,8 @@ function closePitWork() {
   if (!netPlay.active()) holdRaceWake();   // a hidden tab under the garage may have released the screen lock; RETURN TO RACE holds it again
   lastFrame = performance.now();       // or the frozen minutes arrive as one dt
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); }
+  // #4964: THE RACE DOES NOT CARRY THE GARAGE. Free the bay once the visit is down (next tick: release refuses while it shows).
+  setTimeout(() => { if ($("carsetup").hidden && !setupPreviewOn) garagePre.release(); }, 0);
 }
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
