@@ -5594,6 +5594,9 @@
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
+      "integrity": [
+        "tests/unit/deploy-staging.test.mjs"
+      ],
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
       ],
@@ -8021,6 +8024,9 @@
       "state": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "*": [
+        "tests/unit/deploy-staging.test.mjs"
       ]
     },
     "js/garage/garage-data.js": {

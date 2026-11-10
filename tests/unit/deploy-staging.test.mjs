@@ -181,6 +181,47 @@ test("the stamp maps every staged lazy file to its content hash; one changed fil
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// #4992: on a STAMPED shell ScriptLoader.integrity() refuses any lazy file with no `apex-lazy-integrity` key
+// (js/core/script-loader.js: a present map without the key returns false and the file is never fetched). bump-cache
+// hand-listed the rosters and missed LAZY_GARAGE_EXTERIOR and LAZY_DEV, so the garage's pit exterior never loaded
+// on the deployed site and nothing failed locally. The oracle is the RUNTIME, not the stamper: every file roster
+// shipped code reads off `ApexRoster.<NAME>` must be keyed in both maps of a stamped tree.
+test("a stamped tree keys every lazy file the runtime can request (apex-lazy-v and apex-lazy-integrity)", () => {
+  const M = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const names = new Set();
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = dir + "/" + e.name;
+      if (e.isDirectory()) walk(rel);
+      else if (rel.endsWith(".js")) for (const m of read(rel).matchAll(/\bApexRoster\.([A-Z][A-Z0-9_]*)/g)) names.add(m[1]);
+    }
+  };
+  walk("js");
+  const strings = (v) => (Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v).flat() : []).filter((f) => typeof f === "string" && f.endsWith(".js"));
+  // TRACK_VM / TRACK_WORKER_EXTRA name files a worker importScripts by its own key, never through ScriptLoader.
+  const rosters = [...names].filter((n) => /^(DEFERRED|LAZY_)/.test(n) && !/_EDGES$/.test(n)).sort();
+  for (const pin of ["DEFERRED", "LAZY_RACE", "LAZY_GARAGE_EXTERIOR", "LAZY_DEV"]) assert.ok(rosters.includes(pin), `shipped code reads ApexRoster.${pin}`);
+  const want = [...new Set(rosters.flatMap((n) => strings(M[n])))].sort();
+  assert.ok(want.includes("js/garage/exterior.js") && want.length > 100, "the rosters resolved to real file lists");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lazy-sri-"));
+  const put = (rel, body) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); };
+  try {
+    for (const rel of want) put(rel, fs.readFileSync(path.join(ROOT, rel)));
+    const entry = "js/" + "game" + ".js";
+    put(entry, "// shell tag\n");
+    put("index.html", `<head>\n<meta name="apex-build" content="7">\n<script src="${entry}?v=dev"></script>\n</head>\n`);
+    put("version.json", `{ "build": 7 }\n`);
+    const r = spawnSync("node", ["tools/ci/bump-cache.mjs", "--apply", "--at", "4100", "--json", "--root", dir], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+    const staged = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    const mapOf = (id) => JSON.parse(staged.match(new RegExp(`<script type="application/json" id="${id}">([\\s\\S]*?)</script>`))[1]);
+    const v = mapOf("apex-lazy-v"), sri = mapOf("apex-lazy-integrity");
+    const unkeyed = want.filter((rel) => !/^[0-9a-f]{12}$/.test(v[rel] || "") || !/^sha256-[A-Za-z0-9+/]{43}=$/.test(sri[rel] || ""));
+    assert.deepEqual(unkeyed, [], "ScriptLoader refuses these on the deployed site: no version or integrity key");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("the repo shell carries no lazy map (it is stamped at deploy only)", () => {
   assert.doesNotMatch(html, /id="apex-lazy-v"/);
 });
