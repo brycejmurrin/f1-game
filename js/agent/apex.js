@@ -240,6 +240,7 @@ function placeFromTrack(car, sampled) {
   car.head = Math.atan2(sampled.t[0], sampled.t[2]);
 }
 
+let apexSeed = null;   // the last seed an agent set through seed(n) / reset(…, seed)
 const simTick = (d) => ApexLobby.tick(G, d);   // one step()/act() tick (apex-lobby.js)
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m). DELETES the lap in
@@ -2083,15 +2084,17 @@ const api = {
     return out;
   },
 
-  seed(n) { if (n !== undefined && Number.isFinite(n)) G.seed = n; return G.seed; },
+  seed(n) { if (n !== undefined && Number.isFinite(n)) { G.seed = n; apexSeed = n; } return G.seed; },
 
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
     // NaN into prog/s/speed/x survives every later tick (the field sort reads prog): refuse first.
     if (![frac, speed, x, seed].every(finiteOrNil)) return false;
     G.resetEpisodeOwners();   // clear takeovers, held flags and debris before reusing car indexes
-    // ALWAYS re-assert: the setter rewinds the stream, so a seedless reset() replays the last seed.
-    G.seed = seed !== undefined ? seed : G.seed;
+    // A seedless reset() replays the last seed an agent SET (seed(n) / reset(...,seed)): the setter
+    // rewinds the stream. Never seeded through __apex: the stream continues, as before.
+    if (seed !== undefined) apexSeed = seed;
+    if (apexSeed !== null) G.seed = apexSeed;
     gridUp();   // also clears finPos / retired / dnf / dnfAt / dnfWhy
     // RE-ARM retirements exactly as startRaceBody does, minus its raceIndex++:
     // the round stays put, so the (seed, round, driver) hash replans the SAME

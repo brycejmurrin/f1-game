@@ -4564,8 +4564,9 @@ positions the player at lap-fraction `frac` (0–1) with optional `speed` (m/s) 
 lateral offset `x` (m), sets `state = "race"` and `raceT = 0` — all without
 reloading assets. Returns the initial `obs()`, or `false` if no track is loaded.
 `seed` seeds the sim RNG for the episode; WITHOUT one, `reset()` re-asserts the
-last seed (rewinding the sim RNG stream), so a bare `reset()` replays the same
-episode as the last seeded one rather than continuing the stream.
+last seed set through `__apex` (`seed(n)` or `reset(…, seed)`), rewinding the sim RNG
+stream, so a bare `reset()` replays the same episode as the last seeded one. If no
+seed was ever set through `__apex`, the stream continues as before.
 
 Call `race()` first to load the desired circuit, then call `reset()` at the start
 of each episode instead of reloading:
