@@ -74,6 +74,9 @@ export const DATA_SOURCES = [
 export const TRADEMARK = "This game is unofficial and is not associated in any way with the Formula 1 companies. "
   + "F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V.";
 
+/** The title screen's one-line notice (#disclaimer): the full TRADEMARK sentence does not fit portrait Home. */
+export const TITLE_NOTICE = "Unofficial fan game, not associated with Formula 1 companies";
+
 function readJson(root, rel) { return JSON.parse(fs.readFileSync(path.join(root, rel), "utf8")); }
 function readText(root, rel) {
   const abs = path.join(root, rel);

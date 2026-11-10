@@ -2366,9 +2366,12 @@
            text glyph fell back to a host font and the phone title baseline
            flaked on it (tests/data/flaky-quarantine.json). No extra shell node. -->
       <button id="soundbtn" class="minibtn" aria-pressed="true">SOUND ON</button>
-      <!-- The wording Formula 1's fan guidelines ask an unofficial site to carry
-           (formula1.com/en/toolbar/guidelines.html). Never hidden: css/menus.css. -->
-      <p id="disclaimer">This game is unofficial and is not associated in any way with the Formula 1 companies. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V.</p>
+      <!-- Never hidden (css/menus.css). One short line: the full trade-mark sentence
+           Formula 1's fan guidelines give (formula1.com/en/toolbar/guidelines.html)
+           ran 8 lines in portrait and pushed Home past one screen (390x844: 556px
+           in a 440px box), so it heads Settings > ABOUT & CREDITS instead
+           (desktop/scripts/notices.mjs TRADEMARK; TITLE_NOTICE is this line). -->
+      <p id="disclaimer">Unofficial fan game, not associated with Formula 1 companies</p>
     </div>
   </div>
   <button id="home-motion" class="minibtn" type="button" hidden>PAUSE BACKGROUND</button>

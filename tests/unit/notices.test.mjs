@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMPONENTS, NOTICE_SOURCES, TRADEMARK, buildCreditsHtml, detectLicence, syncCommitted, withCreditsBlock } from "../../desktop/scripts/notices.mjs";
+import { COMPONENTS, NOTICE_SOURCES, TITLE_NOTICE, TRADEMARK, buildCreditsHtml, detectLicence, syncCommitted, withCreditsBlock } from "../../desktop/scripts/notices.mjs";
 import { stageExcluded } from "../../tools/desktop/stage-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -71,11 +71,13 @@ test("the page title and descriptions do not brand with the F1 word mark", () =>
   for (const s of [desc, manifest.description, manifest.name, manifest.short_name]) assert.doesNotMatch(s, /\bF1\b|FORMULA ?(1|ONE)/i, s);
 });
 
-test("the landing page carries Formula 1's fan-guideline disclaimer, and no CSS hides it", () => {
+test("the title carries the unofficial notice, ABOUT & CREDITS the full trade-mark sentence, and no CSS hides it", () => {
   assert.ok(TRADEMARK.includes("are trade marks of Formula One Licensing B.V."));
   const m = /<p id="disclaimer">([^<]*)<\/p>/.exec(html);
   assert.ok(m, "#disclaimer exists");
-  assert.equal(m[1], TRADEMARK);
+  assert.equal(m[1], TITLE_NOTICE);
+  const panel = html.slice(html.indexOf('id="pm-panel-credits"'));
+  assert.ok(panel.includes(TRADEMARK), "Formula 1's fan-guideline sentence heads ABOUT & CREDITS");
   for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((x) => x.endsWith(".css"))) {
     const css = read("css/" + f).replace(/\/\*[\s\S]*?\*\//g, "");
     for (const rule of css.matchAll(/([^{}]*#disclaimer[^{}]*)\{([^{}]*)\}/g)) {
