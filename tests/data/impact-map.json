@@ -4870,6 +4870,9 @@
     "js/circuits/scenery/dijon.js": {
       "narrow": [
         "tests/unit/dijon-clips-coplanar.test.mjs"
+      ],
+      "*": [
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/circuits/scenery/estoril.js": {
@@ -7054,6 +7057,9 @@
       ],
       "stampFor": [
         "tests/unit/skidmarks-cadence.test.mjs"
+      ],
+      "*": [
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/fx/visor-optics.js": {
@@ -11260,6 +11266,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
     },
@@ -18055,6 +18062,7 @@
         "tests/unit/node-plan.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-tests.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs"
