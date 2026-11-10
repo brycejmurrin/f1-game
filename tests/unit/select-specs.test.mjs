@@ -9,7 +9,7 @@
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cssSpecs, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
+import { cssSpecs, CSS_LAYOUT_SPECS, CSS_SMOKE_ONLY, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SPILL_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
   FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST, FAT_UI_MIN_PIECES, HUD_LAYOUT_MIN_PIECES,
@@ -1795,38 +1795,108 @@ test("helper imports and reexports propagate transitively with cycles", () => {
   assert.ok(consumers.length > 5, "fixtures reexport reaches indirect consumers");
 });
 
-test("CSS-only changes retain bounded relevant player layout coverage", () => {
+test("CSS-only changes run the layout specs that measure the sheet they touch", () => {
+  const S = (n) => `tests/specs/${n}.spec.js`;
   assert.deepEqual(cssSpecs(["docs/README.md"]), []);
   const menu = cssSpecs(["css/menus.css", "docs/README.md"]);
-  assert.ok(menu.includes("tests/specs/css-player-smoke.spec.js"));
-  assert.ok(menu.includes("tests/specs/menu-baseline.spec.js"));
-  assert.ok(!menu.includes("tests/specs/hud-layout.spec.js"));
+  assert.ok(menu.includes(S("css-player-smoke")));
+  assert.ok(menu.includes(S("menu-baseline")));
   for (const name of ["title", "fonts-hud", "components", "responsive", "dialogs", "dialog-platform", "overlays", "garage-experience"]) {
-    assert.ok(cssSpecs([`css/${name}.css`]).includes("tests/specs/menu-baseline.spec.js"),
+    assert.ok(cssSpecs([`css/${name}.css`]).includes(S("menu-baseline")),
       `${name} changes the title/selector/garage identity`);
   }
+  // The smoke is one 844x390 default-profile boot that taps controls; it never measures a size or a fit. Until
+  // 2026-11-09 it was the ONLY spec a css/hud.css or css/touch-controls.css diff selected (this test pinned that
+  // with `deepEqual(hud, [smoke])`), so the specs that measure the HUD and the pause sheet at phone shapes ran
+  // for JS diffs only. Each sheet now names the spec that measures it.
   const hud = cssSpecs(["css/hud.css"]);
-  assert.deepEqual(hud, ["tests/specs/css-player-smoke.spec.js"]);
-  assert.ok(!hud.includes("tests/specs/menu-baseline.spec.js"));
+  for (const name of ["hud", "touch-controls"]) {
+    const got = cssSpecs([`css/${name}.css`]);
+    assert.ok(got.includes(S("hud-layout")) && got.includes(S("ui-scale")), `${name}.css runs the HUD layout matrix`);
+  }
+  for (const name of ["dialogs", "overlays", "settings"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes(S("ui-resize")), `${name}.css runs the phone sheet cells (pause, settings)`);
+  }
+  for (const name of ["title", "menus", "menu-destinations"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes(S("title-fit")), `${name}.css runs the title fit matrix`);
+  }
+  for (const name of ["garage-experience", "carsetup"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes(S("garage-aero")), `${name}.css runs the garage phone cells`);
+  }
+  for (const name of ["tokens", "responsive", "components"]) {
+    const got = cssSpecs([`css/${name}.css`]);
+    for (const spec of ["hud-layout", "ui-scale", "ui-resize", "title-fit", "garage-aero"]) {
+      assert.ok(got.includes(S(spec)), `${name}.css feeds every surface, so it runs ${spec}`);
+    }
+  }
+  assert.ok(!hud.includes(S("menu-baseline")));
   // Home/menu layout CSS also runs the two specs that reach mid-season doors
   // (#mb-standings): ship CI 39017766676 went red on them after #2633.
   for (const name of ["menus", "menu-destinations", "overlays", "experience"]) {
     const home = cssSpecs([`css/${name}.css`]);
-    assert.ok(home.includes("tests/specs/season.spec.js"), `${name} moves Home doors season.spec clicks`);
-    assert.ok(home.includes("tests/specs/ui-audit.spec.js"), `${name} moves Home doors ui-audit clicks`);
+    assert.ok(home.includes(S("season")), `${name} moves Home doors season.spec clicks`);
+    assert.ok(home.includes(S("ui-audit")), `${name} moves Home doors ui-audit clicks`);
   }
-  assert.ok(!hud.includes("tests/specs/season.spec.js"));
-  assert.equal(menu.length, 4);
-  assert.equal(hud.length, 1);
-  for (const specs of [menu, hud, cssSpecs(["css/tokens.css"]), cssSpecs(["css/menu-destinations.css"])]) {
+  assert.ok(!hud.includes(S("season")));
+  // Every stylesheet on disk is classified: a layout spec, or the smoke-only list by name. A new sheet that is
+  // in neither fails here instead of silently getting the smoke alone.
+  const sheets = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(".css")).map((f) => `css/${f}`);
+  assert.ok(sheets.length > 20, "css/ was read");
+  for (const f of sheets) {
+    const routed = CSS_LAYOUT_SPECS.some(([re]) => re.test(f));
+    assert.notEqual(routed, CSS_SMOKE_ONLY.test(f), `${f} is in exactly one of CSS_LAYOUT_SPECS / CSS_SMOKE_ONLY`);
+  }
+  for (const [, specs] of CSS_LAYOUT_SPECS) for (const spec of specs) assert.ok(fs.existsSync(path.join(ROOT, spec)), `${spec} exists`);
+  // Nothing routed is dropped: every spec lands on a runnable leg (the layout matrices run in their oversize pools).
+  for (const f of ["css/menus.css", "css/hud.css", "css/tokens.css", "css/menu-destinations.css", "css/dialogs.css"]) {
+    const specs = cssSpecs([f]);
     const plan = fit(specs, DEFAULT_BUDGET_MIN);
-    assert.deepEqual(plan.skipped, [], "bounded CSS coverage fits existing shard pools");
+    assert.deepEqual(plan.skipped, [], `${f}: no routed CSS spec is skipped`);
     assert.deepEqual(plan.overBudgetSpecs, []);
-    assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
+    const legs = new Set(shards(plan).flatMap((j) => j.specs.split(" ")));
+    for (const spec of specs) assert.ok(legs.has(spec), `${f}: ${spec} is on a leg`);
   }
-  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
-  assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
+  // The whole selector, not its text: a css-only diff reaches CI legs carrying the layout specs, and a css + docs
+  // diff is still css; a css + js diff takes the routed group instead.
+  const legsOf = (files) => new Set(shards(select("HEAD", DEFAULT_BUDGET_MIN, { files })).flatMap((j) => j.specs.split(" ")));
+  const cssOnly = legsOf(["css/hud.css", "docs/README.md"]);
+  assert.ok(cssOnly.has(S("hud-layout")) && cssOnly.has(S("css-player-smoke")), "a css + docs diff runs the HUD layout matrix");
+  assert.ok(!cssOnly.has(S("menu-keyboard")), "…and stays narrower than the routed ui group");
+  assert.ok(legsOf(["css/dialogs.css"]).has(S("ui-resize")), "a pause-sheet css diff runs the phone sheet cells");
+  assert.ok(legsOf(["css/hud.css", "js/ui/hud.js"]).has(S("menu-keyboard")), "a css + js diff takes the whole routed group");
+});
+
+test("the CI select step leaves the tree it diffs untouched (a chmod there made every PR an infra diff)", () => {
+  // The step used to `chmod +x` its helper, which is committed 100644: git then reported the helper as MODIFIED in
+  // the diff select-specs reads, so reason was "infra" on every PR and "unmatched" (the fail-closed branch) could
+  // never fire. Run the real step in a throwaway repo that commits both scripts at their committed modes; the
+  // selector itself is absent there, so the step fails after base resolution, which is all this needs.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "select-step-"));
+  try {
+    const git = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }).trim();
+    git("init", "-q"); git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t");
+    git("config", "core.fileMode", "true");
+    fs.mkdirSync(path.join(dir, "tools/ci"), { recursive: true });
+    for (const f of ["tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh"]) {
+      fs.copyFileSync(path.join(ROOT, f), path.join(dir, f));
+      const mode = execFileSync("git", ["ls-files", "-s", "--", f], { cwd: ROOT, encoding: "utf8" }).slice(0, 6);
+      assert.match(mode, /^100(644|755)$/, `${f} is tracked`);
+      fs.chmodSync(path.join(dir, f), mode === "100755" ? 0o755 : 0o644);
+    }
+    git("add", "-A"); git("commit", "-q", "-m", "one");
+    fs.writeFileSync(path.join(dir, "x.txt"), "x"); git("add", "-A"); git("commit", "-q", "-m", "two");
+    const before = git("rev-parse", "HEAD~1");
+    let ran = false;
+    try {
+      execFileSync("bash", ["tools/ci/ci-select-specs-step.sh"], { cwd: dir, encoding: "utf8", stdio: "pipe",
+        env: { ...process.env, EVENT: "push", PUSH_BEFORE: before, PR_BASE: "", CALLED: "false", GITHUB_OUTPUT: path.join(dir, "out.txt") } });
+    } catch (e) {
+      ran = /selector failed/.test(String(e.stdout) + String(e.stderr));
+    }
+    assert.ok(ran, "the step got past base resolution to the selector (absent in this fixture)");
+    assert.equal(git("diff", "--name-only", before), "x.txt", "the step's own diff lists only what the commit changed");
+    assert.equal(git("status", "--porcelain", "--untracked-files=no"), "", "no tracked file was modified by the step");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
