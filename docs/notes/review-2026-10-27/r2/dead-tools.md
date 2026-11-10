@@ -13,7 +13,7 @@ Totals: LIVE 273 | DOC-ONLY 14 | TEST-ONLY 39 | ORPHAN 2.
 ## ORPHAN (no reference outside generated catalogs / tools/README.md)
 | class | path | callers | action |
 |---|---|---|---|
-| ORPHAN | check-doctor-catalog.mjs (deleted, #3935) | none; hard-codes `cwd:'/workspace/f1-game'` + `source tools/environment/activate.sh`; no test | DELETE |
+| ORPHAN | check-doctor-catalog.mjs (deleted, #3935) | none; hard-codes `cwd:'/workspace/f1-game'` + `source tools/environment/activate`; no test | DELETE |
 | ORPHAN | tools/gen/track-stills.mjs | none in code/skills; only docs/archive/plans/skilltest-content-pipeline.md. Its output `assets/stills/*.webp` IS shipped (js/ui/select-screen.js) | KEEP (asset generator); add a line to new-track or asset-pack skill |
 
 ## Fleet / orchestrator / relay / train era vs docs/WORKERS.md (GitHub-only bus, dispatcher, land.yml)
@@ -78,3 +78,5 @@ Wording fixes (no delete): queue-depth.mjs header, launch-gate.mjs header, pr-bo
 COVERED: tools/ci (82 entries), env (8), lib (54), mcp (57), check (56), gen (33), shot (48) — 328 scripts counted;
 json/dirs (dispatch.json, *-mcp.json, gen/blender, gen/trees, shot/lib, voice-corpus.json) not classified.
 Not covered: tools/{desktop,environment,archive,track,…} and other tools/ subdirs; .claude/worktrees ignored.
+
+> 2026-11-10 (W17 dead-weight pass): the tools cited here without an extension were deleted; `git log --diff-filter=D -- <path>` recovers them.
