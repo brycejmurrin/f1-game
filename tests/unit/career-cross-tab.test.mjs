@@ -384,9 +384,60 @@ test("quota-refused clear and deletion report session-only outcomes", () => {
   assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 100);
 });
 
+// Press the REAL hub BACK (#cr-back) and read the title's STANDINGS chip.
+// `standalone` is the standalone SEASON save on disk (null: none). The chip is
+// shown only for a standalone season that is under way and not finished; the
+// career's own progress must never reveal it.
+function pressHubBack(standalone, startHidden) {
+  const tracks = ["a", "b", "c"].map((id) => ({ id, name: "Circuit " + id }));
+  const disk = new Map([
+    ["apex26.career.driver.0", JSON.stringify(save(2, 100))],
+    ["apex26.careerSlot", JSON.stringify("driver:0")],
+  ]);
+  if (standalone) disk.set("apex26.season", JSON.stringify(standalone));
+  const { Career, ctx } = load({ disk, tracks: { LIST: tracks, SEASON: tracks, seasonIndex: () => 0 } });
+  const dom = makeDom();
+  ctx.document = dom.document;
+  ctx.Dom = { el: (tag, cls = "", text = "") => {
+    const n = dom.document.createElement(tag); n.className = cls; n.textContent = text; return n;
+  } };
+  ctx.ScrollFade = { refresh() {} };
+  vm.runInContext('Teams.LIST[0].name = "Haas";', ctx);
+  Career.load(); Career.engage(true);
+  const calls = [];
+  const G = { $: dom.byId, els: { overlay: dom.byId("overlay") }, cssCol: () => "#fff", soundOn: false,
+    season: { round: 2 },   // the career weekend's season object, which BACK must replace
+    qualiClear: () => calls.push("qualiClear"), refreshCareerButton: () => calls.push("refresh"),
+    openCareer() {}, openGarage() {} };
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning-ui.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning-ui.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8"), ctx, { filename: absSrc("js/career/career-ui.js") });
+  const screen = vm.runInContext("CareerScreen", ctx).create(G);
+  screen.openHub();
+  const chip = dom.byId("mb-standings");
+  chip.hidden = startHidden;   // callers start it opposite to what BACK must leave
+  dom.byId("cr-back").onclick();
+  return { chip, G, calls, dom };
+}
+
 test("career hub BACK hides the title STANDINGS chip from the standalone season", () => {
+  // No standalone season: the career's round-2 progress must not show the chip.
+  const bare = pressHubBack(null, false);
+  assert.equal(bare.dom.byId("career").hidden, true, "BACK closed the career screen");
+  assert.equal(bare.G.flow, "gp");
+  assert.deepEqual(bare.calls, ["qualiClear", "refresh"]);
+  assert.equal(bare.G.season.round, 0, "G.season is the standalone season again, not the career's");
+  assert.equal(bare.chip.hidden, true, "no standalone season under way: STANDINGS stays hidden");
+  // A standalone season under way (round 1 of 3): BACK shows its chip.
+  const live = pressHubBack({ round: 1, config: { trackIds: ["a", "b", "c"] },
+    pts: {}, teamPts: {}, driverCodes: {} }, true);
+  assert.equal(live.G.season.round, 1);
+  assert.equal(live.chip.hidden, false, "a standalone season under way: STANDINGS is shown");
+  // A finished standalone season (round 3 of 3): nothing left to stand in.
+  const done = pressHubBack({ round: 3, config: { trackIds: ["a", "b", "c"] },
+    pts: {}, teamPts: {}, driverCodes: {} }, false);
+  assert.equal(done.G.season.round, 3);
+  assert.equal(done.chip.hidden, true, "a finished standalone season: STANDINGS stays hidden");
   const src = readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8");
-  assert.match(src, /mb-standings.*SeasonCal\.hasProgress\(G\.season\)/);
   assert.match(src, /\$\("cr-go"\)\.disabled = !!st\.hire \|\| Career\.conflicted\(\)/);
 });
 
@@ -426,12 +477,52 @@ test("the title menu refreshes after a restored career batch selects its slot", 
   assert.match(title, /restoredBatch[\s\S]{0,300}refresh\(\)/);
 });
 
+// Boot the REAL TitleMenu.create(G), capture the store subscriber it registers,
+// and fire it with a restored IndexedDB batch that brought `season` back.
+// `open` names the session-entry screen showing (null: only the title is up).
+function fireSeasonRestore(open) {
+  const dom = makeDom();
+  for (const id of ["race-settings", "select", "loading"]) {
+    dom.document.body.appendChild(dom.byId(id));
+    dom.byId(id).hidden = id !== open;
+  }
+  if (open === "loading-phase") { dom.byId("loading").hidden = true; dom.byId("loading").dataset.phase = "boot"; }
+  const restored = { round: 4, restored: true };
+  let loads = 0, refreshed = 0;
+  const ctx = vm.createContext({
+    document: dom.document, Log: { info() {} },
+    Career: { data: () => null, inCareer: () => false },
+    SeasonCal: { load: () => { loads++; return restored; } },
+    Tracks: { SEASON: [] }, Teams: { LIST: [] },
+  });
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/title-menu.js"), "utf8"), ctx, { filename: absSrc("js/ui/title-menu.js") });
+  const subs = [];
+  const before = { round: 1, entry: true };
+  const G = { $: dom.byId, season: before, seasonMode: false,
+    store: { subscribe: (fn) => subs.push(fn), raw: () => null },
+    daily: { plan: () => ({ trackName: "Monza", weather: "dry" }) },
+    refreshCareerButton: () => { refreshed++; },
+    openCareerSlots() {}, openCareer() {}, openDailyPicker() {} };
+  vm.runInContext("TitleMenu", ctx).create(G);
+  assert.equal(subs.length, 1, "TitleMenu registers one store subscriber");
+  subs[0]({ restoredBatch: true, keys: ["season"] });
+  return { G, before, restored, loads, refreshed };
+}
+
 test("title-menu season hydrate skips when a session entry is already open", () => {
-  const title = readFileSync(join(ROOT, "js/ui/title-menu.js"), "utf8");
-  assert.match(title, /seasonBack[\s\S]{0,400}entering/,
-    "IndexedDB season restore must not mutate G.season during select/race-settings/loading");
-  assert.match(title, /getElementById\("race-settings"\)/);
-  assert.match(title, /getElementById\("loading"\)/);
+  // IndexedDB season restore must not mutate G.season during
+  // select / race-settings / loading: entrySettings() was snapshotted already.
+  for (const open of ["race-settings", "select", "loading", "loading-phase"]) {
+    const r = fireSeasonRestore(open);
+    assert.equal(r.G.season, r.before, `${open} is open: the restore leaves G.season alone`);
+    assert.equal(r.loads, 0, `${open} is open: SeasonCal.load() is not called`);
+    assert.equal(r.refreshed, 1, "the career button still repaints");
+  }
+  // Only the title is up: the restored season is hydrated.
+  const idle = fireSeasonRestore(null);
+  assert.equal(idle.loads, 1);
+  assert.equal(idle.G.season, idle.restored, "no entry open: G.season is the restored season");
+  assert.equal(idle.refreshed, 1);
 });
 
 test("missing calendar preserves exact raw JSON through reads, save, mutation and slot switch", () => {
