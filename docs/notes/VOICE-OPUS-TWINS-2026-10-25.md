@@ -1,5 +1,7 @@
 # Voice Opus twins for the default packs (A·W51, option A)
 
+Summary: Opus twins for the george, fable, emma and heart voice packs (A·W51, option A).
+
 Scope: `george`, `fable`, `emma`, `heart` only. Each gets `<pack>.opus.bin` plus an `opus` block in `<pack>.json`.
 The MP3 `.bin` files are byte-identical to the deploy tip (sha256 table in the PR body).
 

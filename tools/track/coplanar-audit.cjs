@@ -472,11 +472,19 @@ function main() {
   const why = argv.includes("--why");
 
   const env = buildContext();
-  const ids = argv.includes("--all")
-    ? require("../lib/circuit-scope.cjs").scope(env.Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
-    // Skip any token consumed as a flag's VALUE, or `--site <file>.js:<line>`
-    // is read as a track id.
-    : idsFrom(argv);
+  const scopeLib = require("../lib/circuit-scope.cjs");
+  const roster = env.Tracks.LIST.map((d) => d.id);
+  let ids;
+  try {
+    ids = argv.includes("--all")
+      ? scopeLib.scopeAll(roster, "coplanar-audit")   // APEX_CIRCUITS narrows --all; a scope matching nothing throws
+      // Skip any token consumed as a flag's VALUE, or `--site <file>.js:<line>`
+      // is read as a track id.
+      : scopeLib.requireKnown(idsFrom(argv), roster, "coplanar-audit");
+    // `--gate` with no ids used to print "all 0 circuit(s) within the coplanar
+    // baseline" and exit 0: a gate that checked nothing.
+    if (!ids.length) throw new Error("coplanar-audit: no circuits named — pass <id>… or --all");
+  } catch (e) { console.error(e.message); process.exit(2); }
 
   // --both --json: the default sweep AND the --overhead sweep from ONE build per
   // circuit, as { default: [...], overhead: [...] } — each array exactly what

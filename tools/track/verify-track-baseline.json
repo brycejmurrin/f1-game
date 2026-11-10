@@ -1,0 +1,13 @@
+{
+  "//": "verify-track.cjs judge baseline (2026-11-10). The designer's road rules (js/editor/validate.js TrackValidate.judge) run on every shipped circuit; a RED fails the build check unless its code is listed here for that circuit. SHRINK-ONLY: a listed code that no longer reads RED fails too (drop it), and nothing may be added — fix the circuit instead. These are the real-world corner starts and Spa's Eau Rouge grade, the same lists as KNOWN_START_REDS / KNOWN_GRADE_REDS in tests/unit/track-validate-fleet.test.mjs.",
+  "judgeReds": {
+    "silverstone": ["start"],
+    "suzuka": ["start"],
+    "vegas": ["start"],
+    "magny_cours": ["start"],
+    "jerez": ["start"],
+    "mont_tremblant": ["start"],
+    "mosport": ["start"],
+    "spa": ["grade"]
+  }
+}
