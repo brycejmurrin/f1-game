@@ -27,15 +27,15 @@ test("the check waits for SETTLED, which sw.js writes after the scenery pools (C
 test("--help prints the flags; a bad --root or an unstamped dir exits 2 before any browser", () => {
   const help = run("--help");
   assert.equal(help.status, 0);
-  assert.match(help.stdout, /--stage/);
-  assert.match(help.stdout, /--root=/);
+  assert.equal(help.stdout.indexOf("--stage") >= 0, true);
+  assert.equal(help.stdout.indexOf("--root=") >= 0, true);
   assert.equal(run("--stage", "--root=x").status, 0, "both flags at once prints usage");
   const missing = run("--root=artifacts/does-not-exist");
   assert.equal(missing.status, 2);
-  assert.match(missing.stderr, /not a staged site/);
+  assert.equal(missing.stderr.indexOf("not a staged site") >= 0, true);
   const unstamped = run("--root=.");
   assert.equal(unstamped.status, 2, "the working tree reads ?v=dev, so it is not a stamped site");
-  assert.match(unstamped.stderr, /not stamped/);
+  assert.equal(unstamped.stderr.indexOf("not stamped") >= 0, true);
 });
 
 test("a stamp at committed+1 (no full history) yields a shell with no ?v=dev tag", (t) => {

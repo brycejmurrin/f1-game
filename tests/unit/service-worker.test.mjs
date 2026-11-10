@@ -2255,7 +2255,7 @@ test("install carries ?h= pack files and sfx from older generations without refe
     assert.equal(cur.has(`${ORIGIN}/${k}`), false, k + " is not carried");
   }
   assert.equal(fetched.some((p) => p.startsWith("/assets/sfx/") || p.includes("?h=")), false, "carried, never refetched");
-  assert.ok(fetched.includes("/assets/pack/manifest.json"), "this build's pack manifest is seeded to name the carried files offline");
+  assert.equal(fetched.indexOf("/assets/pack/manifest.json") >= 0, true, "this build's pack manifest is seeded to name the carried files offline");
   const settledAt = order.indexOf(`${ORIGIN}/__apex_install_settled__`);
   assert.ok(settledAt > order.indexOf(`${ORIGIN}/assets/sfx/f1_engine.mp3`), "the carry lands before SETTLED unlocks the sweep");
   await h.lifecycleEvent("activate").done();
