@@ -46,7 +46,7 @@ Do **not** use this for:
 | Sponsors | **MY TEAM only** — `sponsorAt()`/`sponsor()` return `null` whenever `career.flavour !== "myteam"`; a DRIVER career never has one, by design (a driver is paid a salary, an owner is paid by sponsors) |
 | Regulation eras | `Regulations.ERAS` legality filter, career-only; `career.owned` never touched — `docs/CAREER.md` §Regulation eras |
 | Season target | `deal.ambition` (signed) vs `career.amb` (pending); absent = rung 1 — `docs/CAREER.md` (`AMBITION`) |
-| Calendar and weekend format | A career races its STAMPED calendar (`Career.calendar()` → `calendarOf` / `stampCalendar` in `js/career/career.js`; `Tracks.SEASON` only when unstamped); `SeasonCal` never customises it (`calCustom`, `fmtActive`). Sprint bugs: [workflow step 9](references/workflow.md) |
+| Calendar and weekend format | A career races its STAMPED calendar (`Career.calendar()` → `calendarOf` / `stampCalendar` in `js/career/career.js`; `Tracks.SEASON` only when unstamped; `calSet` picks the list a new season stamps, absent = the 24-round one); `SeasonCal` never customises it (`calCustom`, `fmtActive`). Sprint bugs: [workflow step 9](references/workflow.md) |
 | Randomness | Use `Career.rnd(...parts)`; never `simRnd` or `Math.random` (pinned: `career-determinism.test.mjs`) |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |
 
