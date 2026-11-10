@@ -1643,11 +1643,6 @@
         "tests/unit/director.test.mjs"
       ]
     },
-    "js/camera/drive-lens.js": {
-      "apply": [
-        "tests/unit/director.test.mjs"
-      ]
-    },
     "js/camera/extra-rigs.js": {
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
@@ -1668,6 +1663,10 @@
       ]
     },
     "js/camera/feel.js": {
+      "apply": [
+        "tests/unit/camera-feel.test.mjs",
+        "tests/unit/director.test.mjs"
+      ],
       "applyFreeLook": [
         "tests/unit/camera-feel.test.mjs"
       ],
@@ -1699,6 +1698,9 @@
       ],
       "modeFov": [
         "tests/unit/camera-feel.test.mjs"
+      ],
+      "read": [
+        "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [
         "tests/unit/camera-feel.test.mjs"
@@ -14362,13 +14364,6 @@
         "tests/unit/ratchets.test.mjs"
       ]
     },
-    "js/race/wx-hash.js": {
-      "*": [
-        "tests/unit/forecast.test.mjs",
-        "tests/unit/rain-cells.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
-      ]
-    },
     "js/render/gfx.js": {
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -17492,12 +17487,6 @@
         "tests/unit/cvd-palette.test.mjs"
       ]
     },
-    "js/ui/debris-opts.js": {
-      "*": [
-        "tests/unit/debris-opts.test.mjs",
-        "tests/unit/settings-tabs.test.mjs"
-      ]
-    },
     "js/ui/deep-link.js": {
       "create": [
         "tests/unit/deep-link.test.mjs"
@@ -18647,6 +18636,7 @@
         "tests/unit/post-fx-opts.test.mjs"
       ],
       "read": [
+        "tests/unit/debris-opts.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
