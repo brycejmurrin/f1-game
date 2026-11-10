@@ -25,13 +25,15 @@ const UiScale = (() => {
       else delete root.dataset.fold;
     } catch (_) { /* progressive; a missing API leaves the CSS media queries in charge */ }
   }
-  // The RESOLUTION pin's shipped default: a phone ships MED, a pointer device AUTO. MED, not LOW,
-  // since #5166 (2026-11-09): at LOW an 852×393 DPR-3 iPhone drew its 3D view at 639×295 under the
-  // 1.5 mobile DPR cap and Bryce read it as "very pixelated" (crisp HUD, blocky scene); MED draws
-  // 959×443 (×2.25 the pixels). Only an UNSET key follows this: a stored LOW/MED/HIGH/AUTO wins. Frame
-  // rate at a pinned scale is held by PerfGov's stage 2 (the feature-shed ladder and the 45 Hz step),
-  // which runs whether or not the resolution stage is pinned (js/perf/governor.js tick()).
-  const defaultResMode = () => (coarseUi() ? "med" : "auto");
+  // RESOLUTION's shipped default is AUTO everywhere since #5227 (2026-11-10). On a phone AUTO is
+  // CAPPED at MED's scale (PHONE_AUTO_CEIL): it boots at 0.75, which is what the MED pin drew since
+  // #5166 (959×443 on an 852×393 DPR-3 iPhone under the 1.5 mobile DPR cap; LOW's 639×295 read as
+  // "very pixelated"), and PerfGov's resolution stage may now step below it and back. A pinned MED
+  // left the governor only the feature-shed ladder, and a phone too slow for MED sat at 30 fps for
+  // the race where LOW would have held 60. Only an UNSET key follows this: a stored LOW/MED/HIGH/AUTO
+  // wins, and HIGH is still the way to draw above MED on a phone.
+  const PHONE_AUTO_CEIL = 0.75;
+  const defaultResMode = () => "auto";
   // A stored LOW on a phone from before #5166 is not proof of a choice: LOW WAS the phone default
   // (2026-09-08..11-09) and a settings file saved then carried it as a value (perDevice null only from
   // 2026-10-04), so importing one pinned it; nothing ever recorded "picked". Bryce's export holds
@@ -281,18 +283,23 @@ const UiScale = (() => {
       { id: "med",  label: "MED",  v: 0.75 },
       { id: "high", label: "HIGH", v: 1.0  },
     ];
-    // A phone ships at MED (0.75 buffer) and a pointer device at AUTO — the
-    // other half of the HIGH graphics preset above. Same question
-    // Input.touchControlsNeeded() asks, asked directly (coarseUi, above) so
-    // this module keeps no dependency on the input stack.
+    // Every device ships at AUTO; a phone's AUTO is capped at MED's 0.75 buffer
+    // (PHONE_AUTO_CEIL, above). "Phone" is the question Input.touchControlsNeeded()
+    // asks, asked directly (coarseUi, above) so this module keeps no dependency
+    // on the input stack.
     migrateResMode(store, coarseUi());
     let resMode = store.get("resMode", defaultResMode());
     function applyResMode() {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
       SettingRow.paint($("pm-res"), m.id);
       const gfx = G.gfx;
-      if (m.v != null) { PerfGov.setAutoRes(false); if (gfx.setRenderScale) gfx.setRenderScale(m.v); }
-      else PerfGov.setAutoRes(true);   // governor takes over from wherever the scale sits now
+      if (m.v != null) { PerfGov.setAutoRes(false); if (gfx.setRenderScale) gfx.setRenderScale(m.v); return; }
+      // AUTO: the governor takes over from wherever the scale sits now, under the device's ceiling.
+      // A scale above a phone's ceiling (the boot's 1.0, or a HIGH pin just left) comes down to it.
+      const ceil = coarseUi() ? PHONE_AUTO_CEIL : 1;
+      if (PerfGov.setResCeil) PerfGov.setResCeil(ceil);
+      if (ceil < 1 && gfx.setRenderScale && (!gfx.getRenderScale || gfx.getRenderScale() > ceil)) gfx.setRenderScale(ceil);
+      PerfGov.setAutoRes(true);
     }
     SettingRow.wire("pm-res", { values: RES_MODES.map((r) => [r.id, r.label]), read: () => resMode, write: (v) => {
       resMode = (RES_MODES.find((r) => r.id === v) || RES_MODES[0]).id;
