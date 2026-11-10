@@ -2,6 +2,14 @@
 
 Kind: measurement · Re-measure-by: 2027-02-01 · Lane: PR `cursor/real-profile-acceptance-01db`
 
+**Outcome, 2026-11-10: only the garage bar cap landed from this lane (PR #5297).** The default BUTTON SIZE 1.25 → 1
+and `--tap` 54 → 58 described below were measured, passed CI, and were then DROPPED before landing: his 2026-11-10
+export (`tests/data/settings-live-export-2026-11-10.json`) stores BUTTON SIZE 143 % and UI SIZE 70, so buttons at the
+old default were not what he wanted smaller, and a stored size wins over any default anyway. Bryce chose "keep the
+garage fix only" (relayed by the orchestrator's question tool, 21:09Z); the default sizes are #5358's to decide. Every
+"after" number for the dock below is what a 100 % default WOULD paint, kept as evidence for that lane; the tree still
+paints the "before" column. `tests/specs/real-profile-dock.spec.js` now holds only the garage bar.
+
 First test of the owner's LIVE settings export (`tests/data/settings-live-export-2026-11-09.json`: UI SIZE 61,
 HUD / BUTTON SIZE unset, TEXT large, custom v4 `hudLayout`, HELMET, BUTTONS steering). Six sessions earlier that day
 tested the October file (HUD 155, BUTTON 245), which he no longer has.

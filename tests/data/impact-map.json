@@ -18853,7 +18853,6 @@
         "tests/unit/scale-defaults.test.mjs"
       ],
       "*": [
-        "tests/specs/real-profile-dock.spec.js",
         "tests/specs/ui-resize.spec.js",
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
