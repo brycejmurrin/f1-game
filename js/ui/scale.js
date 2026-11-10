@@ -103,6 +103,16 @@ const UiScale = (() => {
       const t = scaleSnap(pct, k);
       return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
     };
+    // A phone: the 12 px text floor and the sheet fit's 125 % ceiling bound UI SIZE there (sizeRow).
+    const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
+    const fitCaps = () => (document.body && document.body.classList && document.body.classList.contains("in-race")
+      ? parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")) : null);
+    const cssWas = {};   // prop -> the value this module last wrote: an unchanged row writes nothing (the observer below re-runs it)
+    const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), phoneUi());
+    // Moving one size slider pins the OTHER's stored wish to what it paints now, so room this move frees is
+    // never spent growing something the player did not touch (BUTTON SIZE down grew the gear cluster back).
+    const pinPainted = (key) => { const r = rowFor(key); if (typeof store.get(key, null) === "number" && r.value < scalePct(key)) store.set(key, r.value); };
+    const fromSlider = (key, v) => { const r = rowFor(key); return Math.max(r.min, Math.min(r.max, scaleSnap(+v || scaleDefaultFor(key), key))); };
     function applyScale(key, prop, inputId) {
       const stored = store.get(key, null);
       // The CSS custom property drives the ACTUAL on-screen size — it must read the
@@ -111,11 +121,14 @@ const UiScale = (() => {
       // build's range, a direct localStorage edit) and this function runs on every
       // boot, so an unclamped read here silently applied an out-of-range scale while
       // the slider's own displayed number — always clamped — showed something else.
-      const pct = scalePct(key);
-      if (typeof stored === "number") document.documentElement.style.setProperty(prop, pct / 100);
-      else document.documentElement.style.removeProperty(prop);
-      const input = $(inputId); if (input) input.value = String(pct);
-      const out = $(`${inputId}-v`); if (out) out.textContent = scaleLabel(pct, key);
+      // THE SLIDER IS WHAT PAINTS (#5206). rowFor() clamps the range to what this window can paint (the race
+      // fit's --hud-cap; a phone's UI SIZE band), so the thumb, the number and the custom property are one value
+      // and no part of the travel is dead. The STORED wish is left alone until the player moves the slider.
+      const r = rowFor(key), root = document.documentElement, want = typeof stored === "number" ? String(r.value / 100) : "";
+      if (cssWas[prop] !== want) { cssWas[prop] = want; if (want) root.style.setProperty(prop, want); else root.style.removeProperty(prop); }
+      const input = $(inputId);
+      if (input) { input.min = String(r.min); input.max = String(r.max); input.value = String(r.value); }
+      const out = $(`${inputId}-v`); if (out && out.textContent !== r.label) out.textContent = r.label;
       // IS THIS VALUE MINE OR INHERITED? `stored` has always known — null means
       // "following" — and nothing on screen said so, which is the whole bug class
       // behind BUTTON SIZE: unset it tracks HUD SIZE, and a player who had never
@@ -140,21 +153,10 @@ const UiScale = (() => {
     }
     function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
     // The touch dock keeps its own fixed default and explicit override.
-    // The readout says what the race fit PAINTS: fitHud's pedal-column cap (--hud-z-dock) can stop the
-    // dock below the slider (245 % on an 844x390 phone paints ~118 %), and "245%" alone read as "broken".
-    function applyBtnScale() {
-      applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale");
-      refreshBtnFit();
-    }
-    // fitHud publishes --hud-z-dock on its own schedule (cap changes: rotation, HUD SIZE, a wider dock), so the
-    // "fits N%" suffix is rebuilt from the base label whenever that var moves, not only when the slider does.
-    function refreshBtnFit() {
-      const out = $("pm-btnscale-v"), body = document.body;
-      if (!out || !body || !body.classList.contains("in-race")) return;
-      const pct = scalePct("hudBtnScale");
-      const next = btnFitLabel(scaleLabel(pct, "hudBtnScale"), pct, document.documentElement.style.getPropertyValue("--hud-z-dock"));
-      if (out.textContent !== next) out.textContent = next;
-    }
+    function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
+    // fitHud publishes --hud-cap on its own schedule (rotation, the other slider, a wider dock), so both race
+    // rows are rebuilt whenever <html>'s inline style moves, not only when their own slider does.
+    function refreshFit() { applyHudScale(); applyBtnScale(); }
     // BUTTON OPACITY has its OWN clamp and does not reuse applyScale: that
     // helper snaps to SCALE_MIN..SCALE_MAX (40..200), which is meaningless for a
     // 0-100 % control and would both forbid a faint dock and allow a 200 % one.
@@ -201,20 +203,22 @@ const UiScale = (() => {
     }
     const uiEl = $("pm-uiscale");
     if (uiEl) uiEl.oninput = (e) => {
-      store.set("uiScale", scaleSnap(+e.target.value || scaleDefaultFor("uiScale"), "uiScale"));
+      store.set("uiScale", fromSlider("uiScale", e.target.value));
       applyUiScale();
     };
     const hudEl = $("pm-hudscale");
     if (hudEl) hudEl.oninput = (e) => {
-      store.set("hudScale", scaleSnap(+e.target.value || scaleDefaultFor("hudScale"), "hudScale"));
-      applyHudScale();
+      pinPainted("hudBtnScale");
+      store.set("hudScale", fromSlider("hudScale", e.target.value));
+      refreshFit();
     };
     applyBtnOpacity();
     applyPanelOpacity();
     const btnEl = $("pm-btnscale");
     if (btnEl) btnEl.oninput = (e) => {
-      store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale"), "hudBtnScale"));
-      applyBtnScale();
+      pinPainted("hudScale");
+      store.set("hudBtnScale", fromSlider("hudBtnScale", e.target.value));
+      refreshFit();
     };
     // Revert restores this axis's independent default.
     const revert = (key, apply) => (e) => {
@@ -246,7 +250,7 @@ const UiScale = (() => {
       let fitRaf = 0;
       new MutationObserver(() => {
         if (fitRaf || typeof requestAnimationFrame !== "function") return;
-        fitRaf = requestAnimationFrame(() => { fitRaf = 0; refreshBtnFit(); });
+        fitRaf = requestAnimationFrame(() => { fitRaf = 0; refreshFit(); });
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
     }
     function setScale(key, prop, v) {
@@ -361,5 +365,39 @@ const UiScale = (() => {
     if (!(z > 0) || z * 100 >= +pct - 0.5) return label;
     return `${label} · fits ${Math.round(z * 100)}%`;
   }
+  /** fitHud's --hud-cap ("top bot pedals steer steerKeep btnFloor" as zooms; 9 = no limit) -> an object, or null. */
+  function parseCaps(str) {
+    const a = String(str || "").trim().split(/\s+/).map(Number);
+    if (a.length < 6 || a.some((n) => !(n > 0))) return null;
+    return { top: a[0], bot: a[1], dock: a[2], steer: a[3], keep: a[4], floor: a[5] };
+  }
+  /** One size slider's row on THIS window: { min, max, value, label }. `wish` is the stored (or default) pct,
+   *  `lim` the control's full { min, max, step }, `caps` parseCaps() in a race (else null), `phone` a phone's UI.
+   *  The range is what can paint, `value` is what paints, and the label says so: "194% · pedals 119% · max". */
+  function sizeRow(key, wish, lim, caps, phone) {
+    const st = lim.step || 0.25, down = (p) => Math.floor(p / st + 1e-6) * st, up = (p) => Math.ceil(p / st - 1e-6) * st;
+    let min = lim.min, max = lim.max, part = "";
+    const txt = (p) => `${Math.abs(p % 1) < 1e-9 ? String(Math.round(p)) : p.toFixed(1)}%`;
+    if (key === "uiScale" && phone) { min = Math.max(min, UI_PHONE_MIN); max = Math.min(max, UI_PHONE_MAX); }
+    // The bands paint min(slider, cap) with the cap ceiled onto a 1 % grid (hud.js set()).
+    const band = (z) => (z < 9 ? Math.ceil(z * 100 - 1e-6) : Infinity);
+    if (key === "hudScale" && caps) max = Math.max(min, Math.min(max, Math.max(band(caps.top), band(caps.bot))));
+    if (key === "hudBtnScale" && caps && caps.dock < 9) {
+      min = Math.max(min, up(caps.floor * 100));
+      max = Math.max(min, Math.min(max, down(Math.max(caps.dock, caps.keep, Math.min(wish / 100, caps.steer)) * 100)));
+    }
+    const value = Math.max(min, Math.min(max, wish));
+    if (key === "hudScale" && caps) {
+      const t = Math.min(value, band(caps.top)), b = Math.min(value, band(caps.bot));
+      if (t < value - 0.5) part = ` · top row ${txt(t)}`; else if (b < value - 0.5) part = ` · bottom row ${txt(b)}`;
+    }
+    if (key === "hudBtnScale" && caps && caps.dock < 9) {
+      const ped = Math.round(Math.max(caps.floor, Math.min(value / 100, caps.dock)) * 100);
+      if (ped < value - 0.5) part = ` · pedals ${ped}%`;
+    }
+    return { min, max, value, label: txt(value) + part + (max < lim.max && value >= max ? " · max" : "") };
+  }
+  const UI_PHONE_MIN = 86, UI_PHONE_MAX = 125;   // 14 px --fs-micro x 0.86 = 12 px text; SheetShape's fit stops a phone sheet at 1.25
+  btnFitLabel.sizeRow = sizeRow; btnFitLabel.parseCaps = parseCaps;   // exported on the return line once #5205 (which edits it) lands
   return { create, defaultResMode, btnFitLabel };
 })();

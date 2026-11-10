@@ -1336,7 +1336,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   };
   const gL = groups(_dockL), gR = groups(_dockR);
   const dockH = Math.max(gL.h, gR.h);
-  let capDock = Infinity, capDockS = Infinity;
+  let capDock = Infinity, capDockS = Infinity, capKeepS = Infinity;
   const DOCK_MIN_Z = 24 / 48;   // emergency fit floor: narrow-tier taps must still paint 24 CSS px
   const READABLE_Z = 10 / 14;   // 10 CSS px over --fs-micro 14: the gap-chip clamp's and PR #1734's label floor
   if (dockH) {
@@ -1423,9 +1423,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (window.innerWidth > window.innerHeight) {
       const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
       const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
-      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom * Math.ceil(Math.min(scale, 1) * 100) / 100;   // set() ceils --hud-z-bot
-      capDockS = Math.max(capDock, Math.min(gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity, gS.w ? roomS / gS.w : Infinity));
-    } else capDockS = capDock;
+      // The cluster is budgeted at its SHIPPED size whatever HUD SIZE says: a smaller HUD SIZE handed the pad the
+      // room and GREW the steer buttons (852x393: 140 px at 100 %, 168 at 70 %; #5206). capKeepS is the pad cap that
+      // also leaves a HUD SIZE above 100 % its painted cluster: BUTTON SIZE's slider stops there (js/ui/scale.js).
+      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom, hS = gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity;
+      capDockS = Math.max(capDock, Math.min(hS, gS.w ? roomS / gS.w : Infinity));
+      capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot)) - 1)) / gS.w : Infinity));
+    } else capDockS = capKeepS = capDock;
     const zS = Math.min(want, Math.max(DOCK_MIN_Z, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
     // Readouts adapt to the stable controls, never the reverse.
@@ -1509,6 +1513,9 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
+  // What this window can paint, published whether or not a cap binds: "top bot pedals steer steerKeep btnFloor"
+  // as zooms (9 = no limit). UiScale clamps the HUD SIZE / BUTTON SIZE sliders to it and labels the rows (#5206).
+  hStyle(root, "--hud-cap", [capTop, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
   // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
   // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
   // The paint pass measured it under the zoom the cap pass published, so it is
