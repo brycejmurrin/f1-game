@@ -75,7 +75,10 @@
     // 5R/6L/7R, Bruxelles 8R, 9L, Pouhon 10L/11L, Fagnes 12R/13L, 14R/15R,
     // Blanchimont 16L/17L, Bus Stop 18R/19L. One apex per FIA corner, each
     // the built centreline's |curvature| peak for that bend (not surveyed GPS).
-    turns: [0.0351, 0.1307, 0.1434, 0.1618, 0.3258, 0.3374, 0.3598, 0.4105, 0.4502, 0.5227, 0.5567, 0.6200, 0.6505, 0.6857, 0.7150, 0.8152, 0.8653, 0.9436, 0.9516],
+    // T8 Bruxelles stays on its 0.4168 station (the corner's other curvature
+    // peak, 0.4105, is 44 m away; tests/specs/spa-foundation.spec.js pins the
+    // station matched to the F1 map within 25 m).
+    turns: [0.0351, 0.1307, 0.1434, 0.1618, 0.3258, 0.3374, 0.3598, 0.4168, 0.4502, 0.5227, 0.5567, 0.6200, 0.6505, 0.6857, 0.7150, 0.8152, 0.8653, 0.9436, 0.9516],
     furniture: { tree: "fir", bakedPines: true, fol: [0.14, 0.31, 0.21], lamp: "none" },  // shared authored/forest pine registry
     kit: { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["darkSteel", "steel", "concrete"],
