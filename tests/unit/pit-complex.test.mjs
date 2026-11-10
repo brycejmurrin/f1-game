@@ -935,3 +935,24 @@ test("pit paint stands >= 10 mm clear of the lane (and the hatch of the road), e
     assert.equal(c.down, 0, `${id} hatch: ${c.down} triangles wound down`);
   }
 });
+
+test("the ENTRY road has a drivable floor: no circuit's peel is squeezed into a 30 m road (#5089)", () => {
+  // silverstone, suzuka and magny_cours got a 30 m entry road (ROAD_MIN), so
+  // the armed AI's line moved 7.35 m sideways in 15 m — ~7 g at the 80 km/h
+  // limit. The entry road now has its own floor, as the exit has had.
+  const T = tracksOnce(), P = ctxOnce().TrackPit;
+  assert.ok(P.ENTRY_ROAD_MIN >= 60 && P.ENTRY_ROAD_MIN <= P.ENTRY_ROAD, `ENTRY_ROAD_MIN ${P.ENTRY_ROAD_MIN}`);
+  const short = [];
+  for (const def of T.LIST) {
+    const p = buildOnce(def.id).pit, L = buildOnce(def.id).total;
+    if (!p || p.painted) continue;
+    const road = ((p.sIn - p.sA) % L + L) % L;
+    if (road < P.ENTRY_ROAD_MIN - 0.01) short.push(`${def.id} ${road.toFixed(0)}`);
+  }
+  assert.deepEqual(short, [], `entry roads under ${P.ENTRY_ROAD_MIN} m: ${short.join(", ")}`);
+  for (const id of ["silverstone", "suzuka", "magny_cours"]) {
+    const p = buildOnce(id).pit;
+    // The peel's ramp (the road less the wall's fade) keeps the lateral under ~2 g.
+    assert.ok(p.entryRoadM - p.grow >= 30, `${id}: peel ramp ${p.entryRoadM - p.grow} m`);
+  }
+});
