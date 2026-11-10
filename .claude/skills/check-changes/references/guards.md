@@ -44,7 +44,7 @@ generated readers and executable changes follow the code gates below.
    ```sh
    node tools/ci/tooling-fast.mjs --changed --jobs=3
    ```
-   Run it in the background with `--jobs=3` (AGENTS.md rule 4; the default is 1). It is the
+   Run it in the background with `--jobs=3` (AGENTS.md rule 4). It is the
    local floor (AGENTS.md rule 3); the PR's CI tiers run the full ladder.
    Docs/skills/tools edits: `--changed` selects the docs-integrity family.
    Smoke + load order when you touched `index.html` or `tools/manifest.cjs`: the `smoke` group runs on the
@@ -67,9 +67,9 @@ the intended design. Magnitude-threshold specs and the legacy
 drift; geometry/behaviour hooks are ground truth. Do not "fix" code to
 satisfy a threshold that itself went stale.
 
-A timeout on a busy box measures the machine, not the code — re-run that
-spec **alone** (`node tools/ci/test-solo.mjs <spec>`) before believing it.
-Check `/proc/loadavg` (< 3) and for a live `playwright test` process first.
+A timeout on a busy box measures the machine, not the code — re-run the
+group on the pushed branch (`node tools/ci/remote-group.mjs <group>`) before
+believing it: [`triage.md`](triage.md).
 
 ## Push
 

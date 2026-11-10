@@ -1,4 +1,5 @@
-/* Apex 26 — DRIVER RATINGS: the five-axis skill table for the 2026 grid. Deliberately NOT in js/data/teams.js: that file is the verified real-world grid (names, numbers, colours); these numbers are the game's own opinion of each driver. */
+/* Apex 26 — DRIVER RATINGS: the five-axis skill table for the 2026 grid. Deliberately NOT in js/data/teams.js: that file is the verified real-world grid (names, numbers, colours); these numbers are the game's own opinion of each driver.
+   Rows: the 2026 season-opener grid; a later substitute has none and rates as its tier's default. */
 const DriverRatings = (function () {
   "use strict";
 

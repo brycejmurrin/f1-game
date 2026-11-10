@@ -266,3 +266,33 @@ test("a flipped human car handed back from a takeover is demoted once and is not
   assert.equal(sim.status().fallbacks, 0, "a clean settle is not an anomaly fallback");
   assert.equal(sim.status().handbacks, 2, "one clean handback per car in the window (the human and the AI)");
 });
+
+// #5020: RECOVER / the auto-rescue teleports the car. Damped, the chase eye swung through the car on a wrong-way rescue.
+test("#5020 rescuePlayer is a camera cut for the player: the rig lands whole at the new pose; a rival's rescue leaves it alone", async () => {
+  await g.G.startRace(); g.step(2);
+  const G = g.G, p = G.player, eye = () => Array.from(G.camEye), far = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  p.head += Math.PI; p.x = 3; G.snapGameCam();   // spun round, off line: the rig is framed on the wrong-way pose
+  const stale = eye();
+  G.rescuePlayer(p);
+  const cut = eye();
+  G.snapGameCam();
+  assert.ok(far(cut, eye()) < 1e-9, "after the rescue the eye IS the fresh vantage (no damping from the old one)");
+  assert.ok(far(cut, stale) > 0.5, "and it moved off the wrong-way framing");
+  const rival = G.cars.find((c) => c !== p);
+  if (rival) { const before = eye(); G.rescuePlayer(rival); assert.deepEqual(eye(), before, "a rival being recovered is not the camera's cut"); }
+});
+
+// #5015: the 86 deg HFOV cap returned the same lens at rest and flat out (every onboard / chase base is over it).
+test("#5015 the drawn lens (G.lens.fovY) widens with speed on a landscape screen instead of sitting on the HFOV cap", async () => {
+  await g.G.startRace(); g.step(2);
+  const G = g.G, p = G.player, DEG = 180 / Math.PI, keep = p.speed;
+  const lensAt = (speed) => { p.speed = speed; G.snapGameCam(1 / 60); return { drawn: G.lens.fovY * DEG, authored: G.camFov }; };
+  try {
+    const rest = lensAt(0), fast = lensAt(90);
+    assert.ok(fast.authored > rest.authored + 5, `the authored FOV rises with speed (${rest.authored} -> ${fast.authored})`);
+    const cap = 2 * Math.atan(Math.tan(43 / DEG) / G.gfx.aspect) * DEG;
+    if (rest.authored > cap) assert.ok(Math.abs(rest.drawn - cap) < 0.5, `rest framing stays on the cap (${rest.drawn.toFixed(2)} vs ${cap.toFixed(2)})`);
+    assert.ok(fast.drawn > rest.drawn + 5, `the widen reaches the projection (${rest.drawn.toFixed(2)} -> ${fast.drawn.toFixed(2)})`);
+    assert.ok(Math.abs((fast.drawn - rest.drawn) - (fast.authored - rest.authored)) < 0.5, "the whole dynamic share, one for one");
+  } finally { p.speed = keep; G.snapGameCam(); }
+});

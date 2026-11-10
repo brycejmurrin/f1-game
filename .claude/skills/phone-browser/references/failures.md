@@ -13,8 +13,8 @@
 - A run that failed after starting the server leaves it detached: `node tools/mcp/browser-http-up.mjs --stop` stops
   whatever the state file recorded; an unrecorded one is stopped by its listed PID.
 - A fresh container has no saved state, so `new` is the expected result there; `reuse` only follows a run in the
-  same checkout. The script can take ~20 s; it leaves the tunnel and server detached.
+  same checkout. Each stage polls with a bounded wait (`waitFor` in `browser-http-up.mjs`); it leaves the tunnel and server detached.
 - Token rotation and teardown: SKILL.md §The tunnel URL is a credential.
-- After they re-paste it, `browser_status` is the cheap check that the connector answers; `browser_open` takes
-  `orientation` (`landscape` | `portrait`).
+- After they re-paste it, a re-run printing `reuse` proves the public address answers; asking Grok to call
+  `browser_status` proves the connector itself does (you cannot call it).
 - The page is an emulated phone on software GL, not the user's GPU: no evidence about their real rendering.

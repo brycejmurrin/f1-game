@@ -31,8 +31,8 @@ and focus/rotation checkpoints. Show individual original captures when reporting
    parent-only): `+`/`-` lines per cell, `= diff ok|NEW` last, exit 1 on any new
    clipped/offscreen/docOverflowX/tinyTaps/underHardware/starved/error finding; a skipped cell is listed
    as unmeasured, never a pass.
-4. Add `fit-audit.mjs --scale=` for type/spacing floors (no exit code) and `test:baseline` (6 pixel PNGs)
-   for identity.
+4. Add `fit-audit.mjs --scale=` for type/spacing floors (no exit code); pixel identity is the CI `baseline`
+   group (on the PR, or `node tools/ci/remote-group.mjs baseline` on the pushed branch; AGENTS.md rule 5).
 5. Record baseline path, scope and the `= diff` line.
 
 ## Capture identity
