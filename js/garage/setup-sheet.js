@@ -919,13 +919,43 @@ function resetLivSearch() {
   csLivQuery = ""; csLivFactoryOpen = null; csLivQueryTeam = null;
   clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;
 }
-function livSwatch(team, liv, tags) {
+/** Livery-card bitmap for a CSS box at a pixel ratio: the box's aspect, box x dpr, longest edge 16…384. */
+function livSwatchPx(boxW, boxH, dpr) {
+  const d = +dpr > 0 ? +dpr : 1, w = Math.max(1, +boxW || 1), h = Math.max(1, +boxH || 1);
+  const k = Math.max(16 / Math.max(w, h), Math.min(d, 384 / Math.max(w, h)));
+  return { w: Math.round(w * k), h: Math.round(h * k) };
+}
+// #5224: the bitmap follows each card shape's CSS box (a grid card is ~144x69 CSS on a phone, a factory-fold
+// card 38x24), measured after the build and kept for the next one; it was a fixed 112x80 for both
+// (0.26 texels per device px at DPR 3, crest 1.5x too wide). The seeds are the CSS boxes before a measure.
+const livSwatchBox = { big: { w: 144, h: 69 }, small: { w: 38, h: 24 } };
+function livSwatchCanvas(sw, team, liv) {
+  const box = livSwatchBox[sw.dataset.livShape], px = livSwatchPx(box.w, box.h, typeof window !== "undefined" ? window.devicePixelRatio : 1);
+  // The card adopts last build's painted canvas when the look and size are unchanged (LiveryTex.swatchCanvas).
+  const c = LiveryTex.swatchCanvas(team.id, liv, px.w, px.h, livBuild);
+  c.setAttribute("aria-hidden", "true");
+  sw.replaceChildren(c, ...[...sw.children].filter((n) => n.tagName !== "CANVAS"));
+}
+/** After a build: measure one laid-out swatch per shape; a box that moved repaints that shape's cards. */
+function fitLivSwatches(container, team, livs) {
+  if (typeof LiveryTex === "undefined" || !LiveryTex.swatchCanvas) return;
+  for (const shape of ["big", "small"]) {
+    const sws = [...container.querySelectorAll('.cs-liv-swatch[data-liv-shape="' + shape + '"]')];
+    // Local box x the sheet's UI-scale zoom = visual CSS px (CssZoom: clientWidth, never a transformed rect).
+    const z = sws.length && typeof CssZoom !== "undefined" ? CssZoom.of(sws[0]) : 1;
+    const w = sws.length ? sws[0].clientWidth * z : 0, h = sws.length ? sws[0].clientHeight * z : 0;
+    if (!(w > 0 && h > 0)) continue;   // not laid out (a closed fold, a hidden sheet): keep the seed
+    const box = livSwatchBox[shape];
+    if (Math.abs(w - box.w) < 1 && Math.abs(h - box.h) < 1) continue;
+    livSwatchBox[shape] = { w, h };
+    for (const sw of sws) livSwatchCanvas(sw, team, livs.get(sw.closest("[data-cs-livery]").dataset.csLivery));
+  }
+}
+function livSwatch(team, liv, tags, big) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
+  sw.dataset.livShape = big ? "big" : "small";
   if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
-    // The card adopts last build's painted canvas when the look is unchanged (LiveryTex.swatchCanvas).
-    const c = LiveryTex.swatchCanvas(team.id, liv, 112, 80, livBuild);
-    c.setAttribute("aria-hidden", "true");
-    sw.appendChild(c);
+    livSwatchCanvas(sw, team, liv);
   } else {
     sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
     if (liv.stripe) {
@@ -949,7 +979,7 @@ function livSwatch(team, liv, tags) {
 // tuner's .tune-row markup (DOM only, no new classes), a RAKE readout, and a
 function buildTuneOptions(container, team) { tuneExperiments.build(container, team); }
 
-function makeLiveryRow(team, liv, cur, isCustom) {
+function makeLiveryRow(team, liv, cur, isCustom, big) {
   const active = liv.id === cur;
   const row = document.createElement("button");
   row.type = "button";
@@ -966,7 +996,7 @@ function makeLiveryRow(team, liv, cur, isCustom) {
   const tags = [];
   if (isCustom) tags.push("MINE");
   if (liv.finish && liv.finish !== "gloss") tags.push(liv.finish.toUpperCase());
-  row.appendChild(livSwatch(team, liv, tags));
+  row.appendChild(livSwatch(team, liv, tags, big));
 
   const main = document.createElement("div"); main.className = "cs-opt-main";
   const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
@@ -1123,8 +1153,8 @@ function buildLiveryOptions(container, team) {
     else if (liv.id === cur || q) factory.push(liv); // fitted + search hits stay visible
     else factoryHidden.push(liv);
   }
-  for (const liv of customs) container.appendChild(makeLiveryRow(team, liv, cur, true));
-  for (const liv of factory) container.appendChild(makeLiveryRow(team, liv, cur, false));
+  for (const liv of customs) container.appendChild(makeLiveryRow(team, liv, cur, true, true));
+  for (const liv of factory) container.appendChild(makeLiveryRow(team, liv, cur, false, true));
 
   // Collapse the rest of the factory catalogue when it would dominate the scroll.
   // Desktop defaults OPEN: MenuNav's End uses checkVisibility, which hides closed
@@ -1146,6 +1176,7 @@ function buildLiveryOptions(container, team) {
     fold.appendChild(grid);
     container.appendChild(fold);
   }
+  fitLivSwatches(container, team, new Map([...customs, ...factory, ...factoryHidden].map((l) => [l.id, l])));
 }
 
 function buildLiveryCreator(container, team) {

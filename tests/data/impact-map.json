@@ -8624,6 +8624,9 @@
       "attrIf": [
         "tests/unit/livery-design.test.mjs"
       ],
+      "buildLiveryOptions": [
+        "tests/unit/livery-card-density.test.mjs"
+      ],
       "buildSetup": [
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -8654,6 +8657,9 @@
         "tests/unit/livery-draft-mesh-cache.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
+      "fitLivSwatches": [
+        "tests/unit/livery-card-density.test.mjs"
+      ],
       "flushLivPreview": [
         "tests/unit/livery-design.test.mjs"
       ],
@@ -8671,6 +8677,12 @@
         "tests/unit/livery-design.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/team-livery.test.mjs"
+      ],
+      "livSwatch": [
+        "tests/unit/livery-card-density.test.mjs"
+      ],
+      "livSwatchPx": [
+        "tests/unit/livery-card-density.test.mjs"
       ],
       "openSetup": [
         "tests/specs/parts-setup-ids.spec.js",
