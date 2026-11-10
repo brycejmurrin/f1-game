@@ -14,16 +14,17 @@
 // Rows (all must pass; each prints `= gate <row>: ok|FAIL <reason>`, then one final `= merge-gate passed|refused …`
 // line, which land.yml reads as the check title):
 //   open      the PR is open and not a draft, and its head is the `--sha` the workflow gated (when given)
-//   hold      no `hold` label; a hold Bryce set in person (newest `labeled hold` with performed_via_github_app
-//             null) is lifted only by his own click — an agent's unlabel of it still holds ("hold set by Bryce was
-//             removed by an agent"). An agent may lift a hold an agent set. (provenance, docs/plans/
-//             2026-11-03-agent-surface-reset.md §4.3; tools/ci/lib/provenance.mjs)
-//   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored)
+//   hold      no `hold` label, and the label events walked oldest first: once Bryce has set `hold` in person
+//             (performed_via_github_app null), the PR stays held until a LATER unlabel of his own; any other
+//             unlabel or re-label in between changes nothing. A hold only an agent ever set is lifted by any
+//             removal. (provenance, docs/plans/2026-11-03-agent-surface-reset.md §4.3; tools/ci/lib/provenance.mjs)
+//   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored);
+//             a body with no Plan fails, except a fold bot's PR (author `*[bot]`), whose body has none
 //   ci        the `CI` check-run from the GitHub Actions app, in the check suite of a ci.yml workflow run, is
 //             `success` on the PR's current head, newest attempt
-//   config    a diff touching .claude/hooks/**, .claude/settings.json, .github/workflows/** or .githooks/** needs the
-//             `config-ok` label, last added by Bryce in person (`= gate config: FAIL needs config-ok from brycejmurrin`);
-//             any other diff passes. Replaces the hook "ask" and the unenforced "Bryce's explicit yes" rule.
+//   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
+//             name) needs the `config-ok` label, last added by Bryce in person, and newer than the last push that
+//             touched a CONFIG_PATH (configPushState); any other diff passes. Replaces the hook "ask".
 //   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
@@ -59,10 +60,19 @@ export const CI_WORKFLOW = "ci.yml";
 export const HOLD_LABEL = "hold";
 /** The label Bryce adds in person to let a PR that edits the agent harness land (the config row). */
 export const CONFIG_LABEL = "config-ok";
-/** The paths whose edit needs CONFIG_LABEL: the hooks, the settings and the workflows that enforce every other rule. */
-export const CONFIG_PATH = /^(\.claude\/hooks\/|\.claude\/settings\.json$|\.github\/workflows\/|\.githooks\/)/;
+/** The paths whose edit needs CONFIG_LABEL: the hooks, settings, workflows and actions that enforce every other rule,
+ *  the CI tools that compute this gate and the dispatcher, the MCP and hook tooling, the generated-path list, the
+ *  package scripts, every host's hook and agent config, the tracked memory and the issue templates. */
+export const CONFIG_PATH = new RegExp("^(" + [
+  "\\.claude/hooks/", "\\.claude/settings(\\.local)?\\.json$", "\\.claude/agents/", "\\.claude/memory/",
+  "\\.github/workflows/", "\\.github/actions/", "\\.github/ISSUE_TEMPLATE/", "\\.githooks/", "\\.mcp\\.json$",
+  "tools/ci/", "tools/hooks/", "tools/mcp/", "tools/lib/generated-paths\\.mjs$", "package\\.json$",
+  "\\.cursor/hooks", "\\.codex/hooks",
+].join("|") + ")");
 export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
 export const configFiles = (files) => (files || []).filter(isConfigPath);
+/** The paths a pulls/<n>/files or compare row names: `filename`, and `previous_filename` for a rename. Pure. */
+export const filePaths = (rows) => (rows || []).flatMap((f) => [f?.filename, f?.previous_filename]).filter(Boolean);
 /** Row order, which is also print order. */
 export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "gen", "ratchets"]);
 /** The rows `--trusted` evaluates: none of them runs code from the PR. */
@@ -81,27 +91,33 @@ export function openVerdict(pull) {
   return row(true, "open and ready for review");
 }
 
-/** hold: no `hold` label, and (when the PR's label events are given) a hold the OWNER set in person was lifted by his
- *  own click: the newest `labeled hold` passing byOwner with the newest `unlabeled hold` not passing it is still held.
- *  An agent may lift a hold an agent set. Labels may be strings or `{ name }` objects (the API's shape); `events`
+/** hold: no `hold` label, and (when the PR's label events are given) the `hold` events walked in order (created_at,
+ *  then list order): an owner's in-person `labeled` sets a hold that only a LATER owner `unlabeled` clears; nothing
+ *  anyone else does in between clears it. Labels may be strings or `{ name }` objects (the API's shape); `events`
  *  null skips the provenance half (pure callers without events). Pure. */
 export function holdVerdict(labels, events = null, owner = OWNER) {
   const names = (labels || []).map((l) => String(typeof l === "string" ? l : l?.name || "").toLowerCase());
   if (names.includes(HOLD_LABEL)) return row(false, `the \`${HOLD_LABEL}\` label is set: whoever set it removes it; one ${owner} set, only his own click`);
   const at = (e) => Date.parse(e?.created_at || "") || 0;
-  const newest = (kind) => labelEvents(events, HOLD_LABEL).filter((e) => e.event === kind).reduce((best, e) => (!best || at(e) >= at(best) ? e : best), null);
-  const set = newest("labeled"), lifted = newest("unlabeled");
-  if (set && byOwner(set, owner) && lifted && !byOwner(lifted, owner)) {
-    return row(false, `hold set by Bryce was removed by an agent (set by ${owner} at ${set.created_at || "?"}, unlabeled by ${describeActor(lifted)} at ${lifted.created_at || "?"}): still held until ${owner} removes it himself`);
+  const walk = labelEvents(events, HOLD_LABEL).map((e, i) => ({ e, i })).sort((a, b) => at(a.e) - at(b.e) || a.i - b.i).map((x) => x.e);
+  let ownerHold = null, lifted = null;
+  for (const e of walk) {
+    if (e.event === "labeled" && byOwner(e, owner)) ownerHold = e;
+    else if (e.event === "unlabeled") { lifted = e; if (ownerHold && byOwner(e, owner)) ownerHold = null; }
+  }
+  if (ownerHold) {
+    return row(false, `hold set by ${owner} at ${ownerHold.created_at || "?"} was not removed by ${owner} himself (last unlabel: ${lifted ? `${describeActor(lifted)} at ${lifted.created_at || "?"}` : "none recorded"}): still held until he removes it`);
   }
   return row(true, lifted ? `no \`${HOLD_LABEL}\` label (last removed by ${describeActor(lifted)})` : `no \`${HOLD_LABEL}\` label`);
 }
 
 /** config: a diff touching a CONFIG_PATH needs the `config-ok` label whose newest `labeled` event is the owner's own
- *  click; a diff touching none passes. `files` are the PR's changed paths (the pulls/<n>/files endpoint). Pure. */
-export function configVerdict(files, labels, events = null, owner = OWNER) {
+ *  click; a diff touching none passes. `files` are the PR's changed paths (filePaths over pulls/<n>/files). `push`
+ *  (configPushState) binds the label to the head: "after" (a CONFIG_PATH push came after the label) fails, "unknown"
+ *  waits; null skips the binding (pure callers only). Pure. */
+export function configVerdict(files, labels, events = null, owner = OWNER, push = null) {
   const touched = configFiles(files);
-  if (!touched.length) return row(true, `no hook, settings, workflow or githook path in the diff (${(files || []).length} file(s))`);
+  if (!touched.length) return row(true, `no config path (harness, CI tools, agent config) in the diff (${(files || []).length} file(s))`);
   const shown = touched.slice(0, 4).join(", ") + (touched.length > 4 ? ", …" : "");
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
   const last = newestLabelEvent(events, CONFIG_LABEL);
@@ -109,17 +125,52 @@ export function configVerdict(files, labels, events = null, owner = OWNER) {
   if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
     return row(false, `needs ${CONFIG_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (the diff edits ${shown})`);
   }
-  return row(true, `${CONFIG_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}`);
+  if (push?.state === "after") return row(false, `needs a fresh ${CONFIG_LABEL} from ${owner}: ${push.evidence} after his label at ${last.created_at || "?"} (remove and re-add it)`);
+  if (push?.state === "unknown") return { ...row(false, `${CONFIG_LABEL} from ${owner} found, head push not resolved yet: ${push.evidence}`), pending: true };
+  return row(true, `${CONFIG_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
 }
 
-/** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan at all passes. Pure. */
-export function planRow(body) {
+/**
+ * When did the head get pushed relative to the owner's `config-ok` at `labelAt`? Reads ci.yml's pull_request runs of
+ * this PR (server timestamps; a commit date can say anything). The head is covered when the label is newer than the
+ * head's first run. Otherwise the head at label time is the head of the newest run created before the label, and the
+ * compare from it to the head must touch no CONFIG_PATH.
+ * → { state: "covered"|"after"|"unknown", evidence }. Side effects only through `request`.
+ */
+export function configPushState({ pr, head, headRef, labelAt, request }) {
+  const t = (iso) => Date.parse(iso || "") || 0;
+  const L = t(labelAt);
+  if (!L) return { state: "unknown", evidence: "no config-ok label time" };
+  const runs = listAll(`actions/workflows/${CI_WORKFLOW}/runs?event=pull_request&branch=${encodeURIComponent(headRef || "")}`, request, (j) => j?.workflow_runs, 10);
+  if (runs.error) return { state: "unknown", evidence: `${CI_WORKFLOW} runs: ${runs.error}` };
+  const mine = runs.rows.filter((w) => (w?.pull_requests || []).some((p) => Number(p?.number) === Number(pr)) && t(w.created_at));
+  const onHead = mine.filter((w) => String(w.head_sha || "").toLowerCase() === head);
+  if (!onHead.length) return { state: "unknown", evidence: `no ${CI_WORKFLOW} pull_request run of PR #${pr} on ${head.slice(0, 8)} yet` };
+  const pushedAt = Math.min(...onHead.map((w) => t(w.created_at)));
+  if (L > pushedAt) return { state: "covered", evidence: `labelled after the head ${head.slice(0, 8)} was pushed` };
+  const before = mine.filter((w) => t(w.created_at) < L).sort((a, b) => t(b.created_at) - t(a.created_at))[0];
+  if (!before) return { state: "after", evidence: `no run of PR #${pr} predates the label, so the head ${head.slice(0, 8)} was pushed` };
+  const from = String(before.head_sha || "").toLowerCase();
+  const cmp = request(`compare/${encodeURIComponent(from)}...${encodeURIComponent(head)}`);
+  if (cmp.error) return { state: "unknown", evidence: `compare ${from.slice(0, 8)}...${head.slice(0, 8)}: ${cmp.error}` };
+  const files = cmp.json?.files;
+  if (!Array.isArray(files) || files.length >= 300) return { state: "after", evidence: `the compare ${from.slice(0, 8)}...${head.slice(0, 8)} is unreadable or truncated, so a push` };
+  const hit = configFiles(filePaths(files));
+  return hit.length
+    ? { state: "after", evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
+    : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no config path` };
+}
+
+/** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan fails (skill steward
+ *  §Open: every agent PR carries one), except on a fold bot's PR (`author` a `*[bot]` login). Pure. */
+export function planRow(body, author = "") {
   const p = planVerdict(body);
+  if (p.state === "none" && !/\[bot\]$/.test(String(author || ""))) return row(false, "no ## Plan checklist in the body (skill steward §Open) — add the template's Plan and close it");
   if (p.state === "open") {
     const shown = p.open.slice(0, 3).map((t) => `"${t}"`).join(", ");
     return row(false, `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why`);
   }
-  return row(true, p.state === "none" ? "no ## Plan checklist in the body" : `Plan closed (${p.items} items)`);
+  return row(true, p.state === "none" ? "no ## Plan checklist in the body (a fold bot's PR)" : `Plan closed (${p.items} items)`);
 }
 
 /**
@@ -290,8 +341,9 @@ export function ciSuitesFor(sha, request) {
   return { suites };
 }
 
-/** Every page of a list endpoint through `request` → { rows } | { error }. */
-function listAll(pathQs, request, pick = (j) => j, maxPages = 30) {
+/** Every page of a list endpoint through `request` → { rows } | { error }. A full last allowed page is an error
+ *  (fail closed): on an oldest-first list the rows past it are the newest ones. */
+export function listAll(pathQs, request, pick = (j) => j, maxPages = 30) {
   const out = [];
   for (let page = 1; page <= maxPages; page++) {
     const r = request(`${pathQs}${pathQs.includes("?") ? "&" : "?"}per_page=100&page=${page}`);
@@ -299,9 +351,9 @@ function listAll(pathQs, request, pick = (j) => j, maxPages = 30) {
     const batch = pick(r.json);
     const rows = Array.isArray(batch) ? batch : [];
     out.push(...rows);
-    if (rows.length < 100) break;
+    if (rows.length < 100) return { rows: out };
   }
-  return { rows: out };
+  return { error: `more than ${maxPages} pages of 100: truncated, refusing to judge a partial list` };
 }
 
 /**
@@ -324,7 +376,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const ev = listAll(`issues/${pr}/events`, request, (j) => j, 10);
   if (ev.error) return { error: `events of PR #${pr}: ${ev.error}` };
   rows.hold = holdVerdict(pull.labels, ev.rows, owner);
-  rows.plan = planRow(pull.body);
+  rows.plan = planRow(pull.body, pull.user?.login || "");
   if (!head) return { error: `PR #${pr}: no head sha` };
   const checks = checkRunsFor(head, request);
   if (checks.error) return { error: `check-runs on ${head.slice(0, 8)}: ${checks.error}` };
@@ -333,7 +385,11 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
   const files = listAll(`pulls/${pr}/files`, request);
   if (files.error) return { error: `files of PR #${pr}: ${files.error}` };
-  rows.config = configVerdict(files.rows.map((f) => f?.filename), pull.labels, ev.rows, owner);
+  const changed = filePaths(files.rows);
+  const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
+  const needsPush = configFiles(changed).length && cfgLast?.event === "labeled" && byOwner(cfgLast, owner);
+  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
+  rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
   let tip = "";
   if (!rows.open.ok) {
     for (const k of order.filter((r) => r === "gen" || r === "ratchets")) rows[k] = row(false, "not evaluated: the PR is not open and ready");
@@ -371,9 +427,9 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
   (GH_TOKEN / GITHUB_TOKEN or \`gh auth token\`). Rows, each printed as \`= gate <row>: ok|FAIL <reason>\`, then one
   final \`= merge-gate passed|refused …\` line (the check title):
     open (open, not a draft, head = --sha when given), hold (no \`hold\` label; a hold ${OWNER} set in person is lifted
-    only by his own click, an agent's hold by anyone), plan (Plan closed; \`land:\` items exempt), ci (\`CI\` success on
-    the head), config (a diff touching .claude/hooks/**, .claude/settings.json, .github/workflows/** or .githooks/** needs
-    \`${CONFIG_LABEL}\` added by ${OWNER} in person), gen (clean merge onto the current base tip + gen:check), ratchets (on
+    only by a later click of his own, an agent's hold by anyone), plan (Plan present and closed; \`land:\` items exempt), ci (\`CI\` success on
+    the head), config (a diff touching a config path — harness, CI tools, agent config; see CONFIG_PATH — needs
+    \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), gen (clean merge onto the current base tip + gen:check), ratchets (on
     that merge result).
   --trusted: only the rows that run no PR code (open, hold, plan, ci, config); land.yml's trusted-rows job.
   A row still waiting on CI prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other row ok, CI not
