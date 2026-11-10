@@ -5723,6 +5723,7 @@
         "tests/unit/data-api-status.test.mjs"
       ],
       "schedule": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "sessionResult": [
@@ -6178,6 +6179,9 @@
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "gapLimitMs": [
+        "tests/unit/telemetry-trace.test.mjs"
+      ],
+      "hasDrs": [
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "isGap": [

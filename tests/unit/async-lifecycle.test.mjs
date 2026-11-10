@@ -689,3 +689,63 @@ test('same-size voice-list replacements refresh both settings selectors', () => 
   wired.get('as-radio').write('off');
   for(const id of ['as-v-radio','as-v-announcer']) assert.ok(nodes.get(id).children.flatMap(o=>o.children || [o]).some(o=>o.value==='Replacement'),id);
 });
+
+// W23 #4: the badge used a guessed length (race 4 h, others 2 h) though OpenF1
+// sends date_end. The window is OpenF1's own: start − 30 min … end + 30 min.
+test("LIVE badge window is date_start − 30 min to date_end + 30 min when date_end is known", () => {
+  const live = liveMergeHelpers();
+  const meta = { type: "Practice", dateStart: "2026-11-08T14:00:00Z", dateEnd: "2026-11-08T15:00:00Z" };
+  const at = (iso) => live._sessionStatus(meta, Date.parse(iso));
+  assert.equal(at("2026-11-08T13:29:00Z"), "UPCOMING");
+  assert.equal(at("2026-11-08T13:31:00Z"), "LIVE", "OpenF1 locks out 30 min before the start");
+  assert.equal(at("2026-11-08T15:29:00Z"), "LIVE");
+  assert.equal(at("2026-11-08T15:31:00Z"), "COMPLETED", "a 1 h session is over at end + 30 min, not start + 2 h");
+  const race = { type: "Race", dateStart: "2026-11-08T17:00:00Z", dateEnd: "2026-11-08T19:00:00Z" };
+  assert.equal(live._sessionStatus(race, Date.parse("2026-11-08T19:45:00Z")), "COMPLETED", "not the 4 h guess");
+  assert.equal(live._sessionTimeLabel(meta, "LIVE", (v) => v, Date.parse("2026-11-08T13:45:00Z")),
+    "Starts 2026-11-08T14:00:00Z", "inside the pre-start window the time still reads Starts");
+});
+
+test("mapSession carries OpenF1's date_end", async () => {
+  const h = dataApiHarness([[{ session_key: 11412, meeting_key: 1299, session_name: "Race", session_type: "Race",
+    date_start: "2026-11-08T17:00:00+00:00", date_end: "2026-11-08T19:00:00+00:00", year: 2026 }]]);
+  const s = await h.api.latestSession(0);
+  assert.equal(s.dateEnd, "2026-11-08T19:00:00+00:00");
+});
+
+test("a COMPLETED session's first LIVE build reads the cached snapshots, and their cursor seeds the deltas", async () => {
+  const older = "2026-07-26T14:43:00Z", newer = "2026-07-26T14:44:00Z";
+  const h = dataApiHarness([
+    [{ driver_number: 44, position: 1, date: older }, { driver_number: 4, position: 2, date: newer }],
+    [{ driver_number: 44, gap_to_leader: 0, date: older }, { driver_number: 4, gap_to_leader: 1.5, date: newer }],
+    [], [],
+  ]);
+  const live = liveMergeHelpers();
+  const state = { positionCursor: null, intervalCursor: null, positions: new Map(), intervals: {} };
+  let feed = live._liveFeedRequests(h.api, 7, state, "COMPLETED");
+  live._mergePositionBatch(state, await feed.position);
+  live._mergeIntervalBatch(state, await feed.interval);
+  assert.equal(h.calls[0], "https://api.openf1.org/v1/position?session_key=7", "the snapshot URL (the cached reader)");
+  assert.equal(h.calls[1], "https://api.openf1.org/v1/intervals?session_key=7");
+  assert.equal(state.positionCursor, newer, "the snapshot seeds the position cursor");
+  assert.equal(state.intervalCursor, newer, "the snapshot seeds the interval cursor");
+  assert.equal(state.positions.size, 2);
+  // A rebuild inside the TTL is served from the cache: no new download.
+  const again = live._liveFeedRequests(h.api, 7, { positionCursor: null, intervalCursor: null }, "COMPLETED");
+  await again.position; await again.interval;
+  assert.equal(h.calls.length, 2, "a second build of a finished session does not re-download the whole session");
+  // Later refreshes are deltas from the seeded cursor.
+  feed = live._liveFeedRequests(h.api, 7, state, "COMPLETED");
+  await feed.position; await feed.interval;
+  assert.equal(h.calls[2], "https://api.openf1.org/v1/position?session_key=7&date%3E=2026-07-26T14%3A44%3A00Z");
+  assert.equal(h.calls[3], "https://api.openf1.org/v1/intervals?session_key=7&date%3E=2026-07-26T14%3A44%3A00Z");
+});
+
+test("a LIVE (running) session never reads the cached snapshot", async () => {
+  const h = dataApiHarness([[], []]);
+  const live = liveMergeHelpers();
+  const feed = live._liveFeedRequests(h.api, 8, { positionCursor: null, intervalCursor: null }, "LIVE");
+  await feed.position; await feed.interval;
+  assert.deepEqual(h.sets, [], "delta reads stay uncached");
+  assert.equal(h.calls.length, 2);
+});
