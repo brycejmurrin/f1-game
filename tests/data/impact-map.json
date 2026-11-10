@@ -2122,14 +2122,20 @@
     },
     "js/camera/offsets.js": {
       "apply": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "applyPreset": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
+      "applyToAllModes": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
       "bindContext": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-tuner-a11y.test.mjs"
       ],
@@ -2152,6 +2158,7 @@
         "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "copyFrom": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "cornerHang": [
@@ -2163,6 +2170,7 @@
       ],
       "count": [
         "tests/specs/camera-tuner.spec.js",
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "countGlobal": [
@@ -2198,6 +2206,15 @@
       "getScoped": [
         "tests/unit/camera-tuner-a11y.test.mjs"
       ],
+      "importCars": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
+      "importGlobal": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
+      "importModes": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
       "importPack": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
@@ -2206,10 +2223,22 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
+      "importTracks": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
       "load": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/light-grid.test.mjs"
+      ],
+      "loadCar": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
+      "loadGlobal": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
+      "loadTrack": [
+        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "persist": [
         "tests/unit/camera-defaults.test.mjs"
@@ -2218,11 +2247,19 @@
         "tests/unit/cam-context-alloc.test.mjs"
       ],
       "reset": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "resetAll": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "resetGlobal": [
+        "tests/unit/cam-context-alloc.test.mjs"
+      ],
+      "resetScoped": [
+        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "rollTarget": [
         "tests/unit/camera-defaults.test.mjs"
@@ -2235,10 +2272,12 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "setGlobal": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "setScoped": [
+        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-tuner-a11y.test.mjs"
       ],
