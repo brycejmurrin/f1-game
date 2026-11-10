@@ -1,11 +1,11 @@
 #!/bin/bash
-# PostToolUse hook for Write/Edit/MultiEdit: tell the agent AT ONCE when an
+# PostToolUse hook for Write/Edit: tell the agent AT ONCE when an
 # edit has a consequence it would otherwise learn about at the gate.
 #
 #   js/**/*.js                    -> node --check (does it still parse?)
 #   tests/specs/*.spec.js,
 #   tests/unit/*.test.{mjs,cjs}   -> is the new file registered (groups.json,
-#                                    docs/TESTING.md §5 row, spec counts)?
+#                                    a header for the generated docs/TESTING-COVERAGE.md row)?
 #   tools/manifest.cjs            -> node tools/gen/gen-shell.mjs --check
 #   tests/groups.json             -> node tools/gen/gen-test-groups.mjs --check
 #   js/lighting/knobs.js          -> node tools/gen/gen-slider-doc.mjs --check
@@ -54,21 +54,21 @@ esac
 
 # A NEW TEST FILE IS THREE REGISTRATIONS, not one (2026-09-24 audit): a group in
 # tests/groups.json (else nothing runs it — test-coverage-audit /
-# prepush-gate-coverage, now in test:guards), a row in the docs/TESTING.md §5
-# coverage table, and the regenerated counts. Say which are missing at the edit,
-# not three failures at the commit.
+# prepush-gate-coverage, now in test:guards), a first-line header the generated
+# docs/TESTING-COVERAGE.md row is read from, and the regenerated page. Say which
+# are missing at the edit, not failures at the commit.
 case "$REL" in
   tests/specs/*.spec.js|tests/unit/*.test.mjs|tests/unit/*.test.cjs)
     BASE=$(basename "$REL"); MISSING=()
     # A file git already tracks passed test:guards at its own commit; only a NEW
     # test file can be unregistered (2026-10-26: 1,154 of 1,187 tracked test files
-    # have no basename in TESTING.md, so the old check warned on every test edit).
+    # had no row, so the old check warned on every test edit).
     if ! git ls-files --error-unmatch -- "$REL" >/dev/null 2>&1; then
       AUDIT_RC=0; AUDIT_OUT=$(node tools/ci/test-coverage-audit.mjs 2>&1) || AUDIT_RC=$?
       if [ "$AUDIT_RC" -ne 0 ] && printf '%s' "$AUDIT_OUT" | grep -qF "$BASE"; then
         MISSING+=("add it to a group in tests/groups.json (a spec: one topical browser group; a unit file: toolingFast or a ci.yml node group), then \`node tools/gen/gen-test-groups.mjs\`")
       fi
-      grep -qF "$BASE" docs/TESTING.md 2>/dev/null || MISSING+=("give it a row in the docs/TESTING.md §5 coverage table (what it covers)")
+      grep -qF "$BASE" docs/TESTING-COVERAGE.md 2>/dev/null || MISSING+=("regenerate its docs/TESTING-COVERAGE.md row: give the file a one-sentence header comment (what it covers), then \`node tools/docs/gen-coverage-table.mjs\` (npm run gen)")
     fi
     # (No "declare > 180 s" advice: that used to tell authors how to opt a
     # spec OUT of the change-aware gate. Since 2026-10-04 a declared-slow
@@ -85,7 +85,7 @@ case "$REL" in
     else say "manifest.cjs changed: the shell is now STALE — run \`node tools/gen/gen-shell.mjs\` (or npm run gen) before testing"; fi ;;
   tests/groups.json)
     if node tools/gen/gen-test-groups.mjs --check >/dev/null 2>&1; then say "groups.json: package.json test:* scripts are in sync (tooling-fast reads groups.json at runtime)"
-    else say "groups.json changed: package.json test:* scripts are STALE — finish the source group in tests/groups.json, run \`node tools/gen/gen-test-groups.mjs\`, then update the docs/TESTING.md group row"; fi ;;
+    else say "groups.json changed: package.json test:* scripts are STALE — finish the source group in tests/groups.json, run \`node tools/gen/gen-test-groups.mjs\` (npm run gen)"; fi ;;
   js/lighting/knobs.js)
     if node tools/gen/gen-slider-doc.mjs --check >/dev/null 2>&1; then say "knobs.js: docs/LIGHTING-TUNER-SLIDERS.md is in sync"
     else say "knobs.js changed: docs/LIGHTING-TUNER-SLIDERS.md is STALE — run \`node tools/gen/gen-slider-doc.mjs\` (npm run gen:docs)"; fi ;;

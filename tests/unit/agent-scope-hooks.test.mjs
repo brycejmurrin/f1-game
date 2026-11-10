@@ -22,15 +22,25 @@ const bashCmd = (command) => ({ tool_name: "Bash", tool_input: { command } });
 const edit = (file) => ({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, file), old_string: "a", new_string: "b" } });
 const frontmatter = (text) => /^---\n([\s\S]*?)\n---/.exec(text)?.[1] || "";
 
-test("readonly-bash.sh refuses every write shape a reporter never needs and passes reads", () => {
+test("readonly-bash.sh is an allowlist of reads: write shapes, unknown programs and writes outside scratch/artifacts are refused", () => {
   const refuse = ["echo x > js/core/log.js", "echo x >> docs/PHYSICS.md", "cat a | tee b", "sed -i s/a/b/ js/core/log.js", "perl -pi -e s/a/b/ x", "mv a b", "cp a b",
     "rm -rf scratch/x", "git add .", "git commit -m x", "git push", "git checkout -- x", "git worktree add x", "git stash", "git reset --hard",
     "node -e \"require('fs').writeFileSync('a','b')\"", "python3 -c \"open('a','w').write('x')\"", "npm run gen", "node tools/gen/gen-shell.mjs", "npm install",
-    "ls && echo x > y", "git -C . commit -m x"];
+    "ls && echo x > y", "git -C . commit -m x",
+    // spellings the old denylist let through
+    "touch js/core/log.js", "mkdir js/newdir", "git branch feature", "git branch -D x", "dd if=/dev/zero of=js/x bs=1 count=1", "find . -name x -delete",
+    "find . -exec rm {} ;", "curl -o js/core/log.js https://example.com", "curl -X POST https://api.github.com/x", "gh pr edit 1 --add-label land", "gh pr merge 1",
+    "gh api -X PATCH repos/a/b/pulls/1", "gh api repos/a/b/issues/1/labels -f labels[]=x", "wget https://example.com/x", "git tag v1", "git config user.name x",
+    "ln -s a b", "chmod +x a", "install a b", "sort -o js/x a", "bash -c 'echo x > js/a'", "awk 'BEGIN{system(\"rm x\")}'", "git diff --output=js/x",
+    "node tools/check/ratchets.mjs --update", "unknowncmd x", "echo 'unterminated"];
   const allow = ["ls -la", "git log --oneline -5 -- js/", "git show HEAD:js/core/log.js", "grep -rn foo js/", "node --test tests/unit/ratchets.test.mjs", "cat a 2>&1",
     "ls >/dev/null 2>&1", "git log --format='%H -> %s'", "git diff HEAD~1", "wc -l js/core/log.js", "node tools/ci/verify-change.mjs --fast --json",
-    "echo x 2>/dev/null", "git worktree list", "git blame js/core/log.js", "node tools/check/bloat-scan.mjs --json js/track/"];
-  for (const c of refuse) { const r = sh("tools/hooks/readonly-bash.sh", bashCmd(c)); assert.equal(r.status, 2, `must refuse: ${c}\n${r.stderr}`); assert.match(r.stderr, /read-only reporter/); }
+    "echo x 2>/dev/null", "git worktree list", "git blame js/core/log.js", "node tools/check/bloat-scan.mjs --json js/track/",
+    "echo x > scratch/review/notes.md", "mkdir -p artifacts/report", "grep -n x js/core/log.js | tee artifacts/hits.txt", "git branch -a", "git branch --show-current",
+    "gh pr view 5 --json title", "gh run list --limit 5", "gh api repos/a/b/pulls/1", "curl -sS https://example.com", "find . -name '*.js' | head",
+    "export APEX_SUBAGENT=1\nnode tools/ci/pick-tests.mjs", "cd js && grep -rn Tracks .", "git fetch origin main", "git config --get remote.origin.url",
+    "echo 'git commit -m x > y' | wc -c", "cat <<'EOF' | wc -l\nrm -rf /\nEOF", "jq . package.json", "for f in a b; do cat $f; done"];
+  for (const c of refuse) { const r = sh("tools/hooks/readonly-bash.sh", bashCmd(c)); assert.equal(r.status, 2, `must refuse: ${c}\n${r.stderr}`); assert.match(r.stderr, /read-only reporter|fail closed/); }
   for (const c of allow) { const r = sh("tools/hooks/readonly-bash.sh", bashCmd(c)); assert.equal(r.status, 0, `must allow: ${c}\n${r.stderr}`); }
   assert.equal(sh("tools/hooks/readonly-bash.sh", "junk").status, 2, "fail closed");
   assert.equal(sh("tools/hooks/readonly-bash.sh", { tool_input: {} }).status, 0, "empty command");
@@ -81,50 +91,100 @@ test("every reporter card wires readonly-bash.sh on Bash; the two writers wire t
   for (const gone of ["READONLY_AGENTS", "SURVEYOR_OK", "REPORTER_OK", "live_playwright_in", "shellparse", "ratchet_raise"]) assert.ok(!pf.includes(gone), `protect-files.py still has ${gone}`);
 });
 
-test("protect-files.py: generated files, gen-shell blocks, package.json test scripts and the worktree contract; the hatch; a subagent cannot lift it", () => {
+test("protect-files.py: generated files (derived list), generated blocks, package.json test scripts, the worktree contract, guards and the hatch", () => {
   const pf = (payload) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], { input: JSON.stringify(payload), encoding: "utf8" });
-  for (const f of ["version.json", "js/roster.js", "tools/README.md", "tools/carview.html", "CHANGELOG.md", "docs/agent-index.json", "tests/data/impact-map.json",
-    "tests/data/ratchets.json", "tools/shot/scenery-locations.json"]) {
-    const r = pf(edit(f)); assert.equal(r.status, 2, `${f} is generated`); assert.match(r.stderr, /GENERATED/);
+  for (const f of ["version.json", "js/roster.js", "tools/README.md", "CHANGELOG.md", "docs/agent-index.json", "tests/data/impact-map.json",
+    "tests/data/ratchets.json", "tools/shot/scenery-locations.json", "js/track/circuit-meta.js", "cockpit-view.html", ".cursor/rules/claude-config.mdc",
+    "locales/en.json", "locales/manifest.json", "docs/AGENT-HOOKS.md", "docs/TESTING-COVERAGE.md", "docs/agent-output/catalog.json"]) {
+    const r = pf(edit(f)); assert.equal(r.status, 2, `${f} is generated\n${r.stderr}`); assert.match(r.stderr, /GENERATED/);
   }
   assert.equal(pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, "tests/data/ratchets.d", "cursor--x.json"), content: "{}" } }).status, 2, "a ratchet fragment is tool-written");
-  for (const f of ["docs/PHYSICS.md", "js/core/log.js", "tests/groups.json", "css/a11y-loading.css"]) assert.equal(pf(edit(f)).status, 0, `${f} is authored`);
+  assert.equal(pf({ tool_name: "NotebookEdit", tool_input: { notebook_path: path.join(ROOT, "version.json"), new_source: "x" } }).status, 2, "NotebookEdit-shaped input");
+  for (const f of ["docs/PHYSICS.md", "js/core/log.js", "tests/groups.json", "css/a11y-loading.css", ".cursor/rules/apex-shared.mdc"]) assert.equal(pf(edit(f)).status, 0, `${f} is authored`);
+  // a generated doc block: prose outside it is authored, the block is not
+  const doc = path.join(ROOT, "docs/DEBUG-HOOKS.md");
+  const text = fs.readFileSync(doc, "utf8");
+  const inBlock = text.slice(text.indexOf("<!-- GENERATED: hooks-table -->"), text.indexOf("<!-- /GENERATED -->")).split("\n")[3];
+  assert.ok(inBlock && text.indexOf(inBlock) === text.lastIndexOf(inBlock), "fixture: a unique line inside the generated block");
+  assert.equal(pf({ tool_name: "Edit", tool_input: { file_path: doc, old_string: inBlock, new_string: inBlock + " x" } }).status, 2, "a generated doc block");
+  const prose = text.split("\n").find((l) => l.length > 40 && text.indexOf(l) < text.indexOf("<!-- GENERATED") && text.indexOf(l) === text.lastIndexOf(l));
+  assert.equal(pf({ tool_name: "Edit", tool_input: { file_path: doc, old_string: prose, new_string: prose + " x" } }).status, 0, "prose outside the block");
   // index.html: a hand edit outside the @gen-shell blocks passes in the MAIN checkout, a block edit never does
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const tag = html.match(/<script [^>]*src=["']?js\/[^"'>\s]+[^>]*><\/script>/)?.[0];
   assert.ok(tag, "fixture: a script tag inside the gen-shell block");
   const blockEdit = pf({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, "index.html"), old_string: tag, new_string: "" } });
-  assert.equal(blockEdit.status, 2); assert.match(blockEdit.stderr, /@gen-shell block|shared-contract/);
+  assert.equal(blockEdit.status, 2); assert.match(blockEdit.stderr, /generated block|shared-contract/);
   const pkg = path.join(ROOT, "package.json");
   const mangled = JSON.parse(fs.readFileSync(pkg, "utf8")); mangled.scripts["test:guards"] = "echo nope";
   const w = pf({ tool_name: "Write", tool_input: { file_path: pkg, content: JSON.stringify(mangled, null, 2) } });
   assert.equal(w.status, 2); assert.match(w.stderr, /test:\* scripts are GENERATED|shared-contract/);
-  // a linked worktree never edits a shared-contract file; the main checkout may
+  // a linked worktree never edits a shared-contract file (matched by repo-relative path); the main checkout may
   const linked = fs.statSync(path.join(ROOT, ".git")).isFile();
   const shared = pf(edit("tools/manifest.cjs"));
   if (linked) { assert.equal(shared.status, 2); assert.match(shared.stderr, /shared-contract file/); } else assert.equal(shared.status, 0);
-  // the hatch is for a MAIN session's assigned edit; a subagent cannot create it
-  const hatch = { tool_name: "Write", tool_input: { file_path: path.join(ROOT, ".claude/allow-protected"), content: "" } };
-  assert.equal(pf({ ...hatch, agent_id: "a1" }).status, 2);
-  assert.equal(pf(hatch).status, 0);
-  assert.equal(pf({ tool_name: "Bash", tool_input: { command: "echo x > version.json" } }).status, 0, "Bash is not this hook's business any more (gen:check is the backstop)");
+  if (fs.existsSync(path.join(ROOT, "desktop/package.json"))) assert.equal(pf(edit("desktop/package.json")).status, 0, "a basename twin is not the shared file");
+  // a subagent never writes a guard or a hatch; the main session may
+  for (const f of [".claude/allow-protected", ".claude/allow-context-cap", ".claude/hooks/bash-guard.py", ".claude/settings.json", ".githooks/pre-commit",
+    "tools/hooks/readonly-bash.sh", ".mcp.json", ".cursor/hooks.json", ".codex/hooks/shell-guard.sh"]) {
+    const r = pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, f), content: "" }, agent_id: "a1" });
+    assert.equal(r.status, 2, `subagent must not write ${f}`); assert.match(r.stderr, /subagent never writes/);
+  }
+  assert.equal(pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, ".claude/allow-protected"), content: "" } }).status, 0, "the main session creates its hatch");
+  assert.equal(pf({ tool_name: "Bash", tool_input: { command: "echo x > version.json" } }).status, 0, "Bash is bash-guard's business");
   const junk = spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], { input: "junk", encoding: "utf8" });
   assert.equal(junk.status, 2, "fail closed");
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const groups = settings.hooks.PreToolUse.filter((g) => g.hooks.some((h) => h.command.includes("protect-files.sh")));
-  assert.deepEqual(groups.map((g) => g.matcher), ["Write|Edit|MultiEdit|NotebookEdit"], "protect-files runs on the edit tools only");
+  assert.equal(groups.length, 1, "protect-files runs on the edit tools only");
+  for (const t of ["Write", "Edit", "NotebookEdit"]) assert.ok(new RegExp(`^(${groups[0].matcher})$`).test(t), `matcher selects ${t}`);
+});
+
+test("protect-files.py: the hatch lifts the rules for the MAIN session only, and says so on every guarded call; an unloadable list refuses", () => {
+  // A throwaway copy of the inputs the hook reads, so the hatch never exists in the real checkout.
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "pf-hatch-"));
+  try {
+    spawnSync("git", ["init", "-q", dir]);
+    for (const rel of ["tools/lib/generated-paths.mjs", "tools/gen/targets.mjs", "tools/gen/gen-shell.mjs", "tools/gen/gen-cursor-rules.mjs"]) {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.copyFileSync(path.join(ROOT, rel), path.join(dir, rel));
+    }
+    const gens = fs.readFileSync(path.join(ROOT, "tools/gen/targets.mjs"), "utf8").match(/GENERATORS = \[([\s\S]*?)\]/)[1].match(/"([^"]+)"/g).map((x) => x.slice(1, -1));
+    for (const g of gens) { const rel = path.join("tools/gen", g); fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.copyFileSync(path.join(ROOT, rel), path.join(dir, rel)); }
+    fs.writeFileSync(path.join(dir, "version.json"), "{}\n");
+    const pf = (extra = {}) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")],
+      { input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: path.join(dir, "version.json"), old_string: "{}", new_string: "[]" }, ...extra }), encoding: "utf8" });
+    assert.equal(pf().status, 2, "no hatch: refused");
+    fs.mkdirSync(path.join(dir, ".claude")); fs.writeFileSync(path.join(dir, ".claude/allow-protected"), "");
+    const lifted = pf();
+    assert.equal(lifted.status, 0, lifted.stderr);
+    assert.match(JSON.parse(lifted.stdout).hookSpecificOutput.additionalContext, /allow-protected is ACTIVE.*lifted: version\.json is GENERATED/);
+    const other = spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")],
+      { input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: path.join(dir, "notes.md"), content: "x" } }), encoding: "utf8" });
+    assert.match(JSON.parse(other.stdout).hookSpecificOutput.additionalContext, /ACTIVE.*no rule applied/, "every guarded call announces the hatch");
+    assert.equal(pf({ agent_id: "a1" }).status, 2, "the hatch never lifts a rule for a subagent");
+    fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), "export const NOTHING = 1;\n");
+    const broken = pf({ agent_id: "a1" });
+    assert.equal(broken.status, 2); assert.match(broken.stderr, /could not load the generated-file list/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("mcp-browser-guard.sh: a subagent never drives a browser; the main session may; a live Playwright run in this checkout blocks it", async () => {
   const mb = (payload) => sh(".claude/hooks/mcp-browser-guard.sh", payload);
-  for (const p of [{ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }, { tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" },
-    { tool_name: "mcp__apex-tools__apex_eval", agent_type: "reviewer" }, { tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" },
+  for (const p of [{ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }, { tool_name: "mcp__chrome-devtools__new_page", agent_id: "a1" },
+    { tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1", tool_input: { expr: "1" } }, { tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" },
+    { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "shot_survey" } }, { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "no_such_kind" } },
+    { tool_name: "mcp__apex-tools__apex_shot", agent_id: "a1", tool_input: "not json" },
     { tool_name: "mcp__apex-tools__apex_debug_chrome", agent_id: "a1", tool_input: { action: "start" } }, { tool_name: "mcp__plugin_browser-use_browser-use__x", agent_id: "a1" },
     { tool_name: "mcp__browserstack__runBrowserLiveSession", agent_id: "a1" }])
     assert.equal(mb(p).status, 2, JSON.stringify(p));
   for (const p of [{ tool_name: "mcp__playwright-official__browser_navigate" }, { tool_name: "mcp__js-debugger__debugger_state" },
     { tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }, { tool_name: "mcp__apex-tools__apex_debug_chrome", agent_id: "a1", tool_input: { action: "status" } },
-    { tool_name: "mcp__github__get_me", agent_id: "a1" }])
+    { tool_name: "mcp__github__get_me", agent_id: "a1" }, { tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1", tool_input: { expr: "1", vm: true } },
+    { tool_name: "mcp__js-debugger__debugger_node_test", agent_id: "a1" }, { tool_name: "mcp__js-debugger__output_read", agent_id: "a1" },
+    { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "verify_all" } },
+    { tool_name: "mcp__apex-tools__apex_job_start", agent_id: "a1", tool_input: { kind: "verify_change_fast" } },
+    { tool_name: "mcp__apex-tools__apex_eval", agent_type: "reviewer", tool_input: { expr: "1" } },
+    { tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }])
     assert.equal(mb(p).status, 0, JSON.stringify(p));
   assert.equal(mb("junk").status, 2, "fail closed");
   // the settings matcher selects the browser tools and leaves the tree tools alone
@@ -182,6 +242,9 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
   assert.equal(gh("mcp__github__pull_request_read", {}), "allow");
   assert.equal(gh("merge_pull_request", JSON.stringify({ pullNumber: 1 })), "deny", "Cursor's bare name and string input");
   assert.equal(gh("mcp__github__merge_pull_request", "not json"), "deny", "a guarded call with unreadable input");
+  assert.equal(gh("mcp__github__update_pull_request", "not json"), "deny", "an unparsable input on a guarded tool is a deny, never {}");
+  assert.equal(gh("mcp__github__issue_write", "{bad"), "deny");
+  assert.equal(gh("MCP:merge_pull_request", JSON.stringify({ pullNumber: 1 })), "deny", "Cursor's preToolUse spelling");
   assert.equal(sh(".claude/hooks/github-mcp-guard.sh", "junk").status, 2, "fail closed");
   const src = fs.readFileSync(path.join(ROOT, ".claude/hooks/github-mcp-guard.sh"), "utf8");
   for (const gone of ["merge_policy", "receipt", "ready-gate", "APEX_RUN_CANCEL_OK", "APEX_MERGE_DESK"]) assert.ok(!src.includes(gone), `github-mcp-guard.sh still names ${gone}`);

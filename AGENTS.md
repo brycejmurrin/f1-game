@@ -24,7 +24,7 @@ locally: a draft push gets the fast tier plus a selected browser shard on CI, an
 runs a whole group on the pushed branch. Interactive browser pokes (MCP) stay, one browser at a time.
 
 Session rules. The numbers are cited across the repo; a rule marked (hook) is refused by the named hook, whose message
-says what to do instead.
+says what to do instead. Hooks catch accidents; the Deploy-reset ruleset, `.githooks/` and CI are the boundary.
 1. A fresh container is set up by `session-start.sh`; in a total-red run, read the FIRST failure first.
 2. Make all source edits, then verify once.
 3. The local floor before a push: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit). The
@@ -32,13 +32,13 @@ says what to do instead.
 4. Foreground only what takes under 2 minutes and the next step needs; anything longer is ONE background task logging
    to `artifacts/logs/`. Waiting and Monitor recipes: skill `check-changes`.
 5. No local browser test runs (CI runs them). One interactive browser at a time (hook: `mcp-browser-guard.sh`).
-6. Never `pkill -f` or `killall` (hook: `bash-guard.sh`); kill only a PID you listed and launched.
+6. Never kill by name (`pkill`, `killall`, `pgrep … | kill`; hook: `bash-guard.sh`); kill only a PID you launched.
 7. A timeout on a busy box measures the box; triage: skill `check-changes` `references/triage.md`.
 8. On CI, `cancelled` with zero failures is a timeout until proven otherwise, except the designed dedupe: a draft's run
    and its `ready_for_review` run share a group, so the flip cancels the first on the same `head_sha`.
 9. Never widen a tolerance or skip a test to get green. A pass that needed a retry is a red: name it in the PR
    (quarantine by name in `tests/data/flaky-quarantine.json`). Stopping with unverified groups named beats guessing.
-10. A subagent never starts a browser (hooks: `bash-guard.sh`, `mcp-browser-guard.sh`).
+10. A subagent never starts a browser (hooks: `bash-guard.sh`, `mcp-browser-guard.sh`; Claude Code only).
 11. Never hand-edit a generated file (hook: `protect-files.sh`): edit the source, then `npm run gen`. Files in
     `BUILT_PATHS` (`tools/lib/generated-paths.mjs`) are built, never committed: gitignored, built by
     `node tools/gen/ensure-built.mjs`. The list: `.claude/rules/game-code.md`.
