@@ -12,7 +12,7 @@
 var StoppedCars = (function () {
   "use strict";
   const STOP_V = 1.5;   // m/s — slower than any car still racing, the SC train included
-  const smp = {};
+  const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 0 };   // Tracks.sample writes into these arrays
   function scan(cars, track, out) {
     out.length = 0;
     if (!cars || !track || !(track.total > 0) || typeof Tracks === "undefined") return out;
