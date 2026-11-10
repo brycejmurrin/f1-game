@@ -41,15 +41,18 @@ test("ci-cancel-on-close.yml joins ci.yml's PR concurrency group exactly", async
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const ci = fs.readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8");
   const wf = fs.readFileSync(path.join(root, ".github/workflows/ci-cancel-on-close.yml"), "utf8");
-  // ci.yml's group, for a pull_request event, falls through to `github.event.pull_request.head.ref`
-  // after the `ci-` prefix; the cancel workflow must name that exact group or it cancels nothing.
+  // ci.yml's group, for a pull_request event, resolves to `ci-pr-<number>`; the cancel workflow must
+  // name that exact group or it cancels nothing.
   const ciGroup = /^\s+group: (ci-\$\{\{.*\}\})\s*$/m.exec(ci)?.[1] || "";
   assert.match(ciGroup, /^ci-\$\{\{ /, "ci.yml's top-level group still starts `ci-${{`");
-  assert.match(ciGroup, /\|\| github\.event\.pull_request\.head\.ref \|\|/, "ci.yml still resolves a PR run to head.ref");
-  assert.match(wf, /^\s+group: ci-\$\{\{ github\.event\.pull_request\.head\.ref \}\}\s*$/m);
+  assert.ok(ciGroup.includes("|| (github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)) ||"),
+    "ci.yml resolves a PR run to ci-pr-<number>");
+  assert.doesNotMatch(ciGroup, /head\.ref/, "no PR group keyed on a bare branch name");
+  assert.match(wf, /^\s+group: ci-pr-\$\{\{ github\.event\.pull_request\.number \}\}\s*$/m);
+  assert.match(wf, /select\(\.head_repository\.full_name == env\.HEAD_REPO\)/, "the sweep keeps only this PR's head repository");
   assert.match(wf, /^\s+cancel-in-progress: true\s*$/m);
   assert.match(wf, /types: \[closed\]/);
-  assert.match(wf, /actions: write/);
+  assert.match(wf, /^      actions: write$/m, "actions: write on the job only");
   for (const st of ["queued", "in_progress", "pending", "waiting", "requested"])
     assert.match(wf, new RegExp(`\\b${st}\\b`), `straggler sweep covers live status ${st}`);
 });
