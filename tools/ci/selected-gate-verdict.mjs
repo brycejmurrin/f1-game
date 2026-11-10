@@ -28,9 +28,20 @@ export function shardEvidence(junitIn, startedIn) {
   const names = (root, prefix) => {
     try { return fs.readdirSync(root).filter((d) => d.startsWith(prefix)).map((d) => d.slice(prefix.length)); } catch { return []; }
   };
+  // ONE matched artifact is extracted FLAT into the root (no `<artifact-name>/` folder): a single-shard draft leaves
+  // started-in/marker.txt (its content is the shard name) and junit-in/test-results-*/junit.xml. Read that layout as
+  // the one shard, or every single-shard plan reads "no shard left a run-step marker" (#5282, run 42767850104).
+  let started = names(startedIn, STARTED_PREFIX);
+  let flatShard = "";
+  if (started.length === 0) {
+    try { flatShard = fs.readFileSync(path.join(startedIn, "marker.txt"), "utf8").trim(); } catch { /* no flat marker */ }
+    if (flatShard) started = [flatShard];
+  }
+  const junitDirs = names(junitIn, JUNIT_PREFIX).map((shard) => [shard, path.join(junitIn, JUNIT_PREFIX + shard)]);
+  if (junitDirs.length === 0 && flatShard) junitDirs.push([flatShard, junitIn]);
   const junit = [];
-  for (const shard of names(junitIn, JUNIT_PREFIX)) {
-    const stack = [path.join(junitIn, JUNIT_PREFIX + shard)];
+  for (const [shard, dir] of junitDirs) {
+    const stack = [dir];
     let cases = 0;
     while (stack.length) {
       const d = stack.pop();
@@ -44,7 +55,7 @@ export function shardEvidence(junitIn, startedIn) {
     }
     if (cases > 0) junit.push(shard);
   }
-  return { started: names(startedIn, STARTED_PREFIX), junit };
+  return { started, junit };
 }
 
 /**

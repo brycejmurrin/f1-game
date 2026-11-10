@@ -13,7 +13,7 @@ Retired tools confirmed gone: `tools/ci/{fleet-bus,agent-msg,who-is-on-it,fleet-
 
 | class | path:line | what | action |
 |---|---|---|---|
-| STILL-NEEDED (stale) | tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md:34 | The Codex plugin skill (installed via `install-environment.sh`, `plugin-install.sh`) still tells Codex lanes to "use the existing `claude/fleet-bus` branch" for cross-session coordination | Rewrite step 4 as "GitHub issue/PR comments only (docs/WORKERS.md)". This is the highest-impact leftover because it actively steers live Codex lanes |
+| STILL-NEEDED (stale) | tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL:34 | The Codex plugin skill (installed via `install-environment.sh`, `plugin-install.sh`) still tells Codex lanes to "use the existing `claude/fleet-bus` branch" for cross-session coordination | Rewrite step 4 as "GitHub issue/PR comments only (docs/WORKERS.md)". This is the highest-impact leftover because it actively steers live Codex lanes |
 | STALE-DOC | …/f1-agent-coordination/references/transports.md:9-39 | Documents `github-fleet.cjs` writing to `claude/fleet-bus`, and calls `the deleted fleet-bus tool` authoritative (that file is deleted) | Delete the fleet-bus section |
 | DEAD-CODE | github-fleet.cjs (deleted, #3935) (whole) | A bus writer to `claude/fleet-bus` (addresses `merge-desk`, `orchestrator`). Its only callers are its own test (`the old top-level agent-setup test:4`) and transports.md | Delete it, its test cases and the `tools/README.md:631` row (regenerate with `npm run gen`) |
 | DEAD-CODE | …/f1-dev-tools/scripts/agent-readiness.mjs:36,46 | The `githubFleetBus` readiness route and its "fleet message" note | Drop the route and fix `agent-setup.test.mjs:35,45` |
@@ -78,3 +78,5 @@ memory, settings, workflows; worktrees and pycache excluded), .cursor, .codex, .
 line by line; notes, archive, plans and surveys by file and density), tests/ (unit, fixtures, data), .github/ (workflows, labels,
 template), package.json, the remote branch list, all scheduled tasks (enabled filter + first page of all).
 NOT COVERED: js/ (out of scope: game relays), the contents of each docs/archive file, GitHub issues and labels state.
+
+> 2026-11-10 (W17 dead-weight pass): the tools cited here without an extension were deleted; `git log --diff-filter=D -- <path>` recovers them.

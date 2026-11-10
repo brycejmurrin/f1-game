@@ -10,17 +10,23 @@
    sun-bleached pale concrete — the defaults are northern-European and read
    flatly wrong under this sun.
 
-   FRAME NOTE (2026-10-15 survey): the authored fracs below sit on built turns
-   exactly, but the block NAMES run one to two corners off the built lap order
-   (racing = authored + 0.8736): the "Expo '92" block lands on built T13, "Dry
-   Sack" on T5 (y~11 m) while the crest (y~17.5 m) is T6/T7 (the "Turn 7"
-   block). The names are labels only; the geometry is unchanged until the
-   start-line / corner order is re-verified against the OSM trace.
+   FRAME NOTE (2026-11-10, #5078): the line now sits on the real Lorenzo ->
+   Expo '92 straight (def startFrac 0.2169), so racing = authored + 0.7827
+   (def._sceneryShift) and built T1, the first right after the line (racing
+   ~0.087), is the real Curva Expo '92. The authored fracs below still sit on
+   built turns exactly, but the block NAMES are labels from an older corner
+   order, not the built one: "T4, start of the climb" (0.3043) is built T1,
+   "Sito Pons" (0.3563) T2, "Dry Sack" (0.3842) T3, "Turn 7" (0.5228) T4,
+   "Angel Nieto" (0.7123) T6, "Peluqui" (0.8417) T7/T8, "Ferrari" (0.9177) T9,
+   "final right" (0.9517) T10, "T1 Expo '92" (0.0663) T11, and the "Michelin
+   -> Sito Pons stand complex" (block 7, 0.126-0.272) is the terracing down
+   the outside of the start/finish straight itself (racing 0.909-0.055).
+   Renaming the blocks is a separate pass; no geometry moves with a name.
 
    Block -> brief §4 row map (s, side, dist):
      1  palette + helpers                      (§2 palette, §6 modelling notes)
-     2  0.005  -1 20  main start/finish terracing, roofless but one covered bay
-     3  0.010  +1  8  pit + paddock block (the only dense built mass)
+     2  sl(0.005) -1  the line's own extras on block 7's terracing (masts, concourse)
+     3  sl(0.010) +1  pit + paddock block (the only dense built mass)
      4  0.045  -1 32  Expo '92 braking zone: terrace steps + spectator hill
      5  0.0663 +1 14  T1 Curva Expo '92 infield apex (nothing tall)
      6  0.110  -1 45  open country T1 -> Michelin, loose olive scatter
@@ -182,12 +188,13 @@
         }
       };
 
-      // RE-KEYED THROUGH sl(). The start line sits on a straight (def
-      // startFrac; v0 is in a 43 m corner), and
-      // sceneryStartFrac holds the rest of this file on its real corners —
+      // RE-KEYED THROUGH sl(). The start line sits on the real start/finish
+      // straight (def startFrac: the Lorenzo -> Expo '92 run, 230 m along it),
+      // and sceneryStartFrac holds the rest of this file on its real corners —
       // Dry Sack and the stadium section must not travel with the line. The
-      // pit complex and its terracing belong AT the line, so these two blocks
-      // alone are shifted; sl(f) is the authored frac that lands at the line.
+      // pit complex and the line's own furniture belong AT the line, so these
+      // two blocks alone are shifted; sl(f) is the authored frac that lands at
+      // the line (sl(0) = authored 0.2173, 1 m from block 7's 0.2160 stand).
       // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
       // the 4 dp the props were placed against (the unrounded value flips a few
       // K() nodes, so rounding keeps the geometry while a retuned startFrac still
@@ -195,33 +202,27 @@
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
-      // 2. MAIN START/FINISH TERRACING  (0.005, -1, 20)
-      //    A long pale-concrete run facing the pit lane, ROOFLESS for most of
-      //    its length with one covered centre bay over the line; hoarding
-      //    along the full base, armco at the track edge, a camera mast at
-      //    each end.
-      grandstandEx(sl(0.0000), -1, 20, 130, null, null,
-        { roof: "flat", roofCol: CONC, fasciaCol: CONC_ALT, tiers: 2, h: 14 });
-      grandstandEx(sl(0.9600), -1, 20, 110, null, null,
-        { roof: "none", fasciaCol: CONC_ALT, h: 12 });
-      // Third pit-straight bay. Was sl(0.034)→s≈0.160 gap=20 len=110: every
-      // crowdBank riser hit the Expo'92 fold (rejBox) → engine suppressed a
-      // hollow shell. sl(0.0436)→s≈0.17 clears; shorter bay keeps the run
-      // from colliding with the Michelin complex just downstream.
-      grandstandEx(sl(0.0436), -1, 24, 50, null, null,
-        { roof: "none", fasciaCol: CONC_ALT, h: 12 });
-      terrace(sl(0.9180), sl(0.9520), -1, 19, TERR);
-      sponsorHoarding(sl(0.9350), sl(0.0620), -1, 13);
-      guardrail(sl(0.9300), sl(0.0700), -1, 10, ARMCO);
+      // 2. MAIN START/FINISH TERRACING — THE LINE'S OWN EXTRAS  (sl(0.005), -1)
+      //    The terracing itself is block 7: its three stands, three terrace
+      //    runs, hoarding, armco and tyre wall were authored on this straight
+      //    (racing 0.909-0.055) and now face the pit lane. Until #5078 this
+      //    block stood 250-400 m back and carried a second full set; moved onto
+      //    the real straight that set landed INSIDE block 7's (terrace on
+      //    terrace at gap 19 vs 22, a 2-tier stand in the 0.2160 stand, hoarding
+      //    at 13 and 14, a billboard in the seating, its DUST apron rejected
+      //    outright), so the duplicates are gone and the covered centre bay over
+      //    the line is block 7's 0.2160 stand. What stays is what block 7 lacks
+      //    at the line: a camera mast at each end
+      //    and the concourse behind it.
       cameraTower(K(sl(0.9430)), -1, 17);
       cameraTower(K(sl(0.0560)), -1, 17);
-      groundPatch(K(sl(0.0050)), -1, 15, slab(26, 150), OCHRE_PALE);
-      billboard(K(sl(0.0020)), -1, 25, 20, 6, [0.86, 0.84, 0.78]);
+      // No pale apron under the centre bay any more: block 6's OCHRE slab (the
+      // returning leg's) folds under this stand, and the two lay 26.8 m2 on
+      // one plane in two places (ground-audit flatCoplanar).
       //   ... and what is BEHIND it. A stand on bleached nothing reads like a
       //   model on a table, so the outfield gets the concourse it feeds from:
-      //   dust apron, kiosk line, two flag masts, a services block, then the
-      //   spectator park out on the flat.
-      groundPatch(K(sl(0.0050)), -1, 58, slab(56, 260), DUST);
+      //   kiosk line, two flag masts, a services block, then the spectator
+      //   park out on the flat (block 7's DUST apron lies under all of it).
       kiosks(sl(0.9560), -1, 52, 12, 5);
       tower(K(sl(0.9700)), -1, 50, 1.1, 15);
       tower(K(sl(0.0400)), -1, 50, 1.1, 15);
@@ -234,12 +235,22 @@
       //    row, the taller control tower above the grid, motorhome rows
       //    behind, armco on the pit-wall line.
       guardrail(sl(0.9300), sl(0.0720), 1, 8, ARMCO);
-      groundPatch(K(sl(0.0050)), 1, 10, slab(44, 200), TARMAC);
-      for (let i = 0; i < 10; i++) {                        // garage row
-        const s = sl(0.9540 + i * 0.0080);
-        building(K(s), 1, 11, 20, 7.5, 14,
-          { wall: WHITEWASH, roof: [0.62, 0.60, 0.57] });
-      }
+      // Apron 10..42 m, not 10..54: the returning leg runs 60 m off this
+      // straight and 4.5 m above it, and a draped tile that reaches its
+      // ribbon (gap > ~47) spans the 6.5 m step down to the ground under that
+      // road — two such tiles from this slab and the DUST one that lay over
+      // it (28..74) were the 3.99 m / 1094 m3 clip at (-40,191). The DUST slab
+      // is gone: past the fence at 44 there is only that embankment.
+      // It starts at 15 m because the lane's keep-out reaches 14.3 m and a
+      // slab that touches it is superseded whole.
+      groundPatch(K(sl(0.0050)), 1, 15, slab(27, 200), TARMAC);
+      // NO GARAGE ROW (#5078). The ten building()s that stood here at gap 11
+      // were inside the lane's 14.3 m keep-out and emitted nothing on this
+      // straight (one of ten survived at the old site). A row re-seated
+      // behind it — seven abutting 20 m blocks at gap 16, 4 m deep, ahead of
+      // El Ovni's foot (22-30 m) and the tower (20-28 m) — does emit, but
+      // measured 3 new severe clips and 3 coplanar spots between neighbours,
+      // so it is left out until it is built as ONE mass.
       // Control tower: the required jerez-control-tower modelGroup near the
       // finish line below.
       // Motorhomes belong to the paddock, so they key through sl() like the
@@ -253,10 +264,17 @@
         const gy = terrainYAt(a.c[0], a.c[2]);
         return !(gy != null && Math.abs(gy - (a.c[1] + 0.3)) > 0.1);
       };
+      // The row starts at sl(0.9866), 60 m before the line, and every pad is at
+      // gap 31 (#5078; was sl(0.9730) at gap 27, 33 for the last). A motorhome
+      // is seated at its pad CENTRE and carries its livery stripe 0.3 m up the
+      // road-facing wall: on the first two old pads the ground FALLS 0.5 m
+      // from that wall to the centre, which put the stripe under the earth
+      // (ground-audit buried 2, 0.37 m). From 60 m before the line the ground
+      // rises toward the returning leg on all eight. Gap 31 clears El Ovni's
+      // foot (to 29.75 m) and the tower (to 28 m), which stood on pads at 27.
       for (let i = 0; i < 8; i++) {                         // paddock motorhomes
-        const kk = K(sl(0.9730 + i * 0.0068));
-        // The final pad crosses a grade fold; keep its base stripe above earth.
-        const gap = i === 7 ? 33 : 27;
+        const kk = K(sl(0.9866 + i * 0.0068));
+        const gap = 31;
         if (!seatOk(kk, 1, gap)) continue;
         motorhome(kk, 1, gap, 11, 4.4, 17,
           { wall: [0.86 + hash(i * 13) * 0.08, 0.86, 0.88] });
@@ -282,7 +300,6 @@
         palm(K(sl(0.0060)), 1, 54, 12, OLIVE_D);
       if (!blocksPalmView(1, 56, K(sl(0.0180))))
         palm(K(sl(0.0180)), 1, 56, 11, OLIVE);
-      groundPatch(K(sl(0.0050)), 1, 28, slab(46, 190), DUST);
 
       // 4. EXPO '92 BRAKING ZONE  (0.045, -1, 32)
       //    Open terrace steps cut into the natural rise with the hill
@@ -343,8 +360,9 @@
         { roof: "cantilever", roofCol: CONC, fasciaCol: CONC_ALT, h: 12 });
       grandstandEx(0.1800, -1, 23, 130, null, null,
         { roof: "none", fasciaCol: CONC_ALT, h: 12 });
+      // 0.2160 is the start/finish line (racing 0.9987): the one covered bay.
       grandstandEx(0.2160, -1, 24, 120, null, null,
-        { roof: "none", fasciaCol: CONC_ALT, h: 12 });
+        { roof: "flat", roofCol: CONC, fasciaCol: CONC_ALT, h: 12 });
       terrace(0.1580, 0.1740, -1, 22, TERR);
       terrace(0.1940, 0.2100, -1, 23, TERR);
       terrace(0.2280, 0.2720, -1, 24, TERR_LO);
@@ -595,7 +613,13 @@
       sponsorHoarding(0.8140, 0.8780, -1, 13);
       billboard(K(0.8290), -1, 17, 18, 6, [0.86, 0.84, 0.78]);
       guardrail(0.8100, 0.8860, -1, 10, ARMCO);
-      tyreWall(0.8260, 0.8580, -1, 11, TYRE_CAP);
+      // Two runs with a 22 m marshal gap: the wall is on the INSIDE of a 64 m
+      // radius here, where conveyor caps laid at centreline pitch overlap, and
+      // on this level ground two pairs shared a top plane (flatCoplanar at
+      // nodes 676/677 and 688/689 once #5078 re-phased the nodes). The gap
+      // takes out the second pair.
+      tyreWall(0.8260, 0.8420, -1, 11, TYRE_CAP);
+      tyreWall(0.8470, 0.8580, -1, 11, TYRE_CAP);
       runoffApron(K(0.8417), -1, 11, 30, OCHRE_PALE);
       marshalPost(K(0.8480), -1, 16);
       cameraTower(K(0.8680), -1, 24);

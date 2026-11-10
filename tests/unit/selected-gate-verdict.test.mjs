@@ -197,6 +197,26 @@ test("15-F2: shardEvidence counts only junit with testcases, per shard folder", 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("one matched artifact is extracted flat: started-in/marker.txt names the shard, a flat junit tree is its junit (#5282)", () => {
+  const dir = mkTmpDir("sel-flat-");
+  const j = path.join(dir, "junit-in"), st = path.join(dir, "started-in");
+  fs.mkdirSync(path.join(j, "test-results-36127"), { recursive: true });
+  fs.mkdirSync(st, { recursive: true });
+  fs.writeFileSync(path.join(st, "marker.txt"), "oversize-bryce-phone-paint\n");
+  fs.writeFileSync(path.join(j, "test-results-36127", "junit.xml"),
+    `<testsuites><testsuite><testcase classname="specs/bryce-phone-paint.spec.js" name="t"/></testsuite></testsuites>`);
+  const ev = shardEvidence(j, st);
+  assert.deepEqual(ev, { started: ["oversize-bryce-phone-paint"], junit: ["oversize-bryce-phone-paint"] });
+  const green = selectedGateVerdict({ select: "success", selected: "success", guards: "success", evidence: ev });
+  assert.equal(green.ok, true, green.reason);
+  // The same flat shard with no testcase is still a dead shard, not a pass.
+  fs.writeFileSync(path.join(j, "test-results-36127", "junit.xml"), `<testsuites></testsuites>`);
+  const dead = selectedGateVerdict({ select: "success", selected: "success", guards: "success", evidence: shardEvidence(j, st) });
+  assert.equal(dead.ok, false);
+  assert.match(dead.reason, /oversize-bryce-phone-paint reached the run step and left no junit/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("15-F2 CLI: cancelled + a started shard with an empty junit exits 1; a classname-less failure exits 1", () => {
   const dir = mkTmpDir("sel-gate-");
   fs.mkdirSync(path.join(dir, "started-in", "selected-started-a-1"), { recursive: true });
