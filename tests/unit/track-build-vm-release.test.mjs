@@ -212,7 +212,10 @@ const STRIP = {
   //   spans lose their second leg pair. Emission 274147 → 274099, strip-after 255214 → 255176.
   // → #4967 outside-of-bend tier rows run their full chord (2026-11-09): same
   //   emission, longer risers enclose 5 fewer triangles; strip-after 255176 → 255181.
-  monaco: { before: 274099, after: 255181 },
+  // → W21 #2204 curveTier midpoint-to-midpoint rows (2026-11-10): curved
+  //   bleacher/scaffold rows span to their chord midpoints and rails take their
+  //   own tier. Emission 274099 → 274135, strip-after 255181 → 255289.
+  monaco: { before: 274135, after: 255289 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -266,7 +269,10 @@ const STRIP = {
   //   286386 → 286363. #3374: stand-span pine clear + lake hedge split → 313432 / 284510.
   // → #4967 outside-of-bend tier rows run their full chord, Curva Grande bowl gap 24 → 25
   //   (2026-11-09): longer rows and crowd bands. Emission 313432 → 313768, strip-after 284510 → 284782.
-  monza: { before: 313768, after: 284782 },
+  // → W21 #2204 curveTier midpoint-to-midpoint rows (2026-11-10): the bowl
+  //   tiers meet on the outside of the Curva Grande / Parabolica bends, fascia
+  //   lip at seg. Emission 313768 → 313948, strip-after 284782 → 284931.
+  monza: { before: 313948, after: 284931 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
