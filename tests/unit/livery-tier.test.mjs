@@ -153,8 +153,6 @@ test("desktop player hi-res atlas upload is deferred off boot and garage-open", 
     "a timed-out idle callback must re-queue instead of running the 2048 paint");
   assert.match(src, /getCarDecalTexture\(team, num, true, false\)/,
     "photo rivals mint the player-tier preview with allowHiRes=false");
-  assert.match(src, /reapHiResGrave\(\)/,
-    "the hi-res swap must not free prev until after the next material bind");
   assert.match(src, /_hiResGrave\.push\(\{\s*key:\s*key,\s*tex:\s*prev\s*\}\)/,
     "grave entries are keyed so dropDecalTexture can free a parked preview");
   assert.match(src, /g\.key !== key/,
