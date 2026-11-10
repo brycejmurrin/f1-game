@@ -404,6 +404,11 @@ test("#2186: sync-pr's fast verify of a docs-only diff skips the VM suites, runs
   assert.deepEqual(full[0].args, ["tools/ci/tooling-fast.mjs", "--jobs=3"], "full runs the whole tooling-fast floor, no --changed");
   assert.deepEqual(verifyStages({ verify: "fast", changed: null, circuits: [], suites }).map((s) => s.name), ["tooling-fast", ...suites], "unknown diff runs every suite");
   assert.deepEqual(verifyStages({ verify: "none", changed: [], circuits: [], suites }), []);
+  // mergeOnly (2026-11-10): a sync merge is verified for what the merge decided, not for the branch's whole diff.
+  assert.deepEqual(verifyStages({ verify: "fast", changed: ["js/game.js"], circuits: ["spa", "monza"], suites, mergeOnly: [] }).map((s) => s.name), ["tooling-fast"], "a pure sync runs no node suite and no circuit");
+  assert.deepEqual(verifyStages({ verify: "fast", changed: ["docs/README.md"], circuits: ["spa", "monza"], suites, mergeOnly: ["js/game.js", "js/circuits/scenery/spa.js"] }).map((s) => s.name),
+    ["tooling-fast", ...suites, "verify-track:spa"], "an impure engine path brings the suites back, and only its own circuit");
+  assert.deepEqual(verifyStages({ verify: "full", changed: [], circuits: ["spa"], suites, mergeOnly: [] }).map((s) => s.name), ["tooling-fast", ...suites, "verify-track:spa"], "full ignores the scope");
   assert.deepEqual(VERIFY_MODES, ["none", "fast", "full"]);
 });
 
