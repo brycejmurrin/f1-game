@@ -1,5 +1,7 @@
 # PHONE TEST › GPU TEST: run it, read it (B·H10, 2026-10-21)
 
+Summary: How to run and read the PHONE TEST GPU TEST, the only real phone GPU timing the project can reach (B·H10).
+
 The project cannot time a phone's GPU anywhere else. The CI Mac is a paravirtual GPU
 (`TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md` §2). BrowserStack automation needs credentials this environment
 lacks (`RENDER-SETTINGS-TOOLING-RESEARCH-2026-10-21.md` §2). The one real GPU we can reach is the owner's

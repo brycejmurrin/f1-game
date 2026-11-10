@@ -37,6 +37,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { loadElevationRig, makeElevationTrack } from "../helpers/camera-rig.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -331,6 +332,31 @@ test("VISOR draws the cockpit rig without the steering wheel, and the column and
   assert.ok(Math.min(...x)<=-0.35 && Math.max(...x)>=0.35, "bulkhead spans the tub");
   assert.ok(Math.min(...y)<=-0.24 && Math.max(...y)>=0.07, "bulkhead meets the lower coaming and upper lip");
 
+  // THE DRAW, RUN: the real CarDraw.drawCockpitRig with the VISOR flag (the
+  // `noWheel` game.js passes as visorEye) against the cockpit seat, the player
+  // having picked a real wheel. VISOR must draw the column + bulkhead and no
+  // wheel or wheel-screen readout even though a wheel is selected; the cockpit
+  // draws that wheel and no bulkhead.
+  const v = carDrawVm({ cam: "cockpit" });
+  const { G: vg } = v;
+  v.ctx.CockpitOpts = { haloSize: () => 2, body: () => "standard", wheel: () => "f1", interior: () => "team",
+    layout: () => ({ wheelS: 1, wheelY: 0.5, wheelZ: 0.4 }), wheelHasScreen: () => true };
+  v.ctx.Car3D.cockpitMirrorGlass = () => [];
+  v.ctx.CarMesh = new Proxy({}, { get: (_o, k) => k === "WHEEL_ROLL_LAMBDA" ? 12 : k === "cockpitWheelRoll" ? (q) => q
+    : () => ({ carMesh: String(k) }) });
+  Object.assign(vg, { raceTimeOfDay: "day", track: { total: 5000, def: {} }, dashKph: (sp) => sp * 3.6, raceT: 0 });
+  v.field(() => 1000);
+  const car = Object.assign(vg.player, { gear: 3, rpm: 9000, speed: 50, energy: 0.5 });
+  const drawn = [];
+  vg.gfx.draw = (mesh) => drawn.push(mesh && (mesh.carMesh || mesh.kind));
+  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const rigDraws = (noWheel) => { drawn.length = 0; v.carDraw.drawCockpitRig(car, base, 1 / 60, {}, noWheel); return [...drawn]; };
+  const visor = rigDraws(true), cockpit = rigDraws(false);
+  assert.ok(visor.includes("getCockpitDash"), "VISOR draws the column and bulkhead: " + visor.join(","));
+  for (const r of ["getCockpitWheel", "getGearDigit", "getLedStrip"]) assert.ok(!visor.includes(r), "VISOR draws no " + r);
+  assert.ok(visor.includes("body"), "VISOR keeps the cockpit bodywork: " + visor.join(","));
+  assert.ok(cockpit.includes("getCockpitWheel"), "cockpit draws the chosen wheel: " + cockpit.join(","));
+  assert.ok(!cockpit.includes("getCockpitDash"), "cockpit draws no bare column/bulkhead");
 });
 
 test("EVERY world-facing camera mode is C1 on a gradient", () => {

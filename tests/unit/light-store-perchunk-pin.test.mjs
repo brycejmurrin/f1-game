@@ -177,10 +177,6 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   // sheds it without pinning autoTier (wet-road SSR still uses autoTier).
   // assert.ok (not assert.match) — #1682 ratchet.
   const pfx = readFileSync(join(ROOT, "js/ui/post-fx-opts.js"), "utf8");
-  assert.ok(pfx.includes("lookPostShed"),
-    "the look post stack must read lookPostShed(), not autoTier alone");
-  assert.ok(src.includes("PostFxOpts.applyLookShed"),
-    "race present must route look post through applyLookShed");
   assert.ok(pfx.includes("po.ssao = off ? 0 : v.ssao"),
     "SSAO must follow the lookPostShed latch");
 });

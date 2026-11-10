@@ -12,27 +12,39 @@
 //   node tools/ui/issue-shots.mjs 5218 --json       # machine-readable rows
 //   node tools/ui/issue-shots.mjs 5218 --list       # URLs only, download nothing
 //   node tools/ui/issue-shots.mjs 5218 --branch     # read them from origin/phone-shots:<n>/ instead (a cloud worker's path)
+//   node tools/ui/issue-shots.mjs 5218 --author brycejmurrin --attachments-only --out shots/5218   # the runner's call
 //
 // MEASURED 2026-11-10: a cloud session's proxy answers `github.com/user-attachments/...` with 403 ("sessions are bound
 // to their configured repositories"), so the direct download works on an Actions runner or a laptop and NOT in a
-// worker. A worker reads the copies a runner committed to the `phone-shots` branch (`--branch`; the workflow that
-// fills it is proposed in the note, it is not in the repo yet). A refused download says so and names `--branch`.
+// worker. A worker reads the copies .github/workflows/phone-shots.yml commits to the orphan `phone-shots` branch
+// (`--branch`; #5246). A refused download says so and names `--branch`.
+// The runner's call is hardened because issue text is untrusted: --author keeps only the images in the body/comments
+// that login wrote, --attachments-only keeps only GitHub-hosted attachment URLs, and every run takes at most
+// MAX_SHOTS images of at most MAX_BYTES each over https only; a file whose header is not PNG/JPEG/GIF/WebP is deleted.
+// File names are shot-<hash of the URL>.<ext>, never anything from the issue, so a re-run rewrites the same files.
 // Exit 0 at least one image saved (or listed), 1 none found, 2 usage, 3 API or download error.
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { api } from "../ci/github-api.mjs";
 import { strictFlags } from "../lib/cli-args.mjs";
 import { classifyShot } from "../lib/bryce-phone.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-export const USAGE = `usage: node tools/ui/issue-shots.mjs <issue or PR number> [--list] [--json] [--out <dir>]
+export const USAGE = `usage: node tools/ui/issue-shots.mjs <issue or PR number> [--list] [--json] [--out <dir>] [--branch]
+       [--author <login>] [--attachments-only]
   Saves every image attached to the issue/PR body and its comments under artifacts/phone-shots/<n>/ and prints, per image,
   its pixel size, which of the owner's windows it shows (standalone | safari | neither) and its px per CSS px.
-  --list prints the URLs and downloads nothing. Exit 0 found, 1 none, 2 usage, 3 API/download error.`;
-export const KNOWN = ["--list", "--json", "--out", "--branch"];
+  --list prints the URLs and downloads nothing. --branch reads origin/phone-shots:<n>/ (a cloud worker's path).
+  --author keeps only images written by that login; --attachments-only keeps only GitHub attachment URLs.
+  Exit 0 found, 1 none, 2 usage, 3 API/download error.`;
+export const KNOWN = ["--list", "--json", "--out", "--branch", "--author", "--attachments-only"];
 export const SHOTS_BRANCH = "phone-shots";
+/** Caps on one run: images taken (in order, the rest are skipped and counted) and bytes per image. */
+export const MAX_SHOTS = 20;
+export const MAX_BYTES = 20 * 1024 * 1024;
 
 /** The image files under `<n>/` on origin/phone-shots, extracted into `dir`. `git` is injectable. */
 export function fromBranch(n, dir, git = (args, opts = {}) => spawnSync("git", args, { cwd: ROOT, maxBuffer: 256 << 20, ...opts })) {
@@ -50,7 +62,7 @@ export function fromBranch(n, dir, git = (args, opts = {}) => spawnSync("git", a
   }
   return { files };
 }
-const IMAGE_HOSTS = /^https:\/\/(?:github\.com\/user-attachments\/assets\/|(?:private-)?user-images\.githubusercontent\.com\/|github\.com\/[^/]+\/[^/]+\/assets\/)/;
+export const IMAGE_HOSTS = /^https:\/\/(?:github\.com\/user-attachments\/assets\/|(?:private-)?user-images\.githubusercontent\.com\/|github\.com\/[^/]+\/[^/]+\/assets\/)/;
 const IMAGE_EXT = /\.(?:png|jpe?g|webp|heic|gif)(?:\?[^\s)"']*)?$/i;
 
 /** Image URLs in a Markdown/HTML body, in order, de-duplicated: GitHub attachments and any direct image link. Pure. */
@@ -62,6 +74,18 @@ export function imageUrls(body) {
   for (const m of text.matchAll(/<img\b[^>]*\bsrc=["'](https:\/\/[^"']+)["']/gi)) add(m[1]);
   for (const m of text.matchAll(/(?<![("'=])\bhttps:\/\/[^\s<>)"']+/g)) add(m[0]);
   return out;
+}
+
+/** Keep the rows a runner may download: written by `author` (when given), on a GitHub attachment host (when
+ *  `attachmentsOnly`), at most `max` of them. Returns `{ rows, skipped }`. Pure. */
+export function filterRows(rows, { author = null, attachmentsOnly = false, max = Infinity } = {}) {
+  const ok = rows.filter((r) => (!author || r.author === author) && (!attachmentsOnly || IMAGE_HOSTS.test(r.url)));
+  return { rows: ok.slice(0, max), skipped: rows.length - Math.min(ok.length, max) };
+}
+
+/** A stable file stem for an image URL: `shot-<12 hex of sha256(url)>`. Pure. */
+export function shotStem(url) {
+  return `shot-${createHash("sha256").update(url).digest("hex").slice(0, 12)}`;
 }
 
 /** Every image on an issue: `{ url, where, author, at }`. `get` is github-api's `api` (injectable). */
@@ -102,7 +126,9 @@ export function imageSize(buf) {
 const EXT = { png: "png", jpeg: "jpg", gif: "gif", webp: "webp" };
 
 function download(url, file) {
-  const r = spawnSync("curl", ["-sSL", "--max-time", "60", "-o", file, "-w", "%{http_code}", url], { encoding: "utf8" });
+  const r = spawnSync("curl", ["-sSL", "--proto", "=https", "--proto-redir", "=https", "--max-redirs", "5", "--max-time", "60",
+    "--max-filesize", String(MAX_BYTES), "-o", file, "-w", "%{http_code}", url], { encoding: "utf8" });
+  if (r.status === 63) return `larger than ${MAX_BYTES} bytes`;
   if (r.status !== 0) return `curl failed: ${(r.stderr || "").trim().split("\n")[0]}`;
   return /^2/.test(r.stdout.trim()) ? null : `HTTP ${r.stdout.trim()}`;
 }
@@ -111,7 +137,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const argv = process.argv.slice(2);
   const flags = strictFlags(argv, KNOWN, USAGE);
   const outArg = flags.flag("--out", null);
-  const n = Number(argv.find((a) => !a.startsWith("--") && a !== outArg));
+  const authorArg = flags.flag("--author", null);
+  const n = Number(argv.find((a) => !a.startsWith("--") && a !== outArg && a !== authorArg));
   if (!Number.isInteger(n) || n < 1) { console.error(USAGE); process.exit(2); }
   const describe = (file, extra = "") => {
     const size = imageSize(fs.readFileSync(file));
@@ -132,17 +159,23 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   const found = collect(n);
   if (found.error) { console.error(`issue-shots: ${found.error}`); process.exit(3); }
+  const kept = filterRows(found.rows, { author: authorArg, attachmentsOnly: flags.has("--attachments-only"), max: MAX_SHOTS });
+  if (kept.skipped) console.log(`  skipped ${kept.skipped} image URL(s): another author, a non-attachment host or over the ${MAX_SHOTS}-image cap`);
+  found.rows = kept.rows;
   if (!found.rows.length) { console.log(`= issue-shots #${n}: no image in the body or comments (attach the screenshot to the issue, then re-run)`); process.exit(1); }
   if (flags.has("--list")) { for (const r of found.rows) console.log(`${r.url}  (${r.where}, ${r.author}, ${r.at})`); process.exit(0); }
   const dir = path.resolve(ROOT, outArg || path.join("artifacts", "phone-shots", String(n)));
   fs.mkdirSync(dir, { recursive: true });
   let failed = 0;
-  const rows = found.rows.map((r, i) => {
-    const tmp = path.join(dir, `shot-${i + 1}.bin`);
+  const rows = found.rows.map((r) => {
+    const stem = shotStem(r.url);
+    const tmp = path.join(dir, `${stem}.bin`);
     const err = download(r.url, tmp);
     if (err) { failed++; fs.rmSync(tmp, { force: true }); return { ...r, error: err }; }
     const size = imageSize(fs.readFileSync(tmp));
-    const file = path.join(dir, `shot-${i + 1}.${size ? EXT[size.type] : "bin"}`);
+    // Not a PNG/JPEG/GIF/WebP header: never keep it (HEIC included; the phone app uploads JPEG/PNG).
+    if (!size) { failed++; fs.rmSync(tmp, { force: true }); return { ...r, error: "not a PNG/JPEG/GIF/WebP image" }; }
+    const file = path.join(dir, `${stem}.${EXT[size.type]}`);
     fs.renameSync(tmp, file);
     return { ...r, ...describe(file, `${r.where}, ${r.at}`) };
   });
