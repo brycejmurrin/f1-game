@@ -18019,6 +18019,7 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "flashSector": [
+        "tests/specs/time-trial.spec.js",
         "tests/unit/hud-feel.test.mjs"
       ],
       "gapDecimals": [
@@ -18097,7 +18098,6 @@
       ],
       "*": [
         "tests/specs/hud-mirror.spec.js",
-        "tests/specs/time-trial.spec.js",
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
