@@ -120,6 +120,10 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
     "the stage job stages, then uploads the Pages artifact");
   assert.match(deploy, /id: deployment-retry\n\s+if: \$\{\{ steps\.deployment\.outcome == 'failure' \}\}/, "one retry of the publish step");
   assert.match(deploy, /failed=deploy-pages/, "a Pages-side failure is named apart from a gate failure");
+  // The REST-visible marker the dispatcher reads (steps[].name / conclusion): its name is a contract.
+  const marker = parseYAML(pagesWorkflow).jobs.deploy.steps.find((st) => st.name === "Pages publish failed (platform)");
+  assert.equal(marker?.if, "${{ always() && steps.recheck.outcome == 'success' && steps.deployment.outcome == 'failure' && steps.deployment-retry.outcome == 'failure' }}",
+    "the platform-failure step runs only when both publish attempts failed after the recheck passed");
 
   // apex-sha is the provenance record AND the input to the next run's
   // monotonic check, so it must name the commit actually published: GITHUB_SHA.

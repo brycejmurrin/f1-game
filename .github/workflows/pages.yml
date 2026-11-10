@@ -419,16 +419,27 @@ jobs:
       # ONE RETRY OF THE PUBLISH STEP (2026-11-10). A single transient
       # deploy-pages failure used to fail the run; the second attempt runs only
       # when the first failed, and the verdict step fails the job when both did.
-      - id: deployment
+      - name: Publish to Pages
+        id: deployment
         continue-on-error: true
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
-      - id: deployment-retry
+      - name: Publish to Pages (retry)
+        id: deployment-retry
         if: ${{ steps.deployment.outcome == 'failure' }}
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
+      # THE REST-VISIBLE MARKER. Job outputs are not in the REST API; step names and conclusions
+      # are (actions/runs/<id>/jobs -> steps[].name / conclusion). This step is `failure` exactly
+      # when both publish attempts failed after the recheck passed: a Pages-side failure, not a gate
+      # failure and not a refusal (a refusal fails "Confirm this commit may still be published").
+      - name: Pages publish failed (platform)
+        if: ${{ always() && steps.recheck.outcome == 'success' && steps.deployment.outcome == 'failure' && steps.deployment-retry.outcome == 'failure' }}
+        run: |
+          echo "::error title=deploy-pages::the Pages publish failed twice (a Pages-side failure, not a gate failure)"
+          exit 1
       - name: Deploy verdict
         id: verdict
         if: ${{ always() }}
@@ -441,7 +452,6 @@ jobs:
           if [ "$RECHECK" = failure ]; then echo "failed=refused" >> "$GITHUB_OUTPUT"; exit 1; fi
           if [ "$FIRST" = success ] || [ "$RETRY" = success ]; then exit 0; fi
           echo "failed=deploy-pages" >> "$GITHUB_OUTPUT"
-          echo "::error title=deploy-pages::the Pages publish failed twice (a Pages-side failure, not a gate failure)"
           exit 1
   # The live check the container cannot do: this runner reaches github.io. A
   # deploy is not done until the Pages CDN serves the build just stamped.

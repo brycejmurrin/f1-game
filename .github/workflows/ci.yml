@@ -7,10 +7,11 @@ name: CI
 #
 # The jobs are split by what they cost, so the common case stays fast:
 #
-#   guards   ~8 min wall (461 s median 2026-10-05), two parallel tooling-fast
-#                                  shards then ratchet/audit on the aggregator
-#                                  still named `Structural guards`. Split because
-#                                  the old single job's header still said ~2m20s.
+#   guards   four parallel tooling-fast shards, `Structural guards (tooling
+#                                  A..D)` (guards-a..d); the ratchet / audit /
+#                                  coverage steps run at the end of tooling B,
+#                                  and the no-checkout aggregator `Structural
+#                                  guards` joins the four under one name.
 #                                  This is the job that must never be red;
 #                                  everything it asserts is a property a
 #                                  compiler would enforce in a language that had
