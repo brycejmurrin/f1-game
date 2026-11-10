@@ -10872,6 +10872,7 @@
     },
     "js/perf/loop-health.js": {
       "reload": [
+        "tests/unit/err-overlay-fatal.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "*": [
@@ -14865,6 +14866,7 @@
       ],
       "*": [
         "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
