@@ -2342,6 +2342,7 @@
       ],
       "create": [
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/replay-buf.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/rival-audio.test.mjs"
@@ -5005,7 +5006,8 @@
     },
     "js/circuits/scenery/spa.js": {
       "*": [
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/select-specs.test.mjs",
+        "tests/unit/validation-cli.test.mjs"
       ]
     },
     "js/circuits/scenery/suzuka.js": {
@@ -5597,6 +5599,9 @@
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/share-card.test.mjs"
       ],
+      "integrity": [
+        "tests/unit/deploy-staging.test.mjs"
+      ],
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
       ],
@@ -5819,6 +5824,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
+        "tests/unit/setup-tune.test.mjs",
         "tests/unit/share-code.test.mjs"
       ]
     },
@@ -7116,6 +7122,7 @@
         "tests/unit/engineer.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/onboard.test.mjs",
@@ -7185,6 +7192,7 @@
       ],
       "closePitWork": [
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "coast": [
@@ -7301,6 +7309,7 @@
       ],
       "leaveGarage": [
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "loadTrack": [
@@ -7651,6 +7660,7 @@
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/tyre-model.test.mjs",
+        "tests/unit/validation-cli.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "updateCar": [
@@ -8027,6 +8037,9 @@
       "state": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "*": [
+        "tests/unit/deploy-staging.test.mjs"
       ]
     },
     "js/garage/garage-data.js": {
@@ -8379,6 +8392,7 @@
       ],
       "moodDef": [
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "prepare": [
@@ -10653,6 +10667,9 @@
       "summarize": [
         "tests/unit/bench-capture.test.mjs",
         "tests/unit/bench-run.test.mjs"
+      ],
+      "*": [
+        "tests/unit/pause-hud-layout.test.mjs"
       ]
     },
     "js/perf/gfx-debug-overlay.js": {
@@ -18385,6 +18402,7 @@
       "*": [
         "tests/specs/custom-team.spec.js",
         "tests/specs/wake-lock.spec.js",
+        "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"

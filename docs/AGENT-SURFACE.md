@@ -585,6 +585,19 @@ harness and on the deployed site, and nothing under `vendor/three-0.187.0/addons
 `{on, supported, reason}`. Pin `apex26.gfxBackend=three` first, or a software-GL boot may answer `supported:false` (#2674). Reference:
 [DEBUG-HOOKS §inspector](DEBUG-HOOKS.md), notes in `docs/notes/THREE-INSPECTOR-2026-10-16.md`.
 
+### The owner's phone, one preset (2026-11-10)
+
+- `node tools/ui/bryce-phone.mjs [--measure]` prints, or boots and reads back, the ONE emulation recipe for his iPhone
+  (`tools/lib/bryce-phone.mjs`: 852x393, DPR 3, real `env()` insets 59/0/59/21 through CDP, his settings export seeded;
+  `--window safari`, `--ui-scale P`, `--dpr 1` for HUD fit on this box). A tool or spec imports `openBrycePhone(browser)`.
+- `node tools/ui/issue-shots.mjs <n> [--branch]` saves the screenshots attached to an issue and names the window each
+  one shows from its aspect. A cloud worker's proxy refuses GitHub attachment URLs: use `--branch` (origin/phone-shots).
+- `node tools/ui/phone-shot-diff.mjs --shot <image> [--eval "<js>"]` boots the preset, reaches the screen and reports
+  which elements are a different SIZE in the screenshot (screen-wide factor, per-element outliers, score per row; ~2 min).
+- `node tools/ci/pr-board.mjs --brief` is one line per open PR (state, ci, gate, suggestion, owner, the Plan's `now:`).
+- `sync-pr.mjs` and a local `tooling-fast --changed` verify a sync merge for the paths the MERGE decided
+  (`syncMergeScope`), not the branch's whole diff again; CI's selection is unchanged.
+
 ### Read-only UI inspector
 
 `node tools/ui/explorer.mjs inspect --screen settingsappearance --styles '#as-uiScale'`
