@@ -14184,6 +14184,9 @@
     "js/race/stopped-cars.js": {
       "create": [
         "tests/unit/race-control.test.mjs"
+      ],
+      "scan": [
+        "tests/unit/vstd-invariant.test.mjs"
       ]
     },
     "js/race/storm-flash.js": {
