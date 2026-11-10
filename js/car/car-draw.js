@@ -943,6 +943,10 @@ const CarDraw = (function () {
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
       if (lodWarm) warmLazyRaceMeshes();
+      // The player's pit crew rig (js/garage/pit-crew.js) was built on the frame the car reached its box; queue it
+      // LAST, so it builds under the lights after the grid's own pieces (#5051). Once per race: a restart re-queues
+      // a rig that already exists, which is a cache hit.
+      if (lodWarm) { const p = G.cars.find((c) => c && c.isPlayer); if (p) _deferredCarWarm.push({ c: p, crew: true }); }
       Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, lodWarm, cpuMs: Math.round(performance.now() - at) });
     }
     // ONE CAR'S WARM, IN FOUR PHASES — each one heavy piece, so the stepped
@@ -970,6 +974,7 @@ const CarDraw = (function () {
           // finds the atlas LRU may have dropped its texture since, and the cache rebuilds or hits as it should.
           if (it.atlas) { const tex = getCarDecalTexture(it.c.team, carDecalNum(it.c.team, it.c), !!it.c.isPlayer); if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex); }
           else if (it.caster) teamMesh(it.c.team, it.c, true);
+          else if (it.crew && typeof PitCrewAnim !== "undefined") PitCrewAnim.warm(G, it.c);   // #5051: the stop's rig, not on the box frame
         } catch (e) { Log.warn("gfx", "deferred car warm failed for " + (it.c && it.c.team && it.c.team.id), e); }
         if (performance.now() - t0 >= budget) break;
       }
@@ -1153,6 +1158,7 @@ const CarDraw = (function () {
           const ms = performance.now() - t; cpuMs += ms; if (ms > maxStepMs) maxStepMs = ms;
         }
       }
+      if (lodWarm) { const p = G.cars.find((c) => c && c.isPlayer); if (p) _deferredCarWarm.push({ c: p, crew: true }); }   // #5051, as warmCarAssets does
       Log.info("gfx", "race car assets ready", { cars: cars.length, casters, lodWarm, cpuMs: Math.round(cpuMs),
         maxStepMs: Math.round(maxStepMs), yields, wallMs: Math.round(performance.now() - at), deferred: _deferredCarWarm.length });
       // The census reads RaceEntryProfile marks, not Log.info: one mark carries the step stats.
