@@ -10,6 +10,8 @@
  *      once regen refilled the battery).
  *   #6 aquaplaning reads the same surface as grip: wetnessAt(c.s, c.x) (a
  *      source pin: TyreModel is frozen, the read cannot be intercepted).
+ *   #10 a tyre-wear level changed after boot survives quit-to-menu (MenuQuitTail
+ *      was handed the boot-time value, so every quit reset tyres to it).
  * (#5, the lap-0 quali rescue, is in mechanics-race-vm.test.mjs beside the
  * rescue rules it amends.)
  * Run: node --test tests/unit/game-state-audit-vm.test.mjs
@@ -97,4 +99,14 @@ test("#6 aquaplaning reads the surface under the car at its x, as grip does", ()
   assert.ok(calls.length >= 2, `found ${calls.length} wetnessAt reads — the pattern looks broken`);
   assert.deepEqual([...new Set(calls)], ["c.s,c.x"], "a per-car wetnessAt read without the car's x: " + calls.join(" | "));
   assert.match(src, /TyreModel\.aquaInto\([^\n]*wxArc\.wetnessAt\(c\.s, c\.x\)/, "aquaInto must read wetnessAt(c.s, c.x)");
+});
+
+test("#10 a tyre-wear level changed after boot survives a quit to the menu", async () => {
+  const G = g.G, boot = G.raceTyreWear, other = boot === "light" ? "real" : "light";
+  try {
+    G.raceTyreWear = other;
+    await drive();
+    G.quitToMenu();
+    assert.equal(G.tyres.setLevel(), other, `quit reset the tyre level to the boot value ${boot}`);
+  } finally { G.raceTyreWear = boot; }
 });
