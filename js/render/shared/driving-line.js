@@ -6,20 +6,7 @@
  * LINE_VS/FS, WGX WGSLFx.LINE, TLX tsl-fx lineMat) uploads and shades it. Nothing here touches a car — the arc reaches the PICTURE only
  * (docs/PHYSICS.md §curvature reads: render-only).
  *
- * WHAT THE OTHER GAMES DO (researched 2026-09-08, sources in
- * docs/notes/DRIVING-LINE-RESEARCH.md):
- *   Forza    Suggested Line: FULL / BRAKING ONLY / OFF. One ribbon; blue where it
- *            is ideal to accelerate, red where the driver should slow down.
- *            BRAKING ONLY draws only the red parts. White when off the track.
- *   F1 (EA)  Dynamic Racing Line: FULL / CORNERS ONLY / OFF, 2D flat or 3D
- *            raised; green (on pace) → amber (lift) → red (brake) against the
- *            PLAYER's speed, so the same corner reads differently at 300 and
- *            at 200 km/h — "dynamic".
- *   GT7      a dotted Driving Line, side-of-road Corner Indicators, and a
- *            separate Braking Area marker; the line itself is NOT colour-coded.
- *   Engines  the geometry is a polystrip laid on the road (a generated mesh
- *            decal, depth-tested, no depth write, biased off the surface) —
- *            the same shape as this game's batched skid marks.
+ * Survey of other games' racing lines: docs/notes/DRIVING-LINE-RESEARCH.md.
  * This is Forza's shape with F1's three-colour dynamic grammar and F1's mode
  * names (which the STEERING assist already uses: OFF / CORNERS / FULL).
  *
