@@ -53,15 +53,30 @@ export { TRACK_STALL_MS, awaitTrackBuild };
  * the same onclick handler the game wires up. Use this for any HUD / pause /
  * garage button reached with a race running and no `headless(true)` first;
  * menu clicks on a quiet page keep `locator.click()` and its checks.
+ *
+ * HIT-TEST FIRST (#5242 ask 6). A bare `el.click()` succeeds on a hidden, clipped or covered button, so a spec
+ * could drive a control no thumb can reach and stay green (the #5200 RESUME). Before the click the control is
+ * scrolled into view the way a player would scroll a sheet, must have a painted rect, and must own the point at
+ * its own centre (`elementFromPoint`, which skips `pointer-events: none` layers as a real tap does); otherwise
+ * this throws naming what took the tap. The click itself stays the DOM `.click()` for the reason above.
  */
 export async function clickLive(page, id) {
-  const hit = await page.evaluate((i) => {
+  const r = await page.evaluate((i) => {
     const el = document.getElementById(i);
-    if (!el) return false;
+    if (!el) return { err: "none" };
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const b = el.getBoundingClientRect();
+    if (!(b.width > 0 && b.height > 0)) return { err: `has no painted rect (${b.width}x${b.height}: hidden or display:none)` };
+    const t = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    if (!t || (t !== el && !el.contains(t))) {
+      const who = t ? (t.id ? "#" + t.id : t.tagName.toLowerCase() + (typeof t.className === "string" && t.className ? "." + t.className.trim().split(/\s+/).join(".") : "")) : "nothing (centre off-screen)";
+      return { err: `is covered: a tap at its centre lands on ${who}` };
+    }
     el.click();
-    return true;
+    return { err: null };
   }, id);
-  if (!hit) throw new Error(`clickLive: no element with id "${id}"`);
+  if (r.err === "none") throw new Error(`clickLive: no element with id "${id}"`);
+  if (r.err) throw new Error(`clickLive: #${id} ${r.err}`);
 }
 
 /**
