@@ -77,42 +77,42 @@ Opus worker sessions, one work item and one draft pull request each, against
 `claude/f1-game-project-26h3ng`. No worker merges, adds `land`, or flips a PR
 ready.
 
-| # | Work item | Branch | PR |
-|---|---|---|---|
-| W1 | Deploy stamp misses lazy bundles and the overlay page | `claude/audit-fix-deploy-stamp` | #5260 |
-| W2 | `game.js` state bugs, weather grip step, curvature-contract test | `claude/audit-fix-game-state` | #5268 |
-| W3 | Points table, help text, lore facts | `claude/audit-fix-rules-text` | |
-| W4 | Stream overlay | `claude/audit-fix-overlay` | #5257 |
-| W5 | Circuit data in the wrong lap frame (eleven circuits, fleet test) | `claude/audit-fix-circuit-frames` | |
-| W6 | Test selection holes in the local floor and CI groups | `claude/audit-fix-test-selection` | #5265 |
-| W7 | Guards and tools that pass when they should fail | `claude/audit-fix-guards` | |
-| W8 | Dispatch and merge-gate trust checks | `claude/audit-fix-dispatch-trust` | #5261 |
-| W9 | Multiplayer relay, seat and reconnect bugs | `claude/audit-fix-netplay` | #5274 |
-| W10 | Track designer and VR entry | `claude/audit-fix-editor-xr` | #5263 |
-| W11 | three.js r187 renderer mismatches | `claude/audit-fix-tlx-r187` | #5270 |
-| W12 | Circuits vs the real places: start lines, pit sides, turn numbers, zones | `claude/audit-fix-circuit-reality` | |
-| W13 | Credits, notices, fan-content exposure | `claude/audit-fix-credits-notices` | #5276 |
-| W14 | Agent hooks | `claude/audit-fix-hooks` | |
-| W15 | Workflow hardening and broken scheduled jobs | `claude/audit-fix-workflows` | |
-| W16 | Skills, agent cards, agent docs, the two audit workflows | `claude/audit-fix-agent-docs` | #5275 |
-| W17 | Dead tools and stale packaging | `claude/audit-fix-dead-tools` | #5267 |
-| W18 | Default season is the real 2026 calendar; career save safety | `claude/audit-fix-season-career` | #5269 |
-| W19 | Audio | `claude/audit-fix-audio` | |
-| W20 | Lighting knobs, presets, fog slider | `claude/audit-fix-lighting` | |
-| W21 | Scenery engine placement and materials | `claude/audit-fix-scenery-engine` | |
-| W22 | HUD, broadcast and boot-cover bugs the unit VMs hide | `claude/audit-fix-hud-perf-covers` | |
-| W23 | Data Hub feeds | `claude/audit-fix-data-hub` | |
-| W24 | Service worker, offline play, install | `claude/audit-fix-pwa-offline` | |
-| W25 | Agent tooling, MCP servers, headless hooks | `claude/audit-fix-agent-tooling` | |
-| W26 | AI pace and line, input paths, phone controller | `claude/audit-fix-ai-input` | |
-| W27 | Reference docs, plans, docs guards | `claude/audit-fix-reference-docs` | |
-| W28 | Desktop and mobile packaging | `claude/audit-fix-packaging` | #5293 |
-| W29 | Unit tests that cannot fail: game, physics, race, career, net | `claude/audit-fix-tests-behaviour-a` | |
-| W30 | Unit tests that cannot fail: CSS, HUD, renderers, helpers, never-run | `claude/audit-fix-tests-behaviour-b` | |
-| W31 | Spec and unit-test selection that lets a red merge | `claude/audit-fix-spec-selection` | |
-| W32 | Browser specs that cannot fail | `claude/audit-fix-specs` | |
+| # | Work item | Branch | PR | Issue |
+|---|---|---|---|---|
+| W1 | Deploy stamp misses lazy bundles and the overlay page | `claude/audit-fix-deploy-stamp` | #5260 | #5306 |
+| W2 | `game.js` state bugs, weather grip step, curvature-contract test | `claude/audit-fix-game-state` | #5268 | #5307 |
+| W3 | Points table, help text, lore facts | `claude/audit-fix-rules-text` | #5273 | #5308 |
+| W4 | Stream overlay | `claude/audit-fix-overlay` | #5257 | #5309 |
+| W5 | Circuit data in the wrong lap frame (eleven circuits, fleet test) | `claude/audit-fix-circuit-frames` | #5279 | #5310 |
+| W6 | Test selection holes in the local floor and CI groups | `claude/audit-fix-test-selection` | #5265 | #5311 |
+| W7 | Guards and tools that pass when they should fail | `claude/audit-fix-guards` | #5277 | #5312 |
+| W8 | Dispatch and merge-gate trust checks | `claude/audit-fix-dispatch-trust` | #5261 | #5318 |
+| W9 | Multiplayer relay, seat and reconnect bugs | `claude/audit-fix-netplay` | #5274 | #5313 |
+| W10 | Track designer and VR entry | `claude/audit-fix-editor-xr` | #5263 | #5314 |
+| W11 | three.js r187 renderer mismatches | `claude/audit-fix-tlx-r187` | #5270 | #5315 |
+| W12 | Circuits vs the real places: start lines, pit sides, turn numbers, zones | `claude/audit-fix-circuit-reality` | #5287 | #5316 |
+| W13 | Credits, notices, fan-content exposure | `claude/audit-fix-credits-notices` | #5276 | #5317 |
+| W14 | Agent hooks | `claude/audit-fix-hooks` | #5278 | #5318 |
+| W15 | Workflow hardening and broken scheduled jobs | `claude/audit-fix-workflows` | #5280 | #5318 |
+| W16 | Skills, agent cards, agent docs, the two audit workflows | `claude/audit-fix-agent-docs` | #5275 | #5319 |
+| W17 | Dead tools and stale packaging | `claude/audit-fix-dead-tools` | #5267 | #5320 |
+| W18 | Default season is the real 2026 calendar; career save safety | `claude/audit-fix-season-career` | #5269 | #5321 |
+| W19 | Audio | `claude/audit-fix-audio` | #5294 | #5322 |
+| W20 | Lighting knobs, presets, fog slider | `claude/audit-fix-lighting` | #5291 | #5323 |
+| W21 | Scenery engine placement and materials | `claude/audit-fix-scenery-engine` | #5303 | #5324 |
+| W22 | HUD, broadcast and boot-cover bugs the unit VMs hide | `claude/audit-fix-hud-perf-covers` | #5296 | #5326 |
+| W23 | Data Hub feeds | `claude/audit-fix-data-hub` | #5298 | #5327 |
+| W24 | Service worker, offline play, install | `claude/audit-fix-pwa-offline` | #5300 | #5328 |
+| W25 | Agent tooling, MCP servers, headless hooks | `claude/audit-fix-agent-tooling` |  | #5329 |
+| W26 | AI pace and line, input paths, phone controller | `claude/audit-fix-ai-input` |  | #5330 |
+| W27 | Reference docs, plans, docs guards | `claude/audit-fix-reference-docs` | #5290 | #5331 |
+| W28 | Desktop and mobile packaging | `claude/audit-fix-packaging` | #5293 | #5332 |
+| W29 | Unit tests that cannot fail: game, physics, race, career, net | `claude/audit-fix-tests-behaviour-a` | #5305 | #5333 |
+| W30 | Unit tests that cannot fail: CSS, HUD, renderers, helpers, never-run | `claude/audit-fix-tests-behaviour-b` |  | #5333 |
+| W31 | Spec and unit-test selection that lets a red merge | `claude/audit-fix-spec-selection` | #5304 | #5334 |
+| W32 | Browser specs that cannot fail | `claude/audit-fix-specs` | #5302 | #5334 |
 
-A blank PR cell means the worker had not opened one when this was written.
+A blank PR cell means the worker had not opened one when this was written. Findings not yet assigned are tracked in issue #5335.
 
 ## Not assigned to a worker yet
 
