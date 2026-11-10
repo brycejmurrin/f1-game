@@ -34,12 +34,14 @@ test("judgePaint is a ratchet: above the ceiling is a regression, below it is a 
   assert.deepEqual(judgePaint(p, { taps: 1, text: 1, outside: 1 }, "c"), []);
   const hard = judgePaint(p, {}, "standalone@61 select");
   assert.equal(hard.length, 3);
-  assert.equal(hard[0], "standalone@61 select: 1 tap target(s) paint under 44px, ceiling 0 — button.sel-chip 52x24.5");
-  assert.match(hard[1], /1 text node\(s\) paint under 12px, ceiling 0 — span\.a 7\.14px "MONZA"/);
-  assert.match(hard[2], /1 item\(s\) cross the safe box, ceiling 0/);
+  assert.deepEqual(hard, [
+    "standalone@61 select: 1 tap target(s) paint under 44px, ceiling 0 — button.sel-chip 52x24.5",
+    'standalone@61 select: 1 text node(s) paint under 12px, ceiling 0 — span.a 7.14px "MONZA"',
+    "standalone@61 select: 1 item(s) cross the safe box, ceiling 0 — span.sec-lbl text at 785,85 17x18",
+  ]);
   const stale = judgePaint(p, { taps: 4, text: 1, outside: 1 }, "c");
   assert.equal(stale.length, 1);
-  assert.match(stale[0], /below the recorded ceiling 4 — lower the ceiling to 1/);
+  assert.deepEqual(stale, ["c: 1 tap target(s) paint under 44px, below the recorded ceiling 4 — lower the ceiling to 1 (it only ratchets down)"]);
 });
 
 test("judgeCells: an unopened screen, a screen with no control and an unrecorded cell (hard floor) are all failures", () => {
