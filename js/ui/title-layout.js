@@ -160,13 +160,11 @@ const TitleLayout = (function () {
   const FIT_TOKENS = ["--tf", "--tf-dx", "--tf-dy"];
   let fitRaf = 0;
   function fitClear(el) { for (const k of FIT_TOKENS) el.style.removeProperty(k); }
-  // THE TOUCH PAINT FLOOR (#5213; css/menu-destinations.css): under a finger on a short landscape
-  // screen a door never paints under 44 px, so a cluster too tall for the box RE-FLOWS (eight rows,
-  // seven, five) before anything shrinks; only when no row count fits (or one would clip a word)
-  // does the fit win, with the floor off.
+  // THE TOUCH PAINT FLOOR (#5213; css/menu-destinations.css): under a finger a door is never under
+  // 44 px, so a cluster too tall RE-FLOWS (8 rows, 7, 5) before it shrinks; the fit wins last.
   const touchHome = () => { try { return phoneWide() && win().matchMedia("(pointer: coarse)").matches; } catch (_) { return false; } };
   const floored = () => { const e = doc && doc.getElementById("menu-buttons"); return !!e && touchHome() && e.getAttribute("data-home-floor") !== "off"; };
-  /** BUTTONS SIZE's low end: 100 while the floor holds (a smaller SIZE would paint as 100 anyway). */
+  /** BUTTONS SIZE's low end: 100 while the floor holds. */
   const sizeMin = (part) => (part === "btns" && floored() ? 100 : LIM.size[0]);
   function floorTier(el, availW, availH) {
     el.removeAttribute("data-home-rows"); el.removeAttribute("data-home-floor");
@@ -181,9 +179,8 @@ const TitleLayout = (function () {
     };
     const tiers = current().layout === "grid" ? ["", "7", "5"] : [""];
     for (const t of tiers) { tier(t); if (fits(1)) { el.style.removeProperty("--tf"); return; } }
-    // A SIZE over the floor that no row count takes: the row count that paints the biggest doors,
-    // held (--tf) between the floor and the request, so hold() stops the slider there (never a
-    // bigger SIZE painting smaller doors: export profile, 105 -> 110 fell to 34 px rows, 2026-11-10).
+    // No row count takes this SIZE: the one that paints the biggest doors, held (--tf) between the
+    // floor and the request, so hold() stops the slider (never a bigger SIZE, smaller doors).
     const floor = 100 / Math.max(100, current().btns.size);
     let best = 0, bestT = "";
     if (floor < 1) for (const t of tiers) {
@@ -291,7 +288,7 @@ const TitleLayout = (function () {
         while (hi - lo > 1) { p.size = (lo + hi) >> 1; if (held()) hi = p.size; else lo = p.size; }
         p.size = v; v = lo;
       }
-      v = Math.max(v, sizeMin(part));   // the floor's edge, as the box's: not stored, the thumb stops
+      v = Math.max(v, sizeMin(part));   // the floor is an edge too
     }
     else if (k === "x") v += pull(g("--tf-dx"), root.clientWidth);
     else v += pull(g("--tf-dy"), root.clientHeight);
@@ -386,7 +383,7 @@ const TitleLayout = (function () {
         attrs: { "aria-label": `${part === "btns" ? "Buttons" : part === "title" ? "Title" : "Car drawing"} ${NAMES[k].toLowerCase()}` } });
       const paint = () => {
         let n = current()[part][k];
-        // The range is what the screen can paint and the number is the painted size (#5229's rule).
+        // Range = what paints, number = the painted size.
         if (k === "size") { inp.min = String(sizeMin(part)); n = Math.max(n, sizeMin(part)); }
         if (d.activeElement !== inp) inp.value = String(n);
         out.textContent = pctTxt(k, n);
