@@ -1805,24 +1805,6 @@ const MOVED = {
 /** Locale manifest only (English players need no locale JSON fetch). */
 const SW_LOCALES = ["locales/manifest.json"];
 
-/** Every roster the page's lazy loader can inject WITHOUT a tag, by export name: each `LAZY_*` file list (never the
- *  `*_EDGES` pair lists) plus `DEFERRED` (backend name -> list, flattened). tools/ci/bump-cache.mjs stamps exactly
- *  these into the ?v= / SRI maps, and js/core/script-loader.js refuses any lazy file a present SRI map lacks, so a
- *  roster missing here is dead on the live site (LAZY_GARAGE_EXTERIOR and LAZY_DEV were, until 2026-11-10). */
-function loaderRosters() {
-  const out = {};
-  for (const [name, v] of Object.entries(module.exports)) {
-    if (name === "DEFERRED") { out[name] = Object.values(v).flat(); continue; }
-    if (!/^LAZY_[A-Z_]+$/.test(name) || /_EDGES$/.test(name) || !Array.isArray(v)) continue;
-    out[name] = v.filter((f) => typeof f === "string");
-  }
-  return out;
-}
-/** The union of loaderRosters(), sorted and de-duplicated. */
-function loaderRosterFiles() {
-  return [...new Set(Object.values(loaderRosters()).flat())].sort();
-}
-
 module.exports = {
   MOVED,
   SW_LOCALES,
@@ -1838,5 +1820,4 @@ module.exports = {
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath, isCircuitDefFile,
-  loaderRosters, loaderRosterFiles,
 };
