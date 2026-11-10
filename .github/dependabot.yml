@@ -23,4 +23,16 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
-    labels: ["ci"]
+    labels: ["area:tooling"]   # an existing label (.github/labels.json); there is no `ci` label
+
+  # NPM: SECURITY UPDATES ONLY (2026-11-10). `open-pull-requests-limit: 0` turns off version-update PRs;
+  # Dependabot security updates are not bound by it and still open a PR for a vulnerable dependency, once
+  # "Dependabot security updates" is on in the repository settings.
+  # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#open-pull-requests-limit-
+  - package-ecosystem: npm
+    directories: ["/", "/desktop", "/mobile"]
+    target-branch: claude/f1-game-project-26h3ng
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    labels: ["area:tooling"]

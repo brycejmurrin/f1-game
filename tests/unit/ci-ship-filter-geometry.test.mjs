@@ -105,7 +105,7 @@ test("ci.yml runs on PRs into the deploy branch only, on four event types, with 
   assert.deepEqual(wf.on.pull_request.types, ["opened", "synchronize", "reopened", "ready_for_review"]);
   assert.equal(wf["run-name"], undefined, "no `CI ignored:` run titles: there is no noise run left to title");
   assert.equal(wf.concurrency.group,
-    "ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}",
+    "ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)) || format('ref-{0}', github.ref_name) }}",
     "a Pages call's key, then run_id for dispatch/schedule, then the PR branch — no label-/edit-noise groups");
   assert.equal(wf.jobs["draft-ci-skipped"], undefined, "the opt-out notice job is gone: a draft push runs");
   // Nothing a job evaluates names the label, the marker, the label payload or the edit payload any more.
@@ -129,9 +129,9 @@ test("a draft push runs the fast tier plus the selected legs on a 5-min budget; 
   const ctx = ({ action = "synchronize", draft = true } = {}) => ({
     github: {
       event_name: "pull_request", run_id: 4242, ref_name: "77/merge",
-      event: { action, pull_request: { draft, body: "", labels: [], head: { ref: "cursor/x" } } },
+      event: { action, pull_request: { number: 77, draft, body: "", labels: [], head: { ref: "cursor/x" } } },
     },
-    inputs: { fast_tier_run: "", concurrency_key: "", renderer_macos: false },
+    inputs: { concurrency_key: "", renderer_macos: false },
     // The plan routes everything, so only the tier gates decide what runs; the renderer and xr path
     // questions are steps that sit out a draft (ci-gate-selection pins their `if`), so their outputs are
     // empty there, and empty reads as "do not run" in both jobs.
@@ -152,7 +152,7 @@ test("a draft push runs the fast tier plus the selected legs on a 5-min budget; 
   for (const id of ["node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr", "train-twins", "baseline-trial"])
     assert.ok(!draft.jobs[id], `a draft push does not run ${id} (ready_for_review does)`);
   assert.equal(draft.verdict, "CI (draft fast tier)", "a draft never supplies the required `CI` name (#2664)");
-  assert.equal(draft.group, "ci-cursor/x", "a draft push replaces the PR's live run");
+  assert.equal(draft.group, "ci-pr-77", "a draft push replaces the PR's live run (keyed on the PR number)");
   assert.equal(draft.budget, "5", "one ~5-min selected shard on a draft");
   for (const action of ["opened", "synchronize", "reopened"]) assert.deepEqual(view(ctx({ action })), draft, `${action}: the same draft tier`);
   for (const action of ["synchronize", "ready_for_review"]) {
@@ -161,7 +161,7 @@ test("a draft push runs the fast tier plus the selected legs on a 5-min budget; 
     assert.equal(ready.budget, "", "ready keeps select-specs' default budget");
     for (const id of on(draft)) assert.ok(ready.jobs[id], `ready still runs ${id}`);
     for (const id of ["node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr"]) assert.ok(ready.jobs[id], `ready runs ${id}`);
-    assert.equal(ready.group, "ci-cursor/x");
+    assert.equal(ready.group, "ci-pr-77");
   }
   // The nightly keeps its 60-min budget; a dispatch and the train keep select-specs' default.
   assert.equal(evalTemplate(budgetEnv, { github: { event_name: "schedule", event: {} }, inputs: { concurrency_key: "" } }), "60");
