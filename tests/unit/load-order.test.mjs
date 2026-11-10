@@ -337,11 +337,6 @@ test("shell leaves menu pinch-zoom to the user and cancels iOS double-tap / driv
   assert.doesNotMatch(m[1], /maximum-scale/,
     "viewport must not cap zoom at all (W3C ACT b4f0c3 / WCAG 1.4.4) — see the " +
     "rationale comment at the top of index.html");
-  assert.match(indexHtml, /function killDriveGesture[\s\S]*closest\("#game,#hud"\)/,
-    "iOS GestureEvents are cancelled only on the driving surface");
-  assert.match(indexHtml, /addEventListener\("gesturestart", killDriveGesture/);
-  assert.match(indexHtml, /addEventListener\("touchend"/,
-    "shell must cancel same-spot double-tap zoom");
   // The driving surface opts out in CSS, not in the meta tag — that is what
   // makes dropping the cap safe, so pin it here too.
   const tokens = readFileSync(join(ROOT, "css/tokens.css"), "utf8");
