@@ -85,7 +85,9 @@ function load(options = {}) {
   } } : undefined;
   const ctx = vm.createContext({ I18n: i18nStub(),
     Math, JSON, Object, Array, String, Number, Date, Set, Map, Promise,
-    isNaN, isFinite, parseInt, console, setTimeout, clearTimeout, queueMicrotask, indexedDB,
+    isNaN, isFinite, parseInt, console, queueMicrotask, indexedDB,
+    setTimeout: options.setTimeout || setTimeout, clearTimeout: options.clearTimeout || clearTimeout,
+    AbortController: options.AbortController,
     navigator: options.navigator,
     localStorage: {
       getItem: (k) => options.getItem ? options.getItem(k, disk) : disk.has(k) ? disk.get(k) : null,
@@ -816,22 +818,89 @@ test("a fallback with nothing to restore persists the fallback pointer once the 
 // Each callback is scheduled separately, as with the browser lock task. The
 // owner persists until its document is destroyed (simulated by close()).
 function writerLocks() {
-  let owner = null;
+  let owner = null; const waiting = [];
+  const grant = () => { const next = waiting.shift(); if (next) { owner = next.client; next.resolve(next.callback({ name: "apex26-career-writer" })); } };
   return {
     client() {
       const client = { request(name, options, callback) {
         assert.equal(name, "apex26-career-writer");
+        assert.equal(options.mode, "exclusive");
+        // The bounded second request (#5000) queues like the real manager and
+        // rejects with AbortError when its signal fires first.
+        if (options.signal) {
+          assert.equal(options.ifAvailable, undefined, "ifAvailable and signal cannot be combined");
+          return new Promise((resolve, reject) => {
+            const entry = { client, callback, resolve };
+            waiting.push(entry);
+            options.signal.addEventListener("abort", () => {
+              const at = waiting.indexOf(entry); if (at < 0) return;
+              waiting.splice(at, 1); reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            });
+            if (!owner) grant();
+          });
+        }
         assert.equal(options.ifAvailable, true);
         return Promise.resolve().then(() => {
           if (owner) return callback(null);
           owner = client;
           return callback({ name });
         });
-      }, close() { if (owner === client) owner = null; } };
+      }, close() { if (owner === client) { owner = null; grant(); } } };
       return client;
     },
   };
 }
+// The deadline of the bounded wait, fired by hand.
+function writerClock() {
+  const clock = { deadline: null, cleared: 0,
+    setTimeout(fn, ms) { if (ms === 1500) { clock.deadline = fn; return "writer"; } return setTimeout(fn, ms); },
+    clearTimeout(id) { if (id === "writer") { clock.cleared++; clock.deadline = null; } else clearTimeout(id); } };
+  return clock;
+}
+const settle = () => new Promise((r) => setImmediate(r));
+
+test("#5000: a reload that asks before the dying document's lock is released waits, then owns the save", async () => {
+  const locks = writerLocks(), aLocks = locks.client(), clock = writerClock();
+  const a = load({ navigator: { locks: aLocks } });
+  await a.store.mirror.ready; a.Career.load(); a.Career.engage(true);
+  a.Career.data().money = 4242; a.Career.save();
+  // The reloaded document boots while the old one still holds the lock.
+  const b = load({ disk: a.disk, navigator: { locks: locks.client() }, AbortController, ...clock });
+  b.Career.load(); await settle();
+  assert.equal(b.store.careerWriter.state, "pending", "waiting is not owning");
+  assert.equal(typeof clock.deadline, "function", "the wait is bounded");
+  assert.equal(b.store.write("career.driver.0", save(1, 1)).ok, false, "no career write before the lock is held");
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 4242);
+  aLocks.close(); // the old document finally dies
+  await b.store.mirror.ready;
+  assert.equal(b.store.careerWriter.state, "owned");
+  assert.equal(clock.cleared, 1, "the deadline timer is cancelled");
+  assert.equal(b.Career.data().money, 4242, "pre-lock reads are discarded for the committed save");
+  b.Career.engage(true); b.Career.data().money++; b.Career.save();
+  assert.equal(b.Career.saveStatus().ok, true);
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 4243);
+});
+
+test("#5000: a genuine second tab still ends busy at the deadline and never takes over afterwards", async () => {
+  const locks = writerLocks(), aLocks = locks.client(), clock = writerClock();
+  const a = load({ navigator: { locks: aLocks } });
+  await a.store.mirror.ready; a.Career.load(); a.Career.engage(true);
+  const b = load({ disk: a.disk, navigator: { locks: locks.client() }, AbortController, ...clock });
+  b.Career.load(); await settle();
+  assert.equal(b.store.careerWriter.state, "pending");
+  a.Career.data().money = 7777; a.Career.save(); // the live owner keeps playing during the wait
+  clock.deadline();
+  await b.store.mirror.ready;
+  assert.equal(b.store.careerWriter.state, "busy");
+  b.Career.data().money = 1; b.Career.save();
+  assert.equal(b.Career.saveStatus().reason, "writer-busy");
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 7777);
+  aLocks.close(); await settle();
+  assert.equal(b.store.careerWriter.state, "busy", "after the deadline a losing tab must reload");
+  const next = load({ disk: a.disk, navigator: { locks: locks.client() }, AbortController, ...writerClock() });
+  await next.store.mirror.ready;
+  assert.equal(next.store.careerWriter.state, "owned", "the aborted request left nothing queued");
+});
 
 test("one lifetime writer protects saves before storage events, including a stale localStorage snapshot", async () => {
   const locks = writerLocks(), aLocks = locks.client(), bLocks = locks.client();
