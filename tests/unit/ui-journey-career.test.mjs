@@ -13,6 +13,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -109,11 +110,47 @@ test("career hub objective picks floor at --tap-paint", () => {
 test("CAREER MODES records slotsOrigin; title Esc never climbs to the hub", () => {
   const js = read("js/career/career-ui.js");
   const title = read("js/ui/title-flow.js");
-  assert.match(js, /let slotsOrigin = "title"/);
-  assert.match(js, /slotsOrigin = origin === "hub" \? "hub" : "title"/);
-  assert.match(js, /picking && slotsOrigin === "hub" && Career\.active\(\)/);
-  assert.match(js, /openSlots\("hub"\)/);
-  assert.match(title, /careerUi\.openSlots\("title"\)/);
+  assert.match(js, /openSlots\("hub"\)/, "the hub's CAREER MODES door opens the picker as hub-origin");
+  assert.match(title, /careerUi\.openSlots\("title"\)/, "the title opens the picker as title-origin");
+  // THE BEHAVIOUR, executed: the module's own slotsOrigin declaration,
+  // openSlots(), close() and the #cr-back handler (Esc reaches the same door
+  // through data-esc-close), over a live career — the case the bug bit.
+  const cut = (from, to) => {
+    const a = js.indexOf(from), b = js.indexOf(to, a);
+    assert.ok(a >= 0 && b > a, `career-ui.js slice ${JSON.stringify(from)}`);
+    return js.slice(a, b);
+  };
+  const origin = cut("  let slotsOrigin = ", "\n");
+  const open = cut("  function openSlots(origin) {", "  // close() is the one exit");
+  const close = cut("  function close() {", "  // NEW CAREER field gate");
+  const back = cut('  $("cr-back").onclick = () => {', '  $("cr-garage").onclick');
+  const els = { career: { hidden: true }, "cr-back": {}, overlay: { hidden: true } };
+  const ctx = {
+    calls: [], Log: { info() {} }, GameAudio: { uiSelect() {} },
+    $: (id) => els[id] || null, els: { overlay: els.overlay },
+    Career: { active: () => true, useSlot() {} },
+    SeasonCal: { load: () => null, hasProgress: () => false, rounds: () => 24 },
+    G: { soundOn: false, openCareer() { ctx.calls.push("hub"); }, qualiClear() {}, refreshCareerButton() {} },
+  };
+  vm.runInNewContext(
+    "var picking = false, armedDelete = '', armedImport = '', pendingImport = null, draft = null, draftFrom = null, backupReadGeneration = 0;\n" +
+    origin + "\nfunction build() {}\n" + open + close + back +
+    "\nglobalThis.ui = { openSlots, close, back: () => $('cr-back').onclick(), origin: () => slotsOrigin };", ctx,
+    { filename: absSrc("js/career/career-ui.js") });
+  const leave = (opener) => {
+    ctx.calls.length = 0; els.overlay.hidden = true;
+    ctx.ui.openSlots(opener);
+    ctx.ui.back();
+    return ctx.calls.includes("hub") ? "hub" : (els.overlay.hidden === false && els.career.hidden ? "title" : "?");
+  };
+  assert.equal(ctx.ui.origin(), "title", "the default origin is the title");
+  assert.equal(leave("title"), "title", "title → CAREER MODES → Esc lands on the title, never CAREER 2026");
+  assert.equal(leave(undefined), "title", "an unspecified opener is the title");
+  assert.equal(leave("hub"), "hub", "hub → CAREER MODES → BACK climbs to the hub");
+  // A hub-opened picker that closed does not leave the next title-opened one hub-bound.
+  ctx.ui.openSlots("hub"); ctx.ui.close();
+  assert.equal(ctx.ui.origin(), "title", "close() resets the origin");
+  assert.equal(leave("title"), "title", "after a hub visit, the title's picker still leaves to the title");
 });
 
 test("NEW CAREER START is gated on name / 3-letter code / number 1–99", () => {

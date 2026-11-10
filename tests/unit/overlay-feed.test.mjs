@@ -32,6 +32,17 @@ test("battle uses Broadcast's strict one-second gate", () => {
   assert.equal(Feed.battle(cars(1.01)), null);
 });
 
+test("a caller's own battle (or null) wins over the progress scan", () => {
+  const Feed = load();
+  const noProg = [{ code: "LEC", pos: 1 }, { code: "VER", pos: 2 }];
+  assert.equal(Feed.frame({ state: "race", ranked: noProg, battle: null }).battle, null, "no prog: no 0.00 s fight");
+  assert.deepEqual(JSON.parse(JSON.stringify(Feed.frame({ state: "race", ranked: noProg,
+    battle: { ahead: "LEC", behind: "VER", gapS: 0.4567 } }).battle)), { ahead: "LEC", behind: "VER", gapS: 0.457 });
+  assert.equal(Feed.frame({ state: "race", ranked: noProg, battle: { ahead: "LEC" } }).battle, null, "a malformed battle is none");
+  assert.deepEqual(JSON.parse(JSON.stringify(Feed.frame({ state: "race", ranked: cars(.5) }).battle)),
+    { ahead: "LEC", behind: "NOR", gapS: .5 }, "no battle key: the scan still runs (TV graphics)");
+});
+
 test("sector colours and glyphs match the HUD predicate", () => {
   const Feed = load();
   const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -58,8 +69,8 @@ test("frame schema maps ranked cars without writing them", () => {
   });
   assert.equal(frame.v, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(frame.rows)), [
-    { pos: 1, code: "LEC", team: "#e8002d", interval: null, gap: null, tyre: "M", pit: false, you: false },
-    { pos: 2, code: "NOR", team: "#ff8700", interval: .4, gap: .4, tyre: null, pit: true, you: true },
+    { pos: 1, code: "LEC", team: "#e8002d", interval: null, gap: null, tyre: "M", pit: false, out: false, you: false },
+    { pos: 2, code: "NOR", team: "#ff8700", interval: .4, gap: .4, tyre: null, pit: true, out: false, you: true },
   ]);
   assert.deepEqual(JSON.parse(JSON.stringify(frame.battle)), { ahead: "LEC", behind: "NOR", gapS: .4 });
   assert.equal(JSON.stringify(ranked), before, "read-only mapping");
