@@ -167,9 +167,8 @@ test("a method-shorthand create(G) factory is scanned like `function create(G)`"
   const prop = "const X = (() => ({ create: function (G) { G.zzW = 1; } }))();\n";
   assert.ok(collectUsage("<fixture>", prop).some((h) => h.kind === "write" && h.names[0] === "zzW"));
   const files = ctxModuleFiles();
-  for (const rel of ["js/perf/soak-run.js", "js/perf/bench-run.js"]) {
-    assert.ok(files.includes(rel), `${rel} receives G from game.js and must be under the usage check`);
-  }
+  assert.deepEqual(["js/perf/soak-run.js", "js/perf/bench-run.js"].filter((rel) => !files.includes(rel)), [],
+    "these receive G from game.js and must be under the usage check");
 });
 
 test("every global handed the ctx is covered by the usage leg", () => {

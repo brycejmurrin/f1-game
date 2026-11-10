@@ -120,7 +120,8 @@ test("an unparseable js/ file fails the run (non-zero exit), it is not counted c
     assert.equal(count(root), 1, "a parse error must count as a failure");
     const r = spawnSync(process.execPath, [TOOL, "--root", root], { encoding: "utf8" });
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.match(r.stdout, /PARSE js\/bad\.js/);
+    const parse = r.stdout.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("PARSE "));
+    assert.deepEqual(parse.map((l) => l.split(/[\s:]+/)[1]), [["js", "bad.js"].join("/")], "the run names the one unparseable file");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

@@ -152,8 +152,8 @@ test("a run never modifies the real source — the mutant lives only in the shad
       spec: (spec, cwd) => {
         assert.equal(sha(real), before, "the REAL file changed while the mutant was applied");
         assert.notEqual(path.resolve(cwd), path.resolve(ROOT), "the spec must run inside the shadow tree");
-        const shadowSrc = fs.readFileSync(path.join(cwd, m.file), "utf8");
-        assert.ok(shadowSrc.includes(m.replace) && !shadowSrc.includes(m.find), "the shadow copy carries the mutant");
+        assert.equal(fs.readFileSync(path.join(cwd, m.file), "utf8"), fs.readFileSync(real, "utf8").replace(m.find, m.replace),
+          "the shadow copy is the real file with exactly this mutant applied");
         assert.ok(fs.existsSync(path.join(cwd, spec)), "the spec resolves inside the shadow");
         seen.push(cwd);
         return new Map(Object.entries(m.catchers).map(([name, mustFail]) => [name, !mustFail]));

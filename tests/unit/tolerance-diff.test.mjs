@@ -9,10 +9,12 @@ import { fileURLToPath } from "node:url";
 import { check, loosenings, parseDiff, loadExceptions } from "../../tools/check/tolerance-diff.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+// One production hunk every fixture diff carries (the check only runs when production code changed).
+const PROD_HUNK = ["diff --git a/js/game.js b/js/game.js", "--- a/js/game.js", "+++ b/js/game.js", "@@ -5 +5 @@", "-let a = 1;", "+let a = 2;"];
 const diff = (testFile, removed, added, { prod = true } = {}) => [
   `diff --git a/${testFile} b/${testFile}`, `--- a/${testFile}`, `+++ b/${testFile}`, "@@ -10 +10 @@",
   `-${removed}`, `+${added}`,
-  ...(prod ? ["diff --git a/js/game.js b/js/game.js", "--- a/js/game.js", "+++ b/js/game.js", "@@ -5 +5 @@", "-let a = 1;", "+let a = 2;"] : []),
+  ...(prod ? PROD_HUNK : []),
 ].join("\n");
 
 test("a widened toBeCloseTo next to a production change fails", () => {
@@ -103,7 +105,7 @@ const SEEDS = [
 const seeded = (rem, add) => [
   "diff --git a/tests/unit/x.test.mjs b/tests/unit/x.test.mjs", "--- a/tests/unit/x.test.mjs", "+++ b/tests/unit/x.test.mjs", "@@ -1 +1 @@",
   ...rem.map((l) => `-${l}`), ...add.map((l) => `+${l}`),
-  "diff --git a/js/game.js b/js/game.js", "--- a/js/game.js", "+++ b/js/game.js", "@@ -5 +5 @@", "-let a = 1;", "+let a = 2;",
+  ...PROD_HUNK,
 ].join("\n");
 for (const [name, rem, add] of SEEDS) {
   test(`seeded loosening is red: ${name}; its tightening is green`, () => {

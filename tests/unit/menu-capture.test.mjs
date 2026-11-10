@@ -141,7 +141,7 @@ test("layout-audit --diff with NOTHING compared is not a pass (all skipped, or n
     const d = diffAudits(b, a);
     assert.equal(d.compared, 0);
     assert.equal(diffVerdict(d), "EMPTY");
-    assert.match(formatDiff(d).at(-1), /^= diff EMPTY: 0 cells compared/);
+    assert.equal(formatDiff(d).at(-1).split(",")[0], "= diff EMPTY: 0 cells compared");
   }
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "audit-diff-test-"));
@@ -150,7 +150,7 @@ test("layout-audit --diff with NOTHING compared is not a pass (all skipped, or n
     fs.writeFileSync(f, JSON.stringify(skippedOnly));
     const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ui/layout-audit.mjs"), "--diff", f, "--after=" + f], { encoding: "utf8" });
     assert.equal(r.status, 1, r.stderr || r.stdout);
-    assert.match(r.stdout, /^= diff EMPTY/m);
+    assert.equal(r.stdout.trim().split("\n").at(-1).split(":")[0], "= diff EMPTY", "the CLI's verdict line");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -164,7 +164,7 @@ test("fit-audit's verdict: an error cell, any finding, or an empty matrix is a r
   const err = fitVerdict([clean, { screen: "select", viewport: vp, error: "Execution context was destroyed" }]);
   assert.equal(err.code, 1);
   assert.equal(err.errors.length, 1);
-  assert.match(err.errors[0], /select 852x393: Execution context/);
+  assert.equal(err.errors[0].split(": ")[0], "select 852x393", "the error names the cell");
   assert.equal(fitVerdict([{ ...clean, tap: [{ el: "#x", w: 20, h: 20, sev: "under-floor" }] }]).code, 1);
   assert.equal(fitVerdict([]).code, 1, "no cell measured is not clean");
 });

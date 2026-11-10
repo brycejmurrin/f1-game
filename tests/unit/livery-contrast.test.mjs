@@ -588,5 +588,5 @@ test("an unknown --team is refused by name, not swept as zero teams and passed",
   assert.equal(pickTeams(A, null), A.Teams.LIST);
   const r = spawnSync(process.execPath, [path.join(ROOT, "tools/car/livery-contrast.mjs"), "--team=nope"], { encoding: "utf8", timeout: 30000 });
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /unknown --team nope/);
+  assert.equal(r.stderr.trim().split(" (known:")[0], "livery-contrast: unknown --team nope");
 });

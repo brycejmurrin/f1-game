@@ -35,8 +35,8 @@ test("scopeAll() / requireKnown(): an empty match and an unknown id throw; scope
   const run = (env, code) => spawnSync(process.execPath, ["-e", code],
     { cwd: ROOT, encoding: "utf8", env: { ...process.env, APEX_CIRCUITS: env } });
   const lib = `const L = require("./tools/lib/circuit-scope.cjs");`;
-  let r = run("zzz", `${lib} L.scopeAll(["monza"], "t")`);
-  assert.notEqual(r.status, 0); assert.match(r.stderr, /t: APEX_CIRCUITS=zzz matches none of the 1 circuits/);
+  let r = run("zzz", `${lib} try { L.scopeAll(["monza"], "t"); } catch (e) { process.stderr.write(e.message); process.exit(2); }`);
+  assert.equal(r.status, 2); assert.equal(r.stderr.split(" — ")[0], "t: APEX_CIRCUITS=zzz matches none of the 1 circuits");
   r = run("monza,zzz", `${lib} process.stdout.write(JSON.stringify(L.scopeAll(["monza","spa"])))`);
   assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout, '["monza"]', "a partly-known scope keeps what it names (a CI scope may name a deleted circuit)");
   r = run("", `${lib} process.stdout.write(JSON.stringify(L.scopeAll(["monza","spa"])))`);
@@ -50,20 +50,22 @@ test("scopeAll() / requireKnown(): an empty match and an unknown id throw; scope
 test("the CLIs refuse a scope or an id that matches nothing (exit non-zero, a clear message)", () => {
   const cli = (env, ...args) => spawnSync(process.execPath, args, { cwd: ROOT, encoding: "utf8",
     env: { ...process.env, APEX_CIRCUITS: env } });
+  // [APEX_CIRCUITS, argv, exit code, the verdict line up to its " — " detail]. float-audit's three --all entry
+  // points (default, --foliage, --clip) each go through scopeAll: all three are run, not read.
+  const none = "APEX_CIRCUITS=zzz matches none of the " + require("../../tools/manifest.cjs").CIRCUITS.length + " circuits";
   const cases = [
-    ["zzz", ["tools/track/float-audit.cjs", "--all"], /float-audit: APEX_CIRCUITS=zzz matches none/],
-    ["", ["tools/track/float-audit.cjs", "nosuch"], /float-audit: unknown circuit id\(s\) "nosuch"/],
-    ["zzz", ["tools/track/coplanar-audit.cjs", "--all", "--gate"], /coplanar-audit: APEX_CIRCUITS=zzz matches none/],
-    ["", ["tools/track/coplanar-audit.cjs", "--gate"], /coplanar-audit: no circuits named/],
-    ["", ["tools/track/coplanar-audit.cjs", "nosuch", "--gate"], /coplanar-audit: unknown circuit id\(s\) "nosuch"/],
-    ["", ["tools/track/centreline-kinks.cjs", "nosuch", "--gate"], /centreline-kinks: unknown circuit id\(s\) "nosuch"/],
-    ["zzz", ["tools/track/verify-track.cjs", "--all"], /verify-track --all: APEX_CIRCUITS=zzz matches none/],
+    ["zzz", ["tools/track/float-audit.cjs", "--all"], 2, `float-audit: ${none}`],
+    ["zzz", ["tools/track/float-audit.cjs", "--foliage", "--all"], 2, `float-audit: ${none}`],
+    ["zzz", ["tools/track/float-audit.cjs", "--clip", "--all"], 2, `float-audit: ${none}`],
+    ["", ["tools/track/float-audit.cjs", "nosuch"], 2, 'float-audit: unknown circuit id(s) "nosuch"'],
+    ["zzz", ["tools/track/coplanar-audit.cjs", "--all", "--gate"], 2, `coplanar-audit: ${none}`],
+    ["", ["tools/track/coplanar-audit.cjs", "--gate"], 2, "coplanar-audit: no circuits named"],
+    ["", ["tools/track/coplanar-audit.cjs", "nosuch", "--gate"], 2, 'coplanar-audit: unknown circuit id(s) "nosuch"'],
+    ["", ["tools/track/centreline-kinks.cjs", "nosuch", "--gate"], 2, 'centreline-kinks: unknown circuit id(s) "nosuch"'],
+    ["zzz", ["tools/track/verify-track.cjs", "--all"], 1, `FAIL: could not load track ids: verify-track --all: ${none}`],
   ];
-  for (const [env, args, re] of cases) {
-    const r = cli(env, ...args);
-    assert.notEqual(r.status, 0, `${args.join(" ")} (APEX_CIRCUITS=${env}) exited 0: ${r.stdout.slice(-200)}`);
-    assert.match(r.stderr, re, args.join(" "));
-  }
+  const got = cases.map(([env, args]) => { const r = cli(env, ...args); return [r.status, r.stderr.trim().split("\n")[0].split(" — ")[0]]; });
+  assert.deepEqual(got, cases.map(([, , code, line]) => [code, line]));
 });
 
 test("shard(): i/n shards are a disjoint, order-preserving partition; unset keeps all; malformed throws", async () => {
@@ -92,11 +94,7 @@ test("every audit CLI's --all resolves its roster through scope()", () => {
     const src = read(`tools/track/${cli}.cjs`);
     assert.match(src, /(circuit-scope\.cjs"\)|scopeLib)\.scope(All)?\(/, `${cli}.cjs --all ignores APEX_CIRCUITS`);
   }
-  // float-audit has three --all entry points (foliage, clip, default); all three go through allIds() → scopeAll.
-  const fa = read("tools/track/float-audit.cjs");
-  assert.match(fa, /scopeLib\.scopeAll\(/);
-  assert.equal((fa.match(/target === "--all" \? allIds\(\)/g) || []).length, 2, "--foliage and --clip");
-  assert.match(fa, /const ids = allIds\(Tracks\);/, "the default --all");
+  // float-audit's three --all entry points (default, --foliage, --clip): run, not read, in the test above.
   // verify-track --all (ci.yml's "Every circuit still builds headlessly", 70 s on #510) too.
   assert.match(read("tools/track/verify-track.cjs"), /circuit-scope\.cjs"\)\.scopeAll\(loadTrackIds\(\)/, "verify-track --all ignores APEX_CIRCUITS");
 });

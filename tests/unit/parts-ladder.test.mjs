@@ -167,8 +167,7 @@ test("runLadder: an unknown --team or --cats is a usage error naming it", () => 
   const err = (s) => errs.push(s);
   assert.equal(runLadder(["--team=nope"], { M, log: () => {}, err }), 2);
   assert.equal(runLadder(["--cats=wheels,nope,nada", "--json"], { M, log: () => {}, err }), 2);
-  assert.match(errs[0], /unknown --team nope/);
-  assert.match(errs[1], /unknown --cats nope, nada/);
+  assert.deepEqual(errs.map((e) => e.split(" (")[0]), ["parts-ladder: unknown --team nope", "parts-ladder: unknown --cats nope, nada"]);
   assert.equal(runLadder(["--team=mclaren", "--cats=wheels"], { M, ...quiet }), 0);
 });
 

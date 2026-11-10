@@ -248,8 +248,10 @@ function bootRes({ coarse, stored = {} }) {
   });
   vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
   const el = (id) => ({ id, value: "", textContent: "", hidden: true, classList: { toggle() {}, contains: () => false }, closest: () => null });
-  const store = { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; }, raw: () => null, rawSet() {} };
+  // GameStore semantics: set(k, undefined) REMOVES the key (null would be stored as JSON null).
+  const store = { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { if (v === undefined) delete stored[k]; else stored[k] = v; }, raw: () => null, rawSet() {} };
   vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: { setRenderScale: (v) => calls.scale.push(v) }, updateTrackPreview() {} });
+  calls.stored = stored;
   return calls;
 }
 
@@ -262,7 +264,7 @@ test("RESOLUTION: a phone with nothing stored boots at MED (0.75), pinned", () =
 
 test("RESOLUTION: a stored choice wins over the touch default", () => {
   for (const [mode, v] of [["low", 0.5], ["high", 1.0], ["med", 0.75]]) {
-    const c = bootRes({ coarse: true, stored: { resMode: mode } });
+    const c = bootRes({ coarse: true, stored: { resMode: mode, resSchema: 2 } });
     assert.deepEqual(c.painted, [mode], `stored ${mode} stays ${mode}`);
     assert.deepEqual(c.scale, [v]);
   }
@@ -270,6 +272,44 @@ test("RESOLUTION: a stored choice wins over the touch default", () => {
   assert.deepEqual(auto.painted, ["auto"]);
   assert.deepEqual(auto.scale, [], "AUTO pins nothing");
   assert.deepEqual(auto.autoRes, [true], "AUTO hands the scale to the governor");
+});
+
+// #5198 part 3: a phone's stored LOW from before #5166 was the old DEFAULT, not a choice (a settings
+// file saved then carried it as a value). Bryce's export: resMode "low", not in `changed`. resSchema 2
+// runs once: the implicit phone LOW follows the default again; a LOW picked after that is kept.
+test("RESOLUTION migration: a phone's pre-#5166 stored LOW boots at MED and is unset, once", () => {
+  const c = bootRes({ coarse: true, stored: { resMode: "low" } });
+  assert.deepEqual(c.painted, ["med"]);
+  assert.deepEqual(c.scale, [0.75]);
+  assert.equal("resMode" in c.stored, false, "removed (not null), so a later default change applies too");
+  assert.equal(c.stored.resSchema, 2);
+  // The player then really picks LOW: the next boot keeps it (the migration does not re-run).
+  c.stored.resMode = "low";
+  const again = bootRes({ coarse: true, stored: c.stored });
+  assert.deepEqual(again.painted, ["low"]);
+  assert.deepEqual(again.scale, [0.5]);
+});
+
+test("RESOLUTION migration: only a phone's LOW moves; HIGH/MED/AUTO and a desktop's LOW stay", () => {
+  for (const mode of ["med", "high", "auto"]) {
+    const c = bootRes({ coarse: true, stored: { resMode: mode } });
+    assert.deepEqual(c.painted, [mode], `phone ${mode} kept`);
+    assert.equal(c.stored.resSchema, 2);
+  }
+  const desk = bootRes({ coarse: false, stored: { resMode: "low" } });
+  assert.deepEqual(desk.painted, ["low"], "LOW was never a desktop default, so it was chosen");
+  assert.deepEqual(desk.scale, [0.5]);
+  const fresh = bootRes({ coarse: true });
+  assert.equal(fresh.stored.resSchema, 2, "a fresh install is stamped, so a LOW it later picks survives");
+  assert.equal("resMode" in fresh.stored, false, "the migration writes no resMode of its own");
+});
+
+test("RESOLUTION migration: Bryce's own export is the case it fixes", () => {
+  const exp = JSON.parse(read("tests/data/settings-defaults-export.json"));
+  assert.equal(exp.settings.display.resMode, "low", "stored (a perDevice unset key exports null)");
+  assert.ok(!exp.changed.includes("display.resMode"), "equal to the default it shipped with, never chosen");
+  const c = bootRes({ coarse: true, stored: { resMode: exp.settings.display.resMode } });
+  assert.deepEqual(c.scale, [0.75]);
 });
 
 test("RESOLUTION: a pointer device with nothing stored is unchanged (AUTO, governor-driven)", () => {

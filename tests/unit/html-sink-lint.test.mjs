@@ -116,7 +116,10 @@ test("an audited site whose right-hand side changes fails as CHANGED", () => {
     assert.deepEqual(a.changed.map((c) => c.key), [`${A}::el.innerHTML`]);
     const r = spawnSync(process.execPath, [TOOL, "--root", root], { encoding: "utf8" });
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.match(r.stdout, /CHANGED \S+a\.js::el\.innerHTML[\s\S]*RE-AUDIT/);
+    const out = r.stdout.split("\n").map((l) => l.trim());
+    const at = out.findIndex((l) => l.startsWith("CHANGED "));
+    assert.equal(out[at].split(": ")[0], `CHANGED ${A}::el.innerHTML`, "the CLI names the changed site");
+    assert.equal(out[at + 1].split(":")[0], "RE-AUDIT it", "…and says what to do about it");
 
     // A row with no rhs vouches for nothing: CHANGED too.
     fs.writeFileSync(path.join(root, "tests", "data", "html-sink-allowlist.json"),

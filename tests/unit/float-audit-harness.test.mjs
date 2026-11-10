@@ -26,8 +26,15 @@ test("float-audit's build sees the baked elevation profiles (Suzuka spans > 30 m
   assert.ok(prims.length - from > 1000, `only ${prims.length - from} primitives recorded`);
 });
 
-test("float-audit loads the engine through tools/lib/track-build-vm.cjs, not a private load list", () => {
-  const src = require("node:fs").readFileSync(new URL("../../tools/track/float-audit.cjs", import.meta.url), "utf8");
-  assert.match(src, /require\("\.\.\/lib\/track-build-vm\.cjs"\)/);
-  assert.doesNotMatch(src, /vm\.createContext|TRACK_VM\.slice/, "a second VM harness has crept back in");
+test("float-audit builds exactly what the shared harness builds (no private load list)", () => {
+  // A second VM harness drifts (its load list stopped at "@circuits"): the audit's world must BE the shared one's.
+  const audit = require("../../tools/track/float-audit.cjs").buildContext();
+  const shared = require("../../tools/lib/track-build-vm.cjs").buildContext({ stackFor: null });
+  for (const id of ["suzuka", "spa"]) {
+    const a = audit.Tracks.buildCenterline(audit.Tracks.LIST.find((d) => d.id === id));
+    const b = shared.Tracks.buildCenterline(shared.Tracks.LIST.find((d) => d.id === id));
+    assert.equal(a.n, b.n, `${id} sample count`);
+    assert.deepEqual([...a.py], [...b.py], `${id} centreline heights differ from the shared harness's`);
+  }
+  assert.deepEqual([...audit.Tracks.LIST.map((d) => d.id)].sort(), [...shared.Tracks.LIST.map((d) => d.id)].sort(), "the same roster");
 });
