@@ -151,7 +151,8 @@ const CareerExperience = (function () {
     }
     story.appendChild(rail);
     const milestones = part("div", "milestones");
-    if (c.deal) {
+    // MY TEAM has no contract to run down.
+    if (c.deal && c.flavour !== "myteam") {
       const contract = el("div");
       contract.append(el("strong", "", "Contract"), el("span", "", Career.goalLabel(c.deal.goal)),
         el("small", "", c.deal.left + (c.deal.left === 1 ? " season remaining" : " seasons remaining")));

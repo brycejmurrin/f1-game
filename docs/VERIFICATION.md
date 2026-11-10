@@ -22,7 +22,7 @@ pushed branch. A Bryce-attended session may run ONE named spec locally on his ex
 | `js/render/webgpu/` or `js/render/three/` | the path-scoped rule in `.claude/rules/` says what to run; software probes are not evidence about a player's GPU, so dispatch `gpu-census.yml` on `macos-latest` and read its Verdict step |
 | engine / physics / `js/game.js` | the local floor is `tooling-fast --changed`; the groups `pick-tests` names run on the PR; name any left unrun as not-run in the PR |
 | a whole browser group (not one spec) | `node tools/ci/remote-group.mjs <group>` on the PUSHED branch (`browser-group.yml`, four llvmpipe shards, 10–15 min wall) |
-| geometry pushed to the deploy branch, or a group this box cannot time | `npm run test:sweeps` when the diff reaches the FLEET build (`tools/ci/geometry-paths.mjs`); a lighting, car, debris-world or driving-line edit needs only its TARGETED suite (`--targeted`). Else (Bryce-attended: the hooks ask first) dispatch `ci.yml` with `group: <name>` and read the four Smoke jobs |
+| geometry the FLEET build executes (`tools/ci/geometry-paths.mjs`), or a group this box cannot time | locally only the floor (rule 3): never `npm run test:sweeps` here. CI's `sweeps` job runs the fleet on the PR when the diff reaches it (a lighting, car, debris-world or driving-line edit runs only its TARGETED suite there); for earlier proof (Bryce-attended: the hooks ask first) dispatch `ci.yml` with `group: <name>` and read the four Smoke jobs |
 
 ## 1. Which tests does this change need?
 
@@ -58,10 +58,12 @@ serve `js/` and `css/` from the working tree.
 
 ## 3. The pre-push floor
 
-`tooling-fast --changed --jobs=3 --quiet` plus the ONE spec `pick-tests` /
-`select-specs` names, run in the background (`node tools/ci/test-bg.mjs --spec
-tests/specs/<file>.spec.js`); `node tools/track/verify-track.cjs <id>` for a
-circuit; the docs-only fast path for prose:
+`tooling-fast --changed --jobs=3 --quiet`; `node tools/track/verify-track.cjs <id>`
+for a circuit; the docs-only fast path for prose. No agent runs a browser spec
+locally (AGENTS.md rule 5): the specs `pick-tests` / `select-specs` name are proven
+by the PR's `selected` shard, and a whole group runs on the pushed branch with
+`node tools/ci/remote-group.mjs <group>` (the group names are the ones
+`pick-tests` prints):
 
 ```sh
 node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs
@@ -174,7 +176,7 @@ successful rerun.
 ## 6. CI and Pages
 
 PR CI validates the PR head; the deploy branch requires one check, `gate`, whose
-ci row requires `CI` green on the head (D-002). Every PR push starts CI (a
+ci row requires `CI` green on the head (D-031). Every PR push starts CI (a
 draft's run is the fast tier plus the 5-min-budget `selected` legs, §3); `= ci none` after a
 push means no open PR carries the sha. A deploy-branch push starts the Pages release
 train; there is no separate ship-push CI run. A green PR is not proof that Pages

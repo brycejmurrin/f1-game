@@ -1,0 +1,1 @@
+Fixed: A career save the game cannot open (from a newer build, or damaged) no longer shows as an empty slot that NEW CAREER overwrites, and opening an older cached build no longer moves your career pointer off it.

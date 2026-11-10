@@ -20,7 +20,7 @@ second controller. `APEX_DEBUGGER_PORT` selects the bridge port on daemon and
 callers; the Chrome CDP endpoint is a separate address supplied by its owner.
 Starting a process does not attach tools to the chat; project MCP changes need
 client reload/trust. After an edit to `tools/mcp/js-debugger-*.mjs` (`apex_status`'s
-`server.stale` watches only apex-tools' own files): restart the MCP (client reload or `/mcp`)
+`server.stale` dates the apex-tools process, not this daemon): restart the MCP (client reload or `/mcp`)
 and the owned `serve-http` daemon (Ctrl-C, start again), then re-attach; every
 old pause token dies with it. Never edit global agent instructions for this workflow.
 
@@ -31,8 +31,8 @@ node tools/mcp/debug-chrome.mjs start --headless-game
 node tools/mcp/debug-chrome.mjs status
 ```
 
-This starts the static server on 3456 and headless Chromium on 9222 at 844×390
-with touch (`--device desktop` selects 1280×720); it refuses beside a test run.
+This starts the static server and headless Chromium (ports, viewports and the
+refusals: `debug-chrome.mjs --help`); it refuses beside a test run.
 `--headless-game` suppresses game drawing for logic hunts on software GL; omit
 it when pixels are required. Reuse an existing authorized browser instead of
 starting another. The launcher is a CLI (MCP: `apex_debug_chrome`); the debugger

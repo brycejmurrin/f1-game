@@ -65,49 +65,30 @@ function truncIn(root) {
   return out;
 }
 
-// (c) TAP TARGETS. The tools share ONE floor + measure: tools/ui/tap-floor.mjs
-//   (WCAG 24 + body --tap, label union, ÷ currentCSSZoom, min(w,h), 0.5 px slack)
-//   — layout-audit, menu-mock and fit-audit findings compare. Below, by hand:
-// TRAP 1: read --tap off <body>, NOT :root. The touch ladder is declared
-//   `body:not(.desktop) { --tap: 52px }`. Asking documentElement returns the
-//   44px DESKTOP floor on every device and undercounts every phone cell.
-// TRAP 2: the activation target is the UNION of a control and its wrapping
-//   <label>; measuring a bare checkbox reports 13x13 for something you tap at
-//   342x16.
-// TRAP 3: getBoundingClientRect() inside `.sheet` returns ZOOMED px
-//   (zoom: var(--ui-scale)). Divide by el.currentCSSZoom for CSS px. A row that
-//   paints 57px is ~52 CSS px at the coarse-pointer UI scale of 1.09 — it PASSES
-//   a 52px floor. (The scale lives in the `css/tokens.css` coarse block, mirrored
-//   in `js/ui/scale.js`; 1.0 on a desktop pointer, so the arithmetic bites on
-//   touch and whenever a player dials UI SIZE up, which the matrix does.)
-// TRAP 4: DO NOT SCORE ON min(width, height). Height is the thumb dimension; a
-//   full-height tab that is merely NARROW is not a small target. Examples that
-//   read as false alarms on the minimum: `.dh-tab-live` at 44x52 (fine: a short
-//   label on a full-height tab) and `.sel-chip` at 85x45 (fine: --chip-h is
-//   deliberately one step below --tap).
-//   Report BOTH dimensions and judge height against the ladder; use the
-//   min only for the WCAG 24x24 test, which really is both-axes.
+// (c) TAP TARGETS. ONE rule: tools/ui/tap-floor.mjs (judgeTap + measureTapTarget,
+//   pinned by tests/unit/ui-reset-tap-floor.test.mjs); layout-audit, menu-mock and
+//   fit-audit all judge by it. Do NOT hand-write another. Install it in the page:
+//   paste the output of
+//     node -e 'import("./tools/ui/tap-floor.mjs").then((m) => console.log(m.TAP_FLOOR_SRC))'
+//   into evaluate_script, then use window.__apexTap. What it already handles:
+// TRAP 1: --tap is read off <body>, NOT :root (css/tokens.css raises it on
+//   `body:not(.desktop)`; :root answers the desktop floor on every phone).
+// TRAP 2: a checkbox/radio is activated by the UNION of it and its <label>.
+// TRAP 3: getBoundingClientRect() inside `.sheet` is ZOOMED px (zoom: var(--ui-scale));
+//   it divides by el.currentCSSZoom so the box compares with --tap in CSS px.
+// Triage, not scoring: a `small` hit on a merely NARROW full-height tab, or a chip
+//   sized to --chip-h, may be deliberate — report BOTH w and h, then judge.
 function tapsIn(root) {
-  const floor = parseFloat(getComputedStyle(document.body).getPropertyValue('--tap')) || 44;
-  const chip  = parseFloat(getComputedStyle(document.body).getPropertyValue('--chip-h')) || floor;
+  const T = window.__apexTap, floors = T.floors();
   const SEL = "button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
   const out = [];
   for (const el of root.querySelectorAll(SEL)) {
-    let r = el.getBoundingClientRect();
-    if (r.width < 1 || r.height < 1) continue;
-    const lab = el.closest('label');
-    if (lab) { const lr = lab.getBoundingClientRect(); r = { width: Math.max(r.width, lr.width), height: Math.max(r.height, lr.height) }; }
-    const z = el.currentCSSZoom || 1;
-    const w = r.width / z, h = r.height / z;                 // CSS px, not painted
-    const wcagFail = Math.min(w, h) < 24;                    // SC 2.5.8 AA — both axes
-    // 1.5px of slack: the zoom division rounds (52 x 1.15 = 59.8 -> 51.99).
-    const shortForLadder = h < chip - 1.5;
-    if (wcagFail || shortForLadder)
-      out.push({ el: el.id || String(el.className).split(' ')[0],
-                 w: Math.round(w), h: Math.round(h), wcagFail,
-                 note: h < floor - 1.5 && h >= chip - 1.5 ? 'chip-height, check if deliberate' : '' });
+    const m = T.measure(el, root);
+    if (m.box.width < 1 || m.box.height < 1) continue;
+    const j = T.judge(m, floors);
+    if (j.tiny || j.small) out.push({ el: el.id || String(el.className).split(' ')[0], w: Math.round(m.w), h: Math.round(m.h), ...j });
   }
-  return { floor, chip, under: out };
+  return { floors, under: out };
 }
 
 // (d) DOCUMENT OVERFLOW — always a bug on a fixed-viewport game.
@@ -177,7 +158,7 @@ and is NOT the survey — defects hide on the shapes and screens nobody opens.
 | `#trackdesigner` | `mb-designer` |
 | `#photo-studio` | `mb-photo` |
 | `#loading` | pre-race, opened through its own module (see `SCREENS` `loading`) |
-| `#datahub` | `mb-data` (+ its 6 tabs: schedule/standings/lastrace/live/telemetry/export) |
+| `#datahub` | `mb-data` (+ each of its tabs: `js/data/hub.js`) |
 | `#teampicker` | garage → TEAM tab → `cs-team-card` |
 | `#customize` | garage → TEAM tab → `cs-customize` |
 | `#advanced` | settings → `pm-advanced` |
@@ -236,8 +217,8 @@ Sort by **failure mode, not by count**:
   defect; fix first
 - **truncated text** — a defect when the label IS the information ("CLOUD)" is
   not a weather option); acceptable when it is a known long value with a tooltip
-- **below `--tap`** — a defect under 24px CSS (WCAG 2.2 SC 2.5.8 AA); a house
-  preference between 24 and `--tap`
+- **below `--tap`** — `tiny` (under the WCAG 2.2 SC 2.5.8 floor) is a defect;
+  `small` (under body `--tap`) is a house preference (`tools/ui/tap-floor.mjs`)
 - **document h-overflow** — always a defect here
 - **dead space beside cramped space in one composition** — a design finding, not
   a bug; feed it to `css-play` (its restructure.md, linked from SKILL.md §References)
@@ -248,27 +229,28 @@ edge in portrait, and only a portrait sweep catches it.
 
 Then run the batch instrument to cover what you did not: `node tools/ui/layout-audit.mjs`
 (add `--shots` for a PNG per cell, `--scale=100,130,150` to add the scale axis).
-Finish with `node tools/ci/pick-tests.mjs --staged` and the groups it names — for
-menu/CSS work that is `test:ui`, whose `ui-audit.spec.js` is a capture harness that
-**asserts nothing**: read its PNGs, do not read its pass count. Expect
-`menu-baseline.spec.js` snapshots to change whenever menu geometry does, and
-re-bless them deliberately rather than by reflex.
+Then `node tools/ci/pick-tests.mjs --staged` names the groups; they run on the PR
+(AGENTS.md rule 5), or request one on the pushed branch with
+`node tools/ci/remote-group.mjs <group>`. The `gallery` group's `ui-audit.spec.js`
+is a capture harness that **asserts nothing**: read its PNGs, not its pass count.
+Expect the `baseline` group's `menu-baseline.spec.js` snapshots to change whenever
+menu geometry does; re-bless them deliberately rather than by reflex.
 
 ---
 
 ## Common mistakes
 
-- Reading `--tap` from `:root` — returns the desktop floor on every device.
-- Scoring a tap target on `min(width, height)` — a full-height tab that is merely
-  narrow reads as a small target.
+- Hand-rolling a tap floor instead of installing `tools/ui/tap-floor.mjs` — a
+  second rule gives a second answer for the same button (`:root` `--tap`, no
+  label union, no zoom division were all past bugs).
 - Treating a scroller as a clipper — mass false positives.
 - Comparing a `getBoundingClientRect()` height against a CSS-px token without
-  dividing by `currentCSSZoom` — everything inside `.sheet` looks 15% too big.
+  dividing by `currentCSSZoom` — everything inside `.sheet` looks too big.
 - Measuring during the open transition — the screen reports as absent.
 - Soft-reload without cache bypass — you measure the previous stylesheet (hard-reload; tags stay `?v=dev`).
 - Screenshotting with the WebGL canvas visible — large black regions that look
   exactly like a layout bug.
 - Leaving the MCP browser on a live game page while Playwright runs — contention
   that produces false timeouts.
-- Testing only at UI scale 100 — players can still dial 115–150 via SETTINGS,
-  and some layout bugs only show above 100%.
+- Testing only at UI scale 100 — players dial UI SIZE in SETTINGS (range:
+  `tools/ui/ui-scale-axis.mjs`), and some layout bugs only show above 100%.

@@ -7,7 +7,7 @@ Never force-push. Never rebase published history.
 
 ```sh
 node tools/ci/deploy.mjs --plan       # fetch, show their commits / ours / conflicts / touched circuits — runs nothing
-node tools/ci/deploy.mjs --gate-only  # fetch → merge → test:tooling-fast → ci.yml's node suites → sweeps (if the union moves geometry) → verify-track; pushes nothing
+node tools/ci/deploy.mjs --gate-only  # the deploy gate on the merged union (its steps: --help); pushes nothing
 ```
 
 The local floor is AGENTS.md rule 3, not `--gate-only`: the PR's tiers
@@ -37,7 +37,7 @@ What changed underneath it, and why the old steps are gone:
    `version.json`, and `curl` reaches github.io too (see below) — never the
    in-repo wrapper.
 4. **A PR is the path that lands work** — the deploy branch is protected: its
-   ruleset requires the checks `CI` and `gate` and forbids direct pushes
+   ruleset "Deploy-reset" requires one check, `gate` (it binds admins), and forbids direct pushes
    (skill `steward` `references/vendors.md` §`LAND_TOKEN`). GitHub creates the merge commit, so the PR
    is a real record — a local fast-forward auto-closes the PR instead (#67).
    No session arms auto-merge: `land.yml` arms it once the `land` label is on a

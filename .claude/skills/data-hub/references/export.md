@@ -2,8 +2,8 @@
 
 NOT a CSV and NOT the in-race
 trace buffer. Gather = OpenF1 only (`meetings` -> `sessionsForMeeting` ->
-`sessionDrivers` -> `fastestLap` -> `locationData`, paced 2-5 s/call, ~10 min,
-429 waits 90 s, misses retried once after 2 min) into `{circuits:{key:{trace,sf}}}`;
+`sessionDrivers` -> `fastestLap` -> `locationData`, paced; a 429 waits and retries, misses get one more
+pass — timings are `gatherStartLines`) into `{circuits:{key:{trace,sf}}}`;
 Download = hand-rolled `makeZip` of `startlines-<year>.json` + `img/<circuit>.png`
 (canvas). "Empty" export = Download disabled until Gather completes, or every
 circuit logged `· no lap/loc` (OpenF1 delayed/429 - read the status box), or
