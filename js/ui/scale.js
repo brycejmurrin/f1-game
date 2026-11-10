@@ -144,10 +144,13 @@ const UiScale = (() => {
       // boot, so an unclamped read here silently applied an out-of-range scale while
       // the slider's own displayed number — always clamped — showed something else.
       // THE SLIDER IS WHAT PAINTS (#5206). rowFor() clamps the range to what this window can paint (the race
-      // fit's --hud-cap; UI SIZE keeps its full range), so the thumb, the number and the custom property are one value
+      // fit's --hud-cap; UI SIZE keeps its full range), so the thumb and the number are what is painted
       // and no part of the travel is dead. The STORED wish is left alone until the player moves the slider.
       let r = rowFor(key);
-      const root = document.documentElement, want = typeof stored === "number" ? String(r.value / 100) : "";
+      // --hud-scale carries the STORED wish, as before #5206: a widget placed in ARRANGE HUD paints raw --hud-scale, so
+      // writing the fit-capped value resized it whenever the cap moved (hud-layout.spec "small sectors right of
+      // Boost": 57 -> 61.7 px on Resume). The bands already paint min(wish, cap). The other two write what paints.
+      const root = document.documentElement, want = typeof stored === "number" ? String((key === "hudScale" ? scalePct(key) : r.value) / 100) : "";
       const wrote = cssWas[prop] !== want;
       if (wrote) { cssWas[prop] = want; if (want) root.style.setProperty(prop, want); else root.style.removeProperty(prop); }
       if (key === "uiScale") r = rowFor(key);   // its label names the sheet's zoom, which the write above just moved
