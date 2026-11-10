@@ -901,6 +901,37 @@ test("TopModal: the ghost-tap shield swallows only a fast pointer repeat at the 
   assert.equal(click(row).stopped, false, "a slow swap: the next tap is a choice, not a double tap's ghost");
 });
 
+test("TopModal: the shield also swallows the ghost's pointerdown/pointerup, but only a click opens it (W34 row 6)", () => {
+  let now = 1000;
+  const h = bootTopModal(["overlay", "trackdesigner"], { Date: { now: () => now } });
+  const overlay = h.layer("overlay"), td = h.layer("trackdesigner");
+  td.hidden = true;
+  const door = h.add(overlay, "mb-designer", { y: 100 });
+  const canvas = h.add(td, "td-canvas", { y: 100 });
+  h.TopModal.scanLayers();
+  const ev = (type, target, o = {}) => {
+    const e = { type, target, isTrusted: true, detail: type === "click" ? 1 : 0, clientX: 100, clientY: 110, stopped: false, ...o };
+    e.preventDefault = () => {};
+    e.stopImmediatePropagation = () => { e.stopped = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  assert.equal(ev("pointerup", door).stopped, false);
+  assert.equal(ev("click", door).stopped, false, "the opening tap passes");
+  h.flip(td, false);
+  now += 120;
+  assert.equal(ev("pointerdown", canvas).stopped, true, "the 120 ms ghost's pointerdown never reaches the canvas");
+  assert.equal(ev("pointerup", canvas).stopped, true, "nor its pointerup (the designer places a point on it)");
+  assert.equal(ev("pointerup", canvas, { clientX: 500 }).stopped, false, "elsewhere on the new screen is a choice");
+  now += 400;
+  assert.equal(ev("pointerup", canvas).stopped, false, "after SHIELD_MS the canvas is live");
+  // A pointer event never opens a window of its own: with no click before the show, nothing is shielded.
+  h.flip(td, true); now += 5000;
+  ev("pointerdown", door); ev("pointerup", door);
+  h.flip(td, false); now += 50;
+  assert.equal(ev("pointerup", canvas).stopped, false);
+});
+
 test("TopModal: automation (navigator.webdriver) is never shielded — its fast clicks are deliberate", () => {
   let now = 1000;
   const h = bootTopModal(["overlay", "select"], { Date: { now: () => now }, navigator: { webdriver: true } });

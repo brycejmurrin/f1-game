@@ -4555,6 +4555,7 @@
       ],
       "config": [
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/select-season-tab.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "conflicted": [
@@ -4600,7 +4601,8 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "list": [
-        "tests/unit/career-round2.test.mjs"
+        "tests/unit/career-round2.test.mjs",
+        "tests/unit/select-season-tab.test.mjs"
       ],
       "load": [
         "tests/specs/season-format.spec.js",
@@ -4641,7 +4643,8 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "preset": [
-        "tests/unit/season-cal.test.mjs"
+        "tests/unit/season-cal.test.mjs",
+        "tests/unit/select-season-tab.test.mjs"
       ],
       "presetIds": [
         "tests/unit/season-cal.test.mjs"
@@ -4700,6 +4703,7 @@
       ],
       "setConfig": [
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/select-season-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "shuffled": [
@@ -5118,11 +5122,13 @@
     },
     "js/core/i18n-pseudo.js": {
       "*": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs"
       ]
     },
     "js/core/i18n.js": {
       "_installCatalog": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
@@ -5131,15 +5137,19 @@
         "tests/unit/race-radio.test.mjs"
       ],
       "boot": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs"
       ],
       "date": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
       "lang": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs"
       ],
       "pluralCategories": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs"
       ],
       "*": [
@@ -5640,12 +5650,14 @@
         "tests/unit/data-api-status.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
+        "tests/unit/store-null-default.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
     },
@@ -6059,8 +6071,10 @@
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
+        "tests/unit/race-control.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
         "tests/unit/tools-runnable.test.mjs"
@@ -6151,6 +6165,7 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/setup-tune.test.mjs",
+        "tests/unit/store-null-default.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/tyre-model.test.mjs",
@@ -8602,6 +8617,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/store-null-default.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -13935,6 +13951,17 @@
         "tests/unit/damage.test.mjs"
       ]
     },
+    "js/race/retired-card.js": {
+      "tick": [
+        "tests/unit/retired-card.test.mjs"
+      ],
+      "tickG": [
+        "tests/unit/retired-card.test.mjs"
+      ],
+      "wanted": [
+        "tests/unit/retired-card.test.mjs"
+      ]
+    },
     "js/race/session-entry.js": {
       "begin": [
         "tests/unit/race-entry-profile.test.mjs",
@@ -14103,6 +14130,11 @@
       "update": [
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/start-lights.test.mjs"
+      ]
+    },
+    "js/race/stopped-cars.js": {
+      "create": [
+        "tests/unit/race-control.test.mjs"
       ]
     },
     "js/race/storm-flash.js": {
@@ -16616,6 +16648,7 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/harness-display.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/select-season-tab.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs"
       ]
     },
@@ -18713,6 +18746,12 @@
       "buildSelect": [
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "calendarGroup": [
+        "tests/unit/select-season-tab.test.mjs"
+      ],
+      "calendarIdSet": [
+        "tests/unit/select-season-tab.test.mjs"
       ],
       "create": [
         "tests/unit/async-lifecycle.test.mjs",

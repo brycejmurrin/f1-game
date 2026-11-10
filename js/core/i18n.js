@@ -13,6 +13,35 @@ const I18n = (function () {
   const listeners = new Set();
   let fmtCache = Object.create(null);
 
+  // THE SHIPPED LOCALE LIST: one entry per locales/<tag>.json (manifest.json
+  // excluded); tests/unit/i18n-lang-validate.test.mjs pins it to the directory
+  // and to locales/manifest.json. A tag from storage, ?lang= or set() that is not
+  // on it (or on the loaded manifest) resolves to "en": a stored "x" threw
+  // RangeError from new Intl.PluralRules inside the frame loop, and a stored
+  // "../../etc" built a fetch URL from player-shaped disk data.
+  const SHIPPED_LANGS = Object.freeze(["en"]);
+  const PSEUDO_LANGS = Object.freeze(["en-XA"]);   // built in code (I18nPseudo), no file
+  const MAX_TAG = 35;
+  const TAG_RE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
+
+  function wellFormed(tag) {
+    if (typeof tag !== "string" || !tag || tag.length > MAX_TAG || !TAG_RE.test(tag)) return false;
+    try { Intl.getCanonicalLocales(tag); return true; } catch (_) { return false; }
+  }
+  /** A trimmed, well-formed BCP 47 tag, or null. Never throws. */
+  function cleanLang(v) {
+    const tag = typeof v === "string" ? v.trim() : "";
+    return wellFormed(tag) ? tag : null;
+  }
+  function isShipped(tag) {
+    if (SHIPPED_LANGS.includes(tag) || PSEUDO_LANGS.includes(tag)) return true;
+    return !!(manifest && wellFormed(tag) && Object.prototype.hasOwnProperty.call(manifest, tag));
+  }
+  /** An Intl locale argument that cannot throw RangeError. */
+  function safeLocale(tag) {
+    return wellFormed(tag) ? tag : "en";
+  }
+
   function baseLang(lang) {
     const tag = String(lang || "en");
     if (tag === "en-XA") return "en";
@@ -27,11 +56,10 @@ const I18n = (function () {
     try {
       const search = String(loc.search || "");
       if (typeof URLSearchParams !== "undefined") {
-        const q = new URLSearchParams(search).get("lang");
-        return q && q.trim() ? q.trim() : null;
+        return cleanLang(new URLSearchParams(search).get("lang"));
       }
       const m = /(?:^|[?&])lang=([^&]+)/.exec(search);
-      return m && m[1] ? decodeURIComponent(m[1]).trim() : null;
+      return m && m[1] ? cleanLang(decodeURIComponent(m[1])) : null;
     } catch (_) {
       return null;
     }
@@ -39,8 +67,7 @@ const I18n = (function () {
 
   function readSavedLang() {
     if (typeof GameStore === "undefined") return null;
-    const v = GameStore.store.get(LANG_KEY, null);
-    return typeof v === "string" && v.trim() ? v.trim() : null;
+    return cleanLang(GameStore.store.get(LANG_KEY, null));
   }
 
   function detectFromNavigator() {
@@ -98,7 +125,7 @@ const I18n = (function () {
   function pluralRules(lang) {
     const key = baseLang(lang);
     let pr = _plural.get(key);
-    if (!pr) { pr = new Intl.PluralRules(key); _plural.set(key, pr); }
+    if (!pr) { pr = new Intl.PluralRules(safeLocale(key)); _plural.set(key, pr); }
     return pr;
   }
   function resolvePlural(msg, lang, vars) {
@@ -150,14 +177,14 @@ const I18n = (function () {
   function n(x, opts) {
     const lang = activeLang;
     const k = cacheKey(lang, "n:" + JSON.stringify(opts || {}));
-    if (!fmtCache[k]) fmtCache[k] = new Intl.NumberFormat(baseLang(lang), opts);
+    if (!fmtCache[k]) fmtCache[k] = new Intl.NumberFormat(safeLocale(baseLang(lang)), opts);
     return fmtCache[k].format(x);
   }
 
   function date(d, opts) {
     const lang = activeLang;
     const k = cacheKey(lang, "d:" + JSON.stringify(opts || {}));
-    if (!fmtCache[k]) fmtCache[k] = new Intl.DateTimeFormat(baseLang(lang), opts);
+    if (!fmtCache[k]) fmtCache[k] = new Intl.DateTimeFormat(safeLocale(baseLang(lang)), opts);
     return fmtCache[k].format(d);
   }
 
@@ -202,6 +229,13 @@ const I18n = (function () {
     }
     await loadManifest();
     if (gen !== loadGen) return;
+    // Only a tag on the shipped list or the loaded manifest names a file.
+    if (!isShipped(lang)) {
+      if (typeof Log !== "undefined") Log.warn("i18n", "unshipped language; English", String(lang).slice(0, MAX_TAG));
+      readyDone = true;
+      return;
+    }
+    if (activeLang !== lang) { activeLang = lang; setHtmlLang(lang); }
     const hash = manifestHash(lang);
     const url = "locales/" + encodeURIComponent(lang) + ".json" + (hash ? "?v=" + hash : "");
     let loaded;
@@ -217,11 +251,14 @@ const I18n = (function () {
   }
 
   async function boot(lang) {
-    const next = lang || resolveDetectOrder();
+    // A caller's tag is validated like a stored one; a well-formed tag the
+    // manifest has not confirmed yet runs as "en" until loadCatalog does.
+    const want = lang ? (cleanLang(lang) || "en") : resolveDetectOrder();
+    const next = isShipped(want) ? want : "en";
     activeLang = next;
     setHtmlLang(next);
     readyDone = false;
-    readyPromise = loadCatalog(next).then(() => {
+    readyPromise = loadCatalog(want).then(() => {
       readyDone = true;
       notify();
     });
@@ -246,12 +283,12 @@ const I18n = (function () {
   }
 
   async function set(lang, opts) {
-    const next = String(lang || "en").trim() || "en";
+    const next = cleanLang(lang) || "en";
     const persist = !(opts && opts.persist === false);
     if (persist && typeof GameStore !== "undefined") GameStore.store.set(LANG_KEY, next);
     await boot(next);
     if (typeof I18nDom !== "undefined") I18nDom.apply();
-    return next;
+    return activeLang;
   }
 
   /** Test-only: install a catalogue without fetch. */
@@ -273,7 +310,7 @@ const I18n = (function () {
   }
 
   function pluralCategories(lang) {
-    return new Intl.PluralRules(baseLang(lang)).resolvedOptions().pluralCategories;
+    return new Intl.PluralRules(safeLocale(baseLang(lang))).resolvedOptions().pluralCategories;
   }
 
   if (typeof document !== "undefined") {
@@ -285,7 +322,7 @@ const I18n = (function () {
   return {
     t, raw, n, date,
     lang, set, ready, onChange, dir, boot,
-    pluralCategories,
+    pluralCategories, SHIPPED_LANGS,
     _installCatalog, _resetForTest, _detect: resolveDetectOrder,
   };
 })();

@@ -276,6 +276,19 @@ test("Practice Goal native select follows Apex dark chrome", () => {
   assert.equal(decl(rules, "#practice-brief option", "background"), "var(--plate)");
 });
 
+// The phone card's hero section never scrolls, so the practice brief above the
+// still is one row there (title + GOAL) and its description is clipped to
+// assistive tech; the layout itself is held by time-trial.spec.js at 844x390.
+test("Practice brief is one row on the compact phone card", () => {
+  const rules = css("css/select.css");
+  const card = '#sel-inner[data-density="compact"]:not([data-shape="tall"])';
+  assert.equal(decl(rules, `${card} #practice-brief`, "flex-direction"), "row");
+  assert.equal(decl(rules, `${card} #practice-brief`, "flex-wrap"), "nowrap");
+  assert.equal(decl(rules, `${card} #practice-brief[hidden]`, "display"), "none", "the row rule must not un-hide the brief");
+  assert.equal(decl(rules, `${card} #practice-brief > p`, "clip-path"), "inset(50%)");
+  assert.equal(decl(rules, `${card} #practice-brief .set-row`, "flex-wrap"), "nowrap");
+});
+
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
   const h = bootMenus();
   assert.deepEqual(h.chips(), ["all", "season", "classic"], "the shipped filter bar, no FAVOURITES chip");

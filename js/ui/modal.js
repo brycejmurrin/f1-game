@@ -441,14 +441,17 @@ window.TopModal = (function () {
      EDIT RACE: #sel-go then #rs-go). Keyboard activation (detail 0), a
      script's el.click() (untrusted) and automation (navigator.webdriver,
      whose bot-speed clicks are deliberate, as loading-card.js treats it)
-     always pass; tests/unit/menu-a11y-audit.test.mjs covers the guard. */
+     always pass; tests/unit/menu-a11y-audit.test.mjs covers the guard.
+     Pointer down/up too (W34): the designer canvas acts on pointerup. Only a
+     click opens a window; pointer detail is always 0, so detail-0 is click-only. */
   const SHIELD_MS = 350, SHIELD_PX = 32;
   let lastTap = null, shield = null;
   function shieldLayer(layer) {
     if (lastTap && Date.now() - lastTap.at < SHIELD_MS) shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y };
   }
   function onClickShield(e) {
-    if (!e.isTrusted || e.detail === 0) return;
+    const isClick = e.type === "click";
+    if (!e.isTrusted || (isClick && e.detail === 0)) return;
     if (typeof navigator !== "undefined" && navigator && navigator.webdriver === true) return;
     const s = shield, now = Date.now();
     if (s && now < s.until && s.layer.contains(e.target) &&
@@ -457,7 +460,7 @@ window.TopModal = (function () {
       e.stopImmediatePropagation();
       return;
     }
-    lastTap = { at: now, x: e.clientX, y: e.clientY };
+    if (isClick) lastTap = { at: now, x: e.clientX, y: e.clientY };
   }
 
   function init() {
@@ -468,6 +471,8 @@ window.TopModal = (function () {
     document.addEventListener("keydown", onEscape, true);
     document.addEventListener("focusin", onFocusIn, true);
     window.addEventListener("click", onClickShield, true);
+    window.addEventListener("pointerdown", onClickShield, true);
+    window.addEventListener("pointerup", onClickShield, true);
   }
 
   // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.

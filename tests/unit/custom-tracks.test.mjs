@@ -262,7 +262,9 @@ test("toRaw hands the factory what a circuit file would author", () => {
 test("the picker knows the custom tail (source contract)", () => {
   const src = read("js/ui/select-screen.js");
   assert.match(src, /\["custom", "MY CIRCUITS"\]/, "a MY CIRCUITS chip");
-  assert.match(src, /filter === "season"\) return !\(t\.classic \|\| t\.custom\)/, "SEASON hides customs");
+  // SEASON / CLASSICS route through calendarGroup, whose first rule files a
+  // custom under MY CIRCUITS (behaviour: select-season-tab.test.mjs).
+  assert.match(src, /if \(t\.custom\) return "custom";/, "SEASON and CLASSICS hide customs");
   assert.match(src, /filter === "custom"\) return !!t\.custom/, "MY CIRCUITS shows only customs");
   assert.match(src, /trb trb-custom/, "the CUSTOM badge");
   assert.match(read("css/race-setup.css"), /\.trb-custom \{/, "…styled");

@@ -81,6 +81,11 @@ const GameStore = (function () {
         }
         this._cache.set(key, v);
       }
+      // A stored JSON `null` under a reader that supplies an object/array
+      // default is a miss, not a value: get("parts.<team>", {}) handed null to
+      // the garage sheet, which threw reading parts.engine. A null/primitive
+      // default keeps null (title layout, season, career slots mean "cleared").
+      if (v === null && d !== null && typeof d === "object") return this._def(k, d);
       return v === undefined ? this._def(k, d) : v;
     },
     // What the PLAYER stored (or set this session), with no shipped default and

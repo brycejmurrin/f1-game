@@ -393,6 +393,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `parc-ferme.js` | `ParcFerme` | LAZY_RACE_SESSION | PARC FERMÉ beat (ceremony plan slice 3 / #4069). |
 | `cooldown-lap.js` | `CooldownLap` | LAZY_RACE_SESSION | COOLDOWN LAP (CooldownLap): post-flag drive beat for the ceremony flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). |
 | `ceremony.js` | `RaceCeremony` | LAZY_RACE_SESSION | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
+| `stopped-cars.js` | `StoppedCars` | LAZY_RACE_SESSION | STOPPED CARS (StoppedCars): race control's second hazard source (audit W34, 2026-11-10). |
+| `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | RETIRED CARD (RetiredCard). |
 
 **`js/workers/`**
 
