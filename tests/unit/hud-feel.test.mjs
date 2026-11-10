@@ -1160,12 +1160,7 @@ function scaleSb() {
   vm.runInNewContext(src("js/ui/scale.js") + "\nthis.UiScale = UiScale;", sb, { filename: absSrc("js/ui/scale.js") });
   return sb;
 }
-test("BUTTON SIZE readout names the size the fit paints when the dock is capped", () => {
-  const f = scaleSb().UiScale.btnFitLabel;
-  assert.equal(f("245%", 245, "1.175"), "245% · fits 118%");
-  assert.equal(f("100%", 100, ""), "100%", "no cap written: the player's number");
-  assert.equal(f("100%", 100, "1.175"), "100%", "a cap above the value is not a limit");
-  assert.equal(f("118%", 117.5, "1.175"), "118%", "at the cap: nothing to explain");
+test("the steer dock's zoom is min()ed with BUTTON SIZE, and its labels divide by the same zoom", () => {
   const css = cssRules(readCssSource("css/touch-controls.css"));
   const zoom = decl(css, /^body:not\(\.desktop\) #dock-left,/, "zoom");
   assert.equal(zoom, "min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))", "the steer dock has its own zoom rule, min()ed with the slider like the pedal dock");
@@ -1580,7 +1575,7 @@ test("#4483: BUTTON SIZE fit suffix follows the dock cap, syncLayout is rAF-coal
  * the race fit measured at his two phone cells); tests/specs/ui-scale.spec.js drives the same rows in a live page. */
 const REG = JSON.parse(src("tests/data/control-registry.json"));
 const html = src("index.html");
-const { sizeRow, parseCaps } = scaleSb().UiScale.btnFitLabel;
+const { sizeRow, parseCaps } = scaleSb().UiScale;
 
 test("every range input in the shell is in the control registry, and the registry names no ghost", () => {
   const ids = [...html.matchAll(/<input\b[^>]*type="range"[^>]*>/g)].map((m) => (m[0].match(/\bid="([^"]+)"/) || [])[1]);
@@ -1623,7 +1618,7 @@ for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
     if (r.key === "hudBtnScale") {
       assert.equal(top.min, Math.ceil(caps.floor * 100), "the dock's painted floor (82 %; 92 % at 852x368) is the slider's minimum: no dead travel under it");
       assert.ok(Math.abs(top.max - caps.steer * 100) < 0.26, "BUTTON SIZE stops where the steer pad stops");
-      assert.match(top.label, new RegExp(`· pedals ${Math.round(caps.dock * 100)}%`), "and the row names the pedal column's smaller cap");
+      assert.equal(top.label.split(" · ")[1], `pedals ${Math.round(caps.dock * 100)}%`, "and the row names the pedal column's smaller cap");
     }
     if (r.key === "uiScale") {
       assert.equal(sizeRow(r.key, 200, r.lim, null, 2).label, "200%", "a sheet painting at the wish adds no note");
@@ -1632,8 +1627,11 @@ for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
       assert.deepEqual([ph.min, ph.max, ph.value, ph.label], [r.phoneMin, r.lim.max, r.phoneMin, `${r.phoneMin}%`], "his stored 61 % paints 70 % on a phone");
       assert.equal(sizeRow(r.key, 61, r.lim, null, 0, false).value, 61, "a desktop keeps 40 %");
       const tok = src("css/tokens.css");
-      assert.match(tok, /--fs-micro: max\(14px, calc\(12px \/ var\(--ui-scale, 1\)\)\);/, "menu text never paints under 12 px");
-      assert.match(tok, /--tap: max\(52px, calc\(44px \/ var\(--ui-scale\)\)\);/, "a touch row never paints under 44 px");
+      // The tokens' own arithmetic at the phone minimum: max(rung, floor / scale) * scale painted px, per declaration.
+      const z = r.phoneMin / 100, painted = (name) => [...tok.matchAll(new RegExp(`${name}: max\\((\\d+)px, calc\\((\\d+)px / var\\(--ui-scale`, "g"))]
+        .map((m) => Math.round(Math.max(+m[1], +m[2] / z) * z * 100) / 100);
+      assert.deepEqual(painted("--fs-micro"), [12, 12], "menu text (default and LARGE) paints 12 px at the phone minimum, never under");
+      assert.equal(painted("--tap").pop(), 44, "a touch row (the later, body:not(.desktop) rule) paints 44 px at the phone minimum");
     }
   });
 }

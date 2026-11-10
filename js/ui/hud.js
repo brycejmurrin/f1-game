@@ -1423,9 +1423,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (window.innerWidth > window.innerHeight) {
       const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
       const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
-      // The cluster is budgeted at its SHIPPED size whatever HUD SIZE says: a smaller HUD SIZE handed the pad the
-      // room and GREW the steer buttons (852x393: 140 px at 100 %, 168 at 70 %; #5206). capKeepS is the pad cap that
-      // also leaves a HUD SIZE above 100 % its painted cluster: BUTTON SIZE's slider stops there (js/ui/scale.js).
+      // The cluster is budgeted at its SHIPPED size: a smaller HUD SIZE used to GROW the steer pad (#5206).
+      // capKeepS also leaves a HUD SIZE above 100 % its cluster: BUTTON SIZE's slider stops there.
       const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom, hS = gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity;
       capDockS = Math.max(capDock, Math.min(hS, gS.w ? roomS / gS.w : Infinity));
       capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot)) - 1)) / gS.w : Infinity));
@@ -1513,8 +1512,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
-  // What this window can paint, published whether or not a cap binds: "top bot pedals steer steerKeep btnFloor"
-  // as zooms (9 = no limit). UiScale clamps the HUD SIZE / BUTTON SIZE sliders to it and labels the rows (#5206).
+  // What this window can paint: "top bot pedals steer steerKeep btnFloor" zooms, 9 = no limit (UiScale, #5206).
   hStyle(root, "--hud-cap", [capTop, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
   // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
   // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
