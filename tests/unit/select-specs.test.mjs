@@ -704,7 +704,7 @@ test("select(): a css edit runs its layout specs AND its js owner's routing (W31
   assert.equal(r.reason, "matched");
   const got = new Set([r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file)));
   for (const f of cssSpecs(["css/menus.css"])) assert.ok(got.has(f), `layout spec ${f} still runs`);
-  assert.ok(r.cssOwners.includes("js/ui/modal.js"), `menus.css routes with its owner: ${r.cssOwners}`);
+  assert.ok(new Set(r.cssOwners).has("js/ui/modal.js"), `menus.css routes with its owner: ${r.cssOwners}`);
 });
 
 test("select(): editing the selector itself is infra — narrower than the change, and says so", () => {
@@ -1827,7 +1827,7 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
     assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
   }
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /kind === "css" \? \[\.\.\.new Set\(\[\.\.\.cssSpecs\(changed\), \.\.\.routed\]\)\] : routed/);
+  // (The css-routes-with-its-owner wiring is pinned by behaviour in the W31 row 6 test below.)
   assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
 });
 
@@ -1950,14 +1950,13 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
     const docs = sel(["README.md"]);
     assert.equal(docs.reason, "docs");
     assert.equal(docs.shards.length, 0);
-    const step = fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8");
-    assert.match(step, /!shards\.length && !dropped && !\["none", "docs"\]\.includes\(r\.reason\)/, "the CI step fails closed on an empty code plan");
+    // The CI step's fail-closed on an empty code plan: selected-gate-verdict.test.mjs runs the step's report.
   });
 
   test("W31 row 2: vendor/ and the standalone pages route to real groups; some-unmatched is partial + floor", () => {
     const all = sel(["vendor/three-0.187.0/three.core.min.js", "overlay.html", "controller.html", "bench.html"]);
     assert.equal(all.reason, "matched");
-    for (const g of ["test:gfx", "test:modes", "test:input", "test:perf-frametime"]) assert.ok(all.groups.includes(g), `${g}: ${all.groups}`);
+    assert.deepEqual(["test:gfx", "test:modes", "test:input", "test:perf-frametime"].filter((g) => !new Set(all.groups).has(g)), [], `groups: ${all.groups}`);
     assert.ok(all.shards.length > 0);
     assert.ok(sel(["cockpit-view.html"]).groups.includes("test:ui"));
     // A path nothing claims, beside a claimed one: partial, the floor runs, the path is named.

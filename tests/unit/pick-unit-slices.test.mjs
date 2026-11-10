@@ -63,7 +63,7 @@ test("the raced circuit, the track engine and car parts run BOTH physics charact
   const vmSlices = [...testFileOwners().get("tests/unit/physics-characterization-vm.test.mjs")];
   assert.ok(vmSlices.length, "the VM twin is in some node slice's group");
   const raced = [...characterizationCircuits()];
-  assert.ok(raced.includes("monza"), `circuitsOf reads the raced circuit from the two copies: ${raced}`);
+  assert.ok(new Set(raced).has("monza"), `circuitsOf reads the raced circuit from the two copies: ${raced}`);
   for (const f of ["js/circuits/monza.js", "js/circuits/scenery/monza.js", "js/track/tracks.js",
     "js/track/core/spline.js", "js/car/parts.js"]) {
     const sel = new Set(pick([f]).slices.keys());
