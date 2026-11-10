@@ -199,7 +199,7 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
       state: one.json?.state || "open", draft: one.json?.draft !== false, merged: !!one.json?.merged,
       mergeableState: one.json?.mergeable_state ?? null,
       branch: one.json?.head?.ref || "", body: one.json?.body || "", title: one.json?.title || "",
-      labels, files: filesError ? null : files, filesError,
+      labels, files: filesError ? null : files, filesError, author: one.json?.user?.login || "",
     };
   }
   const r = git("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
@@ -272,8 +272,9 @@ export function planVerdict(body) {
   return { state: open.length ? "open" : "done", items: items.length, open };
 }
 
-/** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan passes with a `planWarning`. */
-export function withPlan(v, body) {
+/** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan refuses too, as merge-gate.mjs planRow
+ *  does (a fold bot's PR, `author` a `*[bot]` login, is exempt there and here). Pure. */
+export function withPlan(v, body, author = "") {
   if (!v || v.code !== 0 || body == null) return v;
   const p = planVerdict(body);
   if (p.state === "open") {
@@ -281,7 +282,11 @@ export function withPlan(v, body) {
     return { ...v, state: "plan-open", code: 1, plan: p,
       evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)` };
   }
-  if (p.state === "none") return { ...v, plan: p, planWarning: "PR body has no ## Plan checklist (AGENTS.md rule 12)" };
+  if (p.state === "none") {
+    if (/\[bot\]$/.test(String(author || ""))) return { ...v, plan: p };
+    return { ...v, state: "plan-missing", code: 1, plan: p,
+      evidence: "PR body has no ## Plan checklist (skill steward §Open) — add the template's Plan and close it; the merge gate refuses it too" };
+  }
   return { ...v, plan: p };
 }
 
@@ -389,12 +394,11 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
       judged = judge({ sha: resolved.sha, localOnly, request });
     }
   }
-  const v = withMemory(withPlan(judged, resolved.body), resolved.files,
+  const v = withMemory(withPlan(judged, resolved.body, resolved.author), resolved.files,
     { body: resolved.body || "", labels: resolved.labels || [], filesError: resolved.filesError || null });
   if (resolved.pr) record(resolved.pr, v.sha, v.code === 0, v.code === 0 ? "" : `${v.state}: ${v.evidence}`);
   if (asJson) log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
   else {
-    if (v.planWarning) say(`warning: ${v.planWarning}`);
     if (resolved.pr && v.code === 0) say("note: flip now (update_pull_request draft:false), then add `land`; a later push or Plan edit needs a fresh ready-gate run");
     // ADVISORY, never a block: the probe merges the deploy tip and runs the ratchets (preflip-probe.mjs).
     if (resolved.pr) say(preflipAdvisory(readProbeReceipt(resolved.pr), v.sha, resolved.pr));

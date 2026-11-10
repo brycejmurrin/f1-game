@@ -150,7 +150,8 @@ test("withPlan: an open Plan turns a green tip into plan-open (exit 1); no Plan 
   assert.deepEqual([v.state, v.code], ["plan-open", 1]);
   assert.ok(v.evidence.startsWith('4 of 4 Plan item(s) open: "one", "two", "three", ...'), v.evidence);
   assert.equal(withPlan(GREEN, body("- [x] one")).code, 0);
-  assert.ok(withPlan(GREEN, "## Goal\nx").planWarning);
+  assert.equal(withPlan(GREEN, "## Goal\nx").state, "plan-missing");
+  assert.equal(withPlan(GREEN, "## Goal\nx", "fold-bot[bot]").code, 0);
   assert.equal(withPlan({ ...GREEN, state: "failed", code: 1 }, body("- [ ] x")).state, "failed");
   assert.equal(withPlan(GREEN, null), GREEN);
 });
@@ -267,11 +268,13 @@ test("ready-gate / ship-pr text does not claim a hook requires the ready receipt
   }
 });
 
-test("a body with no ## Plan: ready-gate and the merge gate agree (both pass; ready-gate warns)", async () => {
-  // The audit said the merge gate now FAILS a Plan-less body; on this base merge-gate.mjs planRow passes it, so
-  // ready-gate keeps passing with a warning. This pins the two to the same answer either way.
+test("a body with no ## Plan: ready-gate and the merge gate agree (both refuse; a bot's PR passes both)", async () => {
+  // merge-gate.mjs planRow refuses a Plan-less body (except a *[bot] author) and ready-gate used to pass it with a
+  // warning, so a PR cleared ready-gate and then failed the merge gate. This pins the two to the same answer.
   const { planRow } = await import("../../tools/ci/merge-gate.mjs");
   const body = "## Goal\nx";
-  const gate = planRow(body), ready = withPlan(GREEN, body);
-  assert.equal(ready.code === 0, gate.ok, `ready-gate code ${ready.code} vs merge-gate plan row ok=${gate.ok}`);
+  for (const author of ["someone", "fold-bot[bot]"]) {
+    const gate = planRow(body, author), ready = withPlan(GREEN, body, author);
+    assert.equal(ready.code === 0, gate.ok, `${author}: ready-gate code ${ready.code} vs merge-gate plan row ok=${gate.ok}`);
+  }
 });
