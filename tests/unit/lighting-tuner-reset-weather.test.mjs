@@ -434,3 +434,27 @@ test("M12: fills still inherit an ordinary mast kind (the circuit's lamp colour)
   const amber = redness(api.buildTrackLights(track)).filter((r) => r > 1.5);
   assert.ok(amber.length > track.lampPosts.length, "sodium amber carried onto the fill lamps");
 });
+
+test("#5041: TIME / WEATHER preview chips stand down in a live VS FRIEND race (the sim keeps stepping under the net pause)", () => {
+  const h = bootTuner("dry");
+  const picks = [];
+  let net = true;
+  h.G.netPlay = { active: () => net };
+  h.G.setTimeOfDay = (t) => { if (t != null) picks.push("tod:" + t); return "dusk"; };
+  h.G.weather = (w) => { if (w != null) picks.push("wx:" + w); return h.st.weather; };
+  h.G.els.pmsettings = { hidden: false };
+  // The panel destructured the setters at create(); rebuild it (chips too) on the spies.
+  h.$("lt-preview").dataset = {};
+  h.panel = vm.runInContext("TunerPanel", h.ctx).create(h.G);
+  h.panel.buildLightTunePanel();
+  h.$("pm-lighting").onclick();
+  assert.equal(h.$("lt-preview").hidden, true, "the chip rows are hidden while a net race is live");
+  h.$("lt-wx-wet").onclick(); h.$("lt-tod-night").onclick();
+  assert.deepEqual(picks, [], "a chip reached through a stale DOM still changes nothing");
+  h.panel.closeLightTuner(false);
+  net = false;
+  h.$("pm-lighting").onclick();
+  assert.equal(h.$("lt-preview").hidden, false, "single player keeps the preview");
+  h.$("lt-wx-wet").onclick();
+  assert.deepEqual(picks, ["wx:wet"], "and the chips still preview there");
+});

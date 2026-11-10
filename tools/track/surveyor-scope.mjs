@@ -8,10 +8,19 @@
  * Anything else is rejected (the hook cannot bind the circuit id).
  */
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 
+// The id is checked against the real roster, not a character class: the old
+// /^[a-z0-9-]+$/ refused the seven ids with an underscore (albert_park,
+// brands_hatch, …), so their hand-back could never pass the scope step.
+const { CIRCUITS } = createRequire(import.meta.url)("../manifest.cjs");
 const [id, base, branch] = process.argv.slice(2);
-if (!id || !base || !branch || !/^[a-z0-9-]+$/.test(id)) {
+if (!id || !base || !branch) {
   console.error("usage: surveyor-scope.mjs <circuit-id> <base-sha> <surveyor-branch>");
+  process.exit(2);
+}
+if (!CIRCUITS.includes(id)) {
+  console.error(`surveyor-scope: unknown circuit id ${JSON.stringify(id)} — valid ids: ${CIRCUITS.join(", ")}`);
   process.exit(2);
 }
 const files = execFileSync("git", ["diff", "--name-only", `${base}..${branch}`], { encoding: "utf8" })
