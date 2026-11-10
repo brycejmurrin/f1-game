@@ -10137,6 +10137,9 @@
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs"
       ],
+      "localProfile": [
+        "tests/unit/net-lobby-lifecycle.test.mjs"
+      ],
       "makeAnswer": [
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs"
@@ -10517,7 +10520,8 @@
         "tests/unit/net-session.test.mjs"
       ],
       "wireId": [
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ],
       "*": [
         "tests/unit/net-grid-separation.test.mjs",
@@ -10548,7 +10552,8 @@
       ],
       "strategyState": [
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ]
     },
     "js/net/transport.js": {
