@@ -116,7 +116,11 @@ export async function measureCell(browser, baseUrl, { window = "standalone", uiS
         await resetToTitleState(page, { tag: `race ${preset.name}`, log: null });
         await page.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: "tier" }); });
         await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 90000 });
-        await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); window.__apex.snapCam(); });
+        // Freeze the sim in the same tick as the start: otherwise the field keeps racing through the HUD and pause
+        // measurements for however long this box takes, and which cars have crossed the line when finishRace() stamps
+        // the field decides which results rows carry a gap span (CI 2026-11-10: safari@40 results 34 vs 35 locally).
+        // The HUD probes freeze the same way (hud.js updateHud); jump() refreshes the HUD with force.
+        await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); window.__apex.snapCam(); window.__apex.freeze(true); });
         await page.waitForSelector("#hud:not([hidden])", { timeout: 15000 });
         await settle(page, 800);
       } catch (e) {
