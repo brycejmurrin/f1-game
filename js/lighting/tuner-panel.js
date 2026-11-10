@@ -28,10 +28,7 @@ function gateNote(d, v) {
     return held ? " · held after a display reset — set to 0 and back on to retry" : "";
   }
   if (!isChunk || !(v > 0)) return "";
-  // The BACKEND gate first: three.js has no per-chunk lamp binding at all, so
-  // on TLX the knob can never do anything however the tier and latch sit.
-  const g = G.gfx;
-  if (g && g.hasPerChunkLights === false) return " · not supported by the three.js renderer — switch to WebGL2 or WebGPU";
+  // No backend note: GLX, TLX and WGX all bind per-chunk lamps.
   let latched = false;
   try { latched = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* no storage: fall through to the tier check */ }
   if (latched) return " · held after a display reset — set to 0 and back on to retry";
@@ -344,9 +341,9 @@ $("lt-reset").onclick = () => {
   $("lt-json").hidden = true;
 };
 /* COPY VALUES HANDS OVER THE EDITS, NOT THE WHOLE FILE. The file+local MERGE —
-   every shipped preset plus the local overrides — measures 805 conditions,
-   7071 knobs and 182,569 characters against the
-   shipped light-presets.js. That is the right input for bake.mjs (a full
+   every shipped preset plus the local overrides — is every key of
+   js/lighting/presets.js (over a thousand conditions, several thousand knob
+   values: count them there, they move). That is the right input for bake.mjs (a full
    REPLACE needs a full snapshot) and the wrong thing entirely for the person
    holding the phone: it cannot be pasted into a message, and #lt-json is a
    10px box capped at 120px, so hand-selecting ~4,500 lines through it is not

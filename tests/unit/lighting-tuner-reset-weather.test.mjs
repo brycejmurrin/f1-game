@@ -149,12 +149,12 @@ test("lighting-3: chunk knob edits refresh dependent notes, clear latch on risin
   h.panel.refreshLightTunePanel();
   h.input("roadChunkLamps", 0); h.input("roadChunkLamps", 1);
   assert.doesNotMatch(h.$("lt-v-perChunkLights").textContent, /held/);
+  // No backend note any more: GLX, TLX and WGX all bind per-chunk lamps, so the
+  // latch outranks the governor tier and is the first gate a note can name.
   h.tier = 2; h.ctx.gfx.hasPerChunkLights = false;
   h.storage.set("apex26.perChunkOff", "1");
-  h.input("perChunkLights", 0.6);
-  assert.match(h.$("lt-v-roadChunkLamps").textContent, /not supported/);
-  h.ctx.gfx.hasPerChunkLights = true;
   h.input("perChunkLights", 0.7);
+  assert.doesNotMatch(h.$("lt-v-roadChunkLamps").textContent, /not supported/);
   assert.match(h.$("lt-v-roadChunkLamps").textContent, /display reset/);
   h.storage.delete("apex26.perChunkOff");
   h.input("perChunkLights", 0.8);
