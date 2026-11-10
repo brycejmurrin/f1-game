@@ -1,5 +1,7 @@
 # Apex steward card — 2026-10-05 (trimmed to pointers 2026-10-26)
 
+Summary: Always-on steward card + hashes (skip re-read of steward / check-changes / PR template when they match); lane mutex; `cursor/<topic>-<hash>` → ship; resolve-swarm cap; tooling/docs merge-train exclusion — superseded by RULEBOOK-REWRITE-2026-10-26.md
+
 Superseded by: [Rulebook rewrite 2026-10-26](RULEBOOK-REWRITE-2026-10-26.md)
 
 Always-on card for cloud / Grok sessions. Do not re-read

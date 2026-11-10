@@ -87,6 +87,11 @@ const OverlayFeed = (function () {
     } : null;
   }
 
+  function battleFrom(b) {
+    return b && b.ahead != null && b.behind != null && Number.isFinite(b.gapS)
+      ? { ahead: String(b.ahead), behind: String(b.behind), gapS: +b.gapS.toFixed(3) } : null;
+  }
+
   function rowsFrom(ranked) {
     const rows = [], lead = ranked && ranked[0];
     for (let i = 0; ranked && i < ranked.length; i++) {
@@ -100,6 +105,7 @@ const OverlayFeed = (function () {
         gap: i ? number(c.gapToLeaderS) ?? +(((lead.prog || 0) - (c.prog || 0)) / speed).toFixed(3) : null,
         tyre: tyreOf(c),
         pit: !!(c.pit || c.inPit),
+        out: !!(c.out || c.retired),
         you: !!(c.you || c.isPlayer),
       });
     }
@@ -127,7 +133,9 @@ const OverlayFeed = (function () {
         if (!rows) rows = rowsFrom(ranked);
         return rows;
       },
-      battle: battle(ranked, input.vScale),
+      // A caller with no progress/speed per car (the game-page publisher reads
+      // field() brief rows) passes its own battle, or null; the scan is for cars.
+      battle: input.battle !== undefined ? battleFrom(input.battle) : battle(ranked, input.vScale),
       sectors: sectorFrame(input.sectorLast, input.sectorBests, input.fieldSectorBests),
       caption: input.caption && input.caption.id != null ? {
         n: input.caption.n == null ? null : String(input.caption.n),
@@ -142,7 +150,7 @@ const OverlayFeed = (function () {
   function sameRow(a, b) {
     return a.pos === b.pos && a.code === b.code && a.team === b.team
       && a.interval === b.interval && a.gap === b.gap && a.tyre === b.tyre
-      && a.pit === b.pit && a.you === b.you;
+      && a.pit === b.pit && a.out === b.out && a.you === b.you;
   }
   function sameRows(a, b) {
     if (a === b) return true;

@@ -88,6 +88,12 @@ test("the claims board is never pruned, however old or unmerged", () => {
   assert.equal(kept[0].why, "protected name");
 });
 
+test("the phone-shots orphan branch (issue screenshots, #5246) is never pruned", () => {
+  const { prune, kept } = selectPrunable([b("phone-shots", 30)], { now: NOW, isMerged: () => true });
+  assert.deepEqual(prune, []);
+  assert.equal(kept[0].why, "protected name");
+});
+
 test("--also refuses a verdict that is not a judgement call (merged/active)", async () => {
   const { main } = await import("../../tools/ci/prune-branches.mjs");
   const err = console.error; let said = "";

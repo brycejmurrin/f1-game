@@ -238,12 +238,60 @@ test("a stricken car that came past the player may be re-passed, and it cannot o
   assert.deepEqual(run(w, f, 3, 6), [], "nothing was owed either way");
 });
 
+// THE REAL WATCH, IN THE REAL GAME. The caution is flown through the façade's
+// scripted hold (G.holdCaution — the hook js/race/real-race.js uses), because the
+// VM cannot raise one through debris. The pass is a teleport past exactly ONE
+// car (the one directly ahead), so the verdict names that car alone: game.js's
+// own scWatch.tick + stricken predicate decide, nothing here re-implements them.
+test("under the safety car, passing a healthy car warns and passing a car being rescued does not (game.js scWatch)", async () => {
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G, apex } = game;
+    apex.headless(true);
+    await game.race("monza", "day", "dry", { laps: 5 });
+    const ready = await game.stepUntil(() => G.state === "race" && G.raceT > 15, { maxSteps: 60 * 40 });
+    assert.ok(ready.ok, "the race is running");
+    G.holdCaution(3, "SAFETY CAR");
+    assert.ok((await game.stepUntil(() => apex.caution().level === 3, { maxSteps: 120 })).ok, "the held SC flies");
+    game.step(30);
+    const L = G.track.total;
+    // Put the player DELTA metres in front of the car directly ahead of it,
+    // short of the next one, on that car's lap and speed.
+    const passNext = (prep) => {
+      const p = G.player;
+      const ahead = G.cars.filter((c) => c !== p && !c.retired && !c.finished && c.prog > p.prog).sort((a, b) => a.prog - b.prog);
+      assert.ok(ahead.length >= 2, "two cars ahead of the player");
+      const [t, t2] = ahead;
+      // Moving: well above stricken()'s "all but stopped" line (vTop × 0.05).
+      assert.ok(t.speed > G.vTop() * 0.08 && !(t.pitState && t.pitState !== "none"), `the target runs on track (v ${t.speed})`);
+      const delta = Math.min(10, (t2.prog - t.prog) / 2);
+      if (prep) prep(t);
+      const owedBefore = apex.caution().owed;
+      const since = (game.sandbox.Log.records().slice(-1)[0] || { id: 0 }).id;
+      apex.jump(((t.s + delta) % L) / L, t.speed, t.x);
+      p.lap = t.lap; p.prog = t.prog + delta;
+      game.step(1);
+      assert.ok(p.prog > t.prog, "the player is ahead of the target after the step");
+      const warns = game.sandbox.Log.records({ ns: "game", since }).filter((r) => /Caution pass warn/.test(r.msg));
+      return { t, warns, owed: apex.caution().owed, owedBefore };
+    };
+    const rescued = passNext((t) => { t.rescueT = 2; });
+    assert.equal(rescued.warns.length, 0, "a car being rescued as stuck (rescueT > 0.25) may be passed under the SC");
+    assert.equal(rescued.owed, rescued.owedBefore, "…and nothing is owed for it");
+    const healthy = passNext();
+    assert.equal(healthy.t.rescueT || 0, 0, "the second target is healthy");
+    assert.equal(healthy.warns.length, 1, "passing a healthy car under the SC raises the give-back warning");
+    assert.equal(healthy.owed, healthy.owedBefore + 1, "one place is owed");
+  } finally { game.close(); }
+});
+
 test("game.js hands the pass watch its stricken-car predicate", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   assert.match(src, /const scWatch = SportingRegs\.createPassWatch\(0, stricken\);/, "the watch reads the shared predicate");
   const def = (/const stricken = \(o\) => [\s\S]*?;\n/.exec(src) || [""])[0];
   assert.match(def, /incidentSim\.owns\(o\)/, "a car mid-incident may be passed");
-  assert.match(def, /rescueT/, "a car being rescued as stuck may be passed");
+  // rescueT (a car being rescued as stuck may be passed) is proven by BEHAVIOUR
+  // in the VM test below, not by the word being present.
   assert.match(def, /offroad/, "a beached car may be passed");
   assert.match(def, /vTop\(\) \* 0\.05/, "a car all but stopped on track may be passed");
   // Blue-flag watch (same stricken predicate, same raw game.js read — do not
