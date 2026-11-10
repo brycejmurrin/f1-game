@@ -51,6 +51,12 @@
     // The main stand is authored in scenery/jerez.js (block 2, 0.005 -1 20 terracing). Without
     // this the generic 7-box shells also stand at nodes 0-24, where the line curves and they overlap.
     ownPitStraight: true,
+    // The pit building is authored too (scenery block 3: garage row, Tío Pepe tower, El Ovni), so the
+    // generic bay row stays off, as it was while the line sat in the short window before #5078. On
+    // this straight the returning Michelin leg runs 60 m away and 4.5 m higher: its terrain ribbon
+    // stands 0.1-2.8 m above the lane floor across the bays' 14-27 m footprint, and the bays' keep-out
+    // (to 30 m) leaves El Ovni and the tower no seat short of that leg.
+    pit: { side: 1, bays: false },
     terrainOuter: 110,
     pal: {
       zenith:        [0.34, 0.46, 0.64],
