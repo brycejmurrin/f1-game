@@ -96,7 +96,8 @@ test("short phone pause (≤400px) caps the sheet and uses a 2-col tray with no 
 test("the phone pause card (#5153 gap 10) is keyed on the body's own density + shape, for every layout", () => {
   const overlays = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
   const dialogs = readCssSource("css/dialogs.css");
-  const PHONE = String.raw`body\[data-density="compact"\]\[data-shape="wide"\]`;
+  // Two keys, one specificity: the body's own-px tier, or the window itself being short (#5200).
+  const PHONE = String.raw`body:is\(\[data-density="compact"\]\[data-shape="wide"\], \[data-pause-short\]\)`;
   // No layout gate: measured 2026-11-06 (docs/notes/UI-PR-D-MEASURE-2026-11-06.md), each
   // stored layout swapped in the 420 card and put QUIT 221-420 own px past the sheet.
   assert.doesNotMatch(overlays, /:root:not\(\[data-pause-layout\]\)/, "the phone card has no :root:not([data-pause-layout]) gate");
@@ -115,10 +116,66 @@ test("the phone pause card (#5153 gap 10) is keyed on the body's own density + s
   assert.match(overlays, new RegExp(String.raw`:root\[data-pause-side="right"\]:has\(> ` + PHONE + String.raw`\) #pausemenu \.sheet-body \{[^}]*"tools tools resume"`));
   // SIDEBAR's full-height strip is geometry: the phone card keeps its own height.
   assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu > \.sheet \{ height: auto; \}`));
-  // The thumb-reach RESUME bar is the 420 card's only: no [data-pause-layout] arm reaches a compact wide body.
-  const thumb = dialogs.slice(dialogs.indexOf("/* THUMB REACH"), dialogs.indexOf("/* Opaque enough that leftover HUD"));
-  assert.doesNotMatch(thumb, /:root\[data-pause-layout\] #pausemenu/, "the bar's [data-pause-layout] arm is gone");
-  assert.match(thumb, /body:not\(\[data-density="compact"\]\[data-shape="wide"\]\) #pausemenu > \.sheet \{/);
+  assert.doesNotMatch(overlays + dialogs, /body\[data-density="compact"\]\[data-shape="wide"\] (#pausemenu|#pm-|:is\(#pm-)/, "no pause rule is left on the own-px key alone");
+});
+
+// #5200 (Bryce, iPhone Home Screen app, build 25617: "on pause menu there's no resume"). At UI SIZE 51 % a landscape
+// phone is a NORMAL-density body in own px, so it got the 420 card, whose RESUME was a position: absolute "thumb
+// reach" bar; the scrolling body's edge-fade mask clipped it the moment the list overflowed. Measured before the
+// fix at 852x393: sheet 214 px wide, body scrolls 209 own px, elementFromPoint at RESUME's centre is the sheet.
+test("RESUME is the first door in the markup of every mode and is never taken out of flow (#5200)", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const dlg = html.slice(html.indexOf('<dialog id="pausemenu"'), html.indexOf("</dialog>", html.indexOf('<dialog id="pausemenu"')));
+  assert.match(dlg, /^<dialog id="pausemenu"[^>]*data-esc-close="pm-resume"/, "Escape and the pad's B resolve to RESUME");
+  const buttons = [...dlg.matchAll(/<button\b([^>]*)>/g)].map((m) => m[1]);
+  assert.match(buttons[0], /id="pm-resume"/, "RESUME is the first button of the pause dialog");
+  assert.match(buttons[0], /\bautofocus\b/, "RESUME takes the default focus");
+  assert.doesNotMatch(buttons[0], /\b(hidden|disabled)\b/, "RESUME ships visible and enabled");
+  assert.equal(buttons.filter((b) => /\bautofocus\b/.test(b)).length, 1, "nothing else on the card asks for focus");
+  // No mode rule can remove it: race, time trial, practice, career and VS FRIEND all share setPaused, and no
+  // script writes RESUME's hidden / disabled / display. (RESTART is the door a networked race disables.)
+  const jsDir = path.join(ROOT, "js");
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? (e.name === "vendor" ? [] : walk(path.join(d, e.name))) : e.name.endsWith(".js") ? [path.join(d, e.name)] : []);
+  const refs = [];
+  for (const f of walk(jsDir)) {
+    const src = fs.readFileSync(f, "utf8");
+    if (/pm-resume|pmResume/.test(src)) refs.push(path.relative(ROOT, f));
+    assert.doesNotMatch(src, /pm-resume"\)\.(hidden|disabled|style|remove|setAttribute)|pmResume\.(hidden|disabled|style|remove)/, path.relative(ROOT, f) + " never hides or disables RESUME");
+  }
+  // A new reader of RESUME is a new way to lose it: name it here after reading what it does with the button.
+  assert.deepEqual(refs.sort(), ["js/camera/replay-buf.js", "js/game.js", "js/perf/bench-run.js"]);
+  assert.match(fs.readFileSync(path.join(jsDir, "camera/replay-buf.js"), "utf8"), /const resume = document\.getElementById\("pm-resume"\);\s*if \(!resume \|\| !resume\.parentNode\) return;/, "replay-buf only uses RESUME as the anchor for its own tile");
+  // No stylesheet positions, hides or collapses it: out of flow under a scroller's mask is how it vanished.
+  for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((n) => n.endsWith(".css"))) {
+    const css = fs.readFileSync(path.join(ROOT, "css", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const m of css.matchAll(/([^{}]*#pm-resume[^{}]*)\{([^}]*)\}/g)) {
+      assert.doesNotMatch(m[2], /position:\s*(absolute|fixed|sticky)|display:\s*none|visibility:\s*hidden|opacity:\s*0(?![.\d])/, f + ": " + m[1].trim() + " keeps RESUME in flow and painted");
+    }
+  }
+  const dialogs = readCssSource("css/dialogs.css");
+  assert.doesNotMatch(dialogs, /--pm-resume-h/, "the thumb-reach bar and its reserved sheet padding are gone");
+  assert.match(dialogs, /#pausemenu #pm-resume \{\s*min-height: max\(var\(--tap\), var\(--tap-paint\), calc\(44px \/ var\(--ui-scale\)\)\);/, "RESUME paints at least 44 px at every UI SIZE");
+});
+
+test("a short landscape window gets the phone pause card at every UI SIZE (#5200)", () => {
+  const overlays = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
+  const opts = fs.readFileSync(path.join(ROOT, "js/ui/pause-opts.js"), "utf8");
+  // The stamp reads the media query (the layout viewport), never innerHeight or --ui-scale.
+  assert.match(opts, /matchMedia\("\(orientation: landscape\) and \(max-height: 500px\)"\)/);
+  assert.match(opts, /document\.body\.toggleAttribute\("data-pause-short", !!mq\.matches\)/);
+  assert.match(opts, /mq\.addEventListener\("change", stamp\)/, "a rotate or a toolbar re-asks");
+  // The card uses the width at a small UI SIZE: 760 own px is 388 painted at 51 %.
+  assert.match(overlays, /--sheet-w: min\(calc\(max\(760px, 620px \/ var\(--ui-scale\)\) \* var\(--look-pause-w, 1\)\), 100%\);/);
+  // The stamp flips with the query, in a VM.
+  const listeners = [];
+  const attrs = new Set();
+  const mq = { matches: true, addEventListener: (t, fn) => listeners.push(fn) };
+  const body = { toggleAttribute: (n, on) => { if (on) attrs.add(n); else attrs.delete(n); } };
+  const src = opts.slice(opts.indexOf("const mq = typeof matchMedia"), opts.indexOf('pm.addEventListener("click", onPauseClick, true);'));
+  new Function("matchMedia", "document", src)(() => mq, { body });
+  assert.ok(attrs.has("data-pause-short"), "stamped at init on a short landscape window");
+  mq.matches = false; listeners[0]();
+  assert.ok(!attrs.has("data-pause-short"), "removed when the window is tall again");
 });
 
 test("a queued INFO card older than ANN_STALE_MS of race time is dropped at the drain; a warning never is", () => {
