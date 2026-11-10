@@ -27,9 +27,15 @@ const LAP_OPTS = [3, 5, 10, 25, 57];
 // into Tracks.LIST and tools/manifest.cjs carries a standing warning about what
 // that costs when the list is reordered; a saved calendar has to survive the
 // list growing, so it stores what it means.
+// A NEW season races the real 2026 calendar (REAL_2026 below); the 24-round
+// list (Tracks.SEASON, the default before 2026-11-10) stays the "24-ROUND"
+// preset and is what a stored season WITHOUT a config snapshot was raced on.
+function legacyIds() { return Tracks.SEASON.map((t) => t.id); }
+// Whole or not at all: a build missing one of its circuits defaults to the 24.
+function defaultIds() { const ids = knownIds(REAL_2026.map((r) => r.id)); return ids.length === REAL_2026.length ? ids : legacyIds(); }
 function fresh() {
   return {
-    trackIds: Tracks.SEASON.map((t) => t.id),
+    trackIds: defaultIds(),
     quali: true,
     sprint: false,    // false | true (every round) | "rounds" (only the rounds in sprintIds)
     sprintIds: [],    // circuit ids that hold a sprint when sprint === "rounds"
@@ -266,7 +272,12 @@ function codeMap(raw) {
 // champion UI; blanking it wiped the table the moment the player re-opened SEASON.
 function resume(saved) {
   const s = saved && typeof saved === "object" ? saved : null;
-  activeCfg = frozenConfig(s && s.config ? s.config : config());
+  // A save with no config snapshot predates it and was raced on the setup the
+  // player stored, or, with none stored, on the 24-round default of its day —
+  // never on today's default, which would move its round onto other circuits.
+  const legacy = s && !s.config && store.get(CFG_KEY, null) == null
+    ? Object.assign(fresh(), { trackIds: legacyIds() }) : null;
+  activeCfg = frozenConfig(s && s.config ? s.config : legacy || config());
   resolved = null;
   const n = activeCfg.trackIds.length;
   // MAP THE ROUND BY CIRCUIT ID. A stored calendar holding an id this build
@@ -642,14 +653,17 @@ function drawRound(season) {
 // to the circuits this game has (all 23 do). Weekend dates are Fri–Sun (Baku
 // races on Saturday 26 Sep; Las Vegas on Saturday 21 Nov). Bahrain and Saudi
 // Arabia were cancelled in April over the Middle East conflict; the Bahrain GP
-// runs at SEPANG on 2–4 Oct. Qatar and Abu Dhabi are still scheduled (plan A;
-// Imola is the stated plan B, decision expected mid-October). Barcelona hosts
+// runs at SEPANG on 2–4 Oct. Qatar (27–29 Nov) and Abu Dhabi (4–6 Dec) were
+// confirmed on 3 Oct by Domenicali and reaffirmed by the FIA on 20 Oct (Imola
+// is a force-majeure stand-in only; re-checked 2026-11-10). Barcelona hosts
 // the "Barcelona-Catalunya GP"; the Spanish GP moved to Madrid (Madring).
 // Sprints: China, Miami, Canada, Britain, Netherlands, Singapore.
 //   https://www.formula1.com/en/racing/2026
 //   https://www.formula1.com/en/latest/article/formula-1-and-fia-announce-2026-sprint-calendar.3PyLPAazrBNe8kQIS3wOfY
 //   https://www.gpfans.com/en/f1-news/1090484/f1-schedule-2026-september-azerbaijan-middle-east-conflict/
 //   https://www.skysports.com/f1/news/13591254/formula-1-teams-expect-final-call-on-qatar-abu-dhabi-grands-prix-by-middle-of-october-on-closing-2026-season-races
+//   https://gulfnews.com/sport/formula-one-confirms-qatar-and-abu-dhabi-grands-prix-to-close-2026-season-as-planned-1.500698952
+//   https://www.the-race.com/formula-1/fia-adamant-f1-qatar-abu-dhabi-gp-will-go-ahead/
 //   https://en.wikipedia.org/wiki/2026_Barcelona-Catalunya_Grand_Prix
 const REAL_2026 = Object.freeze([
   ["albert_park", "03-06", "03-08"], ["shanghai", "03-13", "03-15", 1], ["suzuka", "03-27", "03-29"],
@@ -662,9 +676,10 @@ const REAL_2026 = Object.freeze([
   ["qatar", "11-27", "11-29"], ["abudhabi", "12-04", "12-06"],
 ].map(([id, from, to, sprint]) => Object.freeze({ id, from: "2026-" + from, to: "2026-" + to, sprint: !!sprint })));
 
+// 2026 REAL is the default calendar; "full" (its id kept) is the 24-round list.
 const PRESETS = [
-  { id: "full", label: "FULL" },
   { id: "real2026", label: "2026 REAL" },
+  { id: "full", label: "24-ROUND" },
   { id: "12", label: "12" },
   { id: "8", label: "8" },
   { id: "5", label: "5" },
@@ -717,6 +732,6 @@ return {
   resume, blank, restart, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, roundLaps, pointsTable,
   award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
-  presetIds, preset, shuffled, gpName,
+  presetIds, preset, shuffled, gpName, legacyIds,
 };
 })();

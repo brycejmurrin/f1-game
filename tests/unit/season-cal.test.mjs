@@ -836,7 +836,7 @@ test("2026 REAL: exactly the six real sprint weekends, per round", () => {
 
 test("2026 REAL leaves the other presets and old configs exactly as they were", () => {
   const { S, tracks } = load();
-  assert.deepEqual([...S.PRESETS.map((p) => p.id)], ["full", "real2026", "12", "8", "5", "classics"]);
+  assert.deepEqual([...S.PRESETS.map((p) => p.id)], ["real2026", "full", "12", "8", "5", "classics"]);
   assert.deepEqual(JSON.parse(JSON.stringify(S.preset("full"))), { trackIds: tracks.SEASON.map((t) => t.id) },
     "a calendar preset sets no format");
   assert.deepEqual([...S.preset("8").trackIds], tracks.SEASON.map((t) => t.id).slice(0, 8));

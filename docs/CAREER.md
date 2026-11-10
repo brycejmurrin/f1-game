@@ -144,6 +144,32 @@ on that mode rather than asking again.
 Changing mode on the setup form re-targets the slot (`Career.firstFree`), because
 slot 3 of the driver set is not slot 3 of MY TEAM.
 
+**A full set is refused, never overwritten.** `Career.start()` with no `slot` and no
+free slot in the mode's set returns null (it used to fall back to the live slot and
+replace that career silently); START CAREER then reopens the picker and says all three
+slots are in use, so the player chooses which save to DELETE.
+
+### Calendar
+
+A NEW career or standalone season races the real 2026 calendar (`SeasonCal.REAL_2026`,
+23 rounds). The 24-round list (`Tracks.SEASON`, the `classic`-flag filter of
+`Tracks.LIST`) is the default every save made before 2026-11-10 was created with, and it
+stays on offer: **24-ROUND** in Season SETUP's presets and in the career setup's CALENDAR
+row. A career stores the choice as `calSet` (`"real2026"` | `"24"`; absent reads as `"24"`),
+and `start()`, `rollover()` and `adoptCalendar()` stamp `season.calIds` from it, so an
+existing career keeps its list for every later season. A standalone season keeps its
+frozen `config.trackIds`; a save from before that snapshot, with no stored `seasonCfg`,
+resumes on the 24-round list. Tests: `tests/unit/season-calendar-default.test.mjs`.
+The circuit picker's SEASON / CLASSICS chips still group by the `classic` flag.
+
+**Prize money needs a classified car**, as points do: a retired (unclassified) or
+disqualified player — or MY TEAM's hired mate — is paid no prize for its listed place.
+
+**Import ranges.** `SaveMigrate` clamps a stored career's `money` to
+`[0, LIMITS.MONEY_MAX]` (1e9) and every salary (deal, offer, hire, pending ask) to
+`[0, LIMITS.SALARY_MAX]` (1e5); a backup import outside them is refused
+(`money-range` / `salary-range`) with nothing written.
+
 Versioned (`CAREER_V`), migrated through a ladder of one function per version step,
 mirroring `migrateSeasonPoints`. Key fields:
 

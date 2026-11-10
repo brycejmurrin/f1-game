@@ -55,7 +55,9 @@ function load(n = 24, realParts = false) {
 }
 const started = (opts = {}) => {
   const h = load(opts.n, opts.realParts);
-  h.Career.start(Object.assign({ flavour: "driver", teamId: "haas", seed: 9 }, opts.start));
+  // calendar "24": these cases pin the stamp mechanism on Tracks.SEASON, the 24-round
+  // set every pre-2026-11-10 save carries (the 2026 REAL default: season-calendar-default.test.mjs).
+  h.Career.start(Object.assign({ flavour: "driver", teamId: "haas", seed: 9, calendar: "24" }, opts.start));
   h.Career.engage(true);
   return h;
 };

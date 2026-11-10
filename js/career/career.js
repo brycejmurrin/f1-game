@@ -396,9 +396,10 @@ function start(opts) {
   const flavour = flavourIn(o.flavour);
   // A new career may not overwrite a protected target, even through the public API.
   const free = firstFree(flavour);   // once — each call walks the slot store
-  const target = o.slot != null ? slotIn(o.slot)
-    : free >= 0 ? free
-    : (flavour === slotFlavour ? slotIdx : -1);
+  // A FULL SET IS REFUSED, never overwritten: with no slot named and none free,
+  // falling back to the live slot replaced someone's career without a word.
+  // career-ui sends the player to the picker to choose which one goes.
+  const target = o.slot != null ? slotIn(o.slot) : free;
   if (target < 0 || unsupportedSlot(flavour, target)) return null;
   const targetSave = readSlot(flavour, target);
   if ((calendarProtection && flavour === slotFlavour && target === slotIdx) ||
@@ -471,7 +472,11 @@ function start(opts) {
     career.roster = [rosterEntry(hired, 1)];
   }
   career.year0 = YEAR0;
-  stampCalendar(career.season);
+  // The calendar SET, kept so every later season of this save races the same
+  // one: "real2026" (the default from 2026-11-10) or "24" (the list every save
+  // made before then was stamped with — an absent calSet reads as "24").
+  career.calSet = o.calendar === "24" ? "24" : "real2026";
+  stampCalendar(career.season, career.calSet);
   career.amb = ambIdx(o.amb);
   applyRegs();
   career.deal = newDeal(team, 1);
@@ -1245,8 +1250,12 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   const pos = order.indexOf(player) + 1;
   const team = teamOf(career.team);
   const scored = (c) => (c.classified != null ? !!c.classified : !c.retired);   // a DNF past 90 % distance is classified (endRace)
-  const pts = scored(player) ? (table[pos - 1] || 0) : 0;
-  const prize = prizeFor(pos);
+  // PRIZE MONEY IS FOR A CLASSIFIED CAR, as points are: a retirement or a
+  // disqualification banked the prize for the place it was listed in. (endRace
+  // already sets classified = !dsq; the dsq read keeps a stray flag honest.)
+  const paid = (c) => scored(c) && !c.dsq;
+  const pts = paid(player) ? (table[pos - 1] || 0) : 0;
+  const prize = paid(player) ? prizeFor(pos) : 0;
   // AN OWNER IS NOT ON THE PAYROLL. The guide (career-ui "how the money works")
   // and docs/CAREER.md: a driver is paid a salary, an owner by sponsors. MY TEAM
   // still paid the start() deal's salary + points bonus every round, under a
@@ -1268,7 +1277,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   });
   // ...and owns BOTH cars, so both earn prize money ("two cars in the points is
   // two payments"): the hired team-mate's finish was paid to nobody.
-  const matePrize = owner && mate ? prizeFor(matePos) : 0;
+  const matePrize = owner && mate && paid(mate) ? prizeFor(matePos) : 0;
 
   // MY TEAM's wage bill comes off the balance, never off the fitted cap, so
   // hiring well costs upgrades rather than legality. Wages can exceed a round's
@@ -1835,7 +1844,7 @@ function rollover() {
   s.roundPts = {}; delete s.lastFl;
   delete s.stage; delete s.sprintOrder; delete s.qualiOrder; delete s.qualiTrack; delete s.qualiMode;
   delete s.startedRound;   // markWeekendStarted's stamp: kept, it locked the same round's brief next year
-  stampCalendar(s);        // a new season adopts the calendar this build ships
+  stampCalendar(s, career.calSet);   // a new season adopts this build's version of the save's calendar set
   career.results = [];
   career.obj = null;
   career.objPick = null;
@@ -1851,12 +1860,18 @@ function rollover() {
 // circuit (one skipped, or the one just raced again) and moved the finale.
 // start() and rollover() stamp the ids; every reader below resolves them. The
 // standalone Season does the same with `config.trackIds` + resume()'s remap.
-function calIdsNow() {
+function calIdsNow(set) {
+  if (set === "real2026" && typeof SeasonCal !== "undefined" && SeasonCal.presetIds) {
+    const real = SeasonCal.presetIds("real2026");
+    if (real.length && real.length === (SeasonCal.REAL_2026 || []).length) return real.slice();   // whole, or the 24
+  }
   const ids = (Tracks.SEASON || []).map((t) => t && t.id);
   return ids.length && ids.every((id) => typeof id === "string") ? ids : null;   // null: a stub catalogue without ids
 }
-function stampCalendar(season) {
-  const ids = calIdsNow();
+// set: the career's calSet. Absent (every save from before 2026-11-10) is the
+// 24-round Tracks.SEASON list those saves were created with.
+function stampCalendar(season, set) {
+  const ids = calIdsNow(set);
   if (ids) season.calIds = ids; else delete season.calIds;
 }
 // The tracks this career's season is raced on, in order. Tracks.SEASON itself when
@@ -1888,13 +1903,13 @@ function adoptCalendar(c, explicit) {
   if (!Array.isArray(ids) || !ids.length || ids.length > CAL_MAX ||
       ids.some((id) => typeof id !== "string") || new Set(ids).size !== ids.length) {
     if (explicit) { if (typeof CareerPlanning !== "undefined") CareerPlanning.remapWeekend(c, s.round, 0); s.round = 0; s.pts = {}; s.teamPts = {}; s.roundPts = {}; s.finishes = {}; c.results = []; }
-    stampCalendar(s);
+    stampCalendar(s, c.calSet);
     return c;
   }
   const known = new Set((Tracks.LIST || []).map((t) => t && t.id));
   if (!known.size || ids.every((id) => known.has(id))) return c;
   const keep = ids.filter((id) => known.has(id));
-  if (!keep.length) { if (typeof CareerPlanning !== "undefined") CareerPlanning.remapWeekend(c, s.round, 0); s.round = 0; s.pts = {}; s.teamPts = {}; s.roundPts = {}; s.finishes = {}; c.results = []; stampCalendar(s); return c; }
+  if (!keep.length) { if (typeof CareerPlanning !== "undefined") CareerPlanning.remapWeekend(c, s.round, 0); s.round = 0; s.pts = {}; s.teamPts = {}; s.roundPts = {}; s.finishes = {}; c.results = []; stampCalendar(s, c.calSet); return c; }
   const done = Number.isInteger(s.round) ? Math.min(Math.max(s.round, 0), ids.length) : 0;
   const to = [];                       // old round -> new round, or -1 (dropped)
   let n = 0;

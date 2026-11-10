@@ -336,7 +336,7 @@ const Quali = (function () {
                              (classMode && classMode !== mode))) {
         classification = null; classTrack = null; classMode = null;
       }
-      const raw = G.season && G.season.qualiOrder;
+      let raw = G.season && G.season.qualiOrder;
       if (classification || !Array.isArray(raw) || !raw.length) return !!classification;
       const here = hereId();
       if (G.season.qualiTrack && here && G.season.qualiTrack !== here) return false;
@@ -347,7 +347,17 @@ const Quali = (function () {
       // An imported/older save may name a driver twice or one no longer in
       // the field. Length alone lets duplicate rows through to order(), which
       // then grids the same car twice and omits another live car.
-      const ids = raw.map((e) => e && typeof e === "object" ? e.id : e);
+      let ids = raw.map((e) => e && typeof e === "object" ? e.id : e);
+      // A DUEL races two cars of the field that QUALIFIED (startRace trims it
+      // after qualifying), so the saved order is the untrimmed field's. Read it
+      // against that field: every live car in it, no repeats, and only the live
+      // cars' rows kept, in the order they qualified. Without this a reload
+      // between qualifying and the race refused the order and reopened QUALI.
+      const duel = byId.size === 2 && G.cars.some((c) => c && c.duelRival);
+      if (duel && new Set(ids).size === ids.length && [...byId.keys()].every((id) => ids.includes(id))) {
+        raw = raw.filter((e, i) => byId.has(ids[i]));
+        ids = ids.filter((id) => byId.has(id));
+      }
       if (ids.length !== byId.size || new Set(ids).size !== byId.size ||
           ids.some((id) => !byId.has(id))) return false;
       // The order is the PLAYER's weekend: a different seat (team or driver

@@ -45,6 +45,11 @@ const CareerBackup = (function () {
     if (v === null) return "invalid-version";
     return v > SaveMigrate.CAREER_V ? "newer-version" : null;
   }
+  // [0, SaveMigrate.LIMITS[key]]: the range migrateCareer clamps a stored save to.
+  function inRange(n, key) {
+    const hi = typeof SaveMigrate !== "undefined" && SaveMigrate.LIMITS ? SaveMigrate.LIMITS[key] : Infinity;
+    return Number.isFinite(n) && n >= 0 && n <= hi;
+  }
   function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
     if (Array.isArray(data)) return { ok: false, reason: "slot-not-object" };
@@ -60,7 +65,21 @@ const CareerBackup = (function () {
       if (typeof m === "number" && !Number.isFinite(m)) return { ok: false, reason: "nan-money" };
       if (m != null && typeof m !== "number" && typeof m !== "string") return { ok: false, reason: "nan-money" };
       if (typeof m === "string" && m !== "" && !Number.isFinite(Number(m))) return { ok: false, reason: "nan-money" };
+      // Finite is not enough: -5 or 1e308 imported cleanly, and 1e308 + prize
+      // became Infinity -> null -> 0. Refuse what play cannot produce.
+      if (m != null && m !== "" && !inRange(Number(m), "MONEY_MAX")) return { ok: false, reason: "money-range" };
     }
+    // Every salary the save will pay out: the contract, the offers on the table
+    // (acceptOffer signs them verbatim) and MY TEAM's hire (its pending ask too).
+    const salaries = [];
+    if (isObj(data.deal) && "salary" in data.deal) salaries.push(data.deal.salary);
+    if (Array.isArray(data.offers)) for (const o of data.offers) if (isObj(o) && "salary" in o) salaries.push(o.salary);
+    if (Array.isArray(data.roster)) for (const d of data.roster) {
+      if (!isObj(d)) continue;
+      if ("salary" in d) salaries.push(d.salary);
+      if (isObj(d.pending) && "ask" in d.pending) salaries.push(d.pending.ask);
+    }
+    if (salaries.some((v) => v != null && v !== "" && !inRange(Number(v), "SALARY_MAX"))) return { ok: false, reason: "salary-range" };
     if (data.season != null && (typeof data.season !== "object" || Array.isArray(data.season))) {
       return { ok: false, reason: "season-not-object" };
     }
