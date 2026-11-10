@@ -367,8 +367,8 @@ permanently because nothing ever reads their colour). Array-camera layer descrip
 `apex26.tlxTagDiscard="0"` (every colour hint) and `apex26.tlxDepthDiscard="0"` (depth).
 
 Upstream: unfixed on `dev` as of 2026-10-24 (the `discardColor`/`discardDepth` consts in
-`src/renderers/webgpu/WebGPUBackend.js` still gate on `sampleCount > 1`). No release
-after r186 exists. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §4. Canary:
+`src/renderers/webgpu/WebGPUBackend.js` still gate on `sampleCount > 1`); r187 still
+gates them the same way, so the patch was kept at the bump. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §4. Canary:
 `gfx-backend-canary.test.mjs` "honours the single-sample discard hint".
 
 ## 18. A 3-component colour target keeps a vec4 WGSL fragment output (#3690)
