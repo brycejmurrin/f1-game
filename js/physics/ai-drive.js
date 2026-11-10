@@ -951,18 +951,11 @@ const AiDrive = (function () {
     const lim = (hw || 5) - 0.6;
     return clamp(passX + side * clear, -lim, lim);
   }
-  // STOP BEFORE THE EDGE (W26 row 1, 2026-11-10). The heading controller in
-  // game.js clamps the TARGET to the road (hw - 0.5), but the heading may only
-  // turn at yawMax, so a car carrying heading toward the edge cannot stop its
-  // lateral motion in time: at Spa (16 m road, line edge to edge in ~100 m at
-  // 50 m/s) cars arrived at the clamp with ~0.25 rad and slid 1.5-3 m past the
-  // white line — 17 track-limit strikes in a 6-lap AI-only race, seed 1.
-  // The lateral distance needed to unwind heading h at yaw rate Y is
-  // v*h^2/(2Y) (small angle), so the heading toward an edge is capped at
-  // sqrt(2*EDGE_YAW_SHARE*Y*d/v), d = room left to the keep line. The share
-  // (< 1) leaves the yaw budget for the road's own bends. A target beyond the
-  // road (the pit lane: PitLane.laneX) moves its own side's keep line out, so
-  // pit entry is untouched. Pure; no allocation (hot path).
+  // STOP BEFORE THE EDGE (W26): the target is clamped to the road, but the heading turns at
+  // most yawMax, so a car arriving at the clamp with heading slid past it (Spa: 17 strikes a
+  // race). Unwinding heading h at yaw Y takes v*h^2/(2Y) of road, so the outward heading is
+  // capped by the room d left: sqrt(2*SHARE*Y*d/v). A target past the road (pit lane) moves
+  // its side's keep line out. Pure, no allocation.
   const EDGE_KEEP_M = 0.5, EDGE_YAW_SHARE = 0.7;
   function edgeHead(want, x, hw, desiredX, v, yawMax) {
     if (!(v > 1) || !(yawMax > 0)) return want;
@@ -971,16 +964,9 @@ const AiDrive = (function () {
     const hi = Math.sqrt(k * Math.max(0, hiLim - x)), lo = -Math.sqrt(k * Math.max(0, loLim + x));
     return want > hi ? hi : want < lo ? lo : want;
   }
-  // A STOPPED CAR IS A HAZARD, NOT A BLOCKER (W26 row 5, 2026-11-10). A
-  // car parked on the road by retireCar() is steered round from 30 + 1.5 v
-  // metres (Collide.parkedAhead, #2162), but a car that is merely STOPPED —
-  // a human parked on the grid, a stall — stayed in the traffic scan as a
-  // "slow blocker": the queue braked behind it and the pass logic expected it
-  // to move, and a parked human was hit 17 times in a 10-lap AI race (seed 1).
-  // stoppedHazard says the car ahead is effectively stationary (under 6 % of
-  // the top speed, ~15 km/h, and not in the pit lane); hazardReach is how far
-  // back to start the lane change — further than the parked-car reach,
-  // because nothing about a stopped car will make room.
+  // A STOPPED CAR IS A HAZARD (W26): not retired/parked (Collide.parkedAhead) but stopped,
+  // e.g. a human parked on the grid, which the queue/pass logic treated as a slow blocker.
+  // Under 6 % of vTop and not in the pits; steer round it from hazardReach metres.
   const HAZARD_V_FRAC = 0.06;
   function stoppedHazard(o, vTop) {
     if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
@@ -988,11 +974,8 @@ const AiDrive = (function () {
     return frac < HAZARD_V_FRAC;
   }
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
-  // A PARKED PLAYER IS RETIRED (W26 row 5). stallStep accumulates the seconds
-  // a car has been stationary while the race is live (green flag, racing,
-  // not in the pits, not finished) and zeroes the moment it moves or the
-  // race is not live; at STALL_RETIRE_S the race-end owner retires it, so an
-  // AI race never waits on a parked human. Pure.
+  // A PARKED PLAYER IS RETIRED (W26): stationary seconds while the race is live; the
+  // race-end owner retires the car at STALL_RETIRE_S.
   const STALL_RETIRE_S = 60, STALL_V = 1.0;
   function stallStep(t, speed, dt, live) {
     return live && Math.abs(speed || 0) < STALL_V ? (t || 0) + dt : 0;
@@ -1260,23 +1243,10 @@ const AiDrive = (function () {
   function wornPays(ctx) { bindStrat(); return AiStrategy.wornPays(ctx); }
   function pitNow(ctx) { bindStrat(); return AiStrategy.pitNow(ctx); }
 
-  // errMul is the difficulty-ladder rate scale (PhysicsConsts.DIFF[d].err) —
-  // NOT the render-time brakeTarget multiplier of the same short name in
-  // ctx.errMul (that one scales the braking limit once a mistake has already
-  // fired; this one scales whether it fires at all). >0 multiplies the base
-  // rate; undefined/0/negative leaves it at 1 so every existing caller and
-  // test is unchanged.
-  //
-  // ONE DIFFICULTY FACTOR (W26 row 2, 2026-11-10). Until now `em` entered
-  // twice — once through a "visibility lift" on the base (0.004 at hard, x5.7
-  // at normal, x8 at easy) and again as a straight multiplier — so the rate
-  // went as ~em^2: per braking zone 0.0022 hard, 0.0224 normal, 0.062 easy,
-  // normal ten times hard where PhysicsConsts.DIFF promised the err column.
-  // Now `em` is applied once, and MISTAKE_BASE is today's NORMAL base
-  // (0.004 x (1 + 7 x 0.8/1.2)) so normal keeps its measured rate exactly;
-  // hard:normal:easy is DIFF.err's 1 : 1.8 : 3.5 (pinned in
-  // tests/unit/ai-drive.test.mjs). Optimism adds under
-  // pressure only (zero-mean when unpressured).
+  // errMul = DIFF[d].err (not ctx.errMul, the brake-limit scale once a mistake fired); <=0 or
+  // undefined reads as 1.
+  // errMul (DIFF.err) is applied ONCE (W26; it entered twice, ~em^2). MISTAKE_BASE is the
+  // old NORMAL base, so normal keeps its rate; hard:normal:easy = 1:1.8:3.5 (ai-drive.test.mjs).
   const MISTAKE_BASE = 0.004 * (1 + 7.0 * (0.8 / 1.2));   // ≈ 0.02267
   function mistakeChance(t, pressure, errMul) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;

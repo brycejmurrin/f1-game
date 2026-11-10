@@ -93,11 +93,8 @@ const AiCorridor = (function () {
     out.of = blocker;   // the car this plan was made against (planAllows)
     return out;
   }
-  // DOES A STORED PLAN STILL GATE THE PULL-ASIDE? (W26 row 4.) game.js keeps
-  // one plan bag per car (c.passPlan) and only refreshes it at latch time, so
-  // a `side: 0` verdict against one blocker used to switch the pre-latch pull
-  // off against every LATER blocker too. A plan only speaks for the car it
-  // was made against: no plan, or a plan for another car, allows the pull.
+  // A plan gates the pull-aside only against the blocker it was made for (W26): c.passPlan is
+  // refreshed only at latch time, so a side-0 verdict used to block every later blocker.
   function planAllows(plan, blocker) {
     return !plan || plan.of !== blocker || !!plan.side;
   }

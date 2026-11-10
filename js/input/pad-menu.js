@@ -285,14 +285,9 @@ const InputPadMenu = (function () {
       releaseDirection() { padNavDir = null; }, reset };
   }
 
-  /* DESTRUCTIVE CONTROLS. A paired phone is a remote: it may walk every menu,
-     but RESET / DELETE / IMPORT / ERASE / WIPE / CLEAR / REMOVE / FORGET take a
-     tap on the game's own screen. An element opts in with data-destructive
-     (any value but "false") and out with data-destructive="false"; without
-     the attribute its id, class, name, aria-label and text are read for those
-     words, so the shell's RESET KEYS, the career DELETE / IMPORT cards and
-     the settings IMPORT SHARE CODE are covered without a list to keep. A file
-     picker is an import by definition. */
+  /* DESTRUCTIVE CONTROLS (W26): a paired phone may walk every menu, but reset/delete/import/
+     erase/wipe/clear/remove/forget need a tap on this screen. data-destructive opts in ("false"
+     out); else id/class/name/aria-label/text are matched; a file picker always counts. */
   const DESTRUCTIVE_RE = /(?:^|[^a-z])(reset|delete|del|import|erase|wipe|clear|remove|forget)(?![a-z])/i;
   function isDestructive(el) {
     if (!el || typeof el !== "object") return false;

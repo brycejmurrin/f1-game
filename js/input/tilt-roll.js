@@ -33,13 +33,8 @@ const TiltRoll = (function () {
     return Math.atan2(h, v) / DEG;
   }
 
-  /** The screen rotation the browser reports (0/90/180/270), 0 when it reports nothing.
-   *  The legacy numeric `window.orientation` comes FIRST where it exists: iOS
-   *  16.4 Safari shipped `screen.orientation` with landscape angles swapped
-   *  (90 where Android Chrome reports 270; WebKit bug 254863, w3c
-   *  screen-orientation issue 247), which reversed tilt steering in one
-   *  landscape. `window.orientation` was right on those builds, and on the
-   *  browsers that report both they agree once its -90 is read as 270. */
+  /** Screen rotation 0/90/180/270 (0 if unknown). Numeric window.orientation FIRST: iOS 16.4
+   *  Safari's screen.orientation swapped the landscape angles (WebKit 254863), reversing tilt. */
   function screenAngle(win, scr) {
     const w = win !== undefined ? win : (typeof window !== "undefined" ? window : null);
     const s = scr !== undefined ? scr : (typeof screen !== "undefined" ? screen : null);
