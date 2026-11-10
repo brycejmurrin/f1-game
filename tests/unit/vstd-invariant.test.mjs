@@ -37,7 +37,8 @@
 //
 import test from "node:test";
 import assert from "node:assert/strict";
-import { speedLiteralViolations, stripNonCode, readFiles, violationKey } from "../../tools/check/vstd-lint.mjs";
+import { createRequire } from "node:module";
+import { speedLiteralViolations, stripNonCode, readFiles, violationKey, rosterFiles } from "../../tools/check/vstd-lint.mjs";
 
 // ── the approved absolute sites ───────────────────────────────────────────────
 // Every row is a speed that is legitimately NOT pace-normalised, and says why.
@@ -262,6 +263,13 @@ const ALLOWED = [
     code: "if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= SPOKEN_RATE_MAX) {",
     why: "not a car speed at all: run.speed is the replay playback RATE (1x, 2x), above which the commentator cannot keep up",
   },
+  // Surfaced 2026-11 when the lint's roster stopped being hand-copied and picked up the six lazy lists it had
+  // dropped (LAZY_RACE_SESSION etc.). Pre-existing, not new code; shrink-only — delete the row if the site goes.
+  {
+    file: "js/race/cooldown-lap.js", expr: "(s.speed || 0) <= PARK_SPEED",
+    code: "if (s.atBox || (s.inPitLane && (s.speed || 0) <= PARK_SPEED)) {",
+    why: "crawl/standstill ceiling (PARK_SPEED 2.5 m/s, 'parked at box') in the pit lane, which is speed-limited, not pace-scaled",
+  },
 ];
 
 // ── open findings ─────────────────────────────────────────────────────────────
@@ -415,4 +423,22 @@ test("open findings are recorded, not quietly exempted", () => {
     assert.ok(s.note && s.note.length > 200, `${s.file} ${s.expr}: needs the measured detail`);
   }
   assert.ok(SUSPECT.length <= 1, "a growing suspect list means the guard is being used as an allow-list");
+});
+
+test("the lint's roster is every manifest file list: FULL, DEFERRED and every LAZY_* (js/race/* included)", () => {
+  const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const roster = new Set(rosterFiles());
+  const all = [...manifest.FULL, ...Object.values(manifest.DEFERRED).flat()];
+  for (const [k, v] of Object.entries(manifest)) if (/^LAZY_/.test(k) && Array.isArray(v) && v.every((f) => typeof f === "string")) all.push(...v);
+  assert.deepEqual(all.filter((f) => !roster.has(f)), [], "a manifest list the lint does not read");
+  const race = all.filter((f) => /^js\/race\/[^/]+\.js$/.test(f));
+  assert.ok(race.length > 10, `js/race/* is in the manifest (${race.length})`);
+  assert.deepEqual(race.filter((f) => !roster.has(f)), []);
+  for (const k of ["LAZY_RACE_SESSION", "LAZY_AUDIO", "LAZY_TRACK_BUILD", "LAZY_WORKER", "LAZY_DEV", "LAZY_GARAGE_EXTERIOR"]) {
+    for (const f of manifest[k] || []) assert.ok(roster.has(f), `${k}: ${f}`);
+  }
+  assert.equal(roster.size, new Set(all).size, "deduplicated");
+  // a synthetic manifest: a new LAZY_ list is picked up with no edit to the lint; *_EDGES pair lists are not files
+  assert.deepEqual(rosterFiles({ FULL: ["a.js"], DEFERRED: { x: ["b.js"] }, LAZY_NEW: ["c.js", "a.js"], LAZY_NEW_EDGES: [["c.js", "a.js"]] }),
+    ["a.js", "b.js", "c.js"]);
 });

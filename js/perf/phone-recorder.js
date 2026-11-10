@@ -85,7 +85,6 @@ const PhoneRecorder = (function () {
     return s[s.length >> 1];
   }
 
-  // ---- live readers (every one guarded: the recorder must never throw) -----
   function probeGl() {
     const out = { ok: false };
     if (typeof document === "undefined") return out;
@@ -196,7 +195,6 @@ const PhoneRecorder = (function () {
     return env;
   }
 
-  // ---- the recorder: a state machine driven by frame(nowMs) ----------------
   function create(env) {
     env = env || liveEnv();
     let on = false; let rec = null; let quick = false;
@@ -302,7 +300,6 @@ const PhoneRecorder = (function () {
     };
   }
 
-  // ---- SHARE / COPY --------------------------------------------------------
   function fileName(rec) {
     const stamp = String((rec && rec.startedAt) || "").replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
     return "apex26-soak-" + (stamp || "run") + ".json";
@@ -363,7 +360,6 @@ const PhoneRecorder = (function () {
     return Promise.resolve(viaTextarea());
   }
 
-  // ---- panel + REC badge ---------------------------------------------------
   let _rec = null; let _raf = 0; let _badge = null; let _ui = null; let _lastBadgeSec = -1;
 
   function recorder() { return _rec || (_rec = create()); }
