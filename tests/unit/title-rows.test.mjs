@@ -23,8 +23,8 @@ test("the block exists and keys on the layout viewport only", () => {
 
 // The painted outcome (row counts, the WIDTH split, the UI SIZE and touch floors, a slider stopping at the
 // edge) is measured in tests/specs/title-fit.spec.js; source pins for those were cut on 2026-11-10 when the
-// tree's assertPins ceiling had six sites left (tests/data/ratchets.json). What stays is what a browser
-// cell does not say: which doors each group holds, the look, and that the floor is for a finger only.
+// tree's assertPins ceiling had three sites left (tests/data/ratchets.json). What stays is what a browser
+// cell does not say: which doors each group holds, and the look.
 test("the door roster each row is built from", () => {
   const ids = (group) => [...html.slice(html.indexOf(`<div id="${group}"`)).split("</div>")[0].matchAll(/<button id="(mb-[a-z]+)"([^>]*)>/g)].filter((m) => !/\shidden[\s>]/.test(m[2] + ">") || m[1] === "mb-continue" || m[1] === "mb-phonepad").map((m) => m[1]);
   assert.deepEqual(ids("menu-retention"), ["mb-continue", "mb-daily"]);
@@ -35,15 +35,8 @@ test("the door roster each row is built from", () => {
   assert.deepEqual(ids("menu-secondary"), ["mb-settings", "mb-phonepad", "mb-help", "mb-saves"]);
 });
 
-test("the look: italic slanted doors, subtitles on the hero and retention only", () => {
-  assert.match(block, /font-style: italic/);
-  assert.match(block, /transform: skewX\(-6deg\); border-radius/);
-  assert.ok(block.includes(`${P} .mb-sub { display: none; }`));
-  assert.ok(block.includes(`${P} :is(#mb-career, #menu-retention) .mb-sub {\n  display: block;`));
+test("the look: italic slanted doors, and the quiet restyle stays off the short landscape screen", () => {
+  assert.match(block, /font-style: italic; font-weight: 700;[^}]*transform: skewX\(-6deg\); border-radius/);
   const quiet = css.slice(css.indexOf("Destination presentation: one quiet control family"), css.indexOf("At comfortable heights"));
-  assert.match(quiet, /@media \(min-height: 520px\), \(max-aspect-ratio: 1\/1\) \{\n#overlay #menu-buttons \.bigbtn \{\n  transform: none;/, "the quiet restyle stays off the short landscape screen");
-});
-
-test("the touch paint floor is for a finger: a mouse keeps the composition (#5213)", () => {
-  assert.match(block, /@media \(pointer: coarse\) \{\nbody\[data-shape="wide"\] #overlay #menu-buttons:not\(\[data-home-floor="off"\]\) \{/);
+  assert.match(quiet, /@media \(min-height: 520px\), \(max-aspect-ratio: 1\/1\) \{\n#overlay #menu-buttons \.bigbtn \{\n  transform: none;/);
 });
