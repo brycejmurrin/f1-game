@@ -464,15 +464,23 @@ test.describe("Time Trial — sector splits", () => {
     // class and missed its ~300 ms life on CI (run 42766757935); the observer
     // latch installed before the crossing cannot.
     expect(split.s1, "S1 under the 2 s flash gate — no flash is due").toBeGreaterThanOrEqual(2);
+    // The HUD paints only from the rAF loop, and updateHud returns early while
+    // G.frozen (js/ui/hud.js); act() steps physics without clearing it. So the
+    // page must be live for the flash to paint: record what the crossing left,
+    // unfreeze, and give rAF time with the observer armed.
+    const hudState = await page.evaluate(() => ({
+      frozen: window.__apex.freeze(),
+      hudHidden: !!(document.getElementById("hud") && document.getElementById("hud").hidden)
+        || document.body.classList.contains("hud-hidden"),
+      docHidden: document.hidden === true,
+    }));
+    await page.evaluate(() => window.__apex.freeze(false));
     const flashed = await page.waitForFunction(() => window.__secFlashSeen === true,
       null, { polling: 100, timeout: 5000 }).then(() => true, () => false);
-    // NOT ASSERTED (W32 row 10, candidate game finding, listed in PR #5302):
-    // with every game.js gate met (lap 1, forward entry, no incident, S1 2.8 s,
-    // and sectorLast[0] written by the same block that calls
-    // hud.flashSector(0)), the observer latched NO .sec-flash* class on
-    // #hud-sectors within 5 s (CI run 42802375775, job 129785050375, 4bae7ca).
-    // Recorded on every run until the HUD side is explained.
-    test.info().annotations.push({ type: "sector-flash-latched", description: String(flashed) });
+    test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState }) });
+    // CI run 42802375775 (job 129785050375) latched nothing with every game.js
+    // gate met; hudState says whether the page was frozen or the HUD hidden.
+    expect(flashed, "the sector strip never flashed for the S1 crossing: " + JSON.stringify(hudState)).toBe(true);
   });
 });
 
