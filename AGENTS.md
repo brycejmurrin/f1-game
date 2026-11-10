@@ -24,7 +24,7 @@ locally: a draft push gets the fast tier plus a selected browser shard on CI, an
 runs a whole group on the pushed branch. Interactive browser pokes (MCP) stay, one browser at a time.
 
 Session rules. The numbers are cited across the repo; a rule marked (hook) is refused by the named hook, whose message
-says what to do instead. Hooks catch accidents; the Deploy-reset ruleset, `.githooks/` and CI are the boundary.
+says what to do instead.
 1. A fresh container is set up by `session-start.sh`; in a total-red run, read the FIRST failure first.
 2. Make all source edits, then verify once.
 3. The local floor before a push: `tooling-fast --changed --jobs=3 --quiet` (`tools/track/verify-track.cjs <id>` for a circuit). The
