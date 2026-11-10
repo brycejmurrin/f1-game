@@ -20,12 +20,10 @@ const I18n = (function () {
     return i < 0 ? tag : tag.slice(0, i);
   }
 
-  // A tag Intl rejects (`?lang=en_US`) would make every I18n.n() and plural string throw a RangeError for
-  // the session (hunt B6, #4550). Accept `_` as `-`, canonicalise, else fall back to English.
+  // `?lang=en_US` threw for the session (#4550): `_` as `-`, canonical, else en.
   function cleanTag(lang) {
     const tag = String(lang || "").trim().replace(/_/g, "-");
-    if (!tag) return "en";
-    try { return Intl.getCanonicalLocales(tag)[0] || "en"; } catch (_) { return "en"; }
+    try { return (tag && Intl.getCanonicalLocales(tag)[0]) || "en"; } catch (_) { return "en"; }
   }
 
   function readQueryLang() {

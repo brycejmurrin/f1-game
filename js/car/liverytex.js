@@ -1083,8 +1083,7 @@ const LiveryTex = (function () {
   const FIN_BADGE_IDS = ["logo", "number", "code", "none"];
   function driverCode(teamId, num) {
     const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((x) => x.id === teamId);
-    // resolveRaceNumber returns numberOverride as-is; a string "63" from a share
-    // code or stored override must still match the numeric drivers[].num.
+    // A string override ("63") must still match the numeric drivers[].num (#4651).
     const d = t && t.drivers && t.drivers.find((x) => x.num == num);
     return (d && d.code) || teamShort(teamId);
   }

@@ -333,8 +333,7 @@ const LiveryGraphics = (function () {
       } else if (id === "ridge") {
         drawCoverBand(ctx, id, R, acc, ink, colors, coverPaint, T);
       } else if (id === "streaks") {
-        // Same ink edge strokes as the crown streaks: pale covers used to lose
-        // the tail continuation while the crown still read (chase / rear view).
+        // Crown streaks' ink edge, so pale covers keep the tail (#4651).
         for (let i = 0; i < 4; i++) {
           const tt = (i + 0.85) / 5;
           const x0 = X + W * (tt - 0.028), x1 = X + W * (tt + 0.028);
