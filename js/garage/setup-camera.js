@@ -1294,12 +1294,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   return !(gfx.warming && gfx.warming());
 }
 
-// ---- the #cs-view / #cs-cam-panel controls ----
 // The chips in #cs-view, plus orbit-by-drag and zoom on the canvas itself. All
 // of it is gated on G.setupPreviewOn, so none of these listeners can touch the
 // camera during a race — the canvas is shared with the track render and, on
 // touch, with the steering.
-// ---- the CAMERA disclosure ----
 // The panel holds the whole camera set; only CAMERA and ACTIVE AERO show at
 // rest. Closing is driven by INTENT, not by "a click happened": a preset is an
 // aim-and-leave choice so it closes, while MOVE/zoom/SPIN repeat and must not

@@ -19,7 +19,7 @@ test("every backend caps the device pixel ratio at 1.5 on mobileTier and 2 elsew
   assert.match(read("js/render/three/tlx.js"), /let DPR_CAP = _lite \? _lite\.dprCap : \(mobileTier \? 1\.5 : 2\);/);
   assert.match(read("js/render/glx/glx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, MOBILE_TIER \? 1\.5 : 2\)/);
   assert.match(read("js/render/webgpu/wgx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, WGX_MINIMAL \? 1 : \(WGX_LITE \? 1\.5 : 2\)\)/);
-  assert.match(read("js/render/gfx.js"), /capped 1\.5 mobile \/ 2/);
+  assert.match(read("docs/GFX-CONTRACT.md"), /capped 1\.5 mobile \/ 2/);   // the seam's contract doc
 });
 
 test("RESOLUTION ships at AUTO everywhere; a phone's AUTO is capped at MED's 0.75 (#5227; #5166: was a MED pin)", () => {

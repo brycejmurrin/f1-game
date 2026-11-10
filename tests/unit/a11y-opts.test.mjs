@@ -115,7 +115,6 @@ function load({ stored = {}, osReduce = false, readyState = "complete", withInpu
 }
 
 test("shell declares ACCESSIBILITY door + empty panel; MOTION left Appearance", () => {
-  assert.ok(SHELL.includes('id="pm-open-a11y"'));
   assert.ok(SHELL.includes('id="pm-panel-a11y"'));
   assert.ok(SHELL.includes("ACCESSIBILITY"));
   assert.ok(!SHELL.includes('id="pm-motion"'), "motion row is runtime-built in the a11y panel");

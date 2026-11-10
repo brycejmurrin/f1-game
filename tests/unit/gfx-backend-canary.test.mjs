@@ -4914,12 +4914,14 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "loadTrack's memo still makes a repeat build free");
 });
 
-test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {
+test("driving feel: the player tows with the AI's window and gain, the fronts lock, every car pops on lift", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const human = game.slice(game.indexOf("throttleLvl = inp ? (inp.throttleLevel ?? 1)"), game.indexOf("AiDrive.beginLook();"));
   assert.match(human, /c\.wake = wakeOf\(tg, tc\._snapX - c\.x\)/, "the player's tow uses the AI's window and fade");
   assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
-  assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
+  // "The gate is driver state, never the arc" is executed, not string-banned:
+  // tests/unit/physics-rows-vm.test.mjs runs the same tow pose on a straight and
+  // in a corner and requires the same c.towing.
   // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
   const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && afF > lockOn/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), on the brake-bias-scaled front fraction afF with a speed-aware onset from PhysicsConsts");
@@ -5286,9 +5288,9 @@ test("SSAO tap setup is skipped when strength is 0 on all three backends", () =>
 });
 
 test("Gfx seam lists instancing on all three backends", () => {
-  const gfx = read("js/render/gfx.js");
+  const gfx = read("docs/GFX-CONTRACT.md");   // the seam's contract (moved out of the gfx.js header)
   assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,
-    "gfx.js must not still say TLX exports instancing as undefined");
+    "the Gfx contract must not still say TLX exports instancing as undefined");
 });
 
 test("TLX garage (noEnv) paints the canvas, not the HDR scene target", () => {

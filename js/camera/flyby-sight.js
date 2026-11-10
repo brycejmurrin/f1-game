@@ -125,8 +125,6 @@ const FlybySight = (function () {
     return out;
   }
 
-  // ---- the planner's index: the same boxes on a 32 m XZ grid ----------------
-
   const CELL = 32;
   const cellKey = (ix, iz) => ix * 100003 + iz;
   // The cell walk and the terrain scan are their own functions, not loops nested in
@@ -275,8 +273,6 @@ const FlybySight = (function () {
     }
     return { T: Math.max(0, T), near, Tdrawn: Math.max(0, T) * held };
   }
-
-  // ---- one camera ------------------------------------------------------------
 
   /** A look-at pinhole camera, +Y up, no roll, VERTICAL fov in degrees. */
   function camera(eye, tgt, fovDeg, aspect) {

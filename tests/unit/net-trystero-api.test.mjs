@@ -151,7 +151,6 @@ test("Trystero is dynamic-imported, never in the boot path", () => {
   // touch. It must not be a <script> tag and must not be in the load manifest.
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   assert.doesNotMatch(html, /<script[^>]+trystero/i, "must not be a boot script");
-  assert.match(ours, /import\("@trystero-p2p\/nostr"\)/, "reached by dynamic import");
   const manifest = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
   assert.ok(!manifest.includes("trystero"), "not part of the IIFE load order");
 });

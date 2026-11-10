@@ -345,6 +345,16 @@ test("ShareCardChips: a failed draw says UNAVAILABLE and logs; a cancel restores
   const cancelled = chips.chip("y", async () => "cancelled");
   await cancelled.onclick();
   assert.equal(cancelled.textContent, "SHARE CARD");
+  // A later cancel after SHARED / UNAVAILABLE restores the label, not the last outcome.
+  let next = "shared";
+  const again = chips.chip("w", async () => { if (next === "boom") throw new Error("x"); return next; });
+  await again.onclick();
+  assert.equal(again.textContent, "SHARED");
+  next = "cancelled"; await again.onclick();
+  assert.equal(again.textContent, "SHARE CARD", "a cancel after SHARED restores SHARE CARD");
+  next = "boom"; await again.onclick();
+  next = "cancelled"; await again.onclick();
+  assert.equal(again.textContent, "SHARE CARD", "a cancel after UNAVAILABLE restores SHARE CARD");
   const missing = vm.createContext({ Object, Array, String, Promise });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/share/share-card-chips.js"), "utf8"), missing, { filename: absSrc("js/share/share-card-chips.js") });
   assert.equal(vm.runInContext("ShareCardChips.append({ appendChild() { throw new Error('drawn'); } }, 'z', () => ({}), 'n')", missing), null,
