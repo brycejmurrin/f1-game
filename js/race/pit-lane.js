@@ -1529,7 +1529,19 @@ var PitLane = (function () {
       const fresh = G.tyres.planLaps(TyreModel.AI_CLASS[TyreModel.classForTread(tread)].life, G.lapsTarget) / (c.pitPlan.loadK || 1);
       // The measured rate only after two laps on the set (replan's rule): one
       // lap after a stop read 27 % and stopped two fresh wets again, measured.
-      const onSet = G.tyres.lapsOn(c) >= 2 ? G.tyres.lapsLeft(c) : fresh * (1 - Math.min(1, G.tyres.spent(c)));
+      const n = G.tyres.lapsOn(c);
+      let onSet = n >= 2 ? G.tyres.lapsLeft(c) : fresh * (1 - Math.min(1, G.tyres.spent(c)));
+      // …and that rate was measured on the laps this set has RUN, on a heavier tank. Wear runs
+      // (1 + FUEL_WEAR·fuel) (tyre-model update), so the laps still to come wear less a lap and
+      // lapsLeft, a straight line through the laps run, reads short: 8 of 21 AI boxed wet-for-wet in
+      // a 5-lap Singapore rain race on sets the 13 that stayed out took to the flag at 0.92-0.95
+      // (#5252). The mean fuel over the laps run on the set against the mean over the laps to run,
+      // in completed-lap units (replan's midFuel, the same correction on loadK).
+      if (n >= 2 && onSet != null) {
+        const N = Math.max(1, G.lapsTarget || 1), x = Math.max(0, lap - 1) + done, fw = AiDrive.STRAT.FUEL_WEAR;
+        const fuelAt = (mid) => 1 + fw * clamp(1 - (mid - 0.5) / N, 0, 1);
+        onSet *= fuelAt(Math.max(0, x - n - done) / 2 + x / 2) / fuelAt((x + Math.max(x, N)) / 2);
+      }
       if (onSet == null || onSet * 1.1 >= left) return 99;
       return Math.max(0, Math.round(((G.lapsTarget - fresh) + (lap + onSet)) / 2) - lap);
     }
