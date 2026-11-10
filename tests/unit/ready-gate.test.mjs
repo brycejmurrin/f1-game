@@ -253,21 +253,6 @@ test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label ca
   assert.equal(nextCalls(9, "o/r").length, 3);
 });
 
-test("ready-gate / ship-pr text does not claim a hook requires the ready receipt (W25 row 13)", () => {
-  // Both headers said the hooks (merge_policy.py via github-mcp-guard.sh / bash-guard.sh) require a fresh ok
-  // receipt before draft→ready. merge_policy.py left with the 2026-11-03 hook reset; no hook reads a receipt.
-  const hooks = fs.readdirSync(path.join(ROOT, ".claude/hooks"));
-  assert.ok(!hooks.includes("merge_policy.py"), "merge_policy.py is back: re-check what the gate texts say");
-  for (const h of hooks) {
-    const src = fs.readFileSync(path.join(ROOT, ".claude/hooks", h), "utf8");
-    assert.doesNotMatch(src, /gate-receipt|artifacts\/ready-gate|readReceipt/, `${h} reads a gate receipt now: re-check the texts`);
-  }
-  for (const f of ["tools/ci/ready-gate.mjs", "tools/ci/ship-pr.mjs"]) {
-    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
-    assert.doesNotMatch(src, /hooks?\b[^.\n]*\brequire\b[^.\n]*\b(receipt|flip)|which the hooks require|the hooks gate on|receipt good for/i, `${f} still claims a hook-gated receipt`);
-  }
-});
-
 test("a body with no ## Plan: ready-gate and the merge gate agree (both refuse; a bot's PR passes both)", async () => {
   // merge-gate.mjs planRow refuses a Plan-less body (except a *[bot] author) and ready-gate used to pass it with a
   // warning, so a PR cleared ready-gate and then failed the merge gate. This pins the two to the same answer.

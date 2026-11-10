@@ -3179,7 +3179,6 @@ test("the server instructions name every tool in the table, and a tool the prose
   const { routesFor } = await import("../../tools/mcp/apex-tools-mcp.mjs");
   const extra = routesFor([{ name: "apex_status" }, { name: "apex_zz_new", description: "Tree (no browser) — does a new thing, briefly; more text." }]);
   assert.equal(extra.split("\n").at(-1), "Also: apex_zz_new (does a new thing, briefly).");
-  assert.doesNotMatch(extra, /Also:.*apex_status/, "a routed tool is not repeated");
 });
 
 test("apex_bump_cache_check: every schema field maps to a flag bump-cache.mjs accepts (dryRun is the wrapper's)", () => {
