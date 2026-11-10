@@ -220,6 +220,10 @@ export function writeNotices(root = ROOT, dest = OUT) {
 
 /** Write (or with check, compare) the two committed outputs. Returns the exit code. */
 export function syncCommitted(root = ROOT, { check = false } = {}) {
+  // A partial checkout (tools/ci/deploy.mjs's throwaway regen copy leaves out assets/ and
+  // vendor/) has no sources to read: say so and leave the committed outputs alone.
+  const missing = ["vendor", "assets"].filter((d) => !fs.existsSync(path.join(root, d)));
+  if (missing.length) { process.stdout.write(`notices: skipped (no ${missing.join("/")} in this checkout)\n`); return 0; }
   const targets = [
     [ROOT_NOTICES, buildNoticesText(root)],
     ["index.html", withCreditsBlock(fs.readFileSync(path.join(root, "index.html"), "utf8"), root)],

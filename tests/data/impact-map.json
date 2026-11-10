@@ -13797,9 +13797,6 @@
       "eventStep": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
-      "finish": [
-        "tests/unit/capture-tools-regressions.test.mjs"
-      ],
       "fitFrame": [
         "tests/unit/real-replay-frame-fit.test.mjs"
       ],

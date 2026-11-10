@@ -21,6 +21,15 @@ test("THIRD-PARTY-NOTICES and the index.html credits block match the generator",
   assert.equal(withCreditsBlock(html, ROOT), html);
 });
 
+test("a checkout without vendor/ or assets/ (the deploy regen copy) skips instead of failing", () => {
+  const tmp = fs.mkdtempSync(path.join(ROOT, "artifacts", "notices-partial-"));
+  const out = process.stdout.write;
+  process.stdout.write = () => true;
+  try { assert.equal(syncCommitted(tmp, { check: true }), 0); assert.equal(syncCommitted(tmp), 0); }
+  finally { process.stdout.write = out; fs.rmSync(tmp, { recursive: true, force: true }); }
+  assert.equal(fs.existsSync(path.join(tmp, "THIRD-PARTY-NOTICES")), false);
+});
+
 test("every shipped vendor package and its licence files are credited", () => {
   const credited = new Set(COMPONENTS.map((c) => c.licence));
   for (const dir of fs.readdirSync(path.join(ROOT, "vendor"))) {
