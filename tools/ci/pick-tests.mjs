@@ -609,7 +609,7 @@ function changedFiles(argv) {
 function printExtras(files, argv) {
   const specs = extraSpecs(files);
   if (specs.length) {
-    console.log(`\n${specs.length} spec(s) the group rules do not name (run each ALONE: test-bg.mjs --spec <file>):`);
+    console.log(`\n${specs.length} spec(s) the group rules do not name (the PR's selected shard runs them; one group on the pushed branch: node tools/ci/remote-group.mjs <group>; never run them locally, AGENTS.md rule 5):`);
     for (const r of specs) console.log(`    ${r.spec}  (${r.kind === "shared-ui-layer" ? "shared UI layer" : "loads"} ${r.module})`);
   }
   const explicit = argv.filter((a, n) => !a.startsWith("--") && !(argv.indexOf("--since") >= 0 && n === argv.indexOf("--since") + 1));
