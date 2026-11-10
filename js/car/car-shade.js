@@ -147,7 +147,6 @@ const CarShade = (function () {
     }
   }
 
-  // ---- SMALL PARTS (2026-10-02, batch 3): struts, rounded blocks, plates ----
   // The body sections above were rounded first; what still read as boxes were
   // the parts hung off them — wishbones, halo pillar, mirrors, airbox, floor,
   // endplates. Each helper below takes car3d's own datums (its corners, its
@@ -522,7 +521,6 @@ const CarShade = (function () {
     for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side, chine)), col, frontCol, tri);
   }
 
-  // ---- COKE BOTTLE + DOWNWASH (rounded builds, 2026-10-03) ----
   // The engine recipe's `coke` knob (0.72-1.38; after #797 the grid runs 0.90
   // Alpine .. 1.18 Mercedes .. 1.30 Audi, 1.32 Red Bull / Aston) only narrowed
   // the pods' PLAN view at the waist (z -0.62) and tail (-1.48). The engine cover
@@ -654,7 +652,6 @@ const CarShade = (function () {
       if (l > 0) { N[v * 3] = acc[k] / l; N[v * 3 + 1] = acc[k + 1] / l; N[v * 3 + 2] = acc[k + 2] / l; }
     }
   }
-  // ---- UPPER/LOWER TWO-TONE (livery `lower` / `upper`, 2026-10-03 / 2026-10-14) ----
   // A second body colour on one side of a line along the sidepods and on
   // forward along the monocoque side:
   //   y(z) = podAt(z).bottom + 0.80 (top - bottom),  z -2.00 .. +1.05
