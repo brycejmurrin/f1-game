@@ -301,14 +301,16 @@ test("an IndexedDB open that succeeds after timeout closes its orphan handle", a
 });
 
 function musicLibraryFixture({ failReads = 0, failWrites = 0, deferWrites = false } = {}) {
+  let loseWrites = 0, down = false;
   const rows = [], connections = [], pending = [], playlist = new Map(), revoked = [];
   let reads = 0, urlCount = 0, nextId = 1;
   const context = vm.createContext({
     document: { readyState: "loading", addEventListener() {}, getElementById: () => null },
     indexedDB: { open() {
       const request = {};
+      if (down) { queueMicrotask(() => request.onerror()); return request; }
       const db = { closed: false, close() { this.closed = true; }, transaction(_store, mode) {
-        if (this.closed) throw new Error("InvalidStateError: closed connection");
+        if (this.closed) throw Object.assign(new Error("closed connection"), { name: "InvalidStateError" });
         const transaction = {};
         transaction.objectStore = () => ({
           getAll() {
@@ -322,6 +324,11 @@ function musicLibraryFixture({ failReads = 0, failWrites = 0, deferWrites = fals
           add(record) {
             const result = {};
             const finish = () => {
+              if (loseWrites-- > 0) {
+                db.closed = true;
+                transaction.error = Object.assign(new Error("Connection to Indexed Database server lost. Refresh the page to try again."), { name: "UnknownError" });
+                transaction.onabort(); return;
+              }
               if (failWrites-- > 0) {
                 transaction.error = Object.assign(new Error("quota exceeded"), { name: "QuotaExceededError" });
                 transaction.onabort(); return;
@@ -345,7 +352,8 @@ function musicLibraryFixture({ failReads = 0, failWrites = 0, deferWrites = fals
     setTimeout, clearTimeout,
   });
   context.window = context; seedLog(context); vm.runInContext(musicSource, context);
-  return { lib: context.MusicLib, rows, connections, pending, playlist, revoked, reads: () => reads, urls: () => urlCount };
+  return { lib: context.MusicLib, rows, connections, pending, playlist, revoked, reads: () => reads, urls: () => urlCount,
+    loseWrite() { loseWrites = 1; }, down(on) { down = on; } };
 }
 
 test("music imports serialize across calls until their transactions commit", async () => {
@@ -389,6 +397,42 @@ test("a quota-aborted music import releases its duplicate reservation for a queu
   assert.match(failed.errors[0], /no room left/);
   assert.equal(recovered.added, 1); assert.equal(recovered.skipped, 0);
   assert.equal(f.rows.length, 1); assert.equal(f.lib.count(), 1); assert.equal(f.urls(), 1); assert.equal(f.playlist.size, 1);
+});
+
+// #4997 — iOS WebKit drops the connection behind a suspended Home Screen app,
+// usually without a close event (WebKit bugs 273827, 277615).
+test("music library reopens after iOS drops the connection: close event, silent InvalidStateError, UnknownError abort", async () => {
+  const drops = {
+    "close event": (f) => { f.connections[0].closed = true; f.connections[0].onclose(); },
+    "silent drop": (f) => { f.connections[0].closed = true; },
+    "UnknownError abort": (f) => f.loseWrite(),
+  };
+  for (const [label, drop] of Object.entries(drops)) {
+    const f = musicLibraryFixture(); await f.lib.init();
+    assert.equal((await f.lib.add([{ name: "Before.mp3", type: "audio/mpeg", size: 100 }])).added, 1);
+    drop(f);
+    assert.equal(f.lib.available(), true, label + ": the saved library is still there");
+    assert.equal(f.lib.count(), 1, label + ": loaded tracks stay listed");
+    const result = await f.lib.add([{ name: "After.mp3", type: "audio/mpeg", size: 200 }]);
+    assert.equal(result.added, 1, label + ": " + result.errors.join(" "));
+    assert.equal(f.connections.length, 2, label + ": one fresh connection, the dead one is never reused");
+    assert.equal(f.rows.length, 2, label + ": exactly one copy is written"); assert.equal(f.playlist.size, 2, label);
+    assert.equal(f.lib.available(), true, label);
+  }
+});
+
+test("music library says why an upload failed while storage cannot be reopened, then recovers without a reload", async () => {
+  const f = musicLibraryFixture(); await f.lib.init();
+  await f.lib.add([{ name: "Before.mp3", type: "audio/mpeg", size: 100 }]);
+  f.connections[0].closed = true; f.down(true);
+  const failed = await f.lib.add([{ name: "Lost.mp3", type: "audio/mpeg", size: 200 }]);
+  assert.equal(failed.added, 0); assert.equal(failed.skipped, 1);
+  assert.match(failed.errors[0], /storage was disconnected.*reopen the app/i);
+  assert.equal(f.lib.available(), false); assert.equal(f.lib.count(), 1, "the loaded track stays in the list");
+  f.down(false);
+  const recovered = await f.lib.add([{ name: "Lost.mp3", type: "audio/mpeg", size: 200 }]);
+  assert.equal(recovered.added, 1, recovered.errors.join(" "));
+  assert.equal(f.lib.available(), true); assert.equal(f.rows.length, 2); assert.equal(f.lib.count(), 2);
 });
 
 test("music library invalidates a version-changed connection and reopens for the next import", async () => {

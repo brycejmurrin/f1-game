@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -57,6 +58,44 @@ test("race-normalised intensity 0.10 (onset at 0.10 rad) makes skidLevel audible
     assert.ok(level > 0,
       `skidLevel=${level} at race intensity 0.10: second SQUEAL_THRESH still silencing onset`);
     assert.ok(Math.abs(level - 0.10 * 0.16) < 1e-9, `expected dry gain 0.016, got ${level}`);
+  } finally { g.close(); }
+});
+
+// The REAL squeal gate: updateCar's human-only `slipAng` / `c.skidIntensity`
+// statements, lifted from the shipped source and compiled, so the onset below
+// is the one game.js runs (a hand-forced vLat does not survive a physics step,
+// which is why the boot test above pins the intensity instead).
+const SQUEAL_SRC = (() => {
+  const src = gameSource();
+  const a = src.indexOf("    const slipAng = Math.abs(Math.atan2(c.vLat || 0, Math.max(4, Math.abs(c.speed))));");
+  const b = src.indexOf("c.skidIntensity = c.offroad ? 0.5", a);
+  const e = src.indexOf(";", b);
+  if (a < 0 || b < 0 || e < 0) throw new Error("updateCar's slipAng → skidIntensity statements not found");
+  return src.slice(a, e + 1);
+})();
+const squealIntensity = (slipRad, speed = 40) => {
+  const c = { vLat: speed * Math.tan(slipRad), speed, offroad: false, wheelLock: 0 };
+  Function("c", "clamp", SQUEAL_SRC)(c, (v, lo, hi) => Math.min(hi, Math.max(lo, v)));
+  return c.skidIntensity;
+};
+
+test("squeal onset is 0.10 rad body slip: below it the tyres are silent, above it they talk", async () => {
+  // Pure: the shipped gate on either side of the onset, and its full-slide end.
+  for (const s of [0, 0.05, 0.09, 0.099]) assert.equal(squealIntensity(s), 0, `slip ${s} rad is under the onset`);
+  for (const s of [0.101, 0.11, 0.12]) assert.ok(squealIntensity(s) > 0, `slip ${s} rad is past the onset`);
+  assert.ok(Math.abs(squealIntensity(0.12) - 0.10) < 1e-9, "(0.12 − 0.10) / 0.20 = 0.10");
+  assert.equal(squealIntensity(0.35), 1, "past 0.30 rad is a full slide (clamped)");
+  // ...and through the real race audio: what the gate yields is what the player hears.
+  const { g, sb } = await bootRaceAudio();
+  try {
+    const player = g.G.player;
+    pin(player, "wheelLock", 0);
+    pin(player, "skidIntensity", squealIntensity(0.09));
+    g.step(3);
+    assert.equal(sb.GameAudio.skidLevel(), 0, "0.09 rad slip must be silent");
+    pin(player, "skidIntensity", squealIntensity(0.11));
+    g.step(3);
+    assert.ok(sb.GameAudio.skidLevel() > 0, "0.11 rad slip must squeal");
   } finally { g.close(); }
 });
 

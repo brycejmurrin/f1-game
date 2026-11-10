@@ -1,5 +1,7 @@
 # PERF › IPHONE AUDIT 2026-10-21: live-site freeze, governor ladder §2u, TLX phone costs, BrowserStack profiling map
 
+Summary: External audit of the live site: freeze, governor ladder, TLX phone costs and a BrowserStack profiling map.
+
 An external audit of the live site (https://brycejmurrin.github.io/f1-game/) run two ways on
 2026-10-21 — a browser agent in a software-GL Chromium, and a local Playwright run — plus a
 code-level pass over the iPhone render path and a capability check of BrowserStack for real-device

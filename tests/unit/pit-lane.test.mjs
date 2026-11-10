@@ -1579,11 +1579,35 @@ test("held is the lane's own states, and never a position on the road", () => {
 });
 
 test("stuck is the nearest car ahead, not any car inside the window", () => {
-  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
-  const fn = src.slice(src.indexOf("function rivalsOf"), src.indexOf("function think"));
-  assert.match(fn, /aheadGap = -gap/);
-  assert.match(fn, /ahead && aheadGap < S\.STUCK_GAP_S/);
-  assert.doesNotMatch(fn, /-gap < S\.STUCK_GAP_S && !inLane/);
+  // think() runs the real rivalsOf (the real AiDrive.STRAT: STUCK_GAP_S 1.0 s)
+  // and latches c._stuckFrom on the progress where it first read STUCK.
+  const { pits, G } = strategySession(20);
+  const ai = (prog, pitStops) => ({ human: false, local: false, speed: 40, lap: 8, prog, pitStops,
+    pitState: "none", tyre: { code: "M", tread: 0 }, tyreWear: 0.5, lapsOnSet: 8 });
+  const c = ai(1000, 0);
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [10, 10], lapsAt: [10], pitLossLaps: 0.2 };
+  const near = ai(1020, 0);    // 0.5 s up the road
+  const far = ai(1036, 0);     // 0.9 s: still inside the window, but not the car in front
+  G.cars = [c, near, far];   // the window's LAST car is the far one (the old latch)
+  const stuck = () => { c._stuckFrom = null; pits.think(c); return c._stuckFrom != null; };
+  assert.equal(stuck(), true, "behind an unstopped car on the same stops, inside 1 s: stuck");
+  assert.equal(c._stuckFrom, 1000, "latched on the progress it started at");
+  // The car directly ahead has already stopped (fresher rubber): not stuck,
+  // whatever the backmarker further up the window is doing.
+  near.pitStops = 1;
+  assert.equal(stuck(), false, "the nearest car ahead is on fresher rubber, so the undercut is not ours");
+  // We have stopped and it has not: we are stuck behind it on our fresher set.
+  near.pitStops = 0; far.pitStops = 0; c.pitStops = 1;
+  c.pitPlan = { stops: 2, seq: ["medium", "hard", "soft"], stints: [5, 5, 10], lapsAt: [5, 10], pitLossLaps: 0.2 };
+  assert.equal(stuck(), true, "a car on older rubber than ours, directly ahead, holds us up");
+  // Nearest in the lane: not a car we are stuck behind, even with one behind it in the window.
+  c.pitStops = 0;
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [10, 10], lapsAt: [10], pitLossLaps: 0.2 };
+  near.pitState = "lane";
+  assert.equal(stuck(), false, "the car ahead is already in the lane");
+  // Outside the window: 1.5 s up the road is not stuck.
+  near.pitState = "none"; near.prog = 1060; far.prog = 1080;
+  assert.equal(stuck(), false, "1.5 s ahead is free air");
 });
 
 // ── A box with no garage behind it is a place in the FAST lane (L16) ─────────

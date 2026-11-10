@@ -1,5 +1,7 @@
 # CI + software rendering — research notes (2026-08)
 
+Summary: (§2 superseded: whole groups run as four llvmpipe shards.) SwiftShader vs Lavapipe vs llvmpipe (measured canvas colours + wall-clock), WGX soft-present / `wgx-capture`, Cursor Cloud `mesa-vulkan-drivers` persist, why sharding is the wrong first speedup, and **§There IS a real GPU** — `macos-latest`.
+
 Screenshot / capture / remote-group **operator knobs** landed 2026-10-10:
 `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md` (`shot --batch`, GL-aware
 workers, why Playwright Docker was skipped).
