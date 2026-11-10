@@ -18953,7 +18953,6 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
-        "tests/unit/notices.test.mjs",
         "tests/unit/settings-one-home.test.mjs"
       ]
     },

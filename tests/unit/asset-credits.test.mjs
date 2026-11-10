@@ -38,7 +38,7 @@ const audio = walk(path.join(ROOT, "assets")).filter(isAudio).sort();
 const baseline = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/asset-credits-unknown.json"), "utf8")).unknown;
 
 test("the walk finds the shipped audio (guards a vacuous pass)", () => {
-  assert.ok(audio.includes("assets/sfx/f1_engine.mp3"), "engine sample found");
+  assert.equal(audio.filter((f) => f === "assets/sfx/f1_engine.mp3").length, 1, "engine sample found");
   assert.ok(audio.some((f) => f.startsWith("assets/music/")), "music found");
   assert.ok(audio.some((f) => f.startsWith("assets/voice/")), "voice packs found");
 });

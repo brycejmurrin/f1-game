@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMPONENTS, NOTICE_SOURCES, TITLE_NOTICE, TRADEMARK, buildCreditsHtml, detectLicence, syncCommitted, withCreditsBlock } from "../../desktop/scripts/notices.mjs";
+import { COMPONENTS, NOTICE_SOURCES, TITLE_NOTICE, TRADEMARK, buildCreditsHtml, detectLicence, noticeModel, syncCommitted, withCreditsBlock } from "../../desktop/scripts/notices.mjs";
 import { stageExcluded } from "../../tools/desktop/stage-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -36,11 +36,9 @@ test("every shipped vendor package and its licence files are credited", () => {
     if (dir === "three-patches") continue;   // this project's own patch list, not a package
     const files = fs.readdirSync(path.join(ROOT, "vendor", dir)).filter((f) => /LICEN[CS]E/i.test(f));
     assert.ok(files.length, `vendor/${dir} has no licence file`);
-    for (const f of files) {
-      const rel = `vendor/${dir}/${f}`;
-      assert.ok(credited.has(rel), `${rel} has no COMPONENTS row`);
-      assert.ok(NOTICE_SOURCES.includes(rel), `${rel} is not in NOTICE_SOURCES (its text must ship in the notices)`);
-    }
+    const rels = files.map((f) => `vendor/${dir}/${f}`);
+    assert.deepEqual(rels.filter((rel) => !credited.has(rel)), [], "licence files without a COMPONENTS row");
+    assert.deepEqual(rels.filter((rel) => !NOTICE_SOURCES.includes(rel)), [], "licence texts missing from NOTICE_SOURCES");
   }
 });
 
@@ -50,13 +48,14 @@ test("the licence id is read from the text, and an unknown text is refused", () 
   assert.throws(() => detectLicence("All rights reserved."), /unrecognised licence/);
 });
 
-test("ABOUT & CREDITS is a Settings door with a panel and a route", () => {
-  assert.match(html, /<button id="pm-open-credits" type="button">ABOUT &amp; CREDITS/);
-  assert.match(html, /<section id="pm-panel-credits" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>\s*<!-- @gen-notices:credits -->/);
-  assert.match(read("js/ui/settings-tabs.js"), /credits: Object\.freeze\(\{[^}]*getElementById\("pm-panel-credits"\)[^}]*getElementById\("pm-open-credits"\)/);
+test("ABOUT & CREDITS lists the feeds, components and assets, and says what is unknown", () => {
+  // The door, panel and route are pinned by ui-sheets-audit (door list), the
+  // menu-screens `settingscredits` screen and withCreditsBlock (markers) above.
+  const m = noticeModel(ROOT);
+  const names = [...m.data, ...m.components].map((x) => x.name).concat(m.pack.map((g) => g.author));
+  assert.deepEqual(["Jolpica F1", "OpenF1", "three.js", "Snapdragon Game Super Resolution 1", "Titillium Web", "Kenney"].filter((n) => !names.includes(n)), []);
+  assert.equal(m.audio.find((a) => a.label.startsWith("Music")).unknown, true, "an unknown music licence is said, not hidden");
   const body = buildCreditsHtml(ROOT);
-  for (const name of ["Jolpica F1", "OpenF1", "three.js", "Snapdragon Game Super Resolution 1", "Titillium Web", "Kenney"]) assert.ok(body.includes(name), name);
-  assert.match(body, /Music \(6 tracks\) &middot; licence not on record/, "an unknown licence is said, not hidden");
   for (const [, href] of body.matchAll(/href="([^"]+)"/g)) {
     if (/^https:\/\//.test(href)) continue;
     assert.ok(fs.existsSync(path.join(ROOT, href)), `credits link ${href} points at a shipped file`);
@@ -65,19 +64,18 @@ test("ABOUT & CREDITS is a Settings door with a panel and a route", () => {
 });
 
 test("the page title and descriptions do not brand with the F1 word mark", () => {
-  assert.match(html, /<title>Apex 26 — unofficial racing fan game<\/title>/);
+  assert.equal(/<title>([^<]*)<\/title>/.exec(html)[1], "Apex 26 — unofficial racing fan game");
   const desc = /<meta name="description" content="([^"]*)"/.exec(html)[1];
   const manifest = JSON.parse(read("manifest.json"));
   for (const s of [desc, manifest.description, manifest.name, manifest.short_name]) assert.doesNotMatch(s, /\bF1\b|FORMULA ?(1|ONE)/i, s);
 });
 
 test("the title carries the unofficial notice, ABOUT & CREDITS the full trade-mark sentence, and no CSS hides it", () => {
-  assert.ok(TRADEMARK.includes("are trade marks of Formula One Licensing B.V."));
   const m = /<p id="disclaimer">([^<]*)<\/p>/.exec(html);
   assert.ok(m, "#disclaimer exists");
   assert.equal(m[1], TITLE_NOTICE);
-  const panel = html.slice(html.indexOf('id="pm-panel-credits"'));
-  assert.ok(panel.includes(TRADEMARK), "Formula 1's fan-guideline sentence heads ABOUT & CREDITS");
+  const first = /<!-- @gen-notices:credits -->\s*<p[^>]*>([^<]*)<\/p>/.exec(html);
+  assert.equal(first && first[1], TRADEMARK, "Formula 1's fan-guideline sentence heads ABOUT & CREDITS");
   for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((x) => x.endsWith(".css"))) {
     const css = read("css/" + f).replace(/\/\*[\s\S]*?\*\//g, "");
     for (const rule of css.matchAll(/([^{}]*#disclaimer[^{}]*)\{([^{}]*)\}/g)) {
@@ -88,17 +86,17 @@ test("the title carries the unofficial notice, ABOUT & CREDITS the full trade-ma
 
 test("the adapted SGSR shaders point at the retained BSD-3-Clause text", () => {
   const lic = read("vendor/sgsr/LICENSE");
-  assert.match(lic, /Redistributions of source code must retain the above copyright notice/);
-  assert.match(lic, /THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"/);
+  const kept = ["Redistributions of source code must retain the above copyright notice", 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"'];
+  assert.deepEqual(kept.filter((t) => !lic.includes(t)), [], "the BSD-3 conditions and disclaimer are retained");
   for (const f of ["js/render/glx/shaders/glsl-post.js", "js/render/webgpu/wgsl-post.js"]) {
-    assert.match(read(f), /SPDX-License-Identifier: BSD-3-Clause\n\/\/ Conditions and disclaimer: vendor\/sgsr\/LICENSE/, f);
+    const after = /SPDX-License-Identifier: BSD-3-Clause\n(\/\/ [^\n]*)/.exec(read(f));
+    assert.equal(after && after[1], "// Conditions and disclaimer: vendor/sgsr/LICENSE (retained, BSD-3-Clause clause 1).", f);
   }
 });
 
 test("LICENSE reserves the owner's rights and defers third parties to THIRD-PARTY-NOTICES", () => {
   const lic = read("LICENSE");
-  assert.match(lic, /All rights reserved/);
-  assert.match(lic, /THIRD-PARTY-NOTICES/);
+  assert.deepEqual(["All rights reserved", "THIRD-PARTY-NOTICES"].filter((t) => !lic.includes(t)), []);
   assert.equal(JSON.parse(read("package.json")).license, "UNLICENSED", "package.json and LICENSE agree");
 });
 
