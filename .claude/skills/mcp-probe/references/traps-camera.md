@@ -64,7 +64,7 @@ because it's not `orbit()`/`view()` (the free-cam family covered by the SECOND
 trap above).
 
 **2. `orbit()`/`view()`/`eyeAt()`-family calls silently zero the draw-distance
-cull.** `game.js`'s `frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0) : ...`
+cull.** `game.js` picks `frame.cullDist` from `dbgCam || cine` first
 — on desktop, ANY free-cam hook (`G.dbgCam` set) makes the scenery draw-distance
 cull a no-op (uncapped), and the far-clip plane comes from `dbgCam.far`, not the
 renderDistMul-scaled `farPlane`. A render-distance knob will show **zero**

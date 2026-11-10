@@ -57,11 +57,10 @@ initialised, not broken.
 Heap/CPU while a **js-debugger** session is attached to that page → its `debugger_profile` (one owner per page).
 
 **Census tools** (measured before/after for phone memory, heap growth, CPU-side
-copies and GPU budgets):
-`node tools/perf/runtime-memory.mjs`, `tools/perf/vm-leak-census.mjs`,
-`tools/gfx/mem-census.mjs` (scripted track-switch heap-snapshot compare),
-`tools/perf/mesh-census.mjs` and `tools/perf/garage-census.mjs` (flags in
-each file's header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU. Record
+copies and GPU budgets): `tools/perf/vm-leak-census.mjs`, `tools/gfx/mem-census.mjs`
+(track-switch heap compare; CDP counters via the `tools/perf/runtime-memory.mjs` library),
+`tools/perf/mesh-census.mjs`, `tools/perf/garage-census.mjs` (flags: `--help` or file
+header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU. Record
 track and backend (`__apex.diag().env.backend`) with every number, cite MB
 deltas in the PR, and dispatch `gpu-census.yml` on `macos-latest` for a real
 GPU — SwiftShader here is not player evidence.
@@ -78,7 +77,8 @@ Deep playbook: `docs/research/CHROME-DEVTOOLS-MCP.md`.
 
 1. **Never render Chrome MCP while Playwright runs** — park to `about:blank`,
    then `chrome-stop`, then check CPU (`test-bg.mjs` and `chrome-start` refuse each
-   other; attached `chrome_*` tools are not detected, so close their page yourself); see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
+   other; `mcp-browser-guard.sh` refuses opening attached `chrome_*` tools beside a live
+   run, but nothing sees a page left open, so close it yourself); see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
 2. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
 3. SwiftShader WebGPU **executes**; pixels come from the soft-present blit, never the
    hidden swapchain: `await __apex.awaitPresent()` in a live session, or

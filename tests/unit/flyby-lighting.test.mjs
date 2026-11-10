@@ -158,7 +158,7 @@ test("both the live screen and the editor's preview read them", () => {
     "the live flyby renders at the session's full fog density while the editor previews it thinned");
   // Aspect fit (HFOV cap on wide, floor on portrait) lives in CamFovFit; cine
   // must passthrough so a crane/editor shot keeps the authored angle.
-  assert.match(body, /CamFovFit\.fitFovY\([\s\S]{0,80}\{ cine \}/,
+  assert.match(body, /CamFovFit\.fitFovY\([\s\S]{0,80}\{ cine, boost: /,
     "the cinematic must fly the angle it was framed at, not the gameplay cap");
 
   const apex = fs.readFileSync(new URL("../../js/agent/apex-cam.js", import.meta.url), "utf8");

@@ -3,7 +3,7 @@
 The pad is VS FRIEND's wire with one seat (`docs/MULTIPLAYER.md` §Phone as controller; `js/input/phone-pad.js`).
 
 1. Roles: the game page hosts the room (`createInvite` + `hostRoom`); the phone (`controller.html`) is the JOINER
-   (`swap` + `acceptInvite`, 2.5 s gather). A late relay candidate missing from the phone's answer is the prime
+   (`swap` + `acceptInvite`; a full gather capped by `GATHER_TIMEOUT_MS` in `js/net/handshake.js`, the pad passes no `gatherTimeoutMs`). A late relay candidate missing from the phone's answer is the prime
    suspect for "stuck connecting".
 2. QR: the pad QR opens `controller.html#pad=CODE`; the code can also be typed on a bare `controller.html`.
    The Camera/Safari advice (workflow.md step 5) is VS FRIEND only.
@@ -15,7 +15,7 @@ The pad is VS FRIEND's wire with one seat (`docs/MULTIPLAYER.md` §Phone as cont
    own credentials URL (Metered-style) or `apex26.turn` at your own server; the free `:443?transport=tcp`
    relays sit behind the opt-in `apex26.freeTurn` and were measured dead (the ice.js comment;
    `docs/MULTIPLAYER.md`, `docs/DEBUG-HOOKS.md` TURN rows).
-5. Prove the relay leg on one machine: `node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass`
+5. Prove the relay leg on one machine (parent session only, it boots Chromium; never a pre-push step): `node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass`
    against your own TURN. A bare `npm run rtc:e2e-3p-relay` sets relay-only with no TURN server, so on the
    STUN-only default it always fails and proves nothing. It needs outbound
    TURN access, so a sandbox failure is an answer about the environment.

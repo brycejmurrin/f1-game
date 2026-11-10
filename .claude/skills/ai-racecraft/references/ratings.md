@@ -23,14 +23,14 @@ ai-racecraft owns how those axes drive the field).
 ## Ratings → behaviour (where each knob lives)
 
 `AiDrive.traits(c)` reads `craft`/`awareness`/`experience`/`skill`/`consistency`/
-`aggression`/`optimism` (0.75 mid-grid fallbacks; a reused scratch). Every map below is
+`aggression`/`optimism` (mid-grid fallbacks; a reused scratch). Every map below is
 in `ai-drive.js`; the game.js caller builds its ctx. Find the caller with apex-lsp
 `lsp_references` (skill code-nav) before tuning an `AiDrive` export: some exports are
 test-only (`_t`) or have no game.js caller, and tuning one changes nothing.
 
 | Behaviour | Function → game.js caller | Ratings read | Unit pin (`ai-drive.test.mjs`) |
 |---|---|---|---|
-| OT fire rate (λ, clamp 0.08-2.4) | `otFireRate` / `otShouldFire(roll, dt, ctx)` → `_aiOtFire` with `simRnd()` | craft ↑, awareness ↓, experience ↑, aggression ±22 %; house/team orders | `OT fire rate rises with craft…`, `otShouldFire respects the roll…`, `aggression raises otFireRate…` |
+| OT fire rate (λ, clamped) | `otFireRate` / `otShouldFire(roll, dt, ctx)` → `_aiOtFire` with `simRnd()` | craft ↑, awareness ↓, experience ↑, aggression ±; house/team orders | `OT fire rate rises with craft…`, `otShouldFire respects the roll…`, `aggression raises otFireRate…` |
 | ERS deploy | `wantBoost` → `aiWantsBoost`; X-mode `wantX` → `c.xOn` | awareness (bank when rich), house style, `ersDeploy`/`ersRegen` | `wantBoost catches and defends…`, `…same at every PACE…`, `ERS map and wantX…` |
 | Lane nudge in traffic | `adaptLane(lane, ctx, dt)` → `c.lane` | craft (step size), awareness (commit) | `adaptLane nudges toward the freer side…`, `adaptLane on streets…` |
 | Pull out to pass | `otPull` (gated by `otWant`) | craft; street scale | `otPull: a queue-limited car pulls out…`, `otWant: a blocker that is slow but PULLING AWAY…` |
