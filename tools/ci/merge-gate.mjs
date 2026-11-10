@@ -21,7 +21,8 @@
 //   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored);
 //             a body with no Plan fails, except a fold bot's PR (author `*[bot]`), whose body has none
 //   ci        the `CI` check-run from the GitHub Actions app, in the check suite of a ci.yml workflow run, is
-//             `success` on the PR's current head, newest attempt
+//             `success` on the PR's current head, newest attempt; a run that went green only on a re-run after a
+//             failed job (`run_attempt` > 1) fails the row
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
 //             name) needs the `config-ok` label, last added by Bryce in person, and newer than the last push that
 //             touched a CONFIG_PATH (configPushState); any other diff passes. Replaces the hook "ask".
@@ -188,7 +189,29 @@ export function ciVerdict(checkRuns, name = REQUIRED_CHECK, app = CI_APP, suites
   // Not finished is "waiting", not "refused": a `land` label added while CI still runs must not paint `gate` red.
   if (!best) return { ...row(false, `no ${name} check-run${suites ? ` from ${CI_WORKFLOW}` : ""} on the head yet`), pending: true };
   if (best.status !== "completed") return { ...row(false, `${name} ${best.status}`), pending: true };
-  return best.conclusion === "success" ? row(true, `${name} success (check-run ${best.id})`) : row(false, `${name} ${best.conclusion}`);
+  return best.conclusion === "success" ? { ...row(true, `${name} success (check-run ${best.id})`), suite: best.check_suite?.id ?? null } : row(false, `${name} ${best.conclusion}`);
+}
+
+/** Job conclusions that make an earlier attempt red (a cancelled or skipped job is not a failure). */
+const RED_JOB = new Set(["failure", "timed_out", "startup_failure"]);
+
+/**
+ * ci, retry half: the ci.yml run that owns the green `CI` check-run passed only on a re-run (`run_attempt` > 1) and an
+ * earlier attempt had a red job → the row fails (AGENTS.md rule 9: a pass that needed a retry is a red). `run` is the
+ * workflow run ({ id, run_attempt }); reads actions/runs/<id>/attempts/<n>/jobs for each earlier attempt.
+ * → { ok, evidence } | { error }. Side effects only through `request`.
+ */
+export function ciRetryVerdict(run, request) {
+  const attempt = Number(run?.run_attempt) || 1;
+  if (attempt <= 1) return row(true, "first attempt");
+  const red = [];
+  for (let n = 1; n < attempt; n++) {
+    const jobs = listAll(`actions/runs/${run.id}/attempts/${n}/jobs`, request, (j) => j?.jobs, 5);
+    if (jobs.error) return { error: `jobs of ${CI_WORKFLOW} run ${run.id} attempt ${n}: ${jobs.error}` };
+    for (const j of jobs.rows) if (RED_JOB.has(j?.conclusion)) red.push(`${j.name} (attempt ${n}: ${j.conclusion})`);
+  }
+  if (!red.length) return row(true, `attempt ${attempt}; earlier attempts had no failed job`);
+  return row(false, `${REQUIRED_CHECK} passed only on re-run ${attempt} of ${CI_WORKFLOW} run ${run.id}: ${red.slice(0, 3).join(", ")}${red.length > 3 ? ", …" : ""} failed before — a pass that needed a retry is a red: push a fresh commit, or quarantine the test by name in tests/data/flaky-quarantine.json`);
 }
 
 // ---- git-backed rows --------------------------------------------------------------------------------------
@@ -337,16 +360,16 @@ function checkRunsFor(sha, request) {
  * row reads only ci.yml's own `CI` check-run. Returns { suites: Set } or { error }.
  */
 export function ciSuitesFor(sha, request) {
-  const suites = new Set();
+  const suites = new Set(), runs = new Map();
   const want = `.github/workflows/${CI_WORKFLOW}`;
   for (let page = 1; page <= 5; page++) {
     const r = request(`actions/workflows/${CI_WORKFLOW}/runs?head_sha=${encodeURIComponent(sha)}&per_page=100${page > 1 ? `&page=${page}` : ""}`);
     if (r.error) return { error: r.error };
     const batch = r.json?.workflow_runs || [];
-    for (const w of batch) if (String(w?.path || "").replace(/@.*$/, "") === want && w.check_suite_id != null) suites.add(w.check_suite_id);
+    for (const w of batch) if (String(w?.path || "").replace(/@.*$/, "") === want && w.check_suite_id != null) { suites.add(w.check_suite_id); runs.set(w.check_suite_id, w); }
     if (batch.length < 100) break;
   }
-  return { suites };
+  return { suites, runs };
 }
 
 /** Every page of a list endpoint through `request` → { rows } | { error }. A full last allowed page is an error
@@ -391,6 +414,11 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const ci = ciSuitesFor(head, request);
   if (ci.error) return { error: `${CI_WORKFLOW} runs on ${head.slice(0, 8)}: ${ci.error}` };
   rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
+  if (rows.ci.ok) {
+    const retry = ciRetryVerdict(ci.runs?.get(rows.ci.suite), request);
+    if (retry.error) return { error: retry.error };
+    rows.ci = retry.ok ? row(true, rows.ci.evidence) : retry;
+  }
   const files = listAll(`pulls/${pr}/files`, request);
   if (files.error) return { error: `files of PR #${pr}: ${files.error}` };
   const changed = filePaths(files.rows);

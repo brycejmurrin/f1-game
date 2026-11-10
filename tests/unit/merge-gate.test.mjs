@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor,
+  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
@@ -1220,4 +1220,24 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   ];
   for (const [env, want, why] of cases) assert.equal(dispatched(go(env)).length, want, why);
   assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
+});
+
+test("ci retry: a CI that went green only on a re-run after a failed job fails the row; a first-attempt pass or a re-run after a cancel passes", () => {
+  const jobs = { 1: [{ name: "Structural guards", conclusion: "failure" }, { name: "lint", conclusion: "success" }], 2: [{ name: "x", conclusion: "cancelled" }] };
+  const req = (p) => { const m = /^actions\/runs\/900\/attempts\/(\d+)\/jobs/.exec(p); return m ? { json: { jobs: jobs[m[1]] || [] } } : { error: `unexpected ${p}` }; };
+  assert.equal(ciRetryVerdict({ id: 900, run_attempt: 1 }, req).ok, true);
+  assert.equal(ciRetryVerdict(undefined, req).ok, true, "no run known: the suite pin already decided");
+  const red = ciRetryVerdict({ id: 900, run_attempt: 2 }, req);
+  assert.deepEqual(red, { ok: false, evidence: "CI passed only on re-run 2 of ci.yml run 900: Structural guards (attempt 1: failure) failed before — a pass that needed a retry is a red: push a fresh commit, or quarantine the test by name in tests/data/flaky-quarantine.json" });
+  jobs[1] = [{ name: "x", conclusion: "cancelled" }];
+  assert.equal(ciRetryVerdict({ id: 900, run_attempt: 3 }, req).ok, true, "earlier attempts only cancelled");
+  assert.equal(ciRetryVerdict({ id: 900, run_attempt: 2 }, () => ({ error: "HTTP 502" })).error, "jobs of ci.yml run 900 attempt 1: HTTP 502");
+  // evaluate: the green CI check-run's suite is a re-run with a failed first attempt.
+  const f = fakes();
+  f.runs[0].id = 900; f.runs[0].run_attempt = 2;
+  jobs[1] = [{ name: "Structural guards", conclusion: "failure" }];
+  const rq = (p) => (p.startsWith("actions/runs/900/") ? req(p) : f.deps.request(p));
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, request: rq }).rows[k].ok), ["ci"]);
+  f.runs[0].run_attempt = 1;
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: rq }).ok, true);
 });
