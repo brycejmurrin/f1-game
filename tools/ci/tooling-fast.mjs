@@ -802,11 +802,65 @@ export function syncMergePaths(root = ROOT, opts = {}) {
   }
 }
 
-/** Selection for a pure sync merge: `gen:check` plus the docs tests. */
+/** deploy.mjs's `REGEN_MESSAGE`: the commit `regenerateDerived` adds on top of a sync merge (prepush-floor.test.mjs pins them equal). */
+export const SYNC_REGEN_SUBJECT = "merge: regenerate derived files on the union (npm run gen)";
+
+/**
+ * A deploy-tip sync, pure or not, with the paths the MERGE itself decided (2026-11-10, docs/notes/TOOLING-HUNT-2026-11-09.md).
+ * `syncMergePaths` is all-or-nothing: one regenerated digest (tools/shot/scenery-locations.json on 8 of 14 real syncs)
+ * or one auto-merged file sent the sync back to the whole branch diff, which the push before it had already verified.
+ * Here HEAD is the sync merge, or deploy.mjs's regen commit right on top of it, and `impure` is every path whose merged
+ * content neither side verified: a path BOTH sides changed since the merge base (auto-merged, hand-resolved, or one
+ * side dropped) and a path whose content is not the tip's (regenerated or hand-edited in the merge).
+ * Same refusals as syncMergePaths: a dirty tree, a second parent off the deploy branch, a HEAD already on it.
+ * LOCAL ONLY: the CLI ignores it under GITHUB_ACTIONS, so CI's proof of the pushed head is unchanged.
+ * @returns {{ paths: string[], impure: string[] }|null}
+ */
+export function syncMergeScope(root = ROOT, opts = {}) {
+  const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    if (git("status", "--porcelain")) return null;
+    let merge = "HEAD";
+    let parents = git("rev-list", "--parents", "-n", "1", merge).split(/\s+/).slice(1);
+    if (parents.length === 1 && git("log", "-1", "--format=%s", "HEAD") === SYNC_REGEN_SUBJECT) {
+      merge = parents[0];
+      parents = git("rev-list", "--parents", "-n", "1", merge).split(/\s+/).slice(1);
+    }
+    if (parents.length !== 2) return null;
+    const [p1, p2] = parents;
+    const reach = (a, b) => { try { execFileSync("git", ["merge-base", "--is-ancestor", a, b], { cwd: root, stdio: "ignore" }); return true; } catch (_) { return false; } };
+    const tipRef = `origin/${DEPLOY_BRANCH}`;
+    if (opts.tipRef !== null && (!reach(p2, opts.tipRef || tipRef) || reach("HEAD", opts.tipRef || tipRef))) return null;
+    const names = (...a) => git("diff", "--name-only", ...a).split("\n").filter(Boolean);
+    const paths = names(p1, "HEAD");
+    if (!paths.length) return null;
+    const base = git("merge-base", p1, p2);
+    const mine = new Set(names(base, p1));
+    const both = names(base, p2).filter((f) => mine.has(f));
+    const blob = (rev, f) => { try { return git("rev-parse", "--verify", "-q", `${rev}:${f}`); } catch (_) { return ""; } };
+    const notTips = paths.filter((f) => blob("HEAD", f) !== blob(p2, f));
+    return { paths, impure: [...new Set([...both, ...notTips])].sort() };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Selection for a sync merge: `gen:check` plus the docs tests, plus — when `opts.impure` names paths the merge itself
+ * decided (syncMergeScope) — what `--changed` selects for THOSE paths alone. An impure path that forces the whole floor
+ * still forces it (the returned `widened` says which).
+ */
 export function selectSyncMerge(paths, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
-  const files = allFiles.filter((f) => GENERATED_SEED_TESTS.includes(f));
-  return { files, reason: "sync-merge", genCheck: true, shards: shardsCoveringFiles(files, allFiles), changed: paths.length };
+  const seeds = allFiles.filter((f) => GENERATED_SEED_TESTS.includes(f));
+  const impure = opts.impure || [];
+  if (!impure.length) return { files: seeds, reason: "sync-merge", genCheck: true, shards: shardsCoveringFiles(seeds, allFiles), changed: paths.length };
+  const { impure: _drop, ...inner } = opts;
+  const sel = selectToolingFastChanged(impure, inner);
+  const pool = [...allFiles, ...sel.files.filter((f) => !allFiles.includes(f))];
+  const want = new Set([...seeds, ...sel.files]);
+  const files = pool.filter((f) => want.has(f));
+  return { ...sel, files, reason: `sync-merge+${sel.reason}`, genCheck: true, shards: shardsCoveringFiles(files.filter((f) => allFiles.includes(f)), allFiles), changed: paths.length, impure: impure.length };
 }
 
 /** Wall-time estimate above which --changed prints the background-with-log hint. */
@@ -1280,8 +1334,12 @@ if (isMain) {
   let files0 = parsed.files;
   let changedMeta = null;
   if (parsed.changed) {
-    const synced = parsed.noSyncShortcut ? null : syncMergePaths();
-    changedMeta = synced ? selectSyncMerge(synced) : selectToolingFastChanged(changedVsDeploy());
+    // CI keeps the strict all-or-nothing shortcut; a local run (sync-pr.mjs's verify) scopes an impure sync to the merge.
+    const scoped = parsed.noSyncShortcut || process.env.GITHUB_ACTIONS ? null : syncMergeScope();
+    const synced = parsed.noSyncShortcut || scoped ? null : syncMergePaths();
+    changedMeta = scoped ? selectSyncMerge(scoped.paths, { impure: scoped.impure })
+      : synced ? selectSyncMerge(synced) : selectToolingFastChanged(changedVsDeploy());
+    if (scoped?.impure.length) console.log(`[tooling-fast] sync merge: ${scoped.paths.length} path(s) from the tip, ${scoped.impure.length} decided by the merge (${scoped.impure.slice(0, 6).join(", ")}${scoped.impure.length > 6 ? ", …" : ""}); --no-sync-shortcut selects the branch diff`);
     files0 = changedMeta.files;
     const wide = widenedLine(changedMeta, files0.length);
     if (wide) console.log(wide);
