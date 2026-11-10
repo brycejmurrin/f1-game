@@ -744,6 +744,8 @@
     "tests/unit/perf-spans.test.mjs",
     "tests/unit/perf-try.test.mjs",
     "tests/unit/phone-recorder.test.mjs",
+    "// The shared Bryce-phone preset, issue screenshots and the screenshot size matcher. Pure, ~1 s.",
+    "tests/unit/phone-tools.test.mjs",
     "tests/unit/phone-touch-surface.test.mjs",
     "tests/unit/photo-kit.test.mjs",
     "tests/unit/photo-studio.test.mjs",
