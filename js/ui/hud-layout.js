@@ -1172,7 +1172,6 @@ const HudLayout = (function () {
     return live ? { reason: "hidden right now", soft: true } : null;
   }
 
-  // ---- the DISPLAY › HUD fold ------------------------------------------------
   function peek(on, holdMs) {
     if (typeof ScreenLooks === "undefined") return;
     if (on) ScreenLooks.peek("hud", holdMs || 0);

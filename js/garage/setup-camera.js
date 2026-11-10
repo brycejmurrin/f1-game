@@ -901,6 +901,7 @@ function garageCtx(asSetup = false) {
   ctx.tod = G.raceTimeOfDay;
   ctx.night = h ? home.mode === "night"
     : (G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night)));
+  ctx.bayNight = ctx.night;   // the garage's own hour: GarageScene.moodCtx keys the bay geometry on it (#4965)
   if (c) {
     const n = c.results.length;
     // Keyed on the array too: another slot with the same result count kept the
@@ -980,7 +981,10 @@ function endGarageRes() {
 // canvas, the sheet, the camera strip, or CSS zoom actually changes.
 const _covPr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
 const _covCr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
-let _covKey = "", _covX = 0, _covY = 0, _covPanel = null, _covCanvas = null, _covCam = null;
+// #4974: the size/zoom stamp is compared as scalars in two reused arrays (the scene.js roomStamp
+// idiom), not joined into a ~60-char key string every turntable frame.
+const _covNow = [], _covWas = [];
+let _covX = 0, _covY = 0, _covPanel = null, _covCanvas = null, _covCam = null;
 function _stampRect(out, r) {
   out.left = r.left; out.top = r.top; out.width = r.width; out.height = r.height;
   out.right = r.right; out.bottom = r.bottom;
@@ -1078,6 +1082,9 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   _spWheelDistance = arriving && Number.isFinite(arriving.distance) ? arriving.distance : 0;
   _spWheelSteer = arriving ? -.45 * Math.sin(2 * (arriving.yaw || 0)) : 0;
   sequenceLook(arriving);
+  // This frame's ctx was made before the moment set (or restored) its mood: re-read the hour so the
+  // first and last frames of a show light with the right one (#4965).
+  if (typeof GarageScene !== "undefined" && GarageScene.moodCtx) GarageScene.moodCtx(context);
   _bayBusy = home.active || !!driveOut || !!preview || !!(arriving && arriving.active);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
   // Title Home ambient is already gated by home.moving (respects OS / Menu
@@ -1116,12 +1123,14 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     const camOn = !!(cam && !cam.hidden && cam.offsetParent !== null);
     const zP = window.CssZoom ? CssZoom.of(panelEl) : 1;
     const zC = window.CssZoom ? CssZoom.of(canvasEl) : 1;
-    const key = canvasEl.clientWidth + "x" + canvasEl.clientHeight
-      + "|" + panelEl.clientWidth + "x" + panelEl.clientHeight
-      + "|" + (camOn ? cam.clientWidth + "x" + cam.clientHeight : "0")
-      + "|" + zP + "|" + zC + "|" + (home.active ? 1 : 0)
-      + "|" + document.documentElement.getAttribute("data-look-garage-side");
-    if (key !== _covKey || panelEl !== _covPanel || canvasEl !== _covCanvas || cam !== _covCam) {
+    const st = _covNow;
+    st[0] = canvasEl.clientWidth; st[1] = canvasEl.clientHeight; st[2] = panelEl.clientWidth; st[3] = panelEl.clientHeight;
+    st[4] = camOn ? cam.clientWidth : -1; st[5] = camOn ? cam.clientHeight : -1; st[6] = zP; st[7] = zC; st[8] = home.active;
+    st[9] = document.documentElement.getAttribute("data-look-garage-side");
+    let same = _covWas.length === st.length;
+    for (let i = 0; same && i < st.length; i++) if (st[i] !== _covWas[i]) same = false;
+    if (!same || panelEl !== _covPanel || canvasEl !== _covCanvas || cam !== _covCam) {
+      for (let i = 0; i < st.length; i++) _covWas[i] = st[i];
       _covPanel = panelEl; _covCanvas = canvasEl; _covCam = cam;
       const pr = _stampRect(_covPr, (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect());
       const cr = _stampRect(_covCr, canvasEl.getBoundingClientRect());
@@ -1129,7 +1138,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
         ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top
         : canvasEl.clientHeight;
       const cover = panelCover(pr, cr, canvasEl.clientWidth, canvasEl.clientHeight, camTop);
-      _covX = cover.x; _covY = cover.y; _covKey = key;
+      _covX = cover.x; _covY = cover.y;
     }
     if (home.active) homePane = GarageExperience.freePane(_covPr, _covCr);
     panelFrac = _covX; panelFracY = _covY;
@@ -1285,12 +1294,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   return !(gfx.warming && gfx.warming());
 }
 
-// ---- the #cs-view / #cs-cam-panel controls ----
 // The chips in #cs-view, plus orbit-by-drag and zoom on the canvas itself. All
 // of it is gated on G.setupPreviewOn, so none of these listeners can touch the
 // camera during a race — the canvas is shared with the track render and, on
 // touch, with the steering.
-// ---- the CAMERA disclosure ----
 // The panel holds the whole camera set; only CAMERA and ACTIVE AERO show at
 // rest. Closing is driven by INTENT, not by "a click happened": a preset is an
 // aim-and-leave choice so it closes, while MOVE/zoom/SPIN repeat and must not

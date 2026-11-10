@@ -1,5 +1,7 @@
 # Race entry and memory on the TLX WebGPU path: where the 29.8 s goes (2026-10-27)
 
+Summary: Where the iPhone 14's 29.8 s TLX WebGPU race entry goes: api vs player path, stage split, race-path heap (#3110, #1650).
+
 Worker lane "boot, race entry and memory on TLX WebGPU" (parent session `session_01Ap97PUkoACNwXY4fpfa4ya`), epics #3110 and
 #1650. Question: Device Farm batch #3954 timed a **29.8 s** race entry on an iPhone 14 (TLX WebGPU, Monza day, first entry
 on the unit). Which parts are script load, circuit hydrate, track build, asset pack, pipeline warm and first frame, and
@@ -36,7 +38,7 @@ below is CPU-side or wall time on software rendering, and is a ranking, not a de
 
 ## Method
 
-`tools/perf/race-entry-timer.mjs` (this PR adds `APEX_ENTRY=menu` and `APEX_HEAP=1`), Playwright Chromium with the
+`tools/perf/race-entry-timer` (this PR adds `APEX_ENTRY=menu` and `APEX_HEAP=1`), Playwright Chromium with the
 headless project's launch args, `apex26.gfxBackend=three` so TLX takes its WebGPU path on Dawn/SwiftShader (bootGfx
 `[TLX] three backend: WebGPU`), local `npx serve`, one run per row, loadavg < 4 at start. CPU profiles: CDP Profiler
 (0.5–1 ms), summarised with `tools/perf/cpuprofile-summary.mjs`. Heap: CDP `HeapProfiler.takeHeapSnapshot` after
@@ -44,8 +46,8 @@ headless project's launch args, `apex26.gfxBackend=three` so TLX takes its WebGP
 the same tree (`f41eb15c` plus this PR's tool change).
 
 ```sh
-APEX_PIN=three APEX_PROFILE=artifacts/perf/entry.cpuprofile node tools/perf/race-entry-timer.mjs api monza
-APEX_PIN=three APEX_ENTRY=menu APEX_HEAP=1 node tools/perf/race-entry-timer.mjs menu monza
+APEX_PIN=three APEX_PROFILE=artifacts/perf/entry.cpuprofile node tools/perf/race-entry-timer api monza
+APEX_PIN=three APEX_ENTRY=menu APEX_HEAP=1 node tools/perf/race-entry-timer menu monza
 ```
 
 ## The device rows behind the 29.8 s
@@ -147,3 +149,5 @@ Posted on #3954. One iPhone 14, TLX WebGPU, Monza day, fresh unit:
 One run per row on a 4-core container shared with a static server. SwiftShader makes GPU-bound waits (idle time,
 texture copies, pipeline compiles) far longer than on the phone, and the desktop-UA context uses the desktop pack and
 livery tiers. The heap composition snapshot is Bahrain night, the heap totals are Monza day.
+
+> 2026-11-10 (W17 dead-weight pass): the tools cited here without an extension were deleted; `git log --diff-filter=D -- <path>` recovers them.

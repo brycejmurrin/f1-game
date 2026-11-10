@@ -116,6 +116,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      checks: read     # pages-reuse-verdict.sh reads a candidate run's guards record (an annotation)
     outputs:
       nothing_new: ${{ steps.live.outputs.nothing_new }}
       since: ${{ steps.live.outputs.since }}
@@ -201,6 +202,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      checks: read     # ci.yml's reuse steps read a draft run's guards record
     uses: ./.github/workflows/ci.yml
     with:
       # The live commit, when it is an ancestor of this tip: the sweeps and
@@ -251,72 +253,37 @@ jobs:
           SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
           echo "publish=$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL")" >> "$GITHUB_OUTPUT"
 
-  deploy:
+  # STAGE AND STAMP WITHOUT THE PAGES TOKEN (2026-11-10). npm ci, the npm cache
+  # and the staging scripts run here, with contents: read only; the job uploads
+  # the Pages artifact and the deploy job below publishes it. The deploy job
+  # holds pages: write and id-token: write and runs no repository script but
+  # the publishability recheck.
+  stage:
+    name: Stage and stamp the site
     needs: publishable
-    # `!cancelled()` is load-bearing, not decoration: a job's implicit
-    # success() looks at every job upstream of it, TRANSITIVELY, so when the
-    # gate was skipped (nothing new, or a reused pass) this job was skipped too
-    # even though publishable ran and said yes (run 2237, 2026-09-10). The
-    # explicit result check keeps the failure semantics: a failed or skipped
-    # publishable still stops here.
+    # Same transitive-skip rule as deploy (below).
     if: ${{ !cancelled() && needs.publishable.result == 'success' && needs.publishable.outputs.deploy == 'true' }}
-    # The ONLY step that actually touches GitHub's single-slot Pages queue.
-    # cancel-in-progress stays false: a publish in flight is never interrupted,
-    # and a newer run simply queues behind it and publishes next.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
-    # A CAP, so a hang cannot hold the never-cancelled `pages` lock for the
-    # 360-minute default (2026-10-04). Time queued for the lock does not count;
-    # the job is a full-history checkout, staging and deploy-pages, whose own
-    # deployment `timeout` input defaults to 10 minutes — this sits above it.
-    # 30 since 2026-10-14 (process-review fix 1). Deploy job only: the `ci`
-    # gate is a reusable-workflow call (no job-level timeout allowed) whose
-    # p90 is 73 min; its jobs carry their own caps in ci.yml.
-    timeout-minutes: 30
-    # The only job that needs a Pages token: deploy-pages requests the
-    # deployment with pages: write and authenticates with an OIDC token.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     outputs:
-      page_url: ${{ steps.deployment.outputs.page_url }}
       build: ${{ steps.stamp.outputs.build }}
-    runs-on: ubuntu-latest
     steps:
       # GITHUB_SHA, checked out as-is: the commit the gate above tested is the
       # commit that gets staged, stamped and published. Nothing here re-reads
       # the branch tip.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false   # no git write or authenticated fetch after checkout; Pages deploys with its own OIDC token
+          persist-credentials: false   # no git write or authenticated fetch after checkout
           # The generation is 2000 + the commit count (see "Stamp the shell
           # generation"); a depth-1 checkout would count 1.
           fetch-depth: 0
-      # Rule 2, repeated inside the lock: a newer commit may have published
-      # while this run waited. Failure is deliberate and absolute — once an
-      # environment job exists it must not report success unless deploy-pages
-      # really publishes, and it must never publish an older tree over a newer.
-      - name: Confirm this commit may still be published (under the Pages lock)
-        run: |
-          SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
-          # --strict: under the lock an UNREADABLE live sha refuses, where the
-          # unlocked check above fails open. This is the last read before
-          # bytes go live, and "could not tell" must not publish (2026-09-22).
-          if [ "$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL" --strict)" != "true" ]; then
-            echo "::error::REFUSING DEPLOY: a newer build went live while this run waited for the Pages lock (or history diverged, or the live sha could not be read); $GITHUB_SHA is not published"
-            exit 1
-          fi
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
       # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
       # for what was then a ~14 MB site — slow enough to hit the 10-minute
-      # Pages deployment timeout. The staged artifact is ~140 MB today
-      # (run 38574398206, 2026-10-14), 97 MB of it assets/voice.
+      # Pages deployment timeout. The "Staged size" step below prints today's
+      # size in the job summary.
       #
       # vendor/ IS a runtime directory and was missing here until build 893.
       # Everything reached by dynamic import lives in it — trystero (room
@@ -369,6 +336,14 @@ jobs:
           grep -q "<meta name=\"apex-sha\" content=\"$PUBLISH_SHA\">" _site/index.html
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "stamped build $BUILD for $PUBLISH_SHA"
+      # THE STAGED SIZE, MEASURED EVERY RUN (2026-11-10): it was a dated comment
+      # above ("~140 MB", 2026-10-14) that nobody re-measured.
+      - name: Staged size
+        run: |
+          set -eu
+          size="$(du -sh _site | cut -f1)"; files="$(find _site -type f | wc -l)"
+          echo "staged _site: $size in $files files"
+          echo "**Staged site**: $size in $files files" >> "$GITHUB_STEP_SUMMARY"
       # Artifact name is scoped to the RUN ATTEMPT: artifacts survive across
       # re-run attempts of the same run, so a re-run after a failed deploy left
       # multiple artifacts named "github-pages" in the run and deploy-pages@v4
@@ -378,15 +353,111 @@ jobs:
         with:
           path: _site
           name: github-pages-${{ github.run_attempt }}
-      - id: deployment
+
+  deploy:
+    needs: [publishable, stage]
+    # `!cancelled()` is load-bearing, not decoration: a job's implicit
+    # success() looks at every job upstream of it, TRANSITIVELY, so when the
+    # gate was skipped (nothing new, or a reused pass) this job was skipped too
+    # even though publishable ran and said yes (run 2237, 2026-09-10). The
+    # explicit result check keeps the failure semantics: a failed or skipped
+    # publishable still stops here.
+    if: ${{ !cancelled() && needs.publishable.result == 'success' && needs.publishable.outputs.deploy == 'true' && needs.stage.result == 'success' }}
+    # The ONLY step that actually touches GitHub's single-slot Pages queue.
+    # cancel-in-progress stays false: a publish in flight is never interrupted,
+    # and a newer run simply queues behind it and publishes next.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    # A CAP, so a hang cannot hold the never-cancelled `pages` lock for the
+    # 360-minute default (2026-10-04). Time queued for the lock does not count;
+    # the job is a full-history checkout, the recheck and deploy-pages, whose own
+    # deployment `timeout` input defaults to 10 minutes — this sits above it.
+    # 30 since 2026-10-14 (process-review fix 1). Deploy job only: the `ci`
+    # gate is a reusable-workflow call (no job-level timeout allowed) whose
+    # p90 is 73 min; its jobs carry their own caps in ci.yml.
+    timeout-minutes: 30
+    # The only job that needs a Pages token: deploy-pages requests the
+    # deployment with pages: write and authenticates with an OIDC token.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
+    # `failed` names what went wrong when the job is red, so a reader of the run
+    # can tell a Pages hiccup from a refusal: `deploy-pages` (both attempts of the
+    # publish step failed) or `refused` (the in-lock recheck). Empty on success.
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
+      build: ${{ needs.stage.outputs.build }}
+      failed: ${{ steps.verdict.outputs.failed }}
+    runs-on: ubuntu-latest
+    steps:
+      # The recheck script only; the site itself is the stage job's artifact.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # no git write or authenticated fetch after checkout; Pages deploys with its own OIDC token
+          fetch-depth: 0               # pages-publishable.sh asks merge-base questions
+      # Rule 2, repeated inside the lock: a newer commit may have published
+      # while this run waited. Failure is deliberate and absolute — once an
+      # environment job exists it must not report success unless deploy-pages
+      # really publishes, and it must never publish an older tree over a newer.
+      - name: Confirm this commit may still be published (under the Pages lock)
+        id: recheck
+        run: |
+          SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          # --strict: under the lock an UNREADABLE live sha refuses, where the
+          # unlocked check above fails open. This is the last read before
+          # bytes go live, and "could not tell" must not publish (2026-09-22).
+          if [ "$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL" --strict)" != "true" ]; then
+            echo "::error::REFUSING DEPLOY: a newer build went live while this run waited for the Pages lock (or history diverged, or the live sha could not be read); $GITHUB_SHA is not published"
+            exit 1
+          fi
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      # ONE RETRY OF THE PUBLISH STEP (2026-11-10). A single transient
+      # deploy-pages failure used to fail the run; the second attempt runs only
+      # when the first failed, and the verdict step fails the job when both did.
+      - name: Publish to Pages
+        id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
+      - name: Publish to Pages (retry)
+        id: deployment-retry
+        if: ${{ steps.deployment.outcome == 'failure' }}
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+      # THE REST-VISIBLE MARKER. Job outputs are not in the REST API; step names and conclusions
+      # are (actions/runs/<id>/jobs -> steps[].name / conclusion). This step is `failure` exactly
+      # when both publish attempts failed after the recheck passed: a Pages-side failure, not a gate
+      # failure and not a refusal (a refusal fails "Confirm this commit may still be published").
+      - name: Pages publish failed (platform)
+        if: ${{ always() && steps.recheck.outcome == 'success' && steps.deployment.outcome == 'failure' && steps.deployment-retry.outcome == 'failure' }}
+        run: |
+          echo "::error title=deploy-pages::the Pages publish failed twice (a Pages-side failure, not a gate failure)"
+          exit 1
+      - name: Deploy verdict
+        id: verdict
+        if: ${{ always() }}
+        env:
+          RECHECK: ${{ steps.recheck.outcome }}
+          FIRST: ${{ steps.deployment.outcome }}
+          RETRY: ${{ steps.deployment-retry.outcome }}
+        run: |
+          echo "recheck=$RECHECK deploy-pages=$FIRST retry=${RETRY:-not run}"
+          if [ "$RECHECK" = failure ]; then echo "failed=refused" >> "$GITHUB_OUTPUT"; exit 1; fi
+          if [ "$FIRST" = success ] || [ "$RETRY" = success ]; then exit 0; fi
+          echo "failed=deploy-pages" >> "$GITHUB_OUTPUT"
+          exit 1
   # The live check the container cannot do: this runner reaches github.io. A
   # deploy is not done until the Pages CDN serves the build just stamped.
   verify-live:
     name: Live shell matches the published commit and build
-    needs: deploy
+    needs: [stage, deploy]
     # Same transitive-skip rule as deploy: run exactly when deploy succeeded.
     if: ${{ !cancelled() && needs.deploy.result == 'success' }}
     runs-on: ubuntu-latest
@@ -449,4 +520,4 @@ jobs:
               "Either the CDN is lagging (re-run verify-live) or the published shell is broken. Check \`version.json\` and the \`apex-build\` / \`apex-sha\` metas on the live site before redeploying (AGENTS.md §Watching CI and Pages; deploy-research)." \
               "" \
               "Opened automatically by pages.yml verify-live.")" \
-            --label ci || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"
+            --label area:tooling || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"

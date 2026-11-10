@@ -57,7 +57,6 @@ test("TitleMenu.repairDestinations remounts orphaned play doors", () => {
 
 test("Menus.create returns restoreMenuAfterGraphicsReset for game.js wiring", () => {
   const src = read("js/ui/select-screen.js");
-  assert.ok(src.includes("restoreMenuAfterGraphicsReset"));
   assert.ok(src.includes("TitleMenu.repairDestinations"));
   assert.ok(src.includes("TopModal.syncMenuIsolation"));
   assert.ok(src.includes("restoreMenuAfterGraphicsReset,"));

@@ -796,16 +796,29 @@ test("helmet inherits the production onboard SSR range and releases it outside r
 test("inverse projection stays current at measured tier 4, through and after the SSR fade", () => {
   // TLX's main-view reconstruction reads _mInvProj even after tier 4 sheds all
   // view-space post, so the update is unconditional (PR #3670).
-  const statement = gameSource().match(/^  M4\.invertTo\(_mInvProj, _mProj\);$/m);
-  assert.ok(statement, "production inverse-projection update exists and is unconditional");
+  // Execute the production run of statements from the view matrix through the
+  // inverse-projection update, not the one line alone: a guard put in front of
+  // that line (`if (tier < 4) M4.invertTo(...)` split over two lines, an `if`
+  // block around it) runs here too, and so goes red, instead of being
+  // stepped past by a one-line extract.
+  const src = gameSource();
+  const head = src.indexOf("\n  M4.lookAtTo(_mView, camEye, camTgt, _camUp);\n");
+  const tailLine = "\n  M4.invertTo(_mInvProj, _mProj);\n";
+  const tail = src.indexOf(tailLine, head);
+  assert.ok(head >= 0 && tail > head && tail - head < 600,
+    "production view → inverse-projection statements exist, adjacent, and the update is unconditional");
+  const statement = [src.slice(head + 1, tail + tailLine.length)];
   const math = {};
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/core/mat4.js"), "utf8") +
     "\nthis.exported = M4;", math, { filename: absSrc("js/core/mat4.js") });
   const M4 = math.exported, projection = new Float32Array(16), inverse = new Float32Array(16);
   let calls = 0, tier = 0;
   const ctx = { _mProj: projection, _mInvProj: inverse,
+    _mView: new Float32Array(16), _mVP: new Float32Array(16), _mInvVP: new Float32Array(16),
+    camEye: [0, 2, -6], camTgt: [0, 1, 0], _camUp: [0, 1, 0],
     _roadReflectionTransition: { value: 1 }, PerfGov: { autoTier: () => tier },
-    M4: { invertTo(out, input) { calls++; return M4.invertTo(out, input); } } };
+    M4: { lookAtTo: M4.lookAtTo, mulTo: M4.mulTo,
+      invertTo(out, input) { if (out === inverse) calls++; return M4.invertTo(out, input); } } };
   const run = new vm.Script(statement[0], { filename: absSrc("js/game.js") });
   vm.createContext(ctx);
   const assertCancels = label => {

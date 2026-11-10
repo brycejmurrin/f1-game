@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor,
+  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
@@ -49,7 +49,7 @@ test("holdVerdict provenance: a hold Bryce set in person stays held when an agen
   const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z", T3 = "2026-11-03T12:00:00Z";
   const byAgent = holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", app: APP })]);
   assert.equal(byAgent.ok, false);
-  assert.equal(byAgent.evidence, `hold set by Bryce was removed by an agent (set by brycejmurrin at ${T1}, unlabeled by brycejmurrin via app claude at ${T2}): still held until brycejmurrin removes it himself`);
+  assert.equal(byAgent.evidence, `hold set by brycejmurrin at ${T1} was not removed by brycejmurrin himself (last unlabel: brycejmurrin via app claude at ${T2}): still held until he removes it`);
   const byBryce = holdVerdict([], [ev("hold", T1, { app: APP }), ev("hold", T2, { event: "unlabeled" })]);
   assert.deepEqual(byBryce, { ok: true, evidence: "no `hold` label (last removed by brycejmurrin)" });
   const agentsOwn = holdVerdict([], [ev("hold", T1, { app: APP }), ev("hold", T2, { event: "unlabeled", app: APP })]);
@@ -57,20 +57,29 @@ test("holdVerdict provenance: a hold Bryce set in person stays held when an agen
   assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", app: APP }), ev("hold", T3, { event: "unlabeled" })]).ok, true, "Bryce's later removal is the newest unlabel");
   assert.equal(holdVerdict([], [ev("hold", T2, { event: "unlabeled", app: APP }), ev("hold", T1)]).ok, false, "created_at orders the events, not the list");
   assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", actor: "someone-else" })]).ok, false, "another login's removal of Bryce's hold is not his");
-  assert.equal(holdVerdict([], [ev("hold", T1, { app: APP }), ev("hold", T2, { event: "unlabeled" }), ev("hold", T3)]).ok, true, "newest `labeled` is Bryce's but it was never lifted: the label would be present; with it absent the events alone do not hold");
+  assert.equal(holdVerdict([], [ev("hold", T1, { app: APP }), ev("hold", T2, { event: "unlabeled" }), ev("hold", T3)]).ok, false, "Bryce's hold at T3 has no later unlabel of his own: held (fail closed on a missing event)");
+  const T4 = "2026-11-03T13:00:00Z";
+  assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", actor: "x" }), ev("hold", T3, { actor: "x" }), ev("hold", T4, { event: "unlabeled", actor: "x" })]).ok, false,
+    "a re-label and unlabel by someone else after an agent's removal does not lift Bryce's hold");
+  assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", app: APP }), ev("hold", T3, { app: APP }), ev("hold", T4, { event: "unlabeled", app: APP })]).ok, false, "the same through the app");
+  assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled" }), ev("hold", T3, { app: APP }), ev("hold", T4, { event: "unlabeled", app: APP })]).ok, true, "Bryce lifted his hold; the agent's later hold is the agent's to lift");
+  assert.equal(holdVerdict([], [ev("hold", T1), { ...ev("hold", T2, { event: "unlabeled" }), performed_via_github_app: undefined }]).ok, false, "an unlabel without the app field is not his");
   assert.equal(holdVerdict([], [ev("other", T2, { event: "unlabeled", app: APP })]).ok, true, "another label's events do not count");
   assert.equal(holdVerdict(["hold"], [ev("hold", T2, { event: "unlabeled" })]).ok, false, "the label present always holds");
   assert.equal(holdVerdict([], null).ok, true, "no events (pure callers): the label alone decides");
 });
 
-test("configVerdict: a diff touching hooks, settings.json, workflows or githooks needs `config-ok` last added by Bryce in person; any other diff passes", () => {
+test("configVerdict: a diff touching a config path needs `config-ok` last added by Bryce in person; any other diff passes", () => {
   assert.equal(CONFIG_LABEL, "config-ok");
-  for (const p of [".claude/hooks/bash-guard.sh", ".claude/settings.json", ".github/workflows/dispatch.yml", ".githooks/pre-commit", "./.claude/hooks/x.py"]) assert.equal(isConfigPath(p), true, p);
-  for (const p of [".claude/settings.local.json", ".claude/skills/steward/SKILL.md", ".github/labels.json", "tools/ci/merge-gate.mjs", "js/game.js", ".claude/rules/claude-config.md"]) assert.equal(isConfigPath(p), false, p);
+  for (const p of [".claude/hooks/bash-guard.sh", ".claude/settings.json", ".github/workflows/dispatch.yml", ".githooks/pre-commit", "./.claude/hooks/x.py",
+    ".claude/settings.local.json", "tools/ci/merge-gate.mjs", "tools/ci/lib/provenance.mjs", ".github/actions/setup/action.yml", ".mcp.json", "tools/hooks/readonly-bash.sh", "tools/mcp/apex-extras.mjs",
+    "tools/lib/generated-paths.mjs", "package.json", ".cursor/hooks.json", ".codex/hooks.json", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".github/ISSUE_TEMPLATE/task.yml"]) assert.equal(isConfigPath(p), true, p);
+  for (const p of [".claude/skills/steward/SKILL.md", ".github/labels.json", "js/game.js", ".claude/rules/claude-config.md", "desktop/package.json", "tools/lib/cli-args.mjs"]) assert.equal(isConfigPath(p), false, p);
+  assert.deepEqual(filePaths([{ filename: "docs/TESTING.md", previous_filename: ".claude/hooks/bash-guard.sh" }, { filename: "js/a.js" }]), ["docs/TESTING.md", ".claude/hooks/bash-guard.sh", "js/a.js"], "a rename counts by both names");
   assert.deepEqual(configFiles(["docs/a.md", ".githooks/pre-push", "js/a.js"]), [".githooks/pre-push"]);
   const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z";
-  assert.deepEqual(configVerdict(["docs/TESTING.md", "tools/ci/merge-gate.mjs"], [], null), { ok: true, evidence: "no hook, settings, workflow or githook path in the diff (2 file(s))" });
-  const files = [".github/workflows/dispatch.yml", "tools/ci/dispatch.mjs"];
+  assert.deepEqual(configVerdict(["docs/TESTING.md", "js/game.js"], [], null), { ok: true, evidence: "no config path (harness, CI tools, agent config) in the diff (2 file(s))" });
+  const files = [".github/workflows/dispatch.yml", "js/game.js"];
   assert.deepEqual(configVerdict(files, [], []), { ok: false, evidence: "needs config-ok from brycejmurrin: the diff edits .github/workflows/dispatch.yml" });
   assert.deepEqual(configVerdict(files, ["config-ok"], [ev("config-ok", T1, { app: APP })]),
     { ok: false, evidence: "needs config-ok from brycejmurrin: the label was last added by brycejmurrin via app claude — only his own click counts (the diff edits .github/workflows/dispatch.yml)" });
@@ -80,14 +89,38 @@ test("configVerdict: a diff touching hooks, settings.json, workflows or githooks
   assert.equal(configVerdict(files, ["config-ok"], [ev("config-ok", T1), ev("config-ok", T2, { event: "unlabeled" }), ev("config-ok", "2026-11-03T12:00:00Z", { app: APP })]).ok, false, "Bryce's old click does not cover an agent's re-add");
   const many = configVerdict([".claude/hooks/a.sh", ".claude/hooks/b.sh", ".claude/hooks/c.sh", ".claude/hooks/d.sh", ".claude/hooks/e.sh"], [], []);
   assert.equal(many.evidence, "needs config-ok from brycejmurrin: the diff edits .claude/hooks/a.sh, .claude/hooks/b.sh, .claude/hooks/c.sh, .claude/hooks/d.sh, …");
+  const ok = [ev("config-ok", T1)];
+  assert.equal(configVerdict(files, ["config-ok"], ok, "brycejmurrin", { state: "covered", evidence: "x" }).ok, true);
+  assert.deepEqual(configVerdict(files, ["config-ok"], ok, "brycejmurrin", { state: "after", evidence: "a push touching .claude/hooks/a.sh came" }),
+    { ok: false, evidence: `needs a fresh config-ok from brycejmurrin: a push touching .claude/hooks/a.sh came after his label at ${T1} (remove and re-add it)` });
+  assert.equal(configVerdict(files, ["config-ok"], ok, "brycejmurrin", { state: "unknown", evidence: "x" }).pending, true);
 });
 
-test("planRow: open items refuse, a `land:` item is exempt, no Plan passes", () => {
+test("configPushState: config-ok binds to the pushes made before it; a later push touching a config path needs a fresh label", () => {
+  const H0 = "0".repeat(40), H1 = "1".repeat(40), H2 = "2".repeat(40);
+  const run = (sha, at, pr = 7) => ({ head_sha: sha, created_at: at, pull_requests: [{ number: pr }] });
+  const mk = (runs, cmp) => (p) => p.startsWith("actions/workflows/ci.yml/runs?event=pull_request&branch=cursor%2Fx") ? { json: { workflow_runs: runs } }
+    : p.startsWith("compare/") ? (cmp ? { json: { files: cmp } } : { error: "HTTP 404" }) : { error: `unexpected ${p}` };
+  const at = (h) => `2026-11-03T${String(h).padStart(2, "0")}:00:00Z`;
+  const q = (runs, cmp, head = H2) => configPushState({ pr: 7, head, headRef: "cursor/x", labelAt: at(10), request: mk(runs, cmp) }).state;
+  assert.equal(q([run(H0, at(8)), run(H2, at(9))]), "covered", "labelled after the head was pushed");
+  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "js/a.js" }]), "covered", "a later push touching no config path");
+  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "js/a.js", previous_filename: ".claude/hooks/x.sh" }]), "after", "a later rename of a hook");
+  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "tools/ci/merge-gate.mjs" }]), "after");
+  assert.equal(q([run(H0, at(8)), run(H2, at(11))], null), "unknown", "compare unreadable");
+  assert.equal(q([run(H2, at(11))]), "after", "no run before the label");
+  assert.equal(q([run(H0, at(8)), run(H2, at(9), 99)]), "unknown", "another PR's run on the head does not date this PR's push");
+  assert.equal(q([run(H0, at(8)), run(H1, at(9))]), "unknown", "no run on the head yet");
+});
+
+test("planRow: open items refuse, a `land:` item is exempt, no Plan fails except on a fold bot's PR", () => {
   assert.equal(planRow("## Plan\n- [x] done\n- [ ] land: flip ready, add `land`\n").ok, true);
   const open = planRow("## Plan\n- [x] done\n- [ ] write the test\n- [ ] READY to ORCH A\n");
   assert.equal(open.ok, false);
   assert.ok(open.evidence.includes("1 of 3") && open.evidence.includes('"write the test"'), "an older `READY to` item is still exempt: " + open.evidence);
-  assert.equal(planRow("## Goal\nx\n").ok, true);
+  assert.equal(planRow("## Goal\nx\n").ok, false, "an agent PR carries a Plan (skill steward §Open)");
+  assert.equal(planRow("", "brycejmurrin").ok, false);
+  assert.deepEqual(planRow("fold", "github-actions[bot]"), { ok: true, evidence: "no ## Plan checklist in the body (a fold bot's PR)" });
 });
 
 test("ciVerdict: the required check-run on the head, newest attempt, success only", () => {
@@ -177,7 +210,8 @@ test("localMergeGenCheck: a gen:check failure and a conflict each return the fet
 
 /** A fake GitHub plus fake merge for the evaluator; `pull`, `checks`, `events` and `files` are mutable per case. */
 function fakes() {
-  const pull = { state: "open", draft: false, labels: [], head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
+  const pull = { state: "open", draft: false, labels: [], user: { login: "brycejmurrin" }, head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
+  const prRuns = [{ head_sha: HEAD, created_at: "2026-11-03T09:00:00Z", pull_requests: [{ number: 7 }] }];
   const checks = [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success", check_suite: { id: 50 } }];
   const runs = [{ id: 500, check_suite_id: 50, path: ".github/workflows/ci.yml" }];
   const events = [], files = [{ filename: "js/game.js" }, { filename: "docs/TESTING.md" }];
@@ -189,10 +223,11 @@ function fakes() {
     if (p === "branches/deploy-x") return { json: { commit: { sha: TIP } } };
     if (p.startsWith("commits/")) return { json: { check_runs: checks, total_count: checks.length } };
     if (p.startsWith(`actions/workflows/ci.yml/runs?head_sha=${HEAD}`)) return { json: { workflow_runs: runs, total_count: runs.length } };
+    if (p.startsWith("actions/workflows/ci.yml/runs?event=pull_request&branch=cursor%2Fx")) return { json: { workflow_runs: prRuns } };
     return { error: `unexpected ${p}` };
   };
   const localMerge = (a) => { calls.push(a); return { ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" } }; };
-  return { pull, checks, runs, events, files, calls, deps: { request, root: "/nowhere", localMerge } };
+  return { pull, checks, runs, prRuns, events, files, calls, deps: { request, root: "/nowhere", localMerge } };
 }
 
 test("evaluate: all rows in order; each failing row refuses on its own; the local rows wait for an open PR; API errors are errors, not rows", () => {
@@ -206,13 +241,24 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["hold"]);
   f.pull.labels = []; f.pull.body = "## Plan\n- [ ] still open\n";
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["plan"]);
-  f.pull.body = ""; f.checks[1].conclusion = "failure";
+  f.pull.body = "";
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["plan"], "no Plan on an agent PR");
+  f.pull.body = "## Plan\n- [x] done\n"; f.checks[1].conclusion = "failure";
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"]);
   f.checks[1].conclusion = "success";
   f.files.push({ filename: ".github/workflows/land.yml" });
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["config"], "a workflow edit without Bryce's config-ok");
   f.pull.labels = [{ name: "config-ok" }]; f.events.push(ev("config-ok", "2026-11-03T10:00:00Z"));
   assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true, "config-ok by Bryce's own click");
+  f.prRuns.push({ head_sha: "c".repeat(40), created_at: "2026-11-03T09:30:00Z", pull_requests: [{ number: 7 }] });
+  f.prRuns[0].created_at = "2026-11-03T10:30:00Z";
+  const later = (p) => (p.startsWith("compare/") ? { json: { files: [{ filename: ".github/workflows/land.yml" }] } } : f.deps.request(p));
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, request: later }).rows[k].ok), ["config"], "a workflow push after Bryce's config-ok needs a fresh one");
+  f.prRuns.pop(); f.prRuns[0].created_at = "2026-11-03T09:00:00Z";
+  f.files.push({ filename: "docs/TESTING.md", previous_filename: ".githooks/pre-push" });
+  f.pull.labels = []; f.events.length = 0;
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["config"], "a rename out of a config path needs config-ok");
+  f.files.pop(); f.pull.labels = [{ name: "config-ok" }]; f.events.push(ev("config-ok", "2026-11-03T10:00:00Z"));
   f.events.push(ev("hold", "2026-11-03T10:30:00Z"), ev("hold", "2026-11-03T11:00:00Z", { event: "unlabeled", app: APP }));
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["hold"], "a hold an agent removed still holds");
   f.events.length = 1; f.pull.labels = []; f.files.pop();
@@ -229,6 +275,8 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.ok(/fetch failed/.test(evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "fetch failed", error: true }) }).error));
   const noEvents = (p) => (p.startsWith("issues/7/events") ? { error: "HTTP 502" } : f.deps.request(p));
   assert.equal(evaluate({ pr: 7, ...f.deps, request: noEvents }).error, "events of PR #7: HTTP 502", "unreadable provenance is an error (will retry), never a pass");
+  const fullPages = (p) => (p.startsWith("issues/7/events") ? { json: Array.from({ length: 100 }, () => ev("x", "2026-11-03T10:00:00Z")) } : f.deps.request(p));
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: fullPages }).error, "events of PR #7: more than 10 pages of 100: truncated, refusing to judge a partial list", "a newer hold past the last page must not be unseen");
   const noFiles = (p) => (p.startsWith("pulls/7/files") ? { error: "HTTP 502" } : f.deps.request(p));
   assert.equal(evaluate({ pr: 7, ...f.deps, request: noFiles }).error, "files of PR #7: HTTP 502");
 });
@@ -500,7 +548,7 @@ test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-
   assert.deepEqual(f.calls, [], "localMerge (the PR's scripts) never runs");
   f.pull.body = "## Plan\n- [ ] still open\n";
   assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true }).rows[k].ok), ["plan"]);
-  f.pull.body = "";
+  f.pull.body = "## Plan\n- [x] done\n";
   f.files.push({ filename: ".githooks/pre-commit" });
   assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true }).rows[k].ok), ["config"]);
   f.files.pop();
@@ -585,22 +633,30 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   const at = spawnSync("bash", ["-c", `${atLine}; echo "$at"`], { encoding: "utf8" }).stdout.trim();
   assert.equal(new Date(at).toISOString().replace(".000Z", "Z"), at, "ISO-8601 in whole seconds, like created_at");
   const postRun = LAND.jobs.post.steps.find((s) => s.id === "post").run;
-  const start = postRun.indexOf("write_gate() {");
-  const fn = postRun.slice(start, postRun.indexOf("\n}\n", start) + 3);
+  const start = postRun.indexOf("land_run() {");
+  const fn = postRun.slice(start, postRun.indexOf("\n}\n", postRun.indexOf("write_gate() {")) + 3);
   const atS = postRun.split("\n").find((l) => l.startsWith("AT_S="));
-  const stub = `gh() { local q="" a; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
-  const runGate = (created, url) => {
-    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created, target_url: url }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
-    const script = ["set -uo pipefail", "R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null", stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
-    const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake } });
+  const stub = `gh() { local q="" a; case "$*" in *actions/runs/*) echo "$FAKE_RUN"; return 0 ;; esac; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
+  const LAND_RUN = JSON.stringify({ path: ".github/workflows/land.yml", event: "pull_request_target", head_branch: "cursor/x" });
+  const runGate = (created, url, creator = "github-actions[bot]", run = LAND_RUN) => {
+    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created, target_url: url, creator: { login: creator } }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
+    const script = ["set -uo pipefail", `R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null; DEPLOY_BRANCH=${DEPLOY_BRANCH}`, stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
+    const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake, FAKE_RUN: run } });
     assert.equal(r.status, 0, r.stderr);
     return r.stdout.trim().split("\n").at(-1);
   };
   assert.equal(runGate(null), "POSTED", "no gate status yet");
   assert.equal(runGate("2026-10-27T10:00:04Z"), "POSTED", "an older status is replaced");
   assert.equal(runGate("2026-10-27T10:00:05Z"), "POSTED", "same second as AT: the old string compare kept it (`Z` > `.`)");
-  assert.notEqual(runGate("2026-10-27T10:00:06Z"), "POSTED", "a status newer than this run's read is kept");
-  assert.notEqual(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2"), "POSTED", "another run's newer status is kept");
+  assert.notEqual(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2"), "POSTED", "another land.yml run's newer status is kept");
+  // A newer status counts only when a land.yml run on the deploy branch posted it as the Actions bot (2026-11-10).
+  assert.equal(runGate("2026-10-27T10:00:06Z"), "POSTED", "a newer status naming no run is replaced");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2", "someone"), "POSTED", "a newer status by another author is replaced");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://evil.test/o/r/actions/runs/2"), "POSTED", "a URL off this repository is replaced");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2", "github-actions[bot]", JSON.stringify({ path: ".github/workflows/ci.yml", event: "pull_request" })),
+    "POSTED", "a newer status from another workflow's run is replaced");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2", "github-actions[bot]", JSON.stringify({ path: ".github/workflows/land.yml", event: "workflow_dispatch", head_branch: "cursor/x" })),
+    "POSTED", "a land.yml dispatched on another branch is not this workflow's deploy-branch copy");
   assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/1"), "POSTED",
     "this run's own earlier attempt is replaced (a re-run reuses AT: run 40740152111, #4110)");
 });
@@ -641,6 +697,7 @@ function runStep(script, env, files = {}) {
         `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
     `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
+    `    *"/actions/runs/"*) data=\${FAKE_RUN:-'{}'} ;;`,
     `    *) data=\${FAKE_PR:-'{}'}`,
     `       if [[ " \${args[*]} " == *"/pulls/"* ]] && [ "$(grep -c '/pulls/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pr ] || return 31; data=\${FAKE_PR_AFTER-$data}; fi`,
     `       if [ -n "\${FAKE_PRS:-}" ]; then data=$(jq -c --arg n "$(sed -n 's#.*/pulls/\\([0-9]*\\).*#\\1#p' <<<"\${args[*]}")" '.[$n] // {}' <<<"$FAKE_PRS"); fi ;;`,
@@ -656,6 +713,7 @@ function runStep(script, env, files = {}) {
   }
   const r = spawnSync("bash", ["-c", `${stub}\nexport -f gh\n${script}`], { encoding: "utf8", cwd: dir,
     env: { ...process.env, GH_TOKEN: "fixture-read-token", GITHUB_TOKEN: "fixture-read-token", LAND_TOKEN: "", GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
+      GITHUB_WORKFLOW_REF: `o/r/.github/workflows/land.yml@refs/heads/${DEPLOY_BRANCH}`,
       POST_DEADLINE: String(Math.floor(Date.now() / 1000) + 600), RETRY_MAX: String(LAND.env.RETRY_MAX), ...logs, ...env } });
   const out = Object.fromEntries(fs.readFileSync(logs.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   const calls = fs.readFileSync(logs.GH_LOG, "utf8").split("\n").filter(Boolean);
@@ -665,6 +723,8 @@ function runStep(script, env, files = {}) {
 }
 fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
 const HEAD7 = "a".repeat(40), TIP_A = "b".repeat(40), TIP_B = "c".repeat(40);
+// The `gate` arm requires on the head: the success this run (GITHUB_RUN_ID 1) posted, as the Actions bot.
+const OWN_GATE = JSON.stringify([{ context: "gate", state: "success", creator: { login: "github-actions[bot]" }, target_url: "https://github.com/o/r/actions/runs/1" }]);
 const pr7 = (o = {}) => JSON.stringify({ number: 7, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: HEAD7 }, auto_merge: null, created_at: "2026-10-27T10:00:00Z", labels: [{ name: "land" }], ...o });
 
 test("land.yml retry: workflow_dispatch on the deploy branch only, in the PR's own group, never cancelling", () => {
@@ -722,7 +782,7 @@ function postThenArm(postEnv = {}, armEnv = {}, files) {
   const post = LAND.jobs.post.steps.find(s => s.id === "post"), arm = LAND.jobs.post.steps.find(s => s.id === "arm");
   const p = runStep(post.run, postEnv, files);
   const shouldArm = ghExpr(arm.if, { success: p.status === 0, steps: { post: { outputs: { arm: p.out.arm || "" } } } });
-  const a = shouldArm ? runStep(arm.run, { GITHUB_TOKEN: "read-token", LAND_TOKEN: "land-token", ...armEnv, ARM: p.out.arm }) : null;
+  const a = shouldArm ? runStep(arm.run, { GITHUB_TOKEN: "read-token", LAND_TOKEN: "land-token", FAKE_STATUSES: OWN_GATE, ...armEnv, ARM: p.out.arm }) : null;
   return { post: p, arm: a, retry: p.out.retry || "", arm_retry: a?.out.retry || "", result: p.status === 0 && (!a || a.status === 0) ? "success" : "failure" };
 }
 
@@ -858,7 +918,7 @@ test("land.yml combined outputs: retries survive a skipped or failed arm and sta
 test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other veto is not", () => {
   const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
   const ARM = JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A });
-  const go = (pr, now) => runStep(run, { ARM, FAKE_PR: pr, NOW_TIP: now, LAND_TOKEN: "", GITHUB_TOKEN: "t" });
+  const go = (pr, now, extra = {}) => runStep(run, { ARM, FAKE_PR: pr, NOW_TIP: now, LAND_TOKEN: "", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ...extra });
   let r = go(pr7(), TIP_B);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 });
@@ -871,6 +931,19 @@ test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other
   r = go(pr7(), TIP_A);
   assert.equal(r.out.retry, undefined);
   assert.ok(r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`)), "same tip: arms as before");
+  // 2026-11-10: the newest `gate` on the head must be this run's own success, and this run the deploy branch's land.yml.
+  for (const [extra, why] of [
+    [{ FAKE_STATUSES: "[]" }, "no gate status"],
+    [{ FAKE_STATUSES: JSON.stringify([{ context: "gate", state: "success", creator: { login: "someone" }, target_url: "https://github.com/o/r/actions/runs/1" }]) }, "a success by another author"],
+    [{ FAKE_STATUSES: JSON.stringify([{ context: "gate", state: "success", creator: { login: "github-actions[bot]" }, target_url: "https://github.com/o/r/actions/runs/2" }]) }, "another run's success"],
+    [{ FAKE_STATUSES: JSON.stringify([{ context: "gate", state: "pending", creator: { login: "github-actions[bot]" }, target_url: "https://github.com/o/r/actions/runs/1" }]) }, "this run's status, not a success"],
+    [{ GITHUB_WORKFLOW_REF: "o/r/.github/workflows/land.yml@refs/heads/cursor/x" }, "a land.yml from another branch"],
+  ]) {
+    r = go(pr7(), TIP_A, extra);
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(!r.calls.some((c) => / pr merge /.test(c)), `${why}: never arms`);
+    assert.match(r.summary, /not arming #7/, why);
+  }
 });
 
 test("land.yml arm: only a proven base-modified race re-gates after a failed single merge call", () => {
@@ -878,7 +951,7 @@ test("land.yml arm: only a proven base-modified race re-gates after a failed sin
   const error = "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)";
   const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
   const go = (extra = {}) => runStep(run, {
-    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A,
+    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A, FAKE_STATUSES: OWN_GATE,
     NOW_TIP_AFTER: TIP_B, ...auth,
     GH_MERGE_RC: "17", GH_MERGE_STDERR: error, ...extra,
   });
@@ -921,7 +994,7 @@ test("land.yml arm: clean-status auto-merge refusal re-checks vetoes and tip, th
   const cleanErr = "GraphQL: Pull request Pull request is in clean status (enablePullRequestAutoMerge)";
   const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
   const go = (extra = {}) => runStep(run, {
-    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A,
+    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A, FAKE_STATUSES: OWN_GATE,
     GH_MERGE_RC: "1", GH_MERGE_STDERR: cleanErr, GH_MERGE_RC2: "0", GH_MERGE_STDERR2: "", GH_CLEAN_PATH: "true",
     ...auth, ...extra,
   });
@@ -1028,8 +1101,9 @@ test("land.yml post (STALE TIP): success only onto the tip the gate measured; a 
   assert.equal(r.out.retry, "[]", "missing rows cannot turn a gen/ratchet refusal into a retry");
   assert.equal(r.out.arm, "");
 
-  r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_STATUSES: JSON.stringify([{ context: "gate", created_at: "2026-10-27T10:00:09Z" }]) }), verdict());
-  assert.deepEqual(bodies(r), [], "a newer verdict on the head is kept");
+  r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_RUN: JSON.stringify({ path: ".github/workflows/land.yml", event: "workflow_run", head_branch: DEPLOY_BRANCH }),
+    FAKE_STATUSES: JSON.stringify([{ context: "gate", created_at: "2026-10-27T10:00:09Z", target_url: "https://github.com/o/r/actions/runs/2", creator: { login: "github-actions[bot]" } }]) }), verdict());
+  assert.deepEqual(bodies(r), [], "a newer verdict on the head from another land.yml run is kept");
   assert.equal(disarmed(r), false, "and its run owns the arm state");
 });
 
@@ -1172,4 +1246,24 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   ];
   for (const [env, want, why] of cases) assert.equal(dispatched(go(env)).length, want, why);
   assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
+});
+
+test("ci retry: a CI that went green only on a re-run after a failed job fails the row; a first-attempt pass or a re-run after a cancel passes", () => {
+  const jobs = { 1: [{ name: "Structural guards", conclusion: "failure" }, { name: "lint", conclusion: "success" }], 2: [{ name: "x", conclusion: "cancelled" }] };
+  const req = (p) => { const m = /^actions\/runs\/900\/attempts\/(\d+)\/jobs/.exec(p); return m ? { json: { jobs: jobs[m[1]] || [] } } : { error: `unexpected ${p}` }; };
+  assert.equal(ciRetryVerdict({ id: 900, run_attempt: 1 }, req).ok, true);
+  assert.equal(ciRetryVerdict(undefined, req).ok, true, "no run known: the suite pin already decided");
+  const red = ciRetryVerdict({ id: 900, run_attempt: 2 }, req);
+  assert.deepEqual(red, { ok: false, evidence: "CI passed only on re-run 2 of ci.yml run 900: Structural guards (attempt 1: failure) failed before — a pass that needed a retry is a red: push a fresh commit, or quarantine the test by name in tests/data/flaky-quarantine.json" });
+  jobs[1] = [{ name: "x", conclusion: "cancelled" }];
+  assert.equal(ciRetryVerdict({ id: 900, run_attempt: 3 }, req).ok, true, "earlier attempts only cancelled");
+  assert.equal(ciRetryVerdict({ id: 900, run_attempt: 2 }, () => ({ error: "HTTP 502" })).error, "jobs of ci.yml run 900 attempt 1: HTTP 502");
+  // evaluate: the green CI check-run's suite is a re-run with a failed first attempt.
+  const f = fakes();
+  f.runs[0].id = 900; f.runs[0].run_attempt = 2;
+  jobs[1] = [{ name: "Structural guards", conclusion: "failure" }];
+  const rq = (p) => (p.startsWith("actions/runs/900/") ? req(p) : f.deps.request(p));
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, request: rq }).rows[k].ok), ["ci"]);
+  f.runs[0].run_attempt = 1;
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: rq }).ok, true);
 });

@@ -10,7 +10,8 @@
 //   - Everything else (audio/sfx under assets/, the Jolpica/OpenF1 API is
 //     cross-origin and never touched) is cached opportunistically the first
 //     time it's fetched, so a full offline install follows naturally from one
-//     normal play session.
+//     normal play session — and each deploy's install carries those entries
+//     into its new generation (carryRuntime, #5007), so it survives the sweep.
 //
 // Cache name embeds version.json's build number. There is no manual cache
 // bump: the deploy (pages.yml) stamps the build and content-hashes every `?v=`
@@ -684,7 +685,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js"];
+  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -748,6 +749,104 @@ async function reuseHashed(cache, url) {
     await cache.put(url, new Response(body, { status: 200, headers: old.headers }));
     return true;
   } catch (_) { return false; }   // the network path below still runs
+}
+
+// A PATH-PINNED FILE ANOTHER GENERATION HOLDS IS NOT DOWNLOADED AGAIN EITHER (#5007).
+// `vendor/<name>-<x.y.z>/` and the content-named fonts change only by changing
+// the path, so the copy any apex26-* cache keeps is this deploy's file. Before
+// this, the three.js island (~1.2 MB raw) re-downloaded at every deploy.
+const PATH_PINNED = /^(?:vendor\/[a-z0-9_-]+-\d+\.\d+\.\d+\/|assets\/fonts\/[^/?]+\.woff2$)/;
+async function reusePinned(cache, url) {
+  if (!PATH_PINNED.test(url) || url.includes("?")) return false;
+  try {
+    const old = await caches.match(url);
+    if (!old || !old.ok) return false;
+    await cache.put(url, old);
+    return true;
+  } catch (_) { return false; }   // the network path still runs
+}
+
+// RUNTIME ENTRIES OUTLIVE A DEPLOY (#5007). Sfx, the baked pack (`?h=<md5>`),
+// streamed music and opt-in vendors (Rapier, jsQR, trystero) are cached on
+// first use, never by install, so each new generation started without them and
+// the sweep deleted the only copy: offline lost them, online re-downloaded them
+// (~2.5 MB pack + sfx) after every deploy. Install carries them forward from the
+// older generations it is about to replace, each checked against the network
+// with its own validators so a changed or deleted file is not kept forever:
+//   304 → the cached bytes are current: copied, no body crosses the network;
+//   200 → changed: a bare URL stores the fresh body (it IS the file now), a
+//         `?h=` URL is dropped (Pages ignores the query, so those bytes are a
+//         different hash than the key names);
+//   other status → gone from the deploy: dropped;
+//   no answer → kept as is (the copy was good when written; offline beats none).
+// An explicit If-None-Match / If-Modified-Since with cache "no-store" hands the
+// 304 to script (https://fetch.spec.whatwg.org/ — HTTP-network-or-cache fetch);
+// a 200 whose validator equals the stored one counts as unchanged too.
+// Voices live in VOICE_CACHE (never swept); everything else under /assets/ or
+// /vendor/ is a runtime class. Shell, ?v= script keys and markers are not
+// carried: install lists those itself.
+const CARRY_POOL = 4;
+function isCarriedRuntime(url) {
+  if (url.origin !== self.location.origin) return false;
+  const p = url.pathname;
+  if (p.includes("/assets/voice/")) return false;
+  return p.includes("/assets/") || p.includes("/vendor/");
+}
+async function carryEntry(cache, req, old) {
+  const url = new URL(req.url);
+  const etag = old.headers.get("ETag"), modified = old.headers.get("Last-Modified");
+  if (!etag && !modified) {
+    // Nothing to ask with: only an address that names its content is safe to keep.
+    const rel = url.href.slice(new URL("./", self.location.href).href.length);
+    if (url.search || PATH_PINNED.test(rel)) await cache.put(req, old);
+    return;
+  }
+  const headers = {};
+  if (etag) headers["If-None-Match"] = etag;
+  if (modified) headers["If-Modified-Since"] = modified;
+  let timeout = null;
+  const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+  try {
+    const expired = new Promise((resolve) => {
+      timeout = setTimeout(() => { if (ctrl) ctrl.abort(); resolve(null); }, OPTIONAL_ASSET_MS);
+    });
+    const init = { cache: "no-store", headers, priority: "low" };
+    if (ctrl) init.signal = ctrl.signal;
+    let res = null;
+    try { res = await Promise.race([fetch(url.href, init), expired]); } catch (_) { res = null; }
+    if (!res) { await cache.put(req, old); return; }               // no answer: keep
+    // Unchanged: a 304, or a 200 carrying the same validator (an engine that
+    // answered the conditional from its own HTTP cache instead of passing the
+    // 304 through still reports the stored ETag / Last-Modified).
+    const same = res.status === 304 || (res.ok && (etag ? res.headers.get("ETag") === etag : res.headers.get("Last-Modified") === modified));
+    if (same) { await cache.put(req, old); return; }
+    if (res.ok && !url.search) await cache.put(req, res);          // changed: the new file
+  } finally { if (timeout !== null) clearTimeout(timeout); }
+}
+async function carryRuntime(cache, name) {
+  const build = cacheBuild(name);
+  const sources = (await caches.keys())
+    .filter((k) => cacheBuild(k) > 0 && cacheBuild(k) < build)
+    .sort((a, b) => cacheBuild(b) - cacheBuild(a));
+  const seen = new Set();
+  const jobs = [];
+  for (const k of sources) {
+    const src = await caches.open(k);
+    for (const req of await src.keys()) {
+      if (seen.has(req.url) || !isCarriedRuntime(new URL(req.url))) continue;
+      seen.add(req.url);
+      jobs.push({ src, req });
+    }
+  }
+  let carried = 0;
+  await pooled(jobs, CARRY_POOL, async ({ src, req }) => {
+    try {
+      if (await cache.match(req)) return;   // install already holds it
+      const old = await src.match(req);
+      if (old && old.ok) { await carryEntry(cache, req, old); carried++; }
+    } catch (_) { /* one entry never fails the install */ }
+  });
+  return carried;
 }
 
 async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
@@ -815,7 +914,7 @@ self.addEventListener("install", (event) => {
     const stampKey = (u) => u + "?v=" + (lazyV.get(u) || build);
     const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isRequiredLazy).map(stampKey));
     await Promise.all(["./", "index.html"].map((u) => cache.put(u, urls.shellResponse())));
-    await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u))) await cacheRequiredAsset(cache, u); });
+    await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u)) && !(await reusePinned(cache, u))) await cacheRequiredAsset(cache, u); });
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
     invalidateCacheOrder();   // a marker is a rank input (computeCacheOrder)
     // The DEFERRED backends are the one group in `optional` that is NOT pinned
@@ -859,9 +958,14 @@ self.addEventListener("install", (event) => {
     let optionalMissed = 0, firstMissed = "";
     for (const pool of [critical, background]) {
       await pooled(pool, 4, async (u) => {
-        if (!(await reuseHashed(cache, u)) && !(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
+        if (!(await reuseHashed(cache, u)) && !(await reusePinned(cache, u)) && !(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
       });
     }
+    // Runtime-only doors (WGX, designer, XR, camera editors) are never fetched
+    // here, but a door the player opened keeps its file across a deploy that
+    // left its content hash alone (#5007): a CacheStorage copy, never the network.
+    await pooled(urls.optional.filter(isRuntimeOnlyOptional).map(stampKey), 4, (u) => reuseHashed(cache, u));
+    try { await carryRuntime(cache, name); } catch (e) { swLog("warn", "runtime carry: " + errMsg(e)); }
     if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
     await cache.put(OFFLINE_STATUS_URL, new Response(JSON.stringify({
       build: Number(build), required: ["./", "index.html", ...required], optional: stamped,

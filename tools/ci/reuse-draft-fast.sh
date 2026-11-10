@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# @doc On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA.
+# @doc On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA and base SHA.
 # @section runner
 #
-# reuse-draft-fast.sh
+# reuse-draft-fast.sh            # the reuse question (stdout: GITHUB_OUTPUT lines)
+# reuse-draft-fast.sh --record   # tooling A only: record this run's guards scope (see THE RECORD)
 #
 # Prints GITHUB_OUTPUT `reuse=true|false`. True only when this run is
 # `ready_for_review` AND GitHub holds a completed successful ci.yml
-# pull_request run for the exact PR head SHA (the draft that just went green).
+# pull_request run for the exact PR head SHA (the draft that just went green),
+# on its FIRST attempt, tested against the SAME base SHA as this run.
 # Callers skip the expensive fast-tier STEPS (names still report) and still
 # run ready-only jobs (smoke, sweeps, renderer) and the selected legs (a draft
 # ran them on a smaller budget; see the note at the bottom).
@@ -15,31 +17,55 @@
 # refs/pull/N/merge: the head merged into the base tip AT THAT TIME. Marking
 # ready hours later puts the new run on a newer base, and the merge-dependent
 # checks the reuse skips (tooling A/B, ratchet comparison, test:audit, the node
-# slices) are exactly the ones that fail on a semantic merge. So the draft run
-# is reused only when the base branch has taken no commit since it started.
+# slices) are exactly the ones that fail on a semantic merge. The base each run
+# tested is the first parent of its merge commit; the draft run's is read from
+# its record, this run's from its own checkout, and they must be the same SHA.
+# (This compared the base tip's committer date with the run's start until
+# 2026-11-10; a re-run resets `run_started_at`, and a date is not a commit.)
+#
+# A RE-RUN IS NOT A FIRST-TIME PASS (2026-11-10). A run whose `run_attempt` is
+# above 1 failed or was cancelled at least once on this head; it is never
+# reused, so the ready run tests the head again.
+#
+# THE RECORD. Tooling A writes one annotation, title `apex-guards`, message
+# `mode=<full|changed|unknown> base=<sha|none>`: the guards scope it ran (or the
+# scope of the draft it reused) and the base SHA its merge commit sits on.
+# Annotations are readable through the check-runs API (a job's id is its check
+# run id), so a later run can ask what an earlier one tested. `mode` is also a
+# step output (`guards_mode`). tools/ci/pages-reuse-verdict.sh reads the same
+# record and reuses only a `mode=full` run.
 #
 # Fail-safe: any lookup problem is reuse=false (run the fast tier again).
 set -eu
-ACTION="${GITHUB_EVENT_ACTION:-}"
-HEAD="${PR_HEAD_SHA:-}"
 REPO="${GITHUB_REPOSITORY:?}"
-BASE_REF="${PR_BASE_REF:-}"
 say() { echo "$*" >&2; }
 
-if [ "$ACTION" != "ready_for_review" ]; then
-  say "reuse-draft-fast: action=$ACTION — not ready_for_review"
-  echo "reuse=false"
+# The base SHA this checkout's merge commit sits on: its first parent, read from
+# the commit object so a shallow checkout answers too. Empty off a pull_request.
+current_base() {
+  [ "${GITHUB_EVENT_NAME:-pull_request}" = pull_request ] || return 0
+  git cat-file -p HEAD 2>/dev/null | sed -n 's/^parent //p' | head -1
+}
+
+if [ "${1:-}" = "--record" ]; then
+  mode="${SCOPE_MODE:-${REUSED_MODE:-}}"
+  case "$mode" in full|changed) ;; *) mode=unknown ;; esac
+  base="$(current_base)"
+  echo "::notice title=apex-guards::mode=$mode base=${base:-none}"
+  [ -n "${GITHUB_OUTPUT:-}" ] && echo "guards_mode=$mode" >> "$GITHUB_OUTPUT"
   exit 0
 fi
-case "$HEAD" in ""|0000000000000000000000000000000000000000)
-  say "reuse-draft-fast: no PR head sha"
-  echo "reuse=false"
-  exit 0
-  ;;
-esac
-command -v gh >/dev/null 2>&1 || { say "reuse-draft-fast: no gh"; echo "reuse=false"; exit 0; }
-json="$(gh api "repos/$REPO/actions/runs?head_sha=$HEAD&status=success&per_page=30" 2>/dev/null)" \
-  || { say "reuse-draft-fast: runs API failed"; echo "reuse=false"; exit 0; }
+
+ACTION="${GITHUB_EVENT_ACTION:-}"
+HEAD="${PR_HEAD_SHA:-}"
+no() { say "reuse-draft-fast: $*"; echo "reuse=false"; exit 0; }
+
+[ "$ACTION" = "ready_for_review" ] || no "action=$ACTION — not ready_for_review"
+case "$HEAD" in ""|0000000000000000000000000000000000000000) no "no PR head sha" ;; esac
+command -v gh >/dev/null 2>&1 || no "no gh"
+BASE="${CURRENT_BASE:-$(current_base)}"
+[ -n "$BASE" ] || no "this run's base SHA is unknown — run the fast tier"
+json="$(gh api "repos/$REPO/actions/runs?head_sha=$HEAD&status=success&per_page=30" 2>/dev/null)" || no "runs API failed"
 hit="$(printf '%s' "$json" | node -e '
   let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
     let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
@@ -47,49 +73,38 @@ hit="$(printf '%s' "$json" | node -e '
     const r = runs.find((x) => x.status === "completed" && x.conclusion === "success"
       && String(x.id) !== self && x.path === ".github/workflows/ci.yml"
       && x.event === "pull_request");
-    if (r) process.stdout.write(`${r.id} ${r.run_started_at || r.created_at || ""}`);
+    if (r) process.stdout.write(`${r.id} ${Number(r.run_attempt) || 1}`);
   });')"
-if [ -n "$hit" ]; then
-  started="${hit#* }"
-  hit="${hit%% *}"
-  # The base branch's tip commit date, against the moment the draft run started.
-  tip="$( [ -n "$BASE_REF" ] && gh api "repos/$REPO/commits/$BASE_REF" --jq '.commit.committer.date' 2>/dev/null )" || tip=""
-  moved="$(node -e '
-    const t = Date.parse(process.argv[1]), r = Date.parse(process.argv[2]);
-    process.stdout.write(Number.isFinite(t) && Number.isFinite(r) ? (t > r ? "moved" : "same") : "unknown");
-  ' "$tip" "$started")"
-  if [ "$moved" != same ]; then
-    say "reuse-draft-fast: base $BASE_REF tip ($tip) is $moved against the draft run $hit (started $started) — merge-dependent checks must re-run"
-    echo "reuse=false"
-    exit 0
-  fi
-fi
+[ -n "$hit" ] || no "no green PR ci.yml run on $HEAD"
+attempt="${hit#* }"; hit="${hit%% *}"
+[ "$attempt" = 1 ] || no "ci.yml run $hit passed on attempt $attempt, not its first — run the fast tier"
+
 # A GREEN RUN IS NOT A RUN THAT TESTED ANYTHING (#2184, 2026-10-15). A skipped
 # job reports success, so a run whose fast-tier jobs skipped (until 2026-11-03 a
 # draft that had not opted in, or a label-noise run; still any run cancelled-then-green
 # by a cancelled shard) concludes success while testing nothing. Reuse only a
-# run whose tooling A shard really ran and passed.
+# run whose tooling A shard really ran and passed, and whose record names a base.
 # THE DRAFT `selected` SHARD IS NOT REUSED (2026-11-03): a draft runs selected
 # on a 5-min budget, ready on 10, so the two plans differ and the ready run's
 # selected legs run again. Only the tree-only fast-tier STEPS reuse here.
-if [ -n "$hit" ]; then
-  ran="$(gh api "repos/$REPO/actions/runs/$hit/jobs?per_page=100" 2>/dev/null | node -e '
-    let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
-      let jobs = []; try { jobs = JSON.parse(s).jobs || []; } catch (_) {}
-      const a = jobs.filter((j) => j.name === "Structural guards (tooling A)");
-      process.stdout.write(a.length && a.every((j) => j.conclusion === "success") ? "yes" : "no");
-    });')" || ran=no
-  if [ "$ran" != yes ]; then
-    say "reuse-draft-fast: ci.yml run $hit concluded success but its tooling A shard did not run and pass (a skip-only run) — run the fast tier"
-    echo "reuse=false"
-    exit 0
-  fi
-fi
-if [ -n "$hit" ]; then
-  say "reuse-draft-fast: reusing ci.yml run $hit for head $HEAD"
-  echo "reuse=true"
-  echo "run=$hit"
-else
-  say "reuse-draft-fast: no green PR ci.yml run on $HEAD"
-  echo "reuse=false"
-fi
+job="$(gh api "repos/$REPO/actions/runs/$hit/jobs?per_page=100" 2>/dev/null | node -e '
+  let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+    let jobs = []; try { jobs = JSON.parse(s).jobs || []; } catch (_) {}
+    const a = jobs.filter((j) => j.name === "Structural guards (tooling A)");
+    if (a.length === 1 && a[0].conclusion === "success") process.stdout.write(String(a[0].id || ""));
+  });')" || job=""
+[ -n "$job" ] || no "ci.yml run $hit concluded success but its tooling A shard did not run and pass (a skip-only run) — run the fast tier"
+record="$(gh api "repos/$REPO/check-runs/$job/annotations?per_page=100" 2>/dev/null | node -e '
+  let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+    let rows = []; try { rows = JSON.parse(s); } catch (_) {}
+    const r = (Array.isArray(rows) ? rows : []).find((a) => a && a.title === "apex-guards");
+    const m = r && /^mode=(full|changed|unknown) base=([0-9a-f]{40}|none)$/.exec(String(r.message || "").trim());
+    if (m) process.stdout.write(`${m[1]} ${m[2]}`);
+  });')" || record=""
+[ -n "$record" ] || no "ci.yml run $hit has no readable guards record — run the fast tier"
+mode="${record%% *}"; drafted="${record#* }"
+[ "$drafted" = "$BASE" ] || no "draft run $hit tested base $drafted, this run tests $BASE — merge-dependent checks must re-run"
+say "reuse-draft-fast: reusing ci.yml run $hit for head $HEAD on base $BASE (guards $mode)"
+echo "reuse=true"
+echo "run=$hit"
+echo "guards_mode=$mode"

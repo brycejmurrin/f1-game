@@ -313,7 +313,7 @@ test("player wet advice uses remaining set life and keeps wet stints", async () 
     G.tyres.fit(c, G.tyres.classRecord(cls));
     c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = 0;
     c.tyreLap0 = 0; c.lap = 4;
-    c.prog = 3 * G.track.total + c.s;  // three driven laps, not just a scoring-lap change
+    c.s = 0; c.prog = 3 * G.track.total;  // three driven laps AT THE LINE (lapsLeft counts the part-lap driven, #5233), not just a scoring-lap change
     assert.equal(G.tyres.lapsOn(c), 3, "three physically driven laps on the wet set");
     c.tyreWear = c.tyreWearF = c.tyreWearR = 0.5;
     c._planLap = 3;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-JDzAdPEOtiQUf5FoM4YfPNh2sNp6gHIU7oycf0e18bU=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -478,8 +478,8 @@
   // ever sees the CONSEQUENCE (the ReferenceError from the first file that
   // needed the missing global), by which point the cause is off-screen.
   //
-  // The repair is a ONE-SHOT reload with the stale entries dropped: sweep the
-  // service-worker caches, re-request the failed URL with cache:"reload" to
+  // The repair is a ONE-SHOT reload with the stale entries dropped: delete the
+  // failed URL from the service-worker caches, re-request it with cache:"reload" to
   // punch the HTTP cache entry, then reload. Scripts load before js/game.js
   // evaluates, so nothing is lost by restarting here. sessionStorage bounds it
   // to a single attempt: if the file is genuinely absent from the build, the
@@ -535,7 +535,12 @@
         if (!window.caches) return null;
         return caches.keys().then(function (names) {
           // Only OUR numbered build generations (shared origin; apex26-voice is ~111 MB of voice packs, #4479).
-          return Promise.all(names.filter((n) => /^apex26-\d+$/.test(n)).map(function (n) { return caches.delete(n); }));
+          // SURGICAL (#5009): drop the failed URL's entry from each, never the whole cache. Deleting the
+          // active generation took its INSTALL markers and every precached lazy file with it, and
+          // nothing re-precaches an unchanged worker: offline status read "unknown" until the next deploy.
+          return Promise.all(names.filter((n) => /^apex26-\d+$/.test(n)).map(function (n) {
+            return caches.open(n).then(function (c) { return c.delete(el.src); });
+          }));
         }).then(go, go);
       }, offline);
   }, true);
@@ -3716,9 +3721,9 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<!-- Import map for the vendored ES-module islands (multiplayer's Trystero).
-     The three.js specifiers left with the WGX/TLX spike-out on 2026-09-03
-     (spike/backends/README.md says how to re-attach them). Inline (no src) so
+<!-- Import map for the vendored ES-module islands: three.js r187 (TLX, the
+     default renderer: tlx.js imports "three/webgpu" and "three/tsl") and
+     multiplayer's Trystero. Inline (no src) so
      the load-order test and the service worker's tag parser both ignore it;
      the vendor URLs carry no ?v= — immutability comes from the versioned
      directory name (upgrade = new dir). -->
