@@ -2251,6 +2251,15 @@ const api = {
   //   __apex.audioTune({ pitch: 1.1 })        // clamped into range, returns the tune
   //   __apex.audioProfile("cockpit")          // returns the profile actually set
   //   __apex.audioLayer("wind", false)        // returns the layer map
+  // hudSecFlash() — the HUD's sector-flash state (js/ui/hud.js GameHud.secFlash(): the _secFlash timers, the
+  // last flashed sector and raceT), read-only. Tells "flashSector() never ran" from "ran but never painted".
+  // { ok:false, error:"no_seam" } until GameHud exposes it.
+  hudSecFlash() {
+    if (typeof GameHud === "undefined" || typeof GameHud.secFlash !== "function") {
+      return { ok: false, error: "no_seam", message: "GameHud.secFlash() is not in this build" };
+    }
+    return GameHud.secFlash();
+  },
   audio() {
     return noAudio() || { ok: true, profile: GameAudio.profile(), profiles: GameAudio.profiles(),
       voice: GameAudio.voiceName(), voices: GameAudio.voices(),

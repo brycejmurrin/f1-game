@@ -93,3 +93,12 @@ test("go() still starts a built race", () => {
   assert.equal(api.go(), "race");
   assert.equal(G.raceT, 0.5);
 });
+
+test("hudSecFlash() answers no_seam without GameHud.secFlash and passes its value through when present", () => {
+  const G = { player: { px: 0 }, track: {}, cars: [] };
+  const bare = loadApex(G, {});
+  assert.equal(bare.hudSecFlash().error, "no_seam");
+  const value = { flash: [0, 0.35, 0], last: 1, raceT: 42 };
+  const seam = loadApex(G, { GameHud: { secFlash: () => value } });
+  assert.equal(seam.hudSecFlash(), value);
+});
