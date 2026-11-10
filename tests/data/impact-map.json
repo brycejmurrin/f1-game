@@ -10748,7 +10748,6 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/road-reflection-transition.test.mjs",
-        "tests/unit/scale-defaults.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "*": [
@@ -18626,6 +18625,9 @@
       "applyBtnScale": [
         "tests/unit/scale-defaults.test.mjs"
       ],
+      "applyResMode": [
+        "tests/unit/perf-governor.test.mjs"
+      ],
       "create": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -18638,6 +18640,7 @@
       ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
       "*": [

@@ -3152,7 +3152,7 @@ box, `present` = css × min(`dpr`, the DPR cap: 1.5 on `mobileTier`, else 2),
 `buffer` = present × `scale`, `dprCap` the cap AS APPLIED (present / css),
 `pxPerCss` buffer / css and `ofDevice` buffer / (css × dpr) — the share of the
 panel's pixels the 3D view uses per axis. A DPR‑3 iPhone at 852×393 with
-RESOLUTION LOW (0.5, the touch default) reads `present [1278,590]`, `buffer
+RESOLUTION LOW (0.5; a phone defaults to AUTO capped at 0.75) reads `present [1278,590]`, `buffer
 [639,295]`, `pxPerCss 0.75`, `ofDevice 0.25`. Fields are `null` (never 0 or
 NaN) before a size exists. `js/agent/apex-lifecycle.js` `effectiveRes`;
 `tests/unit/render-effective-res.test.mjs` pins the rule and the numbers.

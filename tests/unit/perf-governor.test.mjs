@@ -204,7 +204,7 @@ function makeGov() {
     },
   };
   PerfGov.init(gfx);
-  return { PerfGov, scale: () => scale };
+  return { PerfGov, scale: () => scale, setScale: (v) => { scale = v; } };
 }
 
 function feed(PerfGov, dtFn, n) {
@@ -477,6 +477,29 @@ test("a device that degraded RECOVERS once the frames come good again", () => {
   assert.ok(scale() > degraded,
     `scale must climb back after sustained clean frames — degraded to ${degraded}, ended at ${scale()}`);
   assert.equal(scale(), 1, "sustained perfect frames should restore all the way to full resolution");
+});
+
+// #5227: a phone's RESOLUTION AUTO is capped at MED (js/ui/scale.js sets the ceiling and starts the scale
+// on it). The resolution stage must work BELOW the ceiling exactly as it does below 1, and never above it.
+test("a configured ceiling (phone AUTO = 0.75) lets the governor cut pixels and bounds the climb back", () => {
+  const g = makeGov();
+  assert.equal(g.PerfGov.resCeil(), 1, "no ceiling unless one is set");
+  assert.equal(g.PerfGov.setResCeil(0.75), 0.75);
+  g.setScale(0.75);                                               // scale.js lowers the scale onto the ceiling itself
+  let peak = 0;
+  const run = (dtFn, n) => { for (let i = 0; i < n; i++) { g.PerfGov.tick(dtFn(i)); peak = Math.max(peak, g.scale()); } };
+  run((i) => (i % 20 === 0 ? 10 : 34 * g.scale()), 1500);        // GPU-bound at 0.75: 25.5 ms, over a 60 Hz refresh
+  const degraded = g.scale();
+  assert.ok(degraded < 0.75 - 1e-9, `the pixel lever must exist under the ceiling, scale stayed ${degraded}`);
+  run(() => 16.7, 9000);                                          // the load lifts
+  assert.equal(g.scale(), 0.75, "clean frames climb back to the ceiling, and stop there");
+  assert.ok(peak <= 0.75 + 1e-9, `the scale never exceeded the ceiling (peak ${peak})`);
+});
+
+test("setResCeil refuses a value outside the resolution stage's range", () => {
+  const { PerfGov } = makeGov();
+  for (const bad of [0.2, 1.5, NaN, undefined, "x"]) assert.equal(PerfGov.setResCeil(bad), 1, String(bad));
+  assert.equal(PerfGov.setResCeil(0.5), 0.5);
 });
 
 test("restore does NOT fire while frames are still missing", () => {
