@@ -4150,7 +4150,8 @@
       ],
       "hirePending": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/career-seat-rollover.test.mjs"
+        "tests/unit/career-seat-rollover.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "identityValue": [
         "tests/unit/career-backup.test.mjs",
@@ -4439,6 +4440,9 @@
         "tests/unit/career-round2.test.mjs"
       ],
       "garageMetadata": [
+        "tests/unit/career-experience.test.mjs"
+      ],
+      "mount": [
         "tests/unit/career-experience.test.mjs"
       ],
       "objectiveStatus": [

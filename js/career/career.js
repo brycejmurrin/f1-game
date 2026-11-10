@@ -1567,7 +1567,7 @@ function hireDriver(code, years) {
 }
 // Whether the seat needs a decision before the season can start.
 function hirePending() {
-  const hire = career.roster && career.roster[0];
+  const hire = career && career.roster && career.roster[0];   // null with no career loaded, as the sibling hooks
   return hire && hire.pending ? Object.assign({ code: hire.code, name: hire.name,
     salary: hire.salary }, hire.pending) : null;
 }

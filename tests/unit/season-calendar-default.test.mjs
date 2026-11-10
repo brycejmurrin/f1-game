@@ -280,3 +280,9 @@ test("career-backup refuses an import whose money or salary is out of range", ()
   assert.equal(B.validate(env(Object.assign(oldCareer(1), { offers: [{ team: "haas", salary: 1e12 }] }))).reason, "salary-range");
   assert.equal(B.validate(env(Object.assign(oldCareer(1), { deal: { salary: -1 } }))).reason, "salary-range");
 });
+
+test("hirePending() (the __apex.careerHire hook) is null with no career loaded, as the sibling hooks", () => {
+  const { Career } = boot();
+  assert.equal(Career.data && Career.data(), null);
+  assert.equal(Career.hirePending(), null);
+});
