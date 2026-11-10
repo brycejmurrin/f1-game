@@ -4702,7 +4702,7 @@ function update(dt) {
       // In a session the guest waits (briefly, and boundedly) for the host's
       // classification rather than publishing its own — see awaitingResult.
       if (netPlay.awaitingResult()) resultT = 0.05;
-      else { resultT = 0; RaceCeremony.want(true); endRace(); return; }   // a natural flag arms the ceremony (default on; afterClassify gates eligibility, SKIP stays); return: no engine/brake-cue/rival audio over the results sheet
+      else { resultT = 0; RaceCeremony.want(true); G.endRace(); return; }   // a natural flag arms the ceremony (default on; afterClassify gates eligibility, SKIP stays); return: no engine/brake-cue/rival audio over the results sheet. G.endRace: a driven real race wraps it to keep the script's DSQs
     }
   }
 
@@ -9320,7 +9320,7 @@ els.pausebtn.onclick = () => setPaused(true);
 // SKIP TO RESULTS: the player is home and the solo field is still finishing (RaceControl.finishDelay waits for it).
 function soloPlayerDone() { return state === "race" && session === "race" && !netPlay.active() && !realRace.isWatch() && player && (player.finished || player.retired); }
 function postFinishWait() { return soloPlayerDone() && !RaceControl.finishPending(cars, raceT, lapsTarget, realRace.raceT0()); }
-function skipToResults() { if (!postFinishWait()) return false; resultT = 0; endRace(); return true; }
+function skipToResults() { if (!postFinishWait()) return false; resultT = 0; G.endRace(); return true; }   // G.endRace, as the flag: RealRace's wrap keeps a driven real race's script DSQs
 $("pm-skip-results").onclick = () => skipToResults();
 addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
 els.workBtn.onclick = openPitWork;

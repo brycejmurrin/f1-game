@@ -112,11 +112,39 @@ test("#10 a tyre-wear level changed after boot survives a quit to the menu", asy
 // VM — audio is silent there and gfx has no warm to await — so pin the source.
 test("survey: update() returns after a natural-flag endRace (no engine / brake-cue / rival audio over the results)", () => {
   const src = gameSource();
-  assert.match(src, /RaceCeremony\.want\(true\); endRace\(\); return; \}/, "update() must return after endRace()");
+  assert.match(src, /RaceCeremony\.want\(true\); G\.endRace\(\); return; \}/, "update() must return after endRace()");
 });
 test("survey: loadTrackStepped re-checks live() after the warm await, before it frees the world", () => {
   const src = gameSource();
   const i = src.indexOf("await gfx.warmSettled();"), j = src.indexOf("dropTrackWorld();", i);
   assert.ok(i > 0 && j > i, "the warm await and the free must both be there");
   assert.match(src.slice(i, j), /if \(!live\(\)\) return false;/, "a superseded build must not free the world a newer selection wants");
+});
+
+// W29 (PR #5305) found it: in a DRIVEN real race the natural flag and SKIP called
+// game.js's local endRace(), past RealRace's wrap of G.endRace (the only path that
+// keeps the script's DSQ markers from SportingRegs.applyCompoundRule). Wrap
+// G.endRace here the way RealRace does and drive SKIP in the real game.
+test("SKIP after the player retires ends the race through G.endRace (the wrap RealRace installs)", async () => {
+  const p = await drive(), G = g.G, A = g.apex;
+  const orig = G.endRace;
+  let wrapped = 0;
+  G["endRace"] = function () { wrapped++; return orig.apply(this, arguments); };
+  try {
+    A.retire(G.cars.indexOf(p), "test");
+    g.step(2);
+    g.sandbox.document.getElementById("pm-skip-results").onclick();
+    assert.equal(G.state, "results", `SKIP did not end the race (state ${G.state}) — the scenario needs postFinishWait()`);
+    assert.equal(wrapped, 1, "SKIP ended the race past G.endRace: a driven real race's script DSQs would be wiped");
+  } finally { G["endRace"] = orig; }
+});
+test("no game.js path ends a race past the G.endRace façade", () => {
+  // game.js's own segment of the union (each file is headed `// ==== <file>`); ceremony.js
+  // calls an INJECTED endRace (apex.js's finishRace dev hook), which is not this path.
+  const all = gameSource(), head = "// ==== js/game.js\n", i = all.indexOf(head), j = all.indexOf("\n// ==== ", i + head.length);
+  assert.ok(i === 0 && j > i, "the union no longer starts with game.js");
+  const src = all.slice(i, j).replace(/\/\/[^\n]*/g, "");
+  const bare = [...src.matchAll(/(^|[^.\w])endRace\(/g)].length;
+  // `function endRace(` is the one bare match allowed: every caller goes through G.endRace
+  assert.equal(bare, 1, `${bare - 1} bare endRace( call(s) — call G.endRace() so RealRace's wrap applies`);
 });

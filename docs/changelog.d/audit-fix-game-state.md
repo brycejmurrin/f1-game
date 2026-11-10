@@ -8,3 +8,4 @@ Fixed: a spun car's side contact now shakes and rumbles with the strike's real f
 Fixed: with SOUND OFF, hitting a street-circuit wall still shakes the screen and vibrates the pad
 Fixed: a tyre wear setting changed during a session is no longer reset to its old value when you quit to the menu
 Fixed: the brake cue, rival cars and other race sounds no longer play on over the results sheet in the frame the race ends
+Fixed: in a driven real race (JUMP IN), a car the real race disqualified now stays disqualified on the results after the chequered flag or SKIP
