@@ -29,10 +29,10 @@ run is long, hung, or targets a worker.
 ## Node tests (one call, parallel)
 
 - `debugger_node_test {files, probes:[{file?, line, expression?, condition?, captureLocals?}]}` runs
-  up to 8 test files under the inspector at once and returns exit code, TAP pass/fail, failing test
+  several test files (cap: `list-tools`) under the inspector at once and returns exit code, TAP pass/fail, failing test
   names, per-probe hit counts, values and locals. No attach; it runs beside a page session.
 - Probing `js/` game code a test loads through `vm`: give the repo path (`js/physics/brake-cue.js`);
-  every filename form and unnamed copies bind (see the reference §Node). Probe a body line past
+  every filename form and unnamed copies bind (see the reference §Node tests and processes). Probe a body line past
   the early returns you care about, not the `function` header line (page breakpoints too).
 - `runner:"test"` = real `node --test`; `children:true` auto-attaches Node processes the test spawns.
 - Interactive instead: `node --inspect-brk=127.0.0.1:9229 <file>`, then `debugger_targets` on
@@ -42,4 +42,4 @@ run is long, hung, or targets a worker.
 
 - `debugger_targets targetType:"service_worker"|"worker"|"node"` reaches `sw.js`, workers and Node.
 - `node tools/mcp/debug-chrome.mjs start --device phone-landscape|desktop` guarantees
-  the viewport (default `phone-landscape`, 844x390 touch; see `status`).
+  the viewport (presets: `debug-chrome.mjs --help`; check with `status`).

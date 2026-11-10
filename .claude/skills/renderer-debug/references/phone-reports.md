@@ -29,5 +29,5 @@ On your pushed branch:
 (or the GitHub MCP `actions_run_trigger`); agent tokens dispatch fine.
 
 Only a request-only leg (`leg`, `lf_*`, `lrm_*` in
-`.github/gpu-census-request.json`; the form is at the 25-input cap) still goes by
+`.github/gpu-census-request.json`; the dispatch form is at GitHub's input cap) still goes by
 editing that file on your branch and pushing.

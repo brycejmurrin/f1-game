@@ -55,7 +55,9 @@ function load(n = 24, realParts = false) {
 }
 const started = (opts = {}) => {
   const h = load(opts.n, opts.realParts);
-  h.Career.start(Object.assign({ flavour: "driver", teamId: "haas", seed: 9 }, opts.start));
+  // calendar "24": these cases pin the stamp mechanism on Tracks.SEASON, the 24-round
+  // set every pre-2026-11-10 save carries (the 2026 REAL default: season-calendar-default.test.mjs).
+  h.Career.start(Object.assign({ flavour: "driver", teamId: "haas", seed: 9, calendar: "24" }, opts.start));
   h.Career.engage(true);
   return h;
 };
@@ -72,8 +74,10 @@ const adoptAfterLoad = (h) => {
 };
 const raced = (h) => h.run("Tracks.LIST")[h.Career.trackIndex()].id;
 
-// This build is obtainable through the garage in the OPEN era; every option
-// remains legal when Aston Martin's works-based cap falls from 1740 to 1530.
+// This build is obtainable through the garage in the OPEN era. The 2030
+// POWERTRAIN FREEZE bans by stat class (#5038), so Aston Martin's own
+// sig_astonmartin_ers (full_attack's twin) and hydro_synth go too: its works-based
+// cap falls from 1740 to 1335 (1530 when a twin could dodge the ban).
 const CAP_BUILD = {
   engine: "stock", aero: "minimal", suspension: "carbon_pushrods", brakes: "brembo_evo",
   tyres: "hypersoft", ers: "sig_astonmartin_ers", gearbox: "seamless_shift", fuel: "hydro_synth",
@@ -95,7 +99,7 @@ test("an era cap fall refits only researched parts and persists a legal budget w
   assert.equal(Career.budget(), 1740);
   c.season.round = Career.roundsTotal();
   Career.rollover();
-  assert.equal(Career.budget(), 1530);
+  assert.equal(Career.budget(), 1335);
   assert.ok(Parts.getCost(c.fitted, team) <= Career.budget(), "the effective race build obeys the new cap");
   assert.deepEqual([...c.owned], owned, "research is never confiscated");
   assert.equal(c.money, money, "refitting owned parts is free");

@@ -362,3 +362,27 @@ test("every saved workflow parses and names only existing agentTypes", () => {
   }
 });
 
+
+/* code-survey and total-audit call themselves whole-tree. Circuits and unowned js/ dirs come from a run-time
+   slice plan; every OTHER js/ dir must be owned by a static slice's `dirs:` list, so a new directory is never
+   silently skipped when the plan step fails (the 2026-11-09 audit found six dirs no slice read). */
+test("every js/ directory is owned by a workflow slice (circuits come from the run-time plan)", () => {
+  const jsDirs = fs.readdirSync(path.join(ROOT, "js"), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => `js/${d.name}/`);
+  for (const f of ["code-survey.js", "total-audit.js"]) {
+    const src = fs.readFileSync(path.join(WORKFLOWS, f), "utf8");
+    const owned = new Set([...src.matchAll(/dirs:\s*\[([^\]]*)\]/g)].flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])));
+    const bad = [];
+    const need = (re, why) => { if (!re.test(src)) bad.push(`${f}: ${why}`); };
+    const never = (re, why) => { if (re.test(src)) bad.push(`${f}: ${why}`); };
+    need(/slicePlan|const PLAN = /, "lost the run-time slice plan");
+    need(/chunk\(PLAN\.circuits/, "circuits must be chunked from the run-time plan");
+    never(/FIRST 20|LAST 20/, "a static circuit split skips circuits past the 40th");
+    const missing = jsDirs.filter((d) => d !== "js/circuits/" && !owned.has(d));
+    if (missing.length) bad.push(`${f}: no slice owns ${missing.join(", ")} — add it to a slice's dirs: and scope`);
+    never(/require\(['"]node:/, "require() is null inside a workflow");
+    never(/`\.replace\(/, "String.replace on a prompt splices $& from finding text; use a template");
+    need(/(refutes|refCount)\[i\] === heard\[i\]/, "a high finding every answering verifier refuted must die");
+    need(/agentsSpawned/, "the run must report how many agents it spawned");
+    assert.deepEqual(bad, [], bad.join("\n"));
+  }
+});

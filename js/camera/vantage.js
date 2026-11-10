@@ -309,7 +309,7 @@ function onboardAttitude(mode, eye, tgt, extra, s, spN) {
 }
 
 const _vantEye = [0, 0, 0], _vantTgt = [0, 0, 0];
-const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60 };
+const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60, fovBoost: 0 };
 // The last finite pose, held when a solve goes non-finite: the render damper in game.js
 // is exponential, so ONE NaN frame would poison camEye/camTgt/camFov until the next snap.
 const _goodEye = [0, 1, 0], _goodTgt = [0, 1, 1];
@@ -699,6 +699,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   if (mode === "chase" || mode === "far" || mode === "drift" || mode === "reverse")
     _vWallClamp(eye, mode === "far" ? s - 10.5 : mode === "chase" ? s - 5.8 : mode === "drift" ? s - 6.2 : s + 5.5);
   if (typeof CamTune !== "undefined") fov = CamTune.apply(mode, eye, tgt, fov);
+  let fovBoost = typeof CamFov !== "undefined" ? CamFov.modeBoost(mode, spFov, dep) : 0;   // the dynamic share of `fov` (#5015: CamFovFit caps the base, keeps this)
   // FREE-LOOK (js/camera/feel.js): additive yaw/pitch on bolted-on cams, after
   // CamTune so the tuner offsets stay the base and free-look stacks on top.
   if (localLook && typeof CamFeel !== "undefined") CamFeel.applyFreeLook(eye, tgt);
@@ -722,6 +723,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const f0 = fov;
     fov = CamFeel.drive(mode, eye, tgt, fov, extra, spN);
     fov = clamp(fov, Math.min(f0, 20), Math.max(f0, 110));
+    fovBoost += fov - f0;
   }
   // Open-circuit wall / building avoidance for broadcast cams (street circuits
   // already use `corr`). Steps toward the road, then lifts over roofs — see
@@ -828,12 +830,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
     _goodEye[0] = eye[0]; _goodEye[1] = eye[1]; _goodEye[2] = eye[2];
     _goodTgt[0] = tgt[0]; _goodTgt[1] = tgt[1]; _goodTgt[2] = tgt[2]; _goodFov = fov;
   } else {   // hold the last finite pose: see _goodEye
-    eye = _goodEye; tgt = _goodTgt; fov = _goodFov;
+    eye = _goodEye; tgt = _goodTgt; fov = _goodFov; fovBoost = 0;
     if (!_nanWarned) { _nanWarned = true; Log.warn("game", "GameCams.vantage: non-finite pose in mode " + mode + ", holding the last good one"); }
   }
   _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
   _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
-  _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.cut = vantCut;
+  _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.fovBoost = fovBoost; _vantOut.cut = vantCut;
   publishListenerBasis(mode, eye, tgt);
   _vTrack = null;   // a per-call input: left set, it pinned the last raced world through the menu
   return _vantOut;

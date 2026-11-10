@@ -12,20 +12,25 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 
 ## Gotchas
 
-- **Parent-only.** Every `layout-audit.mjs` / `menu-mock.mjs` call except `--help` belongs to the parent:
-  `bash-guard.sh` matches the tool name in a subagent, so `--list`, `--report` and `--diff` (no browser) are
-  parent-only too (AGENTS.md rule 10). Subagents analyse finished artifacts only.
-- **Bryce's cell is not the default.** `--viewport` defaults to `ios-iphone-landscape` (852x393); Bryce's
-  profile is `ios-iphone-landscape-844` (AGENTS.md §Coordination). Name it explicitly, and run it first.
-- **Sizes are catalog names, scale is a percent.** `--scale=125` (`1.25` throws, range 40-200); viewports are
-  `VIEWPORTS` names in `tools/ui/menu-screens.mjs` only. A free-form size (568x320) needs a new `VIEWPORTS`
+- **Parent-only.** In a subagent `bash-guard.sh` §2 refuses by name every `tools/ui/*audit*.mjs`
+  (layout-audit, fit-audit, audit-diff) and every `tools/shot/*.mjs` but frame-report/cam-corners/cam-motion
+  (hud-mock, hud-survey, publish-evidence), even `--help`/`--list`/`--diff`. `menu-mock.mjs` and
+  `explorer.mjs` are not matched but launch Chromium: parent-only by AGENTS.md rule 10. Subagents analyse
+  finished artifacts only.
+- **Bryce's cell is not the default.** `--viewport`'s default (`--help`) is not Bryce's 844x390 profile,
+  `ios-iphone-landscape-844` (AGENTS.md §Critical conventions). Name it explicitly, and run it first. For
+  HUD/touch reviews seed his real export `tests/data/settings-defaults-export.json` (`hud-survey.mjs
+  --settings`, `explorer.mjs --settings`); layout-audit and menu-mock boot fresh shipped settings.
+- **Sizes are catalog names, scale is a percent.** `--scale=125`, not `1.25` (range: `tools/ui/ui-scale-axis.mjs`);
+  viewports are `VIEWPORTS` names in `tools/ui/menu-screens.mjs` only. A free-form size needs a new `VIEWPORTS`
   row. `menu-fit.mjs` is DEPRECATED except `--safe=` notch insets.
 - **A run MERGES into `artifacts/layout-audit/audit.json`** by screen|viewport(|theme, `--theme=dark,light`): copy it to `audit.before.json`
   BEFORE the edit, or the regression baseline is gone.
 - **Zero findings is not green.** `ui-audit.spec.js` asserts nothing; thumbnails and an empty inspector are
   insufficient. A skipped or timed-out cell is unmeasured, never a pass.
-- **Hand-rolled probes lie in known ways:** read `--tap` off `<body>` not `:root`, divide by `currentCSSZoom`,
-  hide `#game` before any capture, wait out the dialog transition ([probes.md](references/probes.md) §1).
+- **One tap-floor rule:** `tools/ui/tap-floor.mjs` (`judgeTap`, `measureTapTarget`; test
+  `tests/unit/ui-reset-tap-floor.test.mjs`) is what every tool judges by; a hand probe installs it, never
+  re-derives it. Also hide `#game` before any capture and wait out the dialog transition ([probes.md](references/probes.md) §1).
 
 ## Workflow
 
@@ -67,5 +72,5 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
 - [references/hud-survey.md](references/hud-survey.md): read when the HUD must be measured across devices ×
   cameras × settings with the 3D frame behind it (MCP `apex_hud_survey` / `apex_hud_shot`).
 - Other skills: cache-bust rules [../check-changes/references/bump.md](../check-changes/references/bump.md);
-  Chrome MCP setup and park-before-Playwright [../mcp-probe/references/traps.md](../mcp-probe/references/traps.md) §1;
+  Chrome MCP setup and park-before-Playwright [../mcp-probe/references/traps-chrome.md](../mcp-probe/references/traps-chrome.md);
   dead-space-beside-cramped design findings [../css-play/references/restructure.md](../css-play/references/restructure.md).

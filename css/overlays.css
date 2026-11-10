@@ -231,7 +231,8 @@ html:has(> body > :is(#pausemenu, #results):is(:not([hidden]), [open])) #ios-ins
      (same fix data.css documents twice). */
   top: max(var(--gap), var(--sat)); left: 50%;
   transform: translateX(-50%);
-  width: min(48rem, calc(100vw - 2 * var(--gap)));
+  /* --safe-w, not 100vw: centred on the viewport, a 100vw cap put 17 px of each end under the notch at 852 (#5201). */
+  width: min(48rem, calc(var(--safe-w) - 2 * var(--gap)));
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center; gap: calc(var(--gap) / 3) var(--gap);
   padding: var(--gap);

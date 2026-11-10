@@ -144,6 +144,42 @@ on that mode rather than asking again.
 Changing mode on the setup form re-targets the slot (`Career.firstFree`), because
 slot 3 of the driver set is not slot 3 of MY TEAM.
 
+**A full set is refused, never overwritten.** `Career.start()` with no `slot` and no
+free slot in the mode's set returns null (it used to fall back to the live slot and
+replace that career silently); START CAREER then reopens the picker and says all three
+slots are in use, so the player chooses which save to DELETE.
+
+### Calendar
+
+A NEW career or standalone season races the real 2026 calendar (`SeasonCal.REAL_2026`,
+23 rounds). The 24-round list (`Tracks.SEASON`, the `classic`-flag filter of
+`Tracks.LIST`) is the default every save made before 2026-11-10 was created with, and it
+stays on offer: **24-ROUND** in Season SETUP's presets and in the career setup's CALENDAR
+row. A career stores the choice as `calSet` (`"real2026"` | `"24"`; absent reads as `"24"`),
+and `start()`, `rollover()` and `adoptCalendar()` stamp `season.calIds` from it, so an
+existing career keeps its list for every later season. A standalone season keeps its
+frozen `config.trackIds`; a save from before that snapshot, with no stored `seasonCfg`,
+resumes on the 24-round list. Tests: `tests/unit/season-calendar-default.test.mjs`.
+The circuit picker's SEASON / CLASSICS chips still group by the `classic` flag.
+`fresh()` takes REAL_2026 only when every one of its 23 ids resolves in this build (else the 24).
+Qatar (27–29 Nov) and Abu Dhabi (4–6 Dec) were confirmed on 3 Oct by Domenicali and
+reaffirmed by the FIA on 20 Oct, with Imola only as a force-majeure stand-in (re-checked
+2026-11-10: [Gulf News](https://gulfnews.com/sport/formula-one-confirms-qatar-and-abu-dhabi-grands-prix-to-close-2026-season-as-planned-1.500698952),
+[The Race](https://www.the-race.com/formula-1/fia-adamant-f1-qatar-abu-dhabi-gp-will-go-ahead/)).
+
+**Prize money needs a classified car**, as points do: a retired (unclassified) or
+disqualified player — or MY TEAM's hired mate — is paid no prize for its listed place.
+
+**Import ranges.** `SaveMigrate` clamps a stored career's `money` to
+`[0, LIMITS.MONEY_MAX]` (1e9) and every salary (deal, offer, hire, pending ask) to
+`[0, LIMITS.SALARY_MAX]` (1e5) and `facility` to `[0, LIMITS.FACILITY_MAX]`; a backup import
+outside the money and salary ranges is refused (`money-range` / `salary-range`) with nothing
+written. Why those numbers: the balance floors at 0 in `settleRound` and every spend checks it
+first; 1e9 is far above any season's income (or a run of GRANT top-ups) and far below 1e308,
+which a later `+=` turned into Infinity, saved as null and read back as 0. A salary (deal, offer
+or hire) is tens to a few hundred credits a round; `hireAsk`'s yearly raise compounds, so 1e5
+leaves decades of headroom. Finite-only checks let -5 and 1e308 import cleanly before this.
+
 Versioned (`CAREER_V`), migrated through a ladder of one function per version step,
 mirroring `migrateSeasonPoints`. Key fields:
 
@@ -234,9 +270,10 @@ driver spread (`SKILL_SPAN`, 0.0232 × pace/100) stays below it, so the car stil
 ## Team development
 
 `team.stats` and `TIER_V` are never mutated. `career.tdev[teamId]` is an additive
-delta in stat points (±8 → ±2% pace via `TDEV_TO_PACE`, ~7.7 of the compressed `TIER_V`
-steps — about twice the whole tier ladder; that multiplier was not compressed with the
-ladder, and the number is a balance call), folded into one new per-car field baked in
+delta in stat points (`TDEV_TO_PACE` 0.25 % a point). A winter reaches `TDEV_REACH` = ±3
+(±0.75 % pace, ~2.9 of the compressed `TIER_V` steps; that multiplier was not compressed
+with the ladder, and the number is a balance call); `TDEV_MAX` ±8 is only the clamp an
+imported save is held to (#5047). Folded into one new per-car field baked in
 `makeCars()`:
 
 ```js
@@ -258,6 +295,9 @@ Two gates, not one:
 
 1. **Ownership** — `career.owned`. Every cost-0 option is always owned, and
    `Parts.DEFAULTS` are all cost-0, so a legal car is guaranteed by construction.
+   The list holds OWNERSHIP KEYS, `Parts.ownId(opt)` = `opt.own || opt.id`: brakes
+   Sport owns as `sport_brakes` because suspension also has a `sport` (#5043). A save
+   holding the bare `sport` keeps both rows (SaveMigrate `cleanParts` grants the key).
 2. **A fitted-cost cap** — `Career.budget()`, a MULTIPLE of the team's own works
    car (`BUDGET_MULT`, level 0 = exactly that car), clipped by the
    catalog-derived `budgetCap()` ceiling described under *Two sinks* below.
@@ -653,9 +693,11 @@ come last.
    the whole drift, craft and consistency half. Per-axis deltas, clamped **±12**.
    Experience is bumped +4 a year against its **own 0..40 cap** (per-axis dev deltas carry the ± clamp), because it is cumulative:
    at ±12 a rookie would stall four seasons in and freeze the growth term forever.
-3. **Team development.** `tdev = clamp(round(tdev * 0.5 + shove), ±8)`, where
+3. **Team development.** `tdev = Career.tdevStep(tdev, shove)` = `clamp(roundHalfTowardZero(tdev * 0.5 + shove), ±8)`, where
    `shove = clamp((expectedConstructorPos - actualPos) * 0.5, ±2)`. Without the halving
    a team that gets ahead compounds forever and the grid ossifies after three seasons.
+   Rounding is symmetric (#5047): ±1 decays to 0 on an on-target season, and a climb
+   tops out at ±`TDEV_REACH` (3) both ways — `Math.round` gave +4 but −3, and kept +1 forever.
 4. **Driver market.** 0–2 swaps a year (`rnd(year, "mkt", "n")`), each trading a top
    team's weakest driver for the best in the midfield, and stopping early when nobody
    has earned the move. Only deltas are stored, in `career.seats`; `career.dev` entries
@@ -690,14 +732,15 @@ materially the same build, so near the top the seat you hold stops changing your
 car and the contract ladder terminates with it.
 
 **An era is a legality filter, not a confiscation.** `Regulations.ERAS` names
-three catalog categories per era; the dearest `BAN_TOP` options in each go
-illegal for `ERA_SEASONS`. `career.owned` is never touched — a part you
+three catalog categories per era; the dearest `BAN_TOP` stat CLASSES in each go
+illegal for `ERA_SEASONS` — a class is every priced option with the same cost and
+stats, so a STYLE row or SIGNATURE twin goes with the part it copies (#5038). `career.owned` is never touched — a part you
 researched is *not legal this era*, and it comes back when the era lapses.
 
 | | |
 |---|---|
 | era length | `ERA_SEASONS` = 4 |
-| options taken per category | `BAN_TOP` = 2 |
+| stat classes taken per category | `BAN_TOP` = 2 |
 | first era | `open` — restricts nothing, so the first build is never interrupted |
 
 **Why it reaches the whole grid.** `Parts._resolve()` consults
@@ -1093,3 +1136,76 @@ seeds a new career save's `owned` + `fitted` build via `Parts.getFactorySetup`
 garage, not this table.
 
 ---
+
+## Design notes
+
+Moved verbatim from code comments in `js/career/career.js` (2026-11-10) to keep the boot wall inside its byte budget.
+
+### Winter driver development (`career.js`, above `CRAFT_DEV`)
+
+```text
+One winter of driver development. Three additive terms, each saying something
+different, because a single "form" number produces a grid that only ever sorts
+itself into the order it already had:
+
+GROWTH  where a driver is in their arc. `experience` is the age proxy — a
+30-rated rookie gains ~+2.7 a year, a 100-rated veteran loses 1.5.
+FORM    did the season beat what the CAR should have done. Bounded ±3, so a
+great year in a bad car is worth more than a title in the best one.
+NOISE   development is not a formula. ±2, from the stateless career hash.
+
+THE PLAYER'S `craft` AXIS IS THE ONE EXCEPTION, and it is the whole point of
+measuring race craft. For an AI seat every axis has to be inferred from the
+result, because there is nothing else to go on. For the player there IS: a
+season of settled rounds that recorded how each one was driven. Taking their
+craft drift from that instead of from half their pace drift is what closes
+the loop — drive cleanly and the rating that feeds the silly season
+(`overall()` ranks the grid with it) and a simulated round's race-day swing
+moves with the driving, not with a dice roll. Same ±3 bound as FORM, so it
+is a season's worth of evidence weighted like a season's worth of results.
+
+Stored as per-axis deltas over the shipped DriverRatings table, never absolutes,
+so updating the real 2026 ratings never invalidates a save.
+```
+
+### The contract rival (`career.js`, above `rivalSeatFor`)
+
+```text
+WHO THE RIVAL IS. Ranked by the rating the grid already races on, so the
+benchmark is a driver you are actually close to rather than a random seat:
+a backmarker is no promise and the championship leader is not a contract, it
+is a wish. Your own garage is excluded — that is beatMate's job, and a
+contract that quietly duplicated it would read as two goals and settle as one.
+"Your own garage" is the garage the contract is FOR — the OFFERED team — and the
+player is rated at that team's tier: a move offer used to name a rival from the
+pool of the team being LEFT, then sign a different one (and often the new
+team-mate) once career.team had moved.
+
+AMBITION MOVES THE RIVAL, not a threshold. champPos shifts its target position
+by AMBITION.delta; here the same delta walks the ranked list, so ambitious
+(-3) names someone three places quicker and modest (+3) someone three slower.
+One lever, no second balance number invented for this kind.
+```
+
+### Ambition (`career.js`, above `AMBITION`)
+
+```text
+THE PROMISE YOU MAKE WHEN YOU SIGN. Without it a contract's season goal is
+one number the game chooses for you — expectedFinish(team) — and the only
+lever on a career that feels too easy or too hard is the AI difficulty race
+setting, which is per-race and blunt. Ambition is the same dial taken from the other
+end: you tell the team where you will finish, and the paddock prices it.
+
+THE MIDDLE RUNG IS THE LEGACY CONTRACT — delta 0, rep 5, mv 12, the legacy
+GOAL_REP/GOAL_MV exactly — so a deal signed before this existed
+carries no `ambition`, reads as index 1 through ambIdx(), and resolves
+byte-identically. That is why this table is ordered and indexed rather than
+keyed, and why no CAREER_V rung is owed for the new field.
+
+PAID IN REPUTATION, NOT CREDITS, and deliberately. The settlement comment in
+rollover() says a per-season cash bonus would go stale against
+tools/car/career-economy.mjs and every figure in docs/CAREER.md. Reputation
+and market value are the better currency anyway: they are what decides which
+seats offerBar() opens next winter, so promising more buys a better car
+sooner, and missing costs you rungs on the ladder the hub shows all season.
+```

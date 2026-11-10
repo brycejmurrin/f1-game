@@ -32,8 +32,8 @@ table and palette.
 node tools/track/survey-track.mjs <id> before
 ```
 
-Self-boots (no server). Writes `scratch/captures/survey-track/<id>/`:
-whole-track aerial plus **orbit** and **driver's-eye** at 0/25/50/75 %. EYE
+Self-boots (no server; fixed 1280×720, day/dry). Writes `scratch/captures/survey-track/<id>/`:
+whole-track aerial plus **orbit** and **driver's-eye** at its default fractions (script header). EYE
 shots expose floating props and gaps. Also emits the lateral ground-profile
 probe, auto-flagged:
 
@@ -94,12 +94,13 @@ confirmed defect, intended slope or probe artifact rather than forcing zero flag
 
 ### 6 · PARENT test & ship
 
-- Geometry: `node tools/track/verify-track.cjs <id>` (default), then that circuit's foundation spec ALONE:
-  `node tools/ci/test-bg.mjs --spec tests/specs/<id>-foundation.spec.js`. A whole group (`circuits`) runs on the
-  pushed branch: `node tools/ci/remote-group.mjs circuits` (AGENTS.md verification table).
-- Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
-  baselines). Do not treat it as a gate. Intentional goldens:
-  `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.
+- Geometry: `node tools/track/verify-track.cjs <id>` is the local floor; no browser spec runs locally
+  (AGENTS.md rule 5). The `circuits` group proves a circuit edit on CI: the PR's selected shard picks
+  the touched circuit's foundation spec when one exists (`node tools/ci/select-specs.mjs --files
+  js/circuits/<id>.js` shows it; not every circuit has one: `ls tests/specs/*-foundation.spec.js`,
+  ids hyphenated). The whole group on the pushed branch: `node tools/ci/remote-group.mjs circuits`
+  (`docs/VERIFICATION.md` §By change).
+- No pixel-golden suite: `tests/manual/tracks-visual.spec.js` is retired. Compare before/after captures.
 - `node tools/gen/gen-shell.mjs --check` (shell/cache: `?v=dev`, no bump; check-changes bump reference, linked from SKILL.md) after any `js/*`/`css/*` edit.
 - Pick remaining groups with **check-changes**.
 
@@ -109,8 +110,7 @@ confirmed defect, intended slope or probe artifact rather than forcing zero flag
   driving boundary (**scenery-dress**).
 - Probe both sides — `ground-profile.mjs` reports whichever side has rendered
   terrain; a one-sided lake means one side reads `--` legitimately.
-- Intentional visual change ≠ regression — regenerate parked goldens; don't
-  chase the diff.
+- Intentional visual change ≠ regression — don't chase the diff.
 - One circuit per worker, picture-driven; parent campaigns may delegate
   disjoint pairs in parallel (campaign.md).
 - Survey before re-applying a known terrain fix: a flat island modelled with a

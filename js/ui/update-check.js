@@ -61,6 +61,18 @@ const UpdateCheck = (function () {
     const doFetch = o.fetch || ((u, init) => fetch(u, init));
     const inRace = o.inRace || (() => false);
     const chip = o.chip || (() => null);
+    // NOT RELOADABLE OUTSIDE THE MENUS (#5070). inRace() is count/race only, so
+    // the "results" ceremony (cooldown lap, parc fermé, podium, garage drive-in:
+    // none modal) kept a live chip and one tap reloaded mid-podium. Any state
+    // but "menu" and the #loading cover stand the chip down and refuse apply().
+    const gameState = o.state || null;
+    const cover = o.cover || (() => null);
+    function busy() {
+      if (inRace()) return true;
+      if (gameState && gameState() !== "menu") return true;
+      const c = cover();
+      return !!(c && !c.hidden);
+    }
     let generationRequest = null, generationController = null, generation = 0;
     // The boot guard swallows its own failure (offline, a 3 s fail-fast), so it
     // reports success as window.__apexGuardOk. Until it does, the first check is
@@ -80,7 +92,7 @@ const UpdateCheck = (function () {
       if (!el) return;
       // OUTSIDE RACES ONLY: a reload mid-race throws the race away, and a
       // chip over the track is a distraction. It reappears at the next menu.
-      el.hidden = !(ready > 0 && !inRace());
+      el.hidden = !(ready > 0 && !busy());
       if (!el.hidden) el.setAttribute("aria-label", "Update ready: build " + ready + ". Reload to update.");
       // The spoken line waits for a menu: a radio-priority interruption mid-race is noise.
       if (!el.hidden && refusedFor === ready && refusedSaid !== ready) {
@@ -205,14 +217,14 @@ const UpdateCheck = (function () {
     // transient state before triggering the reload."
     // https://developer.chrome.com/docs/workbox/handling-service-worker-updates
     async function apply() {
-      if (!ready || inRace()) return false;
+      if (!ready || busy()) return false;
       if (o.persist) {
         try {
           await Promise.race([Promise.resolve().then(o.persist),
             new Promise((r) => setTimeout(r, PERSIST_WAIT_MS))]);
         } catch (e) { /* a failed flush is retried by pagehide on the way out */ }
       }
-      if (inRace()) { render(); return false; } // a race may have started while persistence was pending
+      if (busy()) { render(); return false; } // a race may have started while persistence was pending
       const loc = o.location || location;
       try { sessionStorage.setItem(RELOAD_KEY, String(ready)); } catch (e) { /* private mode: the guard may reload once more, harmlessly */ }
       // Same URL shape as the boot guard: ?b= busts the cached shell, the rest
@@ -238,6 +250,14 @@ const UpdateCheck = (function () {
       const late = new Promise((resolve) => { timer = setTimeout(() => resolve(false), FRESH_WAIT_MS); });
       return Promise.race([read, late]).then((r) => { clearTimeout(timer); return r; });
     }
+
+    // The 2 s follow timer hid the chip up to 2 s late: START → #loading → count
+    // left it painted over the GAS pedal at the lights (#5070). Every race entry
+    // raises the #loading cover, so its hidden flip re-renders at once.
+    try {
+      const c = cover();
+      if (c && typeof MutationObserver === "function") new MutationObserver(render).observe(c, { attributes: true, attributeFilter: ["hidden"] });
+    } catch (e) { /* the follow timer still catches up */ }
 
     const api = {
       check, markReady, newerActive, apply, render, onVisible, blocked, checkController, noteRefused, freshen,

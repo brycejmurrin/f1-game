@@ -11,8 +11,8 @@ never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
 Descriptions say **when** to load the skill (the description is what a host routes on; the table below is a
 pointer, not a second router); bodies carry the workflow and `references/` carry the detail. Current verification
 commands and gate meanings live in [`docs/VERIFICATION.md`](../../docs/VERIFICATION.md), so skill text links there
-instead of restating the ladder. Long references start with a contents index. A skill whose work IS a file family
-also carries `paths:` (file-scoped auto-load). Routing is checked by `tests/unit/skill-descriptions.test.mjs` against
+instead of restating the ladder. Long references start with a contents index. No skill carries `paths:`: a path-gated skill
+is not offered in a fresh session, so routes to it break; file-scoped text goes in `.claude/rules/`. Routing is checked by `tests/unit/skill-descriptions.test.mjs` against
 `tests/data/skill-routing/phone.json` (three prompts in Bryce's register plus one near-miss per skill).
 
 **A merge is only correct when the hub's `description` absorbs the trigger words.** That is what a host
