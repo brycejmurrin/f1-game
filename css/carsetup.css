@@ -1272,6 +1272,14 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   max-width: calc(100vw - var(--safe-l) - var(--safe-r) - var(--cs-sheet-w) * var(--sheet-eff-scale, var(--ui-scale)) - var(--gap) * 2);
   z-index: 2;
   display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+  /* THE OVERLAY BUTTONS ARE FIXED MENU CHROME (#5202), like CAM / PAUSE in a race (#5179). CAMERA and ACTIVE
+     AERO rode --tap and PHOTO rode --chip-h, and the GARAGE look's BUTTON SIZE knob rescales both on #carsetup
+     (css/overlays.css): at Bryce's 125 % they painted 65 / 60 / 65 px, PHOTO shorter than and off CAMERA's
+     edges, the bar 136 px of the car view on an 852x393 phone. ONE constant height for all three, and a
+     constant for the camera panel's chips: no look knob, UI SIZE, TEXT SIZE or race BUTTON SIZE feeds them.
+     Plain px: #cs-stack is outside the zoomed .sheet, so 44 here PAINTS 44. */
+  --cs-chrome-h: 44px;
+  --cs-chip-h: 40px;
 }
 /* The two top-level buttons. This row is all that shows at rest.
    align-items:center — CAMERA and ACTIVE AERO share one chip height; flex-end
@@ -1287,9 +1295,10 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    with aria-expanded. Two competing state attributes on one button is worse for
    a screen reader than either alone. */
 #cs-cam, #cs-photo {
-  flex: 0 0 auto; width: auto; margin: 0;
-  display: flex; align-items: center; gap: 6px;
-  padding: 5px 10px; border-radius: var(--r-sm);
+  /* 1 1 auto: when ACTIVE AERO wraps under them (a phone), the pair fills the row to the chip's width. */
+  flex: 1 1 auto; width: auto; margin: 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 10px; border-radius: var(--r-sm);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   background: var(--plate-opaque); color: color-mix(in oklab, var(--text) 62%, transparent);
   border: 1px solid var(--card-line);
@@ -1299,10 +1308,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  /* 44px painted (Apple HIG 44 pt; Bryce chose it for #3333 on 2026-10-22).
-     It was --chip-h alone: 31px on desktop in the readability survey, then a
-     40px chip floor. The /--ui-scale term keeps 44 PAINTED below 100% UI. */
-  min-height: max(var(--chip-h), calc(44px / var(--ui-scale)));
+  /* 44px painted (Apple HIG 44 pt; Bryce chose it for #3333 on 2026-10-22), and exactly that: see
+     --cs-chrome-h on #cs-stack (#5202). */
+  height: var(--cs-chrome-h); min-height: 0;
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
 @media (hover: hover) and (pointer: fine) {
@@ -1347,7 +1355,9 @@ body:not(.desktop) #cs-photo {
     left: 0; bottom: calc(100% + var(--gap));
     width: min(60vw, 420px);
     max-width: calc(100vw - var(--safe-l) - var(--safe-r) - var(--gap) * 2);
-    max-height: min(45vh, 220px);
+    /* Everything above the two-row bar, down to the safe top: the five rows of fixed chips (228 px) show whole
+       at 852x393 and 844x390 instead of three behind a scroll (#5202). It was min(45vh, 220px) = 177 there. */
+    max-height: min(calc(100vh - var(--safe-t) - var(--safe-b) - var(--gap) * 3 - var(--cs-chrome-h) * 2 - 6px), 232px);
     overflow-y: auto;
     overscroll-behavior-y: contain;
   }
@@ -1452,8 +1462,9 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 #cs-aero-bar {
   pointer-events: auto;
   display: flex; align-items: stretch;
-  /* 0 0 auto with CAMERA's group: the bar wraps before either chip is crushed. */
-  flex: 0 0 auto; width: max-content;
+  /* Never shrinks: the bar wraps before either chip is crushed. Grows, like CAMERA and PHOTO, so a wrapped
+     bar is two rows with one left and one right edge instead of a ragged pair (#5202). */
+  flex: 1 0 auto; width: max-content;
   max-width: 100%;
 }
 /* WRAPS INSIDE THE STACK, never past it. #cs-stack is capped at the room left
@@ -1464,10 +1475,10 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
    Chip chrome matches #cs-cam (flex 0 0 auto, align-items center, same pad/
    gap/type) so the two top-level buttons read as one pair. */
 #cs-aero {
-  flex: 0 0 auto; max-width: 100%; flex-wrap: nowrap;
-  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  flex: 1 0 auto; max-width: 100%; flex-wrap: nowrap;
+  display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 6px;
   width: max-content; margin: 0;
-  padding: 5px 10px; border-radius: var(--r-sm);
+  padding: 0 10px; border-radius: var(--r-sm);
   background: var(--plate-opaque);
   border: 1px solid var(--card-line);
   /* no backdrop-filter: these chips sit over the garage's LIVE turntable
@@ -1476,7 +1487,9 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  min-height: max(var(--chip-h), calc(44px / var(--ui-scale)));  /* 44 painted, see #cs-cam (#3333) */
+  /* The same fixed height as #cs-cam / #cs-photo (#5202). line-height 1.1: the stacked label + value of the
+     < 820px layout fit inside it at TEXT SIZE large. */
+  height: var(--cs-chrome-h); min-height: 0; line-height: 1.1;
 }
 @media (hover: hover) and (pointer: fine) {
   #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
@@ -1511,10 +1524,9 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 @media (max-width: 1000px) {
   /* Touch-ish widths: keep padding/type bumps; height floor is --tap-min /
      --chip-h from the base + body:not(.desktop) rules, not a narrower 34. */
-  #cs-aero { padding: 6px 10px; gap: 6px; }
   .cs-aero-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-4); }
   .cs-aero-val { font-size: var(--fs-2); }
-  #cs-cam { padding: 6px 10px; font-size: var(--fs-micro); }
+  #cs-cam { font-size: var(--fs-micro); }
   #cs-cam-panel { padding: 6px 8px; gap: 4px; }
   .cs-pan-lbl { flex-basis: 30px; }
 }
@@ -1525,7 +1537,7 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
   #cs-aero {
     flex-direction: column;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: center; gap: 0;
   }
 }
 /* ONE CHIP CLASS, TWO CONTEXTS — `--sheet-w`'s shape applied to the preview
@@ -1549,10 +1561,10 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
      on the screen you sit on longest outside a race. Same call hud.css and
      overlays.css already make over the race canvas; the tinted bg, raised
      a little to compensate, carries the look. */
-  /* Touch targets: the visual chip stays small, the hit area does not.
-     max() with the WCAG floor: touch re-floors these to --chip-h below, but
-     desktop kept the bare 30 — 12px painted at UI SIZE 40%. */
-  min-height: max(30px, var(--tap-min));
+  /* A fixed chip, one rung under the bar's buttons (--cs-chip-h on #cs-stack, #5202). It was --chip-h on
+     touch, which the GARAGE look's BUTTON SIZE scales: 60 px chips at 125 % left two of the panel's five rows
+     on screen at 852x393. */
+  height: var(--cs-chip-h); min-height: 0;
 }
 @media (hover: hover) and (pointer: fine) {
   .cs-view-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
@@ -1603,7 +1615,7 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
   #cs-view { gap: 3px; }
   .cs-view-btn {
     letter-spacing: var(--ls-3);
-    --vb-pad: 6px 9px; min-height: 34px;
+    --vb-pad: 0 9px;
   }
   #cs-view-in, #cs-view-out { --vb-fs: var(--fs-micro); --vb-pad: 2px 8px; }
   /* THE ARROWS TAKE THE SHARED COMPACT PADDING, and always did — restated
@@ -1613,7 +1625,7 @@ body:has(> .screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
      roomier 4px 8px is the WIDE-bar value, and the bar is what has to wrap to
      two rows on a handset. */
   #cs-view-left, #cs-view-right, #cs-view-up, #cs-view-down,
-  #cs-pan-left, #cs-pan-right, #cs-pan-fwd, #cs-pan-back { --vb-pad: 6px 9px; }
+  #cs-pan-left, #cs-pan-right, #cs-pan-fwd, #cs-pan-back { --vb-pad: 0 9px; }
   /* The dividers cost width and, once the row wraps, land at arbitrary places
      in it — they read as separators of nothing. */
   .cs-view-sep { display: none; }
@@ -1646,36 +1658,10 @@ body:not(.desktop) .cs-tab-cur { font-size: var(--fs-micro); }
    first attempt and it computed to the same 86px. */
 body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
 
-/* THE PREVIEW CONTROLS ARE SIZED BY POINTER, NOT BY WIDTH. #cs-cam, #cs-aero and
-   the view buttons sit at `min-height: 30px`, raised to 34px by a
-   `@media (max-width: 1000px)` block. That gates a TOUCH question on WIDTH, and
-   it is inverted: a 393px phone gets 34px while an iPad landscape at 1194px —
-   also touch, also thumbs — falls out of the branch and keeps 30px. Measured
-   there: #cs-cam 86x31, #cs-aero 157x31, on a device with maxTouchPoints > 0
-   and a --tap of 52.
-   CAMERA and ACTIVE AERO take the full touch floor, the view chips keep
-   --chip-h. The two were on --chip-h too ("they float over the live car
-   preview, so one rung below the floor"), and measured (layout-audit
-   2026-10-05, both iPhone viewports, with and without the tap-target pass)
-   that rung painted them 100x48 and 221x48 — under the 52 floor on the two
-   controls a player reaches for most while the garage is open. They still
-   float over the preview exactly as before; 4px more of chip costs the car
-   nothing. PLAIN --tap, NOT --tap-paint: #cs-stack sits outside the zoomed
-   .sheet, and --tap-paint pre-divides by --ui-scale to paint 52 INSIDE a
-   zoomed sheet — out here it painted 52 / 1.09 = 48 (layout-audit on the
-   merged tree 2026-10-05: #cs-cam 100x48, #cs-aero 221x48, both iPhone
-   viewports). Un-zoomed, --tap is the floor itself: 52 on touch, 44 with a
-   mouse. The camera panel's view
-   chips are a disclosure opened and left, and stay on --chip-h. Width still
-   decides their PADDING and type above; only the target floor moves here.
-   docs/COMPONENTS.md states the rule this restores: "Input modality is not
-   size. A 1024px iPad is not a desktop." */
-/* .cs-view-btn ALONE covers the zoom pair and the eight arrows: every one of
-   them carries that class in the markup, so the two extra selectors this list
-   used to name were restating a floor they already had. */
-body:not(.desktop) .cs-view-btn { min-height: var(--chip-h); }
-body:not(.desktop) #cs-cam,
-body:not(.desktop) #cs-aero { min-height: var(--tap); }
+/* THE PREVIEW CONTROLS ARE SIZED BY NEITHER POINTER NOR WIDTH (#5202). #cs-cam, #cs-aero and the view chips
+   were floored here on --tap / --chip-h for touch ("Input modality is not size", docs/COMPONENTS.md), which
+   tied them to every knob that rescales those tokens. They are fixed chrome now: --cs-chrome-h (44 px, the
+   touch floor itself) and --cs-chip-h on #cs-stack, the same on a phone, an iPad and a desktop. */
 body:not(.desktop) .cs-opt-tag { font-size: var(--fs-micro); }
 body:not(.desktop) .cs-opt-desc { font-size: var(--fs-2); }
 body:not(.desktop) .cs-delta { font-size: var(--fs-micro); }
