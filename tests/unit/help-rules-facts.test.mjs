@@ -33,3 +33,12 @@ test("help: no retired mode names, no Overtake cooldown, no 'in a row' track-lim
   assert.doesNotMatch(help, /in a row/);
   assert.doesNotMatch(help, /super-clipped|feel a slowdown/, "a full pack has no physics effect (game.js energy caps at 1)");
 });
+
+test("help: ACTIVE AERO and GEARS are named in the panel that holds them", () => {
+  const panel = (id) => { const at = html.indexOf('id="' + id + '"'); return html.slice(html.lastIndexOf("<section", at), at); };
+  for (const [ctl, label] of [["pm-aero", "ACTIVE AERO"], ["pm-gears", "GEARS"]]) {
+    assert.match(panel(ctl), /id="pm-panel-driving"/, ctl + " lives in the DRIVING AIDS panel");
+    assert.match(help, new RegExp("SETTINGS › DRIVING AIDS › " + label));
+    assert.doesNotMatch(help, new RegExp("CONTROLS › " + label));
+  }
+});
