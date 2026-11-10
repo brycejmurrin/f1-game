@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, pct, dist, analyseTrace, analyseProfile } from "../../tools/gfx/live-frame-census.mjs";
+import { parseArgs, pct, dist, analyseTrace, analyseProfile, sweepSteps } from "../../tools/gfx/live-frame-census.mjs";
 
 test("live-frame-census parseArgs: defaults are the phone census rows", () => {
   const o = parseArgs([]);
@@ -55,4 +55,21 @@ test("live-frame-census analyseProfile: self time by function and file", () => {
   assert.equal(r.idleMs, 1);
   assert.deepEqual(r.fns[0], ["render game.js:10", 2]);
   assert.deepEqual(r.files.find((f) => f[0] === "three.webgpu.min.js"), ["three.webgpu.min.js", 1]);
+});
+
+test("live-frame-census parseArgs: phone-cost options, as flags and as lf.* pseudo-keys that never reach the page", () => {
+  const d = parseArgs([]);
+  assert.deepEqual([d.dsf, d.cpuThrottle, d.sweep, d.lab], [1.5, 1, [], ""], "defaults leave the census rows as they were");
+  const f = parseArgs(["--dsf", "3", "--cpu-throttle", "4", "--lab", "dpr3", "--sweep", "1.5,3,2,9", "--step", "4"]);
+  assert.deepEqual([f.dsf, f.cpuThrottle, f.lab, f.step], [3, 4, "dpr3", 4]);
+  assert.deepEqual(f.sweep, [3, 2, 1.5], "caps sorted descending (capDpr only lowers); an out-of-range cap is dropped");
+  const r = parseArgs(["--ls", "apex26.a=1 lf.dsf=3 lf.sweep=2,3 lf.cpuThrottle=6 lf.lab=dpr3 lf.win=30"]);
+  assert.deepEqual(r.ls, [["apex26.a", "1"]]);
+  assert.deepEqual([r.dsf, r.cpuThrottle, r.lab, r.win, r.sweep], [3, 6, "dpr3", 30, [3, 2]]);
+  assert.equal(parseArgs(["--lab", "dpr3,<script>"]).lab, "dpr3", "a lab name is alphanumeric: it goes into the URL");
+});
+
+test("live-frame-census sweepSteps: every cap at scale 1 / 0.75 / 0.5, caps in the given order", () => {
+  assert.deepEqual(sweepSteps([3, 1.5]).map((s) => s.cap + "@" + s.scale), ["3@1", "3@0.75", "3@0.5", "1.5@1", "1.5@0.75", "1.5@0.5"]);
+  assert.deepEqual(sweepSteps([]), []);
 });

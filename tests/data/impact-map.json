@@ -15678,6 +15678,9 @@
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "labDprCap": [
+        "tests/unit/tlx-lite-lab.test.mjs"
+      ],
       "lineIndex": [
         "tests/unit/tlx-fx-warm.test.mjs"
       ],

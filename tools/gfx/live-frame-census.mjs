@@ -20,6 +20,19 @@
 //
 //   node tools/gfx/live-frame-census.mjs [--tracks monaco,spa] [--backends tlx-gl,tlx-gpu] [--cam helmet]
 //        [--warm 8] [--win 40] [--trace 6] [--prof 12] [--ls "apex26.k=v ..."] [--json live-frame.json]
+//        [--dsf 1.5] [--cpu-throttle 1] [--lab dpr3] [--sweep 3,2,1.5] [--step 6] [--row-cap 480]
+//
+// Phone-cost options (phone perf hunt 2026-11-10, docs/notes/PHONE-PERF-MEASURE-2026-11-10.md):
+//   --dsf N          the context's deviceScaleFactor (an iPhone is 3; the renderer's DPR cap decides what is drawn)
+//   --cpu-throttle N CDP Emulation.setCPUThrottlingRate after the race gate: a phone-class main thread (4 or 6)
+//   --sweep caps     after the window, with the governor's ladder held: for each DPR cap (DESCENDING, capDpr only
+//                    lowers; boot the row with --lab dpr3 or dpr2 and --dsf >= it) x scale 1 / 0.75 / 0.5,
+//                    --step s of frames: canvas px, rAF interval, callback wall, GPU timer ms. Frame ms against
+//                    pixels on THIS adapter: the pixel-bound vs CPU-bound answer.
+//   counts           every row reports createBuffer / createTexture / createBindGroup / writeBuffer / draw / pass
+//                    per frame over the window (WebGPU), and boot / race-entry wall.
+// The request relay passes only `ls`, so the same options ride it as pseudo-keys: `lf.dsf=3 lf.sweep=3,2,1.5
+// lf.cpuThrottle=4 lf.lab=dpr3 lf.step=6 lf.win=30` (stripped before the page's localStorage is seeded).
 import { startStaticServer, launchChromium } from "../lib/harness.mjs";
 import { gotoGame } from "../shot/probe-page.mjs";
 import { raceGate } from "../lib/census-entry.mjs";
@@ -28,7 +41,9 @@ import { fileURLToPath } from "node:url";
 
 const BACKENDS = ["tlx-gl", "tlx-gpu"];
 export function parseArgs(argv) {
-  const o = { tracks: ["monaco", "spa", "singapore"], backends: BACKENDS.slice(), cam: "helmet", warm: 8, win: 40, trace: 6, prof: 12, ls: [], json: "live-frame.json" };
+  const o = { tracks: ["monaco", "spa", "singapore"], backends: BACKENDS.slice(), cam: "helmet", warm: 8, win: 40, trace: 6, prof: 12, ls: [], json: "live-frame.json", dsf: 1.5, cpuThrottle: 1, sweep: [], step: 6, rowCap: 480, lab: "" };
+  const labs = (v) => String(v || "").split(",").map((x) => x.trim()).filter((x) => /^[A-Za-z0-9]+$/.test(x)).join(",");
+  const caps = (v) => String(v || "").split(",").map((x) => +x).filter((x) => x >= 1 && x <= 3).sort((a, b) => b - a);
   const num = (v, lo, hi) => { const n = +v; if (!Number.isFinite(n)) throw new Error("not a number: " + v); return Math.min(hi, Math.max(lo, n)); };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], v = argv[i + 1];
@@ -41,15 +56,32 @@ export function parseArgs(argv) {
     else if (a === "--prof") { o.prof = num(v, 0, 30); i++; }
     else if (a === "--ls") { o.ls = String(v || "").split(/\s+/).filter(Boolean).map((kv) => { const k = kv.indexOf("="); return k > 0 ? [kv.slice(0, k), kv.slice(k + 1)] : null; }).filter(Boolean); i++; }
     else if (a === "--json") { o.json = String(v); i++; }
+    else if (a === "--dsf") { o.dsf = num(v, 1, 3); i++; }
+    else if (a === "--cpu-throttle") { o.cpuThrottle = num(v, 1, 20); i++; }
+    else if (a === "--sweep") { o.sweep = caps(v); i++; }
+    else if (a === "--lab") { o.lab = labs(v); i++; }
+    else if (a === "--step") { o.step = num(v, 2, 30); i++; }
+    else if (a === "--row-cap") { o.rowCap = num(v, 60, 1500); i++; }
     else throw new Error("unknown flag: " + a);
   }
   if (!o.backends.length) o.backends = BACKENDS.slice();
+  // `lf.*` pseudo-keys in --ls are tool options (the request relay passes only `ls`); they never reach the page.
+  for (const [k, v] of o.ls) {
+    if (k === "lf.dsf") o.dsf = num(v, 1, 3); else if (k === "lf.cpuThrottle") o.cpuThrottle = num(v, 1, 20);
+    else if (k === "lf.sweep") o.sweep = caps(v); else if (k === "lf.step") o.step = num(v, 2, 30);
+    else if (k === "lf.win") o.win = num(v, 10, 120); else if (k === "lf.rowCap") o.rowCap = num(v, 60, 1500);
+    else if (k === "lf.lab") o.lab = labs(v);
+  }
+  o.ls = o.ls.filter(([k]) => !/^lf\./.test(k));
   // The window must hold the trace and the profile, which run back to back after a 4 s lead.
   o.win = Math.max(o.win, 4 + o.trace + o.prof);
   return o;
 }
 
-let TRACKS, CAM, WARM, WIN, TRACE, PROF, EXTRA, report, save;
+let TRACKS, CAM, WARM, WIN, TRACE, PROF, EXTRA, DSF = 1.5, THROTTLE = 1, SWEEP = [], STEP = 6, LAB = "", report, save;
+export const SWEEP_SCALES = [1, 0.75, 0.5];
+/** The sweep's steps in run order: caps descending (capDpr only lowers), each at scale 1 / 0.75 / 0.5. */
+export function sweepSteps(capList) { const out = []; for (const cap of capList) for (const scale of SWEEP_SCALES) out.push({ cap, scale }); return out; }
 const log = (m) => console.log("[live-frame] " + m);
 
 export function recorder() {
@@ -97,12 +129,13 @@ export function driver() {
 function slowCalls() {
   // Every GL / WebGPU call that takes > 20 ms, with the bound program's SHADER_NAME and a short stack; plus
   // program links and pipeline creations counted per phase (window on = after the gate).
-  const S = window.__lfSlow = { on: false, slow: [], links: { pre: 0, win: 0 }, pipes: { pre: 0, win: 0 }, linkNames: [], cur: "", srcs: new WeakMap() };
+  const S = window.__lfSlow = { on: false, n: {}, slow: [], links: { pre: 0, win: 0 }, pipes: { pre: 0, win: 0 }, linkNames: [], cur: "", srcs: new WeakMap() };
   const stack = () => (new Error().stack || "").split("\n").slice(3, 7).map((l) => l.trim().replace(/^at /, "").replace(/https?:\/\/[^/]+\//, "").replace(/\?v=[^:]+/, "")).join(" < ");
   const wrap = (proto, name, tag) => {
     const o = proto && proto[name]; if (typeof o !== "function") return;
     proto[name] = function () {
       const a = performance.now();
+      if (S.on) S.n[name] = (S.n[name] || 0) + 1;
       try { return o.apply(this, arguments); } finally {
         const d = performance.now() - a;
         if (d > 20 && S.slow.length < 60) S.slow.push({ fn: tag + "." + name, ms: +d.toFixed(1), win: S.on, prog: S.cur, at: Math.round(a), stack: stack() });
@@ -126,6 +159,10 @@ function slowCalls() {
     for (const n of ["submit", "writeBuffer", "writeTexture", "copyExternalImageToTexture"]) wrap(GPUQueue.prototype, n, "queue");
     wrap(GPUCanvasContext.prototype, "getCurrentTexture", "ctx");
     wrap(GPUCommandEncoder.prototype, "finish", "enc");
+    // Count only (no clock read): draws and passes per frame.
+    const count = (proto, name, key) => { const o = proto && proto[name]; if (typeof o !== "function") return; proto[name] = function () { if (S.on) S.n[key] = (S.n[key] || 0) + 1; return o.apply(this, arguments); }; };
+    for (const n of ["draw", "drawIndexed", "drawIndirect", "drawIndexedIndirect"]) count(GPURenderPassEncoder.prototype, n, "draw");
+    count(GPUCommandEncoder.prototype, "beginRenderPass", "pass");
   } catch (_) {}
 }
 
@@ -180,7 +217,7 @@ export function analyseProfile(p) {
 }
 
 async function runRow(browser, server, backend, track) {
-  const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1.5, hasTouch: true });
+  const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: DSF, hasTouch: true });
   const page = await ctx.newPage();
   const cons = [];
   const t0 = Date.now();
@@ -199,7 +236,9 @@ async function runRow(browser, server, backend, track) {
   await page.addInitScript(driver);
   await page.addInitScript(slowCalls);
   await page.addInitScript(() => { const L = window.__lfTier = []; let last = null; setInterval(() => { try { const t = PerfGov.tier(); if (t !== last) { L.push([Math.round(performance.now()), t, window.__apex && window.__apex.info ? window.__apex.info().state : ""]); last = t; } } catch (_) {} }, 250); });
-  await gotoGame(page, server.url, 180000);
+  const tBoot = Date.now();
+  await gotoGame(page, server.url + (LAB ? (server.url.indexOf("?") >= 0 ? "&" : "?") + "lab=" + LAB : ""), 180000);
+  const bootMs = Date.now() - tBoot, tEntry = Date.now();
   await page.evaluate(() => {
     // Name every render pipeline three builds after boot (the WebGL2 backend links its program here, synchronously).
     const S = window.__lfSlow, T = typeof GLX !== "undefined" ? GLX.__tlx : null, be = T && T.renderer && T.renderer.backend;
@@ -225,6 +264,8 @@ async function runRow(browser, server, backend, track) {
   });
   await page.evaluate(async (t) => { const A = window.__apex; await A.race(t); A.go(); }, track);
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
+  const entryMs = Date.now() - tEntry;
+  if (THROTTLE > 1) await (await ctx.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: THROTTLE });
   await page.evaluate((c) => { const A = window.__apex; try { A.camera(c); } catch (_) {} window.__lfDrive.start(); }, CAM);
   await page.waitForTimeout(WARM * 1000);
   const env = await page.evaluate(() => {
@@ -262,16 +303,38 @@ async function runRow(browser, server, backend, track) {
     const A = window.__apex, p = A.perf();
     const iv = []; for (let i = 1; i < H.ts.length; i++) iv.push(H.ts[i] - H.ts[i - 1]);
     let gpuMs = null; try { gpuMs = A.gpuTimer().ms; } catch (_) {}
-    return { iv, cb: H.cb, spans: p.spans, loaf: p.loaf, drive: { frames: window.__lfDrive.frames, dist: Math.round(window.__lfDrive.dist), off: window.__lfDrive.off, err: window.__lfDrive.err },
+    const nf = Math.max(1, H.ts.length), counts = { frames: H.ts.length, perFrame: {} }; for (const k of Object.keys(SC.n)) counts.perFrame[k] = +(SC.n[k] / nf).toFixed(2);
+    return { iv, cb: H.cb, counts, spans: p.spans, loaf: p.loaf, drive: { frames: window.__lfDrive.frames, dist: Math.round(window.__lfDrive.dist), off: window.__lfDrive.off, err: window.__lfDrive.err },
       tierLog: window.__lfTier, warm: (() => { try { const m = GLX.__tlx.memState(); return m && m.warm; } catch (_) { return null; } })(), gpuMs, slow: { calls: SC.slow, links: SC.links, pipes: SC.pipes, linkNames: SC.linkNames, pipeNames: SC.pipeNames }, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
   });
+  // The pixel sweep: frame ms against drawn pixels, the ladder held so a shed feature cannot pass for a pixel saving.
+  const sweep = [];
+  if (SWEEP.length) {
+    await page.evaluate(() => { const A = window.__apex; try { A.govHold(true); } catch (_) {} try { A.gpuTimer(true); } catch (_) {} window.__lfSlow.on = false; window.__lfDrive.start(); });
+    for (const st of sweepSteps(SWEEP)) {
+      const set = await page.evaluate(({ cap, scale }) => { const A = window.__apex, T = GLX.__tlx; let capped = null; try { capped = T.capDpr(cap); } catch (e) { capped = String(e.message); }
+        const r = A.renderScale(scale); return { capped, scale: r && r.scale }; }, st);
+      await page.waitForTimeout(1500);
+      await page.evaluate(() => { const H = window.__lf; H.ts = []; H.cb = []; H.lastT = -1; H.on = true; });
+      const gpu = [];
+      for (let k = 0; k < Math.max(2, Math.round(STEP * 2)); k++) { await page.waitForTimeout(500); const g = await page.evaluate(() => { try { return window.__apex.gpuTimer().ms; } catch (_) { return null; } }); if (g > 0) gpu.push(g); }
+      const r = await page.evaluate(() => { const H = window.__lf; H.on = false; const iv = []; for (let i = 1; i < H.ts.length; i++) iv.push(H.ts[i] - H.ts[i - 1]);
+        const T = GLX.__tlx, c = T.renderer.domElement, ps = T.getPresentSize ? T.getPresentSize() : null; let post = null; try { const s = T.postState && T.postState(); post = s && { rtResizes: s.rtResizes }; } catch (_) {}
+        return { iv, cb: H.cb, canvas: [c.width, c.height], present: ps && [ps.width, ps.height], post, tier: PerfGov.tier() }; });
+      const ivd = dist(r.iv);
+      sweep.push({ cap: st.cap, scale: st.scale, set, canvas: r.canvas, present: r.present, px: r.canvas[0] * r.canvas[1], tier: r.tier, post: r.post,
+        frame: Object.assign(ivd, { over33: +(r.iv.filter((x) => x > 33.4).length / Math.max(1, r.iv.length) * 100).toFixed(1) }), cpu: dist(r.cb), gpuMs: dist(gpu) });
+      log(`  sweep cap ${st.cap} scale ${st.scale} canvas ${r.canvas.join("x")} frame p50 ${ivd.p50} p95 ${ivd.p95} cpu p50 ${pct(r.cb, 0.5)} gpu p50 ${pct(gpu, 0.5)} (n ${gpu.length})`);
+    }
+    await page.evaluate(() => { try { window.__lfDrive.stop(); } catch (_) {} });
+  }
   const over = (ms) => +(got.iv.filter((x) => x > ms).length / Math.max(1, got.iv.length) * 100).toFixed(1);
   const loafE = (got.loaf && got.loaf.entries) || [];
   // Frame k's interval is ts[k]-ts[k-1]; a rebuild recorded while frame index n was the last pushed ts runs in the
   // callback of frame n-1 -> its cost shows as interval iv[n-1] (ts[n]-ts[n-1]).
   const row = { ivs: got.iv.map((x) => Math.round(x)),
     env, frame: Object.assign(dist(got.iv), { over33: over(33.4), over50: over(50), over100: over(100), fps: +(1000 * got.iv.length / Math.max(1, got.iv.reduce((a, b) => a + b, 0))).toFixed(1) }),
-    cpu: dist(got.cb), spans: got.spans, slow: got.slow, tierLog: got.tierLog, warm: got.warm, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
+    cpu: dist(got.cb), counts: got.counts, sweep, t: { bootMs, entryMs }, dsf: DSF, cpuThrottle: THROTTLE, spans: got.spans, slow: got.slow, tierLog: got.tierLog, warm: got.warm, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
     loaf: { supported: got.loaf && got.loaf.supported, n: loafE.length, top: loafE.slice().sort((a, b) => (b.duration || 0) - (a.duration || 0)).slice(0, 6) },
     trace: analyseTrace(events, f1 - f0), prof: cpuProf, console: cons,
   };
@@ -281,8 +344,8 @@ async function runRow(browser, server, backend, track) {
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  TRACKS = o.tracks; CAM = o.cam; WARM = o.warm; WIN = o.win; TRACE = o.trace; PROF = o.prof; EXTRA = o.ls;
-  report = { started: new Date().toISOString(), warm: WARM, win: WIN, trace: TRACE, prof: PROF, cam: CAM, extra: EXTRA, rows: [] };
+  TRACKS = o.tracks; CAM = o.cam; WARM = o.warm; WIN = o.win; TRACE = o.trace; PROF = o.prof; EXTRA = o.ls; DSF = o.dsf; THROTTLE = o.cpuThrottle; SWEEP = o.sweep; STEP = o.step; LAB = o.lab;
+  report = { started: new Date().toISOString(), warm: WARM, win: WIN, trace: TRACE, prof: PROF, cam: CAM, extra: EXTRA, dsf: DSF, cpuThrottle: THROTTLE, sweep: SWEEP, step: STEP, lab: LAB, rows: [] };
   save = () => writeFileSync(o.json, JSON.stringify(report, null, 2));
   const BACK = o.backends;
   const server = await startStaticServer(process.cwd());
@@ -292,7 +355,7 @@ async function main() {
       const t0 = Date.now(); let browser = null;
       try {
         browser = await launchChromium({ args: ["--enable-unsafe-webgpu", "--disable-background-timer-throttling", "--enable-features=LongAnimationFrameTiming"] });
-        Object.assign(row, await Promise.race([runRow(browser, server, backend, track), new Promise((_, rej) => setTimeout(() => rej(new Error("row cap 480 s")), 480000))]));
+        Object.assign(row, await Promise.race([runRow(browser, server, backend, track), new Promise((_, rej) => setTimeout(() => rej(new Error("row cap " + o.rowCap + " s")), o.rowCap * 1000))]));
         const f = row.frame, c = row.cpu;
         // THE PARAVIRTUAL FLAG: macos-latest's Apple Paravirtual device answers frame time from its present path, not
       // from pixels or passes (docs/notes/TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md §2). Its ms are structure, never GPU cost.
@@ -300,6 +363,7 @@ async function main() {
       if (row.paravirtual) log("  PARAVIRTUAL adapter: frame ms here are the runner's present path, not GPU cost; read stalls, links and counts only");
       log(`${backend} ${track} ${JSON.stringify(row.env).slice(0, 400)}`);
         log(`  frame p50 ${f.p50} p95 ${f.p95} p99 ${f.p99} max ${f.max} fps ${f.fps} >33 ${f.over33}% >50 ${f.over50}% | cpu p50 ${c.p50} p95 ${c.p95} max ${c.max} | drive ${JSON.stringify(row.drive)}`);
+        log(`  counts/frame ${JSON.stringify(row.counts)} boot ${row.t.bootMs} ms entry ${row.t.entryMs} ms throttle x${THROTTLE} dsf ${DSF}`);
         log(`  spans ${JSON.stringify(row.spans)}`);
         log(`  trace ${JSON.stringify(row.trace)}`);
           log(`  slow ${JSON.stringify(row.slow).slice(0, 2500)}`);
