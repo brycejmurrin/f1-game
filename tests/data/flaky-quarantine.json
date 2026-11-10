@@ -115,6 +115,17 @@
       "signature": "^spa: previous circuit chunk geometries are still in the render-object set",
       "expires": "2026-11-13",
       "review": "By 2026-11-13, remove this row once the exact test passes without retry on three Metal runs. Platform removes it after a clean week. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/overlay-live.spec.js",
+      "since": "2026-11-10",
+      "owner": "brycejmurrin",
+      "why": "Failed first try and passed on retry on PR #5355 (selected-2, attempt 1 job 129761157643, attempt 2 green): the opening poll compared the overlay tower with a field order read ONCE before the poll, at the Monza countdown (raceT 0); the tower lacked BEA (P1 in that read) and every row was shifted one place, COL at 20. The PR changes only the AI wet-for-wet pit decision, which cannot run at lap 0 of a dry race. Suspected: the expected string is captured once (toBe(await fieldOf(page))) while the order or the publisher's roster moves during the countdown. Not proven.",
+      "title": "stream overlay \u2014 live same-browser feed \u203a overlay rows follow __apex.field() within 0.5 s and captions arrive",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/42795311071/job/129761157643",
+      "signature": "^expect\\(received\\)\\.toBe\\(expected\\) // Object\\.is equality",
+      "expires": "2026-11-24",
+      "review": "By 2026-11-24, read the field inside the poll (compare tower and field from the same moment) or wait for the grid order to settle before the first comparison, check the OverlayFeed roster against field() at raceT 0, and remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a new deadline needs fresh failed-run evidence."
     }
   ]
 }
