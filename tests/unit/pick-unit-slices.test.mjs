@@ -330,8 +330,7 @@ test("#5241 G3: node-plan runs the script hosting a dropped twin, and a partitio
 });
 
 test("#5241 G3: the adapted runner honours APEX_VM_PAGE_ONLY and refuses a name that is not ADAPTED", () => {
-  const src = fs.readFileSync(path.join(ROOT, "tests/unit/adapted-specs.test.mjs"), "utf8");
-  assert.match(src, /APEX_VM_PAGE_ONLY/);
+  // Executed, not text-scanned: the child must refuse the name (a source regex here would pass on a dead branch).
   let threw = "";
   try {
     execFileSync("node", ["--test", "tests/unit/adapted-specs.test.mjs"], { cwd: ROOT, encoding: "utf8", stdio: "pipe",
