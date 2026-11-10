@@ -116,6 +116,9 @@ const evaluated = new Set();
 // bundle. Both are strict loads of the same top-level const, so they must
 // share the pending insertion as well as the completed evaluation.
 const evaluating = new Map();
+// A strict file whose attempt hit the deadline but whose fetch may still land
+// and evaluate: src -> Promise<boolean> of that late outcome.
+const stranded = new Map();
 // One admitted browser attempt owns only its element and responsive-time timers.
 // It knows nothing about bundles, strict sharing, evaluated scripts or retries.
 // onLoad runs IN the load event (not a later promise turn): readiness must be
@@ -135,7 +138,7 @@ function browserAttempt(src, href, sri, opts, onLoad) {
     const slowMs = (opts && opts.slowMs) || SLOW_MS, deadlineMs = (opts && opts.deadlineMs) || DEADLINE_MS;
     let slowT = null, deadT = null;
     const W = typeof window !== "undefined" ? window : null, timed = !!(W && typeof W.setTimeout === "function");
-    const settle = (ok, retry) => { if (timed) { W.clearTimeout(slowT); W.clearTimeout(deadT); } resolve({ ok, retry: !!retry }); };
+    const settle = (ok, retry, late) => { if (timed) { W.clearTimeout(slowT); W.clearTimeout(deadT); } resolve({ ok, retry: !!retry, late }); };
     if (timed) {
     slowT = W.setTimeout(() => {
       try { if (opts && opts.onSlow) opts.onSlow(src); } catch (_) { /* UI hook only */ }
@@ -155,9 +158,16 @@ function browserAttempt(src, href, sri, opts, onLoad) {
       last = t;
       if (budget < deadlineMs) { deadT = W.setTimeout(beat, tickMs); return; }
       if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
-      el.onload = el.onerror = null;
+      // A REMOVED <script> STILL RUNS WHEN ITS FETCH LANDS (HTML "execute the
+      // script element" checks only the preparation-time document). Its late
+      // load still reports readiness, and `late` lets the caller wait for it
+      // instead of injecting a second copy whose top-level const would throw.
+      let lateDone = null;
+      const late = new Promise((r) => { lateDone = r; });
+      el.onload = () => { let ok = false; try { ok = !!onLoad(); } catch (_) { /* readiness hook */ } lateDone(ok); };
+      el.onerror = () => lateDone(false);
       if (el.remove) el.remove();
-      settle(false, false);
+      settle(false, false, late);
     };
     deadT = W.setTimeout(beat, tickMs);
     }
@@ -233,7 +243,26 @@ function loadBackendScripts(files, edges, opts) {
       catch (_) { ready = false; }
       if (ready) evaluated.add(src);
       return ready;
+    }).then((r) => {
+      if (r.late) {
+        const late = r.late.finally(() => { if (stranded.get(src) === late) stranded.delete(src); });
+        stranded.set(src, late);
+      }
+      return r;
     });
+  };
+  // A strict retry of a file that timed out waits up to one more deadline for
+  // the stranded copy; only a fetch still silent after that gets a second tag.
+  const awaitStranded = async (src) => {
+    const late = stranded.get(src);
+    if (!late) return;
+    const W = typeof window !== "undefined" ? window : null;
+    let t = null;
+    const wait = (opts && opts.deadlineMs) || DEADLINE_MS;
+    const expired = new Promise((r) => { if (W && typeof W.setTimeout === "function") t = W.setTimeout(r, wait); });
+    await Promise.race([late, expired]);
+    if (t !== null) W.clearTimeout(t);
+    stranded.delete(src);
   };
   // Strict bundles with a `loaded` set (ensureDataHub / ensureNet / …) keep one inject
   // per file per load attempt so a miss leaves siblings resident and the next ensure*
@@ -244,6 +273,7 @@ function loadBackendScripts(files, edges, opts) {
   const injectFile = async (src) => {
     if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
     // Strict retry: already evaluated in this tab — no second <script>.
+    if (strict && !evaluated.has(src)) await awaitStranded(src);
     if (strict && evaluated.has(src)) return true;
     const optBust = opts && opts.cacheBust;
     if (deferInjectRetry) {

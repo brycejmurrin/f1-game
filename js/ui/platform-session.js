@@ -93,8 +93,25 @@ if ($("pm-fullscreen")) {
   const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
     (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
   const standalone = !!(nav.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
-  if (!ios || standalone || store.get("iosInstallSeen", false)) return;
-  const dismiss = () => { el.hidden = true; store.set("iosInstallSeen", true); };
+  // THE RACE WAKE LOCK IS A NO-OP IN A HOME SCREEN APP ON iOS 16.4-18.3
+  // (WebKit bug 254545, fixed in iOS 18.4), so the screen can dim mid-race in
+  // exactly the mode this nudge recommends. No hidden-video hack: say so once.
+  const v = /OS (\d+)_(\d+)/.exec(nav.userAgent || "") || /Version\/(\d+)\.(\d+)/.exec(nav.userAgent || "");
+  const ver = v ? Number(v[1]) * 100 + Number(v[2]) : 0;
+  const wakeBroken = ver >= 1604 && ver < 1804;
+  const NOTE = "On iOS 16.4\u201318.3 the Home Screen app cannot keep the screen awake, so it may dim mid-race. Update to iOS 18.4 or later to fix it.";
+  const msg = $("ios-install-msg");
+  if (!ios) return;
+  if (standalone) {
+    if (!wakeBroken || !msg || store.get("iosWakeNoteSeen", false)) return;
+    msg.textContent = NOTE;   // installed already: only the wake-lock note
+  } else if (store.get("iosInstallSeen", false)) return;
+  else if (wakeBroken && msg && typeof msg.append === "function") msg.append(" " + NOTE);
+  const dismiss = () => {
+    el.hidden = true;
+    if (!standalone) store.set("iosInstallSeen", true);
+    if (wakeBroken) store.set("iosWakeNoteSeen", true);   // the nudge carried the note: once, ever
+  };
   el.hidden = false;
   const x = $("ios-install-x");
   if (x) x.onclick = dismiss;

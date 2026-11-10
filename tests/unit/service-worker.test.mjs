@@ -1621,24 +1621,23 @@ test("the broken-install repair deletes only apex26- caches", async () => {
 
 // #2424: offline (or an unreachable edge) a missing shell tag is a cache miss, not a broken install:
 // the repair must not delete apex26-* caches until a network answer proves the edge is up.
-async function runRepair({ onLine, fetchImpl, names = ["apex26-320", "other-proj"] }) {
+async function runRepair({ onLine, fetchImpl, names = ["apex26-320", "other-proj"], serviceWorker, calls = { reload: 0, shown: [] }, cachesLog = [] }) {
   const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
   const at = html.indexOf('var RETRY_KEY = "apex26.scriptRetry"');
   const end = html.indexOf("  // A CLEAN load clears the one-shot", at);
   assert.ok(at > 0 && end > at, "the repair block is still locatable");
   const listeners = {};
   const caches = new Map(names.map((n) => [n, 1]));
-  const calls = { reload: 0, shown: [] };
   const store = new Map();
   const ctx = vm.createContext({
     window: { caches: {
       keys: async () => [...caches.keys()],
       delete: async (n) => caches.delete(n),
     }, addEventListener: (type, fn) => { if (type === "error") listeners.error = fn; } },
-    location: { origin: "https://x.test", reload: () => { calls.reload++; } },
-    navigator: { onLine },
+    location: { origin: "https://x.test", reload: () => { calls.reload++; cachesLog.push("reload"); } },
+    navigator: { onLine, ...(serviceWorker ? { serviceWorker } : {}) },
     sessionStorage: { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
-    caches: { keys: async () => [...caches.keys()], delete: async (n) => caches.delete(n) },
+    caches: { keys: async () => [...caches.keys()], delete: async (n) => { cachesLog.push("delete " + n); return caches.delete(n); } },
     fetch: fetchImpl,
     show: (...a) => calls.shown.push(a),
     recordError: () => {},
@@ -1672,6 +1671,30 @@ test("the broken-install repair sweeps apex26- caches and reloads once a network
     names: ["apex26-320", "apex26-voice", "other-proj"] });
   assert.deepEqual(r.caches.sort(), ["apex26-voice", "other-proj"], "build generations go; the ~111 MB voice cache survives (#4479)");
   assert.equal(r.calls.reload, 1);
+});
+
+// W24 row 2: the same sw.js?v=<build> re-registers after the reload, which is no
+// update, so no install re-seeds the swept generation's markers. The repair
+// unregisters first: the reload is uncontrolled and register() installs afresh.
+test("the broken-install repair unregisters the worker before sweeping, so the reload installs afresh", async () => {
+  const log = [];
+  const serviceWorker = { getRegistration: async () => ({ unregister: async () => { log.push("unregister"); return true; } }) };
+  const r = await runRepair({ onLine: true, fetchImpl: () => Promise.resolve({ status: 200 }), serviceWorker, cachesLog: log,
+    names: ["apex26-320", "apex26-voice"] });
+  assert.deepEqual(log, ["unregister", "delete apex26-320", "reload"]);
+  assert.deepEqual(r.caches, ["apex26-voice"]);
+});
+
+test("the broken-install repair still sweeps and reloads when unregister fails or finds nothing", async () => {
+  for (const serviceWorker of [
+    { getRegistration: async () => undefined },
+    { getRegistration: async () => { throw new Error("SecurityError"); } },
+    { getRegistration: async () => ({ unregister: async () => { throw new Error("nope"); } }) },
+  ]) {
+    const r = await runRepair({ onLine: true, fetchImpl: () => Promise.resolve({ status: 200 }), serviceWorker });
+    assert.deepEqual(r.caches, ["other-proj"]);
+    assert.equal(r.calls.reload, 1);
+  }
 });
 
 // ── The error catcher's reason serializer (same inline shell, other half) ──
@@ -2192,5 +2215,109 @@ test("essential preload URLs get one verified admission while optional-only hint
     assert.ok(status.optional.includes("assets/fonts/fixture.woff2"), "optional-only fonts keep their existing policy");
     assert.equal(cache.has(`${ORIGIN}/assets/fonts/fixture.woff2`), false, "optional-only miss remains tolerated");
     assert.equal(h.skipped, 1);
+  }
+});
+
+// ── W24 row 1: runtime-only immutable files survive a generation change ──
+// Content-addressed pack files (`?h=<md5>`) and engine samples are cached only
+// on first use. Install copies them from older generations (no refetch) before
+// SETTLED, so the sweep that SETTLED unlocks can no longer strand an offline race.
+test("install carries ?h= pack files and sfx from older generations without refetching them", async () => {
+  const md5 = "0123456789abcdef0123456789abcdef";
+  const fetched = [], order = [];
+  const ordinary = installFetch();
+  const h = createHarness({
+    fetchImpl: async (request) => {
+      const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      fetched.push(u.pathname + u.search);
+      return ordinary(request);
+    },
+    putImpl: async (name, request) => { if (name === "apex26-321") order.push(requestKey(request)); },
+  });
+  h.stores.set("apex26-319", new Map([
+    [`${ORIGIN}/assets/sfx/f1_engine.mp3`, new Response("engine-319")],
+  ]));
+  h.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/assets/pack/mat-albedo-256.png?h=${md5}`, new Response("albedo")],
+    [`${ORIGIN}/assets/pack/models/k_x.bin?h=${md5}`, new Response("model")],
+    [`${ORIGIN}/assets/pack/mat-normal-256.png`, new Response("bare pack")],
+    [`${ORIGIN}/assets/sfx/f1_engine.mp3`, new Response("engine-320")],
+    [`${ORIGIN}/assets/sfx/f1_engine.mp3?x=1`, new Response("queried")],
+    [`${ORIGIN}/assets/stills/monaco.webp`, new Response("still")],
+    [`${ORIGIN}/assets/pack/broken.png?h=${md5.replace("0", "f")}`, new Response("gone", { status: 404 })],
+  ]));
+  await h.lifecycleEvent("install").done();
+  const cur = h.stores.get("apex26-321");
+  assert.equal(await cur.get(`${ORIGIN}/assets/pack/mat-albedo-256.png?h=${md5}`).clone().text(), "albedo");
+  assert.equal(await cur.get(`${ORIGIN}/assets/pack/models/k_x.bin?h=${md5}`).clone().text(), "model");
+  assert.equal(await cur.get(`${ORIGIN}/assets/sfx/f1_engine.mp3`).clone().text(), "engine-320", "the newest generation's copy wins");
+  for (const k of ["assets/pack/mat-normal-256.png", "assets/sfx/f1_engine.mp3?x=1", "assets/stills/monaco.webp", `assets/pack/broken.png?h=${md5.replace("0", "f")}`]) {
+    assert.equal(cur.has(`${ORIGIN}/${k}`), false, k + " is not carried");
+  }
+  assert.equal(fetched.some((p) => p.startsWith("/assets/sfx/") || p.includes("?h=")), false, "carried, never refetched");
+  assert.ok(fetched.includes("/assets/pack/manifest.json"), "this build's pack manifest is seeded to name the carried files offline");
+  const settledAt = order.indexOf(`${ORIGIN}/__apex_install_settled__`);
+  assert.ok(settledAt > order.indexOf(`${ORIGIN}/assets/sfx/f1_engine.mp3`), "the carry lands before SETTLED unlocks the sweep");
+  await h.lifecycleEvent("activate").done();
+  assert.deepEqual(h.deleted.sort(), ["apex26-319", "apex26-320"]);
+  const offline = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
+  for (const [n, st] of h.stores) offline.stores.set(n, st);
+  const res = await offline.fetchEvent(new Request(`${ORIGIN}/assets/sfx/f1_engine.mp3`)).responsePromise;
+  assert.equal(await res.text(), "engine-320", "offline after the sweep the engine sample still answers");
+});
+
+test("a failing carry-over never fails the install", async () => {
+  const h = createHarness({ fetchImpl: installFetch(), putImpl: async (name, request) => {
+    if (name === "apex26-321" && requestKey(request).includes("/assets/sfx/")) throw new Error("QuotaExceededError");
+  } });
+  h.stores.set("apex26-320", new Map([[`${ORIGIN}/assets/sfx/f1_engine.mp3`, new Response("x")]]));
+  await h.lifecycleEvent("install").done();
+  assert.equal(h.skipped, 1);
+  assert.ok(h.stores.get("apex26-321").has(`${ORIGIN}/__apex_install_settled__`));
+});
+
+// ── W24 row 4: the version.json kill switch ──
+function killHarness({ fetchImpl } = {}) {
+  let unregistered = 0;
+  const h = createHarness({
+    fetchImpl: fetchImpl || (async () => new Response('{"build":321,"swKill":true}', { status: 200 })),
+    registration: { unregister: async () => { unregistered++; return true; } },
+  });
+  h.stores.set("apex26-320", new Map([[`${ORIGIN}/index.html`, new Response("shell")]]));
+  h.stores.set("apex26-voice", new Map());
+  h.stores.set("other-proj", new Map());
+  return { h, unregistered: () => unregistered };
+}
+
+test("kill switch: a version.json with swKill unregisters the worker and deletes every apex26 cache", async () => {
+  const { h, unregistered } = killHarness();
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/version.json?_=1`));
+  assert.equal((await (await ev.responsePromise).json()).swKill, true, "the page still gets the real answer");
+  await Promise.all(ev.lifetimes);
+  assert.equal(unregistered(), 1);
+  assert.deepEqual([...h.stores.keys()], ["other-proj"], "apex26-<n> and apex26-voice go; another project's cache stays");
+  const after = h.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=abcdefabcdef`));
+  assert.equal(after.responsePromise, undefined, "a retired worker no longer answers: the network does");
+});
+
+test("kill switch: an install under the flag refuses to install and creates no cache", async () => {
+  const fetchImpl = async (request) => {
+    const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (u.pathname.endsWith("/version.json")) return new Response('{"build":321,"swKill":true}', { status: 200 });
+    return installFetch()(request);
+  };
+  const h = createHarness({ fetchImpl });
+  await assert.rejects(h.lifecycleEvent("install").done(), /swKill/);
+  assert.equal(h.stores.has("apex26-321"), false);
+  assert.equal(h.skipped, 0);
+});
+
+test("kill switch: a version.json without the flag (or swKill false) changes nothing", async () => {
+  for (const body of ['{"build":321}', '{"build":321,"swKill":false}', '{"build":321,"swKill":"true"}']) {
+    const { h, unregistered } = killHarness({ fetchImpl: async () => new Response(body, { status: 200 }) });
+    const ev = h.fetchEvent(new Request(`${ORIGIN}/version.json?_=1`));
+    await ev.responsePromise; await Promise.all(ev.lifetimes);
+    assert.equal(unregistered(), 0, body);
+    assert.ok(h.stores.has("apex26-320"), body);
   }
 });

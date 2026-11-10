@@ -83,6 +83,26 @@ function isBackgroundOptional(u) {
   return !isInstallCriticalOptional(u) && !isRuntimeOnlyOptional(u);
 }
 
+// KILL SWITCH. A deploy whose version.json carries `"swKill": true` retires
+// this worker: on the next version.json it sees (the page's boot guard and
+// UpdateCheck read it on every launch and foreground) it unregisters itself and
+// deletes every apex26-* cache, voice included; a fresh install under the flag
+// refuses to install, so the re-registration the shell makes is a no-op. Remove
+// the flag in a later deploy and the next launch installs normally. Only a
+// worker that already has this code can honour it.
+let _killed = false;
+const isKillFlag = (v) => !!(v && v.swKill === true);
+async function killWorker() {
+  if (_killed) return;
+  _killed = true;
+  swLog("warn", "kill switch: version.json asked this worker to retire; unregistering and clearing caches");
+  try { if (self.registration && typeof self.registration.unregister === "function") await self.registration.unregister(); }
+  catch (e) { swLog("warn", "kill switch: unregister failed: " + errMsg(e)); }
+  const names = (await caches.keys()).filter((n) => n.startsWith(CACHE_PREFIX));
+  await Promise.all(names.map((n) => caches.delete(n)));
+  invalidateCacheOrder();
+}
+
 let _cacheNamePromise = null;
 // The RESOLVED name, readable without awaiting: cache matching must never wait
 // on a version.json round trip (offline, that fetch can hang for as long as the
@@ -96,6 +116,7 @@ function currentCacheName() {
       return r.json();
     })
     .then((v) => {
+      if (isKillFlag(v)) throw new Error("Service worker retired by version.json swKill");
       const build = Number(v && v.build);
       if (!Number.isSafeInteger(build) || build <= 0) throw new Error("Invalid deployed build");
       _cacheNameKnown = CACHE_PREFIX + build;
@@ -346,6 +367,10 @@ async function precacheAssetLists() {
     "assets/fonts/barlow-condensed-latin-600-normal.woff2",
     "assets/fonts/barlow-condensed-latin-700-normal.woff2",
     "assets/fonts/saira-apex26-800-italic.woff2",
+    // The baked pack's index (network-first at runtime). Seeded so the `?h=`
+    // pack files carried over from the last generation have THIS build's
+    // manifest to name them offline; without it the pack is absent offline.
+    "assets/pack/manifest.json",
     // @gen-shell:sw-optional
     // ROOT PAGES — answered offline under their own URL, never by the game shell
     "controller.html",
@@ -797,6 +822,38 @@ async function pooled(items, limit, fn) {
   await Promise.all(workers);
 }
 
+// RUNTIME-ONLY FILES THAT NAME IMMUTABLE BYTES ARE CARRIED INTO THE NEW
+// GENERATION. Content-addressed pack files (`assets/pack/<file>?h=<md5>`) and
+// the engine samples (`assets/sfx/*`, never changed after release) are cached
+// only on first use, so when the previous generation was swept an offline race
+// lost its textures, props and engine sound until the next online session.
+// Install COPIES them (no refetch) from every older numbered generation before
+// SETTLED, which is what gates the sweep. Best effort: a failure here never
+// fails the install. Voice lives in its own fixed cache and is untouched.
+function isCarriedRuntime(href) {
+  let u;
+  try { u = new URL(href); } catch (_) { return false; }
+  if (u.origin !== self.location.origin) return false;
+  if (u.pathname.includes("/assets/pack/")) return isHashedPackRequest(u);
+  return u.search === "" && /\/assets\/sfx\/[^/]+$/.test(u.pathname);
+}
+async function carryRuntimeAssets(cache, name) {
+  let carried = 0;
+  const older = (await caches.keys()).filter((n) => n !== name && cacheBuild(n) > 0)
+    .sort((a, b) => cacheBuild(b) - cacheBuild(a));   // newest copy of a bare sfx key wins
+  for (const n of older) {
+    try {
+      const old = await caches.open(n);
+      for (const req of await old.keys()) {
+        if (!isCarriedRuntime(req.url) || await cache.match(req)) continue;
+        const res = await old.match(req);
+        if (res && res.ok) { await cache.put(req, res); carried++; }
+      }
+    } catch (_) { /* a generation swept or unreadable mid-copy: the next one, or the network later */ }
+  }
+  return carried;
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
@@ -818,6 +875,8 @@ self.addEventListener("install", (event) => {
     await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u))) await cacheRequiredAsset(cache, u); });
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
     invalidateCacheOrder();   // a marker is a rank input (computeCacheOrder)
+    try { await carryRuntimeAssets(cache, name); }
+    catch (e) { swLog("warn", "precache: runtime carry-over failed: " + errMsg(e)); }
     // The DEFERRED backends are the one group in `optional` that is NOT pinned
     // by path — js/game.js:loadBackendScripts injects them as `<path>?v=<build>`,
     // mirroring the shell's tags. Seeded bare they were cached under a key
@@ -1072,6 +1131,7 @@ self.addEventListener("fetch", (event) => {
   // the guard is here so that stays true if it ever does.
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
   if (url.origin !== self.location.origin) return;   // never touch cross-origin (Jolpica/OpenF1 data hub)
+  if (_killed) return;   // retired: the network answers until this page navigates away
   maybeSweep(event, req.mode === "navigate");
 
   // STREAMED MUSIC ASKS FOR BYTE RANGES (perf-memory M-4b). A phone plays
@@ -1125,6 +1185,12 @@ self.addEventListener("fetch", (event) => {
     // https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
     let cacheWrite = Promise.resolve();
     const network = fetch(req, { cache: isVersion || isShellBust ? "no-store" : "no-cache" }).then((res) => {
+      if (res && res.ok && isVersion) {
+        // The kill switch is read off the version.json the page already asks for.
+        const copy = res.clone();
+        cacheWrite = copy.json().then((v) => { if (isKillFlag(v)) return killWorker(); }, () => {})
+          .catch((e) => swLog("warn", "kill switch failed: " + errMsg(e)));
+      }
       if (res && res.ok && !isVersion && url.search === "") {
         // Clone before the page can consume the body. Maintenance belongs to
         // waitUntil, so generation lookup and slow puts cannot delay navigation.

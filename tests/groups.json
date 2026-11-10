@@ -77,6 +77,7 @@
     "// #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).",
     "tests/unit/assert-match-ratchet.test.mjs",
     "tests/unit/assets-pack.test.mjs",
+    "tests/unit/assets-scratch-gl-fallback.test.mjs",
     "// #3296: material filmstrip PNGs require albedoMd5/normalMd5 (same as model md5).",
     "tests/unit/assets-verify-material-md5.test.mjs",
     "tests/unit/audit-circuit.test.mjs",
@@ -494,6 +495,7 @@
     "tests/unit/git-fixture-env.test.mjs",
     "// Shared GET-only GitHub REST helper (#3013).",
     "tests/unit/github-api.test.mjs",
+    "tests/unit/gitignore-secrets.test.mjs",
     "tests/unit/global-registry.test.mjs",
     "// Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).",
     "tests/unit/glx-failure-paths.test.mjs",
@@ -546,6 +548,7 @@
     "tests/unit/ios-input-zoom-w25e.test.mjs",
     "// #3558: iOS Safari focus auto-zoom — text inputs in FREE sheets must floor at 16px.",
     "tests/unit/ios-input-zoom.test.mjs",
+    "tests/unit/ios-wake-note.test.mjs",
     "// #3315: Jeddah night_pass/dual_lite/scenery orbit at frac 0 clears near-field neon canyon (game-vm + propsGeo, ~5 s).",
     "tests/unit/jeddah-night-orbit.test.mjs",
     "// knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.",
@@ -625,6 +628,7 @@
     "// LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.",
     "// VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.",
     "tests/unit/loop-health.test.mjs",
+    "tests/unit/manifest-screenshots.test.mjs",
     "// The marshal posts' light panels show race control: a waved yellow in the",
     "// sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.",
     "tests/unit/marshal-panels.test.mjs",
@@ -698,6 +702,7 @@
     "tests/unit/nontext-contrast.test.mjs",
     "// #3373: Nürburgring Eifel horizon — spruce-green mountain rock[] + Burg Nürburg compass NNE (no beige sand pyramids).",
     "tests/unit/nurburgring-eifel-horizon.test.mjs",
+    "tests/unit/offline-precache-check.test.mjs",
     "// Round-2: a slow/offline navigation to controller.html never gets the game shell; controller.html is precached as optional.",
     "tests/unit/offline-precache-nav.test.mjs",
     "// updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.",
@@ -909,6 +914,7 @@
     "tests/unit/scenery-guards.test.mjs",
     "tests/unit/scenery-kits.test.mjs",
     "tests/unit/scenery-preview-budget.test.mjs",
+    "tests/unit/script-loader-late-eval.test.mjs",
     "// Lazy bundles preload every gated wave and still evaluate in edge order; the boot preloads its likely backend (B·H8 load hunt).",
     "tests/unit/script-loader-preload.test.mjs",
     "// #3295: a strict retry after a sibling failure must not re-append a classic script that already evaluated.",
@@ -1029,6 +1035,7 @@
     "tests/unit/suzuka-circuit-wheel.test.mjs",
     "// Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.",
     "tests/unit/suzuka-crossover-span.test.mjs",
+    "tests/unit/sw-kill-stamp.test.mjs",
     "tests/unit/sweep-shards.test.mjs",
     "tests/unit/sync-pr-robust.test.mjs",
     "tests/unit/telemetry-trace.test.mjs",
@@ -2092,6 +2099,12 @@
         "--test-concurrency=1"
       ],
       "kind": "node"
+    },
+    "test:offline-precache": {
+      "files": [
+        "tests/specs/offline-precache.spec.js"
+      ],
+      "kind": "browser"
     },
     "test:perf-budget": {
       "files": [

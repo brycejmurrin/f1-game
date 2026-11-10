@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-U2BhFAb5Lprg2tN5VFT545beilzilFpnqF7K9seadX0=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-rs15WWlcjLLr21oAwbEl9bWwV3FktfqLTDqm9V0+DaE=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -488,12 +488,25 @@
         "The network is unreachable, so the local copy was left alone. Reconnect and reload.", true);
     };
     if (navigator.onLine === false) { offline(); return; }
+    // UNREGISTER BEFORE THE SWEEP. The reload re-registers the SAME
+    // sw.js?v= URL (same build), which is no update, so no install would ever re-seed the
+    // swept generation (its INSTALL_COMPLETE / INSTALL_SETTLED / OFFLINE_STATUS
+    // markers stayed gone until the next deploy). Unregister removes the
+    // registration from the scope map at once (w3c.github.io/ServiceWorker
+    // "Unregister"), so the reload is uncontrolled and register() installs afresh.
+    var unregister = function () {
+      var sw = navigator.serviceWorker;
+      if (!sw || typeof sw.getRegistration !== "function") return Promise.resolve();
+      return sw.getRegistration().then(function (r) { return r && r.unregister(); }).catch(function () {});
+    };
     fetch(el.src, { cache: "reload" })
       .then(function () {
-        if (!window.caches) return null;
-        return caches.keys().then(function (names) {
-          // Only OUR numbered build generations (shared origin; apex26-voice is ~111 MB of voice packs, #4479).
-          return Promise.all(names.filter((n) => /^apex26-\d+$/.test(n)).map(function (n) { return caches.delete(n); }));
+        return unregister().then(function () {
+          if (!window.caches) return null;
+          return caches.keys().then(function (names) {
+            // Only OUR numbered build generations (shared origin; apex26-voice is ~111 MB of voice packs, #4479).
+            return Promise.all(names.filter((n) => /^apex26-\d+$/.test(n)).map(function (n) { return caches.delete(n); }));
+          });
         }).then(go, go);
       }, offline);
   }, true);
@@ -816,7 +829,7 @@
 <!-- iOS: Add to Home Screen is the only real fullscreen this platform has.
      Shown once, dismissible, and only where it applies (js/game.js). -->
 <div id="ios-install" role="note" hidden>
-  <span>Add Apex 26 to your Home Screen for a full-screen race with no browser bars &mdash; tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
+  <span id="ios-install-msg">Add Apex 26 to your Home Screen for a full-screen race with no browser bars &mdash; tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
   <button id="ios-install-x" type="button" aria-label="Dismiss">&times;</button>
 </div>
 <!-- Android / desktop Chromium: the browser's own install offer, behind one tap
