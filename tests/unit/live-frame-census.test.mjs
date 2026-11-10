@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, pct, dist, analyseTrace, analyseProfile, sweepSteps } from "../../tools/gfx/live-frame-census.mjs";
+import { parseArgs, pct, dist, analyseTrace, analyseProfile, sweepSteps, analyseAlloc } from "../../tools/gfx/live-frame-census.mjs";
 
 test("live-frame-census parseArgs: defaults are the phone census rows", () => {
   const o = parseArgs([]);
@@ -72,4 +72,16 @@ test("live-frame-census parseArgs: phone-cost options, as flags and as lf.* pseu
 test("live-frame-census sweepSteps: every cap at scale 1 / 0.75 / 0.5, caps in the given order", () => {
   assert.deepEqual(sweepSteps([3, 1.5]).map((s) => s.cap + "@" + s.scale), ["3@1", "3@0.75", "3@0.5", "1.5@1", "1.5@0.75", "1.5@0.5"]);
   assert.deepEqual(sweepSteps([]), []);
+});
+
+test("live-frame-census analyseAlloc: bytes by allocating function per frame, native frames named", () => {
+  const profile = { head: { callFrame: { functionName: "(root)", url: "" }, selfSize: 0, children: [
+    { callFrame: { functionName: "tick", url: "http://h/js/game.js?v=1", lineNumber: 9 }, selfSize: 2048, children: [
+      { callFrame: { functionName: "", url: "", lineNumber: 0 }, selfSize: 1024, children: [] }] },
+    { callFrame: { functionName: "tick", url: "http://h/js/game.js?v=1", lineNumber: 9 }, selfSize: 2048, children: [] }] } };
+  const a = analyseAlloc(profile, 2);
+  assert.deepEqual([a.frames, a.totalKB, a.kbPerFrame], [2, 5, 2.5]);
+  assert.deepEqual(a.top, [["tick game.js:10", 2], ["(anon) (native):1", 0.5]]);
+  assert.equal(analyseAlloc({}, 0).kbPerFrame, 0);
+  assert.equal(parseArgs(["--alloc", "8", "--win", "10"]).win, 30, "the window holds trace + profile + alloc");
 });

@@ -20,7 +20,7 @@
 //
 //   node tools/gfx/live-frame-census.mjs [--tracks monaco,spa] [--backends tlx-gl,tlx-gpu] [--cam helmet]
 //        [--warm 8] [--win 40] [--trace 6] [--prof 12] [--ls "apex26.k=v ..."] [--json live-frame.json]
-//        [--dsf 1.5] [--cpu-throttle 1] [--lab dpr3] [--sweep 3,2,1.5] [--step 6] [--row-cap 480]
+//        [--dsf 1.5] [--cpu-throttle 1] [--lab dpr3] [--sweep 3,2,1.5] [--step 6] [--row-cap 480] [--alloc 0] [--poke 'weather("rain")']
 //
 // Phone-cost options (phone perf hunt 2026-11-10, docs/notes/PHONE-PERF-MEASURE-2026-11-10.md):
 //   --dsf N          the context's deviceScaleFactor (an iPhone is 3; the renderer's DPR cap decides what is drawn)
@@ -29,8 +29,12 @@
 //                    lowers; boot the row with --lab dpr3 or dpr2 and --dsf >= it) x scale 1 / 0.75 / 0.5,
 //                    --step s of frames: canvas px, rAF interval, callback wall, GPU timer ms. Frame ms against
 //                    pixels on THIS adapter: the pixel-bound vs CPU-bound answer.
+//   --alloc N        N s of V8's sampling heap profiler WITH collected objects kept (includeObjectsCollectedByMinorGC /
+//                    ByMajorGC): bytes allocated per frame and the top allocating functions. Garbage by site.
+//   --poke "expr"    after the window: run window.__apex.<expr> (e.g. 'weather("rain")') and record the next 12 s:
+//                    frame intervals, pipelines and shader modules created, calls over 20 ms. A hitch at an event.
 //   counts           every row reports createBuffer / createTexture / createBindGroup / writeBuffer / draw / pass
-//                    per frame over the window (WebGPU), and boot / race-entry wall.
+//                    per frame over the window (WebGPU), the top call stacks of each create*, and boot / race-entry wall.
 // The request relay passes only `ls`, so the same options ride it as pseudo-keys: `lf.dsf=3 lf.sweep=3,2,1.5
 // lf.cpuThrottle=4 lf.lab=dpr3 lf.step=6 lf.win=30` (stripped before the page's localStorage is seeded).
 import { startStaticServer, launchChromium } from "../lib/harness.mjs";
@@ -41,7 +45,7 @@ import { fileURLToPath } from "node:url";
 
 const BACKENDS = ["tlx-gl", "tlx-gpu"];
 export function parseArgs(argv) {
-  const o = { tracks: ["monaco", "spa", "singapore"], backends: BACKENDS.slice(), cam: "helmet", warm: 8, win: 40, trace: 6, prof: 12, ls: [], json: "live-frame.json", dsf: 1.5, cpuThrottle: 1, sweep: [], step: 6, rowCap: 480, lab: "" };
+  const o = { tracks: ["monaco", "spa", "singapore"], backends: BACKENDS.slice(), cam: "helmet", warm: 8, win: 40, trace: 6, prof: 12, ls: [], json: "live-frame.json", dsf: 1.5, cpuThrottle: 1, sweep: [], step: 6, rowCap: 480, lab: "", poke: "", alloc: 0 };
   const labs = (v) => String(v || "").split(",").map((x) => x.trim()).filter((x) => /^[A-Za-z0-9]+$/.test(x)).join(",");
   const caps = (v) => String(v || "").split(",").map((x) => +x).filter((x) => x >= 1 && x <= 3).sort((a, b) => b - a);
   const num = (v, lo, hi) => { const n = +v; if (!Number.isFinite(n)) throw new Error("not a number: " + v); return Math.min(hi, Math.max(lo, n)); };
@@ -60,6 +64,8 @@ export function parseArgs(argv) {
     else if (a === "--cpu-throttle") { o.cpuThrottle = num(v, 1, 20); i++; }
     else if (a === "--sweep") { o.sweep = caps(v); i++; }
     else if (a === "--lab") { o.lab = labs(v); i++; }
+    else if (a === "--alloc") { o.alloc = num(v, 0, 30); i++; }
+    else if (a === "--poke") { o.poke = String(v || ""); i++; }
     else if (a === "--step") { o.step = num(v, 2, 30); i++; }
     else if (a === "--row-cap") { o.rowCap = num(v, 60, 1500); i++; }
     else throw new Error("unknown flag: " + a);
@@ -70,15 +76,15 @@ export function parseArgs(argv) {
     if (k === "lf.dsf") o.dsf = num(v, 1, 3); else if (k === "lf.cpuThrottle") o.cpuThrottle = num(v, 1, 20);
     else if (k === "lf.sweep") o.sweep = caps(v); else if (k === "lf.step") o.step = num(v, 2, 30);
     else if (k === "lf.win") o.win = num(v, 10, 120); else if (k === "lf.rowCap") o.rowCap = num(v, 60, 1500);
-    else if (k === "lf.lab") o.lab = labs(v);
+    else if (k === "lf.lab") o.lab = labs(v); else if (k === "lf.alloc") o.alloc = num(v, 0, 30);
   }
   o.ls = o.ls.filter(([k]) => !/^lf\./.test(k));
   // The window must hold the trace and the profile, which run back to back after a 4 s lead.
-  o.win = Math.max(o.win, 4 + o.trace + o.prof);
+  o.win = Math.max(o.win, 4 + o.trace + o.prof + o.alloc);
   return o;
 }
 
-let TRACKS, CAM, WARM, WIN, TRACE, PROF, EXTRA, DSF = 1.5, THROTTLE = 1, SWEEP = [], STEP = 6, LAB = "", report, save;
+let TRACKS, CAM, WARM, WIN, TRACE, PROF, EXTRA, DSF = 1.5, THROTTLE = 1, SWEEP = [], STEP = 6, LAB = "", POKE = "", ALLOC = 0, report, save;
 export const SWEEP_SCALES = [1, 0.75, 0.5];
 /** The sweep's steps in run order: caps descending (capDpr only lowers), each at scale 1 / 0.75 / 0.5. */
 export function sweepSteps(capList) { const out = []; for (const cap of capList) for (const scale of SWEEP_SCALES) out.push({ cap, scale }); return out; }
@@ -129,13 +135,13 @@ export function driver() {
 function slowCalls() {
   // Every GL / WebGPU call that takes > 20 ms, with the bound program's SHADER_NAME and a short stack; plus
   // program links and pipeline creations counted per phase (window on = after the gate).
-  const S = window.__lfSlow = { on: false, n: {}, slow: [], links: { pre: 0, win: 0 }, pipes: { pre: 0, win: 0 }, linkNames: [], cur: "", srcs: new WeakMap() };
+  const S = window.__lfSlow = { on: false, n: {}, who: { createBuffer: {}, createTexture: {}, createBindGroup: {} }, slow: [], links: { pre: 0, win: 0 }, pipes: { pre: 0, win: 0 }, linkNames: [], cur: "", srcs: new WeakMap() };
   const stack = () => (new Error().stack || "").split("\n").slice(3, 7).map((l) => l.trim().replace(/^at /, "").replace(/https?:\/\/[^/]+\//, "").replace(/\?v=[^:]+/, "")).join(" < ");
   const wrap = (proto, name, tag) => {
     const o = proto && proto[name]; if (typeof o !== "function") return;
     proto[name] = function () {
       const a = performance.now();
-      if (S.on) S.n[name] = (S.n[name] || 0) + 1;
+      if (S.on) { S.n[name] = (S.n[name] || 0) + 1; if (S.who[name]) { const k = stack(); S.who[name][k] = (S.who[name][k] || 0) + 1; } }
       try { return o.apply(this, arguments); } finally {
         const d = performance.now() - a;
         if (d > 20 && S.slow.length < 60) S.slow.push({ fn: tag + "." + name, ms: +d.toFixed(1), win: S.on, prog: S.cur, at: Math.round(a), stack: stack() });
@@ -197,6 +203,19 @@ export function analyseTrace(events, frames) {
   return { spanMs: +((tMax - tMin) / 1000).toFixed(0), frames, threads: threads.slice(0, 12),
     gc: { minorN: gc.minor.length, minorMs: sum(gc.minor), minorMax: gc.minor.length ? +Math.max(...gc.minor).toFixed(2) : 0,
       majorN: gc.major.length, majorMs: sum(gc.major), majorMax: gc.major.length ? +Math.max(...gc.major).toFixed(2) : 0, bgN: gc.other.length } };
+}
+
+/** A sampling heap profile taken with collected objects kept: bytes by allocating function, per frame. */
+export function analyseAlloc(profile, frames) {
+  const by = new Map(); let total = 0;
+  (function walk(n) {
+    const cf = n.callFrame || {}, sz = n.selfSize || 0;
+    if (sz) { total += sz; const file = (cf.url || "").split("/").pop().replace(/\?.*$/, "") || "(native)"; const k = (cf.functionName || "(anon)") + " " + file + ":" + ((cf.lineNumber | 0) + 1); by.set(k, (by.get(k) || 0) + sz); }
+    for (const c of n.children || []) walk(c);
+  })(profile.head || {});
+  const f = Math.max(1, frames | 0);
+  return { frames: frames | 0, totalKB: +(total / 1024).toFixed(0), kbPerFrame: +(total / 1024 / f).toFixed(1),
+    top: [...by].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => [k, +(v / 1024 / f).toFixed(2)]) };
 }
 
 export function analyseProfile(p) {
@@ -297,16 +316,43 @@ async function runRow(browser, server, backend, track) {
   const { profile } = await cdp.send("Profiler.stop");
   const g1 = await page.evaluate(() => window.__lf.ts.length);
   const cpuProf = Object.assign(analyseProfile(profile), { frames: g1 - g0 });
-  await page.waitForTimeout(Math.max(0, WIN - pre - TRACE - PROF) * 1000);
+  let alloc = null;
+  if (ALLOC > 0) {
+    try {
+      const a0 = await page.evaluate(() => window.__lf.ts.length);
+      await cdp.send("HeapProfiler.enable");
+      await cdp.send("HeapProfiler.startSampling", { samplingInterval: 16384, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
+      await page.waitForTimeout(ALLOC * 1000);
+      const hp = await cdp.send("HeapProfiler.stopSampling");
+      alloc = analyseAlloc(hp.profile, (await page.evaluate(() => window.__lf.ts.length)) - a0);
+    } catch (e) { alloc = { error: String((e && e.message) || e).slice(0, 160) }; }
+  }
+  await page.waitForTimeout(Math.max(0, WIN - pre - TRACE - PROF - ALLOC) * 1000);
   const got = await page.evaluate(() => {
     const H = window.__lf; H.on = false; window.__lfDrive.stop(); const SC = window.__lfSlow; SC.on = false;
     const A = window.__apex, p = A.perf();
     const iv = []; for (let i = 1; i < H.ts.length; i++) iv.push(H.ts[i] - H.ts[i - 1]);
     let gpuMs = null; try { gpuMs = A.gpuTimer().ms; } catch (_) {}
     const nf = Math.max(1, H.ts.length), counts = { frames: H.ts.length, perFrame: {} }; for (const k of Object.keys(SC.n)) counts.perFrame[k] = +(SC.n[k] / nf).toFixed(2);
+    // Who creates GPU objects mid-race: the top call stacks per create* (count over the window).
+    counts.who = {}; for (const k of Object.keys(SC.who)) counts.who[k] = Object.entries(SC.who[k]).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([st, n]) => ({ n, stack: st.slice(0, 260) }));
     return { iv, cb: H.cb, counts, spans: p.spans, loaf: p.loaf, drive: { frames: window.__lfDrive.frames, dist: Math.round(window.__lfDrive.dist), off: window.__lfDrive.off, err: window.__lfDrive.err },
       tierLog: window.__lfTier, warm: (() => { try { const m = GLX.__tlx.memState(); return m && m.warm; } catch (_) { return null; } })(), gpuMs, slow: { calls: SC.slow, links: SC.links, pipes: SC.pipes, linkNames: SC.linkNames, pipeNames: SC.pipeNames }, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
   });
+  // The event poke: what the 12 s after one __apex call cost (a weather change, a camera cut).
+  let poke = null;
+  if (POKE) {
+    const before = await page.evaluate((expr) => { const H = window.__lf, S = window.__lfSlow; H.ts = []; H.cb = []; H.lastT = -1; H.on = true; S.on = true; window.__lfDrive.start();
+      const b = { n: Object.assign({}, S.n), pipes: S.pipes.win, names: (S.pipeNames || []).length, slow: S.slow.length, links: S.links.win };
+      try { b.ret = JSON.stringify(new Function("A", "return A." + expr)(window.__apex)).slice(0, 200); } catch (e) { b.err = String(e.message).slice(0, 160); } return b; }, POKE);
+    await page.waitForTimeout(12000);
+    const after = await page.evaluate((b) => { const H = window.__lf, S = window.__lfSlow; H.on = false; S.on = false; window.__lfDrive.stop(); const iv = []; for (let i = 1; i < H.ts.length; i++) iv.push(H.ts[i] - H.ts[i - 1]);
+      const dn = {}; for (const k of Object.keys(S.n)) { const d = S.n[k] - (b.n[k] || 0); if (d) dn[k] = d; }
+      return { iv, cb: H.cb, pipes: S.pipes.win - b.pipes, links: S.links.win - b.links, pipeNames: (S.pipeNames || []).slice(b.names), slow: S.slow.slice(b.slow), created: { createShaderModule: dn.createShaderModule || 0, createRenderPipeline: dn.createRenderPipeline || 0, createTexture: dn.createTexture || 0, createBuffer: dn.createBuffer || 0 } }; }, before);
+    poke = { expr: POKE, ret: before.ret, err: before.err, frame: Object.assign(dist(after.iv), { over33: after.iv.filter((x) => x > 33.4).length, over100: after.iv.filter((x) => x > 100).length }), cpu: dist(after.cb),
+      pipes: after.pipes, links: after.links, created: after.created, pipeNames: after.pipeNames, slow: after.slow };
+    log(`  poke ${POKE} -> ${before.ret || before.err} frame ${JSON.stringify(poke.frame)} cpu ${JSON.stringify(poke.cpu)} pipes ${after.pipes} links ${after.links} created ${JSON.stringify(after.created)} names ${JSON.stringify(after.pipeNames).slice(0, 900)} slow ${JSON.stringify(after.slow).slice(0, 600)}`);
+  }
   // The pixel sweep: frame ms against drawn pixels, the ladder held so a shed feature cannot pass for a pixel saving.
   const sweep = [];
   if (SWEEP.length) {
@@ -334,7 +380,7 @@ async function runRow(browser, server, backend, track) {
   // callback of frame n-1 -> its cost shows as interval iv[n-1] (ts[n]-ts[n-1]).
   const row = { ivs: got.iv.map((x) => Math.round(x)),
     env, frame: Object.assign(dist(got.iv), { over33: over(33.4), over50: over(50), over100: over(100), fps: +(1000 * got.iv.length / Math.max(1, got.iv.reduce((a, b) => a + b, 0))).toFixed(1) }),
-    cpu: dist(got.cb), counts: got.counts, sweep, t: { bootMs, entryMs }, dsf: DSF, cpuThrottle: THROTTLE, spans: got.spans, slow: got.slow, tierLog: got.tierLog, warm: got.warm, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
+    cpu: dist(got.cb), counts: got.counts, alloc, sweep, poke, t: { bootMs, entryMs }, dsf: DSF, cpuThrottle: THROTTLE, spans: got.spans, slow: got.slow, tierLog: got.tierLog, warm: got.warm, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
     loaf: { supported: got.loaf && got.loaf.supported, n: loafE.length, top: loafE.slice().sort((a, b) => (b.duration || 0) - (a.duration || 0)).slice(0, 6) },
     trace: analyseTrace(events, f1 - f0), prof: cpuProf, console: cons,
   };
@@ -344,7 +390,7 @@ async function runRow(browser, server, backend, track) {
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  TRACKS = o.tracks; CAM = o.cam; WARM = o.warm; WIN = o.win; TRACE = o.trace; PROF = o.prof; EXTRA = o.ls; DSF = o.dsf; THROTTLE = o.cpuThrottle; SWEEP = o.sweep; STEP = o.step; LAB = o.lab;
+  TRACKS = o.tracks; CAM = o.cam; WARM = o.warm; WIN = o.win; TRACE = o.trace; PROF = o.prof; EXTRA = o.ls; DSF = o.dsf; THROTTLE = o.cpuThrottle; SWEEP = o.sweep; STEP = o.step; LAB = o.lab; POKE = o.poke; ALLOC = o.alloc;
   report = { started: new Date().toISOString(), warm: WARM, win: WIN, trace: TRACE, prof: PROF, cam: CAM, extra: EXTRA, dsf: DSF, cpuThrottle: THROTTLE, sweep: SWEEP, step: STEP, lab: LAB, rows: [] };
   save = () => writeFileSync(o.json, JSON.stringify(report, null, 2));
   const BACK = o.backends;
@@ -364,6 +410,7 @@ async function main() {
       log(`${backend} ${track} ${JSON.stringify(row.env).slice(0, 400)}`);
         log(`  frame p50 ${f.p50} p95 ${f.p95} p99 ${f.p99} max ${f.max} fps ${f.fps} >33 ${f.over33}% >50 ${f.over50}% | cpu p50 ${c.p50} p95 ${c.p95} max ${c.max} | drive ${JSON.stringify(row.drive)}`);
         log(`  counts/frame ${JSON.stringify(row.counts)} boot ${row.t.bootMs} ms entry ${row.t.entryMs} ms throttle x${THROTTLE} dsf ${DSF}`);
+        if (row.alloc) log(`  alloc ${JSON.stringify(row.alloc).slice(0, 2600)}`);
         log(`  spans ${JSON.stringify(row.spans)}`);
         log(`  trace ${JSON.stringify(row.trace)}`);
           log(`  slow ${JSON.stringify(row.slow).slice(0, 2500)}`);
