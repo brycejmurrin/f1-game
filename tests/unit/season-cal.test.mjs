@@ -1003,9 +1003,25 @@ test("rankTeams: points, then the team's tier, then the id — one order for eve
   assert.match(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), /SeasonCal\.rankTeams\(career\.season, a\.id, b\.id\)/);
 });
 
-test("boot's migrate-and-save never writes back a season load() refused (game.js)", () => {
-  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season, \{ migration: true \}\);/);
+test("boot's migrate-and-save never writes back a season load() refused (game.js)", async () => {
+  // The REAL boot in the game VM over a stored season naming a circuit this
+  // build does not know: the stored calendar survives byte for byte, and boot
+  // does not even try to save the lossy read (no refused save, no warning).
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const lossy = { round: 1, pts: { d0: 25 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco", "nosuch"] } };
+  const writes = [];
+  const g = await createGame({ carMeshes: false, storage: { season: lossy }, onSandbox(sandbox) {
+    const ls = sandbox.localStorage, set = ls.setItem.bind(ls);
+    ls.setItem = (k, v) => { if (k === "apex26.season") writes.push(v); return set(k, v); };
+  } });
+  try {
+    const SC = g.sandbox.SeasonCal;
+    assert.equal(SC.lastLoadLossy(), true, "boot's load() read the unknown circuit as lossy");
+    assert.equal(writes.length, 0, "boot wrote nothing to apex26.season");
+    assert.deepEqual(JSON.parse(g.sandbox.localStorage.getItem("apex26.season")), lossy, "the stored season keeps its unknown circuit");
+    assert.notEqual(SC.saveStatus().reason, "unknown circuit", "boot never attempted to save the lossy read");
+    assert.equal(g.record.console.filter(([, m]) => /SeasonCal\.save refused/.test(m)).length, 0, "no refused-save warning at boot");
+  } finally { g.close(); }
 });
 
 test("mid-weekend reads the season's own config: the title menu (flow gp) still says AFTER THE SPRINT", () => {

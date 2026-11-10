@@ -1,5 +1,7 @@
 # Device Farm ledger — every iPhone run so far (2026-10-23)
 
+Summary: One table of every Device Farm run on Apex 26, so lanes stop re-deriving it.
+
 One table of every AWS Device Farm run on Apex 26, so lanes stop re-deriving it. Method, tools and the full
 write-ups are in `AWS-DEVICE-FARM-IPHONE-2026-10-23.md` (§ references below) and in the PRs named in each row.
 Asked for by OrchA 28 (Bryce in OrchA 28's session, about 01:12 PT: "Any sessions that are idle or waiting review

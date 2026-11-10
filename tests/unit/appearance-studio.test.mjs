@@ -198,7 +198,7 @@ test("profile restore, Undo and reset repaint mounted title and pause controls w
   studio.loadProfile("profile-1"); assertControls(true);
   studio.undo(); assertControls(false);
   studio.undo(); assertControls(true);
-  studio.applyPreset("classic"); assertControls(false);
+  studio.applyPreset("classic"); assertControls(true);   // a cosmetic preset never moves the menu layouts (#5058)
 });
 
 test("Studio mounts once the document has passed loading (interactive included)", () => {
@@ -489,6 +489,75 @@ test("cosmetic presets retain accessibility and units without writing those pref
     }
     studio.undo(); assert.deepEqual(plain(studio.snapshot()), before);
   }
+});
+
+// Bryce's installed-app profile, copied from his live settings export of 2026-11-09
+// (PR #5264; inline here because that file belongs to that PR until it lands).
+const LIVE = Object.freeze({ uiScale: 61, textSize: "large", uiContrast: "high", homeScene: "static",
+  titleLayout: { v: 2, wide: { btns: { x: 50, y: -42, size: 60, width: 49 }, title: { x: -50, y: 2, size: 100 }, art: { x: 0, y: 0, size: 100 }, layout: "grid", side: "auto" } },
+  hudLayout: { v: 4, standard: { cockpit: {}, helmet: { tower: { x: 0, y: 0, s: 80 }, limits: { x: -73.97, y: -2.83, s: 70 } } } }, layoutPreset: "shipped" });
+
+test("preset tiles keep Bryce's live UI SIZE, main-menu layout and ARRANGE HUD layout (#5058)", () => {
+  for (const preset of ["classic", "paddock", "broadcast", "focus", "sunlight"]) {
+    const { studio, values, writes } = load(structuredClone(LIVE));
+    assert.equal(studio.applyPreset(preset), true);
+    for (const key of ["uiScale", "titleLayout", "hudLayout", "layoutPreset", "textSize", "uiContrast"]) {
+      assert.equal(new Set(writes).has(key), false, preset + " leaves " + key + " unwritten");
+      assert.deepEqual(plain(values[key]), plain(LIVE[key]), preset + " keeps " + key);
+    }
+  }
+});
+
+test("preset tiles keep custom HUD sizes, opacities, the pause layout and screen looks; a named look is merged (#5058)", () => {
+  const mine = { ...structuredClone(LIVE), hudScale: 155.25, hudBtnScale: 245, hudBtnOpacity: 65, hudPanelOpacity: 80,
+    pauseLayout: "sidebar", pauseSide: "right", pauseDim: "soft", lookGarage: { btn: 125, pw: 135 }, lookCareer: { density: "tight", corners: "sharp" }, lookDesigner: { size: 150 } };
+  for (const preset of ["classic", "paddock", "broadcast", "focus", "sunlight"]) {
+    const { studio, values, writes } = load(structuredClone(mine));
+    studio.applyPreset(preset);
+    for (const key of ["hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "pauseLayout", "pauseSide", "pauseDim", "lookGarage", "lookDesigner"]) {
+      assert.equal(new Set(writes).has(key), false, preset + " leaves " + key + " unwritten");
+      assert.deepEqual(plain(values[key]), plain(mine[key]), preset + " keeps " + key);
+    }
+    const named = studio.PRESETS.find((p) => p.id === preset).values.lookCareer;
+    assert.deepEqual(plain(values.lookCareer), { ...mine.lookCareer, ...named }, preset + " merges lookCareer");
+  }
+});
+
+test("scene chip, profile apply and UNDO keep Bryce's live profile; RESET SCOPE is the one path that resets it and UNDO brings it back", () => {
+  const { studio, values } = load(structuredClone(LIVE));
+  const same = (why) => { for (const key of ["uiScale", "titleLayout", "hudLayout"]) assert.deepEqual(plain(values[key]), plain(LIVE[key]), why + " keeps " + key); };
+  studio.setScene("garage"); same("scene chip");
+  studio.saveProfile("Mine"); studio.applyPreset("broadcast"); same("preset");
+  assert.equal(studio.loadProfile("profile-1"), true); same("profile apply"); assert.equal(values.homeScene, "garage");
+  studio.undo(); same("UNDO"); studio.undo(); same("second UNDO");
+  studio.reset("global");
+  assert.equal(values.uiScale, null);
+  assert.deepEqual(plain(values.hudLayout), plain(LIVE.hudLayout), "ARRANGE HUD is not a Studio key");
+  studio.undo(); same("UNDO after RESET SCOPE");
+});
+
+test("no preset value names a key presets preserve (no dead FOCUS / SUNLIGHT values)", () => {
+  const { studio } = load(), preserved = new Set(studio.PRESET_PRESERVE);
+  for (const k of ["uiScale", "hudScale", "hudBtnScale", "titleLayout", "pauseLayout"]) assert.equal(preserved.has(k), true, k);
+  for (const p of studio.PRESETS) for (const k of Object.keys(p.values)) assert.equal(preserved.has(k), false, p.id + " sets preserved key " + k);
+});
+
+test("DESIGNER SIZE (lookDesigner) is a Studio visual key: profiles carry it and RESET SCOPE covers it (#5060)", () => {
+  const { studio, values } = load({ lookDesigner: { size: 150 } });
+  assert.equal(studio.VISUAL_KEYS.includes("lookDesigner"), true);
+  studio.saveProfile("D"); assert.deepEqual(plain(studio.profiles()[0].values.lookDesigner), { size: 150 });
+  studio.reset("global"); assert.equal(values.lookDesigner, null);
+  studio.undo(); assert.deepEqual(plain(values.lookDesigner), { size: 150 });
+});
+
+test("HUD preview prints the speed in the chosen unit only (#5058)", () => {
+  const h = loadStudioRenderCounts(), descendants = node => [node, ...node.children.flatMap(descendants)];
+  const all = () => descendants(h.dom.byId("appearance-studio"));
+  const speed = () => all().find(node => node.dataset.as === "preview-speed").textContent;
+  h.dom.dispatch(all().find(node => node.tagName === "BUTTON" && node.textContent === "HUD"), { type: "click", bubbles: true });
+  assert.equal(speed(), "287 KM/H");
+  h.studio.applySnapshot({ ...h.studio.snapshot(), speedUnits: "mph" });
+  assert.equal(speed(), "178 MPH");
 });
 
 test("profile application obeys selected screen scope and undo restores the affected screen", () => {
