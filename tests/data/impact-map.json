@@ -19164,9 +19164,6 @@
       ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
-      ],
-      "*": [
-        "tests/unit/title-rows.test.mjs"
       ]
     },
     "js/ui/title-menu.js": {
