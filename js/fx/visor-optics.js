@@ -302,10 +302,7 @@ const VisorOptics = (function () {
     return _knobs;
   }
 
-  // The scene comes from game.js's G façade, handed over by VisorOptics.bindScene(G) — NOT only
-  // through window.__apex: the agent surface is LAZY_AGENT, absent on a player's Pages build, and
-  // gating on it left the visor glint unpainted for every player. A bare `typeof G` read never
-  // worked either: game.js's `const G` lives inside its async IIFE, invisible to this script.
+  // G arrives via bindScene(G): game.js's G is IIFE-local and __apex is LAZY_AGENT (absent on Pages).
   let _G = null;
   function bindScene(G) { _G = G || null; }
   function readScene() {

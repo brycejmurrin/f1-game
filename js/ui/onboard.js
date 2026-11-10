@@ -10,10 +10,9 @@ const Onboard = (function () {
   // memory, so RACES_MAX "two races and the player has seen enough" restarted
   // at every page load and an unseen mark could still appear a month in.
   const RACES_KEY = "onboardRaces";
-  // REPEAT CONTROL REMINDERS keeps the race count and records where it stood: the
-  // re-armed control marks get their own RACES_MAX window counted from there.
+  // races at REPEAT CONTROL REMINDERS: re-armed marks get RACES_MAX more
   const RACES_BASE_KEY = "onboardRaceBase";
-  const CONTROLS = 7;           // brake | ot | aero — the device-aware marks
+  const CONTROLS = 7;           // brake | ot | aero
   const MARKS = ["brake", "ot", "aero", "harvest"];
   const BIT = { brake: 1, ot: 2, aero: 4, harvest: 8 };
   const ALL = 15;
@@ -188,8 +187,7 @@ const Onboard = (function () {
       store.set(RACES_KEY, 0);
       store.set(RACES_BASE_KEY, 0);
     }
-    /** REPEAT CONTROL REMINDERS: re-arm brake, overtake and aero only (`shown &= ~7`). The
-     *  harvest mark stays spent and the race count stays — reset() wiped both. */
+    /** REPEAT CONTROL REMINDERS: re-arm brake/ot/aero only; keep harvest and races. */
     function resetControls() {
       load();
       shown &= ~CONTROLS;

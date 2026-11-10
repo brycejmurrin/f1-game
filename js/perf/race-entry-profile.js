@@ -256,9 +256,7 @@ const RaceEntryProfile = (() => {
     menuEntrySession = false;
   }
 
-  // game.js's G and loadingScreen live inside its async IIFE, so a bare `typeof G` from this
-  // script is always "undefined" in the browser (only a VM that injected a global saw them).
-  // game.js hands over two probes instead: {state(): G.state, loadingPhase(): loadingScreen.phase()}.
+  // G / loadingScreen are game.js IIFE-locals: game.js binds {state(), loadingPhase()}.
   let game = null;
   function bindGame(probe) { game = probe || null; }
   function gameState() {

@@ -91,12 +91,12 @@ const Broadcast = (function () {
     }
     return _mix(h, fastestAt(script, T) || 0);
   }
-  /** The fastest-lap holder's car number at race time T, or null (the tower's purple row). */
+  /** Fastest-lap holder's number at T, or null. */
   function fastestAt(script, T) {
     const f = script && script.fastest;
     return f && f.t != null && T >= f.t ? f.num : null;
   }
-  /** …and that car's code, for TvGraphics' FASTEST LAP banner. */
+  /** …and its code (TvGraphics banner). */
   function fastestCode(script, T) {
     const num = fastestAt(script, T);
     if (num == null) return null;

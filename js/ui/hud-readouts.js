@@ -136,9 +136,7 @@ const HudReadouts = (function () {
 
   // BLUE FLAG. The AI yields (AiDrive.letPassCase in js/game.js) to a chaser a
   // HALF LAP or more up in progress inside 9 m; the flag marshal shows it a
-  // little earlier, at about a second. The lapping test is race control's own
-  // (SportingRegs.blueFlagCar, 1.2 s, pit lane exempt on either car): a private
-  // copy here showed and spoke blue flags race control said did not apply.
+  // little earlier, at about a second. The test is SportingRegs.blueFlagCar's.
   const BLUE_S = 1.2, BLUE_HOLD_S = 1.6;   // BLUE_S mirrors SportingRegs BLUE_GAP_S (exported for readers)
   const _blueOpts = { total: 0, vFloor: 0 };
   /** The car that should be let through, or null. `held` (the car flagged last tick) keeps

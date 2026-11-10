@@ -181,7 +181,7 @@ const SaveSchemaRegistry = (function () {
     "wgxTransient": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     onboarded: entry("js/ui/onboard.js", "json", 1, "json"),
     onboardRaces: entry("js/ui/onboard.js", "json", 1, "json"),
-    onboardRaceBase: entry("js/ui/onboard.js", "json", 1, "json"),   // races at the last REPEAT CONTROL REMINDERS
+    onboardRaceBase: entry("js/ui/onboard.js", "json", 1, "json"),
     customTracks: entry("js/editor/custom-tracks.js", "json", 1, "json"),
     customTrackDraft: entry("js/editor/custom-tracks.js", "json", 1, "json"),
     customTrackDraftPrev: entry("js/editor/custom-tracks.js", "json", 1, "json"),

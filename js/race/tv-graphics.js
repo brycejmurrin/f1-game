@@ -1,7 +1,6 @@
 /* Apex 26 — broadcast-profile lower thirds, battle bar and fastest-lap banner.
-   Reads G.ranked; shares OverlayFeed's v1 battle/gap frame. The fastest-lap
-   holder comes from the creator (opts.fastest(), Broadcast's script.fastest):
-   no ranked car carries a `fastest` flag, so reading one left the banner dark. */
+   Reads G.ranked; shares OverlayFeed's v1 battle/gap frame; the fastest-lap
+   holder comes from opts.fastest() (Broadcast). */
 const TvGraphics = (function () {
   "use strict";
 
@@ -9,7 +8,7 @@ const TvGraphics = (function () {
   const LOWER_S = 5;
 
   function codeOf(c) { return String(c && (c.code || c.id || c.num) || "—"); }
-  /** `holder`: the fastest-lap holder's code; absent, a per-car `fastest` flag still counts. */
+  /** `holder`: fastest-lap code, else per-car flags. */
   function snapshot(ranked, holder) {
     return (ranked || []).map((c, i) => ({ code: codeOf(c), pos: Number.isFinite(c.pos) ? c.pos : i + 1,
       fastest: holder ? codeOf(c) === holder : !!(c.fastest || c.fastestLap) }));
@@ -44,7 +43,7 @@ const TvGraphics = (function () {
     doc.head.appendChild(style);
   }
 
-  /** opts.fastest(): the fastest-lap holder's code, or null (Broadcast passes it). */
+  /** opts.fastest(): holder code or null. */
   function create(G, parent, opts) {
     const holderOf = opts && typeof opts.fastest === "function" ? opts.fastest : () => null;
     const doc = typeof document !== "undefined" ? document : null;

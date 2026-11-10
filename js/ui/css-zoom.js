@@ -38,12 +38,7 @@ window.CssZoom = (function () {
     return (typeof z === "number" && z > 0) ? z : 1;
   }
 
-  // Effective zoom from computed style: the product of each ancestor's own `zoom`
-  // (legacy zoom reports the element's own factor, not the inherited product).
-  // The local-rect fallback below needs this, not of(): per MDN browser-compat-data
-  // (8.1.8, 2026-11) currentCSSZoom ships in Safari / iOS Safari 26.4, Chrome 128,
-  // Firefox 126 — so the engines with LOCAL rects (WebKit before 26.4) are exactly
-  // the ones without it, and of() read 1 there: the scale below was a no-op.
+  // Product of ancestors' computed `zoom`: local-rect engines (WebKit < 26.4) lack currentCSSZoom (MDN BCD).
   function computedZoom(el) {
     let z = 1;
     try {

@@ -119,7 +119,7 @@ const teamCss = (c) => {
 // The minimap (#minimap) lives in js/ui/hud-minimap.js; fitKey is a getter because _fitKey moves.
 const _minimap = HudMinimap.create(G, { vpW, vpH, teamCss, replayGhost, motionReduced, fitKey: () => _fitKey });
 let _secRows = null;
-let _secFlash = [0, 0, 0], _secFlashLog = { last: -1, raceT: null, calls: 0, painted: 0 };   // read by secFlash()
+let _secFlash = [0, 0, 0], _secFlashLog = { last: -1, raceT: null, calls: 0, painted: 0 };
 // THE GAIN, not only the split: each sector row shows the split's delta to the
 // best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
 // _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
@@ -2345,12 +2345,12 @@ function syncPhoneFit() {
 _syncPhoneFit = syncPhoneFit; _secFlashRead = () => ({ flash: _secFlash.slice(), ..._secFlashLog });
 return {
   updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit,
-  laneRectMisses, resetLaneRectMisses, secFlash: _secFlashRead,   // PERF probe (hud-radio-lane.js); sector-flash probe
+  laneRectMisses, resetLaneRectMisses, secFlash: _secFlashRead,   // PERF probe (hud-radio-lane.js)
 };
 }
 
 return {
-  create, secFlash: () => (_secFlashRead ? _secFlashRead() : null),   // GameHud.secFlash(): the live instance's sector-flash probe (__apex.hudSecFlash)
+  create, secFlash: () => (_secFlashRead ? _secFlashRead() : null),   // __apex.hudSecFlash
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
   vp: () => [vpW(), vpH()],   // the layout viewport (ICB) every HUD rect is measured in; never inner* (#5201)

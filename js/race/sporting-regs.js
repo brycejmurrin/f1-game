@@ -238,11 +238,8 @@ const SportingRegs = (function () {
   }
 
   /** The lapping car the blue flag is shown for, or null. `o.total` is lap
-   *  length, `o.vRef` the envelope (vTop) — or `o.vFloor`, the speed floor
-   *  itself. Time gap, never a literal m/s. The ONE predicate: the HUD chip
-   *  and its spoken call (HudReadouts.blueFlag) ask this too, so the HUD never
-   *  flags a car race control exempts (pit lane on either car). `held`, the car
-   *  flagged last tick, keeps its flag out to `holdS` (the HUD's anti-blink). */
+   *  length, `o.vRef` the envelope (vTop) or `o.vFloor` the floor. Time gap,
+   *  never m/s. Shared with HudReadouts.blueFlag; `held` keeps to `holdS`. */
   function blueFlagCar(p, field, o, held, holdS) {
     const floor = o && o.vFloor > 0 ? o.vFloor : o && o.vRef > 0 ? o.vRef * BLUE_VFLOOR : 0;
     if (!p || !o || !(o.total > 0) || !(floor > 0)) return null;
@@ -301,7 +298,7 @@ const SportingRegs = (function () {
 
   // Compound / caution / blue-flag scalars stay module-local. compoundsRun,
   // compoundVerdict and passPenaltyS stay module-local too: the short/apply/watch
-  // APIs own them. blueFlagCar is public for HudReadouts.blueFlag (one predicate).
+  // APIs own them.
   return Object.freeze({
     compoundShort, applyCompoundRule,
     exempt, createPassWatch, champOrder,

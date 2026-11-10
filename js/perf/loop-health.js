@@ -135,8 +135,7 @@ const LoopHealth = (() => {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
     } catch (_) { /* harness */ }
     try {
-      // Called ON document: an unbound `const g = document.getElementById; g(id)` throws
-      // "Illegal invocation" in a browser, and the catch turned both covers off.
+      // Bound: an unbound getElementById throws "Illegal invocation" in a browser.
       if (typeof document === "undefined" || !document.getElementById) return false;
       const cs = document.getElementById("carsetup");
       if (cs && !cs.hidden) return true;

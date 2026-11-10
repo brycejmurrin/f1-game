@@ -3597,8 +3597,8 @@ raceSettings = RaceSettings.create(G, {
 // over the world scheduleFlybyTrack() already warmed, and startRaceBody keeps
 // its card up until the backend presents the grid — see that file for why.
 const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags, store, announcer: () => announcer, radio: () => radioVoice });
-RaceEntryProfile.bindGame({ state: () => G.state, loadingPhase: () => loadingScreen.phase() });   // G / loadingScreen are IIFE-local: hand LoopHealth's cover probe over
-if (typeof VisorOptics !== "undefined") VisorOptics.bindScene(G);   // the HELMET visor glint reads the scene from G
+RaceEntryProfile.bindGame({ state: () => G.state, loadingPhase: () => loadingScreen.phase() });
+if (typeof VisorOptics !== "undefined") VisorOptics.bindScene(G);
 /** The RACE! button's route into a race. Not folded into startRace(): netplay
  *  and __apex.race() both AWAIT that function, and neither should gain two
  *  seconds of flourish. The button is the only place a human is watching. */
