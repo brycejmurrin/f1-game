@@ -31,7 +31,7 @@ says what to do instead. Hooks catch accidents; the Deploy-reset ruleset, `.gith
    PR's tiers prove the rest; never re-run them locally. Ladder: `docs/VERIFICATION.md`.
 4. Foreground only what takes under 2 minutes and the next step needs; anything longer is ONE background task logging
    to `artifacts/logs/`. Waiting and Monitor recipes: skill `check-changes`.
-5. No local browser test runs (CI runs them). One interactive browser at a time (hook: `mcp-browser-guard.sh`).
+5. No local browser test runs (CI runs them). One interactive browser at a time (hook: `mcp-browser-guard.sh`, beside a live Playwright run).
 6. Never kill by name (`pkill`, `killall`, `pgrep … | kill`; hook: `bash-guard.sh`); kill only a PID you launched.
 7. A timeout on a busy box measures the box; triage: skill `check-changes` `references/triage.md`.
 8. On CI, `cancelled` with zero failures is a timeout until proven otherwise, except the designed dedupe: a draft's run

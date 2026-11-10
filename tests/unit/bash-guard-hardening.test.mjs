@@ -86,7 +86,8 @@ test("2. a subagent never starts a browser run, by any entry point; browser-free
     "node tools/shot/shot.mjs --help", "node tools/ui/layout-audit.mjs --plan", "node tools/shot/shot-survey.mjs --list-locations --track monza",
     "node tools/mcp/apex-tools-mcp.mjs call apex_eval '{\"expr\":\"1\",\"vm\":true}'", "node tools/mcp/apex-tools-mcp.mjs call apex_status '{}'",
     "npx playwright --version", "npx playwright install chromium", "npx playwright test --list", "node tools/mcp/browser-http-up.mjs --stop",
-    "cat > scratch/x.md <<'EOF'\nnpm test\nnpx playwright test\nEOF", "grep -rn 'playwright test' tools/ci", "echo 'npm test'", "npm run gen",
+    "cat > scratch/x.md <<'EOF'\nnpm test\nnpx playwright test\nEOF", "cat > scratch/n.md <<'EOF'\nnode tools/ci/test-bg.mjs smoke\nremote-group garage-angles career-economy\nEOF",
+    "echo 'run test-bg and garage-angles'", "node tools/shot/garage-angles.mjs --help", "node tools/net/rtc-e2e.mjs --help", "grep -rn 'playwright test' tools/ci", "echo 'npm test'", "npm run gen",
   ];
   for (const cmd of browser) refused(cmd, /subagent never starts a browser run/, SUB);
   for (const cmd of nodeOnly) allowed(cmd, SUB);
@@ -105,6 +106,8 @@ test("2b. a subagent's node/npm/shell command carries APEX_SUBAGENT=1 (updatedIn
   assert.equal(out.permissionDecision, undefined, "no decision: the normal permission flow still decides");
   assert.deepEqual(out.updatedInput, { command: "export APEX_SUBAGENT=1\nnode tools/shot/agent.mjs monza info --vm", description: "d", timeout: 5000 });
   assert.equal(run("git status", SUB).stdout.trim(), "", "a command that runs no interpreter is left as written");
+  const rtc = JSON.parse(run("node tools/net/rtc-e2e.mjs", SUB).stdout).hookSpecificOutput.updatedInput.command;
+  assert.match(rtc, /^export APEX_SUBAGENT=1\n/, "a direct launcher script gets the marker; launchChromium refuses it");
   assert.equal(run("node -v").stdout.trim(), "", "the main session's command is left as written");
   const again = run("export APEX_SUBAGENT=1\nnode x.mjs", SUB);
   assert.equal(again.stdout.trim(), "", "never prefixed twice");
@@ -135,7 +138,8 @@ test("3. the commit gate stays reachable: --no-verify / -n and hooks-path writes
   for (const cmd of ["git commit -m x", "git commit -am x", "git commit -m 'no -n here'", "git commit --amend --no-edit", "git commit -F msg.txt",
     "git -c user.name=x commit -m x", "git log -n 3", "git diff --name-only", "git commit -m x && git log -n 3", "git commit -m -n",
     `git config --get ${HP}`, `git config ${HP}`, `git config --get-all ${HP}`, `git commit -m "docs: explain ${HP} setup"`,
-    "git commit -m \"$(cat <<'X'\nfix (a\n\ngh pr merge is banned; git commit -n too\nX\n)\"", "git commit --help", "git log --no-walk -n 1"])
+    "git commit -m \"$(cat <<'X'\nfix (a\n\ngh pr merge is banned; git commit -n too\nX\n)\"", "git commit --help", "git log --no-walk -n 1",
+    "git commit -F - <<'EOF'\nfix\n\nnever use -n or --no-verify here\nEOF"])
     allowed(cmd);
 });
 
