@@ -59,7 +59,6 @@ test("expandInputPaths walks directories and skips missing leaves", () => {
 test("ci.yml wires lookup-only verdict cache for guards shards and honours NO_MEMO", () => {
   assert.match(CI_YML, /tools\/ci\/inputs-hash\.mjs guards/);
   assert.match(CI_YML, /lookup-only:\s*true/);
-  assert.match(CI_YML, /NO_MEMO:/);
   // Nightly schedule forces NO_MEMO so the auditor always runs the work.
   assert.match(CI_YML, /NO_MEMO: \$\{\{ github\.event_name == 'schedule' && '1' \|\| '' \}\}/);
   // sweeps-parts path set is declared here; ci.yml wiring waits on a follow-up

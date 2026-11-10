@@ -179,9 +179,21 @@ export function visibleRows(Parts, cat, team) {
   return [...seen.values()];
 }
 
+/** An id that names nothing: an unknown --team used to fall through to "no
+ *  filter" and an unknown --cats to zero rows, and both passed. */
+export class LadderArgError extends Error {}
+
 export function sweepLadder({ M, cats, teamId } = {}) {
   const mods = M || loadParts();
   const team = teamId ? mods.Teams.LIST.find((t) => t.id === teamId) : null;
+  if (teamId && !team) {
+    throw new LadderArgError(`unknown --team ${teamId} (known: ${mods.Teams.LIST.map((t) => t.id).join(", ")})`);
+  }
+  if (cats) {
+    const known = mods.Parts.CATALOG.map((c) => c.id);
+    const bad = cats.filter((c) => !known.includes(c));
+    if (bad.length) throw new LadderArgError(`unknown --cats ${bad.join(", ")} (known: ${known.join(", ")})`);
+  }
   const out = [];
   for (const cat of mods.Parts.CATALOG) {
     if (cats && !cats.includes(cat.id)) continue;
@@ -200,38 +212,46 @@ export function sweepLadder({ M, cats, teamId } = {}) {
   return out;
 }
 
-function main() {
-  const args = process.argv.slice(2);
+/** The CLI body: prints the report (or the JSON) and RETURNS the exit code —
+ *  1 on a paid trap (under --json too: it used to return before the verdict),
+ *  2 on an unknown --team / --cats. `M` and `log` are injectable for tests. */
+export function runLadder(args, { M, log = console.log, err = console.error } = {}) {
   const has = (n) => args.includes("--" + n);
   const val = (n) => { const a = args.find((x) => x.startsWith("--" + n + "=")); return a && a.slice(n.length + 3); };
   const cats = (val("cats") || "").split(",").filter(Boolean);
   const teamId = val("team") || null;
 
-  const rows = sweepLadder({ cats: cats.length ? cats : null, teamId });
-  if (has("json")) { console.log(JSON.stringify(rows, null, 1)); return; }
+  let rows;
+  try { rows = sweepLadder({ M, cats: cats.length ? cats : null, teamId }); } catch (e) {
+    if (!(e instanceof LadderArgError)) throw e;
+    err("parts-ladder: " + e.message);
+    return 2;
+  }
+  const trapCount = rows.reduce((n, r) => n + r.traps.length, 0);
+  if (has("json")) { log(JSON.stringify(rows, null, 1)); return trapCount ? 1 : 0; }
 
   const F = (v, w) => String(v).padEnd(w);
-  console.log(F("category", 12) + F("shown", 7) + F("live", 6) + F("dead", 6) +
+  log(F("category", 12) + F("shown", 7) + F("live", 6) + F("dead", 6) +
               F("dead%", 7) + F("traps", 7) + "flat stats");
   let shown = 0, dead = 0, traps = 0;
   for (const r of rows) {
     shown += r.shown; dead += r.dead.length; traps += r.traps.length;
-    console.log(F(r.cat, 12) + F(r.shown, 7) + F(r.live, 6) + F(r.dead.length, 6) +
+    log(F(r.cat, 12) + F(r.shown, 7) + F(r.live, 6) + F(r.dead.length, 6) +
       F((100 * r.dead.length / r.shown).toFixed(0) + "%", 7) +
       F(r.traps.length || "", 7) + (r.flat.join(",") || "-"));
     if (has("verbose")) {
       for (const d of r.dead)
-        console.log("     dead  " + d.id.padEnd(24) + String(d.cost || 0).padStart(4) + "cr  " +
+        log("     dead  " + d.id.padEnd(24) + String(d.cost || 0).padStart(4) + "cr  " +
           STATS.map((k) => statOf(d, k).toFixed(2)).join(" "));
       for (const t of r.traps)
-        console.log("     TRAP  " + t.dead.id + " (" + (t.dead.cost || 0) + "cr) is beaten on every " +
+        log("     TRAP  " + t.dead.id + " (" + (t.dead.cost || 0) + "cr) is beaten on every " +
           "stat by " + t.by.id + " (" + (t.by.cost || 0) + "cr)");
     }
   }
-  console.log("\n" + shown + " rows" + (teamId ? " visible to " + teamId : "") +
+  log("\n" + shown + " rows" + (teamId ? " visible to " + teamId : "") +
     " · " + dead + " never optimal (" + (100 * dead / shown).toFixed(1) + "%)" +
     " · " + traps + " paid traps");
-  if (traps) process.exitCode = 1;
+  return traps ? 1 : 0;
 }
 
-if (process.argv[1] && process.argv[1].endsWith("parts-ladder.mjs")) main();
+if (process.argv[1] && process.argv[1].endsWith("parts-ladder.mjs")) process.exitCode = runLadder(process.argv.slice(2));

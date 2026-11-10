@@ -44,17 +44,6 @@ function _rigBar(out, x0, y0, x1, y1, z, w, d, col) {
     out.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
 }
-// A rim arc of radius r from angle a0 to a1 (radians, 0 = 3 o'clock, CCW), in
-// n straight segments each stretched past its ends so the joins leave no gap.
-function _rigArc(out, r, a0, a1, n, w, d, col) {
-  const ext = w * 0.18;
-  for (let i = 0; i < n; i++) {
-    const t0 = a0 + (a1 - a0) * i / n, t1 = a0 + (a1 - a0) * (i + 1) / n;
-    const x0 = r * Math.cos(t0), y0 = r * Math.sin(t0), x1 = r * Math.cos(t1), y1 = r * Math.sin(t1);
-    const L = Math.hypot(x1 - x0, y1 - y0) || 1, ex = (x1 - x0) / L * ext, ey = (y1 - y0) / L * ext;
-    _rigBar(out, x0 - ex, y0 - ey, x1 + ex, y1 + ey, 0, w, d, col);
-  }
-}
 // Convex, bevel-cornered fascia / glove panels. Unlike boxes, their silhouette
 // stays rounded when the wheel rolls. Front is -z, toward the driver.
 // Physical cockpit materials avoid the generic world/ground texture on instruments.
@@ -571,7 +560,6 @@ function getCockpitDash() {
   cockpitDashMesh = _gfx.createMesh(_rigMaterials(out));
   return cockpitDashMesh;
 }
-// --- COCKPIT INTERIORS (js/camera/cockpit-opts.js INTERIOR) ------------------
 // The bodywork an interior adds around its seat, CAR-LOCAL (the frame the body
 // is drawn in: y up from the road, z forward, x across) and never rolled with
 // the wheel (CockpitOpts INTERIOR). TEAM: padding in the team's colours. CLASSIC:
