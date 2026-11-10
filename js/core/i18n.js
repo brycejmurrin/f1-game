@@ -13,12 +13,7 @@ const I18n = (function () {
   const listeners = new Set();
   let fmtCache = Object.create(null);
 
-  // THE SHIPPED LOCALE LIST: one entry per locales/<tag>.json (manifest.json
-  // excluded); tests/unit/i18n-lang-validate.test.mjs pins it to the directory
-  // and to locales/manifest.json. A tag from storage, ?lang= or set() that is not
-  // on it (or on the loaded manifest) resolves to "en": a stored "x" threw
-  // RangeError from new Intl.PluralRules inside the frame loop, and a stored
-  // "../../etc" built a fetch URL from player-shaped disk data.
+  // Shipped locales (i18n-lang-validate.test.mjs pins it); any other tag is "en" (W34).
   const SHIPPED_LANGS = Object.freeze(["en"]);
   const PSEUDO_LANGS = Object.freeze(["en-XA"]);   // built in code (I18nPseudo), no file
   const MAX_TAG = 35;
@@ -251,8 +246,7 @@ const I18n = (function () {
   }
 
   async function boot(lang) {
-    // A caller's tag is validated like a stored one; a well-formed tag the
-    // manifest has not confirmed yet runs as "en" until loadCatalog does.
+    // A caller's tag is validated like a stored one; unconfirmed runs as "en".
     const want = lang ? (cleanLang(lang) || "en") : resolveDetectOrder();
     const next = isShipped(want) ? want : "en";
     activeLang = next;

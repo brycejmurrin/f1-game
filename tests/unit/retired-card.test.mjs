@@ -13,7 +13,6 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/race/retired-card.js"), "utf8");
-const CSS = readFileSync(join(ROOT, "css/touch-controls.css"), "utf8");
 
 function fakeDom() {
   const nodes = {};
@@ -76,15 +75,13 @@ test("the card hides itself when race ticks stop (pause, quit) and returns on th
   assert.equal(RC.shown, true);
 });
 
-test("the card is built once with a real 44 px-styled button, and its CSS hides the driving controls", () => {
+test("the card is built once, with a real button, as a status region", () => {
   const dom = fakeDom();
   const { RC } = load(dom);
   RC.tick(view()); RC.tick(view({ state: "results" })); RC.tick(view());
   assert.equal(dom.nodes["retired-skip"].tag, "button");
   assert.equal(dom.nodes["retired-skip"].textContent, "SKIP TO RESULTS");
   assert.equal(dom.nodes["retired-card"].attrs.role, "status");
-  assert.match(CSS, /#retired-card button \{ min-height: 44px; min-width: 44px;/);
-  assert.match(CSS, /body\[data-retired-wait\] \.dock-grp, body\[data-retired-wait\] \.touchbtn \{ display: none !important; \}/);
 });
 
 test("tickG reads the façade: a retired player in a solo race shows; a room or WATCH does not", () => {

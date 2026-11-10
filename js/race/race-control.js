@@ -394,13 +394,9 @@ const RaceControl = (function () {
       if (stamp != null) _s8Done = stamp;   // after the match check; call sites pass finite dt
       // Before any gate, so the card hides once the race is over.
       if (typeof port.playerWait === "function") port.playerWait();
-      // State reset BEFORE the ownership gate: a guest's caution mirror comes
-      // from host apply(), and returning early here would leave the last flag
-      // flown on its HUD after the race ended (reset() is local-only, safe for all).
-      // A lone lap has no field to protect: in Time Trial and qualifying the
-      // player's OWN cones and shards (hz.total >= 6) raised a VSC whose
-      // cautionV held them to 0.6 of vTop, and the CAUTIONS row is hidden there
-      // so it could not be switched off. Same reset path as "not racing".
+      // State reset BEFORE the ownership gate (a guest's mirror would keep the
+      // last flag after the race). A lone lap (TT, quali) has no field to
+      // protect: its own cones raised a VSC there. Same reset as "not racing".
       if ((port.state !== "race" && !(replayOwned && port.state === "count")) || port.timeTrial || port.session === "quali") {
         if (caution.level !== 0 || capHoldT || replayOwned) reset();
         lowGripNoted = false;
@@ -429,11 +425,8 @@ const RaceControl = (function () {
         publish();
       }
       if (caution.level !== 0) caution.sinceT += dt;
-      // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS. The hazard loop
-      // can only raise one while enabled, but apply() (a scripted red, a host's)
-      // can land one with CAUTIONS off — and a red that never ages never asks
-      // for its restart, which held the whole field at 2 % of top speed until
-      // the player quit. The switch gates the hazard loop below, not this.
+      // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS: apply() can land
+      // one with CAUTIONS off, and a red that never ages never restarts.
       if (caution.level === 4) {
         // The red procedure: no hazard query, no cap — it ends in exactly ONE
         // restart request. The re-arm hold then keeps the same (not yet
@@ -459,11 +452,8 @@ const RaceControl = (function () {
       if (stopQueryT >= QUERY_EVERY) { stopQueryT -= QUERY_EVERY; stopPic = port.stopped ? port.stopped(QUERY_EVERY) : null; }
       const debrisOn = DebrisWorld.active();
       if (!debrisOn && !stopPic && !stopOwned) {
-        // Debris inactive mid-flag: the LEVEL freezes (test-asserted — see
-        // "debris going inactive mid-race freezes a flying flag") but it keeps
-        // AGEING, so the hard cap still fires. Before this, a trapped Rapier
-        // world (debrisworld sets _active=false permanently) pinned a safety
-        // car — and disabled OVERTAKE — for the rest of the race.
+        // Debris inactive mid-flag: the LEVEL freezes (test-asserted) but keeps
+        // AGEING, so the hard cap still fires (a trapped Rapier world pinned an SC).
         if (!(held && caution.level <= held)) capDropIfExpired();
         return;
       }
@@ -494,15 +484,10 @@ const RaceControl = (function () {
       // host to name the moment (netplay hostStart) — it holds a SAFETY CAR.
       if (desired === 4 && port.networkActive()) { desired = 3; dcause = "SAFETY CAR"; }
 
-      // The HARD CAP the constants always promised ("a stuck hazard cannot
-      // neutralise the race forever"): a flag flown for its full cap drops to
-      // GREEN even while the hazard picture persists — marshals have had their
-      // window; racing resumes. Without this the cap clause below was dead code
-      // (MIN_HOLD < cap made the disjunct unreachable, and lowering only ever
-      // ran when the picture had ALREADY cleared), so one never-despawning
-      // piece of debris held a safety car for the rest of the race.
-      // capHold suppresses an instant re-raise from the SAME stale picture;
-      // genuinely new hazards re-arm after it expires.
+      // HARD CAP: a flag flown for its full cap drops to GREEN even while the
+      // hazard picture persists (one never-despawning shard held an SC all race).
+      // capHold stops an instant re-raise from the SAME stale picture; new
+      // hazards re-arm after it expires.
       if (held && desired < held) { desired = held; dsector = -1; dfrac = 0; dcause = heldCause; }
       if (!(held && caution.level <= held) && capDropIfExpired()) return;
       if (capHoldT > 0) {

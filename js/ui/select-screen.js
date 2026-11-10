@@ -633,11 +633,7 @@ function applyTrackSearch(value) {
   ScrollFadeRefresh();
 }
 
-// SEASON / CLASSICS follow the calendar the player's season races, read
-// through SeasonCal.list() (the setup's calendar, the season in progress, or a
-// career's stamped one), not the `classic` flag: the real 2026 calendar races
-// Zandvoort, Catalunya and Sepang, which are flagged classic. calendarIdSet and
-// calendarGroup are pure (Menus.calendarIdSet / Menus.calendarGroup, tested).
+// SEASON / CLASSICS follow SeasonCal.list(), not the `classic` flag (W34; select-season-tab.test.mjs).
 const seasonIds = () => calendarIdSet(typeof SeasonCal !== "undefined" ? SeasonCal : null);
 // The CLASSIC badge: a flagged circuit that this season's calendar does not race.
 const classicBadge = (t, ids) => !!t.classic && calendarGroup(t, ids) === "classic";
@@ -1626,9 +1622,7 @@ return {
 };
 }
 
-/** The ids of the calendar the player's season races (SeasonCal.list()), or
- *  null when SeasonCal, its list() or a non-empty calendar is missing — the
- *  caller then falls back to the `classic` flag. Pure apart from that read. */
+/** The season calendar's ids, or null (then the `classic` flag decides). */
 function calendarIdSet(cal) {
   if (!cal || typeof cal.list !== "function") return null;
   let l;
@@ -1638,10 +1632,7 @@ function calendarIdSet(cal) {
   for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
   return ids.size ? ids : null;
 }
-/** The picker tab a circuit belongs to: "custom" (MY CIRCUITS), "season" (on
- *  the calendar in `ids`) or "classic" (every other built-in circuit). With no
- *  calendar (ids null) it is the legacy split on the `classic` flag. Every
- *  circuit lands in exactly one group, so each shows under at least one chip. */
+/** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
 function calendarGroup(t, ids) {
   if (!t) return null;
   if (t.custom) return "custom";
