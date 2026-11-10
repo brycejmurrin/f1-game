@@ -60,3 +60,10 @@ test("fix() returns absolute when given a relative that exists", () => {
   assert.ok(path.isAbsolute(o.filename), o.filename);
   assert.ok(o.filename.endsWith(`${path.sep}js${path.sep}core${path.sep}log.js`), o.filename);
 });
+
+test("hash index covers js/render/three/ (the TLX renderer) and skips only vendored trees", () => {
+  const tlx = path.join(ROOT, "js/render/three/tlx.js");
+  assert.equal(preload.byHash(fs.readFileSync(tlx, "utf8")), tlx);
+  for (const dir of ["vendor", "node_modules", "three-0.187.0"]) assert.match(dir, preload.VENDORED_DIR);
+  for (const dir of ["three", "render", "threejs-helpers"]) assert.doesNotMatch(dir, preload.VENDORED_DIR);
+});
