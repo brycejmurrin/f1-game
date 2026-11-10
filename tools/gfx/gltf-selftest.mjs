@@ -25,7 +25,10 @@ const repoRoot = join(__dirname, "../..");
 // --- load js/render/shared/gltf.js into this context ---
 // TextDecoder is global in modern Node; atob exists too, but the module also
 // supports Buffer, which we rely on for base64.
-const src = readFileSync(
+// APEX_GLTF_SELFTEST_SRC points the test at another copy of the loader — the
+// mutation check in tests/unit/gltf-selftest.test.mjs feeds it a copy with the
+// mirrored-node winding swap disabled and expects a red, without touching js/.
+const src = readFileSync(process.env.APEX_GLTF_SELFTEST_SRC ||
   join(repoRoot, (await import("node:module")).createRequire(import.meta.url)("../manifest.cjs").PATHS.GLTF),
   "utf8");
 const logSrc = readFileSync(join(repoRoot, "js/core/log.js"), "utf8");

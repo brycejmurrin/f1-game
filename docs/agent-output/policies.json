@@ -771,6 +771,11 @@
       "presentation": "native",
       "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan; missing fleet-block field on a cursor/ branch"
     },
+    "tools/ci/ready-sweep.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "STALE/DRIFTED rows with their cites; the ready over|within cap row; = ready-sweep verdict; exit 3 unreadable GitHub"
+    },
     "tools/ci/release-provenance.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2875,6 +2880,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "LGPL attribution, imported status/IDs and actual write receipts; prose currently accompanies --json."
+    },
+    "tools/track/verify-track-baseline.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
     },
     "tools/track/verify-track.cjs": {
       "action": "targeted-summary",

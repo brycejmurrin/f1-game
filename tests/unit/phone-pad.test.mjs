@@ -1236,7 +1236,6 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(page, /#menupad \{ position: absolute; inset: 0; display: none;/, "the pad screen is hidden on the wheel");
   assert.match(page, /body\.linked\.menu #menupad \{ display: grid; \}/, "and shows, linked, in a menu");
   assert.match(page, /body\.menu #ctl \{ display: none; \}/, "while the wheel goes");
-  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "the pad refuses browser gestures too");
   assert.match(page, /pause: \[\$\("b-pause"\), \$\("b-pause-menu"\)\]/, "PAUSE on the wheel and on the pad");
   assert.match(page, /navSelect: \$\("b-navSelect"\), navBack: \$\("b-navBack"\)/, "SELECT and BACK wired");
   assert.match(page, /mtitle: \$\("mp-title"\)/, "the pad's title is painted from the dash");

@@ -153,3 +153,30 @@ test("summary lists executed vs skipped jobs and names the required set", () => 
   assert.ok(/FAIL/.test(red));
   assert.ok(/smoke: required to succeed/.test(red));
 });
+
+// ---- #5241 G5 ----
+import { rerunVerdict } from "../../tools/ci/ci-verdict.mjs";
+test("#5241 G5: a plan that said run and a job that skipped is not green", () => {
+  const ok = { guards: { result: "success" }, select: { result: "success", outputs: { any: "true", any_node: "true" } },
+    selected: { result: "success" }, "selected-verdict": { result: "success" }, "node-suites": { result: "success" } };
+  assert.equal(verdict(ok, { fullTier: true }).ok, true);
+  // the issue's crafted input: all three skipped was {"ok":true}
+  const hollow = { ...ok, selected: { result: "skipped" }, "selected-verdict": { result: "skipped" }, "node-suites": { result: "skipped" } };
+  const v = verdict(hollow, { fullTier: true });
+  assert.equal(v.ok, false);
+  assert.equal(v.bad.length, 3);
+  assert.equal(verdict({ ...ok, "node-suites": { result: "skipped" } }).ok, true, "a draft / the train skips node-suites by design");
+  assert.equal(verdict({ ...ok, "node-suites": { result: "skipped" } }, { fullTier: true }).ok, false);
+  const empty = { ...ok, select: { result: "success", outputs: { any: "false", any_node: "false" } }, selected: { result: "skipped" }, "node-suites": { result: "skipped" } };
+  assert.equal(verdict(empty, { fullTier: true }).ok, true, "an empty plan still skips legitimately; selected-verdict judges it");
+});
+test("#5241 G5: a CI green that needed a re-run is not ok until the PR names it (#5190, run 42730286157 attempt 2)", () => {
+  assert.equal(rerunVerdict({ attempt: 1 }).ok, true);
+  const r = rerunVerdict({ attempt: 2, previous: "failure", body: "## Plan\n- [x] done" });
+  assert.equal(r.ok, false);
+  assert.match(r.evidence, /rule 9/);
+  assert.equal(rerunVerdict({ attempt: 2, previous: "", body: "" }).ok, false, "an unread previous attempt fails closed");
+  assert.equal(rerunVerdict({ attempt: 2, previous: "cancelled" }).ok, true, "the designed dedupe is not a re-run of a red");
+  assert.equal(rerunVerdict({ attempt: 2, previous: "failure", body: "## Verified\n- re-run: perf-hot-bench.test.mjs — runner noise, quarantined" }).ok, true);
+  assert.equal(rerunVerdict({ attempt: 2, previous: "failure", body: "<!-- re-run: hidden -->" }).ok, false, "a comment names nothing");
+});

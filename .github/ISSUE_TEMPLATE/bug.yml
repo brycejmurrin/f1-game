@@ -1,6 +1,6 @@
 name: Bug
 description: Something in the game is wrong — what you saw and how to get there.
-labels: ["bug", "ready"]
+labels: ["bug"]
 body:
   - type: textarea
     id: what
