@@ -43,7 +43,7 @@ surface without hand-wiring:
 | Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the six catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
 | Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the six catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
-| Guard hooks | `.claude/settings.json` hooks; `.cursor/hooks.json`; `.codex/hooks.json` | Yes. The git pre-commit hook owns `test:guards` for every host; PreToolUse guards make fast, fail-closed refusals. One rule set, two doors: Claude runs `.claude/hooks/bash-guard.sh` and `protect-files.sh`; Cursor reaches the same scripts through `.cursor/hooks/shell-guard.sh` (`beforeShellExecution`), `edit-guard.sh` (`preToolUse` with no matcher: the script picks the file writes and deletes, since Cursor's edit tool names are undocumented) and `mcp-guard.sh`, each answering in Cursor's `permission` JSON ([hooks](https://cursor.com/docs/agent/hooks), [tool map](https://cursor.com/docs/reference/third-party-hooks)). The shared safety bans (2026-10-22): no hand ratchet raise, no edit to another branch's `tests/data/ratchets.d` fragment, no push over a foreign pusher, no `pkill -f` (`tests/unit/cross-tool-guards.test.mjs`). |
+| Guard hooks | `.claude/settings.json` hooks; `.cursor/hooks.json`; `.codex/hooks.json` | Yes. (Not `docs/AGENT-HOOKS.md`: that generated file indexes the game's `__apex` hooks; these Claude Code hooks are listed in `.claude/rules/claude-config.md`.) The git pre-commit hook owns `test:guards` for every host; PreToolUse guards make fast, fail-closed refusals. One rule set, two doors: Claude runs `.claude/hooks/bash-guard.sh` and `protect-files.sh`; Cursor reaches the same scripts through `.cursor/hooks/shell-guard.sh` (`beforeShellExecution`), `edit-guard.sh` (`preToolUse` with no matcher: the script picks the file writes and deletes, since Cursor's edit tool names are undocumented) and `mcp-guard.sh`, each answering in Cursor's `permission` JSON ([hooks](https://cursor.com/docs/agent/hooks), [tool map](https://cursor.com/docs/reference/third-party-hooks)). The shared safety bans (2026-10-22): no hand ratchet raise, no edit to another branch's `tests/data/ratchets.d` fragment, no push over a foreign pusher, no `pkill -f` (`tests/unit/cross-tool-guards.test.mjs`). |
 
 **Codex collaboration adapter.** When the Codex host exposes collaboration
 agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
@@ -221,9 +221,9 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Tiny car inspect JPEG | `tools/car/carshot.mjs` (soft→CDP clip) | full `apex-capture` sweep |
 | Interactive host browser | **playwright-official** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
 | One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
-| Start Playwright **groups** | `tools/ci/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
-| Agent bloat / extract / dead code | skill **slim-bloat** → `bloat-auditor` + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
-| Review one skill / agent / hook / AGENTS.md section after an edit | `agent-surface-reviewer` (report in `scratch/`; `retest <old report>` = before/after) | the main session hand-reading every unit |
+| Run a Playwright **group** | CI: the PR's tiers, or `node tools/ci/remote-group.mjs <group>` on the pushed branch (agents run no browser test locally, AGENTS.md rule 5) | `test-bg.mjs` (one spec, Bryce-granted sessions only); any `apex_*` wrap; host `browser_*` |
+| Agent bloat / extract / dead code | skill **slim-bloat** → `code-hunter` (focus dead-code) + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
+| Review one skill / agent / hook / AGENTS.md section after an edit | `surface-reviewer` (report in `scratch/`; `retest <old report>` = before/after) | the main session hand-reading every unit |
 | Bug / perf hunt over a slice | `prior-art-scout` (known list) → one `code-hunter` per slice → `finding-verifier` before any fix | a browser run in a hunter; acting on an unverified finding |
 
 Call `apex_status` before any `apex_*` browser tool. Occupancy treats a
@@ -520,7 +520,7 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 <!-- NEVER-WRAP -->
 | CLI / action | Why | Use instead |
 |---|---|---|
-| `test-bg.mjs` start / `--wait` / `--stop` | Minutes of Playwright; foreground-illegal | CLI `test-bg.mjs`; skill **check-changes** |
+| `test-bg.mjs` start / `--wait` / `--stop` | Minutes of Playwright; agents never start it (AGENTS.md rule 5) | CI groups via `node tools/ci/remote-group.mjs <group>`; skill **check-changes** |
 | `verify-change.mjs` without `--fast` | Starts browser groups | `apex_verify_change_fast` |
 | `node tools/ci/bump-cache.mjs --apply --at N --root _site` | Deploy-only: hashes a STAGED shell (pages.yml); the repo carries `?v=dev` and `--apply` refuses without `--root` | `check-changes/references/bump.md` |
 | `assets.mjs bake*` | Author-time writer | skill **asset-pack** |

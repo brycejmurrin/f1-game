@@ -11,7 +11,7 @@ Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
 | Kerb strike | `js/game.js` `kerbCueT` block (grep `KERB_SHAKE`); `KERB_SHAKE` / `KERB_CUE_HOLD` in `js/physics/consts.js` | **Not particles.** `KERB_SHAKE` is a HELD FLOOR (`Math.max(feel.shake, KERB_SHAKE)` while the cue holds): raising it makes a steadier buzz, not punch. PUNCH = a one-off add on the kerb-ENTRY edge (`kerbCueT` rising from 0), with a cooldown, scaled by speed; keep the floor. AUDIO = the continuous kerb loop in `js/audio/engine.js` (`kerbSrc`/`kerbGain`, `setEngine`'s `onKerb`); `GameAudio.rumble()` is a no-op while `kerbLive`. Haptics `Input.vibrate/rumble` (none on iOS). Onboard shiver: `js/camera/vantage.js` `onboardAttitude`. The lines just above the cue block (the `c.speed` cut and `kerbGripSm`) are PHYSICS — never touch them for feel. |
 | Collision / wall sfx | `GameAudio.collision()` | Gate with `collideT` / `wallT`. |
 | Wall/car-car sparks | `Particles.sparks` | Wall scrape from `Tracks.wallAt` proximity; collision via `c.fxSparkI`. |
-| Off-track kickup | `Particles.kickup` | Only when `c.offroad` (`Math.abs(c.x) > hw && !c.onKerb`). Kerbs never get kickup. |
+| Off-track kickup | `Particles.kickup` | Only when `c.offroad` (game.js, grep `c.offroad =`; false on a kerb). Kerbs never get kickup. |
 | Tyre marks | `js/fx/skidmarks.js` | Stamp from measured slip; keep the ring bounded. |
 | Chassis attitude | `js/physics/body-attitude.js` | Visual only; never write back into physics. |
 | Gear-shift punch | `GameAudio.shift()` | Layer sfx/camera tick; do not retune physics. |

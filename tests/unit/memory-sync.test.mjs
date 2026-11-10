@@ -62,8 +62,8 @@ test("the repo fills the live dir; a live edit made after the last restore is ke
     r.put(r.live, "a.md", topic("a", "live edit"));
     r.put(r.live, "new.md", topic("new", "session-only"));
     const out = r.run("restore");
-    assert.match(out, /memory: 1 in/);
-    assert.match(out, /KEPT live edits newer than the last restore, differing from the repo: a\.md/);
+    assert.equal(out, "memory: 1 in from .claude/memory/ (repo fills the live dir; edit memories there); "
+      + "KEPT live edits newer than the last restore, differing from the repo: a.md (copy into .claude/memory/ and commit to keep them)\n");
     assert.equal(r.get(r.live, "a.md"), topic("a", "live edit"), "a mid-session memory survives");
     assert.equal(r.get(r.live, "b.md"), topic("b", "repo"), "an older live copy is refreshed from the repo");
     assert.equal(r.get(r.repo, "new.md"), null, "nothing flows live → repo");
@@ -80,7 +80,8 @@ test("only a new session restores: resume, compact, clear and fork leave the liv
       assert.equal(r.run("restore", {}, JSON.stringify({ hook_event_name: "SessionStart", source })), "", source);
       assert.equal(r.get(r.live, "a.md"), null, `${source}: no copy`);
     }
-    assert.match(r.run("restore", {}, JSON.stringify({ hook_event_name: "SessionStart", source: "startup" })), /memory: 1 in/);
+    assert.equal(r.run("restore", {}, JSON.stringify({ hook_event_name: "SessionStart", source: "startup" })),
+      "memory: 1 in from .claude/memory/ (repo fills the live dir; edit memories there)\n");
   } finally { r.done(); }
 });
 

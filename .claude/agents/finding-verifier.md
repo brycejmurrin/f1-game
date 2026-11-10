@@ -72,7 +72,8 @@ over), never soften a REFUTED to fit the claimant, never edit a file.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: rows
 decided so far plus `not checked:` for the rest beats silence; hitting
-`maxTurns` mid-tool-call returns NOTHING to the parent.
+`maxTurns` returns your output marked partial, which is only what your last
+message said.
 
-Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
 Run one simple command per Bash call (no `&&`, `|`, `;`, `$()` or `git -C`) so an allowlist can approve it. If a Bash call is denied, mark only that item UNREAD and continue with Read/Grep/Glob; if every route is denied, return your contract block marked UNREAD. Never route around a denial.

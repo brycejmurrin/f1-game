@@ -36,4 +36,4 @@ brighter, blue = B darker), `heat.png`, `sheet.png`, `result.json`. Batch runs a
   from an agent session without an explicit ask — those are human/CI lattices. Agent default is
   classify → `--live <one id>` → bake.
 
-Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
+Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring sliders.

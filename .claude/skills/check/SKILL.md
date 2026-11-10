@@ -19,24 +19,25 @@ live: <yes|no|unknown> (<live sha7>)
 ```
 
 Green = `CI` success AND the `gate` status success on the PR head. "gate" means three things here; only the
-third is the ruleset's: `ready-gate.mjs` (the draft→ready receipt), `Structural guards` (the job it reads), and
+third is the ruleset's: `ready-gate.mjs` (the draft→ready receipt), `Structural guards` (the jobs it reads), and
 `land.yml`'s `gate` COMMIT STATUS. Never start a run, push or re-run anything to answer.
 
 1. `node tools/ci/session-status.mjs --summary --pr` — branch, push/dirty state and PR/CI
    snapshot. It finds OPEN PRs only: "no open PR" may mean merged — check with `gh api "repos/brycejmurrin/f1-game/pulls?state=all&head=brycejmurrin:<branch>"`
-   (or MCP `search_pull_requests`), then pass `--pr <n>`. Use `git rev-parse HEAD` when the
+   (or MCP `list_pull_requests` with `state: all`), then pass `--pr <n>`. Use `git rev-parse HEAD` when the
    snapshot has no head SHA. No PR is not evidence that no run exists.
 2. `node tools/ci/ci-watch.mjs --sha <head> --once` — the `= ci …` line (its default floor is the PR's last ready/reopen event, so an older head reads `none`: add `--since none` to look further back). Anything but `passed` is not green:
-   `running (0 failed)` is not stale; `none` = the push started no run; `hollow` = only the skip skeleton ran;
-   `superseded (merged)` → re-read with `--sha <merge sha> --pages`; `superseded (new head …)` → re-read on that
-   sha; `blocked` = conflicts; `unknown` = no API evidence.
+   `running (0 failed)` is not stale; `none` = no run counted on that sha; `cancelled` = a timeout until proven
+   otherwise (rule 8); `superseded (merged)` → re-read with `--sha <merge sha>`; any other `superseded` → re-read on
+   the sha it names; `unknown` = no API evidence. `--once` never waits long enough to print `blocked`: conflicts
+   show as `mergeable_state dirty` in step 1.
 3. The `gate` line: `gh api repos/brycejmurrin/f1-game/commits/<head>/statuses`, newest `context: gate` (ci-watch does not
    read statuses). Absent on a draft or a PR without `land` is expected; for one PR's land readiness (Plan, LAND/WAIT)
    `node tools/ci/pr-board.mjs --pr <n>`.
 4. Only when `artifacts/logs/` has a log newer than the head commit: its closing `= …` line
    (`= tooling-fast passed|failed …`; a `test-bg` log's verdict is `= bg exit N`). No closing line = still running.
 5. Live build, only when liveness is asked: agent `deploy-research` returns the live `apex-sha` (never curl
-   github.io from the main context; steward §7). Then `git merge-base --is-ancestor <head> <live sha>` — exit 0
+   github.io from the main context; steward `references/ci-verdicts.md`). Then `git merge-base --is-ancestor <head> <live sha>` — exit 0
    means live; exit 1 means not live only in a full clone. If `git rev-parse --is-shallow-repository` prints
    `true`, first run `git fetch --deepen=200 origin claude/f1-game-project-26h3ng` (or `--unshallow`) and retry.
    Any other result — an empty live read, a missing commit, exit 128 — is unknown, never "not live". A merged

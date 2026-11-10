@@ -372,7 +372,8 @@ jobs:
     # A CAP, so a hang cannot hold the never-cancelled `pages` lock for the
     # 360-minute default (2026-10-04). Time queued for the lock does not count;
     # the job is a full-history checkout, the recheck and deploy-pages, whose own
-    # deployment `timeout` input defaults to 10 minutes — this sits above it.
+    # deployment `timeout` input is set below (17 min, then 10 on the retry) —
+    # this sits above their sum.
     # 30 since 2026-10-14 (process-review fix 1). Deploy job only: the `ci`
     # gate is a reusable-workflow call (no job-level timeout allowed) whose
     # p90 is 73 min; its jobs carry their own caps in ci.yml.
@@ -419,18 +420,29 @@ jobs:
       # ONE RETRY OF THE PUBLISH STEP (2026-11-10). A single transient
       # deploy-pages failure used to fail the run; the second attempt runs only
       # when the first failed, and the verdict step fails the job when both did.
+      # `timeout` 17 min on the first attempt (2026-11-10, Bryce: "Yes, raise
+      # it"): the ~135 MB artifact published in 8m23s at 14:03Z (run
+      # 42825665906), then run #5056 (1421575a) hit the 600000 ms default twice
+      # ("Timeout reached, aborting!" at 19:37:39Z in syncing_files and at
+      # 19:47:50Z in finished_file_sync) at the same size (134,939,340 B against
+      # 134,923,321 B). Pages was slow; nothing grew. The retry keeps the
+      # 10-minute default, written out, so 17 + 10 plus the checkout and recheck
+      # (~1 min) stays under this job's 30-minute cap, which
+      # tests/unit/ci-workflow-triggers.test.mjs holds at <= 30.
       - name: Publish to Pages
         id: deployment
         continue-on-error: true
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
+          timeout: 1020000
       - name: Publish to Pages (retry)
         id: deployment-retry
         if: ${{ steps.deployment.outcome == 'failure' }}
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
+          timeout: 600000
       # THE REST-VISIBLE MARKER. Job outputs are not in the REST API; step names and conclusions
       # are (actions/runs/<id>/jobs -> steps[].name / conclusion). This step is `failure` exactly
       # when both publish attempts failed after the recheck passed: a Pages-side failure, not a gate

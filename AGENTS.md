@@ -10,10 +10,10 @@ GitHub Pages. `CLAUDE.md` imports this file; Cursor and Codex load it directly (
 npx serve -l 3456 .                         # serve locally
 node tools/ci/pick-tests.mjs                # 1. which groups this change needs (they run on the PR)
 #                                             2. make ALL edits, then verify ONCE (rule 2)
-node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. the local floor (rule 3); a circuit: verify-track.cjs <id>
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. the local floor (rule 3); a circuit: tools/track/verify-track.cjs <id>
 git add <paths>                             # 4. stage in its own call
 git commit                                  # 5. the next call (timeout 300000); the hook runs test:guards
-git push -u origin cursor/<topic>-<hash>    # 6. alone, no output pipe; then refresh the draft PR (rule 12)
+git push -u origin <branch>                # 6. alone, no output pipe; then refresh the draft PR (rule 12)
 ```
 Prose-only change (`docs/`, `*.md`): skip 1 and 3, run `node --test tests/unit/docs-integrity.test.mjs
 tests/unit/agent-config.test.mjs`. Then CI runs on the PR (rule 13). Commands and the gate ladder: `docs/VERIFICATION.md`; skill `check-changes`.
@@ -27,21 +27,22 @@ Session rules. The numbers are cited across the repo; a rule marked (hook) is re
 says what to do instead. Hooks catch accidents; the Deploy-reset ruleset, `.githooks/` and CI are the boundary.
 1. A fresh container is set up by `session-start.sh`; in a total-red run, read the FIRST failure first.
 2. Make all source edits, then verify once.
-3. The local floor before a push: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit). The
+3. The local floor before a push: `tooling-fast --changed --jobs=3 --quiet` (`tools/track/verify-track.cjs <id>` for a circuit). The
    PR's tiers prove the rest; never re-run them locally. Ladder: `docs/VERIFICATION.md`.
 4. Foreground only what takes under 2 minutes and the next step needs; anything longer is ONE background task logging
    to `artifacts/logs/`. Waiting and Monitor recipes: skill `check-changes`.
 5. No local browser test runs (CI runs them). One interactive browser at a time (hook: `mcp-browser-guard.sh`, beside a live Playwright run).
 6. Never kill by name (`pkill`, `killall`, `pgrep … | kill`; hook: `bash-guard.sh`); kill only a PID you launched.
 7. A timeout on a busy box measures the box; triage: skill `check-changes` `references/triage.md`.
-8. On CI, `cancelled` with zero failures is a timeout until proven otherwise, except the designed dedupe: a draft's run
-   and its `ready_for_review` run share a group, so the flip cancels the first on the same `head_sha`.
+8. On CI, `cancelled` with zero failures is a timeout until proven otherwise, except a designed cancel: a newer run in a
+   `cancel-in-progress` group replaced it (a draft's run and its `ready_for_review` run share a group, so the flip
+   cancels the first on the same `head_sha`).
 9. Never widen a tolerance or skip a test to get green. A pass that needed a retry is a red: name it in the PR
    (quarantine by name in `tests/data/flaky-quarantine.json`). Stopping with unverified groups named beats guessing.
 10. A subagent never starts a browser (hooks: `bash-guard.sh`, `mcp-browser-guard.sh`; Claude Code only).
 11. Never hand-edit a generated file (hook: `protect-files.sh`): edit the source, then `npm run gen`. Files in
     `BUILT_PATHS` (`tools/lib/generated-paths.mjs`) are built, never committed: gitignored, built by
-    `node tools/gen/ensure-built.mjs`. The list: `.claude/rules/game-code.md`.
+    `node tools/gen/ensure-built.mjs`.
 12. Hand off through git: commit and push at every verified checkpoint and before any wait over ~10 min.
     Commit in two calls: stage in its own command, then `git commit`. Push with `git push -u origin <branch>`, no
     output pipe. A DRAFT PR opens at the first commit; its body is the session log (skill `steward`).
@@ -68,7 +69,7 @@ in `tools/manifest.cjs`, `ensureCircuit` in `js/core/lazy-bundles.js`). The modu
   contract. `js/agent/apex.js` is `__apex`.
 - `js/render/gfx.js` picks TLX (`three/`, default), GLX (`glx/`, explicit WebGL2 and the fallback) or opt-in WGX
   (`webgpu/`); `shared/` is backend-agnostic. Only GENERIC tables live in `js/track/` (the `scenery(api)` contract is
-  test-frozen; it and `js/circuits/` carry a nested `AGENTS.md`). `index.html` owns ALL static DOM.
+  test-frozen; it and `js/circuits/` carry a nested `AGENTS.md`). `index.html` owns the static shell DOM (screens, ids); js/ builds the dynamic DOM.
 
 ## Critical conventions
 Code conventions load with the files they govern (`.claude/rules/`, by `paths:`). Regenerable output goes in
@@ -85,7 +86,7 @@ line may affect the player with assists off (channels: `docs/PHYSICS.md` §Curva
 WGX implement it. Skill `asset-pack`.
 
 ## Git branch & deploy
-Work on a `cursor/<topic>-<hash>` branch. The deploy branch `claude/f1-game-project-26h3ng` is protected by the
+Work on the branch you were assigned (`claude/*` in a cloud session), else `cursor/<topic>-<hash>`. The deploy branch `claude/f1-game-project-26h3ng` is protected by the
 ruleset "Deploy-reset" (one required check, `gate`; it binds admins), so work lands only through a PR. A path in an
 open PR's diff belongs to that PR until it merges or closes. A red, a sync, a conflict, opening, flipping ready,
 `land`: skill `steward`. "Is it live?": skill `check`.

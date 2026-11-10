@@ -114,7 +114,9 @@ test("protect-files.py: generated files (derived list), generated blocks, packag
   const tag = html.match(/<script [^>]*src=["']?js\/[^"'>\s]+[^>]*><\/script>/)?.[0];
   assert.ok(tag, "fixture: a script tag inside the gen-shell block");
   const blockEdit = pf({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, "index.html"), old_string: tag, new_string: "" } });
-  assert.equal(blockEdit.status, 2); assert.match(blockEdit.stderr, /generated block|shared-contract/);
+  assert.equal(blockEdit.status, 2);
+  assert.equal(blockEdit.stderr, "BLOCKED: index.html: the edit touches a generated block (between @gen-… / GENERATED markers). gen-shell.mjs and the doc generators write those from their sources; edit the SOURCE and run `npm run gen`. "
+    + `If this edit was explicitly assigned, the MAIN session runs: touch ${path.join(ROOT, ".claude/allow-protected")} , retries, and removes it after.\n`);
   const pkg = path.join(ROOT, "package.json");
   const mangled = JSON.parse(fs.readFileSync(pkg, "utf8")); mangled.scripts["test:guards"] = "echo nope";
   const w = pf({ tool_name: "Write", tool_input: { file_path: pkg, content: JSON.stringify(mangled, null, 2) } });
@@ -128,7 +130,8 @@ test("protect-files.py: generated files (derived list), generated blocks, packag
   for (const f of [".claude/allow-protected", ".claude/allow-context-cap", ".claude/hooks/bash-guard.py", ".claude/settings.json", ".githooks/pre-commit",
     "tools/hooks/readonly-bash.sh", ".mcp.json", ".cursor/hooks.json", ".codex/hooks/shell-guard.sh"]) {
     const r = pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, f), content: "" }, agent_id: "a1" });
-    assert.equal(r.status, 2, `subagent must not write ${f}`); assert.match(r.stderr, /subagent never writes/);
+    assert.equal(r.status, 2, `subagent must not write ${f}`);
+    assert.equal(r.stderr, `BLOCKED: ${f} is a guard (a .claude/allow-* hatch, a hook, settings, .githooks, tools/hooks, .mcp.json or a host's hook config): a subagent never writes one (AGENTS.md rule 10). Report the change for the parent.\n`);
   }
   assert.equal(pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, ".claude/allow-protected"), content: "" } }).status, 0, "the main session creates its hatch");
   assert.equal(pf({ tool_name: "Bash", tool_input: { command: "echo x > version.json" } }).status, 0, "Bash is bash-guard's business");
@@ -164,7 +167,8 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     assert.equal(pf({ agent_id: "a1" }).status, 2, "the hatch never lifts a rule for a subagent");
     fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), "export const NOTHING = 1;\n");
     const broken = pf({ agent_id: "a1" });
-    assert.equal(broken.status, 2); assert.match(broken.stderr, /could not load the generated-file list/);
+    assert.equal(broken.status, 2);
+    assert.equal(broken.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
