@@ -409,9 +409,6 @@
       "fireCheer": [
         "tests/unit/crowd-audio.test.mjs"
       ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
-      ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
@@ -789,9 +786,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
-      ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
@@ -1083,9 +1077,6 @@
       "emitFieldSfx": [
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
-      ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
       ],
       "passByState": [
         "tests/unit/rival-attach-init.test.mjs",
@@ -5760,6 +5751,7 @@
         "tests/unit/data-api-status.test.mjs"
       ],
       "schedule": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "sessionResult": [
@@ -6114,6 +6106,7 @@
     },
     "js/data/tab-utils.js": {
       "*": [
+        "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/data-results.test.mjs",
@@ -6216,6 +6209,9 @@
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "gapLimitMs": [
+        "tests/unit/telemetry-trace.test.mjs"
+      ],
+      "hasDrs": [
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "isGap": [
@@ -10137,6 +10133,9 @@
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs"
       ],
+      "localProfile": [
+        "tests/unit/net-lobby-lifecycle.test.mjs"
+      ],
       "makeAnswer": [
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs"
@@ -10517,7 +10516,8 @@
         "tests/unit/net-session.test.mjs"
       ],
       "wireId": [
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ],
       "*": [
         "tests/unit/net-grid-separation.test.mjs",
@@ -10548,7 +10548,8 @@
       ],
       "strategyState": [
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ]
     },
     "js/net/transport.js": {

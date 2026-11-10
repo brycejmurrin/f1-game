@@ -7,7 +7,10 @@ const DataIcs = (function () {
      UTF-8 sequence (§3.1), TEXT escaping of \ ; , and newline (§3.3.11), UTC DATE-TIME with a Z and no
      TZID (§3.3.5 form 2, so no VTIMEZONE block and no DST arithmetic), DATE values for an all-day event
      (§3.3.4). The UID is the session, never its title or time, so a corrected time re-imports as an
-     update; SEQUENCE counts days since 2026-01-01 so the newer export wins. Plan:
+     update; SEQUENCE counts days since 2026-01-01 so the newer export wins. The UID names the race
+     by year + Jolpica circuitId, NOT the round: 2026 was renumbered in-season (Bahrain and Saudi
+     Arabia cancelled), and a round-keyed UID re-imported as an update to a DIFFERENT race while the
+     dropped rounds stayed behind as orphans. UID is TEXT (§3.8.4.7), escaped like any TEXT. Plan:
      docs/archive/plans/2026-10-04-pwa-shortcuts-calendar.md §D. */
   const CRLF = "\r\n";
   const FOLD = 75;
@@ -55,20 +58,23 @@ const DataIcs = (function () {
 
   function raceYear(r) { return r && /^\d{4}/.test(r.date || "") ? r.date.slice(0, 4) : "0000"; }
   function raceKey(r) { return r.round != null ? "r" + r.round : "d" + dateValue(r.date || ""); }
+  // Stable across a renumbered calendar: the circuit (one race per circuit per
+  // season), falling back to the round only for a row with no circuitId.
+  function uidKey(r) { return r.circuitId ? "c-" + r.circuitId : raceKey(r); }
   function place(r) { return [r.circuit, r.locality, r.country].filter(Boolean).join(", "); }
 
   // One race → its VEVENTs. Timed sessions come from DataSchedule.weekendSessions (the NEXT tile's own
   // list, so sprint weekends carry SQ/S and conventional ones FP2/FP3). A date-only race with no timed
   // session is one all-day event and gets NO alarm: a reminder before midnight UTC would be a lie.
   function raceEvents(r, opt) {
-    const base = raceYear(r) + "-" + raceKey(r);
+    const base = raceYear(r) + "-" + uidKey(r);
     const loc = place(r);
     const ev = [];
     const sessions = DataSchedule.weekendSessions(r);
     for (const s of sessions) {
       const lines = [
         "BEGIN:VEVENT",
-        "UID:" + base + "-" + s.key + "@apex26",
+        "UID:" + text(base + "-" + s.key + "@apex26"),
         "DTSTAMP:" + opt.stamp,
         "SEQUENCE:" + opt.seq,
         "DTSTART:" + utc(s.startMs),
@@ -87,7 +93,7 @@ const DataIcs = (function () {
     if (!sessions.length && /^\d{4}-\d{2}-\d{2}$/.test(r.date || "")) {
       const lines = [
         "BEGIN:VEVENT",
-        "UID:" + base + "-r@apex26",
+        "UID:" + text(base + "-r@apex26"),
         "DTSTAMP:" + opt.stamp,
         "SEQUENCE:" + opt.seq,
         "DTSTART;VALUE=DATE:" + dateValue(r.date),

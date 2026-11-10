@@ -1775,7 +1775,8 @@ test("a downshift flares the note, then it settles; an upshift does not", async 
 });
 
 test("car SFX levels follow the car's own state, never the road's curvature", () => {
-  const sb = { Math, Number, Object, GameAudio: {} };
+  let wallMs = 0;   // one update() per 16 ms frame here; substeps are the next test
+  const sb = { Math, Number, Object, GameAudio: {}, performance: { now: () => (wallMs += 16) } };
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
   const sent = [], guns = [];
@@ -1805,6 +1806,32 @@ test("car SFX levels follow the car's own state, never the road's curvature", ()
   // A new race's car starting mid-state does not fire a phantom gun.
   S.update({ speed: 0, pitState: "box" });
   assert.equal(guns.length, 2, "a fresh car resets the edge");
+});
+
+// #5052: game.js calls update() on every physics substep (up to 5 a frame) for the wheel-gun
+// edges; setCarSfx's three aimGain + surf filter ran on each. Levels go once per frame now,
+// an on/off flip at once, and the edges still fire on the substep they happen.
+test("car SFX levels go out once per frame across substeps; flips and pit edges are not delayed (#5052)", () => {
+  let wallMs = 1000;
+  const sb = { Math, Number, Object, GameAudio: {}, performance: { now: () => wallMs } };
+  const vctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
+  const sent = [], guns = [];
+  sb.GameAudio.setCarSfx = (o) => sent.push({ ...o });
+  sb.GameAudio.pitGun = (t) => guns.push(t);
+  const G = { vTop: () => 100, isWetRoad: () => false, raceT: 10 };
+  const S = vm.runInContext("CarSfx", vctx).create(G);
+  const car = { speed: 50, frontUtil: 1.05, pitState: "none" };
+  const frame = (steps, each) => { wallMs += 16; for (let k = 0; k < steps; k++) { if (each) each(k); S.update(car); G.raceT += 1 / 240; } };
+  frame(4);
+  assert.equal(sent.length, 1, "four substeps of one frame: one level write");
+  for (let i = 0; i < 9; i++) frame(4, (k) => { car.frontUtil = 1.05 + 0.001 * k; });
+  assert.equal(sent.length, 10, "ten frames: ten writes, not forty");
+  frame(4, (k) => { car.frontUtil = k >= 2 ? 0.9 : 1.05; });
+  assert.equal(sent.length, 12, "scrub ending mid-frame is sent on that substep");
+  assert.equal(sent[11].scrub, 0);
+  frame(4, (k) => { if (k === 1) car.pitState = "box"; if (k === 3) car.pitState = "out"; });
+  assert.deepEqual(guns, [false, true], "pit edges fire on their own substeps");
 });
 
 test("a rewind that jumps the race clock across a pit edge re-seeds wheel guns silently", () => {
@@ -2725,9 +2752,9 @@ test("rain restarts (pause/resume, weather flips) reuse one 4 s loop buffer inst
   assert.equal(rainBufs(), 1, "three rain starts generated the 4 s buffer once");
 });
 
-// ── LAB audioIdle (?lab=audioIdle; OFF by default) ──────────────────────────
-// The rival pass-by pool, the crowd bed + cheers and the ERS layer loop through
-// menus at gain 0. With the lab on, stopEngine() unplugs their output gains from
+// ── audio idle (ON by default since #5053; ?lab=noAudioIdle is the off switch) ─
+// The rival pass-by pool, the crowd bed + cheers and the ERS layer looped through
+// menus at gain 0. With idle on, stopEngine() unplugs their output gains from
 // the bus once the fades are done, and startEngine() plugs them back.
 async function idleRig(search) {
   const b = boot({ search });
@@ -2751,10 +2778,10 @@ async function idleRig(search) {
   return { ...b, ...mods, all, unplugs, plugs, pans, menu };
 }
 
-test("audioIdle OFF leaves the layer graph exactly as shipped through a menu cycle", async () => {
+test("?lab=noAudioIdle leaves the layer graph plugged in through a menu cycle", async () => {
   const sig = (r) => r.all.map((n) => n.kind + ":" + n.connections.length + ":" + n.unplugs).join(",");
   const runs = [];
-  for (const search of [null, "?lab=rivalEps", "?lab="]) {
+  for (const search of ["?lab=noAudioIdle", "?lab=rivalEps,noAudioIdle", "?lab= noAudioIdle"]) {
     const r = await idleRig(search);
     assert.equal(r.CrowdAudio.inspect().attached, true, "precondition: the crowd bed is built");
     assert.equal(r.ErsLayer.attached(), true, "precondition: the ERS layer is built");
@@ -2765,18 +2792,18 @@ test("audioIdle OFF leaves the layer graph exactly as shipped through a menu cyc
     r.GameAudio.startEngine();
     runs.push({ sig: sig(r), unplugs: r.unplugs(), plugs: r.plugs() });
   }
-  assert.equal(runs[1].sig, runs[0].sig, "a different lab builds and tears down the same graph");
-  assert.equal(runs[2].sig, runs[0].sig, "an empty lab param is off");
+  assert.equal(runs[1].sig, runs[0].sig, "the off switch works beside another lab");
+  assert.equal(runs[2].sig, runs[0].sig, "…and with stray whitespace");
 });
 
-test("audioIdle ON unplugs the rival, crowd and ERS outputs in menus and restores them on race entry", async () => {
-  const off = await idleRig(null);
-  const on = await idleRig("?lab=audioIdle");
+test("by default (#5053) the rival, crowd and ERS outputs unplug in menus and come back on race entry", async () => {
+  const off = await idleRig("?lab=noAudioIdle");
+  const on = await idleRig(null);
   const u0off = off.unplugs(), u0on = on.unplugs();
   assert.equal(u0on, u0off, "nothing is unplugged while racing");
   off.menu(); on.menu();
   // 4 pass-by panners + crowd bed + 4 desktop cheer gains + 4 ERS gains = 13.
-  // Red on d7d7617b: 0 (no lab, no idle()).
+  // Red on fcb2b81 (before #5053): the default unplugged 0.
   assert.equal((on.unplugs() - u0on) - (off.unplugs() - u0off), 13, "the menu unplugs 13 layer outputs");
   for (const p of on.pans()) assert.equal(p.unplugs, 1, "every pass-by panner is unplugged");
   assert.equal(on.CrowdAudio.inspect().bedGain.unplugs, 1, "the crowd bed is unplugged");
@@ -2801,8 +2828,8 @@ test("audioIdle ON unplugs the rival, crowd and ERS outputs in menus and restore
   assert.ok(g.sets > sets && g.value > 0, "the reconnected pass-by voice is aimed on the first collect()");
 });
 
-test("audioIdle ON: a resume inside the fade window never unplugs anything", async () => {
-  const on = await idleRig("?lab=audioIdle");
+test("audio idle: a resume inside the fade window never unplugs anything", async () => {
+  const on = await idleRig(null);
   const u0 = on.unplugs();
   on.GameAudio.stopEngine();
   on.GameAudio.startEngine();       // back in the race before the 500 ms timer
@@ -2811,4 +2838,25 @@ test("audioIdle ON: a resume inside the fade window never unplugs anything", asy
   assert.equal(on.pans().reduce((s, p) => s + p.unplugs, 0), 0, "the pass-by pool stays plugged in");
   assert.equal(on.CrowdAudio.inspect().bedGain.unplugs, 0, "the crowd bed stays plugged in");
   assert.ok(on.unplugs() >= u0);
+});
+
+// #5052: a rival voice's level drifts with distance and revs, and aimGain's absolute 1e-4 floor
+// never let it settle: two slowly closing rivals cost ~400 gain writes per 600 frames.
+test("two slowly closing rivals settle: gain within 3 %, rate within 0.004 (#5052)", async () => {
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init(); await release(); A.startEngine();
+  const all = () => [...live].reduce((n, nd) => n + nd.gain.sets + nd.playbackRate.sets, 0);
+  const rows = (i) => [
+    { slot: 0, lat: 2, arc: 30 - i * 0.02, rev: 0.80 + 0.003 * Math.sin(i * 0.3), approach: 1.2 },
+    { slot: 1, lat: -3, arc: 45 - i * 0.01, rev: 0.75 + 0.003 * Math.sin(i * 0.5), approach: 0.6 },
+  ];
+  for (let i = 0; i < 60; i++) { ctxTime(1 / 60); A.setRivals(rows(i)); }
+  const s0 = all();
+  for (let i = 60; i < 660; i++) { ctxTime(1 / 60); A.setRivals(rows(i)); }
+  const sets = all() - s0;
+  assert.ok(sets < 200, `gain + rate writes over 600 frames: ${sets}`);
+  const g = A.rivalState().map((v) => v.gain);
+  assert.ok(g[0] > 0 && g[1] > 0, "both voices are still audible");
+  A.setRivals([]);
+  assert.deepEqual(A.rivalState().map((v) => v.gain), A.rivalState().map(() => 0), "a hard 0 still mutes exactly");
 });
