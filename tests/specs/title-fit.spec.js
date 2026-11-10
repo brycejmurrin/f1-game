@@ -215,11 +215,18 @@ test.describe("Title doors — a fast double tap is one tap", () => {
     const box = await page.locator("#" + id).boundingBox();
     if (!box) throw new Error("door not on screen: " + id);
     const x = box.x + box.width / 2, y = box.y + box.height / 2;
-    await page.touchscreen.tap(x, y);
-    if (twice) {
-      await page.evaluate(() => new Promise((r) => setTimeout(r, 120)));
-      await page.touchscreen.tap(x, y);
-    }
+    // The taps go out over CDP with explicit input timestamps 120 ms apart and
+    // without waiting between them: a page-side delay (or awaiting the first
+    // tap's handling) only starts once the door's handler frees the main thread,
+    // so on a slow runner the "second tap" really came after the window.
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      const t0 = Date.now() / 1000, pt = [{ x, y }];
+      const send = (type, timestamp, touchPoints) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints, timestamp });
+      const sent = [send("touchStart", t0, pt), send("touchEnd", t0 + 0.03, [])];
+      if (twice) sent.push(send("touchStart", t0 + 0.12, pt), send("touchEnd", t0 + 0.15, []));
+      await Promise.all(sent);
+    } finally { await cdp.detach(); }
     await settle(page);
     return openLayers(page);
   }
