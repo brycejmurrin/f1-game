@@ -854,33 +854,33 @@
           r: a0.r, u: a0.u, t: a0.t,
         };
         const b = [a.r, a.u, a.t];
+        // The ground falls ~0.7 m across this bank and the basis follows
+        // the road grade, so nothing here may assume the anchor's height:
+        // grounded() is a box whose TOP is `top` above the anchor plane
+        // and whose bottom is 0.3 m under the lowest terrain in its OWN
+        // footprint (the risers and the board hung 1.5-3.0 m clear, #5085).
+        const grounded = (stage, dx, top, w, len, col) => {
+          let d = 0;
+          for (const sx of [-0.5, 0, 0.5]) for (const sz of [-0.5, 0, 0.5]) {
+            const p = vadd(vadd(a.c, a.r, dx + sx * w), a.t, sz * len);
+            const y = terrainYAt(p[0], p[2]);
+            if (y != null && p[1] - y > d) d = p[1] - y;
+          }
+          const h = top + d + 0.3;
+          addBox(stage, vadd(vadd(a.c, a.r, dx), a.u, top - h / 2),
+                 [w, h, len], col, b);
+        };
         if (!onTrack(a.c[0], a.c[2], 5)) {
           modelGroup("tremblant-namerow-bank", {
             center: vadd(a.c, a.u, 2.8), size: [10, 8, 22], basis: b,
           }, (stage) => {
-            // The ground falls ~0.7 m across this bank and the basis follows
-            // the road grade, so nothing here may assume the anchor's height:
-            // grounded() is a box whose TOP is `top` above the anchor plane
-            // and whose bottom is 0.3 m under the lowest terrain in its OWN
-            // footprint (the risers and the board hung 1.5-3.0 m clear, #5085).
-            const grounded = (dx, top, w, len, col) => {
-              let d = 0;
-              for (const sx of [-0.5, 0, 0.5]) for (const sz of [-0.5, 0, 0.5]) {
-                const p = vadd(vadd(a.c, a.r, dx + sx * w), a.t, sz * len);
-                const y = terrainYAt(p[0], p[2]);
-                if (y != null && p[1] - y > d) d = p[1] - y;
-              }
-              const h = top + d + 0.3;
-              addBox(stage, vadd(vadd(a.c, a.r, dx), a.u, top - h / 2),
-                     [w, h, len], col, b);
-            };
             stage._mat = MAT.CONCRETE;
-            grounded(0, 0.4, 4.5, 16, ROCK);
+            grounded(stage, 0, 0.4, 4.5, 16, ROCK);
             // Three risers climbing away from the ribbon (−1 outfield), each a
             // solid step down to grade. Lengths differ by 8 cm so the 0.1 m
             // overlap strips do not share an end face.
             for (let i = 0; i < 3; i++) {
-              grounded(-1 * (0.8 + i * 1.4), 0.825 + i * 0.85, 1.5, 14 - i * 0.08,
+              grounded(stage, -1 * (0.8 + i * 1.4), 0.825 + i * 0.85, 1.5, 14 - i * 0.08,
                        i ? ROCK2 : CONC);
             }
             stage._mat = MAT.METAL;
