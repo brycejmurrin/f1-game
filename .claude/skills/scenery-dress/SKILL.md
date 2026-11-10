@@ -1,8 +1,5 @@
 ---
 name: scenery-dress
-paths:
-  - "js/circuits/**"
-  - "js/track/**"
 description: "Use when adding or fixing track scenery: buildings, trees, grandstands, barriers, billboards, floodlight masts, props that float, sink or vanish, a circuit scenery(api) callback, TrackGraph.instance migration, graph parity, batches()/bakeOnly. Not lamps → lighting-tuner; real-place accuracy → survey-track."
 ---
 
@@ -23,9 +20,10 @@ Node-based helpers take `(k, side, dist, …)`:
 
 Destructure `out` from `api` first; `verify-track` catches a `scenery()` throw.
 
-`K(s)` is AUTHORED-frame: pass it straight through. Frames, `along()` and the `_sceneryShift`
+`K(s)` is AUTHORED-frame: pass it straight through to a wrapped helper — but a RAW read
+(`px/py/pz/hw[k]`, `groundYAt(k, …)`) stays in the ENGINE frame. Frames, `along()` and the `_sceneryShift`
 print command: [references/rules.md](references/rules.md) §Frames (one home; rule:
-`.claude/rules/game-code.md`).
+`js/circuits/CLAUDE.md`).
 
 ## Helper families
 
@@ -51,15 +49,14 @@ print command: [references/rules.md](references/rules.md) §Frames (one home; ru
   (dusk/dawn/night gate, lamp cap) → **lighting-tuner**.
 
 ```sh
-node tools/track/verify-track.cjs <id>     # must print OK; catches scenery() THROW
-node tools/track/float-audit.cjs <id>       # node-VM, seconds: floating props; `--why` names the emitting source line
-node tools/track/ground-audit.cjs <id> --why  # buried / unsupported prims (--all --gate = ratchet)
-node tools/track/clip-audit.cjs <id> --why    # prop-vs-prop clipping; `--all --gate` = tools/track/clip-baseline.json
-node tools/track/props-tris.cjs <id>          # post-strip props tris; the margin lives in tests/unit/props-tri-ratchet.test.mjs
+node tools/track/audit-circuit.cjs <id>     # node-VM, seconds: verify + every per-circuit audit vs its baseline, one verdict
+node tools/track/float-audit.cjs <id> --why # on a FAIL: the emitting source line (ground-audit / clip-audit take --why too)
 ```
 
-Grounded = float-audit clean and ground-audit no worse than `tests/data/scenery-audit-baseline.json`;
-added props must also stay inside the clip and props-tris baselines (a denser circuit raises the tris one in a commit that says why). Then `npm run gen:check` ([shell/cache](../check-changes/references/bump.md)).
+Grounded = `audit-circuit.cjs <id>` all OK (its header names each check's baseline); a denser circuit raises the
+props-tris baseline (`tests/unit/props-tri-ratchet.test.mjs`) in a commit that says why. Then `npm run gen:check`
+([shell/cache](../check-changes/references/bump.md)). The rest is the PR's CI: `node tools/ci/pick-tests.mjs`
+names the groups (`circuits`, plus `sweeps` for an engine edit); `node tools/ci/remote-group.mjs <group>` on the pushed branch.
 
 **Generated:** `tools/shot/scenery-locations.json` goes stale when a prop moves. Regenerate with
 `node tools/shot/gen-scenery-locations.cjs` (`--check` names drift); never hand-edit it

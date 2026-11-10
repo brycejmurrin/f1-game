@@ -362,3 +362,23 @@ test("every saved workflow parses and names only existing agentTypes", () => {
   }
 });
 
+
+/* code-survey and total-audit call themselves whole-tree. Circuits and unowned js/ dirs come from a run-time
+   slice plan; every OTHER js/ dir must be owned by a static slice's `dirs:` list, so a new directory is never
+   silently skipped when the plan step fails (the 2026-11-09 audit found six dirs no slice read). */
+test("every js/ directory is owned by a workflow slice (circuits come from the run-time plan)", () => {
+  const jsDirs = fs.readdirSync(path.join(ROOT, "js"), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => `js/${d.name}/`);
+  for (const f of ["code-survey.js", "total-audit.js"]) {
+    const src = fs.readFileSync(path.join(WORKFLOWS, f), "utf8");
+    const owned = new Set([...src.matchAll(/dirs:\s*\[([^\]]*)\]/g)].flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])));
+    assert.match(src, /slicePlan|const PLAN = /, `${f}: lost the run-time slice plan`);
+    assert.match(src, /chunk\(PLAN\.circuits/, `${f}: circuits must be chunked from the run-time plan`);
+    assert.doesNotMatch(src, /FIRST 20|LAST 20/, `${f}: a static circuit split skips circuits past the 40th`);
+    const missing = jsDirs.filter((d) => d !== "js/circuits/" && !owned.has(d));
+    assert.deepEqual(missing, [], `${f}: no slice owns ${missing.join(", ")} — add it to a slice's dirs: and scope`);
+    assert.doesNotMatch(src, /require\(['"]node:/, `${f}: require() is null inside a workflow`);
+    assert.doesNotMatch(src, /`\.replace\(/, `${f}: String.replace on a prompt splices $& from finding text; use a template`);
+    assert.match(src, /(refutes|refCount)\[i\] === heard\[i\]/, `${f}: a high finding every answering verifier refuted must die`);
+    assert.match(src, /agentsSpawned/, `${f}: the run must report how many agents it spawned`);
+  }
+});

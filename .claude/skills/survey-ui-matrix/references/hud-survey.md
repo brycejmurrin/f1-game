@@ -14,6 +14,7 @@ node tools/shot/hud-survey.mjs --matrix quick --only chase-default   # 1 boot
 node tools/shot/hud-survey.mjs --matrix quick            # a few boots; --list prints cells + cost
 node tools/shot/hud-survey.mjs --matrix quick --no-shots --gl llvmpipe   # MEASURE FIRST, then --only <cells with findings> for pixels
 node tools/shot/hud-survey.mjs --matrix leads            # static-audit repros with numeric checks
+node tools/shot/hud-survey.mjs --matrix quick --settings tests/data/settings-defaults-export.json   # Bryce's real settings
 # full (pairwise) and exhaustive: read the cost from --list; shard big ones: --shard i/n, then --merge <dirs>
 ```
 

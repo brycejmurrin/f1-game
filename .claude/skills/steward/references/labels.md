@@ -2,7 +2,7 @@
 
 Source of truth: `.github/labels.json` (name, colour, description); this table adds where each goes and what a
 session does with it. Applying a new row to GitHub is `gh label create` by hand. Add and remove labels with
-`gh api -X POST …/issues/<n>/labels -f 'labels[]=<name>'` / `-X DELETE …/labels/<name>`, never the MCP `labels`
+`gh api -X POST …/issues/<n>/labels -f 'labels[]=<name>'` / `gh api -X DELETE …/issues/<n>/labels/<name>`, never the MCP `labels`
 field (it replaces the whole list).
 
 | label | on | meaning |

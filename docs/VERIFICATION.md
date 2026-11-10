@@ -58,10 +58,12 @@ serve `js/` and `css/` from the working tree.
 
 ## 3. The pre-push floor
 
-`tooling-fast --changed --jobs=3 --quiet` plus the ONE spec `pick-tests` /
-`select-specs` names, run in the background (`node tools/ci/test-bg.mjs --spec
-tests/specs/<file>.spec.js`); `node tools/track/verify-track.cjs <id>` for a
-circuit; the docs-only fast path for prose:
+`tooling-fast --changed --jobs=3 --quiet`; `node tools/track/verify-track.cjs <id>`
+for a circuit; the docs-only fast path for prose. No agent runs a browser spec
+locally (AGENTS.md rule 5): the specs `pick-tests` / `select-specs` name are proven
+by the PR's `selected` shard, and a whole group runs on the pushed branch with
+`node tools/ci/remote-group.mjs <group>` (the group names are the ones
+`pick-tests` prints):
 
 ```sh
 node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs
@@ -174,7 +176,7 @@ successful rerun.
 ## 6. CI and Pages
 
 PR CI validates the PR head; the deploy branch requires one check, `gate`, whose
-ci row requires `CI` green on the head (D-002). Every PR push starts CI (a
+ci row requires `CI` green on the head (D-031). Every PR push starts CI (a
 draft's run is the fast tier plus the 5-min-budget `selected` legs, §3); `= ci none` after a
 push means no open PR carries the sha. A deploy-branch push starts the Pages release
 train; there is no separate ship-push CI run. A green PR is not proof that Pages

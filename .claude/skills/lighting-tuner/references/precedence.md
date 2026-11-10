@@ -21,10 +21,10 @@
 
 ## localStorage and live sliders
 
-Live slider edits write the **current condition** key (`LightStore.set` → `profiles[key()]`), not
-global `"*"`. localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the LIGHTING
-TUNER drops the current track/tod/weather back to shipped. Legacy `"*"` profiles may still win;
-clear that key if a global override sticks.
+Live slider edits write the **current condition** key (`set()` → `profiles[keyFor(id, key())]` in
+`js/lighting/profiles.js`; sun knobs land in the `|dry` slot), not global `"*"`; `lightTune()`
+persists the same way. localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
+LIGHTING TUNER (`reset()`) drops the current track/tod/weather and the legacy player `"*"` layer.
 
 ## One condition, every circuit
 

@@ -23,7 +23,7 @@
    descriptors: getters are not invoked. Lexical globals such as `PhonePad`
    need not be properties of `window`.
 5. `debugger_control` supports `over`, `into`, `out`, `resume`, `pause` and `cancel`. A step waits
-   (`waitMs`, default 1500) and returns the new pause; without one, read state again:
+   (`waitMs`; default in `list-tools`) and returns the new pause; without one, read state again:
    acknowledgments are not pause evidence. A pause with `cause:"unowned"` is not yours
    (another client on the target, or a `debugger` statement): its resume is theirs. A step
    can stop at another column on the same line; follow the returned location,
@@ -47,7 +47,7 @@ and `go()` before it settles leaves zero cars. The Cloud Chromium launch line is
 so scope the condition to the player and give the player speed; with no input the
 car never gets there. `c.speed` is ground speed in m/s. The dash shows
 `dashKph(v) = vStd(v) × 3.6` (game.js), which equals `c.speed × 3.6` at the default
-PACE 1.0 only (AGENTS.md §Physics: PACE scales ground speed). So "80" read as dash
+PACE only (AGENTS.md §Physics: PACE scales ground speed). So "80" read as dash
 km/h is `c.speed > 80 / 3.6` (22.2) at default PACE; quote the converted threshold
 back to the user.
 
@@ -63,7 +63,7 @@ keeps it there (`clearInput()` after). Without `jump`, hold throttle and allow
 `timeoutMs:30000` or `keep:true` and re-wait. Get the line from `lsp_definition
 {symbol:"updateCar", body:true}`, never from this file. Under software GL, `attach`, `detach`
 and `debugger_exceptions` can time out yet apply; `__apex.headless(true)` makes
-them take about 0.2 s. A run stopped at a breakpoint reads `paused`, not `unknown`.
+them fast. A run stopped at a breakpoint reads `paused`, not `unknown`.
 
 Paused evaluation blocks side effects by default. Only use
 `allowSideEffects:true` or mutating `debugger_run` for the intended local

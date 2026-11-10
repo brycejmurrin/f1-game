@@ -15,8 +15,8 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
   `__apex.lightTune()` and the stamp's value in presets.js; never quote a remembered number.
 - Editing a `"*|tod|wx"` stamp or running `lightCopy()` changes EVERY circuit: only for a fleet
   complaint, and say so in the PR. A one-track complaint edits that track's row.
-- localStorage (`apex26.lightTune`) outranks shipped presets until RESET in the LIGHTING TUNER; a
-  legacy `"*"` profile may still win.
+- localStorage (`apex26.lightTune`) outranks shipped presets until RESET in the LIGHTING TUNER
+  (`reset()` in `js/lighting/profiles.js`: drops this condition and the player `"*"` layer).
 - `numLights` counts only `G.frame.lights`: read the other lamp fields (references/symptoms.md
   §lightState) before calling floodlights off.
 - COPY VALUES exports a `window.LightEdits` DELTA; `bake.mjs` is a FULL REPLACE: never feed it a
@@ -25,8 +25,8 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
 ## Workflow
 
 1. **Pin the condition**: track, time of day, weather (wet/rain is a different row) and backend
-   (the owner plays TLX WebGPU on an iPhone; a headless probe is a software backend, which changes
-   precedence layer 5). The key is `<track>|<tod>|<weather>` (`key()` in `js/lighting/profiles.js`:
+   (the owner plays TLX WebGPU on an iPhone; precedence layer 5, `"*|tod"`, applies only where
+   `gfx.hasPerChunkLights` — GLX/WGX, not TLX). The key is `<track>|<tod>|<weather>` (`key()` in `js/lighting/profiles.js`:
    tod `default` → `def.night`, storm → rain).
 2. **Measure before any knob** (parent only):
    ```sh
@@ -37,8 +37,9 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
    washed out: resolved `nightAmbLift` first, then `mistDensity`/`fogDensityMul`,
    `bloomMul`/`bloomKnee`, `cityGlowMul`, `exposureMul`.
 5. **Try the knob live**: `__apex.lightTune({ nightAmbLift: 1.1 })` (knobs are `TUNE_DEFS` in
-   `js/lighting/knobs.js`, read via `LT.<id>` each frame). Confirm wiring and the changed region
-   with `slider-effect` (classify → `--live <one id>`).
+   `js/lighting/knobs.js`, read via `LT.<id>`; `slider-effect --class` says per-frame vs
+   apply/build-only). It PERSISTS to localStorage: RESET in the LIGHTING TUNER before you measure
+   shipped presets again. Confirm wiring with `slider-effect` (classify → `--live <one id>`).
 6. **Compare** `lightState()` before/after (it is the resolved snapshot after `applyRaceSettings`);
    don't guess from docs.
 7. **Ship**: merge the `LightEdits` delta (`merge-proposals.mjs`), or hand-merge one key; edit
@@ -48,10 +49,10 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
    mkdir -p artifacts/tmp
    git diff --name-only origin/claude/f1-game-project-26h3ng > artifacts/tmp/changed.txt
    node tools/ci/geometry-paths.mjs --targeted artifacts/tmp/changed.txt   # run each named node suite
-   node tools/ci/test-bg.mjs --spec tests/specs/lighting-ab.spec.js        # parent only
+   node tools/ci/pick-tests.mjs                                            # names the CI groups
    ```
-   The whole `gfx` group only when `applyRaceSettings`' structure changed:
-   `node tools/ci/remote-group.mjs gfx` on the pushed branch.
+   `tests/specs/lighting-ab.spec.js` runs in the `gfx` group on CI, never locally (AGENTS.md rule
+   5); to run the whole group on the pushed branch: `node tools/ci/remote-group.mjs gfx`.
 
 ## References
 

@@ -35,7 +35,7 @@ Do **not** use this for:
 |---|---|
 | Active career | Gameplay accessors are gated on `Career.inCareer()`, not "a save exists" |
 | Flow/session axes | `flow: "gp" | "season" | "career"` and `session: "race" | "tt" | "quali"` |
-| Saves | Six slots: `apex26.career.driver.0..2`, `apex26.career.myteam.0..2`. Slot mutations (`careerSlotDelete`) keep `ok`/`durable`/`reason`; a session-only deletion is not permanent (pin: `apex-career-delete.test.mjs`) |
+| Saves | `Career.SLOTS` per flavour in `Career.FLAVOURS`: keys `apex26.career.<flavour>.<i>`. Slot mutations (`careerSlotDelete`) keep `ok`/`durable`/`reason`; a session-only deletion is not permanent (pin: `apex-career-delete.test.mjs`) |
 | Live slot | `apex26.careerSlot` stores `"flavour:index"` |
 | Lost state | `store.write()` `durable:false` on quota, IndexedDB mirror, `save-migrate.js`, `acceptOffer` re-seed — [references/persistence.md](references/persistence.md) |
 | Modes | DRIVER uses an existing team/seat; MY TEAM owns `custom` and hires a second driver |
@@ -53,7 +53,7 @@ Do **not** use this for:
 Hooks: `__apex.career*` (`careerState`, `careerSim`, `careerSlots`, `careerFacility`, `careerHire`,
 `careerAmbition`, `careerEra`, `careerRollover`, …), `persistState`, `qualiSim`, `retirements`, `ratings` —
 arguments and returns in `docs/DEBUG-HOOKS.md` §Career & qualifying (`__apex.agentHelp()` at runtime).
-Gotchas: `careerState().owned` is a COUNT (part ids: `__apex.career().owned` / `Career.isOwned()`);
+Gotchas: `careerState().owned` is a COUNT (part ids: `__apex.career().owned`; `Career.owned(teamId)` is the Set of what may be fitted, null outside a career);
 `careerSim(n)` settles through the real `Career.scoreRound()` → `settleRound()` (rolls the whole career back when the
 save is refused) and needs a loaded track/grid first; each row returns `sponsorPay` and `sponsorVerdict`.
 
@@ -64,18 +64,17 @@ stashes it in `G.careerSettlement`).
 Commands:
 
 ```sh
-node tools/car/career-economy.mjs            # launches Chromium: session only (AGENTS.md rule 10)
-node tools/car/career-economy.mjs --years 3
-node tools/ci/test-bg.mjs --spec tests/specs/career-hub.spec.js   # one spec (or career.spec.js); background, session only
-node tools/ci/remote-group.mjs modes         # the whole group (career + quali + season + TT) on the pushed branch
+node tools/car/career-economy.mjs --help     # boots Chromium: session only (AGENTS.md rule 10)
+node tools/ci/pick-tests.mjs                 # the groups this diff needs (career specs: `modes`)
+node tools/ci/remote-group.mjs modes         # the browser specs (package.json `test:modes`) on the pushed branch
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
-node --test tests/unit/season-cal.test.mjs     # ~1 s, VM: the calendar/format gates (career neutral)
+node --test tests/unit/season-cal.test.mjs     # VM: the calendar/format gates (career neutral)
 node --test tests/unit/career-settle.test.mjs  # VM: settleRound, mid-weekend `stage`
 ```
 
-Node-VM unit tests (no browser; also in `test:tooling-fast`): `season-cal`,
-`career-settle`, `career-regulations`, `career-legends`, `career-seat-rollover`,
-`career-cross-tab`, `career-determinism`.
+Browser specs are never run locally (AGENTS.md rule 5): CI proves them. Node-VM unit tests (no browser):
+`tests/unit/career-*.test.mjs`, `season-cal`, `apex-career-delete`; `tooling-fast --changed` picks the ones a diff
+pins, and CI runs the rest (most sit in the always-on `state-unit` group).
 
 Deep reference: `docs/CAREER.md`.
 
