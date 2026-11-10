@@ -942,6 +942,11 @@
       ]
     },
     {
+      "path": "tools/ci/file-verdict-reporter.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/fixture-consumer-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

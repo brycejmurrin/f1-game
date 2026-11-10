@@ -82,13 +82,18 @@ export const ALWAYS_ON_TOPICAL = Object.freeze([
 ]);
 
 /** The planned VM slices that thin the same way (ci.yml vm-b1 / vm-b2, inside
- *  `planned`). Five game-vm-b files sit in tooling-fast too — real-replay-vm
+ *  `planned`). Some game-vm-b files sit in tooling-fast too — real-replay-vm
  *  alone is ~121 s on a runner — and Structural guards shares node-suites'
- *  `if:`, so whenever a slice runs, guards already ran them (test audit T5,
- *  2026-10-05). Same contract: only a matched plan sets NODE_PLAN_SKIP_TF. */
+ *  `if:` (test audit T5, 2026-10-05). Same contract: only a matched plan sets
+ *  NODE_PLAN_SKIP_TF. But guards runs the WHOLE floor only when guardsScope
+ *  says full; on a js/-only PR it runs a `--changed` selection, so run-group
+ *  `--skip-tf` subtracts what guards ran (tooling-fast guardsRanFiles), not
+ *  every tooling-fast member — the old subtraction left game-vm,
+ *  physics-characterization-vm and real-replay-vm in no PR job (audit W6). */
 export const THINNED_VM = Object.freeze(["test:game-vm-b1", "test:game-vm-b2"]);
 
-/** Files ALWAYS_ON_TOPICAL would re-run that tooling-fast already covers. */
+/** Files ALWAYS_ON_TOPICAL would re-run that a FULL tooling-fast run covers (informational: run-group
+ *  `--skip-tf` subtracts what the guards shards actually ran, guardsRanFiles in tooling-fast.mjs). */
 export function topicalTfOverlap(groups = groupsJson()) {
   const tf = new Set(TOOLING_FAST_FILES);
   const out = [];

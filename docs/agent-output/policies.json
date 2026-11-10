@@ -616,6 +616,11 @@
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
     },
+    "tools/ci/file-verdict-reporter.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "A node --test reporter module: one JSON object of per-file event counts to its destination; never a command"
+    },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
       "presentation": "native",

@@ -155,7 +155,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/release-provenance.mjs** | Proves the deployed revision by combining local git ancestry with live shell SHA/build metadata. | — |
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
-| **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so the always-on riders (vm-a1 / vm-a2 / slow arms) do not double-bill. | — |
+| **ci/run-group.mjs** | PR-only topical runner: `--skip-tf` drops exactly the files the guards shards ran for this diff (no double run). | — |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, verdicts, live run); `--pr` adds live PR state. | check-changes |
 | **ci/session-transcript.mjs** | Digest saved `list_events` pages into a timeline: prompts, replies, commands, MCP calls, subagents, errors. | steward |
 | **ci/ship-pr.mjs** | Runs ready-gate on a draft PR; on a pass prints the two calls that land it (MCP draft:false flip, `land` label). | ship |
@@ -739,6 +739,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/debug-unit.mjs** | Wrapper: npm run debug:unit -- <file> loads vm-debug-preload so vm-loaded js/ is file://-debuggable. |
 | **ci/dispatch.mjs** | The Actions dispatcher: launches, takeovers, deploy:red fixers, nudges, digests, the Board; --fire starts workers. |
+| **ci/file-verdict-reporter.mjs** | A `node --test` reporter writing per-file event counts, so a group runner can refuse an exit 0 that verified nothing. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
 | **ci/github-api.mjs** | The one GitHub REST client: token on curl stdin, 5xx/429 backoff, ETag/304 GETs, JSON bodies; repo constants. |
@@ -788,7 +789,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
 | **ci/dispatch.json** | `ci/dispatch.mjs`, `ci/lib/provenance.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md`, `tests/unit/dispatch.test.mjs` |
 | **ci/worker-prompt.md** | `ci/dispatch.mjs` |
-| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `lib/generated-paths.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-staging.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/memory-sync.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tooling-fast-runner.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
+| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `lib/generated-paths.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/changed-files.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-staging.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/memory-sync.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tooling-fast-runner.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
 | **environment/ENVIRONMENT.md** | `environment/MCP-STARTUP-SKILL.md`, `environment/bind-canonical.sh`, `environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md` |
 | **environment/MCP-STARTUP-SKILL.md** | `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/install-environment.sh` |
 | **environment/PLUGIN-BUILD.md** | `environment/bind-canonical.sh` |

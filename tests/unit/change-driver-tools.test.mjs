@@ -295,3 +295,44 @@ test("test-honesty finds no unexplained skips (the silent-skip ratchet)", () => 
   // while testing nothing (docs/PERF-FINDINGS.md).
   assert.deepEqual(v.detail, [], "unexplained skip/fixme/empty-body sites — annotate or fix them");
 });
+
+// ── AUDIT W6 (2026-11-10): no deploy base is a refusal; generated files run gen:check ──
+
+test("W6: with no deploy base the selectors refuse instead of answering for HEAD~1", (t) => {
+  // driverEnv's git always fails: neither origin/<deploy> nor <deploy> resolves.
+  const env = driverEnv(t);
+  const pick = run(["tools/ci/pick-tests.mjs"], { env, stdio: "pipe" });
+  assert.equal(pick.status, 4, pick.out);
+  assert.match(pick.out, /\[pick-tests\] no deploy base/);
+  assert.doesNotMatch(pick.out, /fatal: Not a valid object name/, "one refusal line, not a git fatal per ref");
+  const json = run(["tools/ci/pick-tests.mjs", "--json"], { env, stdio: "pipe" });
+  assert.equal(json.status, 4);
+  assert.equal(JSON.parse(json.out.split("\n")[0]).reason, "no-deploy-base");
+  assert.equal(run(["tools/ci/pick-tests.mjs", "js/game.js"], { env, stdio: "pipe" }).status, 0, "explicit paths need no base");
+  const vc = run(["tools/ci/verify-change.mjs", "--plan"], { env, stdio: "pipe" });
+  assert.equal(vc.status, 2, vc.out);
+  assert.match(vc.out, /\[verify-change\] no deploy base/);
+  const tf = run(["tools/ci/tooling-fast.mjs", "--changed", "--jobs=1"], { env, stdio: "pipe" });
+  assert.equal(tf.status, 4, tf.out);
+  assert.match(tf.out, /\[tooling-fast\] no deploy base/);
+  assert.match(tf.out, /= run failed|FAILED|failed/i);
+  const scope = run(["tools/ci/tooling-fast.mjs", "--print-scope"], { env: { ...env, GITHUB_EVENT_NAME: "pull_request" }, stdio: "pipe" });
+  assert.equal(scope.status, 0);
+  assert.match(scope.out, /^mode=full\nreason=no deploy base/m, "the guards shards fail safe to the whole floor");
+});
+
+test("W6: a generated file in the diff runs gen:check in verify-change's fast phase", (t) => {
+  const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "js/roster.js"]).out);
+  assert.equal(plan.fast.toolingFastReason, "generated-only");
+  assert.equal(plan.fast.genCheck, true, "the selection said genCheck: the plan must carry it");
+  const env = driverEnv(t, { stubFastGate: true });
+  const stubDir = env.PATH.split(path.delimiter)[0];
+  fs.writeFileSync(path.join(stubDir, "npm"), "#!/bin/sh\ncase \"$*\" in *gen:check*) echo 'gen-shell: js/roster.js is stale'; exit 1;; esac\nexit 0\n", { mode: 0o755 });
+  const r = run(["tools/ci/verify-change.mjs", "--fast", "--json", "js/roster.js"], { env, stdio: "pipe" });
+  const out = JSON.parse(r.out.slice(r.out.indexOf("{")));
+  const gen = out.phases.find((p) => p.name === "gen:check");
+  assert.ok(gen, r.out);
+  assert.equal(gen.ok, false);
+  assert.equal(out.verdict, "fail", "a hand-edited generated file must not pass the fast gate");
+  assert.equal(r.status, 1);
+});

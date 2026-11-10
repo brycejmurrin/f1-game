@@ -344,3 +344,33 @@ test("stepUntil arms a real WATCH countdown and advances its replay clock", asyn
     assert.equal(replay.owns(g.G.player), true);
   } finally { g.G.quitToMenu(); }
 });
+
+// AUDIT W6 (2026-11-10): a lazily injected script that throws at load was only
+// RECORDED, so createGame resolved on a half-built game (a throwing
+// js/circuits/scenery/monza.js raced a bare Monza). It rejects by default now;
+// allowScriptErrors is the per-test opt-out for a test asserting on the failure.
+test("a lazily injected script that throws at load rejects createGame unless allowScriptErrors", async (t) => {
+  const fs = require("node:fs"), path = require("node:path");
+  const { ROOT, scriptLoadErrors } = require("../../tools/lib/game-vm.cjs");
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "game-vm-throw-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const rel = path.relative(ROOT, path.join(dir, "throws-at-load.js")).replace(/\\/g, "/");
+  fs.writeFileSync(path.join(ROOT, rel), "throw new Error('W6 fixture: broken at load');\n");
+  const inject = (sandbox) => {
+    const s = sandbox.document.createElement("script");
+    s.src = rel;
+    sandbox.document.head.appendChild(s);
+  };
+  const before = process.listenerCount("unhandledRejection");
+  await assert.rejects(createGame({ onSandbox: inject, carMeshes: false }), (error) => {
+    assert.match(error.message, /threw at load during boot: .*throws-at-load\.js \(W6 fixture: broken at load\)/);
+    assert.equal(error.scriptErrors.length, 1);
+    assert.equal(error.resources.closed, true, "a rejected boot releases its harness resources");
+    return true;
+  });
+  assert.equal(process.listenerCount("unhandledRejection"), before);
+  const lenient = await createGame({ onSandbox: inject, carMeshes: false, allowScriptErrors: true });
+  try {
+    assert.deepEqual(scriptLoadErrors(lenient.record).map((s) => s.file), [rel], "the opt-out keeps the error on the record");
+  } finally { lenient.close(); }
+});
