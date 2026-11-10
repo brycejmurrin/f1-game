@@ -87,11 +87,10 @@ Hook names drift: `__apex.agentHelp()` is the live manifest.
 Commands:
 
 ```sh
-npm run test:net-unit                                  # node, no browser: run first
-node tools/ci/test-bg.mjs --spec tests/specs/multiplayer-lobby.spec.js   # ONE spec for the symptom (lobby/room/scan/seats/session/roles/npeer), backgrounded (rule 4)
-node tools/ci/remote-group.mjs net                     # the whole `net` group (tests/groups.json), on the pushed branch only
-node tools/net/rtc-e2e.mjs
-node tools/net/rtc-e2e-3p.mjs
+npm run test:net-unit                                  # node, no browser: the local floor, run first
+node tools/ci/pick-tests.mjs                           # which groups the change needs
+node tools/ci/remote-group.mjs net                     # the browser `net` specs, on CI against the pushed branch (rule 5: never locally)
+# The real-RTC scripts (tools/net/rtc-e2e*.mjs) boot Chromium: a PARENT-session diagnosis aid, never a pre-push step or a subagent's (rule 10).
 node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass   # relay-only ICE; a bare rtc:e2e-3p-relay has no TURN (STUN-only default) and proves nothing
 # Room-code / relay diagnosis (not a package.json dep — install on demand):
 npm i --no-save ws @noble/curves

@@ -19,15 +19,15 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 (`issue_read` / `pull_request_read`); the Plan and the Hand-off block are the whole brief.
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
-   stand down. Labels ONLY via `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=claimed'` (`-X DELETE
-   …/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list.
+   stand down. Labels ONLY via `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=claimed'` (`gh api -X
+   DELETE repos/<o>/<r>/issues/<n>/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list.
 2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: the Action already removed `needs-owner` and posted `adopts PR #<n>`
    (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
    NEWEST adoption comment wins (stand down if a newer one appears), the opposite of issue claims.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
    No PR, no question.
-5. **Cap.** The brief's `STOP AT` (300k context by default) and $10 soft (cost): finish the unit, push, refresh Plan
+5. **Cap.** The brief's `STOP AT` (the worker brief `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan
    and Hand-off, add `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
 6. **Ask = `needs-decision` plus ONE comment** with the options and your pick, then keep working on what does not
    depend on it. No question to the user at the end of a turn, no `AskUserQuestion`. Bryce answers with his own label
@@ -82,8 +82,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    on a dirty PR starts no CI.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:
-3. GitHub MCP `update_pull_request` with `draft: false` (the hook needs a ready-gate receipt under 10 min old; older,
-   re-run step 2), then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=land'`.
+3. GitHub MCP `update_pull_request` with `draft: false`, then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f
+   'labels[]=land'`.
 4. Refresh the Hand-off block; call `subscribe_pr_activity` again (the subscription dies at the flip); end the turn.
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by

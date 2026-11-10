@@ -33,7 +33,9 @@ uses. `def._sceneryShift` is the single arc number between them.
   `node -e 'const T=require("./tools/track/verify-track.cjs").buildContext(),d=T.LIST.find(x=>x.id==="spa");T.buildCenterline(d,{line:false});console.log(d.sceneryStartFrac,d._sceneryShift)'`
 - **`K(s)` is authored-frame and passes straight through.** Never pre-shift it.
   The wrapped `(k, side, …)` helpers (`anchor`, `tree`, `place`, `building`, …)
-  apply the shift themselves, exactly once. Dropping a non-zero `sceneryStartFrac` re-bases every
+  apply the shift themselves, exactly once. A RAW read does not: `px/py/pz/hw[K(s)]` and
+  `groundYAt(K(s), …)` index the ENGINE frame, so on a shifted circuit they read a different node —
+  read the ground through the wrapped `anchor()` (`c[1]`) instead. Dropping a non-zero `sceneryStartFrac` re-bases every
   authored frac literal at once — take a `tools/track/audit-circuit.cjs` baseline before and after,
   never a one-line edit.
 - **`along()` hands authored-frame `k` to the callback** (`sceneryNodeToAuthored`). Wrapped helpers inside an `along` span apply the
@@ -48,7 +50,7 @@ uses. `def._sceneryShift` is the single arc number between them.
 
 ## On-track rejection
 
-Every primitive emitter is footprint-tested (`rejBox` / `onRoadHit`; `docs/SCENERY-API.md` §rejection):
+Every primitive emitter is footprint-tested (`rejBox` / `onRoadHit`; `docs/SCENERY-API.md` §On-track guard):
 a footprint touching tarmac drops the **entire shape**. Too-close props silently vanish — increase `dist`/`gap`.
 
 - **Console warning is not universal.** Composite helpers (`building`,
@@ -66,7 +68,7 @@ a footprint touching tarmac drops the **entire shape**. Too-close props silently
   racing line" bug: `building()`/`neonTower`/masts testing an inner-face point on a curving street).
 - **`RAW.*` (engine-internal, not on the circuit `api`) bypasses the guard.** Crowd spectators via `RAW.addBox` are not
   footprint-tested; only place them behind a shell.
-- **Regression:** `tests/specs/props-over-road.spec.js` (in `test:circuits`).
+- **Regression:** `tests/specs/props-over-road.spec.js` — CI group `circuits` (`node tools/ci/remote-group.mjs circuits`, pushed branch).
   One track: `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots` (browser, parent only).
 
 ## Terrain anchoring
@@ -76,20 +78,22 @@ Which ground the helpers use and the fixes: [float-fix.md](float-fix.md).
 
 ## Reverse circuits
 
-When `reverse: true`, the engine auto-flips `side`; author in the original
-trace direction.
+When `reverse: true`, the WRAPPED helpers flip `side` (`transformSceneryApi`,
+`js/track/scenery/api-wrap.js`); author in the original trace direction. Six entry points get the origin
+shift only, never the side flip: `groundPatch`, `waterField`, `frameAt`, `overheadSpan`, `groundedSegments`,
+`circuitKit` (the comment above `shiftS` says why) — and a raw read gets neither.
 
 ## Vertex budget — increment, not a ceiling
 
-Per-circuit prop size: `node tools/track/props-tris.cjs <id>` (`--all`); `tests/unit/props-tri-ratchet.test.mjs` fails past its +0.5 % margin. Also `verify-track.cjs <id>` before and after; keep the edit at or below the existing count unless you can say why.
+Per-circuit prop size: `node tools/track/props-tris.cjs <id>` (`--all`); `tests/unit/props-tri-ratchet.test.mjs` fails past its margin (the test header). Also `verify-track.cjs <id>` before and after; keep the edit at or below the existing count unless you can say why.
 `every(20)` for sparse features, `every(5)` only for hero sections; jitter
 with `hash()`; double-place at two distances instead of doubling density.
 
 ## Denser vegetation
 
 Levers in order (then `clip-audit.cjs <id> --why`, `props-tris.cjs <id>`):
-1. `forestEdge(s0, s1, side, gap, opts)` `opts.density` (clamped 0.05-1; above ~0.6 the engine adds a
-   staggered back row — the comment above Spa's belts) and `gap`; `opts.pineFrac`/`hMin`/`hMax` for the look.
+1. `forestEdge(s0, s1, side, gap, opts)` `opts.density` (its clamp and the
+   staggered back row it adds when high: `forestEdgeNow` in `js/track/scenery/nature.js`) and `gap`; `opts.pineFrac`/`hMin`/`hMax` for the look.
 2. Deeper ranks: an `along()` loop that consults the circuit's own exclusion map before each tree (Spa's
    `OPEN` windows + `plantPine` → `forestRank`), never a bare `every()` pine loop — Spa's early `every()`
    pines ignored `OPEN` and caused the severe pine×motorhome / pine×crowd clips (the comment above `OPEN`).

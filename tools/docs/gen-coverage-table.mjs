@@ -6,9 +6,16 @@
  *
  * docs/TESTING.md §5 used to inline this table, so opening the how-to loaded
  * every suite's description. The how-to now links here. A row's text is the
- * note directly above the file in tests/groups.json `toolingFast` when one
- * exists, otherwise the first sentence of the file's header, otherwise the
- * first test title.
+ * first sentence of the file's own header; a file with no header takes the
+ * note directly above it in tests/groups.json `toolingFast`, unless that note
+ * is a continuation ("...and the"); otherwise the first test title.
+ *
+ * Header first, because the file is the only text that is always about itself:
+ * `toolingFast` is kept sorted, and a sort moves a file away from the comment
+ * written for it while the comment stays put — the ready-gate.test.mjs row
+ * described a real-race replay test, and 15 rows opened "...and the" (audit W27,
+ * 2026-11-09). A note that reads as a continuation of the line above is never
+ * attached to the file below it.
  *
  *   node tools/docs/gen-coverage-table.mjs
  *   node tools/docs/gen-coverage-table.mjs --check
@@ -46,11 +53,14 @@ function firstTitle(src) {
   return m ? m[2].replace(/\s+/g, " ").trim() : "";
 }
 
+export const isContinuation = (note) => /^(?:\.\.\.|…|and\b|or\b|plus\b|then\b|also\b)/i.test(note || "");
+
 export function describeFile(rel, src, notes) {
-  const noted = notes.get(rel);
+  const raw = notes.get(rel);
+  const noted = raw && !isContinuation(raw) ? raw : null;
   const header = headerSentence(src);
   const title = firstTitle(src);
-  let text = (noted || header || title || "—").replace(/\s+/g, " ").trim();
+  let text = (header || noted || title || "—").replace(/\s+/g, " ").trim();
   if (text.length > 220) text = text.slice(0, 217).replace(/\s+\S*$/, "") + "…";
   return text.replace(/\|/g, "\\|");
 }

@@ -204,7 +204,7 @@ function makeGov() {
     },
   };
   PerfGov.init(gfx);
-  return { PerfGov, scale: () => scale };
+  return { PerfGov, scale: () => scale, setScale: (v) => { scale = v; } };
 }
 
 function feed(PerfGov, dtFn, n) {
@@ -477,6 +477,29 @@ test("a device that degraded RECOVERS once the frames come good again", () => {
   assert.ok(scale() > degraded,
     `scale must climb back after sustained clean frames — degraded to ${degraded}, ended at ${scale()}`);
   assert.equal(scale(), 1, "sustained perfect frames should restore all the way to full resolution");
+});
+
+// #5227: a phone's RESOLUTION AUTO is capped at MED (js/ui/scale.js sets the ceiling and starts the scale
+// on it). The resolution stage must work BELOW the ceiling exactly as it does below 1, and never above it.
+test("a configured ceiling (phone AUTO = 0.75) lets the governor cut pixels and bounds the climb back", () => {
+  const g = makeGov();
+  assert.equal(g.PerfGov.resCeil(), 1, "no ceiling unless one is set");
+  assert.equal(g.PerfGov.setResCeil(0.75), 0.75);
+  g.setScale(0.75);                                               // scale.js lowers the scale onto the ceiling itself
+  let peak = 0;
+  const run = (dtFn, n) => { for (let i = 0; i < n; i++) { g.PerfGov.tick(dtFn(i)); peak = Math.max(peak, g.scale()); } };
+  run((i) => (i % 20 === 0 ? 10 : 34 * g.scale()), 1500);        // GPU-bound at 0.75: 25.5 ms, over a 60 Hz refresh
+  const degraded = g.scale();
+  assert.ok(degraded < 0.75 - 1e-9, `the pixel lever must exist under the ceiling, scale stayed ${degraded}`);
+  run(() => 16.7, 9000);                                          // the load lifts
+  assert.equal(g.scale(), 0.75, "clean frames climb back to the ceiling, and stop there");
+  assert.ok(peak <= 0.75 + 1e-9, `the scale never exceeded the ceiling (peak ${peak})`);
+});
+
+test("setResCeil refuses a value outside the resolution stage's range", () => {
+  const { PerfGov } = makeGov();
+  for (const bad of [0.2, 1.5, NaN, undefined, "x"]) assert.equal(PerfGov.setResCeil(bad), 1, String(bad));
+  assert.equal(PerfGov.setResCeil(0.5), 0.5);
 });
 
 test("restore does NOT fire while frames are still missing", () => {
@@ -1749,3 +1772,67 @@ test("software garage preview sheds render scale on SwiftShader and restores", (
   hw.governor.softwareGaragePreviewEnd(hw.gfx);
   assert.deepEqual(hw.sets, [], "hardware GL keeps its scale through the preview");
 });
+
+// ---- A MODELLED VSYNC-LOCKED PHONE (docs/notes/PHONE-PERF-HUNT-2026-11-09.md §3) -------------------------------
+// The shipped tick() against a device model: a frame costs (base + fill x scale^2) x (1 - tierSave x tier) ms and is
+// shown on the next refresh, so 17 ms of work reads as 33.3 ms, as on a 60 Hz phone. The ms are the model's; the
+// decisions (where the scale and tier end, what the governor gives up on) are the governor's. These pin the note's
+// table: a governor change that moves a row must update the note with it.
+const PHONE_MODES = { low: { scale: 0.5, auto: false }, med: { scale: 0.75, auto: false }, high: { scale: 1, auto: false }, auto: { scale: 1, auto: true } };
+
+// One race on the modelled device. Returns where the governor ended and every step it took.
+function phoneReplay({ base, fill, mode = "med", seconds = 120, hz = 60, tierSave = 0.06, heavy = null }) {
+  const m = PHONE_MODES[mode]; if (!m) throw new Error("mode wants low|med|high|auto, got " + mode);
+  const kv = new Map(), quiet = { info() {}, warn() {}, debug() {}, error() {} };
+  const ctx = vm.createContext({ document: { getElementById: () => null, hidden: false }, Log: quiet, performance, setTimeout, clearTimeout,
+    GameStore: { store: { raw: (k) => (kv.has(k) ? kv.get(k) : null), rawSet: (k, v) => kv.set(k, v), rawDel: (k) => kv.delete(k), get: (k, d) => d, set() {} } } });
+  const G = vm.runInContext(SRC + ";PerfGov", ctx, { filename: absSrc("js/perf/governor.js") });
+  let scale = m.scale;
+  // The backend contract (js/render/gfx.js): clamp 0.5..1, refuse a move inside the 0.02 dead zone.
+  const gfx = { isMobile: true, backendState: () => ({ softwareGL: false }), getRenderScale: () => scale,
+    setRenderScale(s) { s = Math.max(0.5, Math.min(1, s)); if (Math.abs(s - scale) < 0.02) return false; scale = s; return true; } };
+  G.init(gfx); G.setAutoRes(m.auto); G.sentinelArm(true);
+  const q = 1000 / hz, steps = [], iv = [];
+  let t = 0, lastTier = G.tier(), lastScale = scale, seed = 1;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // fixed seed: the replay is deterministic
+  while (t < seconds * 1000) {
+    const load = heavy && (t % heavy.period) < heavy.len ? heavy.mult : 1;
+    const cost = (base + fill * scale * scale * load) * Math.max(0.5, 1 - tierSave * G.tier()) + (rand() - 0.5) * 1.2;
+    const dt = Math.max(1, Math.ceil(cost / q)) * q;
+    G.tick(dt, true); t += dt; iv.push(dt);
+    if (G.tier() !== lastTier || scale !== lastScale) { steps.push({ s: +(t / 1000).toFixed(1), scale: [+lastScale.toFixed(2), +scale.toFixed(2)], tier: [lastTier, G.tier()] }); lastTier = G.tier(); lastScale = scale; }
+  }
+  const tail = iv.slice(-600);
+  return { mode, base, fill, endScale: +scale.toFixed(2), endTier: G.tier(), endFps: +(1000 * tail.length / tail.reduce((a, b) => a + b, 0)).toFixed(1),
+    scaleMoves: steps.filter((x) => x.scale[0] !== x.scale[1]).length, tierMoves: steps.filter((x) => x.tier[0] !== x.tier[1]).length, steps };
+}
+
+test("a pinned RESOLUTION never moves the scale, whatever the device", () => {
+  for (const mode of ["low", "med", "high"]) for (const [base, fill] of [[9, 12], [9, 16], [14, 16]]) {
+    const r = phoneReplay({ base, fill, mode });
+    assert.equal(r.scaleMoves, 0, `${mode} on ${base}+${fill}: scale moved`);
+    assert.equal(r.endScale, PHONE_MODES[mode].scale);
+  }
+});
+
+test("a device with headroom at MED is left alone: 60 fps, no tier shed", () => {
+  const r = phoneReplay({ base: 9, fill: 12, mode: "med" });
+  assert.equal(r.endFps, 60); assert.equal(r.endTier, 0); assert.equal(r.tierMoves, 0);
+});
+
+test("a marginal device at MED pays in features, not pixels", () => {
+  const r = phoneReplay({ base: 9, fill: 16, mode: "med" });
+  assert.equal(r.endFps, 60); assert.ok(r.endTier >= 1, "tiers shed: " + r.endTier);
+});
+
+test("AUTO finds 60 fps on the device a HIGH pin strands at 30", () => {
+  assert.equal(phoneReplay({ base: 9, fill: 16, mode: "high" }).endFps, 30);
+  const a = phoneReplay({ base: 9, fill: 16, mode: "auto" });
+  assert.equal(a.endFps, 60); assert.ok(a.endScale < 1 && a.endScale >= 0.5); assert.equal(a.endTier, 0);
+});
+
+test("the replay is deterministic", () => {
+  assert.deepEqual(phoneReplay({ base: 9, fill: 16, mode: "auto" }), phoneReplay({ base: 9, fill: 16, mode: "auto" }));
+});
+
+test("an unknown mode is refused", () => { assert.throws(() => phoneReplay({ base: 9, fill: 9, mode: "ultra" }), /mode wants/); });

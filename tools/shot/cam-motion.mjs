@@ -26,7 +26,6 @@ function loadRig() {
   const files = [
     "js/core/mat4.js",
     "js/camera/fov-mode.js",
-    "js/camera/drive-lens.js",
     "js/camera/feel.js",
     "js/camera/extra-rigs.js",
     "js/camera/vantage-ride.js",

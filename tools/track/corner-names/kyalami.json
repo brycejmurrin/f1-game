@@ -1,0 +1,16 @@
+{
+  "why": "Modern (post-2015) Kyalami names in lap order, mapped onto THIS def.turns[] by built curvature sign/angle: T1 Crowthorne R 129deg; T2 Jukskei Sweep L 44deg; T3 Barbecue L 128deg; T4 Sunset R; T5 Clubhouse R 138deg; T6-T8 the Esses (L-R-R, 34-61deg); T9 Leeukop R 104deg R35m; T10 Mineshaft L; T11 Crocodiles R 90deg; T13 Wesbank R 132deg (final corner). Order from docs/tracks/kyalami.md line 62 and the scenery 2c comment; not survey-verified.",
+  "names": {
+    "Crowthorne": 1,
+    "Jukskei Sweep": 2,
+    "Jukskei": 2,
+    "Barbecue": 3,
+    "Barbeque": 3,
+    "Sunset": 4,
+    "Clubhouse": 5,
+    "Leeukop": 9,
+    "Mineshaft": 10,
+    "Crocodiles": 11,
+    "Wesbank": 13
+  }
+}

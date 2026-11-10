@@ -34,6 +34,7 @@ your change touches → the skill that drives it.
 | [SCENERY-API.md](SCENERY-API.md) / [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) | The `scenery(api)` contract; the track/scenery build pipeline. |
 | [LIGHTING.md](LIGHTING.md) / [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | Light records, time of day, lamps; every tuner slider (generated). |
 | [GFX-CONTRACT.md](GFX-CONTRACT.md) | The renderer backend seam: the interface every backend (GLX, TLX, WGX) implements for `js/render/gfx.js`. |
+| [GOVERNOR-RATIONALE.md](GOVERNOR-RATIONALE.md) | Why `js/perf/governor.js` (PerfGov) cuts, holds and climbs the render scale and sheds tiers: its long comment blocks, moved verbatim. |
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire, rendezvous, snapshots, phone as controller. |
 | [UI-MAP.md](UI-MAP.md) | Navigation web and screens, DOM IDs; the UI explorer toolkit and the capture/publish review flow (merged 2026-11-03). |
 | [COMPONENTS.md](COMPONENTS.md) / [CODE-STANDARDS.md](CODE-STANDARDS.md) | CSS class families and owners, layout axes, layout tokens, the UI experience and studio acceptance contract; JavaScript house style. |
@@ -63,11 +64,11 @@ One redirect stub remains: [PERF-FINDINGS.md](PERF-FINDINGS.md) → `notes/PERF-
 live cites for 21 days is archived) · [research/](NOTES-INDEX.md) source-cited research ·
 [plans/](NOTES-INDEX.md) live plans (shipped and superseded ones are under archive/plans/) ·
 [DECISIONS.md](DECISIONS.md) the `D-NNN` ledger of what Bryce decided · [archive/](NOTES-INDEX.md)
-provenance only (archive/research/, archive/notes/, archive/plans/, archive/survey/, archive/surveys/,
+provenance only (archive/research/, archive/notes/, archive/plans/, [archive/survey/](archive/survey), [archive/surveys/](archive/surveys),
 archive/superpowers/, archive/slider-effect/, archive/manual-probes/, archive/webgpu/,
 archive/tracks/, archive/workflows/, archive/moves/, archive/tools/) · [changelog.d/](changelog.d/README.md)
 per-PR changelog fragments · [tracks/](tracks) per-circuit reference · [look-survey/](look-survey/README.md)
-contact sheets · perf/ device measurements · [evidence/](evidence/historical-catalog.json) capture catalog.
+contact sheets · [perf/](perf) device measurements · [superpowers/](superpowers) the newest workflow specs · [evidence/](evidence/historical-catalog.json) capture catalog.
 
 For day-to-day workflows, see the skills (`.claude/skills/README.md`) and the
 tools (`tools/README.md`).
