@@ -269,7 +269,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
-| `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `post-fx-opts.js` | `PostFxOpts` | tag | PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent player settings (GRAPHICS). |
 | `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
 | `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
@@ -354,7 +353,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
 | `setup-trial-session.js` | `SetupTrialSession` | tag | Fresh solo setup trials use normal race construction; never restore a world checkpoint. |
-| `wx-hash.js` | `WxHash` | tag | WX HASH (WxHash): the FNV-1a unit draw shared by Forecast and RainCells. |
 | `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
@@ -613,7 +611,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `cockpit-finishes.js` | `CockpitFinishes` | tag | first-person finish preferences. |
 | `cockpit-preview.js` | `CockpitPreview` | tag | isolated cockpit option preview. |
 | `fov-mode.js` | `CamFov` | tag | one speed-FOV curve for every player camera. vantage.js asks CamFeel.modeFov, which forwards here, so the recipe is not buried in look-back and shake. |
-| `drive-lens.js` | `DriveLens` | tag | lens-only FOV delta for every live camera family. |
 | `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
 | `cam-groups.js` | `CamGroups` | tag | CamGroups: the ONE table of which player cameras count as "onboard" and which take the cockpit HUD layout, by CamModes id. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |

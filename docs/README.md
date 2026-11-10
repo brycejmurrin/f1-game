@@ -34,6 +34,7 @@ your change touches → the skill that drives it.
 | [SCENERY-API.md](SCENERY-API.md) / [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) | The `scenery(api)` contract; the track/scenery build pipeline. |
 | [LIGHTING.md](LIGHTING.md) / [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | Light records, time of day, lamps; every tuner slider (generated). |
 | [GFX-CONTRACT.md](GFX-CONTRACT.md) | The renderer backend seam: the interface every backend (GLX, TLX, WGX) implements for `js/render/gfx.js`. |
+| [GOVERNOR-RATIONALE.md](GOVERNOR-RATIONALE.md) | Why `js/perf/governor.js` (PerfGov) cuts, holds and climbs the render scale and sheds tiers: its long comment blocks, moved verbatim. |
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire, rendezvous, snapshots, phone as controller. |
 | [UI-MAP.md](UI-MAP.md) | Navigation web and screens, DOM IDs; the UI explorer toolkit and the capture/publish review flow (merged 2026-11-03). |
 | [COMPONENTS.md](COMPONENTS.md) / [CODE-STANDARDS.md](CODE-STANDARDS.md) | CSS class families and owners, layout axes, layout tokens, the UI experience and studio acceptance contract; JavaScript house style. |

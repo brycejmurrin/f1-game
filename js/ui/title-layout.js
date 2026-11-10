@@ -174,7 +174,21 @@ const TitleLayout = (function () {
       el.style.setProperty("--tf", tf.toFixed(3));
       const r = el.getBoundingClientRect();
       if (r.height * Math.max(1, el.scrollHeight / (el.clientHeight || 1)) > availH || r.width * Math.max(1, el.scrollWidth / (el.clientWidth || 1)) > availW) return false;
-      for (const b of el.querySelectorAll(".bigbtn")) if (b.scrollWidth > b.clientWidth + 1) return false;
+      // A clipped label span rejects the tier, the .mb-sub ellipsis excepted (#5378: Safari 852×283).
+      for (const b of el.querySelectorAll(".bigbtn")) {
+        if (b.hidden || b.closest("[hidden]")) continue;
+        if (b.scrollWidth > b.clientWidth + 1) return false;
+        for (const s of b.querySelectorAll("span:not(.mb-sub)")) {
+          if (s.scrollWidth <= s.clientWidth + 1) continue;
+          const sub = s.querySelector(".mb-sub");
+          const label = s.querySelector(".mb-label");
+          if (sub && sub.clientWidth > 0 && sub.scrollWidth > sub.clientWidth + 1) {
+            if (label && label.scrollWidth > label.clientWidth + 1) return false;
+            continue;
+          }
+          return false;
+        }
+      }
       return true;
     };
     const tiers = current().layout === "grid" ? ["", "7", "5"] : [""];
