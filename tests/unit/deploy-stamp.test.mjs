@@ -199,14 +199,16 @@ test("every staged root .html page is stamped (overlay.html included) and --chec
     shell(dir);
     put(dir, "fx/a.js", "console.log('a');\n");
     const pages = STAGE_ROOT_FILES.filter((f) => f.endsWith(".html") && f !== "index.html");
-    assert.ok(pages.includes("overlay.html"));
+    assert.deepEqual(["overlay.html"].filter((p) => !pages.includes(p)), [], "the allow-list ships overlay.html");
     for (const p of pages) put(dir, p, `<script src="fx/a.js?v=dev"></script>\n`);
     assert.equal(runAt(dir, "--apply").status, 0);
-    for (const p of pages) {
-      const text = fs.readFileSync(path.join(dir, p), "utf8");
-      assert.doesNotMatch(text, /\?v=dev/, `${p} was stamped`);
-      assert.match(text, /integrity="sha256-/, `${p} carries SRI`);
-    }
+    // Each page's one tag, parsed: a real ?v= key and the SRI of fx/a.js's actual bytes.
+    const sri = "sha256-" + createHash("sha256").update(fs.readFileSync(path.join(dir, "fx/a.js"))).digest("base64");
+    const stamped = pages.map((p) => {
+      const tag = /<script src="fx\/a\.js\?v=([^"]+)"([^>]*)>/.exec(fs.readFileSync(path.join(dir, p), "utf8"));
+      return [p, tag ? tag[1] !== "dev" : "no tag", tag ? (/integrity="([^"]+)"/.exec(tag[2]) || [])[1] : null];
+    });
+    assert.deepEqual(stamped, pages.map((p) => [p, true, sri]), "every staged page is keyed and carries the file's SRI");
     assert.equal(runAt(dir, "--check").status, 0);
     // A root page outside the allow-list, staged with a dev key: --check names it.
     put(dir, "stray.html", `<script src="fx/a.js?v=dev"></script>\n`);
