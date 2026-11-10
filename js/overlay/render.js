@@ -111,13 +111,13 @@ const OverlayRender = (function () {
         const out = rows[i], row = list[i];
         out.el.hidden = i >= limit || !row;
         if (!row || i >= limit) continue;
-        const key = [row.pos, row.code, row.team, row.interval, row.tyre, row.pit, row.you].join("|");
+        const key = [row.pos, row.code, row.team, row.interval, row.tyre, row.pit, row.out, row.you].join("|");
         out.el.style.transform = "translate3d(0," + ((Math.max(1, row.pos) - 1) * 34) + "px,0)";
         if (key === out.key) continue;
         out.key = key;
         text(out.pos, row.pos);
         text(out.code, row.code);
-        text(out.gap, row.pos === 1 ? "LEADER" : row.pit ? "PIT" : row.interval == null ? "" : "+" + Number(row.interval).toFixed(2));
+        text(out.gap, row.out ? "OUT" : row.pos === 1 ? "LEADER" : row.pit ? "PIT" : row.interval == null ? "" : "+" + Number(row.interval).toFixed(2));
         text(out.tyre, row.tyre || "");
         out.team.style.background = row.team || "";
         const plate = rgbOf(row.team) ? row.team : "";
@@ -201,6 +201,35 @@ const OverlayRender = (function () {
     });
   }
 
+  // THE STALE FEED. A game tab that closes or stops publishing sends nothing
+  // more, so the last tower, battle and caption stayed on stream forever. The
+  // publisher sends a full frame at least every OverlayFeed.FULL_MS, so three of
+  // those with no frame at all means the feed is gone: clear, show the waiting card.
+  const STALE_MS = 3 * (typeof OverlayFeed !== "undefined" && OverlayFeed.FULL_MS || 2000);
+  function waitingFrame() {
+    return OverlayFeed.frame({
+      seq: 0, state: "waiting", ranked: [],
+      caption: { id: "waiting", who: "APEX 26", text: "Waiting for a broadcast feed", kind: "status" },
+    });
+  }
+  // deps: { now(), setInterval(fn, ms) }. Returns { frame(f), check() } (check is exposed for tests).
+  function watch(painter, deps) {
+    const now = deps.now;
+    let lastAt = null;
+    function check() {
+      if (lastAt == null || now() - lastAt < STALE_MS) return false;
+      lastAt = null;
+      painter.clear();
+      painter.paint(waitingFrame());
+      return true;
+    }
+    deps.setInterval(check, 1000);
+    return {
+      frame(f) { lastAt = now(); return painter.paint(f); },
+      check,
+    };
+  }
+
   function boot() {
     const root = typeof document !== "undefined" && document.querySelector('main#overlay[role="region"]');
     if (!root) return null;
@@ -212,12 +241,12 @@ const OverlayRender = (function () {
     root.style.setProperty("--ov-scale", String(config.scale));
     const painter = create(root, config);
     if (!config.demo) {
-      painter.paint(OverlayFeed.frame({
-        seq: 0, state: "waiting", ranked: [],
-        caption: { id: "waiting", who: "APEX 26", text: "Waiting for a broadcast feed", kind: "status" },
-      }));
+      painter.paint(waitingFrame());
       // Same-browser feed: a game tab of this origin publishes once it hears us.
-      if (typeof OverlayBridge !== "undefined") OverlayBridge.subscribe((frame) => painter.paint(frame));
+      if (typeof OverlayBridge !== "undefined") {
+        const feed = watch(painter, { now: () => performance.now(), setInterval: (fn, ms) => window.setInterval(fn, ms) });
+        OverlayBridge.subscribe((frame) => feed.frame(frame));
+      }
       return painter;
     }
     const started = performance.now();
@@ -227,7 +256,7 @@ const OverlayRender = (function () {
     return painter;
   }
 
-  return { MAX_ROWS, FLASH_MS, options, create, demoFrame, boot, contrast, ink };
+  return { MAX_ROWS, FLASH_MS, STALE_MS, options, create, watch, waitingFrame, demoFrame, boot, contrast, ink };
 })();
 Object.freeze(OverlayRender);
 if (typeof document !== "undefined" && document.querySelector('main#overlay[role="region"]')) OverlayRender.boot();

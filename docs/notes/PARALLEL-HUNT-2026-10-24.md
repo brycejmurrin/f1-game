@@ -1,5 +1,7 @@
 # Parallel hunt — what can leave the main thread (A·H14, 2026-10-24)
 
+Summary: What can leave the main thread: ranked candidates and prototypes behind a default-OFF `apex26.*` flag (A·H14).
+
 Lane A·H14 (Fleet A, wave 34). The ask: find work the game can move off the
 main thread or run in parallel, rank it, and prototype the best wins behind an
 `apex26.*` flag that defaults OFF. Bryce plays TLX on three's WebGPU backend on
