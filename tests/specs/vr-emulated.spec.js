@@ -464,15 +464,21 @@ test("stereo viewports: left width > 0; non-blank canvas capture; flat mode afte
   expect(diag.presenting).toBe(true);
   expect(diag.frameCount).toBeGreaterThan(0);
 
-  const dataUrl = await captureCanvasDataUrl(page, "#game");
-  // Soft: under some soft-present paths #game may be empty; prefer #game-soft.
-  const url = dataUrl || await captureCanvasDataUrl(page, "#game-soft");
-  expect(url && url.startsWith("data:image/png")).toBeTruthy();
-  // A blank canvas also encodes to a valid PNG: decode it and read the pixels
-  // (PNG size tracks compression, not content).
-  const png = Buffer.from(url.split(",")[1], "base64");
-  expect(frameContent(await screenshotPixels(page, png)).nonblank,
-    "captured canvas must carry content, not a blank frame").toBe(true);
+  // The PRESENTED canvas carries the frame: #game-soft where the backend
+  // soft-presents (this headless box), #game otherwise. Both are decoded and
+  // read. The old check took #game first whenever it produced ANY PNG, and on
+  // the soft path that PNG is the blank GPU buffer: the byte-count assert
+  // passed on it, and the pixel check failed (CI run 42766757935, 1c0b339).
+  const frames = {};
+  for (const sel of ["#game-soft", "#game"]) {
+    const u = await captureCanvasDataUrl(page, sel);
+    if (!u || !u.startsWith("data:image/png")) continue;
+    frames[sel] = frameContent(await screenshotPixels(page, Buffer.from(u.split(",")[1], "base64")));
+  }
+  test.info().annotations.push({ type: "xr-capture", description: JSON.stringify(frames) });
+  expect(Object.keys(frames).length, "neither canvas could be captured").toBeGreaterThan(0);
+  expect(Object.values(frames).some((f) => f.nonblank),
+    "captured canvas must carry content, not a blank frame: " + JSON.stringify(frames)).toBe(true);
 
   await endVr(page);
 
