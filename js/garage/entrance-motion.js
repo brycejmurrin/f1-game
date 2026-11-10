@@ -37,6 +37,22 @@ const GarageEntranceMotion = (function () {
     return t <= backAt ? sample("lane", (t - timeline.door) / timeline.lane, side, out)
       : sample("back", (t - backAt) / timeline.back, side, out);
   }
+  const samePoint = (a, b) => !a.some((v, j) => v !== b[j]);
+  // Segment i of the camera path is usable when it starts where the previous one
+  // ended (time and position), holds four finite XYZ controls, and only the
+  // first segment adapts to the source eye, only the last to the fitted one;
+  // an adaptive end's first two (or last two) controls coincide.
+  function validSegment(segs, i, start) {
+    const s = segs[i], last = segs.length - 1;
+    if (!s || !Number.isFinite(s.u0) || !Number.isFinite(s.u1) || s.u0 !== start || !(s.u1 > s.u0 && s.u1 <= 1)
+        || !Array.isArray(s.points) || s.points.length !== 4
+        || !s.points.every((p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite))
+        || (i === 0 ? s.sourceEndpoint !== true : !!s.sourceEndpoint)
+        || (i === last ? s.fitEndpoint !== true : !!s.fitEndpoint)) return false;
+    if (i && !samePoint(s.points[0], segs[i - 1].points[3])) return false;
+    return !(s.sourceEndpoint && !samePoint(s.points[0], s.points[1]))
+      && !(s.fitEndpoint && !samePoint(s.points[2], s.points[3]));
+  }
   let checkedCamera = null, usableCamera = false;
   function cameraData() {
     const d = data(), c = d && d.camera;
@@ -44,16 +60,8 @@ const GarageEntranceMotion = (function () {
     checkedCamera = c; usableCamera = !!c && c.version === 1 && Array.isArray(c.segments) && c.segments.length > 0;
     let end = 0;
     if (usableCamera) for (let i = 0; i < c.segments.length; i++) {
-      const s = c.segments[i];
-      if (!s || !Number.isFinite(s.u0) || !Number.isFinite(s.u1) || s.u0 !== end || !(s.u1 > s.u0 && s.u1 <= 1)
-          || !Array.isArray(s.points) || s.points.length !== 4
-          || !s.points.every((p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite))
-          || (i === 0 ? s.sourceEndpoint !== true : !!s.sourceEndpoint)
-          || (i === c.segments.length - 1 ? s.fitEndpoint !== true : !!s.fitEndpoint)) { usableCamera = false; break; }
-      if (i && s.points[0].some((v, j) => v !== c.segments[i - 1].points[3][j])) { usableCamera = false; break; }
-      if ((s.sourceEndpoint && s.points[0].some((v, j) => v !== s.points[1][j]))
-          || (s.fitEndpoint && s.points[2].some((v, j) => v !== s.points[3][j]))) { usableCamera = false; break; }
-      end = s.u1;
+      if (!validSegment(c.segments, i, end)) { usableCamera = false; break; }
+      end = c.segments[i].u1;
     }
     usableCamera = usableCamera && end === 1;
     return usableCamera ? c : null;

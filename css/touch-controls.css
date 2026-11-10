@@ -842,16 +842,26 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   }
 }
 
+/* CAM + PAUSE ARE TOP-BAND CHROME, NOT DRIVING CONTROLS (#5179). They used to ride BUTTON SIZE (--tap-hud,
+   up to 150 %; PAUSE to 200 %), so at Bryce's BUTTON 245 % / HUD 155 % on an 852x393 iPhone the pair painted
+   97x52 + 52x52 CSS px beside a 43 px timing strip (~14 % of the screen height each). Now ONE fixed 44 px
+   tap target for both, top-aligned with the strip's row at the safe edge. It is a CONSTANT on purpose:
+   HUD SIZE must not move or resize a single control (Bryce 2026-10-17, hud-layout "controls ignore HUD
+   SIZE"), and the strip's height follows HUD SIZE, so neither may feed it. 44 <= the --tap-hud band, so
+   every readout that hangs below it (sectors, limits, flag, radio card) keeps its anchor. */
+:is(#btn-cam, #pausebtn, #campicker) {
+  --hud-chrome-h: 44px;
+  --hud-chrome-t: calc(8px + var(--sat));
+  --hud-chrome-gap: calc(var(--gap) / 2);
+}
 #pausebtn {
   position: fixed;
-  top: calc(8px + var(--sat));
+  top: var(--hud-chrome-t);
   right: calc(10px + var(--sar));
   z-index: 14;
-  /* in-race chrome, but still a thumb target — on the ladder like the rest.
-     --tap-hud (css/hud.css): it follows HUD SIZE with the timing tower beside
-     it, and never shrinks below --tap. */
-  width: var(--tap-hud); height: var(--tap-btn, var(--tap-hud));
-  font-size: max(var(--touch-label-floor), calc(100% * var(--hud-btn-z)));
+  /* A fixed chrome target (see above): a square box, so the coarse-pointer radius below is a true circle. */
+  width: var(--hud-chrome-h); height: var(--hud-chrome-h);
+  font-size: max(var(--touch-label-floor), 100%);
   border-radius: var(--r-md);
   padding: 0;
   /* Race chrome, dark in every theme — same reason as .touchbtn. LIGHT's
@@ -862,40 +872,36 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   border: 1px solid var(--look-hud-dim);
 }
 /* A thumb finds a circle faster than the small rounded square. The hit
-   box stays --tap-hud (width and height are pinned). A fine pointer keeps
-   the square so PAUSE still matches the CAM pill beside it. */
+   box is the square --hud-chrome-h (width and height are pinned), so this is a
+   true circle. A fine pointer keeps the square so PAUSE still matches the CAM pill beside it. */
 @media (pointer: coarse) {
   #pausebtn { border-radius: 50%; }
-}
-/* ABOVE 150 % BUTTON SIZE, PAUSE keeps growing with the docks (up to 200 %) — DOWN only, into its own column:
-   its width and CAM stay on the --tap-hud band (css/hud.css, capped at 150 %), so the top row never gets wider
-   (round 3 grew both and CAM landed on the tower's BEST box at 640x360, hud-mock 2026-10-14). The right column,
-   flag and radio card hang from the band too, so none of them moves. The min() arm stops PAUSE at the sector
-   plate, which stands off --dock-r-w (0 before the first fit: the arm goes negative and PAUSE keeps the band).
-   Broadcast keeps the band (#bc-pip hangs under PAUSE). At or under 150 % --tap-btn IS --tap-hud. */
-body:not(.desktop):not(.bc-on) {
-  --hud-btn-zt: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 2);
-  --tap-btn: max(var(--tap-hud), min(calc(var(--tap-hud) / var(--hud-btn-z) * var(--hud-btn-zt)), calc((10px + var(--dock-r-w, 0px)) * var(--hud-z-top, var(--hud-scale)) - 14px)));
 }
 /* CAM mode button sits just left of the pause button (top-right). */
 #btn-cam {
   position: fixed;
-  top: calc(8px + var(--sat));
-  /* DERIVED, not 58: this used to be 10 + --tap + 4 with --tap hard-coded at
-     its 44px desktop value, so on touch (--tap: 52px) CHASE overlapped the
-     pause button by 4px on every phone. */
-  right: calc(10px + var(--tap-hud) + 4px + var(--sar));
+  top: var(--hud-chrome-t);
+  /* DERIVED from PAUSE's own box + the pair's even gap, never a constant. */
+  right: calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar));
   z-index: 14;
-  height: var(--tap-hud);
-  min-width: calc(76px * var(--hud-btn-z));
-  padding: 0 calc(var(--gap) * var(--hud-btn-z));
+  height: var(--hud-chrome-h);
+  min-width: calc(var(--hud-chrome-h) * 1.6);
+  padding: 0 calc(var(--gap) * 0.75);
   border-radius: var(--r-md);
-  font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-z)));
+  font-size: max(var(--touch-label-floor), var(--fs-micro));
   font-weight: 700;
   letter-spacing: var(--ls-3);
   background: var(--look-hud-bg);
   color: var(--look-hud-ink);
   border: 1px solid var(--look-hud-dim);
+}
+/* PORTRAIT KEEPS ITS OLD BAND (#5179 is a landscape fix): CAM / PAUSE at --tap-hud, top-aligned, CAM stacked
+   under PAUSE (css/track-detail.css). A narrower CAM there let fitHud grow the tower into the radio card's
+   lane, and the card collapsed beside the sector plate (hud-layout portrait radio card, HUD 150 %). */
+@media (orientation: portrait) {
+  :is(#btn-cam, #pausebtn, #campicker) { --hud-chrome-t: calc(8px + var(--sat)); --hud-chrome-h: var(--tap-hud); }
+  #btn-cam { min-width: calc(76px * var(--hud-btn-z)); padding: 0 calc(var(--gap) * var(--hud-btn-z));
+    font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-z))); }
 }
 /* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
    cinematic view — readouts, start lights, announce, cam picker and the cam
@@ -959,7 +965,7 @@ body.hud-hidden #hud-restore::after {
   /* Same derivation as #btn-cam above — 52 was 8 + --tap at 44px, so the
      picker overlapped #pausebtn by 8px on touch. */
   top: calc(8px + var(--tap-hud) + var(--sat));
-  right: calc(10px + var(--tap-hud) + 4px + var(--sar));
+  right: calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar));
   z-index: 24;
   display: flex; flex-wrap: wrap;
   --balance-basis: 84px; --balance-min: 84px;
