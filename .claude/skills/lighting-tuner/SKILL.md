@@ -25,8 +25,8 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
 ## Workflow
 
 1. **Pin the condition**: track, time of day, weather (wet/rain is a different row) and backend
-   (the owner plays TLX WebGPU on an iPhone; precedence layer 5, `"*|tod"`, applies only where
-   `gfx.hasPerChunkLights` — GLX/WGX, not TLX). The key is `<track>|<tod>|<weather>` (`key()` in `js/lighting/profiles.js`:
+   (the owner plays TLX WebGPU on an iPhone; whether precedence layer 5, `"*|tod"`, applies is `condLayer` in
+   `js/lighting/profiles.js` — read it, do not assume a backend gate). The key is `<track>|<tod>|<weather>` (`key()` in `js/lighting/profiles.js`:
    tod `default` → `def.night`, storm → rain).
 2. **Measure before any knob** (parent only):
    ```sh

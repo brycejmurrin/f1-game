@@ -6,7 +6,7 @@
 2. shipped `js/lighting/presets.js` `"*"`
 3. shipped `"*|tod|wx"` (shared stamp, e.g. `"*|night|dry"`)
 4. shipped `"track|tod|weather"`
-5. shipped `"*|tod"` — only when `gfx.hasPerChunkLights` (all presets/device classes)
+5. shipped `"*|tod"` — when `condLayer` in `js/lighting/profiles.js` says it applies (all presets/device classes)
 6. localStorage `"*"`
 7. localStorage **`track|tod|weather`**
 
