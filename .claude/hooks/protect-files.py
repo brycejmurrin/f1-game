@@ -209,7 +209,7 @@ def block(msg):
 
 
 try:
-    whole, blocks = generated(root) if APEX_TREE else ({}, set())
+    whole, blocks = generated(root) if APEX_TREE else ({}, {"index.html", "sw.js"})   # the shell's known block files
     mdc = mdc_generated(root, rel) if APEX_TREE else False
 except Exception as e:
     fail("protect-files could not load the generated-file list (%s: %s), so it cannot tell whether %s is generated and "
