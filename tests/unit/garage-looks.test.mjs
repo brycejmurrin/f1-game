@@ -291,3 +291,21 @@ test("new working-light moods preserve fixtures and restore the standard rig", (
   }
   assert.equal(signatures.size, 3, "each new mood changes the emitted light rig");
 });
+
+test("#4965: a moment mood that flips the hour relights the bay without rebuilding its geometry", () => {
+  const { GarageScene: scene, meshes } = harness();
+  const ctx = { night: false, bayNight: false, ambient: false, weather: "dry" };
+  const draw = () => scene.draw(TEAM, LIV, [0, 1.6, 0], null, 0, scene.moodCtx(ctx));
+  draw();
+  const built = meshes.length;
+  assert.ok(built > 0, "the first frame builds the bay");
+  assert.equal(scene.mood("night"), "night");
+  assert.equal(scene.moodDef().night, true, "the night mood forces the hour, or this test proves nothing");
+  draw();
+  assert.equal(ctx.night, true, "the mood still lights the bay as night");
+  assert.equal(meshes.filter((m) => !m.uv).length, meshes.slice(0, built).filter((m) => !m.uv).length, "no bay geometry rebuilt at the shutter");
+  scene.mood("shipped");
+  draw();
+  assert.equal(ctx.night, false, "the return restores the garage's own hour");
+  assert.equal(meshes.filter((m) => !m.uv).length, meshes.slice(0, built).filter((m) => !m.uv).length, "no bay geometry rebuilt at the return");
+});
