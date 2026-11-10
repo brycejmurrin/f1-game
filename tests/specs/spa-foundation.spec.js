@@ -184,9 +184,10 @@ test.describe("Spa track-owned foundation migration", () => {
     // A missing mesh scans as 0, a clean pass over nothing: each scan must hit
     // samples. Measured road 9000, terrain 510, props+glass 25 (headless VM,
     // 2026-11-10); the floor is > 0.
-    expect(overlaps.pairs.road).toBeGreaterThan(0);
-    expect(overlaps.pairs.terrain).toBeGreaterThan(0);
-    expect(overlaps.pairs.props + overlaps.pairs.glass).toBeGreaterThan(0);
+    const pd = "scan hits " + JSON.stringify(overlaps.pairs);
+    expect(overlaps.pairs.road, pd).toBeGreaterThan(0);
+    expect(overlaps.pairs.terrain, pd).toBeGreaterThan(0);
+    expect(overlaps.pairs.props + overlaps.pairs.glass, pd).toBeGreaterThan(0);
     expect(overlaps.road).toBeLessThanOrEqual(0.18);
     expect(overlaps.terrain).toBeLessThanOrEqual(0.18);
     expect(overlaps.props).toBeLessThanOrEqual(0.20);
