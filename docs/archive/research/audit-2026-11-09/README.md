@@ -116,10 +116,10 @@ ready.
 | W27 | Reference docs, plans, docs guards | `claude/audit-fix-reference-docs` | #5290 | #5331 |
 | W28 | Desktop and mobile packaging | `claude/audit-fix-packaging` | #5293 | #5332 |
 | W29 | Unit tests that cannot fail: game, physics, race, career, net | `claude/audit-fix-tests-behaviour-a` | #5305 | #5333 |
-| W30 | Unit tests that cannot fail: CSS, HUD, renderers, helpers, never-run | `claude/audit-fix-tests-behaviour-b` |  | #5333 |
+| W30 | Unit tests that cannot fail: CSS, HUD, renderers, helpers, never-run | `claude/audit-fix-tests-behaviour-b` | #5340 | #5333 |
 | W31 | Spec and unit-test selection that lets a red merge | `claude/audit-fix-spec-selection` | #5304 | #5334 |
 | W32 | Browser specs that cannot fail | `claude/audit-fix-specs` | #5302 | #5334 |
-| W33 | Find and re-land fixes erased by the 2026-11-06 rollbacks | `claude/audit-rollback-reland` |  | #5335 |
+| W33 | Find and re-land fixes erased by the 2026-11-06 rollbacks | `claude/audit-rollback-reland` | #5348 | #5335 |
 | W34 | Bugs found by playing: cautions, DNF exit, practice picker, storage holes, Back and double tap | `claude/audit-fix-live-play` |  | #5335 |
 
 A blank PR cell means the worker had not opened one when this was written. Findings not yet assigned are tracked in issue #5335.
