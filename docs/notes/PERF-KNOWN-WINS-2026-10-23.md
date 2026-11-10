@@ -1,5 +1,7 @@
 # Known perf wins and remaining opportunities, cross-checked against the Device Farm iPhone evidence (2026-10-23)
 
+Summary: Known perf wins and remaining opportunities cross-checked against the Device Farm iPhone evidence (A·X1).
+
 Base: `origin/claude/f1-game-project-26h3ng` @ 9d15d0b7, fetched 2026-10-23. Notes were read from that ref.
 The 17 open PRs and the open issues came from the GitHub REST API. This was read-only: nothing was built, and
 nothing was run on a device. A·X1 (session_01Jxz6BMpucD8Gm23RmWTptJ) did the cross-check for OrchA 28.

@@ -1,5 +1,7 @@
 # Live debugger — in-race phone perf (A·H10, 2026-10-24)
 
+Summary: In-race CPU, render submission and memory on Bryce's iPhone (TLX WebGPU; iPhone 14 WebGL2; A·H10).
+
 Lane: in-race CPU, render submission and memory on Bryce's iPhone (TLX WebGPU; iPhone 14 WebGL2). Base
 `origin/claude/f1-game-project-26h3ng` @ b3779370. Prior art read first (not re-reported here):
 `PERF-KNOWN-WINS-2026-10-23.md`, `PERF-IPHONE-AUDIT-2026-10-21.md`, `PERF-FRESH-HUNT-2026-10-21.md`,
