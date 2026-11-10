@@ -1856,6 +1856,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/paint-floor.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Library: raw painted boxes, the paint block, its one-line summary and the ceiling failures are returned, never printed."
+    },
     "tools/lib/pr-snapshot.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -2920,6 +2925,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "AUDIT / TOTALS / SKIPPED / CELL / BYSCREEN / CLEAN lines and exit status (2 bad argument or missing file); output is bounded by --top and a per-cell cap, so it is already compact"
+    },
+    "tools/ui/bryce-paint.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One paint line per cell and screen, every NOT MEASURED line, every ceiling difference and the final = bryce-paint verdict line."
     },
     "tools/ui/bryce-phone.mjs": {
       "action": "keep-native",
