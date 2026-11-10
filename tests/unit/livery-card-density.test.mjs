@@ -43,10 +43,11 @@ test("bad inputs fall back to DPR 1 and a floor, never a zero-size canvas", () =
 });
 
 test("cards size through livSwatchPx from a measured box, not a literal", () => {
-  assert.doesNotMatch(src, /swatchCanvas\([^)]*\d+, \d+, livBuild\)/, "no fixed bitmap size");
-  assert.match(src, /LiveryTex\.swatchCanvas\(team\.id, [^\n]*, px\.w, px\.h, livBuild\)/);
-  const build = src.slice(src.indexOf("function buildLiveryOptions("));
-  assert.match(build, /fitLivSwatches\(container, team\)/, "the build measures the laid-out box");
-  const fit = src.slice(src.indexOf("function fitLivSwatches("), src.indexOf("function livSwatch("));
-  assert.match(fit, /clientWidth \* z/, "local box x UI-scale zoom (CssZoom), never a transformed rect");
+  // Exact lines, not loose patterns: the one card-canvas call sizes from px (no literal), the build ends
+  // by fitting, and the box is the local clientWidth x UI-scale zoom (CssZoom), never a transformed rect.
+  const lines = src.split("\n").map((l) => l.trim());
+  const calls = lines.filter((l) => l.startsWith("const c = LiveryTex.swatchCanvas("));
+  assert.deepEqual(calls, ["const c = LiveryTex.swatchCanvas(team.id, livs.find((l) => l.id === id), px.w, px.h, livBuild);"]);
+  assert.equal(lines.filter((l) => l === "fitLivSwatches(container, team);").length, 1, "the build measures the laid-out box");
+  assert.equal(lines.filter((l) => l === "if (e && e.clientWidth) livBox[s] = [e.clientWidth * z, e.clientHeight * z];").length, 1);
 });

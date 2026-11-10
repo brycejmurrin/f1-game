@@ -54,7 +54,7 @@ and call status from the actual chat before claiming recovery.
 For subsequent environment installation/startup, configure the non-secret paths
 `APEX_CHAT_MCP_PROFILE` and `APEX_TUNNEL_CLIENT_BIN` through the environment's
 supported settings. `cloud-agent-install.sh` starts the service only when the
-profile variable is set. Build snapshots do not preserve running processes;
+profile variable is set (`tools/env/cloud-agent-install.sh`). Build snapshots do not preserve running processes;
 the platform must execute its startup hook after boot. Managed environment
 configuration remains a separate reviewed operation.
 
@@ -125,10 +125,17 @@ does not certify those checks automatically.
 
 ## Garage arrival and drive-out previz
 
-The garage in / out shows are analytic poses in `js/garage/arrival.js`
-(`GarageArrival.pose` / `poseOut`); the crews are Blender-authored key tables
+The garage entrance (the "in" car path) is Blender-authored:
+`tools/gen/blender/garage-entrance.py --write-runtime` exports sampled curves to
+the generated `js/data/garage-entrance-motion.js`, which
+`js/garage/entrance-motion.js` (`GarageEntranceMotion.pose`) samples on
+`GarageArrival`'s timeline; contract `tests/unit/garage-entrance-motion.test.mjs`.
+`js/garage/arrival.js` (`GarageArrival.pose` / `poseOut` / `poseHome`) owns the
+timeline, cameras and labels, keeps an analytic in-path as the fallback when the
+authored data is absent, and still poses the drive-out and after-race home
+analytically. The crews are Blender-authored key tables
 (`tools/gen/blender/crew-choreo.py` → `js/garage/crew-choreo.js`). To see or
-redesign the car path and camera in Blender:
+redesign the analytic path and camera in Blender:
 
 ```sh
 node tools/garage/arrival-poses.mjs --angle cut --out artifacts/garage-previz/poses.json
@@ -138,13 +145,16 @@ blender -b --factory-startup --python tools/gen/blender/garage-previz.py -- \
     --poses artifacts/garage-previz/poses.json --output-dir artifacts/garage-previz --render --step 2
 ```
 
-The first samples the real JS in a Node VM (no port of the maths); the second
+The first samples the real `arrival.js` in a Node VM (no port of the maths; it
+does not load the authored entrance data, so its "in" clip is the analytic
+fallback); the second
 builds `garage-previz.blend` (scenes `garage-in` / `garage-out`: the
 `TrackPit.BAY` room, shutter, car proxy with a red nose, camera keyed from
 eye / aim / vertical fov, captions as timeline markers) and, with `--render`,
 844x390 Workbench MP4s and contact sheets (~100 s for both clips at step 2).
-Edit there, then port the change into `arrival.js`; the parked-pose and
-sampler contracts are `tests/unit/garage-arrival.test.mjs`.
+Edit there, then port an analytic change into `arrival.js` (an entrance
+change goes through `garage-entrance.py` and its runtime export); the
+parked-pose and sampler contracts are `tests/unit/garage-arrival.test.mjs`.
 
 ## Pit crew body
 
@@ -192,8 +202,9 @@ validation/procedural-room tooling. `playwright-probe` owns viewer/camera captur
 worker agents; the parent remains the only browser owner. Sites publication is
 its own workflow, after the relevant review gates.
 
-Contract regression checks are in `tests/unit/free-design-tools.test.mjs`, included
-in `agent-contract` and `tooling-fast`. They are not browser or GPU evidence.
+Contract regression checks are in `tests/unit/free-design-tools.test.mjs`, in the
+`test:agent-contract` group of `tests/groups.json` (not in the `toolingFast` list).
+They are not browser or GPU evidence.
 
 ## Upstream references
 
@@ -205,6 +216,7 @@ in `agent-contract` and `tooling-fast`. They are not browser or GPU evidence.
   [Boolean modifier](https://docs.blender.org/api/current/bpy.types.BooleanModifier.html),
   [glTF exporter](https://docs.blender.org/api/current/bpy.ops.export_scene.html).
 
-Dependencies are pinned in package-lock.json. Installed Blender 4.3.2 was checked
-for Exact Boolean support and the glTF operator; online Blender documentation was
-partly unavailable during implementation, so the installed API is authoritative.
+Dependencies are pinned in package-lock.json. The room adapter was checked
+against a Blender 4.3.2 install for Exact Boolean support and the glTF operator
+when it was written; the pinned install is now `tools/env/install-blender.sh`'s
+4.2 LTS, and the installed API is authoritative over online documentation.

@@ -34,14 +34,15 @@ circuits run in parallel or the diagnosis would flood this context.
    target year): follow [campaign.md](references/campaign.md) instead.
 2. Baseline, browser-free (run again after all pair edits):
    ```sh
-   node tools/track/audit-circuit.cjs <id> --json                  # verify/float/clip/coplanar/props/ground vs baselines
+   node tools/track/audit-circuit.cjs <id> --json                  # every offline check vs its baseline (names: --help)
    node tools/track/audit-circuit.cjs <id> --checks verify,ground  # a subset
    ```
    `ground` covers buried/unsupported props; `float-audit` is props only, so terrain-over-road and
    sunk water still need survey captures. Layout numbers: [loop.md](references/loop.md) §Layout check.
 3. Capture: `node tools/track/survey-track.mjs <id> before` (aerial/orbit/EYE; `--oblique` for a
-   satellite comparison, [loop.md](references/loop.md) §2); any HUD or driver-view capture at
-   844×390 landscape first.
+   satellite comparison, [loop.md](references/loop.md) §2). It hard-codes a 1280×720 viewport and
+   day/dry (`runSurvey` in its source): other light or weather, and any HUD or driver-view capture
+   at 844×390 landscape, is a **playwright-probe** `tools/shot/shot.mjs` frame.
 4. Build the evidence packet (the delegation prompt cites it): research dated satellite/OSM/
    official-map/onboard sources (WebSearch/WebFetch; cite URLs, year, uncertainty; separate source
    claims from measurements) and fill [evidence-template.json](references/evidence-template.json)
@@ -58,13 +59,12 @@ circuits run in parallel or the diagnosis would flood this context.
 ## Hand-back
 
 The surveyor's edits are on its worktree branch, not in this checkout. Its report names the branch
-and path. Per surveyor, in turn:
-
-1. Scope check BEFORE merging: `node tools/track/surveyor-scope.mjs <id> <base> <surveyor-branch>` (`<base>` = the
-   delegation prompt's `Start SHA`; exit 1 lists each file outside the assigned pair plus `scratch/`/`artifacts/`).
-   Reject those files and say so (the hook cannot bind the circuit id).
-2. `git merge --no-ff <surveyor-branch>`, then `verify-track <id>` on the merged tree.
-3. `git worktree remove <path>`.
+and path. Per surveyor, in turn, from the parent checkout:
+`node tools/track/merge-surveyor.mjs <id> <base> <surveyor-branch>` (`<base>` = the delegation
+prompt's `Start SHA`; `--dry-run` prints the plan). It runs the scope check (`surveyor-scope.mjs`),
+`git merge --no-ff`, `verify-track <id>` and `git worktree remove`, stopping at the first red. A
+scope `REJECT` lists files outside the pair plus `scratch/`/`artifacts/`: reject them and say so
+(the edit hook cannot bind the circuit id).
 
 A campaign merges the branches one at a time in that loop (disjoint pairs do not conflict). After
 the last merge (one circuit or a campaign) the PARENT regenerates `tools/shot/scenery-locations.json`

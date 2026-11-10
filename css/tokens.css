@@ -270,10 +270,13 @@
      friends). Those want the roomier number, and a font-size that changed as the
      toolbar moved would be far worse than a few pixels of imprecision. */
   --gut: 12px;
-  --safe-t: calc(var(--sat) + var(--gut));
-  --safe-r: calc(var(--sar) + var(--gut));
-  --safe-b: calc(var(--sab) + var(--gut));
-  --safe-l: calc(var(--sal) + var(--gut));
+  /* The LARGER of the hardware inset and the gutter, never their sum (#5201). The inset is already clear space: adding
+     the gutter to it padded a landscape iPhone 67 px a side and 29 px at the bottom (718x356 of 852x393); max() gives
+     the box the OS calls safe, 734x372. An edge with no inset (desktop, the top in landscape) keeps the gutter. */
+  --safe-t: max(var(--sat), var(--gut));
+  --safe-r: max(var(--sar), var(--gut));
+  --safe-b: max(var(--sab), var(--gut));
+  --safe-l: max(var(--sal), var(--gut));
   /* Usable box inside hardware on full-screen menus (#overlay, .screen hosts).
      Any cap written against raw svh/vw must use these, not 100% of the
      viewport — viewport-fit=cover includes the notch and home indicator. */
@@ -283,7 +286,9 @@
      house unit for the same reason dvh is not — it changes while browser
      chrome shows and hides. */
   --safe-w: calc(100svw - var(--safe-l) - var(--safe-r));
-  --safe-h: calc(100 * var(--svhz) - var(--safe-t) - var(--safe-b));
+  /* OWN px of a sheet zoomed by --ui-scale, like --svhz: the insets are painted px, so they are divided too (#5201;
+     `100 * --svhz - insets` subtracted painted px from own px and came up short by insets * (1 - 1/scale)). */
+  --safe-h: calc((100svh - var(--safe-t) - var(--safe-b)) / var(--ui-scale));
   /* Width tiers (layout-tokens.test.mjs). */
   --bp-phone: 480px;
   --bp-tablet: 700px;

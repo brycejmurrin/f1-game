@@ -26,7 +26,7 @@ function boot() {
   seedLog(ctx);
   // hash("dur") = 0.99 draws the raw 7-minute MIXED walk so the cap is visible.
   ctx.Career = { inCareer: () => false, hash: (_s, _r, _k, n) => n === "dur" ? 0.99 : 0.1 };
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/wx-hash.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const P = ctx.Particles, TM = ctx.TyreModel;
   let drawn = 0;
@@ -440,7 +440,7 @@ test("drying line: the tabled groove knots give exactly the per-call-hash groove
   // The pre-table grooveX, verbatim, against the real hash.
   const ref = vm.createContext({ Math, Number, JSON, Object, Array, Error });
   seedLog(ref);
-  for (const f of ["js/race/wx-hash.js", "js/race/rain-cells.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ref, { filename: absSrc(f) });
+  for (const f of ["js/race/rain-cells.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ref, { filename: absSrc(f) });
   const RC = ref.RainCells;
   const grooveRef = (frac) => {
     const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = u * u * (3 - 2 * u);

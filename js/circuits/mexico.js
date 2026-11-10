@@ -15,7 +15,7 @@
     // straight before Foro Sol and the stadium bowl on the T4-T6 hairpins.
     // docs/notes/DEFECT-LEDGER.md "mexico — FIXED".
     name: "MEXICO CITY",
-    gp: "Mexican GP",
+    gp: "Mexican GP",   // the event is the Mexico City GP; the announcer reads this aloud, so it changes with a voice re-bake (tests/unit/voice-pack.test.mjs)
     country: "Mexico",
     night: false,
     theme: "modern",

@@ -16,9 +16,9 @@ or SCHEDULE.
 | Table | Cause | Check |
 |---|---|---|
 | TAGGED `LAST SEASON · <y> FINAL`, Jan → opener | intended fallback | none |
-| TAGGED, mid-season | BUG: the current-year table came back empty (shape change, `jStandingsList` null, a 200 with an empty list) | fetch Jolpica `/<season()>/driverstandings.json`; read it through `jStandingsList` (`api.js`) |
-| UNTAGGED | wrong page clock, or the API serving last year | `F1API.season()` on the live page FIRST (mcp-probe `evaluate_script`), then the raw Jolpica body |
-| any, in a browser spec | the mock (`tests/helpers/f1-api-mock.js` answers EVERY year's path as `season: "2026"`) | not a product bug |
+| TAGGED, mid-season | BUG: the current-year table came back empty (shape change, `jStandingsList` null, a 200 with an empty list), or the API served another year's body — `standingsSeasonOk` (`api.js`) refuses it (a `standings season mismatch` warn) and the fallback paints | fetch Jolpica `/<season()>/driverstandings.json`; read its `StandingsLists[0].season` through `jStandingsList` |
+| UNTAGGED | wrong page clock (`season()` reads it, so the URL and the check both use the wrong year) | `F1API.season()` on the live page FIRST (mcp-probe `evaluate_script`; `F1API` is lazy — open DATA first or it is undefined), then the raw Jolpica body |
+| any, in a browser spec | the mock (`tests/helpers/f1-api-mock.js` answers every year's standings path with one fixed-season body) | not a product bug |
 
 Only at the year rollover (within an hour of New Year): a `MAX_AGE` tab node or an
 `apex26.api.*` entry built under the old year. Otherwise the cache cannot hold a

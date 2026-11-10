@@ -18,16 +18,19 @@ launch a browser (AGENTS.md rule 10, hook-enforced).
   fill-bound work: use `motion-capture.mjs` (trust p90) or `profile.mjs --repeat 3`.
 - Inside a tunnel bore use cam `eye` at a mid-bore frac, never `park` (recipes.md §Tunnel).
 - Before/after: `git stash apply <sha>`, never `pop` (commands.md §Before/after captures).
-- `browserType.launch: Executable doesn't exist`: AGENTS.md rule 1 (`cloud-agent-install.sh`).
+- `browserType.launch: Executable doesn't exist`: `bash tools/env/install-browsers.sh` (what
+  `session-start.sh` runs, AGENTS.md rule 1; log `artifacts/session-browsers.log`).
 
 ## Workflow
 
-1. Pick the tool (the `apex_eval` / `apex_shot` MCP wraps are the cheaper route; the CLI is for pinning a backend, `references/commands.md`): one `__apex` value → `tools/shot/apex-eval.mjs`; one framed still →
+1. Pick the tool (the `apex_eval` / `apex_shot` MCP wraps are the cheaper route; `apex_shot` cannot pin a backend, `references/commands.md`): one `__apex` value → `tools/shot/apex-eval.mjs`
+   (`--vm` / `apex_eval {vm:true}`: Node VM, no browser, for any value that needs no pixels); one framed still →
    `tools/shot/shot.mjs`; mode/track fanout → `tools/shot/apex-capture.mjs`; GLX vs TLX →
    `tools/shot/backend-compare.mjs`; flicker → `tools/shot/motion-capture.mjs`; frame time →
    `tools/perf/profile.mjs`; car only → `tools/car/render-car.mjs`. Menus/DOM resize surveys are
    the `browser_*` MCP (skill `survey-ui-matrix`); one-screen CSS is skill `css-play`.
-2. Find the place with no browser first: `frac` from `turns:` in `js/circuits/<id>.js`, or
+2. Find the place with no browser first: `frac` from `turns:` in `js/circuits/<id>.js` (read it
+   there, never from prose), or
    `node tools/shot/flicker-gate.mjs --list` for tunnel/bridge sites.
 3. A multi-minute capture (GLX `webgl2` boot, `backend-compare`, `motion-capture`,
    `profile.mjs --repeat`) runs as ONE `run_in_background` task logging to `artifacts/logs/`

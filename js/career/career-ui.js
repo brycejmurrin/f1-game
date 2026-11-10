@@ -65,6 +65,7 @@ function create(G) {
       amb: 1,                  // WHAT THEY ASK — the middle rung, the team's own target
       name: "Your Name", code: "YOU", num: 99,
       hire: "NKM",
+      calendar: "real2026",    // Career.start's calSet; "24" is the original list
     };
   }
 
@@ -202,6 +203,8 @@ function create(G) {
     announce(partial ? "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP"
       : result.reason === "conflict" ? "SAVE CONFLICT — IMPORT REFUSED"
       : result.reason === "undo-unavailable" ? "IMPORT REFUSED — COULD NOT KEEP A RESTORE POINT OF THE SAVE IT WOULD REPLACE; NOTHING CHANGED"
+      : result.reason === "money-range" ? "IMPORT REFUSED — THE FILE'S CREDITS ARE OUTSIDE WHAT A CAREER CAN EARN; NOTHING CHANGED"
+      : result.reason === "salary-range" ? "IMPORT REFUSED — A SALARY IN THE FILE IS OUTSIDE WHAT A CAREER CAN PAY; NOTHING CHANGED"
       : ("IMPORT FAILED — " + String(result.reason || "error").toUpperCase()));
     build();
     return result;
@@ -242,7 +245,7 @@ function create(G) {
       if (G.soundOn) GameAudio.uiSelect();
       // A newer-build slot cannot replace the live career. Keep the picker
       // intact, including when another tab updated this card after rendering.
-      if (s.used && !Career.useSlot(s.flavour, s.i)) { announce("UPDATE REQUIRED"); return; }
+      if (s.used && !Career.useSlot(s.flavour, s.i)) { announce(s.damaged ? "DAMAGED SAVE" : "UPDATE REQUIRED"); return; }
       ++backupReadGeneration;
       armedDelete = "";
       armedImport = "";
@@ -947,6 +950,26 @@ function create(G) {
       }
     }
 
+    // THE CALENDAR every season of this save races (Career.start stamps it as
+    // calSet): the real 2026 season by default, the original 24-round list on request.
+    right.appendChild(head("CALENDAR"));
+    const cals = el("div", "cr-seats");
+    const realN = typeof SeasonCal !== "undefined" && SeasonCal.presetIds ? SeasonCal.presetIds("real2026").length : 0;
+    for (const [id, label, who] of [
+      ["real2026", "2026 REAL", `${realN} rounds, as the 2026 season ran`],
+      ["24", "24-ROUND", `${Tracks.SEASON.length} rounds, the original Apex 26 calendar`],
+    ]) {
+      if (id === "real2026" && (!realN || realN !== SeasonCal.REAL_2026.length)) continue;   // whole, or not offered
+      const on = (draft.calendar === "24" ? "24" : "real2026") === id;
+      const b = el("button", `cr-seat${on ? " active" : ""}`);
+      b.type = "button";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.append(el("span", "cr-seat-role", label), el("span", "cr-seat-who", who));
+      b.onclick = () => { draft.calendar = id; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
+      cals.appendChild(b);
+    }
+    right.appendChild(cals);
+
     right.appendChild(head("BEFORE YOU START"));
     const learn = el("button", "cr-card cr-record");
     learn.id = "cr-learn";
@@ -1387,7 +1410,7 @@ function create(G) {
       row("Goal", Career.goalLabel(preview.deal.goal)), row("Fitted budget cap", preview.currentCap + " → " + preview.cap + " cr"),
       row("Retained credits / facility", preview.retained.money + " cr / level " + preview.retained.facility));
     card.appendChild(el("p", "cg-p", "Your personal driver development is retained. " + (preview.moving ? "The destination works build replaces your researched and fitted parts." : "Your researched and fitted parts are retained.")));
-    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id); if (opt) return Parts.optLabel(cat.id, opt); } return id; };
+    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id) || cat.options.find((o) => o.own === id); if (opt) return Parts.optLabel(cat.id, opt); } return id; };   // lostResearch holds ownership keys (Parts.ownId)
     for (const [cat, id] of Object.entries(preview.resolvedFitted)) {
       card.appendChild(row(cat, label(preview.currentFitted[cat]) + " → " + label(id)));
       if (preview.fitted[cat] !== id) card.appendChild(el("p", "cg-p", "Works research retained: " + label(preview.fitted[cat]) + "; current regulations substitute " + label(id) + " on the car."));
@@ -1772,7 +1795,12 @@ function create(G) {
       // no slot was named — it will not pick one to overwrite. Send the
       // player to the picker so the replacement is their call, and leave
       // draftFrom alone so BACK still works.
-      if (!Career.start(draft)) { openSlots(slotsOrigin); return; }   // draft.slot, when the picker set one
+      if (!Career.start(draft)) {   // draft.slot, when the picker set one
+        const full = draft.slot == null && Career.firstFree(draft.flavour) < 0;
+        openSlots(slotsOrigin);
+        if (full) announce("ALL THREE SLOTS ARE IN USE — DELETE ONE TO START A NEW CAREER");
+        return;
+      }
       draftFrom = null;             // committed: the new slot IS the live one now
       G.openCareer();          // re-enters the hub with the save in place
       return;
@@ -1790,7 +1818,7 @@ function create(G) {
     // It bites every MY TEAM season (makeOffers returns [] for myteam) and any
     // driver season entered on a multi-year deal; a driver who must accept an
     // offer is rescued by acceptOffer's openCareer().
-    if (Career.seasonDone()) { Career.rollover(); G.trackIdx = Career.trackIndex(); build(); openOffers(); return; }
+    if (Career.seasonDone()) { if (!Career.rollover()) { build(); return; } G.trackIdx = Career.trackIndex(); build(); openOffers(); return; }
     G.openRaceSettings("career");
   };
   $("co-back").onclick = () => {

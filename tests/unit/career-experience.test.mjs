@@ -191,3 +191,22 @@ test("pause-card brief keeps a retired team-mate in order (not last-by-absence)"
   assert.match(pointsCareer.objectiveStatus(G), /ON TARGET$/,
     "classified retirement keeps championship points on the pause card");
 });
+
+test("the season story's Contract tile is a driver's: MY TEAM has no contract to run down", () => {
+  const text = (n) => (n.textContent || "") + Array.from(n.children || []).map(text).join(" ");
+  const story = (flavour) => {
+    const { career, dom } = boot({
+      Career: { calendar: () => [{ id: "monza", name: "MONZA" }], goalLabel: () => "Finish P10" },
+      Tracks: { SEASON: [] }, Teams: { LIST: [] },
+    });
+    const panes = {};
+    for (const id of ["cr-left", "cr-right", "cr-header"]) panes[id] = dom.document.createElement("div");
+    const G = { $: (id) => panes[id] || null, cssCol: () => "#000" };
+    const c = { flavour, year: 2026, season: { round: 0 }, results: [],
+      deal: { goal: { type: "champPos", value: 10 }, left: 1, years: 1 } };
+    career.mount(G, c, {}, null);
+    return text(panes["cr-right"]);
+  };
+  assert.equal(/1 season remaining/.test(story("driver")), true, "a driver sees the contract tile");
+  assert.equal(/season remaining|Contract/.test(story("myteam")), false, "an owner does not");
+});
