@@ -42,6 +42,19 @@ tilt / drag player's BOOST / OT / AERO stay over the ~15 mm floor at the new def
 
 No dock button overlaps a readout of his layout in A, B or C, before or after.
 
+Re-measured 2026-11-10 by the PR's second owner (same method): A, B and C paint exactly the "after" column above.
+Drag steering (his export + `steerMode: "touch"`), the mode that paints the small `--tap` rung:
+
+| window | tap at the 100 % default | tap at BUTTON SIZE 200 % (fitHud-capped) | 200 % column |
+|---|---|---|---|
+| A 852×393 | 58 | 84.2 | y 94..362 of 372 |
+| B 852×368 | 57 | 77.6 | y 90..337 of 347 |
+| C 844×390 | 58 | 83.5 | y 93..359 of 359 |
+
+The cap, not the raw slider, is what fits 200 % on these phones (three 58 px taps at 2× are 369 px). At 200 % in
+drag mode BOOST overlaps his sector plate by 5 px (his stored +4.8 % offset). The cap is a height cap, so the old
+54 px tap should land on the same rect; that was not measured on the old tree.
+
 ## Findings nobody asked for
 
 1. **Title and pause broke only at 393 tall.** 852×368 was fine on the same tree. A test at one phone height is not a

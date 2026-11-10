@@ -50,10 +50,11 @@ async function boot(page, geo, store) {
   await page.waitForFunction(() => window.__apex && window.__apex.race && document.documentElement.hasAttribute("data-booted"), null, { polling: 100, timeout: BOOT_MS });
 }
 
-async function race(page) {
+// `shown`: a dock button the steering mode paints (drag steering hides GAS).
+async function race(page, shown = "btn-throttle") {
   await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForFunction(() => { const b = document.getElementById("btn-throttle"); return window.__apex.info().state === "race" && b && !b.hidden && b.getBoundingClientRect().width > 0; },
-    null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForFunction((id) => { const b = document.getElementById(id); return window.__apex.info().state === "race" && b && !b.hidden && b.getBoundingClientRect().width > 0; },
+    shown, { polling: 100, timeout: BOOT_MS });
   // Two equal reads 400 ms apart: fitHud publishes its caps on its own schedule.
   const read = () => page.evaluate((ids) => Object.fromEntries(ids.map((id) => {
     const el = document.getElementById(id), r = el.getBoundingClientRect(), cs = getComputedStyle(el);
@@ -130,5 +131,48 @@ test.describe("owner's live profile 852x393-standalone, stored sizes and the gar
     expect(g["cs-stack"].w, `the bar is ${g["cs-stack"].w.toFixed(0)} px wide (446 before the cap)`).toBeLessThanOrEqual(289);
     for (const id of ["cs-cam", "cs-photo", "cs-aero"]) expect(Math.abs(g[id].h - 44), `${id} is the fixed 44 px chrome (#5202)`).toBeLessThanOrEqual(0.5);
     expect(g["cs-stack"].l, "the bar clears the left inset").toBeGreaterThanOrEqual(geo.insets.left - 1);
+  });
+});
+
+// DRAG STEERING PAINTS THE SMALL TAP RUNG (--tap, css/touch-controls.css), the one this PR raised 54 -> 58 so a tap
+// clears the ~15 mm floor at the 100 % default. tests/unit/phone-touch-surface.test.mjs modelled three taps at
+// 200 % fitting a 390 px phone raw; three 58 px taps at 200 % do not (369 px in 359), so the PAINTED result is held
+// here instead: fitHud's cap keeps the column on screen. Measured 2026-11-10 (Chromium, software GPU), 844x390
+// insets 47/47/21: default 58x58, column y 174..359; 200 % capped to 83.5x83.5, column y 93..359.
+const MM_15 = 15 / (25.4 / 96);   // 56.7 CSS px
+test.describe("owner's live profile 844x390, drag steering taps", () => {
+  const geo = GEOS[2];
+  const TAPS = ["btn-boost", "btn-ot", "btn-aero"];
+  test.use({ viewport: { width: geo.w, height: geo.h }, hasTouch: true, isMobile: true });
+
+  test("the default tap paints 58 px, over the 15 mm floor", async ({ page }) => {
+    test.setTimeout(240_000);
+    await boot(page, geo, liveStore({ steerMode: "touch" }));
+    const m = await race(page, "btn-boost");
+    for (const id of TAPS) {
+      expect(m[id], `${id} is on screen (drag steering)`).not.toBeNull();
+      expect(Math.abs(m[id].w - 58), `${id} paints ${m[id].w.toFixed(1)} px wide, want 58 (54 at the old --tap is 14.3 mm at 100 %)`).toBeLessThanOrEqual(1);
+      expect(Math.abs(m[id].h - 58), `${id} paints ${m[id].h.toFixed(1)} px tall, want 58`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("BUTTON SIZE 200 %: fitHud's cap keeps the taps column on screen, every tap over 15 mm", async ({ page }) => {
+    test.setTimeout(240_000);
+    await boot(page, geo, liveStore({ steerMode: "touch", hudBtnScale: 200 }));
+    const m = await race(page, "btn-boost");
+    const col = m["grp-taps"];
+    expect(col, "the BOOST / OT / AERO column is on screen").not.toBeNull();
+    for (const id of TAPS) {
+      expect(m[id], `${id} is on screen`).not.toBeNull();
+      expect(m[id].w, `${id} paints ${m[id].w.toFixed(1)} px wide at 200 %, floor ${MM_15.toFixed(1)} (15 mm)`).toBeGreaterThanOrEqual(MM_15);
+      expect(m[id].h, `${id} paints ${m[id].h.toFixed(1)} px tall at 200 %, floor ${MM_15.toFixed(1)} (15 mm)`).toBeGreaterThanOrEqual(MM_15);
+      expect(m[id].w, `${id} is never larger than the 200 % the player asked for`).toBeLessThanOrEqual(2 * 58 + 1);
+      expect(m[id].r, `${id} clears the right inset`).toBeLessThanOrEqual(geo.w - geo.insets.right + 1);
+    }
+    expect(col.b, `the column ends at y ${col.b.toFixed(0)}, inside the ${geo.h - geo.insets.bottom} px above the home indicator`).toBeLessThanOrEqual(geo.h - geo.insets.bottom + 1);
+    for (const top of ["btn-cam", "pausebtn"]) {
+      expect(m[top], `${top} is on screen`).not.toBeNull();
+      expect(col.t, `the column starts at y ${col.t.toFixed(0)}, below ${top} (ends y ${m[top].b.toFixed(0)})`).toBeGreaterThanOrEqual(m[top].b);
+    }
   });
 });
