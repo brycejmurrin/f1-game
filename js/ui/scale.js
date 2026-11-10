@@ -32,6 +32,21 @@ const UiScale = (() => {
   // rate at a pinned scale is held by PerfGov's stage 2 (the feature-shed ladder and the 45 Hz step),
   // which runs whether or not the resolution stage is pinned (js/perf/governor.js tick()).
   const defaultResMode = () => (coarseUi() ? "med" : "auto");
+  // A stored LOW on a phone from before #5166 is not proof of a choice: LOW WAS the phone default
+  // (2026-09-08..11-09) and a settings file saved then carried it as a value (perDevice null only from
+  // 2026-10-04), so importing one pinned it; nothing ever recorded "picked". Bryce's export holds
+  // resMode:"low" outside `changed`, and the 3D view stayed at LOW after #5193 (#5198). Run ONCE per
+  // device (resSchema): a phone's stored LOW goes back to the default; a desktop's never was a default,
+  // so it stays. A LOW picked after this runs is kept. Decision record: PR for #5198 part 3.
+  const RES_SCHEMA = 2;
+  function migrateResMode(store, coarse) {
+    if (store.get("resSchema", 1) >= RES_SCHEMA) return false;
+    const reset = !!coarse && store.get("resMode", defaultResMode()) === "low";
+    if (reset) store.set("resMode", undefined);   // undefined REMOVES the key; null would store "null" and read as AUTO
+    store.set("resSchema", RES_SCHEMA);
+    if (reset) Log.info("ui", "resMode: implicit phone LOW -> default " + defaultResMode());
+    return reset;
+  }
   function create(G) {
     Log.info("ui", "UiScale.create");
     const { $, els, store } = G;
@@ -270,6 +285,7 @@ const UiScale = (() => {
     // other half of the HIGH graphics preset above. Same question
     // Input.touchControlsNeeded() asks, asked directly (coarseUi, above) so
     // this module keeps no dependency on the input stack.
+    migrateResMode(store, coarseUi());
     let resMode = store.get("resMode", defaultResMode());
     function applyResMode() {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
@@ -361,5 +377,5 @@ const UiScale = (() => {
     if (!(z > 0) || z * 100 >= +pct - 0.5) return label;
     return `${label} · fits ${Math.round(z * 100)}%`;
   }
-  return { create, defaultResMode, btnFitLabel };
+  return { create, defaultResMode, migrateResMode, RES_SCHEMA, btnFitLabel };
 })();
