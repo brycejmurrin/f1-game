@@ -4235,6 +4235,9 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
+      "prizeFor": [
+        "tests/unit/career-settle.test.mjs"
+      ],
       "renewHire": [
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
