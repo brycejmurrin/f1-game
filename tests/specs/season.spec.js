@@ -28,7 +28,13 @@ async function startSeasonRace(page, laps) {
   await page.locator("#cs-done").click();
   await page.locator("#carsetup").waitFor({ state: "hidden" });
   await page.locator("#race-settings").waitFor({ state: "visible" });
-  if (laps != null) {
+  if (laps === "full") {
+    // The FULL distance is the round's own race length (the select's last option),
+    // so it follows whichever circuit opens the calendar: 57 was Bahrain's, round 1
+    // of the 24-round list; the 2026 REAL default opens at Albert Park.
+    const full = await page.locator("#rs-laps-sel option").last().getAttribute("value");
+    await page.locator("#rs-laps-sel").selectOption(String(full));
+  } else if (laps != null) {
     await page.locator("#rs-laps-sel").selectOption(String(laps));   // a setting row: value, not label
   }
   // Accept race settings. A championship weekend now opens with QUALIFYING —
@@ -55,8 +61,8 @@ test.describe("Season — mode flags", () => {
     expect(info.timeTrial).toBe(false);
   });
 
-  for (const laps of [10, 25, 57]) {
-    test(`does not end a ${laps}-lap race at 360 seconds`, async ({ page }) => {
+  for (const laps of [10, 25, "full"]) {
+    test(`does not end a ${laps === "full" ? "full-distance" : laps + "-lap"} race at 360 seconds`, async ({ page }) => {
       await startSeasonRace(page, laps);
       const state = await page.evaluate(() => {
         window.__apex.go();
