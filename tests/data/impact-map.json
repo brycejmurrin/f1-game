@@ -5108,6 +5108,7 @@
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/quali-persist.test.mjs",
@@ -6838,7 +6839,8 @@
         "tests/unit/track-validate-fleet.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs"
       ]
     },
     "js/editor/workspace.js": {
@@ -7704,6 +7706,7 @@
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
@@ -19227,6 +19230,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/cvd-palette.test.mjs",
         "tests/unit/free-cam.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
     },
