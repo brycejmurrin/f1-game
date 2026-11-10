@@ -245,7 +245,9 @@ function scoreMap(raw) {
   const out = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
   Object.entries(raw).forEach(([id, value]) => {
-    const n = Number(value);
+    // Numbers and numeric strings only: Number() on a stored object whose
+    // valueOf/toString are not callable THROWS, and load() runs at boot.
+    const n = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
     if (id && isFinite(n)) out[id] = Math.max(0, n);
   });
   return out;

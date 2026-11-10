@@ -328,7 +328,8 @@ const CareerBackup = (function () {
       if (data.flavour != null && !FLAVOURS.includes(data.flavour)) return { ok: false, reason: "flavour-mismatch" };
       if ((data.flavour || "driver") !== target.flavour) return { ok: false, reason: "flavour-mismatch" };
       if (typeof SaveMigrate === "undefined" || !Number.isSafeInteger(SaveMigrate.CAREER_V)
-        || (data.v != null && (!Number.isSafeInteger(data.v) || data.v < 0 || data.v > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
+        // One version policy at every ingress: the envelope path accepts "2" too.
+        || (data.v != null && (SaveMigrate.careerVersion(data.v) === null || SaveMigrate.careerVersion(data.v) > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
       envelope.slots.push({ flavour: target.flavour, i: target.i, data });
     }
     // Career calendars use calIds; standalone calendars use config.trackIds.

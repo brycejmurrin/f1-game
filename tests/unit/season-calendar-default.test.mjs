@@ -286,3 +286,45 @@ test("hirePending() (the __apex.careerHire hook) is null with no career loaded, 
   assert.equal(Career.data && Career.data(), null);
   assert.equal(Career.hirePending(), null);
 });
+
+// ── save ingress (code survey follow-ups) ─────────────────────────────────────
+
+test("a stored season whose points hold an unconvertible object loads instead of throwing at boot", () => {
+  const poison = { valueOf: 1, toString: 2 };   // JSON-shaped: neither is callable, so Number() throws
+  const { SeasonCal } = boot({ season: { round: 2, pts: { "haas:0": poison, "haas:1": "7", x: 5 }, teamPts: { haas: poison },
+    config: { trackIds: OLD_24 } } });
+  SeasonCal.engage("season");
+  let s;
+  assert.doesNotThrow(() => { s = SeasonCal.load(); });
+  deq(s.pts, { "haas:1": 7, x: 5 });
+  deq(s.teamPts, {});
+  assert.equal(s.round, 2);
+});
+
+function backup() {
+  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Set, Map, isNaN, isFinite, console,
+    Blob: class { constructor(p) { this.size = String(p[0]).length; } }, Promise, Tracks: TRACKS });
+  seedLog(ctx);
+  seedSaveMigrate(ctx);
+  vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
+  return vm.runInContext("CareerBackup", ctx);
+}
+
+test("the recovery import takes a digit-string version as the envelope path does", () => {
+  const B = backup();
+  const env = (v) => B.recoveryEnvelope({ format: "apex26-recovery-v1", career: Object.assign(oldCareer(1), { v }) },
+    { flavour: "driver", i: 0 });
+  assert.equal(env("2").ok !== false, true, "v: \"2\" is accepted");
+  assert.equal(env(2).ok !== false, true);
+  assert.equal(env("2a").reason, "unsupported-version");
+  assert.equal(env(99).reason, "unsupported-version");
+  assert.equal(env(-1).reason, "unsupported-version");
+});
+
+test("a stored facility level is clamped to the ladder at migrate time", () => {
+  const { SaveMigrate, Career } = boot();
+  assert.equal(SaveMigrate.LIMITS.FACILITY_MAX, Career.FACILITY_MAX, "the mirror matches career.js");
+  assert.equal(SaveMigrate.migrateCareer(Object.assign(oldCareer(1), { facility: -3 })).facility, 0);
+  assert.equal(SaveMigrate.migrateCareer(Object.assign(oldCareer(1), { facility: 99 })).facility, Career.FACILITY_MAX);
+  assert.equal(SaveMigrate.migrateCareer(Object.assign(oldCareer(1), { facility: 4 })).facility, 4);
+});

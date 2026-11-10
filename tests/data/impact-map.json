@@ -3841,7 +3841,8 @@
         "tests/unit/save-durability.test.mjs"
       ],
       "recoveryEnvelope": [
-        "tests/unit/career-backup.test.mjs"
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "revisionOf": [
         "tests/unit/career-backup.test.mjs"

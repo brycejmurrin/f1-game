@@ -46,6 +46,7 @@ const SaveMigrate = (function () {
   const TDEV_LIMIT = 8;
   const DEV_LIMIT = 12;
   const EXP_LIMIT = 40;
+  const FACILITY_LIMIT = 8;   // career.js FACILITY_MAX (pinned equal in season-calendar-default.test.mjs)
 
   function clampTo(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
   // THE RANGES PLAY CAN REACH. The balance floors at 0 in settleRound and every
@@ -368,7 +369,7 @@ const SaveMigrate = (function () {
     career.objPick = career.objPick && typeof career.objPick === "object"
       && !Array.isArray(career.objPick) ? career.objPick : null;
     career.budgetLvl = Math.max(0, finiteNumber(career.budgetLvl) | 0);
-    career.facility = finiteNumber(career.facility) | 0;
+    career.facility = clampTo(finiteNumber(career.facility) | 0, 0, FACILITY_LIMIT);
     career.moves = rows(career.moves);
     // MY TEAM's hired seat: rows or null — `roster: {}` threw in wageBill().
     // Its numbers as cleanDeal's: wageBill() sums `salary`, and one "x" turned
@@ -423,6 +424,6 @@ const SaveMigrate = (function () {
   return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V,
            careerVersion,
            validateCareerSave,
-           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX }) };
+           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT }) };
 })();
 Object.freeze(SaveMigrate);
