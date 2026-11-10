@@ -141,9 +141,13 @@ const UiScale = (() => {
       const wrote = cssWas[prop] !== want;
       if (wrote) { cssWas[prop] = want; if (want) root.style.setProperty(prop, want); else root.style.removeProperty(prop); }
       if (key === "uiScale") r = rowFor(key);
-      // The sheet's computed zoom can lag the --ui-scale write (sheet-shape.js roomOwn): read again.
+      // The sheet's computed zoom can lag the --ui-scale write by more than a frame (sheet-shape.js roomOwn; CI runs
+      // 42753025608 / 42790487904 kept "100% · this menu 70%"): read the row again on the next three frames and at
+      // 250 ms, 1 s and 3 s after the LAST write. An unchanged row writes nothing.
       if (key === "uiScale" && wrote && typeof requestAnimationFrame === "function" && typeof setTimeout === "function") {
-        requestAnimationFrame(applyUiRow); clearTimeout(uiRowAgain); uiRowAgain = setTimeout(applyUiRow, 250);
+        const g = ++uiRowAgain, again = () => { if (g === uiRowAgain) applyUiRow(); };
+        requestAnimationFrame(() => { again(); requestAnimationFrame(() => { again(); requestAnimationFrame(again); }); });
+        for (const ms of [250, 1000, 3000]) setTimeout(again, ms);
       }
       const input = $(inputId);
       if (input) { input.min = String(r.min); input.max = String(r.max); input.value = String(r.value); }
@@ -273,7 +277,9 @@ const UiScale = (() => {
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
     }
     if (typeof MutationObserver === "function" && uiSheet()) {
-      new MutationObserver(applyUiRow).observe(uiSheet(), { attributes: true });
+      const mo = new MutationObserver(applyUiRow);
+      mo.observe(uiSheet(), { attributes: true });
+      if (document.body) mo.observe(document.body, { attributes: true, attributeFilter: ["data-density"] });   // the compact zoom rule keys on it
     }
     function setScale(key, prop, v) {
       if (v !== undefined) {
