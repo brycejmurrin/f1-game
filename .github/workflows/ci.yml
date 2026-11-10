@@ -763,8 +763,12 @@ jobs:
         run: node tools/check/workflow-lint.mjs
       - name: Shader validation (glslang + naga)
         run: node tools/check/shader-validate.mjs
-      - name: Planted-defect fixtures
-        run: node --test --test-timeout=900000 tests/unit/workflow-lint.test.mjs tests/unit/shader-validate.test.mjs
+      # Pillow + numpy for the slider-effect view checks, which skip where they are absent (every
+      # tooling-fast shard); here they run. Pinned so a release never changes the measurement.
+      - name: Python image deps (Pillow, numpy)
+        run: python3 -m pip install --disable-pip-version-check --user "pillow==11.3.0" "numpy==2.3.2"
+      - name: Planted-defect fixtures and the slider-effect view checks
+        run: node --test --test-timeout=900000 tests/unit/workflow-lint.test.mjs tests/unit/shader-validate.test.mjs tests/unit/slider-effect.test.mjs
 
   node-suites:
     # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
@@ -968,8 +972,11 @@ jobs:
               # rows, greedy by median: here net-unit 33 s, audio-unit 33 s,
               # state-unit 5 s, desktop-unit 0.5 s beside a 112 s shard. Still
               # always-on (never guarded by planned()); on a matched PR plan
-              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
-              # the `npm run` else-branch stays for gateNodeSuites / deploy.
+              # NODE_PLAN_SKIP_TF=1 runs each group through
+              # `tools/ci/run-group.mjs --skip-tf`, which leaves out the files
+              # the Structural guards shards cover (that script decides which;
+              # its header is the rule); the `npm run` else-branch stays for
+              # gateNodeSuites / deploy.
               # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
               # tools/ci/pick-unit-slices.mjs SLICE_SCRIPTS mirrors these arms and
               # its test pins the two in step.
@@ -1046,12 +1053,11 @@ jobs:
               # (tests/groups.json; test:game-vm-b is still the whole list locally).
               # Re-cut 2026-10-15 by per-file runner medians (LPT over 59 files,
               # ~850 s of serial test time each; survey note §7): the 2026-09-30
-              # cut measured 437 s vs 220 s on a runner. NODE_PLAN_SKIP_TF=1 drops
-              # the VM files Structural guards already runs (tooling-fast:
-              # real-replay-vm 98 s, game-vm, red-flag-fuel-vm here;
-              # physics-characterization-vm, session-entry-vm on b2) — both jobs
-              # share one `if:`, so a matched plan ran them twice (test audit T5,
-              # 2026-10-05). --all / fail-safe keep npm run.
+              # cut measured 437 s vs 220 s on a runner. NODE_PLAN_SKIP_TF=1 leaves
+              # out the VM files the Structural guards shards cover, as
+              # `tools/ci/run-group.mjs --skip-tf` decides (a matched plan used to
+              # run them in both jobs: test audit T5, 2026-10-05). --all /
+              # fail-safe keep npm run.
               if planned test:game-vm-b1; then
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
               npm run test:game-vm-b1

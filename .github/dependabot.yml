@@ -25,14 +25,31 @@ updates:
         patterns: ["*"]
     labels: ["area:tooling"]   # an existing label (.github/labels.json); there is no `ci` label
 
-  # NPM: SECURITY UPDATES ONLY (2026-11-10). `open-pull-requests-limit: 0` turns off version-update PRs;
-  # Dependabot security updates are not bound by it and still open a PR for a vulnerable dependency, once
+  # NPM AT THE ROOT: SECURITY UPDATES ONLY (2026-11-10). The root holds dev tooling only;
+  # `open-pull-requests-limit: 0` turns off its version-update PRs, and Dependabot security
+  # updates are not bound by that limit, so a vulnerable dependency still gets a PR once
   # "Dependabot security updates" is on in the repository settings.
   # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#open-pull-requests-limit-
   - package-ecosystem: npm
-    directories: ["/", "/desktop", "/mobile"]
+    directory: /
     target-branch: claude/f1-game-project-26h3ng
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
+    labels: ["area:tooling"]
+
+  # THE SHIPPED SHELLS: weekly version updates. desktop/ pins exact versions (a test
+  # enforces it), so these PRs bump exact pins.
+  - package-ecosystem: npm
+    directories: ["/desktop", "/mobile"]
+    target-branch: claude/f1-game-project-26h3ng
+    schedule:
+      interval: weekly
+    labels: ["area:tooling"]
+
+  - package-ecosystem: gradle
+    directory: /mobile/android
+    target-branch: claude/f1-game-project-26h3ng
+    schedule:
+      interval: weekly
     labels: ["area:tooling"]

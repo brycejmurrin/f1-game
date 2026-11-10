@@ -9,11 +9,13 @@
 #      ubuntu-only electron-builder --dir + Playwright _electron (xvfb + soft GL).
 #      Windows / macOS pack-smoke lives on tag / workflow_dispatch only (Actions
 #      load: 1 job per packaging PR, not 3). Does NOT compete with pages.yml.
+#      A weekly schedule runs pack-smoke on all three OSes too, so a packaging
+#      break that no PR touched still surfaces.
 #   2. release — workflow_dispatch + tags desktop-v*: full installers on the
 #      3-OS matrix, optional signed-verify when secrets exist (skip cleanly
 #      otherwise), auto-update plan echo. Never on push to the ship branch.
 #
-# Electron pin: 44.4.5 (Chromium 152). Soft-GL + simpleFullScreen notes in
+# Electron pin: desktop/package.json (exact). Soft-GL + simpleFullScreen notes in
 # docs/notes/DESKTOP-TEST-PLAN.md. Pack-smoke uses `npm run pack:test` so
 # EnableNodeCliInspectArguments stays on for Playwright; release `pack`/`dist`
 # keep inspect + grantFileProtocolExtraPrivileges off.
@@ -43,6 +45,8 @@ on:
   push:
     tags:
       - "desktop-v*"
+  schedule:
+    - cron: "41 9 * * 3"   # Wednesdays 09:41 UTC (01:41 Pacific)
 
 concurrency:
   # Per PR NUMBER so synchronize cancels the prior run of the same PR (and two
@@ -65,7 +69,7 @@ jobs:
     # Skip draft PRs (draft→ready gets a fresh run). Dispatch keeps the matrix.
     if: >
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-      || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -88,6 +92,12 @@ jobs:
           # an input a PR run could have written (zizmor cache-poisoning); setup-node v6+
           # enables one implicitly unless told otherwise. npm ci is ~30 s.
           package-manager-cache: false
+
+      # ROOT DEPENDENCIES (2026-11-10): staging minifies js/ with the root's terser
+      # (tools/desktop/minify.mjs), and a release build fails without it. Same rule
+      # as the desktop install: no package-manager cache.
+      - name: Install root deps (terser for the stage)
+        run: npm ci
 
       - name: Install desktop deps
         working-directory: desktop
@@ -166,6 +176,12 @@ jobs:
           # enables one implicitly unless told otherwise. npm ci is ~30 s.
           package-manager-cache: false
 
+      # ROOT DEPENDENCIES (2026-11-10): staging minifies js/ with the root's terser
+      # (tools/desktop/minify.mjs), and a release build fails without it. Same rule
+      # as the desktop install: no package-manager cache.
+      - name: Install root deps (terser for the stage)
+        run: npm ci
+
       - name: Install desktop deps
         working-directory: desktop
         run: npm ci
@@ -174,6 +190,7 @@ jobs:
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          APEX_RELEASE_BUILD: "1"
           DIST_SCRIPT: ${{ matrix.dist_script }}
         run: npm run "$DIST_SCRIPT"
 
