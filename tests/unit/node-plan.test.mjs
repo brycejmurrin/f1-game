@@ -37,7 +37,11 @@ test("a UI-only diff skips the VM slices; the fast scripts are never in the plan
   const p = plan(["js/ui/hud.js", "css/hud.css"]);
   assert.equal(p.all, false);
   assert.ok(p.skip.includes("test:game-vm-a"), "a HUD edit must not rebuild 40 circuits");
-  assert.ok(p.skip.includes("test:game-vm-b1") && p.skip.includes("test:game-vm-b2"));
+  assert.ok(p.skip.includes("test:game-vm-b1"));
+  // #5241 G3: game-vm-b2 used to be skipped here too, but the browser plan drops agent-determinism, dev-tools and
+  // persistence for this diff as VM-covered and their twins live in game-vm-b2, so it runs for them (and only that
+  // reason runs it: no group rule names game-vm-b2 for a HUD edit).
+  assert.ok(p.run.includes("test:game-vm-b2") && p.forced["test:game-vm-b2"]?.length === 3, JSON.stringify(p.forced));
   assert.deepEqual(p.circuits, []);
   const sh = toShell(p);
   assert.match(sh, /unset APEX_CIRCUITS/);
@@ -254,7 +258,10 @@ test("a spec edit: an ADAPTED spec runs vm-page; a twinned spec's group runs no 
   assert.deepEqual(adapted.run, ["test:vm-page-a"], "logging is in page-a");
   const twinned = plan(["tests/specs/collisions-deep.spec.js"]);
   assert.deepEqual(twinned.groups, ["audit"], "the owner route must not reach the VM planner");
-  assert.deepEqual(twinned.run, []);
+  // #5241 G3: this pinned `run: []`, but select-specs drops the edited twinned spec from the browser legs (0 shards),
+  // so the edit ran NOWHERE. Its twin collisions-deep-vm lives in game-vm-b1, which now runs for it alone.
+  assert.deepEqual(twinned.run, ["test:game-vm-b1"]);
+  assert.deepEqual(twinned.forced, { "test:game-vm-b1": ["tests/specs/collisions-deep.spec.js"] });
 });
 
 test("L9: a circuit an ADAPTED spec builds keeps test:vm-page in the plan (2026-10-09)", () => {

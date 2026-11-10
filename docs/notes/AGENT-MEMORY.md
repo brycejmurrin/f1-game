@@ -1,5 +1,7 @@
 # Agent memory — what persists between sessions (2026-09-24, rewritten 2026-11-03)
 
+Summary: Agent memory — what persists between sessions (2026-09-24)
+
 Kind: how-to · Re-measure-by: 2027-01-15
 
 Supersedes the "auto memory structurally cannot persist here" finding in

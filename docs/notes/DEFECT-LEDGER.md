@@ -1,5 +1,7 @@
 # Apex 26 — defect ledger
 
+Summary: The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8).
+
 > **Historical record — nothing updates this file.** It has no owner and its newest
 > entry is dated 2026-10-14; rows below may be stale or fixed. Open defects live in
 > GitHub issues with the `bug` label. Corrected 2026-11-10: the "No CSP" row (index.html
