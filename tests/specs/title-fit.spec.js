@@ -177,7 +177,10 @@ test.describe("title fit at a small UI SIZE 852x393-standalone", () => {
         await page.evaluate(() => { document.getElementById("mb-continue").hidden = false; });
         const { frames, m } = await measure(page);
         expect(frames, "the fit settled").toBeGreaterThan(0);
-        expect(m.uiScale, "precondition: the stored UI SIZE reached --ui-scale").toBe(String(ui / 100));
+        // #5235: a phone's UI SIZE stops at 70 %, and a smaller stored value is raised on load (js/ui/scale.js). So
+        // these stored sizes all boot at 0.7; the title's own floor below is still what holds the doors and labels.
+        expect(m.uiScale, "precondition: a stored UI SIZE under the phone minimum boots at 70 %").toBe("0.7");
+        expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and is raised in storage").toBe(70);
         const rows = {};
         for (const d of m.doors) (rows[Math.round(d.t)] ||= []).push(d.id);
         expect(Object.values(rows).map((r) => r.length), `rows ${JSON.stringify(rows)}`).toEqual(geo.rows);
@@ -341,7 +344,7 @@ for (const geo of LIVE_GEOS) {
         const { frames, m } = await measure(page);
         const at = `${geo.name}${cont ? " with CONTINUE" : ""}: ${JSON.stringify({ fit: m.fit, mb: m.mb.rect, doors: m.doors.map((d) => `${d.id} ${Math.round(d.h * 10) / 10}/${d.fs}`) })}`;
         expect(frames, "the fit settled").toBeGreaterThan(0);
-        expect(m.uiScale, "precondition: the stored UI SIZE reached --ui-scale").toBe("0.61");
+        expect(m.uiScale, "precondition: his stored UI SIZE 61 % boots at the phone minimum (#5235)").toBe("0.7");
         expect(judge(m, { offsets: true }), at).toEqual([]);
         expect(judgeFloor(m), at).toEqual([]);
         expect(m.fit.mb || "1", `the floor is not paid for by the fit ${at}`).toBe("1");
