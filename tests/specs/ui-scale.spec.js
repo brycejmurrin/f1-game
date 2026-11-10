@@ -1934,6 +1934,13 @@ async function bootOwnerCell(page, cell, { race = true, store = {} } = {}) {
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.headless(true));   // the HUD tick without the software-GL frame
   await page.waitForFunction(() => document.documentElement.style.getPropertyValue("--hud-cap") !== "", null, { polling: 100, timeout: BOOT_MS });
+  // The race fit takes about a second of passes to settle after boot (measured: --hud-cap's steerKeep 1.186 -> 1.875
+  // over 0.8 s at cell A). No player reaches SETTINGS in that second; a slider read inside it is a read of a draft.
+  await page.waitForFunction(() => {
+    const w = /** @type {any} */ (window), cap = document.documentElement.style.getPropertyValue("--hud-cap"), now = performance.now();
+    if (w.__capSeen !== cap) { w.__capSeen = cap; w.__capAt = now; }
+    return now - w.__capAt > 1500;
+  }, null, { polling: 100, timeout: BOOT_MS });
 }
 const sizeRowState = (page, id) => page.evaluate((id) => {
   const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
@@ -1965,12 +1972,20 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         expect(at.value, "the thumb is at the painted size").toBe(at.max);
         expect(at.max, "the range ends where this window stops painting").toBeLessThan(row.lim.max);
         expect(at.label, "the row shows the cap").toMatch(/ · max$/);
-        const stops = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round((at.min + (at.max - at.min) * t) * 4) / 4);
+        // The first move pins the OTHER slider's wish to what it paints, and this row's range becomes the one that
+        // keeps that painted size (BUTTON SIZE at cell A: 194 -> about 187 %). It must not collapse, and it must hold.
+        await driveSize(page, row.id, at.min);
+        const held = await sizeRowState(page, row.id);
+        expect(held.min, "the first move leaves the minimum alone").toBe(at.min);
+        expect(held.max, "the first move never widens the range").toBeLessThanOrEqual(at.max);
+        expect(held.max, "and keeps at least 95 % of it").toBeGreaterThanOrEqual(at.max * 0.95);
+        const stops = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round((held.min + (held.max - held.min) * t) * 4) / 4);
         const seen = [];
         for (const v of stops) {
           await driveSize(page, row.id, v);
           const st = await sizeRowState(page, row.id);
           expect(st.value, `${v}: the slider holds the value it was given`).toBe(v);
+          expect([st.min, st.max], `${v}: the range holds while the slider moves`).toEqual([held.min, held.max]);
           expect(st.label.startsWith(`${v % 1 ? v.toFixed(1) : v}%`), `${v}: label "${st.label}" leads with the value`).toBe(true);
           seen.push({ v, moves: await widths(page, row.moves), still: await widths(page, row.still) });
         }
@@ -1991,20 +2006,28 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         for (let m = 0; m < row.moves.length; m++) expect(Math.abs(back[m] - seen[0].moves[m]), `${row.moves[m]} has no hysteresis`).toBeLessThan(1);
       });
     }
-    test("pm-uiscale (every menu): a phone cannot shrink menu text under 12 px, and no travel is dead above the sheet cap", async ({ page }) => {
+    // The range is NOT clamped: above the sheet's 125 % the title still grows, and a legibility minimum is #5235's call.
+    test("pm-uiscale (every menu): the whole range is kept and the row names the zoom its own sheet paints at", async ({ page }) => {
       const ui = CONTROL_REG.size.find((r) => r.key === "uiScale");
       await bootOwnerCell(page, cell, { race: false, store: { uiScale: 51 } });
-      const st = await sizeRowState(page, ui.id);
-      expect([st.min, st.max, st.value, st.label]).toEqual([ui.phone.min, ui.phone.max, ui.phone.min, `${ui.phone.min}%`]);
-      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale"))).toBe("0.86");
-      expect(await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fs-micro")) * 0.86)).toBeGreaterThanOrEqual(12);
-      await page.evaluate((id) => {
-        const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
-        el.value = "200";
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-      }, ui.id);
-      expect((await sizeRowState(page, ui.id)).value).toBe(ui.phone.max);
-      expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale")))).toBe(ui.phone.max);
+      await page.locator("#mb-settings").click();
+      await page.locator("#pm-open-appearance").click();
+      await expect(page.locator("#" + ui.id)).toBeVisible();
+      const sheetZoom = () => page.evaluate((id) => +getComputedStyle(document.getElementById(id).closest(".sheet")).zoom, ui.id);
+      expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.lim.min, max: ui.lim.max, value: 51, label: "51%" });
+      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale"))).toBe("0.51");
+      for (const v of [100, 125, 150, 200]) {
+        await page.evaluate(({ id, v }) => {
+          const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
+          el.value = String(v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }, { id: ui.id, v });
+        const z = Math.round(Math.min(v / 100, ui.sheetZoom) * 100);
+        await expect.poll(sheetZoom, `${v} %: the sheet paints min(wish, ${ui.sheetZoom})`).toBeCloseTo(z / 100, 2);
+        await expect(page.locator(`#${ui.id}-v`), `${v} %: the number is the wish, the note is what this sheet paints`).toHaveText(z < v ? `${v}% · this menu ${z}%` : `${v}%`);
+        expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale")))).toBe(v);
+        expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale"))).toBe(String(v / 100));
+      }
     });
   });
 }

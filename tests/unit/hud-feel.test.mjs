@@ -1574,7 +1574,7 @@ test("#4483: BUTTON SIZE fit suffix follows the dock cap, syncLayout is rAF-coal
 
 /* #5206 — EVERY SIZE SLIDER DOES WHAT IT SAYS. Bryce, on his iPhone: the sliders are "wonky and backwards". Measured
  * (docs/notes/CONTROL-AUDIT-5206-2026-11-10.md): HUD SIZE painted nothing above 100 % behind an unlabelled fit cap,
- * BUTTON SIZE was dead under 82 % and above the cap, UI SIZE was dead from 125 % up and could shrink menu text to 7 px.
+ * BUTTON SIZE was dead under 82 % and above the cap, UI SIZE said 200 % while its own sheet stopped at 125 %.
  * The rule: a slider's range on this window is the range that paints, its number is the painted size, and the row names
  * the cap. Table-driven over tests/data/control-registry.json: the pure half is here (UiScale's sizeRow over the caps
  * the race fit measured at his two phone cells); tests/specs/ui-scale.spec.js drives the same rows in a live page. */
@@ -1603,35 +1603,37 @@ for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
     assert.ok(caps, "the cell's measured --hud-cap parses");
     let prev = -Infinity;
     for (let wish = r.lim.min; wish <= r.lim.max; wish += 5) {
-      const row = sizeRow(r.key, wish, r.lim, caps, true);
+      const row = sizeRow(r.key, wish, r.lim, caps, 0);
       assert.ok(row.min <= row.value && row.value <= row.max, `${wish}: value inside its own range`);
       assert.ok(row.value >= prev, `${wish}: a bigger wish never paints smaller`);
       prev = row.value;
       assert.ok(row.label.startsWith(`${Math.round(row.value * 10) / 10}`.replace(/\.0$/, "")), `${wish}: "${row.label}" leads with the painted ${row.value}`);
       assert.equal(/ · max$/.test(row.label), row.max < r.lim.max && row.value >= row.max, `${wish}: "· max" exactly when the window's cap is reached ("${row.label}")`);
+      if (r.key === "uiScale") {
+        assert.deepEqual([row.min, row.max, row.value], [r.lim.min, r.lim.max, wish], `${wish}: UI SIZE is never clamped (the title paints the whole range; a legibility minimum is #5235's call)`);
+        const z = Math.round(r.sheetZoom * 100);
+        assert.equal(sizeRow(r.key, wish, r.lim, caps, r.sheetZoom).label, wish > z + 0.5 ? `${wish}% · this menu ${z}%` : `${wish}%`, `${wish}: the row names the zoom the settings sheet paints at`);
+      }
     }
-    const top = sizeRow(r.key, r.lim.max, r.lim, caps, true);
+    const top = sizeRow(r.key, r.lim.max, r.lim, caps, 0);
     if (r.key === "hudScale") {
       assert.equal(top.max, Math.max(Math.ceil(caps.top * 100 - 1e-6), Math.ceil(caps.bot * 100 - 1e-6)), "HUD SIZE stops at the larger band cap");
       assert.ok(top.max < r.lim.max, "his phone caps HUD SIZE: the dead 100-200 % travel is gone");
     }
     if (r.key === "hudBtnScale") {
-      assert.equal(top.min, 82, "the dock's painted floor is the slider's minimum: no dead 40-82 %");
+      assert.equal(top.min, Math.ceil(caps.floor * 100), "the dock's painted floor (82 %; 92 % at 852x368) is the slider's minimum: no dead travel under it");
       assert.ok(Math.abs(top.max - caps.steer * 100) < 0.26, "BUTTON SIZE stops where the steer pad stops");
       assert.match(top.label, new RegExp(`· pedals ${Math.round(caps.dock * 100)}%`), "and the row names the pedal column's smaller cap");
     }
     if (r.key === "uiScale") {
-      assert.deepEqual([top.min, top.max], [r.phone.min, r.phone.max], "a phone's UI SIZE runs 86-125 %");
-      assert.ok(14 * top.min / 100 >= 12, "the smallest menu text (--fs-micro 14 px) stays >= 12 px");
-      assert.equal(sizeRow(r.key, 51, r.lim, caps, true).value, 86, "a stored 51 % paints 86 %");
-      assert.deepEqual([sizeRow(r.key, 51, r.lim, null, false).value, sizeRow(r.key, 200, r.lim, null, false).value], [51, 200], "a desktop keeps the full range");
+      assert.equal(sizeRow(r.key, 200, r.lim, null, 2).label, "200%", "a sheet painting at the wish adds no note");
     }
   });
 }
 
 test("outside a race (no --hud-cap) the race sliders keep their full range and plain label", () => {
   for (const r of REG.size.filter((x) => x.key !== "uiScale")) {
-    const row = sizeRow(r.key, r.lim.max, r.lim, null, true);
+    const row = sizeRow(r.key, r.lim.max, r.lim, null, 0);
     assert.deepEqual([row.min, row.max, row.label], [r.lim.min, r.lim.max, `${r.lim.max}%`]);
   }
   assert.equal(parseCaps(""), null);

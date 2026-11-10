@@ -11,6 +11,17 @@
    },
    "caps": "0.989 1.002 1.186 1.942 1.942 0.82"
   },
+  "S": {
+   "//": "Bryce's iPhone in a Safari tab (phone bridge 2026-11-10 02:38Z: landscape 852x368, DPR 3); insets assumed as cell A's.",
+   "width": 852,
+   "height": 368,
+   "insets": {
+    "sal": 59,
+    "sar": 59,
+    "sab": 21
+   },
+   "caps": "0.996 1 1.199 2.303 2.228 0.92"
+  },
   "D": {
    "width": 844,
    "height": 390,
@@ -70,10 +81,7 @@
     "max": 200,
     "step": 0.25
    },
-   "phone": {
-    "min": 86,
-    "max": 125
-   }
+   "sheetZoom": 1.25
   }
  ],
  "opacity": [

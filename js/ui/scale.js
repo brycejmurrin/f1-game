@@ -103,12 +103,14 @@ const UiScale = (() => {
       const t = scaleSnap(pct, k);
       return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
     };
-    // A phone: the 12 px text floor and the sheet fit's 125 % ceiling bound UI SIZE there (sizeRow).
-    const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
+    // UI SIZE keeps its whole range: above the settings sheet's fit cap the title still grows (measured 125 -> 200 %
+    // at 852x393 and 852x368), so the row NAMES the zoom this sheet paints at (its computed zoom, 1.25 on a phone) instead.
+    const uiSheet = () => { const el = $("pm-uiscale"); return el && el.closest ? el.closest(".sheet") : null; };
+    const sheetCap = () => { const sh = uiSheet(); return (sh && sh.getClientRects && sh.getClientRects().length && parseFloat(getComputedStyle(sh).zoom)) || 0; };
     const fitCaps = () => (document.body && document.body.classList && document.body.classList.contains("in-race")
       ? parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")) : null);
     const cssWas = {};   // prop -> the value this module last wrote: an unchanged row writes nothing (the observer below re-runs it)
-    const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), phoneUi());
+    const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), sheetCap());
     // Moving one size slider pins the OTHER's stored wish to what it paints now, so room this move frees is
     // never spent growing something the player did not touch (BUTTON SIZE down grew the gear cluster back).
     const pinPainted = (key) => { const r = rowFor(key); if (typeof store.get(key, null) === "number" && r.value < scalePct(key)) store.set(key, r.value); };
@@ -122,10 +124,12 @@ const UiScale = (() => {
       // boot, so an unclamped read here silently applied an out-of-range scale while
       // the slider's own displayed number — always clamped — showed something else.
       // THE SLIDER IS WHAT PAINTS (#5206). rowFor() clamps the range to what this window can paint (the race
-      // fit's --hud-cap; a phone's UI SIZE band), so the thumb, the number and the custom property are one value
+      // fit's --hud-cap; UI SIZE keeps its full range), so the thumb, the number and the custom property are one value
       // and no part of the travel is dead. The STORED wish is left alone until the player moves the slider.
-      const r = rowFor(key), root = document.documentElement, want = typeof stored === "number" ? String(r.value / 100) : "";
+      let r = rowFor(key);
+      const root = document.documentElement, want = typeof stored === "number" ? String(r.value / 100) : "";
       if (cssWas[prop] !== want) { cssWas[prop] = want; if (want) root.style.setProperty(prop, want); else root.style.removeProperty(prop); }
+      if (key === "uiScale") r = rowFor(key);   // its label names the sheet's zoom, which the write above just moved
       const input = $(inputId);
       if (input) { input.min = String(r.min); input.max = String(r.max); input.value = String(r.value); }
       const out = $(`${inputId}-v`); if (out && out.textContent !== r.label) out.textContent = r.label;
@@ -253,6 +257,10 @@ const UiScale = (() => {
         fitRaf = requestAnimationFrame(() => { fitRaf = 0; refreshFit(); });
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
     }
+    // SheetShape re-shapes the sheet (density, fit) after the slider moves: rebuild the UI SIZE row when it does.
+    if (typeof MutationObserver === "function" && uiSheet()) {
+      new MutationObserver(() => applyScale("uiScale", "--ui-scale", "pm-uiscale")).observe(uiSheet(), { attributes: true });
+    }
     function setScale(key, prop, v) {
       if (v !== undefined) {
         if (v === null) store.set(key, null);
@@ -372,13 +380,13 @@ const UiScale = (() => {
     return { top: a[0], bot: a[1], dock: a[2], steer: a[3], keep: a[4], floor: a[5] };
   }
   /** One size slider's row on THIS window: { min, max, value, label }. `wish` is the stored (or default) pct,
-   *  `lim` the control's full { min, max, step }, `caps` parseCaps() in a race (else null), `phone` a phone's UI.
+   *  `lim` the control's full { min, max, step }, `caps` parseCaps() in a race (else null), `sheetCap` the zoom the
+   *  settings sheet paints at (0 = not on screen; UI SIZE only: its range is never clamped, the row names the cap).
    *  The range is what can paint, `value` is what paints, and the label says so: "194% · pedals 119% · max". */
-  function sizeRow(key, wish, lim, caps, phone) {
+  function sizeRow(key, wish, lim, caps, sheetCap) {
     const st = lim.step || 0.25, down = (p) => Math.floor(p / st + 1e-6) * st, up = (p) => Math.ceil(p / st - 1e-6) * st;
     let min = lim.min, max = lim.max, part = "";
     const txt = (p) => `${Math.abs(p % 1) < 1e-9 ? String(Math.round(p)) : p.toFixed(1)}%`;
-    if (key === "uiScale" && phone) { min = Math.max(min, UI_PHONE_MIN); max = Math.min(max, UI_PHONE_MAX); }
     // The bands paint min(slider, cap) with the cap ceiled onto a 1 % grid (hud.js set()).
     const band = (z) => (z < 9 ? Math.ceil(z * 100 - 1e-6) : Infinity);
     if (key === "hudScale" && caps) max = Math.max(min, Math.min(max, Math.max(band(caps.top), band(caps.bot))));
@@ -395,9 +403,9 @@ const UiScale = (() => {
       const ped = Math.round(Math.max(caps.floor, Math.min(value / 100, caps.dock)) * 100);
       if (ped < value - 0.5) part = ` · pedals ${ped}%`;
     }
+    if (key === "uiScale" && sheetCap > 0 && sheetCap * 100 < value - 0.5) part = ` · this menu ${Math.round(sheetCap * 100)}%`;
     return { min, max, value, label: txt(value) + part + (max < lim.max && value >= max ? " · max" : "") };
   }
-  const UI_PHONE_MIN = 86, UI_PHONE_MAX = 125;   // 14 px --fs-micro x 0.86 = 12 px text; SheetShape's fit stops a phone sheet at 1.25
   btnFitLabel.sizeRow = sizeRow; btnFitLabel.parseCaps = parseCaps;   // exported on the return line once #5205 (which edits it) lands
   return { create, defaultResMode, btnFitLabel };
 })();
