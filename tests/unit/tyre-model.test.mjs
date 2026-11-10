@@ -116,6 +116,38 @@ test("wear OFF: a car on its own garage slick is fitted the weather's tread at t
   assert.equal(s.startRecord(player, 2).id, slick.id, "wear on: the player's own set, whatever the sky");
 });
 
+test("wear OFF: a car on its own garage slick follows the weather when it turns mid-race (CHANGEABLE)", () => {
+  // Measured in the VM (silverstone, dry start, arc to rain, TYRE WEAR off): the player stayed
+  // at tread 0 / grip 0.72 against an AI field at 0.97 for the rest of the race, no pit lane.
+  const slick = TYRES.find((o) => !o.wetTread), inter = TYRES.find((o) => o.wetTread === 1);
+  let wetness = 0;
+  const G = { lapsTarget: 5, track: { total: 5386, def: {} }, LAT_MAX: 22, raceTyreWear: "off", raceWeather: "dry", trackWetness: () => wetness, aTop: () => 7, vTop: () => 60 };
+  const s = T.create(G);
+  const car = { human: true, tyreOpt: slick, tread: 0 };
+  s.fit(car, s.startRecord(car, 0));
+  s.update(car, 1 / 60);
+  assert.equal(car.tread, 0, "dry: the garage set");
+  wetness = 0.5; s.update(car, 1 / 60);
+  assert.equal(car.tread, 1, "the road is damp: intermediates");
+  wetness = 1; s.update(car, 1 / 60);
+  assert.equal(car.tread, 2, "full wet");
+  wetness = 0; s.update(car, 1 / 60);
+  assert.equal(car.tread, 0); assert.equal(car.tyre.id, slick.id, "dried out: back on the garage set");
+  const ai = { human: false, tread: null, tyreOpt: null }; wetness = 1;
+  s.update(ai, 1 / 60);
+  assert.equal(ai.tread, null, "the field's sentinel is left alone");
+  if (inter) {
+    const own = { human: true, tyreOpt: inter, tread: 1 };
+    s.fit(own, s.startRecord(own, 1)); s.update(own, 1 / 60);
+    assert.equal(own.tyre.id, inter.id, "a treaded set of their own stays theirs");
+  }
+  // Wear ON: the stop is the recourse, nothing is fitted behind the driver's back.
+  s.setLevel("real");
+  const on = { human: true, tyreOpt: slick, tread: 0, lap: 1, prog: 0, s: 0, speed: 0 };
+  wetness = 1; s.fit(on, s.startRecord(on, 0)); s.update(on, 1 / 60);
+  assert.equal(on.tread, 0, "wear on: the player's own set, whatever the sky");
+});
+
 test("an AI car starts a WET race on the tread the weather wants, not the plan's slick", () => {
   // The planner sequences dry classes only; with no tread the whole field
   // lined up on slicks and was armed for the weather on the first tick.
