@@ -371,14 +371,18 @@ test("every js/ directory is owned by a workflow slice (circuits come from the r
   for (const f of ["code-survey.js", "total-audit.js"]) {
     const src = fs.readFileSync(path.join(WORKFLOWS, f), "utf8");
     const owned = new Set([...src.matchAll(/dirs:\s*\[([^\]]*)\]/g)].flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])));
-    assert.match(src, /slicePlan|const PLAN = /, `${f}: lost the run-time slice plan`);
-    assert.match(src, /chunk\(PLAN\.circuits/, `${f}: circuits must be chunked from the run-time plan`);
-    assert.doesNotMatch(src, /FIRST 20|LAST 20/, `${f}: a static circuit split skips circuits past the 40th`);
+    const bad = [];
+    const need = (re, why) => { if (!re.test(src)) bad.push(`${f}: ${why}`); };
+    const never = (re, why) => { if (re.test(src)) bad.push(`${f}: ${why}`); };
+    need(/slicePlan|const PLAN = /, "lost the run-time slice plan");
+    need(/chunk\(PLAN\.circuits/, "circuits must be chunked from the run-time plan");
+    never(/FIRST 20|LAST 20/, "a static circuit split skips circuits past the 40th");
     const missing = jsDirs.filter((d) => d !== "js/circuits/" && !owned.has(d));
-    assert.deepEqual(missing, [], `${f}: no slice owns ${missing.join(", ")} — add it to a slice's dirs: and scope`);
-    assert.doesNotMatch(src, /require\(['"]node:/, `${f}: require() is null inside a workflow`);
-    assert.doesNotMatch(src, /`\.replace\(/, `${f}: String.replace on a prompt splices $& from finding text; use a template`);
-    assert.match(src, /(refutes|refCount)\[i\] === heard\[i\]/, `${f}: a high finding every answering verifier refuted must die`);
-    assert.match(src, /agentsSpawned/, `${f}: the run must report how many agents it spawned`);
+    if (missing.length) bad.push(`${f}: no slice owns ${missing.join(", ")} — add it to a slice's dirs: and scope`);
+    never(/require\(['"]node:/, "require() is null inside a workflow");
+    never(/`\.replace\(/, "String.replace on a prompt splices $& from finding text; use a template");
+    need(/(refutes|refCount)\[i\] === heard\[i\]/, "a high finding every answering verifier refuted must die");
+    need(/agentsSpawned/, "the run must report how many agents it spawned");
+    assert.deepEqual(bad, [], bad.join("\n"));
   }
 });
