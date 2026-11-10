@@ -1,13 +1,6 @@
 "use strict";
 /* Apex 26 — FLYBY SHOT SEQUENCER: the pre-race loading screen's camera.
  *
- * WHAT IT REPLACES. The menu camera was one continuous crawl: `s` advanced with
- * the wall clock and camVantage("cinematic") solved a broadcast rig around it.
- * That rig has no idea what is standing beside the track — its only lateral
- * guard, `corr`, is applied on STREET circuits and is Infinity everywhere else —
- * so on an open circuit the eye sat 22 m off the racing line and flew through
- * whatever was there. Reported as "the flyby goes through a building".
- *
  * WHAT A SHOT IS. A list of shots, each a move from one camera pose to another
  * over a duration. Poses are TRACK-RELATIVE and anchored on landmarks, never on
  * world coordinates:
@@ -793,6 +786,7 @@ const FlybySeq = (function () {
        grid        up the aisle between the columns, ending among the front
                    rows with the start gantry ahead */
   const DEFAULT = [
+    // ---- establish: where are we -------------------------------------------
     {
       id: "wide", dur: 0.09, ease: "inOut", sway: 0.35,
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
@@ -807,6 +801,7 @@ const FlybySeq = (function () {
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 39],
     },
+    // ---- this circuit in particular ----------------------------------------
     {
       id: "landmark1", dur: 0.09, ease: "inOut",
       eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
@@ -821,6 +816,7 @@ const FlybySeq = (function () {
       look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
       fov: [38, 41],
     },
+    // ---- the corners you will actually drive --------------------------------
     {
       id: "turn-first", dur: 0.09, ease: "inOut",
       eye: [{ at: "corner", n: "first", off: -60, x: 16, y: 9 },
@@ -850,6 +846,7 @@ const FlybySeq = (function () {
              { at: "corner", n: "fastest", off: 45, x: 0, y: 0.6 }],
       fov: [40, 43],
     },
+    // ---- and then the grid you start from ------------------------------------
     // The road draws without slope-scaled depth bias (PR #248), so the grid can
     // be filmed from ahead of pole.
     {

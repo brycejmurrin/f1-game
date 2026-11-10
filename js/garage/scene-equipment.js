@@ -388,6 +388,7 @@ function buildEquipment(g, liv, ctx) {
   timingScreenHousing(g);
 }
 
+
   // COMPOUND, starterCart, tyreTrolley and rearJack are exported for the garage-mesh tests.
   return { RUBBER, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, monitorGantry, wheelDolly, build: buildEquipment };
 })();
