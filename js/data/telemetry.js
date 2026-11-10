@@ -403,7 +403,7 @@ const DataTelemetry = (function () {
           if (myGen !== telGen) return;
           clear(detail);
           let msg = "Couldn't load telemetry.";
-          if (err && err.message && err.message.indexOf("Live F1 session") !== -1) msg = err.message;
+          if (DataTabUtils.liveLockout(err)) msg = DataTabUtils.LOCKOUT_TITLE + " — " + DataTabUtils.LOCKOUT_MSG;
           const failure = el("div", "dh-error");
           failure.setAttribute("role", "status");
           failure.setAttribute("data-state", "failed");

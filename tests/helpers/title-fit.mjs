@@ -25,8 +25,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // `rows` is the composition a TOUCH boot paints with CONTINUE shown (#5213: under a finger a door
 // is at least 44 px, so the eight rows re-flow where eight 44 px rows do not fit the box): seven
 // rows (CAREER joins the retention row) in a 353-356 px box, all eight at 430; `floor` is false
-// where no row count fits and the fit wins (Safari's 246 px box at UI SIZE 109 %: three doors on
-// the top row clip a word, so it is the unfloored eight rows zoomed down, as before the floor).
+// where no row count fits WITH EVERY WORD WHOLE and the fit wins. Safari's 254 px box (#5208's
+// max(inset, gutter) edge; it was 246) takes the five-row tier by door box, but PRACTICE's label
+// clips four-up (#5378: span 53 px in a 50 px box), so fits() rejects it and the unfloored eight
+// rows zoom down, as before the floor. judgeLabels holds the "every word whole" half.
 const ROWS7 = [3, 2, 2, 2, 2, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 2, 3, 4];
 export const GEOS = [
   { name: "852x393-standalone", w: 852, h: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS7, floor: true },
@@ -34,6 +36,12 @@ export const GEOS = [
   { name: "844x390", w: 844, h: 390, insets: { top: 0, left: 47, bottom: 21, right: 47 }, rows: ROWS7, floor: true },
   { name: "932x430", w: 932, h: 430, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS8, floor: true },
 ];
+
+/** No door paints a clipped label (#5378: Safari 852x283's five-row tier fit by door box while
+ *  PRACTICE's label span was 53 px in a 50 px box). The rows pin follows from this rule. */
+export function judgeLabels(m) {
+  return m.doors.filter((d) => d.clip).map((d) => `door ${d.id} clips its label`);
+}
 
 /** The touch paint floor (#5213): every door at least 44 px tall and its label at least 12 px. */
 export function judgeFloor(m) {
@@ -167,7 +175,15 @@ export function measureInPage() {
     const r = R(b);
     if (!(r.h > 0 && r.w > 0) || getComputedStyle(b).visibility === "hidden") continue;
     const hit = document.elementFromPoint((r.l + r.r) / 2, (r.t + r.b) / 2);
-    doors.push({ id: b.id || (b.textContent || "").trim().slice(0, 18), ...r, fs: Math.round(parseFloat(getComputedStyle(b).fontSize) * (parseFloat(getComputedStyle(mb).zoom) || 1) * 100) / 100, hit: !!hit && (hit === b || b.contains(hit)) });
+    // A label span wider than its box is a clipped word; the subtitle's ellipsis (.mb-sub) is the
+    // designed clip, unless the .mb-label beside it clips too (#5378's rule in TitleLayout fits()).
+    const over = (e) => !!e && e.clientWidth > 0 && e.scrollWidth > e.clientWidth + 1;
+    let clip = over(b);
+    for (const sp of b.querySelectorAll("span:not(.mb-sub)")) {
+      if (clip || !over(sp)) continue;
+      clip = !over(sp.querySelector(".mb-sub")) || over(sp.querySelector(".mb-label"));
+    }
+    doors.push({ id: b.id || (b.textContent || "").trim().slice(0, 18), ...r, clip, fs: Math.round(parseFloat(getComputedStyle(b).fontSize) * (parseFloat(getComputedStyle(mb).zoom) || 1) * 100) / 100, hit: !!hit && (hit === b || b.contains(hit)) });
   }
   const de = document.documentElement;
   const cols = cs.gridTemplateColumns.split(/\s+/).map(parseFloat).filter((n) => n > 0);
@@ -244,7 +260,7 @@ export function judge(m, { offsets = false } = {}) {
  *  fails that, the 15.4 measured at fit 1 clears it with the room a machine's
  *  fonts can take back (#5152: never pin the fit). Where the cluster IS the
  *  track and the fit still sits under 1, the fit is paying for height alone
- *  (Safari's 283: seven rows in a 246 px box, fit 0.752, RACE at 11.6) and
+ *  (Safari's 283: the unfloored eight rows in a 254 px box, 246 before #5208) and
  *  the label follows it with every door (UI contract §3 rules 2–3: zoom
  *  scales type inside a fitted box; fit, never scroll); the track and the
  *  row pins are the guard there, and a label floor would only restate the

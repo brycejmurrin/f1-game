@@ -71,7 +71,7 @@ var CrowdAudio = (function () {
   let standTrack = null;
   let wrapped = false;
   let _orig = null;
-  let idled = false;             // LAB audioIdle: bed + cheers unplugged from the bus
+  let idled = false;             // audio idle (#5053): bed + cheers unplugged from the bus
 
   function context() {
     if (host && typeof host.context === "function") return host.context();
@@ -118,7 +118,7 @@ var CrowdAudio = (function () {
     idled = false;
   }
 
-  // LAB audioIdle (engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // Audio idle, on by default (#5053; engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
   // idle(true) unplugs the bed gain and every cheer gain from the bus once
   // silence() has faded them; idle(false) plugs them back. Same nodes, same ctx.
   function idle(on) {
