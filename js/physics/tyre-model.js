@@ -1062,16 +1062,16 @@ const TyreModel = (function () {
       };
     }
 
-    // WEAR OFF HAS NO PIT LANE (PitLane.enabled), so the set fitted at the lights
-    // is the set for the whole race. A car that carries its own garage tyre (the
-    // player, a MY TEAM mate) lined up for a rain race on that slick: 0.72 grip
-    // against a field on the full-wet column (0.97, the `tread: null` sentinel)
-    // with no stop to take. With no recourse the lights fit the weather's tread,
-    // as the field is assumed to have. A treaded set of their own stays theirs,
-    // and with wear on the choice (and the stop) is still the driver's.
+    // A WET ROAD AT THE LIGHTS FITS THE WEATHER'S TREAD to a car that carries its
+    // own garage slick (the player, a MY TEAM mate), as the field is fitted. The
+    // garage does not show the race's weather when the set is chosen, and a slick
+    // on a wet road is 0.72 grip against a field at 0.97: with wear off there is
+    // no pit lane at all, and with wear on it was a forced stop on lap 1 that a
+    // 3-lap race never recovers (Bryce's decision, #5251). A treaded set of their
+    // own stays theirs; the garage slick comes back at a stop on a dry road.
     function sessionStartRecord(c, tread) {
       const rec = startRecord(c, tread);
-      if (on() || !(tread > 0) || !c || !c.tyreOpt || !rec || rec.tread > 0) return rec;
+      if (!(tread > 0) || !c || !c.tyreOpt || !rec || rec.tread > 0) return rec;
       return classRecord(classForTread(tread));
     }
 
