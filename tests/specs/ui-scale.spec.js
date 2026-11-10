@@ -377,12 +377,12 @@ test.describe("UI scale", () => {
       };
     });
 
-    // Touch defaults to 125%, independently of the readout scale.
+    // Touch defaults to 100% (125 until 2026-11-09, PR #5297), independently of the readout scale.
     await page.evaluate(() => { window.__apex.hudScale(120); window.__apex.btnScale(null); });
     let st = await state();
     expect(st.over, "unset: no override marker").toBe(false);
     expect(st.revertShown, "unset: no revert button").toBe(false);
-    expect(st.btn, "unset: independent touch default").toBe(125);
+    expect(st.btn, "unset: independent touch default").toBe(100);
 
     await page.evaluate(() => window.__apex.btnScale(60));
     st = await state();
@@ -399,13 +399,13 @@ test.describe("UI scale", () => {
     // range input and move the very slider it was meant to reset.
     await page.evaluate(() => document.getElementById("pm-btnscale-r").click());
     st = await state();
-    expect(st.btn, "revert restores the independent touch default").toBe(125);
+    expect(st.btn, "revert restores the independent touch default").toBe(100);
     expect(st.over, "and clears its own marker").toBe(false);
     expect(st.revertShown, "and hides itself").toBe(false);
 
     // A later HUD change must leave the reset button size alone.
     await page.evaluate(() => window.__apex.hudScale(90));
-    expect((await state()).btn, "HUD changes leave the button default unchanged").toBe(125);
+    expect((await state()).btn, "HUD changes leave the button default unchanged").toBe(100);
   });
 
   // The mechanism itself. If these two ever start moving together the sliders
@@ -427,19 +427,19 @@ test.describe("UI scale", () => {
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.9" });
 
-    // Buttons are a third independent axis, with a fixed 125% touch default.
+    // Buttons are a third independent axis, with a fixed 100% touch default.
     const btn = () => page.evaluate(() => window.__apex.btnScale().pct);
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "unset, independent touch default").toBe(125);
+    expect(await btn(), "unset, independent touch default").toBe(100);
     await page.evaluate(() => window.__apex.hudScale(120));
-    expect(await btn(), "HUD changes leave default buttons unchanged").toBe(125);
+    expect(await btn(), "HUD changes leave default buttons unchanged").toBe(100);
     await page.evaluate(() => window.__apex.btnScale(60));
     expect(await btn(), "set, it is its own axis").toBe(60);
     expect(await read(), "and moving it must not move the HUD").toEqual({ ui: "1.5", hud: "1.2" });
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await btn(), "nor does the HUD move it back").toBe(60);
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "null restores the button default").toBe(125);
+    expect(await btn(), "null restores the button default").toBe(100);
 
     // Out of range clamps rather than throwing — a stored value from an older
     // build with a wider range must not be able to produce a 4x interface.
