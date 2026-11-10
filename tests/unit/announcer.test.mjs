@@ -589,28 +589,42 @@ test("every lore line is one spoken sentence the synth can read", () => {
   }
 });
 
-// Baku is exempt until its night line is baked: lore lines are pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side
-// credentials), and voice-pack.test.mjs fails on an unbaked line. Drop BAKED_GAP once the voice pack is re-baked with a Baku night line.
+// Baku is exempt from the night-slot rule: lore lines are pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side
+// credentials), so Baku was moved to a DAY default instead of growing an unbaked night line. The Baku test below pins that decision, so this
+// exemption cannot hide a night circuit with nothing to say after dark.
 const BAKED_GAP = ["baku"];
 test("every night circuit has a night line, so the announcer has something to say after dark", () => {
   const { CircuitLore } = load();
   const nights = readdirSync(join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js"))
     .filter((f) => /^ {4}night: true,/m.test(readFileSync(join(ROOT, "js/circuits", f), "utf8")))
     .map((f) => f.replace(/\.js$/, ""));
-  assert.ok(nights.includes("baku") && nights.length >= 7, `only found ${nights.join(", ")}`);
+  assert.ok(nights.length >= 6, `only found ${nights.join(", ")}`);
   assert.deepEqual(nights.filter((id) => !BAKED_GAP.includes(id) && !CircuitLore.LORE[id].night), [], "a night circuit has no `night` lore slot");
 });
 
-test("Baku's night line is a known gap (voice bake pending)", { todo: true }, () => {
+test("Baku races in daylight by default, so its identity line is a day line and the night-slot exemption hides nothing", () => {
+  // Decision: Baku defaults to day rather than carrying an unbaked night line. The circuit def is the default time of day
+  // (game.js: raceTimeOfDay "default" && def.night), so the def must not say night, and every BAKED_GAP id must be a day circuit.
   const { CircuitLore } = load();
-  assert.ok(CircuitLore.LORE.baku.night, "Baku is night: true but has no night lore line");
+  for (const id of BAKED_GAP) {
+    const def = readFileSync(join(ROOT, "js/circuits", `${id}.js`), "utf8");
+    assert.doesNotMatch(def, /^ {4}night: true,/m, `${id} defaults to night but is exempt from the night-lore rule`);
+  }
+  const line = CircuitLore.LORE.baku.line;
+  assert.ok(line, "Baku has no identity line");
+  assert.doesNotMatch(line, /\b(night|floodlit|floodlights?|dark|after dark|moon)\b/i, "Baku's identity line is a night line");
 });
 
-// Reverted until the voice pack is re-baked: the Istanbul `corner` line IS voiced (voice-pack.test.mjs fails on any reworded line),
-// so the fix is "seems to last forever" + a bake of that line.
-test("no lore line states a duration the circuit does not have (Istanbul turn eight is seconds, not a minute)", { todo: true }, () => {
+// The Istanbul `corner` line IS voiced (voice-pack.test.mjs fails on any reworded line), so its fix ships with a re-bake of that line.
+test("no lore line states a duration the circuit does not have (Istanbul turn eight is seconds, not a minute)", () => {
   const { CircuitLore } = load();
-  assert.doesNotMatch(CircuitLore.LORE.istanbul.corner, /minute/);
+  assert.ok(CircuitLore.LORE.istanbul.corner, "Istanbul lost its turn-eight line");
+  assert.doesNotMatch(CircuitLore.LORE.istanbul.corner, /most of a minute/i);
+  for (const [id, row] of Object.entries(CircuitLore.LORE)) {
+    for (const [slot, text] of Object.entries(row)) {
+      assert.doesNotMatch(text, /\b(lasts?|for) (most of |nearly |almost )?(a|one|two|\d+) minutes?\b/i, `${id}.${slot} gives a corner a minute-long duration`);
+    }
+  }
 });
 
 test("the circuit's own line is spoken, and outranks the numbers when the budget is tight", () => {
