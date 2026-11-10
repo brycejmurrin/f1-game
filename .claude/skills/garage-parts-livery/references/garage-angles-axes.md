@@ -63,12 +63,11 @@ node tools/shot/garage-angles.mjs --team=mercedes --views=free --az=1.2 --el=0.3
 The absolute flags, targets and lamps go through `__apex.garageFrame`;
 `--picker-team` still clicks the DOM for the counted flags only.
 
-**The player-clamped orbit** defaults to elevation `0..1.30` rad
-(`SP_EL_MIN/MAX`, `js/garage/setup-camera.js`): the eye never goes below the target, so a
+**The player-clamped orbit** is bounded by `SP_EL_MIN/MAX` and `SP_DIST_MIN/MAX`
+(`js/garage/setup-camera.js`): the eye never goes below the target, so a
 "looking up" shot is not reachable within those player clamps — put the TARGET below the subject instead
-and the subject lands above frame centre from a floor-level eye. Distance is
-`4.6..15` m on every base view except `wingFront` (2.0) and `wingRear` (1.8),
-which exist to sit close to a flap; the sidecar records the clamped value
+and the subject lands above frame centre from a floor-level eye. `wingFront` and
+`wingRear` have a closer distance floor, to sit close to a flap; the sidecar records the clamped value
 that was actually rendered, so compare `dist` there against what you asked.
 
 ```sh
@@ -82,29 +81,32 @@ node tools/shot/garage-angles.mjs --fast --team=all --views=wingFront \
 
 A station is a camera bundle that frames a specific car part or room subject:
 base view + orbit + look-at + lamp, and `clamp: false` where it sits inside
-the player's 4.6 m floor (a survey framing, not a preset). Every component is
+the player's distance floor (a survey framing, not a preset). Every component is
 a default the axes override, so `--station=spineTop --az=150deg,170deg` is
 the crown station swung round. `--crop=none` shows the whole frame while
 tuning one.
 
-| station | frames | bundle |
-|---|---|---|
-| `spineTop` | crown / SPINE TOP, top-down nose-up (the chase camera's read) | rear · az 0.92π · el 0.72 · 3.2 m · at [0, 0.9, -0.85] (the cover's middle) · lamp off |
-| `spineSide` | flank / SPINE SIDE at shoulder height | side · az 0.50π · el 0.15 · 3.4 m · at flank · lamp side |
-| `finBadge` | fin badge + handoff | rear · az 0.78π · el 0.30 · 3.0 m · at fin · lamp wingRear |
-| `sidepod` | sidepod flash, stripe, finish | side · az 0.56π · el 0.12 · 3.6 m · at [0.7, 0.45, 0.2] |
-| `noseFlash` | nose flash, DETAIL keyline | wingFront · az 0.18π · el 0.14 · 4.0 m · at nose · lamp front |
-| `endplate` | front-wing endplate | wingFront · az 0.35π · el 0.10 · 2.6 m · at [0.9, 0.2, 2.3] |
-| `rearWing` | rear wing / wingCarbon | wingRear · az 0.72π · el 0.30 · 2.8 m · at [0, 1.0, -2.4] |
-| `wallCrest` | the wall lightbox mark | front · az 0.32π · el 0.28 · 9.4 m · at wall · lamp off |
-| `floorNose` | the floor-level nose recipe above | wingFront · az 0 · el 0.04 · 3.5 m · at [0, -0.15, 2.2] |
-| `fwLow` / `fwSide` / `noseTip` | front-wing / nose close-ups (`--preset=closeup`) | wingFront · unique az · ~2 m · clamp off |
-| `rwRear` / `rwSide` / `rwTop` | rear-wing gap / top | wingRear · unique az · ~2 m · clamp off |
-| `podInlet` / `podFloor` | sidepod inlet + floor edge | side · unique az · ~2.4 m · clamp off |
-| `wheelF` / `wheelR` | front / rear wheel (cover, rim) | side · unique az · 1.7 m · clamp off |
-| `haloBehind` / `mirror` / `cover` | halo+headrest, mirror, engine-cover mark | rear/front · unique az · ~2 m · clamp off |
+Each station's exact bundle (view, az, el, dist, target, lamp, clamp): `--list-cameras` (`STATIONS` in
+`tools/shot/lib/garage-camera-catalog.mjs`).
 
-**`--preset=closeup`** shoots the fourteen close-up stations, including `endplate`, with no shared `--az` product. Multi-team runs also write `<team>-sheet.png`.
+| station | frames |
+|---|---|
+| `spineTop` | crown / SPINE TOP, top-down nose-up (the chase camera's read) |
+| `spineSide` | flank / SPINE SIDE at shoulder height |
+| `finBadge` | fin badge + handoff |
+| `sidepod` | sidepod flash, stripe, finish |
+| `noseFlash` | nose flash, DETAIL keyline |
+| `endplate` | front-wing endplate |
+| `rearWing` | rear wing / wingCarbon |
+| `wallCrest` | the wall lightbox mark |
+| `floorNose` | the floor-level nose recipe above |
+| `fwLow` / `fwSide` / `noseTip` | front-wing / nose close-ups (`--preset=closeup`) |
+| `rwRear` / `rwSide` / `rwTop` | rear-wing gap / top |
+| `podInlet` / `podFloor` | sidepod inlet + floor edge |
+| `wheelF` / `wheelR` | front / rear wheel (cover, rim) |
+| `haloBehind` / `mirror` / `cover` | halo+headrest, mirror, engine-cover mark |
+
+**`--preset=closeup`** shoots the close-up stations, including `endplate`, with no shared `--az` product. Multi-team runs also write `<team>-sheet.png`.
 
 **A design walk with no camera flag shoots its own stations.** `FIELD_STATIONS`
 maps every `Liveries.FIELDS` key to the station(s) that show it (`spineLogo →
@@ -203,8 +205,7 @@ reload → status → quit.
 | `{"reload":true}` | reload the page (the tree as it is now), reopen, re-apply team + paint |
 | `{"status":true}` / `{"quit":true}` | state · end |
 
-`--watch[=paths]` (default: `js/car/liverytex.js, liveries.js, car3d.js,
-js/data/teams.js, js/garage`) reloads on a source change: in a session it
+`--watch[=paths]` (default list: `WATCH_DEFAULT` in the tool) reloads on a source change: in a session it
 re-shoots the last camera and emits `{"event":"watch",…}`; in a batch run it
 re-walks the matrix and re-runs the sheets and pairs. That is the tightest
 loop for painter work: edit → ~10 s → a new frame.
@@ -242,7 +243,7 @@ clock. Failed captures restore the caller's rendering state.
 
 | flag | meaning |
 |---|---|
-| `--out=dir` | PNGs (default `artifacts/garage-angles`) |
+| `--out=dir` | PNGs (under `artifacts/`; default in `--help`) |
 | `--name='{team}-{tag}-{cam}'` | file-name template; tokens `{team} {tag} {cam} {view} {vp} {dpr} {i} {az} {el} {dist}` |
 | `--label=0` / `--sheet=0` / `--cols=N` / `--cell=px` | caption bars, contact sheets, columns and cell width. `--fast` defaults both to `0`; pass `--sheet=1` with it to keep the sheets |
 | `design-pairs.png` / `diff/` / `flat-sheet.png` / `path-strip.png` | the comparison and dolly outputs above |

@@ -9694,6 +9694,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/skill-progressive.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -9770,6 +9771,7 @@
         "tests/unit/night-washout-presets.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/skill-progressive.test.mjs",
         "tests/unit/validation-cli.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ]

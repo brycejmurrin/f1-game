@@ -2,7 +2,7 @@
 
 Claude Code auto memory for this repo: one line per memory linking its topic
 file, detail in the topic file. User preferences and corrections only — a
-measured lesson belongs in `docs/notes/` (with a `Re-measure-by:` line), a rule
+measured fact belongs in the doc that uses it or a `docs/notes/` note with a `Re-measure-by:` line, a rule
 in a hook or test, a decision in `docs/DECISIONS.md` (`D-NNN`). Coordination
 rules live in AGENTS.md §Coordination; do not restate them here. The tracked
 copy is the only store: `session-start.sh` restores it into the live memory dir

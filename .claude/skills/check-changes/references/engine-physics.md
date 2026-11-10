@@ -9,8 +9,7 @@ any left unrun as not-run in the PR.
    consts/game.js edit lists many; a single physics file fewer — read the plan, not this page).
 2. The one spec: `tests/specs/physics-characterization.spec.js` is the master gate near game.js; for another
    file `node tools/ci/select-specs.mjs --since origin/claude/f1-game-project-26h3ng` names it. It runs on the
-   PR's selected shard; locally only on Bryce's explicit grant, as a background `node tools/ci/test-bg.mjs --spec
-   <file>` (AGENTS.md rules 4-5).
+   PR's selected shard, never locally (AGENTS.md rule 5).
 3. The plan's groups: the two most specific on the pushed branch via `remote-group.mjs`, the rest named not-run.
 4. Static checks that belong with this change:
    - `node tools/check/ratchets.mjs` — game.js growth over the ratchet (the commit hook's absorb: `.claude/rules/game-code.md`).

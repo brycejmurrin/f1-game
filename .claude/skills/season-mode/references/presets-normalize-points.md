@@ -32,7 +32,7 @@ Tests: `2026 REAL: every round is a shipped circuit…` and `presets slice the c
 
 ## Points tables and standings
 
-`pointsTable()`: `CLASSIC_POINTS` (1991-2002) when `fmtActive()` and `points === "classic"`, else
+`pointsTable()`: `CLASSIC_POINTS` when `fmtActive()` and `points === "classic"`, else
 `Teams.POINTS`; `payTable()` scales short races (`SHORT_POINTS`). Standings use `netPts(season, id)`:
 with `drop`, only the best `trackIds.length − drop` rounds count (test `DROP WORST 2 ranks on the best
 rounds…`). Sprint scoring: see SKILL.md References.
