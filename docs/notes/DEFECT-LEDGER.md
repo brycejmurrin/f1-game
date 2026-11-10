@@ -912,8 +912,8 @@ half a lap away, four circuits emitted-then-culled up to 295 backdrops per
 build. `api.K` and `api.lapBounds()` replace 37 local `K` helpers and 30
 centroid loops; `bakedModels` left the contract (112 members). Estoril and
 Indianapolis carried wrong `lengthKm`. Madrid's was NOT fixed then (5.47 still
-derived 56 laps, not the 57 it races); fixed 2026-11-10: `lengthKm` 5.416 and an
-authored `gpLaps: 57`.
+derived 56 laps, not the 57 it races); fixed 2026-11-10: an authored `gpLaps: 57`
+(`lengthKm` stays 5.47 until a voice re-bake: the announcer reads it aloud).
 
 *UI / PWA / data / storage.* The service worker returned a browser error page
 for any navigation that lost a 3 s race while online; a primitive ghost blob

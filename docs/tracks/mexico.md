@@ -66,7 +66,7 @@ Peraltada line survives as real **banking** into the final corners (6° at
   **Park-first**: dense Mixhuca `forestEdge` on the DRS/mid-lap; push/thin
   `cityFront` so CDMX sprawl sits as backdrop, not street canyon.
 - Scatter **festive accents**: pink/orange/green banner and flag boxes on stands and
-  fences for the fiesta atmosphere; Mexico City GP billboards at Foro entry/exit.
+  fences for the fiesta atmosphere; Mexican GP billboards at Foro entry/exit.
 - Pit/paddock: white hospitality suites with green/white/red fascia behind the
   engine pit complex (not grey/orange placeholder boxes).
 - Brick/terracotta pavilion variety on the Mixhuca sports-city arcs.
@@ -87,7 +87,7 @@ road-normal anchors 17° off and in swapped order until 2026-10-10.
 
 **DETAIL 2026-10-05:** closed Foro Sol terrace/bowl backs, seated portals +
 scoreboard masts, midfield plaza/lawn/service roads, brick pavilion variety,
-Mexico City GP signage/crowd, and paddock suite identity.
+Mexican GP signage/crowd, and paddock suite identity.
 
 Note for a future pass: *cactus would be wrong here.* The Autódromo Hermanos
 Rodríguez is inside the urban Magdalena Mixhuca sports park at 2,240 m, not in

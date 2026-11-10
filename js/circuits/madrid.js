@@ -12,10 +12,12 @@
     street: false,
     reverse: false,
     sceneryCoordinates: "racing",
-    // formula1.com circuit guide: 5.416 km, 57 laps (the 2026 race ran 57).
-    // 5.47 was a pre-homologation figure and derived 56 laps. The OSM trace
-    // builds 5.343 km.
-    lengthKm: 5.416,
+    // 5.47 is the pre-homologation figure; formula1.com's circuit guide gives
+    // 5.416 km and the 2026 race ran 57 laps. 5.47 stays because the announcer
+    // reads lengthKm aloud and every baked voice pack has "5.470 kilometres"
+    // (tests/unit/voice-pack.test.mjs); change it with a voice re-bake. Alone
+    // it derived 56 laps, so the race distance is authored. OSM builds 5.343 km.
+    lengthKm: 5.47,
     gpLaps: 57,
     tyreSeverity: 1.18,  // New 2026 Madring asphalt; street-circuit band 1.1–1.25 (no measured Chronicle rate yet)
     baseHW: 7,
