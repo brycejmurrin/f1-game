@@ -286,7 +286,7 @@ test("REPEAT CONTROL REMINDERS re-arms brake, overtake and aero only, keeps the 
   run();
   step(vet.on, 30);
   assert.equal(vet.said.length, 1, "the brake reminder shows again");
-  assert.match(vet.said[0][0], /^BRAKE/);
+  assert.equal(vet.said[0][0].split(" — ")[0], "BRAKE", "…the brake one");
   run(); run();
   assert.equal(vet.on.state().done, true, "two more races and the window closes again");
   assert.equal(vet.stored.get("onboardRaces") > 3, true, "the count kept counting from where it was");

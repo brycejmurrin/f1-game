@@ -1365,8 +1365,8 @@ test("an accepted card is never taken back: announce() true means the card plays
   offer("hit 1", "penalty-hit");                         // used to pop "warn B" (already told true)
   r.step(0.1, 400);
   const said = r.said.map((x) => x.msg);
-  for (const msg of accepted) assert.ok(said.includes(msg), `accepted "${msg}" was played (${JSON.stringify(said)})`);
-  assert.ok(!accepted.includes("hit 1"), "the newcomer to a full queue is refused, not swapped in");
+  assert.deepEqual(accepted, ["warn A", "warn B", "box 1", "box 2", "box 3"], "the newcomer to a full queue is refused, not swapped in");
+  assert.deepEqual(accepted.filter((m) => !said.includes(m)), [], `every accepted card was played (${JSON.stringify(said)})`);
 });
 
 function loadEngineer() {

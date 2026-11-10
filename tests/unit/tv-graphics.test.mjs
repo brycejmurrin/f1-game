@@ -45,7 +45,7 @@ test("a real Broadcast hands TvGraphics the fastest-lap holder: the banner shows
   assert.equal(banner().hidden, true, "before the fastest lap is set: no banner");
   bc.tick(0.3, st(60));
   assert.equal(banner().hidden, false, "script.fastest reached: the banner is up");
-  assert.match(banner().textContent, /FASTEST LAP\s+·\s+NOR/);
+  assert.equal(banner().textContent, "FASTEST LAP  ·  NOR");
   bc.stop();
 });
 
