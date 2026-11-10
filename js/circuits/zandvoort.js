@@ -7,13 +7,16 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zandvoort",
-    // Pits on the driver's RIGHT of the main straight (side +1): FIA 2026
-    // Dutch GP "Circuit Map, Pit Lane Drawing and Emergency Exits Map" — the
-    // pit-lane drawing (p.3) has the garages on the right of the lane, entry
-    // off T14 and exit into T1, and the circuit map (p.2) draws the pit lane on
-    // the infield (T2/T3) side of the straight. verge 4: the exit wall
-    // otherwise clips Tarzan's widened road envelope at 3.5% lap.
-    pit: { side: 1, bands: { verge: 4 } },
+    // PIT SIDE IS WRONG HERE AND KNOWN (W12, 2026-11-10): the FIA 2026 Dutch
+    // GP "Circuit Map, Pit Lane Drawing and Emergency Exits Map" puts the
+    // garages on the driver's RIGHT (pit-lane drawing p.3: entry off T14, exit
+    // into T1; map p.2: lane on the infield T2/T3 side). The flip to +1 was
+    // built and reverted: on the +1 dune the engine pit complex's apron strips
+    // sit under the terrain (ground-audit buried 2 -> 6) at every verge that
+    // keeps the coplanar baseline. Needs pit-apron terrain flattening (engine)
+    // with the mirrored scenery. verge 4: the exit wall otherwise clips
+    // Tarzan's widened road envelope at 3.5% lap.
+    pit: { side: -1, bands: { verge: 4 } },
     classic: true,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.4 m off centreline; = trace vertex 0 (timing line).

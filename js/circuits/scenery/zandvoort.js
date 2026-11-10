@@ -222,15 +222,12 @@
           hedge(s, Math.min(s + step * 0.88, s1), side, gJ, hJ, col);
         }
       };
-      // Starts at 0.11, not 0.10: with the pit complex on +1 (2026-11-10) its
-      // first chunks sat on the flattened pit apron and two came out coplanar
-      // (coplanar-audit, 0.2 mm / 4 m2).
-      marramHedge(0.11, 0.22, 1,  26, 1.6, marramT);
+      marramHedge(0.10, 0.22, 1,  26, 1.6, marramT);
       marramHedge(0.22, 0.55, 1,  32, 1.1, marramT);   // mid-lap thin
       marramHedge(0.20, 0.58, -1, 28, 1.1, marramG);   // mid-lap thin
       marramHedge(0.55, 0.85, 1,  26, 1.5, marramG);
-      marramHedge(0.65, 0.95, -1, 22, 1.5, marramT);   // stops short of the 0.96/0.97 main-straight stands
-      marramHedge(0.80, 0.92, 1,  28, 1.4, marramG);   // stops at the pit entry split (0.922, pit side +1)
+      marramHedge(0.65, 0.98, -1, 22, 1.5, marramT);
+      marramHedge(0.80, 0.95, 1,  28, 1.4, marramG);
 
       // The orange campsites (modelGroup below, 25 x 34 m at 44 m out) are
       // reached by the verge bushes of the stretch the lap brings past them:
@@ -320,39 +317,30 @@
         });
       };
 
-      // PIT = +1 (def pit.side, FIA 2026 pit-lane drawing: garages on the
-      // driver's right). The engine builds the pit complex on PIT over lap
-      // 0.922-0.047; every main-straight stand faces it from STAND = -PIT.
-      const PIT = 1, STAND = -PIT;
-      grandstandEx(0.01,  STAND, 16, 36, null, orange,
-        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // main straight, opposite the pits (largest, permanent grandstand)
+      grandstandEx(0.01,  1,  16, 36, null, orange,
+        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // main pit straight R (largest, permanent grandstand)
       duneDeck("zandvoort-deck-tarzan", 0.05, 1, 14, 5,
         { rows: 7, fascia: [0.96, 0.42, 0.02] });   // Tarzan hairpin R
       grandstandEx(0.09, -1,  14, 26, null, orange,
         { livery: "orange", roof: "flat" }); // Tarzan exit L
-      // Hugenholtz's outside (+1) at 0.190-0.207 lies 44-65 m from the main
-      // straight, on its PIT side: the engine's garage row (keep 32 m) fills it
-      // and rejected this stand at 0.205. 0.221 is the same outside rim on the
-      // exit, 118 m from the straight.
-      const HUG_S = 0.221;
-      grandstandEx(HUG_S, 1,   26, 38, null, orange,
+      grandstandEx(0.205, 1,   26, 38, null, orange,
         { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true }); // Hugenholtz banked outside (+1)
       duneDeck("zandvoort-deck-hugenholtz", 0.236, 1, 16, 5,
         { rows: 6, fascia: [0.92, 0.90, 0.86] });   // Hugenholtz exit R
       grandstandEx(0.48, -1,  28, 34, null, orange,
-        { livery: "orange", roof: "truss" }); // T8 approach L (gap was 28 in previous pass)
+        { livery: "orange", roof: "truss" }); // Scheivlak approach L (gap was 28 in previous pass)
       grandstandEx(0.53,  1,  18, 28, null, orange,
         { livery: "alu", roof: "none", endWalls: true });
       grandstandEx(0.588, 1,  14, 42, null, orange,
-        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true, pylons: true }); // T10 left hairpin outside (+1)
+        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true, pylons: true }); // T9 Mastersbocht outside (+1)
       grandstandEx(0.865, 1,  42, 36, null, orange,
         { livery: "alu", roof: "none" }); // Luyendyk approach R (gap 36→42: banked corner clearance) — uncovered temporary bleacher
       grandstandEx(0.915, 1,  28, 80, null, orange,
         { livery: "orange", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // Arie Luyendyk banked R (massive) (gap 22→28: VERY banked, roof overhang)
-      grandstandEx(0.96,  STAND, 28, 32, null, orange,
+      grandstandEx(0.96,  1,  28, 32, null, orange,
         { livery: "scaffold", roof: "flat", pylons: true }); // (gap 22→28: post-banked transition)
-      duneDeck("zandvoort-deck-pitstraight", 0.97, STAND, 22, 5,
-        { rows: 6, fascia: [0.16, 0.20, 0.34] });   // main straight, opposite the pits
+      duneDeck("zandvoort-deck-pitstraight", 0.97, -1, 22, 5,
+        { rows: 6, fascia: [0.16, 0.20, 0.34] });   // pit straight L
 
       bowlSeatWall(0.405, 0.445, -1, 22, {
         h: 5.5, thick: 2.2, shell: sandDk, step: 9,
@@ -367,11 +355,11 @@
       bowlSeatWall(0.692, 0.732, -1, 24, {
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
-      });   // Arena-In approach / T11 R outside
+      });   // Arena-In approach / T10 R outside
       bowlSeatWall(0.742, 0.778, 1, 24, {
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
-      });   // T12 L outside through Arena exit kink
+      });   // T11 L outside through Arena exit kink
 
       for (const [idx, s, dist] of [[0, 0.34, 112], [1, 0.675, 118]]) {
         const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
@@ -674,9 +662,9 @@
 
       runoffApron(K(0.040),  1, 4.5, [16, 0.32, 28], gravel);  // Tarzan outer
       runoffApron(K(0.055), -1, 5.0, [14, 0.32, 22], gravel);  // Tarzan exit
-      runoffApron(K(0.490), -1, 5.0, [18, 0.32, 30], gravel);  // T8 approach
-      runoffApron(K(0.520),  1, 5.5, [16, 0.32, 28], gravel);  // T8-T9 outer
-      runoffApron(K(0.535), -1, 5.0, [14, 0.32, 24], gravel);  // T9 exit
+      runoffApron(K(0.490), -1, 5.0, [18, 0.32, 30], gravel);  // Scheivlak approach
+      runoffApron(K(0.520),  1, 5.5, [16, 0.32, 28], gravel);  // Scheivlak outer
+      runoffApron(K(0.535), -1, 5.0, [14, 0.32, 24], gravel);  // Scheivlak exit
 
       bankedKerbStrip(0.190, 0.230, -1, { saferGap: 7.2, kerbRed, kerbWht, saferCol });
       bankedKerbStrip(0.194, 0.225,  1, { safer: false, kerbRed, kerbWht });
@@ -684,20 +672,18 @@
       bankedKerbStrip(0.890, 0.950, -1, { safer: false, kerbRed, kerbWht });
 
       // Catch / debris fencing in front of grandstands
-      // Main-straight catch fence on the STAND side; the PIT side is the
-      // engine's pit wall until the exit road closes at 0.047.
-      fence(0.05, 0.10, PIT,  8.0, 4.2, fenceCol);
-      fence(0.00, 0.09, STAND, 8.0, 4.2, fenceCol);
+      fence(0.00, 0.10, 1,  8.0, 4.2, fenceCol);
+      fence(0.04, 0.09, -1, 8.0, 4.2, fenceCol);
       fence(0.19, 0.23, 1,  8.0, 4.2, fenceCol);   // Hugenholtz outer-rim GA fence
       fence(0.48, 0.54, -1, 9.0, 4.0, fenceCol);
-      fence(0.86, 0.92, PIT,  8.0, 4.4, fenceCol);   // ends where the pit entry road splits (0.922)
-      fence(0.94, 1.00, STAND, 8.0, 4.2, fenceCol);
-      recordBarrier(0.05, 0.10, PIT, 8.0);
-      recordBarrier(0.00, 0.09, STAND, 8.0);
+      fence(0.86, 0.99, 1,  8.0, 4.4, fenceCol);
+      fence(0.94, 1.00, -1, 8.0, 4.2, fenceCol);
+      recordBarrier(0.00, 0.10, 1, 8.0);
+      recordBarrier(0.04, 0.09, -1, 8.0);
       recordBarrier(0.19, 0.23, 1, 8.0);
       recordBarrier(0.48, 0.54, -1, 9.0);
-      recordBarrier(0.86, 0.92, PIT, 8.0);
-      recordBarrier(0.94, 1.00, STAND, 8.0);
+      recordBarrier(0.86, 0.99, 1, 8.0);
+      recordBarrier(0.94, 1.00, -1, 8.0);
 
       // Steel armco guardrail on fast dune stretches
       guardrail(0.235, 0.33, 1,  5.0, railRW);
@@ -707,11 +693,11 @@
       guardrail(0.68, 0.80, 1,  5.0, [0.85, 0.86, 0.88]);
       guardrail(0.80, 0.86, -1, 5.0, railRW);
 
-      // Tyre walls at corner exits (Tarzan, Hugenholtz, T8-T9, Luyendyk)
-      tyreWall(0.048, 0.065, PIT, 4.6, [0.88, 0.42, 0.06]);   // starts past the pit exit road (closes 0.047)
+      // Tyre walls at corner exits (Tarzan, Hugenholtz, Scheivlak, Luyendyk)
+      tyreWall(0.025, 0.065, 1,  4.6, [0.88, 0.42, 0.06]);
       tyreWall(0.192, 0.228, -1, 4.8, [0.30, 0.30, 0.32]);
       tyreWall(0.48,  0.54,  -1, 5.2, [0.18, 0.40, 0.65]);
-      tyreWall(0.90,  0.92,  PIT, 5.0, [0.86, 0.38, 0.04]);
+      tyreWall(0.90,  0.96,  1,  5.0, [0.86, 0.38, 0.04]);
 
       // Billboards / advertising hoardings
       const adCols = [[0.90, 0.20, 0.10], [0.10, 0.45, 0.75], [0.95, 0.55, 0.08],
@@ -736,7 +722,7 @@
       gantry(0.005, 7.5, [0.12, 0.13, 0.16]);
       gantry(0.99,  6.5, [0.14, 0.14, 0.18]);
 
-      for (const [s, side, buntDist] of [[0.01, STAND, 16], [HUG_S, 1, 26], [0.915, 1, 28], [0.588, 1, 14]]) {
+      for (const [s, side, buntDist] of [[0.01, 1, 16], [0.205, 1, 26], [0.915, 1, 28], [0.588, 1, 14]]) {
         const a = anchor(K(s), side, buntDist);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         const b = [a.r, a.u, a.t];
@@ -777,7 +763,7 @@
       }
 
       // (Removed 2026-10-18) A circuit-side roof-fascia strip + spot row used to
-      // hang at a fixed 13.5 / 13.03 m on anchor(gap+5) under the 0.01, 0.205 (now 0.221),
+      // hang at a fixed 13.5 / 13.03 m on anchor(gap+5) under the 0.01, 0.205,
       // 0.588 and 0.915 stands. All four are `tiers: 2`: grandstandEx lifts the
       // roof to 13 + topLift (the built upper rake, js/track/scenery/nature.js
       // roofY), so those strips sat INSIDE the upper seat rake. The engine owns

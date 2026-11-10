@@ -163,7 +163,7 @@
         building(k, 1, 42, 52, 22, 30, { kind: "dome", wall: SAND, window: WIN_WARM, floor: 4.5, lit: true });
         // Decorative base plinth (uplit, slightly wider than body, very low)
         const aBase = anchor(k, 1, 68);
-        addBox(out, vadd(aBase.c, aBase.u, 1.5), [58, 3, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);
+        addBox(out, vadd(aBase.c, aBase.u, 1.1), [58, 3.0, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);   // sunk 0.4 m (top 2.6 m): its faces shared the palace body's planes (ground-audit flatCoplanar)
 
         for (const tOff of [-20, 20]) {
           const aTow = anchor(k, 1, 75);
