@@ -77,7 +77,7 @@
     // yet one-per-real-corner),
     // 10 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
-    sectors: [0.36, 0.613],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
+    sectors: [0.36, 0.632],  // ~1/3 and ~2/3 on a straight; S2 re-snapped 0.613 -> 0.632 when the line moved (2026-11-10) — not FIA-published splits
     turns: [0.0873, 0.1725, 0.3059, 0.4544, 0.6018, 0.6189, 0.6630, 0.7743, 0.9198, 0.9328],
     furniture: { tree: "fir", fol: [0.15, 0.31, 0.19], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
