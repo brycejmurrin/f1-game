@@ -2147,7 +2147,7 @@ test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT c
   await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
   assert.equal(h.ctl.state().phase, "confirming");
   assert.equal(c.asks.length, 1); assert.equal(h.ui.linkedN, 0, "not linked before the player says so");
-  assert.match(h.ui.said.at(-1), /ALLOW/);
+  assert.equal(h.ui.said.at(-1), "A phone connected — tap ALLOW on this screen to let it steer, or REJECT.");
   assert.equal(h.room.stopped, 1, "one phone per room: the room closes while it asks");
   h.clock.t = 100;
   h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 25, held: 0 }));
@@ -2169,7 +2169,7 @@ test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT c
   r.asks[0].answer(false); await settle();
   assert.equal(no.ctl.state().phase, "lost"); assert.equal(no.ui.lostN, 1);
   assert.equal(no.hostEnd.status, "closed", "a rejected phone's transport is closed");
-  assert.match(no.ui.said.at(-1), /^!Phone rejected/);
+  assert.equal(no.ui.said.at(-1), "!Phone rejected — press STEER THIS GAME WITH A PHONE for a new code.");   // "!" = say(…, bad)
   assert.equal(no.ui.linkedN, 0);
 
   const d = handConfirm();
