@@ -47,7 +47,7 @@ test("1. kills by name are refused in every shell spelling; listing processes an
     allowed(cmd);
 });
 
-test("1b. a kill of a Chromium pid is refused unless that kill carries APEX_KILL_OK=1", { skip: !fs.existsSync("/proc/self/comm") }, async () => {
+test("1b. a kill of a Chromium pid is refused unless that kill carries APEX_KILL_OK=1", { skip: !fs.existsSync("/proc/self/comm") && "needs Linux /proc to give a process a chrome comm" }, async () => {
   // A process whose /proc/<pid>/comm reads `chrome`: comm is the executable's name, so run a copy of sleep called chrome.
   const bin = fs.mkdtempSync(path.join(ROOT, "artifacts", "chrome-comm-"));
   fs.copyFileSync(spawnSync("bash", ["-c", "command -v sleep"], { encoding: "utf8" }).stdout.trim(), path.join(bin, "chrome"));
