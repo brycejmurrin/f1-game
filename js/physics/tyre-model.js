@@ -883,23 +883,8 @@ const TyreModel = (function () {
     // Integrate one physics tick. Distance-based, not time-based: wear reaches
     // 1.0 after `lifeLaps` laps at load 1.0, which is what makes the constant
     // above mean what its name says regardless of pace, PACE or lap time.
-    // WEAR OFF, AND THE WEATHER TURNS (a CHANGEABLE race): there is still no pit
-    // lane, so the set the lights fitted (sessionStartRecord) is the wrong one for
-    // the rest of the race — measured, silverstone dry→rain: the player at 0.72
-    // grip against a field at 0.97 (its `tread: null` sentinel follows the sky).
-    // A car on its own garage slick is kept on the weather's tread the same way;
-    // it goes back to that slick when the road dries. A treaded set of their own
-    // stays theirs, as at the lights.
-    function followWeather(c) {
-      if (!c || !c.tyreOpt || c.tread == null || c.retired || c.finished || c.tyreOpt.wetTread > 0) return;
-      const want = treadFor(G.raceWeather, G.trackWetness ? G.trackWetness() : undefined);
-      if (want === c.tread) return;
-      fit(c, want > 0 ? classRecord(classForTread(want)) : optionRecord(c.tyreOpt));
-    }
-
     function update(c, dt) {
-      if (!on()) { followWeather(c); return; }
-      if (!c || c.retired || c.finished) return;
+      if (!on() || !c || c.retired || c.finished) return;
       const track = G.track;
       if (!track || !(track.total > 0) || !(dt > 0)) return;
       if (!c.tyre) fit(c, classRecord("medium"));
