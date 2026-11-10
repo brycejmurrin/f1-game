@@ -18,13 +18,10 @@
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { gameSource } from "../helpers/game-source.mjs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 let g = null;
@@ -94,7 +91,7 @@ test("#4 BOOST pressed on a flat battery does not latch on", async () => {
 // TyreModel is frozen, so the read cannot be intercepted in the VM: pin the source.
 // Every per-car surface read in game.js passes the car's x (the drying line is lateral).
 test("#6 aquaplaning reads the surface under the car at its x, as grip does", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const src = gameSource();
   const calls = [...src.matchAll(/wxArc\.wetnessAt\(([^()]*)\)/g)].map((m) => m[1].replace(/\s+/g, ""));
   assert.ok(calls.length >= 2, `found ${calls.length} wetnessAt reads — the pattern looks broken`);
   assert.deepEqual([...new Set(calls)], ["c.s,c.x"], "a per-car wetnessAt read without the car's x: " + calls.join(" | "));
@@ -114,11 +111,11 @@ test("#10 a tyre-wear level changed after boot survives a quit to the menu", asy
 // The code survey's two flow items (W2 follow-up). Neither is observable in the
 // VM — audio is silent there and gfx has no warm to await — so pin the source.
 test("survey: update() returns after a natural-flag endRace (no engine / brake-cue / rival audio over the results)", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const src = gameSource();
   assert.match(src, /RaceCeremony\.want\(true\); endRace\(\); return; \}/, "update() must return after endRace()");
 });
 test("survey: loadTrackStepped re-checks live() after the warm await, before it frees the world", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const src = gameSource();
   const i = src.indexOf("await gfx.warmSettled();"), j = src.indexOf("dropTrackWorld();", i);
   assert.ok(i > 0 && j > i, "the warm await and the free must both be there");
   assert.match(src.slice(i, j), /if \(!live\(\)\) return false;/, "a superseded build must not free the world a newer selection wants");
