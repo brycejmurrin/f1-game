@@ -1129,3 +1129,76 @@ seeds a new career save's `owned` + `fitted` build via `Parts.getFactorySetup`
 garage, not this table.
 
 ---
+
+## Design notes
+
+Moved verbatim from code comments in `js/career/career.js` (2026-11-10) to keep the boot wall inside its byte budget.
+
+### Winter driver development (`career.js`, above `CRAFT_DEV`)
+
+```text
+One winter of driver development. Three additive terms, each saying something
+different, because a single "form" number produces a grid that only ever sorts
+itself into the order it already had:
+
+GROWTH  where a driver is in their arc. `experience` is the age proxy — a
+30-rated rookie gains ~+2.7 a year, a 100-rated veteran loses 1.5.
+FORM    did the season beat what the CAR should have done. Bounded ±3, so a
+great year in a bad car is worth more than a title in the best one.
+NOISE   development is not a formula. ±2, from the stateless career hash.
+
+THE PLAYER'S `craft` AXIS IS THE ONE EXCEPTION, and it is the whole point of
+measuring race craft. For an AI seat every axis has to be inferred from the
+result, because there is nothing else to go on. For the player there IS: a
+season of settled rounds that recorded how each one was driven. Taking their
+craft drift from that instead of from half their pace drift is what closes
+the loop — drive cleanly and the rating that feeds the silly season
+(`overall()` ranks the grid with it) and a simulated round's race-day swing
+moves with the driving, not with a dice roll. Same ±3 bound as FORM, so it
+is a season's worth of evidence weighted like a season's worth of results.
+
+Stored as per-axis deltas over the shipped DriverRatings table, never absolutes,
+so updating the real 2026 ratings never invalidates a save.
+```
+
+### The contract rival (`career.js`, above `rivalSeatFor`)
+
+```text
+WHO THE RIVAL IS. Ranked by the rating the grid already races on, so the
+benchmark is a driver you are actually close to rather than a random seat:
+a backmarker is no promise and the championship leader is not a contract, it
+is a wish. Your own garage is excluded — that is beatMate's job, and a
+contract that quietly duplicated it would read as two goals and settle as one.
+"Your own garage" is the garage the contract is FOR — the OFFERED team — and the
+player is rated at that team's tier: a move offer used to name a rival from the
+pool of the team being LEFT, then sign a different one (and often the new
+team-mate) once career.team had moved.
+
+AMBITION MOVES THE RIVAL, not a threshold. champPos shifts its target position
+by AMBITION.delta; here the same delta walks the ranked list, so ambitious
+(-3) names someone three places quicker and modest (+3) someone three slower.
+One lever, no second balance number invented for this kind.
+```
+
+### Ambition (`career.js`, above `AMBITION`)
+
+```text
+THE PROMISE YOU MAKE WHEN YOU SIGN. Without it a contract's season goal is
+one number the game chooses for you — expectedFinish(team) — and the only
+lever on a career that feels too easy or too hard is the AI difficulty race
+setting, which is per-race and blunt. Ambition is the same dial taken from the other
+end: you tell the team where you will finish, and the paddock prices it.
+
+THE MIDDLE RUNG IS THE LEGACY CONTRACT — delta 0, rep 5, mv 12, the legacy
+GOAL_REP/GOAL_MV exactly — so a deal signed before this existed
+carries no `ambition`, reads as index 1 through ambIdx(), and resolves
+byte-identically. That is why this table is ordered and indexed rather than
+keyed, and why no CAREER_V rung is owed for the new field.
+
+PAID IN REPUTATION, NOT CREDITS, and deliberately. The settlement comment in
+rollover() says a per-season cash bonus would go stale against
+tools/car/career-economy.mjs and every figure in docs/CAREER.md. Reputation
+and market value are the better currency anyway: they are what decides which
+seats offerBar() opens next winter, so promising more buys a better car
+sooner, and missing costs you rungs on the ladder the hub shows all season.
+```
