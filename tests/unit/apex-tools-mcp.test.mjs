@@ -1361,6 +1361,9 @@ test("runSpawn never blocks, and a cancel or timeout kills the child's process g
   assert.equal(fine.stdout, "note");
 });
 
+/** A job id in the exact shape jobStart mints (<kind>-<base36>-<pid>-<12 hex>); anything else is refused. */
+const jid = (kind, n) => `${kind}-t${n}-1-${String(n).padStart(12, "0")}`;
+
 test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad input", () => {
   const body = (r) => JSON.parse(r.stdout);
   const ok = (name, args, re) => {
@@ -1390,8 +1393,10 @@ test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad
   bad("apex_job_start", { kind: "rm_rf" });
   bad("apex_job_start", { kind: "ui_gallery", screens: "--write" });
   bad("apex_job_start", { kind: "survey_track", track: "nope" });
-  bad("apex_job_status", { jobId: "missing" }, "unknown_job");
-  bad("apex_job_cancel", { jobId: "missing" }, "unknown_job");
+  bad("apex_job_status", { jobId: "missing" });   // not the shape jobStart mints
+  bad("apex_job_cancel", { jobId: "../missing" });
+  bad("apex_job_status", { jobId: jid("float_all", 404) }, "unknown_job");
+  bad("apex_job_cancel", { jobId: jid("float_all", 404) }, "unknown_job");
   ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--json","--scale=130/);
   bad("apex_ui_fit", { screen: "--all" });
   bad("apex_ui_fit", { screen: "settings", scale: 500 });
@@ -1761,19 +1766,19 @@ test("apex_job_status {} is bounded: newest first, limit, state filter, total", 
     const dir = path.join(fake, "artifacts/logs/apex-jobs");
     fs.mkdirSync(dir, { recursive: true });
     for (let i = 1; i <= 5; i++) {
-      fs.writeFileSync(path.join(dir, `float_all-t${i}.json`), JSON.stringify({ id: `float_all-t${i}`, kind: "float_all", state: i % 2 ? "done" : "failed", exit: i % 2 ? 0 : 1,
-        started: 1000 * i, ended: Date.now() - 5, argv: [], log: `artifacts/logs/apex-jobs/float_all-t${i}.log`, stderr: "" }));   // recent: older than 7 days is pruned
+      fs.writeFileSync(path.join(dir, `${jid("float_all", i)}.json`), JSON.stringify({ id: jid("float_all", i), kind: "float_all", state: i % 2 ? "done" : "failed", exit: i % 2 ? 0 : 1,
+        started: 1000 * i, ended: Date.now() - 5, argv: [], log: `artifacts/logs/apex-jobs/${jid("float_all", i)}.log`, stderr: "" }));   // recent: older than 7 days is pruned
     }
     const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
     const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
       occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
     const list = (a) => JSON.parse(x.handlers.apex_job_status(a).content[0].text);
     const two = list({ limit: 2 });
-    assert.deepEqual(two.jobs.map((j) => j.jobId), ["float_all-t5", "float_all-t4"], "newest first");
+    assert.deepEqual(two.jobs.map((j) => j.jobId), [jid("float_all", 5), jid("float_all", 4)], "newest first");
     assert.equal(two.total, 5);
     assert.match(two.hint, /3 older job\(s\) not shown/);
     const failed = list({ state: "failed" });
-    assert.deepEqual(failed.jobs.map((j) => j.jobId), ["float_all-t4", "float_all-t2"]);
+    assert.deepEqual(failed.jobs.map((j) => j.jobId), [jid("float_all", 4), jid("float_all", 2)]);
     assert.equal(failed.hint, undefined, "nothing hidden, no hint");
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
@@ -1787,7 +1792,10 @@ test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-
     const dir = path.join(fake, rel);
     fs.mkdirSync(dir, { recursive: true });
     const now = Date.now();
-    const mk = (id, state, ended, logText, exitText) => {
+    const ids = { "old-done": jid("float_all", 1), "old-failed": jid("float_all", 2), "stale-failed": jid("float_all", 3), "real-failed": jid("float_all", 4), "exit-failed": jid("float_all", 5) };
+    const names = Object.fromEntries(Object.entries(ids).map(([k, v]) => [v, k]));
+    const mk = (name, state, ended, logText, exitText) => {
+      const id = ids[name];
       fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: "float_all", state, exit: state === "done" ? 0 : 1, started: ended - 10, ended, argv: [], log: `${rel}/${id}.log`, stderr: `${rel}/${id}.err` }));
       fs.writeFileSync(path.join(dir, `${id}.log`), logText);
       fs.writeFileSync(path.join(dir, `${id}.err`), "");
@@ -1803,11 +1811,11 @@ test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-
     const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
       occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
     const res = JSON.parse(x.handlers.apex_job_status({}).content[0].text);
-    const state = Object.fromEntries(res.jobs.map((j) => [j.jobId, j.state]));
+    const state = Object.fromEntries(res.jobs.map((j) => [names[j.jobId], j.state]));
     assert.deepEqual(state, { "stale-failed": "done", "real-failed": "failed", "exit-failed": "failed" });
     assert.equal(res.total, 3);
-    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith("old-")), [], "json, log, err and exit of an expired job are all gone");
-    assert.ok(fs.existsSync(path.join(dir, "real-failed.log")), "recent jobs keep their files");
+    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith(ids["old-done"]) || f.startsWith(ids["old-failed"])), [], "json, log, err and exit of an expired job are all gone");
+    assert.ok(fs.existsSync(path.join(dir, `${ids["real-failed"]}.log`)), "recent jobs keep their files");
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
 
@@ -1851,7 +1859,7 @@ test("jobs_busy names the running jobs and the limit", async () => {
   try {
     const dir = path.join(fake, "artifacts/logs/apex-jobs");
     fs.mkdirSync(dir, { recursive: true });
-    for (const [id, kind] of [["hud_survey-a", "hud_survey"], ["frame_fleet-b", "frame_fleet"]]) {
+    for (const [id, kind] of [[jid("hud_survey", 1), "hud_survey"], [jid("frame_fleet", 2), "frame_fleet"]]) {
       fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind, state: "running", exit: null, pid: process.pid, started: Date.now() - 5000, argv: [], log: `artifacts/logs/apex-jobs/${id}.log`, stderr: "" }));
     }
     const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
@@ -1859,8 +1867,8 @@ test("jobs_busy names the running jobs and the limit", async () => {
       occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
     const r = JSON.parse(x.handlers.apex_job_start({ kind: "verify_all" }).content[0].text);
     assert.equal(r.error, "jobs_busy");
-    assert.match(r.message, /hud_survey-a \(hud_survey, \d+s\)/);
-    assert.match(r.message, /frame_fleet-b \(frame_fleet, \d+s\)/);
+    assert.match(r.message, /hud_survey-t1-1-000000000001 \(hud_survey, \d+s\)/);
+    assert.match(r.message, /frame_fleet-t2-1-000000000002 \(frame_fleet, \d+s\)/);
     assert.match(r.fix, /At most 2 run at once/);
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
@@ -1903,7 +1911,9 @@ test('custom survey collection flows through the location catalog and async job 
   const { design } = await import('../helpers/editor-vm.mjs');
   const { loadSurveyDesigns } = await import('../../tools/lib/custom-survey-locations.mjs');
   const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-custom-survey-')), file = path.join(dir, 'designs.json');
+  // designs is read only under artifacts/ or scratch/
+  fs.mkdirSync(path.join(ROOT, 'scratch'), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, 'scratch', 'mcp-custom-survey-')), file = path.join(dir, 'designs.json');
   try {
     fs.writeFileSync(file, JSON.stringify({ format: 'apex26.tracks', v: 1, items: [design({ props: [{ kind: 'pond', s: .25, side: 1, gap: 40 }] })] }));
     const custom = loadSurveyDesigns(file);
@@ -2641,11 +2651,11 @@ test("a running browser job on disk is occupancy even after its one-shot `call` 
     assert.equal(ex.runningBrowserJob(), null);
     const manifest = (id, browser) => fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: browser ? "hud_shot" : "verify_all",
       state: "running", pid: process.pid, browser, started: Date.now(), log: `artifacts/logs/apex-jobs/${id}.log` }));
-    manifest("verify_all-x-1", false);
+    manifest(jid("verify_all", 1), false);
     assert.equal(ex.runningBrowserJob(), null, "a node-only job is not browser occupancy");
-    manifest("hud_shot-x-2", true);
-    assert.deepEqual(ex.runningBrowserJob(), { id: "hud_shot-x-2", kind: "hud_shot", pid: process.pid });
-    fs.writeFileSync(path.join(dir, "hud_shot-x-2.exit"), "0");
+    manifest(jid("hud_shot", 2), true);
+    assert.deepEqual(ex.runningBrowserJob(), { id: jid("hud_shot", 2), kind: "hud_shot", pid: process.pid });
+    fs.writeFileSync(path.join(dir, `${jid("hud_shot", 2)}.exit`), "0");
     assert.equal(ex.runningBrowserJob(), null, "the job's recorded exit frees it");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
   const src = fs.readFileSync(MCP, "utf8");
@@ -2903,12 +2913,12 @@ test("MCP concurrency: failed spawns and stale reservations free slots; live unk
     assert.equal(body(ex.handlers.apex_job_status({ jobId: first.jobId })).state, "failed");
     const reserve = (id, owner) => fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: "parts_sweep", state: "starting", owner,
       started: Date.now(), log: `artifacts/logs/apex-jobs/${id}.log`, stderr: `artifacts/logs/apex-jobs/${id}.err` }));
-    reserve("dead", { pid: 2147483647, birth: capturedOwner.birth });
-    reserve("reused", { ...capturedOwner, birth: `${capturedOwner.birth}:different` });
-    reserve("unknown-live", { pid: process.pid });
+    reserve(jid("parts_sweep", 1), { pid: 2147483647, birth: capturedOwner.birth });
+    reserve(jid("parts_sweep", 2), { ...capturedOwner, birth: `${capturedOwner.birth}:different` });
+    reserve(jid("parts_sweep", 3), { pid: process.pid });
     const next = body(ex.handlers.apex_job_start({ kind: "parts_sweep" }));
     assert.equal(next.ok, true, JSON.stringify(next));
-    for (const id of ["dead", "reused"]) {
+    for (const id of [jid("parts_sweep", 1), jid("parts_sweep", 2)]) {
       const retired = JSON.parse(fs.readFileSync(path.join(dir, `${id}.json`), "utf8"));
       assert.equal(retired.state, "failed");
       assert.match(retired.exit, /owner exited/);

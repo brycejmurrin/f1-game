@@ -30,6 +30,7 @@ import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy
 import { aliveRun } from "../ci/test-bg.mjs";
 import { CLAUDE_CATALOG, createClaudeTools } from "./apex-claude-agents.mjs";
 import { runningEndpoint } from "./debug-chrome.mjs";
+import { lockPayload, readLock, reapStaleLock as reapLockFile, writeLock } from "./job-admission.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } from "./ui-tools.mjs";
 import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
@@ -245,25 +246,15 @@ function testBgStatus() {
   return { recorded: true, mode: state.mode, running, browserRunning, runs };
 }
 
+// The lock carries its holder's start time (tools/mcp/job-admission.mjs): a live PID with another start time is a
+// reused PID, so the lock is stale; reaping moves the file aside and checks it before removing it.
 function lockInfo() {
-  if (!fs.existsSync(LOCK_PATH)) return { held: false };
-  let raw;
-  try {
-    raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
-  } catch {
-    return { held: true, stale: false, error: "unreadable" };
-  }
-  if (!isObject(raw) || !Number.isInteger(Number(raw.pid)) || Number(raw.pid) <= 0) return { held: true, stale: false, error: "invalid owner" };
-  const pid = Number(raw.pid);
-  if (!alive(pid)) return { held: false, stale: true, pid };
-  return { held: true, pid, since: raw.since || null, tool: raw.tool || null };
+  const { text: _text, ...info } = readLock(LOCK_PATH);
+  return info;
 }
 
 function reapStaleLock() {
-  const info = lockInfo();
-  if (info.stale && fs.existsSync(LOCK_PATH)) {
-    try { fs.unlinkSync(LOCK_PATH); } catch { /* ignore */ }
-  }
+  reapLockFile(LOCK_PATH);
 }
 
 function occupancyRefuse() {
@@ -326,12 +317,7 @@ export function acquireLock(tool) {
   const busy = occupancyRefuse();
   if (busy) return busy;
   fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
-  const payload = { pid: process.pid, since: Date.now(), tool };
-  try { fs.writeFileSync(LOCK_PATH, JSON.stringify(payload), { flag: "wx" }); }
-  catch (e) {
-    if (e.code === "EEXIST") return refuse("lock_held", "another tool claimed the browser lock", "Retry after the owner exits.");
-    throw e;
-  }
+  if (writeLock(LOCK_PATH, lockPayload(tool))) return refuse("lock_held", "another tool claimed the browser lock", "Retry after the owner exits.");
   const again = lockInfo();
   if (!again.held || again.pid !== process.pid) {
     return refuse(
@@ -525,7 +511,7 @@ const CATALOG = [
   {
     name: "apex_debug_chrome",
     kind: "tree",
-    description: "Tree — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, 844x390 touch + iPhone UA by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
+    description: "Tree (status/stop); start takes the browser lock — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, 844x390 touch + iPhone UA by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses while the lock is held, a browser job runs, beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
     inputSchema: {
       type: "object",
       required: ["action"],
@@ -2623,8 +2609,11 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (pinned) return pinned;
   const env = extraEnv(name, args);
 
+  // apex_debug_chrome start launches Chromium, so it takes the browser lock and every occupancy check (a running
+  // browser job included). status and stop launch nothing and stay tree: stop must work while the browser is up.
+  const launchesBrowser = name === "apex_debug_chrome" && args.action === "start";
   if (args.dryRun) {
-    if (kind === "browser" && !mockMode()) {
+    if ((kind === "browser" || launchesBrowser) && !mockMode()) {
       const busy = occupancyRefuse();
       if (busy) return busy;
     }
@@ -2633,6 +2622,12 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   const hud = name === "apex_hud_shot" || name === "apex_hud_survey" || name === "apex_hud_mock";
   if (mockMode()) return name === "apex_hud_mock" ? hudMockMock(argv) : hud ? hudMock(name, argv, args) : mockSuccess(name, argv, env);
+
+  if (launchesBrowser) {
+    const took = acquireLock(name);
+    if (took) return took;
+    return runSpawn(argv, { timeoutMs: 120000, env, signal }).finally(releaseLock);
+  }
 
   if (hud && args.async !== false) {
     // Host MCP calls die at ~60–120 s; a cell is ~2 min and the quick matrix
