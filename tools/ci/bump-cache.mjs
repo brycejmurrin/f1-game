@@ -40,6 +40,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { strictFlags } from "../lib/cli-args.mjs";
+import { STAGE_ROOT_FILES } from "../desktop/stage-files.mjs";
 import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
@@ -58,10 +59,16 @@ const ROOT = STAGED ? path.resolve(opt("--root")) : path.resolve(path.dirname(fi
 const INDEX = path.join(ROOT, "index.html");
 const VERSION = path.join(ROOT, "version.json");
 // Every other ROOT page whose tags carry `?v=` — hashed like the shell, no
-// generation meta of its own. Optional: a staged copy that lacks one is a
-// pages.yml `cp` omission tests/unit/ci-coverage.test.mjs reports, not this
-// tool's failure.
-const EXTRA_PAGES = ["controller.html", "cockpit-view.html"].map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
+// generation meta of its own. DERIVED, never hand-kept: every root .html the
+// stage allow-list ships (tools/desktop/stage-files.mjs STAGE_ROOT_FILES) and,
+// in a staged copy, every root .html it actually holds — a hand list once left
+// overlay.html deploying `?v=dev` keys with no SRI while --check passed. A page
+// with no tags (bench.html) is a no-op. Optional: a staged copy that lacks one
+// is a pages.yml `cp` omission tests/unit/ci-coverage.test.mjs reports.
+const EXTRA_PAGES = [...new Set([
+  ...STAGE_ROOT_FILES.filter((f) => f.endsWith(".html")),
+  ...(STAGED ? fs.readdirSync(ROOT).filter((f) => f.endsWith(".html")) : []),
+])].filter((f) => f !== "index.html").sort().map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
 export const DEV_TOKEN = "dev";
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
 // Initial <script src> and <link rel="stylesheet"> tags also carry the file's FULL sha256 SRI once staged (#2312):

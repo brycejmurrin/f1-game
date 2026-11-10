@@ -1572,12 +1572,17 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.deepEqual(lowControl.uploads[0].brick,
       [...decodePNG(fs.readFileSync(path.join(dir, man.materials.low.albedo))).rgba.subarray(2 * 4 * 4 * 4, 3 * 4 * 4 * 4)]);
     const oldLow = fs.readFileSync(path.join(dir, man.materials.low.albedo));
-    // #4702: GRAPHICS: HIGH on a phone lifts the pack to the high tier; MEDIUM stays low.
+    // #5225: on a phone only GRAPHICS: LOW keeps the low tier; MEDIUM (the phone
+    // default) and HIGH take the high tier (#4702 lifted HIGH alone).
     const onHigh = await readMobile({ GfxQuality: { current: () => "high" } });
     assert.equal(onHigh.state.tier, "high");
     assert.equal(onHigh.uploads[0].size, 8);
     const onMedium = await readMobile({ GfxQuality: { current: () => "medium" } });
-    assert.equal(onMedium.state.tier, "low");
+    assert.equal(onMedium.state.tier, "high", "a phone on GRAPHICS: MEDIUM takes the 256 px tier (#5225)");
+    assert.equal(onMedium.uploads[0].size, 8);
+    const onLow = await readMobile({ GfxQuality: { current: () => "low" } });
+    assert.equal(onLow.state.tier, "low", "GRAPHICS: LOW on a phone keeps the 128 px tier");
+    assert.equal(onLow.uploads[0].size, 4);
 
     // Retain another layer's provenance plus unrelated records during a patch.
     const other = { mat: 1, id: "concrete", scale: 1.25, source: "procedural:keep", licence: "CC0", author: "Fixture" };

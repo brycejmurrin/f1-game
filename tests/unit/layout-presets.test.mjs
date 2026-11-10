@@ -168,7 +168,7 @@ test("any single knob changed afterwards reads CUSTOM, and the row repaints off 
   assert.equal(M.current(), "custom", "PauseOpts knobs count");
   P.setDim("full");
   T.set({ btns: { x: 10 } });
-  assert.equal(M.current(), "custom", "a moved title layout counts");
+  assert.equal(M.current(), "big", "the main-menu layout is not part of any preset's picture (#5060)");
 });
 
 test("UNDO restores the state the preset replaced, a CUSTOM one included", () => {
@@ -177,7 +177,7 @@ test("UNDO restores the state the preset replaced, a CUSTOM one included", () =>
   assert.equal(M.current(), "custom");
   M.apply("thumb");
   assert.equal(S.read("datahub").tabs, "filled");
-  assert.equal(T.isDefault(T.all().wide), true);
+  assert.equal(T.all().wide.btns.x, 12, "THUMB keeps a custom main-menu layout (#5060)");
   const undo = dom.byId("pm-layoutpreset-undo");
   assert.equal(undo.hidden, false);
   assert.equal(M.undo(), true);
@@ -188,6 +188,25 @@ test("UNDO restores the state the preset replaced, a CUSTOM one included", () =>
   assert.equal(data.layoutPreset, undefined);
   assert.equal(M.current(), "custom");
   assert.equal(M.undo(), false, "one level");
+});
+
+test("no LAYOUT PRESET, SHIPPED included, nor its UNDO touches Bryce's live main-menu layout (#5060)", () => {
+  // His live settings export of 2026-11-09 (PR #5264): layoutPreset "shipped" with a custom landscape title layout.
+  const layout = { v: 2, wide: { btns: { x: 50, y: -42, size: 60, width: 49 }, title: { x: -50, y: 2, size: 100 }, art: { x: 0, y: 0, size: 100 }, layout: "grid", side: "auto" } };
+  for (const id of ["thumb", "compact", "big", "shipped"]) {
+    const { M, T, data } = boot({ stored: { layoutPreset: "shipped", titleLayout: structuredClone(layout) } });
+    assert.equal(M.current(), "shipped", "his stored preset reads SHIPPED, not CUSTOM");
+    const before = plain(T.all());
+    M.apply(id);
+    assert.deepEqual(plain(data.titleLayout), layout, id + " leaves apex26.titleLayout");
+    assert.deepEqual(plain(T.all()), before, id + " leaves the live layout");
+    assert.equal(M.current(), id);
+    if (id !== "shipped") { assert.equal(M.undo(), true); assert.deepEqual(plain(data.titleLayout), layout, id + " UNDO leaves it"); }
+  }
+  // A layout edited AFTER the preset survives UNDO too (UNDO used to reset it first).
+  const { M, T } = boot();
+  M.apply("thumb"); T.set({ btns: { x: 33 } });
+  assert.equal(M.undo(), true); assert.equal(T.all().wide.btns.x, 33);
 });
 
 test("the chevron steps presets: › from SHIPPED applies THUMB, ‹ goes straight back to SHIPPED", () => {

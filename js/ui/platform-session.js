@@ -320,10 +320,12 @@ $("pm-phonepad").onclick = () => {
 
 function wireLifecycle() {
 // UPDATE READY: re-read version.json when the tab comes back (≤ 1 per 10 min)
-// and when a newer worker takes control; the chip shows outside races only and
+// and when a newer worker takes control; the chip shows in the menus only and
 // reloads once the store and ghosts are flushed.
 const updates = UpdateCheck.create({
   inRace: () => UiLayers.inRace(),
+  state: () => G.state,          // "results" (podium, cooldown lap) is not a menu (#5070)
+  cover: () => $("loading"),     // the race-entry cover: hide before the lights, not 2 s into them
   chip: () => $("update-chip"),
   persist: () => { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); return store.mirrorFlush && store.mirrorFlush(); },
 });

@@ -25,7 +25,7 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { minifyInWorkers } from "../../tools/desktop/minify-worker.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
-import { MINIFY_OPTIONS, canMinify, minifyExcluded, minifySource, minifyStaged, minifyTargets, minifyJobCount } from "../../tools/desktop/minify.mjs";
+import { MINIFY_OPTIONS, canMinify, minifyExcluded, minifySource, minifyStaged, minifyTargets, minifyJobCount, unminifiedPolicy } from "../../tools/desktop/minify.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -244,6 +244,14 @@ test("a failed minify task leaves every staged source/map untouched in serial an
   }
 });
 
+// A local (non-Actions, non-release) env, so the skip below does not depend on the CI event.
+function localEnv() {
+  const env = { ...process.env };
+  for (const k of Object.keys(env)) if (k.startsWith("GITHUB_")) delete env[k];
+  delete env.APEX_RELEASE_BUILD;
+  return env;
+}
+
 test("jobs1 does not import workers; unavailable Terser skips without changing staged bytes", (t) => {
   const fixture = minifyFixture(t);
   const loader = path.join(fixture.dir, "loader.mjs");
@@ -254,7 +262,7 @@ test("jobs1 does not import workers; unavailable Terser skips without changing s
   const moduleURL = pathToFileURL(path.join(ROOT, "tools/desktop/minify.mjs")).href;
   const run = (blocked) => spawnSync(process.execPath, ["--experimental-loader", loader, "--input-type=module", "--eval",
     `import { minifyStaged } from ${JSON.stringify(moduleURL)}; console.log(JSON.stringify(await minifyStaged(${JSON.stringify(fixture.dir)}, { jobs: 1 })));`],
-  { encoding: "utf8", env: { ...process.env, APEX_MINIFY_BLOCK_IMPORT: blocked } });
+  { encoding: "utf8", env: { ...localEnv(), APEX_MINIFY_BLOCK_IMPORT: blocked } });
   const absent = run("terser");
   assert.equal(absent.status, 0, absent.stderr);
   assert.match(JSON.parse(absent.stdout).skipped, /terser is not installed/);
@@ -282,4 +290,56 @@ test("a Terser task error joins every real worker before returning its source pa
     resultRoot: fixture.resultRoot, jobs: 2, WorkerClass: ObservedWorker }), /minify: js\/probe0\.js:/);
   assert.equal(workers.length, 2);
   assert.ok(workers.every((worker) => worker.threadId === -1), "task errors also drain the pool");
+});
+
+// A missing terser: a release build fails, a pull-request or local build stages
+// source bytes and logs the choice (minify.mjs unminifiedPolicy).
+test("unminifiedPolicy: release builds refuse, PR and local builds allow with a reason", () => {
+  const cases = [
+    [{}, true],
+    [{ APEX_RELEASE_BUILD: "1" }, false],
+    [{ APEX_RELEASE_BUILD: "true", GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request" }, false],
+    [{ GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request" }, true],
+    [{ GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "merge_group" }, true],
+    [{ GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "push", GITHUB_REF: "refs/tags/desktop-v1.0.0" }, false],
+    [{ GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "push", GITHUB_REF: "refs/heads/claude/f1-game-project-26h3ng" }, false],
+    [{ GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "workflow_dispatch" }, false],
+    [{ GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "schedule" }, false],
+    [{ GITHUB_REF_TYPE: "tag" }, false],
+  ];
+  for (const [env, allow] of cases) {
+    const p = unminifiedPolicy(env);
+    assert.equal(p.allow, allow, JSON.stringify(env));
+    assert.ok(p.reason.length > 0, "every verdict names its reason");
+  }
+});
+
+test("minifyStaged without terser: throws in a release build, logs and skips in a PR build", (t) => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", ".minify-policy-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, "js"), { recursive: true });
+  const src = "(function () { var longName = 1; return longName; })();\n";
+  fs.writeFileSync(path.join(dir, "js", "a.js"), src);
+  const loader = path.join(dir, "loader.mjs");
+  fs.writeFileSync(loader, `export async function resolve(name, context, next) {
+    if (name === "terser") throw Object.assign(new Error("fixture unavailable"), { code: "ERR_MODULE_NOT_FOUND" });
+    return next(name, context);
+  }`);
+  const moduleURL = pathToFileURL(path.join(ROOT, "tools/desktop/minify.mjs")).href;
+  const base = { ...process.env };
+  for (const k of Object.keys(base)) if (k.startsWith("GITHUB_")) delete base[k];
+  delete base.APEX_RELEASE_BUILD;
+  const run = (extra) => spawnSync(process.execPath, ["--experimental-loader", loader, "--input-type=module", "--eval",
+    `import { minifyStaged } from ${JSON.stringify(moduleURL)}; console.log(JSON.stringify(await minifyStaged(${JSON.stringify(dir)}, { jobs: 1 })));`],
+  { encoding: "utf8", env: { ...base, ...extra } });
+
+  const release = run({ APEX_RELEASE_BUILD: "1" });
+  assert.notEqual(release.status, 0, "a release build must not stage unminified");
+  assert.match(release.stderr, /a release build must minify js\/ \(APEX_RELEASE_BUILD is set\)/);
+
+  const pr = run({ GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request" });
+  assert.equal(pr.status, 0, pr.stderr);
+  assert.match(JSON.parse(pr.stdout).skipped, /allowed: GitHub Actions pull_request build/);
+  assert.match(pr.stderr, /::warning::stage: terser is not installed/);
+  assert.equal(fs.readFileSync(path.join(dir, "js", "a.js"), "utf8"), src, "skipped stage keeps source bytes");
 });

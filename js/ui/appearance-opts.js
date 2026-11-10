@@ -472,7 +472,8 @@ const AppearanceOpts = (function () {
     textSize = oneOf(v.textSize, TEXT_SIZES, "large");
     contrast = oneOf(v.uiContrast, CONTRASTS, "high");
     cvdMode = oneOf(v.cvdMode, CVD_MODES, "off");
-    appIcon = oneOf(v.appIcon, ICON_SETS, "default");
+    // Studio snapshots do not carry appIcon: keep the chosen icon (#5059).
+    if ("appIcon" in v) appIcon = oneOf(v.appIcon, ICON_SETS, "default");
     units = oneOf(v.speedUnits, UNITS, "kmh");
     help = oneOf(v.menuHelp, HELPS, "on");
     applyAll();

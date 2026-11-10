@@ -310,3 +310,62 @@ test("a red-flagged race stays NEXT past two hours after lights out", () => {
   assert.equal(S.isUpcoming(VEGAS, Date.parse("2026-11-22T06:30:00Z")), true);
   assert.equal(S.isUpcoming(VEGAS, Date.parse("2026-11-22T08:30:00Z")), false, "finished by 4 h");
 });
+
+// W23 #2: on 1 January next year's calendar is often unpublished (Jolpica's
+// /2027.json answered total "0" on 2026-11-10): the tab said "No calendar data
+// available yet." Show last season, labelled as such, with no NEXT tile and no
+// ADD-TO-CALENDAR buttons for races that already ran. The clock is pinned.
+test("an empty year falls back to last season, labelled, with no calendar buttons", async () => {
+  const now = Date.parse("2027-01-01T10:00:00Z");
+  class ClockDate extends Date {
+    constructor(...a) { super(...(a.length ? a : [now])); }
+    static now() { return now; }
+  }
+  const asked = [];
+  function el(tag, cls, text) {
+    return { tag, cls, textContent: text || "", attrs: {}, children: [], isConnected: false, parentElement: null,
+      classList: { add() {} }, addEventListener() {}, removeAttribute(k) { delete this.attrs[k]; },
+      setAttribute(k, v) { this.attrs[k] = v; },
+      appendChild(child) { child.parentElement = this; this.children.push(child); return child; } };
+  }
+  const context = vm.createContext({ I18n: i18nStub(), Date: ClockDate, MutationObserver: class { observe() {} disconnect() {} },
+    document: { documentElement: {} }, queueMicrotask() {}, setInterval: () => 1, clearInterval() {},
+    F1API: { schedule: (year) => { asked.push(year); return Promise.resolve(year === 2026 ? [{ ...VEGAS, round: 22 }] : []); } } });
+  vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context, { filename: absSrc("js/data/schedule.js") });
+  const { loadSchedule } = context.S.create({ el, emptyMsg: (t) => el("div", "dh-empty", t) });
+  const wrap = await loadSchedule();
+  assert.deepEqual(asked, [undefined, 2026], "this year first, then last season");
+  const all = []; (function walk(n) { all.push(n); (n.children || []).forEach(walk); })(wrap);
+  assert.equal(all.filter((n) => n.cls === "dh-section")[0].textContent, "LAST SEASON · 2026 CALENDAR");
+  assert.equal(wrap.children[0].textContent, "The 2027 calendar isn't published yet. Showing the 2026 season.");
+  assert.equal(all.filter((n) => n.attrs && n.attrs["data-ics"]).length, 0, "no ADD-TO-CALENDAR for a finished season");
+  assert.equal(all.filter((n) => n.cls === "dh-empty").length, 0, "not an empty tab");
+  assert.equal(wrap.attrs["data-season"], "last");
+});
+
+test("both years empty is still the empty message", async () => {
+  function el(tag, cls, text) { return { tag, cls, textContent: text || "", attrs: {}, children: [],
+    setAttribute(k, v) { this.attrs[k] = v; }, appendChild(c) { this.children.push(c); return c; } }; }
+  const context = vm.createContext({ I18n: i18nStub(), F1API: { schedule: () => Promise.resolve([]) } });
+  vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context, { filename: absSrc("js/data/schedule.js") });
+  const wrap = await context.S.create({ el, emptyMsg: (t) => el("div", "dh-empty", t) }).loadSchedule();
+  assert.equal(wrap.children[0].textContent, "No calendar data available yet.");
+});
+
+// W23 #10: tests/helpers/f1-api-mock.js routed only /2026.json, so from
+// 2027-01-01 the clock-year schedule URL fell through to an empty stub and the
+// UI screen still passed. The route matches any season and the paged query.
+test("the Playwright schedule mock answers any season's calendar URL", async () => {
+  const { setupApiMocks, JOLPICA_SCHEDULE_ROUTE } = await import("../helpers/f1-api-mock.js");
+  const routes = [];
+  await setupApiMocks({ route: async (pattern, handler) => { routes.push({ pattern, handler }); } });
+  const hit = (url) => routes.filter((r) => r.pattern instanceof RegExp && r.pattern.test(url));
+  for (const url of ["https://api.jolpi.ca/ergast/f1/2026.json?limit=100", "https://api.jolpi.ca/ergast/f1/2027.json?limit=100",
+    "https://api.jolpi.ca/ergast/f1/2031.json?limit=100&offset=100", "https://api.jolpi.ca/ergast/f1/2027.json"]) {
+    assert.equal(hit(url).length, 1, url);
+  }
+  assert.equal(JOLPICA_SCHEDULE_ROUTE.test("https://api.jolpi.ca/ergast/f1/2026/driverstandings.json?limit=100"), false);
+  let body = null;
+  await hit("https://api.jolpi.ca/ergast/f1/2027.json?limit=100")[0].handler({ fulfill: (r) => { body = JSON.parse(r.body); } });
+  assert.ok(body.MRData.RaceTable.Races.length > 20, "the fixture calendar, not an empty stub");
+});

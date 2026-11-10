@@ -107,9 +107,9 @@ There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 [x, y, z,  r, g, b,  radius,  aimX, aimY, aimZ,  coneIn, coneOut,  bleed, volW, glareW]
 ```
 
-GLX uploads packed `vec4` arrays per frame — `uLightA[i]` (xyz + radius),
-`uLightB[i]` (rgb + bleed), `uLightC[i]` (aim + coneIn), `uLightD[i]` (coneOut),
-plus `uNumLights`. God-rays still use their own 6-slot unpacked set. Every
+GLX uploads one packed `vec4` array per frame, `uLight[MAX_LIGHTS*4]` — four
+rows per lamp (xyz + radius; rgb + bleed; aim + coneIn; coneOut …), one
+`uniform4fv` (`js/render/glx/glx.js`, `shaders/glsl-lit.js`) — plus `uNumLights`. God-rays still use their own 6-slot unpacked set. Every
 `lights.push(...)` in `buildTrackLights` (`js/lighting/track-lights.js`) must be
 exactly 15 values.
 
@@ -128,7 +128,7 @@ cull budgeted 48 there and no tail-light ever reached the shader.
 **48 is an engine cap, not a WebGL one.** WebGL has no lights API and no
 `MAX_LIGHTS`. The real constraint is `MAX_FRAGMENT_UNIFORM_VECTORS` (WebGL2
 minimum **224** `vec4` rows; this repo's SwiftShader Chrome measured **4096**,
-UBO block **64 KB**). Four packed `vec4` arrays of 48 (`uLightA..D`) cost 192
+UBO block **64 KB**). Four `vec4` rows per lamp × 48 (`uLight[192]`) cost 192
 rows — the same budget the old six vertical arrays used at 32. God-rays stay
 at 6 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for fragment cost, not
 uniforms.
@@ -367,7 +367,7 @@ catalog to follow.
 |---|---|---|
 | `lampFog.base` — `0.45 + 0.6*groundMist`, cap 0.9 | How strongly lamps tint the fog itself (the glowing-fog amount). Clear night ≈0.55, fog night ≈0.80, day 0. | fogwall mean |
 | lampFog sun gate — `(0.55-sunLum)/0.30` | Cuts lamp-fog glow when the sun is bright (dawn/dusk mist already carries the sun tint; both together blew out). | dusk fog delta ≈ 0 |
-| `lampFog.softClip` — `lf/(1+maxCh*0.7)` | Reinhard shoulder that stops a lamp cluster pushing the fog wall past the night bloom threshold (0.93) into white wash. | fogwall bloomPct |
+| `lampFog.softClip` — `lf/(1+maxCh*0.7)` | Reinhard shoulder that stops a lamp cluster pushing the fog wall past the night bloom threshold (0.97, `_thresh` in `js/game.js`) into white wash. | fogwall bloomPct |
 | `lampFog.mistShare` — `lampFogC * 1.5` | Ground-mist share of the glow vs the air-fog share (mist hugs the road where the lamps aim). | near mean |
 | `vol.lampRange` — `td < 200` | How far along each ray lamps volumetrically in-scatter (was 110 — distant lamps had no glow). | fogwall mean |
 | `vol.beamHeight` — `exp(-Δy*0.07)` | Beam height falloff. Bigger constant = beams hug the road; smaller = tall light cones. | sky mean |
@@ -472,6 +472,7 @@ TUNE_DEFS default  →  file "*"  →  file "track|tod|wx"  →  player localSto
 | knob | value | why |
 |---|---|---|
 | `carGloss` | 0.35 | near-matte paint across the board (one notch above the slider min) |
+| HDR grade | `blacks` … `gainB` | the shipped broadcast grade (tone, lift/gamma/gain) — read the `"*"` row in `js/lighting/presets.js` for the values |
 
 Don't re-specify a `"*"` value in a per-condition preset unless you're deliberately overriding it.
 
@@ -499,7 +500,7 @@ Don't re-specify a `"*"` value in a per-condition preset unless you're deliberat
 - `desert` (bahrain, abudhabi, qatar) — warm/amber, dusty warm `fogTint`+, high hard sun by day, floodlit at night, clear starry skies.
 - `street_night` (baku, jeddah, singapore, vegas) — neon city; big `cityGlowMul`/`glowAmp` at night, warm-cool neon mix, reflective streets when wet.
 - `street_day` (monaco) — Mediterranean harbour warmth, bright day, glamorous.
-- `modern` (miami, madrid, mexico, shanghai) — city skyline backdrop, moderate, some neon at night.
+- `modern` (`theme: "modern"` in `js/track/circuit-meta.js`: miami, madrid, mexico, shanghai, …) — city skyline backdrop, moderate, some neon at night.
 - `green` (spa, silverstone, monza, suzuka, imola, interlagos, montreal, cota, hungaroring, redbull, zandvoort, albert_park) — natural parkland; cooler, lush; several are weather-prone (spa, zandvoort, interlagos) so wet/overcast matter more.
 
 ---
@@ -508,7 +509,7 @@ Don't re-specify a `"*"` value in a per-condition preset unless you're deliberat
 
 _(from `TUNE_DEFS` in `js/lighting/knobs.js`. Focus on the per-condition-relevant ones; leave the rest at default.)_
 
-_Ranges + defaults below were re-synced from `TUNE_DEFS` (2026-09-29; 111 of the 191 knobs are listed, the rest are in `LIGHTING-TUNER-SLIDERS.md`, which is generated and always exact). Some
+_Ranges + defaults below were re-synced from `TUNE_DEFS` (2026-09-29; a subset of the knobs is listed here — the full, generated and always exact table is in `LIGHTING-TUNER-SLIDERS.md`). Some
 knobs (e.g. `ssaoRadius`, `mistShare`, `carClearcoat`, `wetness`, `blackLift`,
 `chromAb`, `grain`, `sharpen`, `speedBlur`) are repair/stylistic and rarely need a
 per-condition preset — focus on the ones the intent notes above call out._
@@ -633,7 +634,7 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `presets.js`
 
-All 52 circuits have a full `tod × weather` grid (1,040 condition keys, plus `"*"`, the four `"*|<tod>"` keys, and the shared `"*|dawn|dry"` / `"*|dusk|dry"` / `"*|dusk|wet"` / `"*|night|dry"` / `"*|night|wet"` stamps; `light-presets.test.mjs` fails a circuit file without one). Batches B1a (fuji, okayama from kyalami) and B1b (korea, jerez from madrid / bahrain) baked 2026-09-30 with no `wetness` pins. The last eight were copied verbatim on 2026-10-04 from their nearest green-theme sibling (same country or climate): anderstorp ← nurburgring, brands_hatch and donington ← silverstone, buddh ← sepang, dijon ← magny_cours, mont_tremblant ← montreal, mosport ← watkins_glen, zolder ← spa. Their `day|dry` and `day|rain` entries were then hand-tuned per circuit on 2026-10-27 (#1615: sun elevation, haze/`fogTint`, foliage shadow strength, rain murk; rain stays darker than dry, no `wetness` pins); the other tod×weather keys remain donor copies until each circuit's look-survey sheet is reviewed.
+All 52 circuits have a full `tod × weather` grid (1,040 condition keys, plus `"*"`, the four `"*|<tod>"` keys, and a shared `"*|<tod>|<wx>"` stamp for most conditions (list them: the `"*|` keys at the top of `js/lighting/presets.js`); `light-presets.test.mjs` fails a circuit file without one). Batches B1a (fuji, okayama from kyalami) and B1b (korea, jerez from madrid / bahrain) baked 2026-09-30 with no `wetness` pins. The last eight were copied verbatim on 2026-10-04 from their nearest green-theme sibling (same country or climate): anderstorp ← nurburgring, brands_hatch and donington ← silverstone, buddh ← sepang, dijon ← magny_cours, mont_tremblant ← montreal, mosport ← watkins_glen, zolder ← spa. Their `day|dry` and `day|rain` entries were then hand-tuned per circuit on 2026-10-27 (#1615: sun elevation, haze/`fogTint`, foliage shadow strength, rain murk; rain stays darker than dry, no `wetness` pins); the other tod×weather keys remain donor copies until each circuit's look-survey sheet is reviewed.
 
 The `<track>|dusk|wet` profiles are short deltas (2026-10-04): `<track>|dusk|rain` minus its falling-rain knobs plus the wet-surface knobs of `<track>|day|wet`, replacing a COPY-ALL stamp with `ambientMul` 0 / `keyMul` 0.115. Dawn|dry fill is the shared stamp `LightPresets["*|dawn|dry"]` (`ambientMul` 0.5, twilight `keyMul` 0.29): per-track dawn|dry no longer pins those two knobs, so the fleet lift is one key (profiles.js resolves `*|<tod>|<wx>` between `"*"` and the track key). Dusk|dry uses `LightPresets["*|dusk|dry"]` (twilight ambient/key fill, lamp/bloom/floodEmit, buried-sun `sunElev` fixes on 15 tracks): per-track dusk|dry keeps sun/gr/tint and Spa #1136 twilight exceptions. Night|dry authenticity is the shared stamp `LightPresets["*|night|dry"]` (ambient fill up, nightAmbLift/bloom/key down, floodEmit up): per-track night|dry keeps only exceptions (Spa flood/cityGlow, Bahrain/Qatar mast pools, …). Dusk|wet uses `LightPresets["*|dusk|wet"]` (twilight sky fill, key/bloom/floodEmit for lamp read in rain sheen, exposure trimmed): per-track dusk|wet keeps fog/ssr/tint exceptions (Spa twilight fill #1136, …). Night|wet uses `LightPresets["*|night|wet"]` (band fill and key/bloom up for lamp read in rain sheen, city glow and exposure down): per-track night|wet keeps grade and fog exceptions (Monaco tunnel grade, Spa pools/fog, …).
 
@@ -691,8 +692,8 @@ Cross-cutting from the frames:
 | Las Vegas | `vegas` | street_night | night | ✅ |
 | Zandvoort | `zandvoort` | green | day | ✅ |
 | Buenos Aires | `buenos_aires` | green | day | ✅ |
-| Catalunya | `catalunya` | modern | day | ✅ |
-| Estoril | `estoril` | modern | day | ✅ |
+| Catalunya | `catalunya` | green | day | ✅ |
+| Estoril | `estoril` | green | day | ✅ |
 | Hockenheim | `hockenheim` | green | day | ✅ |
 | Indianapolis | `indianapolis` | modern | day | ✅ |
 | Istanbul | `istanbul` | green | day | ✅ |
@@ -708,7 +709,7 @@ Cross-cutting from the frames:
 | Watkins Glen | `watkins_glen` | green | day | ✅ |
 | Fuji | `fuji` | green | day | ✅ (B1a donor kyalami; look-survey deferred) |
 | Okayama | `okayama` | green | day | ✅ (B1a donor kyalami; look-survey deferred) |
-| Korea | `korea` | modern | day | ✅ (B1b donor madrid; look-survey deferred) |
+| Korea | `korea` | green | day | ✅ (B1b donor madrid; look-survey deferred) |
 | Jerez | `jerez` | desert | day | ✅ (B1b donor bahrain; look-survey deferred) |
 | Anderstorp | `anderstorp` | green | day | ✅ (donor nurburgring; day grid hand-tuned #1615; look-survey deferred) |
 | Brands Hatch | `brands_hatch` | green | day | ✅ (donor silverstone; day grid hand-tuned #1615; look-survey deferred) |
