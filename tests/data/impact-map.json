@@ -17564,6 +17564,9 @@
       ]
     },
     "js/ui/hud-arrange.js": {
+      "barSlot": [
+        "tests/unit/hud-arrange.test.mjs"
+      ],
       "clashes": [
         "tests/unit/hud-arrange.test.mjs"
       ],
