@@ -301,27 +301,24 @@ test("qualifying runs light, on a set its out-lap has warmed", () => {
   assert.equal(r.tyreTs, T.T_BLANKET, "…and off the blankets");
 });
 
-test("the player's top speed pays for worn rubber, as the AI's does", () => {
-  // The AI's vmax took tractionMul; the player's took none, and perfMul only
-  // slows the climb to vmax (ACCEL·perfMul·(1 − v/vmax)), never the cap.
+test("updateCar's shared trMul is the model's tractionMul exactly", () => {
+  // The BEHAVIOUR (the player's terminal speed drops on a worn set, as the AI's
+  // does) is executed in tests/unit/physics-rows-vm.test.mjs; this pins the
+  // equation updateCar evaluates once per car (tyreGrip shared after the tyre
+  // and pit updates) against TyreModel.tractionMul over the wear/temperature/
+  // defect grid, so the shared value cannot drift from the model's own.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  // updateCar shares this car's tread grip after tyre/pit updates. Its traction
-  // still uses the model's exact long-share equation, and still caps the player.
-  assert.match(src, /else if \(c\.human\) vmax \*= (?:tyres\.tractionMul\(c\)|trMul)/,
-    "the human branch of the speed target must carry the tyre's traction");
-  if (/vmax \*= trMul/.test(src)) {
-    const init = src.match(/\btyreGrip = ([^,;]+), trMul = ([^,;]+)/);
-    assert.ok(init, "the production traction initializer is available");
-    const traction = new Function("tyres", "TyreModel", "c", `const tyreGrip = ${init[1]}; return ${init[2]};`);
-    const model = ctxFor(), car = freshCar(model, 0.74);
-    for (const level of ["off", "real"]) {
-      model.setLevel(level);
-      for (const wear of [0, 0.15, 0.6, 1, 1.5]) for (const temp of [20, T.T_BLANKET, T.optTemp(0.74), 150])
-        for (const grain of [0, 0.4]) for (const blister of [0, 0.7]) {
-          Object.assign(car, { tyreWear: wear, tyreTs: temp, tyreGrain: grain, tyreBlister: blister });
-          assert.equal(traction(model, T, car), model.tractionMul(car), `${level}: wear ${wear}, temperature ${temp}, grain ${grain}, blister ${blister}`);
-        }
-    }
+  const init = src.match(/\btyreGrip = ([^,;]+), trMul = ([^,;]+)/);
+  assert.ok(init, "the production traction initializer is available");
+  const traction = new Function("tyres", "TyreModel", "c", `const tyreGrip = ${init[1]}; return ${init[2]};`);
+  const model = ctxFor(), car = freshCar(model, 0.74);
+  for (const level of ["off", "real"]) {
+    model.setLevel(level);
+    for (const wear of [0, 0.15, 0.6, 1, 1.5]) for (const temp of [20, T.T_BLANKET, T.optTemp(0.74), 150])
+      for (const grain of [0, 0.4]) for (const blister of [0, 0.7]) {
+        Object.assign(car, { tyreWear: wear, tyreTs: temp, tyreGrain: grain, tyreBlister: blister });
+        assert.equal(traction(model, T, car), model.tractionMul(car), `${level}: wear ${wear}, temperature ${temp}, grain ${grain}, blister ${blister}`);
+      }
   }
 });
 

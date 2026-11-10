@@ -25,7 +25,6 @@ const RealRace = (function () {
     properName, situation, mapField, fieldAt, paceMul, classOf,
   } = RealRacePace;
 
-
   /** The wheel changes hands (FlyingStart, RealRace.tickHandover): the AI never advances `c.head` (only the human
    *  integrator does), so the car would take the wheel facing the heading it was DROPPED with, up to ~90 deg off the
    *  road after the run-up's bends. Re-seed the pose from the road at the car's CURRENT s/x. */

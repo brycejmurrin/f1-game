@@ -17,9 +17,11 @@ function roomHarness() {
       async setAlarm(at) { calls.alarm++; calls.alarmAt = at; },
       async delete(key) { records.delete(key); },
       async deleteAlarm() { calls.alarmAt = null; },
+      async deleteAll() { calls.deleteAll = (calls.deleteAll || 0) + 1; records.clear(); },
       // SQLite transactions use storage itself; the legacy txn object has no alarm methods.
       async transaction(fn) { return fn({}); },
     },
+    async blockConcurrencyWhile(fn) { return fn(); },
   };
   return { room: new Room(state), records, calls };
 }
@@ -233,10 +235,23 @@ test("Worker keeps the earliest slot expiry and preserves a later live answer", 
     assert.equal(h.records.has("offer"), false);
     assert.equal(h.records.has("answer"), true);
     assert.equal(h.calls.alarmAt, h.records.get("answer").expires);
+    assert.equal(h.calls.deleteAll || 0, 0, "a room with a live slot keeps its storage");
     now = h.calls.alarmAt;
     await h.room.alarm();
     assert.equal(h.records.size, 0);
+    assert.equal(h.calls.deleteAll, 1, "an emptied room drops its whole SQLite database");
+    assert.equal(h.calls.alarmAt, null, "and its alarm (deleteAll keeps alarms before compat 2026-02-24)");
   } finally { Date.now = realNow; }
+});
+
+test("Room alarm skips deleteAll when a write lands between emptying and deletion", async () => {
+  const h = roomHarness();
+  const live = { payload: "v2." + "A".repeat(60), owner: null, expires: Date.now() + 120000 };
+  // The transaction empties the room; a POST then lands before the delete step runs.
+  h.room.state.blockConcurrencyWhile = async (fn) => { h.records.set("offer", live); return fn(); };
+  await h.room.alarm();
+  assert.equal(h.calls.deleteAll || 0, 0);
+  assert.equal(h.records.get("offer"), live, "the racing write survives");
 });
 
 test("Worker rejects malformed v2 encoding and undersized crypto envelopes", async () => {

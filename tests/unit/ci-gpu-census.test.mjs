@@ -104,7 +104,7 @@ test("gpu-census: the nightly skips an unchanged renderer, fail-safe; legs time 
     assert.equal(s["continue-on-error"], true, `${s.name}: a red leg must still reach the Verdict`);
   }
   assert.ok(legs.length * 6 < wf.jobs.census["timeout-minutes"], "four capped legs must fit inside the job cap");
-  const up = wf.jobs.census.steps.find((s) => String(s.uses || "").startsWith("actions/upload-artifact@"));
+  const up = wf.jobs.census.steps.find((s) => String(s.uses || "").startsWith("actions/upload-artifact@") && s.with?.name === "gpu-census-${{ matrix.image }}");
   assert.equal(up.with["retention-days"], 7);
 });
 

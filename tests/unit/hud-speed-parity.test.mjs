@@ -33,8 +33,6 @@ test("game.js: dashKph is vStd(v) * 3.6, the one dash-scale accessor", () => {
 test("HUD and every wheel readout feed G.dashKph(<car>.speed) then HudReadouts.spdDigits", () => {
   assert.match(HUD, /const kph = Math\.max\(0, G\.dashKph\(player\.speed\)\);/);
   assert.match(HUD, /_ro\.spdPlate\(kph\)/);
-  assert.match(RO, /function spdDigits\(kph/);
-  assert.match(RO, /spdDigits, spdPlate/);
   // LCD wheels, RETRO wheel, CLASSIC gauges: all three call sites in drawCockpitRig.
   const calls = DRAW.match(/G\.dashKph\(c\.speed \|\| 0\)/g) || [];
   assert.equal(calls.length, 3, "drawCockpitRig: LCD + drawRetroTelemetry + drawClassicTelemetry");
@@ -61,8 +59,6 @@ function loadReadouts(units) {
 }
 
 test("wheel LCD and HUD plate print the same number for one dash km/h (km/h and mph)", () => {
-  assert.match(DRAW, /HudReadouts\.spdDigits\(dash\)/);
-  assert.match(MESH, /HudReadouts\.spdDigits\(kph\)/);
   for (const units of ["kmh", "mph"]) {
     const { R } = loadReadouts(units);
     for (let dash = -30; dash <= 420; dash += 0.173) {

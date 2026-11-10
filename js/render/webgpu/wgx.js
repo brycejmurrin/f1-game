@@ -371,7 +371,8 @@ const WGX = (function () {
         // runtime output probe's loss ladder to GLX, which renders fine.
         // `soft(ware|pipe)` not bare `soft` — that substring matched any
         // "Microsoft" description.
-        _softAdapterLocal = !!(adapter.isFallbackAdapter
+        // Chrome 136+ reports the fallback flag on GPUAdapterInfo; Chrome 140 removed GPUAdapter.isFallbackAdapter.
+        _softAdapterLocal = !!((info && info.isFallbackAdapter) || adapter.isFallbackAdapter
             || /HeadlessChrome/i.test(ua)
             || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft(ware|pipe)/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }

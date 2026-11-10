@@ -144,8 +144,9 @@ const selectAll = selectJob + "\n" + selectStep;
 const selectionGate = {
   present: Boolean(selectJob) && ci.includes("\n  selected:\n"),
   blocking: Boolean(selectJob) && !/^    continue-on-error:\s*true\s*$/m.test(selectJob),
-  onPush: selectIf.includes("github.event_name == 'push'"),
-  onPullRequest: selectIf.includes("github.event_name == 'pull_request'"),
+  // No `if:` at all (since 2026-11-10) means the job runs on every event.
+  onPush: selectIf === "" || selectIf.includes("github.event_name == 'push'"),
+  onPullRequest: selectIf === "" || selectIf.includes("github.event_name == 'pull_request'"),
   // NOT an event_name test. Inside a REUSABLE workflow the github context is
   // the CALLER's, so `github.event_name` reads `push` on a Pages call exactly
   // as on a direct push. `inputs` is the only caller-specific context, and

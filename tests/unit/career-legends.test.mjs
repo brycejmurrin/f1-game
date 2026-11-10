@@ -111,17 +111,41 @@ test("standings count the constructors, not the guests", () => {
 });
 
 test("the driver market and contract offers stay inside the real grid", () => {
-  const Career = driverCareer();
-  const career = Career.data();
-  career.season.round = 1;
-  Career.rollover();
+  // Offers are only drawn in the winter a deal EXPIRES, and past the renewal
+  // only when the seeded dice say so, so a loop over career.offers can walk an
+  // empty list. Force the case: the deal ends this winter, the player leads the
+  // table on max reputation (market value 100 clears every offerBar rung,
+  // Legends' tier 0 included), and seeds are walked until a winter draws at
+  // least one offer beyond the renewal.
+  let career = null;
+  for (let seed = 1; seed <= 64 && !career; seed++) {
+    const Career = load();
+    Career.start({ flavour: "driver", teamId: "haas", seed });
+    Career.engage(true);
+    const c = Career.data();
+    c.season.round = 1;
+    c.rep = 100;
+    c.deal.left = 1;
+    c.season.pts["haas:" + c.seat] = 999;
+    Career.rollover();
+    if ((c.offers || []).length > 1) career = c;
+  }
+  assert.ok(career, "no seed in 1..64 drew an offer beyond the renewal: the forced case never happened");
   const dev = Object.keys(career.dev || {});
   assert.deepEqual(here(dev.filter((k) => k.startsWith("legends"))), [],
     "one winter used to write career.dev['legends:0..11']");
-  for (const o of career.offers || [])
-    assert.notEqual(o.team, "legends", "a legend team cannot offer a drive — it has no car on the grid");
-  for (const m of career.moves || [])
-    assert.notEqual(m.team, "legends", "the market cannot move a driver into the Legends team");
+  const offerTeams = here(career.offers.map((o) => o.teamId));
+  assert.equal(offerTeams[0], "haas", "the first offer is the renewal at your own team");
+  for (const id of offerTeams) {
+    assert.notEqual(id, "legends", "a legend team cannot offer a drive — it has no car on the grid");
+    assert.notEqual(id, "custom", "MY TEAM cannot offer a seat in a DRIVER career");
+  }
+  assert.deepEqual(here(offerTeams.slice(1)), ["ferrari"], "the only other real team is Ferrari, and it clears its bar");
+  for (const m of career.moves || []) {
+    assert.ok(typeof m.from === "string" && typeof m.to === "string", "moves carry from/to team ids");
+    for (const id of [m.from, m.to])
+      assert.ok(id !== "legends" && id !== "custom", "the market cannot move a driver through a guest team: " + id);
+  }
 });
 
 test("an unknown team id falls back to MY TEAM, not to whatever booted last", () => {

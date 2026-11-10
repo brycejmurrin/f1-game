@@ -2,10 +2,7 @@
  * F1 24/25's uniform "blanket" rain. Pure maths — no G, no clock of its own: WeatherArc (js/race/weather-arc.js)
  * owns the arc and hands this module its constants and the shared race clock.
  *
- * WHY LOCAL. Spa's microclimate leaves one part of the 7 km lap wet and another dry
- * (https://www.grandprix247.com/formula-1-news/rain-over-spa-francochamps-could-turn-the-belgian-grand-prix-into-a-lottery-f1-preview);
- * Red Bull Ring FP2 2016 was drying from T2 while T9 was still very wet, and F1's forecaster (Ubimet) can miss a
- * single cell by ~500 m (https://www.formula1.com/en/latest/features/2016/9/how-weather-forecasting-works-in-f1.html).
+ * WHY LOCAL: real circuits dry in one sector while another is still wet.
  * Notes: docs/notes/WEATHER-ROADMAP-2026-10-14.md.
  *
  * THE CELL is { c0, h, v, life, total }: its centre starts at lap fraction c0, it covers ±h of the lap, drifts at

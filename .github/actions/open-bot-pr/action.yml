@@ -1,0 +1,76 @@
+name: Open a bot PR (or ask for a hand)
+description: >
+  Opens the PR for a branch a scheduled job already pushed. With `pr-token` (LAND_TOKEN, the token land.yml
+  uses for its PR operations) the PR is opened as that identity and its `pull_request` CI starts on its own;
+  without it the default token tries, and its PR starts no CI, so ci.yml is dispatched on the branch. When the
+  PR cannot be opened, one issue with a stable title is opened, or commented on when its last update is more
+  than a day old, and the step fails.
+
+inputs:
+  branch:
+    description: head branch, already pushed
+    required: true
+  title:
+    description: PR title
+    required: true
+  body:
+    description: PR body
+    required: true
+  issue-title:
+    description: stable title of the fallback issue (no run id in it, so one issue collects every refusal)
+    required: true
+  what:
+    description: short name of the job, for the issue text ("changelog fold")
+    required: true
+  pr-token:
+    description: token that may open PRs (secrets.LAND_TOKEN); empty falls back to github-token
+    required: false
+    default: ""
+  github-token:
+    description: the job's GITHUB_TOKEN (issues, ci.yml dispatch)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Open the PR
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch }}
+        PR_TITLE: ${{ inputs.title }}
+        PR_BODY: ${{ inputs.body }}
+        ISSUE_TITLE: ${{ inputs.issue-title }}
+        WHAT: ${{ inputs.what }}
+        PR_TOKEN: ${{ inputs.pr-token }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        err="$RUNNER_TEMP/open-bot-pr.err"
+        via=GITHUB_TOKEN; tok="$GH_TOKEN"
+        if [ -n "$PR_TOKEN" ]; then via=LAND_TOKEN; tok="$PR_TOKEN"; fi
+        if GH_TOKEN="$tok" gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng \
+          --head "$BRANCH" --title "$PR_TITLE" --body "$PR_BODY" 2> "$err"; then
+          PR_OK=1; echo "PR opened with $via"
+        else
+          PR_OK=0; cat "$err"
+        fi
+        # A PR opened with GITHUB_TOKEN starts no pull_request run; a workflow_dispatch always does
+        # (https://docs.github.com/en/actions/concepts/security/github_token). A LAND_TOKEN PR runs CI itself.
+        if [ "$PR_OK" = 0 ] || [ "$via" = GITHUB_TOKEN ]; then
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" \
+            || echo "::warning::ci.yml dispatch failed; dispatch it on $BRANCH by hand"
+        fi
+        [ "$PR_OK" = 1 ] && exit 0
+        NOTE="The scheduled $WHAT pushed \`$BRANCH\` ($(git rev-parse --short HEAD)) but \`gh pr create\` ($via) was refused: $(head -1 "$err"). Open the PR from \`$BRANCH\` by hand (its ci.yml run was dispatched), or set the LAND_TOKEN secret. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        row="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title,updatedAt \
+          --jq '[.[] | select(.title == env.ISSUE_TITLE)][0] // empty | "\(.number) \(.updatedAt)"')"
+        if [ -z "$row" ]; then
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body "$NOTE"
+        else
+          num="${row%% *}"; updated="${row#* }"
+          age=$(( $(date -u +%s) - $(date -u -d "$updated" +%s) ))
+          if [ "$age" -gt 86400 ]; then gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$NOTE"
+          else echo "issue #$num was updated ${age}s ago; not re-pinged"; fi
+        fi
+        echo "::error::$WHAT PR not opened: $(head -1 "$err") — see the issue \"$ISSUE_TITLE\""
+        exit 1
