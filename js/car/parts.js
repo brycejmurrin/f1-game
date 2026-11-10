@@ -178,8 +178,7 @@ const Parts = (function () {
         // carbon colour in car3d — correct enough for a steel disc carrying pad
         // transfer, and not a knob this file can separate.
         { id: "drilled",     label: "Drilled Steel",    cost:  25, desc: "Cross-drilled steel discs — improved heat management",                      braking: 1.05, visual: {"cal": null, "duct": 0.72, caliperPos: 0, coverOpen: 1, rotor: 1, rotorScale: 1.06, discFace: 1}, visualTier: 1 },
-        // own: the OWNERSHIP key (ownId below). "sport" is also a suspension id, and
-        // career.owned is a flat id list, so researching one unlocked the other (#5043).
+        // own: ownership key, "sport" is also a suspension id (#5043)
         { id: "sport",       own: "sport_brakes", label: "Sport", cost:  40, desc: "Improved pads and discs",                                                   speed: 0.99, braking: 1.08, visual: {"cal": [0.95, 0.45, 0.05], "duct": 0.95, caliperPos: 0.9, coverOpen: 1, rotor: 1, rotorScale: 1.00, scoop: 0, caliper: 1}, visualTier: 2 },
         // Light alloy: the smallest disc on the ladder behind a solid cover, and
         // the caliper swung round to ~155° for the mass distribution the desc
@@ -739,7 +738,7 @@ const Parts = (function () {
     const eq = cat.options.find((o) => o.id === eqId);
     const opt = Object.assign({}, eq, { id, label, tag: "STYLE", equivalent: eqId,
       desc: `${eq.label} performance — ${look}`, visual: Object.assign({}, eq.visual, visual) });
-    delete opt.own;   // a STYLE row is researched on its own id, never its root's key
+    delete opt.own;   // a STYLE row owns its own id
     cat.options.push(opt);
   }
 
@@ -847,11 +846,8 @@ const Parts = (function () {
   // The installed predicate itself, so a caller that must read the WORKS build
   // outside the era (CareerAiDev.worksSetup) can put the exact ruleset back.
   function legality() { return _legal; }
-  // THE OWNERSHIP KEY. career.owned (and an AI bag's owned) is a flat list with no
-  // category, so a paid option whose id repeats in another category carries a
-  // unique `own` key and every ownership read and write goes through here. Fitted
-  // setups, share codes and presets keep the plain id. Pinned unique per priced
-  // option: tests/unit/career-parts-regs.test.mjs.
+  // Ownership key: owned lists have no category, so a repeated paid id carries a
+  // unique `own`; fitted ids keep the plain id (#5043, career-parts-regs.test.mjs).
   function ownId(opt) { return opt ? (opt.own || opt.id) : null; }
   function ownIdOf(catId, id) {
     const cat = CATALOG.find((c) => c.id === catId);

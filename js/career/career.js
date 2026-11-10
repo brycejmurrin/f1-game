@@ -19,16 +19,8 @@ const RESEARCH_MULT = 3;
 const BUDGET_MULT = [1.0, 1.15, 1.35, 1.6];
 const BUDGET_UPGRADE = [2500, 5000, 9000];   // cost to reach level 1 / 2 / 3
 
-// Team development is stat points converted to a pace multiplier here
-// (TDEV_TO_PACE: 0.25 % a point). TDEV_MAX ±8 is the CLAMP an imported save is
-// held to (SaveMigrate mirrors it), not a level a winter reaches: tdevStep halves
-// the carried value, adds a shove of at most ±2 and rounds half toward zero, so
-// a team climbing from neutral tops out at TDEV_REACH = ±3 points, ±0.75 % pace
-// (#5047: it was +4 but -3; an imported ±8 parks at ±4, also stable). TIER_V was compressed on 2026-10-06 (#1112) to ~1.05% from tier 0 to
-// tier 4 (~0.26% a step), so a fully developed team gains about 2.9 tier
-// steps over a few seasons without `team.tier` ever
-// changing (it drives the grid sort, the mesh presets and the colours). The
-// multiplier was left at its pre-compression value on purpose: a balance call.
+// Team development: stat points, 0.25 % pace each. TDEV_MAX is the import clamp;
+// a winter climbs to TDEV_REACH ±3 (±0.75 %, ~2.9 TIER_V steps; #5047, docs/CAREER.md).
 const TDEV_MAX = 8;
 const TDEV_SHOVE = 2;
 const TDEV_REACH = 3;   // the fixed point of tdevStep(x, ±TDEV_SHOVE); pinned by career-parts-regs.test.mjs
@@ -976,8 +968,7 @@ function grant(n) {
 }
 const charge = (cost) => (freeMoney() ? 0 : cost);
 
-// A fitted {cat: id} build as ownership keys (Parts.ownId): the brakes and the
-// suspension "sport" are two parts, and a flat owned list must not merge them.
+// A fitted {cat: id} build as ownership keys (Parts.ownId, #5043).
 function ownedOf(setup) {
   return Object.keys(setup).map((cat) => (Parts.ownIdOf ? Parts.ownIdOf(cat, setup[cat]) : setup[cat]));
 }
@@ -1470,11 +1461,8 @@ function rolloverTeams(tStand) {
     if (next) career.tdev[team.id] = next; else delete career.tdev[team.id];
   }
 }
-// One winter of team development: half the carried delta plus the season's
-// shove, rounded HALF TOWARD ZERO. Math.round sends .5 up, so +1 stuck at +1
-// forever while -1 decayed to 0, and +3 went to 2 but -3 to -1 (#5047): an
-// underachiever and an overachiever drift back to neutral alike, and the
-// ceiling is ±TDEV_REACH both ways.
+// One winter: half the carry plus the shove, rounded half TOWARD ZERO so ±1
+// decays alike (Math.round kept +1 and dropped -1, #5047).
 function tdevStep(prev, shove) {
   const v = (Number(prev) || 0) * 0.5 + clamp(Number(shove) || 0, -TDEV_SHOVE, TDEV_SHOVE);
   return clamp(Math.sign(v) * Math.ceil(Math.abs(v) - 0.5), -TDEV_MAX, TDEV_MAX) || 0;

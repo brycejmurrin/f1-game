@@ -255,11 +255,8 @@ const SaveMigrate = (function () {
     if (typeof Parts === "undefined" || !Array.isArray(Parts.CATALOG) || !Parts.CATALOG.length) return;
     const byCategory = new Map();
     const all = new Set();
-    // Ownership keys (Parts.ownId) that differ from the option id: a save written
-    // before brakes Sport got its own key holds the bare "sport", which unlocked
-    // BOTH Sport rows (#5043). Keep what it unlocked: the legacy id also grants the
-    // new key. Additive and idempotent, no CAREER_V rung, so an older build still
-    // opens the save (it drops only the key it does not know).
+    // #5043: a bare legacy "sport" unlocked both Sport rows; it also grants the
+    // new key. Additive, idempotent, no CAREER_V rung (older builds still load).
     const split = [];
     for (const cat of Parts.CATALOG) {
       if (!cat || typeof cat.id !== "string" || !Array.isArray(cat.options)) continue;
@@ -277,7 +274,7 @@ const SaveMigrate = (function () {
     };
     career.owned = Array.isArray(career.owned) ? grantSplit(career.owned.filter((id, i, a) =>
       typeof id === "string" && all.has(id) && a.indexOf(id) === i)) : [];
-    // AI bags (CareerAiDev) keep their entries as they were; they only gain the key.
+    // AI bags only gain the key.
     const bags = career.aiParts && typeof career.aiParts === "object" && !Array.isArray(career.aiParts) ? career.aiParts : {};
     for (const id of Object.keys(bags)) {
       const bag = bags[id];
