@@ -2342,6 +2342,7 @@
       ],
       "create": [
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/replay-buf.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/rival-audio.test.mjs"
@@ -10654,6 +10655,9 @@
       "summarize": [
         "tests/unit/bench-capture.test.mjs",
         "tests/unit/bench-run.test.mjs"
+      ],
+      "*": [
+        "tests/unit/pause-hud-layout.test.mjs"
       ]
     },
     "js/perf/gfx-debug-overlay.js": {
@@ -18384,6 +18388,7 @@
       "*": [
         "tests/specs/custom-team.spec.js",
         "tests/specs/wake-lock.spec.js",
+        "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"
