@@ -2183,6 +2183,32 @@
       ],
       "kind": "browser"
     },
+    "test:scratch-churn": {
+      "files": [
+        "tests/specs/scratch-churn-r1.spec.js",
+        "tests/specs/scratch-churn-r2.spec.js",
+        "tests/specs/scratch-churn-r3.spec.js",
+        "tests/specs/scratch-churn-r4.spec.js",
+        "tests/specs/scratch-churn-r5.spec.js",
+        "tests/specs/scratch-churn-r6.spec.js",
+        "tests/specs/scratch-churn-r7.spec.js",
+        "tests/specs/scratch-churn-r8.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:scratch-rcm": {
+      "files": [
+        "tests/specs/scratch-rcm-r1.spec.js",
+        "tests/specs/scratch-rcm-r2.spec.js",
+        "tests/specs/scratch-rcm-r3.spec.js",
+        "tests/specs/scratch-rcm-r4.spec.js",
+        "tests/specs/scratch-rcm-r5.spec.js",
+        "tests/specs/scratch-rcm-r6.spec.js",
+        "tests/specs/scratch-rcm-r7.spec.js",
+        "tests/specs/scratch-rcm-r8.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",

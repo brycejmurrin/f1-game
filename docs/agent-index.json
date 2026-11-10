@@ -1423,6 +1423,38 @@
       "twinned": false
     },
     {
+      "id": "scratch-churn",
+      "script": "test:scratch-churn",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-churn-r1.spec.js",
+        "tests/specs/scratch-churn-r2.spec.js",
+        "tests/specs/scratch-churn-r3.spec.js",
+        "tests/specs/scratch-churn-r4.spec.js",
+        "tests/specs/scratch-churn-r5.spec.js",
+        "tests/specs/scratch-churn-r6.spec.js",
+        "tests/specs/scratch-churn-r7.spec.js",
+        "tests/specs/scratch-churn-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "scratch-rcm",
+      "script": "test:scratch-rcm",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-rcm-r1.spec.js",
+        "tests/specs/scratch-rcm-r2.spec.js",
+        "tests/specs/scratch-rcm-r3.spec.js",
+        "tests/specs/scratch-rcm-r4.spec.js",
+        "tests/specs/scratch-rcm-r5.spec.js",
+        "tests/specs/scratch-rcm-r6.spec.js",
+        "tests/specs/scratch-rcm-r7.spec.js",
+        "tests/specs/scratch-rcm-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",

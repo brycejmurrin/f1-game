@@ -1207,6 +1207,8 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
+        "test:scratch-churn",
+        "test:scratch-rcm",
         "test:shimmer",
         "test:smoke",
         "test:stall-reload-sw",
@@ -4283,6 +4285,14 @@
     {
       "name": "test:results-flow",
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
+    },
+    {
+      "name": "test:scratch-churn",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-churn-r1.spec.js tests/specs/scratch-churn-r2.spec.js tests/specs/scratch-churn-r3.spec.js tests/specs/scratch-churn-r4.spec.js tests/specs/scratch-churn-r5.spec.js tests/specs/scratch-churn-r6.spec.js tests/specs/scratch-churn-r7.spec.js tests/specs/scratch-churn-r8.spec.js"
+    },
+    {
+      "name": "test:scratch-rcm",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcm-r1.spec.js tests/specs/scratch-rcm-r2.spec.js tests/specs/scratch-rcm-r3.spec.js tests/specs/scratch-rcm-r4.spec.js tests/specs/scratch-rcm-r5.spec.js tests/specs/scratch-rcm-r6.spec.js tests/specs/scratch-rcm-r7.spec.js tests/specs/scratch-rcm-r8.spec.js"
     },
     {
       "name": "test:service-worker",
