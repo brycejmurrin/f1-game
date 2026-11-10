@@ -1041,6 +1041,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // and in renderer-picker.js long after its only writer left game.js, which
     // is what the WRITER check below now catches.)
     "apex26.gfxProbeStrikes",
+    // The canary's retirement record (#4995): RESET returns to the default renderer, so its notice goes too.
+    "apex26.gfxRetired",
     // The last boot's BOUND backend (renderer-boot.js start()): steers only the next
     // boot's early backend preload (guessBackend). A RESET that kept it would preload
     // the old path's group once; dropping it costs nothing.
