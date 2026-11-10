@@ -624,7 +624,6 @@ function buildSetup() {
   teamEl.textContent = team.name.toUpperCase();
   teamEl.title = team.name;
 
-
   const budgetEl = $("cs-budget");
   const budgetFill = $("cs-budget-fill");
   const unlimitedBtn = $("cs-unlimited");

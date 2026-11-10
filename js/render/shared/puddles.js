@@ -7,14 +7,9 @@
 // GLSL/TSL/WGSL copies are hand-ported and tests/unit/puddles.test.mjs pins
 // each literal against K, plus sample values of mask() itself.
 //
-// Research (docs/notes/WEATHER-ROADMAP-2026-10-14.md):
-//  - GT7 keeps puddles at FIXED real locations and dries the racing line first
-//    (https://traxion.gg/gran-turismo-7-features-detailed-dynamic-weather-but-not-at-every-track/):
-//    a world-keyed mask, not a per-frame random one. The racing line itself is
-//    not an input here (the arc must not reach the driver — AGENTS.md §Physics);
-//    the crown-drains / gutter-holds weighting carries the same read.
-//  - iRacing Tempest: rough surface texture fills first
-//    (https://www.iracing.com/?p=272386) — the edges and kerb hollows hold water.
+// Research: docs/notes/WEATHER-ROADMAP-2026-10-14.md (GT7 fixed-location puddles,
+// iRacing rough-surface fill). The racing line is not an input (the arc must
+// not reach the driver — AGENTS.md §Physics).
 //  - The cheap technique: a low-frequency procedural mask that fades in with
 //    wetness; inside it roughness near zero, a darker albedo and a strong
 //    Fresnel mirror. SSR is shed on phones, so the puddle must read through
