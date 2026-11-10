@@ -3699,6 +3699,7 @@
       "isOptionAvailable": [
         "tests/specs/parts-catalog.spec.js",
         "tests/unit/career-ai-dev.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
@@ -3716,6 +3717,9 @@
       ],
       "optLabel": [
         "tests/unit/i18n-parts-career.test.mjs"
+      ],
+      "ownId": [
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "resolveSetup": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -3933,6 +3937,7 @@
         "tests/unit/career-regulations.test.mjs"
       ],
       "*": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs"
       ]
     },
@@ -4069,6 +4074,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-experience.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
@@ -4097,6 +4103,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -4126,6 +4133,7 @@
         "tests/unit/career-seat-rollover.test.mjs"
       ],
       "freeMoney": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs"
       ],
       "goalLabel": [
@@ -4180,6 +4188,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
@@ -4227,6 +4236,7 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "owned": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs"
       ],
       "paceMult": [
@@ -4256,7 +4266,8 @@
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "research": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "rollover": [
         "tests/unit/career-ai-dev.test.mjs",
@@ -4358,6 +4369,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -4375,6 +4387,9 @@
       ],
       "tallyOf": [
         "tests/unit/career-seat-rollover.test.mjs"
+      ],
+      "tdevStep": [
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "teamStandings": [
         "tests/unit/career-legends.test.mjs",
@@ -4486,6 +4501,7 @@
       "*": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs"
       ]
@@ -4521,6 +4537,7 @@
       "migrateCareer": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/save-migrate.test.mjs",
         "tests/unit/share-code.test.mjs"
@@ -5121,6 +5138,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
@@ -5283,6 +5301,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
@@ -5407,6 +5426,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -5805,6 +5825,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/legends.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -6140,6 +6161,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -11938,6 +11960,7 @@
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
