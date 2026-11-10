@@ -126,7 +126,8 @@ test("combined slip: a cornering rear pays for the same drive with more κ and l
   const straight = run(0), cornering = run(0.11);
   assert.ok(cornering.k > straight.k + 0.01, `κR straight ${straight.k} cornering ${cornering.k}`);
   assert.ok(cornering.lat < straight.lat - 0.03, `latScaleR straight ${straight.lat} cornering ${cornering.lat}`);
-  assert.equal(cornering.short, 0, "still under the combined peak: the drive is delivered");
+  // Rounding only: the runaway settles where Fx = aReq, so 1 − ach/want is 0 to the last ulp.
+  assert.ok(cornering.short < 1e-12, `still under the combined peak: the drive is delivered (shortfall ${cornering.short})`);
 });
 
 test("a placement (speed step > RESYNC_A·dt) re-syncs the rims instead of reading slip", () => {
@@ -188,4 +189,35 @@ test("reverse travel: a rim slower than the body is LOCKED, faster is SPINNING (
   assert.ok(revLock.locked > 0 && revLock.spinning === 0, `reverse slow rim reads locked, got locked=${revLock.locked} spinning=${revLock.spinning}`);
   const revSpin = run(-80, -10);
   assert.ok(revSpin.spinning > 0 && revSpin.locked === 0, `reverse fast rim reads spinning, got locked=${revSpin.locked} spinning=${revSpin.spinning}`);
+});
+
+// W26 6a: each axle reads its OWN lateralCurve, with ρ = 1 at that axle's
+// peak — the front's hold-less branch peaks at CURVE_PEAK_X_F, the rear (floor,
+// fall and hold passed, as PlayerForces' Fyr) at CURVE_PEAK_X and holds to
+// CURVE_HOLD_R. Before: both axles called the front-shaped curve at ρ·π/2, so
+// the front was already past its peak at ρ = 1 and the rear lost its hold.
+test("axleStep: Fx(ρ) is the axle's own curve, normalised to 1 at that axle's peak", () => {
+  const { WheelState, TyreModel: TM } = load();
+  // A runaway step keeps the Fx of the state it was handed: κ = kn·KAPPA_PEAK, α = 0.
+  const fxAt = (kn, rear) => {
+    const vx = 30;
+    const o = WheelState.axleStep({ vw: vx * (1 + kn * 0.10) }, { dt: DT, vx, aReq: 1000, muLong: 10, alphaN: 0, rear }, {});
+    return o.fx / 10;
+  };
+  assert.ok(Math.abs(fxAt(1, false) - 1) < 1e-9, `front at its peak: ${fxAt(1, false)}`);
+  assert.ok(Math.abs(fxAt(1, true) - 1) < 1e-9, `rear at its peak: ${fxAt(1, true)}`);
+  const rearCurve = Math.abs(TM.lateralCurve(1.4 * TM.CURVE_PEAK_X, TM.CURVE_FLOOR_R, TM.CURVE_FALL_W_R, TM.CURVE_HOLD_R));
+  const frontCurve = Math.abs(TM.lateralCurve(1.4 * TM.CURVE_PEAK_X_F));
+  assert.equal(rearCurve, 1, "1.4× the rear peak is still inside the rear hold");
+  assert.ok(Math.abs(fxAt(1.4, true) - rearCurve) < 1e-9, `rear past peak follows the rear curve: ${fxAt(1.4, true)}`);
+  assert.ok(Math.abs(fxAt(1.4, false) - frontCurve) < 1e-9, `front past peak follows the front curve: ${fxAt(1.4, false)}`);
+  assert.ok(frontCurve < 0.97, `the front has already started its fall: ${frontCurve}`);
+});
+
+test("stepPlayer passes the rear curve to the rear axle (fxR inside the hold = full μ)", () => {
+  const { WheelState } = load();
+  WheelState.setEnabled(true);
+  const c = { speed: 30, vwF: 30, vwR: 30 * 1.14, kappaF: 0, kappaR: 0.14 };
+  const r = WheelState.stepPlayer(c, opts({ thrOn: true, aReqR: 1000, muLongR: 10 }));
+  assert.ok(Math.abs(r.fxR - 10) < 1e-9, `rear spinning at 1.4× peak κ keeps μ in its hold: fxR ${r.fxR}`);
 });

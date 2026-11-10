@@ -12,7 +12,11 @@ const OvertakeMode = (function () {
   // 3–5 s push, then a 9–14 s lockout".
   //
   // ENERGY UNITS. `c.energy` is the battery as 0..1 of the Energy Store's 4 MJ
-  // deployable window (4 MJ ≈ 11.5 s at the MGU-K's 350 kW), so the allowance
+  // deployable window. That unit is a label, not a power model: BOOST drains
+  // it at drainFor(c) = lerp(DRAIN_HI 0.26, DRAIN_LO 0.14, ersDeploy) per real
+  // second (PhysicsConsts; no PACE term), so a full battery lasts 3.8–7.1 s of
+  // deploy (5.0 s at the default ersDeploy 0.5) — not the ≈ 11.5 s that 4 MJ
+  // would last at the MGU-K's real 350 kW. The allowance
   // is OT_MJ / ES_MJ = 0.125 of that same unit, held SEPARATELY in `c.otE`:
   // it is an extra allowance, not a draw on the battery (BOOST's job). It is
   // spent at the rate that empties it over `otTimeFor(c)` seconds of deploy

@@ -90,11 +90,26 @@ const WheelState = (function () {
   }
 
   /**
+   * |F(ρ)| / μ for one axle, with ρ = 1 at that axle's peak. Front: the
+   * hold-less branch, abscissa ρ·CURVE_PEAK_X_F. Rear: the rear's floor, fall
+   * and hold (as PlayerForces' Fyr), abscissa ρ·CURVE_PEAK_X.
+   */
+  function curveAt(rho, rear) {
+    if (typeof TyreModel === "undefined" || !TyreModel.lateralCurve) return Math.min(1, rho);
+    const TM = TyreModel;
+    if (rear) {
+      return Math.abs(TM.lateralCurve(rho * (TM.CURVE_PEAK_X || Math.PI / 2),
+        TM.CURVE_FLOOR_R, TM.CURVE_FALL_W_R, TM.CURVE_HOLD_R));
+    }
+    return Math.abs(TM.lateralCurve(rho * (TM.CURVE_PEAK_X_F || Math.PI / 2)));
+  }
+
+  /**
    * One axle: demand aReq (accel units, +drive / −brake) vs tyre Fx; update vw.
    * Pure over numbers; writes into `out` { vw, kappa, fx, locked, spinning }.
    *
    * @param {{ vw: number, kappa?: number }} state
-   * @param {{ dt: number, vx: number, aReq: number, muLong: number, alphaN?: number }} params
+   * @param {{ dt: number, vx: number, aReq: number, muLong: number, alphaN?: number, rear?: boolean }} params
    * @param {object} [out]
    */
   function axleStep(state, params, out) {
@@ -116,14 +131,15 @@ const WheelState = (function () {
       return o;
     }
 
-    // Combined-slip abscissa: ρ=1 at the lateralCurve peak on both axes.
+    // Combined-slip abscissa: ρ=1 at THIS axle's lateralCurve peak on both
+    // axes. The front curve (no hold) peaks at CURVE_PEAK_X_F; the rear passes
+    // its own floor / fall / hold and peaks at CURVE_PEAK_X — the same shapes
+    // PlayerForces' Fy path uses, and the same peaks stepPlayer divides alphaN by.
+    const rear = !!params.rear;
     let kappa = clamp(kappaOf(vw, vx), -KAPPA_MAX, KAPPA_MAX);
     const kn = kappa / KAPPA_PEAK;
     const rho = Math.hypot(alphaN, kn);
-    const peakX = (typeof TyreModel !== "undefined" && TyreModel.CURVE_PEAK_X) || (Math.PI / 2);
-    const f = (typeof TyreModel !== "undefined" && TyreModel.lateralCurve)
-      ? Math.abs(TyreModel.lateralCurve(rho * peakX))
-      : Math.min(1, rho);
+    const f = curveAt(rho, rear);
     const share = rho > 1e-9 ? f / rho : 0;
     // Sign: drive (+κ) pushes the car forward (+Fx); brake (−κ) resists.
     let fx = muLong * share * kn;
@@ -156,9 +172,7 @@ const WheelState = (function () {
       kappa = clamp(kappaOf(vw, vx), -KAPPA_MAX, KAPPA_MAX);
       const kn2 = kappa / KAPPA_PEAK;
       const rho2 = Math.hypot(alphaN, kn2);
-      const f2 = (typeof TyreModel !== "undefined" && TyreModel.lateralCurve)
-        ? Math.abs(TyreModel.lateralCurve(rho2 * peakX))
-        : Math.min(1, rho2);
+      const f2 = curveAt(rho2, rear);
       const share2 = rho2 > 1e-9 ? f2 / rho2 : 0;
       fx = clamp(muLong * share2 * kn2, -muLong, muLong);
     } else {
@@ -191,8 +205,7 @@ const WheelState = (function () {
     // spinning tyre keeps only the sliding force's sideways share. The first
     // slice's √(1−κn²) hit its 0.05 floor the instant κ passed the peak.
     const aN = Math.abs(alphaN), rhoL = Math.hypot(aN, knAbs);
-    const g = (x) => (typeof TyreModel !== "undefined" && TyreModel.lateralCurve)
-      ? Math.abs(TyreModel.lateralCurve(x * peakX)) : Math.min(1, x);
+    const g = (x) => curveAt(x, rear);
     const per = (x) => (x > 1e-3 ? g(x) / x : g(1e-3) / 1e-3);   // F(x)/x, its slope at 0
     o.latScale = clamp(per(rhoL) / per(aN), 0.05, 1);
     return o;
@@ -204,8 +217,8 @@ const WheelState = (function () {
   // Pooled axleStep inputs (audit4 P2): axleStep reads them before it writes its out bag and keeps none.
   const _fState = { vw: 0.5, kappa: 0.5 };
   const _rState = { vw: 0.5, kappa: 0.5 };
-  const _fIn = { dt: 0.5, vx: 0.5, aReq: 0.5, muLong: 0.5, alphaN: 0.5 };
-  const _rIn = { dt: 0.5, vx: 0.5, aReq: 0.5, muLong: 0.5, alphaN: 0.5 };
+  const _fIn = { dt: 0.5, vx: 0.5, aReq: 0.5, muLong: 0.5, alphaN: 0.5, rear: false };
+  const _rIn = { dt: 0.5, vx: 0.5, aReq: 0.5, muLong: 0.5, alphaN: 0.5, rear: true };
   const _results = { latScaleF: 1, latScaleR: 1, fxF: 0, fxR: 0, shortfall: 0 };
 
   /**

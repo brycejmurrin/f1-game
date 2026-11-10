@@ -951,6 +951,35 @@ const AiDrive = (function () {
     const lim = (hw || 5) - 0.6;
     return clamp(passX + side * clear, -lim, lim);
   }
+  // STOP BEFORE THE EDGE (W26): the target is clamped to the road, but the heading turns at
+  // most yawMax, so a car arriving at the clamp with heading slid past it (Spa: 17 strikes a
+  // race). Unwinding heading h at yaw Y takes v*h^2/(2Y) of road, so the outward heading is
+  // capped by the room d left: sqrt(2*SHARE*Y*d/v). A target past the road (pit lane) moves
+  // its side's keep line out. Pure, no allocation.
+  const EDGE_KEEP_M = 0.5, EDGE_YAW_SHARE = 0.7;
+  function edgeHead(want, x, hw, desiredX, v, yawMax) {
+    if (!(v > 1) || !(yawMax > 0)) return want;
+    const keep = hw - EDGE_KEEP_M, k = 2 * EDGE_YAW_SHARE * yawMax / v;
+    const hiLim = desiredX > keep ? desiredX : keep, loLim = -desiredX > keep ? -desiredX : keep;
+    const hi = Math.sqrt(k * Math.max(0, hiLim - x)), lo = -Math.sqrt(k * Math.max(0, loLim + x));
+    return want > hi ? hi : want < lo ? lo : want;
+  }
+  // A STOPPED CAR IS A HAZARD (W26): not retired/parked (Collide.parkedAhead) but stopped,
+  // e.g. a human parked on the grid, which the queue/pass logic treated as a slow blocker.
+  // Under 6 % of vTop and not in the pits; steer round it from hazardReach metres.
+  const HAZARD_V_FRAC = 0.06;
+  function stoppedHazard(o, vTop) {
+    if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
+    const frac = Math.abs(o.speed || 0) / (vTop > 0 ? vTop : 72);   // a share of the top speed, so PACE-scaled
+    return frac < HAZARD_V_FRAC;
+  }
+  function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
+  // A PARKED PLAYER IS RETIRED (W26): stationary seconds while the race is live; the
+  // race-end owner retires the car at STALL_RETIRE_S.
+  const STALL_RETIRE_S = 60, STALL_V = 1.0;
+  function stallStep(t, speed, dt, live) {
+    return live && Math.abs(speed || 0) < STALL_V ? (t || 0) + dt : 0;
+  }
   // IS THE PASS LANE STILL REACHABLE? Dropping the latch whenever less than a
   // car width (WCAR) of road is left beyond the passing car — checked every
   // frame, INCLUDING after it arrives in the lane (passTarget allows 0.6 m from
@@ -1214,27 +1243,18 @@ const AiDrive = (function () {
   function wornPays(ctx) { bindStrat(); return AiStrategy.wornPays(ctx); }
   function pitNow(ctx) { bindStrat(); return AiStrategy.pitNow(ctx); }
 
-  // errMul is the difficulty-ladder rate scale (PhysicsConsts.DIFF[d].err) —
-  // NOT the render-time brakeTarget multiplier of the same short name in
-  // ctx.errMul (that one scales the braking limit once a mistake has already
-  // fired; this one scales whether it fires at all). >0 multiplies the base
-  // rate; undefined/0/negative leaves it at 1 so every existing caller and
-  // test is unchanged.
-  //
-  // Slice 4: short races need visible late-brake/gather on easy/normal without
-  // editing DIFF.err. Hard (errMul≈1) keeps the 0.004 base; easy/normal get a
-  // visibility lift from (em−1). Optimism adds under pressure only (zero-mean
-  // when unpressured).
+  // errMul = DIFF[d].err (not ctx.errMul, the brake-limit scale once a mistake fired); <=0 or
+  // undefined reads as 1.
+  // errMul (DIFF.err) is applied ONCE (W26; it entered twice, ~em^2). MISTAKE_BASE is the
+  // old NORMAL base, so normal keeps its rate; hard:normal:easy = 1:1.8:3.5 (ai-drive.test.mjs).
+  const MISTAKE_BASE = 0.004 * (1 + 7.0 * (0.8 / 1.2));   // ≈ 0.02267
   function mistakeChance(t, pressure, errMul) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
     const em = errMul > 0 ? errMul : 1;
     const press = clamp(pressure || 0, 0, 1);
-    // Cap 8× once em≥2.5 (easy); normal (~1.8) gets ~5.7×. Hard (em=1)
-    // stays on the 0.004 base so DIFF.err alone sets the hard rate.
-    const base = 0.004 * (1 + 7.0 * clamp((em - 1) / 1.2, 0, 1));
     const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
     const optMul = 1 + 0.25 * opt * press;
-    return base * (1 + 2 * press) * (1.3 - cons) * em * optMul;
+    return MISTAKE_BASE * em * (1 + 2 * press) * (1.3 - cons) * optMul;
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
@@ -1629,7 +1649,7 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, stallStep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

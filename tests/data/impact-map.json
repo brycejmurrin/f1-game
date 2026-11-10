@@ -9472,6 +9472,9 @@
       "fmtLap": [
         "tests/unit/phone-pad.test.mjs"
       ],
+      "makePeerId": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "padUrl": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9506,6 +9509,12 @@
       ]
     },
     "js/input/phone-pad.js": {
+      "admit": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "askOnScreen": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "cancel": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
@@ -9584,6 +9593,9 @@
     },
     "js/input/tilt-roll.js": {
       "rollDeg": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "screenAngle": [
         "tests/unit/phone-pad.test.mjs"
       ],
       "*": [
@@ -11393,6 +11405,9 @@
     "js/physics/ai-corridor.js": {
       "choose": [
         "tests/unit/ai-corridor.test.mjs"
+      ],
+      "planAllows": [
+        "tests/unit/ai-corridor.test.mjs"
       ]
     },
     "js/physics/ai-drive.js": {
@@ -11469,6 +11484,9 @@
       "digOutHeld": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "edgeHead": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "endLook": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11480,6 +11498,9 @@
         "tests/unit/ai-strategy.test.mjs"
       ],
       "followTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardReach": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "holdLineGap": [
@@ -11688,6 +11709,9 @@
       "squeezeEase": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "stallStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "startCalm": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11702,6 +11726,9 @@
       ],
       "stintPlan": [
         "tests/unit/ai-strategy.test.mjs"
+      ],
+      "stoppedHazard": [
+        "tests/unit/ai-drive.test.mjs"
       ],
       "strategyTemper": [
         "tests/unit/ai-strategy.test.mjs"
@@ -12342,7 +12369,8 @@
       ],
       "lateralCurve": [
         "tests/unit/grip-steer.test.mjs",
-        "tests/unit/tyre-peak-slip.test.mjs"
+        "tests/unit/tyre-peak-slip.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
       ],
       "lifeLaps": [
         "tests/unit/ai-strategy.test.mjs",
@@ -12439,8 +12467,7 @@
       "*": [
         "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs",
-        "tests/unit/wheel-state.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/physics/vehicle.js": {
