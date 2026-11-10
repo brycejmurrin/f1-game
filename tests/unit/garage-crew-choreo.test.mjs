@@ -19,6 +19,7 @@ import vm from "node:vm";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -199,8 +200,23 @@ test("pit steps sit on PitLane.stopAnim's boundaries", () => {
   for (const n of ["0.15", "0.80", "0.12"]) assert.ok(anim.includes(n), `stopAnim still keys on ${n}`);
 });
 
-// The car-draw slide: wheels out 0.55 m from u .15 to .27, back .68 to .80 (pit-lane.js stopAnim).
-const slide = (u) => { const e = (t) => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); return 0.55 * (u < 0.5 ? e((u - 0.15) / 0.12) : e((0.80 - u) / 0.12)); };
+// The car-draw slide is the REAL PitLane.stopAnim(c).off (js/race/pit-lane.js), run
+// at a stop's u: a retime or a new travel there must move the crew's hands too.
+const slide = (() => {
+  const ctx = vm.createContext({ Math, Object, Array, Number, JSON, isFinite, Float32Array, window: null });
+  ctx.window = ctx;
+  seedLog(ctx);
+  ctx.Tracks = { sample: (_t, _s, out) => { out.hw = 7; return out; } };
+  for (const f of ["js/core/mat4.js", "js/race/pit-geom.js", "js/race/pit-lane.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const pits = vm.runInContext("PitLane", ctx).create({ track: { total: 5386, n: 1346, def: {} }, vTop: () => 60, cars: [], ranked: [], tyres: { on: () => true } });
+  const boxS = pits.zoneOf().boxS;
+  assert.ok(boxS > 0, "the stub lane has a box time");
+  return (u) => pits.stopAnim({ pitState: "box", pitT: boxS * (1 - u), pitWorked: 0 }).off;
+})();
+test("slide is stopAnim's wheel travel: off at the jack, fully out mid-hold, back on before the drop", () => {
+  assert.equal(slide(0.1), 0); assert.equal(slide(0.85), 0);
+  assert.ok(slide(0.5) > 0.5, `fully out mid-hold: ${slide(0.5)}`);
+});
 test("the tyre men's hands ride the wheel slide; gunners hold their guns; jacks pump while the car is up", () => {
   const { Choreo } = load(), out = Choreo.actors(12), len = Choreo.CLIPS.pit.len;
   for (let u = 0; u <= 0.84; u += 0.01) {
@@ -252,6 +268,34 @@ test("PitCrewAnim draws the player's stop, deterministically, and leaves AI cars
   assert.equal(Pit.draw(G, { ...c, pitState: "out" }, base, {}), false, "nothing once released");
   assert.equal(Pit.draw({ ...G, camEye: [0, 0, 200] }, c, base, {}), false, "far: static mesh");
   assert.equal(Pit.draw({ ...G, pits: { stopAnim: () => ({ u: -1, lift: 0, off: 0 }) } }, c, base, {}), false);
+});
+
+test("PitCrewAnim.warm builds the player's rig ahead of the stop: the box frame builds no mesh (#5051)", () => {
+  const { Pit, gfx, meshes } = load();
+  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 0, 4, 1]);
+  const { c, G } = raceCtx(Pit, 0.5); G.gfx = gfx;
+  const idle = meshes.length;
+  assert.equal(Pit.warm(G, { ...c, isPlayer: false }), false, "an AI car has no animated crew to warm");
+  assert.equal(meshes.length, idle);
+  // Under the lights the car is on the grid, not in its box: warm must not wait for pitState.
+  assert.equal(Pit.warm(G, { ...c, pitState: "none" }), true);
+  const rig = meshes.length - idle;
+  assert.ok(rig >= 8, `the rig is the stop's whole mesh build: ${rig}`);
+  assert.equal(Pit.warm(G, c), true);
+  assert.equal(meshes.length, idle + rig, "a second warm (a restart's countdown) is a cache hit");
+  assert.equal(Pit.draw(G, c, base, {}), true);
+  assert.equal(meshes.length, idle + rig, "BUDGET 0: the first box frame creates no mesh after a warm");
+  assert.equal(Pit.setEnabled(false), false);
+  assert.equal(Pit.warm(G, c), false, "the A/B switch off builds nothing");
+  Pit.setEnabled(true);
+});
+
+test("car-draw.js queues the crew warm behind the grid's own pieces and drains it through PitCrewAnim.warm", () => {
+  const src = read("js/car/car-draw.js");
+  assert.equal(src.split("_deferredCarWarm.push({ c: p, crew: true })").length - 1, 2, "both warm paths (sync and stepped) queue it");
+  assert.ok(/else if \(it\.crew && typeof PitCrewAnim !== "undefined"\) PitCrewAnim\.warm\(G, it\.c\);/.test(src), "drainDeferredCarWarm builds it");
+  const stepped = src.slice(src.indexOf("_deferredCarWarm.length = 0;"));
+  assert.ok(stepped.indexOf("crew: true") > 0, "queued after the stepped path resets the queue, or the reset would drop it");
 });
 
 test("PitCrewAnim frees the evicted rigs' meshes when a third team colour arrives (perf hunt 9)", () => {

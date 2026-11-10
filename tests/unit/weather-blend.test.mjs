@@ -26,7 +26,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
-function boot(trackId = "t", { particles = false } = {}) {
+function boot(trackId = "t", { particles = false, saved = {} } = {}) {
   const sandbox = {
     console,
     Assets: { env: () => null },
@@ -49,7 +49,6 @@ function boot(trackId = "t", { particles = false } = {}) {
     rain.init({ drawParticles: (_data, floats, additive) => { if (!additive) drawnRain += floats; } });
   }
   vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: absSrc("js/lighting/profiles.js") });
-  const saved = {};
   const G = {
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
     store: { get: (k, d) => (k in saved ? saved[k] : d), set: (k, v) => { saved[k] = JSON.parse(JSON.stringify(v)); } },
@@ -77,7 +76,7 @@ function boot(trackId = "t", { particles = false } = {}) {
     drawnRain = 0; rain.draw();
     return drawnRain;
   };
-  return { G, atmo, ltStore, LT, DEFS, P, snapLt, drawRain };
+  return { G, atmo, ltStore, LT, DEFS, P, snapLt, drawRain, saved };
 }
 const host = (v) => JSON.parse(JSON.stringify(v));
 const sum = (a) => a.reduce((s, v) => s + v, 0);
@@ -549,6 +548,31 @@ test("FOG weather effective density stays in the readable band on shipped preset
     }
   }
   assert.equal(seen.length, 16);
+});
+
+// The band clamp used to divide the LIVE LT.fogDensityMul back out, while the renderers
+// multiply by the live value: in a clamped FOG session the FOG DENSITY slider moved the
+// picture until the next applyRaceSettings undid it, and a saved value never survived a
+// reload. It now divides out the SHIPPED multiplier (LightStore.shipped), so the player's
+// ratio over the shipped value scales the band and persists. Unedited sessions are
+// bit-identical (shipped === live).
+test("FOG weather: the player's FOG DENSITY survives a re-apply and a reload in a clamped session", () => {
+  const eff = (b) => b.G.frame.fogDensity * b.LT.fogDensityMul;
+  const start = (saved) => {
+    const b = boot("spa", { saved });
+    b.G.frame.fogDensity = 0.0043; b.G.raceTimeOfDay = "day"; b.G.raceWeather = "fog";
+    b.atmo.applyRaceSettings();
+    return b;
+  };
+  const b = start({});
+  const shipped = b.LT.fogDensityMul, base = eff(b);
+  assert.ok(Math.abs(base - 0.006) < 1e-9 || Math.abs(base - 0.0067) < 1e-9, `spa day fog is band-clamped (eff ${base})`);
+  b.ltStore.set("fogDensityMul", shipped * 1.5); b.ltStore.persist();
+  b.atmo.applyRaceSettings();
+  assert.ok(Math.abs(eff(b) / base - 1.5) < 1e-9, `a re-apply must keep the player's x1.5 (got x${eff(b) / base})`);
+  const r = start(b.saved);
+  assert.equal(r.LT.fogDensityMul, shipped * 1.5, "the saved value resolves after a reload");
+  assert.ok(Math.abs(eff(r) / base - 1.5) < 1e-9, `the saved x1.5 must reach the picture after a reload (got x${eff(r) / base})`);
 });
 
 test("FOG BOOST still scales fog: the band follows the knob, so pea-soup stays reachable", () => {

@@ -157,3 +157,29 @@ jobs:
           path: scratch/garage-before/
           if-no-files-found: error
           retention-days: 30
+
+  # A RED SCHEDULE IS HEARD (audit 2026-11-09). The daily capture failed every day from 2026-10-27 with nobody
+  # told. A scheduled run that ends red opens ONE issue, or comments on it when it is already open. The issue
+  # carries no `ready` label, so the dispatcher does not launch a worker on it; a person triages it first.
+  report-red:
+    name: Report a red schedule
+    needs: [plan, capture, pack]
+    if: always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      issues: write
+    steps:
+      - name: Open or refresh the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: "Garage before: the scheduled capture is red"
+          RESULTS: "plan=${{ needs.plan.result }} capture=${{ needs.capture.result }} pack=${{ needs.pack.result }}"
+        run: |
+          set -euo pipefail
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          note="Scheduled run $url ended red ($RESULTS) on $GITHUB_SHA. The failed jobs' logs name the step; garage-angles.mjs prints the failing frame."
+          num="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title == env.ISSUE_TITLE)][0].number // empty')"
+          if [ -n "$num" ]; then gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$note"
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body "$note"; fi

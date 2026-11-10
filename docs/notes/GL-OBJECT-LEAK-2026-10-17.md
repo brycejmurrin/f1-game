@@ -1,6 +1,6 @@
 # three's WebGL fallback never freed GL programs, shaders or VAOs (#2651), 2026-10-17
 
-Tool: `node tools/gfx/gl-object-census.mjs --cycles 3` (wraps `WebGL2RenderingContext.prototype.create*/delete*`,
+Tool: `node tools/gfx/gl-object-census --cycles 3` (wraps `WebGL2RenderingContext.prototype.create*/delete*`,
 picker mode, monza → monaco → spa × 3, forced `apex26.tlxForceGL=1`, i.e. three's WebGL2 backend, the iPhone path;
 every row reports `webgl2Backend: true`). SwiftShader here; counts, never timing. The Metal CI leg runs three's
 *WebGPU* backend (session 01UQC1Jf, PR #2637), so this fix does not touch that heap step.
@@ -31,3 +31,5 @@ drifted +8 per cycle, which is what found the missing release.
 ## Not established
 Whether an undeleted VAO kept its buffers alive in ANGLE-Metal (the hypothesis in PERF-RESEARCH-2026-10-17 §2.4) — this
 container cannot test it; read Safari's Memory timeline across 5 switches on a phone.
+
+> 2026-11-10 (W17 dead-weight pass): the tools cited here without an extension were deleted; `git log --diff-filter=D -- <path>` recovers them.

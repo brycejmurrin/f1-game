@@ -840,6 +840,49 @@ test("a host relays only validated guest qualifying laps to the other guest", as
   } finally { h.lobby.cancel(); }
 });
 
+test("two guests claiming one seat: only the EARLIER may post its qualifying time", async () => {
+  // The clash resolves by join rank after the fact (the later guest moves), and
+  // until then both HELLOs sit in the host's roster. Keyed on the seat alone,
+  // the later claimant's QUALI overwrote the holder's time (last write wins).
+  const { h, made } = await connectedHost();
+  const heard = [];
+  h.G.onPeerQuali = (q) => heard.push([q.driverId, q.t]);
+  try {
+    await h.lobby.inviteAnother();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 2);
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[1].deliver("hello", { team: "beta", driver: 0 });       // the later guest picks the same car
+    const before = made[0].sent.length;
+    made[1].deliver("quali", { driverId: "beta:0", t: 99.9 });   // the later claimant: refused
+    made[0].deliver("quali", { driverId: "beta:0", t: 71.5 });   // the holder: accepted
+    assert.deepEqual(heard, [["beta:0", 71.5]], "only the seat holder's time is taken");
+    assert.equal(made[0].sent.slice(before).filter((m) => m.t === "quali").length, 0,
+      "the refused time is not relayed to the holder either");
+    // Once the later guest moves, its own seat is its own.
+    made[1].deliver("hello", { team: "beta", driver: 1 });
+    made[1].deliver("quali", { driverId: "beta:1", t: 72.25 });
+    assert.deepEqual(heard.at(-1), ["beta:1", 72.25]);
+  } finally { h.lobby.cancel(); }
+});
+
+test("a profile carried inside an answer code is cleaned like a HELLO before it is stored", async () => {
+  const peer = { team: "beta", driver: 1, from: "g9", rank: 0, junk: "x".repeat(4096),
+    parts: { wing: "w2", fn() {}, deep: { a: 1 } } };
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    handshake: { acceptAnswer: async () => ({ ok: true, peer }) } });
+  try {
+    await h.lobby.host();
+    assert.equal((await h.lobby.acceptAnswer("APEX1.p.X")).ok, true);
+    const stored = h.lobby.roomState().peers;
+    assert.equal(stored.length, 1);
+    assert.equal(JSON.stringify(stored[0]), JSON.stringify({ team: "beta", driver: 1, parts: { wing: "w2" } }),
+      "only localProfile() fields survive, and a code never carries a relay tag");
+  } finally { h.lobby.cancel(); }
+});
+
 test("X on a sub-step while in a room stops the scanner as well as keeping the room", async () => {
   const { h, scanners } = await connectedHost();
   try {
@@ -1819,6 +1862,72 @@ test("once guest connected, status never regresses and no expiry error", async (
   }
 });
 
+// A relay replayed an offer the host had already used; the guest answered it
+// and the host dropped the answer (wrong_offer). With reanswer the exchange
+// hands the guest the host's NEWER offer: it needs a fresh pc to answer it.
+test("a code join answers a newer offer on a FRESH transport, and stops listening once connected", async () => {
+  const made = [], ts = [], accepted = [];
+  let token = null, reanswerAsked = null, second = null;
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS, netSession: fakeNetSession(made),
+    handshake: { acceptInvite: async (t, invite) => { accepted.push([ts.indexOf(t), invite]); return { ok: true, code: "answer-" + invite, peer: null }; } },
+    rendezvous: {
+      usingPrivateRelay: () => false,
+      normalise: (c) => String(c || "").toUpperCase(),
+      valid: () => true,
+      swap: async (o) => {
+        token = o.token; reanswerAsked = o.reanswer;
+        assert.equal(await o.reply("stale-invite"), "answer-stale-invite");
+        second = await o.reply("current-invite");
+        return { ok: true, payload: "current-invite" };
+      },
+    },
+  });
+  h.lobby.setTransportFactory(() => {
+    const t = { status: "new", onClose() {}, close() { t.status = "closed"; },
+      stats: () => ({ ice: "checking", connection: "connecting" }) };
+    ts.push(t);
+    return t;
+  });
+  try {
+    const result = await h.lobby.codeJoin("ABC234");
+    assert.equal(result.ok, true);
+    assert.equal(reanswerAsked, true, "the lobby asks the exchange for re-answers");
+    assert.equal(second, "answer-current-invite", "the newer offer is answered");
+    assert.deepEqual(accepted, [[0, "stale-invite"], [1, "current-invite"]], "each offer on its own pc");
+    assert.equal(ts[0].status, "closed", "the stale answer's pc is released");
+    ts[1].status = "open";
+    for (let i = 0; i < 40 && !h.lobby.status().connected; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(h.lobby.status().connected, true, "the fresh transport is the one watched");
+    assert.equal(token.cancelled, true, "connected: the exchange stops listening for offers");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a code join never re-answers once its first answer connected", async () => {
+  const made = [];
+  let t0 = null, again;
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS, netSession: fakeNetSession(made),
+    handshake: { acceptInvite: async () => ({ ok: true, code: "answer", peer: null }) },
+    rendezvous: {
+      usingPrivateRelay: () => false, normalise: (c) => String(c || "").toUpperCase(), valid: () => true,
+      swap: async (o) => {
+        await o.reply("first");
+        t0.status = "open";
+        again = await o.reply("next-guests-offer");
+        return { ok: true, payload: "first" };
+      },
+    },
+  });
+  let built = 0;
+  h.lobby.setTransportFactory(() => { built++; t0 = { status: "new", onClose() {}, close() { t0.status = "closed"; } }; return t0; });
+  try {
+    await h.lobby.codeJoin("ABC234");
+    assert.equal(again, null, "the live connection keeps its answer");
+    assert.equal(built, 1, "no second transport");
+  } finally { h.lobby.cancel(); }
+});
+
 // Host room-code expiry / courier fail (onFail) must close the half-built
 // pending RTCPeerConnection + transport. Leaving it leaked blocked a retry
 // from the same guest (stale pending offer / PC) after #1237's longer host
@@ -2603,8 +2712,15 @@ test("HELLO keeps only the profile fields; guest SETTINGS skip unchanged snapsho
     const snap = initialGuestSettings({ laps: laps0 });
     s.deliver("settings", snap); s.deliver("settings", snap);
     assert.equal(h.G.raceLaps, 98, "an unchanged snapshot is not re-applied");
+    // Let the rolling window (EVENT_WINDOW_MS = 1000) empty, then burst 10 CHANGED snapshots synchronously:
+    // exactly HELLO_RATE (5) may apply. Count the applies by the raceLaps writes applySettings makes.
+    await new Promise((r) => setTimeout(r, 1050));
+    let lapsNow = h.G.raceLaps, lapWrites = 0;
+    Object.defineProperty(h.G, "raceLaps", { configurable: true, enumerable: true,
+      get: () => lapsNow, set: (v) => { lapWrites++; lapsNow = v; } });
     for (let n = 0; n < 10; n++) s.deliver("settings", initialGuestSettings({ laps: 5 + n % 2 }));
-    assert.ok(h.G.raceLaps === 98 || h.G.raceLaps === 5 || h.G.raceLaps === 6);
+    assert.equal(lapWrites, 5, "past 5 SETTINGS in a rolling second the rest are dropped");
+    assert.equal(h.G.raceLaps, 5, "the fifth (laps 5) is the last one applied");
   } finally { h.lobby.cancel(); }
 });
 

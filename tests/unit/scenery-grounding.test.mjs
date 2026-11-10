@@ -173,8 +173,8 @@ for (const guard of ["clear", "road", "unsupported"]) {
     h.sandbox.TrackScenery.jerez = (api) => {
       const sl = (f) => (f + Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4) % 1;
       const seats = Array.from({ length: 8 }, (_, i) => {
-        const k = api.K(sl(0.973 + i * 0.0068));
-        const gap = i === 7 ? 33 : 27;
+        const k = api.K(sl(0.9866 + i * 0.0068));   // the loop as authored since #5078 moved the line
+        const gap = 31;
         const a = api.anchor(k, 1, gap);
         assert.equal(api.onTrack(a.c[0], a.c[2], 10), false);
         assert.ok(Math.abs(api.terrainYAt(a.c[0], a.c[2]) - a.c[1] - 0.3) < 1e-8);

@@ -119,6 +119,7 @@ const SPEC = [
   { k: "lookDesigner", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js TRACK DESIGNER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "layoutPreset", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js LAYOUT PRESET (null = none recorded; the last preset applied — it reads CUSTOM once the knobs above no longer match it)", oneOf: ["shipped", "thumb", "compact", "big"] },
   { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : (G.gfx.isMobile ? "med" : "auto")), src: "js/ui/scale.js (MED on a touch device)", perDevice: true },
+  { k: "resSchema", lane: "json", group: "display", def: 1, info: true, src: "js/ui/scale.js RES_SCHEMA (migration version — boot writes the current one, so never a change)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
   { k: "buildWorker", lane: "raw", group: "display", def: "1", src: "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)", oneOf: ["0", "1"], perDevice: true },
@@ -1111,7 +1112,6 @@ function create(G) {
     otherFiles.className = "adv-help";
     otherFiles.setAttribute("data-help", "keep");
     otherFiles.textContent = "Separate backups: GARAGE → TEAM → SAVE GARAGE FILE saves parts, setups, liveries and your team. CAREER → CAREER MODES → SAVE CAREER FILE saves all six career slots. The same separate file controls are on the Save and Restore pages here. LOAD asks twice and replaces only the corresponding data, then reloads. Settings, garage and career remain separate files. Photos, personal backgrounds, ghosts, replays and accounts are not included in these backups. STORAGE HEALTH & RESTORE POINTS below reports browser storage and local career history; local history is not an exported backup.";
-
 
     const shareNote = document.createElement("p");
     shareNote.id = "pm-share-code-help";

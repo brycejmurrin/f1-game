@@ -808,7 +808,14 @@ function setMood(id) {
 }
 function moodDef() { return MD; }
 // The hour outside is part of the mood: garageCtx() hands its ctx through here.
-function moodCtx(ctx) { if (ctx && MD.night !== null) ctx.night = MD.night; return ctx; }
+// The mood's hour lights the bay (live(): rig, backdrop, atlas); the GEOMETRY keeps the garage's own hour
+// (ctx.bayNight, set by the producer before this), so a moment whose mood flips the hour does not
+// rebuild the whole bay at the shutter and again at the return (#4965). Idempotent: callable twice a frame.
+function moodCtx(ctx) {
+  if (ctx) ctx.night = MD.night !== null ? MD.night : ctx.bayNight !== undefined ? !!ctx.bayNight : ctx.night;
+  return ctx;
+}
+function hourNight(ctx) { return !!(ctx && (ctx.bayNight !== undefined ? ctx.bayNight : ctx.night)); }
 function fixGain(i) { return i < 2 ? MD.key : i < 6 ? MD.fill : MD.wash; }
 function fixTint(i, t) { return (i < 2 ? MD.keyTint : i < 6 ? MD.fillTint : MD.washTint) || t; }
 {
@@ -1238,7 +1245,7 @@ function roomKeyStrings(team, liv, info, ctx) {
   // Shell, floor, LEDs, props and the career desks. Not the crest, the sponsor
   // banners or the pit-board numbers — those are atlas texels.
   const geom = `${team && team.id}|${(team && team.legend) || ""}|${paint}`
-               + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
+               + `|${hourNight(ctx) ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
   const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
   const board = boardKey(info);
@@ -1320,10 +1327,10 @@ function rebuild(team, liv, info, ctx) {
       if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
     const flr = acc();
     buildBayFloor(flr, liv, look);
-    const fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, !!(ctx && ctx.night));
+    const fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, hourNight(ctx));
     exteriorFallbackMesh = _gfx.createMesh(fallback);
     // The clear colour beyond the apron rim follows the hour outside.
-    const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
+    const bd = hourNight(ctx) ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
     BACKDROP[0] = _bdBase[0] = bd[0]; BACKDROP[1] = _bdBase[1] = bd[1]; BACKDROP[2] = _bdBase[2] = bd[2];
     floorMesh = _gfx.createMesh(flr);
     const g = {};

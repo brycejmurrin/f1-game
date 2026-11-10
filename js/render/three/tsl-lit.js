@@ -62,7 +62,7 @@
   // the same 192 and squeaks under with a lean hand-written shader; three/TSL
   // adds its own block on top and goes OVER, so the shader fails to LINK and
   // every lit surface draws nothing — while textured/emissive ones still draw.
-  // 16 lamps = 64 rows (LightBudget.LITE). Same _liteGpu gate as samples/outputType in tlx.js.
+  // 16 lamps = 64 rows (LightBudget.LITE). Same _liteGpu gate as antialias/outputType in tlx.js.
 
   function lit(THREE, TSL, ctx) {
     // Read from ctx so the cap is decided at factory time, BEFORE the TSL graph
@@ -825,8 +825,9 @@
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
         .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
       // DERIVATIVES UNCONDITIONAL (roadMarkings / WGX fs_main pattern): fwidth
-      // inside If(inRange)/If(matWallLike) is non-uniform CF → hard WGSL error
-      // on TLX-WebGPU. Hoist footprints; branches only consume them.
+      // inside If(inRange)/If(matWallLike) is non-uniform CF — undefined values,
+      // and a hard WGSL error on Firefox (r187 switches derivative_uniformity off
+      // everywhere else). Hoist footprints; branches only consume them.
       const an0 = abs(N);
       const hc0 = select(an0.x.greaterThan(an0.z), wp.z, wp.x).toVar();
       const y0 = wp.y.toVar();
@@ -1007,7 +1008,8 @@
     // 17-layer array. Sampling `.depth(int(mid))` and `uMatTexScale[mid]` raw
     // is OOB on every painted/tyre/carbon fragment: SwiftShader/WebGL then
     // returns black (or discards), so the whole car vanishes. Clamp the layer for the
-    // hoisted sample (derivative_uniformity forbids an early-out around it)
+    // hoisted sample (an early-out around it is non-uniform CF: undefined
+    // derivatives, and a compile error on Firefox where r187 keeps the check)
     // and keep the apply-gate on the REAL id so cars stay procedural.
     const matTexLayer = (mid) => clamp(mid, float(0.0), float(16.0));
     const matTexInPack = (mid) => mid.greaterThanEqual(1.0).and(mid.lessThanEqual(16.0));
