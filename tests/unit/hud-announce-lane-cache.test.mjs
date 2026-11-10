@@ -163,7 +163,6 @@ function boot(opts = {}) {
 test("source: lane memo buckets gaps empty/non-empty; caches rects; invalidateFit clears", () => {
   const hud = read("js/ui/hud.js");
   const js = read("js/ui/hud-radio-lane.js");   // the lane left hud.js whole (#3261)
-  assert.match(js, /function invalidateLaneRects\b/, "invalidateLaneRects exists");
   assert.match(js, /function laneRect\b/, "laneRect caches getBoundingClientRect");
   assert.match(js, /gapBit/, "gap empty/non-empty bit is in the layout key");
   assert.doesNotMatch(

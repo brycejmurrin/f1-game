@@ -36,6 +36,9 @@ const QualiWire = (function () {
     // QUALI + QLIVE flood cap, shared by the lobby and the in-race relay: per
     // connection, rolling window. A real client sends ~2.5 QLIVE/s plus one QUALI.
     const QUALI_RATE = 12, EVENT_WINDOW_MS = 1000;
+    // A GUEST's one connection is the host relaying the whole room (the lobby's
+    // MAX_GUESTS + 1 = 4 seats), so it gets four drivers' worth of window (#5012).
+    const QUALI_GUEST_RATE = QUALI_RATE * 4;
     function rateGate(limit, windowMs = EVENT_WINDOW_MS) {
       const times = [];
       return () => {
@@ -87,7 +90,7 @@ const QualiWire = (function () {
     }
     return {
       validQuali, validQualiLive, rateGate, bindQuali, qualiReporters,
-      QUALI_MIN_S, QUALI_MAX_S, QUALI_RATE, EVENT_WINDOW_MS,
+      QUALI_MIN_S, QUALI_MAX_S, QUALI_RATE, QUALI_GUEST_RATE, EVENT_WINDOW_MS,
     };
   }
   return { create };
