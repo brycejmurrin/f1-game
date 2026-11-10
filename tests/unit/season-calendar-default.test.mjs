@@ -231,7 +231,9 @@ test("start() with every slot of the mode used and none named returns null and w
 
 function race(Career, mark) {
   Career.engage(true);
-  Career.start({ teamId: "haas", seat: 1 });
+  // A fixed seed: the round's objective (and its bonus) is drawn from it, so the
+  // three runs differ only in how the car was classified.
+  Career.start({ teamId: "haas", seat: 1, seed: 4242 });
   Career.data().season.round = 1;
   const field = Array.from({ length: 6 }, (_, i) => ({ team: { id: "x" + i }, driverId: "x" + i }));
   const me = { isPlayer: true, team: { id: "haas" }, driverId: "haas:1" };

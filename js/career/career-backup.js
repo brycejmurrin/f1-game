@@ -79,7 +79,11 @@ const CareerBackup = (function () {
       if ("salary" in d) salaries.push(d.salary);
       if (isObj(d.pending) && "ask" in d.pending) salaries.push(d.pending.ask);
     }
-    if (salaries.some((v) => v != null && v !== "" && !inRange(Number(v), "SALARY_MAX"))) return { ok: false, reason: "salary-range" };
+    // Numbers and numeric strings only: Number() on an object leaf throws, and
+    // migrateCareer already coerces any other shape (an object, "x") to 0.
+    const outside = (v) => (typeof v === "number" || (typeof v === "string" && v !== "" && Number.isFinite(Number(v))))
+      && !inRange(Number(v), "SALARY_MAX");
+    if (salaries.some(outside)) return { ok: false, reason: "salary-range" };
     if (data.season != null && (typeof data.season !== "object" || Array.isArray(data.season))) {
       return { ok: false, reason: "season-not-object" };
     }
