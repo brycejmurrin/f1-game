@@ -5,8 +5,8 @@ paths:
 
 # .claude/ config — loads with .claude/
 
-- Hooks (`.claude/hooks/**`) and `.claude/settings*.json`: a PR that edits them needs the `config-ok` label, which
-  Bryce applies himself (merge-gate's `config` row reads the label event's actor, not a message).
+- A PR whose diff touches a path matched by `CONFIG_PATH` (`tools/ci/merge-gate.mjs`, the one list) needs the
+  `config-ok` label, which Bryce applies himself (merge-gate's `config` row reads the label event's actor, not a message).
 - The deny and ask lists live in `.claude/settings.json` (`permissions.deny`, `permissions.ask`); a denied tool is
   refused outright, an asked one waits for Bryce in an attended session and is unavailable in a worker.
 - Memory: `.claude/memory/` is restored one way at SessionStart (`memory-sync.sh restore`; the repo copy wins); edits
