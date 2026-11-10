@@ -104,7 +104,6 @@ test("a WebGPU desktop still builds the PCSS blocker", () => {
 test("TLX post chain: re-callable factory, rebuilt at the next realloc, bound label kept (M13)", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /function buildPost\(\) \{/, "the post chain is built by a function that can run again");
-  assert.match(src, /post = buildPost\(\);/);
   const resize = src.slice(src.indexOf("function applyResize()"), src.indexOf("function resize()"));
   assert.match(resize, /if \(_postRebuild && !post\) \{\s*_postRebuild = false; post = buildPost\(\);\s*if \(!post\) postFailure\("Post-processing reconstruction failed"\);\s*\}\s*if \(post\) post\.resize\(rw, rh, presentW, presentH\);/,
     "a render-target realloc rebuilds a retired chain before resizing it");

@@ -1,5 +1,7 @@
 # Upstream three.js issues to file — drafts (2026-09-22)
 
+Summary: Draft issue bodies for the three local three.js patches (swizzle gate, WGSL `var<private>` scope, `yieldToMain` fallback) — none is filed upstream as of 2026-09-22; post, then put the URLs in `vendor/three-0.187.0/PATCHES.md` and `patches.mjs`.
+
 Apex 26 vendors three.js r186 with three local patches
 (`vendor/three-0.187.0/PATCHES.md`, `vendor/three-patches/patches.mjs`). None of
 the three has an upstream issue or PR as of 2026-09-22 (searched mrdoob/three.js

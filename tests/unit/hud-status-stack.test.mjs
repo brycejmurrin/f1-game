@@ -39,8 +39,6 @@ test("fitHud publishes gaps-bottom and tyre-stack for the left/centre columns", 
 });
 
 test("CSS: flag and announce clear the gaps strip; tyre stack; strat under REL", () => {
-  assert.match(CSS, /--hud-gaps-b/,
-    "flag/announce rules consume --hud-gaps-b");
   // Compact density overrides #hud-flag top — must still max() gaps-b (72×1.5=108
   // sat inside the gaps strip on phoneL broadcast @150%).
   assert.match(CSS,
