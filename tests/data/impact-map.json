@@ -5387,6 +5387,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/crest-marks.test.mjs",
@@ -7245,6 +7246,7 @@
       "gripMult": [
         "tests/specs/parts-physics.spec.js",
         "tests/unit/ai-drive.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs"
       ],
@@ -7614,6 +7616,9 @@
       "titleIfBare": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
+      ],
+      "trackFrom": [
+        "tests/unit/track-from-projection-vm.test.mjs"
       ],
       "trackWetness": [
         "tests/unit/light-presets.test.mjs",
@@ -11645,6 +11650,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "*": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
@@ -11766,6 +11772,7 @@
       ],
       "create": [
         "tests/specs/physics-hotpath.spec.js",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
@@ -11787,6 +11794,7 @@
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "pairContact": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
@@ -11802,6 +11810,7 @@
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "resolveCollisions": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
@@ -11901,6 +11910,7 @@
       ],
       "*": [
         "tests/unit/ai-drive.test.mjs",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
@@ -14169,6 +14179,9 @@
       "setWeatherLive": [
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
+      ],
+      "settle": [
+        "tests/unit/race-settings-vm.test.mjs"
       ],
       "startArc": [
         "tests/unit/forecast.test.mjs",
@@ -18974,6 +18987,7 @@
       ],
       "*": [
         "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]

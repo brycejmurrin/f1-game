@@ -1190,7 +1190,11 @@ physics-contract-auditor: ZERO violations — every player-path read is
 behind an assist knob that defaults to 0, or reaches only render / audio /
 telemetry. `tests/unit/curvature-channels.test.mjs` asserts every file that
 reads curvature appears here, so a new consumer must be classified before
-it lands.
+it lands. That guard is bookkeeping (it counts call sites); the BEHAVIOURAL guard is
+`tests/unit/curvature-contract-vm.test.mjs`: with assists off it swaps every runtime curvature and
+racing-line table (`curv`, `lineRoadK`, `line*`) under the player on a straight and the three tightest
+corners of three circuits and requires the trajectory to stay bit-identical (red on an injected steer,
+grip or racing-line read, 2026-11-10).
 
 | file | sites (symbol) | channel | why it never reaches the player with assists off |
 |---|---|---|---|

@@ -345,7 +345,7 @@ const Collide = (() => {
         c.yawRateCur = clamp(state.omega + dw, -4, 4);
       }
     }
-    function orientedResponse(a, b, ct, last) {
+    function orientedResponse(a, b, ct) {
       const correction = Math.max(0, ct.depth - COL_SLOP) * 0.7;
       shiftLong(a, ct.nx * correction * ct.sA); shiftLong(b, -ct.nx * correction * ct.sB);
       a.x += ct.ny * correction * ct.sA; b.x -= ct.ny * correction * ct.sB;
@@ -355,7 +355,10 @@ const Collide = (() => {
       if (correction > CORR_EPS || j.magnitude > CORR_EPS) {
         if (!netPlay.owns(a)) a.contactT = 0.22;
         if (!netPlay.owns(b)) b.contactT = 0.22;
-        if (last) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
+        // The FIRST pass per pair per step carries the severity, as the rear-end path: on the `last`
+        // pass the closing speed was already gone (always the 0.15 floor), and a pair separated
+        // early skips the last pass entirely (the `!_colTouched` break) — no shake or rumble at all.
+        if (firstPairFx(a, b)) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
         // already removed closing velocity. Both worlds retain their own gates.
         if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
@@ -419,7 +422,7 @@ const Collide = (() => {
           const shares = sepShares(a, b);
           hit.dProg = x0 + (da - db) * t; hit.dX = y0 + (xa - xb) * t;
           hit.aSp = a.speed; hit.bSp = b.speed; hit.sA = shares.sA; hit.sB = shares.sB;
-          orientedResponse(a, b, hit, true);
+          orientedResponse(a, b, hit);
           pa.sweepGeneration = pb.sweepGeneration = 0;
           break; // let the ordinary solver settle a cluster before another sweep
         }
@@ -577,7 +580,7 @@ const Collide = (() => {
       const ct = pairContact(a, b);
       if (!ct) return;
       _colTouched = true;
-      if (ct.oriented) { orientedResponse(a, b, ct, last); return; }
+      if (ct.oriented) { orientedResponse(a, b, ct); return; }
       const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
       if (sideContact) {
         // side-by-side contact: separate laterally, scrub a little speed. Mark
@@ -619,7 +622,7 @@ const Collide = (() => {
           // touching with no correction left to apply — re-fired audio, shake
           // and hit-stop every frame and banked a career `hits` count of ~14 in
           // five seconds of contact that the solver had already resolved.
-          if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
+          if (firstPairFx(a, b)) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);   // once per pair per step, and not lost to the early-break
         }
       } else {
         // rear-end: separate along the track and nudge speeds together (gentle,

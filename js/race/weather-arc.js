@@ -92,7 +92,7 @@ const WeatherArc = (function () {
     }
     function weather(w) {
       if (w === undefined) return G.raceWeather;
-      arc = null;
+      arc = null; grooveEnd = null;
       return setWeatherLive(w);
     }
 
@@ -205,7 +205,7 @@ const WeatherArc = (function () {
     function restoreBase() {
       if (base != null && G.raceWeather !== base) G.raceWeather = base;
       base = null;
-      arc = null;
+      arc = null; grooveEnd = null;
     }
     /** The flag, or a quit to the menu: an arc that outlived the race would
      *  become the next race's starting weather. Restoring the chip's pick also
@@ -213,7 +213,7 @@ const WeatherArc = (function () {
      *  the rain: the fade is ticked only in a race, so otherwise the results and
      *  the menu kept the arc's last sky until the next flyby. */
     function endSession(keepPlan) {
-      arc = null;
+      arc = null; grooveEnd = null;
       const restored = base != null && G.raceWeather !== base;
       endChangeable(keepPlan);
       if (restored && G.track) { Particles.rainShow(false); G.applyRaceSettings(); }
@@ -359,7 +359,20 @@ const WeatherArc = (function () {
         if (typeof a.w0 !== "number") adopt(a);
         w = RainCells.sample(segs(a), s / len);
       }
-      return a && Number.isFinite(x) && len > 0 && Number.isFinite(s) ? w * (1 - DRYLINE_K * dryLine(s / len, x) * Math.sqrt(Math.max(0, 1 - w))) : w;
+      const k = a ? 1 : grooveFade();
+      return k > 0 && Number.isFinite(x) && len > 0 && Number.isFinite(s) ? w * (1 - k * DRYLINE_K * dryLine(s / len, x) * Math.sqrt(Math.max(0, 1 - w))) : w;
+    }
+    // An arc that SETTLES lets go of a still-damp road: dropping the groove on that tick took 8.7 % of
+    // grip from a car on the line in 1/60 s (Monza dry→wet, 0.898 → 0.820). It fades over
+    // DRYLINE_FADE_S of the shared race clock instead; any other end (a chip, __apex, the flag) cuts.
+    const DRYLINE_FADE_S = 5;
+    let grooveEnd = null;   // now() when a live arc settled, else null
+    function settle() { arc = null; grooveEnd = now(); }
+    function grooveFade() {
+      if (grooveEnd == null) return 0;
+      const e = now() - grooveEnd;
+      if (!(e >= 0) || e >= DRYLINE_FADE_S) { grooveEnd = null; return 0; }   // a clock that went back is a new race
+      return 1 - e / DRYLINE_FADE_S;
     }
     // ── Drying line (#1627) — a lateral field on top of the along-lap wetness ──
     // SURFACE channel (docs/PHYSICS.md): the groove is where traffic has worn the rubber in, a fixed smooth
@@ -458,7 +471,7 @@ const WeatherArc = (function () {
       const w0 = live ? wetness() : wetOf(from);
       const i0 = live ? intAt(arc, Math.min(1, arc.t / arc.dur)) : intOf(from);
       if (from === to && (!live || (Math.abs(w0 - wetOf(to)) < SETTLE && Math.abs(i0 - intOf(to)) < SETTLE))) {
-        if (live) { arc = null; if (G.raceWeather !== to) setWeatherLive(to, true); }
+        if (live) { settle(); if (G.raceWeather !== to) setWeatherLive(to, true); }
         return null;
       }
       const t0 = (typeof G.raceT === "number" && G.state !== "race") ? 0 : now();
@@ -512,11 +525,11 @@ const WeatherArc = (function () {
         // weather, and once the wettest is there the arc lets go of the road.
         if (arc.t >= arc.cell.life && maxDev(arc, arc.w0) < SETTLE) {
           if (G.raceWeather !== arc.from) setWeatherLive(arc.from, true);
-          arc = null;
+          settle();
         }
       } else if (f >= 1 && maxDev(arc, wetOf(arc.to)) < SETTLE) {
         if (G.raceWeather !== arc.to) setWeatherLive(arc.to, true);
-        arc = null;   // the road has settled — weather stays at `to`
+        settle();   // the road has settled — weather stays at `to`
       }
     }
 
@@ -542,7 +555,7 @@ const WeatherArc = (function () {
     return {
       setWeatherLive, setTimeOfDay, weather,
       startArc, tick, syncWetness, wetness, wetnessAt, dryLine, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
-      get arc() { return arc; }, set arc(v) { arc = v; if (!arc) setWeatherLive(G.raceWeather); },
+      get arc() { return arc; }, set arc(v) { arc = v; grooveEnd = null; if (!arc) setWeatherLive(G.raceWeather); },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },
     };

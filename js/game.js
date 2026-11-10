@@ -435,18 +435,23 @@ const _trk = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 // the loop). Returns it for convenience.
 const _tf = { s: 0, x: 0 };
 const _tfSamp = { track: null, s: NaN };   // the (track, s) of _trk's last sample: sampleAt below
+// Two plain steps (s += along) as ever; past them a SECANT step along / h, h measured
+// from the last two samples (no curvature read). A plain step is short by h = 1 - k·x,
+// so off the inside kerb of a hairpin (h → 0.2) it trailed the car 0.6-2.4 m (Sochi:
+// tests/unit/track-from-projection-vm.test.mjs). Under 5 cm of miss after two steps
+// — all on-road driving — the read is bit-identical to the two-step version.
 function trackFrom(px, pz, sPredicted) {
-  let s = wrapS(sPredicted);
-  for (let i = 0; i < 2; i++) {
+  let s = wrapS(sPredicted), aPrev = 0, dPrev = 0, fresh = false;
+  for (let i = 0; i < 6; i++) {
     Tracks.sample(track, s, _trk);
     let tx = _trk.t[0], tz = _trk.t[2];
     const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
     const along = (px - _trk.p[0]) * tx + (pz - _trk.p[2]) * tz;
-    if (Math.abs(along) < 1e-3) break;
-    // Cap the step so one bad sample can't fling the reading down the track.
-    s = wrapS(s + clamp(along, -12, 12));
+    if (Math.abs(along) < (i < 2 ? 1e-3 : 0.05)) { fresh = true; break; }
+    // ±12 m cap: one bad sample can't fling the read down the track; h is the secant from the last two samples.
+    const h = i < 2 ? 1 : (aPrev - along) / dPrev, d = clamp(along / clamp(Number.isFinite(h) ? h : 1, 0.1, 2.5), -12, 12); s = wrapS(s + d); aPrev = along; dPrev = d;
   }
-  Tracks.sample(track, s, _trk);
+  if (!fresh) Tracks.sample(track, s, _trk);
   let rx = _trk.r[0], rz = _trk.r[2];
   const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
   _tf.s = s;
@@ -1461,7 +1466,7 @@ function fieldSize() {
 }
 
 function makeCars() {
-  cars = [];
+  cars = []; clampDriverIdx();   // every team switch clamps (G.teamIdx); this is the one place an out-of-range seat would start a race with player === null
   // the custom team only enters the grid when the player has selected it
   const grid = gridTeams();
   // Counted through the same accessor the loop below iterates, or MY TEAM's second
@@ -3258,7 +3263,7 @@ const G = {
   },
   get musicEnabled() { return musicEnabled; }, set musicEnabled(v) { musicEnabled = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
-  get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
+  get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; clampDriverIdx(); },   // a LEGENDS pick ≥ 2, then a share code's two-seat team: no seat was yours
   // Stable helpers consumed by js/garage/setup-sheet.js.
   arrToHex, hexToArr, getTeamParts, saveTeamParts, recomputePlayerMods, getLiveryId, saveLiveryId,
   getCustomLiveries, setCustomLiveries, getLiveries,
@@ -4894,7 +4899,7 @@ function updateCar(c, dt, ranked) {
   // pits.update refits a set, the tread and the weather cannot change inside a car's step, and driveTune.PACE cannot
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
-  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, wxArc ? wxArc.wetnessAt(c.s) : trackWetness());   // standing water UNDER the car (a local shower)
+  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness());   // standing water UNDER the car (a local shower, the drying line), as gripMult reads it
   const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE, gmC = gripMult(c) * aq.mul, gm0 = gripMult();
   const perfMul = trMul * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
@@ -5041,7 +5046,7 @@ function updateCar(c, dt, ranked) {
   let deploy = 0;
   const boostToggle = c.isPlayer && !!(EnergyPlan.toggleFor(c, isTimeTrial()) | Input.consumeBoostToggle());   // #1580: the sector plan asks for the same toggle a press makes
   if (S.recordInput) S.recordInput.boost = !!boostToggle;
-  if (boostToggle) c.boostOn = !c.boostOn;   // BOOST is a toggle
+  if (boostToggle) c.boostOn = !c.boostOn && c.energy > 0;   // BOOST is a toggle; ON with a flat battery latched and fired by itself once regen refilled it
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
   // pitHeld: lane limiter only (OT earn / flaps also gate on it). ersHeld adds box + caution for BOOST.
   const pitHeld = pits.held(c);
@@ -6547,7 +6552,7 @@ function updateCarAdvance(c, dt, ranked, S) {
 // Put the player back on the racing line at its CURRENT progress, facing forward at a modest speed — for a spin, a
 // beach or a wall. Progress is kept; lateral position, heading and slip reset. In TT/QUALI the lap is DELETED (no free re-centre).
 function rescuePlayer(c) {
-  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali()) c.qualiCut = true; }   // as a track-limits cut
+  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali() && c.lap >= 1) c.qualiCut = true; }   // as a track-limits cut; lap 0 is the run to the line, no timed lap to delete
   // A live incident takeover would re-impose the Rapier pose over this rescue
   // (same authority rule as __apex.jump) — hand the car back first.
   incidentSim.release(c);
