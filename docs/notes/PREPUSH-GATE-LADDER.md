@@ -1,5 +1,9 @@
 # The pre-push gate is a ladder — moved
 
+Summary: The pre-push ladder: `test:guards` ⊂ `test:tooling-fast` ⊂ `deploy.mjs --gate-only`, with the measured sizes (`gen-ladder-figures.mjs` regenerates it). Read before judging a green rung as proof of the one above.
+
+> **Historical record** (superseded): neither AGENTS.md rule 3 nor `tests/unit/docs-integrity.test.mjs` names this path any more, so the condition below for keeping this pointer has lapsed; the ladder lives in docs/VERIFICATION.md §4.
+
 Kind: how-to
 
 > This note's content is §4 of [VERIFICATION.md](../VERIFICATION.md) since

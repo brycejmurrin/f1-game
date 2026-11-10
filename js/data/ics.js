@@ -11,7 +11,7 @@ const DataIcs = (function () {
      by year + Jolpica circuitId, NOT the round: 2026 was renumbered in-season (Bahrain and Saudi
      Arabia cancelled), and a round-keyed UID re-imported as an update to a DIFFERENT race while the
      dropped rounds stayed behind as orphans. UID is TEXT (§3.8.4.7), escaped like any TEXT. Plan:
-     docs/plans/2026-10-04-pwa-shortcuts-calendar.md §D. */
+     docs/archive/plans/2026-10-04-pwa-shortcuts-calendar.md §D. */
   const CRLF = "\r\n";
   const FOLD = 75;
   const SEQ_EPOCH = Date.UTC(2026, 0, 1);

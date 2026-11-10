@@ -1,7 +1,7 @@
 /* Apex 26 — Captions: on-screen text for radio, spotter, and pre-race announcer.
    Presentation only — no physics, no circuit arc reads. Radio lines keep using #announce;
    non-radio sources use #captions. Speaker labels live here (moved from announce-banner).
-   Plan slice 4: docs/plans/2026-10-04-colourblind-captions.md */
+   Plan slice 4: docs/archive/plans/2026-10-04-colourblind-captions.md */
 const Captions = (function () {
   "use strict";
 
