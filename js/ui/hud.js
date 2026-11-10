@@ -119,7 +119,7 @@ const teamCss = (c) => {
 // The minimap (#minimap) lives in js/ui/hud-minimap.js; fitKey is a getter because _fitKey moves.
 const _minimap = HudMinimap.create(G, { vpW, vpH, teamCss, replayGhost, motionReduced, fitKey: () => _fitKey });
 let _secRows = null;
-let _secFlash = [0, 0, 0];
+let _secFlash = [0, 0, 0], _secFlashLog = { last: -1, raceT: null, calls: 0, painted: 0 };   // read by secFlash()
 // THE GAIN, not only the split: each sector row shows the split's delta to the
 // best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
 // _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
@@ -230,7 +230,7 @@ function syncHudCamClasses() {
 // A first-ever split has nothing to beat and keeps the absolute time.
 function flashSector(i) {
   if (!(i >= 0 && i < 3)) return;
-  _secFlash[i] = 0.35;
+  _secFlash[i] = 0.35; _secFlashLog.last = i; _secFlashLog.raceT = G.raceT ?? null; _secFlashLog.calls++;
   const t = G.sectorLast && G.sectorLast[i];
   const ok = t != null && isFinite(_secPrevBest[i]);
   _secDelta[i] = ok ? t - _secPrevBest[i] : 0;
@@ -2193,7 +2193,7 @@ function updateHud(force, dtMs) {
       if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
       if (_secFlash[i] > 0) {
         _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
-        hToggle(_secRows[i].parentElement, "sec-flash", _secFlash[i] > 0);
+        if (_secFlash[i] > 0) _secFlashLog.painted++; hToggle(_secRows[i].parentElement, "sec-flash", _secFlash[i] > 0);
         hToggle(_secRows[i].parentElement, "sec-flash-pb", _secFlash[i] > 0 && pb);
         hToggle(_secRows[i].parentElement, "sec-flash-slow", _secFlash[i] > 0 && !pb && t != null);
       } else {
@@ -2345,7 +2345,7 @@ function syncPhoneFit() {
 _syncPhoneFit = syncPhoneFit;
 return {
   updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit,
-  laneRectMisses, resetLaneRectMisses,   // PERF probe (js/ui/hud-radio-lane.js)
+  laneRectMisses, resetLaneRectMisses, secFlash: () => ({ flash: _secFlash.slice(), ..._secFlashLog }),   // PERF probe (hud-radio-lane.js); sector-flash probe (__apex.hudSecFlash)
 };
 }
 

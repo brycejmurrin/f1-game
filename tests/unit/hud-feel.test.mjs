@@ -333,6 +333,26 @@ test("a sector split shows its GAIN on the previous best for 3 s, then the split
   assert.equal(vals[0].textContent, "▼29.500");
 });
 
+// W32's Time Trial spec saw no .sec-flash* after a crossing; GameHud.secFlash() is the read-only seam
+// (__apex.hudSecFlash, W25) that tells "flashSector never called" from "called, never painted".
+test("secFlash(): the sector flash is recorded at the crossing and painted on the next HUD tick", () => {
+  const { els, G, hud, tick } = boot();
+  tick();
+  const rows = els.hudSectors.children;
+  assert.deepEqual(JSON.parse(JSON.stringify(hud.secFlash())), { flash: [0, 0, 0], last: -1, raceT: null, calls: 0, painted: 0 });
+  G.raceT = 12.5; G.sectorLast[0] = 28.4;
+  hud.flashSector(0);
+  let f = hud.secFlash();
+  assert.deepEqual([f.last, f.raceT, f.calls, f.painted, f.flash[0]], [0, 12.5, 1, 0, 0.35], "recorded, not yet painted");
+  tick();
+  f = hud.secFlash();
+  assert.equal(f.painted, 1, "the first tick after the crossing paints it");
+  assert.equal(rows[0].classList.contains("sec-flash"), true, ".sec-flash lands on the S1 .sec-row inside #hud-sectors");
+  tick(); tick(); tick();
+  assert.equal(rows[0].classList.contains("sec-flash"), false, "a ~0.35 s pulse: off after its fourth tick");
+  assert.equal(hud.secFlash().flash[0], 0);
+});
+
 test("in a race the lap clock holds the lap just driven for 3 s — green on a personal best", () => {
   // The clock snapped to zero at the line and the race gaps slot shows gaps,
   // so a race never showed the lap the driver had just completed.
