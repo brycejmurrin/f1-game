@@ -597,13 +597,16 @@ const Assets = (function () {
     return !!(c && (c.saveData || /2g$/.test(c.effectiveType || "")));
   }
 
-  // Phones take the 128 px tier below GRAPHICS: HIGH (#4702, #3110 F7 A); HIGH
-  // lifts them to 256 px (~+1.1 MB). Desktop never takes the low tier here.
-  // GfxQuality is read at CALL time (no load-order edge); absent => stay low.
-  function _phoneBelowHigh() {
+  // Phones take the 128 px tier only on GRAPHICS: LOW (#5225, superseding the
+  // HIGH-only lift of #4702 / #3110 F7 A): MEDIUM, the phone default, draws a
+  // 959-1278 px buffer where a 128 px texel (2-4 cm of tarmac) is magnified,
+  // and 256 px costs ~+1.1 MB download and ~+8.5 MB GPU. Desktop never takes
+  // the low tier here. GfxQuality is read at CALL time (no load-order edge);
+  // absent or throwing => stay low.
+  function _phoneLowPreset() {
     if (!(_gfx.isMobile || _gfx.mobileTier)) return false;
     try {
-      return !(typeof GfxQuality !== "undefined" && GfxQuality.current() === "high");
+      return !(typeof GfxQuality !== "undefined" && GfxQuality.current() !== "low");
     } catch (_) { return true; }
   }
 
@@ -648,7 +651,7 @@ const Assets = (function () {
     const mats = m.materials;
 
     const wantLow = opts.tier ? opts.tier === "low"
-                              : !!(_phoneBelowHigh() || _lowDataLink());
+                              : !!(_phoneLowPreset() || _lowDataLink());
     const variant = (wantLow && mats.low) ? mats.low : mats;
     const size = variant.size | 0;
     if (!size || !variant.albedo) { _err = "bad-materials"; _tier = "off"; return false; }
