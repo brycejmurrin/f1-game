@@ -362,16 +362,14 @@ const WeatherArc = (function () {
       const k = a ? 1 : grooveFade();
       return k > 0 && Number.isFinite(x) && len > 0 && Number.isFinite(s) ? w * (1 - k * DRYLINE_K * dryLine(s / len, x) * Math.sqrt(Math.max(0, 1 - w))) : w;
     }
-    // An arc that SETTLES lets go of a still-damp road: dropping the groove on that tick took 8.7 % of
-    // grip from a car on the line in 1/60 s (Monza dry→wet, 0.898 → 0.820). It fades over
-    // DRYLINE_FADE_S of the shared race clock instead; any other end (a chip, __apex, the flag) cuts.
+    // A settling arc fades the groove over DRYLINE_FADE_S (race clock), not one tick (-8.7 % grip); other ends cut.
     const DRYLINE_FADE_S = 5;
-    let grooveEnd = null;   // now() when a live arc settled, else null
+    let grooveEnd = null;
     function settle() { arc = null; grooveEnd = now(); }
     function grooveFade() {
       if (grooveEnd == null) return 0;
       const e = now() - grooveEnd;
-      if (!(e >= 0) || e >= DRYLINE_FADE_S) { grooveEnd = null; return 0; }   // a clock that went back is a new race
+      if (!(e >= 0) || e >= DRYLINE_FADE_S) { grooveEnd = null; return 0; }
       return 1 - e / DRYLINE_FADE_S;
     }
     // ── Drying line (#1627) — a lateral field on top of the along-lap wetness ──
@@ -529,7 +527,7 @@ const WeatherArc = (function () {
         }
       } else if (f >= 1 && maxDev(arc, wetOf(arc.to)) < SETTLE) {
         if (G.raceWeather !== arc.to) setWeatherLive(arc.to, true);
-        settle();   // the road has settled — weather stays at `to`
+        settle();   // weather stays at `to`
       }
     }
 

@@ -130,8 +130,7 @@ const WallClamp = (function () {
         // pad haptics stay street-only. Throttled scrape re-arm while grinding.
         const WALL_SFX_REARM = 0.35;
         const WALL_SCRAPE_SPEED = 2;   // m/s — stopped against the barrier stays quiet
-        // SOUND OFF silences the SFX only: the shake, vibrate and rumble (and the re-arm that paces
-        // them) sat inside the soundOn gate, so a muted player felt no wall at all.
+        // SOUND OFF mutes the SFX only, never the feel
         if (c.isPlayer && c.collideT <= 0) {
           const firstStrike = !c.wasOnWall && noseIn && incidence > 0.12;
           const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;

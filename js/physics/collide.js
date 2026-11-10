@@ -355,9 +355,7 @@ const Collide = (() => {
       if (correction > CORR_EPS || j.magnitude > CORR_EPS) {
         if (!netPlay.owns(a)) a.contactT = 0.22;
         if (!netPlay.owns(b)) b.contactT = 0.22;
-        // The FIRST pass per pair per step carries the severity, as the rear-end path: on the `last`
-        // pass the closing speed was already gone (always the 0.15 floor), and a pair separated
-        // early skips the last pass entirely (the `!_colTouched` break) — no shake or rumble at all.
+        // First pass per pair carries the severity (the last had none, or was skipped by the early break)
         if (firstPairFx(a, b)) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
         // already removed closing velocity. Both worlds retain their own gates.
@@ -622,7 +620,7 @@ const Collide = (() => {
           // touching with no correction left to apply — re-fired audio, shake
           // and hit-stop every frame and banked a career `hits` count of ~14 in
           // five seconds of contact that the solver had already resolved.
-          if (firstPairFx(a, b)) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);   // once per pair per step, and not lost to the early-break
+          if (firstPairFx(a, b)) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
         }
       } else {
         // rear-end: separate along the track and nudge speeds together (gentle,
