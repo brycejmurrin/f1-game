@@ -746,7 +746,7 @@
       for (let i = 0; i < 3; i++) signBoard(K(0.012 + i * 0.009), -1, 7, "braking", 3 - i);
       signBoard(K(0.055), 1, 7.5, "corner", 1);
       signBoard(K(0.300), -1, 7.5, "corner", 5);
-      signBoard(K(0.640), 1, 7.5, "corner", 11);
+      signBoard(K(0.640), 1, 7.5, "corner", 12);  // FIA 2021 T12 (turns[11] 0.624)
       sponsorHoarding(0.940, 0.060, -1, 3.4, { h: 1.15, step: 9 });
       // Algarve branding strips on the main straight (+1) and T1 approach
       // (-1). T1 starts after the S/F wrap (0.060) so two along() boards

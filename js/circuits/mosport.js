@@ -71,21 +71,22 @@
     },
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // turns: the 10 strongest curvature peaks of THIS centreline in lap order,
-    // 10 being the real turn count. Mosport is the one circuit here whose corners
-    // OSM names individually, so these are checked against the real thing rather
-    // than taken on trust — Clayton (T2), Quebec (T3), Moss (T5a/5b), the Esses
-    // after T8 and Whites (T10) all land where the named ways say they do.
-    // No researched sectors — consumers fall back to thirds.
+    // turns: one apex per numbered corner of the operator's Grand Prix Track map
+    // (Canadian Tire Motorsport Park facility map, cdn.shopify.com/s/files/1/1566/0845/
+    // files/CTMP_Map.png, linked from canadiantiremotorsportpark.com, 2023 upload),
+    // T1..T10 in its order. Each is this centreline's curvature peak inside that
+    // corner, matched by registering the trace onto the map (~1.1 m/px). Sub-labels
+    // are one turn each: T2/2a is Clayton (apex T2; 2a is its exit, ~0.18),
+    // T5a/5b/5c is Moss (apex 5b, the hairpin), T8 opens the Esses. T6 and T7 are
+    // the Mario Andretti Straightaway kinks (|k| ~0.0005 and ~0.003, flat).
+    // T4 takes the left at the Chevrolet bridge (map marker), not the equal
+    // left at ~0.417 just before Moss. No researched sectors — consumers fall back to thirds.
     //
-    // CHECKED AGAINST THE NAMED WAYS, not just taken from curvature. Projecting
-    // OSM's own corner ways onto this ring puts Clayton at 0.185, Quebec at
-    // 0.307, Moss at 0.491, the Esses at 0.873 and Whites at 0.937; the peaks
-    // below land at 0.1817, 0.3117, 0.4817, 0.8817 and 0.9183. Five named
-    // corners, five matches inside ~20 m, which is the geometry validating
-    // itself rather than a curve-fit hoping to be right.
+    // Cross-check: projecting OSM's named corner ways onto this ring puts Clayton
+    // at 0.185, Quebec at 0.307, Moss at 0.491, the Esses at 0.873 and Whites at
+    // 0.937 — each within ~80 m of the apex carrying its map number below.
     sectors: [0.334, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0183, 0.0467, 0.1483, 0.1817, 0.2800, 0.3117, 0.4817, 0.8017, 0.8817, 0.9183],
+    turns: [0.0183, 0.1495, 0.2787, 0.3856, 0.4812, 0.6000, 0.7040, 0.8016, 0.8820, 0.9176],
     furniture: { tree: "broad", fol: [0.22, 0.40, 0.20], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],

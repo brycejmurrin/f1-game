@@ -9,6 +9,11 @@
     // lane off the inside of T16 with the F1 garages beyond it — the infield of
     // this clockwise lap. It was -1 (left), the grandstand side.
     pit: { side: 1 },
+    // The authored qatar-main-stand-* own the stand side of the pit straight;
+    // with the pits flipped to +1 the engine's generic S/F stand landed on -1
+    // at ~25 m, in front of them (and in the S/F orbit corridor). Zolder,
+    // Monza, Sepang and Portimao precedent.
+    ownPitStraight: true,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.3 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.

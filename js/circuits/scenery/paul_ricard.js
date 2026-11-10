@@ -524,7 +524,7 @@
       // gptoday / RaceFans same weekend. Outside of Tour → right of racing
       // (paddock side = side −1 in this file's convention). Channel length /
       // wall height approximate — no FIA drawing scaled here.
-      // Placed just past Tour apex (0.940) at gap 22 with a short bay — mid-
+      // Placed at 0.940, just past the FIA 2022 T15 apex (0.925; T14 is 0.908), at gap 22 with a short bay — mid-
       // corner spans at gap 14–28 were footprint-rejected on the ribbon fold.
       {
         const a = anchor(K(0.940), -1, 22);
@@ -559,7 +559,7 @@
       }
       for (let i = 0; i < 3; i++) signBoard(K(0.463 + i * 0.010), 1, 8, "braking", 3 - i);   // into the chicane
       signBoard(K(0.052), -1, 8, "corner", 1);
-      signBoard(K(0.705), -1, 9, "corner", 8);
+      signBoard(K(0.705), -1, 9, "corner", 10);   // FIA 2022 T10 (Signes, apex 0.7135)
       // Posted panels, not the theme's LED ribbon: this run stands along the
       // pit straight, where the pit complex rejects the apron, so a post-less
       // ribbon hung 0.15 m over bare ground (24 unsupported prims).
