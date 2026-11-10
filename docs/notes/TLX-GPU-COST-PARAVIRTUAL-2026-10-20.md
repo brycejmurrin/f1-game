@@ -1,5 +1,7 @@
 # TLX-WebGPU GPU cost per pass: what the macos-latest runner can and cannot measure (2026-10-20)
 
+Summary: What the macos-latest paravirtual GPU can and cannot measure for TLX WebGPU per-pass cost (B·H7).
+
 Lane B·H7 (Fleet B, wave 4: "perf hunters across the renderers"). Question: on
 TLX (three r186 WebGPU) at the phone tier, which GPU passes cost the most, and
 which can be made cheaper without changing a pixel? Starting fact from B·H6: TLX-WebGPU

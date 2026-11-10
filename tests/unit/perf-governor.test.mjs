@@ -1062,14 +1062,26 @@ test("clearStrikes / safeMode(false) releases a latched _perfTier", () => {
   // REGRESSION. clearStrikes used to zero the strike floor and leave `_perfTier`
   // where degrade had parked it — so __apex.safeMode(false) reported a lower
   // floor while tier() stayed high until reload. Mirror cleanRace()'s release.
-  const { PerfGov } = makeGov();
-  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 43 - PerfGov.tier() * 7), 1200);
-  assert.ok(PerfGov.tier() > 0, "precondition: governor shed at least one feature rung");
-  const before = PerfGov.tier();
+  // Boot a phone with two crash strikes: init() seeds _perfTier AT the strike
+  // floor (4), which is the latch. Clearing the strikes must drop tier() to 0
+  // at once, not only report floor 0 while _perfTier holds 4 until reload.
+  globalThis.localStorage = {
+    _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },
+    getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+    removeItem(k) { delete this._s[k]; },
+  };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
+  assert.equal(PerfGov.tierFloor(), 4, "precondition: two strikes floor the ladder at 4");
+  assert.equal(PerfGov.tier(), 4, "precondition: and tier() is latched there");
   PerfGov.clearStrikes();
-  assert.ok(PerfGov.tier() <= before,
-    `clearStrikes must not leave tier() above the new floor (was ${before}, now ${PerfGov.tier()})`);
+  assert.equal(PerfGov.strikes(), 0, "strikes cleared");
   assert.equal(PerfGov.tierFloor(), 0, "strikes cleared → floor 0");
+  assert.equal(PerfGov.autoTier(), 0, "the latched _perfTier is released to the new floor");
+  assert.equal(PerfGov.tier(), 0, "tier() follows immediately, no reload");
+  assert.equal(globalThis.localStorage._s["apex26.crashStrikes"], "0", "the cleared count is persisted");
 });
 
 test("a refused climb backs off: restore→verify-fail→revert must not cycle every cooldown", () => {
@@ -1707,7 +1719,33 @@ test("without RenderRate the drift response is the governor rung, unchanged", ()
 });
 
 test("software garage preview sheds render scale on SwiftShader and restores", () => {
-  assert.match(SRC, /softwareGaragePreviewBegin\(gfx\)/);
-  assert.match(SRC, /softwareGaragePreviewEnd\(gfx\)/);
-  assert.match(SRC, /if \(cur > 0\.55\) \{ _swGarageScaleSaved = cur; gfx\.setRenderScale\(0\.55\); \}/);
+  // Drive the real begin/end pair (no race scale chosen yet, so the garage
+  // intro bay is the one place that sheds) and watch the renderer's scale.
+  const { governor, gfx, sets, scale } = raceScaleGov({ softwareGL: true, scale0: 1 });
+  gfx.envProbeOptOut = false;
+  governor.init(gfx);
+  governor.softwareGaragePreviewBegin(gfx);
+  assert.equal(scale(), 0.55, "SwiftShader garage preview sheds fill rate to 0.55");
+  assert.equal(gfx.envProbeOptOut, true, "and opts the env probe out while the bay is up");
+  governor.softwareGaragePreviewBegin(gfx);
+  assert.deepEqual(sets, [0.55], "a second begin does not overwrite the saved scale");
+  governor.softwareGaragePreviewEnd(gfx);
+  assert.equal(scale(), 1, "end restores the scale the player had before the preview");
+  assert.equal(gfx.envProbeOptOut, false, "and gives the env probe back");
+  assert.deepEqual(sets, [0.55, 1]);
+  for (const s of sets) assert.ok(s >= 0.55 && s <= 1, `every scale written stays in [0.55, 1], got ${s}`);
+  governor.softwareGaragePreviewEnd(gfx);
+  assert.deepEqual(sets, [0.55, 1], "a second end is a no-op");
+
+  // A scale already at or below 0.55 is left alone, and so is hardware.
+  const low = raceScaleGov({ softwareGL: true, scale0: 0.5 });
+  low.governor.init(low.gfx);
+  low.governor.softwareGaragePreviewBegin(low.gfx);
+  low.governor.softwareGaragePreviewEnd(low.gfx);
+  assert.deepEqual(low.sets, [], "never raises a scale that is already below the preview shed");
+  const hw = raceScaleGov({ softwareGL: false });
+  hw.governor.init(hw.gfx);
+  hw.governor.softwareGaragePreviewBegin(hw.gfx);
+  hw.governor.softwareGaragePreviewEnd(hw.gfx);
+  assert.deepEqual(hw.sets, [], "hardware GL keeps its scale through the preview");
 });

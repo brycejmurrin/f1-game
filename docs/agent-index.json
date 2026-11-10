@@ -1519,6 +1519,7 @@
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
+        "tests/unit/real-race-tab-no-race.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/screen-looks.test.mjs",

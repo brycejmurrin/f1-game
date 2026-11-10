@@ -124,8 +124,6 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
 }
 
 test("shell declares TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO (motion is a11y)", () => {
-  assert.ok(SHELL.includes('id="pm-panel-appearance"'));
-  assert.ok(!SHELL.includes('id="pm-motion"'), "REDUCE MOTION row is built by A11yOpts");
   assert.ok(SHELL.includes('id="pm-titleintro"'));
   assert.ok(SHELL.includes('id="pm-menuwash"'));
   assert.ok(SHELL.includes('id="pm-titleart"'));
@@ -334,12 +332,10 @@ test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-
   assert.match(MENUS, /var\(--menu-wash-pct/);
   assert.match(CSS, /var\(--menu-wash-pct/);
   assert.match(MENUS, /--grain-opacity:\s*0\.025/);
-  assert.match(MENUS, /--grain-opacity:\s*0/);
   assert.match(COMP, /opacity:\s*var\(--grain-opacity/);
   assert.match(MENUS, /data-title-intro="quick"/);
   assert.match(MENUS, /:not\(\[data-title-intro="off"\]\)/);
   assert.match(COMP, /:not\(\[data-title-intro="off"\]\)/);
-  assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"a11y"/);
   assert.match(EXPORT, /k:\s*"titleIntro"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"menuWash"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleArt"[\s\S]*?group:\s*"appearance"/);

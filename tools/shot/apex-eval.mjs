@@ -34,10 +34,48 @@
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
+const IS_MAIN = !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+// ONE shape function for both routes: installed as window.__shape in the page
+// (Playwright serialises its source), called directly in the VM.
+function shapeOf(v, d = 0) {
+  if (v === null || v === undefined) return v === null ? "null" : "undefined";
+  if (Array.isArray(v)) return `Array(${v.length})` + (v.length ? `<${shapeOf(v[0], d + 1)}>` : "");
+  const t = typeof v;
+  if (t === "object") {
+    if (d > 1) return "object";
+    const o = {};
+    for (const k of Object.keys(v).slice(0, 32)) {
+      const x = v[k];
+      o[k] = Array.isArray(x) ? `Array(${x.length})`
+        : x && typeof x === "object" ? "object"
+        : typeof x === "number" ? +x.toFixed(3) : x;
+    }
+    return o;
+  }
+  return t === "number" ? +v.toFixed(3) : v;
+}
+// A NAMED function expression: its recursive `shapeOf(` calls bind to itself,
+// so no source rewrite is needed. A global /shapeOf\(/ → "window.__shape("
+// replace also hit the declaration and produced `function window.__shape(` —
+// a SyntaxError that failed every browser apex-eval (2026-10-05).
+const SHAPE = "window.__shape = (" + shapeOf.toString() + "); window.__shape.shapeOf = window.__shape;";
+
+/** The page's answer -> what to print and the exit code. A throwing expr comes
+ *  back from page.evaluate as { err } — a red, as on the --vm route (the
+ *  browser route used to print it and exit 0). Pure, so a unit test holds it
+ *  without a browser. */
+export function evalVerdict(result) {
+  if (result && result.ok) return { out: result.val, code: 0 };
+  return { out: result && result.err != null ? result : { err: "no result from the page" }, code: 1 };
+}
+
+async function main() {
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `usage: node tools/shot/apex-eval.mjs <trackId> "<expr>" [--raw] [--backend three|webgl2|webgpu] [--vm]
   \`a\` is window.__apex inside the expr (async is awaited); default output is shape-compacted, --raw dumps it.
@@ -75,31 +113,6 @@ if (vmRoute && backendPinned) {
   process.exit(2);
 }
 
-// ONE shape function for both routes: installed as window.__shape in the page
-// (Playwright serialises its source), called directly in the VM.
-function shapeOf(v, d = 0) {
-  if (v === null || v === undefined) return v === null ? "null" : "undefined";
-  if (Array.isArray(v)) return `Array(${v.length})` + (v.length ? `<${shapeOf(v[0], d + 1)}>` : "");
-  const t = typeof v;
-  if (t === "object") {
-    if (d > 1) return "object";
-    const o = {};
-    for (const k of Object.keys(v).slice(0, 32)) {
-      const x = v[k];
-      o[k] = Array.isArray(x) ? `Array(${x.length})`
-        : x && typeof x === "object" ? "object"
-        : typeof x === "number" ? +x.toFixed(3) : x;
-    }
-    return o;
-  }
-  return t === "number" ? +v.toFixed(3) : v;
-}
-// A NAMED function expression: its recursive `shapeOf(` calls bind to itself,
-// so no source rewrite is needed. A global /shapeOf\(/ → "window.__shape("
-// replace also hit the declaration and produced `function window.__shape(` —
-// a SyntaxError that failed every browser apex-eval (2026-10-05).
-const SHAPE = "window.__shape = (" + shapeOf.toString() + "); window.__shape.shapeOf = window.__shape;";
-
 // THE VM ROUTE. The same expr, `a` the VM's __apex, `g` the handle; the track
 // is built by createGame({ track }) before the expr runs, as race() does in
 // the browser route. Measured: ~1.5 s to __apex, ~2.5 s more to a built monza.
@@ -117,7 +130,7 @@ async function evalInVm() {
     process.exitCode = 1;
   } finally { g.close(); }
 }
-if (vmRoute) { await evalInVm(); process.exit(process.exitCode || 0); }
+  if (vmRoute) { await evalInVm(); process.exit(process.exitCode || 0); }
 
 // How long a track build may take before this is a real failure. Sized off a
 // MEASURED TLX build (16.6 s) with room for a loaded box, not off a round
@@ -125,7 +138,7 @@ if (vmRoute) { await evalInVm(); process.exit(process.exitCode || 0); }
 const TRACK_MS = 45000;
 const BOOT_MS = 45000;
 
-(async () => {
+  await (async () => {
   const srv = await startStaticServer(ROOT);
 
   try {
@@ -172,7 +185,9 @@ const BOOT_MS = 45000;
       } catch (e) { return { err: String((e && e.message) || e) }; }
     }, { expr, raw });
 
-    console.log(JSON.stringify(result.ok ? result.val : result, null, 2));
+    const v = evalVerdict(result);
+    console.log(JSON.stringify(v.out, null, 2));
+    if (v.code) process.exitCode = v.code;
   } catch (e) {
     console.error("apex-eval failed:", e.message);
     process.exitCode = 1;
@@ -182,3 +197,6 @@ const BOOT_MS = 45000;
     await shutdown();
   }
 })();
+}
+
+if (IS_MAIN) await main();
