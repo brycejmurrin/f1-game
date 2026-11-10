@@ -59,7 +59,9 @@ test("act()/step() fall back to one 1/60 s step on non-finite dt/n instead of up
   const G = { player: { px: 0 }, track: {}, cars: [], state: "race", update: (d) => dts.push(d), syncRenderAnchors: () => {} };
   const api = loadApex(G, { AgentView: { create: () => ({}), syncRenderAnchors: () => {}, obs: () => ({}) } });
   api.step(NaN, Infinity); api.step(-1, NaN); api.step(0.5, 2);
-  assert.deepEqual(dts, [1 / 60, 1 / 60, 0.5, 0.5]);
+  // step(dt, n) runs dt*n as whole 1/60 s steps (the game's only physics step, W25 row 9): 0.5 x 2 = 60 of them.
+  assert.equal(dts.length, 62);
+  assert.ok(dts.every((d) => d === 1 / 60), JSON.stringify(dts.slice(0, 4)));
 });
 
 test("reset() / seed() / garageParts() refuse non-finite or non-string input before mutating", () => {
