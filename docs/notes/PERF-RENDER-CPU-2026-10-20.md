@@ -1,5 +1,7 @@
 # Render-path CPU and the flyby scene index (B·H9, 2026-10-20)
 
+Summary: Render-path CPU and the flyby scene index: the flyby-sight `sceneOf` deopt storm (B·H9).
+
 Fleet B, follow-up to the scene-cpu hunt (#3218, `PERF-SCENE-CPU-2026-10-20.md`). Two items
 from OrchB 24: the flyby-sight `sceneOf` deopt storm, and a ranking of the render-path JS from a
 real-GPU profile.

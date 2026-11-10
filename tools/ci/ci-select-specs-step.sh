@@ -72,6 +72,9 @@ node -e '
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of (r.coveredByManualOptIn || []))
     console.log(`COVERED BY MANUAL OPT-IN (env-gated; not a selected-gate verdict): ${s.file} (${s.tests} tests)`);
+  // Named, never silent (#5241 G3): these left the browser legs; node-plan / pick-unit-slices run their twins.
+  for (const s of (r.coveredByVmTwin || []))
+    console.log(`COVERED BY A VM TWIN (no browser leg; its node slice runs it): ${s.file} (${s.tests} tests) -> ${s.twin}`);
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
   for (const s of (r.unreadable || []))

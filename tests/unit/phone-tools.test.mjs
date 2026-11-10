@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BRYCE_WINDOWS, brycePhone, classifyShot, mismatches, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
 import { describe, presetOptions } from "../../tools/ui/bryce-phone.mjs";
-import { collect, imageSize, imageUrls } from "../../tools/ui/issue-shots.mjs";
+import { collect, filterRows, imageSize, imageUrls, MAX_SHOTS, shotStem } from "../../tools/ui/issue-shots.mjs";
 import { contrast, crop, halve, matchElement, median, resample, summarize } from "../../tools/lib/shot-match.mjs";
 import { reportLines } from "../../tools/ui/phone-shot-diff.mjs";
 
@@ -84,6 +84,26 @@ test("issue-shots: finds GitHub attachments and direct image links, once each, a
   assert.deepEqual(collect(7, get).rows.map((r) => `${r.where}:${r.url.slice(-2)}`), ["body:a1", "comment 9:b2"]);
   assert.match(collect(7, () => ({ error: "HTTP 404" })).error, /issue #7: HTTP 404/);
   assert.equal(run("tools/ui/issue-shots.mjs").code, 2);
+});
+
+test("issue-shots runner filters: owner only, GitHub attachment hosts only, capped; names are a URL hash", () => {
+  const rows = [
+    { url: "https://github.com/user-attachments/assets/a1", author: "bryce" },
+    { url: "https://evil.example/x.png", author: "bryce" },
+    { url: "https://github.com/user-attachments/assets/b2", author: "someone" },
+    { url: "https://private-user-images.githubusercontent.com/1/c3.png?jwt=x", author: "bryce" },
+  ];
+  const kept = filterRows(rows, { author: "bryce", attachmentsOnly: true });
+  assert.deepEqual(kept.rows.map((r) => r.url), [rows[0].url, rows[3].url]);
+  assert.equal(kept.skipped, 2);
+  assert.equal(filterRows(rows).rows.length, 4, "no filter on a laptop run");
+  const many = Array.from({ length: MAX_SHOTS + 5 }, (_, i) => ({ url: `https://github.com/user-attachments/assets/${i}`, author: "bryce" }));
+  const capped = filterRows(many, { max: MAX_SHOTS });
+  assert.equal(capped.rows.length, MAX_SHOTS);
+  assert.equal(capped.skipped, 5);
+  assert.match(shotStem(rows[0].url), /^shot-[0-9a-f]{12}$/);
+  assert.equal(shotStem(rows[0].url), shotStem(rows[0].url));
+  assert.notEqual(shotStem(rows[0].url), shotStem(rows[2].url));
 });
 
 test("imageSize reads PNG, JPEG and GIF headers", () => {

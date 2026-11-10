@@ -72,6 +72,22 @@ export function verdict(needs, opts = {}) {
     const result = needs[name] && typeof needs[name] === "object" ? String(needs[name].result || "") : "";
     if (result !== "success") bad.push(`${name}: required to succeed on a full-tier run, got ${result || "missing"}`);
   }
+  // A PLAN THAT SAID "RUN" AND A JOB THAT DID NOT (#5241 G5). `skipped` is a pass above because a path-filtered job
+  // skips legitimately — but the select job's own outputs (toJSON(needs) carries them) say when it may not: a plan
+  // with browser legs (`any`) owes a `selected` result, a successful selection owes its verdict job, and on a
+  // full-tier PR run a plan with node slices (`any_node`) owes `node-suites` (drafts and the train skip it by
+  // design, D1/D2 2026-10-16). Each was a green before: REQUIRE_SUCCESS names none of the three.
+  const res = (job) => (needs[job] && typeof needs[job] === "object" ? String(needs[job].result || "") : "");
+  const sel = needs.select && typeof needs.select === "object" ? needs.select : null;
+  if (sel) {
+    const out = sel.outputs && typeof sel.outputs === "object" ? sel.outputs : {};
+    if (out.any === "true" && "selected" in needs && res("selected") === "skipped")
+      bad.push("selected: skipped, but the plan has browser legs (select.outputs.any=true) — the selected specs did not run");
+    if (sel.result === "success" && "selected-verdict" in needs && res("selected-verdict") === "skipped")
+      bad.push("selected-verdict: skipped after a successful selection — nothing judged the selected specs");
+    if (opts.fullTier && out.any_node === "true" && "node-suites" in needs && res("node-suites") === "skipped")
+      bad.push("node-suites: skipped on a full-tier run whose plan has node slices (select.outputs.any_node=true) — the VM twins and unit slices did not run");
+  }
   // Skipped-only is not green either: when every needed job was skipped (a
   // workflow whose gates all hung off one input) nothing was actually checked.
   // (A named core set is deliberately NOT required: a called run may skip
@@ -102,6 +118,25 @@ export function summary(v, require = []) {
   ].join("\n");
 }
 
+/**
+ * A CI success on run attempt N > 1 (#5241 G5, AGENTS.md rule 9: a pass that needed a retry is a red until the PR
+ * names it). Measured: #5190 merged on run 42730286157 attempt 2 after attempt 1 failed tests/unit/perf-hot-bench.test.mjs.
+ * Pure. `attempt` is the newest attempt of the ci.yml run that carries the green `CI`; `previous` the conclusion of
+ * attempt N-1 (`actions/runs/<id>/attempts/<n>`), "" when unread; `body` the PR body. A cancelled previous attempt is
+ * the designed dedupe or a timeout re-queue, not a red. The escape is a body line `re-run: <what failed> — <why>`,
+ * which is what rule 9 asks for; without it the verdict is not ok.
+ * @returns {{ ok: boolean, rerun: boolean, evidence: string }}
+ */
+export function rerunVerdict({ attempt = 1, previous = "", body = "" } = {}) {
+  const n = Number(attempt) || 1;
+  if (n <= 1) return { ok: true, rerun: false, evidence: "first attempt" };
+  const prev = String(previous || "");
+  if (prev === "cancelled" || prev === "skipped") return { ok: true, rerun: true, evidence: `attempt ${n} after a ${prev} attempt ${n - 1} (no red was re-run)` };
+  const named = /^[ \t>*-]*re-run:[ \t]*\S.*$/im.exec(String(body || "").replace(/<!--[\s\S]*?-->/g, ""));
+  if (named) return { ok: true, rerun: true, evidence: `attempt ${n} after attempt ${n - 1} ${prev || "of unknown conclusion"}; named in the PR body: "${named[0].trim().slice(0, 120)}"` };
+  return { ok: false, rerun: true, evidence: `CI is green only on attempt ${n} (attempt ${n - 1}: ${prev || "conclusion unread"}) — a pass that needed a retry is a red (AGENTS.md rule 9): fix or quarantine the test, or name the re-run in the PR body as \`re-run: <what failed> — <why it was infra>\`` };
+}
+
 function main(argv = process.argv.slice(2)) {
   let needs;
   if (!process.env.NEEDS || !process.env.NEEDS.trim()) {
@@ -119,7 +154,10 @@ function main(argv = process.argv.slice(2)) {
     process.exit(2);
   }
   const require = String(process.env.REQUIRE_SUCCESS || "").split(",").map((x) => x.trim()).filter(Boolean);
-  const v = verdict(needs, { require });
+  const v = verdict(needs, { require, fullTier: require.length > 0 });
+  // This job cannot read attempt N-1 (no token here); it can say that it is one. merge-gate is where rerunVerdict binds.
+  const attempt = Number(process.env.GITHUB_RUN_ATTEMPT || 1) || 1;
+  if (attempt > 1) console.log(`::warning::CI verdict on run attempt ${attempt}: a pass that needed a retry is a red until the PR names it (AGENTS.md rule 9)`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary(v, require)); } catch { /* the summary is advisory */ }
   }
