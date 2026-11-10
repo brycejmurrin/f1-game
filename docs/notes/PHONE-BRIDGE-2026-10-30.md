@@ -1,5 +1,7 @@
 # Phone bridge: a Claude session drives the live game on Bryce's phone (2026-10-30)
 
+> **Historical record** (2026-10-30): §6's "first live run pending" was true only for this session; live bridge runs followed (e.g. bridge #5135, cited in docs/notes/UI-HISTORY-2026-11-06.md), and the current procedure is skill `phone-bridge`.
+
 Goal (Bryce, 2026-10-30): let a Claude session test and profile the **live** site on the phone he plays on, two-way,
 instead of reading SwiftShader numbers from a container. Module: `js/agent/apex-bridge.js`; test:
 `tests/unit/apex-bridge.test.mjs`.
@@ -84,4 +86,4 @@ reads the clipboard directly. Same probe after the fix: focus stays on the input
 
 | date (Pacific) | build (`facts.sha`) | device | path | scene | fps | p50 / p95 / p99 ms | over 33 ms |
 |---|---|---|---|---|---|---|---|
-| 2026-10-30 | — | — | — | first live run pending: the link was not formed this session | — | — | — |
+| 2026-10-30 | — | — | — | no live run this session (the link was not formed); live runs followed, e.g. bridge #5135 (2026-11-05) | — | — | — |

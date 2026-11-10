@@ -1,5 +1,7 @@
 # Parallel work — subagents, worktrees, and the one thing that does not parallelise
 
+> **Historical record** (superseded): agents no longer run browser test groups locally at all (AGENTS.md rules 5 and 10), so the local Playwright concurrency advice below is history; CI runs the browser groups on the PR, and the current loop is AGENTS.md §The loop and docs/VERIFICATION.md.
+
 Where to spend concurrency in this repo, and where spending it makes things
 *worse*. Written after a session in which parallelism produced ten confident,
 entirely fake test failures.

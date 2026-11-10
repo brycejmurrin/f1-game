@@ -1,5 +1,7 @@
 # Testing — operational field notes
 
+> **Historical record** (dated measurements): the local browser-run recipes below predate the rule that agents run no browser tests locally (AGENTS.md rules 5 and 10); CI runs them on the PR, and the current commands are in docs/VERIFICATION.md.
+
 > Carved out of [`../TESTING.md`](../TESTING.md) on 2026-09-03 (tree restructure
 > Phase 5). These are DATED MEASUREMENTS of this container and of CI, not rules:
 > the rule they support is in `AGENTS.md` §Verification or in `TESTING.md` §1.

@@ -8,7 +8,7 @@ const DataIcs = (function () {
      TZID (§3.3.5 form 2, so no VTIMEZONE block and no DST arithmetic), DATE values for an all-day event
      (§3.3.4). The UID is the session, never its title or time, so a corrected time re-imports as an
      update; SEQUENCE counts days since 2026-01-01 so the newer export wins. Plan:
-     docs/plans/2026-10-04-pwa-shortcuts-calendar.md §D. */
+     docs/archive/plans/2026-10-04-pwa-shortcuts-calendar.md §D. */
   const CRLF = "\r\n";
   const FOLD = 75;
   const SEQ_EPOCH = Date.UTC(2026, 0, 1);

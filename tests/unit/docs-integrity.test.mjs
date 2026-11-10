@@ -109,7 +109,7 @@ const LIVE_DOCS = [];
     const rel = path.join(dir, e.name);
     if (e.isDirectory()) {
       // ANCHORED (audit 2026-11-09): the bare /archive|research|…/ also skipped
-      // docs/notes/agent-ops-research-2026-10-27/ and docs/plans/research-2026-09-16/
+      // the dated batch directories under docs/notes/ and docs/plans/
       // by substring. Those are dated records and stay exempt — but by the
       // DATED rule (SKIP_DOC_DIR), stated, not by accident.
       if (SKIP_DOC_DIR.test(e.name)) continue;

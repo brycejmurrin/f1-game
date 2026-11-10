@@ -1,5 +1,7 @@
 # Hooks, guards and permissions — security pass (2026-10-26)
 
+> **Historical record** (2026-10-26): the "after" column is stale, since the 2026-11-03 agent-surface reset cut `bash-guard.sh` to four refusals with no API-call parser, poll-loop or push-lookup checks; the current hooks are listed in `.claude/rules/claude-config.md`.
+
 Lane S5 of the 2026-10-26 system-audit implementation (PR #3785). Grant: Bryce, typed
 2026-10-26 ~23:00 PT — "Fix hook or guard or perm", "Implement all ideas and improvements
 now". Source findings: the audit artifact §4 (hooks table) and §10 (authority and security),

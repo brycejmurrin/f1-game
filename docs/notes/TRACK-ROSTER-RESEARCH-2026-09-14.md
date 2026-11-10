@@ -1,5 +1,7 @@
 # Track roster — what is missing (2026-09-14)
 
+> **Historical record** (2026-09-14): the shipped-roster count and the gap lists predate later circuit additions; the current roster is `tools/manifest.cjs` (picker metadata in the generated `js/track/circuit-meta.js`), never a count in this note.
+
 What Apex 26 ships against every circuit that has hosted a Formula One World
 Championship Grand Prix, and what it would cost to close each gap. Dated by
 design: the calendar half of this goes stale, the venue half does not.

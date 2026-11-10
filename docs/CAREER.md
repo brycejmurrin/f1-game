@@ -29,8 +29,8 @@ A career weekend qualifies and then races, so `career` and `quali` must both be
 expressible at once — a single flat enum cannot say that. The split also lets
 qualifying reuse the time-trial path instead of adding a game state.
 
-`G.seasonMode` returns `flow === "season" || flow === "career"`, and `G.timeTrial`
-returns `session === "tt"`. Every downstream module (`js/ui/results-sheet.js`, `js/ui/title-menu.js`,
+`G.seasonMode` returns `isChampionship()` (`flow === "season" || flow === "career"`),
+and `G.timeTrial` returns `isTimeTrial()` (`session === "tt"`). Every downstream module (`js/ui/results-sheet.js`, `js/ui/title-menu.js`,
 `js/ui/hud.js`, `js/agent/agentview.js`) and the `__apex.info()` contract are unchanged. Because a
 career genuinely *is* a championship, the standings screens work in career with no
 career-specific branch.
@@ -166,7 +166,8 @@ points `game.js`'s `season` variable straight at it. That is what lets
 
 Two consequences to respect:
 
-- `endRace()` must persist through `Career.save()`, **not** `store.set("season", …)`,
+- `endRace()` scores a career round through `Career.scoreRound()` (award, settle and
+  `Career.save()` in one call), **not** `SeasonCal.award()` + `store.set("season", …)`,
   or a career's standings overwrite the standalone season save.
 - `migrateSeasonPoints` persists unconditionally, so career goes through the pure
   remap inside `migrateCareer` instead. Leaving the entry points (`#mb-season`,
@@ -199,8 +200,11 @@ every key in the file ends with its varying part.
 
 ## Driver ratings
 
-`js/data/driver-ratings.js` holds five axes, 0–100, for all 22 drivers, keyed by
-driver **code** so a driver keeps their ratings when the market moves them.
+`js/data/driver-ratings.js` holds five quality axes (`AXES`), 0–100, for every
+driver on the grid (`BASE`) and every MY TEAM free agent (`HIRES`), keyed by driver
+**code** so a driver keeps their ratings when the market moves them. Two signed
+style axes (`STYLE_AXES`: `aggression`, `optimism`) ride alongside and never enter
+`overall()` or `skill()`.
 
 | Axis | Feeds |
 |---|---|
@@ -240,7 +244,9 @@ ladder, and the number is a balance call), folded into one new per-car field bak
 `makeCars()`:
 
 ```js
-tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),   // paceMult() is exactly 1 outside career; the mate factor is MY TEAM's second car (below)
+tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : isP ? 1 : catalogPace),
+// paceMult() is exactly 1 outside career; the mate factor is MY TEAM's second car (below);
+// catalogPace credits a career AI's developed build (Career.aiSetup) against its works car, 1 otherwise
 ```
 
 The per-car update reads `c.tierV * c.skill * dd.ai`. `team.tier` itself is never
@@ -371,9 +377,13 @@ The hire is paid **every round, out of the BALANCE** — `wageBill()`, deducted 
 `settleRound()` — and never off the fitted cap. Real driver salaries sit outside the
 development cost cap, so a quick team-mate costs you upgrades rather than legality.
 
-`FREE_AGENTS` carry no ratings table of their own. `DriverRatings.get()` falls
-through to its deterministic tier hash for an unknown code, so each hire has a
-stable personality without a second table to keep in step with the first.
+`FREE_AGENTS` are rated by their own authored rows, `DriverRatings.HIRES`, kept
+out of `BASE` so the grid's statistics stay about the real drivers. They used to
+fall through to the tier hash (`fromTier()`), which depends on the caller's tier:
+the hire tile and the race asked with different tiers, so a tile promised a
+different driver than raced. An authored row answers the same whatever tier is
+passed, and `overall()` rises with the asking price
+(`tests/unit/career-hire-rating.test.mjs`).
 
 ### The hire has a contract, and it runs
 
@@ -388,13 +398,13 @@ decision is the player's, and the hub is where they make it.
 | Outcome | When | What the player does |
 |---|---|---|
 | `renew` | the default | take `ask`, or sign somebody else |
-| `left` | only after they **outperformed** the car (`pos < expected − 4`), and then only on a seeded 35% draw | sign somebody else |
+| `left` | only after they **outperformed** the car (`pos < tierFinish(team) − 4`), and then only on a seeded 35% draw | sign somebody else |
 
 They can only ever be poached after outperforming. Losing a driver who was beaten
 all year would read as a bug rather than as a story.
 
 What they ask for follows what the seat was worth to them:
-`salary × (1 + clamp((expected − pos) / 8, −0.35, +0.45))`, floored at
+`hireAsk()`: `salary × (1 + clamp((expected − pos) / 8, −0.35, HIRE_RAISE_MAX))` (+0.45), floored at
 `HIRE_MIN` — beating the car's expectation is worth money, being beaten by it is a
 pay cut, and nobody drives for nothing.
 
@@ -413,16 +423,17 @@ end-of-season sheet, the one screen that sits between two seasons.
 ## Objectives and reputation
 
 **Three** objectives per round, drawn with `Career.rnd(year, "obj", round)` from a
-table of five kinds; the player takes one. Meeting it pays **+150 cr and +2 rep**;
-missing it costs **2 rep**.
+table of kinds (`OBJ_KINDS`); the player takes one. Meeting it pays **`OBJ_BONUS`
+(150 cr) and `OBJ_REP` (+2 rep)**, plus twice any planning stake escrowed on the
+round (`js/career/career-planning.js`); missing it costs **2 rep**.
 
 | Type | Met when | Value |
 |---|---|---|
-| `finish` | `pos <= value` | `expectedFinish(team) - 1` — one place better than the contract's own season goal, or a race brief would be easier than the year-long one |
+| `finish` | `pos <= value` | `expectedFinish(team) - 1`, clamped 1–20 — one place better than the contract's own season goal, or a race brief would be easier than the year-long one |
 | `beatMate` | you finish ahead of your team-mate | — |
 | `outQualMate` | you started ahead of your team-mate (`car.gridPos`) | — |
 | `points` | `pts >= value` | 1 |
-| `clean` | no track-limits cuts, no penalty | — |
+| `clean` | not retired or disqualified, no track-limits cuts, no penalty | — |
 
 `clean` reads `car.cuts`, the **lifetime** cut count. The penalty ladder in
 `game.js` counts on a separate `cutWarn` — the race's strike count (FIA 2026:
@@ -449,15 +460,17 @@ applying to a round it was never for. No `CAREER_V` rung is owed: `migrateCareer
 normalises the field the way it does `moves` and `paidSponsors`.
 
 `objectiveLocked()` freezes the pick once `season.stage`, `qualiOrder` or
-`sprintOrder` is set. Quali and a sprint have already decided part of what
+`sprintOrder` is set, or once `markWeekendStarted()` has stamped
+`season.startedRound` for the live round (a simulated qualifying persists no
+`qualiOrder`, and starting the race then quitting would otherwise unlock it). Quali and a sprint have already decided part of what
 `outQualMate` and `finish` measure, so choosing after them is choosing with the
 answer in hand; the hub then shows the chosen line alone, as it did when the brief
 was dealt.
 
 The save stores four **scalars** — `{round, type, value, done}` — never the sentence.
 Wording comes from `OBJ_LABELS` at render time, because prose in a save can never be
-reworded again without a migration. `round` is load-bearing: `endRace()` advances the
-calendar *before* calling `settleRound()`, so without it there is no telling the brief
+reworded again without a migration. `round` is load-bearing: the calendar advances
+(`SeasonCal.award()`, inside `Career.scoreRound()`) *before* `settleRound()` runs, so without it there is no telling the brief
 that was live for the race just run from the one for the race to come. `settleRound()`
 recomputes it with `objectiveFor(round - 1)` rather than trusting the cache — the draw
 is pure, so the two can never disagree.
@@ -546,7 +559,7 @@ than reading as a season of zeroes.
 ## Reliability and retirements
 
 `js/race/reliability.js` (global `Reliability`) decides whether a car reaches the
-flag. Without it every one of the twenty-two finishes every race forever, which
+flag. Without it every car finishes every race forever, which
 makes a championship a pure pace ranking — and a career flat, because a points
 finish in a bad car is only earned if the good cars can break.
 
@@ -559,7 +572,7 @@ buy:
 |---|---|---|
 | tier | `TIER_RISK[team.tier]` | 4 % (tier 0) → 12 % (tier 4) per race |
 | team development | `Career.paceMult(teamId)`, normalised to ±1 | up to −40 % at full `tdev` |
-| the build | fitted ENGINE + GEARBOX cost, as a fraction of the dearest option | up to −33 %, human cars only |
+| the build | fitted ENGINE + GEARBOX cost, as a fraction of the dearest option | up to −33 %, the player's car only, and not in a networked race |
 
 The third is the R&D economy's grip on this. ENGINE and GEARBOX because those are
 the two components a real car retires from, and cost because cost is exactly what
@@ -574,14 +587,16 @@ tier alone: an AI runs its team's works car, which is what `tier` already says.
 `driverSkill()`'s roll — and
 the stream position after them is a hard contract (see the rule in Driver ratings
 above). So reliability draws from **nothing**: `Reliability.arm()` hashes
-`(seed, "dnf", round, driverId)` through `Career.hash` — the stateless draw `rnd`
-is built on, with the seed passed in, because a Grand Prix has no career seed.
-Inside a career the seed is `Career.seasonSeed()` and the round is `career.season.round`;
+`(seed, "dnf", round, driverId)` (then `"dnfAt"` / `"dnfWhy"` for a car that fails)
+through `Career.hash` — the stateless draw `rnd` is built on, with the seed passed
+in, because a Grand Prix has no career seed. The seed is game.js `luckSeed()`.
+In a championship the round is `SeasonCal.drawRound(season)` — `season.round`,
+except that a sprint weekend's two legs draw apart. Inside a career the seed is `Career.seasonSeed()`;
 in a standalone Season it is the season's OWN seed (`SeasonCal.luckSeed`, stamped
 from the session seed at the season's first draw and saved with it, so a reload
-cannot re-roll a planned retirement or the qualifying draw — game.js `luckSeed()`
-routes every `(seed, round, driver)` draw through it); otherwise `simSeed()` and a
-per-session race counter, so two Grands Prix in a row are not handed the same casualties.
+cannot re-roll a planned retirement or the qualifying draw — `luckSeed()` routes
+every `(seed, round, driver)` draw through it); otherwise `simSeed()` and a
+per-session race counter (`raceIndex`), so two Grands Prix in a row are not handed the same casualties.
 
 Arming happens once, at the green light (`armReliability` in game.js), and writes
 a plan: `dnfAt`, a fraction of RACE DISTANCE, and `dnfWhy`. `checkRetirements()`
@@ -602,8 +617,10 @@ which is one line doing four jobs — the HUD position stops counting a parked c
 the AI stops treating it as a blocker, `resolveCollisions` leaves it where it was
 put, and the overtake target walks past it.
 
-`endRace()` classifies `fin.concat(run, out)`, retirements last and ordered among
-themselves by progress, then delegates awarding to `SeasonCal.award()`, which
+`endRace()` classifies through `RaceControl.classify()` (`js/race/race-control.js`):
+laps first, then the 90 % line, retirements last and ordered among themselves by
+progress, DSQ after them. It then delegates awarding to `SeasonCal.award()`
+(through `Career.scoreRound()` in a career), which
 pays `c.retired ? 0 : (table[i] || 0)` from `pointsTable()` — `Teams.POINTS` in
 career, `CLASSIC_POINTS`/`SPRINT_POINTS` under a season weekend format — explicit
 rather than relying on a DNF landing outside the ten scoring slots, so every car
@@ -647,24 +664,29 @@ come last.
 1. **Archive** into `career.history`: year, team, driver pos/pts, constructor pos/pts,
    champion, wins, podiums. **Capped at 10 entries** — this is localStorage.
 2. **Driver development.** Each grid driver drifts by `growth + form + noise`:
-   `growth = (1 - experience/100) * 6 - 1.5` (experience is the age proxy — a rookie
-   gains ~+2.7 a year, a 100-rated veteran loses 1.5), `form = clamp((tierFinish(team)
-   - champPos) * 0.25, ±3)`, `noise = ±2` from `rnd(year, "dev", driverId)`. Pace takes
-   the whole drift, craft and consistency half. Per-axis deltas, clamped **±12**.
-   Experience is bumped +4 a year against its **own 0..40 cap** (per-axis dev deltas carry the ± clamp), because it is cumulative:
+   `growth = (1 - experience/100) * 6 - 1.5` (experience is the age proxy — a 30-rated
+   rookie gains ~+2.7 a year, a 100-rated veteran loses 1.5), `form = clamp((tierFinish(team)
+   - champPos) * 0.25, ±3)`, `noise = ±2` from `rnd(year, "dev", driverId)`
+   (`rolloverDrivers()`). Pace takes the whole drift and craft half — the player's craft
+   takes the season's measured craft instead (*Craft develops the driver*). Awareness and
+   consistency never drift: they stay at the shipped rating for the whole career (the
+   winter report still lists them, at a zero delta). Per-axis deltas, clamped **±12** (`DEV_MAX`).
+   Experience is bumped +4 a year against its **own 0..40 cap** (`EXP_MAX`; the other dev deltas carry the ± clamp), because it is cumulative:
    at ±12 a rookie would stall four seasons in and freeze the growth term forever.
-3. **Team development.** `tdev = clamp(round(tdev * 0.5 + shove), ±8)`, where
+3. **Team development** (`rolloverTeams()`). `tdev = clamp(round(tdev * 0.5 + shove), ±TDEV_MAX)` (±8), where
    `shove = clamp((expectedConstructorPos - actualPos) * 0.5, ±2)`. Without the halving
    a team that gets ahead compounds forever and the grid ossifies after three seasons.
 4. **Driver market.** 0–2 swaps a year (`rnd(year, "mkt", "n")`), each trading a top
-   team's weakest driver for the best in the midfield, and stopping early when nobody
+   (tier ≤ 1) team's weakest driver for the best in the midfield (tiers 2–3), ranked by
+   `DriverRatings.overall()`, and stopping early when nobody
    has earned the move. Only deltas are stored, in `career.seats`; `career.dev` entries
    are swapped with them, because development follows the **driver** and `dev` is keyed
    by seat.
 5. **Offers.** `marketValue = 0.5 * rep + 0.5 * (championship percentile * 100)`. A team
    talks once that clears `92 - tier * 18`, so tier 0 wants essentially a champion and
    tier 4 will take anyone. Your own team always offers first — an empty list would
-   strand a career with nothing to press. Deal length is `1 + floor(mv / 40)`, capped at 3.
+   strand a career with nothing to press; 0–2 willing teams join it (`makeOffers()`).
+   Deal length is `1 + floor(mv / 40)`, capped at 3.
 
    **MY TEAM is never offered a seat, and its contract clock does not run.** You own the
    constructor; there is nothing to sign and nobody to be hired away by. This is a
@@ -741,16 +763,25 @@ era. `year0` is stamped at `start()`; a save without one started in 2026.
 
 Two rules that were written down and never ran.
 
-**The season goal is resolved at the winter.** `deal.goal` — the championship
-position promised for the season — was written by `newDeal()`, rendered on the
+**The season goal is resolved at the winter.** `deal.goal` — the promise for the
+season, `{type, value}` — was written by `newDeal()`, rendered on the
 hub and on the offer sheet, and read by nothing. Meeting it moves reputation;
 missing it moves reputation the other way AND takes market value off the figure
 the winter's offers are drawn against. That is the demotion: `offerBar()` spaces
 the tiers 18 apart, so a missed goal costs most of a tier's worth of interest
 without needing a second rule to say so.
 
+**The goal is a kind.** `GOAL_KINDS` in `js/career/career.js`: `champPos` (a
+drivers' championship position — the first kind and the fallback for an unknown
+type, so every older deal keeps its meaning), `teamPos` (a constructors' position
+off `expectedConstructor()`), `beatMate` and `beatRival` (finish the season ahead
+of a named seat; its own independent roll, `RIVAL_SHARE`, so adding it did not
+re-bucket the other three kinds' draws). `goalFor()` draws the kind from the career
+seed and the year.
+
 **The target is a RUNG THE PLAYER PICKS, not a number the game chose.**
-`deal.ambition` indexes `AMBITION`, and the target is
+`deal.ambition` indexes `AMBITION`, and each kind shifts its target by
+`AMBITION[i].delta` — for `champPos`, `goalValueFor()` =
 `expectedFinish(team) + AMBITION[i].delta`:
 
 | rung | `key` | target | met / missed | missed also costs |
@@ -870,11 +901,15 @@ allow, which is the constraint that actually makes a weekend a choice.
 ## Qualifying
 
 A `session`, not a game state. The player's flying lap **is** a time trial: one car,
-the existing lap timing and validity, two laps (a standing out-lap then the one that
-counts).
+the existing lap timing and validity, and ONE timed lap (`lapsTarget = 1` in
+the qualifying branch of `startRaceBody()`, `js/game.js`). There is no standing out-lap:
+`js/race/flying-start.js` drops the car in on the road before the line at speed and
+hands it over, and the lap clock starts at the line crossing, so the lap that counts
+is a flying one.
 
-The rest of the field is **modelled**, not driven — twenty-one AI cars round a real
-lap costs a second or more of frozen UI on a phone. `Quali.lapTime()` is a
+The rest of the field is **modelled**, not driven — a full AI field round a real
+lap costs a second or more of frozen UI on a phone. `lapTime()` inside
+`Quali.create()` (`js/race/quali-model.js`; create-local, not exported) is a
 quasi-steady lap simulation: the cornering limit at each sample, a forward pass for
 what the car could accelerate to, a backward pass for what it must brake for. It
 reads the same `LAT_MAX`/`BRAKE` the driving model uses (acceleration through
@@ -1005,22 +1040,33 @@ lights up gold with no new CSS.
 
 ## Tests
 
-`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/ci/test-bg.mjs modes`
-(there is no `test:career` group — `test-bg` exits 2 on an unknown name). They cover the mode axes, the save and its migration, the
-isolation guarantees, the hub flow, a settled round, the R&D garage, MY TEAM's two
-cars and its wage bill, the objectives, the rollover and the contracts, the ratings,
-the grid, and RELIABILITY — that OFF changes nothing, that a seeded season retires
-the same cars for the same reasons every time, that a retirement classifies below
-every finisher and scores no points, and that the draw leaves the sim RNG stream
-exactly where it found it. `tests/specs/ui-audit.spec.js` screenshots the career hub, its
-new-career state, qualifying and the offers sheet in both orientations.
+The browser specs are in the `test:modes` group (`tests/groups.json`; there is no
+`test:career` group):
 
-Run `node tools/ci/test-bg.mjs modes` in the background after any change here, and `node tools/ci/test-bg.mjs car` after
-anything that touches the garage.
+- `tests/specs/career.spec.js` — the mode axes, the save and its migration, the
+  isolation guarantees (*"career team development does not reach a Grand Prix"*), a
+  settled round, the ratings, the R&D garage, MY TEAM's two cars and its wage bill.
+- `tests/specs/career-season.spec.js` — the objectives, reputation, the rollover,
+  the market and the contracts, career history, and RELIABILITY: *"OFF is the shipped
+  default and nothing ever retires"*, *"a seeded season retires the same cars for the
+  same reasons every time"*, *"a retirement classifies below every finisher and scores
+  no points"* and *"the reliability draw does not move the sim RNG stream"*.
+- `tests/specs/career-hub.spec.js` — the CAREER MODES picker and slots, the hub,
+  extra funds, the hire's contract.
+- `tests/specs/quali.spec.js` — qualifying.
+
+`tests/specs/ui-audit.spec.js` (`test:gallery`) screenshots the career picker, setup,
+guide, hub and offers sheet in both orientations.
+
+Agents do not run these locally (AGENTS.md rule 5): a pushed PR gets the
+change-aware selected browser legs on CI (`tools/ci/select-specs.mjs` maps
+`js/career/` edits onto these specs), and `node tools/ci/remote-group.mjs modes` runs the
+whole group on the pushed branch — `node tools/ci/remote-group.mjs car` after anything
+that touches the garage.
 
 ## Upgrade parts — the catalog
 
-Twelve upgrade categories, a 780 cr budget, and the measured effect of each on
+The upgrade categories, the 780 cr `Parts.BUDGET`, and the measured effect of each on
 the four stats. Extracted from the agent brief. `AGENTS.md` keeps only the rules another
 subsystem has to respect.
 
@@ -1028,7 +1074,7 @@ subsystem has to respect.
 
 **THE ERS PART RUNS THE BATTERY.** Every category moves the four stats
 (`speed`→`vmax`, `accel`→`ACCEL`, `cornering`→`LAT_MAX`, `braking`→`BRAKE`), and
-all twelve have real spread — but ERS's options *describe* battery behaviour
+every category has real spread — but ERS's options *describe* battery behaviour
 ("harvests extra energy under braking", "maximum recovery window", "immediate
 deployment") and for a long time did none of it. `Parts.ersProfile(setup, team)`
 returns two 0..1 axes read from the bias the catalog already encodes
@@ -1049,14 +1095,14 @@ already differ). A car with no resolved setup still sits at the midpoint.
 `otMJ`. (The cooldown column is historical: since the 2026 Overtake rule there is
 no lockout — one 0.5 MJ allowance per earned lap, js/race/overtake-mode.js.)
 
-`Parts.CATALOG` — an **array** of 12 category objects (ordered, not keyed by id):
+`Parts.CATALOG` — an **array** of category objects (ordered, not keyed by id):
 `engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,
 `exhaust`, `floor`, `cockpit`, `wheels`. Each
 category is `{ id, label, options:[…] }`; each option has
 `{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
 Budget = 780 cr (`Parts.BUDGET`) for a non-career garage build; in career the
 cap is `Career.budget()` instead (works-car cost × the RAISE THE CAP multiplier,
-clamped by the catalog-derived `budgetCap()` — see docs/CAREER.md) and the
+clamped by the catalog-derived `budgetCap()` — see *Economy and R&D* above) and the
 unlimited toggle is ignored (`js/garage/setup-sheet.js`). `Parts.getMods(setup, team)`
 takes a `{id, engine}` team object and returns `{speed, accel, cornering,
 braking}` multipliers. Supplier-exclusive options (e.g. `manu_mercedes`) are

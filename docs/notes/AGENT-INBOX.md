@@ -1,5 +1,7 @@
 # GitHub inbox CLI and MCP adapter
 
+> **Historical record** (2026-11-03): §MCP adapter and existing server integration and §Host activation proposal describe the deleted `apex_inbox_*` tools and stdio adapter; only the CLI `tools/agent/inbox.mjs` remains, and the GitHub MCP reads the same comments.
+
 > **Retired MCP half (2026-11-03, agent-surface reset §4.8):** the four `apex_inbox_*`
 > tools and the stdio adapter `mcp/inbox-mcp.mjs` were deleted — the GitHub MCP reads
 > the same comments, and the SQLite mirror was a second copy of the bus. The CLI
