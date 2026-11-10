@@ -9,7 +9,6 @@ const MenuTeardown = (function () {
   const SYNC_WARN_MS = 50;
   let mask = 0;
   let quitInProgress = false;
-  let quitGen = 0;   // endQuit's deferred release belongs to one quit; a newer beginQuit owns QUIT again
   let timer = 0;
   let lastSync = null;
   const syncLog = [];
@@ -83,15 +82,13 @@ const MenuTeardown = (function () {
   function beginQuit() {
     try { if (typeof PauseOpts !== "undefined" && PauseOpts.disarm) PauseOpts.disarm(); } catch (_) { /* harness */ }
     quitInProgress = true;
-    quitGen++;
     arm(QUIT);
   }
   function endQuit() {
     quitInProgress = false;
     if (!software()) { release(QUIT); return; }
     clearTimer();
-    const gen = quitGen;
-    const finish = () => { if (gen === quitGen) release(QUIT); };
+    const finish = () => release(QUIT);
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(finish));
     else setTimeout(finish, 32);
   }

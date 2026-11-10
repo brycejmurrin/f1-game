@@ -2039,8 +2039,7 @@
         "tests/unit/free-cam.test.mjs"
       ],
       "create": [
-        "tests/unit/free-cam.test.mjs",
-        "tests/unit/photo-kit.test.mjs"
+        "tests/unit/free-cam.test.mjs"
       ],
       "decorate": [
         "tests/unit/free-cam.test.mjs"
@@ -2059,8 +2058,7 @@
       ],
       "place": [
         "tests/unit/flyby-lighting.test.mjs",
-        "tests/unit/free-cam.test.mjs",
-        "tests/unit/photo-kit.test.mjs"
+        "tests/unit/free-cam.test.mjs"
       ],
       "publish": [
         "tests/unit/free-cam.test.mjs"
@@ -2085,6 +2083,9 @@
       ],
       "wheelSpeed": [
         "tests/unit/free-cam.test.mjs"
+      ],
+      "*": [
+        "tests/unit/photo-kit.test.mjs"
       ]
     },
     "js/camera/mode-switch.js": {
@@ -2122,20 +2123,14 @@
     },
     "js/camera/offsets.js": {
       "apply": [
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "applyPreset": [
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
-      "applyToAllModes": [
-        "tests/unit/cam-context-alloc.test.mjs"
-      ],
       "bindContext": [
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-tuner-a11y.test.mjs"
       ],
@@ -2158,7 +2153,6 @@
         "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "copyFrom": [
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "cornerHang": [
@@ -2170,7 +2164,6 @@
       ],
       "count": [
         "tests/specs/camera-tuner.spec.js",
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "countGlobal": [
@@ -2206,15 +2199,6 @@
       "getScoped": [
         "tests/unit/camera-tuner-a11y.test.mjs"
       ],
-      "importCars": [
-        "tests/unit/cam-context-alloc.test.mjs"
-      ],
-      "importGlobal": [
-        "tests/unit/cam-context-alloc.test.mjs"
-      ],
-      "importModes": [
-        "tests/unit/cam-context-alloc.test.mjs"
-      ],
       "importPack": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
@@ -2223,22 +2207,10 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
-      "importTracks": [
-        "tests/unit/cam-context-alloc.test.mjs"
-      ],
       "load": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/light-grid.test.mjs"
-      ],
-      "loadCar": [
-        "tests/unit/cam-context-alloc.test.mjs"
-      ],
-      "loadGlobal": [
-        "tests/unit/cam-context-alloc.test.mjs"
-      ],
-      "loadTrack": [
-        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "persist": [
         "tests/unit/camera-defaults.test.mjs"
@@ -2247,19 +2219,11 @@
         "tests/unit/cam-context-alloc.test.mjs"
       ],
       "reset": [
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "resetAll": [
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
-      ],
-      "resetGlobal": [
-        "tests/unit/cam-context-alloc.test.mjs"
-      ],
-      "resetScoped": [
-        "tests/unit/cam-context-alloc.test.mjs"
       ],
       "rollTarget": [
         "tests/unit/camera-defaults.test.mjs"
@@ -2272,12 +2236,10 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "setGlobal": [
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "setScoped": [
-        "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-tuner-a11y.test.mjs"
       ],
@@ -2296,16 +2258,13 @@
     "js/camera/photo-cam.js": {
       "create": [
         "tests/unit/free-cam.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "enterPhotoMode": [
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "exitPhotoMode": [
         "tests/unit/free-cam.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "updatePhotoCam": [
@@ -5326,7 +5285,6 @@
         "tests/unit/log-namespaces.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ready-gate.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -5496,7 +5454,6 @@
         "tests/unit/pace-math.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-pad.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
@@ -8817,7 +8774,6 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/phone-pad.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -8903,7 +8859,6 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/phone-pad.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -8950,7 +8905,6 @@
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -9361,7 +9315,6 @@
       ],
       "*": [
         "tests/unit/camera-feel.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/reject-lint.test.mjs",
@@ -9375,7 +9328,6 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/phone-pad.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -9409,7 +9361,6 @@
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
@@ -10869,18 +10820,10 @@
     },
     "js/perf/menu-teardown.js": {
       "beginQuit": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/menu-quit-tail.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "cover": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/menu-quit-tail.test.mjs"
-      ],
-      "endQuit": [
-        "tests/unit/menu-quit-tail.test.mjs"
-      ],
-      "quitReadbackDefer": [
-        "tests/unit/menu-quit-tail.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "quitRenderHold": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -15012,9 +14955,6 @@
       "setPalette": [
         "tests/unit/driving-line.test.mjs"
       ],
-      "setPhoto": [
-        "tests/unit/photo-kit.test.mjs"
-      ],
       "speedAt": [
         "tests/specs/smoke.spec.js",
         "tests/unit/driving-line.test.mjs"
@@ -18505,7 +18445,6 @@
       ],
       "create": [
         "tests/specs/photo-studio.spec.js",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photo-studio.test.mjs"
       ],
       "crop": [
@@ -18536,6 +18475,7 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "*": [
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/prepush-floor.test.mjs"
       ]
     },
