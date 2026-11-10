@@ -94,7 +94,7 @@ const CircuitLore = (function () {
       wet: "The painted surfaces here turn to ice the moment it rains.",
     },
     monaco: {
-      line: "Monaco. Barriers the whole way round, no run-off, and a street layout older than the championship itself.",
+      line: "Monaco. Barriers the whole way round, no run-off, and a circuit that has never needed to change.",
       corner: "Casino, the tunnel, then the harbour chicane — the most famous sequence in the sport.",
       wet: "Wet, this place stops being about lap time and starts being about survival.",
     },
@@ -122,7 +122,7 @@ const CircuitLore = (function () {
       wet: "The mountain weather can soak one half of the circuit and leave the other dry.",
     },
     shanghai: {
-      line: "Shanghai, where the opening corner spirals ever tighter, and the longest straight waits at the back.",
+      line: "Shanghai, where the opening corner spirals ever tighter before the longest straight on the lap.",
       corner: "Turns one to three wind inward and reward patience over commitment.",
     },
     silverstone: {
@@ -147,7 +147,7 @@ const CircuitLore = (function () {
     vegas: {
       line: "Las Vegas, straight down the Strip at night, with the casinos going past at three hundred.",
       corner: "The long left onto the Strip is where the lap is made.",
-      night: "Run late on a Saturday night, on a cold track that never quite comes to you.",
+      night: "Run in the small hours, on a cold track that never quite comes to you.",
     },
     zandvoort: {
       line: "Zandvoort, in the dunes on the Dutch coast, narrow and banked and unlike anywhere else.",
@@ -156,11 +156,11 @@ const CircuitLore = (function () {
     },
     istanbul: {
       line: "Istanbul Park, anticlockwise and sweeping, with a corner that sits in a class of its own.",
-      corner: "Turn eight is a multi-apex left that lasts over eight seconds and never stops loading the tyre.",
+      corner: "Turn eight is a quadruple-apex left that lasts most of a minute and never stops loading the tyre.",
     },
     sepang: {
       line: "Sepang, two enormous straights joined by fast corners, in tropical heat that punishes everything.",
-      corner: "The final left hairpin feeds the main straight and rewards a patient exit.",
+      corner: "The long final right feeds the main straight and rewards a patient exit.",
       wet: "The afternoon storm here arrives all at once and floods the circuit in minutes.",
     },
     sochi: {
