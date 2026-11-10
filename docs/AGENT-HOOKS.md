@@ -94,32 +94,31 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `act` | `act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
+| `act` | `act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() |
 | `aiPlace` | `aiPlace(i,frac,v,x)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
-| `caution` | `caution({force})` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
-| `ceremony` | `ceremony(phase\|skip)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
-| `clearInput` | `clearInput()` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
-| `flagHold` | `flagHold(on)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
-| `go` | `go()` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
+| `caution` | `caution(o)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `ceremony` | `ceremony(phase\|skip)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `clearInput` | `clearInput()` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() |
+| `flagHold` | `flagHold(on)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `go` | `go()` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
 | `headless` | `headless(bool)` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
-| `jump` | `jump(frac,speed,x,{keepLap})` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
-| `park` | `park(f)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
-| `race` | `race(id)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
-| `reset` | `reset(f,v,x,seed)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
-| `seed` | `seed(n)` | seed(n) sets the sim seed; same seed + same inputs => same result. Pin it before any A/B or the comparison is noise |
+| `jump` | `jump(f,v,x,{keepLap})` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `park` | `park(f)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `race` | `race(id)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `reset` | `reset(f,v,x,seed)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `seed` | `seed(n)` | seed(n): same seed + inputs => same result; pin it before any A/B |
 | `setEnergy` | `setEnergy(v)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
-| `setInput` | `setInput(o)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
+| `setInput` | `setInput(o)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() |
 | `setLap` | `setLap(n)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
 | `setPhysics` | `setPhysics(o)` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
 | `setTimeOfDay` | `setTimeOfDay('night')` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
-| `step` | `step(dt,n)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
-| `them` | `them(default1)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
+| `step` | `step(dt,n)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() |
 | `weather` | `weather('wet')` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
 ## model
 
 | Hook | Signature | Summary |
 |---|---|---|
 | `decide vs show` | `decide vs show` | read world()/scene()/trackInfo()/the read hooks to DECIDE; call render() only to SEE — its glyphs are approximate |
-| `lean default, pull detail` | `lean default, pull detail` | the world is stored in FULL but never dumped — a flat serialisation is huge and reads worse. Keep the default lean and pull with describe(id)/query() where a decision needs it |
+| `lean default, pull detail` | `lean default, pull detail` | the world is stored in FULL but never dumped; pull with describe(id)/query() where a decision needs it |
 | `per tick` | `per tick` | world({detail:"brief", since:<seq>}) — ~355 bytes/step, 34x cheaper than full. detail is the big lever |
 | `static vs dynamic` | `static vs dynamic` | trackInfo()+carView() are constant — fetch once. world()+field()+scene() are the live frame — read per decision |

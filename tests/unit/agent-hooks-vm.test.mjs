@@ -529,3 +529,17 @@ test("caution({force:3}) queues the AI field behind the safety car and force:0 r
   assert.equal(g.apex.caution().level, 0);
   gt(vMax(), scV * 1.3, "the field races again after the release");
 });
+
+// finishRace() must end the race through G.endRace as it is AT CALL TIME: RealRace wraps
+// G.endRace after boot, and a boot-time capture skipped that wrap (a script DSQ was lost).
+test("finishRace() calls the current G.endRace, not a boot-time capture", async () => {
+  await load("monza", 0.1, 40);
+  const orig = g.G.endRace;
+  let calls = 0;
+  g.G.endRace = function (...a) { calls++; return orig.apply(this, a); };
+  try {
+    g.apex.finishRace();
+    assert.equal(calls, 1);
+    assert.equal(g.apex.info().state, "results");
+  } finally { g.G.endRace = orig; }
+});

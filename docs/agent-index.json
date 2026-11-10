@@ -368,7 +368,7 @@
       "name": "act",
       "group": "control",
       "signature": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n)",
-      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
       "name": "aiPlace",
@@ -379,32 +379,32 @@
     {
       "name": "caution",
       "group": "control",
-      "signature": "caution({force})",
-      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+      "signature": "caution(o)",
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "ceremony",
       "group": "control",
       "signature": "ceremony(phase|skip)",
-      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "clearInput",
       "group": "control",
       "signature": "clearInput()",
-      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
       "name": "flagHold",
       "group": "control",
       "signature": "flagHold(on)",
-      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "go",
       "group": "control",
       "signature": "go()",
-      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "headless",
@@ -415,32 +415,32 @@
     {
       "name": "jump",
       "group": "control",
-      "signature": "jump(frac,speed,x,{keepLap})",
-      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+      "signature": "jump(f,v,x,{keepLap})",
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "park",
       "group": "control",
       "signature": "park(f)",
-      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "race",
       "group": "control",
       "signature": "race(id)",
-      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "reset",
       "group": "control",
       "signature": "reset(f,v,x,seed)",
-      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "seed",
       "group": "control",
       "signature": "seed(n)",
-      "summary": "seed(n) sets the sim seed; same seed + same inputs => same result. Pin it before any A/B or the comparison is noise"
+      "summary": "seed(n): same seed + inputs => same result; pin it before any A/B"
     },
     {
       "name": "setEnergy",
@@ -452,7 +452,7 @@
       "name": "setInput",
       "group": "control",
       "signature": "setInput(o)",
-      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
       "name": "setLap",
@@ -476,13 +476,7 @@
       "name": "step",
       "group": "control",
       "signature": "step(dt,n)",
-      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
-    },
-    {
-      "name": "them",
-      "group": "control",
-      "signature": "them(default1)",
-      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
       "name": "weather",
@@ -500,7 +494,7 @@
       "name": "lean default, pull detail",
       "group": "model",
       "signature": "lean default, pull detail",
-      "summary": "the world is stored in FULL but never dumped — a flat serialisation is huge and reads worse. Keep the default lean and pull with describe(id)/query() where a decision needs it"
+      "summary": "the world is stored in FULL but never dumped; pull with describe(id)/query() where a decision needs it"
     },
     {
       "name": "per tick",

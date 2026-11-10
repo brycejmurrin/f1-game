@@ -112,7 +112,7 @@ const noAudio = () => (typeof GameAudio === "undefined"
   : null);
 // Stable bindings (functions + consts) from the game.js closure.
 const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
-        applyRaceSettings, camVantage, endRace, gridUp, gripMult, isErsDeploying,
+        applyRaceSettings, camVantage, gridUp, gripMult, isErsDeploying,
         copyLightTune, loadCarModel, loadTrack, persistLightTune, refreshLightTunePanel,
         restoreLightTune,
         rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
@@ -1293,7 +1293,8 @@ const api = {
   // A retirement never crosses the line (finishThrough); finishT only when raceT > 0.5.
   finishRace(opts) {
     if (!G.track || G.state === "results" || G.state === "menu") return false;
-    return RaceCeremony.finishThrough(G, endRace, raceOrder, opts);
+    // G.endRace at CALL time, not the boot capture: RealRace wraps G.endRace (a script DSQ must survive).
+    return RaceCeremony.finishThrough(G, (o) => G.endRace(o), raceOrder, opts);
   },
   // RaceCeremony status / seek / skip (Esc = SKIP once the host UI wires it).
   ceremony(arg) { return RaceCeremony.apexCall(arg); },
@@ -1462,7 +1463,6 @@ const api = {
       perChunkHeld: (() => {
         if (!(+LT.perChunkLights > 0)) return null;          // player has it off
         if (G.frame.perChunkLights > 0) return null;         // actually running
-        if (gfx && gfx.hasPerChunkLights === false) return "backend";
         try { if (localStorage.getItem("apex26.perChunkOff") === "1") return "latch"; } catch (_) { /* no storage */ }
         if (typeof PerfGov !== "undefined" && PerfGov.autoShed && PerfGov.autoShed() >= 2) return "tier";
         return "day";   // the flood branch never ran: daylight with no daytime lamps
