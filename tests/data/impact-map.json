@@ -2030,6 +2030,12 @@
       ]
     },
     "js/camera/fov-mode.js": {
+      "modeBoost": [
+        "tests/unit/fov-fit.test.mjs"
+      ],
+      "modeFov": [
+        "tests/unit/fov-fit.test.mjs"
+      ],
       "*": [
         "tests/unit/director.test.mjs"
       ]
@@ -7145,7 +7151,8 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "sceneFromG": [
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ],
       "stats": [
         "tests/unit/visor-optics.test.mjs"
