@@ -1517,7 +1517,14 @@ var PitLane = (function () {
      *  otherwise midway between the first lap a fresh wet reaches the flag and
      *  the lap this one is gone — the split that wastes least of either set. */
     function wetLapsToStop(c, tread) {
-      const lap = c.lap || 0, left = lapsToFlag(c);
+      // `left` is what the SET still has to cover. lapsToFlag counts the lap the car is on
+      // WHOLE, and the set's life is measured off continuous wear: late in a lap the two
+      // disagreed by most of a lap, so a wet that reached the flag read as short and the
+      // whole field boxed wet-for-wet (measured: all 21 AI in a 5-lap rain race, Monaco
+      // and Singapore, wear ~0.19 a lap). Take off the part of this lap already driven.
+      const lap = c.lap || 0, len = G.track && G.track.total;
+      const done = lap >= 1 && len > 0 ? Math.min(1, Math.max(0, (c.s || 0) / len)) : 0;
+      const left = lapsToFlag(c) - done;
       if (!G.tyres.lapsLeft || !G.tyres.lapsOn) return 99;
       const fresh = G.tyres.planLaps(TyreModel.AI_CLASS[TyreModel.classForTread(tread)].life, G.lapsTarget) / (c.pitPlan.loadK || 1);
       // The measured rate only after two laps on the set (replan's rule): one

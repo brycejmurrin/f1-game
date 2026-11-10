@@ -159,7 +159,7 @@ on all eleven:
 | fuji | 0.00000 | R | R, the long right at the end of the 1.5 km straight |
 | okayama | 0.00004 | R | R |
 | korea | 0.00001 | L | L — the lap runs anti-clockwise |
-| jerez | 0.00108 | R | R, Expo |
+| jerez | 0.00002 | R | R, Expo '92. Re-surveyed 2026-11-10 (#5078): v0 is NOT the pit straight (it is two corners early), so jerez ships `startFrac: 0.2169` on the real 600 m straight, first apex R at 364 m |
 | donington | 0.00040 | R | R, Redgate |
 | anderstorp | 0.00011 | R | R |
 | brands_hatch | **0.00619** | R | R, Paddock Hill Bend |

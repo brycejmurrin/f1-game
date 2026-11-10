@@ -1678,6 +1678,7 @@
         "tests/specs/menu-survey.spec.js",
         "tests/specs/menu-traversal.spec.js",
         "tests/specs/music-library.spec.js",
+        "tests/specs/named-controls.spec.js",
         "tests/specs/persistence.spec.js",
         "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
@@ -2067,6 +2068,11 @@
     {
       "path": "js/agent/apex.js",
       "global": "ApexApi",
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/bridge-link.js",
+      "global": "BridgeLink",
       "roster": "LAZY_AGENT"
     },
     {

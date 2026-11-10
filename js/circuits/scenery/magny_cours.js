@@ -25,6 +25,13 @@
       const poplar = (k, side, dist, h) => {
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
+        // All-or-nothing (#5082): the engine guards each primitive on its own
+        // footprint, so on a folded stretch the r 1.5 crown tiers were dropped
+        // over the parallel road while the r 0.2 trunk passed and shipped
+        // alone. Test the crown footprint + 2 m at the foot and at the tip
+        // (a.u leans with the ground) before emitting anything.
+        const tip = vadd(a.c, a.u, h * 1.06);
+        if (onTrack(a.c[0], a.c[2], 3.5) || onTrack(tip[0], tip[2], 3.5)) return;
         out._mat = MAT.WOOD;
         addCyl(out, a.c, 0.20, h * 0.22, [0.44, 0.38, 0.30], 5, b);
         out._mat = MAT.FOLIAGE;

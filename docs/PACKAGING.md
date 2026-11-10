@@ -1,7 +1,16 @@
 # Apex 26 — packaging
 
-Native wrappers around the **same staged site** GitHub Pages publishes.
-There is no second gameplay codebase and no build step for the game itself.
+Native wrappers around the site GitHub Pages publishes, staged by the same
+`tools/desktop/stage.mjs` (`stageSiteMinified`) the Pages deploy runs. There is
+no second gameplay codebase and no build step for the game itself. Neither
+wrapper has ever been released: no Windows, macOS, Android or iOS package has
+been built or run by CI (desktop CI to date is Ubuntu pull-request pack-smoke
+only; nothing in CI builds `mobile/`).
+
+The staged `js/` is byte-identical to Pages only when terser is installed at the
+repo root (`npm ci`). A missing terser fails a release build (`APEX_RELEASE_BUILD=1`,
+a tag, or a non-PR GitHub Actions event) and is a logged, allowed skip in a
+pull-request or local build (`tools/desktop/minify.mjs` `unminifiedPolicy`).
 
 - Desktop (Electron): `desktop/` — this document’s first section, plus that
   folder’s README.
@@ -53,8 +62,12 @@ npm run dist:mac       # .dmg + .zip arm64+x64 (macOS host)
 Override the staged tree with `APEX_SITE_DIR=/abs/path` (must contain
 `version.json`). Default is `desktop/dist-site`.
 
-Artifacts land in `desktop/dist/` (gitignored). **Unsigned.** Uninstall does
-**not** delete app data (`nsis.deleteAppDataOnUninstall: false`).
+Artifacts land in `desktop/dist/` (gitignored). **Unsigned**, no update
+channel. Fuses (incl. asar integrity on macOS/Windows) and what they do not
+protect without signing: `desktop/README.md` §What is and is not protected.
+Debug env flags (`APEX_DESKTOP_SOFT_GL`, `APEX_DESKTOP_NO_SANDBOX`) are ignored
+by a packaged build. Uninstall does **not** delete app data
+(`nsis.deleteAppDataOnUninstall: false`).
 
 ### Artifact names
 
@@ -124,8 +137,9 @@ cd mobile/android && ./gradlew assembleDebug
 ```
 
 `sync-web.mjs` copies the stamped tree into `mobile/www` (Capacitor `webDir`)
-and runs `npx cap sync android`. It **reuses** `tools/desktop/stage.mjs` (the
-Electron/Pages stager). Unstamped `?v=dev` output is refused unless `--dev`.
+and runs `npx cap sync android`. A fresh stage calls `stageSiteMinified` then
+`stampStaged` from `tools/desktop/stage.mjs` (the Electron/Pages stager).
+Unstamped `?v=dev` output is refused unless `--dev`.
 
 Inspect a debug APK with `chrome://inspect`. Committed
 `webContentsDebuggingEnabled` is `false`; flip locally, do not commit `true`.
@@ -157,7 +171,9 @@ Export buttons use `URL.createObjectURL` + `<a download>` (`settings-export.js`,
 `agent/apex.js`, `career/career-backup.js`). Android WebView commonly ignores that. `NativeDownload`
 intercepts those clicks when `Native.platform()` is `android`/`ios` **and**
 `window.Capacitor.Plugins.Filesystem` + `Share` exist (no bundler — Capacitor
-injects the Plugins proxy). Writes `Directory.CACHE` (`"CACHE"`) then Share.
+injects the Plugins proxy). Writes `Directory.CACHE` (`"CACHE"`) under
+`apex26-downloads/v2/` then Share; the FileProvider (`res/xml/file_paths.xml`)
+exposes only that folder.
 
 QR join (`js/net/scan.js`) uses `getUserMedia`. The manifest has `CAMERA` with
 `required=false`. Join-by-code still works if the WebView denies the camera.

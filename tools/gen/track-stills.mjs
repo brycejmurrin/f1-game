@@ -14,8 +14,8 @@
 // SIGNATURE section (HERO below — Eau Rouge, Turn 8, the Casino climb), HUD
 // off, at the time of day the table picks for the mood (night races stay night).
 // The still is the PLACE, not the race: the picker's hero shows where you are
-// about to drive, and the outline drawn over it says which way the lap goes. The 1280x720 canvas clip is
-// downsampled to STILL_W x STILL_H WebP — ~30 KB a circuit, cheap enough to
+// about to drive, and the outline drawn over it says which way the lap goes. The 1600x900 canvas clip is
+// written twice (stillFiles: STILL_W x STILL_H and the 2x file) as WebP, cheap enough to
 // ship for the whole catalogue and load lazily (js/ui/select-screen.js only
 // asks for the selected circuit's still).
 //
@@ -35,6 +35,17 @@ import { awaitPresentedFrame, screenshotPresentedCanvas } from "../shot/probe-pa
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const OUT_DIR = resolve(ROOT, "assets", "stills");
 export const STILL_W = 800, STILL_H = 450;
+// The 2x file (#5223): the picker hero is ~804 CSS px wide on a phone, 2411 device px at DPR 3, so the
+// 800 px still alone drew 0.33 source px per device px. `<id>-1600.webp` rides the hero's srcset
+// (js/ui/select-screen.js stillSrcset); both files come from ONE capture so they can never disagree.
+export const STILL_2X_W = 1600, STILL_2X_H = 900, STILL_2X_SUFFIX = "-1600";
+/** The files one circuit ships: [{ file, w, h, quality }]. */
+export function stillFiles(id) {
+  return [
+    { file: id + ".webp", w: STILL_W, h: STILL_H, quality: 78 },
+    { file: id + STILL_2X_SUFFIX + ".webp", w: STILL_2X_W, h: STILL_2X_H, quality: 72 },
+  ];
+}
 
 function flag(argv, name, fallback) {
   const i = argv.indexOf(name);
@@ -117,7 +128,7 @@ const WAIT_MS = Math.max(5, parseFloat(flag(argv, "--wait", "180"))) * 1000;
 const circuits = readdirSync(resolve(ROOT, "js", "circuits"))
   .filter((f) => f.endsWith(".js")).map((f) => f.replace(/\.js$/, ""))
   .filter((id) => !only.length || only.includes(id))
-  .filter((id) => force || !existsSync(resolve(OUT_DIR, id + ".webp")));
+  .filter((id) => force || !stillFiles(id).every((f) => existsSync(resolve(OUT_DIR, f.file))));
 
 if (!circuits.length) { console.log("track-stills: nothing to shoot"); process.exit(0); }
 mkdirSync(OUT_DIR, { recursive: true });
@@ -125,7 +136,7 @@ mkdirSync(OUT_DIR, { recursive: true });
 const srv = await startStaticServer(ROOT);
 try {
   const browser = await launchChromium({ args: ["--use-angle=swiftshader"] });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const page = await browser.newPage({ viewport: { width: STILL_2X_W, height: STILL_2X_H } });
   // domcontentloaded, not load: a cold SwiftShader boot can hold the load
   // event past Playwright's 30 s default while the page is perfectly alive;
   // the __apex wait below is the real readiness signal.
@@ -179,9 +190,15 @@ try {
       return { buf: png };
     });
     const png = shot.buf;
-    const webp = await sharp(png).resize(STILL_W, STILL_H, { fit: "cover" }).webp({ quality: 78 }).toBuffer();
-    writeFileSync(resolve(OUT_DIR, id + ".webp"), webp);
-    console.log(`${id} @${frac} ${tod}: ${(webp.length / 1024).toFixed(1)} KB in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
+    const meta = await sharp(png).metadata();
+    if (meta.width < STILL_2X_W || meta.height < STILL_2X_H) throw new Error(`capture is ${meta.width}x${meta.height}, under ${STILL_2X_W}x${STILL_2X_H}: the 2x still would be upscaled`);
+    const kb = [];
+    for (const f of stillFiles(id)) {
+      const webp = await sharp(png).resize(f.w, f.h, { fit: "cover" }).webp({ quality: f.quality }).toBuffer();
+      writeFileSync(resolve(OUT_DIR, f.file), webp);
+      kb.push(`${f.w}w ${(webp.length / 1024).toFixed(1)} KB`);
+    }
+    console.log(`${id} @${frac} ${tod}: ${kb.join(", ")} in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
     } catch (err) {
       // One circuit's timeout (a SwiftShader screenshot past 60 s under load)
       // must not end the batch: log it, move on, re-run for the missing ones.

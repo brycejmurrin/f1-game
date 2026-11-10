@@ -184,7 +184,7 @@
 /* THE TAP LADDER IS TYPED so JS can READ it. All three are max(Npx,
    calc(24px / var(--ui-scale))) expressions; unregistered, getComputedStyle
    returns the raw token stream and every parseFloat() on it is NaN — which
-   is how tools/layout-audit.mjs measured every tap against a hardcoded 44
+   is how tools/ui/layout-audit.mjs measured every tap against a hardcoded 44
    for its whole life (its own comment block swears the opposite), and how
    js/game/menus.js's chip-height read silently pinned the circuit preview
    band to 40 at every scale and on every pointer. Registered <length>, the

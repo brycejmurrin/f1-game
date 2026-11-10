@@ -80,6 +80,21 @@ export function median(xs) {
 
 const keyOf = (...parts) => JSON.stringify(parts);
 
+/** Keyed maps (specs, titles) have no prototype, so a test titled `__proto__`
+ *  is an ordinary key rather than Object.prototype. */
+const dict = () => Object.create(null);
+
+// Names that are object-model keys, not test or spec names.
+const RESERVED = new Set(["__proto__", "constructor", "prototype"]);
+
+/** A spec path or test title as it may be stored: a non-empty string of at
+ *  most 500 characters, no control characters, not a reserved key. Rows from
+ *  junit or a live log that fail this are dropped at merge. */
+export function validName(name) {
+  return typeof name === "string" && name.length > 0 && name.length <= 500 &&
+    !/[\u0000-\u001f\u007f]/.test(name) && !RESERVED.has(name);
+}
+
 const round = (n) => Math.round(n * 1000) / 1000;
 
 /** `specs/<id>.spec.js` or `./tests/specs/<id>.spec.js` -> `tests/specs/<id>.spec.js`.
@@ -169,15 +184,49 @@ export function parseLiveLog(text, endISO) {
 }
 
 export function emptyDb() {
-  return { "//": SCHEMA, keep: KEEP, specs: {} };
+  return { "//": SCHEMA, keep: KEEP, specs: dict() };
 }
 
-export function loadDb(file = path.join(ROOT, TIMINGS_FILE)) {
-  try {
-    const db = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (db && typeof db === "object" && db.specs) return db;
-  } catch { /* absent or unreadable is an empty history, never a hard failure */ }
-  return emptyDb();
+const isMap = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+
+/** The parsed file, re-keyed into prototype-free maps; throws on a wrong shape. */
+function fromJson(raw) {
+  if (!isMap(raw) || !isMap(raw.specs)) throw new Error("top level must be an object with a `specs` object");
+  const db = { ...raw, specs: dict() };
+  for (const [spec, entry] of Object.entries(raw.specs)) {
+    if (!isMap(entry) || (entry.s != null && !Array.isArray(entry.s)) || (entry.t != null && !isMap(entry.t)))
+      throw new Error(`spec ${JSON.stringify(spec)} must be { s: [], t: {} }`);
+    const t = dict();
+    for (const [title, list] of Object.entries(entry.t || {})) {
+      if (!Array.isArray(list)) throw new Error(`${JSON.stringify(spec)} › ${JSON.stringify(title)} must be an array`);
+      t[title] = list;
+    }
+    db.specs[spec] = { s: entry.s || [], t };
+  }
+  return db;
+}
+
+/** The history at `file`. A MISSING file is an empty history. A file that
+ *  exists but does not parse, or has the wrong shape, THROWS under
+ *  `strict: true` — the merge passes it, because it writes what it loaded back
+ *  over the file (and CI force-pushes it), so a damaged record read as empty
+ *  would replace every accumulated sample. Read-only callers (the shard and
+ *  budget planners) keep the default and estimate from an empty history. */
+export function loadDb(file = path.join(ROOT, TIMINGS_FILE), { strict = false } = {}) {
+  const lenient = !strict;
+  let text;
+  try { text = fs.readFileSync(file, "utf8"); }
+  catch (e) {
+    if (e && e.code === "ENOENT") return emptyDb();
+    if (lenient) return emptyDb();
+    throw new Error(`spec timings: cannot read ${file}: ${e.message}`);
+  }
+  try { return fromJson(JSON.parse(text)); }
+  catch (e) {
+    if (lenient) return emptyDb();
+    throw new Error(`spec timings: ${file} exists but is not a valid history (${e.message}); ` +
+      "refusing to treat it as empty — restore or delete the file");
+  }
 }
 
 /** Newest last, ties broken by bucket so the order is total and stable. */
@@ -197,10 +246,10 @@ function push(list, sample, keep) {
 /** Fold `rows` into `db` under `env`. Returns the db and what actually landed. */
 export function mergeRows(db, rows, { env = "local", keep = KEEP } = {}) {
   if (!BUCKETS.includes(env)) throw new Error(`unknown env bucket: ${env} (${BUCKETS.join("|")})`);
-  db.specs = db.specs || {};
+  db.specs = db.specs || dict();
   db.keep = keep;
   db["//"] = SCHEMA;
-  let added = 0, duplicates = 0;
+  let added = 0, duplicates = 0, rejected = 0;
   // ONE RUN, ONE SAMPLE PER TEST — collapse before anything is counted.
   // A batch routinely carries the same run twice (its junit AND its
   // live-reporter log), and the per-test push would dedupe those while the
@@ -210,22 +259,24 @@ export function mergeRows(db, rows, { env = "local", keep = KEEP } = {}) {
   const unique = new Map();
   for (const r of rows) {
     if (!r || !r.spec || !r.title || !r.ts || !Number.isFinite(r.sec)) continue;
+    if (!validName(r.spec) || !validName(r.title)) { rejected++; continue; }
     // FIRST wins, and the default source list is junit only: junit carries
     // millisecond `time`, the live log rounds to one decimal, so a batch given
     // both keeps the more precise reading rather than whichever was passed last.
     const k = keyOf(r.spec, r.ts, r.title);
     if (!unique.has(k)) unique.set(k, r);
   }
-  const collapsed = rows.length - unique.size;
+  const collapsed = rows.length - unique.size - rejected;
   // Per (spec, run) totals, so the spec-level series says what a whole file cost
   // in that run and how many tests bought it — the per-test figure select-budget
   // needs, undistorted by a spec that grew a test.
   const runs = new Map();
   for (const r of unique.values()) {
-    const entry = (db.specs[r.spec] ||= { s: [], t: {} });
-    entry.t ||= {};
+    const entry = (Object.hasOwn(db.specs, r.spec) ? db.specs[r.spec] : (db.specs[r.spec] = { s: [], t: dict() }));
+    entry.t ||= dict();
     entry.s ||= [];
-    if (push((entry.t[r.title] ||= []), [r.ts, env, round(r.sec)], keep)) added++;
+    const list = Object.hasOwn(entry.t, r.title) ? entry.t[r.title] : (entry.t[r.title] = []);
+    if (push(list, [r.ts, env, round(r.sec)], keep)) added++;
     else duplicates++;
     const key = keyOf(r.spec, r.ts);
     const agg = runs.get(key) || { spec: r.spec, ts: r.ts, sec: 0, tests: 0 };
@@ -235,7 +286,7 @@ export function mergeRows(db, rows, { env = "local", keep = KEEP } = {}) {
   }
   for (const agg of runs.values())
     push(db.specs[agg.spec].s, [agg.ts, env, round(agg.sec), agg.tests], keep);
-  return { db, added, duplicates, collapsed, specs: new Set([...runs.values()].map((a) => a.spec)).size };
+  return { db, added, duplicates, collapsed, rejected, specs: new Set([...runs.values()].map((a) => a.spec)).size };
 }
 
 /** Union two histories sample by sample (identity = run second + bucket, the
@@ -253,7 +304,7 @@ export function unionDb(a, b, { keep = KEEP } = {}) {
   };
   const A = a?.specs || {}, B = b?.specs || {};
   for (const spec of new Set([...Object.keys(A), ...Object.keys(B)])) {
-    const t = {};
+    const t = dict();
     for (const title of new Set([...Object.keys(A[spec]?.t || {}), ...Object.keys(B[spec]?.t || {})]))
       t[title] = series(A[spec]?.t?.[title], B[spec]?.t?.[title]);
     out.specs[spec] = { s: series(A[spec]?.s, B[spec]?.s), t };
@@ -464,19 +515,20 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     read.push({ file: path.relative(ROOT, f), rows: got.length });
     rows.push(...got);
   }
-  const db = loadDb(into);
+  const db = loadDb(into, { strict: true });
   const r = mergeRows(db, rows, { env, keep });
   const dry = argv.includes("--dry-run");
   if (!dry) saveDb(db, into);
   if (json) {
     console.log(JSON.stringify({ env, keep, dryRun: dry, sources: read,
-      added: r.added, duplicates: r.duplicates, collapsed: r.collapsed, specs: r.specs }, null, 2));
+      added: r.added, duplicates: r.duplicates, collapsed: r.collapsed, rejected: r.rejected, specs: r.specs }, null, 2));
   } else {
     for (const s of read) console.error(`read ${s.rows} test row(s) from ${s.file}`);
     if (!sources.length) console.error("no junit.xml under artifacts/ — pass paths explicitly");
     console.log(`${dry ? "would merge" : "merged"} ${r.added} new sample(s) across ${r.specs} ` +
       `spec(s) into ${path.relative(ROOT, into)} [${env}]` +
       (r.duplicates ? `; ${r.duplicates} already recorded` : "") +
-      (r.collapsed ? `; ${r.collapsed} row(s) were one run seen twice` : ""));
+      (r.collapsed ? `; ${r.collapsed} row(s) were one run seen twice` : "") +
+      (r.rejected ? `; ${r.rejected} row(s) with an invalid spec or test name dropped` : ""));
   }
 }
