@@ -1,0 +1,2 @@
+Fixed: grandstands, gravel traps, tyre walls and corner boards at Magny-Cours (Adelaide, Lycée), Montreal (L'Épingle, final chicane, Wall of Champions), Mexico City (Turn 1, the Esses), Miami (Turns 1-4, the Turnpike chicane), Kyalami, Jacarepaguá and Jerez now stand at the corners they are named for, on the outside, instead of hundreds of metres away on a straight
+Fixed: Jeddah's banking is on the final corner instead of Turn 1; Korea's turn markers sit on the apexes; Madrid's full race distance is 57 laps; the Mexico event is named the Mexico City GP
