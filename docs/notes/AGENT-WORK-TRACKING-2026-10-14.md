@@ -1,5 +1,7 @@
 # Backlog check-in: 2026-10-29
 
+Summary: Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md §Backlog.
+
 Issue: [#1518](https://github.com/brycejmurrin/f1-game/issues/1518).
 This completes the two-week check-in requested by the
 [original October 14 research](../archive/notes/AGENT-WORK-TRACKING-2026-10-14.md).

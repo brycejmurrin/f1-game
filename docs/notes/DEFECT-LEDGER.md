@@ -1,5 +1,7 @@
 # Apex 26 — defect ledger
 
+Summary: The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8).
+
 > Carved out of `ARCHITECTURE-REVIEW.md` §7-8 on 2026-09-03 (tree
 > restructure Phase 5). The standing assessment — the founding bet, the physics
 > authority, the `G` façade, the renderer seam, the lessons — stays there; this
