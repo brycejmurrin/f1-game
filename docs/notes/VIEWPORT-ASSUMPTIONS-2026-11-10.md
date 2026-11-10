@@ -35,11 +35,32 @@ document scroll, no sheet outside its host, no page error. Before and after coun
 off-screen 0 / 1 / 0), so the safe-box change moved no control under hardware. The tap-floor rows (about 800 per
 window) are the standing 52 px comfort floor against 48 px chips and are unchanged.
 
+**UI SIZE 51 % and 40 %** (added after two other sessions matched Bryce's pause and title screenshots to an effective
+UI SIZE near 51 %, though the export stores no `uiScale`): `SURVEY_SCALE=51|40 node tools/ui/profile-survey.mjs A,C,D`
+on this branch only (no base run), 183 cells each, 0 errors. `__apex.uiScale(n)` is set after the import.
+
+| UI SIZE | body density A / C / D | outside safe box | doc scroll | off-screen | clipped A / C / D | fat A / C / D |
+|---|---|---|---|---|---|---|
+| 109 % (export) | compact / compact / compact | 0 | 0 | 0 / 1 / 0 | 13 / 18 / 14 | not kept |
+| 51 % | normal / compact / normal | 0 | 0 | 0 | 16 / 15 / 17 | 20 / 10 / 20 |
+| 40 % | normal / normal / normal | 0 | 0 | 0 | 17 / 19 / 18 | 28 / 18 / 28 |
+
+So the safe-box and layout-viewport changes hold in the normal tier too: no control leaves the safe box and nothing
+scrolls the document at either scale. What does change at 51 % is per screen, not shared: every result above this
+paragraph is for the compact tier, and at 51 % windows A and D leave it (C, 283 px tall, stays compact until 40 %).
+The pause card is 278×364 at 51 % (the full safe height, y 8 to 372) against 218×323 at 40 % and 210 px tall at
+109 % (#5200 owns it). The "fat" rows are the touch dock at BUTTON 245 % (140 px steer pads, 7 a HUD screen) and one
+to three garage controls; UI SIZE does not move the dock. Not answered here: what sets an effective 51 % on his phone
+when the export has `uiScale: null`.
+
 ## 2. What this PR changes
 
 - `--safe-t/r/b/l: max(inset, gutter)`. An edge with no inset keeps the gutter, so desktop and the top edge in
   landscape are unchanged. `--safe-h` is `(100svh − safe-t − safe-b) / --ui-scale`. `--dh-safe-h` and the desktop hub
   card read the same tokens. `#save-warning` caps to `--safe-w`. Test: `tests/unit/safe-box-tokens.test.mjs`.
+  The telemetry compare popup's card is capped by the same `--safe-t/b` as its dialog's padding: capped on the raw
+  insets it was 372 px in a 364 px box and ended 4 px under the home indicator (`telemetry-fit.spec.js`, 376 > 373 on
+  the first CI run of this branch; 8 to 372 after).
 - `hud.js` `vpSync` reads `documentElement.clientWidth/Height` (inner* only when there is no layout, which keeps the VM
   harnesses as they were); every other read in the file goes through `vpW()/vpH()`; `GameHud.vp()` serves the mirror
   and the REL card. Visor, rain and menu paging read the ICB. Test: `tests/unit/viewport-icb-readers.test.mjs`.
