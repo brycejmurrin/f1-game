@@ -438,22 +438,23 @@ test('toolbar: one fixed-size strip, never scaled by HUD SIZE, BUTTON SIZE or TE
   const css = [bar, ...bar.children, ...bar.children.flatMap((c) => c.children)].map((el) => el.style.cssText || '').join('\n');
   assert.doesNotMatch(css, /var\(--(fs-|hud-|tap|ui-scale|text-scale|look-)/, 'no scaled token sizes the toolbar');
   assert.doesNotMatch(css, /font:\s*inherit[^;]*;[^\n]*font-size:\s*var/, 'no inherited scaled font size');
-  assert.match(bar.style.cssText, /font-size:\s*13px/);
-  assert.match(bar.style.cssText, /flex-wrap:\s*nowrap/, 'one row by default');
+  // Parsed declarations, not source-text pins (assertPins ratchet, #1682).
+  const decl = (el) => Object.fromEntries(String(el.style.cssText || '').split(';').map((d) => d.split(':')).filter((kv) => kv.length > 1)
+    .map(([k, ...v]) => [k.trim(), v.join(':').trim()]));
+  const b = decl(bar);
+  assert.equal(b['font-size'], '13px'); assert.equal(b['flex-wrap'], 'nowrap', 'one row by default');
   for (const id of ['hud-arrange-element', 'hud-arrange-vis']) {
-    const sel = e.ids.get(id).style.cssText;
-    assert.match(sel, /(^|;)height:\s*44px/, id + ' is an explicit 44 px box (beats the coarse select floor)');
-    assert.match(sel, /max-height:\s*44px/, id);
-    assert.match(sel, /(^|;)appearance:\s*none/, id + ' draws its own box: WebKit painted it ~100 px tall');
-    assert.match(sel, /(^|;)width:\s*\d+px/, id + ' has a fixed width');
+    const d = decl(e.ids.get(id));
+    assert.deepEqual([d.height, d['max-height'], d.appearance], ['44px', '44px', 'none'],
+      id + ': an explicit 44 px self-drawn box (beats the coarse select floor; WebKit painted it ~100 px tall)');
+    assert.ok(/^\d+px$/.test(d.width), id + ' has a fixed width');
   }
   for (const id of ['hud-arrange-move', 'hud-arrange-smaller', 'hud-arrange-larger', 'hud-arrange-recover', 'hud-arrange-reset', 'hud-arrange-done']) {
-    const st = e.ids.get(id).style.cssText;
-    assert.match(st, /min-height:\s*44px/, id + ' keeps a 44 px touch target');
-    assert.match(st, /max-height:\s*44px/, id + ' never grows the strip');
+    const d = decl(e.ids.get(id));
+    assert.deepEqual([d['min-height'], d['max-height']], ['44px', '44px'], id + ': a 44 px touch target that never grows the strip');
   }
   assert.ok(!e.ids.get('hud-arrange-vis').parentNode._text, 'no visible VISIBILITY caption widens the strip');
-  assert.match(e.ids.get('hud-arrange-hint').style.cssText, /max-height:\s*2\.4em/, 'the hint is clamped to two lines');
+  assert.equal(decl(e.ids.get('hud-arrange-hint'))['max-height'], '2.4em', 'the hint is clamped to two lines');
   assert.doesNotMatch(e.ids.get('hud-arrange-hint').style.cssText, /display:/, '[hidden] must still hide the hint');
 });
 
