@@ -135,11 +135,7 @@ test("a brand-new unit file selects guards only, not every slice", () => {
   // dangling source comment pointing at a missing file.
   const ghost = ["tests", "unit", "ghost-unlisted-" + "pickonly.test.mjs"].join("/");
   const r = pick([ghost]);
-  // W31 row 1 puts the test:tiny boot floor in every non-docs browser plan, and the
-  // floor's logging.spec.js is dropped for its ADAPTED VM twin; #5241 G3 then owes
-  // that twin's page slice, so the plan is guards + page-a — still not every slice.
-  assert.deepEqual([...r.slices.keys()].sort(), ["guards", "page-a"]);
-  assert.ok(r.slices.size < SLICES.length, "must not fail-safe to all");
+  assert.deepEqual([...r.slices.keys()], ["guards"]);
 });
 
 test("SLICE_COST_P50_SEC covers every slice", () => {

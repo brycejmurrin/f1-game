@@ -1931,7 +1931,8 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
       assert.ok(r.shards.length > 0, `${files}: a job runs`);
       assert.ok(planned(r).includes("tests/specs/boot-guard.spec.js"), `${files}: boot-guard is planned`);
     }
-    assert.deepEqual(W31.floorSpecs().sort(), ["tests/specs/boot-guard.spec.js", "tests/specs/logging.spec.js", "tests/specs/smoke.spec.js"]);
+    // logging.spec.js is in test:tiny but TWINNED (ADAPTED, vm-page-a): the floor leaves it out so it forces no node slice.
+    assert.deepEqual(W31.floorSpecs().sort(), ["tests/specs/boot-guard.spec.js", "tests/specs/smoke.spec.js"]);
   });
 
   test("W31 row 1: a runner/config diff runs one spec per default-project browser group", () => {

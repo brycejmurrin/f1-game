@@ -1453,10 +1453,14 @@ export function cssSpecs(changed) {
 // only browser route was nothing at all (a tools/ file, a vendored library).
 // The floor is the `test:tiny` set (boot-guard, logging, smoke): the cheapest
 // "does the page still boot" evidence. An EMPTY plan is a pass only for a
-// docs-only (or empty) diff.
+// docs-only (or empty) diff. A TWINNED floor spec (logging.spec.js, ADAPTED) is left
+// out, as perGroupSpecs does: the browser plan drops it for its VM twin anyway, and
+// #5241 G3 would then force that twin's node slice (vm-page-a) onto every code diff,
+// which node-plan.mjs rules out ("a plain js/ edit does not run vm-page for logging's
+// twin alone"). boot-guard and smoke are the floor's browser evidence.
 export const FLOOR_GROUP = "test:tiny";
 export function floorSpecs(scripts = pkgScripts()) {
-  return specsOf([FLOOR_GROUP], scripts).filter((f) => fs.existsSync(path.join(ROOT, f)));
+  return specsOf([FLOOR_GROUP], scripts).filter((f) => fs.existsSync(path.join(ROOT, f)) && !isTwinned(f));
 }
 const pkgScripts = () => JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
 
