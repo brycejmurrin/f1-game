@@ -61,6 +61,11 @@ test.describe("Season — mode flags", () => {
       const state = await page.evaluate(() => {
         window.__apex.go();
         window.__apex.headless(true);
+        // The AI drives the player's car: a player parked for 60 s under green is
+        // retired (W26 row 5, AiDrive.stallSweep), which would end the race for a
+        // reason that is not the time cap this test is about.
+        const me = window.__apex.carRoles().findIndex((r) => r.local);
+        window.__apex.carRole(me, { human: false });
         window.__apex.step(1, 361);
         return window.__apex.info().state;
       });
