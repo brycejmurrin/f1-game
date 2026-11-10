@@ -201,7 +201,11 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const hudDock = ruleFor(ov, "#hud-dock", "bottom");
   assert.match(hudDock.decls.get("bottom"), /^calc\(10px \+ var\(--sab\)\)$/);
   const H = 390, SAB = 21;
-  for (const scale of [1, 1.5, 2]) {
+  // 200 % left this raw-fit list on 2026-11-09 (PR #5297): --tap went 54 -> 58 so a tap clears the ~15 mm floor
+  // at the new 100 % default (tests/unit/scale-defaults.test.mjs), and three 58 px taps at 200 % are 369 px, past
+  // the 359 this phone has. No integer tap holds both (15 mm needs >= 57, the 200 % raw fit <= 56). fitHud's cap
+  // (asserted below) is the net from ~195 %, as it always was for buttons mode.
+  for (const scale of [1, 1.5]) {
     const painted = tallestTilt * scale;
     assert.ok(painted + 10 + SAB <= H,
       `tilt/manual HUD SIZE ${scale * 100}%: tallest column ${painted.toFixed(0)}px + ${10 + SAB}px stays inside ${H}px`);
@@ -226,7 +230,8 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| mult/,
     "unset controls use a fixed default independent of HUD size");
   const capTilt = (H - 3 * air) / tallestTilt;
-  assert.ok(capTilt >= 2, `tilt/manual cap (${capTilt.toFixed(2)}) only bites past 200 % on 390px — the raw slider fits every setting`);
+  assert.ok(capTilt >= 1.9 && capTilt < 2, `tilt/manual cap (${capTilt.toFixed(2)}) bites only in the last 10 % of the slider on 390px`);
+  assert.ok(tap * capTilt > 54 * 2, `capped at ${capTilt.toFixed(2)} a tap still paints ${(tap * capTilt).toFixed(0)}px, more than the 108px the old 54px tap painted at 200 %`);
   const capButtons = (H - 3 * air) / tallestButtons;
   assert.ok(capButtons < 2 && capButtons >= 1.5,
     `buttons cap (${capButtons.toFixed(2)}) bites before 200 % — fitHud must shrink the dock at max HUD SIZE`);
@@ -806,7 +811,7 @@ test("dock touch labels keep an 11 CSS-px painted floor under --hud-z-dock", () 
   // Hit-area tokens stay size tokens — the floor must not leak into --tap/--hold.
   const tap = dock.decls.get("--tap");
   const hold = dock.decls.get("--hold");
-  assert.match(String(tap), /^max\(54px/);
+  assert.match(String(tap), /^max\(58px/);
   assert.match(String(hold), /^max\(72px/);
   assert.doesNotMatch(String(tap), /touch-label-floor/);
   assert.doesNotMatch(String(hold), /touch-label-floor/);
