@@ -1547,9 +1547,11 @@ test("host(): private relay swaps one offer/answer and the linked phone can driv
   assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
   assert.ok(request.token.cancelled, "linking stops the rendezvous");
   h.clock.t = 100;
-  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 0.8, brk: 0, roll: 0, held: 0 }));
+  const wire = PhonePad.encodeSample({ seq: 0, thr: 0.8, brk: 0, roll: 0, held: 0 });
+  h.padEnd.send(NetTransport.STATE, wire);
   h.hostEnd.pump(100);
-  assert.ok(h.Input.throttleLevel() > 0.77, "the accepted answer installs the real Input link");
+  // The exact remote pedal: the wire's throttle past the 0.1 travel threshold, rescaled (W26 row 8).
+  assert.equal(h.Input.throttleLevel(), (PhonePad.decodeSample(wire).thr - 0.1) / 0.9, "the accepted answer installs the real Input link");
   h.ctl.cancel(); assert.equal(h.hostEnd.status, "closed"); assert.equal(h.Input.remoteActive(), false);
 });
 
