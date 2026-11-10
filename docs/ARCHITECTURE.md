@@ -1749,21 +1749,23 @@ additive glow follows the sky (`js/render/gfx.js` frame protocol).
 
 ### VR renderer selection (task 20)
 
-When `apex26.xr=1` **and** the device reports immersive-vr (cached in
-`apex26.xrCaps` for the sync boot read; refreshed by `ApexXR.detect()`),
-`backendPreference()` in `js/game.js` takes a **non-persisted** override from
-`ApexXR.bootPick()` / `XRPlan.resolve`:
+What switches a player onto the XR-capable renderer is the ENTER VR tap:
+`XrBoot.ensureXrBackend()` pins `apex26.gfxBackend=three` +
+`apex26.tlxForceGL=1` for one boot, stashes the player's own pick and reloads
+(never during a race); `mountUi()` puts the pick back after the next boot.
+`XRPlan.resolve` / `ApexXR.plan()` are advisory (`ApexXR.stats()`):
+`renderer-boot.js` asks `ApexXR.bootPick()`, but ApexXR is LAZY_XR and is not
+loaded when that read runs, so a real boot is never steered by it.
 
-| `apex26.xrBackend` | Path | Boot override | Notes |
-|---|---|---|---|
-| unset / `webgl2` | WebGL2 (GLX) | `"webgl2"` | Default shippable Quest path. GLX `getContext("webgl2")` sets `xrCompatible:true` only when `navigator.xr` exists. |
-| `webgpu` | WebGPU experimental (TLX) | `"three"` | Requires `navigator.gpu` **and** `XRGPUBinding`; otherwise falls back to WebGL2 with a reason in `ApexXR.stats().fallbacks`. Session feature negotiation is task 45. |
+| `apex26.xrBackend` | Session | Notes |
+|---|---|---|
+| unset / `webgl2` | WebGL2 (TLX + forceGL, `XRWebGLLayer`) | The shippable Quest path. |
+| `webgpu` | WebGL2 as well | A preference only: the attach builds an `XRWebGLLayer` and nothing creates an `XRGPUBinding`, so `XrSession` does not request the `webgpu` feature (`ATTACH_WEBGPU` in `js/xr/xr-session.js`). A failed request or attach under that preference latches `sessionStorage apex26.xrFallback=webgl2`. |
 
-The override **never writes** `apex26.gfxBackend`. Disarming VR restores the
-player's 2D RENDERER pick. A post-boot WebGPU failure latches
-`sessionStorage apex26.xrFallback=webgl2` (honoured on the next resolve).
-SETTINGS › DISPLAY › VR rows (`XROpts`) stay hidden unless `caps.vr`.
-Stereo presentation is tasks 40/45 — this module only plans the path.
+Nothing here writes the player's `apex26.gfxBackend` for good. SETTINGS ›
+DISPLAY › VR rows (`XROpts`) stay hidden unless `caps.vr`. On a phone
+(Chromium answers immersive-vr for Cardboard) ENTER VR shows only once VR MODE
+is ON, and ENTER hides while a race runs.
 
 Canary + session claim-fail recover from claim-and-die / jetsam by falling
 back to WebGL2 without always wiping the user’s pick. WGX climbs

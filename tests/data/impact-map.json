@@ -4780,7 +4780,6 @@
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "create": [
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/race-setup-sheets.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ],
@@ -5212,7 +5211,6 @@
       "create": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/gfx-debug-overlay.test.mjs",
@@ -10078,7 +10076,6 @@
         "tests/unit/lobby-settings.test.mjs"
       ],
       "*": [
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -18913,9 +18910,11 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "calendarGroup": [
+        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/select-season-tab.test.mjs"
       ],
       "calendarIdSet": [
+        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/select-season-tab.test.mjs"
       ],
       "create": [
@@ -18948,6 +18947,12 @@
       ],
       "showStill": [
         "tests/unit/hero-still-density.test.mjs"
+      ],
+      "trackInFilter": [
+        "tests/unit/custom-tracks.test.mjs"
+      ],
+      "trackTile": [
+        "tests/unit/custom-tracks.test.mjs"
       ],
       "updateTrackPreview": [
         "tests/unit/select-preview-defer.test.mjs"
@@ -19536,9 +19541,6 @@
       "bootPick": [
         "tests/unit/xr-opts.test.mjs"
       ],
-      "caps": [
-        "tests/unit/xr-opts.test.mjs"
-      ],
       "detect": [
         "tests/unit/xr-opts.test.mjs"
       ],
@@ -19552,9 +19554,6 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "plan": [
-        "tests/unit/xr-opts.test.mjs"
-      ],
-      "rendererMatchesPlan": [
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
@@ -19698,6 +19697,9 @@
       ]
     },
     "js/xr/xr-session.js": {
+      "backend": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "bind": [
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
@@ -19728,6 +19730,7 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "isVisible": [
+        "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
       "lastError": [
