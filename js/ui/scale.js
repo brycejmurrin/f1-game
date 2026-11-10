@@ -118,10 +118,8 @@ const UiScale = (() => {
       const t = scaleSnap(pct, k);
       return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
     };
-    // UI SIZE keeps its whole range: above the settings sheet's fit cap the title still grows (measured 125 -> 200 %
-    // at 852x393 and 852x368), so the row NAMES the zoom this sheet paints at (its computed zoom, 1.25 on a phone) instead.
-    // A PHONE'S UI SIZE STOPS AT 70 % (#5235, Bryce 2026-11-10): under it menus painted 7 px text and 24 px taps.
-    // A smaller stored value is raised once at boot; css/tokens.css holds text at 12 painted px down to that 70 %.
+    // UI SIZE keeps its top: above the sheet's fit cap the title still grows, so the row NAMES this sheet's zoom.
+    // A PHONE'S UI SIZE STOPS AT 70 % (#5235, Bryce 2026-11-10); a smaller stored value is raised once at boot.
     const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
     const uiSheet = () => { const el = $("pm-uiscale"); return el && el.closest ? el.closest(".sheet") : null; };
     const sheetCap = () => { const sh = uiSheet(); return (sh && sh.getClientRects && sh.getClientRects().length && parseFloat(getComputedStyle(sh).zoom)) || 0; };
@@ -129,8 +127,7 @@ const UiScale = (() => {
       ? parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")) : null);
     const cssWas = {};   // prop -> the value this module last wrote: an unchanged row writes nothing (the observer below re-runs it)
     const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), sheetCap(), phoneUi());
-    // Moving one size slider pins the OTHER's stored wish to what it paints now, so room this move frees is
-    // never spent growing something the player did not touch (BUTTON SIZE down grew the gear cluster back).
+    // Moving one size slider pins the OTHER's stored wish to what it paints, so freed room never grows it.
     const pinPainted = (key) => { const r = rowFor(key); if (typeof store.get(key, null) === "number" && r.value < scalePct(key)) store.set(key, r.value); };
     const fromSlider = (key, v) => { const r = rowFor(key); return Math.max(r.min, Math.min(r.max, scaleSnap(+v || scaleDefaultFor(key), key))); };
     let uiRowAgain = 0;
@@ -143,19 +140,16 @@ const UiScale = (() => {
       // build's range, a direct localStorage edit) and this function runs on every
       // boot, so an unclamped read here silently applied an out-of-range scale while
       // the slider's own displayed number — always clamped — showed something else.
-      // THE SLIDER IS WHAT PAINTS (#5206). rowFor() clamps the range to what this window can paint (the race
-      // fit's --hud-cap; UI SIZE keeps its full range), so the thumb and the number are what is painted
-      // and no part of the travel is dead. The STORED wish is left alone until the player moves the slider.
+      // THE SLIDER IS WHAT PAINTS (#5206): rowFor() clamps the range to what this window can paint (--hud-cap), so no
+      // travel is dead. The STORED wish is left alone until the player moves the slider.
       let r = rowFor(key);
-      // --hud-scale carries the STORED wish, as before #5206: a widget placed in ARRANGE HUD paints raw --hud-scale, so
-      // writing the fit-capped value resized it whenever the cap moved (hud-layout.spec "small sectors right of
-      // Boost": 57 -> 61.7 px on Resume). The bands already paint min(wish, cap). The other two write what paints.
+      // --hud-scale keeps the STORED wish: a widget placed in ARRANGE HUD paints it raw, so the capped value resized
+      // it whenever the cap moved (hud-layout.spec "small sectors right of Boost"). The other two write what paints.
       const root = document.documentElement, want = typeof stored === "number" ? String((key === "hudScale" ? scalePct(key) : r.value) / 100) : "";
       const wrote = cssWas[prop] !== want;
       if (wrote) { cssWas[prop] = want; if (want) root.style.setProperty(prop, want); else root.style.removeProperty(prop); }
       if (key === "uiScale") r = rowFor(key);   // its label names the sheet's zoom, which the write above just moved
-      // The sheet's computed zoom can still read the OLD value on the turn --ui-scale lands (sheet-shape.js roomOwn;
-      // CI 42753025608: "125% · this menu 100%" stayed). Read the row again on the next frame and 250 ms after the last write.
+      // The sheet's computed zoom can read the OLD value on the turn --ui-scale lands (sheet-shape.js roomOwn): re-read.
       if (key === "uiScale" && wrote && typeof requestAnimationFrame === "function" && typeof setTimeout === "function") {
         requestAnimationFrame(applyUiRow); clearTimeout(uiRowAgain); uiRowAgain = setTimeout(applyUiRow, 250);
       }
@@ -439,6 +433,6 @@ const UiScale = (() => {
     return { min, max, value, label: txt(value) + part + (max < lim.max && value >= max ? " · max" : "") };
   }
   const UI_PHONE_MIN = 70;   // #5235
-  btnFitLabel.sizeRow = sizeRow; btnFitLabel.parseCaps = parseCaps;   // exported on the return line once #5205 (which edits it) lands
+  btnFitLabel.sizeRow = sizeRow; btnFitLabel.parseCaps = parseCaps;
   return { create, defaultResMode, migrateResMode, RES_SCHEMA, btnFitLabel };
 })();
