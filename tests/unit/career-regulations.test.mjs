@@ -66,8 +66,10 @@ test("a ban takes the DEAREST options, is derived from the catalog, and never ta
   for (const era of Regulations.ERAS) {
     const banned = Regulations.bannedIds(era.id);
     if (!era.cats.length) { assert.equal(banned.size, 0, `${era.id} bans nothing`); continue; }
-    assert.equal(banned.size, era.cats.length * Regulations.BAN_TOP,
-      `${era.id} takes BAN_TOP from each of its categories`);
+    // BAN_TOP stat CLASSES per category (#5038): an option plus every STYLE /
+    // SIGNATURE twin at the same cost and stats, so at least BAN_TOP ids each.
+    assert.ok(banned.size >= era.cats.length * Regulations.BAN_TOP,
+      `${era.id} takes at least BAN_TOP from each of its categories`);
     for (const cat of Parts.CATALOG) {
       const hit = cat.options.filter((o) => banned.has(o.id));
       if (!era.cats.includes(cat.id)) {
@@ -79,6 +81,15 @@ test("a ban takes the DEAREST options, is derived from the catalog, and never ta
       for (const b of hit) for (const k of kept)
         assert.ok((b.cost || 0) >= (k.cost || 0),
           `${era.id}/${cat.id}: ${b.id} (${b.cost}) should outprice kept ${k.id} (${k.cost})`);
+      // No legal twin: a kept option never matches a banned one on cost AND every
+      // stat. A STYLE row or SIGNATURE twin of a banned part used to stay legal and
+      // perform identically (style_susp_upright under AERO RESET, #5038).
+      const stats = (o) => [o.cost || 0, ...["speed", "accel", "cornering", "braking"].map((k) => o[k] ?? 1), o.wetTread ?? "", o.life ?? ""].join("|");
+      const bannedStats = new Set(hit.map(stats));
+      for (const k of kept)
+        assert.ok(!bannedStats.has(stats(k)), `${era.id}/${cat.id}: ${k.id} is legal but identical to a banned option`);
+      // The class is whole: exactly BAN_TOP distinct classes go.
+      assert.equal(bannedStats.size, Regulations.BAN_TOP, `${era.id}/${cat.id} bans BAN_TOP stat classes`);
       for (const b of hit)
         assert.ok((b.cost || 0) > 0, "a cost-0 option is the fallback and can never be banned");
     }

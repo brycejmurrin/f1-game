@@ -16,7 +16,7 @@ alwaysApply: true
 - **Route:** deploy/`version.json` → `deploy-research` (host fetch / WebFetch);
   pre-push → `verify-agent` (`--base <ref>` for "was it already red?");
   live canvas → `mcp-probe`; host browser → `playwright-official`;
-  bloat/extract/dead code → `slim-bloat` / `bloat-auditor`. Do not attach
+  bloat/extract/dead code → `slim-bloat` / `code-hunter` (focus dead-code). Do not attach
   `mcp-probe` for a version.json check.
 - **MCP:** six servers in `.mcp.json` / `.cursor/mcp.json` (`apex-tools`,
   `playwright-official`, `chrome-devtools`, `js-debugger`, `apex-lsp`, `browserstack`); plugin

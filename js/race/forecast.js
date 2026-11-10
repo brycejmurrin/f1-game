@@ -89,8 +89,8 @@ const Forecast = (function () {
     return out;
   }
 
-  // WxHash.fnv01: the same draw RainCells uses, deterministic on every peer and every replay.
-  function h01(str) { return WxHash.fnv01(str); }
+  // RainCells.h01: the same draw the rain cell uses, deterministic on every peer and every replay.
+  function h01(str) { return RainCells.h01(str); }
   /** The ± bound on a statement `lead` seconds out. */
   function errBound(lead) {
     if (!(lead > 0)) return 0;

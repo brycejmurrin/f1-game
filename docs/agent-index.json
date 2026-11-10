@@ -1476,6 +1476,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -1524,6 +1525,7 @@
         "tests/unit/save-durability.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-card-layout.test.mjs",
@@ -1610,6 +1612,7 @@
         "tests/unit/road-under-floor.test.mjs",
         "tests/unit/scenery-ground-audit.test.mjs",
         "tests/unit/scenery-grounding.test.mjs",
+        "tests/unit/scenery-seats.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/stand-curve-gap-fleet.test.mjs",
@@ -1679,6 +1682,7 @@
         "tests/specs/menu-survey.spec.js",
         "tests/specs/menu-traversal.spec.js",
         "tests/specs/music-library.spec.js",
+        "tests/specs/named-controls.spec.js",
         "tests/specs/persistence.spec.js",
         "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
@@ -2223,11 +2227,6 @@
     {
       "path": "js/camera/director.js",
       "global": "Director",
-      "roster": "tag"
-    },
-    {
-      "path": "js/camera/drive-lens.js",
-      "global": "DriveLens",
       "roster": "tag"
     },
     {
@@ -4236,11 +4235,6 @@
       "roster": "tag"
     },
     {
-      "path": "js/race/wx-hash.js",
-      "global": "WxHash",
-      "roster": "tag"
-    },
-    {
       "path": "js/render/gfx.js",
       "global": "Gfx",
       "roster": "tag"
@@ -4703,11 +4697,6 @@
     {
       "path": "js/ui/cvd-palette.js",
       "global": "CvdPalette",
-      "roster": "tag"
-    },
-    {
-      "path": "js/ui/debris-opts.js",
-      "global": "DebrisOpts",
       "roster": "tag"
     },
     {

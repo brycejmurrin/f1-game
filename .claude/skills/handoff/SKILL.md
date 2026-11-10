@@ -17,9 +17,10 @@ host-specific; use only exposed host capabilities.
 
 Two audiences, two endings (steps 1–2 are shared):
 
-- **Attended** (the user asked, or `context-cap.py` names your live context near its stop): steps 1–3, then
-  output the prompt in chat in ONE code block. Add no `needs-owner` unless the user leaves the PR to the fleet.
-- **Unattended owner at its cap or stuck** (skill `steward` §Lane 5): steps 1–2, then add `needs-owner` with
+- **Attended** (the user asked, or the context is long; no brief, so no cap advisory): steps 1–3, then output the
+  prompt in chat in ONE code block. Add no `needs-owner` unless the user leaves the PR to the fleet.
+- **Unattended owner at its cap or stuck** (skill `steward` §Lane 5; `context-cap.py` advises against the cap in
+  `tools/ci/worker-prompt.md`): steps 1–2, then add `needs-owner` with
   `gh api -X POST …/labels -f 'labels[]=needs-owner'` and end. No chat prompt: the takeover reads only the Hand-off
   block and the Plan; the dispatch Action launches it once no live owner names the PR.
 

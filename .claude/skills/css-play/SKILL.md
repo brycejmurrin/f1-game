@@ -1,7 +1,5 @@
 ---
 name: css-play
-paths:
-  - "css/**"
 description: "Use when tweaking one menu or HUD element (padding, font size, safe area, tap target) with screenshots, or restructuring screens, DOM or design tokens (BEM/CUBE/ITCSS). Not for: a cramped screen → ui-menu-a11y; the whole-UI review → survey-ui-matrix; dead CSS → slim-bloat."
 ---
 
@@ -47,8 +45,8 @@ id) does it REPLACE the path, so give the whole route: settings DISPLAY panel =
 Door and screen ids drift: read them from `--list` (catalog ids are a subset of
 `SCREENS` in `tools/ui/menu-screens.mjs`), not from this file.
 Every step here is a browser run (Chromium via harness.mjs): session only, never a
-subagent (AGENTS.md rule 10; bash-guard refuses it), never beside a Playwright group.
-`--help`/`--list` need none. The default viewport is the phone touch shape (852×393);
+subagent (AGENTS.md rule 10; no hook catches this CLI, so the rule is on you), never beside a Playwright group.
+`--help`/`--list` need none. The default viewport is a phone touch shape (`--help`);
 Bryce's own is `--viewport 844x390` — shoot that first. `--desktop` is the exception.
 
 Who owns a row (tune-row, set-row, the pause sheet and its chips): [references/loop.md §Who owns a row](references/loop.md#who-owns-a-row).
@@ -61,20 +59,20 @@ An edit that changes nothing on screen: a LATER `@layer` or a more specific rule
 3. **One browser at a time** — [mcp-probe traps](../mcp-probe/references/traps-chrome.md).
 4. **Do not run `layout-audit` per edit or for one screen.** That is the matrix: once, as a restructure's before-count only.
 5. **A change to TYPE METRICS invalidates a pixel golden — re-bless in the SAME
-   commit.** `tests/specs/menu-baseline.spec.js` holds the blessed PNGs (`ls tests/specs/menu-baseline.spec.js-snapshots`); the
-   title, select and garage screens are pixel-compared at a 1% tolerance. A
-   font-size, tracking, weight or gap change relays text and blows that budget.
-   Which sheets select it is code, not prose: `node tools/ci/pick-tests.mjs`
-   (group `baseline`) and `select-specs.mjs` (the spec) — when neither names it
-   for your sheet, run the spec yourself (background, session only). Regenerate on
-   the platform CI uses (SwiftShader parity; the spec header says why) and REVIEW the
-   diff, never accept it blind:
+   commit.** `tests/specs/menu-baseline.spec.js` holds the blessed PNGs (`ls tests/specs/menu-baseline.spec.js-snapshots`),
+   pixel-compared at a tight tolerance (the spec). A font-size, tracking, weight or
+   gap change relays text and blows that budget. CI group `baseline` proves it; which
+   sheets select it is code, not prose: `node tools/ci/pick-tests.mjs`. Never run the
+   spec locally (AGENTS.md rule 5): push, then request it on the branch on the
+   platform the goldens were captured on (SwiftShader; the spec header says why):
 
    ```sh
-   node tools/ci/test-bg.mjs --spec tests/specs/menu-baseline.spec.js   # does it still match?
-   npm run test:baseline -- --update-snapshots              # re-bless all; only the moved one changes
+   node tools/ci/remote-group.mjs baseline --gl swiftshader   # does it still match?
    ```
 
+   No CI job writes goldens. On a red, download the shard's `playwright-artifacts-baseline-*`
+   artifact (`gh run download`), REVIEW each `-actual`/`-diff` PNG, never accept it blind,
+   copy only the moved `-actual` over its golden, commit it with the CSS, re-request the group.
    Skipping the re-bless has left `menu-baseline` red on the deploy branch and blocked Pages.
 
 Live MCP session (already on localhost): `browser_resize` →

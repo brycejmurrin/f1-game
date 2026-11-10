@@ -215,12 +215,15 @@ const STRIP = {
   // → #5079 pit taper pocket capped (2026-11-10): the street barrier now runs
   //   along the exit taper (nodes 37-41) at the lane wall instead of the 14 m
   //   run-off default. Emission 274099 → 274383, strip-after 255181 → 255453.
+  // → #5084 / #5088 (PR #5254, 2026-11-10): city.js awning posts are left out where the
+  //   ground is above the awning (-24 emitted); the street-panel skirt buries its
+  //   bottom faces (buried 633 → 722, bottom 661 → 668). Emission on top of #5079 274383 → 274359,
+  //   strip-after 255453 → 255333.
   // → W21 #2204 curveTier midpoint-to-midpoint rows (2026-11-10): curved
   //   bleacher/scaffold rows span to their chord midpoints and rails take their
   //   own tier. Emission 274099 → 274135, strip-after 255181 → 255289.
-  // → both together (merge of the tip into #5303, 2026-11-10): the two deltas add
-  //   exactly (+36 emitted, +108 strip-after on #5079's 274383/255453).
-  monaco: { before: 274419, after: 255561 },
+  // → merged (#5303 over #5254, 2026-11-10): the deltas add exactly (+36 emitted) → 274395 / 255441.
+  monaco: { before: 274395, after: 255441 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -274,10 +277,14 @@ const STRIP = {
   //   286386 → 286363. #3374: stand-span pine clear + lake hedge split → 313432 / 284510.
   // → #4967 outside-of-bend tier rows run their full chord, Curva Grande bowl gap 24 → 25
   //   (2026-11-09): longer rows and crowd bands. Emission 313432 → 313768, strip-after 284510 → 284782.
+  // → #5080 (PR #5254, 2026-11-10): the Rettifilo gravel is trimmed per cell instead
+  //   of dropped whole; cells under the asphalt are left out. Emission 313768 → 313916,
+  //   strip-after 284782 → 284930.
   // → W21 #2204 curveTier midpoint-to-midpoint rows (2026-11-10): the bowl
   //   tiers meet on the outside of the Curva Grande / Parabolica bends, fascia
   //   lip at seg. Emission 313768 → 313948, strip-after 284782 → 284931.
-  monza: { before: 313948, after: 284931 },
+  // → merged (#5303 over #5254, 2026-11-10): the deltas add exactly (+180 emitted) → 314096 / 285079.
+  monza: { before: 314096, after: 285079 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

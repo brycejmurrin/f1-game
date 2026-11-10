@@ -100,6 +100,14 @@ viewport itself is portrait — which is what window Aₛ's classification paint
 no scroll in landscape. *Goes:* `(min-width: 700px)` as a gate on a phone rule (:152); width as a share of the
 viewport without a floor. Owned by #5152: `css/title.css`, `css/menus.css`, `css/menu-destinations.css`,
 `css/responsive.css`, `js/ui/title-layout.js`, the inline boot and `js/ui/sheet-shape.js`.
+**2026-11-10, #5199 (PR #5213):** the phone-landscape title is now ONE block, `PHONE LANDSCAPE HOME` at the end of
+`css/menu-destinations.css`, keyed on `(max-height: 519px) and (min-aspect-ratio: 1/1)` alone: no density, home-scene,
+`.desktop` or stored-layout gate, rows 1/2/2/2/2/2/3/4 (`tests/unit/title-rows.test.mjs`, `tests/specs/title-fit.spec.js`).
+Its base zoom does not follow UI SIZE under 100 % (doors `max(1, min(ui, 1.25))`, brand 1): measured at 852×393 with
+UI SIZE 51 % the doors were a 129 px strip with 6.9 px labels, and `body[data-density="normal"]` (UI SIZE under ~66 %
+there) used to select the 11-row base layout. The `[data-shape=wide][data-density=compact]` rules above it still serve
+compact landscape windows 520 px and taller (a 1000×560 window, a desktop at UI SIZE 200 %), so they stay. A slider
+request the box cannot give is no longer stored (`hold()` in `js/ui/title-layout.js`): the thumb stops at the edge.
 
 ### 4.2 Settings sheet (#pmsettings-inner)
 Inputs: `--sheet-w min(1020, --safe-w − 2·pad)` settings.css:11-12 (dialogs.css:8 also sets 760; load order decides);

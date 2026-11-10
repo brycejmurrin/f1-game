@@ -28,20 +28,18 @@ paired stays here. Escape/focus paths → **ui-menu-a11y**.
 1. Reproduce at Bryce's profile first: iPhone, 844×390 landscape, touch — before any desk device. Parent session
    only (skill **mcp-probe**, or Playwright MCP `browser_*` with touch at 844×390); a subagent cannot run a
    browser (AGENTS.md rule 10).
-2. Read `__apex.inputState()`: `steerMode` first (buttons / drag / tilt), then `btn.*` (buttons),
+2. Read `__apex.inputState()`: `steerMode` first (`buttons` / `touch` = drag / `tilt`), then `btn.*` (buttons),
    `touchSteer` / `touchActive` (drag), `pad.*` (gamepad) or `gate` (menu leak).
 3. Find which source wins in `Input.steer()` and which file owns it → [references/sources-and-files.md](references/sources-and-files.md).
 4. Route the symptom to its reference (below) and fix there.
 5. Changed a default or a slider? Add the `STEER_SCHEMA` step and check `tests/specs/steer-migration.spec.js`
    → [references/assists.md](references/assists.md).
-6. Verify: the node pins, then ONE browser spec in the background:
+6. Verify: the node pins locally; the browser specs (`test:input`) run on the PR, never locally (AGENTS.md rule 5):
 
 ```sh
 node --test tests/unit/key-binds.test.mjs tests/unit/ui-improve-pass.test.mjs   # node pins
-node tools/ci/test-bg.mjs --spec tests/specs/tilt-pipeline.spec.js   # ONE spec per run; swap in the one that matches:
-#   touch-buttons, touch-steer, touch-pedals, gamepad, steering, steer-migration or sliders
-# whole group (test:input, camera specs too) only if one spec is not enough: node tools/ci/remote-group.mjs input
-# on the pushed branch (docs/VERIFICATION.md §By change); never a local group run
+node tools/ci/pick-tests.mjs                 # the groups this change needs (docs/VERIFICATION.md §By change)
+node tools/ci/remote-group.mjs input         # the whole group on the PUSHED branch, when the PR run is not enough
 ```
 
 ## References

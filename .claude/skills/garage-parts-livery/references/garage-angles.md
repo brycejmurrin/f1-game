@@ -40,8 +40,8 @@ node tools/shot/garage-angles.mjs --plan --team=mclaren --preset=workshop --fast
 node tools/shot/garage-angles.mjs --team=mclaren --preset=workshop --fast --viewport=844x390 --budget=180s --sheet=1 --out=artifacts/workshop-review
 ```
 
-`workshop` visits `toolWall`, `serviceCorner`, `safetyStation`, `engineerDesk`;
-`room` visits `roomBack`, `roomDoor` for opposite views of the bay. Discovery
+`workshop` visits the bench/wall stations and `room` the opposite views of the
+bay (`--preset=list` names them). Discovery
 includes each station's subject, purpose and exact orbit/target. These are
 inspection defaults, not tracking cameras: changed room geometry still needs
 pixel review for occlusion. `--station=toolWall` captures just that subject;
@@ -79,22 +79,14 @@ zoom, pan, az, lamp, target, a livery field), so `--preset=flank --az=80deg`
 is the flank framing swung to a new azimuth, and `--preset=none` (the
 default) is no preset.
 
-| preset | sets |
-|---|---|
-| `wall` | views=front zoom=4 |
-| `fin` | views=rear zoom=4 |
-| `flank` | views=side zoom=8 pan=5,0 |
-| `mark` | views=front,side,rear zoom=6 pan=4,0 finBadge=logo |
-| `quick` | views=side zoom=6 pan=4,0 fast |
-| `sweep` | views=side zoom=6 pan=4,0 az=50deg,70deg,90deg,110deg,130deg |
-| `saddleWall` | views=bayFront spineLogo=saddle spineSide=logo logos=default |
+What each preset sets: `--preset=list`, or `--list-cameras` (JSON, `presets` key).
 
 ## Fast iteration
 
 ```sh
 # Fast mode: fewer settle frames, no label/sheet (add --sheet=1 for matrix.png), one gate retry (~40% quicker per shot):
 node tools/shot/garage-angles.mjs --fast --preset=quick --team=redbull --spineLogo=wrap
-# Tune settle yourself (defaults: livery 8, view 4; fast 6 / 2):
+# Tune settle yourself (defaults: the usage header):
 node tools/shot/garage-angles.mjs --settle=6 --view-settle=3 --views=side --team=redbull
 ```
 
@@ -106,7 +98,7 @@ or with a higher `--view-settle`.
 ## Multi-team
 
 `--team=all` (or `all+custom`) walks the grid in one browser and writes a
-per-team rollup contact sheet of `--rollup-view` (default `side`);
+per-team rollup contact sheet of `--rollup-view`;
 `--full-views` shoots every camera for every team. `--resume` skips teams that
 already have their first frame in `--out`; `--reset` clears it.
 
@@ -119,10 +111,9 @@ For a car/garage change, download the ship pack instead of shooting the
 node tools/garage-angles-fetch.mjs --out artifacts/garage-before
 ```
 
-`Garage before` (`.github/workflows/garage-before.yml`) captures
-`--team` shards × `--views=hero,front,side,rear,top,wingFront,wingRear`
-on macos-latest, once a day when the watched paths moved (or on
-dispatch), so the newest pack may trail ship by up to a day; the fetch
+`Garage before` (`.github/workflows/garage-before.yml`, which holds the
+shards, views, runner and schedule) captures on a schedule when the watched
+paths moved (or on dispatch), so the newest pack may trail ship; the fetch
 prints how stale it is. Recapture only the AFTER angles you changed.
 
 

@@ -1,9 +1,5 @@
 ---
 name: pwa-cache-service-worker
-paths:
-  - "sw.js"
-  - "version.json"
-  - "manifest.json"
 description: "Use when editing the service worker (sw.js), version.json or the PWA manifest: an installed app stuck on an old build, offline play, stale shell, or precache lists. Not for: audio → audio-debug; textures → asset-pack; picking tests → check-changes."
 ---
 
@@ -28,7 +24,7 @@ from that key offline, never written at runtime).
 `references/workflow.md` step 1 has the manifest edit.
 
 **CSP.** `<meta http-equiv="Content-Security-Policy">` is a gen-shell block
-(`CSP` in `tools/gen/gen-shell.mjs`, first in `<head>`): a new third-party
+(`CSP_DIRECTIVES` in `tools/gen/gen-shell.mjs`, first in `<head>`): a new third-party
 script, frame or non-https endpoint must be added THERE, or the browser
 refuses it. `load-order.test.mjs` pins its shape.
 
@@ -59,15 +55,18 @@ refuses it. `load-order.test.mjs` pins its shape.
 | Shell (navigations) | Essential (404 = fail) | Network-first, `cache:"no-cache"` revalidation (304 when unchanged) |
 | Tagged `?v=<sha256>` js/css/assets | Essential (404 = fail) | Cache-first (immutable only inside the SW) |
 | `version.json` | Essential | Network-first (no-store) |
-| `assets/pack/` (unversioned) | Runtime only | Network-first (3 s race to cache) |
-| DEFERRED TLX/WGX / vendor / fonts | Optional (fail OK) | Cache-first on first use |
+| `assets/pack/` (unversioned) | Runtime only | Network-first (`NAV_RACE_MS` race to cache) |
+| DEFERRED TLX / vendor / scenery / fonts | Optional (fail OK) | Cache-first on first use |
+| WGX, editor, XR, camera editors (`isRuntimeOnlyOptional`) | Never (seeded, skipped at install) | Runtime-cached on first use |
 | DEFERRED GLX (`js/render/glx/`), career UI (`isRequiredLazy`) | Required at install | Cache-first |
 
 ```sh
 npm run test:service-worker
 npm run test:tooling-fast
-node tools/check/offline-precache-check.cjs   # offline precache contract — LAUNCHES CHROMIUM (Playwright), ~1 min
 ```
+
+`tools/check/offline-precache-check.cjs` (native offline boot) LAUNCHES CHROMIUM and is wired to no npm
+script or CI group: not a pre-push step (AGENTS.md rule 5); parent session only, by hand.
 
 Related: `npm run gen:check`, **check-changes**.
 

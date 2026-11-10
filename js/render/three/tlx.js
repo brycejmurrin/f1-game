@@ -190,6 +190,8 @@ const TLX = (function () {
     return _labs.indexOf(name) >= 0;
   }
   function liteTier(webgl2, phone) { return labOn("tlxLite") && !!webgl2 && !!phone ? LITE : null; }
+  // LAB DPR cap (phone perf hunt 2026-11-10): ?lab=dpr2 or ?lab=dpr3 replaces the tier's cap; no lab returns it unchanged.
+  function labDprCap(base) { return labOn("dpr3") ? 3 : (labOn("dpr2") ? 2 : base); }
   // Per present, on the caller's opts (pinSoftwareRaceShed's precedent): idempotent, so a reused opts is safe.
   function liteOpts(o) {
     if (!o) return o;
@@ -1276,7 +1278,11 @@ const TLX = (function () {
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
       // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
       const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
-      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
+      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // a phone is ALWAYS mobileTier (glx-facade.js): no setting lifts this 1.5 cap, only the URL lab below (docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F1)
+      // LAB ?lab=dpr2 / ?lab=dpr3 (labOn above: URL only, one boot, no storage key) replaces the cap, so what a sharper
+      // phone picture costs per frame can be measured on the phone itself and by tools/gfx/live-frame-census.mjs --sweep
+      // (docs/notes/PHONE-PERF-MEASURE-2026-11-10.md). No lab: the tier's cap, unchanged.
+      if (!_lite) DPR_CAP = labDprCap(DPR_CAP);
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present: the
@@ -7235,7 +7241,7 @@ const TLX = (function () {
     return s < 2 ? 0 : s;
   }
 
-  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts };
+  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts, labDprCap };
 })();
 
 if (typeof window !== "undefined") window.TLX = TLX;
