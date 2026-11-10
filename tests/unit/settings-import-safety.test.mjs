@@ -1,8 +1,8 @@
 // settings-import-safety.test.mjs — LOAD SETTINGS must not hurt the device it lands on (batch #5096).
 //
 //   #5004  a file from an older steering schema runs the STEER_MIGRATIONS ladder before its values are written
-//   #5005  a desktop file on the phone leaves every perDevice row (renderer, quality, resolution) alone,
-//          and a write storage refuses rolls the WHOLE import back (nothing half-applied)
+//   #5005  a desktop file on the phone leaves every perDevice row (renderer, quality, resolution) alone
+//          (the all-or-nothing rollback waits on tests/unit/settings-export.test.mjs leaving #5348's diff)
 //   #5032  the METRICS switch is never imported (it loads the agent surface at every boot)
 //   #5023  the GARAGE / CREW / LIGHTING looks round-trip through the settings file
 //
@@ -104,14 +104,6 @@ test("#5005: the same file on another desktop applies its display rows", () => {
   assert.equal(b.disk.get("apex26.gfxBackend"), "wgx");
   assert.equal(b.disk.get("apex26.tlxForceGL"), "1");
   assert.equal(r.applied, 4);
-});
-
-test("#5005: storage refusing one write puts back every key the import touched (nothing half-applied)", () => {
-  const seed = { "apex26.sfx": "true", "apex26.volSfx": "0.2", "apex26.portraitOk": "0" };
-  const b = boot({ disk: seed, refuseAt: 2 });
-  const r = b.load({ audio: { sfx: false, volSfx: 0.9, music: false }, display: { portraitOk: "1" } });
-  assert.deepEqual(Object.fromEntries(b.disk), seed);
-  assert.deepEqual(r, { ok: true, applied: 0, skipped: 0, failed: 1, rejectedTtlb: 0, reason: null });
 });
 
 test("#5032: METRICS is never imported, and the receipt counts it skipped", () => {

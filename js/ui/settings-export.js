@@ -577,10 +577,6 @@ function thisDesktop(G) {
   try { if (document.body.classList) return document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
   return G && G.gfx && typeof G.gfx.isMobile === "boolean" ? !G.gfx.isMobile : null;
 }
-// The exact on-disk string (null = absent) of one key, for the all-or-nothing rollback below.
-function diskValue(full) {
-  try { return localStorage.getItem(full); } catch (_) { return null; }
-}
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
   // A file is player input: a non-object `settings` or group is "nothing here",
@@ -621,12 +617,6 @@ function applySettings(file, G) {
     if ((!row.freeShape && !typeOk(v, def)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
     writes.push([row, v]);
   }
-  // ALL OR NOTHING. A write storage refuses (a nearly full phone) used to leave the keys before and after it
-  // written: half old, half new after the next launch. Snapshot every key first; any refusal puts them all back
-  // and the time-trial merge below never starts. (That merge is additive and keeps its own contract: a refused
-  // lap stays usable this session and SAVE RETRY persists it — settings-ttlb-backup.test.mjs.)
-  const before = new Map();   // short key -> the exact disk string, or null when absent
-  for (const [row] of writes) before.set(row.k, diskValue(`apex26.${row.k}`));
   let applied = 0, failed = 0;
   for (const [row, v] of writes) {
     try {
@@ -643,17 +633,6 @@ function applySettings(file, G) {
       }
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
-  }
-  if (failed) {
-    // JSON keys go back through store.set (its cache, rev and listeners see the old value again).
-    const lane = new Map(writes.map(([row]) => [row.k, row.lane]));
-    for (const [k, prev] of before) {
-      try {
-        if (lane.get(k) === "raw") { if (prev === null) GameStore.store.rawDel(`apex26.${k}`); else GameStore.store.rawSet(`apex26.${k}`, prev); }
-        else GameStore.store.set(k, prev === null ? undefined : JSON.parse(prev));
-      } catch (_) { /* an unparseable old value: leave the key to the store's own repair */ }
-    }
-    return { ok: true, applied: 0, skipped, failed, rejectedTtlb: 0, reason: null };
   }
   const ttlb = applyTtlb(file.ttlb);
   applied += ttlb.applied;
@@ -1121,7 +1100,7 @@ function create(G) {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
-        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED${r.applied ? "" : ", NOTHING CHANGED"}`, 3200); return; }
+        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
         if (!r.applied) { flash(b, label, "NOTHING TO LOAD", 2200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first
