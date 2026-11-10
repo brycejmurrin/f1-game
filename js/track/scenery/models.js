@@ -495,8 +495,12 @@ const TrackModels = (function () {
         const v = preflight({ center, size, basis });
         return v === true ? null : v;
       };
+      // Only the pit complex drops a patch whole. A ROAD hit falls through to
+      // the per-cell guard below, which keeps the clear cells: the whole-box
+      // test (the capsule widened by the patch) dropped 53 of qatar's 620
+      // verges, 45 of which never touch the tarmac (#5080).
       const hit = reject(mid, sz, [r, u, t]);
-      if (hit !== null) return suppress(false, hit === "pit");
+      if (hit === "pit") return suppress(false, true);
       const cuts = [gap];
       const rails = ctx.rails || [];
       for (const d of rails) if (d > gap + 0.25 && d < gap + sz[0] - 0.25) cuts.push(d);

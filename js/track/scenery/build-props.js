@@ -1240,10 +1240,19 @@ const TrackBuildProps = (function () {
       }
       // distant scenery settles to the lap's low baseline (groundYAt past the last
       // ribbon vert returns it), so a ridge/skyline never floats on a high section
-      const cy0 = groundYAt(k, dist) + sz[1] / 2 - 2;
+      // …but where the drawn terrain reaches it and stands over the whole
+      // body (shanghai's 30.6 m shed: profile -2.0, terrain >= 6.26 at every
+      // corner, invisible — #5088), it stands on the lowest terrain corner.
+      let base = groundYAt(k, dist), lowT = Infinity;
+      for (const [a, c] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+        const g = terrainYAt(cx + t[0] * a * sz[0] / 2 + r[0] * c * sz[2] / 2, cz + t[2] * a * sz[0] / 2 + r[2] * c * sz[2] / 2);
+        lowT = Number.isFinite(g) ? Math.min(lowT, g) : -Infinity;
+      }
+      if (lowT !== Infinity && lowT > base + sz[1] - 2.5) base = lowT;
+      const cy0 = base + sz[1] / 2 - 2;
       const greenDom = col[1] > col[0] && col[1] > col[2] * 1.05;
       if (greenDom) {
-        const foot = groundYAt(k, dist) - 2;
+        const foot = base - 2;
         const R = Math.max(sz[0], sz[2]) * 0.5 * (0.92 + hash(k * 2.3 + side) * 0.2);
         const H = sz[1] * (0.9 + hash(k * 3.7 + side * 1.3) * 0.35);
         const c1 = [col[0], col[1], col[2]];
@@ -1342,8 +1351,18 @@ const TrackBuildProps = (function () {
         const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
         const f = norm([bx - ax, by - ay, bz - az]);
         const rr = norm(cross(f, upOf(track, kA)));
+        // A SKIRT down to the ground: the base follows the road plane, and
+        // where the road is a raised platform (jeddah, frac 0.233 and
+        // 0.734-0.806) the terrain beyond the verge is 2-3 m lower — 37
+        // panels stood on 1.7-2.3 m of air (#5084). Never sinks a panel.
+        let drop = 0;
+        for (const [x, y, z] of [[ax, ay, az], [cx, cy, cz], [bx, by, bz]]) {
+          const g = terrainYAt(x, z);
+          if (Number.isFinite(g) && y - g > drop) drop = y - g;
+        }
+        drop = drop > 0.3 ? Math.min(drop + 0.1, 6) : 0;
         instance(`street-barrier|${col.join(",")}`,
-          { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+          { o: [cx, cy + (WH - drop) / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, (WH + drop) / WH, len] },
           (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
           { kind: "streetBarrier", k: kA, side });
         return [cx, cz];

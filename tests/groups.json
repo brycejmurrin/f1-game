@@ -2321,6 +2321,7 @@
         "tests/unit/road-under-floor.test.mjs",
         "tests/unit/scenery-ground-audit.test.mjs",
         "tests/unit/scenery-grounding.test.mjs",
+        "tests/unit/scenery-seats.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
