@@ -102,7 +102,7 @@ test("listener counts include custom event types named after inherited object pr
 
 test("CPU hitch windows rank the whole profile: the worst stall is kept even after maxWindows earlier ones", () => {
   const deltas = [60, 61, 62, 63, 64, 500].map(ms => ms * 1000);
-  const profile = { nodes: [{ id: 1, callFrame: { functionName: "tick", url: "http://127.0.0.1:3456/js/game.js" } }],
+  const profile = { nodes: [{ id: 1, callFrame: { functionName: "tick", url: "http://127.0.0.1:3456/js/agent/apex.js" } }],
     samples: deltas.map(() => 1), timeDeltas: deltas };
   const { windows } = hitchWindowsFromCpuProfile(profile, { thresholdMs: 50, maxWindows: 3 });
   assert.deepEqual(windows.map(w => w.durationMs), [500, 64, 63]);

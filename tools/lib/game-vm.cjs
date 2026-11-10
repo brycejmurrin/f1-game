@@ -561,6 +561,25 @@ function seatReport(name, sandbox, G) {
   return { name, teamIdx: idx, team, parts };
 }
 
+// A LAZILY INJECTED SCRIPT THAT THROWS IS A BROKEN BOOT (audit W6, 2026-11-10).
+// The <script src> stub above catches the throw, records it and fires onerror —
+// exactly what a browser does — so createGame used to resolve on a half-built
+// game: a js/circuits/scenery/monza.js that threw at load raced a bare Monza and
+// every assertion ran against it. Reject by default; `allowScriptErrors: true`
+// is the per-test opt-out for a test that ASSERTS on a failed load.
+function scriptLoadErrors(record) { return record.scripts.filter((s) => s && s.error); }
+function assertScriptsLoaded(record, opts, where) {
+  if (opts && opts.allowScriptErrors) return;
+  const bad = scriptLoadErrors(record);
+  if (!bad.length) return;
+  const err = new Error(`game-vm: ${bad.length} lazily injected script(s) threw at load ${where}: ` +
+    bad.slice(0, 5).map((s) => `${s.file} (${s.error})`).join("; ") +
+    " — fix the script; createGame({ allowScriptErrors: true }) is only for a test that asserts on the failure");
+  err.record = record;
+  err.scriptErrors = bad;
+  throw err;
+}
+
 function safeStr(x) { try { return typeof x === "object" ? JSON.stringify(x) : String(x); } catch (_) { return String(x); } }
 
 // ---------------------------------------------------------------------------
@@ -673,6 +692,9 @@ async function settle(pred, maxTurns) {
  *           takeovers run headless (see runRapierScript) — OPT-IN
  *   seat    "pin" (default: McLaren, empty parts sheet) | "shipped" (no garage
  *           seed — the GarageDefaults car a fresh browser boots)
+ *   allowScriptErrors  true keeps a lazily injected script's load error in
+ *           record.scripts instead of rejecting (createGame and race() reject
+ *           by default; see assertScriptsLoaded)
  *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly({untilAllFlagged}),
  *             settle(pred), flushTimers(), record, bootMs, trackMs }
  */
@@ -794,8 +816,10 @@ async function createGame(opts) {
       err.record = record;
       throw err;
     }
+    assertScriptsLoaded(record, opts, "during boot");
 
     const apex = sandbox.__apex;
+    const createOpts = opts;
     // Opt-in per-step state-hash trace (#2963). Off by default — zero cost when
     // unset. Enable with createGame({ stepTrace: true }) or APEX_STEP_TRACE=1.
     const stepTraceOn = !!(opts.stepTrace || process.env.APEX_STEP_TRACE === "1");
@@ -822,6 +846,7 @@ async function createGame(opts) {
           return !G || G.cars !== carsBefore;
         }, 4000);
         if (!ok) throw new Error("game-vm: track never built for " + id);
+        assertScriptsLoaded(record, createOpts, `while building ${id}`);
         apex.go();
         handle.trackMs = performance.now() - t1;
         return r;
@@ -892,7 +917,7 @@ async function createGame(opts) {
   }
 }
 
-module.exports = { createGame, settle, settleAsync: settle, captureStepState, ROOT, SKIP, SEATS };
+module.exports = { createGame, scriptLoadErrors, settle, settleAsync: settle, captureStepState, ROOT, SKIP, SEATS };
 
 if (require.main === module) {
   (async () => {
