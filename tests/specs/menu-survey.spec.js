@@ -98,9 +98,16 @@ async function cycleTo(page, id, want) {
   }, { id, want });
   expect(value, `#${id} has an option labelled ${want}`).not.toBeNull();
   const [key, expected] = [map[0], map[1](value)];
-  await page.waitForFunction(({ key, expected }) =>
-    JSON.stringify(GameStore.store.get(key)) === JSON.stringify(expected),
-  { key, expected }, { polling: 50, timeout: 5000 });
+  // The GAME's live value is the row's read() (js/ui/setting-row.js keeps it on
+  // the select as _srLive), not sel.value. A pick that is already the live mode
+  // (BUTTONS is the touch default) writes nothing, so the stored key is checked
+  // only once it exists: then it must match too.
+  await page.waitForFunction(({ id, value, key, expected }) => {
+    const live = document.getElementById(id + "-sel")._srLive;
+    if (!live || String(live.read()) !== value) return false;
+    const raw = localStorage.getItem("apex26." + key);
+    return raw == null || raw === JSON.stringify(expected);
+  }, { id, value, key, expected }, { polling: 50, timeout: 5000 });
   return page.evaluate((id) => {
     const sel = document.getElementById(id + "-sel");
     return sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : "";
