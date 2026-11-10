@@ -5751,6 +5751,7 @@
         "tests/unit/data-api-status.test.mjs"
       ],
       "schedule": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "sessionResult": [
@@ -6105,6 +6106,7 @@
     },
     "js/data/tab-utils.js": {
       "*": [
+        "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/data-results.test.mjs",
@@ -6207,6 +6209,9 @@
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "gapLimitMs": [
+        "tests/unit/telemetry-trace.test.mjs"
+      ],
+      "hasDrs": [
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "isGap": [

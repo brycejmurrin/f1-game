@@ -393,10 +393,12 @@ const DataHub = (function () {
       return;
     }
     // A node may say when it goes stale on its own (Schedule: the NEXT race ends).
-    if (st && st.node && (Date.now() - st.at) < maxAge && !(Date.now() >= st.node.nextFlipAt)) {
+    const reuseFor = st && st.lockout ? Math.min(maxAge, LOCKOUT_REUSE_MS) : maxAge;
+    if (st && st.node && (Date.now() - st.at) < reuseFor && !(Date.now() >= st.node.nextFlipAt)) {
       // loadTab calls showTab to paint the fresh node; only log reuse on a later visit.
       if (Date.now() - st.at > 1000) Log.info("data", "tab " + id + " cached");
       clear(contentEl);
+      if (st.lockout) contentEl.appendChild(lockoutBlock());
       contentEl.appendChild(st.node);
       if (st.status !== "loading") contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
       contentEl.scrollTop = 0;
@@ -434,6 +436,7 @@ const DataHub = (function () {
         // window. Failed is recorded only in the rejection arm below.
         status: node && node.querySelector && node.querySelector(".dh-empty") ? "empty" : "ready",
         error: null,
+        lockout: !!(SESSION_TABS[id] && lockoutAt && Date.now() - lockoutAt < 5 * MINUTE),
         ...(node && node.tabOutcome || {})
       };
       if (openFlag && active === id) showTab(id);
@@ -494,9 +497,9 @@ const DataHub = (function () {
         : "Couldn't refresh from the F1 data service. Showing the last data you loaded.";
       reason = offline ? "offline-cached" : "upstream-cached";
     }
-    if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
-      title = "LIVE SESSION";
-      msg = err.message;
+    if (DataTabUtils.liveLockout(err)) {
+      title = DataTabUtils.LOCKOUT_TITLE;
+      msg = DataTabUtils.LOCKOUT_MSG;
       reason = "live-auth";
     }
     w.dataset.reason = reason;
@@ -514,6 +517,20 @@ const DataHub = (function () {
     retry.type = "button";
     retry.addEventListener("click", function () { loadTab(id); });
     w.appendChild(retry);
+    return w;
+  }
+
+  // OpenF1's live window refused the session read (ensureSession fell back to
+  // the cached picker): the card above a session tab says why, keyed on
+  // err.status (DataTabUtils.liveLockout), not on the server's wording.
+  function lockoutBlock() {
+    const w = el("div", "dh-error");
+    w.setAttribute("role", "status");
+    w.dataset.reason = "live-auth";
+    const titleEl = el("div", "dh-error-msg", DataTabUtils.LOCKOUT_TITLE);
+    titleEl.dataset.role = "title";
+    w.appendChild(titleEl);
+    w.appendChild(el("div", "dh-error-msg", DataTabUtils.LOCKOUT_MSG));
     return w;
   }
 
@@ -554,6 +571,27 @@ const DataHub = (function () {
   let selectionPending = null;
   let selectionGen = 0;           // explicit picker intent, shared across tab instances
   const SESSION_STALE_MS = 120 * 1000;
+  // A lockout card is a claim about NOW: a tab node built under one is not
+  // reused past this, so the next visit asks OpenF1 again.
+  const LOCKOUT_REUSE_MS = 2 * MINUTE;
+  let lockoutAt = 0;              // when latestSession() last met OpenF1's live window
+  const SESSION_TABS = { results: 1, live: 1, telemetry: 1, race: 1 };
+
+  // latestSession(0) bypasses the cache, and the transport never serves a
+  // stale copy on 401/403. Inside OpenF1's live window that rejected every
+  // session tab: fall back to the stored latest session (any age) so the
+  // picker and cached sessions still work, and flag the lockout for the card.
+  function latestOrCached() {
+    return F1API.latestSession(0).then(function (ses) {
+      lockoutAt = 0;
+      return ses;
+    }, function (err) {
+      if (!DataTabUtils.liveLockout(err)) throw err;
+      lockoutAt = Date.now();
+      Log.info("data", "latest session locked out (HTTP " + err.status + "); cached picker");
+      return F1API.latestSession(Infinity).then(null, function () { return null; });
+    });
+  }
 
   function ensureSession(force) {
     if (selectionPending) return selectionPending.then(() => selectionPending ? ensureSession(force) : sel.meta);
@@ -567,7 +605,7 @@ const DataHub = (function () {
     if (sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     const mySelection = selectionGen;
-    return F1API.latestSession(0).then(function (ses) {
+    return latestOrCached().then(function (ses) {
       // A YEAR/GP change is explicit intent even while its own request has not
       // pinned a session yet. An older latest response cannot replace it.
       if (mySelection !== selectionGen || sel.pinned) return sel.meta;

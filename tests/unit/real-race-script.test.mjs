@@ -1019,3 +1019,35 @@ test("SC ending notice keeps its inclusive lap but releases only at TRACK CLEAR"
   assert.equal(D.cautionsFor(rows.slice(0, 2), secs)[0].tTo, null, "notice alone has no exact release");
   assert.equal(D.cautionsFor([rows[0], rows[2]])[0].to, 36, "release without notice retains the last caution lap");
 });
+
+// W23 #8: the venue aliases were written against names OpenF1 never sends.
+// Every circuit_short_name of https://api.openf1.org/v1/meetings?year=2026
+// (2026-11-10) resolves WITHOUT the date window — the calendar only knows 2026,
+// so 2023–2025 sessions rely on names alone. Ids/names as js/circuits/ ships them.
+test("every 2026 OpenF1 circuit_short_name resolves to its game circuit by name alone", () => {
+  const { D } = load();
+  const roster = [
+    ["catalunya", "CATALUNYA", "Spain"], ["madrid", "MADRID", "Spain"], ["abudhabi", "ABU DHABI", "UAE"],
+    ["bahrain", "BAHRAIN", "Bahrain"], ["albert_park", "ALBERT PARK", "Australia"], ["shanghai", "SHANGHAI", "China"],
+    ["suzuka", "SUZUKA", "Japan"], ["jeddah", "JEDDAH", "Saudi Arabia"], ["miami", "MIAMI", "USA"],
+    ["montreal", "MONTREAL", "Canada"], ["monaco", "MONACO", "Monaco"], ["redbull", "RED BULL RING", "Austria"],
+    ["silverstone", "SILVERSTONE", "UK"], ["spa", "SPA", "Belgium"], ["hungaroring", "HUNGARORING", "Hungary"],
+    ["zandvoort", "ZANDVOORT", "Netherlands"], ["monza", "MONZA", "Italy"], ["baku", "BAKU", "Azerbaijan"],
+    ["sepang", "SEPANG", "Malaysia", true], ["singapore", "SINGAPORE", "Singapore"], ["cota", "COTA", "USA"],
+    ["mexico", "MEXICO CITY", "Mexico"], ["interlagos", "INTERLAGOS", "Brazil"], ["vegas", "LAS VEGAS", "USA"],
+    ["qatar", "QATAR", "Qatar"],
+  ].map(([id, name, country, classic]) => ({ id, name, country, classic: !!classic }));
+  const openf1 = {
+    "Sakhir": "bahrain", "Melbourne": "albert_park", "Shanghai": "shanghai", "Suzuka": "suzuka", "Jeddah": "jeddah",
+    "Miami": "miami", "Montreal": "montreal", "Monte Carlo": "monaco", "Catalunya": "catalunya", "Spielberg": "redbull",
+    "Silverstone": "silverstone", "Spa-Francorchamps": "spa", "Hungaroring": "hungaroring", "Zandvoort": "zandvoort",
+    "Monza": "monza", "Madring": "madrid", "Baku": "baku", "Kuala Lumpur": "sepang", "Singapore": "singapore",
+    "Austin": "cota", "Mexico City": "mexico", "Interlagos": "interlagos", "Las Vegas": "vegas", "Lusail": "qatar",
+    "Yas Marina Circuit": "abudhabi",
+  };
+  for (const [name, id] of Object.entries(openf1)) {
+    assert.equal(D.trackIdFor({ circuit_short_name: name, country_name: "Nowhere" }, roster), id, name);
+  }
+  assert.equal(D.trackIdFor({ circuit_short_name: "Madring", country_name: "Spain" }, roster), "madrid",
+    "Madrid's Spanish GP is not Spain's first circuit");
+});

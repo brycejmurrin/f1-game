@@ -35,8 +35,8 @@ const DataTelemetryPlayer = (function () {
           "speed " + speedText(c.speed) + ", gear " +
           (typeof c.gear === "number" && isFinite(c.gear) ? (c.gear ? "G" + c.gear : "N") : "—") +
           ", throttle " + summaryValue(c.throttle, "%") + ", brake " + summaryValue(c.brake, "%") +
-          ", rpm " + summaryValue(c.rpm, "") + ", DRS " +
-          (c.drs == null ? "—" : (drsOpen(c.drs) ? "open" : "closed")) + ".");
+          ", rpm " + summaryValue(c.rpm, "") +
+          (view.hasDrs === false ? "" : ", DRS " + (c.drs == null ? "—" : (drsOpen(c.drs) ? "open" : "closed"))) + ".");
       });
       if (view.laps.length > 2) bits.push("Additional lanes are speed markers only.");
       view.a11ySummary.textContent = bits.join(" ");
@@ -158,15 +158,17 @@ const DataTelemetryPlayer = (function () {
       g.thr = barCell("dh-gthr", "THROTTLE", "#3fb950");
       g.brk = barCell("dh-gbrk", "BRAKE", "#ff4d4d");
       g.rpm = barCell("dh-grpm", "RPM", "#c084fc");
-      const drsCell = el("div", "dh-gcell dh-gdrscell");
-      drsCell.appendChild(el("div", "dh-glabel", "DRS"));
-      g.drs = [el("div", "dh-gdrs-pill", "—")];
-      drsCell.appendChild(g.drs[0]);
-      if (cmp) {
-        const p2 = el("div", "dh-gdrs-pill dh-gdrs2", "—");
-        drsCell.appendChild(p2); g.drs.push(p2);
+      if (view.hasDrs !== false) {
+        const drsCell = el("div", "dh-gcell dh-gdrscell");
+        drsCell.appendChild(el("div", "dh-glabel", "DRS"));
+        g.drs = [el("div", "dh-gdrs-pill", "—")];
+        drsCell.appendChild(g.drs[0]);
+        if (cmp) {
+          const p2 = el("div", "dh-gdrs-pill dh-gdrs2", "—");
+          drsCell.appendChild(p2); g.drs.push(p2);
+        }
+        card.appendChild(drsCell);
       }
-      card.appendChild(drsCell);
       if (cmp) {
         const dcell = el("div", "dh-gcell dh-gdeltacell");
         dcell.appendChild(el("div", "dh-glabel", "Δ " + dcode(view.compare.d)));
@@ -208,9 +210,11 @@ const DataTelemetryPlayer = (function () {
         setScale(g.thr[i], (c.throttle === null ? 0 : clamp(c.throttle, 0, 100)) / 100);
         setScale(g.brk[i], (c.brake === null ? 0 : clamp(c.brake, 0, 100)) / 100);
         setScale(g.rpm[i], (c.rpm === null ? 0 : clamp(c.rpm / view.rpmMax * 100, 0, 100)) / 100);
-        const open = c.drs != null && drsOpen(c.drs);
-        setText(g.drs[i], open ? "OPEN" : "—");
-        g.drs[i].classList.toggle("dh-on", open);
+        if (g.drs) {
+          const open = c.drs != null && drsOpen(c.drs);
+          setText(g.drs[i], open ? "OPEN" : "—");
+          g.drs[i].classList.toggle("dh-on", open);
+        }
       }
       // Once the reference finishes, its distance and gap clock must stop together.
       const refT = Math.min(t, view.primary.lap && view.primary.lap.lapDuration || view.primary.cum.t[view.primary.cum.t.length - 1]);

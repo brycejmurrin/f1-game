@@ -114,3 +114,18 @@ test("Jolpica attribution rides every event; file names are stable", () => {
   assert.equal(I.fileName([CONVENTIONAL, SPRINT], true), "apex26-f1-2026.ics");
   assert.match(I.build([], { now: NOW }), /^BEGIN:VCALENDAR[\s\S]*END:VCALENDAR\r\n$/);
 });
+
+// W23 #7: 2026 was renumbered in-season (Bahrain and Saudi Arabia cancelled), so
+// a ROUND-keyed UID re-imported as an update to a different race and left the
+// dropped rounds behind. The UID names year + Jolpica circuitId, escaped as TEXT.
+test("the UID is keyed on year + circuitId, so a renumbered calendar keeps each race's events", () => {
+  const before = { round: 7, circuitId: "villeneuve", name: "Canadian Grand Prix", date: "2026-06-21" };
+  const after = { ...before, round: 5 };
+  const uid = (r) => props(I.build([r], { now: NOW }), "UID");
+  assert.deepEqual(uid(before), uid(after), "the renumber does not move the UID");
+  assert.ok(uid(before)[0].startsWith("UID:2026-c-villeneuve-"), uid(before)[0]);
+  const other = { round: 7, circuitId: "monaco", name: "Monaco Grand Prix", date: "2026-06-07" };
+  assert.notDeepEqual(uid(other), uid(before), "another race that takes round 7 gets its own UID");
+  const odd = { circuitId: "a,b;c", name: "X", date: "2026-06-07" };
+  assert.equal(uid(odd)[0], "UID:2026-c-a\\,b\\;c-r@apex26", "UID text is escaped per RFC 5545 §3.3.11");
+});
