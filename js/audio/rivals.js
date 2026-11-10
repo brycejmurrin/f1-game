@@ -227,7 +227,7 @@ var RivalAudio = (() => {
     idled = false;
   }
 
-  // LAB audioIdle (engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // Audio idle, on by default (#5053; engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
   // idle(true) unplugs each voice's panner from the bus once its fade is done;
   // idle(false) plugs it back. Same nodes, same ctx: nothing is rebuilt.
   function idle(on) {

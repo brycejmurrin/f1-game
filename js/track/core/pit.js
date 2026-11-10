@@ -99,6 +99,12 @@ const TrackPit = (function () {
   // the wall must hold a car's move back inside the road edge — 25 m of it
   // at 80 m, measured against 14 m at 60 (the AI still ran off the end).
   const EXIT_ROAD_MIN = 80;
+  // The ENTRY road's floor, for the same reason: the peel's ramp is the road
+  // less the wall's fade, and a 30 m road (silverstone, suzuka, magny_cours)
+  // asked the armed AI for 7.35 m of lateral in 15 m — ~7 g at the 80 km/h
+  // limit (smoothstep peak 6·D/R²·v²). At 60 m the ramp is 30 m, ~1.75 g
+  // (#5089); the standard 70 m road's 40 m ramp is ~1 g.
+  const ENTRY_ROAD_MIN = 60;
   // The straight a REJOINING car must see past the merge. A car coming off the
   // limiter has no room to dodge, so the exit may not deliver it into a bend —
   // see window(), which buys this out of the bay row's own slack.
@@ -305,11 +311,13 @@ const TrackPit = (function () {
     const ds = L / n;
     const sIn = wrap(-win.entryM, L), sOut = wrap(win.exitM, L);
     const lenM = win.entryM + win.exitM;
-    // Neither road may open or close inside a corner: each runs only while
-    // the road is still straight enough, never shorter than ROAD_MIN.
+    // Neither road may open or close inside a corner where the straight
+    // allows: each runs only while the road is still straight enough, never
+    // shorter than its own floor (ENTRY_ROAD_MIN / EXIT_ROAD_MIN, the blend
+    // the AI can drive) — that floor may reach back into the corner.
     const room = Math.max(ROAD_MIN, (L / 3 - lenM) * 0.4);
     const entryRoadM = Math.min(ENTRY_ROAD, room,
-      Math.max(ROAD_MIN, straightRun(track, curvature, sIn, -1, ENTRY_ROAD)));
+      Math.max(ENTRY_ROAD_MIN, straightRun(track, curvature, sIn, -1, ENTRY_ROAD)));
     // The EXIT road's floor is EXIT_ROAD_MIN, not ROAD_MIN: a 30 m blend
     // (Bahrain's, into T1) asked the AI for 7 m of lateral in 1.4 s — 0.4 s
     // on the grass at the end of every exit, measured. The wall's fade
@@ -472,6 +480,32 @@ const TrackPit = (function () {
       // road edge, so there it keeps only raising.
       bar[k] = lim > track.hw[k] + 1.2 ? lim : Math.max(bar[k], lim);
     }
+    capTaper(track, bar, p);
+  }
+
+  // A TAPER RUN (keep nodes too narrow to be wall-bound) kept the run-off
+  // default (hw+9) between a wall-bound lane node and the run-off past the
+  // window, and featherAfterOpen protects keep nodes: one 4–16 m segment of
+  // Tracks.wallAt 4–7.7 m wider than both neighbours on 24 circuits (#5079).
+  // Cap each run at the wider of its two bounding nodes — lowers only.
+  function capTaper(track, bar, p) {
+    const n = track.n;
+    const taper = (k) => p.keep[k] > 0 && !(track.hw[k] + outerAt(p, k) - 0.9 > track.hw[k] + 1.2);
+    for (let k0 = 0; k0 < n; k0++) {
+      if (!taper(k0) || taper((k0 - 1 + n) % n)) continue;
+      let len = 1;
+      while (len < n && taper((k0 + len) % n)) len++;
+      if (len >= n) return;
+      // The lane-wall side is the bound; the run-off side is not final yet
+      // (featherAfterOpen may still lower it — spa's did, to 12.9 from 17).
+      const a = (k0 - 1 + n) % n, b = (k0 + len) % n;
+      const wa = p.keep[a] > 0, wb = p.keep[b] > 0;
+      const cap = wa === wb ? Math.max(bar[a], bar[b]) : (wa ? bar[a] : bar[b]);
+      for (let i = 0; i < len; i++) {
+        const k = (k0 + i) % n;
+        if (bar[k] > cap) bar[k] = cap;
+      }
+    }
   }
 
   /** The row index of a team id (teammates share a box); -1 when unknown. */
@@ -485,7 +519,7 @@ const TrackPit = (function () {
   // STREET / NARROW / ROAD_MIN / WALL_GROW / LIMIT_KPH / GRID_* / ROW_END stay
   // module-local (resolve/build only); nothing outside reads them. BANDS + the
   // window/road floors + ROW_TAIL stay — tests and race/garage code pin them.
-  return { BANDS, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, EXIT_ROAD_MIN, MOUTH_RUN,
+  return { BANDS, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ENTRY_ROAD_MIN, EXIT_ROAD_MIN, MOUTH_RUN,
            ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, ROW_TAIL,
            resolve, window, row, build, at, outerAt, openBoundary, rowOf };
 })();

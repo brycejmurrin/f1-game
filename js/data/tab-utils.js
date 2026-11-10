@@ -1,4 +1,4 @@
-/* Apex 26 — shared Data Hub driver colors and lane identity counts. */
+/* Apex 26 — shared Data Hub driver colors, lane identity counts and the OpenF1 live-window test. */
 const DataTabUtils = (function () {
   "use strict";
 
@@ -33,6 +33,20 @@ const DataTabUtils = (function () {
     return counts && counts[num] > 1 && sessionLabel ? " " + sessionLabel : "";
   }
 
-  return { driverColor, countsByDriver, placeLabel, sessionSuffix };
+  // OPENF1'S LIVE WINDOW. The free tier refuses requests from 30 minutes
+  // before a session until 30 minutes after it ends ("Data is considered live
+  // from 30 minutes before a session starts until 30 minutes after it ends",
+  // https://openf1.org/ FAQ). The refusal is HTTP 401/403, and the status is
+  // the signal — js/data/api-transport.js keeps it on every wrapped error and
+  // replaces the message with the server's `detail`, so text is not.
+  function liveLockout(err) {
+    const status = err && err.status;
+    return status === 401 || status === 403;
+  }
+  const LOCKOUT_TITLE = "LIVE SESSION IN PROGRESS";
+  const LOCKOUT_MSG = "OpenF1's free feed pauses from 30 minutes before a session until 30 minutes after it ends. " +
+    "Sessions already loaded on this device still open; live timing returns after the session.";
+
+  return { driverColor, countsByDriver, placeLabel, sessionSuffix, liveLockout, LOCKOUT_TITLE, LOCKOUT_MSG };
 })();
 Object.freeze(DataTabUtils);

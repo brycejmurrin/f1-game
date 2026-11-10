@@ -658,10 +658,13 @@ test.describe("UI scale", () => {
         // them to the compact layout and 100% is the normal column.
         expect(scale.racePainted, `${name}: 200% never paints RACE smaller than this box's 100% ${scaleDump}`)
           .toBeGreaterThanOrEqual(baseline.racePainted * 0.99);
-        // 33 painted px at the 1.25 cap = 26.4 own px: the 200% request lands in
-        // the cluster's own units (text takes the residual 1.6), the fit scales
-        // the paint uniformly.
-        expect(scale.raceFont, `${name}: control text carries the requested 200% in its own px ${scaleDump}`).toBeGreaterThanOrEqual(26.4);
+        // The 200% request lands in the cluster's own units: the 1.25 cap takes
+        // its share and text takes the residual 1.6, the fit scales the paint
+        // uniformly. Relative to this box's own 100% label since #5199: the pin
+        // was 26.4 own px, which is 1.6 x the 16.5 px label of the composition
+        // #5199 replaced; the eight-row Home's label is smaller at 100% (12.58
+        // own px in CI run 42737932108, 20.128 at 200% = 1.6 x exactly).
+        expect(scale.raceFont, `${name}: control text carries the requested 200% in its own px ${scaleDump}`).toBeGreaterThanOrEqual(baseline.raceFont * 1.6 * 0.999);
         expect(scale.scrollY, `${name}: the fitted cluster has no vertical scroller ${scaleDump}`).toBeLessThanOrEqual(1);
         expect(scale.scrollX, `${name}: the fitted cluster has no horizontal scroller ${scaleDump}`).toBeLessThanOrEqual(1);
         expect(scale.off, `${name}: every destination is on screen without scrolling ${scaleDump}`).toEqual([]);

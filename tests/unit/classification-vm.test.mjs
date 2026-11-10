@@ -39,7 +39,10 @@ test("a lapped car that takes the flag is classified behind a lead-lap car still
   place(B, L - 100, 2, 75);                                        // a lap down, just behind on the road
   place(C, L - 440, 3, 80);                                        // lead lap, ~5 s back
   a.setInput({ throttle: true, steer: 0 });
-  for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g.step(1);
+  // A wait cap, not a measured value: C is dropped at x=0 at 80 m/s, runs to the right-hand wall and scrubs
+  // along it to the pit entry, so when it takes the flag depends on that wall. Measured: results at step 716
+  // with the #5079 pocket (the car left the wall one node early), 724 with the taper capped at the lane wall.
+  for (let i = 0; i < 60 * 15 && G.state === "race"; i++) g.step(1);
   assert.equal(G.state, "results");
   assert.equal(P.finPos, 1);
   assert.ok(C.finPos < B.finPos, `the lead-lap car (P${C.finPos}) must be ahead of the lapped one (P${B.finPos})`);

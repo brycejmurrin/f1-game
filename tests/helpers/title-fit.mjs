@@ -22,12 +22,37 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+// `rows` is the composition a TOUCH boot paints with CONTINUE shown (#5213: under a finger a door
+// is at least 44 px, so the eight rows re-flow where eight 44 px rows do not fit the box): seven
+// rows (CAREER joins the retention row) in a 353-356 px box, all eight at 430; `floor` is false
+// where no row count fits and the fit wins (Safari's 246 px box at UI SIZE 109 %: three doors on
+// the top row clip a word, so it is the unfloored eight rows zoomed down, as before the floor).
+const ROWS7 = [3, 2, 2, 2, 2, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 2, 3, 4];
 export const GEOS = [
-  { name: "852x393-standalone", w: 852, h: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 } },
-  { name: "852x283-safari", w: 852, h: 283, insets: { top: 0, left: 67, bottom: 21, right: 67 } },
-  { name: "844x390", w: 844, h: 390, insets: { top: 0, left: 47, bottom: 21, right: 47 } },
-  { name: "932x430", w: 932, h: 430, insets: { top: 0, left: 59, bottom: 21, right: 59 } },
+  { name: "852x393-standalone", w: 852, h: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS7, floor: true },
+  { name: "852x283-safari", w: 852, h: 283, insets: { top: 0, left: 67, bottom: 21, right: 67 }, rows: ROWS8, floor: false },
+  { name: "844x390", w: 844, h: 390, insets: { top: 0, left: 47, bottom: 21, right: 47 }, rows: ROWS7, floor: true },
+  { name: "932x430", w: 932, h: 430, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS8, floor: true },
 ];
+
+/** The touch paint floor (#5213): every door at least 44 px tall and its label at least 12 px. */
+export function judgeFloor(m) {
+  const bad = [];
+  for (const d of m.doors) {
+    if (d.h < 44) bad.push(`door ${d.id} paints ${Math.round(d.h * 10) / 10} px tall (under 44)`);
+    if (d.fs < 12) bad.push(`door ${d.id} label paints at ${d.fs} px (under 12)`);
+  }
+  return bad;
+}
+
+/** What Bryce's phone stored on 2026-11-09 (his live export, the settings file PR #5264
+ *  adds under tests/data): UI SIZE 61 %, and a landscape TITLE LAYOUT with
+ *  BUTTONS SIZE 60, WIDTH 49, pushed right and up, the title pushed left. Over the older export. */
+export const LIVE_TITLE = Object.freeze({ v: 2, wide: { btns: { x: 50, y: -42, size: 60, width: 49 }, title: { x: -50, y: 2, size: 100 }, art: { x: 0, y: 0, size: 100 }, layout: "grid", side: "auto" } });
+export function liveStore() {
+  const exp = exportStore();
+  return { json: { ...exp.json, uiScale: 61, titleLayout: LIVE_TITLE }, raw: exp.raw };
+}
 
 /** Bryce's export as the store keys a boot writes: `json` through store.set, `raw` verbatim. */
 export function exportStore() {
@@ -142,7 +167,7 @@ export function measureInPage() {
     const r = R(b);
     if (!(r.h > 0 && r.w > 0) || getComputedStyle(b).visibility === "hidden") continue;
     const hit = document.elementFromPoint((r.l + r.r) / 2, (r.t + r.b) / 2);
-    doors.push({ id: b.id || (b.textContent || "").trim().slice(0, 18), ...r, hit: !!hit && (hit === b || b.contains(hit)) });
+    doors.push({ id: b.id || (b.textContent || "").trim().slice(0, 18), ...r, fs: Math.round(parseFloat(getComputedStyle(b).fontSize) * (parseFloat(getComputedStyle(mb).zoom) || 1) * 100) / 100, hit: !!hit && (hit === b || b.contains(hit)) });
   }
   const de = document.documentElement;
   const cols = cs.gridTemplateColumns.split(/\s+/).map(parseFloat).filter((n) => n > 0);
