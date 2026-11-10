@@ -41,7 +41,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, noDeployBaseMessage, resolveDeployBase, untrackedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -521,11 +521,8 @@ function gitLines(args) {
 
 /** Added-vs-deploy paths and added globals for the working diff (best effort: no git -> nothing). */
 function addedSinceBase(explicit) {
-  let base = "";
-  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "HEAD~1"]) {
-    const b = gitLines(["merge-base", "HEAD", ref])[0];
-    if (b) { base = b; break; }
-  }
+  // No HEAD~1 fallback (audit W6): without a deploy base only the untracked files count as added.
+  const base = resolveDeployBase(DEPLOY_BRANCH, { cwd: ROOT })?.sha || "";
   const added = new Set([...(base ? gitLines(["diff", "--name-only", "--diff-filter=A", base]) : []),
     ...gitLines(["ls-files", "--others", "--exclude-standard"])]);
   if (explicit) for (const f of explicit) if (fs.existsSync(path.join(ROOT, f)) && !gitLines(["cat-file", "-e", `HEAD:${f}`]).length && !gitLines(["ls-tree", "HEAD", f]).length) added.add(f);
@@ -584,7 +581,6 @@ function changedFiles(argv) {
   // answers a different question and looks like a real answer).
   const explicit = argv.filter((a, n) => !a.startsWith("--") && !(since >= 0 && n === since + 1));
   if (explicit.length) return explicit;
-  const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
   // Rename sources too (ledger M36): --name-only lists only the destination.
   if (argv.includes("--staged")) return changedPaths(["--cached"], { cwd: ROOT });
   if (since >= 0 && argv[since + 1]) return changedPaths([argv[since + 1]], { cwd: ROOT });
@@ -596,13 +592,17 @@ function changedFiles(argv) {
   // the repo — which reads as "run everything", i.e. the tool silently gives up
   // exactly when it is asked the real question. It is kept as a fallback only
   // for a clone that has no deploy branch.
-  let base = "";
-  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "origin/main", "main", "HEAD~1"]) {
-    try { base = git(["merge-base", "HEAD", ref]); break; } catch (_) { /* try the next */ }
-  }
+  // No base is a REFUSAL (audit W6, 2026-11-10). The chain used to fall through
+  // origin/main, main and HEAD~1 — printing one `fatal: Not a valid object name`
+  // per missing ref — and answered for the last commit only, which reads as a
+  // real answer for the whole branch. origin/main is gone with it: main is a
+  // stale fork, and a merge-base with it is not this branch's change either.
+  const base = resolveDeployBase(DEPLOY_BRANCH, { cwd: ROOT });
+  if (!base) { const e = new Error(noDeployBaseMessage(DEPLOY_BRANCH, "pick-tests")); e.code = "NO_DEPLOY_BASE"; throw e; }
+  changedFiles.base = base;
   const out = new Set(changedPaths(["HEAD"], { cwd: ROOT }));
-  if (base) for (const f of changedPaths([base], { cwd: ROOT })) out.add(f);
-  for (const f of git(["ls-files", "--others", "--exclude-standard"]).split("\n")) if (f) out.add(f);
+  for (const f of changedPaths([base.sha], { cwd: ROOT })) out.add(f);
+  for (const f of untrackedPaths({ cwd: ROOT })) out.add(f);
   return [...out];
 }
 
@@ -610,7 +610,7 @@ function changedFiles(argv) {
 function printExtras(files, argv) {
   const specs = extraSpecs(files);
   if (specs.length) {
-    console.log(`\n${specs.length} spec(s) the group rules do not name (run each ALONE: test-bg.mjs --spec <file>):`);
+    console.log(`\n${specs.length} spec(s) the group rules do not name (the PR's selected shard runs them; one group on the pushed branch: node tools/ci/remote-group.mjs <group>; never run them locally, AGENTS.md rule 5):`);
     for (const r of specs) console.log(`    ${r.spec}  (${r.kind === "shared-ui-layer" ? "shared UI layer" : "loads"} ${r.module})`);
   }
   const explicit = argv.filter((a, n) => !a.startsWith("--") && !(argv.indexOf("--since") >= 0 && n === argv.indexOf("--since") + 1));
@@ -632,7 +632,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   // tools-runnable.test.mjs fails even though the selector itself is fine.
   // That smoke used to pass accidentally whenever the working tree had diffs.
   const USAGE = `Usage: node tools/ci/pick-tests.mjs [options] [paths…]
-  (no args)     groups for files not yet on ${DEPLOY_BRANCH}, plus the working tree
+  (no args)     groups for files not yet on ${DEPLOY_BRANCH} (origin/, else local; neither: exit 4), plus the working tree and untracked files
   --staged      only staged files
   --since <ref> files changed since <ref>
   --bg          print tools/ci/remote-group.mjs commands only (one per browser group)
@@ -644,7 +644,15 @@ An unknown option prints this usage and exits 2.`;
   if (argv.includes("--help") || argv.includes("-h")) { console.log(USAGE); process.exit(0); }
   try { validateSelectionArgs(argv); } catch (e) { console.error(`${e.message}\n${USAGE}`); process.exit(2); }
 
-  const files = changedFiles(argv);
+  let files;
+  try { files = changedFiles(argv); }
+  catch (e) {
+    if (e.code !== "NO_DEPLOY_BASE") throw e;
+    if (argv.includes("--json")) console.log(JSON.stringify({ reason: "no-deploy-base", files: [], groups: [], error: e.message }));
+    else console.error(e.message);
+    process.exit(4);
+  }
+  const base = changedFiles.base || null;
 
   // --json short-circuits BEFORE any prose path, deliberately. The two early
   // exits below ("no changed files", "no rule matched") are the cases a
@@ -662,6 +670,7 @@ An unknown option prints this usage and exits 2.`;
       // no rule claimed them, so the selection is NOT trustworthy and the
       // caller must fall back to a full run. "matched" — groups is the answer.
       ...selectionReceipt(files, pkgJ.scripts),
+      ...(base ? { base: `${base.ref}@${base.sha}` } : {}),
       files,
       groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
       specs,
@@ -672,11 +681,11 @@ An unknown option prints this usage and exits 2.`;
   }
 
   if (!files.length) {
-    console.log("no changed files — nothing to run");
+    console.log(`no changed files${base ? ` vs ${base.ref} (merge-base ${base.sha.slice(0, 12)})` : ""} — nothing to run`);
     process.exit(0);
   }
   const groups = pick(files);
-  console.log(`${files.length} changed file(s):`);
+  console.log(`${files.length} changed file(s)${base ? ` vs ${base.ref} (merge-base ${base.sha.slice(0, 12)}, untracked included)` : ""}:`);
   for (const f of files.slice(0, 20)) console.log(`    ${f}`);
   if (files.length > 20) console.log(`    … and ${files.length - 20} more`);
 

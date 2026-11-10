@@ -109,6 +109,11 @@ const CLIMB_SURVIVE_MS = 30000;
 // is unreachable by any cut or refused climb, so `> 1` now means exactly
 // "no measurement yet".
 let _scaleCap = Infinity;
+// The CONFIGURED ceiling, separate from the measured one above: the highest scale the resolution
+// stage may climb to. 1 everywhere except a phone on RESOLUTION AUTO, where js/ui/scale.js sets
+// 0.75 (#5227): AUTO there means "MED's sharpness, and the governor may drop pixels when the
+// frame rate needs it". It is a setting, not a measurement, so nothing here expires or resets it.
+let _resCeil = 1;
 // The ceiling EXPIRES, or a device that was slower for one stretch — a weather
 // effect, a full field on lap one, a thermal excursion that passed — could
 // never have its resolution back. UNBROKEN headroom is the whole
@@ -974,7 +979,7 @@ function tick(dtMs, drawn) {
     // that gap only hands the next heavy section something to take back. The
     // margin belongs to a measurement, never to the default — subtracting it
     // from an untouched ceiling would pin every healthy device at 0.9.
-    const ceil = _scaleCap > 1 ? 1 : Math.max(0.5, _scaleCap - 0.1);
+    const ceil = _scaleCap > 1 ? _resCeil : Math.max(0.5, Math.min(_resCeil, _scaleCap - 0.1));
     if (_autoRes && cur < ceil - 1e-9) {
       // HALVE THE GAP, don't crawl it. A fixed +0.06 needs eight steps to get
       // from the 0.5 floor back to full — eight target reallocations, eight
@@ -1180,6 +1185,10 @@ return {
   // held at the race's observed minimum while the ladder finishes its work.
   computeBound: () => _computeBound,
   autoRes: () => _autoRes,
+  // The configured ceiling of the resolution stage (see _resCeil). Clamped to the stage's own
+  // range; it never moves the scale by itself: the caller that lowers it also lowers the scale.
+  resCeil: () => _resCeil,
+  setResCeil: (v) => { v = +v; _resCeil = v >= 0.5 && v <= 1 ? v : 1; return _resCeil; },
   // Drop any unverified SCALE step on the way in or out of manual resolution.
   // _pendingVerify holds {kind:"scale", prev} and the next evaluation would
   // "revert" it by calling setRenderScale(prev) — writing over the scale the

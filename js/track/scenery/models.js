@@ -495,8 +495,20 @@ const TrackModels = (function () {
         const v = preflight({ center, size, basis });
         return v === true ? null : v;
       };
+      // Only the pit complex drops a patch whole. A ROAD hit falls through to
+      // the per-cell guard below, which keeps the clear cells: the whole-box
+      // test (the capsule widened by the patch) dropped 53 of qatar's 620
+      // verges, 45 of which never touch the tarmac (#5080).
       const hit = reject(mid, sz, [r, u, t]);
-      if (hit !== null) return suppress(false, hit === "pit");
+      if (hit === "pit") return suppress(false, true);
+      // …but rejBox skips a box whose top is >0.3 m under the road, so a
+      // drape cell UNDER an embanked road passed it (montreal-park-lawn-r-10:
+      // 30 cells 1.6 m under the hairpin). In a patch the road hit, a cell
+      // must also clear the road's footprint height-blind, centre and corners.
+      // A patch the road missed keeps the old per-cell test exactly.
+      const onRoad = hit === false && ctx.onRoad
+        ? (q, c) => ctx.onRoad(c[0], c[2], 0) || q.some((p) => ctx.onRoad(p[0], p[2], 0))
+        : () => false;
       const cuts = [gap];
       const rails = ctx.rails || [];
       for (const d of rails) if (d > gap + 0.25 && d < gap + sz[0] - 0.25) cuts.push(d);
@@ -523,7 +535,7 @@ const TrackModels = (function () {
         const q = quad(i, j), hi = Math.max(q[0][1], q[1][1], q[2][1], q[3][1]);
         const lo = Math.min(q[0][1], q[1][1], q[2][1], q[3][1]) - sz[1];
         const c = [(q[0][0] + q[2][0]) / 2, (lo + hi) / 2, (q[0][2] + q[2][2]) / 2];
-        if (reject(c, [cuts[i + 1] - cuts[i], hi - lo, sz[2] / rows], cellB) === null) {
+        if (reject(c, [cuts[i + 1] - cuts[i], hi - lo, sz[2] / rows], cellB) === null && !onRoad(q, c)) {
           keep[j * cols + i] = 1; kept++;
         }
       }

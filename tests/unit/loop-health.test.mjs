@@ -21,13 +21,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SRC = fs.readFileSync(path.join(ROOT, "js/perf/loop-health.js"), "utf8");
 
 /** Fresh LoopHealth in a VM. `clock.t` is what performance.now() returns. */
-function load(clock = { t: 0 }) {
+function load(clock = { t: 0 }, extra = {}) {
   const errors = [];
   const ctx = {
     performance: { now: () => clock.t },
     Date: { now: () => clock.t },
     Math,
     console,
+    ...extra,
   };
   vm.createContext(ctx);
   seedLog(ctx);
@@ -351,4 +352,32 @@ test("stall: lighter renderer already latched skips a second reload", () => {
   h.frames(11, 2500);
   assert.equal(h.calls.reload, 0);
   assert.equal(h.LoopHealth.state().stall.act, "budget");
+});
+
+// #4994: at the cap nothing scheduled another frame, so the loop stayed dead for
+// the life of the page — on an installed PWA that is a force-quit.
+test("recover(): a stopped loop re-arms one window rAF and forgets the tally (#4994)", () => {
+  let chained = 0;
+  const { LoopHealth } = load({ t: 0 }, { XrBoot: { chainWindowRaf() { chained++; return true; } } });
+  assert.equal(LoopHealth.recover(), false, "a live loop has nothing to recover");
+  assert.equal(chained, 0, "and must not be handed a second rAF chain");
+  for (let i = 0; i < 8; i++) LoopHealth.fault(new Error("boom"));
+  assert.equal(LoopHealth.state().stopped, true);
+  assert.equal(LoopHealth.recover(), true);
+  assert.equal(chained, 1, "exactly one frame is scheduled");
+  const s = LoopHealth.state();
+  assert.deepEqual([s.stopped, s.run, s.faults, s.recoveries], [false, 0, 0, 1]);
+  // The fault is still there: the cap is reached again and the loop stops again.
+  for (let i = 1; i <= 7; i++) assert.equal(LoopHealth.fault(new Error("boom")), true, `fault ${i} after a recovery survives`);
+  assert.equal(LoopHealth.fault(new Error("boom")), false);
+  assert.equal(LoopHealth.state().stopped, true);
+});
+
+test("recover(): stays stopped when no frame could be scheduled", () => {
+  for (const XrBoot of [undefined, { chainWindowRaf: () => false }, { chainWindowRaf() { throw new Error("no rAF"); } }]) {
+    const { LoopHealth } = load({ t: 0 }, XrBoot ? { XrBoot } : {});
+    for (let i = 0; i < 8; i++) LoopHealth.fault(new Error("boom"));
+    assert.equal(LoopHealth.recover(), false);
+    assert.equal(LoopHealth.state().stopped, true, "a card that says the loop stopped must stay true");
+  }
 });

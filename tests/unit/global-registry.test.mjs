@@ -143,6 +143,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/track/tracks.js": ["scheduler"], // buildPaced's task yield between slices under the race cover (pace.rafEvery, B·H14); typeof-guarded, else setTimeout(0)
   "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)
   "js/ui/update-check.js": ["__apexGuardOk"],   // index.html's boot version guard: set only when its version.json read succeeded (#4925)
+  "js/render/renderer-boot.js": ["__APEX_BUILD"], // the canary's retirement record names the build that retired the pick (#4995)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
   "js/core/lazy-bundles.js": ["__TEST_MODE", "__APEX_BUILD", "scheduler"], // Playwright agent-surface flag; prefetch URL stamp; scheduler.yield (Chrome 129+) typeof-guarded in ensureAudio, Safari → setTimeout(0)
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
