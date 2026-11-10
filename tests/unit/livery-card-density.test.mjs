@@ -43,10 +43,10 @@ test("bad inputs fall back to DPR 1 and a floor, never a zero-size canvas", () =
 });
 
 test("cards size through livSwatchPx from a measured box, not a literal", () => {
-  assert.doesNotMatch(src, /swatchCanvas\(team\.id, liv, \d+, \d+/, "no fixed bitmap size");
-  assert.match(src, /LiveryTex\.swatchCanvas\(team\.id, liv, px\.w, px\.h, livBuild\)/);
+  assert.doesNotMatch(src, /swatchCanvas\([^)]*\d+, \d+, livBuild\)/, "no fixed bitmap size");
+  assert.match(src, /LiveryTex\.swatchCanvas\(team\.id, [^\n]*, px\.w, px\.h, livBuild\)/);
   const build = src.slice(src.indexOf("function buildLiveryOptions("));
-  assert.match(build, /fitLivSwatches\(container, team,/, "the build measures the laid-out box");
+  assert.match(build, /fitLivSwatches\(container, team\)/, "the build measures the laid-out box");
   const fit = src.slice(src.indexOf("function fitLivSwatches("), src.indexOf("function livSwatch("));
   assert.match(fit, /clientWidth \* z/, "local box x UI-scale zoom (CssZoom), never a transformed rect");
 });
