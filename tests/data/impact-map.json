@@ -10550,6 +10550,9 @@
       "boot": [
         "tests/unit/overlay-feed.test.mjs"
       ],
+      "check": [
+        "tests/unit/overlay-render.test.mjs"
+      ],
       "clear": [
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-render.test.mjs"
@@ -10572,6 +10575,9 @@
       "text": [
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
+      ],
+      "watch": [
         "tests/unit/overlay-render.test.mjs"
       ]
     },
