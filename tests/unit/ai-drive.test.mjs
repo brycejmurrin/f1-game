@@ -1944,6 +1944,22 @@ test("row 5: a stopped car is a hazard, a moving or retired or pitting one is no
   assert.ok(A.hazardReach(50) > 30 + 1.5 * 50, "reacts from further back than the parked-car reach");
 });
 
+test("row 5: stallSweep counts only a LOCAL, running car on the road under green, and retires it once at 60 s", () => {
+  const mk = (o) => Object.assign({ local: true, speed: 0, retired: false, finished: false, inPit: false, inPitLane: false }, o);
+  const cars = [mk({}), mk({ local: false }), mk({ inPit: true }), mk({ inPitLane: true }), mk({ finished: true }), mk({ retired: true })];
+  const out = [];
+  for (let i = 0; i < 61 * 60; i++) A.stallSweep(cars, 1 / 60, true, (c) => { out.push(cars.indexOf(c)); c.retired = true; });
+  assert.deepEqual(out, [0], "only the parked local car on the road is retired, once");
+  for (const c of cars.slice(1)) assert.ok(!(c.stallT > 0), "a remote, pitting, pit-lane, finished or retired car counts nothing");
+  const live = mk({});
+  for (let i = 0; i < 120 * 60; i++) A.stallSweep([live], 1 / 60, false, () => assert.fail("not green: never retired"));
+  assert.equal(live.stallT, 0, "a non-green race (pause, caution, grid, quali, time trial) counts nothing");
+  const lane = mk({ stallT: 59 });
+  A.stallSweep([lane], 1 / 60, true, () => {}); lane.inPitLane = true; A.stallSweep([lane], 1 / 60, true, () => {});
+  assert.equal(lane.stallT, 0, "entering the pit lane resets the count");
+  assert.doesNotThrow(() => A.stallSweep([mk({})], undefined, true, () => {}), "a missing dt is 0");
+});
+
 test("row 5: stallStep counts stationary live seconds and resets on motion or a non-live race", () => {
   let t = 0;
   for (let i = 0; i < 60 * 61; i++) t = A.stallStep(t, 0, 1 / 60, true);
