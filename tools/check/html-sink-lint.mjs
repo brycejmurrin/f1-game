@@ -6,6 +6,7 @@
 //
 //   node tools/check/html-sink-lint.mjs          # list non-constant sinks, audited or not
 //   node tools/check/html-sink-lint.mjs --json
+//   node tools/check/html-sink-lint.mjs --rehash   # after a RE-AUDIT: refresh rhs hashes of existing rows
 //
 // WHY. A custom team's driver name — set by an imported garage file — reached
 // `el.innerHTML` through js/ui/aria-state.js paintOnOff, which re-wrapped a
@@ -29,9 +30,18 @@
 // not waved through by the first one's reason. tests/unit/html-sink-lint.test.mjs
 // fails on an unaudited site AND on a stale entry.
 //
+// THE RIGHT-HAND SIDE IS PINNED TOO. The key names WHERE markup is written, not
+// WHAT: an audited `sum.innerHTML = <validated enum>` could later take a URL or
+// a driver name and keep its key. Each entry therefore carries `rhs`, the sorted
+// short sha256s of its sites' whitespace-collapsed HTML expression source; a
+// changed expression fails as CHANGED until someone re-reads the site, updates
+// the reason, and runs `--rehash` (which rewrites `rhs`/`count` for EXISTING
+// rows only — it never audits a new key).
+//
 // THE FIX FOR A NEW SITE is almost never an allowlist row: build the node with
 // Dom.el()/textContent, or escape the dynamic part the way aria-state.js does.
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
@@ -70,24 +80,31 @@ function propName(m) {
   return null;
 }
 
+/** Short sha256 of an HTML expression's source, whitespace-collapsed (so a reflow is not a change). */
+export function rhsHash(source) {
+  const norm = String(source).replace(/\s+/g, " ").trim();
+  return crypto.createHash("sha256").update(norm).digest("hex").slice(0, 12);
+}
+
 /** Non-constant HTML sinks in one source. */
 export function lintSource(src, file = "<src>") {
   let ast;
-  try { ast = espree.parse(src, { ecmaVersion: 2022, loc: true, range: true }); }
+  try { ast = espree.parse(src, { ecmaVersion: "latest", loc: true, range: true }); }
   catch (e) { return { file, parseError: e.message, sites: [] }; }
   const text = (n) => src.slice(n.range[0], n.range[1]).replace(/\s+/g, " ");
+  const rhs = (n) => rhsHash(n ? src.slice(n.range[0], n.range[1]) : "");
   const sites = [];
   each(ast, (n) => {
     if (n.type === "AssignmentExpression" && (n.operator === "=" || n.operator === "+=")) {
       const p = propName(n.left);
       if (!p || !SINK_PROPS.has(p) || isConstantHtml(n.right)) return;
-      sites.push({ line: n.loc.start.line, sink: p, key: `${file}::${text(n.left.object)}.${p}` });
+      sites.push({ line: n.loc.start.line, sink: p, key: `${file}::${text(n.left.object)}.${p}`, rhs: rhs(n.right) });
     } else if (n.type === "CallExpression") {
       const p = propName(n.callee);
       const arg = CALL_SINKS.get(p);
       if (arg === undefined || isConstantHtml(n.arguments[arg])) return;
       if (arg === 0 && (p === "write" || p === "writeln") && !/^(window\.)?document$/.test(text(n.callee.object))) return;
-      sites.push({ line: n.loc.start.line, sink: p, key: `${file}::${text(n.callee.object)}.${p}` });
+      sites.push({ line: n.loc.start.line, sink: p, key: `${file}::${text(n.callee.object)}.${p}`, rhs: rhs(n.arguments[arg]) });
     }
   });
   return { file, parseError: null, sites };
@@ -120,40 +137,83 @@ export function readAllowlist(root = ROOT) {
   return JSON.parse(fs.readFileSync(path.join(root, ALLOWLIST), "utf8")).sites || {};
 }
 
-/** { unaudited: [site], stale: [key], miscounted: [{key, want, got}], parseErrors: [row] } */
+/** key -> sorted rhs hashes of its sites in the tree. */
+function treeHashes(rows) {
+  const by = new Map();
+  for (const r of rows) for (const s of r.sites) {
+    if (!by.has(s.key)) by.set(s.key, []);
+    by.get(s.key).push(s.rhs);
+  }
+  for (const v of by.values()) v.sort();
+  return by;
+}
+
+/** { unaudited: [site], stale: [key], miscounted: [{key, want, got}],
+ *    changed: [{key, want, got}], parseErrors: [row] } */
 export function audit(root = ROOT) {
   const rows = lintAll(root);
   const allow = readAllowlist(root);
-  const got = new Map();
+  const got = treeHashes(rows);
   const unaudited = [];
   for (const r of rows) for (const s of r.sites) {
-    got.set(s.key, (got.get(s.key) || 0) + 1);
     if (!allow[s.key]) unaudited.push(Object.assign({ file: r.file }, s));
   }
   const stale = Object.keys(allow).filter((k) => !got.has(k));
-  const miscounted = Object.keys(allow).filter((k) => got.has(k) && got.get(k) !== (allow[k].count || 1))
-    .map((k) => ({ key: k, want: allow[k].count || 1, got: got.get(k) }));
-  return { unaudited, stale, miscounted, parseErrors: rows.filter((r) => r.parseError) };
+  const miscounted = Object.keys(allow).filter((k) => got.has(k) && got.get(k).length !== (allow[k].count || 1))
+    .map((k) => ({ key: k, want: allow[k].count || 1, got: got.get(k).length }));
+  // A row with no `rhs` vouches for nothing in particular, so it is CHANGED too.
+  const changed = Object.keys(allow).filter((k) => got.has(k)
+    && JSON.stringify([...(allow[k].rhs || [])].sort()) !== JSON.stringify(got.get(k)))
+    .map((k) => ({ key: k, want: allow[k].rhs || [], got: got.get(k) }));
+  return { unaudited, stale, miscounted, changed, parseErrors: rows.filter((r) => r.parseError) };
+}
+
+/** --rehash: rewrite `rhs` and `count` of every EXISTING allowlist row from the tree.
+ *  Never adds a key (a new site needs an audit and a reason) and never drops one. */
+export function rehash(root = ROOT) {
+  const file = path.join(root, ALLOWLIST);
+  const doc = JSON.parse(fs.readFileSync(file, "utf8"));
+  const got = treeHashes(lintAll(root));
+  const updated = [];
+  for (const [k, v] of Object.entries(doc.sites || {})) {
+    if (!got.has(k)) continue;
+    const next = got.get(k);
+    if (JSON.stringify(v.rhs) !== JSON.stringify(next) || v.count !== next.length) updated.push(k);
+    v.count = next.length;
+    v.rhs = next;
+  }
+  fs.writeFileSync(file, JSON.stringify(doc, null, 2) + "\n");
+  return updated;
 }
 
 function main() {
+  const ri = process.argv.indexOf("--root");          // --root <dir>: audit a fixture tree (tests)
+  const root = ri > 0 && process.argv[ri + 1] ? path.resolve(process.argv[ri + 1]) : ROOT;
+  if (process.argv.includes("--rehash")) {
+    const u = rehash(root);
+    console.log(`rehashed ${u.length} allowlist row(s)${u.length ? ": " + u.join(", ") : ""}`);
+  }
   const json = process.argv.includes("--json");
-  const a = audit();
+  const a = audit(root);
   if (json) { console.log(JSON.stringify(a, null, 2)); }
   else {
-    const allow = readAllowlist();
-    for (const r of lintAll()) {
+    const allow = readAllowlist(root);
+    for (const r of lintAll(root)) {
       if (r.parseError) { console.log(`PARSE ${r.file}: ${r.parseError}`); continue; }
       for (const s of r.sites) console.log(`${allow[s.key] ? "audited " : "UNAUDITED"} ${r.file}:${s.line}  ${s.key.split("::")[1]}`);
     }
     for (const k of a.stale) console.log(`STALE allowlist entry (no such site): ${k}`);
     for (const m of a.miscounted) console.log(`COUNT ${m.key}: allowlist says ${m.want}, tree has ${m.got}`);
+    for (const c of a.changed) {
+      console.log(`CHANGED ${c.key}: the HTML expression differs from the audited one (allowlist rhs ${JSON.stringify(c.want)}, tree ${JSON.stringify(c.got)})`);
+      console.log("  RE-AUDIT it: can the new right-hand side carry player text or a URL? Fix it, or update the reason and run --rehash.");
+    }
     if (a.unaudited.length) {
       console.log("\nFix: build the node with Dom.el()/textContent, or escape the dynamic part;");
       console.log(`only a site whose dynamic parts cannot carry player text belongs in ${ALLOWLIST}.`);
     }
   }
-  const bad = a.unaudited.length + a.stale.length + a.miscounted.length + a.parseErrors.length;
+  const bad = a.unaudited.length + a.stale.length + a.miscounted.length + a.changed.length + a.parseErrors.length;
   process.exitCode = bad ? 1 : 0;
 }
 
