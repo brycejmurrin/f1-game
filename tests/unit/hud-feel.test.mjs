@@ -1610,7 +1610,7 @@ for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
       assert.ok(row.label.startsWith(`${Math.round(row.value * 10) / 10}`.replace(/\.0$/, "")), `${wish}: "${row.label}" leads with the painted ${row.value}`);
       assert.equal(/ · max$/.test(row.label), row.max < r.lim.max && row.value >= row.max, `${wish}: "· max" exactly when the window's cap is reached ("${row.label}")`);
       if (r.key === "uiScale") {
-        assert.deepEqual([row.min, row.max, row.value], [r.lim.min, r.lim.max, wish], `${wish}: UI SIZE is never clamped (the title paints the whole range; a legibility minimum is #5235's call)`);
+        assert.deepEqual([row.min, row.max, row.value], [r.lim.min, r.lim.max, wish], `${wish}: UI SIZE is not clamped off a phone, and never from above (the title paints the whole range)`);
         const z = Math.round(r.sheetZoom * 100);
         assert.equal(sizeRow(r.key, wish, r.lim, caps, r.sheetZoom).label, wish > z + 0.5 ? `${wish}% · this menu ${z}%` : `${wish}%`, `${wish}: the row names the zoom the settings sheet paints at`);
       }
@@ -1627,6 +1627,13 @@ for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
     }
     if (r.key === "uiScale") {
       assert.equal(sizeRow(r.key, 200, r.lim, null, 2).label, "200%", "a sheet painting at the wish adds no note");
+      // #5235 (Bryce 2026-11-10): a phone's UI SIZE stops at 70 %, and the tokens hold text at 12 painted px there.
+      const ph = sizeRow(r.key, 61, r.lim, null, 0, true);
+      assert.deepEqual([ph.min, ph.max, ph.value, ph.label], [r.phoneMin, r.lim.max, r.phoneMin, `${r.phoneMin}%`], "his stored 61 % paints 70 % on a phone");
+      assert.equal(sizeRow(r.key, 61, r.lim, null, 0, false).value, 61, "a desktop keeps 40 %");
+      const tok = src("css/tokens.css");
+      assert.match(tok, /--fs-micro: max\(14px, calc\(12px \/ var\(--ui-scale, 1\)\)\);/, "menu text never paints under 12 px");
+      assert.match(tok, /--tap: max\(52px, calc\(44px \/ var\(--ui-scale\)\)\);/, "a touch row never paints under 44 px");
     }
   });
 }

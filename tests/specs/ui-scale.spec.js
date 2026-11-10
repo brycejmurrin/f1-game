@@ -2006,16 +2006,30 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         for (let m = 0; m < row.moves.length; m++) expect(Math.abs(back[m] - seen[0].moves[m]), `${row.moves[m]} has no hysteresis`).toBeLessThan(1);
       });
     }
-    // The range is NOT clamped: above the sheet's 125 % the title still grows, and a legibility minimum is #5235's call.
-    test("pm-uiscale (every menu): the whole range is kept and the row names the zoom its own sheet paints at", async ({ page }) => {
+    // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 70 % on a phone (#5235).
+    test("pm-uiscale (every menu): a phone stops at 70 % with 12 px text and 44 px rows, and the row names the zoom its own sheet paints at", async ({ page }) => {
       const ui = CONTROL_REG.size.find((r) => r.key === "uiScale");
       await bootOwnerCell(page, cell, { race: false, store: { uiScale: 51 } });
       await page.locator("#mb-settings").click();
       await page.locator("#pm-open-appearance").click();
       await expect(page.locator("#" + ui.id)).toBeVisible();
       const sheetZoom = () => page.evaluate((id) => +getComputedStyle(document.getElementById(id).closest(".sheet")).zoom, ui.id);
-      expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.lim.min, max: ui.lim.max, value: 51, label: "51%" });
-      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale"))).toBe("0.51");
+      expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.phoneMin, max: ui.lim.max, value: ui.phoneMin, label: `${ui.phoneMin}%` });
+      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 51 % paints the minimum").toBe(String(ui.phoneMin / 100));
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and is raised in storage on load").toBe(ui.phoneMin);
+      // At the minimum: the open panel's token-sized text paints >= 12 px and its controls >= 44 px.
+      const floor = await page.evaluate(() => {
+        const panel = document.getElementById("pm-panel-appearance"), z = +getComputedStyle(/** @type {Element} */ (panel.closest(".sheet"))).zoom;
+        const shown = (/** @type {Element} */ el) => el.getClientRects().length > 0;
+        const rows = [...panel.querySelectorAll("button, input, select")].filter(shown).map((el) => Math.min(el.getBoundingClientRect().width, el.getBoundingClientRect().height));
+        const probe = panel.appendChild(Object.assign(document.createElement("span"), { textContent: "x" }));
+        probe.style.fontSize = "var(--fs-micro)";
+        const micro = parseFloat(getComputedStyle(probe).fontSize) * z;
+        probe.remove();
+        return { micro, tap: Math.min(...rows) };
+      });
+      expect(floor.micro, "the smallest type rung paints 12 px").toBeGreaterThanOrEqual(11.95);
+      expect(floor.tap, "the smallest control in the panel paints 44 px").toBeGreaterThanOrEqual(43.5);
       for (const v of [100, 125, 150, 200]) {
         await page.evaluate(({ id, v }) => {
           const el = /** @type {HTMLInputElement} */ (document.getElementById(id));

@@ -105,12 +105,15 @@ const UiScale = (() => {
     };
     // UI SIZE keeps its whole range: above the settings sheet's fit cap the title still grows (measured 125 -> 200 %
     // at 852x393 and 852x368), so the row NAMES the zoom this sheet paints at (its computed zoom, 1.25 on a phone) instead.
+    // A PHONE'S UI SIZE STOPS AT 70 % (#5235, Bryce 2026-11-10): under it menus painted 7 px text and 24 px taps.
+    // A smaller stored value is raised once at boot; css/tokens.css holds text at 12 painted px down to that 70 %.
+    const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
     const uiSheet = () => { const el = $("pm-uiscale"); return el && el.closest ? el.closest(".sheet") : null; };
     const sheetCap = () => { const sh = uiSheet(); return (sh && sh.getClientRects && sh.getClientRects().length && parseFloat(getComputedStyle(sh).zoom)) || 0; };
     const fitCaps = () => (document.body && document.body.classList && document.body.classList.contains("in-race")
       ? parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")) : null);
     const cssWas = {};   // prop -> the value this module last wrote: an unchanged row writes nothing (the observer below re-runs it)
-    const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), sheetCap());
+    const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), sheetCap(), phoneUi());
     // Moving one size slider pins the OTHER's stored wish to what it paints now, so room this move frees is
     // never spent growing something the player did not touch (BUTTON SIZE down grew the gear cluster back).
     const pinPainted = (key) => { const r = rowFor(key); if (typeof store.get(key, null) === "number" && r.value < scalePct(key)) store.set(key, r.value); };
@@ -234,6 +237,7 @@ const UiScale = (() => {
     const hudRev = $("pm-hudscale-r"); if (hudRev) hudRev.onclick = revert("hudScale", applyHudScale);
     const btnRev = $("pm-btnscale-r"); if (btnRev) btnRev.onclick = revert("hudBtnScale", applyBtnScale);
 
+    if (phoneUi() && typeof store.get("uiScale", null) === "number" && store.get("uiScale", null) < rowFor("uiScale").min) store.set("uiScale", rowFor("uiScale").min);   // #5235: clamp on load
     applyUiScale();
     applyHudScale();
     applyBtnScale();
@@ -381,11 +385,12 @@ const UiScale = (() => {
   }
   /** One size slider's row on THIS window: { min, max, value, label }. `wish` is the stored (or default) pct,
    *  `lim` the control's full { min, max, step }, `caps` parseCaps() in a race (else null), `sheetCap` the zoom the
-   *  settings sheet paints at (0 = not on screen; UI SIZE only: its range is never clamped, the row names the cap).
+   *  settings sheet paints at (0 = not on screen; `phone` raises UI SIZE's minimum to UI_PHONE_MIN; UI SIZE only: its range is never clamped, the row names the cap).
    *  The range is what can paint, `value` is what paints, and the label says so: "194% · pedals 119% · max". */
-  function sizeRow(key, wish, lim, caps, sheetCap) {
+  function sizeRow(key, wish, lim, caps, sheetCap, phone) {
     const st = lim.step || 0.25, down = (p) => Math.floor(p / st + 1e-6) * st, up = (p) => Math.ceil(p / st - 1e-6) * st;
     let min = lim.min, max = lim.max, part = "";
+    if (key === "uiScale" && phone) min = Math.max(min, UI_PHONE_MIN);
     const txt = (p) => `${Math.abs(p % 1) < 1e-9 ? String(Math.round(p)) : p.toFixed(1)}%`;
     // The bands paint min(slider, cap) with the cap ceiled onto a 1 % grid (hud.js set()).
     const band = (z) => (z < 9 ? Math.ceil(z * 100 - 1e-6) : Infinity);
@@ -406,6 +411,7 @@ const UiScale = (() => {
     if (key === "uiScale" && sheetCap > 0 && sheetCap * 100 < value - 0.5) part = ` · this menu ${Math.round(sheetCap * 100)}%`;
     return { min, max, value, label: txt(value) + part + (max < lim.max && value >= max ? " · max" : "") };
   }
+  const UI_PHONE_MIN = 70;   // #5235
   btnFitLabel.sizeRow = sizeRow; btnFitLabel.parseCaps = parseCaps;   // exported on the return line once #5205 (which edits it) lands
   return { create, defaultResMode, btnFitLabel };
 })();

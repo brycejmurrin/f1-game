@@ -699,7 +699,8 @@
    is the test game.js applies via Input.touchControlsNeeded(), where it sets
    the `desktop` class on <body>. */
 body:not(.desktop) {
-  --tap: max(52px, calc(24px / var(--ui-scale)));
+  /* 44 PAINTED px under 85 % (#5235): the floor term was 24, which let a 70 % phone paint 36 px rows. */
+  --tap: max(52px, calc(44px / var(--ui-scale)));
   /* Why: docs/notes/TOKENS-RATIONALE.md §R5. */
   --chip-h: max(48px, min(calc(52px / var(--ui-scale)), calc(52px * var(--ui-scale))), calc(24px / var(--ui-scale)));
   --tap-sm: max(36px, calc(24px / var(--ui-scale)));
@@ -859,6 +860,17 @@ body:not(.desktop) {
   --fs-micro: 18px; --fs-2: 20px; --fs-3: 21px; --fs-4: 22px; --fs-5: 23px; --fs-6: 26px;
   --hud-text-boost: 1.18;
 }
+/* 12 PAINTED px FLOOR (#5235). Menus zoom by --ui-scale, so under 86 % the 14 px rung painted below 12 (9.8 px at the
+   phone minimum of 70 %). Each max() is its rung at 86 % and above and 12 painted px below it. The literal rungs stay
+   above (tools/check/tree-counts.mjs reads --fs-micro's px there); :root loses to the presets, so LARGE has its own. */
+:root {
+  --fs-micro: max(14px, calc(12px / var(--ui-scale, 1)));
+  --fs-2: max(15px, calc(12px / var(--ui-scale, 1)));
+  --fs-3: max(16px, calc(12px / var(--ui-scale, 1)));
+  --fs-4: max(17px, calc(12px / var(--ui-scale, 1)));
+}
+:root[data-text-size="large"] { --fs-micro: max(16px, calc(12px / var(--ui-scale, 1))); --fs-2: max(17px, calc(12px / var(--ui-scale, 1))); }
+
 /* Why: docs/notes/TOKENS-RATIONALE.md §R9. */
 :root[data-cvd="deutan"],
 :root[data-cvd="protan"] {
