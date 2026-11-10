@@ -20,7 +20,7 @@
 // does; the band's other candidate — the sticky utility-row scrim #menu-buttons
 // paints only as a scroller (.sf-scroll) — cannot appear once nothing scrolls.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { GEOS, profiles, sweep, settleInPage, measureInPage, judge, judgeStored, judgeFloor, liveStore, LIVE_TITLE, staleLaunchInPage, firstFlagsInPage } from "../helpers/title-fit.mjs";
+import { GEOS, profiles, sweep, settleInPage, measureInPage, judge, judgeStored, judgeFloor, judgeLabels, liveStore, LIVE_TITLE, staleLaunchInPage, firstFlagsInPage } from "../helpers/title-fit.mjs";
 
 const SETTLE_FRAMES = 12;
 
@@ -86,6 +86,7 @@ for (const geo of GEOS) {
           for (const d of withContinue.m.doors) (rows[Math.round(d.t)] ||= []).push(d.id);
           expect(Object.values(rows).map((r) => r.length), `${geo.name} ${prof.name} rows ${JSON.stringify(rows)}`).toEqual(geo.rows);
           expect(judge(withContinue.m, { offsets: prof.offsets }), `${geo.name} ${prof.name} with CONTINUE`).toEqual([]);
+          expect(judgeLabels(withContinue.m), `${geo.name} ${prof.name} with CONTINUE: no clipped label (#5378)`).toEqual([]);
           if (geo.floor) expect(judgeFloor(withContinue.m), `${geo.name} ${prof.name} with CONTINUE: the touch paint floor`).toEqual([]);
           await page.evaluate(() => { document.getElementById("mb-continue").hidden = true; });
           await measure(page);

@@ -40,7 +40,7 @@ import { pick, DEPLOY_BRANCH, validateSelectionArgs, selectionReceipt } from "./
 import { estimateToolingFast, loadTimings, selectToolingFastChanged, TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 import { liveCiRuns } from "./live-run-check.mjs";
 import { gitOut } from "../lib/git-run.mjs";
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, noDeployBaseMessage, resolveDeployBase, untrackedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -64,15 +64,13 @@ const loadavgLine = () => {
 
 const git = (args) => gitOut(args, { cwd: ROOT });   // throws on failure (tools/lib/git-run.mjs)
 
-// The ref the default selection diffs against: merge-base with the deploy
-// branch (HEAD~1 last). Also graph-parity's BASE: without one it diffs only the
-// uncommitted part, and exits 2 "nothing to compare" on a clean tree.
-function mergeBase() {
-  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "HEAD~1"]) {
-    try { return git(["merge-base", "HEAD", ref]); } catch (_) { /* next */ }
-  }
-  return "";
-}
+// The ref the default selection diffs against: merge-base with origin/<deploy>,
+// else the local deploy branch — never HEAD~1, which answered for the last
+// commit and read as green for the branch (audit W6, 2026-11-10). Also
+// graph-parity's BASE: without one it diffs only the uncommitted part, and
+// exits 2 "nothing to compare" on a clean tree.
+const deployBase = resolveDeployBase(DEPLOY_BRANCH, { cwd: ROOT });
+function mergeBase() { return deployBase ? deployBase.sha : ""; }
 
 // ── changed-file selection (same semantics as pick-tests.mjs's CLI) ─────────
 function changedFiles() {
@@ -84,10 +82,16 @@ function changedFiles() {
   // lists only a moved file's destination, so its old directory's rules never fired.
   if (flag("--staged")) return changedPaths(["--cached"], { cwd: ROOT });
   if (opt("--since")) return changedPaths([opt("--since")], { cwd: ROOT });
-  const base = mergeBase();
+  if (!deployBase) {
+    // A refusal, not a guess: exit 2 is the "not a verdict" code (usage / unmatched).
+    if (JSON_OUT) console.log(JSON.stringify({ verdict: "no-deploy-base", error: noDeployBaseMessage(DEPLOY_BRANCH, "verify-change") }));
+    else console.error(noDeployBaseMessage(DEPLOY_BRANCH, "verify-change"));
+    process.exit(2);
+  }
+  changedFiles.base = `${deployBase.ref}@${deployBase.sha}`;
   const out = new Set(changedPaths(["HEAD"], { cwd: ROOT }));
-  if (base) for (const f of changedPaths([base], { cwd: ROOT })) out.add(f);
-  for (const f of git(["ls-files", "--others", "--exclude-standard"]).split("\n")) if (f) out.add(f);
+  for (const f of changedPaths([deployBase.sha], { cwd: ROOT })) out.add(f);
+  for (const f of untrackedPaths({ cwd: ROOT })) out.add(f);
   return [...out];
 }
 
@@ -144,6 +148,8 @@ const graphParityBase = wantsGraphParity ? (opt("--since") || mergeBase() || nul
 const wantsSweepsHint = files.some((f) => /^js\/(track|circuits)\//.test(f) || /^tools\//.test(f));
 
 const plan = {
+  // The default selection's diff base (working tree and untracked files on top); null for explicit paths / --since / --staged.
+  base: changedFiles.base || null,
   files,
   // Carried into the plan too, not just the verdict: `--plan` printing
   // `"batches": []` with no reason is the same vacuous answer the run path
@@ -164,6 +170,9 @@ const plan = {
     verifyTrack: circuits,
     graphParity: wantsGraphParity,
     graphParityBase,
+    // A generated file in the diff is proven by its generator, not by the floor
+    // (tooling-fast's own --changed path runs this too; audit W6, 2026-11-10).
+    genCheck: !!toolingFastSelection.genCheck,
     cacheCheck: true,
   },
   batches,
@@ -175,7 +184,7 @@ if (flag("--plan")) {
   process.exit(0);
 }
 
-say(`plan: files=${files.length} batches=${batches.length} ` +
+say(`plan: base=${plan.base || "explicit"} files=${files.length} batches=${batches.length} ` +
   `browser=${browserGroups.length} node=${nodeGroups.length} ` +
   `toolingFast=${wantsToolingFast} verifyTrack=[${circuits.join(",")}] ` +
   `graphParity=${wantsGraphParity} ${loadavgLine()}`);
@@ -207,6 +216,9 @@ if (plan.fast.graphParity) {
   const base = plan.fast.graphParityBase;
   fastOk = run(`graph-parity BASE=${base || "HEAD"}`, "node", ["tools/track/graph-parity.cjs", "--all"],
     base ? { BASE: base } : null) && fastOk;
+}
+if (plan.fast.genCheck) {
+  fastOk = run("gen:check", "npm", ["run", "gen:check", "--silent"]) && fastOk;
 }
 if (plan.fast.toolingFast) {
   // Files at a time, by load. MEASURED 2026-09-16 on the 4-core box: 194 files

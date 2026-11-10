@@ -1,4 +1,5 @@
-/* debris-opts — the DEBRIS switch as a player setting, not a console call.
+/* debris-opts — the DEBRIS switch as a player setting, not a console call (PostFxOpts.debris in
+ * js/ui/post-fx-opts.js; the DebrisOpts module had its own file until 2026-11-10).
  *
  * The failure this guards is the quiet one: a wiring module that still ships,
  * still looks right in the shell, and simply stops claiming its row. So this
@@ -21,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const FILE = "js/ui/debris-opts.js";
+const FILE = "js/ui/post-fx-opts.js";
 const SRC = fs.readFileSync(path.join(ROOT, FILE), "utf8").replace(/^const\b/gm, "var");
 const DEFAULTS = (() => {   // the REAL shipped SettingsDefaults, not a stub that answers "0" for everything
   const ctx = vm.createContext({});
@@ -50,12 +51,12 @@ function load({ stored = {}, readyState = "complete", world = true } = {}) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
-  return { M: vm.runInContext("DebrisOpts", ctx), rows, calls, stored, doc: sb.document };
+  return { M: vm.runInContext("PostFxOpts.debris", ctx), rows, calls, stored, doc: sb.document };
 }
 
 test("it claims pm-debris, and the shell declares that row with its select", () => {
   const { rows } = load();
-  assert.deepEqual([...rows.keys()], ["pm-debris"]);
+  assert.ok(rows.has("pm-debris"), "the DEBRIS row is claimed");
   assert.ok(SHELL.includes('id="pm-debris"'), "pm-debris must exist in index.html");
   assert.ok(SHELL.includes('id="pm-debris-sel"'), "pm-debris-sel must exist — SettingRow needs the select");
   assert.ok(SHELL.includes('id="pm-debris-label" data-i18n="pause.debris">DEBRIS<'), "the row must be labelled DEBRIS");
@@ -106,7 +107,7 @@ test("it wires on DOMContentLoaded when the document is still loading", () => {
   const { rows, doc } = load({ readyState: "loading" });
   assert.equal(rows.size, 0, "precondition: nothing claimed yet");
   doc._handlers.DOMContentLoaded();
-  assert.equal(rows.size, 1, "the row is claimed once the shell exists");
+  assert.ok(rows.has("pm-debris"), "the row is claimed once the shell exists");
 });
 
 test("the key is registered for settings export/import", () => {
@@ -117,7 +118,7 @@ test("the key is registered for settings export/import", () => {
     "js/ui/settings-export.js SPEC must carry debris on the raw lane");
 });
 
-test("it reaches nothing from game.js — the reason it is its own file", () => {
+test("it reaches nothing from game.js — no G, Tracks, player or gfx", () => {
   // load() runs in a sandbox with no G, Tracks, player or gfx: any reach for one
   // throws a ReferenceError during wiring, a read or a write.
   const { M, rows, doc } = load({ readyState: "loading" });

@@ -1,0 +1,145 @@
+{
+ "//": "Every range input in index.html, by what it controls (#5206). A SIZE row is driven through its whole range by tests/specs/ui-scale.spec.js at Bryce’s phone cells and by tests/unit/hud-feel.test.mjs; a new slider must be added here to pass.",
+ "cells": {
+  "A": {
+   "width": 852,
+   "height": 393,
+   "insets": {
+    "sal": 59,
+    "sar": 59,
+    "sab": 21
+   },
+   "caps": "0.989 1.002 1.186 1.942 1.942 0.82"
+  },
+  "S": {
+   "//": "Bryce's iPhone in a Safari tab (phone bridge 2026-11-10 02:38Z: landscape 852x368, DPR 3); insets assumed as cell A's.",
+   "width": 852,
+   "height": 368,
+   "insets": {
+    "sal": 59,
+    "sar": 59,
+    "sab": 21
+   },
+   "caps": "0.996 1 1.199 2.303 2.228 0.92"
+  },
+  "D": {
+   "width": 844,
+   "height": 390,
+   "insets": {
+    "sal": 0,
+    "sar": 0,
+    "sab": 0
+   },
+   "caps": "1.034 1.122 1.25 2.611 2.373 0.82"
+  }
+ },
+ "profile": "tests/data/settings-defaults-export.json",
+ "size": [
+  {
+   "id": "pm-hudscale",
+   "key": "hudScale",
+   "names": "the race readouts",
+   "lim": {
+    "min": 70,
+    "max": 200,
+    "step": 0.25
+   },
+   "moves": [
+    "#hud-gearbox",
+    "#hud-speed"
+   ],
+   "still": [
+    "#btn-steer-left",
+    "#btn-throttle",
+    "#btn-brake",
+    "#btn-boost"
+   ]
+  },
+  {
+   "id": "pm-btnscale",
+   "key": "hudBtnScale",
+   "names": "the touch buttons",
+   "lim": {
+    "min": 40,
+    "max": 300,
+    "step": 0.25
+   },
+   "moves": [
+    "#btn-steer-left"
+   ],
+   "still": [
+    "#hud-gearbox",
+    "#hud-speed"
+   ]
+  },
+  {
+   "id": "pm-uiscale",
+   "key": "uiScale",
+   "names": "every menu",
+   "lim": {
+    "min": 40,
+    "max": 200,
+    "step": 0.25
+   },
+   "sheetZoom": 1.25,
+   "phoneMin": 70
+  }
+ ],
+ "opacity": [
+  "pm-btnopacity",
+  "pm-panelopacity"
+ ],
+ "other": {
+  "pm-tiltsimple": "feel",
+  "pm-adaptbtn": "feel",
+  "pm-haptics": "feel",
+  "pm-brakecue": "feel",
+  "pm-pace": "feel",
+  "pm-smooth": "feel",
+  "pm-tiltcurve": "feel",
+  "pm-touchrange": "feel",
+  "pm-dragsmooth": "feel",
+  "pm-touchcurve": "feel",
+  "pm-padcurve": "feel",
+  "pm-paddz": "feel",
+  "pm-padsat": "feel",
+  "pm-steerrate": "feel",
+  "pm-help": "feel",
+  "pm-rate": "feel",
+  "pm-expo": "feel",
+  "pm-lock": "feel",
+  "pm-speedsteer": "feel",
+  "pm-analogspeed": "feel",
+  "pm-weight": "feel",
+  "pm-line": "feel",
+  "as-mvol": "audio",
+  "as-svol": "audio",
+  "as-rvol": "audio",
+  "as-rfx": "audio",
+  "as-t-idle": "audio",
+  "as-t-pitch": "audio",
+  "as-t-range": "audio",
+  "as-t-curve": "audio",
+  "as-t-gravel": "audio",
+  "as-t-detune": "audio",
+  "as-t-bright": "audio",
+  "as-t-sub": "audio",
+  "as-t-lim": "audio",
+  "as-t-limrate": "audio",
+  "as-t-limsag": "audio",
+  "as-t-boost": "audio",
+  "as-t-boostlift": "audio",
+  "as-t-whine": "audio",
+  "as-t-harvest": "audio",
+  "as-t-wind": "audio",
+  "as-t-tyres": "audio",
+  "as-t-brakes": "audio",
+  "as-t-shift": "audio",
+  "as-t-rivals": "audio",
+  "as-t-rev": "audio",
+  "as-t-ovr": "audio",
+  "sp-vol": "audio",
+  "fb-u": "flyby",
+  "pc-fov": "camera"
+ }
+}
