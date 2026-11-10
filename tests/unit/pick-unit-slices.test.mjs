@@ -26,15 +26,20 @@ test("SLICES / NODE_SLICES match the ci.yml matrix", () => {
 });
 
 test("a scenery-only circuit file skips the physics-heavy slices", () => {
-  const r = pick(["js/circuits/scenery/monaco.js"]);
+  const r = pick(["js/circuits/scenery/dijon.js"]);
   const sel = new Set(r.slices.keys());
   assert.ok(sel.has("guards"));
   assert.ok(sel.has("vm-a1"), "elevation twin shard 1");
   assert.ok(sel.has("vm-a2"), "elevation twin shard 2");
   assert.ok(!sel.has("vm-b1"));
   assert.ok(!sel.has("vm-b2"));
-  assert.ok(!sel.has("page-a") && !sel.has("page-b"));
+  assert.ok(!sel.has("page-a") && !sel.has("page-b"), "no ADAPTED spec builds dijon");
   assert.ok(!sel.has("slow"));
+  // #5241 G3: monaco scenery used to pin "no page" too, but the browser plan routes logging.spec.js (it loads
+  // monaco) and drops it as VM-covered, so without page-a it ran nowhere. Only page-a, and node-plan filters it
+  // to that one spec (APEX_VM_PAGE_ONLY).
+  const monaco = new Set(pick(["js/circuits/scenery/monaco.js"]).slices.keys());
+  assert.ok(monaco.has("page-a") && !monaco.has("page-b") && !monaco.has("vm-b1") && !monaco.has("vm-b2"), [...monaco].join(","));
   const c = costs(r.slices);
   assert.ok(c.saved_sec > 0);
 });
@@ -142,7 +147,7 @@ test("--github-output writes any_node / driving / slices", () => {
     "node",
     [
       "tools/ci/pick-unit-slices.mjs", "--github-output",
-      "js/circuits/scenery/monaco.js",
+      "js/circuits/scenery/dijon.js",   // #5241: monaco scenery now owes page-a (logging.spec.js loads monaco)
     ],
     { cwd: ROOT, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: ghOut } },
   );
@@ -152,7 +157,7 @@ test("--github-output writes any_node / driving / slices", () => {
   // Without --needed-only (a deploy push / the train) every NODE_SLICE is
   // listed so the Pages reuse check saw expanded rows (and, until
   // 2026-10-15, so the six then-required names reported); scenery needs
-  // only vm-a1/vm-a2 (needed=true), the rest needed=false.
+  // only vm-a1/vm-a2 (needed=true), the rest needed=false (a circuit no ADAPTED spec builds, #5241).
   const slicesLine = text.split("\n").find((l) => l.startsWith("slices="));
   assert.ok(slicesLine, "slices= line");
   const matrix = JSON.parse(slicesLine.slice("slices=".length));
@@ -199,9 +204,10 @@ test("L9: the SOURCE an ADAPTED spec asserts schedules the page slice (2026-10-0
   for (const f of ["js/circuits/cota.js", "js/circuits/imola.js", "js/circuits/albert_park.js",
     "js/circuits/scenery/cota.js", "js/race/pit-lane.js", "js/race/race-control.js", "js/track/core/space.js"])
     assert.ok(slices(f).has("page-a") && slices(f).has("page-b"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
-  // Circuits and scenery no ADAPTED spec reads keep the cheap plan.
+  // Circuits and scenery no ADAPTED spec reads keep the cheap plan. (Until #5241 monaco scenery was pinned here; but
+  // logging.spec.js loads monaco and the browser plan drops it as VM-covered, so it now owes page-a — see above.)
   assert.ok(!slices("js/circuits/dijon.js").has("page-a") && !slices("js/circuits/dijon.js").has("page-b"));
-  assert.ok(!slices("js/circuits/scenery/monaco.js").has("page-a") && !slices("js/circuits/scenery/monaco.js").has("page-b"));
+  assert.ok(!slices("js/circuits/scenery/dijon.js").has("page-a") && !slices("js/circuits/scenery/dijon.js").has("page-b"));
 });
 
 test("15-F1: every other source an ADAPTED spec reads schedules the page slice (2026-10-10)", () => {
@@ -212,12 +218,17 @@ test("15-F1: every other source an ADAPTED spec reads schedules the page slice (
   for (const f of ["js/core/log.js", "js/track/core/spline.js", "js/track/core/pit.js", "js/track/core/line.js",
     "js/physics/tyre-model.js", "js/physics/player-forces.js", "js/physics/consts.js", "js/agent/agentview.js"])
     assert.ok(slices(f).has("page-a") && slices(f).has("page-b"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
-  // An unrelated engine file keeps the cheap plan.
-  assert.ok(!slices("js/track/core/mesh.js").has("page-a") && !slices("js/track/core/mesh.js").has("page-b"));
+  // An engine file no ADAPTED spec reads BY NAME used to keep the cheap plan here. #5241 G3: the browser plan routes
+  // mesh.js to groups whose ADAPTED specs (logging, autopilot, *-foundation, physics-fixes, pit-lane, race-control)
+  // it then drops as VM-covered — every one of them builds a track, so mesh.js is under test in each. The path rule
+  // stays off; the dropped-twin hosts put page-a and page-b on the matrix, and node-plan runs only those specs.
+  const rulesOnly = pick(["js/track/core/mesh.js"], { dropped: [] }).slices;
+  assert.ok(!rulesOnly.has("page-a") && !rulesOnly.has("page-b"), "the path rule alone still leaves mesh.js off the page slices");
+  assert.ok(slices("js/track/core/mesh.js").has("page-a") && slices("js/track/core/mesh.js").has("page-b"));
 });
 
 test("--needed-only (a pull request) lists only the needed rows; a deploy push keeps every slice name", () => {
-  const scenery = pick(["js/circuits/scenery/monaco.js"]);
+  const scenery = pick(["js/circuits/scenery/dijon.js"]);   // #5241: a circuit no ADAPTED spec builds
   const draft = ciOutputs(scenery, { neededOnly: true });
   assert.deepEqual(draft.slices.map((r) => r.slice), ["vm-a1", "vm-a2"], "a scenery diff on a pull request runs the two elevation shards only");
   assert.ok(draft.slices.every((r) => r.needed === "true"));
@@ -262,7 +273,11 @@ test("a rider's source path selects the row that runs the rider (2026-10-15)", (
   const owners = testFileOwners();
   // audio-unit rides vm-a1: a js/audio edit must spin vm-a1 and needs no game-vm-b half.
   assert.ok(slices("js/audio/announcer.js").has("vm-a1"));
-  assert.ok(!slices("js/audio/announcer.js").has("vm-b1") && !slices("js/audio/announcer.js").has("vm-b2"));
+  // ...and no game-vm-b half by PATH. #5241 G3: the browser plan routes the boot group and drops agent-determinism,
+  // dev-tools and persistence as VM-covered; their twins live in game-vm-b2, so vm-b2 is on the matrix for them.
+  assert.ok(!slices("js/audio/announcer.js").has("vm-b1"));
+  assert.ok(!pick(["js/audio/announcer.js"], { dropped: [] }).slices.has("vm-b2"), "no path rule spins vm-b2 for js/audio");
+  assert.match([...pick(["js/audio/announcer.js"]).slices.get("vm-b2")].join(" | "), /VM twin of tests\/specs\/(agent-determinism|dev-tools|persistence)\.spec\.js/);
   assert.ok(owners.get("tests/unit/net-roster.test.mjs")?.has("vm-a1"), "net-unit → vm-a1");
   assert.ok(owners.get("tests/unit/helmets.test.mjs")?.has("vm-a2"), "garage-unit → vm-a2");
   assert.ok(owners.get("tests/unit/key-binds.test.mjs")?.has("slow"), "steering-unit → slow");
@@ -320,7 +335,9 @@ test("#5241 G3: the adapted runner honours APEX_VM_PAGE_ONLY and refuses a name 
   let threw = "";
   try {
     execFileSync("node", ["--test", "tests/unit/adapted-specs.test.mjs"], { cwd: ROOT, encoding: "utf8", stdio: "pipe",
-      env: { ...process.env, APEX_VM_PAGE_ONLY: ["tests/specs/not-a", "spec.spec.js"].join("-"), NODE_TEST_CONTEXT: "" } });
+      // NODE_TEST_CONTEXT must be ABSENT, not empty: node --test inside a test file otherwise skips the file and exits 0.
+      env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "NODE_TEST_CONTEXT")),
+        APEX_VM_PAGE_ONLY: ["tests/specs/not-a", "spec.spec.js"].join("-") } });
   } catch (e) { threw = `${e.stdout || ""}${e.stderr || ""}`; }
   assert.match(threw, /not an ADAPTED spec/);
 });

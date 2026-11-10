@@ -26,7 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS } from "./geometry-paths.mjs";
 import { DEPLOY_BRANCH } from "./pick-tests.mjs";
-import { circuitsOf, select } from "./select-specs.mjs";
+import { circuitsOf, circuitsTouched, select } from "./select-specs.mjs";
 import { ADAPTED, ADAPTED_RUNNER, TWINNED, adaptedPageGroupFor, isAdapted } from "./twinned-specs.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
 
@@ -241,7 +241,17 @@ function adaptedSourceWhy(f) {
  *  spec ran in neither place. The specs select() reports as coveredByVmTwin for this diff: */
 export function droppedTwins(files, ref = undefined) {
   if (!files.length) return [];
-  return (select(ref, undefined, { files }).coveredByVmTwin || []).map((r) => r.file);
+  const rows = select(ref, undefined, { files }).coveredByVmTwin || [];
+  // A CIRCUIT-SCOPED diff (every path is one circuit's data/scenery) owes only the twins that BUILD a touched circuit:
+  // the rest cannot see the diff, and neither could the spec they replay. node-plan applies the same rule per script
+  // (`no file builds <id>`), so without it this tool spun a runner whose script node-plan then skipped (js/circuits/dijon.js
+  // dropped logging + autopilot, which build monaco/monza/suzuka). An unreadable twin (circuitsOf null) is owed.
+  const circ = circuitsTouched(files, ref);
+  if (!circ.scoped || !circ.ids.length) return rows.map((r) => r.file);
+  return rows.filter((r) => {
+    const ids = circuitsOf(r.twin || r.file);
+    return ids === null || circ.ids.some((c) => ids.has(c));
+  }).map((r) => r.file);
 }
 
 /** Where each dropped spec's twin runs: the node SLICES that own it and the SCOPED scripts node-plan must not skip.
