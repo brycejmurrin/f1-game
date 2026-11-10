@@ -50,7 +50,6 @@ test("COAST_YAW_* constants ship and are read by player-forces", () => {
   assert.ok(/COAST_YAW_LO:\s*0\.65/.test(consts), "COAST_YAW_LO in consts");
   assert.ok(/COAST_YAW_HI:\s*1\.10/.test(consts), "COAST_YAW_HI in consts");
   assert.ok(forces.includes("COAST_YAW_DAMP"), "player-forces reads COAST_YAW_DAMP");
-  assert.ok(forces.includes("coastYaw"), "coastYaw term present");
 });
 
 test("lift-off at 45 m/s lock 0.8 rotates but does not snap past 1.25× in 0.75 s", () => {

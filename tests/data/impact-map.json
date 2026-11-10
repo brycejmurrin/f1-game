@@ -14334,7 +14334,6 @@
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/init-owner-resize-observer.test.mjs",
-        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs"
       ],
@@ -15917,15 +15916,13 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "startMirrorWarm": [
-        "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "startProgramWarm": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-lite-lab.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-lite-lab.test.mjs"
       ],
       "startRigWarm": [
         "tests/unit/tlx-rig-warm.test.mjs"
