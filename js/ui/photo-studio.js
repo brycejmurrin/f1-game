@@ -82,6 +82,10 @@ async function download(blob, name) {
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
+// Dismissing the native share sheet is the player's choice, not a failure (#5040; same test as
+// settings-export.js and results-sheet.js).
+const shareCancelled = (e) => typeof NativeDownload !== "undefined" && !!NativeDownload.isCancelled && NativeDownload.isCancelled(e);
+const downloadError = (e) => shareCancelled(e) ? "Download cancelled." : "Download failed: " + text(e && e.message);
 function create(G, deps) {
   deps = deps || {};
   const root = G.$("photo-studio");
@@ -658,7 +662,7 @@ function create(G, deps) {
     downloading = true;
     const gen = st.generation, name = filename(st.metadata.title || "photo"), canvas = last;
     try { await download(await blobOf(canvas), name); if (gen === st.generation) say("PNG download requested."); }
-    catch (e) { if (gen === st.generation) say("Download failed: " + text(e.message)); }
+    catch (e) { if (gen === st.generation) say(downloadError(e)); }
     finally { downloading = false; }
   }
   async function savePhoto() {
@@ -714,7 +718,7 @@ function create(G, deps) {
           downloading = true;
           const gen = st.generation;
           try { await download(p.blob, filename(p.title).replace(/\.png$/, ".jpg")); if (gen === st.generation) say("Photo download requested."); }
-          catch (e) { if (gen === st.generation) say("Download failed: " + text(e.message)); }
+          catch (e) { if (gen === st.generation) say(downloadError(e)); }
           finally { downloading = false; }
         }),
         bg,
@@ -768,5 +772,5 @@ function create(G, deps) {
   live = api; busy(false); return api;
 }
 // ASPECTS / LIMIT stay module-private (crop + library only); no external callers.
-return Object.freeze({ create, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
+return Object.freeze({ create, shareCancelled, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
 })();

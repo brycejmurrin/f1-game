@@ -417,7 +417,7 @@ const ReplayBuf = (function () {
       const say = (text) => { if (generation === sheetGeneration && typeof document !== "undefined") { const el = document.getElementById("pm-replay-sheet-status"); if (el) el.textContent = text; } };
       say("Capturing before, moment and after…");
       try { const ok = await PhotoStudio.contactSheet(times, seek, cancelled); if (cancelled()) return false; say("Contact sheet PNG download requested."); return ok; }
-      catch (e) { say(sheetCancelled ? "Capture cancelled." : "Contact sheet unavailable. Try again."); Log.warn("ui", "Contact sheet failed", e); return false; }
+      catch (e) { say(sheetCancelled || PhotoStudio.shareCancelled(e) ? "Capture cancelled." : "Contact sheet unavailable. Try again."); Log.warn("ui", "Contact sheet failed", e); return false; }
       finally {
         if (owns()) {
           seek(saved.t); scrubPlaying = saved.playing; scrubRate = saved.rate;

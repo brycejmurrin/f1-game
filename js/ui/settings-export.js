@@ -60,6 +60,10 @@ const FORMAT = "apex26-settings-v1";
 // went red and the release train never fired) — and each time the question was
 // asked at the wrong moment. Asked at the ROW, it is asked when the key is
 // added.
+//
+// perDevice = the value belongs to the device: an UNSET key exports as null (collect), and a file
+// saved on the other kind of device (file.device.desktop) never writes it (applySettings, #5005).
+// noImport = exported for context, never written back by LOAD SETTINGS (#5032).
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
   { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
@@ -129,13 +133,13 @@ const SPEC = [
   { k: "gfxGodrays", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js GOD-RAYS (only \"0\" is off; game.js zeroes po.godray + po.lampVol)", oneOf: ["0", "1"] },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
-  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/render/renderer-boot.js (unset = TLX when a GPU adapter resolves, else GLX — skips three.webgpu)" },
-  { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)" },
+  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/render/renderer-boot.js (unset = TLX when a GPU adapter resolves, else GLX — skips three.webgpu)", perDevice: true },
+  { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)", perDevice: true },
   { k: "tlxMaterialDetail", lane: "raw", group: "display", def: "4", src: "js/render/three/tlx.js (manual reload)", oneOf: ["4", "8"] },
   { k: "tlxSharpenLimit", lane: "raw", group: "display", def: "0", src: "js/render/three/tlx-post.js (prototype)", oneOf: ["0", "1"] },
   { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   { k: "xr", lane: "raw", group: "display", def: "0", src: "js/xr/xr-opts.js", oneOf: ["0", "1"] },
-  { k: "xrBackend", lane: "raw", group: "display", def: "webgl2", src: "js/xr/xr-opts.js", oneOf: ["webgl2", "webgpu"] },
+  { k: "xrBackend", lane: "raw", group: "display", def: "webgl2", src: "js/xr/xr-opts.js", oneOf: ["webgl2", "webgpu"], perDevice: true },
   { k: "xrInput", lane: "raw", group: "display", def: "controllers", src: "js/xr/xr-opts.js", oneOf: ["controllers", "existing"] },
   // HUD (js/game.js)
   { k: "hudProfile", lane: "json", group: "hud", def: "standard", oneOf: ["minimal", "standard", "broadcast"], src: "js/game.js" },
@@ -258,6 +262,11 @@ const SPEC = [
   { k: "homeScene", lane: "json", group: "appearance", def: "photo", src: "js/ui/appearance-studio.js", oneOf: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"] },
   { k: "backgroundMotion", lane: "json", group: "appearance", def: "ambient", src: "js/ui/appearance-studio.js", oneOf: ["still", "ambient"] },
   { k: "homeCamera", lane: "json", group: "appearance", def: "side", src: "js/ui/appearance-studio.js", oneOf: ["auto", "hero", "front", "side", "rear"] },
+  // GARAGE › GARAGE / CREW / LIGHTING looks (#5023). The readers validate on load too; oneOf mirrors
+  // GaragePrims LOOKS, GarageCrew.LOOKS and GarageScene.MOODS (garage bundle is lazy, so the lists are pinned by test).
+  { k: "garageLook", lane: "raw", group: "appearance", def: "stock", src: "js/garage/scene-prims.js setLook (GARAGE row)", oneOf: ["stock", "studio", "carbon", "flood", "workshop", "porcelain", "heritage", "endurance", "rainready", "qualify"] },
+  { k: "crewLook", lane: "raw", group: "appearance", def: "classic", src: "js/garage/scene-crew.js setLook (CREW row)", oneOf: ["classic", "sculpted", "pitstop", "workshop", "welcome"] },
+  { k: "garageMood", lane: "raw", group: "appearance", def: "shipped", src: "js/garage/scene.js setMood (LIGHTING row)", oneOf: ["shipped", "broadcast", "night", "showroom", "daylight", "inspection", "goldenhour", "endurance", "podium", "rain", "neon"] },
   { k: "appearanceProfiles", lane: "json", group: "appearance", def: [], src: "js/ui/appearance-studio.js", normalize: (v) => Array.isArray(v) ? (!v.length ? [] : typeof AppearanceStudio !== "undefined" ? AppearanceStudio.normalizeProfiles(v) : undefined) : undefined },
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
@@ -316,7 +325,9 @@ const SPEC = [
   { k: "keys", lane: "json", group: "controls", def: null, src: "js/input/input.js KEY_ACTIONS", changed: () => !(typeof Input !== "undefined" && Input.keysAreDefault && Input.keysAreDefault()) },
   { k: "pad", lane: "json", group: "controls", def: null, src: "js/input/input.js PAD_ACTIONS", changed: () => !(typeof Input !== "undefined" && Input.padsAreDefault && Input.padsAreDefault()) },
   // METRICS PANEL (js/perf/metrics-overlay.js)
-  { k: "metrics", lane: "raw", group: "metrics", def: null, src: "js/perf/metrics-overlay.js (null = off)" },
+  // noImport: a per-device diagnostic. ON loads the whole agent surface at every boot (#5032), so a
+  // friend's file must not switch it on; it is exported for context and never written back.
+  { k: "metrics", lane: "raw", group: "metrics", def: null, src: "js/perf/metrics-overlay.js (null = off)", noImport: true },
   { k: "metricsPage", lane: "raw", group: "metrics", def: "gov", src: "js/perf/metrics-overlay.js" },
   { k: "metricsPos", lane: "raw", group: "metrics", def: "left", src: "js/perf/metrics-overlay.js" },
   { k: "metricsSize", lane: "raw", group: "metrics", def: "s", src: "js/perf/metrics-overlay.js" },
@@ -560,31 +571,63 @@ function typeOk(v, def) {
   if (typeof def === "object") return v !== null && typeof v === "object";
   return typeof v === typeof def;
 }
+// Which kind of device this page runs on, read the way collect() writes file.device.desktop.
+function thisDesktop(G) {
+  try { if (document.body.classList) return document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
+  return G && G.gfx && typeof G.gfx.isMobile === "boolean" ? !G.gfx.isMobile : null;
+}
+// The exact on-disk string (null = absent) of one key, for the all-or-nothing rollback below.
+function diskValue(full) {
+  try { return localStorage.getItem(full); } catch (_) { return null; }
+}
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
   // A file is player input: a non-object `settings` or group is "nothing here",
   // never a value to assign into (strict mode throws on a primitive, #2191).
   const isPlain = (o) => o !== null && typeof o === "object" && !Array.isArray(o);
-  const groups = isPlain(file.settings) ? file.settings : {};
+  const groups = isPlain(file.settings) ? Object.assign({}, file.settings) : {};
   // Legacy: REDUCE MOTION lived under appearance before ACCESSIBILITY.
   if (isPlain(groups.appearance) && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
       && (groups.a11y == null || isPlain(groups.a11y))
       && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
-    (groups.a11y ||= {}).motion = groups.appearance.motion;
+    groups.a11y = Object.assign({}, groups.a11y, { motion: groups.appearance.motion });
   }
-  let applied = 0, skipped = 0, failed = 0;
+  // A STEERING SHEET FROM AN OLDER SCHEMA (#5004): the boot migration never runs over imported values (this
+  // device is already at STEER_SCHEMA), so the file's own version runs the same ladder here first: a v2 PACE 3
+  // is 0.750 of ground speed there and would read as 0.527 on today's grid.
+  if (isPlain(groups.steering) && typeof SteerTuning !== "undefined" && SteerTuning.migrateValues) {
+    groups.steering = SteerTuning.migrateValues(groups.steering.steerSchema, groups.steering);
+  }
+  // A FILE FROM THE OTHER KIND OF DEVICE (#5005): a desktop's renderer, quality and resolution pinned on the
+  // phone boot desktop graphics. Every perDevice row stays this device's own; the receipt counts them skipped.
+  const here = thisDesktop(G), there = isPlain(file.device) ? file.device.desktop : null;
+  const crossDevice = typeof here === "boolean" && typeof there === "boolean" && here !== there;
+  const writes = [];
+  let skipped = 0;
   for (const row of SPEC) {
     // A migration VERSION is context in the file and must never be written
     // back: an older number would re-run migrations that have already run.
     if (row.info) continue;
     const g = groups[row.group];
     if (!isPlain(g) || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
+    if (row.noImport || (crossDevice && row.perDevice)) { skipped++; continue; }
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
     if ((!row.freeShape && !typeOk(v, def)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
+    writes.push([row, v]);
+  }
+  // ALL OR NOTHING. A write storage refuses (a nearly full phone) used to leave the keys before and after it
+  // written: half old, half new after the next launch. Snapshot every key first; any refusal puts them all back.
+  const before = new Map();   // short key -> [lane, the exact disk string or null]
+  for (const [row] of writes) before.set(row.k, [row.lane, diskValue(`apex26.${row.k}`)]);
+  if (isPlain(file.ttlb)) for (const id of Object.keys(file.ttlb)) {
+    if (TTLB_TRACK_RE.test(id)) before.set(`ttlb.${id}`, ["json", diskValue(`apex26.ttlb.${id}`)]);
+  }
+  let applied = 0, failed = 0;
+  for (const [row, v] of writes) {
     try {
       // A write storage refused (full quota, private mode) is not APPLIED:
       // counting it reloaded the page into the values it had lost.
@@ -599,11 +642,22 @@ function applySettings(file, G) {
       }
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
+    if (failed) break;
   }
-  const ttlb = applyTtlb(file.ttlb);
+  const ttlb = failed ? { applied: 0, skipped: 0, failed: 0, rejected: 0 } : applyTtlb(file.ttlb);
   applied += ttlb.applied;
   skipped += ttlb.skipped;
   failed += ttlb.failed || 0;
+  if (failed) {
+    // JSON keys go back through store.set (its cache, rev and listeners see the old value again).
+    for (const [k, [lane, prev]] of before) {
+      try {
+        if (lane === "raw") { if (prev === null) GameStore.store.rawDel(`apex26.${k}`); else GameStore.store.rawSet(`apex26.${k}`, prev); }
+        else GameStore.store.set(k, prev === null ? undefined : JSON.parse(prev));
+      } catch (_) { /* an unparseable old value: leave the key to the store's own repair */ }
+    }
+    return { ok: true, applied: 0, skipped, failed, rolledBack: true, rejectedTtlb: ttlb.rejected || 0, reason: null };
+  }
   return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, reason: null };
 }
 // A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey
@@ -1066,7 +1120,7 @@ function create(G) {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
-        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
+        if (r.failed) { flash(b, label, r.rolledBack ? "STORAGE FULL — NOTHING CHANGED" : `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
         if (!r.applied) { flash(b, label, "NOTHING TO LOAD", 2200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first
