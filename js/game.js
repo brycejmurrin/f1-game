@@ -435,11 +435,9 @@ const _trk = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 // the loop). Returns it for convenience.
 const _tf = { s: 0, x: 0 };
 const _tfSamp = { track: null, s: NaN };   // the (track, s) of _trk's last sample: sampleAt below
-// Two plain steps (s += along) as ever; past them a SECANT step along / h, h measured
-// from the last two samples (no curvature read). A plain step is short by h = 1 - k·x,
-// so off the inside kerb of a hairpin (h → 0.2) it trailed the car 0.6-2.4 m (Sochi:
-// tests/unit/track-from-projection-vm.test.mjs). Under 5 cm of miss after two steps
-// — all on-road driving — the read is bit-identical to the two-step version.
+// Two plain steps, then SECANT steps along/h (h from the last two samples, no curvature read): a plain step is short by
+// h = 1 - k·x, so off a hairpin's inside kerb the read trailed 0.6-2.4 m. On-road (< 5 cm miss) it is bit-identical
+// (tests/unit/track-from-projection-vm.test.mjs).
 function trackFrom(px, pz, sPredicted) {
   let s = wrapS(sPredicted), aPrev = 0, dPrev = 0, fresh = false;
   for (let i = 0; i < 6; i++) {
