@@ -1248,6 +1248,13 @@ export const SOURCE_AFFECTED = [
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
   ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
+  // ROUTED TO SPECS THAT DO NOT EXERCISE THEM (#5241 G4). js/fx/ goes to group `ui`, whose specs run the GLX pin and
+  // assert no fx layer; the one spec that asserts one (M6: the skid batch after a driven slide, on the three.js path
+  // players get) is tlx-probes in `gfx`. #5181 changed js/fx/skidmarks.js and ran 60 specs, not that one.
+  [/^js\/fx\//, "tests/specs/tlx-probes.spec.js"],
+  // sw.js is TRACKED (reason `infra`) and its pick-tests rule names a node group only, so a sw.js-only diff had an
+  // EMPTY browser plan: the spec that boots the real worker and checks its precache did not run on #5187 / #5188.
+  [/^sw\.js$/, "tests/specs/perf-sw-cache-hit.spec.js"],
 ];
 
 /** Specs that prove nothing about a particular module: they boot the page or

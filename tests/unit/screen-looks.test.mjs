@@ -396,7 +396,6 @@ test("a peek swallows only the dismissing click, not the next one", () => {
   const src = read("js/ui/screen-looks.js");
   const fn = src.slice(src.indexOf("function onPointer"), src.indexOf("function onClick"));
   assert.doesNotMatch(fn, /700/);
-  assert.match(fn, /pk\.swallowGen/);
   assert.match(fn, /setTimeout\(\(\) => \{ if \(pk\.swallowGen === gen\) pk\.swallowClick = false; \}, 0\)/);
   assert.match(fn, /pointerup/);
   assert.match(fn, /pointercancel/);

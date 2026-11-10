@@ -121,9 +121,7 @@ test("the five once-dropped fields carry their authored values", () => {
 // resolves `def.sceneryTheme || (street ? "street" : theme === "desert" ?
 // "desert" : "permanent")`, so authoring the fallback value is dead metadata
 // with no runtime effect. Parked rows below ship today. Dropping one edits
-// js/circuits/<id>.js and forces a shot-catalog sourceDigest stamp (every
-// circuit def is in that hash) — coordinate with the digest owner; do not
-// widen this allow-list.
+// js/circuits/<id>.js; do not widen this allow-list.
 const REDUNDANT_SCENERY_THEME = {
   bahrain: "desert matches theme→desert fallback",
   silverstone: "permanent matches non-street/non-desert fallback",

@@ -1,5 +1,7 @@
 # Lit-WGSL census: how often does a deploy re-key the phone shader cache? (2026-10-24)
 
+Summary: How often a deploy re-keys the phone's shader cache by changing the lit-family WGSL, and what each re-key costs (A·W44, issue #3672).
+
 A·W44, Fleet A, issue #3672 (lever 1 of PR #3671 §4). Safari keeps its WebGPU pipeline cache across reload, kill and
 data-clear, keyed on the shader CODE, so any merge that changes the WGSL three.js generates for the lit family
 re-charges ~14 s (race warm) + ~7.5 s (menu warm) on an iPhone 14, ~9 s on an 18 Pro Max, to every phone once.

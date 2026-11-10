@@ -81,11 +81,34 @@ API references: [WebCrypto randomness](https://developer.mozilla.org/en-US/docs/
 
 ## Cost
 
-One Durable Object per opaque room id, alive for two minutes. Durable Objects have been on
-the Cloudflare **free plan** since April 2025 (100,000 requests/day, 313,000
-GB-seconds/day). A signalling handoff uses that for seconds, so a fan game will
-not leave the free tier. `wrangler.toml` uses `new_sqlite_classes` deliberately —
-the SQLite-backed class is the one available on the free plan.
+Checked against Cloudflare's Durable Objects pricing page on 2026-11-10
+(developers.cloudflare.com/durable-objects/platform/pricing). Durable Objects
+have been on the Workers **Free plan** since April 2025; the Free plan can only
+use SQLite-backed classes, which is why `wrangler.toml` uses
+`new_sqlite_classes`. Free-plan daily limits (reset 00:00 UTC):
+
+| Limit | Free plan | What one handoff uses |
+| --- | --- | --- |
+| Durable Object requests (HTTP + alarm invocations) | 100,000 / day | ~2 POSTs, polls at ~50/min while waiting, 1–2 alarms |
+| Duration | 13,000 GB-s / day (billed at 128 MB per active object) | seconds of activity per room |
+| SQLite rows read | 5 million / day | a few per request |
+| SQLite rows written | 100,000 / day | a few per POST (slot + alarm) and alarm cleanup |
+| SQL stored data | 5 GB total | under 13 KB per live room; zero after cleanup |
+
+On the Free plan an exceeded limit is not billed: further operations of that
+type **fail with an error** until the daily reset, so the relay stops working
+for everyone until 00:00 UTC. Normal fan-game use stays far below these numbers;
+abuse can reach them (see the rate-limit note below).
+
+Each room is one Durable Object, alive for two minutes. When the alarm finds
+every slot expired it deletes the alarm and then calls `storage.deleteAll()`,
+so an abandoned room leaves no stored rows behind.
+
+**Deployed version.** Nothing in this repository deploys the Worker (no
+workflow runs `wrangler deploy`). Whoever operates the endpoint deploys it by
+hand, so the code and `compatibility_date` (`2025-04-01`) live on the endpoint
+cannot be known from the repo: compare the operator's deployment
+(`wrangler deployments list`) with this file before assuming a fix is live.
 
 ## What it does not do
 
@@ -101,11 +124,15 @@ the SQLite-backed class is the one available on the free plan.
   the encoding alone. There is no plaintext compatibility path.
 - Any method other than GET/POST/OPTIONS is answered 405 in the outer Worker,
   before the rate limiter and before a Durable Object is named.
-- The Worker applies a defense-in-depth, per-isolate fixed-window limit before
-  allocating a Durable Object (20 writes and 180 reads per IP per minute). This
-  protects normal deployments without changing the browser protocol, but is not
-  a global distributed-abuse boundary; use a Cloudflare WAF rate-limit rule when
-  operating the endpoint at a scale where account-wide enforcement matters.
+- The Worker applies a defense-in-depth fixed-window limit before allocating a
+  Durable Object (20 writes and 180 reads per IP per minute). The counters live
+  in one isolate's memory: Cloudflare runs many isolates, each with its own
+  counters, so the real per-IP ceiling is that times the isolates reached. Even
+  a single isolate admits 200 requests/minute per IP (288,000/day), above the
+  100,000 Durable Object requests/day of the Free plan, so the limiter does not
+  keep one determined client inside the free quota. It stops casual bulk room
+  creation only; an operator who needs a real boundary adds a Cloudflare WAF
+  rate-limiting rule (account-wide) in front of the Worker.
 
 ## If you never deploy it
 
