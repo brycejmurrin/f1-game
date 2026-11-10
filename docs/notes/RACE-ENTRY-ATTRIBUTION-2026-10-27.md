@@ -1,5 +1,7 @@
 # Race entry and memory on the TLX WebGPU path: where the 29.8 s goes (2026-10-27)
 
+Summary: Where the iPhone 14's 29.8 s TLX WebGPU race entry goes: api vs player path, stage split, race-path heap (#3110, #1650).
+
 Worker lane "boot, race entry and memory on TLX WebGPU" (parent session `session_01Ap97PUkoACNwXY4fpfa4ya`), epics #3110 and
 #1650. Question: Device Farm batch #3954 timed a **29.8 s** race entry on an iPhone 14 (TLX WebGPU, Monza day, first entry
 on the unit). Which parts are script load, circuit hydrate, track build, asset pack, pipeline warm and first frame, and
