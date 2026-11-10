@@ -5002,7 +5002,8 @@
     },
     "js/circuits/scenery/spa.js": {
       "*": [
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/select-specs.test.mjs",
+        "tests/unit/validation-cli.test.mjs"
       ]
     },
     "js/circuits/scenery/suzuka.js": {
@@ -7649,6 +7650,7 @@
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/tyre-model.test.mjs",
+        "tests/unit/validation-cli.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "updateCar": [
