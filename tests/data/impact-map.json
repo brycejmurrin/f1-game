@@ -18641,6 +18641,7 @@
         "tests/unit/scale-defaults.test.mjs"
       ],
       "*": [
+        "tests/specs/real-profile-dock.spec.js",
         "tests/specs/ui-resize.spec.js",
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
@@ -18882,6 +18883,7 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
+        "tests/specs/real-profile-dock.spec.js",
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",

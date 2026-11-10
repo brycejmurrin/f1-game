@@ -740,10 +740,12 @@ body:not(.desktop) {
 }
 /* Why: docs/notes/TOKENS-RATIONALE.md §R7. */
 @media (pointer: coarse) {
-  /* Fixed touch-control default; HUD SIZE does not move this axis. */
+  /* Fixed touch-control default; HUD SIZE does not move this axis. 1, not 1.25 (2026-11-09): in BUTTONS mode
+     every dock button is the 72 px hold size, and 1.25 (height-capped to 1.19) painted 85 px circles whose
+     3-high column filled all the room an 852x393 phone has. A stored BUTTON SIZE still wins. */
   :root {
     --ui-scale: 1.09; --hud-scale: 1;
-    --hud-btn-mult: 1.25;
+    --hud-btn-mult: 1;
     --hud-btn-scale: var(--hud-btn-mult);
   }
 }

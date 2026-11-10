@@ -80,33 +80,32 @@ test("css/tokens.css and js/ui/scale.js agree on the touch defaults", () => {
 });
 
 test("the touch default puts every driving control over the physical floor", () => {
-  // The rendered sizes, measured in Chromium at the default (2026-09-14):
-  //   852x393  brake 90.0px (23.9mm)   boost 67.5px (17.9mm)
-  //   667x375  brake 80.0px (21.2mm)   boost 60.0px (15.9mm)
-  // The smallest of those is the one that has to clear the floor, and it is the
-  // secondary column on the small phone. Derived here from the tokens rather
-  // than hard-coded, so a change to --btn or the ratio is caught.
+  // Derived from the tokens the dock really paints with (css/touch-controls.css: --tap for BOOST / OT / AERO,
+  // --hold for the pedals and steer arrows; BUTTONS mode puts the taps on --hold too), times the default
+  // BUTTON SIZE. Painted in Chromium at the default, 2026-11-09, BUTTONS mode:
+  //   852x393  every dock button 72 px (19.1 mm)      852x368  64 px (16.9 mm)
+  // It read --btn x measured fit factors until then, a model the dock stopped using.
   const css = coarseDefaults();
   const ratio = Number(css["--hud-btn-mult"]);
-  const hud = Number(css["--hud-scale"]);
-  const overlays = readCssSource("css/overlays.css");
-  const btn = Number(overlays.match(/--btn:\s*(\d+)px/)[1]);
-  // The dock's own fit factor, measured: the painted pedal is ~0.947 of --btn
-  // before the button scale, and the secondary column is ~0.71 of it.
-  const paintedMm = (frac) => btn * frac * hud * ratio * MM_PER_PX;
-  const pedal = paintedMm(0.947), secondary = paintedMm(0.71);
-  assert.ok(secondary >= 15,
-    `the secondary buttons land at ~${secondary.toFixed(1)}mm; XAG 107 asks ~15mm ` +
-    `minimum for a phone touch target. Raise the --hud-btn-scale ratio, do NOT ` +
-    `raise --hud-scale — that carries the readouts up too and is what put the ` +
-    `pedal column on the minimap`);
-  assert.ok(pedal >= 15, `the pedals land at ~${pedal.toFixed(1)}mm, under the 15mm floor`);
-  // And the other direction: 2.3x the floor is what covered the minimap.
-  assert.ok(pedal <= 28,
-    `the pedals land at ~${pedal.toFixed(1)}mm. Past ~28mm the stacked column ` +
-    `exceeds half the short edge of a 393px phone and reaches #minimap — that is ` +
-    `the 2026-09-08 regression. Verify with tests/specs/hud-layout.spec.js before ` +
-    `moving this bound`);
+  const touch = readCssSource("css/touch-controls.css");
+  const tiers = [...touch.matchAll(/--tap:\s*max\((\d+)px, calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)\);\s*--hold:\s*max\((\d+)px,/g)]
+    .map((m) => ({ tap: Number(m[1]), hold: Number(m[2]) }));
+  assert.equal(tiers.length, 2, "the wide tier and the small-landscape tier each declare --tap and --hold");
+  const mm = (px) => px * ratio * MM_PER_PX;
+  for (const { tap, hold } of tiers) {
+    assert.ok(mm(tap) >= 15,
+      `a ${tap}px tap lands at ~${mm(tap).toFixed(1)}mm at the default; XAG 107 asks ~15mm ` +
+      `minimum for a phone touch target. Raise --tap or the --hud-btn-mult ratio, do NOT ` +
+      `raise --hud-scale: that carries the readouts up too and is what put the ` +
+      `pedal column on the minimap`);
+    assert.ok(mm(hold) >= 15, `a ${hold}px hold lands at ~${mm(hold).toFixed(1)}mm, under the 15mm floor`);
+    // The other direction. 3 holds + 2 gaps is BUTTONS mode's taps column: past ~21mm a hold it is taller than
+    // the room an 852x393 phone has under CAM / PAUSE (the 2026-11-09 report: 85 px circles, "way too large";
+    // 2026-09-08 put the pedal column on #minimap the same way).
+    assert.ok(mm(hold) <= 21,
+      `a ${hold}px hold lands at ~${mm(hold).toFixed(1)}mm at the default. Verify with ` +
+      `tests/specs/hud-layout.spec.js before moving this bound`);
+  }
 });
 
 test("--hud-scale carries no blanket touch bump, and the old size stays reachable", () => {

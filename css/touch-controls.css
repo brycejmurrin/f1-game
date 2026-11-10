@@ -491,7 +491,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      the control groups; race messages and optional panels adapt around them. */
   body:not(.desktop) .dock,
   body.desktop .dock:has(.touchbtn:not([hidden])) {
-    --tap: max(54px, calc(24px / max(1, var(--hud-btn-scale))));
+    /* 58, not 54 (2026-11-09): the touch default BUTTON SIZE is 1 now (css/tokens.css), and a 54 px tap at 1
+       is 14.3 mm, under the ~15 mm phone target floor tests/unit/scale-defaults.test.mjs holds. */
+    --tap: max(58px, calc(24px / max(1, var(--hud-btn-scale))));
     --hold: max(72px, calc(24px / max(1, var(--hud-btn-scale))));
     /* Same expression as zoom: when fitHud writes --hud-z-dock the labels
        divide the 10px floor by it so GAS/BRAKE stay readable. Hit boxes
@@ -519,9 +521,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      BUTTON SIZE slider (40–300%, index.html) did nothing below 100% — on a
      coarse pointer that is everything under the 1.25 default's 80% mark,
      while its help text promises that smaller buttons buy the readouts room.
-     The floor is now the zoom at which the 54px tap paints 44px (Apple HIG /
-     WCAG 2.5.5); the 72px holds paint 59. The narrow tier below restates it
-     for its 48px taps. js/ui/hud.js reads the same token to size the dock cap. */
+     The floor is the zoom at which the tap still clears 44px (Apple HIG /
+     WCAG 2.5.5): the 58px tap paints 48, the 72px holds 59. The narrow tier
+     below restates it for its 57px taps. js/ui/hud.js reads the same token to size the dock cap. */
   /* fitHud may reduce the preferred 44px rung on a crowded viewport, but
      its independent 24/48 emergency floor keeps even narrow-tier taps at 24px. */
   :root { --hud-btn-floor: 0.82; }
@@ -587,11 +589,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      than the SE yet took the 54/72 sizes (67/90 painted), which fitHud then
      had to cap back (hud-mock 2026-10-14: 9.7px pedal labels at HUD 150%). */
   @media (max-width: 700px), (max-height: 380px) {
-    :root { --hud-btn-floor: 0.92; }   /* 48px taps paint 44 */
+    :root { --hud-btn-floor: 0.92; }   /* 57px taps paint 52, 64px holds 59 */
     /* Same HUD-axis floor as the base dock values above. */
     body:not(.desktop) .dock,
     body.desktop .dock:has(.touchbtn:not([hidden])) {
-      --tap: max(48px, calc(24px / max(1, var(--hud-btn-scale))));
+      --tap: max(57px, calc(24px / max(1, var(--hud-btn-scale))));
       --hold: max(64px, calc(24px / max(1, var(--hud-btn-scale))));
     }
     body:not(.desktop) .dock .touchbtn,

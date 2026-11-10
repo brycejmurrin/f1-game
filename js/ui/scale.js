@@ -100,7 +100,9 @@ const UiScale = (() => {
     // pedals on a phone and the column covered the minimap and the sector strip.
     // Target size and readout size are separate floors; this ratio carries the
     // buttons' physical floor, --hud-scale no longer carries a blanket bump.
-    const BTN_DEFAULT = 1.25;
+    // 1, corrected 2026-11-09 from 1.25: on the owner's 852x393 phone (BUTTON SIZE unset) 1.25 painted
+    // 85 px BOOST / OT / AERO / BRAKE / GAS and a 187x102 steer pad, "way too large". Only the default moved.
+    const BTN_DEFAULT = 1;
     const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
     const scaleSnap = (v, k) => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));

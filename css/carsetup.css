@@ -1281,6 +1281,14 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   --cs-chrome-h: 44px;
   --cs-chip-h: 40px;
 }
+/* A LANDSCAPE PHONE: THE BAR IS AS WIDE AS THE ACTIVE AERO CHIP, NOT AS WIDE AS THE ROOM. The stack is
+   max-content up to the room beside the sheet, and a bar that wraps clamps to that room: at UI SIZE 61 the
+   sheet is narrow, the room is 446 px, one row needs 470, so the two wrapped rows stretched to 446 (CAMERA
+   234 px, PHOTO 206, ACTIVE AERO 446 over the car; owner's export, 852x393, 2026-11-09). 288 holds the chip
+   at TEXT SIZE large (267) and the CAMERA + PHOTO pair above it. */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 701px) {
+  #cs-stack { max-width: min(calc(100vw - var(--safe-l) - var(--safe-r) - var(--cs-sheet-w) * var(--sheet-eff-scale, var(--ui-scale)) - var(--gap) * 2), 288px); }
+}
 /* The two top-level buttons. This row is all that shows at rest.
    align-items:center — CAMERA and ACTIVE AERO share one chip height; flex-end
    used to drop the taller aero chip below the cam chip's baseline. */
