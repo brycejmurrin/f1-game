@@ -1818,7 +1818,7 @@ function create(G) {
     // It bites every MY TEAM season (makeOffers returns [] for myteam) and any
     // driver season entered on a multi-year deal; a driver who must accept an
     // offer is rescued by acceptOffer's openCareer().
-    if (Career.seasonDone()) { Career.rollover(); G.trackIdx = Career.trackIndex(); build(); openOffers(); return; }
+    if (Career.seasonDone()) { if (!Career.rollover()) { build(); return; } G.trackIdx = Career.trackIndex(); build(); openOffers(); return; }
     G.openRaceSettings("career");
   };
   $("co-back").onclick = () => {

@@ -935,3 +935,43 @@ test("SeasonCal keeps its revision armed across a retryFailed rewrite (#4823)", 
   assert.equal(SeasonCal.save(r.season).ok !== false, true);
   assert.notEqual(SeasonCal.saveStatus && SeasonCal.saveStatus().reason, "conflict");
 });
+
+function atFinale() {
+  const rig = load({ disk: new Map([
+    ["apex26.career.driver.0", JSON.stringify({ ...save(24, 100), deal: { salary: 0, bonusPt: 0, left: 1, years: 1 } })],
+    ["apex26.careerSlot", JSON.stringify("driver:0")],
+  ]) });
+  rig.Career.load(); rig.Career.engage(true);
+  return rig;
+}
+
+test("a rollover whose save is refused leaves RAM equal to disk", () => {
+  const { Career, store, disk } = atFinale();
+  const career = Career.data();
+  const alias = career.season, before = JSON.stringify(career);
+  const diskBefore = disk.get("apex26.career.driver.0");
+  store._keyRev.set("apex26.career.driver.0", (store._keyRev.get("apex26.career.driver.0") || 0) + 1);
+  assert.equal(Career.rollover(), null);
+  assert.equal(JSON.stringify(career), before);
+  assert.equal(career.season, alias);
+  assert.equal(Career.conflicted(), true);
+  assert.equal(disk.get("apex26.career.driver.0"), diskBefore);
+  assert.equal(Career.rollover(), null, "a second rollover must not advance the year");
+});
+
+test("a rollover whose save is refused mid-way restores the career in place", () => {
+  const { Career, store } = atFinale();
+  const career = Career.data();
+  const alias = career.season, before = JSON.stringify(career);
+  const originalRev = store.keyRevision.bind(store);
+  let reads = 0;
+  // the entry guard reads once; bump from the second read (inside save())
+  store.keyRevision = (k) => {
+    if (k === "career.driver.0" && ++reads >= 2) store._keyRev.set("apex26.career.driver.0", 99);
+    return originalRev(k);
+  };
+  assert.equal(Career.rollover(), null);
+  assert.equal(JSON.stringify(career), before);
+  assert.equal(career.season, alias);
+  assert.equal(Career.conflicted(), true);
+});
