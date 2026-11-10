@@ -47,7 +47,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
     loadBackendScripts: loadBackend || (async (files) => { calls.push(...files); }),
   });
   const fire = (ms) => { for (const t of timers) if (t.live && t.ms === ms) { t.live = false; t.fn(); } };
-  return { rb, ls, ss, warns, calls, fire, timers };
+  return { rb, ls, ss, warns, calls, fire, timers, ctx };
 }
 
 test("a Gfx.create() that never settles resolves start() with GLX, canary left armed", async () => {
@@ -249,6 +249,21 @@ test("a known WebGPU failure is claimed in capture so the raw overlay does not a
 // sessionStorage apex26.gfxFallbackWhy (read by __apex.diag().env.backendFallback).
 // Each of these paths used to bind GLX with no gfxWgxFail and no warning.
 const WHY = "apex26.gfxFallbackWhy";
+// A CLEAN refusal after a claim is not a hang: TLX's WebGL2 leg hands #game's context back intact (tlx.js
+// disposeKeepingContext), so GLX must get its same-page try. Before, any claim showed "Graphics unavailable".
+for (const type of ["webgl2", "webgpu"]) test(`a claimed-then-refused alternate falls through to GLX, not "Graphics unavailable" (${type})`, async () => {
+  const glxOk = type === "webgl2";   // a "webgpu"-bound canvas cannot give GLX a webgl2 context
+  let reloaded = 0;
+  const h = boot({ ownerProtocol: true, gfxCreate: async (_, opts) => { opts.initOwner.canvas.getContext(type); return null; } });
+  h.ctx.GLX.init = () => { h.calls.push("GLX.init"); return glxOk; };
+  h.ctx.location.reload = () => { reloaded++; };
+  const r = await h.rb.start();
+  assert.ok(h.calls.includes("GLX.init"), "GLX gets its same-page try after a clean refusal");
+  assert.ok(!h.calls.includes("unavailable"), "no Graphics-unavailable card");
+  if (glxOk) assert.equal(r.bound, false, "GLX bound on this load");
+  else { assert.equal(r, null); assert.equal(reloaded, 1, "a webgpu-bound canvas takes the one claim-fail reload"); }
+});
+
 test("a null adapter on a WGX pick falls back loudly", async () => {
   const h = boot({ stored: "webgpu", requestAdapter: async () => null });
   const r = await h.rb.start();

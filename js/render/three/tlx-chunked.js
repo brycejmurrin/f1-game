@@ -775,7 +775,16 @@
      * never use one. */
     function releaseMirrors(mesh) {
       if (!mesh || !mesh.chunks || !mesh.chunks.length || mesh._mirrorsFreed) return;
-      mesh._mirrorsFreed = true;
+      mesh._mirrorsFreed = true;   // the release is DECIDED (once per mesh); _mirrorsKept says it kept them
+      // NOT ON THE WEBGPU BACKEND (r187). Every pipeline (re-)resolve builds the vertex-layout cache key from
+      // EVERY attribute's array: WebGPUAttributeUtils.getVertexBufferLayout reads
+      // `geometryAttribute.array.BYTES_PER_ELEMENT` and _getVertexFormat `array.constructor`, uploaded or not.
+      // A never-seen chunk entering the frustum, or a parked shadow-pool mesh taking a chunk geometry, is a new
+      // RenderObject, so a nulled array throws a TypeError there — caught, but the shadow map switches off for
+      // the session or the main pass falls down its ladder. The zero-length view three would accept is barred
+      // by the hardware A/B below (gpu-census 26 vs 27), so WebGPU keeps the mirrors. WebGL2 reads the array
+      // only at first upload (WebGLAttributeUtils.createAttribute), which every shared attribute has passed.
+      if (ctx && ctx.isWebGPU && ctx.isWebGPU()) { mesh._mirrorsKept = true; return; }
       // NULL, matching what shipped. Read the r185 SOURCE (not the minified
       // bundle) before touching this: src/renderers/webgpu/utils/
       // WebGPUAttributeUtils.js and its webgl-fallback sibling.
@@ -813,19 +822,38 @@
       // carries the same rule and the same reason.
     }
 
+    // Dispose a set of freed geometries that SHARE their vertex attributes (every chunk and merge slot of a mesh
+    // holds the same attribute objects). r187's geometry dispose (Geometries.initGeometry onDispose) deletes only
+    // the attributes the geometry STILL holds, and only for a geometry three initialised (drew), so stripping the
+    // attributes first — what releases the CPU arrays — left the shared GPU vertex buffers alive whenever no
+    // drawn, unstripped geometry was disposed after them (a mesh drawn only through its merge slots). Each shared
+    // attribute is disposed ONCE here: BufferAttribute.dispose() fires the listener three's Attributes armed at
+    // upload (Attributes.update), which destroys the buffer; a never-uploaded attribute has none and is a no-op.
+    // The index stays on the geometry, so g.dispose() still frees it.
+    function disposeShared(geos) {
+      const attrs = new Set();
+      for (const g of geos) {
+        if (!g || !g.attributes) continue;
+        for (const k in g.attributes) if (g.attributes[k]) attrs.add(g.attributes[k]);
+      }
+      for (const a of attrs) { try { if (typeof a.dispose === "function") a.dispose(); } catch (_) { /* already gone */ } }
+      for (const g of geos) {
+        if (!g) continue;
+        if (g.attributes) { const names = Object.keys(g.attributes); for (let k = 0; k < names.length; k++) delete g.attributes[names[k]]; }
+        try { g.dispose(); } catch (_) { /* already gone */ }
+      }
+      return attrs.size;
+    }
+
     function free(mesh, freedGeos) {
       if (!mesh) return;
       const mark = (g) => { if (g && freedGeos) freedGeos.add(g); };
-      const dropGeo = (g, stripMergeAttrs) => {
+      const owned = [];   // unbatched: disposed together at the end (disposeShared), merge slots and chunks alike
+      const dropGeo = (g) => {
         if (!g) return;
         mark(g);
         releaseGeometry(g);
-        if (freedGeos) return;
-        if (stripMergeAttrs) {
-          const names = Object.keys(g.attributes);
-          for (let k = 0; k < names.length; k++) delete g.attributes[names[k]];
-        }
-        try { g.dispose(); } catch (_) { /* already gone */ }
+        if (!freedGeos) owned.push(g);   // batched: tlx.js flushChunkedOwnership disposes the whole batch
       };
       const mv = mesh._tlxMv;
       if (mv) {
@@ -838,7 +866,7 @@
           // dispatches "dispose" (a geometry dispose only clears vertex state),
           // so geometry.dispose() alone left the wrapper in the pool and the
           // previous circuit's merge slot in renderer._objects on the next race.
-          dropGeo(g, true);
+          dropGeo(g);
           mv[i].geo = null;
         }
       }
@@ -846,18 +874,17 @@
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
-          if (ch.geo) { dropGeo(ch.geo, false); ch.geo = null; }
+          if (ch.geo) { dropGeo(ch.geo); ch.geo = null; }
           if (ch.wrap) ch.wrap.geo = null;
         }
         mesh.chunks = null;
         mesh.geo = null;
-        return;
-      }
-      if (mesh.geo) { dropGeo(mesh.geo, false); mesh.geo = null; }
+      } else if (mesh.geo) { dropGeo(mesh.geo); mesh.geo = null; }
+      if (owned.length) disposeShared(owned);
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
-    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free, mergeVisible };
+    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free, disposeShared, mergeVisible };
   }
 
   // THE ROAD SPLIT (B·H10, docs/notes/LIVE-FRAME-H10-2026-10-20.md). TLX draws the road as ONE mesh

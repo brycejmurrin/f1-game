@@ -349,10 +349,14 @@ try {
   }
 } catch (e) { gfx = null; why = "boot threw: " + ((e && e.message) || e); }
 if (!gfx) {
-  // An alternate that claimed the canvas (getContext succeeded) then timed out
-  // cannot attach GLX on this load — same rule as init-fail below, without
-  // calling GLX.init on a poisoned surface (renderer-boot-timeout VM).
-  if (_initOwner && _initOwner.claimed) {
+  // An alternate that claimed the canvas (getContext succeeded) then TIMED OUT
+  // cannot attach GLX on this load: its init may still be running on that
+  // context. Only the hang refuses here (renderer-boot-timeout VM). A clean
+  // refusal falls through to GLX.init: TLX's WebGL2 leg hands back #game's
+  // context intact (disposeKeepingContext) and GLX takes the same object; a
+  // canvas already bound as "webgpu" fails GLX.init and takes the one-reload
+  // claim-fail skip below, exactly as TLX's failure path promises.
+  if (_initOwner && _initOwner.claimed && _createHung) {
     showGraphicsUnavailable(); return null;
   }
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing
