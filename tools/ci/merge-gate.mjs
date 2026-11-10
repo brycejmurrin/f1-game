@@ -213,6 +213,8 @@ export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = 
   return { tip: git(["rev-parse", `refs/remotes/origin/${base}`], cwd).stdout.trim() };
 }
 
+/** The catalog child's exit code for "no sourceDigest field": the gate then runs the generator's full `--check`. */
+const NO_DIGEST = 3;
 export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge } = {}) {
   const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
   const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
@@ -239,22 +241,28 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
   // The full scenery generator builds every circuit (~2 min), so gen:check
   // deliberately omits it. Its cheap input fingerprint must still hold on THIS
   // merge: a green head can inherit a stale catalog from a changed base (#4160).
-  // Keep PR code in a child with the same stripped environment as gen:check.
-  const catalog = run(process.execPath, ["-e", [
+  // A catalog with NO sourceDigest field (the committed fingerprint made every garage/scenery PR conflict on one
+  // line, tooling hunt 2026-11-09 row 2) is not waved through: the child exits NO_DIGEST and the generator's own
+  // `--check` rebuilds every circuit on this merge and compares (about a minute). A digest that is present must
+  // still be well-formed and equal. Keep PR code in a child with the same stripped environment as gen:check.
+  let catalog = run(process.execPath, ["-e", [
     "const fs = require('node:fs');",
     "const { scenerySourceDigest } = require('./tools/shot/scenery-source-hash.cjs');",
     "const stored = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8')).sourceDigest;",
+    `if (stored === undefined) process.exit(${NO_DIGEST});`,
     "if (typeof stored !== 'string' || !/^[a-f0-9]{64}$/.test(stored)) throw new Error('catalog sourceDigest is missing or malformed');",
     "if (stored !== scenerySourceDigest(process.cwd())) throw new Error('catalog sourceDigest does not match scenery inputs');",
   ].join("\n")], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 60_000, maxBuffer: 1 << 20 });
+  const rebuilt = !catalog.error && catalog.status === NO_DIGEST;
+  if (rebuilt) catalog = run(process.execPath, ["tools/shot/gen-scenery-locations.cjs", "--check"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
   if (catalog.error || catalog.status !== 0) {
     const detail = catalog.error?.message || `${catalog.stdout || ""}\n${catalog.stderr || ""}`.split("\n")
-      .map((line) => line.trim()).find((line) => /Error:/.test(line)) || `exit ${catalog.status}`;
+      .map((line) => line.trim()).find((line) => /Error:|catalog is stale/.test(line)) || `exit ${catalog.status}`;
     return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${detail} — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`);
   }
   const rat = ratchets({ cwd: wt, run });
   cleanup();
-  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog digest 0`, tip, ratchets: rat };
+  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog ${rebuilt ? "rebuild check" : "digest"} 0`, tip, ratchets: rat };
 }
 
 // ---- evaluator and CLI --------------------------------------------------------------------------------------
