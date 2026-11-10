@@ -512,8 +512,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-strategy.js` | `AiStrategy` | tag | AI STRATEGY: tyre-wear pace and the stint planner. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
-| `ai-band.js` | `AiBand` | tag | @ts-check |
-| `ai-corridor.js` | `AiCorridor` | tag | @ts-check |
+| `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
+| `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `drive-tune.js` | `DriveTune` | tag | DriveTune: the live driving-feel lets (PACE, wheelbase, steer, grip). |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
@@ -522,7 +522,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
 | `contact-geometry.js` | `ContactGeometry` | tag | Physical road boundaries and oriented boxes in the local road plane. |
 | `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
-| `wall-end-face.js` | `WallEndFace` | tag | @ts-check |
+| `wall-end-face.js` | `WallEndFace` | tag | WALL END FACE: the one case the lateral wall clamp gets wrong. |
 | `wall-clamp.js` | `WallClamp` | tag | WALL CLAMP: per-side barrier / pit-wall / gantry limits, human slide-along + scrub, lane-side pit clamp, and the conditional road→world writeback when xPinned. |
 
 **`js/lighting/`**

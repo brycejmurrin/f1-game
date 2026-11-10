@@ -62,11 +62,11 @@ One redirect stub remains: [PERF-FINDINGS.md](PERF-FINDINGS.md) → `notes/PERF-
 live cites for 21 days is archived) · [research/](NOTES-INDEX.md) source-cited research ·
 [plans/](NOTES-INDEX.md) live plans (shipped and superseded ones are under archive/plans/) ·
 [DECISIONS.md](DECISIONS.md) the `D-NNN` ledger of what Bryce decided · [archive/](NOTES-INDEX.md)
-provenance only (archive/research/, archive/notes/, archive/plans/, archive/survey/, archive/surveys/,
+provenance only (archive/research/, archive/notes/, archive/plans/, [archive/survey/](archive/survey), [archive/surveys/](archive/surveys),
 archive/superpowers/, archive/slider-effect/, archive/manual-probes/, archive/webgpu/,
 archive/tracks/, archive/workflows/, archive/moves/, archive/tools/) · [changelog.d/](changelog.d/README.md)
 per-PR changelog fragments · [tracks/](tracks) per-circuit reference · [look-survey/](look-survey/README.md)
-contact sheets · perf/ device measurements · [evidence/](evidence/historical-catalog.json) capture catalog.
+contact sheets · [perf/](perf) device measurements · [superpowers/](superpowers) the newest workflow specs · [evidence/](evidence/historical-catalog.json) capture catalog.
 
 For day-to-day workflows, see the skills (`.claude/skills/README.md`) and the
 tools (`tools/README.md`).
