@@ -133,7 +133,9 @@ const BridgeLink = (function () {
 
   function build() {
     const mk = (tag, css, text) => { const n = document.createElement(tag); if (css) n.style.cssText = css; if (text) n.textContent = text; return n; };
-    const dlg = document.createElement("dialog");
+    // el("dialog", "<class>"): the idiom tests/unit/css-layers.test.mjs reads to know every runtime dialog root.
+    const el = (tag, cls) => { const n = document.createElement(tag); n.className = cls; return n; };
+    const dlg = el("dialog", "bridge-link-panel");
     dlg.style.cssText = "z-index:99998;position:fixed;inset:0;margin:auto;height:fit-content;box-sizing:border-box;border:0;border-radius:14px;padding:14px;background:#1b1d22;color:#eee;"
       + "font:14px/1.4 system-ui,sans-serif;width:min(560px,calc(100vw - 24px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));"
       + "max-height:calc(100vh - 16px - env(safe-area-inset-bottom,0px));overflow:auto;-webkit-user-select:text;user-select:text";

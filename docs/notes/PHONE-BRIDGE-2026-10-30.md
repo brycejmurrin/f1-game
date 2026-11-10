@@ -94,7 +94,9 @@ no load, no scope check, no service-worker shell fetch, and the running game kee
 exercised later by the bridge's own `reload` / `path` / `bench` commands (an in-scope reload of that address).
 Measured in Chromium at 852×393 touch with a stored UI SIZE of 51 %: the door paints 398×51 px with 16 / 14 px type (its
 neighbours 198×35 with 10.7 px), the panel 560×224 px centred, every control 48 px tall, typed text stays in the token
-box, LINK → `CLAUDE LINK · 0 · TAP TO END`, UNLINK → address back to the start URL. Not proven anywhere but his
+box, LINK → `CLAUDE LINK · 0 · TAP TO END`, UNLINK → address back to the start URL. With his app's real export values
+(UI SIZE 61 %, text size large; #5264) the door is 476×52 px and, as the last hub tile, sits just under the fold
+(y 346 against a sheet body ending at 343): one swipe up in SETTINGS. Not proven anywhere but his
 phone: the standalone window, its storage, the keyboard and the safe-area insets (59/21/59 is an emulation figure).
 
 ## 6. Live runs
