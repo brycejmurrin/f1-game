@@ -258,9 +258,8 @@ const SaveSchemaRegistry = (function () {
   // stamps new laps with the current revision and drops an entry stamped older
   // (an unstamped entry is revision 0). Lap TIMES (ttlb.*) are the same loop and
   // stay valid; input ghosts are build-stamped and invalidate on their own.
-  //   1: donington, brands_hatch, zolder — 2026-11-10, line moved onto the real
-  //      pit straight (docs/tracks/START-LINES.md "Moved 2026-11-10").
-  const LINE_REV = Object.freeze({ donington: 1, brands_hatch: 1, zolder: 1 });
+  //   1: zolder — 2026-11-10, line moved onto the real pit straight (docs/tracks/START-LINES.md "Moved 2026-11-10").
+  const LINE_REV = Object.freeze({ zolder: 1 });
   function lineRev(trackId) { return LINE_REV[trackId] | 0; }
   function lapDataStale(trackId, entry) {
     return !!entry && typeof entry === "object" && ((entry.lineRev | 0) < lineRev(trackId));

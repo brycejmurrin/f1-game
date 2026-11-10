@@ -32,6 +32,11 @@
       // content. Hand-authored cityFront/towers in scenery/baku.js sit past
       // the orbit ring (gap 48 / 72+); keep generic city off this side.
       { kinds: ["city"], s0: 0.58, s1: 0.97, side: 1 },
+      // Day theme (2026-11-10): street_day dresses generic city boxes on the
+      // start/finish straight, where the authored neon towers already stand
+      // (clip-audit: 6 m place x neonTowerBody at frac 0.00-0.02).
+      { kinds: ["city"], s0: 0.97, s1: 1.0 },
+      { kinds: ["city"], s0: 0.0, s1: 0.07 },
     ],
     // Day palette: a hazy Caspian afternoon (pale horizon, mid-blue zenith,
     // sandstone-warm ground bounce). The old night palette is what the

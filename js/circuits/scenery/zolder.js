@@ -561,7 +561,7 @@
       //     the chicane memorial as one small low building).
       //     https://motorsportguides.com/a-pilgrimage-to-zolder-where-gilles-villeneuve-lost-his-life/
       {
-        const a = anchor(K(sl(0.028)), 1, 54);
+        const a = anchor(K(sl(0.028)), 1, 46);   // 46, not 54: from the moved line (2026-11-10) 54 m reached the parallel back straight
         if (a && !onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           const gy = terrainYAt(a.c[0], a.c[2]);

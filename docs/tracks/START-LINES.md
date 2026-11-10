@@ -160,38 +160,41 @@ on all eleven:
 | okayama | 0.00004 | R | R |
 | korea | 0.00001 | L | L — the lap runs anti-clockwise |
 | jerez | 0.00108 | R | R, Expo |
-| donington | 0.00040 | R | R, Redgate — **stale: see "Moved 2026-11-10"** |
+| donington | 0.00040 | R | R, Redgate — **stale (line now 0.9072): see "Moved 2026-11-10"** |
 | anderstorp | 0.00011 | R | R |
-| brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale: see "Moved 2026-11-10"** |
+| brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale (line now 0.1226): see "Moved 2026-11-10"** |
 | zolder | 0.00015 | R | R — **stale: see "Moved 2026-11-10"** |
 | dijon | 0.00001 | R | R |
 | buddh | 0.00002 | R | R |
 | mont_tremblant | 0.00087 | R | R |
 
-### Moved 2026-11-10: donington, brands_hatch, zolder
+### Moved 2026-11-10: zolder (donington and brands_hatch still owed)
 
 The table above describes v0. A later "MEASURED" pass moved these three lines
 off v0 (onto the nearest straight holding R >= 1500 m across the grid) and
-landed each on the WRONG straight: donington 0.9072 sat on the Starkey straight
+landed each on the WRONG straight: donington 0.9072 sits on the Starkey straight
 before the Esses, brands_hatch 0.1226 on the Stirlings-Clearways link, zolder
-0.1226 before the final chicane. W12 (audit 2026-11-09) moved each onto its
-real start/finish straight, by shape against the circuit layout (no surveyed
-coordinate: the placement within the straight is the control-point node that
-keeps the 182 m grid straight, an estimate to within one node, ~40 m):
+0.1226 before the final chicane (audit 2026-11-09, W12).
 
-| circuit | startFrac before → after | where | grid max \|k\| | to first turn-in |
-|---|---|---|---|---|
-| donington | 0.9072 → **0.2577** (node 25/97) | pit straight, Goddards → Redgate | 0.00017 | 124 m |
-| brands_hatch | 0.1226 → **0.2736** (node 29/106) | Brabham straight, Clark Curve → Paddock Hill | 0.00175 | 216 m |
-| zolder | 0.1226 → **0.2170** (node 23/106) | pit straight after the final chicane | 0.00029 | 324 m |
+**zolder — moved**: 0.1226 → **0.2170** (node 23/106), the pit straight after the
+final chicane; grid max |k| 0.00029, 324 m to the first turn-in. Placement by
+circuit shape (no surveyed coordinate: within one control node, ~40 m). `turns`
+re-seated onto the same physical apexes; the `sl()`-keyed pit/S-F scenery
+follows the line, the rest stays on `sceneryStartFrac`. The new resample phase
+exposed a 6.4 m node radius in the final chicane, cleared by moving
+`path.pts[15]` 1 m. Positional ghosts recorded before the move are dropped on
+load (`SaveSchemaRegistry.LINE_REV`); lap times stay valid.
 
-`turns` were re-seated onto the same physical apexes (`turns[0]` is now the
-first corner after the new line: Redgate, Paddock Hill, Earste links); the
-`sl()`-keyed pit/S-F scenery follows the line through `_sceneryShift`, the rest
-stays on `sceneryStartFrac`. Lap-distance-keyed saves: positional ghosts
-recorded before the move are dropped on load (`SaveSchemaRegistry.LINE_REV`);
-lap times stay valid. Zolder's new resample phase exposed a 6.4 m node radius
-in the final chicane, cleared by moving `path.pts[15]` 1 m.
+**donington, brands_hatch — measured, NOT moved**. The right nodes are known:
+donington **0.2577** (node 25/97, pit straight Goddards → Redgate, grid max |k|
+0.00017, 124 m to Redgate turn-in); brands_hatch **0.2736** (node 29/106, Brabham
+straight, 216 m to the Paddock Hill turn-in). Moving them carries each file's
+`sl()`-keyed frontage onto the real pit straight, into infield scenery authored
+for the old line: donington's clip-audit went 7 → 10 severe (hedge on hedge at
+the new line), brands_hatch 1 → 5 (pits, team offices, retail, tents and the
+Kentagon reach across the ~70-100 m paddock to the Cooper straight's forest edge
+and lock-ups; one house sat on a desire path the old pit complex had
+superseded). Each needs a scenery pass with the move.
 
 **Brands Hatch is over the bar and that is correct.** Its pit straight genuinely
 curves right as it runs to the rim before the track drops into Paddock Hill —

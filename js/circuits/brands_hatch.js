@@ -30,11 +30,7 @@
     // sceneryStartFrac keeps the dressing on the v0 origin it was authored
     // against, so props, landmarks and corner boards stay on their real corners
     // while only the line and grid move.
-    // 2026-11-10: the line moved from 0.1226 (on the Stirlings-Clearways link) to
-    // the BRABHAM STRAIGHT between Clark Curve and Paddock Hill Bend — the real
-    // start/finish. Node 29 of 106: 412 m past Clearways, 216 m to the Paddock
-    // Hill turn-in, grid max |k| 0.00175 (the straight genuinely curves right).
-    startFrac: 0.2736,
+    startFrac: 0.1226,
     sceneryStartFrac: 0.0000,
     name: "BRANDS HATCH",
     gp: "British GP",
@@ -60,16 +56,14 @@
     },
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: sector splits + turn apexes as RACING-LAP
+    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the 11 strongest curvature peaks of THIS centreline in lap order
-    // (re-seated onto the same physical apexes when the line moved 2026-11-10; not
-    // yet one-per-real-corner),
+    // turns: the 11 strongest curvature peaks of THIS centreline in lap order,
     // 11 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
     sectors: [0.27, 0.703],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0669, 0.1504, 0.1637, 0.2214, 0.3254, 0.5211, 0.5345, 0.6025, 0.7034, 0.7652, 0.8795],
+    turns: [0.0268, 0.2147, 0.2977, 0.3113, 0.3688, 0.4727, 0.6688, 0.6813, 0.7502, 0.8508, 0.9127],
     furniture: { tree: "broad", fol: [0.20, 0.38, 0.18], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],
