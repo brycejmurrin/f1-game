@@ -26,8 +26,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS } from "./geometry-paths.mjs";
 import { DEPLOY_BRANCH } from "./pick-tests.mjs";
-import { circuitsOf } from "./select-specs.mjs";
-import { ADAPTED, ADAPTED_RUNNER } from "./twinned-specs.mjs";
+import { circuitsOf, circuitsTouched, select } from "./select-specs.mjs";
+import { ADAPTED, ADAPTED_RUNNER, TWINNED, adaptedPageGroupFor, isAdapted } from "./twinned-specs.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -263,6 +263,47 @@ function characterizationWhy(f, raced) {
   return raced === null || raced.has(m[1]) ? `circuit ${m[1]} is raced by the physics characterization` : "";
 }
 
+/** THE BROWSER PLAN'S HALF OF THE SUBSTITUTION (#5241 G3). select-specs drops a twinned spec from the browser legs
+ *  because "its VM twin runs on the node gate"; nothing checked that the node gate was going to. RULES above route by
+ *  PATH, the browser plan routes by GROUP, and the two disagree: a js/ui diff routes the boot group, whose
+ *  logging.spec.js is ADAPTED (page-a), while the js/ui rule spins no page slice. Measured on the 20 merged PRs before
+ *  e808230 (tests/data/gate-sample-2026-11-09.json): 11 had a dropped twin whose host slice was not picked, so the
+ *  spec ran in neither place. The specs select() reports as coveredByVmTwin for this diff: */
+export function droppedTwins(files, ref = undefined) {
+  if (!files.length) return [];
+  const rows = select(ref, undefined, { files }).coveredByVmTwin || [];
+  // A CIRCUIT-SCOPED diff (every path is one circuit's data/scenery) owes only the twins that BUILD a touched circuit:
+  // the rest cannot see the diff, and neither could the spec they replay. node-plan applies the same rule per script
+  // (`no file builds <id>`), so without it this tool spun a runner whose script node-plan then skipped (js/circuits/dijon.js
+  // dropped logging + autopilot, which build monaco/monza/suzuka). An unreadable twin (circuitsOf null) is owed.
+  const circ = circuitsTouched(files, ref);
+  if (!circ.scoped || !circ.ids.length) return rows.map((r) => r.file);
+  return rows.filter((r) => {
+    const ids = circuitsOf(r.twin || r.file);
+    return ids === null || circ.ids.some((c) => ids.has(c));
+  }).map((r) => r.file);
+}
+
+/** Where each dropped spec's twin runs: the node SLICES that own it and the SCOPED scripts node-plan must not skip.
+ *  A hand twin is owned through tests/groups.json (testFileOwners); an ADAPTED spec by its vm-page partition.
+ *  `slices: null` = the twin is in no slice this tool knows: the caller fails safe to every slice. */
+export function twinHosts(specs, owners = testFileOwners(), groupsJson = null) {
+  const g = groupsJson || JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8"));
+  const tf = new Set((g.toolingFast || []).filter((x) => typeof x === "string" && !x.startsWith("//")));
+  return specs.map((spec) => {
+    if (isAdapted(spec)) {
+      const part = adaptedPageGroupFor(spec);
+      const parts = part ? [part] : ["a", "b"];
+      return { spec, twin: spec, adapted: true, slices: parts.map((p) => `page-${p}`), scripts: parts.map((p) => `test:vm-page-${p}`) };
+    }
+    const twin = TWINNED[spec];
+    const own = twin ? [...(owners.get(twin) || [])] : [];
+    const scripts = Object.values(SLICE_SCRIPTS).flat().filter((sc, i, a) => a.indexOf(sc) === i && (g.groups?.[sc]?.files || []).includes(twin));
+    if (own.length) return { spec, twin, adapted: false, slices: own, scripts };
+    return { spec, twin: twin || null, adapted: false, slices: twin && tf.has(twin) ? ["guards"] : null, scripts };
+  });
+}
+
 function pickAll(why = "--all") {
   const slices = new Map();
   for (const s of SLICES) slices.set(s, new Set([why]));
@@ -322,6 +363,14 @@ export function pick(files, opts = {}) {
     }
 
     if (!hit) unmatched.push(f);
+  }
+
+  // A twin the browser plan dropped must have its host slice on the matrix (twinHosts above). `opts.dropped` is the
+  // injectable list (tests); a select() that throws propagates to main()'s fail-safe: every slice.
+  const dropped = opts.dropped ?? droppedTwins(files, opts.ref);
+  for (const h of twinHosts(dropped, owners, groupsJson)) {
+    const why = `hosts the VM twin of ${h.spec}, which the browser plan dropped`;
+    for (const s of h.slices || SLICES) add(s, h.slices ? why : `${why} (twin ${h.twin || "unknown"} is in no known slice: fail safe)`);
   }
 
   if (unmatched.length) {
@@ -397,7 +446,8 @@ function main(argv = process.argv.slice(2)) {
       result = pickAll();
     } else {
       const files = changedFiles(argv);
-      result = pick(files);
+      const si = argv.indexOf("--since");
+      result = pick(files, { ref: si >= 0 ? argv[si + 1] : undefined });
     }
   } catch (e) {
     console.error(`pick-unit-slices: fail-safe all (${e.message})`);

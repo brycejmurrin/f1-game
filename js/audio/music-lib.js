@@ -41,6 +41,7 @@ window.MusicLib = (function () {
   const DEAD_MSG = "your browser can't store files here";
 
   let dbPromise = null;      // memoised open, so init() is safe to call twice
+  let dbHandle = null;       // the connection dbPromise resolved to, while it is believed alive
   let readyPromise = null;   // memoised init()
   let addQueue = Promise.resolve(); // serialises imports, including separate file-picker events
   let generation = 0;        // prevents an invalidated read from restoring a closed connection
@@ -68,11 +69,16 @@ window.MusicLib = (function () {
         }
         settled = true;
         if (timer !== null) clearTimeout(timer);
-        if (db) db.onversionchange = () => {
-          try { db.close(); } catch (e) { /* another lifecycle path closed it first */ }
-          generation++; dbPromise = null; readyPromise = null; usable = false;
-          render();
-        };
+        if (db) {
+          dbHandle = db;
+          db.onclose = () => dropDb(db);
+          db.onversionchange = () => {
+            try { db.close(); } catch (e) { /* another lifecycle path closed it first */ }
+            if (dbHandle === db) dbHandle = null;
+            generation++; dbPromise = null; readyPromise = null; usable = false;
+            render();
+          };
+        }
         res(db || null);
       };
       try {
@@ -102,31 +108,49 @@ window.MusicLib = (function () {
     return dbPromise;
   }
 
+  // iOS drops the connection behind a suspended page, often with no close
+  // event: a throwing transaction() (InvalidStateError) or an UnknownError
+  // abort is the only sign. The library on disk is intact and loaded tracks
+  // keep playing, so only the handle is forgotten; the operation that found it
+  // dead runs once more on a fresh connection.
+  const connectionLost = (e) => !!e && (e.name === "InvalidStateError" || e.name === "UnknownError");
+  function dropDb(db) {
+    if (dbHandle !== db) return;
+    dbHandle = null; dbPromise = null;
+    try { db.close(); } catch (e) { /* already closed */ }
+  }
+  function withDb(run, again) {
+    return openDb().then((db) => new Promise((res, rej) => {
+      if (!db) { rej(new Error("unavailable")); return; }
+      const fail = (e) => {
+        if (!connectionLost(e)) { rej(e); return; }
+        dropDb(db);
+        if (again) rej(e); else res(withDb(run, true));
+      };
+      try { run(db, res, fail); } catch (e) { fail(e); }
+    }));
+  }
+
   // One transaction per call. Resolves on `oncomplete`, not on the request's
   // success: a quota failure surfaces when the transaction tries to commit, and
   // reading the id early would let us report a write that never landed.
   function write(fn) {
-    return openDb().then((db) => new Promise((res, rej) => {
-      if (!db) { rej(new Error("unavailable")); return; }
-      let t;
-      try { t = db.transaction(STORE, "readwrite"); } catch (e) { rej(e); return; }
+    return withDb((db, res, fail) => {
+      const t = db.transaction(STORE, "readwrite");
       let out;
       const r = fn(t.objectStore(STORE));
       if (r) r.onsuccess = () => { out = r.result; };
       t.oncomplete = () => res(out);
-      t.onerror = t.onabort = () => rej(t.error || (r && r.error) || new Error("write failed"));
-    }));
+      t.onerror = t.onabort = () => fail(t.error || (r && r.error) || new Error("write failed"));
+    });
   }
 
   function readAll() {
-    return openDb().then((db) => new Promise((res, rej) => {
-      if (!db) { rej(new Error("unavailable")); return; }
-      let r;
-      try { r = db.transaction(STORE, "readonly").objectStore(STORE).getAll(); }
-      catch (e) { rej(e); return; }
+    return withDb((db, res, fail) => {
+      const r = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
       r.onsuccess = () => res(r.result || []);
-      r.onerror = () => rej(r.error || new Error("read failed"));
-    }));
+      r.onerror = () => fail(r.error || new Error("read failed"));
+    });
   }
 
   // The playlist id namespace is a contract with js/audio/engine.js: user uploads
@@ -287,7 +311,9 @@ window.MusicLib = (function () {
 
   function add(files) {
     const list = files ? Array.prototype.slice.call(files) : [];
-    const added = addQueue.then(() => init()).then(() => {
+    // A failed reopen leaves `usable` false behind a memoised init(); the cache
+    // is still right, so probe the store again instead of refusing until reload.
+    const added = addQueue.then(() => init()).then(() => { if (!usable && readyPromise) return openDb(); }).then(() => {
       const out = { added: 0, skipped: 0, errors: [] };
       if (!list.length) return out;
       if (!usable) { out.skipped = list.length; out.errors.push(DEAD_MSG); render(DEAD_MSG); return out; }
@@ -312,7 +338,8 @@ window.MusicLib = (function () {
           }, (err) => {
             out.skipped++;
             const quota = err && (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED");
-            out.errors.push(file.name + (quota ? ": no room left in this browser's storage" : " could not be saved"));
+            out.errors.push(file.name + (quota ? ": no room left in this browser's storage"
+              : connectionLost(err) || !usable ? " could not be saved: storage was disconnected. Close and reopen the app, then try again" : " could not be saved"));
           });
         });
       }

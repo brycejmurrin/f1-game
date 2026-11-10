@@ -35,7 +35,6 @@
 
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
 
 const ROOT = path.resolve(__dirname, "../..");
 
@@ -46,116 +45,17 @@ const GROUNDED_EPS = 1.0;  // prop within this of the ground counts as footing (
 const MIN_CELLS = 1;       // ignore clusters smaller than this
 
 // ---------------------------------------------------------------------------
-// VM harness — mirrors verify-track.cjs, but captures buffers.
+// VM harness — the SHARED one (tools/lib/track-build-vm.cjs), not a private
+// copy. This file used to carry its own buildContext whose load list stopped at
+// "@circuits", so js/track/circuit-elevations.js (the baked elevation profiles)
+// never ran: every circuit with a baked profile was audited against the wrong
+// terrain — Suzuka's vertical range read 9.42 m here against 40.08 m on the
+// shared harness (2026-11-10). One harness, one load order.
+const HARNESS = require("../lib/track-build-vm.cjs");
 
 function buildContext(opts) {
-  const stackFor = (opts && opts.stackFor) || null;
-  const captures = [];
-  const capture = (buf) => {
-    const verts = buf && buf.pos ? buf.pos.length / 3 : 0;
-    const rec = { verts, pos: buf && buf.pos ? buf.pos : [],
-                  idx: buf && buf.idx ? buf.idx : null };
-    captures.push(rec);
-    return { verts, idxCount: buf && buf.idx ? buf.idx.length : 0, __cap: rec };
-  };
-  const GLX = {
-    createMesh: capture,
-    createChunkedMesh: (buf) => capture(buf),
-  };
-
-  const sandbox = {
-    Math, Array, Float32Array, Float64Array, Uint16Array, Uint32Array, Object, JSON,
-    isNaN, isFinite, parseInt, parseFloat,
-    GLX,
-    console: { log: () => {}, warn: () => {}, error: () => {}, info: () => {},
-               debug: () => {}, trace: () => {}, assert: () => {}, group: () => {},
-               groupEnd: () => {}, table: () => {}, dir: () => {}, count: () => {},
-               time: () => {}, timeEnd: () => {} },
-  };
-  sandbox.window = sandbox;
-  // The baked asset pack, as tools/lib/track-build-vm.cjs installs it: without
-  // it bakedModel() stamped nothing and this audit never saw the 36 models.
-  sandbox.Assets = require("../lib/pack-assets.cjs").packAssets();
-  const ctx = vm.createContext(sandbox);
-
-  function runFile(relPath) {
-    const src = fs.readFileSync(path.join(ROOT, relPath), "utf8");
-    vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: relPath });
-  }
-
-  // Load list comes from tools/manifest.cjs (TRACK_VM) — same source of truth
-  // as verify-track.cjs. Everything before the instrumentation point (the
-  // emitter wrappers below must install before build-props.js / tracks.js run).
-  const MANIFEST = require("../manifest.cjs");
-  const BUILD_PROPS = "js/track/scenery/build-props.js";
-  const PRE = MANIFEST.TRACK_VM.slice(0, MANIFEST.TRACK_VM.indexOf("@circuits"))
-    .filter((f) => f !== BUILD_PROPS);
-  for (const f of PRE) runFile(f);
-
-  // Instrument the geometry emitters so every flagged cluster can name the
-  // primitive that produced it. build-props.js (and tracks.js) destructure
-  // TrackGeom at load time, so the wrappers must be installed BEFORE they run.
-  // Emitters called from inside js/track/core/geom.js (addCyl -> emit) use
-  // module-scope references and are untouched, so nothing is double-counted.
-  const prims = [];
-  const TG = ctx.TrackGeom;
-  for (const name of Object.keys(TG)) {
-    if (typeof TG[name] !== "function") continue;
-    const orig = TG[name];
-    TG[name] = function (out) {
-      if (!out || !out.pos || typeof out.pos.length !== "number")
-        return orig.apply(this, arguments);
-      const start = out.pos.length;
-      const r = orig.apply(this, arguments);
-      const end = out.pos.length;
-      if (end > start) {
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity,
-            minZ = Infinity, maxZ = -Infinity;
-        const pos = out.pos._data || out.pos;
-        for (let i = start; i < end; i += 3) {
-          const x = pos[i], y = pos[i + 1], z = pos[i + 2];
-          if (x < minX) minX = x; if (x > maxX) maxX = x;
-          if (y < minY) minY = y; if (y > maxY) maxY = y;
-          if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
-        }
-        const rec = { name, minX, maxX, minY, maxY, minZ, maxZ, mat: out._mat || 0 };
-        // --why: capture the emitting source line, but only for primitives the
-        // first pass already flagged. The build is deterministic, so the second
-        // pass reproduces identical geometry and this stays cheap.
-        if (stackFor) {
-          const key = `${minX.toFixed(1)}|${minY.toFixed(1)}|${minZ.toFixed(1)}`;
-          if (stackFor.has(key)) {
-            // Keep a DEEP slice. tracks.js wraps every emitter in a culling
-            // shim, so the innermost one or two frames are always that shim
-            // (addBox -> RAW.addBox) and say nothing about who asked for the
-            // geometry. The reporter walks outward past them to the first frame
-            // that names a real builder.
-            const st = new Error().stack.split("\n").slice(2, 14)
-              .map((l) => l.trim().replace(/^at\s+/, ""))
-              .filter((l) => !/track\/geom\.js/.test(l));
-            rec.stack = st.slice(0, 6).join("  <-  ");
-          }
-        }
-        prims.push(rec);
-      }
-      return r;
-    };
-  }
-  ctx.__prims = prims;
-  for (const id of MANIFEST.CIRCUITS) runFile(MANIFEST.circuitPath(id));
-  // …and the split-out scenery closures (LAZY_SCENERY). The .js filter above
-  // only sees the top level, so without this every circuit builds BARE — road
-  // and terrain, no dressing — and the numbers look plausible enough to trust.
-  // That is exactly how cota read 3,988 prop cells here instead of 32,897.
-  for (const f of MANIFEST.LAZY_SCENERY) runFile(f);
-  runFile(BUILD_PROPS);
-  runFile("js/track/tracks.js");
-
-  if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
-  // Prim ranges [s,e) index the raw props buffer: build uncompacted, as
-  // tools/lib/track-build-vm.cjs does (TrackHiddenFaces.compact moves them).
-  ctx.Tracks.setCompactProps(false);
-  return { Tracks: ctx.Tracks, TrackSurface: ctx.TrackSurface, TrackGeom: ctx.TrackGeom, prims };
+  const env = HARNESS.buildContext({ stackFor: (opts && opts.stackFor) || null });
+  return { Tracks: env.Tracks, TrackSurface: env.TrackSurface, TrackGeom: env.TrackGeom, prims: env.prims };
 }
 
 // ---------------------------------------------------------------------------
@@ -476,7 +376,7 @@ function topFrom(args, dflt = 6) {
   return n;
 }
 
-module.exports = { clusterFloatingPrimitives, targetFrom, topFrom };
+module.exports = { clusterFloatingPrimitives, targetFrom, topFrom, buildContext };
 
 // ---------------------------------------------------------------------------
 
@@ -492,6 +392,17 @@ const topN = (() => {
   try { return topFrom(args); } catch (e) { console.error(e.message); process.exit(2); }
 })();
 const target = targetFrom(args);
+// The --all roster through circuit-scope (APEX_CIRCUITS narrows it), refusing
+// a scope that matches nothing; a named id must be a circuit. Exit 2, no stack.
+const scopeLib = require("../lib/circuit-scope.cjs");
+function allIds(Tracks) {
+  try { return scopeLib.scopeAll((Tracks || buildContext().Tracks).LIST.map((d) => d.id), "float-audit"); }
+  catch (e) { console.error(e.message); process.exit(2); }
+}
+if (target && target !== "--all") {
+  try { scopeLib.requireKnown([target], require("../manifest.cjs").CIRCUITS, "float-audit"); }
+  catch (e) { console.error(e.message); process.exit(2); }
+}
 
 function printOne(res, top) {
   const list = allClusters ? res.all : res.floating;
@@ -649,7 +560,7 @@ function foliageAudit(id) {
 
 if (args.includes("--foliage")) {
   const why = args.includes("--why");
-  const ids = target === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [target];
+  const ids = target === "--all" ? allIds() : [target];
   for (const id of ids) {
     const r = foliageAudit(id);
     console.log(`\n${r.id.padEnd(13)} ${String(r.hits.length).padStart(4)} prim-pair hit(s) ` +
@@ -711,7 +622,7 @@ function emitJson(obj) {
 }
 
 if (args.includes("--clip")) {
-  const ids = target === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [target];
+  const ids = target === "--all" ? allIds() : [target];
   let total = 0;
   for (const id of ids) {
     const r = clipAudit(id);
@@ -733,7 +644,7 @@ this ranked list as a lead at most.`);
 
 if (target === "--all") {
   const { Tracks } = buildContext();
-  const ids = require("../lib/circuit-scope.cjs").scope(Tracks.LIST.map((d) => d.id));   // APEX_CIRCUITS narrows --all
+  const ids = allIds(Tracks);   // APEX_CIRCUITS narrows --all
   // THE SAME CAPS AS THE GATE. tests/unit/scenery-grounding.test.mjs holds each
   // circuit at tools/track/float-baseline.json, and the caps are where the
   // known-legitimate flags live (Madrid's and Mexico's airliners in flight —

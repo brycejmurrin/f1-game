@@ -1087,6 +1087,39 @@ test("ICE failed after connecting rides the grace and restarts ICE through the c
   } finally { h.done(); }
 });
 
+test("a courier offer that fails (no_relay mid network switch) does not end ICE restarts for the outage (#4998)", async () => {
+  const board = boardCourier();
+  let failNext = true;
+  const courier = {
+    ...board,
+    offer: (code, sdp, token) => {
+      if (failNext) { failNext = false; board.offers.push({ code, sdp, token, failed: true }); return Promise.resolve({ ok: false, error: "no_relay" }); }
+      return board.offer(code, sdp, token);
+    },
+  };
+  const h = restartPair(courier);
+  try {
+    await h.connect();
+    h.a.setDisconnectGrace(25000);
+    h.b.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.set(h.b, "failed");
+    h.advance(0);
+    assert.equal(await h.until(() => board.offers.length === 1), true, "the first restart offer went out");
+    await h.flush();
+    assert.equal(h.a.stats().iceRestarts, 1);
+    // The network is back a few seconds later; nothing else changes state.
+    for (let i = 0; i < 4 && h.a.stats().iceRestarts < 2; i++) { h.advance(1000); await h.flush(); }
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 2 && h.a.pc.signalingState === "stable" &&
+      !!h.a.pc.currentRemoteDescription && h.a.pc.currentRemoteDescription.sdp === h.b.pc.currentLocalDescription.sdp), true,
+      "the offerer tries again inside the grace and the answer lands (restarts: " + h.a.stats().iceRestarts + ")");
+    assert.equal(board.offers[1].code, board.offers[0].code, "the retry stays on the attempt the answerer is listening for");
+    h.set(h.a, "connected"); h.set(h.b, "connected");
+    h.advance(30000);
+    await h.flush();
+    assert.equal(h.a.status, "open", "the recovered wire outlives the grace");
+  } finally { h.done(); }
+});
+
 test("with no courier, ICE failed after connecting closes at the grace end, not at once", async () => {
   const h = restartPair(null);
   try {

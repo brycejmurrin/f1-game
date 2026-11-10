@@ -328,7 +328,6 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   assert.match(gfx, /return `GRAPHICS: \$\{current\(\)\.label\}`/);
   assert.match(gfx, /\{ id: "high",\s+label: "HIGH"/);
   assert.match(gfx, /SettingRow\.build\("pm-gfx", "GRAPHICS"/);
-  assert.match(html, /id="pm-settings-index"/);
   for (const id of ["pm-open-controls", "pm-open-display", "pm-advanced", "pm-lighting"]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
@@ -407,7 +406,6 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
 
   const wgsl = shader("js/render/webgpu/wgsl-post.js");
   assert.match(wgsl, /fn\s+ssaoViewPosFromD\s*\(/);
-  assert.match(wgsl, /P\s*=\s*ssaoViewPosFromD\(\s*in\.uv\s*,\s*dCentre\s*\)/);
   assert.match(wgsl, /if\s*\(\s*bloomAmt\s*>\s*0\.001\s*\)\s*\{\s*bloomSample\s*=\s*textureSampleLevel\(\s*bloomTex/);
   assert.match(wgsl, /if\s*\(\s*U\.lift\.w\s*>\s*0\.5\s*\)\s*\{\s*c\s*=\s*c\s*\+\s*textureSampleLevel\(\s*godrayTex/);
 

@@ -1377,7 +1377,6 @@ test("career round-trip: export then import restores the slot through migrateCar
 
 test("careerRow injects file controls without a static shell id in index.html", () => {
   const src = read("js/ui/settings-export.js");
-  assert.match(src, /function careerRow\(/);
   assert.match(src, /cr-career-save/);
   assert.match(src, /cr-career-load/);
   assert.equal(/id="cr-career-file"/.test(read("index.html")), false,

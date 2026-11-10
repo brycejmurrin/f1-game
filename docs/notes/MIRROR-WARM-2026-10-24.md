@@ -1,5 +1,7 @@
 # Cold first-race freeze on TLX WebGPU: the menu warm was being thrown away (2026-10-24)
 
+Summary: Cold first-race freeze on TLX WebGPU: the menu warm was being thrown away; warm the race and mirror pipelines instead (A·W50).
+
 A·W50, Fleet A (OrchA 32). Bryce, relayed by DAD from the Apex BrowserStack Profiler at 7:29 PM PT 2026-10-23: fix the
 iPhone 14 Pro WebGPU cold first-race freeze by warming the race and mirror pipelines during the menu warm-up.
 

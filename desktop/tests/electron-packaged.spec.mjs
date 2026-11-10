@@ -25,8 +25,9 @@ import { createRequire } from "node:module";
 
 const DESKTOP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { resolveSiteDir } = createRequire(import.meta.url)("../lib/site.cjs");
+const { switchArgs } = createRequire(import.meta.url)("../lib/debug-flags.cjs");
 
-/** Launch env: soft GL + explicit no-sandbox for CI/xvfb; never inherit ELECTRON_RUN_AS_NODE. */
+/** Launch env: soft GL + explicit no-sandbox for CI/xvfb (turned into argv); never inherit ELECTRON_RUN_AS_NODE. */
 function launchEnv() {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -41,9 +42,13 @@ function launchEnv() {
  */
 async function launchPackaged() {
   const { path: executablePath } = findUnpackedBinary({ desktopRoot: DESKTOP });
+  const env = launchEnv();
   return electron.launch({
     executablePath,
-    env: launchEnv(),
+    // A packaged build ignores the APEX_DESKTOP_* env flags (lib/debug-flags.cjs),
+    // so the harness passes the same Chromium switches as argv.
+    args: switchArgs(env),
+    env,
     timeout: 90_000,
   });
 }

@@ -90,7 +90,6 @@ const HudStrategy = (function () {
     return (o.myWear || 0) - (o.behindWear || 0) >= UNDERCUT_WEAR;
   }
 
-  // ---- the DOM ------------------------------------------------------------
   const doc = typeof document !== "undefined" ? document : null;
   let root = null, nodes = null;
   const last = { tyre: "", loss: "", next: "", uc: null, ucWho: null, cov: null, covWho: null };
