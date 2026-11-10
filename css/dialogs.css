@@ -253,17 +253,17 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
    css/overlays.css) rather than the raw `(orientation: landscape) and
    (max-height: 500px)`: that band was zoom-blind (UI contract 2026-11-06 §7
    gap 24, handed to #5153 PR D). */
-body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
   min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   padding-block: 3px;
 }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
-body[data-density="compact"][data-shape="wide"] #pm-race-context { padding-block: 1px; }
-body[data-density="compact"][data-shape="wide"] #pm-race-context :is(span, small) { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context { padding-block: 1px; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context :is(span, small) { display: none; }
 /* The RACE TOOLS tray's compact gap/floors live in css/experience.css, after
    the tray's own (overlays-layer) base rules: written here they lost to them. */
-body[data-density="compact"][data-shape="wide"] :is(#pm-now-card, #pm-build) { display: none; }
-body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body {
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) :is(#pm-now-card, #pm-build) { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -297,32 +297,16 @@ body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body {
     min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   }
 }
-/* THUMB REACH (reach round 2026-10-30, tools/ui/reach-score.mjs): on a phone
-   held sideways in two hands RESUME, the first row, sat top-centre — the far
-   end of both thumb arcs (844x390: y 79-131 of 390). On the phone band (touch,
-   short landscape: the pause block's own 500px query plus coarse) it becomes a
-   full-width bar pinned to the card's bottom edge and the card docks to the
-   bottom of the screen. Absolute against the .sheet (not the scrolling body),
-   so it never scrolls away and never covers a door: the sheet reserves its
-   height as padding. DOM, Tab and autofocus order are unchanged (RESUME is
-   still first); MenuNav is geometric, so Up from RESUME reaches the door above
-   it and Down wraps to the top. NOT on a compact wide body (css/overlays.css:
-   the phone card, for EVERY layout since #5153 gap 10), whose RESUME slab
-   already sits in the thumb column: this bar is the 420 card's, which a
-   landscape phone reaches only below UI SIZE 66 %. A player's TOP/BOTTOM
-   position keeps its own vertical placement. */
-@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
-  body:not([data-density="compact"][data-shape="wide"]) #pausemenu > .sheet {
-    --pm-resume-h: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)), calc(var(--tap-0) * var(--look-pause-btn, 0)));
-    position: relative;
-    padding-bottom: calc(var(--pm-resume-h) + var(--pad) * 0.7);
-  }
-  body:not([data-density="compact"][data-shape="wide"]) #pausemenu #pm-resume {
-    position: absolute; inset: auto var(--pad) calc(var(--pad) * 0.35);
-    height: var(--pm-resume-h); min-height: 0; margin: 0; z-index: 1;
-  }
-  :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"]):has(> body:not([data-density="compact"][data-shape="wide"])) #pausemenu { align-items: end; }
-}
+/* NO THUMB-REACH BAR (#5200). The reach round (2026-10-30) pinned RESUME to
+   the 420 card's bottom edge with position: absolute against the .sheet. The
+   scrolling body's edge-fade mask (css/components.css) clips every descendant
+   it paints, so the moment the list overflowed the bar was masked away: on a
+   landscape iPhone at UI SIZE 51 % the card had NO RESUME at either scroll
+   position, a scrolling list and 50 px of reserved, empty sheet (Bryce,
+   build 25617). RESUME is never out of flow again: it is the first door of
+   the grid in every card, and a short landscape window gets the phone card
+   of css/overlays.css at every UI SIZE (body[data-pause-short],
+   js/ui/pause-opts.js), which fits without a scroller. */
 /* Opaque enough that leftover HUD cannot read through the card. Color is
    the original dim wash, not carnival inks.
    --pause-wash / --pause-scrim are the PAUSE MENU › BACKGROUND setting

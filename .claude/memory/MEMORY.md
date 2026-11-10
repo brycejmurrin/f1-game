@@ -19,4 +19,4 @@ it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:ret
 - [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it (D-006)
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first (D-013)
 - [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR (D-017)
-- [Bryce's settings profile](bryce-settings-profile.md) — tests/data/settings-defaults-export.json is his real iPhone export (HELMET, buttons, BUTTON 245%); seed it for HUD/touch work
+- [Bryce's settings profile](bryce-settings-profile.md) — tests/data/settings-live-export-2026-11-09.json is his CURRENT Home Screen app export (UI SIZE 61, HUD/BUTTON default); the Oct 5 file is stale
