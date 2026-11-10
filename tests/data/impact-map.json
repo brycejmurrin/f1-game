@@ -4281,7 +4281,8 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
-        "tests/unit/save-durability.test.mjs"
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/season-cal.test.mjs"
       ],
       "scoreRound": [
         "tests/unit/career-cross-tab.test.mjs",
@@ -4697,7 +4698,8 @@
       "saveStatus": [
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
-        "tests/unit/career-settle.test.mjs"
+        "tests/unit/career-settle.test.mjs",
+        "tests/unit/season-cal.test.mjs"
       ],
       "scored": [
         "tests/unit/season-cal.test.mjs"
@@ -7349,6 +7351,9 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "motionReduced": [
+        "tests/unit/flyby-intro.test.mjs"
+      ],
       "naturalGear": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
@@ -7459,6 +7464,7 @@
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/mirror-pass-carbuild.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/repo-size.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/rival-audio.test.mjs",
@@ -7482,7 +7488,8 @@
       ],
       "scheduleFlybyTrack": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/settings-open-perf.test.mjs"
+        "tests/unit/settings-open-perf.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "seatsFor": [
         "tests/unit/legends-team.test.mjs"
@@ -7500,9 +7507,6 @@
       ],
       "setPortraitOk": [
         "tests/unit/source-integrity.test.mjs"
-      ],
-      "setState": [
-        "tests/unit/ctx-lost-notice.test.mjs"
       ],
       "setSteerMode": [
         "tests/specs/touch-buttons.spec.js",
@@ -7525,6 +7529,7 @@
         "tests/unit/real-race.test.mjs"
       ],
       "snapGameCam": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
@@ -7552,7 +7557,6 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
       "startRaceCovered": [
@@ -7614,6 +7618,7 @@
         "tests/unit/results-cam.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
+        "tests/unit/title-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
@@ -7743,7 +7748,6 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
-        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
