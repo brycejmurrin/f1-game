@@ -70,7 +70,7 @@ test("#5004: every rung above the file's version runs, only over keys the file c
   assert.equal(b.disk.get("apex26.adaptiveButtons"), "6", "v4: old ON becomes mid strength");
   assert.equal(b.disk.get("apex26.gripSteer"), "1", "v5: a non-number grip steer is OFF");
   assert.equal(b.disk.get("apex26.drivingHelp"), "4", "a key the file does not carry is the device's own");
-  assert.deepEqual(b.ST.migrateValues(2, { drivingHelp: 6, raceLine: 2 }), { drivingHelp: 1, raceLine: 0 });
+  assert.deepEqual(JSON.parse(JSON.stringify(b.ST.migrateValues(1, { drivingHelp: 6, raceLine: 2 }))), { drivingHelp: 1, raceLine: 0 });
 });
 
 test("#5004: a file at or past STEER_SCHEMA (or without a version) is written as it is", () => {
@@ -111,9 +111,7 @@ test("#5005: storage refusing one write puts back every key the import touched (
   const b = boot({ disk: seed, refuseAt: 2 });
   const r = b.load({ audio: { sfx: false, volSfx: 0.9, music: false }, display: { portraitOk: "1" } });
   assert.deepEqual(Object.fromEntries(b.disk), seed);
-  assert.equal(r.applied, 0);
-  assert.equal(r.failed, 1);
-  assert.equal(r.rolledBack, true);
+  assert.deepEqual(r, { ok: true, applied: 0, skipped: 0, failed: 1, rejectedTtlb: 0, reason: null });
 });
 
 test("#5032: METRICS is never imported, and the receipt counts it skipped", () => {

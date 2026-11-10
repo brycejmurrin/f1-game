@@ -63,6 +63,7 @@ const FORMAT = "apex26-settings-v1";
 //
 // perDevice = the value belongs to the device: an UNSET key exports as null (collect), and a file
 // saved on the other kind of device (file.device.desktop) never writes it (applySettings, #5005).
+// deviceBound = the renderer pins (backend, forced GL, XR backend): only that second half of perDevice.
 // noImport = exported for context, never written back by LOAD SETTINGS (#5032).
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
@@ -133,13 +134,13 @@ const SPEC = [
   { k: "gfxGodrays", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js GOD-RAYS (only \"0\" is off; game.js zeroes po.godray + po.lampVol)", oneOf: ["0", "1"] },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
-  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/render/renderer-boot.js (unset = TLX when a GPU adapter resolves, else GLX — skips three.webgpu)", perDevice: true },
-  { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)", perDevice: true },
+  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/render/renderer-boot.js (unset = TLX when a GPU adapter resolves, else GLX — skips three.webgpu)", deviceBound: true },
+  { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)", deviceBound: true },
   { k: "tlxMaterialDetail", lane: "raw", group: "display", def: "4", src: "js/render/three/tlx.js (manual reload)", oneOf: ["4", "8"] },
   { k: "tlxSharpenLimit", lane: "raw", group: "display", def: "0", src: "js/render/three/tlx-post.js (prototype)", oneOf: ["0", "1"] },
   { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   { k: "xr", lane: "raw", group: "display", def: "0", src: "js/xr/xr-opts.js", oneOf: ["0", "1"] },
-  { k: "xrBackend", lane: "raw", group: "display", def: "webgl2", src: "js/xr/xr-opts.js", oneOf: ["webgl2", "webgpu"], perDevice: true },
+  { k: "xrBackend", lane: "raw", group: "display", def: "webgl2", src: "js/xr/xr-opts.js", oneOf: ["webgl2", "webgpu"], deviceBound: true },
   { k: "xrInput", lane: "raw", group: "display", def: "controllers", src: "js/xr/xr-opts.js", oneOf: ["controllers", "existing"] },
   // HUD (js/game.js)
   { k: "hudProfile", lane: "json", group: "hud", def: "standard", oneOf: ["minimal", "standard", "broadcast"], src: "js/game.js" },
@@ -610,7 +611,8 @@ function applySettings(file, G) {
     if (row.info) continue;
     const g = groups[row.group];
     if (!isPlain(g) || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
-    if (row.noImport || (crossDevice && row.perDevice)) { skipped++; continue; }
+    // An unset (null) value is nothing to keep out, so it is not a skip either.
+    if (row.noImport || (crossDevice && (row.perDevice || row.deviceBound))) { if (g[row.k] !== null) skipped++; continue; }
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
@@ -620,12 +622,11 @@ function applySettings(file, G) {
     writes.push([row, v]);
   }
   // ALL OR NOTHING. A write storage refuses (a nearly full phone) used to leave the keys before and after it
-  // written: half old, half new after the next launch. Snapshot every key first; any refusal puts them all back.
-  const before = new Map();   // short key -> [lane, the exact disk string or null]
-  for (const [row] of writes) before.set(row.k, [row.lane, diskValue(`apex26.${row.k}`)]);
-  if (isPlain(file.ttlb)) for (const id of Object.keys(file.ttlb)) {
-    if (TTLB_TRACK_RE.test(id)) before.set(`ttlb.${id}`, ["json", diskValue(`apex26.ttlb.${id}`)]);
-  }
+  // written: half old, half new after the next launch. Snapshot every key first; any refusal puts them all back
+  // and the time-trial merge below never starts. (That merge is additive and keeps its own contract: a refused
+  // lap stays usable this session and SAVE RETRY persists it — settings-ttlb-backup.test.mjs.)
+  const before = new Map();   // short key -> the exact disk string, or null when absent
+  for (const [row] of writes) before.set(row.k, diskValue(`apex26.${row.k}`));
   let applied = 0, failed = 0;
   for (const [row, v] of writes) {
     try {
@@ -642,22 +643,22 @@ function applySettings(file, G) {
       }
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
-    if (failed) break;
   }
-  const ttlb = failed ? { applied: 0, skipped: 0, failed: 0, rejected: 0 } : applyTtlb(file.ttlb);
-  applied += ttlb.applied;
-  skipped += ttlb.skipped;
-  failed += ttlb.failed || 0;
   if (failed) {
     // JSON keys go back through store.set (its cache, rev and listeners see the old value again).
-    for (const [k, [lane, prev]] of before) {
+    const lane = new Map(writes.map(([row]) => [row.k, row.lane]));
+    for (const [k, prev] of before) {
       try {
-        if (lane === "raw") { if (prev === null) GameStore.store.rawDel(`apex26.${k}`); else GameStore.store.rawSet(`apex26.${k}`, prev); }
+        if (lane.get(k) === "raw") { if (prev === null) GameStore.store.rawDel(`apex26.${k}`); else GameStore.store.rawSet(`apex26.${k}`, prev); }
         else GameStore.store.set(k, prev === null ? undefined : JSON.parse(prev));
       } catch (_) { /* an unparseable old value: leave the key to the store's own repair */ }
     }
-    return { ok: true, applied: 0, skipped, failed, rolledBack: true, rejectedTtlb: ttlb.rejected || 0, reason: null };
+    return { ok: true, applied: 0, skipped, failed, rejectedTtlb: 0, reason: null };
   }
+  const ttlb = applyTtlb(file.ttlb);
+  applied += ttlb.applied;
+  skipped += ttlb.skipped;
+  failed += ttlb.failed || 0;
   return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, reason: null };
 }
 // A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey
@@ -1120,7 +1121,7 @@ function create(G) {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
-        if (r.failed) { flash(b, label, r.rolledBack ? "STORAGE FULL — NOTHING CHANGED" : `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
+        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED${r.applied ? "" : ", NOTHING CHANGED"}`, 3200); return; }
         if (!r.applied) { flash(b, label, "NOTHING TO LOAD", 2200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first
