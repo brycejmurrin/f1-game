@@ -152,14 +152,7 @@ window.PhysicsConsts = {
   // inter/full crossover is wetness ~0.68, just under TyreModel.treadFor's 0.72
   // switch; the slick/inter crossover is ~0.20 (treadFor: 0.25), set by the
   // dry row below. tests/unit/wet-grip-ladder.test.mjs pins the ordering.
-  // THE DRY ROW IS A GROOVED TYRE'S DRY COST (#5289, Bryce 2026-11-11: "Grooved
-  // tyres lose dry grip"). It used to live only in the catalog's stat rows, on
-  // the player alone; a wet set now costs a human what it costs an AI
-  // (TyreModel.applyCompound), so the dry-road price moved here, where both
-  // pay it. The slick's 1 is untouched: a dry race on slicks cannot move. The
-  // inter's 0.92 is the highest that keeps the slick->inter crossover on
-  // treadFor's damp side (~0.20; 0.94 put it at 0.17 and treadFor would fit
-  // the slower tyre between 0.17 and 0.25). wet-grip-ladder.test.mjs pins it.
+  // dry: a grooved tyre's dry-road cost, paid by player and AI (#5289; docs/PHYSICS.md).
   WET_GRIP: {
     dry:  [1.00, 0.92, 0.90],
     wet:  [0.82, 0.94, 0.88],

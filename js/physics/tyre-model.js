@@ -576,9 +576,7 @@ const TyreModel = (function () {
     soft:   { code: "S", life: 0.48, off: 0.004,  tread: 0, colour: [0.92, 0.12, 0.10] },
     medium: { code: "M", life: 0.74, off: 0,      tread: 0, colour: [0.96, 0.80, 0.10] },
     hard:   { code: "H", life: 1.05, off: -0.004, tread: 0, colour: [0.90, 0.90, 0.93] },
-    // The rows' `mods` mirror the catalog's wet rows (parts.js) for display and
-    // the record shape; on a car they are NOT applied: applyCompound fits any
-    // treaded set at the AI's cost (wetModsFor, #5289), so both pay `off`.
+    // `mods` mirror parts.js; a car is fitted at the AI's cost instead (wetModsFor, #5289).
     inter:  { code: "I", life: 1.00, off: -0.010, tread: 1, colour: [0.10, 0.72, 0.24],
               mods: { speed: 0.92, accel: 0.93, cornering: 0.94, braking: 0.98 } },
     wet:    { code: "W", life: 1.10, off: -0.020, tread: 2, colour: [0.10, 0.40, 0.92],
@@ -615,26 +613,17 @@ const TyreModel = (function () {
     return weather === "rain" || weather === "storm" ? 2 : weather === "wet" ? 1 : 0;
   }
   function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
-  // The tread that grips best on a road at `w` (weatherGrip's argmax).
   function bestTread(w) {
     const g0 = weatherGrip(0, w), g1 = weatherGrip(1, w), g2 = weatherGrip(2, w);
     return g2 > g1 && g2 > g0 ? 2 : g1 > g0 ? 1 : 0;
   }
-  // The tread a car's grip reads (game.js gripMult via carGrip, aquaInto).
-  // `null` is the competent-field sentinel: the tread the conditions call for
-  // (treadFor, on the lap mean). A car that FOLLOWS THE WEATHER (c.wxFollow,
-  // set by the session's fit) is on ONE set, the best tread for the lap-mean
-  // road (the session's followWeather keeps its record there): a single set,
-  // like any car's, never the best tread per patch of road.
+  // A car's grip tread: null = treadFor (the field); c.wxFollow = its one set (#5253).
   function treadOf(c, weather, wetness) {
     if (!c) return 0;
     if (c.wxFollow && c.tyre) return c.tyre.tread || 0;
     return c.tread == null ? treadFor(weather, wetness) : c.tread;
   }
-  /** game.js gripMult(c): weather grip for car `c`; `mean` is the lap-mean wetness, `surface` the road under it.
-   *  A following car's set change BLENDS over WX_CHANGE_S (c.wxMix, from c.wxPrev's
-   *  curve to the new set's), so its grip never steps: game-state-audit-vm #2b
-   *  measured 2.8 % in one step on a drier racing line with an instant change. */
+  /** game.js gripMult(c): `mean` lap-mean wetness, `surface` the road under the car. */
   function carGrip(c, weather, mean, surface) {
     const g = weatherGrip(treadOf(c, weather, mean), surface);
     if (!c || !c.wxFollow || !(c.wxMix < 1) || c.wxPrev == null) return g;
@@ -721,13 +710,7 @@ const TyreModel = (function () {
   }
 
   const STAT_KEYS = ["speed", "accel", "cornering", "braking"];
-  // A WET SET COSTS THE PLAYER WHAT IT COSTS THE AI (#5289, Bryce: "Scale the
-  // player down to match"). An AI on an inter or a full wet pays only its
-  // record's `off` on vmax, and only with wear on (game.js); the catalog/class
-  // stat rows (wet 0.88/0.90/0.90/0.94) made the same set ~11% slower for a
-  // human on the same grip. A treaded set on a human is therefore fitted at the
-  // AI's cost: speed 1 + off (wear on) and nothing else. Fixed at fit time, so
-  // c.mods (the session-record key) cannot move mid-race.
+  // A treaded set costs a human what it costs an AI: 1 + off on speed, wear on only (#5289).
   const _wetMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
   function wetModsFor(tread, wearOn) {
     const t = AI_CLASS[classForTread(tread)];
@@ -809,12 +792,7 @@ const TyreModel = (function () {
     function fit(c, record) {
       if (!c) return;
       applyCompound(c, record, on());
-      // WEAR OFF, A GARAGE SLICK: THE SET FOLLOWS THE WEATHER (#5253, Bryce
-      // 2026-11-11: "Automatic set"). With wear off there is no pit lane, so a
-      // dry start that turns to rain left the player on slicks at 0.72 grip
-      // against a field at 0.97. Such a car now drives on the tyre the weather
-      // calls for, as the AI field does, and back when it dries (followWeather
-      // in update). A treaded set the player chose in the garage stays theirs.
+      // Wear off (no pit lane): a garage slick follows the weather (#5253, followWeather).
       c.wxFollow = !on() && c.tread !== null && !!c.tyreOpt && !c.tyreOpt.wetTread;
       c.wxMix = 1; c.wxPrev = null;
       c.tyreWear = 0;
@@ -929,13 +907,8 @@ const TyreModel = (function () {
     // Integrate one physics tick. Distance-based, not time-based: wear reaches
     // 1.0 after `lifeLaps` laps at load 1.0, which is what makes the constant
     // above mean what its name says regardless of pace, PACE or lap time.
-    // Keep a following car's RECORD on the weather's tread: the HUD letter and
-    // the band colour read it (grip reads treadOf, on the surface). c.tread and c.mods stay as fitted,
-    // because they are the session-record key (session-records.js). Allocates
-    // only on a change of tread.
-    // The changeover: the new set's grip blends in over WX_CHANGE_S of race
-    // time, and a set must beat the one on the car by WX_HYST at the lap mean
-    // before it is changed, so a mean hovering on a crossover cannot chatter.
+    // A following car's record (HUD letter) moves to the best tread for the lap mean;
+    // grip blends over WX_CHANGE_S, WX_HYST stops chatter. c.tread/c.mods never move.
     const WX_CHANGE_S = 3, WX_HYST = 0.002;
     function followWeather(c, dt) {
       if (c.wxMix < 1) c.wxMix = Math.min(1, c.wxMix + (dt > 0 ? dt : 0) / WX_CHANGE_S);
