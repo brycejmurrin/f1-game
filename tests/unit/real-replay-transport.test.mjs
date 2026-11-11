@@ -313,12 +313,7 @@ test("manual HIGHLIGHTS skip, chapter and seek retain intentional replay of over
 });
 
 test("overlapping automatic cuts keep active radio while large steps skip exhausted holds into the next forward segment", () => {
-  const clips = [];
-  const { replay, G, drivers, options } = transportReplay({ Audio: class {
-    constructor() { this.paused = true; clips.push(this); }
-    play() { this.paused = false; return Promise.resolve(); }
-    pause() { this.paused = true; }
-  } }, { completeSubject: true });
+  const { replay, G, drivers, options } = transportReplay({}, { completeSubject: true });
   options.traces.cars = { 1: line(0, 50, 0, 0, 100), 2: line(0, 45, 0, 0, 100) };
   options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 16, by: 2, over: 1 }, { t: 50, by: 1, over: 2 }];
   drivers[1].pits = [1, 2]; drivers[1].pitT = [11, 16];
@@ -329,12 +324,12 @@ test("overlapping automatic cuts keep active radio while large steps skip exhaus
   replay.start({ ...options, reel: true }); resets = 0;
   for (let i = 0; i < 14; i++) replay.tick(1);
   assert.equal(replay.status().T, 16);
-  assert.equal(clips.length, 1); assert.equal(clips[0].paused, false, "continuous footage keeps its current radio clip");
+  assert.ok(replay.status().radio, "continuous footage keeps its current radio caption link");
   assert.equal(resets, 0);
   replay.tick(10);
   assert.equal(replay.status().T, 42, "exhaust all overlapping holds in one step before the next forward lead-in");
   assert.equal(replay.status().reelIdx, 4);
-  assert.equal(clips[0].paused, true, "a genuine forward time jump releases old audio");
+  assert.equal(replay.status().radio, null, "a genuine forward time jump releases the old radio link");
   assert.equal(resets, 1);
   replay.tick(20);
   assert.equal(replay.status().finished, true, "a large terminal step finishes without revisiting an old segment");
@@ -342,22 +337,18 @@ test("overlapping automatic cuts keep active radio while large steps skip exhaus
 });
 
 test("a short automatic forward cut does not re-fire a radio event inside the new caption window", () => {
-  const clips = [], messages = [];
-  const { replay, G, options } = transportReplay({ Audio: class {
-    constructor() { this.paused = true; clips.push(this); }
-    play() { this.paused = false; return Promise.resolve(); }
-    pause() { this.paused = true; }
-  } }, { completeSubject: true });
+  const messages = [];
+  const { replay, G, options } = transportReplay({}, { completeSubject: true });
   options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 25, by: 2, over: 1 }];
   options.script.radio = [{ t: 15, num: 1, url: "https://example.test/near-cut.mp3" }];
   G.soundOn = true; G.announce = (text) => { messages.push(text); return true; };
   replay.start({ ...options, reel: true });
   for (let i = 0; i < 13; i++) replay.tick(1);
-  assert.equal(clips.length, 1); assert.equal(clips[0].paused, false);
+  assert.ok(replay.status().radio, "the radio message is up");
   replay.tick(1);
-  assert.equal(replay.status().T, 17); assert.equal(clips[0].paused, true);
+  assert.equal(replay.status().T, 17); assert.equal(replay.status().radio, null, "the cut releases it");
   replay.tick(1);
-  assert.equal(clips.length, 1, "the recent radio event was already consumed before the forward cut");
+  assert.equal(replay.status().radio, null, "the recent radio event was already consumed before the forward cut");
   assert.equal(messages.filter((text) => text.includes("RADIO")).length, 1);
   replay.stop();
 });
@@ -382,12 +373,7 @@ test("WATCH paused seek repaints the timing tower and race clock without advanci
 
 test("WATCH manual and automatic reel cuts release radio and reset timeline presentation before snapping", () => {
   for (const automatic of [false, true]) for (const locked of [false, true]) {
-    const clips = [];
-    const { replay, G, cars, options } = transportReplay({ Audio: class {
-      constructor() { this.paused = true; clips.push(this); }
-      play() { this.paused = false; return Promise.resolve(); }
-      pause() { this.paused = true; }
-    } });
+    const { replay, G, cars, options } = transportReplay();
     options.reel = true;
     options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 50, by: 2, over: 1 }];
     options.script.radio = [{ t: 11, num: 1, url: "https://example.test/radio.mp3" }];
@@ -400,11 +386,11 @@ test("WATCH manual and automatic reel cuts release radio and reset timeline pres
     replay.start(options);
     replay.setLocked(locked);
     replay.tick(9); // Opening lead-in starts at T=2: the first radio fires at 11.
-    assert.equal(clips[0].paused, false);
+    assert.ok(replay.status().radio, "the radio message is up");
     snaps.length = pip.length = hud.length = 0;
     if (automatic) replay.tick(5); else { replay.setPaused(true); replay.skip(); }
     assert.equal(replay.status().T, 42);
-    assert.equal(clips[0].paused, true, "the previous segment's audio cannot cross a reel cut");
+    assert.equal(replay.status().radio, null, "the previous segment's radio link cannot cross a reel cut");
     assert.equal(G.raceT, 42, "HUD clock changes on the same cut");
     assert.equal(replay.status().follow, locked ? "AAA" : "BBB", "a cut respects a locked subject");
     assert.equal(snaps.at(-1).paint, false, "the cut snaps without forcing headless playback to render");

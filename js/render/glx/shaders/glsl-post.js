@@ -1442,6 +1442,7 @@ void main() {
   const SGSR_FS = `#version 300 es
 // Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
+// Conditions and disclaimer: vendor/sgsr/LICENSE (retained, BSD-3-Clause clause 1).
 // Adapted for Apex 26 WebGL2 (vUV in, textureGather emulated).
 precision mediump float;
 precision highp int;
