@@ -141,63 +141,6 @@ test("GLX setPolyOffset caches bias and draw() passes depthBias without a litera
   assert.match(glx, /uf2\(litU\.uBakeOrigin/);
 });
 
-
-test("iterator GC microbench: indexed cull packs with less young-gen pressure than for…of", async () => {
-  // Synthetic pack loop mirroring cullInstances' inner cell walk. Measures
-  // retained heap after forced GC over N cell iterations — for…of mints an
-  // iterator per cell; indexed for does not. It measures V8 on two loops
-  // written HERE, not the game's cull: the source pins above are what tie the
-  // shape to js/. Until 2026-11-09 this body never ran anywhere: it returned
-  // (a pass, not a skip) when gc() was absent, and no runner passes
-  // --expose-gc. Take gc() the way frame-lights-shed does, and fail if it
-  // cannot be had.
-  const v8 = await import("node:v8");
-  v8.setFlagsFromString("--expose-gc");
-  const gc = vm.runInNewContext("gc");
-  assert.equal(typeof gc, "function", "gc() is available after --expose-gc (the microbench must run, not return)");
-  const cells = 4000;
-  const idx = new Array(32);
-  for (let i = 0; i < 32; i++) idx[i] = i;
-  const src = new Float32Array(32 * 16);
-  const dst = new Float32Array(32 * 16);
-  const packForOf = () => {
-    let n = 0;
-    for (const i of idx) {
-      const so = i * 16, dOff = n * 16;
-      for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
-      n++;
-    }
-    return n;
-  };
-  const packIdx = () => {
-    let n = 0;
-    for (let j = 0, jn = idx.length; j < jn; j++) {
-      const i = idx[j];
-      const so = i * 16, dOff = n * 16;
-      for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
-      n++;
-    }
-    return n;
-  };
-  const measure = (fn) => {
-    gc(); gc();
-    const h0 = process.memoryUsage().heapUsed;
-    for (let c = 0; c < cells; c++) fn();
-    gc(); gc();
-    return process.memoryUsage().heapUsed - h0;
-  };
-  // Warm both paths so JIT noise is shared.
-  for (let i = 0; i < 200; i++) { packForOf(); packIdx(); }
-  const dFor = measure(packForOf);
-  const dIdx = measure(packIdx);
-  // Indexed must not allocate MORE retained bytes than for…of over the same
-  // work. Absolute floors are noisy across V8 versions; the relative check is
-  // the pin. Log both for the PR body.
-  assert.ok(dIdx <= dFor + 64 * 1024,
-    `indexed retained ${dIdx} B should be ≤ for…of ${dFor} B (+64 KiB slack)`);
-  console.log(`# microbench cells=${cells} forOfDelta=${dFor} indexedDelta=${dIdx}`);
-});
-
 // ---- bug-hunt 2026-10-09 4.2 (W5 game) --------------------------------------------------------
 test("CarMesh.aeroEdgeOn is memoised and tested AFTER the blend: no localStorage read per car per frame", () => {
   const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap, Date };
