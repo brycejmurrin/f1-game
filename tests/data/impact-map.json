@@ -7069,6 +7069,9 @@
       ]
     },
     "js/fx/particles.js": {
+      "armPrime": [
+        "tests/unit/particles-dirty.test.mjs"
+      ],
       "capacity": [
         "tests/unit/car-fx.test.mjs",
         "tests/unit/droplets-spray.test.mjs"
