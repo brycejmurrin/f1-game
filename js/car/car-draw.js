@@ -1550,6 +1550,7 @@ const CarDraw = (function () {
       if (held()) return 0;
       _primeArmed = 2;
       const Z = _primeZ; let n = 0;
+      if (typeof gfx.primeChunkMerge === "function") gfx.primeChunkMerge();   // TLX: each chunked record's merge slot, this present
       const d = (mesh, opts) => { if (mesh) { gfx.draw(mesh, Z, opts); n++; } };
       // Cockpit LCD: each digit once per place it can hold (the pool keys wrappers per occurrence: gear x1, speed x3).
       for (let k = 0; k <= 9; k++) { d(getGearDigit(k), _rigFx); for (let j = 0; j < 3; j++) d(getSpeedDigit(k), _rigFx); }
