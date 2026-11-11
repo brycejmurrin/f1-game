@@ -2185,6 +2185,28 @@
       ],
       "kind": "browser"
     },
+    "test:scratch-finala": {
+      "files": [
+        "tests/specs/scratch-final-r1.spec.js",
+        "tests/specs/scratch-final-r2.spec.js",
+        "tests/specs/scratch-final-r3.spec.js",
+        "tests/specs/scratch-final-r4.spec.js",
+        "tests/specs/scratch-final-r5.spec.js",
+        "tests/specs/scratch-final-r6.spec.js",
+        "tests/specs/scratch-final-r7.spec.js",
+        "tests/specs/scratch-final-r8.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:scratch-finalb": {
+      "files": [
+        "tests/specs/scratch-final-r10.spec.js",
+        "tests/specs/scratch-final-r11.spec.js",
+        "tests/specs/scratch-final-r12.spec.js",
+        "tests/specs/scratch-final-r9.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",

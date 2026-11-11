@@ -1423,6 +1423,34 @@
       "twinned": false
     },
     {
+      "id": "scratch-finala",
+      "script": "test:scratch-finala",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-final-r1.spec.js",
+        "tests/specs/scratch-final-r2.spec.js",
+        "tests/specs/scratch-final-r3.spec.js",
+        "tests/specs/scratch-final-r4.spec.js",
+        "tests/specs/scratch-final-r5.spec.js",
+        "tests/specs/scratch-final-r6.spec.js",
+        "tests/specs/scratch-final-r7.spec.js",
+        "tests/specs/scratch-final-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "scratch-finalb",
+      "script": "test:scratch-finalb",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-final-r10.spec.js",
+        "tests/specs/scratch-final-r11.spec.js",
+        "tests/specs/scratch-final-r12.spec.js",
+        "tests/specs/scratch-final-r9.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",
