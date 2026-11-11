@@ -252,8 +252,7 @@ orchestrator brief template under the dispatcher skill; this note.
 ## Refuter verdicts
 
 A fresh reader was given the twelve largest numerical claims and told only to break them from GitHub, the code and
-the raw transcripts. None was refuted; three survived unchanged, one with a small correction, eight had a number
-corrected. The table above carries the corrected numbers.
+the raw transcripts. None was refuted; five survived unchanged and seven had a number corrected. The table above carries the corrected numbers.
 
 | claim | verdict | correction |
 |---|---|---|
