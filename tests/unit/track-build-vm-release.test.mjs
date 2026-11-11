@@ -223,7 +223,9 @@ const STRIP = {
   //   bleacher/scaffold rows span to their chord midpoints and rails take their
   //   own tier. Emission 274099 → 274135, strip-after 255181 → 255289.
   // → merged (#5303 over #5254, 2026-11-10): the deltas add exactly (+36 emitted) → 274395 / 255441.
-  monaco: { before: 274395, after: 255441 },
+  // → curveTier drops a sub-10 cm sideways sagitta (2026-11-11, mexico coplanar): same
+  //   emission, 34 more enclosed faces stripped: strip-after 255441 → 255407.
+  monaco: { before: 274395, after: 255407 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

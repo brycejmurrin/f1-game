@@ -37,6 +37,12 @@ const require = createRequire(import.meta.url);
 // 2026-10-05: Buddh 210980 -> 190604 (sparse field-boundary scatter) and
 // Korea 264747 -> 235195 (tree:"none" on the salt fill) after the fold-clear
 // chord samples. Fuji 612418 stays inside the 612361 ±0.5 % band.
+// 2026-11-11 W21 (#5303): cota 301685 -> 303352 (+0.55 %), mexico 342242 -> 344035
+// (+0.52 %), fuji 564203 -> 567976 (+0.67 %). Two visible fixes add geometry: a
+// grandstandEx that seats no rows no longer records its solid, so trees now grow
+// where the phantom stand stood (mexico +17 trees, cota +2); and curved stand rows
+// span midpoint to midpoint instead of stopping short (#2204: fuji's back terraces
+// gapped up to 28.8 m). Compaction stays identical on every circuit.
 // 2026-11-10 W5 (#5279): Magny-Cours 249802 -> 240416 (-3.8 %): the Adelaide and
 // Lycée kits moved onto their corners and three treeline/poplar runs were trimmed
 // clear of the relocated stands.
