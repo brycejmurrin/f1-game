@@ -75,8 +75,9 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
   // `errCount` counts AI mistakes within ONE race, so a cold car has none (a
-  // short rollout rarely trips a mistake, so a leak goes unnoticed).
-  "errCount", "pitWorked",
+  // short rollout rarely trips a mistake, so a leak goes unnoticed). `aiHeadV`, the speed the AI heading was
+  // last written at (game.js AI_HEAD_JUMP, #5338): undefined on a cold car, which its `!= null` read takes as no jump.
+  "errCount", "pitWorked", "aiHeadV",
   // The lazy `c.passPlan || (c.passPlan = {})` cache in game.js's
   // overtake-attempt block survives reset() untouched, and
   // `!c.passPlan || c.passPlan.side` (same file) reads `.side` straight off it
