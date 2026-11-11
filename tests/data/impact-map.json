@@ -2706,6 +2706,7 @@
       "flushDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-draw-decal-sweep.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
       "freeBodyPair": [
