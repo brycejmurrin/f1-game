@@ -252,6 +252,7 @@
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
@@ -423,6 +424,9 @@
       "silence": [
         "tests/unit/crowd-audio.test.mjs"
       ],
+      "swell": [
+        "tests/unit/crowd-audio.test.mjs"
+      ],
       "update": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
@@ -491,6 +495,7 @@
         "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "deployBoost": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "driveBrakeTone": [
@@ -544,12 +549,14 @@
         "tests/unit/wind-speed.test.mjs"
       ],
       "lightsOut": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "onInterrupted": [
         "tests/unit/lazy-audio-yield.test.mjs"
       ],
       "pitGun": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "rebuildCtx": [
@@ -775,6 +782,7 @@
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "deployLevel": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "detach": [
@@ -785,7 +793,8 @@
       ],
       "harvestLevel": [
         "tests/unit/audio-tune.test.mjs",
-        "tests/unit/ers-audio-layer.test.mjs"
+        "tests/unit/ers-audio-layer.test.mjs",
+        "tests/unit/pu-harvest-audio.test.mjs"
       ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
@@ -1003,6 +1012,9 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
+      ],
+      "pickChannelVoice": [
+        "tests/unit/radio-voice.test.mjs"
       ],
       "plan": [
         "tests/unit/announcer.test.mjs",
@@ -3759,6 +3771,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/parts-visual-distinctness.test.mjs",
         "tests/unit/pick-tests.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
@@ -3984,6 +3997,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-ui-lazy.test.mjs",
         "tests/unit/load-order.test.mjs",
@@ -4001,8 +4015,12 @@
       "openHub": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-ui-lazy.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
+      ],
+      "openOffers": [
+        "tests/unit/career-hub-spend.test.mjs"
       ],
       "openSlots": [
         "tests/unit/career-backup.test.mjs",
@@ -4458,9 +4476,11 @@
     },
     "js/career/custom-team.js": {
       "create": [
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs"
       ],
       "init": [
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs"
       ],
       "legendSeat": [
@@ -4470,6 +4490,7 @@
         "tests/unit/boot-input-shape.test.mjs"
       ],
       "openCustomize": [
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs"
       ],
       "syncCustomTeam": [
@@ -4508,6 +4529,7 @@
       ],
       "*": [
         "tests/unit/career-hire-rating.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ]
     },
@@ -4630,6 +4652,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
+        "tests/unit/select-season-tab.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "conflicted": [
@@ -4681,7 +4704,8 @@
       ],
       "list": [
         "tests/unit/career-round2.test.mjs",
-        "tests/unit/season-calendar-default.test.mjs"
+        "tests/unit/season-calendar-default.test.mjs",
+        "tests/unit/select-season-tab.test.mjs"
       ],
       "load": [
         "tests/specs/season-format.spec.js",
@@ -4723,7 +4747,8 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "preset": [
-        "tests/unit/season-cal.test.mjs"
+        "tests/unit/season-cal.test.mjs",
+        "tests/unit/select-season-tab.test.mjs"
       ],
       "presetIds": [
         "tests/unit/season-cal.test.mjs",
@@ -4786,6 +4811,7 @@
       ],
       "setConfig": [
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/select-season-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "shuffled": [
@@ -4825,7 +4851,6 @@
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "create": [
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/race-setup-sheets.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ],
@@ -4917,6 +4942,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/merge-surveyor.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/prop-clipping.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -5046,6 +5072,7 @@
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs"
@@ -5199,6 +5226,7 @@
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/quali-persist.test.mjs",
@@ -5212,11 +5240,13 @@
     },
     "js/core/i18n-pseudo.js": {
       "*": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs"
       ]
     },
     "js/core/i18n.js": {
       "_installCatalog": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
@@ -5225,15 +5255,19 @@
         "tests/unit/race-radio.test.mjs"
       ],
       "boot": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs"
       ],
       "date": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
       "lang": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs"
       ],
       "pluralCategories": [
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs"
       ],
       "*": [
@@ -5252,7 +5286,6 @@
       "create": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/gfx-debug-overlay.test.mjs",
@@ -5487,6 +5520,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/crest-marks.test.mjs",
@@ -5688,6 +5722,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/script-loader-late-eval.test.mjs",
         "tests/unit/script-loader-preload.test.mjs",
         "tests/unit/script-loader-retry-eval.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
@@ -5740,6 +5775,7 @@
         "tests/unit/data-api-status.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
@@ -5747,6 +5783,7 @@
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
+        "tests/unit/store-null-default.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
     },
@@ -5759,6 +5796,9 @@
       ],
       "hold": [
         "tests/unit/wake-lock-vm.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ios-wake-note.test.mjs"
       ]
     },
     "js/data/api-transport.js": {
@@ -6163,8 +6203,10 @@
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
+        "tests/unit/race-control.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
         "tests/unit/tools-runnable.test.mjs"
@@ -6198,6 +6240,7 @@
       ],
       "sanitizeCustom": [
         "tests/unit/career-data-audio-improvements.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "*": [
@@ -6258,6 +6301,7 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/setup-tune.test.mjs",
+        "tests/unit/store-null-default.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/tyre-model.test.mjs",
@@ -6948,7 +6992,8 @@
         "tests/unit/track-validate-fleet.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs"
       ]
     },
     "js/editor/workspace.js": {
@@ -7251,6 +7296,7 @@
         "tests/unit/vstd-invariant.test.mjs"
       ],
       "applyCaution": [
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "applyLightTune": [
@@ -7322,6 +7368,7 @@
         "tests/unit/field-lod.test.mjs"
       ],
       "dropTrackWorld": [
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/ghost.test.mjs"
       ],
       "enableTilt": [
@@ -7333,6 +7380,7 @@
         "tests/specs/wake-lock.spec.js",
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ghost.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
@@ -7374,6 +7422,7 @@
       "gripMult": [
         "tests/specs/parts-physics.spec.js",
         "tests/unit/ai-drive.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs"
       ],
@@ -7505,11 +7554,15 @@
       "playerAnchor": [
         "tests/unit/field-lod.test.mjs"
       ],
+      "postFinishWait": [
+        "tests/unit/game-state-audit-vm.test.mjs"
+      ],
       "quitToMenu": [
         "tests/specs/wake-lock.spec.js",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/ghost.test.mjs",
@@ -7755,6 +7808,9 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "trackFrom": [
+        "tests/unit/track-from-projection-vm.test.mjs"
+      ],
       "trackWetness": [
         "tests/unit/light-presets.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
@@ -7770,6 +7826,7 @@
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/engineer.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
@@ -7836,6 +7893,7 @@
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
@@ -8165,6 +8223,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "*": [
+        "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/deploy-staging.test.mjs"
       ]
     },
@@ -8740,6 +8799,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/store-null-default.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -8766,6 +8826,9 @@
         "tests/unit/livery-draft-mesh-cache.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
+      "fitLivSwatches": [
+        "tests/unit/livery-card-density.test.mjs"
+      ],
       "flushLivPreview": [
         "tests/unit/livery-design.test.mjs"
       ],
@@ -8783,6 +8846,9 @@
         "tests/unit/livery-design.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/team-livery.test.mjs"
+      ],
+      "livSwatchPx": [
+        "tests/unit/livery-card-density.test.mjs"
       ],
       "openSetup": [
         "tests/specs/parts-setup-ids.spec.js",
@@ -9514,6 +9580,9 @@
       "fmtLap": [
         "tests/unit/phone-pad.test.mjs"
       ],
+      "makePeerId": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "padUrl": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9548,6 +9617,12 @@
       ]
     },
     "js/input/phone-pad.js": {
+      "admit": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "askOnScreen": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "cancel": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
@@ -9626,6 +9701,9 @@
     },
     "js/input/tilt-roll.js": {
       "rollDeg": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "screenAngle": [
         "tests/unit/phone-pad.test.mjs"
       ],
       "*": [
@@ -10118,7 +10196,6 @@
         "tests/unit/lobby-settings.test.mjs"
       ],
       "*": [
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -11437,6 +11514,9 @@
     "js/physics/ai-corridor.js": {
       "choose": [
         "tests/unit/ai-corridor.test.mjs"
+      ],
+      "planAllows": [
+        "tests/unit/ai-corridor.test.mjs"
       ]
     },
     "js/physics/ai-drive.js": {
@@ -11513,6 +11593,9 @@
       "digOutHeld": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "edgeHead": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "endLook": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11524,6 +11607,9 @@
         "tests/unit/ai-strategy.test.mjs"
       ],
       "followTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardReach": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "holdLineGap": [
@@ -11732,6 +11818,12 @@
       "squeezeEase": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "stallStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "stallSweep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "startCalm": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11746,6 +11838,9 @@
       ],
       "stintPlan": [
         "tests/unit/ai-strategy.test.mjs"
+      ],
+      "stoppedHazard": [
+        "tests/unit/ai-drive.test.mjs"
       ],
       "strategyTemper": [
         "tests/unit/ai-strategy.test.mjs"
@@ -11822,6 +11917,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "*": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
@@ -11943,6 +12039,7 @@
       ],
       "create": [
         "tests/specs/physics-hotpath.spec.js",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
@@ -11963,6 +12060,7 @@
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "pairContact": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
@@ -11978,6 +12076,7 @@
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "resolveCollisions": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
@@ -12078,6 +12177,7 @@
       ],
       "*": [
         "tests/unit/ai-drive.test.mjs",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
@@ -14110,6 +14210,17 @@
         "tests/unit/damage.test.mjs"
       ]
     },
+    "js/race/retired-card.js": {
+      "tick": [
+        "tests/unit/retired-card.test.mjs"
+      ],
+      "tickG": [
+        "tests/unit/retired-card.test.mjs"
+      ],
+      "wanted": [
+        "tests/unit/retired-card.test.mjs"
+      ]
+    },
     "js/race/session-entry.js": {
       "begin": [
         "tests/unit/race-entry-profile.test.mjs",
@@ -14280,6 +14391,14 @@
         "tests/unit/start-lights.test.mjs"
       ]
     },
+    "js/race/stopped-cars.js": {
+      "create": [
+        "tests/unit/race-control.test.mjs"
+      ],
+      "scan": [
+        "tests/unit/vstd-invariant.test.mjs"
+      ]
+    },
     "js/race/storm-flash.js": {
       "create": [
         "tests/unit/carve-a-modules.test.mjs",
@@ -14361,6 +14480,9 @@
       "setWeatherLive": [
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
+      ],
+      "settle": [
+        "tests/unit/race-settings-vm.test.mjs"
       ],
       "startArc": [
         "tests/unit/forecast.test.mjs",
@@ -14925,6 +15047,7 @@
     },
     "js/render/shared/assets.js": {
       "_ensureScratchGl": [
+        "tests/unit/assets-scratch-gl-fallback.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs"
       ],
       "adopt": [
@@ -16809,6 +16932,7 @@
     },
     "js/track/circuit-meta.js": {
       "*": [
+        "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/circuit-def-fields.test.mjs",
         "tests/unit/circuit-meta.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
@@ -16816,6 +16940,7 @@
         "tests/unit/harness-display.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
+        "tests/unit/select-season-tab.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs"
       ]
     },
@@ -17341,6 +17466,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
@@ -17644,11 +17770,13 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-experience.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/podium-beat.test.mjs",
         "tests/unit/quali-persist.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -17852,6 +17980,10 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "clearReadouts": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "commit": [
+        "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
       "effective": [
@@ -18267,7 +18399,8 @@
         "tests/unit/store-registry.test.mjs"
       ],
       "*": [
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/layers.js": {
@@ -18515,6 +18648,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
@@ -18562,6 +18696,7 @@
         "tests/specs/menu-keyboard.spec.js",
         "tests/unit/docs-integrity.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs"
       ]
     },
@@ -18656,7 +18791,8 @@
       ],
       "*": [
         "tests/unit/photo-kit.test.mjs",
-        "tests/unit/prepush-floor.test.mjs"
+        "tests/unit/prepush-floor.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/platform-session.js": {
@@ -18672,6 +18808,9 @@
       "installChip": [
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/platform-session-install.test.mjs"
+      ],
+      "iosInstallNudge": [
+        "tests/unit/ios-wake-note.test.mjs"
       ],
       "isActivation": [
         "tests/unit/audio-recovery.test.mjs"
@@ -18848,7 +18987,10 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
-      "refreshBtnFit": [
+      "parseCaps": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
+      "refreshFit": [
         "tests/unit/hud-feel.test.mjs"
       ],
       "setScale": [
@@ -18856,10 +18998,16 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
+      "sizeRow": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
       "*": [
+        "tests/specs/time-trial.spec.js",
+        "tests/specs/title-fit.spec.js",
         "tests/specs/ui-resize.spec.js",
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/phone-tools.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/test-groups.test.mjs"
@@ -18930,6 +19078,14 @@
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "calendarGroup": [
+        "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/select-season-tab.test.mjs"
+      ],
+      "calendarIdSet": [
+        "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/select-season-tab.test.mjs"
+      ],
       "create": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
@@ -18966,6 +19122,12 @@
       ],
       "teamSwatch": [
         "tests/unit/team-swatch-density.test.mjs"
+      ],
+      "trackInFilter": [
+        "tests/unit/custom-tracks.test.mjs"
+      ],
+      "trackTile": [
+        "tests/unit/custom-tracks.test.mjs"
       ],
       "updateTrackPreview": [
         "tests/unit/select-preview-defer.test.mjs"
@@ -19185,6 +19347,7 @@
     },
     "js/ui/share-code.js": {
       "apply": [
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "consumeHash": [
@@ -19356,6 +19519,9 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
+      "commit": [
+        "tests/unit/title-layout.test.mjs"
+      ],
       "current": [
         "tests/specs/title-fit.spec.js",
         "tests/unit/appearance-opts.test.mjs",
@@ -19367,6 +19533,9 @@
       ],
       "enter": [
         "tests/unit/title-layout.test.mjs"
+      ],
+      "finish": [
+        "tests/specs/ui-scale.spec.js"
       ],
       "isDefault": [
         "tests/unit/title-layout.test.mjs"
@@ -19396,6 +19565,9 @@
       ],
       "slider": [
         "tests/specs/title-fit.spec.js"
+      ],
+      "step": [
+        "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
@@ -19452,6 +19624,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/cvd-palette.test.mjs",
         "tests/unit/free-cam.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
     },
@@ -19554,9 +19727,6 @@
       "bootPick": [
         "tests/unit/xr-opts.test.mjs"
       ],
-      "caps": [
-        "tests/unit/xr-opts.test.mjs"
-      ],
       "detect": [
         "tests/unit/xr-opts.test.mjs"
       ],
@@ -19570,9 +19740,6 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "plan": [
-        "tests/unit/xr-opts.test.mjs"
-      ],
-      "rendererMatchesPlan": [
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
@@ -19716,6 +19883,9 @@
       ]
     },
     "js/xr/xr-session.js": {
+      "backend": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "bind": [
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
@@ -19746,6 +19916,7 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "isVisible": [
+        "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
       "lastError": [

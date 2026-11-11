@@ -1,6 +1,10 @@
 // @doc Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache.
 // @section runner
-/* offline-precache-check.cjs — the ONLY test that proves the precache fix.
+/* offline-precache-check.cjs — the end-to-end proof that the precache keeps a
+ * cold circuit's lazy payload offline (the unit harness in
+ * tests/unit/service-worker.test.mjs proves the worker's logic; this proves a
+ * real browser). CI runs it as `test:offline-precache` (tests/groups.json,
+ * tests/specs/offline-precache.spec.js) against a STAGED, STAMPED site.
  *
  * The regression is silent by construction: loadBackendScripts injects the
  * scenery closure and its `el.onload = el.onerror = resolve` swallows a failed
@@ -10,6 +14,15 @@
  * circuit this session has never raced, and compare the instanced-prop count
  * against tools/track/verify-track.cjs, which builds the same circuit in Node with
  * the closure guaranteed present.
+ *
+ * WHAT IT SERVES. By default the working tree (`?v=dev` tags, the committed
+ * placeholder build) on 127.0.0.1, where sw.js takes its DEV_HOST branch
+ * (network-first). `--root=<dir>` serves an already staged site and `--stage`
+ * stages and stamps one first (tools/desktop/stage.mjs, the same bump-cache
+ * stamp pages.yml runs: content-hashed `?v=` keys, the lazy-hash map, a real
+ * build). Either of those is served under a NON-loopback host name mapped to
+ * 127.0.0.1 and allowed as a secure origin, so sw.js runs its DEPLOYED code
+ * path (cache-first, hash-verified) exactly as a player's phone does.
  */
 const { chromium } = require("playwright");
 const http = require("node:http"), fs = require("node:fs"), path = require("node:path");
@@ -28,10 +41,16 @@ const TY = { ".html":"text/html", ".js":"text/javascript", ".css":"text/css", ".
 // and the browser agreed on cota once (8665) but not since (2026-09-28: Node
 // 6536, browser 6685), and browser-vs-browser needs no tolerance. The Node
 // number is still printed, as information.
-const WARM_ARG = process.argv[2];
-const TRACK_ARG_RAW = process.argv[3];
-const USAGE = "usage: node tools/check/offline-precache-check.cjs [warmCircuit] [coldCircuit]\n"
-  + "  Defaults: warm=spa cold=cota. Launches Chromium (~1 min). Do not pass flags.";
+const ARGV = process.argv.slice(2);
+const ROOT_FLAG = ARGV.find((a) => a.startsWith("--root="));
+const STAGE = ARGV.includes("--stage");
+const POSITIONAL = ARGV.filter((a) => a !== "--stage" && a !== ROOT_FLAG);
+const WARM_ARG = POSITIONAL[0];
+const TRACK_ARG_RAW = POSITIONAL[1];
+const USAGE = "usage: node tools/check/offline-precache-check.cjs [--stage | --root=<staged dir>] [warmCircuit] [coldCircuit]\n"
+  + "  Defaults: warm=spa cold=cota, the working tree on 127.0.0.1. Launches Chromium (~1-2 min).\n"
+  + "  --stage  stage + stamp the site into artifacts/offline-precache/site first (what pages.yml ships)\n"
+  + "  --root=  serve an already staged, stamped site directory";
 
 function isCircuitId(s) {
   return typeof s === "string" && /^[a-z][a-z0-9_]*$/i.test(s);
@@ -39,9 +58,10 @@ function isCircuitId(s) {
 
 // --help / -h / any dash-flag must NOT become a circuit id and boot Chromium
 // (skilltest 2026-10-01: `--help` was raced as warm=--help and left a hung page).
-if (process.argv.includes("--help") || process.argv.includes("-h")
+if (ARGV.includes("--help") || ARGV.includes("-h")
     || (WARM_ARG && WARM_ARG.startsWith("-"))
-    || (TRACK_ARG_RAW && TRACK_ARG_RAW.startsWith("-"))) {
+    || (TRACK_ARG_RAW && TRACK_ARG_RAW.startsWith("-"))
+    || (STAGE && ROOT_FLAG) || (ROOT_FLAG && ROOT_FLAG === "--root=")) {
   console.log(USAGE);
   process.exit(0);
 }
@@ -58,16 +78,45 @@ const WARM = WARM_ARG || "spa";
 const TRACK = TRACK_ARG_RAW || "cota";
 const TRACK_ARG = WARM;
 
+// The directory served: the working tree, or a staged site (--root / --stage).
+const SERVE = ROOT_FLAG ? path.resolve(ROOT_FLAG.slice("--root=".length))
+  : STAGE ? path.join(ROOT, "artifacts", "offline-precache", "site") : ROOT;
+const STAMPED = !!(ROOT_FLAG || STAGE);   // --root names a STAGED dir: the working tree is refused, never served
+// A deployed-shape host for a stamped site: sw.js's DEV_HOST test is loopback only.
+const HOST = STAMPED ? "apex-offline.test" : "127.0.0.1";
+
 const srv = http.createServer((req, rep) => {
   let u = decodeURIComponent(req.url.split("?")[0]); if (u === "/") u = "/index.html";
-  const f = path.join(ROOT, u.replace(/^\/+/, ""));
-  if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { rep.writeHead(404); return rep.end(); }
+  const f = path.join(SERVE, u.replace(/^\/+/, ""));
+  if (!f.startsWith(SERVE) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { rep.writeHead(404); return rep.end(); }
   rep.writeHead(200, { "content-type": TY[path.extname(f)] || "application/octet-stream" });
   rep.end(fs.readFileSync(f));
 });
 
-srv.listen(0, "127.0.0.1", async () => {
-  const base = `http://127.0.0.1:${srv.address().port}`;
+async function prepareSite() {
+  if (STAGE) {
+    const { stageSite, stampStaged } = await import("../desktop/stage.mjs");
+    const committed = JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf8")).build;
+    stageSite(SERVE, { root: ROOT });
+    // A build above the committed placeholder, without the full-history count
+    // pagesBuild() needs (a CI checkout may be shallow).
+    const at = stampStaged(SERVE, { at: committed + 1, sha: "0".repeat(40) });
+    console.log(`staged + stamped build ${at} into ${path.relative(ROOT, SERVE)}`);
+  }
+  if (!STAMPED) return;
+  if (!fs.existsSync(path.join(SERVE, "index.html")) || !fs.existsSync(path.join(SERVE, "sw.js"))) {
+    console.error(`offline-precache: ${SERVE} is not a staged site (no index.html / sw.js)`);
+    process.exit(2);
+  }
+  if (/\?v=dev"/.test(fs.readFileSync(path.join(SERVE, "index.html"), "utf8"))) {
+    console.error(`offline-precache: ${SERVE} is not stamped (its shell still reads ?v=dev); stage it with --stage`);
+    process.exit(2);
+  }
+}
+
+prepareSite().then(() => srv.listen(0, "127.0.0.1", async () => {
+  const port = srv.address().port;
+  const base = `http://${HOST}:${port}`;
   const want = Number((execFileSync("node", ["tools/track/verify-track.cjs", TRACK], { encoding: "utf8" })
     .match(/— (\d+) instanced/) || [])[1]);
   console.log(`warm=${WARM} (raced online)   cold=${TRACK} (first touched OFFLINE, Node says ${want})`);
@@ -75,8 +124,10 @@ srv.listen(0, "127.0.0.1", async () => {
   // paths), never a hard-coded /opt path — tools-runnable.test.mjs pins that,
   // and rtc-e2e died on a Mac for exactly this.
   const exe = (await import("../lib/harness.mjs")).pickChromium();
+  const hostArgs = STAMPED ? [`--host-resolver-rules=MAP ${HOST} 127.0.0.1`,
+    `--unsafely-treat-insecure-origin-as-secure=${base}`] : [];
   const browser = await chromium.launch({
-    ...(exe ? { executablePath: exe } : {}), args: ["--no-sandbox"] });
+    ...(exe ? { executablePath: exe } : {}), args: ["--no-sandbox", ...hostArgs] });
   const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
   const bad = [];
   let serverDown = false;
@@ -102,12 +153,14 @@ srv.listen(0, "127.0.0.1", async () => {
     const installed = await p1.evaluate(async () => {
       const reg = await navigator.serviceWorker.ready.catch(() => null);
       if (!reg) return { ok: false, why: "no service worker" };
-      // The SW marks a finished install with its own sentinel key.
-      for (let i = 0; i < 240; i++) {
+      // The SW marks a finished install with its own sentinel keys. COMPLETE
+      // lands after the REQUIRED pool, before the optional pools that carry
+      // the scenery closures; SETTLED lands after them. Wait for SETTLED.
+      for (let i = 0; i < 360; i++) {
         const names = await caches.keys();
         for (const n of names) {
           const c = await caches.open(n);
-          if (await c.match("__apex_install_complete__")) {
+          if (await c.match("__apex_install_settled__")) {
             const keys = await c.keys();
             return { ok: true, cache: n, entries: keys.length,
                      scenery: keys.filter((k) => k.url.includes("/js/circuits/scenery/")).length,
@@ -116,7 +169,7 @@ srv.listen(0, "127.0.0.1", async () => {
         }
         await new Promise((r) => setTimeout(r, 500));
       }
-      return { ok: false, why: "install never completed" };
+      return { ok: false, why: "install never settled" };
     });
     console.log("install:", JSON.stringify(installed));
     if (!installed.ok) bad.push("service worker install: " + installed.why);
@@ -140,10 +193,10 @@ srv.listen(0, "127.0.0.1", async () => {
     });
     console.log(`online  ${TRACK_ARG}: instanced=${online} (Node ${want})`);
 
-    // ---- 2. take CONTROL. sw.js deliberately does not clients.claim() (see its
-    // activate handler: no claim for an incomplete generation), so the page that
-    // registered the worker is not controlled by it. One reload fixes that, and
-    // it is what a returning player does anyway.
+    // ---- 2. take CONTROL. sw.js's activate handler calls clients.claim(), so
+    // the registering page is usually controlled already; the reload makes it
+    // certain (activation can land after this point) and is what a returning
+    // player does anyway.
     await p1.reload({ waitUntil: "domcontentloaded" });
     const controlled = await p1.evaluate(() => !!navigator.serviceWorker.controller);
     console.log("controlled after reload:", controlled);
@@ -183,6 +236,25 @@ srv.listen(0, "127.0.0.1", async () => {
       if (after.count < repairProbe.before) bad.push("offline repair probe deleted apex26-* caches");
       if (!after.names.includes(repairProbe.cache)) bad.push("offline repair probe lost the install cache name");
       await p1.reload({ waitUntil: "domcontentloaded" });
+      // The probe took js/game.js out of the install cache, and only this
+      // online reload puts it back: sw.js's fetch-miss `remember` hashes the
+      // body and cache.put()s it AFTER the page has its bytes. Closing the page
+      // at domcontentloaded and killing the server raced that write, so step 3
+      // went offline without js/game.js and read "the game did not boot offline
+      // at all" (Pages runs #5078 and #5081, 2 of the first 5 on the tip). Wait
+      // for the key the probe removed; a restore that never comes is its own
+      // failure, not a boot failure.
+      const restored = await p1.evaluate(async (name) => {
+        const t0 = Date.now();
+        for (let i = 0; i < 240; i++) {
+          const keys = await (await caches.open(name)).keys();
+          if (keys.some((r) => /\/js\/game\.js/.test(r.url))) return { ok: true, ms: Date.now() - t0, polls: i };
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        return { ok: false, ms: Date.now() - t0 };
+      }, repairProbe.cache).catch((e) => ({ ok: false, why: String(e.message).slice(0, 80) }));
+      console.log("repair probe restore:", JSON.stringify(restored));
+      if (!restored.ok) bad.push("js/game.js did not return to the precache after the online reload");
     }
     await p1.close();
 
@@ -239,7 +311,7 @@ srv.listen(0, "127.0.0.1", async () => {
                  presets: !!(window.LightPresets && Object.keys(window.LightPresets).length) };
       }).catch(() => got);
     }
-    console.log(`offline ${TRACK}: instanced=${got.instanced} (Node ${want})  TrackScenery=${got.hasScenery}  LightPresets=${got.presets}  pageErrors=${errs.length}`);
+    console.log(`offline ${TRACK}: instanced=${got.instanced} (Node ${want})  TrackScenery=${got.hasScenery}  LightPresets=${got.presets}  pageErrors=${errs.length}${errs.length ? " [" + errs.join(" | ") + "]" : ""}`);
     // COLD circuit offline vs the same circuit online: a bare build loses most
     // of its props, so this is a large, unambiguous gap, not a judgement call.
     if (got.instanced !== ref) bad.push(`OFFLINE BARE BUILD: ${TRACK} ${got.instanced} instanced offline vs ${ref} online`);
@@ -249,4 +321,4 @@ srv.listen(0, "127.0.0.1", async () => {
   for (const b of bad) console.error("FAIL: " + b);
   console.log(bad.length ? `\n${bad.length} FAILURE(S)` : "\nOFFLINE OK — lazy payloads survive a cold offline race");
   process.exit(bad.length ? 1 : 0);
-});
+}));

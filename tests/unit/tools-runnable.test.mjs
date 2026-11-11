@@ -378,7 +378,12 @@ test("offline-precache-check --help prints usage and does not launch Chromium", 
   const r = spawnSync(process.execPath, [tool("offline-precache-check.cjs"), "--help"],
     { encoding: "utf8", cwd: ROOT, timeout: 10000 });
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout, "usage: node tools/check/offline-precache-check.cjs [warmCircuit] [coldCircuit]\n  Defaults: warm=spa cold=cota. Launches Chromium (~1 min). Do not pass flags.\n", "must exit before the server/Chromium path");
+  // The usage gained --stage / --root= with #5300 (PWA offline audit), which
+  // landed one merge after #5392 pinned the old two-line text exactly.
+  assert.equal(r.stdout, "usage: node tools/check/offline-precache-check.cjs [--stage | --root=<staged dir>] [warmCircuit] [coldCircuit]\n"
+    + "  Defaults: warm=spa cold=cota, the working tree on 127.0.0.1. Launches Chromium (~1-2 min).\n"
+    + "  --stage  stage + stamp the site into artifacts/offline-precache/site first (what pages.yml ships)\n"
+    + "  --root=  serve an already staged, stamped site directory\n", "must exit before the server/Chromium path");
 });
 
 test("garage-angles / render-car reject an unknown flag (exit 2 + usage) before Chromium; hud-mock -h is help", () => {

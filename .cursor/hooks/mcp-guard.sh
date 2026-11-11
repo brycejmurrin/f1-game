@@ -5,7 +5,9 @@
 # Cursor's beforeMCPExecution sends {"tool_name", "tool_input": "<JSON string>",
 # "mcp_server_name", ...} and reads {"permission": "allow"|"deny"|"ask",
 # "user_message", "agent_message"}; exit 2 also denies
-# (https://cursor.com/docs/agent/hooks). The guard normalises the payload; this
+# (https://cursor.com/docs/agent/hooks). Cloud agents do not run beforeMCPExecution: there
+# an MCP call reaches preToolUse as `MCP:<tool>`, and .cursor/hooks/edit-guard.sh hands it
+# here. The guard normalises the payload; this
 # adapter maps its PreToolUse decision onto Cursor's answer. 2026-10-15: run
 # cancels under the owner's account kept landing after both Claude doors refused
 # them, and Cursor's MCP door was the one left open.

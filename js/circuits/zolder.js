@@ -1,5 +1,8 @@
 /* Apex 26 — ZOLDER circuit definition (data only). Retired circuit (`classic: true`).
    Belgian GP 1973-1984. Pine heath in Limburg; Gilles Villeneuve was killed here in qualifying in 1982.
+   LAYOUT: this trace is the MODERN (2002-present, ~4.01 km) circuit with its
+   chicanes, not the ~4.26 km layout the Belgian GP used 1975-1984, which no
+   longer exists on the ground (docs/tracks/zolder.md, geometry caveat).
 
    Centreline: OpenStreetMap (ODbL-1.0), stitched by tools/track/stitch-osm-ring.mjs
    and projected by tools/track/import-circuit-path.mjs. The bacinger/f1-circuits
@@ -30,6 +33,8 @@
     // sceneryStartFrac keeps the dressing on the v0 origin it was authored
     // against, so props, landmarks and corner boards stay on their real corners
     // while only the line and grid move.
+    // Do NOT move it past the left-right chicane after the 580 m straight: that
+    // chicane is T1, not the final one (verdict 2026-11-11, docs/tracks/zolder.md).
     startFrac: 0.1226,
     sceneryStartFrac: 0.0000,
     name: "ZOLDER",

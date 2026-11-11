@@ -69,6 +69,11 @@ const XrBoot = (function () {
    */
   function ensureXrBackend() {
     if (canAttach()) return { ok: true };
+    // The pin reloads the page: never mid-race (a phone's Cardboard probe can
+    // show ENTER VR over the touch dock; one stray tap lost the race).
+    if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+      return { ok: false, message: "VR AFTER THE RACE" };
+    }
     try {
       if (localStorage.getItem(LS_XR_PREV) === null) {   // a second click must not stash the pin itself
         const prev = {};

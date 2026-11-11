@@ -294,6 +294,17 @@ test("ensureNet: a throwing createNetwork / wire resolves false and a later call
 // ask (a failed script is a completed request with fallback scenery, and
 // session-entry-vm holds that request to prove a start survives it), no
 // negative cache, so the next ask fetches again.
+test("ensureScenery: a custom circuit's inline scenery closure fetches nothing", async () => {
+  let fetches = 0;
+  const w = world({
+    globals: { Tracks: { LIST: [{ id: "custom-abc", custom: true, scenery() {} }], circuitPayloadResident: () => true } },
+    body: () => "",
+    deps: { loadBackendScripts: async () => { fetches++; return true; } },
+  });
+  await w.lb.ensureScenery(0);
+  assert.equal(fetches, 0, "no scenery file request: the def carries its closure");
+});
+
 test("ensureScenery: a failed fetch resolves false after one attempt; the next call fetches again; a landed one is true", async () => {
   let fetches = 0, land = false;
   const w = world({
