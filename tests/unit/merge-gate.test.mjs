@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, newerTipPaths, RETEST_MARGIN_MIN, LOCAL_ROWS,
+  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, newerTipPaths, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
@@ -304,7 +304,7 @@ test("evaluate: a gen:check or conflict refusal refuses on its own row, never ma
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, localMerge: genFail, log: (l) => logs.push(l) }), 2, "a refusal (exit 2), not an error (exit 1)");
   assert.ok(logs.some((l) => l.startsWith("= gate gen: FAIL gen:check fails")), logs.join("\n"));
-  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=ok gen=FAIL ratchets=FAIL retest=FAIL pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
+  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=ok raise=ok gen=FAIL ratchets=FAIL retest=FAIL pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
   const noTip = evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: "" }) });
   assert.equal(noTip.error, undefined, noTip.error);
   assert.deepEqual([ROWS.filter((k) => !noTip.rows[k].ok), noTip.tip], [["gen", "ratchets", "retest"], ""]);
@@ -317,7 +317,7 @@ test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a r
   const deps = { ...f.deps, log: (l) => logs.push(l), write: (p, text) => { written[p] = JSON.parse(text); } };
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], deps), 0);
   assert.deepEqual(logs.slice(0, ROWS.length).map((l) => l.split(" ").slice(0, 4).join(" ")), ROWS.map((k) => `= gate ${k}: ok`));
-  assert.ok(logs[ROWS.length].startsWith("= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok gen=ok ratchets=ok retest=ok pr=#7 sha=" + HEAD), logs[ROWS.length]);
+  assert.ok(logs[ROWS.length].startsWith("= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok raise=ok gen=ok ratchets=ok retest=ok pr=#7 sha=" + HEAD), logs[ROWS.length]);
   logs.length = 0;
   f.files.push({ filename: ".claude/hooks/bash-guard.sh" });
   assert.equal(main(["--pr", "7", "--json", "artifacts/g.json"], deps), 2);
@@ -550,7 +550,7 @@ test("ciSuitesFor: the ci.yml runs on the head (path re-checked, a ref suffix to
 // ---- WP-L2: --trusted runs no PR code; post takes open/hold/plan/ci/config from it, never from the artifact -----
 
 test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-away merge, no fetch", () => {
-  assert.deepEqual([...TRUSTED_ROWS], ["open", "hold", "plan", "ci", "config"]);
+  assert.deepEqual([...TRUSTED_ROWS], ["open", "hold", "plan", "ci", "config", "raise"]);
   const f = fakes();
   const v = evaluate({ pr: 7, ...f.deps, trusted: true });
   assert.equal(v.ok, true, JSON.stringify(v.rows));
@@ -565,7 +565,7 @@ test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-
   f.files.pop();
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 0);
-  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD} tip=${TIP}`);
+  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok raise=ok pr=#7 sha=${HEAD} tip=${TIP}`);
   f.checks[1].status = "in_progress";
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: () => {} }), 3, "CI running is waiting");
 });
@@ -798,7 +798,7 @@ function postThenArm(postEnv = {}, armEnv = {}, files) {
 }
 
 function postFixture() {
-  const line = `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`;
+  const line = `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok raise=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`;
   const env = { GH_TOKEN: "read-token", DISARM_TOKEN: "land-token", PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), NOTASKED: "[]", DISARM: "[]",
     PAUSED: "false", AT: "2026-10-27T10:00:05Z", TRUSTED: JSON.stringify([{ number: 7, head: HEAD7, code: 0, line, tip: TIP_A }]),
     NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_RUNS: JSON.stringify({ workflow_runs: [{ path: ".github/workflows/ci.yml", check_suite_id: 1 }] }),
@@ -1065,7 +1065,7 @@ test("land.yml post (STALE TIP): success only onto the tip the gate measured; a 
   const ok0 = run.indexOf("0) #");
   assert.ok(ok0 > 0 && run.indexOf(`branches/$DEPLOY_BRANCH`, ok0) > ok0 && run.indexOf(`branches/$DEPLOY_BRANCH`, ok0) < run.indexOf("write_gate \"$head\" completed success", ok0),
     "the deploy tip is read after the verdict and before the success write");
-  const line = `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`;
+  const line = `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok raise=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`;
   const verdict = (code = 0) => ({ "verdicts/7.json": JSON.stringify({ number: 7, head: HEAD7, code, line, tip: TIP_A, out: "rows" }) });
   const env = (o = {}) => ({ GH_TOKEN: "t", DISARM_TOKEN: "lt", PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), NOTASKED: "[]", DISARM: "[]",
     PAUSED: "false", AT: "2026-10-27T10:00:05Z", TRUSTED: JSON.stringify([{ number: 7, head: HEAD7, code: 0, line, tip: TIP_A }]),
@@ -1407,4 +1407,69 @@ test("#5407 evaluate: the retest row is local (never --trusted), waits with a pe
   const wait = evaluate({ pr: 7, ...f.deps });
   assert.equal(f.calls.at(-1).ciAt, null, "no green CI yet: the re-test is not run");
   assert.deepEqual([wait.ok, wait.waiting, wait.rows.retest.pending], [false, true, true], "a pending CI keeps the gate waiting, not refused");
+});
+
+// ---- #5405 option (b), Bryce 2026-11-11 ~09:10Z "Build the check (Recommended)" ---------------------------------
+
+/** A fixture ratchets.d fragment path no tree carries, built so the source-path lint does not read it as a reference. */
+const FRAG = (name) => ["tests", "data", "ratchets.d", `${name}.json`].join("/");
+
+test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bound to the head; lower, unchanged and per-file pass", () => {
+  assert.equal(RAISE_LABEL, "ratchet-raise");
+  const b64 = (o) => ({ json: { encoding: "base64", content: Buffer.from(JSON.stringify(o)).toString("base64") } });
+  const MB = "m".repeat(40);
+  // The merge base: assertPins 100 in the table plus a +5 fragment from an earlier PR; a per-file ceiling beside it.
+  const at = {
+    [MB]: { table: { tree: { assertPins: { ceiling: 100, slack: 5 }, bareCatches: { ceiling: 10 } }, files: { "css/hud.css": { lines: 900 } } }, frags: { [FRAG("old")]: { tree: { assertPins: 5 } } } },
+    [HEAD]: { table: { tree: { assertPins: { ceiling: 100, slack: 5 }, bareCatches: { ceiling: 10 } }, files: { "css/hud.css": { lines: 900 } } }, frags: { [FRAG("old")]: { tree: { assertPins: 5 } }, [FRAG("cursor--x")]: { tree: { assertPins: 3 }, files: { "css/hud.css": { lines: 20 } } } } },
+  };
+  const ghRequest = (p) => {
+    const m = /^contents\/(.+)\?ref=(\w+)$/.exec(p);
+    if (!m) return null;
+    const [, file, ref] = m, side = at[ref];
+    if (!side) return { error: "HTTP 404" };
+    if (file === "tests/data/ratchets.json") return b64(side.table);
+    if (file === "tests/data/ratchets.d") return { json: Object.keys(side.frags).map((f) => ({ type: "file", name: f.split("/").pop(), path: f })) };
+    return side.frags[file] ? b64(side.frags[file]) : { error: "HTTP 404" };
+  };
+  assert.deepEqual(treeCeilingsAt(MB, ghRequest), { tree: { assertPins: 105, bareCatches: 10 } });
+  assert.deepEqual(treeRaises({ a: 1, b: 5 }, { a: 2, b: 4, c: 9 }), [{ metric: "a", from: 1, to: 2 }], "lowered and new ceilings are no raise");
+  const f = fakes();
+  f.files.push({ filename: FRAG("cursor--x") });
+  const request = (p) => ghRequest(p) || (p.startsWith("compare/") ? { json: { merge_base_commit: { sha: MB }, files: [{ filename: FRAG("cursor--x") }] } } : f.deps.request(p));
+  const rowOf = () => evaluate({ pr: 7, ...f.deps, request, trusted: true }).rows.raise;
+  // Raise without the label: refused, naming the metric.
+  let r = rowOf();
+  assert.equal(r.ok, false);
+  assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: the diff raises a tree-wide ceiling (assertPins 105→108) — lower the count instead, or ask him");
+  // An agent's label (through an app) never counts.
+  f.pull.labels = [{ name: "ratchet-raise" }]; f.events.push(ev("ratchet-raise", "2026-11-03T10:00:00Z", { app: APP }));
+  r = rowOf();
+  assert.equal(r.ok, false);
+  assert.match(r.evidence, /only his own click counts \(raises assertPins 105→108\)/);
+  // Bryce's own click after the head was pushed (its first ci.yml run, 09:00): passes.
+  f.events.push(ev("ratchet-raise", "2026-11-03T10:30:00Z"));
+  r = rowOf();
+  assert.equal(r.ok, true, r.evidence);
+  assert.match(r.evidence, /^ratchet-raise added by brycejmurrin at 2026-11-03T10:30:00Z covers assertPins 105→108 \(labelled after the head/);
+  // A push touching a ratchet file after his label: a fresh label is needed.
+  f.prRuns.push({ head_sha: "c".repeat(40), created_at: "2026-11-03T09:30:00Z", pull_requests: [{ number: 7 }] });
+  f.prRuns[0].created_at = "2026-11-03T11:00:00Z";
+  r = rowOf();
+  assert.equal(r.ok, false);
+  assert.match(r.evidence, /^needs a fresh ratchet-raise from brycejmurrin: a push touching tests\/data\/ratchets\.d\/cursor--x\.json .* after his label at 2026-11-03T10:30:00Z \(remove and re-add it\)/);
+  f.prRuns.pop(); f.prRuns[0].created_at = "2026-11-03T09:00:00Z";
+  // A lowered ceiling (and a per-file raise beside it) needs no label.
+  f.pull.labels = []; f.events.length = 0;
+  at[HEAD].frags[FRAG("cursor--x")] = { tree: { assertPins: -2 }, files: { "css/hud.css": { lines: 20 } } };
+  r = rowOf();
+  assert.deepEqual(r, { ok: true, evidence: "no tree-wide ratchet ceiling rises in the diff" });
+  // No ratchet file in the diff: no reads at all.
+  f.files.pop();
+  assert.deepEqual(evaluate({ pr: 7, ...f.deps, trusted: true }).rows.raise, { ok: true, evidence: "no ratchet ceiling file in the diff" });
+  // Unreadable ceilings are an error (the gate retries), never a pass.
+  f.files.push({ filename: "tests/data/ratchets.json" });
+  const broken = (p) => (p.startsWith("contents/tests/data/ratchets.json") ? { error: "HTTP 502" } : request(p));
+  assert.match(evaluate({ pr: 7, ...f.deps, request: broken, trusted: true }).error, /tests\/data\/ratchets\.json at m{8}: HTTP 502/);
+  assert.equal(raiseVerdict([], [], []).ok, true);
 });

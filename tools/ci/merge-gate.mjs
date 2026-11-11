@@ -27,6 +27,11 @@
 //             name) needs the `config-ok` label, last added by Bryce in person, and newer than the last push that
 //             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
 //             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
+//   raise     a diff that RAISES a tree-wide ceiling (tests/data/ratchets.json `tree`, plus the tests/data/ratchets.d
+//             deltas, compared head vs merge base; a lowered, unchanged or new ceiling is no raise) needs the
+//             `ratchet-raise` label, last added by Bryce in person and newer than the last push touching a ratchet file.
+//             Per-file ceilings (`files`, the commit hook's --auto-raise) are not this row's. Bryce's pick, 2026-11-11
+//             ~09:10Z: "Build the check (Recommended)" (#5405 option b; .claude/rules/game-code.md).
 //   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
@@ -38,7 +43,7 @@
 // The `distance` row (merge-base at most N game merges behind the tip) was retired 2026-11-03 (plan §6): gen and
 // ratchets already run on the real merge result, which is what catches composition reds; the row only bought syncs.
 //
-// `--trusted` evaluates only the rows that run no code from the PR (open, hold, plan, ci, config): GitHub reads only,
+// `--trusted` evaluates only the rows that run no code from the PR (open, hold, plan, ci, config, raise): GitHub reads only,
 // nothing checked out or run. land.yml's `trusted-rows` job runs it, so `post` never takes those rows from the
 // artifact of the leg that ran the PR's scripts (WP-L2).
 //
@@ -66,6 +71,11 @@ export const CI_APP = "github-actions";
 export const CI_WORKFLOW = "ci.yml";
 /** The label that vetoes a landing (plan §4.1); since 2026-11-03 only Bryce's own click lifts it (the hold row). */
 export const HOLD_LABEL = "hold";
+/** The label Bryce adds in person to let a PR that raises a tree-wide ratchet ceiling land (the raise row, #5405). */
+export const RAISE_LABEL = "ratchet-raise";
+/** The ratchet ceiling files: the base table and the per-branch delta fragments (tools/check/ratchets.mjs). */
+export const RATCHET_FILE = /^tests\/data\/(ratchets\.json|ratchets\.d\/[^/]+\.json)$/;
+export const ratchetFiles = (files) => (files || []).filter((f) => RATCHET_FILE.test(String(f || "").replace(/^\.\//, "")));
 /** The label Bryce adds in person to let a PR that edits the agent harness land (the config row). */
 export const CONFIG_LABEL = "config-ok";
 /** The paths whose edit needs CONFIG_LABEL: the hooks, settings, workflows and actions that enforce every other rule,
@@ -82,7 +92,7 @@ export const configFiles = (files) => (files || []).filter(isConfigPath);
 /** The paths a pulls/<n>/files or compare row names: `filename`, and `previous_filename` for a rename. Pure. */
 export const filePaths = (rows) => (rows || []).flatMap((f) => [f?.filename, f?.previous_filename]).filter(Boolean);
 /** Row order, which is also print order. */
-export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "gen", "ratchets", "retest"]);
+export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "raise", "gen", "ratchets", "retest"]);
 /** The rows that need the throw-away merge (git + the merge result's code); `--trusted` evaluates none of them. */
 export const LOCAL_ROWS = Object.freeze(["gen", "ratchets", "retest"]);
 /** The rows `--trusted` evaluates: none of them runs code from the PR. */
@@ -147,7 +157,7 @@ export function configVerdict(files, labels, events = null, owner = OWNER, push 
  * compare from it to the head must touch no CONFIG_PATH.
  * → { state: "covered"|"after"|"unknown", evidence }. Side effects only through `request`.
  */
-export function configPushState({ pr, head, headRef, labelAt, request }) {
+export function configPushState({ pr, head, headRef, labelAt, request, touches = configFiles, what = "config path" }) {
   const t = (iso) => Date.parse(iso || "") || 0;
   const L = t(labelAt);
   if (!L) return { state: "unknown", evidence: "no config-ok label time" };
@@ -165,10 +175,85 @@ export function configPushState({ pr, head, headRef, labelAt, request }) {
   if (cmp.error) return { state: "unknown", evidence: `compare ${from.slice(0, 8)}...${head.slice(0, 8)}: ${cmp.error}` };
   const files = cmp.json?.files;
   if (!Array.isArray(files) || files.length >= 300) return { state: "after", evidence: `the compare ${from.slice(0, 8)}...${head.slice(0, 8)} is unreadable or truncated, so a push` };
-  const hit = configFiles(filePaths(files));
+  const hit = touches(filePaths(files));
   return hit.length
     ? { state: "after", evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
-    : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no config path` };
+    : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no ${what}` };
+}
+
+/**
+ * The effective tree-wide ceilings at `ref`: ratchets.json `tree` plus every ratchets.d delta's `tree` part, with
+ * tools/check/ratchets.mjs applyFragments' rule (a delta for a metric the table does not carry moves nothing). Kept
+ * here, not imported: the gate must not change when a non-config file does. GitHub reads only.
+ * → { tree: { metric: ceiling } } | { error }.
+ */
+export function treeCeilingsAt(ref, request) {
+  const read = (file) => {
+    const r = request(`contents/${file}?ref=${encodeURIComponent(ref)}`);
+    if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") return { error: `${file} at ${String(ref).slice(0, 8)}: ${r.error || "unreadable"}` };
+    try { return { json: JSON.parse(Buffer.from(r.json.content, "base64").toString("utf8")) }; } catch (e) { return { error: `${file} at ${String(ref).slice(0, 8)}: ${e.message}` }; }
+  };
+  const base = read("tests/data/ratchets.json");
+  if (base.error) return base;
+  const tree = {};
+  for (const [m, v] of Object.entries(base.json?.tree || {})) {
+    const c = typeof v === "number" ? v : v?.ceiling;
+    if (typeof c === "number" && Number.isFinite(c)) tree[m] = c;
+  }
+  const dir = request(`contents/tests/data/ratchets.d?ref=${encodeURIComponent(ref)}`);
+  if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `tests/data/ratchets.d at ${String(ref).slice(0, 8)}: ${dir.error}` };
+  const frags = dir.error ? [] : (Array.isArray(dir.json) ? dir.json : []).filter((e) => e?.type === "file" && /\.json$/.test(e.name || "")).map((e) => e.path);
+  for (const f of frags.sort()) {
+    const r = read(f);
+    if (r.error) return r;
+    for (const [m, d] of Object.entries(r.json?.tree || {})) {
+      if (!Object.hasOwn(tree, m)) continue;
+      if (typeof d !== "number" || !Number.isFinite(d)) return { error: `${f}: tree delta ${m} is not a number` };
+      tree[m] += d;
+    }
+  }
+  return { tree };
+}
+
+/** The tree metrics whose ceiling is higher at `after` than at `before` (both carry it). Pure. */
+export function treeRaises(before, after) {
+  return Object.keys(after || {}).filter((m) => Object.hasOwn(before || {}, m) && after[m] > before[m]).sort()
+    .map((m) => ({ metric: m, from: before[m], to: after[m] }));
+}
+
+/**
+ * raise: no tree-wide ceiling rises, or Bryce's own newest `ratchet-raise` covers the head (`push` from
+ * configPushState over the ratchet files). An agent's label never counts. Pure.
+ */
+export function raiseVerdict(raises, labels, events = null, owner = OWNER, push = null) {
+  if (!raises?.length) return row(true, "no tree-wide ratchet ceiling rises in the diff");
+  const shown = raises.slice(0, 4).map((r) => `${r.metric} ${r.from}→${r.to}`).join(", ") + (raises.length > 4 ? ", …" : "");
+  const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
+  const last = newestLabelEvent(events, RAISE_LABEL);
+  if (!names.includes(RAISE_LABEL)) return row(false, `needs ${RAISE_LABEL} from ${owner}: the diff raises a tree-wide ceiling (${shown}) — lower the count instead, or ask him`);
+  if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
+    return row(false, `needs ${RAISE_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (raises ${shown})`);
+  }
+  if (push?.state === "after") return row(false, `needs a fresh ${RAISE_LABEL} from ${owner}: ${push.evidence} after his label at ${last.created_at || "?"} (remove and re-add it)`);
+  if (push?.state === "unknown") return { ...row(false, `${RAISE_LABEL} from ${owner} found, head push not resolved yet: ${push.evidence}`), pending: true };
+  return row(true, `${RAISE_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
+}
+
+/** The raise row for PR `pr` (GitHub reads only: compare for the merge base, the ceilings at it and at the head). */
+export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request }) {
+  if (!ratchetFiles(changed).length) return row(true, "no ratchet ceiling file in the diff");
+  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
+  const mb = cmp.json?.merge_base_commit?.sha;
+  if (cmp.error || !mb) return { error: `merge base of ${head.slice(0, 8)}: ${cmp.error || "unreadable"}` };
+  const before = treeCeilingsAt(mb, request);
+  if (before.error) return { error: before.error };
+  const after = treeCeilingsAt(head, request);
+  if (after.error) return { error: after.error };
+  const raises = treeRaises(before.tree, after.tree);
+  const last = newestLabelEvent(events, RAISE_LABEL);
+  const push = raises.length && last?.event === "labeled" && byOwner(last, owner)
+    ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, touches: ratchetFiles, what: "ratchet file" }) : null;
+  return raiseVerdict(raises, labels, events, owner, push);
 }
 
 /** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan fails (skill steward
@@ -586,6 +671,10 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const needsPush = configFiles(changed).length && cfgLast?.event === "labeled" && byOwner(cfgLast, owner);
   const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
   rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
+  // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
+  const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request });
+  if (raise.error) return { error: raise.error };
+  rows.raise = raise;
   if (generated) rows.config = { ...rows.config, evidence: `${rows.config.evidence}; ${generated.ok ? generated.evidence : `package.json counted as a config edit: ${generated.evidence}`}` };
   let tip = "";
   if (!rows.open.ok) {
@@ -631,9 +720,10 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
     open (open, not a draft, head = --sha when given), hold (no \`hold\` label; a hold ${OWNER} set in person is lifted
     only by a later click of his own, an agent's hold by anyone), plan (Plan present and closed; \`land:\` items exempt), ci (\`CI\` success on
     the head), config (a diff touching a config path — harness, CI tools, agent config; see CONFIG_PATH — needs
-    \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), gen (clean merge onto the current base tip + gen:check), ratchets (on
+    \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), raise (a tree-wide ratchet ceiling
+    rises only with \`${RAISE_LABEL}\` added by ${OWNER} in person after the last push touching a ratchet file), gen (clean merge onto the current base tip + gen:check), ratchets (on
     that merge result), retest (the unit tests the tip merges since the CI run select, re-run on that merge result).
-  --trusted: only the rows that run no PR code (open, hold, plan, ci, config); land.yml's trusted-rows job.
+  --trusted: only the rows that run no PR code (open, hold, plan, ci, config, raise); land.yml's trusted-rows job.
   A row still waiting on CI prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other row ok, CI not
   finished), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
 

@@ -18,6 +18,7 @@ field (it replaces the whole list).
 | `needs-owner` | PR | no live owner (silent past its window, or the cap); the dispatch Action launches a takeover |
 | `lane:claude` / `lane:cursor` / `lane:codex` | PR | which host owns it (`references/vendors.md`) |
 | `config-ok` | PR | Bryce's own click on a PR that edits a config path (`CONFIG_PATH` in merge-gate.mjs: hooks, settings, workflows, actions, `tools/ci/**`, MCP and agent config, templates); it must be newer than the last push touching one, so such a push needs it removed and re-added (on a phone: untick it, close the label menu, then tick it again, or the click does not register; a click alone does not re-run `gate`, so say which head it is for); a `package.json` diff that is only the generated `test:*` file lists (a new unit test) needs none |
+| `ratchet-raise` | PR | Bryce's own click on a PR whose diff raises a tree-wide ceiling (`tests/data/ratchets.json` `tree` plus the `ratchets.d` deltas, head vs merge base; a lower or per-file ceiling needs none); merge-gate's `raise` row, bound to the head like `config-ok` (a later push touching a ratchet file needs it removed and re-added); an agent's label never counts |
 | `dispatch:pause` | Dispatch issue | the Action launches nothing; running owners carry on to `land` or their cap |
 | `dispatch:merge-pause` | Dispatch issue | `land.yml` arms nothing; removing the label takes effect on each PR's next event |
 | `deploy:red` | Board issue | the latest Pages train failed; one fixer is launched |
