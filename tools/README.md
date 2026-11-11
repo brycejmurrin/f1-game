@@ -427,6 +427,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/line-audit.mjs** | Audits the baked racing line on real circuits: slope, clamp time, corner-time / lap-time gains, tighter corners. | agent-view |
 | **track/measure-props-over-road.mjs** | Prop geometry on/above the racing line for ONE track; JSON report, `--shots` writes PNGs to `artifacts/tmp/`. | scenery-dress |
 | **track/merge-surveyor.mjs** | The track-surveyor hand-back: scope check, merge --no-ff, verify-track, worktree remove; --dry-run prints the plan. | survey-track |
+| **track/official-corners.cjs** | Fits the F1 timing outline (FastF1's MultiViewer source) onto the built centreline; places each official turn number. | survey-track |
 | **track/props-tris.cjs** | Per-circuit props triangles after hidden-face strip + vertex compaction; proves compaction render-identical. | scenery-dress |
 | **track/refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data; tests never call it or the network. | new-track |
 | **track/rotate-markings.cjs** | Rotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them; `--check`. | new-track |
