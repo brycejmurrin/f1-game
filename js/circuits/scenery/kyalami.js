@@ -165,6 +165,13 @@
 
       const CROWD = [[0.86, 0.84, 0.80], [0.20, 0.24, 0.34], [0.72, 0.24, 0.20],
                      [0.24, 0.44, 0.30], [0.90, 0.72, 0.24], [0.42, 0.36, 0.32]];
+      // A truss post stands on the ground under it, not the road frame: on the
+      // Crowthorne and Leeukop falls the front posts hung 0.5-0.6 m in the air (#5088).
+      const post = (stage, foot, rad, h, b) => {
+        const gy = terrainYAt(foot[0], foot[2]);
+        const drop = Number.isFinite(gy) ? Math.min(6, Math.max(0, foot[1] - gy + 0.2)) : 0;
+        seat.cyl(stage, [foot[0], foot[1] - drop, foot[2]], rad, h + drop, OXIDE, 5, b);
+      };
       const ironTerrace = (id, k, side, dist, bays, opts) => {
         opts = opts || {};
         const rows = opts.rows || 6, pitch = 6.2, len = bays * pitch;
@@ -191,8 +198,8 @@
           stage._mat = MAT.METAL;
           for (let i = 0; i <= bays; i++) {          // raked red-oxide trusses
             const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
-            seat.cyl(stage, vadd(p, a.r, -inw * 6.0), 0.17, backH + 4.6, OXIDE, 5, b);
-            seat.cyl(stage, vadd(p, a.r, inw * 6.2), 0.15, backH + 1.4, OXIDE, 5, b);   // clear of row 0 (lat 5.4, 1.35 deep)
+            post(stage, vadd(p, a.r, -inw * 6.0), 0.17, backH + 4.6, b);
+            post(stage, vadd(p, a.r, inw * 6.2), 0.15, backH + 1.4, b);   // clear of row 0 (lat 5.4, 1.35 deep)
             addBox(stage, vadd(vadd(p, a.r, -inw * 0.3), a.u, backH + 3.0),
               [11.8, 0.16, 0.16], OXIDE, b);
             addBox(stage, vadd(vadd(p, a.r, -inw * 0.3), a.u, backH + 2.0),
