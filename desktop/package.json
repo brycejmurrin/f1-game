@@ -13,7 +13,7 @@
     "sync-version": "node scripts/set-version.mjs",
     "set-version": "node scripts/set-version.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "notices": "node scripts/notices.mjs",
+    "notices": "node scripts/notices.mjs --desktop",
     "prebuild": "node scripts/prebuild.mjs",
     "prestart": "npm run stage && npm run sync-version",
     "start": "electron .",

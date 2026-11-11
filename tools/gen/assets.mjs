@@ -103,6 +103,15 @@ const ROUGHNESS = {
 // (col, row) with row 0 at the TOP of the PNG — the same convention as the
 // filmstrip (layer N at y = N*size).
 const ATLAS_DIR = path.join(ROOT, "assets", "atlases");
+// PROVENANCE of the sheets in assets/atlases/: each PNG carries a C2PA manifest
+// naming OpenAI's image service (gpt-image, digital source type
+// trainedAlgorithmicMedia). They are AI-generated, not procedural, so a layer
+// baked from them says so (assets/atlases/README.md). Any other sheet passed
+// with --albedo/--normal is labelled by --licence/--author (default procedural).
+export const ATLAS_PROVENANCE = Object.freeze({
+  licence: "LicenseRef-AI-Generated-OpenAI",
+  author: "AI-generated (OpenAI gpt-image, C2PA manifest) for Apex 26",
+});
 const ATLAS_PRESETS = {
   generated: {
     grid: 4,
@@ -1503,8 +1512,9 @@ function bakeAtlas(args) {
     baked.push({
       mid, id: MAT_NAME[mid].toLowerCase(),
       source: `generated:${srcFile}#${ac},${ar}`,
-      licence: "Apex26-Procedural",
-      author: "Apex 26",
+      ...(path.dirname(albPng._path) === ATLAS_DIR
+        ? ATLAS_PROVENANCE
+        : { licence: strArg(args, "--licence", "Apex26-Procedural"), author: strArg(args, "--author", "Apex 26") }),
     });
     console.log(`  ${matKey} ← ${srcFile} tile ${ac},${ar}`);
   }
