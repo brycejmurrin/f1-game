@@ -95,8 +95,10 @@
     ],
     // Massenet and Mirabeau are TURN anchors (1-based into `turns` below): as
     // fracs (0.1286 / 0.2961) the _sceneryShift compensation landed them on
-    // T1 Ste Devote and mid-Massenet. T3 0.2341 is Massenet (long left, +k;
-    // its apex nearest the official T3 marker), T5 0.3433 Mirabeau Haute
+    // T1 Ste Devote and mid-Massenet. T3 0.2135 is Massenet's FIRST apex
+    // (long left, +k; the official T3 marker fits nearer its second apex,
+    // 0.2341, but seating T3 there moved this bank 68 m and slowed the driven
+    // lap 9 % at PACE 1.34: quali-pace-parity-vm), T5 0.3433 Mirabeau Haute
     // (right, -k). The other three fracs measure onto T12 Tabac, T16 the pool
     // exit and T18 (the tight 0.8799 right, see turns below).
     bankZones: [
@@ -116,14 +118,14 @@
     // live-timing corner markers, api.multiviewer.app circuits/22/2026,
     // similarity-fitted onto this centreline, rms 5.6 m), each seated on the
     // built curvature peak nearest its marker (2026-11-11):
-    // T1 Ste Devote | T2 Beau Rivage | T3 Massenet | T4 Casino | T5 Mirabeau
+    // T1 Ste Devote | T2 Beau Rivage | T3 Massenet (first apex, see bankZones) | T4 Casino | T5 Mirabeau
     // Haute | T6 Grand Hotel hairpin | T7 Mirabeau Bas | T8 Portier | T9 the
     // tunnel (gentle long right, its -k extremum 28 m past the marker) |
     // T10-T11 Nouvelle chicane | T12 Tabac | T13-T16 Swimming Pool | T17
     // Rascasse (FIA map label; its marker sits on the 0.8459 left kink) |
     // T18-T19 Anthony Noghes. The tight 0.8799 right (T18) is the corner the
     // scenery's Rascasse bar and the "Rascasse" bank zone stand on.
-    turns: [0.0666, 0.1820, 0.2341, 0.2742, 0.3433, 0.3834, 0.4077, 0.4344, 0.5413, 0.6323, 0.6408, 0.7171, 0.7633, 0.7755, 0.8143, 0.8227, 0.8459, 0.8797, 0.9064],
+    turns: [0.0666, 0.1820, 0.2135, 0.2742, 0.3433, 0.3834, 0.4077, 0.4344, 0.5413, 0.6323, 0.6408, 0.7171, 0.7633, 0.7755, 0.8143, 0.8227, 0.8459, 0.8797, 0.9064],
     barrier: { a: [0.95, 0.95, 0.96], b: [0.86, 0.16, 0.15], c: [0.13, 0.28, 0.55], night: [0.20, 0.20, 0.24], tyre: [0.86, 0.16, 0.15] },  // red/white + Riviera navy
     furniture: { tree: "palm",  fol: [0.25, 0.45, 0.22], lamp: "globe", lc: [1.0, 0.92, 0.70] },  // Riviera palms
     kit: { marshal: "tent",      rail: "armco",       fence: "hoarding",  tyre: "tecpro",  board: "fascia",    gantry: "cantilever", camera: "scaffold",  hoarding: "barrierTop" },
