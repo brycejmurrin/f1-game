@@ -1151,6 +1151,31 @@ test("WGX timer ignores late readbacks and waits for a timed pass after enabling
   assert.equal(buffer.mapState, "unmapped");
 });
 
+test("frame UBO PCF texel (float 74) is 1 / the size of the depth map the sun pass rasterised", async () => {
+  // Behaviour, not a source line: wgx-shadow-size-source used to includes() the
+  // `d[74] = 1 / SHD.SHADOW_SIZE` statement, which stays true when a later
+  // assignment overrides it. Read the shadow pass's own attachment instead.
+  const h = makeGpuHarness({ recordPass: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 672);
+  const id = new Float32Array(16); id[0] = id[5] = id[10] = id[15] = 1;
+  const mark = h.passCalls.length;
+  gfx.shadowBegin(id);
+  const open = h.passCalls.slice(mark).find(([n]) => n === "beginRenderPass");
+  assert.ok(open, "shadowBegin opens a render pass");
+  const tex = open[1][0].depthStencilAttachment.view.texture;
+  const [w, hgt] = tex.desc.size;
+  assert.equal(w, hgt, "the sun depth map is square");
+  assert.ok(w >= 1024, `sun depth map is a real map, not a 1x1 stand-in (${w})`);
+  gfx.shadowEnd();
+  assert.equal(gfx.begin({}), true);
+  const frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
+  assert.equal(frame[72], 1, "shadows armed after a rendered sun map (params2.x)");
+  assert.equal(frame[74], Math.fround(1 / w), `params2.z must be the texel of the ${w}px map that was rendered`);
+  gfx.present({});
+});
+
 test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
@@ -2285,7 +2310,12 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // helpers took fwidth behind material-id branches and early returns, and a
   // callee that returns early non-uniformly poisons its CALLER too, so the fix
   // is structural: derivatives at the fs_main entry, footprint passed down.
-  const DERIV = /\b(dpdx|dpdy|fwidth)\s*\(/g;
+  // No g flag: a global regex reused with .test() keeps lastIndex, so the body
+  // after a matching one was searched from that offset (a dpdx at the top of
+  // SHADOW's vs_main, right after LIT's long fs_main, slipped through).
+  // matchAll below takes a fresh global copy.
+  const DERIV = /\b(dpdx|dpdy|fwidth)\s*\(/;
+  const DERIV_ALL = new RegExp(DERIV.source, "g");
   // Structural, not an allow-list of spellings: two sessions fixed this in
   // parallel and picked different names, and a list of exact lines would have
   // called the other one's correct code a regression. The invariant is about
@@ -2311,7 +2341,6 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   const offenders = fns
     .filter((f) => DERIV.test(f.body) && !/^fs_main/.test(f.name))
     .map((f) => f.name);
-  DERIV.lastIndex = 0;
   assert.deepEqual(offenders, [],
     "a derivative (or a wrapper around one) lives outside a fragment entry point");
 
@@ -2330,7 +2359,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
     postFns.push({ name: m[1], body: postStripped.slice(i, end + 1) });
   }
   const postOff = postFns
-    .filter((f) => { DERIV.lastIndex = 0; return DERIV.test(f.body) && !/^fs_main/.test(f.name); })
+    .filter((f) => DERIV.test(f.body) && !/^fs_main/.test(f.name))
     .map((f) => f.name);
   assert.deepEqual(postOff, [],
     "wgsl-post.js: a derivative lives outside a fragment entry point: " + postOff.join(","));
@@ -2338,14 +2367,12 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // Uniform means before the FIRST branch, not merely inside fs_main: an early
   // `return` or an `if` above the derivative poisons everything after it.
   for (const f of fns.filter((f) => /^fs_main/.test(f.name) && DERIV.test(f.body))) {
-    DERIV.lastIndex = 0;
     const firstBranch = f.body.search(/\b(if|for|while|loop|switch|return|discard)\b/);
-    for (const d of f.body.matchAll(DERIV)) {
+    for (const d of f.body.matchAll(DERIV_ALL)) {
       assert.ok(firstBranch === -1 || d.index < firstBranch,
         `${f.name}: ${d[1]} at ${d.index} sits after the first branch at ${firstBranch}`);
     }
   }
-  DERIV.lastIndex = 0;
 
   // …and the footprint must reach every consumer as a parameter.
   // World-position derivatives also drive the hammered cotangent frame.
