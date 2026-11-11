@@ -1,5 +1,7 @@
 # Highlight reel and clip export — score the race, cut a 30-60 s reel, save it as a video
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **OPEN** (checked against the code 2026-10-26) — no reel player, clip store or video export exists; the unused stub `event-journal.js` (js/race/) was deleted by audit-4 game-code PR #3878.
 
 Date: 2026-10-04 Status when written: PLAN (docs-only; nothing here is built) Scope: solo races only. A new event journal, a long-horizon clip store, a pure scorer

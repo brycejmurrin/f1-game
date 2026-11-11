@@ -100,12 +100,19 @@ const linkResolves = (dir, href) => {
 // exist yet by definition — so dropping the exemption would turn the next
 // planning session red. archive/ is skipped wholesale, so the archived copies
 // are covered either way.
+// A directory whose name carries an ISO date is one research or review batch: a
+// dated record, exempt like archive/.
+const SKIP_DOC_DIR = /^(archive|research|tracks|superpowers)$|\d{4}-\d{2}-\d{2}$/;
 const LIVE_DOCS = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (/archive|research|tracks|superpowers/.test(e.name)) continue;
+      // ANCHORED (audit 2026-11-09): the bare /archive|research|…/ also skipped
+      // the dated batch directories under docs/notes/ and docs/plans/
+      // by substring. Those are dated records and stay exempt — but by the
+      // DATED rule (SKIP_DOC_DIR), stated, not by accident.
+      if (SKIP_DOC_DIR.test(e.name)) continue;
       walk(rel);
     } else if (e.name.endsWith(".md")) LIVE_DOCS.push(rel);
   }
@@ -155,23 +162,79 @@ function stripMovedBlock(text) {
   return end < 0 ? text : text.slice(0, at) + text.slice(end + 2);
 }
 
-function brokenPathsIn(file) {
+function brokenPathsIn(file, re = PATH_RE) {
   const bad = [];
   let text = read(file);
   if (file === "tools/manifest.cjs") text = stripMovedBlock(text);
-  for (const m of new Set(text.match(PATH_RE) || [])) {
+  for (const m of new Set(text.match(re) || [])) {
     if (PLACEHOLDERS.has(m) || m.includes("<") || m.includes("*")) continue;
     if (!fs.existsSync(path.join(ROOT, m))) bad.push(m);
   }
   return bad;
 }
 
+// THE WIDE FORM FOR DOCS (audit 2026-11-09). PATH_RE knew eight prefixes and seven
+// extensions, so 46 dead backticked paths under .claude/, .github/, desktop/,
+// mobile/ and types/ — hooks that were deleted, workflows that retired, agents
+// that were renamed — passed the check that exists to catch exactly them. Prose
+// names config and workflow files as often as code, so the doc scan takes every
+// tracked top-level tree and every extension the repo ships. Source comments keep
+// the narrow PATH_RE: widening that is its own sweep.
+const DOC_PATH_RE = /(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs|desktop|mobile|types|\.claude|\.github|\.cursor|\.codex|\.agents)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|mdc|sh|py|ts|yml|yaml|toml|html|txt|patch))(?![A-Za-z0-9])/g;
+
+// A DATED RECORD is exempt: a doc whose own name or directory carries an ISO date
+// (docs/notes/HOOKS-SECURITY-2026-10-26.md, docs/plans/research-2026-09-16/…) was
+// true on that date and names files that have since moved, by design — the same
+// reason docs/archive/ is skipped. Undated docs describe the current tree.
+// A doc that opens with a history banner (`> **Historical record` within its
+// first 12 lines) has declared the same thing in prose: docs/notes/ carries such
+// banners on the checklists and notes whose plan has shipped.
+const HISTORY_BANNER = /^> \*\*(Historical|Superseded|Archived)\b/m;
+const isDatedRecord = (doc) => /\d{4}-\d{2}(-\d{2})?/.test(doc)
+  || HISTORY_BANNER.test(read(doc).split("\n").slice(0, 12).join("\n"));
+
+// Paths a live doc may name although they are not in the tree, each with why.
+// Gitignored output (local settings, built notices) is answered by git itself
+// below; this list is for the rest. Keep it short.
+const DOC_ABSENT_OK = new Map([
+  // Named as RETIRED: the doc's point is that the file is gone.
+  ["tools/ci/claude-transcript.py", /AGENT-SURFACE\.md/],
+  [".github/workflows/docs-guards.yml", /TESTING\.md/],
+  // An instruction to CREATE the file locally for a dev run.
+  ["desktop/dev-app-update.yml", /DESKTOP-TEST-PLAN\.md/],
+]);
+const gitIgnored = (paths) => {
+  if (!paths.length) return new Set();
+  try {
+    const out = cp.execSync("git check-ignore --no-index --stdin", { cwd: ROOT, input: paths.join("\n") });
+    return new Set(out.toString("utf8").split("\n").filter(Boolean));
+  } catch (e) { return new Set(String(e.stdout || "").split("\n").filter(Boolean)); }   // exit 1 = none ignored
+};
+
 test("live docs reference only files that exist", () => {
-  const broken = [];
-  for (const doc of LIVE_DOCS)
-    for (const p of brokenPathsIn(doc)) broken.push(`${doc} -> ${p}`);
+  const candidates = [];
+  for (const doc of LIVE_DOCS) {
+    if (isDatedRecord(doc)) continue;
+    for (const p of brokenPathsIn(doc, DOC_PATH_RE)) {
+      if (DOC_ABSENT_OK.get(p)?.test(doc)) continue;
+      candidates.push([doc, p]);
+    }
+  }
+  const ignored = gitIgnored([...new Set(candidates.map(([, p]) => p))]);
+  const broken = candidates.filter(([, p]) => !ignored.has(p)).map(([d, p]) => `${d} -> ${p}`);
   assert.deepEqual(broken, [],
     "a doc points at a path that no longer exists — update the doc, or add a placeholder if it is illustrative");
+});
+
+test("the dated-record exemption and DOC_PATH_RE still see what they claim to", () => {
+  const dated = ["docs", "notes", "review-2099-01-01"].join("/");
+  assert.ok(isDatedRecord(`${dated}/hooks-models-cleanup.md`));
+  assert.ok(!isDatedRecord("docs/notes/AGENT-MEMORY.md"));
+  for (const p of [".claude/hooks/x.py", ".github/workflows/ci.yml", "desktop/main.cjs", "types/game-ctx.d.ts", "mobile/a.html"])
+    assert.deepEqual(`see \`${p}\``.match(DOC_PATH_RE), [p], p);
+  // Anchored: a name that merely CONTAINS a skipped word is walked.
+  for (const d of ["trackside", "research-notes", "archived-ideas"]) assert.ok(!SKIP_DOC_DIR.test(d), d);
+  for (const d of ["archive", "research", "research-2099-01-01", "ops-research-2099-01-01"]) assert.ok(SKIP_DOC_DIR.test(d), d);
 });
 
 // Source files that are ALLOWED to name a path that does not resolve, with the
@@ -795,10 +858,22 @@ test("docs/README.md indexes every directory under docs/", () => {
     for (const sub of fs.readdirSync(path.join(ROOT, "docs/archive"), { withFileTypes: true }))
       if (sub.isDirectory()) dirs.push(`archive/${sub.name}/`);
   }
-  // A directory counts as indexed when the path appears anywhere in the file:
-  // some are linked as a directory row, others only through a link to a file
-  // inside them (notes/, research/). Either is discoverable, which is the point.
-  const missing = dirs.filter((d) => !index.includes(d));
+  // A directory counts as indexed when a LINK in the index (docs/README.md, or the
+  // NOTES-INDEX.md it hands the notes/plans/archive tables to) resolves to the
+  // directory or to a file inside it. This was a substring test on the README
+  // text until 2026-11-09, so "plans/" was satisfied by "archive/plans/" and any
+  // prose mention counted as an index row (audit W27).
+  void index;
+  const targets = [];
+  for (const src of ["docs/README.md", "docs/NOTES-INDEX.md"]) {
+    if (!fs.existsSync(path.join(ROOT, src))) continue;
+    for (const m of read(src).matchAll(/\]\(([^)\s#]+)(?:#[^)]*)?\)/g)) {
+      if (/^[a-z]+:/i.test(m[1])) continue;
+      const rel = path.relative(path.join(ROOT, "docs"), path.resolve(ROOT, path.dirname(src), m[1])).split(path.sep).join("/");
+      targets.push(rel.replace(/\/$/, ""));
+    }
+  }
+  const missing = dirs.filter((d) => !targets.some((t) => t === d.slice(0, -1) || t.startsWith(d)));
   assert.deepEqual(missing, [], "a directory under docs/ is unreachable from docs/README.md");
 });
 
