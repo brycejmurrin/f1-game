@@ -1672,6 +1672,7 @@
         "tests/specs/agent-determinism.spec.js",
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
+        "tests/specs/bryce-phone-paint.spec.js",
         "tests/specs/css-player-smoke.spec.js",
         "tests/specs/dev-tools.spec.js",
         "tests/specs/engine-audio-offline.spec.js",
