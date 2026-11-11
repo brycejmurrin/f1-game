@@ -233,6 +233,23 @@ Written so each can be asked with one tap. The first option is the recommendatio
      afterwards; never a recommendation to cancel a run; never its own PRs.
    - (b) Ask first, as now.
 
+## Decisions recorded so far
+
+Relayed by orchestrator A (message of 2026-11-11 05:16Z): Bryce answered the first four through its question prompt
+at about 05:00Z (Nov 10, 9:00 PM PT). These are a record of intent, not a `decision:` comment on GitHub: nothing here
+grants a change, and each patch below still needs its own PR and his `config-ok` click on that PR. This review did
+not read the answers at the source.
+
+| decision | his answer, as relayed | patches it unlocks | where the work goes |
+|---|---|---|---|
+| 1. Red deploy tip | "Gate holds merges, one fixer" | P4 (the `base` row in `merge-gate.mjs`, `tip-red` in `needs-sync.mjs`, the train running the specs of every merge since the last green train). The "one fixer" half is orchestrator behaviour, already in the brief template. | A new issue for the `base` row; #5407 (two green PRs crossing on a stale merge ref) is its sibling and should land with it, since a held gate does not stop a crossing. #5420 if the Dispatch workflow is to launch the fixer later. |
+| 2. Ready flip | "Ready flip reuses the draft verdict" | P3 (`ci.yml`, first half: reuse the same-sha draft verdict and run only the full-only jobs). The draft leg cap, P3's second half, was option (b) and is not unlocked. | A new issue; #5403 (the full-tier verdict does not require `selected-verdict`) touches the same job and should be read first, so that a reused verdict is one the full tier actually requires. |
+| 3. Generated files | "Build them, stop committing" | No numbered patch: move the generated `test:*` lists in `package.json`, `docs/agent-output/catalog.json`, `tools/shot/scenery-locations.json` and `tests/data/impact-map.json` to `BUILT_PATHS` in `tools/lib/generated-paths.mjs` (a config path), one file per PR, the way #5349 and #5389 did. It also removes most of what P1 exists to tolerate, but P1 is still needed for real `tools/ci/**` changes arriving through a sync. | A new issue per file, `scenery-locations.json` first (step 1 landed as #5255; it is D1 of the 2026-11-09 review). `package.json` is the hardest: the script lines are read by `npm run`, so the build step must run before any `npm run test:*`. |
+| 4. Session start | "Leaner environment + budget above start" | P9 (`tools/ci/worker-prompt.md`: the cap as a budget above the measured start) and the `STOP AT` line of the brief template, which already says so. The leaner environment is not a repo patch: it is the worker's cloud environment and connector list, which Bryce configures. | #5212 (orchestration redesign; "strip worker connectors" is its D2). A worker environment needs a setup that still has the GitHub and apex tools and drops the web-search, Drive, docs, three.js and BrowserStack connectors, which is about 90k of the 102k start. |
+
+Not answered yet: 5 (check-ins), 6 (standing grants), 7 (orchestrator autonomy), and where the saved transcripts
+go (they stay in this session's `scratch/orch-review/transcripts/` until he says).
+
 ## Already recommended on 2026-11-09 and still open
 
 `docs/notes/ORCHESTRATION-REVIEW-2026-11-09.md` §D listed these before this window's largest waves; they recur above:
