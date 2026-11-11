@@ -5,7 +5,7 @@
 // follow __apex.field() within 0.5 s, and an #announce card must reach the
 // overlay's caption.
 //
-// The tower check is sequence-based, not wall-time: the publisher samples on a
+// The tower and caption checks are sequence-based, not wall-time: the publisher samples on a
 // 250 ms timer, so a field change waits up to one tick (more on a loaded runner,
 // or wherever the game tab's timers are throttled) before any frame carries it.
 // The spec reads OverlayPublisher.lastSeq() in the same turn as the move, waits
@@ -72,13 +72,18 @@ test.describe("stream overlay — live same-browser feed", () => {
     await expect.poll(() => towerOf(overlay), { timeout: 500, intervals: [50] }).toBe(moved);
 
     // A radio card on #announce reaches the overlay caption (MutationObserver tap).
-    await page.evaluate(() => {
+    // The caption rides the same 250 ms frame tick as the tower, so the same rule:
+    // mark the seq once the observer has run, wait for a later frame, then 0.5 s to paint.
+    const capMark = await page.evaluate(async () => {
       document.getElementById("announce-num").textContent = "16";
       document.getElementById("announce-who").textContent = "LEC";
       document.getElementById("announce-text").textContent = "Box, box";
       document.getElementById("announce").dataset.kind = "radio";
       document.getElementById("announce").hidden = false;
+      await new Promise((r) => setTimeout(r, 0));   // the observer's microtask has delivered the caption
+      return OverlayPublisher.lastSeq();
     });
+    await overlay.waitForFunction((s) => /** @type {any} */ (window).__ovSeen.seq > s, capMark, { polling: 25, timeout: 10_000 });
     await expect(overlay.locator(".ov-caption")).toBeVisible({ timeout: 500 });
     await expect(overlay.locator(".ov-caption span")).toHaveText("Box, box");
     await expect(overlay.locator(".ov-caption strong")).toHaveText(/16\s+LEC/);
