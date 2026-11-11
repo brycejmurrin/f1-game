@@ -4,7 +4,11 @@
 const NetRendezvous = (function () {
   // No 0/O, no 1/I/L — the characters people mishear and mistype.
   const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-  const CODE_LEN = 6;
+  // 8 letters of 31 is ~39.6 bits on the PUBLIC relay (6 was ~29.7, #5313): the QR
+  // code and the invite link carry it, so nobody has to type the extra two. A
+  // 6-letter code typed by hand still joins: a friend on an older build hosts one.
+  const CODE_LEN = 8;
+  const LEGACY_CODE_LEN = 6;
   const PRIVATE_CODE_LEN = 32;   // 32 unbiased base-31 draws: >158 bits, shared out of band
   const PRIVATE_PROTOCOL = "3";
 
@@ -108,7 +112,8 @@ const NetRendezvous = (function () {
     const c = normalise(code);
     return c.length === length && [...c].every((ch) => ALPHABET.indexOf(ch) >= 0);
   };
-  const valid = (code) => validLength(code, usingPrivateRelay() ? PRIVATE_CODE_LEN : CODE_LEN);
+  const valid = (code) => usingPrivateRelay() ? validLength(code, PRIVATE_CODE_LEN)
+    : validLength(code, CODE_LEN) || validLength(code, LEGACY_CODE_LEN);
   const privateCodeError = () => ERR("bad_code", "Private rooms need a new 32-character token. Ask the host to share a new token, or use the invite link.");
   const protocolError = () => ERR("relay_version", "Update the private room Worker and reload both players, or use the invite link. This relay uses an incompatible protocol.");
 

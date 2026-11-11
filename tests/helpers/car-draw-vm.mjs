@@ -136,8 +136,11 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     getLiveryId: () => "default",
     getTeamParts: () => playerParts,
   };
+  const factory = new Map();
   const carDraw = ctx.CarDraw.create(G, {
     resolveLivery: () => livery || ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
+    // CustomLiveries.factoryLivery: the team's own colours, one object per team (identity-stable, as the real memo).
+    factoryLivery: (team) => factory.get(team.id) || factory.set(team.id, { id: "default", c1: team.color, c2: team.color2 }).get(team.id),
     // drawAeroFlaps in game.js, recorded (field-lod.test.mjs drives the real one):
     // `still` = the static flap set, drawn whatever the car's distance.
     drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still, viewLivery) => {
