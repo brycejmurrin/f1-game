@@ -1488,6 +1488,7 @@
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/duel-row.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
