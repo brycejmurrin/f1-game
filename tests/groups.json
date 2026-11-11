@@ -2185,6 +2185,15 @@
       ],
       "kind": "browser"
     },
+    "test:scratch-primeft2": {
+      "files": [
+        "tests/specs/scratch-primeft-m1.spec.js",
+        "tests/specs/scratch-primeft-m2.spec.js",
+        "tests/specs/scratch-primeft-m3.spec.js",
+        "tests/specs/scratch-primeft-m4.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",

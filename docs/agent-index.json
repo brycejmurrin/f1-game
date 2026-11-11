@@ -1423,6 +1423,18 @@
       "twinned": false
     },
     {
+      "id": "scratch-primeft2",
+      "script": "test:scratch-primeft2",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-primeft-m1.spec.js",
+        "tests/specs/scratch-primeft-m2.spec.js",
+        "tests/specs/scratch-primeft-m3.spec.js",
+        "tests/specs/scratch-primeft-m4.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",

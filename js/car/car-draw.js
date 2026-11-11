@@ -1541,17 +1541,20 @@ const CarDraw = (function () {
       const gfx = G.gfx, held = () => !!((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
       if (_primeArmed === 2) { if (!held()) { _primeArmed = 0; return 0; } _primeArmed = 1; }   // that present started a warm: again
       if (held()) return 0;
+      // SCRATCH A/B (#5387, never merged): apex26.scratchRacePrime=0 walks the same path and draws nothing.
+      let _off = false; try { _off = localStorage.getItem("apex26.scratchRacePrime") === "0"; } catch (_) { /* on */ }
       _primeArmed = 2;
       const Z = _primeZ; let n = 0;
-      const d = (mesh, opts) => { if (mesh) { gfx.draw(mesh, Z, opts); n++; } };
+      const gfx0 = gfx; const gfxP = _off ? { draw() {}, drawShadow: gfx0.drawShadow ? () => {} : null, drawMark: gfx0.drawMark ? () => {} : null } : gfx0;
+      const d = (mesh, opts) => { if (mesh) { gfxP.draw(mesh, Z, opts); n++; } };
       // Cockpit LCD: each digit once per place it can hold (the pool keys wrappers per occurrence: gear x1, speed x3).
       for (let k = 0; k <= 9; k++) { d(getGearDigit(k), _rigFx); for (let j = 0; j < 3; j++) d(getSpeedDigit(k), _rigFx); }
       const ws = CockpitOpts.wheel();
       if (CockpitOpts.wheelHasScreen(ws)) for (let lit = 0; lit <= 9; lit++) d(getLedStrip(lit, ws), _rigFx);
       d(getErsBar(), _rigFx); _rigFxA.alpha = 0.75; d(getErsBar(), _rigFxA);
       d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
-      if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
-      if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
+      if (!_off && typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
+      if (!_off && ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
       // Rivals: the shared near/far bodies, each team body, and every flap draw (closed set, open set, moving elements).
       // Per car, with the field's own size (a restart, VS FRIEND or a short practice field re-arms with its count). The
       // pool keys a wrapper per OCCURRENCE of a (geometry, material) in a frame, so a mesh SHARED across cars is drawn
@@ -1565,17 +1568,18 @@ const CarDraw = (function () {
         for (let i = 0; i < cars.length; i++) {
           const c = cars[i];
           if (!c) continue;
-          if (gfx.drawShadow) { gfx.drawShadow(Z, 2.4, 5.8); n++; }
-          if (gfx.drawMark) { gfx.drawMark(Z, 1, 1); n++; }
+          if (gfxP.drawShadow) { gfxP.drawShadow(Z, 2.4, 5.8); n++; }
+          if (gfxP.drawMark) { gfxP.drawMark(Z, 1, 1); n++; }
           if (c.isPlayer) continue;   // the player's own meshes draw from its first frame
           d(_sharedRivalBody, co); d(_farRivalBody, co);
           d(teamBodyMesh(c.team, c), paint);
           const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp);
-          for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(c.team, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
+          for (const b of [0, 1, 0.5]) { if (!_off) deps.drawAeroFlaps(c.team, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
           const wm = getFieldWheelMeshes(c.team, c);
           if (wm) for (let k = 0; k < 2; k++) { d(wm.F, wo); d(wm.R, wo); d(wm.FFixed, wo); d(wm.RFixed, wo); }
         }
       }
+      try { document.dispatchEvent(new CustomEvent("apex-scratch-prime", { detail: { off: _off, n, t: performance.now() } })); } catch (_) { /* no DOM */ }
       return n;
     }
     // The rig's programs before the first onboard frame needs them (TLX gfx.warmDraws captures the draws
