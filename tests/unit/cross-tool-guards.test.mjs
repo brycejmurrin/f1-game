@@ -172,7 +172,7 @@ test("Codex's MCP door guards legacy and hosted GitHub operations: an ask become
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, draft: false }), null, prefix + "the ready flip passes");
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, state: "closed" }), "deny", prefix + "close ask becomes a deny");
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, body: "x" }), null, prefix + "body edit passes");
-    assert.equal(mcp(prefix + "issue_write", { method: "update", issue_number: 1, labels: ["hold", "x"] }), null, prefix + "labels that keep hold pass");
+    assert.equal(mcp(prefix + "issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "hold", "land", "needs-decision", "x"] }), null, prefix + "labels that keep every guarded label pass (no lookup)");
     for (const input of [undefined, null, [], false, 1, "not JSON", "[]"])
       assert.equal(mcp(prefix + "update_pull_request", input), "deny", prefix + "malformed input " + JSON.stringify(input));
     assert.equal(mcp(prefix + "update_pull_request", JSON.stringify({ pullNumber: 1, body: "x" })), null, prefix + "a JSON-object string body edit passes");
