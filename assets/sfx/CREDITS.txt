@@ -1,5 +1,20 @@
 Engine sound effects
 --------------------
-f1_engine.mp3 (sustained F1 engine drone, primary base), f1_rev.mp3 (high-rev layer)
-— F1 car engine clips provided by the project owner. Looped and pitched by
-rpm/gear at runtime. Licensing of these clips is the project owner's responsibility.
+f1_engine.mp3 (sustained F1 engine drone) is the ONE engine sample: looped and
+pitched by rpm/gear at runtime (js/audio/engine.js). f1_rev.mp3, a high-rev
+layer nothing loaded, was deleted on 2026-11-10; it is in the git history.
+
+What is known and what is not (2026-11-10)
+------------------------------------------
+Known: the file's own ID3 tags (title, author, grouping) all read
+"101soundboards.com", so it was downloaded from that site's soundboards, and the
+project owner added it to the repo.
+Not known: who recorded it, which car or event it is, and under what licence
+101soundboards.com offered it. That site hosts user uploads and states no licence
+for this clip, so no right to redistribute it is on record. Until the owner
+supplies a recording with a known licence (or the original's terms), treat it as
+unlicensed. It is listed in tests/data/asset-credits-unknown.json, a shrink-only
+baseline that tests/unit/asset-credits.test.mjs holds.
+
+Rows (one per audio file; tests/unit/asset-credits.test.mjs reads them)
+file: f1_engine.mp3 | source: 101soundboards.com download (per the file's ID3 tags), added by the project owner | author: unknown | licence: unknown
