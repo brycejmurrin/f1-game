@@ -432,9 +432,9 @@ test('pause comparison controls cannot quit a later ordinary session with no run
 });
 
 // ── Batch #5094 (garage bay): the zoom takes the distance off the turntable (#5034), a camera
-// restore drives the AERO button (#5045), and the decal
+// restore drives the AERO button and one Escape closes one layer (#5045), and the decal
 // stations ink against every paint the mesh puts under them (#5039). ──
-const CAM = "js/garage/setup-camera.js", cam = read(CAM);
+const CAM = "js/garage/setup-camera.js", SHEET = "js/garage/setup-sheet.js", cam = read(CAM);
 const at = (f) => ({ filename: absSrc(f) });
 function slice(src, from, to) {
   const a = src.indexOf(from), b = src.indexOf(to, a + from.length);
@@ -492,6 +492,33 @@ test("restoring the camera after INSPECT puts the AERO button back with the flap
   assert.equal(aero.attrs["aria-pressed"], "false", "aria-pressed follows the restored flaps");
   assert.equal(aero.val.textContent, "CORNER MODE", "and so does the label");
   assert.deepEqual(spots, ["side"]);
+});
+
+test("one Escape with the CAMERA panel open over the paint editor closes the panel only (#5045)", () => {
+  const game = read(GAME_REL);
+  const sheetFirst = game.indexOf("SetupUI.create(G)") < game.indexOf("SetupCamera.create(G");
+  assert.ok(game.includes("SetupUI.create(G)") && game.includes("SetupCamera.create(G"), "both modules are created by the entry file");
+  const panel = { hidden: false }, cancel = { clicks: 0, click() { this.clicks++; } }, listeners = [];
+  const c = vm.createContext({
+    $: (id) => (id === "cs-cam-panel" ? panel : null), G: { setupPreviewOn: true }, csLivCreating: true,
+    setupCamPanelOpen: () => !panel.hidden, setSetupCamPanel: (open) => { panel.hidden = !open; },
+    document: { querySelector: (sel) => (sel.includes(".cs-liv-ed-cancel") ? cancel : null) },
+    window: { addEventListener: (type, fn) => listeners.push(fn) },
+  });
+  const sheetEsc = slice(sheet, 'window.addEventListener("keydown", (e) => {\n  if (e.key !== "Escape" || !csLivCreating', "}, true);") + "}, true);";
+  const camEsc = slice(cam, 'window.addEventListener("keydown", (e) => {\n  // …but only when the GARAGE is the top layer', "}, true);") + "}, true);";
+  for (const [src, f] of sheetFirst ? [[sheetEsc, SHEET], [camEsc, CAM]] : [[camEsc, CAM], [sheetEsc, SHEET]]) vm.runInContext(src, c, at(f));
+  assert.equal(listeners.length, 2);
+  const press = () => {
+    const e = { key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+    for (const fn of listeners) fn(e);
+    return e;
+  };
+  assert.equal(press().defaultPrevented, true, "the key is claimed");
+  assert.equal(panel.hidden, true, "the panel closes");
+  assert.equal(cancel.clicks, 0, "CANCEL is not pressed by the same key");
+  press();
+  assert.equal(cancel.clicks, 1, "the next Escape is the editor's");
 });
 
 // ── #5039 ──
