@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict,
+  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, newerTipPaths, RETEST_MARGIN_MIN, LOCAL_ROWS,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
@@ -123,6 +123,17 @@ test("planRow: open items refuse, a `land:` item is exempt, no Plan fails except
   assert.deepEqual(planRow("fold", "github-actions[bot]"), { ok: true, evidence: "no ## Plan checklist in the body (a fold bot's PR)" });
 });
 
+test("#5404: an open `**now:**` item still refuses the plan row (no exemption), and the refusal names the cure", () => {
+  // PR #5368 at f2f03ea: refused on "1 of 10 Plan item(s) open: **now:** ready CI on f2f03ea; the gate re-decides".
+  const r = planRow("## Plan\n- [x] a\n- [ ] **now:** ready CI on f2f03ea; the gate re-decides\n- [ ] land: add `land`\n");
+  assert.equal(r.ok, false, "option (a): the gate is unchanged, a `now:` item is open");
+  assert.match(r.evidence, /the `\*\*now:\*\*` item counts: at the ready flip tick it with its evidence, or move what is left of it into the `land:` item/);
+  // The cure passes: what is left lives in the gate-exempt land item.
+  assert.equal(planRow("## Plan\n- [x] a\n- [ ] land: ready CI on f2f03ea; the gate re-decides, then `land`\n").ok, true);
+  // No `now:` among the open items: no hint.
+  assert.doesNotMatch(planRow("## Plan\n- [ ] write the test\n").evidence, /now:/);
+});
+
 test("ciVerdict: the required check-run on the head, newest attempt, success only", () => {
   assert.equal(REQUIRED_CHECK, "CI");
   assert.equal(ciVerdict([]).ok, false);
@@ -213,7 +224,7 @@ function fakes() {
   const pull = { state: "open", draft: false, labels: [], user: { login: "brycejmurrin" }, head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
   const prRuns = [{ head_sha: HEAD, created_at: "2026-11-03T09:00:00Z", pull_requests: [{ number: 7 }] }];
   const checks = [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success", check_suite: { id: 50 } }];
-  const runs = [{ id: 500, check_suite_id: 50, path: ".github/workflows/ci.yml" }];
+  const runs = [{ id: 500, check_suite_id: 50, path: ".github/workflows/ci.yml", created_at: "2026-11-03T09:01:00Z" }];
   const events = [], files = [{ filename: "js/game.js" }, { filename: "docs/TESTING.md" }];
   const calls = [];
   const request = (p) => {
@@ -226,7 +237,7 @@ function fakes() {
     if (p.startsWith("actions/workflows/ci.yml/runs?event=pull_request&branch=cursor%2Fx")) return { json: { workflow_runs: prRuns } };
     return { error: `unexpected ${p}` };
   };
-  const localMerge = (a) => { calls.push(a); return { ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" } }; };
+  const localMerge = (a) => { calls.push(a); return { ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" }, retest: a.ciAt === null ? null : { ok: true, evidence: "no tip merge since the CI run" } }; };
   return { pull, checks, runs, prRuns, events, files, calls, deps: { request, root: "/nowhere", localMerge } };
 }
 
@@ -236,7 +247,7 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.equal(v.ok, true, JSON.stringify(v.rows));
   assert.deepEqual(Object.keys(v.rows), ROWS);
   assert.deepEqual([v.head, v.base, v.tip], [HEAD, "deploy-x", TIP]);
-  assert.deepEqual(f.calls[0], { pr: 7, head: HEAD, headRef: "cursor/x", cwd: "/nowhere", base: "deploy-x" }, "the merge targets the PR's own base");
+  assert.deepEqual(f.calls[0], { pr: 7, head: HEAD, headRef: "cursor/x", cwd: "/nowhere", base: "deploy-x", ciAt: "2026-11-03T09:01:00Z" }, "the merge targets the PR's own base, and the re-test compares against the green CI run's creation");
   f.pull.labels = [{ name: "hold" }];
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["hold"]);
   f.pull.labels = []; f.pull.body = "## Plan\n- [ ] still open\n";
@@ -244,7 +255,7 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   f.pull.body = "";
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["plan"], "no Plan on an agent PR");
   f.pull.body = "## Plan\n- [x] done\n"; f.checks[1].conclusion = "failure";
-  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"]);
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci", "retest"]);
   f.checks[1].conclusion = "success";
   f.files.push({ filename: ".github/workflows/land.yml" });
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["config"], "a workflow edit without Bryce's config-ok");
@@ -263,13 +274,13 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["hold"], "a hold an agent removed still holds");
   f.events.length = 1; f.pull.labels = []; f.files.pop();
   const refused = evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: TIP }) });
-  assert.deepEqual(ROWS.filter((k) => !refused.rows[k].ok), ["gen", "ratchets"], "a refused merge leaves the ratchets unproven");
+  assert.deepEqual(ROWS.filter((k) => !refused.rows[k].ok), ["gen", "ratchets", "retest"], "a refused merge leaves the ratchets and the re-test unproven");
   f.pull.draft = true; f.calls.length = 0;
   const draft = evaluate({ pr: 7, ...f.deps });
-  assert.deepEqual(ROWS.filter((k) => !draft.rows[k].ok), ["open", "gen", "ratchets"]);
+  assert.deepEqual(ROWS.filter((k) => !draft.rows[k].ok), ["open", "gen", "ratchets", "retest"]);
   assert.equal(f.calls.length, 0, "no throw-away merge for a PR that is not open and ready");
   f.pull.draft = false;
-  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, sha: "b".repeat(40), ...f.deps }).rows[k].ok), ["open", "gen", "ratchets"], "--sha must be the current head");
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, sha: "b".repeat(40), ...f.deps }).rows[k].ok), ["open", "gen", "ratchets", "retest"], "--sha must be the current head");
   assert.equal(evaluate({ pr: 7, sha: HEAD.slice(0, 12), ...f.deps }).ok, true, "a prefix of the head is the head");
   assert.ok(/HTTP 500/.test(evaluate({ pr: 7, ...f.deps, request: () => ({ error: "HTTP 500" }) }).error));
   assert.ok(/fetch failed/.test(evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "fetch failed", error: true }) }).error));
@@ -288,15 +299,15 @@ test("evaluate: a gen:check or conflict refusal refuses on its own row, never ma
   const v = evaluate({ pr: 7, ...f.deps, localMerge: genFail });
   assert.equal(v.error, undefined, v.error);
   assert.deepEqual([v.ok, v.waiting, v.tip], [false, false, GEN_TIP]);
-  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["gen", "ratchets"]);
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["gen", "ratchets", "retest"]);
   assert.ok(v.rows.gen.evidence.startsWith("gen:check fails"), v.rows.gen.evidence);
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, localMerge: genFail, log: (l) => logs.push(l) }), 2, "a refusal (exit 2), not an error (exit 1)");
   assert.ok(logs.some((l) => l.startsWith("= gate gen: FAIL gen:check fails")), logs.join("\n"));
-  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=ok gen=FAIL ratchets=FAIL pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
+  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=ok gen=FAIL ratchets=FAIL retest=FAIL pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
   const noTip = evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: "" }) });
   assert.equal(noTip.error, undefined, noTip.error);
-  assert.deepEqual([ROWS.filter((k) => !noTip.rows[k].ok), noTip.tip], [["gen", "ratchets"], ""]);
+  assert.deepEqual([ROWS.filter((k) => !noTip.rows[k].ok), noTip.tip], [["gen", "ratchets", "retest"], ""]);
 });
 
 test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a row failed, 1 usage/API error; --json writes the summary", () => {
@@ -305,8 +316,8 @@ test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a r
   const written = {};
   const deps = { ...f.deps, log: (l) => logs.push(l), write: (p, text) => { written[p] = JSON.parse(text); } };
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], deps), 0);
-  assert.deepEqual(logs.slice(0, 7).map((l) => l.split(" ").slice(0, 4).join(" ")), ROWS.map((k) => `= gate ${k}: ok`));
-  assert.ok(logs[7].startsWith("= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok gen=ok ratchets=ok pr=#7 sha=" + HEAD), logs[7]);
+  assert.deepEqual(logs.slice(0, ROWS.length).map((l) => l.split(" ").slice(0, 4).join(" ")), ROWS.map((k) => `= gate ${k}: ok`));
+  assert.ok(logs[ROWS.length].startsWith("= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok gen=ok ratchets=ok retest=ok pr=#7 sha=" + HEAD), logs[ROWS.length]);
   logs.length = 0;
   f.files.push({ filename: ".claude/hooks/bash-guard.sh" });
   assert.equal(main(["--pr", "7", "--json", "artifacts/g.json"], deps), 2);
@@ -509,7 +520,7 @@ test("ciVerdict: only the GitHub Actions app's `CI` counts; a same-named check f
   assert.equal(ciVerdict([red, { ...red, id: 3, conclusion: "success" }]).ok, true);
   const f = fakes();
   f.checks[1].app = { slug: "not-actions" };
-  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"]);
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci", "retest"]);
 });
 
 // ---- WP-L3e: the ci row reads ci.yml's own `CI`, not any Actions check-run of that name -------------------------
@@ -523,7 +534,7 @@ test("ciVerdict pinned to ci.yml: a `CI` check-run in another workflow's suite i
   assert.equal(ciVerdict([real, { ...real, id: 3, conclusion: "success" }], "CI", CI_APP, new Set([50])).ok, true);
   const f = fakes();
   f.checks.push(rogue); f.checks[1].conclusion = "failure";
-  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"], "evaluate pins the row to ci.yml's suites");
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci", "retest"], "evaluate pins the row to ci.yml's suites");
   f.checks[1].conclusion = "success"; f.runs[0].path = ".github/workflows/other.yml";
   assert.equal(evaluate({ pr: 7, ...f.deps }).rows.ci.pending, true, "a run whose path is not ci.yml contributes no suite");
 });
@@ -1263,7 +1274,7 @@ test("ci retry: a CI that went green only on a re-run after a failed job fails t
   f.runs[0].id = 900; f.runs[0].run_attempt = 2;
   jobs[1] = [{ name: "Structural guards", conclusion: "failure" }];
   const rq = (p) => (p.startsWith("actions/runs/900/") ? req(p) : f.deps.request(p));
-  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, request: rq }).rows[k].ok), ["ci"]);
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, request: rq }).rows[k].ok), ["ci", "retest"]);
   f.runs[0].run_attempt = 1;
   assert.equal(evaluate({ pr: 7, ...f.deps, request: rq }).ok, true);
 });
@@ -1301,4 +1312,99 @@ test("config: a package.json diff that is only the generated test file lists is 
   assert.equal(bad.rows.config.evidence, "needs config-ok from brycejmurrin: the diff edits package.json; package.json counted as a config edit: package.json carries edits the test-groups generator does not reproduce");
   const noMb = evaluate({ pr: 7, ...f.deps, request: (p) => (p.startsWith("compare/") ? { error: "HTTP 404" } : rq(headPkg)(p)) });
   assert.equal(noMb.rows.config.ok, false, "an unreadable merge base fails closed");
+});
+
+// ---- #5407 option (b), Bryce 2026-11-11 ~09:02Z "Quick re-test at merge (Recommended)" ---------------------------
+
+/** A fixture unit-test path no tree carries, built so the source-path lint does not read it as a reference. */
+const U = (name) => ["tests", "unit", `${name}.test.mjs`].join("/");
+
+test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit tests it touched on the merge result; red, timeout or unreadable refuses", () => {
+  const T = scratch("merge-gate-retest-");
+  const at = (iso) => ({ ...process.env, GIT_COMMITTER_DATE: iso, GIT_AUTHOR_DATE: iso });
+  const git = (cwd, env, ...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8", env }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(W, rel)), { recursive: true }); fs.writeFileSync(path.join(W, rel), text); };
+  const W = path.join(T, "w");
+  try {
+    fs.mkdirSync(W);
+    git(W, at("2026-11-11T00:00:00Z"), "init", "-q", "-b", "deploy-x");
+    write("tools/check/offline-precache-check.cjs", "// v1\n"); write("tests/unit/tools-runnable.test.mjs", "// v1\n"); write(U("old"), "// v1\n");
+    git(W, at("2026-11-11T00:00:00Z"), "add", "-A"); git(W, at("2026-11-11T00:00:00Z"), "commit", "-q", "-m", "base");
+    // The PR (#5300's shape): adds usage lines to the tool, CI runs at 01:00.
+    git(W, at("2026-11-11T00:30:00Z"), "checkout", "-q", "-b", "pr");
+    write("tools/check/offline-precache-check.cjs", "// v1 + two usage lines\n");
+    git(W, at("2026-11-11T00:30:00Z"), "commit", "-q", "-am", "the PR");
+    const head = git(W, undefined, "rev-parse", "HEAD");
+    git(W, undefined, "checkout", "-q", "deploy-x");
+    // A tip commit well before the CI run (outside the margin) was in its merge ref: nothing to re-test.
+    write(U("old"), "// v2\n"); git(W, at("2026-11-11T00:20:00Z"), "commit", "-q", "-am", "old merge");
+    const ciAt = "2026-11-11T01:00:00Z";
+    const calls = [];
+    const run = (cmd, argv, opts) => { calls.push({ cmd, argv, cwd: opts.cwd, env: opts.env }); return { status: 0, stdout: "", stderr: "" }; };
+    const select = (paths) => ({ files: paths.filter((f) => f.startsWith("tests/unit/")), reason: "matched" });
+    let tip = git(W, undefined, "rev-parse", "HEAD");
+    const quiet = retestOnMerge({ cwd: W, tip, head, ciAt, run, select });
+    assert.equal(quiet.ok, true, quiet.evidence);
+    assert.match(quiet.evidence, /^no tip merge since the CI run's base \(created 2026-11-11T01:00:00Z, margin 15 min\)/);
+    assert.equal(calls.length, 0, "nothing runs when CI tested this combination");
+    // #5392's shape lands AFTER the CI run: it pins the tool's --help as exact text (the test file changes).
+    write("tests/unit/tools-runnable.test.mjs", "// v2: exact two-line --help\n"); git(W, at("2026-11-11T01:44:54Z"), "commit", "-q", "-am", "#5392");
+    tip = git(W, undefined, "rev-parse", "HEAD");
+    const t = newerTipPaths({ cwd: W, tip, head, ciAt });
+    assert.deepEqual([t.commits.length, t.newer, t.pr], [1, ["tests/unit/tools-runnable.test.mjs"], ["tools/check/offline-precache-check.cjs"]]);
+    const green = retestOnMerge({ cwd: W, tip, head, ciAt, run, select });
+    assert.equal(green.ok, true, green.evidence);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].argv, ["tools/ci/tooling-fast.mjs", "--jobs=2", "--quiet", "tests/unit/tools-runnable.test.mjs"], "the merge result's tooling-fast runs the touched test");
+    assert.equal(calls[0].cwd, W);
+    assert.equal(calls[0].env.GITHUB_TOKEN, undefined, "the PR's code runs with the stripped environment");
+    assert.match(green.evidence, /1 tip merge\(s\) since the CI run .*1 unit file\(s\) re-tested on the merge result .*tools-runnable\.test\.mjs passed/);
+    // The crossing itself: the re-test is red on the merge → refused (deploy red #5396 would not have happened).
+    const red = retestOnMerge({ cwd: W, tip, head, ciAt, select, run: () => ({ status: 1, stdout: "[tooling-fast] FAIL  1/1 tests/unit/tools-runnable.test.mjs exit=1\n", stderr: "" }) });
+    assert.equal(red.ok, false);
+    assert.match(red.evidence, /the re-test of 1 unit file\(s\) on the merge onto \w{8} failed: \[tooling-fast\] FAIL  1\/1 tests\/unit\/tools-runnable\.test\.mjs exit=1 — the PR and the newer tip cross/);
+    const slow = retestOnMerge({ cwd: W, tip, head, ciAt, select, run: () => ({ status: null, error: Object.assign(new Error("spawnSync node ETIMEDOUT"), { code: "ETIMEDOUT" }) }) });
+    assert.equal(slow.ok, false);
+    assert.match(slow.evidence, /failed: timed out after 420 s/);
+    // Un-runnable never passes: no CI time, a selection that cannot run, a git error.
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select }).ok, false);
+    assert.match(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select }).evidence, /re-test not runnable: the CI run's creation time is unreadable/);
+    assert.match(retestOnMerge({ cwd: W, tip, head, ciAt, run, select: () => ({ error: "tooling-fast selection failed: boom" }) }).evidence, /^re-test not runnable: tooling-fast selection failed: boom/);
+    assert.equal(retestOnMerge({ cwd: W, tip: "f".repeat(40), head, ciAt, run, select }).ok, false, "an unknown tip refuses");
+    // Measured too broad for the cap: refused up front, nothing runs (the cure is a sync and a fresh CI run).
+    calls.length = 0;
+    const broad = retestOnMerge({ cwd: W, tip, head, ciAt, run, select: (p) => ({ ...select(p), estMs: 400_000 }) });
+    assert.equal(broad.ok, false);
+    assert.match(broad.evidence, /measured ~400 s at --jobs=2, over the 420 s cap — too broad to re-test at merge: sync-pr\.mjs and push/);
+    assert.equal(calls.length, 0);
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select: (p) => ({ ...select(p), estMs: 30_000 }) }).ok, true, "a measured-small re-test runs");
+    // A merge just BEFORE the CI run's creation (inside the margin) may be missing from its merge ref: re-tested too.
+    assert.equal(RETEST_MARGIN_MIN, 15);
+    assert.equal(newerTipPaths({ cwd: W, tip, head, ciAt: "2026-11-11T01:50:00Z" }).commits.length, 1, "01:44:54 is inside 01:50 - 15 min");
+    assert.equal(newerTipPaths({ cwd: W, tip, head, ciAt: "2026-11-11T02:00:00Z" }).commits.length, 0);
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("#5407 retestPlan: the gate's own selection, kept to files the merge has; a widened selection falls back to the touched unit files and says so", () => {
+  const has = (f) => f !== U("deleted");
+  assert.deepEqual(retestPlan({ newer: ["js/a.js", U("b")], pr: [U("deleted")], selection: { files: [U("a")], reason: "matched" }, exists: has }),
+    { files: [U("a"), U("b")], how: "tooling-fast's --changed selection (matched)" });
+  assert.deepEqual(retestPlan({ newer: ["package.json", U("b")], pr: [U("c")], selection: { files: ["x"], widened: "package.json forces full suite" }, exists: has }),
+    { files: [U("b"), U("c")], how: "the touched tests/unit files (the selection widened: package.json forces full suite)" });
+  assert.deepEqual(retestPlan({ newer: [["docs", "x.md"].join("/")], pr: [], selection: { files: [], reason: "docs" } }).files, []);
+});
+
+test("#5407 evaluate: the retest row is local (never --trusted), waits with a pending ci row, and a refused re-test refuses the gate", () => {
+  assert.deepEqual(LOCAL_ROWS, ["gen", "ratchets", "retest"]);
+  assert.ok(!TRUSTED_ROWS.includes("retest"), "the re-test runs PR code: not a trusted row");
+  const f = fakes();
+  const cross = (a) => ({ ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" }, retest: { ok: false, evidence: "the re-test failed" } });
+  const v = evaluate({ pr: 7, ...f.deps, localMerge: cross });
+  assert.deepEqual([v.ok, ROWS.filter((k) => !v.rows[k].ok)], [false, ["retest"]]);
+  const none = evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" } }) });
+  assert.deepEqual(ROWS.filter((k) => !none.rows[k].ok), ["retest"], "a merge result with no re-test is never a pass");
+  f.checks[1].status = "in_progress";
+  const wait = evaluate({ pr: 7, ...f.deps });
+  assert.equal(f.calls.at(-1).ciAt, null, "no green CI yet: the re-test is not run");
+  assert.deepEqual([wait.ok, wait.waiting, wait.rows.retest.pending], [false, true, true], "a pending CI keeps the gate waiting, not refused");
 });

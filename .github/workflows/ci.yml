@@ -2924,6 +2924,8 @@ jobs:
           GUARDS: ${{ needs.guards.result }}
           DROPPED: ${{ needs.select.outputs.dropped }}
           UNREPRESENTED: ${{ needs.select.outputs.unrepresented }}
+          # The plan itself (#5403): on a green matrix every spec it names must have a junit testcase.
+          SHARDS: ${{ needs.select.outputs.shards }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
           DOWNLOAD_FAILED: ${{ steps.dl_junit.outcome == 'failure' || steps.dl_started.outcome == 'failure' }}

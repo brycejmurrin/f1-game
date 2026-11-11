@@ -6,7 +6,7 @@ import fs from "node:fs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { selectedGateVerdict, shardEvidence } from "../../tools/ci/selected-gate-verdict.mjs";
+import { selectedGateVerdict, shardEvidence, plannedSpecs, ranSpecsUnder } from "../../tools/ci/selected-gate-verdict.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const base = {
@@ -304,4 +304,63 @@ test("#5304: groups the runner fan-out could not represent are named on the verd
   assert.equal(selectedGateVerdict({ ...base, unrepresented: "" }).reason, selectedGateVerdict({ ...base }).reason);
   const red = selectedGateVerdict({ ...base, dropped: "1", unrepresented: "test:perf-session" });
   assert.equal(red.ok, false, "naming never exempts a drop");
+});
+
+test("#5403: on a green matrix every PLANNED spec needs a junit testcase in some shard", () => {
+  const plan = JSON.stringify([
+    { name: "selected-1", specs: "tests/specs/boot-guard.spec.js tests/specs/camera.spec.js", circuits: "" },
+    { name: "oversize-c-1of2", specs: "tests/specs/quali.spec.js", shard: "1/2", circuits: "" },
+    { name: "oversize-c-2of2", specs: "tests/specs/quali.spec.js", shard: "2/2", circuits: "" },
+  ]);
+  const planned = plannedSpecs(plan);
+  assert.deepEqual(planned, { specs: ["tests/specs/boot-guard.spec.js", "tests/specs/camera.spec.js", "tests/specs/quali.spec.js"] });
+  const ev = { started: ["selected-1"], junit: ["selected-1"], planned };
+  // Before #5403 this was green: selected-1 left a testcase (a), so b and c were invisible.
+  const miss = selectedGateVerdict({ ...base, evidence: { ...ev, ran: ["tests/specs/boot-guard.spec.js"] } });
+  assert.equal(miss.ok, false);
+  assert.match(miss.reason, /2 planned spec\(s\) left no junit testcase in any shard: tests\/specs\/camera\.spec\.js, tests\/specs\/quali\.spec\.js/);
+  const all = selectedGateVerdict({ ...base, evidence: { ...ev, ran: ["tests/specs/boot-guard.spec.js", "tests/specs/camera.spec.js", "tests/specs/quali.spec.js"] } });
+  assert.equal(all.ok, true, all.reason);
+  // No plan handed in (a pure caller or an older workflow): the per-shard rules alone, as before.
+  assert.equal(plannedSpecs(""), null);
+  assert.equal(selectedGateVerdict({ ...base, evidence: { ...ev, planned: null, ran: [] } }).ok, true);
+  // A plan that cannot be read fails closed, never reads as "nothing planned".
+  for (const bad of ["{not json", '{"specs":"x"}', '[{"name":"x"}]']) {
+    const v = selectedGateVerdict({ ...base, evidence: { ...ev, planned: plannedSpecs(bad), ran: [] } });
+    assert.equal(v.ok, false, bad);
+    assert.match(v.reason, /cannot check each planned spec ran; failing closed/);
+  }
+  // The circuit lane: a per-circuit loop spec may collect zero tests for the scoped circuit, so its row is left out.
+  assert.deepEqual(plannedSpecs(JSON.stringify([{ name: "selected-1", specs: "tests/specs/tracks-walls-a.spec.js tests/specs/tracks-walls-b.spec.js", circuits: "monza" }])), { specs: [] });
+  // A red matrix is untouched: it is judged by the failure rules, never cleared by a full plan.
+  const red = selectedGateVerdict({ ...base, selected: "failure", evidence: { ...ev, ran: ["tests/specs/boot-guard.spec.js", "tests/specs/camera.spec.js", "tests/specs/quali.spec.js"] } });
+  assert.equal(red.ok, false);
+});
+
+// A spec name no tree carries, built so the source-path lint does not read it as a reference.
+const NEVER = ["tests", "specs", "never-planned.spec.js"].join("/");
+
+test("#5403 CLI: SHARDS names a spec no junit ran -> exit 1; every planned spec ran -> exit 0", () => {
+  const dir = mkTmpDir("sel-plan-");
+  const j = path.join(dir, "junit-in", "spec-timings-junit-selected-selected-1-0", "test-results-1");
+  fs.mkdirSync(j, { recursive: true });
+  fs.mkdirSync(path.join(dir, "started-in", "selected-started-selected-1-0"), { recursive: true });
+  fs.writeFileSync(path.join(j, "junit.xml"),
+    `<testsuites><testsuite><testcase classname="specs/boot-guard.spec.js" name="t"/><testcase classname="specs/camera.spec.js" name="u"><skipped/></testcase></testsuite></testsuites>`);
+  assert.deepEqual(ranSpecsUnder(path.join(dir, "junit-in")), ["tests/specs/boot-guard.spec.js", "tests/specs/camera.spec.js"]);
+  const run = (specs) => {
+    try {
+      execFileSync(process.execPath, [path.join(ROOT, "tools/ci/selected-gate-verdict.mjs"), "--junit-in", "junit-in", "--started-in", "started-in"], {
+        cwd: dir, encoding: "utf8", stdio: "pipe",
+        env: { ...process.env, SELECT: "success", SELECTED: "success", GUARDS: "success", DROPPED: "0", CALLED: "false", DRAFT: "false", DOWNLOAD_FAILED: "false",
+          SHARDS: JSON.stringify([{ name: "selected-1", specs, circuits: "" }]) },
+      });
+      return { code: 0, err: "" };
+    } catch (e) { return { code: e.status, err: String(e.stderr) }; }
+  };
+  assert.equal(run("tests/specs/boot-guard.spec.js tests/specs/camera.spec.js").code, 0);
+  const r = run(`tests/specs/boot-guard.spec.js tests/specs/camera.spec.js ${NEVER}`);
+  assert.equal(r.code, 1);
+  assert.match(r.err, /1 planned spec\(s\) left no junit testcase in any shard: tests\/specs\/never-planned\.spec\.js/);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

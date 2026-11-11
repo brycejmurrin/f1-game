@@ -269,6 +269,8 @@ test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once
     "junit download/stage/carry may never decide the verdict by throwing");
   const decideStep = job.steps.find((st) => st.name === "One answer for the change-aware gate");
   assert.ok(decideStep && decideStep["continue-on-error"] !== true, "the verdict step decides");
+  // #5403: the verdict is handed the plan, so a planned spec with no junit testcase reds a green matrix.
+  assert.equal(decideStep.env?.SHARDS, "${{ needs.select.outputs.shards }}", "selected-verdict must read the select job's plan");
   // …and no `selected` shard saves it any more (one key per run, one writer).
   const selected = parseYAML(ciWorkflow).jobs.selected;
   assert.ok(!selected.steps.some((st) => /cache\/save/.test(st.uses || "")), "a shard must not race for the carry-forward key");
