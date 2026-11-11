@@ -425,11 +425,6 @@ const FULL = [
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/post-fx-opts.js",   // PostFxOpts: GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS (game.js reads them per frame)
   "js/perf/metrics-overlay.js",
-  "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated; before game.js binds it)
-  "js/perf/gpu-test-run.js",   // GpuTestRun: PHONE TEST > GPU TEST, one-tap phase run over SoakRun (scale sweep, mirror off, GPU timer, link counts)
-  "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633); reads PerfGov/GLX, writes neither
-  "js/perf/bench-capture.js",  // BenchCapture: BENCHMARK's per-leg profiling record (memory, logs, GPU, timing, device); bench-run.js hooks it
-  "js/perf/bench-run.js",      // BenchRun: SETTINGS > GRAPHICS > BENCHMARK (#bench): GPU TEST per three.js path across reloads, results file
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage-ride.js", // VantageRide: smoothed ride height / grade / soft floor (before vantage)
@@ -1062,6 +1057,22 @@ const LAZY_EDGES = [
 const LAZY_DEV = [
   "js/perf/gfx-debug-overlay.js", // GfxDebug: ?gfxdebug=1 on-screen renderer verdict
 ];
+
+// PERF RIG (#4978 row 2, ~116 KB): BENCHMARK, PHONE TEST (RECORD / GPU TEST /
+// AUTO SOAK) and their capture helpers. Nothing reads them at eval: their
+// settings doors mount on a timer after load and every cross-file read is at
+// call time (typeof-guarded in apex-bridge). LazyBundles.bootPerfRig loads
+// them at idle after boot, or at once when BenchRun's multi-reload plan
+// (apex26.benchRun) is waiting to resume, and binds SoakRun / BenchRun to G.
+// Order is the old FULL order (soak before the runners that drive it).
+const LAZY_PERF = [
+  "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated)
+  "js/perf/gpu-test-run.js",   // GpuTestRun: PHONE TEST > GPU TEST, one-tap phase run over SoakRun
+  "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633)
+  "js/perf/bench-capture.js",  // BenchCapture: BENCHMARK's per-leg profiling record; bench-run.js hooks it
+  "js/perf/bench-run.js",      // BenchRun: SETTINGS > GRAPHICS > BENCHMARK (#bench), resumes across reloads
+];
+const LAZY_PERF_EDGES = [];
 
 // overlay.html (the stream OVERLAY page) loads these by its own tags; the game
 // shell never reads them (#4978 row 1). Listed so FULL ∪ DEFERRED ∪ LAZY_* ∪
@@ -1809,7 +1820,7 @@ module.exports = {
   MOVED,
   SW_LOCALES,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
-  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, OVERLAY_PAGE, LAZY_RACE,
+  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, LAZY_PERF, LAZY_PERF_EDGES, OVERLAY_PAGE, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,
   LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,

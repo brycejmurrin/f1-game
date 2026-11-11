@@ -5286,6 +5286,9 @@
       "bootAgentSurface": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "bootPerfRig": [
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
+      ],
       "create": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -5326,6 +5329,9 @@
       ],
       "ensureNet": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
+      ],
+      "ensurePerfRig": [
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "ensureRaceSession": [
         "tests/unit/global-registry.test.mjs",
@@ -10868,7 +10874,8 @@
       ],
       "load": [
         "tests/unit/bench-capture.test.mjs",
-        "tests/unit/bench-run.test.mjs"
+        "tests/unit/bench-run.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "median": [
         "tests/unit/bench-run.test.mjs"
@@ -10886,7 +10893,8 @@
         "tests/unit/bench-run.test.mjs"
       ],
       "resume": [
-        "tests/unit/bench-capture.test.mjs"
+        "tests/unit/bench-capture.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "scenes": [
         "tests/unit/bench-capture.test.mjs",

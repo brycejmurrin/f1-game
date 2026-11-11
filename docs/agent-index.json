@@ -3802,12 +3802,12 @@
     {
       "path": "js/perf/bench-capture.js",
       "global": "BenchCapture",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/bench-run.js",
       "global": "BenchRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/gfx-debug-overlay.js",
@@ -3827,7 +3827,7 @@
     {
       "path": "js/perf/gpu-test-run.js",
       "global": "GpuTestRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/loop-health.js",
@@ -3852,7 +3852,7 @@
     {
       "path": "js/perf/phone-recorder.js",
       "global": "PhoneRecorder",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/quality-preset.js",
@@ -3877,7 +3877,7 @@
     {
       "path": "js/perf/soak-run.js",
       "global": "SoakRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/spans.js",
