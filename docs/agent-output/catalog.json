@@ -1207,6 +1207,8 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
+        "test:scratch-proofa",
+        "test:scratch-proofb",
         "test:shimmer",
         "test:smoke",
         "test:stall-reload-sw",
@@ -4298,6 +4300,14 @@
     {
       "name": "test:results-flow",
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
+    },
+    {
+      "name": "test:scratch-proofa",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-proof-r1.spec.js tests/specs/scratch-proof-r2.spec.js tests/specs/scratch-proof-r3.spec.js tests/specs/scratch-proof-r4.spec.js tests/specs/scratch-proof-r5.spec.js tests/specs/scratch-proof-r6.spec.js tests/specs/scratch-proof-r7.spec.js tests/specs/scratch-proof-r8.spec.js"
+    },
+    {
+      "name": "test:scratch-proofb",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-prebuild-m1.spec.js tests/specs/scratch-prebuild-m2.spec.js tests/specs/scratch-prebuild-m3.spec.js tests/specs/scratch-prebuild-m4.spec.js tests/specs/scratch-proof-r10.spec.js tests/specs/scratch-proof-r11.spec.js tests/specs/scratch-proof-r12.spec.js tests/specs/scratch-proof-r9.spec.js"
     },
     {
       "name": "test:service-worker",

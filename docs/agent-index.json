@@ -1423,6 +1423,38 @@
       "twinned": false
     },
     {
+      "id": "scratch-proofa",
+      "script": "test:scratch-proofa",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-proof-r1.spec.js",
+        "tests/specs/scratch-proof-r2.spec.js",
+        "tests/specs/scratch-proof-r3.spec.js",
+        "tests/specs/scratch-proof-r4.spec.js",
+        "tests/specs/scratch-proof-r5.spec.js",
+        "tests/specs/scratch-proof-r6.spec.js",
+        "tests/specs/scratch-proof-r7.spec.js",
+        "tests/specs/scratch-proof-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "scratch-proofb",
+      "script": "test:scratch-proofb",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-prebuild-m1.spec.js",
+        "tests/specs/scratch-prebuild-m2.spec.js",
+        "tests/specs/scratch-prebuild-m3.spec.js",
+        "tests/specs/scratch-prebuild-m4.spec.js",
+        "tests/specs/scratch-proof-r10.spec.js",
+        "tests/specs/scratch-proof-r11.spec.js",
+        "tests/specs/scratch-proof-r12.spec.js",
+        "tests/specs/scratch-proof-r9.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",
