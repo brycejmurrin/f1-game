@@ -13,6 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DOCS_FAST_TEST_FILES } from "../../tools/ci/docs-fast-tests.mjs";
 import { spawnSync } from "node:child_process";
 import { verificationIdentity, beginVerification, finishVerification, readVerification, verificationPath, verificationMarker } from "../../tools/ci/verification-receipt.mjs";
 import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
@@ -525,6 +526,18 @@ test("--changed: a tests/data file selects the unit files that pin it; an unpinn
   const unpinned = selectToolingFastChanged(["tests/data/flaky-quarantine.json"], { allFiles: all, pinIndex: new Map() });
   assert.equal(unpinned.reason, "tests-data-unpinned");
   assert.deepEqual(unpinned.files, all);
+});
+
+// #5461: the CI guards tier on a prose PR is `tooling-fast --changed`, and its docs-only set left knowledge-retention
+// out, so a 43 KB note merged green and reddened the deploy tip. The set is the list the pre-commit hook runs too.
+test("docs-only mode runs the shared docs list, knowledge-retention included, on the real floor (#5461)", () => {
+  const sel = selectToolingFastChanged(["docs/notes/" + "BIG-2026-11-11.md"], { pinIndex: new Map() });
+  assert.equal(sel.reason, "docs-only");
+  assert.ok(sel.files.includes("tests/unit/knowledge-retention.test.mjs"), "the 40 KB note cap runs on a prose diff");
+  assert.deepEqual([...sel.files].sort(), [...DOCS_FAST_TEST_FILES].sort(),
+    "every listed docs test is in the floor and selected: a list entry the floor lacks would silently not run");
+  const hook = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../.githooks/pre-commit"), "utf8");
+  assert.match(hook, /node tools\/ci\/docs-fast-tests\.mjs/, "the hook's docs-only branch reads the same list");
 });
 
 test("--changed selector: one case per branch (empty, docs-only, tracked, unmatched, no-pin-match, matched)", () => {

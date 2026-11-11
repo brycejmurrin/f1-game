@@ -296,6 +296,7 @@ test("a real worktree commit isolates guard fixtures while preserving its branch
     write("tools/check/ratchets.mjs", "// Read-only fixture of the ratchet stage.\n");
     const verify = `import assert from 'node:assert/strict';\nimport {execFileSync} from 'node:child_process';\nconst actual=execFileSync('git',['rev-parse','--show-toplevel'],{cwd:process.env.APEX_OTHER_REPO,encoding:'utf8'}).trim();\nassert.equal(actual,process.env.APEX_OTHER_REPO,'fixture Git must use its own repository');\nassert.equal(process.env.GIT_DIR,undefined);\nassert.equal(process.env.GIT_INDEX_FILE,undefined);\n`;
     write("tests/unit/docs-integrity.test.mjs", verify);
+    write("tools/ci/docs-fast-tests.mjs", 'console.log("tests/unit/docs-integrity.test.mjs");\n');   // the hook's docs list (#5461)
     write("guard-fixture.mjs", verify);
     write("bin/npm", '#!/usr/bin/env bash\nexec "' + process.execPath + '" guard-fixture.mjs\n');
     fs.chmodSync(path.join(base, "bin/npm"), 0o755);

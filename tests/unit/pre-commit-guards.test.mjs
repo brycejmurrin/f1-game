@@ -22,6 +22,7 @@ import {
   unstagedTracked,
 } from "../../tools/ci/guards-verdict.mjs";
 import { parseFailures, report as guardsReport } from "../../tools/ci/guards-report.mjs";
+import { DOCS_FAST_TEST_FILES } from "../../tools/ci/docs-fast-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HELPER = path.join(ROOT, "tools/ci/guards-verdict.mjs");
@@ -681,7 +682,10 @@ function splitFixture(prefix) {
   put('tools/check/ratchets.mjs','process.exit(0);\n');
   put('tools/gen/targets.mjs','console.log("tools/README.md");\n');
   put('tools/ci/guards-verdict.mjs','process.exit(1);\n');
-  put('tests/unit/docs-integrity.test.mjs','import {test} from "node:test";test("docs",()=>{});\n');
+  // The hook runs the REAL docs list (#5461); every listed file is a passing stub here.
+  fs.mkdirSync(path.join(repo.dir,'tools/ci'),{recursive:true});
+  fs.copyFileSync(path.join(ROOT,'tools/ci/docs-fast-tests.mjs'),path.join(repo.dir,'tools/ci/docs-fast-tests.mjs'));
+  for(const f of DOCS_FAST_TEST_FILES) put(f,'import {test} from "node:test";test("docs",()=>{});\n');
   put('tests/data/ratchets.json','{}\n');
   put('package.json',JSON.stringify({scripts:{'test:guards':'node -e "require(\'fs\').appendFileSync(\'calls.log\',\'guards\\n\')"'}}));
   put('code.js','v1\n');put('docs/PHYSICS.md','note\n');put('tools/README.md','generated\n');
@@ -708,6 +712,33 @@ test('git hook classifies docs, survey assets, generated docs and code; runs und
    assert.equal(fs.readFileSync(path.join(r.dir,'calls.log'),'utf8'),before+'guards\n',rel);
    r.g('commit','-qm','code');
   }
+ }finally{r.rm();}
+});
+
+// #5461: the docs-only branch ran docs-integrity alone, so a 43 KB note reached the deploy tip and reddened
+// test:guards there. Here knowledge-retention is the REAL 40 KB cap (tools/docs/knowledge-gc.mjs scan) run through
+// the hook's own docs list: a 41 KB note is refused, a 39 KB note commits.
+test('git hook docs-only branch runs knowledge-retention: a 41 KB note is refused, a 39 KB note commits (#5461)',()=>{
+ const r=splitFixture('split-notes-');
+ try{
+  fs.mkdirSync(path.join(r.dir,'tools/docs'),{recursive:true});
+  fs.copyFileSync(path.join(ROOT,'tools/docs/knowledge-gc.mjs'),path.join(r.dir,'tools/docs/knowledge-gc.mjs'));
+  r.put('tests/unit/knowledge-retention.test.mjs',[
+   'import {test} from "node:test";import assert from "node:assert/strict";',
+   'import {scan} from "../../tools/docs/knowledge-gc.mjs";',
+   'test("size cap",()=>{assert.deepEqual(scan().oversize.map((n)=>n.file),[]);});',''].join('\n'));
+  r.g('add','-A');r.g('commit','-qm','cap fixture','--no-verify');
+  const note=(rel,kb)=>{r.put(rel,'# N\n\nKind: how-to · Re-measure-by: 2099-01-01\n\n'+'x'.repeat(kb*1024)+'\n');r.g('add',rel);};
+  note('docs/notes/'+'BIG.md',41);
+  const big=r.run();
+  assert.equal(big.status,1,big.stderr);
+  assert.match(big.stderr,/docs-only test set is red/);
+  assert.equal(fs.existsSync(path.join(r.dir,'calls.log')),false,'still the docs-only branch, not test:guards');
+  r.g('rm','-q','--cached','docs/notes/'+'BIG.md');fs.rmSync(path.join(r.dir,'docs/notes','BIG.md'));
+  note('docs/notes/'+'SMALL.md',39);
+  const small=r.run();
+  assert.equal(small.status,0,small.stderr);
+  assert.match(small.stderr,new RegExp(`docs-only commit — docs test set green \\(${DOCS_FAST_TEST_FILES.length} files`));
  }finally{r.rm();}
 });
 

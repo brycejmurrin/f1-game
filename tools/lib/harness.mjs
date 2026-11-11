@@ -57,6 +57,18 @@ const _wgpuArgs = require("./webgpu-chrome-args.cjs");
 export const WEBGPU_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_CHROMIUM_ARGS;
 export const WEBGPU_LAVAPE_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_LAVAPE_CHROMIUM_ARGS;
 export const WEBGPU_LAVAPE_ENV = _wgpuArgs.WEBGPU_LAVAPE_ENV;
+export const WEBGPU_CENSUS_ADAPTER = _wgpuArgs.WEBGPU_CENSUS_ADAPTER;
+export const WEBGPU_CENSUS_ARM = _wgpuArgs.WEBGPU_CENSUS_ARM;
+export const adapterMismatch = _wgpuArgs.adapterMismatch;
+
+/** The adapter three's WebGPU backend runs on (GPUDevice.adapterInfo, else GPUAdapter.info), or null. #5450. */
+export async function readWebgpuAdapter(page) {
+  return page.evaluate(() => {
+    const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend;
+    const i = (b && b.device && b.device.adapterInfo) || (b && b.adapter && b.adapter.info);
+    return i ? { vendor: i.vendor, architecture: i.architecture, device: i.device, description: i.description } : null;
+  });
+}
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
