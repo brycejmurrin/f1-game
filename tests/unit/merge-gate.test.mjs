@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict,
+  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict, raisesCovered,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
@@ -1458,7 +1458,7 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   const f = fakes();
   f.files.push({ filename: FRAG("cursor--x") });
   const request = (p) => ghRequest(p) || (p.startsWith("compare/") ? { json: { merge_base_commit: { sha: MB }, files: [{ filename: FRAG("cursor--x") }] } } : f.deps.request(p));
-  const rowOf = () => evaluate({ pr: 7, ...f.deps, request, trusted: true }).rows.raise;
+  const rowOf = () => { const v = evaluate({ pr: 7, ...f.deps, request, trusted: true }); assert.ok(v.rows, v.error); return v.rows.raise; };
   // Raise without the label: refused, naming the metric.
   let r = rowOf();
   assert.equal(r.ok, false);
@@ -1476,9 +1476,20 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   // A push touching a ratchet file after his label: a fresh label is needed.
   f.prRuns.push({ head_sha: "c".repeat(40), created_at: "2026-11-03T09:30:00Z", pull_requests: [{ number: 7 }] });
   f.prRuns[0].created_at = "2026-11-03T11:00:00Z";
+  at["c".repeat(40)] = at[MB]; // the head he labelled raised nothing yet
   r = rowOf();
   assert.equal(r.ok, false);
   assert.match(r.evidence, /^needs a fresh ratchet-raise from brycejmurrin: a push touching tests\/data\/ratchets\.d\/cursor--x\.json .* after his label at 2026-11-03T10:30:00Z \(remove and re-add it\)/);
+  // …unless the head he labelled raised as much: a sync that only brought other PRs' fragments needs no re-click.
+  const C = "c".repeat(40);
+  at[C] = at[HEAD];
+  r = rowOf();
+  assert.equal(r.ok, true, r.evidence);
+  assert.match(r.evidence, /^ratchet-raise added by brycejmurrin .* covers assertPins 105→108 \(the pushes since cccccccc touch a ratchet file but raise nothing beyond what he labelled there\)/);
+  // A further raise after his click is not covered.
+  at[C] = { ...at[HEAD], frags: { ...at[HEAD].frags, [FRAG("cursor--x")]: { tree: { assertPins: 1 } } } };
+  assert.equal(rowOf().ok, false, "105→108 now vs 105→106 when he clicked");
+  delete at[C];
   f.prRuns.pop(); f.prRuns[0].created_at = "2026-11-03T09:00:00Z";
   // A lowered ceiling (and a per-file raise beside it) needs no label.
   f.pull.labels = []; f.events.length = 0;
@@ -1493,4 +1504,14 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   const broken = (p) => (p.startsWith("contents/tests/data/ratchets.json") ? { error: "HTTP 502" } : request(p));
   assert.match(evaluate({ pr: 7, ...f.deps, request: broken, trusted: true }).error, /tests\/data\/ratchets\.json at m{8}: HTTP 502/);
   assert.equal(raiseVerdict([], [], []).ok, true);
+});
+
+test("#5405 raisesCovered: a later raise is covered only by an equal or larger one on the same metric; a removal only by a removal", () => {
+  const r = (metric, from, to) => ({ metric, from, to });
+  assert.equal(raisesCovered([], []), true);
+  assert.equal(raisesCovered([r("a", 10, 12)], [r("a", 20, 23)]), true, "the amount counts, not the absolute (a sync moves both)");
+  assert.equal(raisesCovered([r("a", 10, 14)], [r("a", 20, 23)]), false);
+  assert.equal(raisesCovered([r("b", 1, 2)], [r("a", 1, 9)]), false, "another metric is a new raise");
+  assert.equal(raisesCovered([r("a", 5, null)], [r("a", 5, 99)]), false, "a removal is wider than any amount");
+  assert.equal(raisesCovered([r("a", 5, 99)], [r("a", 5, null)]), true);
 });

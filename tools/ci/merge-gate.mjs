@@ -179,7 +179,7 @@ export function configPushState({ pr, head, headRef, labelAt, request, touches =
   if (!Array.isArray(files) || files.length >= 300) return { state: "after", evidence: `the compare ${from.slice(0, 8)}...${head.slice(0, 8)} is unreadable or truncated, so a push` };
   const hit = touches(filePaths(files));
   return hit.length
-    ? { state: "after", evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
+    ? { state: "after", from, evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
     : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no ${what}` };
 }
 
@@ -244,20 +244,44 @@ export function raiseVerdict(raises, labels, events = null, owner = OWNER, push 
   return row(true, `${RAISE_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
 }
 
-/** The raise row for PR `pr` (GitHub reads only: compare for the merge base, the ceilings at it and at the head). */
+/** The PR's own tree raises at `sha`: its ceilings vs those at its merge base with `base` (so a sync, which moves the
+ *  merge base, brings other PRs' fragments into both sides and they cancel). → { raises } | { error }. */
+export function prRaisesAt(sha, base, request) {
+  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(sha)}`);
+  const mb = cmp.json?.merge_base_commit?.sha;
+  if (cmp.error || !mb) return { error: `merge base of ${String(sha).slice(0, 8)}: ${cmp.error || "unreadable"}` };
+  const before = treeCeilingsAt(mb, request);
+  if (before.error) return before;
+  const after = treeCeilingsAt(sha, request);
+  if (after.error) return after;
+  return { raises: treeRaises(before.tree, after.tree) };
+}
+
+/** Does `now` raise nothing beyond `then` (the raises Bryce saw when he clicked)? Every metric raised now was raised
+ *  then by at least as much; a removal is covered only by a removal. Pure. */
+export function raisesCovered(now, then) {
+  const amt = (r) => (r.to === null ? Infinity : r.to - r.from);
+  const was = new Map((then || []).map((r) => [r.metric, amt(r)]));
+  return (now || []).every((r) => was.has(r.metric) && amt(r) <= was.get(r.metric));
+}
+
+/** The raise row for PR `pr` (GitHub reads only: compare for the merge base, the ceilings at it and at the head).
+ *  Bound to what Bryce labelled: a push after his click that touches a ratchet file still counts as covered when the
+ *  PR's own raise at the head is no wider than its own raise at the head he labelled, so a sync that brings in other
+ *  PRs' ratchets.d fragments does not need a fresh click, and any further raise does. */
 export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request }) {
   if (!ratchetFiles(changed).length) return row(true, "no ratchet ceiling file in the diff");
-  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
-  const mb = cmp.json?.merge_base_commit?.sha;
-  if (cmp.error || !mb) return { error: `merge base of ${head.slice(0, 8)}: ${cmp.error || "unreadable"}` };
-  const before = treeCeilingsAt(mb, request);
-  if (before.error) return { error: before.error };
-  const after = treeCeilingsAt(head, request);
-  if (after.error) return { error: after.error };
-  const raises = treeRaises(before.tree, after.tree);
+  const now = prRaisesAt(head, base, request);
+  if (now.error) return { error: now.error };
+  const raises = now.raises;
   const last = newestLabelEvent(events, RAISE_LABEL);
-  const push = raises.length && last?.event === "labeled" && byOwner(last, owner)
+  let push = raises.length && last?.event === "labeled" && byOwner(last, owner)
     ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, touches: ratchetFiles, what: "ratchet file" }) : null;
+  if (push?.state === "after" && push.from) {
+    const then = prRaisesAt(push.from, base, request);
+    if (then.error) return { error: then.error };
+    if (raisesCovered(raises, then.raises)) push = { state: "covered", evidence: `the pushes since ${push.from.slice(0, 8)} touch a ratchet file but raise nothing beyond what he labelled there` };
+  }
   return raiseVerdict(raises, labels, events, owner, push);
 }
 
