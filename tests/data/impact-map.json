@@ -12393,6 +12393,9 @@
       "ambient": [
         "tests/unit/tyre-model.test.mjs"
       ],
+      "applyCompound": [
+        "tests/unit/tyre-model.test.mjs"
+      ],
       "aquaInto": [
         "tests/unit/tyre-model.test.mjs"
       ],
@@ -12415,7 +12418,8 @@
         "tests/unit/tyre-model.test.mjs"
       ],
       "classForTread": [
-        "tests/unit/ai-strategy.test.mjs"
+        "tests/unit/ai-strategy.test.mjs",
+        "tests/unit/tyre-model.test.mjs"
       ],
       "classRecord": [
         "tests/unit/ai-strategy.test.mjs",

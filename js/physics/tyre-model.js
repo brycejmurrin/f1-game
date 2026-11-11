@@ -576,10 +576,9 @@ const TyreModel = (function () {
     soft:   { code: "S", life: 0.48, off: 0.004,  tread: 0, colour: [0.92, 0.12, 0.10] },
     medium: { code: "M", life: 0.74, off: 0,      tread: 0, colour: [0.96, 0.80, 0.10] },
     hard:   { code: "H", life: 1.05, off: -0.004, tread: 0, colour: [0.90, 0.90, 0.93] },
-    // A player who owns no weather tyre gets the class fallback. Its dry-stat
-    // cost must travel with it just as a catalog row's does; AI cars have no
-    // tyreBaseMods and continue to use `off` instead, so this is not counted
-    // twice on the field.
+    // The rows' `mods` mirror the catalog's wet rows (parts.js) for display and
+    // the record shape; on a car they are NOT applied: applyCompound fits any
+    // treaded set at the AI's cost (wetModsFor, #5289), so both pay `off`.
     inter:  { code: "I", life: 1.00, off: -0.010, tread: 1, colour: [0.10, 0.72, 0.24],
               mods: { speed: 0.92, accel: 0.93, cornering: 0.94, braking: 0.98 } },
     wet:    { code: "W", life: 1.10, off: -0.020, tread: 2, colour: [0.10, 0.40, 0.92],
@@ -696,7 +695,20 @@ const TyreModel = (function () {
   }
 
   const STAT_KEYS = ["speed", "accel", "cornering", "braking"];
-  function applyCompound(c, record) {
+  // A WET SET COSTS THE PLAYER WHAT IT COSTS THE AI (#5289, Bryce: "Scale the
+  // player down to match"). An AI on an inter or a full wet pays only its
+  // record's `off` on vmax, and only with wear on (game.js); the catalog/class
+  // stat rows (wet 0.88/0.90/0.90/0.94) made the same set ~11% slower for a
+  // human on the same grip. A treaded set on a human is therefore fitted at the
+  // AI's cost: speed 1 + off (wear on) and nothing else. Fixed at fit time, so
+  // c.mods (the session-record key) cannot move mid-race.
+  const _wetMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
+  function wetModsFor(tread, wearOn) {
+    const t = AI_CLASS[classForTread(tread)];
+    _wetMods.speed = wearOn && t ? 1 + t.off : 1;
+    return _wetMods;
+  }
+  function applyCompound(c, record, wearOn) {
     if (!c) return null;
     c.tyre = record || classRecord("medium");
     // `null` is the competent-field sentinel: ordinary AI is assumed to have
@@ -709,7 +721,7 @@ const TyreModel = (function () {
     // Wear off (no plan) keeps the sentinel: that field cannot change tyres.
     if (c.tread !== null || (c.pitPlan && !c.human)) c.tread = c.tyre.tread || 0;
     if (c.tyreBaseMods) {
-      const out = c.mods || (c.mods = {}), tm = c.tyre.mods || null;
+      const out = c.mods || (c.mods = {}), tm = c.tyre.tread > 0 ? wetModsFor(c.tyre.tread, !!wearOn) : c.tyre.mods || null;
       for (const k of STAT_KEYS) out[k] = c.tyreBaseMods[k] * (tm && tm[k] != null ? tm[k] : 1);
     }
     return c.tyre;
@@ -770,7 +782,7 @@ const TyreModel = (function () {
     // and a re-grid cannot disagree about what "fresh" means.
     function fit(c, record) {
       if (!c) return;
-      applyCompound(c, record);
+      applyCompound(c, record, on());
       c.tyreWear = 0;
       c.tyreWearF = 0; c.tyreWearR = 0;
       // A FRESH SET COMES OUT OF BLANKETS, not up to temperature. This one line
@@ -1065,7 +1077,7 @@ const TyreModel = (function () {
       stints, closeStints,
       lapsOn, spent, lapsLeft, belowWindow, info, severity, ambient, trackTemp,
       level: () => level, setLevel, on, planLaps,
-      classRecord, optionRecord, applyCompound, startRecord: sessionStartRecord,
+      classRecord, optionRecord, applyCompound: (c, record) => applyCompound(c, record, on()), startRecord: sessionStartRecord,
     };
   }
 
