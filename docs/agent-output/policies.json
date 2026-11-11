@@ -471,6 +471,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/ci/apt-cached-install.sh": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "GitHub ::error::/::warning:: lines verbatim; the distinct mirror-unreachable text; exit 3 vs 1; populated=1 to GITHUB_OUTPUT"
+    },
     "tools/ci/assert-audit.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -760,6 +765,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Unknown API/base forces no reuse; no stdout prose"
+    },
+    "tools/ci/reuse-draft-selected.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Any lookup doubt or moved tip forces no reuse; stdout is GITHUB_OUTPUT lines only"
     },
     "tools/ci/run-group.mjs": {
       "action": "artifact-first",
@@ -2129,7 +2139,7 @@
     "tools/perf/vm-alloc-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Window KB/frame values with their (gc) marks, the mean, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
+      "preserve": "The objects (gated), boxed and heap KB/frame means, window objects/boxed values with their (gc) marks, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
     },
     "tools/perf/vm-leak-census.mjs": {
       "action": "keep-native",
