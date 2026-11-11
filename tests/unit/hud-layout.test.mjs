@@ -945,7 +945,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "phone sectors clear BOOST via measured --dock-r-w only (#1191 anchor max overshot into #announce)");
   // OVERTAKE / CORNER MODE: cockpit --hl-x must not shove the chips under the
   // right dock when taps/shifts are lit (hud-survey aero×shift-up + Bryce OT/BOOST).
-  assert.match(css, /body:has\(\.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]:not\(\[data-hl-v4\]\)\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
+  // The :has() argument is scoped to the shell's child chain (#3108, css-has-scope.test.mjs): same match.
+  assert.match(css, /body:has\(> :where\(#hud\) > :where\(#hud-dock\) > \.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]:not\(\[data-hl-v4\]\)\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
     "lit docks adjust shipped OVERTAKE / CORNER MODE while preserving explicitly placed chips");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
   for (const id of ["damage", "rel", "strat", "inputs"]) {
