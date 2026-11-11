@@ -2175,13 +2175,9 @@ const TLX = (function () {
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
       const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
-      // #5387 (Bryce, 2026-11-11: "Allow it under the loading screen", ONLY these small merge geometries; the track and
-      // scenery pre-build stays on hold). A chunked record's main-pass MERGE SLOT (tlx-chunked mergeVisible) was made
-      // the first time that record had 2+ visible chunks, and its pool wrapper and render object (UBO, bind group) with
-      // it, so a record that first merged mid-lap minted them there (proof runs 42963201936 / 42963212978). On the
-      // frame car-draw's primeRace primes (gfx.primeChunkMerge), each chunked record still without a slot gets one
-      // from its first two chunks (a small index; a later, larger visible set grows it in place, an index buffer and
-      // no new wrapper), drawn once at a ZERO matrix: zero-area, no fragment, no depth. Main pass only.
+      // #5387: a chunked record's merge slot (and its wrapper) was made at its first 2+-chunk view, mid-lap. On a
+      // primeRace frame (gfx.primeChunkMerge) each slotless record gets one from its first two chunks, drawn at a
+      // ZERO matrix. Main pass only; the track pre-build stays on hold (Bryce).
       let _chunkPrime = false, _chunkPrimeNow = false, _chunkPrimeN = 0;
       const _chunkPrimeZ = new Float32Array(16);
       function _primeMergeSlot(rec, order) {
