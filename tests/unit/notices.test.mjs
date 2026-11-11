@@ -67,7 +67,8 @@ test("the page title and descriptions do not brand with the F1 word mark", () =>
   assert.equal(/<title>([^<]*)<\/title>/.exec(html)[1], "Apex 26 — unofficial racing fan game");
   const desc = /<meta name="description" content="([^"]*)"/.exec(html)[1];
   const manifest = JSON.parse(read("manifest.json"));
-  for (const s of [desc, manifest.description, manifest.name, manifest.short_name]) assert.doesNotMatch(s, /\bF1\b|FORMULA ?(1|ONE)/i, s);
+  const MARK = /\bF1\b|FORMULA ?(1|ONE)/i;
+  assert.deepEqual([desc, manifest.description, manifest.name, manifest.short_name].filter((s) => MARK.test(s)), []);
 });
 
 test("the title carries the unofficial notice, ABOUT & CREDITS the full trade-mark sentence, and no CSS hides it", () => {
@@ -76,12 +77,14 @@ test("the title carries the unofficial notice, ABOUT & CREDITS the full trade-ma
   assert.equal(m[1], TITLE_NOTICE);
   const first = /<!-- @gen-notices:credits -->\s*<p[^>]*>([^<]*)<\/p>/.exec(html);
   assert.equal(first && first[1], TRADEMARK, "Formula 1's fan-guideline sentence heads ABOUT & CREDITS");
+  const HIDES = /display\s*:\s*none|visibility\s*:\s*hidden/, hiding = [];
   for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((x) => x.endsWith(".css"))) {
     const css = read("css/" + f).replace(/\/\*[\s\S]*?\*\//g, "");
     for (const rule of css.matchAll(/([^{}]*#disclaimer[^{}]*)\{([^{}]*)\}/g)) {
-      assert.doesNotMatch(rule[2], /display\s*:\s*none|visibility\s*:\s*hidden/, `css/${f}: ${rule[1].trim()} hides #disclaimer`);
+      if (HIDES.test(rule[2])) hiding.push(`css/${f}: ${rule[1].trim()}`);
     }
   }
+  assert.deepEqual(hiding, [], "a CSS rule hides #disclaimer");
 });
 
 test("the adapted SGSR shaders point at the retained BSD-3-Clause text", () => {

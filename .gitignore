@@ -55,6 +55,8 @@ assets/pack/src/
 # deploy; the list is BUILT_PATHS in tools/lib/generated-paths.mjs
 # (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
 /js/track/circuit-meta.js
+# Retired generator outputs (RETIRED_PATHS, same file): built into artifacts/ on demand.
+/docs/TESTING-COVERAGE.md
 
 # Electron desktop spike — staged site + builder output (never commit)
 desktop/dist/

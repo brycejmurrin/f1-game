@@ -14068,7 +14068,6 @@
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "stop": [
-        "tests/unit/capture-tools-regressions.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",

@@ -127,8 +127,8 @@ ledger lists.
 - [Share image cards](archive/plans/2026-10-04-share-cards.md): one card renderer for race, daily-challenge, ghost-lap and career results, shared as a PNG with a download fallback.
 - [Stream overlay mode](archive/plans/2026-10-04-stream-overlay.md): a transparent broadcast-graphics page for OBS that joins the game as a spectator, because an OBS source cannot see the player's browser tab.
 - [Highlight reel and clip export](plans/2026-10-04-highlight-reel-clip-export.md): scored race events stitched into a reel, exported as video with WebCodecs, with a MediaRecorder fallback.
-- [PWA shortcuts and race calendar](plans/2026-10-04-pwa-shortcuts-calendar.md): manifest shortcuts with deep links, and an `.ics` calendar built from the schedule the Data Hub already fetches.
-- [Colour-vision extension and captions](plans/2026-10-04-colourblind-captions.md): the colour-only meanings the existing mode misses, non-colour cues, and captions for the spoken lines that have none.
+- [PWA shortcuts and race calendar](archive/plans/2026-10-04-pwa-shortcuts-calendar.md): manifest shortcuts with deep links, and an `.ics` calendar built from the schedule the Data Hub already fetches.
+- [Colour-vision extension and captions](archive/plans/2026-10-04-colourblind-captions.md): the colour-only meanings the existing mode misses, non-colour cues, and captions for the spoken lines that have none.
 - [Localisation](plans/2026-10-04-localisation.md): a no-build string architecture, measured string surface, first languages, and the voice problem.
 - [Barrier run-off lateral teleports](archive/plans/2026-09-30-barrier-runoff-teleports.md): open 2026-09-26 ledger defect — `wallAt`/`bar*` jumps ~7.9 m at tyre-stack termini; feather + end-face clamp plan with per-circuit probes.
 - [Carve headroom](plans/2026-09-30-carve-headroom.md): saturated size ratchets → extract player-forces / wall-clamp / grip / band / cam leftovers from `game.js` (helpers, not a megafunction split); lower ceilings only.

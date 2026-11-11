@@ -7,9 +7,11 @@ quoting him; the quote lives here once (docs/plans/2026-11-03-agent-surface-rese
 old row's `superseded by` names it; rows are never deleted or renumbered.
 `tests/unit/knowledge-retention.test.mjs` checks that every `D-NNN` cited
 anywhere exists here, that ids are unique and sequential, and that each row's
-`cited by` paths exist.
+`related files` exist. A related file is where the decision lands or is enforced;
+it need not quote the id (the column was `cited by` until 2026-11-09, when 23 of
+30 rows listed files that never mention their id).
 
-Columns: `D-NNN | date (PT unless marked Z) | "verbatim words" | scope | via | cited by | superseded by`.
+Columns: `D-NNN | date (PT unless marked Z) | "verbatim words" | scope | via | related files | superseded by`.
 `via` is how the words reached the repo: `session` (Bryce typed it in that
 session), `relay` (a dispatcher quoted him with when and where; retired by
 D-001 §4.3 in favour of provenance), `AskUserQuestion`. "(recorded: …)" marks
@@ -20,7 +22,7 @@ uses them or a `docs/notes/` note with `Re-measure-by:` (docs/notes/AGENT-MEMORY
 listed. Backfilled 2026-11-03 from the inline quotes
 (`grep -rn "Bryce, 20\|Bryce 20\|Bryce (20"`); notes keep their quotes.
 
-| id | date | words | scope | via | cited by | superseded by |
+| id | date | words | scope | via | related files | superseded by |
 |---|---|---|---|---|---|---|
 | D-001 | 2026-11-03 | "Let's fix all and add/edit new skills agents and any changes within one pr" | the agent-surface reset lands as ONE PR: hooks, settings, skills, agents, memory, docs and the retention tool included (docs/plans/2026-11-03-agent-surface-reset.md); 21-day cite-or-archive window; chat preferences stay in auto-memory, decisions get rows here | session | docs/plans/2026-11-03-agent-surface-reset.md, tools/docs/knowledge-gc.mjs, tests/unit/knowledge-retention.test.mjs | — |
 | D-002 | 2026-10-15 | (recorded: branch protection requires `CI` and nothing else; "it was twelve names") | the deploy branch's one required check is `CI` (`ci-verdict`); `gate` reads it | session | .github/workflows/ci.yml, tools/ci/merge-gate.mjs | D-031 |

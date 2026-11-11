@@ -1,5 +1,9 @@
 # Track roster — what is missing (2026-09-14)
 
+Summary: The 38 World Championship venues the game does not carry, why the upstream `bacinger/f1-circuits` trace file can add no more, what each remaining candidate costs to import (Overpass-measured), and the four shipped defs whose `classic` flag the 2027 calendar contradicts.
+
+> **Historical record** (2026-09-14): the shipped-roster count and the gap lists predate later circuit additions; the current roster is `tools/manifest.cjs` (picker metadata in the generated `js/track/circuit-meta.js`), never a count in this note.
+
 What Apex 26 ships against every circuit that has hosted a Formula One World
 Championship Grand Prix, and what it would cost to close each gap. Dated by
 design: the calendar half of this goes stale, the venue half does not.
