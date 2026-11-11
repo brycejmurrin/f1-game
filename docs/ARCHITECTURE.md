@@ -152,13 +152,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
-| `soak-run.js` | `SoakRun` | tag | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
-| `gpu-test-run.js` | `GpuTestRun` | tag | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
-| `phone-recorder.js` | `PhoneRecorder` | tag | PhoneRecorder: a phone-only soak recorder (issue #1633). |
-| `bench-capture.js` | `BenchCapture` | tag | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
-| `bench-run.js` | `BenchRun` | tag | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
 | `three-inspector.js` | `ThreeInspector` | LAZY_AGENT | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
 | `gfx-debug-overlay.js` | `GfxDebug` | LAZY_DEV | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
+| `soak-run.js` | `SoakRun` | LAZY_PERF | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
+| `gpu-test-run.js` | `GpuTestRun` | LAZY_PERF | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
+| `phone-recorder.js` | `PhoneRecorder` | LAZY_PERF | PhoneRecorder: a phone-only soak recorder (issue #1633). |
+| `bench-capture.js` | `BenchCapture` | LAZY_PERF | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
+| `bench-run.js` | `BenchRun` | LAZY_PERF | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
 
 **`js/render/`**
 
@@ -206,7 +206,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `team-identity.js` | `CareerTeamIdentity` | tag | Per-career MY TEAM appearance. |
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
 | `restore-points.js` | `CareerRestorePoints` | tag | CareerRestorePoints — bounded local history at explicit round/import boundaries. |
-| `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
 | `career-planning.js` | `CareerPlanning` | tag | Career planning: pure projections and bounded choices; never changes Parts legality. |
@@ -217,6 +216,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `career-ui-boot.js` | `CareerUI` | tag | CAREER screen boot stub (FULL). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
+| `career-backup.js` | `CareerBackup` | LAZY_CAREER_UI | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `career-planning-ui.js` | `CareerPlanningUI` | LAZY_CAREER_UI | Read-only Career planning cards and explicit local save recovery actions. |
 | `career-ui.js` | `CareerScreen` | LAZY_CAREER_UI | the CAREER screen (#career), LAZY_CAREER_UI. |
 
