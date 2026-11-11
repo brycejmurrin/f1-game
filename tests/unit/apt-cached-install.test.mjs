@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { parse as parseYaml } from "yaml";
 
 const SCRIPT = path.resolve("tools/ci/apt-cached-install.sh");
 
@@ -23,11 +24,13 @@ const STUBS = {
     '  --remove) ;;',
     "esac",
   ].join("\n"),
-  getent: '[ -e "$STATE/dns-down" ] && exit 2; echo "10.0.0.1 $2"',
+  // APT_REACH seam: HOST PORT answers unless the mirror is down.
+  reach: 'echo "reach $1:$2" >> "$STATE/probes"; [ -e "$STATE/dns-down" ] && exit 2; exit 0',
+  "apt-config": '[ -e "$STATE/apt-proxy" ] && echo \'Acquire::http::Proxy "http://proxy:3128";\'; exit 0',
   "apt-get": [
     'echo "apt-get $*" >> "$STATE/calls"',
     '[ -e "$STATE/interrupted" ] && { echo "E: dpkg was interrupted"; exit 100; }',
-    '[ -e "$STATE/apt-down" ] && exit 100',
+    '[ -e "$STATE/apt-down" ] && { echo "E: Failed to fetch https://security.ubuntu.com/x.deb  Temporary failure resolving \'security.ubuntu.com\'"; exit 100; }',
     '[ -n "${APT_STALL:-}" ] && sleep "$APT_STALL"',
     'case " $* " in',
     '  *" update "*) exit 0 ;;',
@@ -39,7 +42,7 @@ const STUBS = {
   ].join("\n"),
 };
 
-function fixture(t, { installed = [], want = [], cached = [], flags = [] } = {}) {
+function fixture(t, { installed = [], want = [], cached = [], flags = [], sources } = {}) {
   const root = fs.mkdtempSync(path.resolve("scratch/apt-cached-install-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const bin = path.join(root, "bin"), state = path.join(root, "state"), cache = path.join(root, "cache");
@@ -53,20 +56,26 @@ function fixture(t, { installed = [], want = [], cached = [], flags = [] } = {})
   }
   for (const f of flags) fs.writeFileSync(path.join(state, f), "");
   fs.writeFileSync(path.join(root, "sources.list"), "# deb http://commented.example/ubuntu x main\ndeb http://azure.archive.ubuntu.com/ubuntu noble main\n");
-  fs.writeFileSync(path.join(root, "ubuntu.sources"), "Types: deb\nURIs: http://security.ubuntu.com/ubuntu/\n");
+  // The runner image's shape (job 130569884615): URIs: mirror+file:/etc/apt/apt-mirrors.txt.
+  fs.writeFileSync(path.join(root, "apt-mirrors.txt"), "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n");
+  fs.writeFileSync(path.join(root, "ubuntu.sources"), `Types: deb\nURIs: mirror+file:${path.join(root, "apt-mirrors.txt")}\n`);
+  const sourceFiles = (sources ?? ["sources.list", "ubuntu.sources"]).map(f => path.join(root, f)).join(" ");
   const run = (args, env = {}) => {
     const out = path.join(root, "github_output");
     const r = spawnSync("bash", [SCRIPT, ...args], {
       encoding: "utf8", timeout: 20000,
       env: {
         ...process.env, PATH: `${bin}:${process.env.PATH}`, STATE: state, APT_SUDO: "", APT_RETRY_SLEEP: "0",
-        APT_SOURCES: `${path.join(root, "sources.list")} ${path.join(root, "ubuntu.sources")}`, GITHUB_OUTPUT: out, ...env,
+        APT_REACH: path.join(bin, "reach"), RUNNER_TEMP: root,
+        https_proxy: "", HTTPS_PROXY: "", http_proxy: "", HTTP_PROXY: "",
+        APT_SOURCES: sourceFiles, GITHUB_OUTPUT: out, ...env,
       },
     });
     const calls = fs.existsSync(path.join(state, "calls")) ? fs.readFileSync(path.join(state, "calls"), "utf8") : "";
     const output = fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "";
+    const probes = fs.existsSync(path.join(state, "probes")) ? fs.readFileSync(path.join(state, "probes"), "utf8") : "";
     const has = p => fs.existsSync(path.join(state, "db", p));
-    return { r, calls, output, has, log: r.stdout + r.stderr + "\ncalls:\n" + calls };
+    return { r, calls, output, has, probes, log: r.stdout + r.stderr + "\ncalls:\n" + calls };
   };
   return { run, cache };
 }
@@ -105,15 +114,39 @@ test("a cached .deb for a package the image already has is not reinstalled (no d
   assert.match(calls, /^dpkg -i \S*libgles2_1\.0_amd64\.deb$/m, log);
 });
 
-test("nothing available (no cache, no apt host resolves): fails at once with the distinct mirror error", (t) => {
+test("nothing available (no cache, no apt mirror answers): fails at once with the distinct mirror error", (t) => {
   const { run, cache } = fixture(t, { flags: ["apt-down", "dns-down"] });
   const started = Date.now();
-  const { r, calls, log } = run(["--label", "mesa-xvfb", "--cache", cache, "libegl1"]);
+  const { r, calls, probes, log } = run(["--label", "mesa-xvfb", "--cache", cache, "libegl1"]);
   assert.equal(r.status, 3, log);
-  assert.equal(calls, "", "no apt attempt when no host resolves:\n" + log);
+  assert.equal(calls, "", "no apt attempt when no mirror answers:\n" + log);
+  // Plain URIs and the mirror+file list, de-duplicated, each on its scheme's port.
+  assert.deepEqual(probes.trim().split("\n").sort(), ["reach azure.archive.ubuntu.com:80", "reach security.ubuntu.com:443"]);
   assert.equal(r.stdout.trim().split("\n").at(-1),
-    "::error::mesa-xvfb: runner package mirror unreachable: no apt host resolves (azure.archive.ubuntu.com security.ubuntu.com) and no cached .debs cover libegl1");
+    "::error::mesa-xvfb: runner package mirror unreachable: no apt mirror answers (azure.archive.ubuntu.com:80 security.ubuntu.com:443) and no cached .debs cover libegl1");
   assert.ok(Date.now() - started < 10000, "seconds, not the 300 s apt budget");
+});
+
+test("hosts listed only in a mirror+file list are probed (the runner image's shape)", (t) => {
+  const { run } = fixture(t, { sources: ["ubuntu.sources"], flags: ["dns-down"] });
+  const { r, probes, log } = run(["libegl1"]);
+  assert.equal(r.status, 3, log);
+  assert.match(probes, /reach security\.ubuntu\.com:443/);
+});
+
+test("behind an apt proxy the direct-connect probe is skipped and apt decides", (t) => {
+  const { run } = fixture(t, { want: ["libegl1"], flags: ["dns-down", "apt-proxy"] });
+  const { r, probes, log } = run(["libegl1"]);
+  assert.equal(r.status, 0, log);
+  assert.equal(probes, "", log);
+});
+
+test("a failed attempt names its step and prints the tail of apt's own output", (t) => {
+  const { run } = fixture(t, { flags: ["apt-down"] });
+  const { r, log } = run(["--label", "lint-bins glslang-tools", "glslang-tools"]);
+  assert.equal(r.status, 1, log);
+  assert.match(r.stdout, /::warning::lint-bins glslang-tools: apt attempt 1: apt-get update \(cap 120 s\) exited 100/);
+  assert.match(r.stdout, /::group::lint-bins glslang-tools: last apt output \(attempt 1\)\nE: Failed to fetch \S+  Temporary failure resolving 'security\.ubuntu\.com'\n::endgroup::/);
 });
 
 test("a broken cached set is removed and apt installs instead", (t) => {
@@ -148,6 +181,7 @@ test("retries share one budget instead of exhausting the caller job", (t) => {
   assert.equal(r.status, 1, log);
   assert.equal((calls.match(/^apt-get /gm) || []).length, 1, "no retry after the budget is spent:\n" + log);
   assert.match(r.stdout, /::error::apt: apt could not install libegl1 within 1 s and up to 3 attempts \(runner mirror down\?\)/);
+  assert.match(r.stdout, /apt attempt 1: apt-get update \(cap 1 s\) was killed by its cap/);
 });
 
 test("repairs a dpkg its own cap interrupted instead of failing every retry", (t) => {
@@ -172,4 +206,26 @@ test("the lint installer takes its apt packages through the cached installer", (
   const src = fs.readFileSync(path.resolve("tools/env/install-lint-bins.sh"), "utf8");
   assert.match(src, /bash "\$ROOT\/tools\/ci\/apt-cached-install\.sh" --label "lint-bins \$PKG" --cache "\$BIN\/debs"/);
   assert.doesNotMatch(src, /apt-get install/, "no direct apt call left");
+});
+
+test("every job that uses the mesa-xvfb action checks this repo out whole at the workspace root first", () => {
+  // The action runs "$GITHUB_WORKSPACE/tools/ci/apt-cached-install.sh": a `path:` or sparse checkout
+  // before it would leave the script missing and fail every leg in set-up.
+  const users = [];
+  for (const file of fs.readdirSync(".github/workflows").filter(f => /\.ya?ml$/.test(f))) {
+    const wf = parseYaml(fs.readFileSync(path.join(".github/workflows", file), "utf8"));
+    for (const [name, job] of Object.entries(wf.jobs || {})) {
+      const steps = job.steps || [];
+      const at = steps.findIndex(s => s.uses === "./.github/actions/mesa-xvfb");
+      if (at < 0) continue;
+      users.push(`${file}:${name}`);
+      const checkouts = steps.slice(0, at).filter(s => /^actions\/checkout@/.test(s.uses || ""));
+      assert.ok(checkouts.length > 0, `${file}:${name} runs mesa-xvfb before any checkout`);
+      for (const c of checkouts) {
+        assert.equal(c.with?.path, undefined, `${file}:${name}: a path: checkout moves tools/ci`);
+        assert.equal(c.with?.["sparse-checkout"], undefined, `${file}:${name}: a sparse checkout can omit tools/ci`);
+      }
+    }
+  }
+  assert.deepEqual(users.sort(), ["browser-group.yml:group", "car-shot.yml:shot", "ci.yml:selected", "ci.yml:smoke", "ci.yml:staged-boot"]);
 });

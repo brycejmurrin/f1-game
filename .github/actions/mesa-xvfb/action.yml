@@ -26,6 +26,12 @@ runs:
     # what every PR restores. Passing job 130492997085 measured the image: xvfb
     # and libgl1-mesa-dri ship on it, apt fetched 8 .debs (libegl1, libgles2,
     # mesa-utils and their deps).
+    # CONCURRENT SAVES: on a cold key every leg of a run reaches the save step
+    # with the same key; the losers' save is a log line, not a step failure.
+    # actions/cache@55cc834 (v6.1.0) src/saveImpl.ts catches every save error
+    # as `utils.logWarning(...)` and never calls setFailed, and saveOnlyRun
+    # logs a -1 cacheId at debug level. The Playwright cache action makes the
+    # same many-legs-one-key save on every lockfile bump.
     - id: plan
       shell: bash
       env:

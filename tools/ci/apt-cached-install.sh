@@ -7,7 +7,7 @@
 # that outage cost nothing when the job has what it needs, and seconds when it does not:
 #   1. every package already installed (dpkg-query)        -> no apt, no network, exit 0
 #   2. the .debs in --cache DIR cover the missing ones      -> `dpkg -i` offline, exit 0
-#   3. no apt source host resolves (getent)                 -> fail at once: "runner package
+#   3. no apt mirror answers (DNS + TCP, mirror+file lists) -> fail at once: "runner package
 #      mirror unreachable", exit 3, instead of three five-minute apt attempts
 #   4. bounded apt (the mesa-xvfb rules of 2026-09-30 and 2026-11-10: per-call caps, one
 #      shared --budget, `dpkg --configure -a` after a cut-short attempt); the .debs apt
@@ -20,7 +20,8 @@
 # usage: bash tools/ci/apt-cached-install.sh [--label L] [--cache DIR] [--budget S] [--plan] pkg...
 #   --plan  print the missing packages (also `missing=` to $GITHUB_OUTPUT) and exit 0.
 # Test seams (tests/unit/apt-cached-install.test.mjs): APT_SUDO (default: sudo unless root),
-# APT_SOURCES (apt source files/dirs), APT_RETRY_SLEEP (seconds between attempts, default 10).
+# APT_SOURCES (apt source files/dirs), APT_RETRY_SLEEP (seconds between attempts, default 10),
+# APT_REACH (command HOST PORT that exits 0 when a mirror answers; default getent + TCP connect).
 # @section runner
 set -uo pipefail
 LABEL=apt; CACHE=""; BUDGET=300; PLAN=0
@@ -75,15 +76,43 @@ if [[ -n $CACHE && -d $CACHE ]]; then
   fi
 fi
 
-# 3. Fail fast when no apt source host resolves: an outage costs seconds, with its own text.
-mapfile -t HOSTS < <(grep -rhsv '^[[:space:]]*#' "${SOURCES[@]}" 2>/dev/null | grep -oE 'https?://[^/[:space:]]+' | sed -E 's#^https?://##; s#^[^@]*@##; s#:[0-9]+$##' | sort -u)
-if [[ ${#HOSTS[@]} -gt 0 ]]; then
-  resolved=0
-  for h in "${HOSTS[@]}"; do
-    if timeout 5 getent hosts "$h" >/dev/null 2>&1; then resolved=1; break; fi
+# 3. Fail fast when no apt mirror answers: an outage costs seconds, with its own text.
+# The runner image's sources name `mirror+file:/etc/apt/apt-mirrors.txt` (job 130569884615:
+# "W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/resolute/InRelease  Temporary
+# failure resolving 'security.ubuntu.com'"), so the hosts come from that file as well as from
+# plain URIs. A mirror ANSWERS when its name resolves and it accepts a TCP connection on its
+# scheme's port within 5 s; one answering mirror is enough to try apt (apt's mirror method walks
+# the list itself). Skipped behind a proxy (apt reaches the mirror through it, not directly).
+apt_uris() {
+  local u
+  grep -rhsv '^[[:space:]]*#' "${SOURCES[@]}" 2>/dev/null | grep -oE '(mirror\+file:|https?://)[^[:space:]]+' | while read -r u; do
+    case $u in
+      mirror+file:*) grep -hsv '^[[:space:]]*#' "${u#mirror+file:}" | grep -oE 'https?://[^[:space:]]+' ;;
+      *) echo "$u" ;;
+    esac
   done
-  if [[ $resolved == 0 ]]; then
-    echo "::error::$LABEL: runner package mirror unreachable: no apt host resolves (${HOSTS[*]}) and no cached .debs cover ${MISS[*]}"
+}
+reach() {
+  if [[ -n ${APT_REACH:-} ]]; then "$APT_REACH" "$1" "$2"; return; fi
+  # shellcheck disable=SC2016 # $0/$1 expand in the child bash, by design
+  timeout 5 getent hosts "$1" >/dev/null 2>&1 && timeout 5 bash -c 'exec 3<>"/dev/tcp/$0/$1"' "$1" "$2" 2>/dev/null
+}
+proxied() {
+  [[ -n ${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-} ]] && return 0
+  apt-config dump 2>/dev/null | grep -qiE '^Acquire::https?::Proxy "[^"]+"'
+}
+mapfile -t MIRRORS < <(apt_uris | sed -nE 's#^(https?)://([^/@]*@)?([^/:]+)(:([0-9]+))?.*#\1 \3 \5#p' \
+  | while read -r scheme host port; do
+      if [[ -z $port ]]; then if [[ $scheme == https ]]; then port=443; else port=80; fi; fi
+      echo "$host:$port"
+    done | sort -u)
+if [[ ${#MIRRORS[@]} -gt 0 ]] && ! proxied; then
+  answered=0
+  for m in "${MIRRORS[@]}"; do
+    if reach "${m%:*}" "${m##*:}"; then answered=1; break; fi
+  done
+  if [[ $answered == 0 ]]; then
+    echo "::error::$LABEL: runner package mirror unreachable: no apt mirror answers (${MIRRORS[*]}) and no cached .debs cover ${MISS[*]}"
     exit 3
   fi
 fi
@@ -102,12 +131,26 @@ if [[ -n $CACHE ]]; then
   APT_OPTS+=(-o "Dir::Cache::Archives=$CACHE/" -o APT::Keep-Downloaded-Packages=true)
 fi
 deadline=$((SECONDS + BUDGET))
+APT_LOG=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/apex-apt.XXXXXX")
+trap 'rm -f "$APT_LOG"' EXIT
+LAST_STEP=apt-get
 apt_with_budget() {
   local remaining=$((deadline - SECONDS)) cap=$1
   shift
   if [[ $remaining -le 0 ]]; then return 124; fi
   if [[ $cap -gt $remaining ]]; then cap=$remaining; fi
-  $SUDO timeout "$cap" apt-get "$@" "${APT_OPTS[@]}"
+  LAST_STEP="apt-get $1 (cap ${cap} s)"
+  # Tee'd so a failed attempt can name its cause (#5519: job 130499870210 sat silent 2 min in
+  # `update -qq` until the cap killed it). pipefail is on: the status is apt's, not tee's.
+  $SUDO timeout "$cap" apt-get "$@" "${APT_OPTS[@]}" 2>&1 | tee -a "$APT_LOG"
+}
+explain_attempt() {
+  local rc=$1
+  if [[ $rc -eq 124 ]]; then echo "::warning::$LABEL: apt attempt $attempt: $LAST_STEP was killed by its cap"
+  else echo "::warning::$LABEL: apt attempt $attempt: $LAST_STEP exited $rc"; fi
+  echo "::group::$LABEL: last apt output (attempt $attempt)"
+  tail -n 15 "$APT_LOG"
+  echo "::endgroup::"
 }
 repair_dpkg() {
   local remaining=$((deadline - SECONDS)) cap=60
@@ -117,10 +160,12 @@ repair_dpkg() {
 }
 ok=0
 for attempt in 1 2 3; do
-  if apt_with_budget 120 update -qq \
-     && apt_with_budget 180 install -y -qq --no-install-recommends "${MISS[@]}"; then
-    ok=1; break
-  fi
+  : > "$APT_LOG"
+  rc=0
+  apt_with_budget 120 update -qq \
+    && apt_with_budget 180 install -y -qq --no-install-recommends "${MISS[@]}" || rc=$?
+  if [[ $rc -eq 0 ]]; then ok=1; break; fi
+  explain_attempt "$rc"
   repair_dpkg
   if [[ -z $(missing) ]]; then
     echo "::warning::$LABEL: apt attempt $attempt was cut short; dpkg --configure -a finished the install"
