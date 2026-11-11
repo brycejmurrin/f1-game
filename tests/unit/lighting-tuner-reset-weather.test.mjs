@@ -458,3 +458,16 @@ test("#5041: TIME / WEATHER preview chips stand down in a live VS FRIEND race (t
   h.$("lt-wx-wet").onclick();
   assert.deepEqual(picks, ["wx:wet"], "and the chips still preview there");
 });
+
+test("#5066: LIGHTING DONE gives back VISUAL STUDIO (its tool page), never the HUD & CAMERA page", () => {
+  const h = bootTuner("dry");
+  h.G.els.pmsettings = { hidden: false }; h.G.paused = true;
+  h.$("pm-panel-visual").hidden = false; h.$("pm-panel-display").hidden = true;
+  h.$("pm-lighting").onclick();
+  assert.equal(h.G.els.pmsettings.hidden, true);
+  assert.equal(h.$("pm-panel-visual").hidden, true);
+  h.$("lt-close").onclick();
+  assert.equal(h.G.els.pmsettings.hidden, false);
+  assert.equal(h.$("pm-panel-visual").hidden, false);
+  assert.equal(h.$("pm-panel-display").hidden, true);
+});

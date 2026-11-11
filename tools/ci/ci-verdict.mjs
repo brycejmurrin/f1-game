@@ -81,7 +81,10 @@ export function verdict(needs, opts = {}) {
   const sel = needs.select && typeof needs.select === "object" ? needs.select : null;
   if (sel) {
     const out = sel.outputs && typeof sel.outputs === "object" ? sel.outputs : {};
-    if (out.any === "true" && "selected" in needs && res("selected") === "skipped")
+    // The one sanctioned skip (#5426): a ready flip whose select job proved the same-sha draft verdict reusable.
+    // The verdict job still has to pass (and is in the full tier's REQUIRE_SUCCESS); it re-checks the claim.
+    const reused = out.selected_reused === "true" && /^\d+$/.test(String(out.selected_reused_run || ""));
+    if (out.any === "true" && "selected" in needs && res("selected") === "skipped" && !reused)
       bad.push("selected: skipped, but the plan has browser legs (select.outputs.any=true) — the selected specs did not run");
     if (sel.result === "success" && "selected-verdict" in needs && res("selected-verdict") === "skipped")
       bad.push("selected-verdict: skipped after a successful selection — nothing judged the selected specs");
