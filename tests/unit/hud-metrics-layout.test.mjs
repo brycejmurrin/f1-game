@@ -357,3 +357,12 @@ test("F-13 slice 1: a replay hides #hud-sectors and #hud-limits in ONE rule", ()
     assert.equal(bc.length, 1, `#${id} has one bc-on hide: ${bc.map((r) => r.sel).join(" | ")}`);
   }
 });
+
+test("F-13 slice 2: #hud-delta hides in plain display:none, and nothing could beat it", () => {
+  const { hides } = assertPlainHidesWin("hud-delta");
+  for (const sel of ["#hud-delta[hidden]", "body:not(.desktop) #hud-delta[data-pending]"]) {
+    const h = hides.find((r) => r.sel === sel);
+    assert.ok(h, sel + " still hides");
+    assert.doesNotMatch(h.body, /!important/, sel + " needs no !important");
+  }
+});
