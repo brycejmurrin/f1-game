@@ -2018,6 +2018,8 @@ jobs:
       # all. poke-train needs both to tell an empty plan from an unaffordable one.
       dropped: ${{ steps.sel.outputs.dropped }}
       reason: ${{ steps.sel.outputs.reason }}
+      # Browser groups the runner fan-out could not represent (select-specs perGroupPlan).
+      unrepresented: ${{ steps.sel.outputs.unrepresented }}
       # The node-slice plan (was unit-plan's).
       slices: ${{ steps.plan.outputs.slices }}
       any_node: ${{ steps.plan.outputs.any_node }}
@@ -2921,6 +2923,7 @@ jobs:
           SELECTED: ${{ needs.selected.result }}
           GUARDS: ${{ needs.guards.result }}
           DROPPED: ${{ needs.select.outputs.dropped }}
+          UNREPRESENTED: ${{ needs.select.outputs.unrepresented }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
           DOWNLOAD_FAILED: ${{ steps.dl_junit.outcome == 'failure' || steps.dl_started.outcome == 'failure' }}

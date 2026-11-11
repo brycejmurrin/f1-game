@@ -396,7 +396,9 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   min-height: var(--tap-paint); height: auto; max-height: none;
 }
-html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
+/* #audiostate only: the trade-mark disclaimer is never hidden (it is the notice
+   Formula 1's fan guidelines ask the landing page to carry). */
+html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand #audiostate { display: none; }
 /* Tall live Home: two-band grid + menu row (all widths; was duplicated 699/700). */
 html[data-home-live] :where(body[data-shape="tall"]) #overlay {
   grid-template-rows: auto minmax(0, 1fr);
