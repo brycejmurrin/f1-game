@@ -886,6 +886,12 @@
       ]
     },
     {
+      "path": "tools/ci/fat-shard.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/file-verdict-reporter.mjs",
       "classification": "ambiguous",
       "outputPolicy": "protocol-only"
