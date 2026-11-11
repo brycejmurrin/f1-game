@@ -2264,6 +2264,7 @@ const TLX = (function () {
       const instRoot = new THREE.Object3D();
       instRoot.matrixAutoUpdate = false; instRoot.matrixWorldAutoUpdate = false;
       if (_instRootOn) scene.add(instRoot);
+      scene.userData.instRegistry = _instRegistry;   // tooling (?three-devtools=1 specs, heap census): the members the walk no longer reaches
       const _instKids = [];
       function _instAdd(im) {
         if (!_instRootOn) { scene.add(im); return; }
