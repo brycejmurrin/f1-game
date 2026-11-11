@@ -139,7 +139,10 @@ const path3 = flag("--path", "webgpu");
 // (census 200-207, beats: memState.presentMs=0 and the governor ring at n=1
 // until the race), so fifteen beats held 0-5 s of a parked race. The race
 // gate below waits for the race itself; --beats sizes what it then measures.
-const beats = Math.max(1, Math.round(Number(flag("--beats", 15))) || 15);
+// SCRATCH #5447 (never merged): --ls apex26.gcBeats=N lengthens the TLX/WebGPU leg only (the workflow pins --beats 20).
+const _lsBeats = extraLs.map((s) => /^apex26\.gcBeats=(\d+)$/.exec(s)).find(Boolean);
+const beats = (_lsBeats && backend === "three" && path3 === "webgpu") ? Math.max(1, +_lsBeats[1])
+  : Math.max(1, Math.round(Number(flag("--beats", 15))) || 15);
 // --no-drive keeps the car parked for the window (the pre-2026-09-22 census).
 // The default DRIVES: a parked car streams nothing, and the hitch this tool
 // exists to find is scenery reaching a moving car.
@@ -965,10 +968,11 @@ try {
   // the night leg looked exactly like noon.
   const tod = flag("--tod", "");
   if (entry === "api") {
-    out.raceCall = await bounded(() => page.evaluate(([t, d]) => {
+    out.raceCall = await bounded(() => page.evaluate(([t, d, long]) => {
       window.__apexMark("raceCall");
+      if (long) return window.__apex.race(t, d || "default", "dry", { laps: 10 });   // SCRATCH #5447: no finish inside the window
       return d ? window.__apex.race(t, d) : window.__apex.race(t);
-    }, [track, tod]), 60000, "race");
+    }, [track, tod, !!(_lsBeats && backend === "three" && path3 === "webgpu")]), 60000, "race");
   } else {
     out.menu = await enterViaMenu(tod);
     checkpoint("menu-entry", { menu: out.menu });
@@ -1222,6 +1226,15 @@ try {
             // buffers three holds and how many KB — the shared frame block
             // (apex26.tlxSharedUniforms) is a structural count change, so this
             // is the one census number that does not need a quiet runner.
+            // SCRATCH #5447: lifetime GPU buffer/texture counts, live bytes by class, the player's lap, TLX pool churn.
+            gm: (() => { try { const st = window.GPUDevice && window.GPUDevice.prototype.__gmw; if (!st) return null;
+              const c = {}; let b = 0; for (const e of st.buf.values()) { b += e.b; const k = e.cls; const r = c[k] || (c[k] = [0, 0]); r[0]++; r[1] += e.b; }
+              for (const k in c) c[k][1] = +(c[k][1] / 1024).toFixed(1);
+              let tb = 0; for (const e of st.tex.values()) tb += e.b;
+              return { bc: st.life.Buffer.created, bd: st.life.Buffer.destroyed, bl: st.buf.size, bmb: +(b / 1048576).toFixed(2), cls: c,
+                tc: st.life.Texture.created, td: st.life.Texture.destroyed, tl: st.tex.size, tmb: +(tb / 1048576).toFixed(2), sites: st.sites.size, armed: st.armedCreates }; } catch (_) { return null; } })(),
+            lap: (() => { try { const p = A && A.physState ? A.physState() : null; return p ? { lap: p.lap, prog: p.prog != null ? +(+p.prog).toFixed(3) : null, v: p.speed != null ? Math.round(p.speed) : null } : null; } catch (_) { return null; } })(),
+            churn: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null; return m && m.churn ? m.churn : null; } catch (_) { return null; } })(),
             ubo: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
               return m && m.rUbo != null ? { n: m.rUbo, kb: m.rUboKB, ver: m.groupVer, pms: m.presentMs, dr: m.draws } : null; } catch (_) { return null; } })(),
             // Programs and materials as the car drives: three's program count is
