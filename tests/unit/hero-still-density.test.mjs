@@ -88,7 +88,7 @@ test("the hero's srcset offers both files and a DPR-3 phone gets at least 0.6 so
 
 test("Save-Data, 2G and the kept-still circuits load the 800 px file alone (one request)", () => {
   for (const [conn, id] of [[{ saveData: true }, "monza"], [{ effectiveType: "2g" }, "monza"],
-    [{ effectiveType: "slow-2g" }, "monza"], [null, "zolder"], [{ effectiveType: "4g" }, "imola"]]) {
+    [{ effectiveType: "slow-2g" }, "monza"], ...ONE_X.map((id) => [{ effectiveType: "4g" }, id])]) {
     const p = picker(conn);
     p.showStill({ id });
     assert.equal(p.attr("srcset"), null, id + " " + JSON.stringify(conn));

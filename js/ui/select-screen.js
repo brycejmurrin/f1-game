@@ -1158,7 +1158,7 @@ watchHero(document.getElementById("sel-hero"));
 let stillToken = 0;
 // Hero ~ full width: a DPR-3 phone takes the 1600 px file (#5223). STILL_1X_ONLY have no 2x file.
 const STILL_SIZES = "100vw";
-const STILL_1X_ONLY = ["baku", "estoril", "imola", "watkins_glen", "zolder"];
+const STILL_1X_ONLY = [];
 /** "" = the 800 px file only (no 2x file, Save-Data, 2G). */
 function stillSrcset(id, conn) {
   if (STILL_1X_ONLY.includes(id) || (conn && (conn.saveData || /2g$/.test(conn.effectiveType || "")))) return "";
