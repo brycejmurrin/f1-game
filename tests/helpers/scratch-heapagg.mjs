@@ -25,7 +25,7 @@ export async function facetPath(cdp) {
       const et = etypes[edges[e + eT]]; if (et === "weak") continue;   // the root reaches Window by shortcut edges
       const to = edges[e + eTo] / NF;
       // The owner {x, z, reach, facets} is the hit, whether or not its array was reached first by another edge.
-      if (et === "property" && strings[edges[e + eN]] === "facets" && nm(to) === "Float64Array") { hit = o; break; }
+      if (et === "property" && strings[edges[e + eN]] === "facets" && String(strings[nodes[to * NF + iN]]) === "Float64Array") { hit = o; break; }
       if (parent[to] >= 0) continue;
       parent[to] = o; pedge[to] = e; q[t++] = to;
     }
