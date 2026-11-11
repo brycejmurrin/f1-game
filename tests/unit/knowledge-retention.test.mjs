@@ -84,8 +84,12 @@ test("every live note renders one table row from its own header lines", () => {
 // ---------------------------------------------------------------------------
 // docs/DECISIONS.md — the D-NNN ledger
 
-test("every D-NNN cited anywhere exists in docs/DECISIONS.md, ids are unique and sequential, and each row's cited-by paths exist", () => {
+test("every D-NNN cited anywhere exists in docs/DECISIONS.md, ids are unique and sequential, and each row's related files exist", () => {
   const ledger = read("docs/DECISIONS.md");
+  // The sixth column is RELATED FILES, not "cited by": it was named "cited by" while
+  // 23 of 30 rows listed files that never mention their id (audit W27, 2026-11-09).
+  // Existence is what is checked; the header keeps the name honest.
+  assert.match(ledger, /^\| id \| date \| words \| scope \| via \| related files \| superseded by \|$/m, "the ledger header names the sixth column `related files`");
   const rows = ledger.split("\n").filter((l) => /^\| D-\d{3} \|/.test(l));
   const ids = rows.map((l) => /^\| (D-\d{3}) \|/.exec(l)[1]);
   assert.ok(ids.length >= 1, "the ledger holds no rows");
@@ -94,7 +98,7 @@ test("every D-NNN cited anywhere exists in docs/DECISIONS.md, ids are unique and
   const tracks = new Set(files);
   for (const l of rows) {
     const cells = l.split("|").slice(1, -1).map((c) => c.trim());
-    assert.equal(cells.length, 7, `${cells[0]}: seven columns (id | date | words | scope | via | cited by | superseded by)`);
+    assert.equal(cells.length, 7, `${cells[0]}: seven columns (id | date | words | scope | via | related files | superseded by)`);
     for (const tok of cells[5].split(",").map((s) => s.trim()).filter((s) => /^[\w.-]+\/[\w./-]+$/.test(s)))
       assert.ok(tracks.has(tok), `${cells[0]} cites ${tok}, which is not a tracked file`);
     for (const m of cells[6].matchAll(/D-\d{3}/g)) assert.ok(have.has(m[0]), `${cells[0]} is superseded by ${m[0]}, which has no row`);

@@ -1,7 +1,7 @@
 // @ts-check
 // PIT LANE — the stop, driven.
 //
-// tests/unit/pit-lane.test.mjs pins the geometry on all 42 circuits without a
+// tests/unit/pit-lane.test.mjs pins the geometry on every circuit in the roster without a
 // browser. This is the half that needs one: that calling a stop actually
 // limits the car, that a stop fits fresh tyres and is held for the box time,
 // that blowing through the box misses it, and that with TYRE WEAR off none of

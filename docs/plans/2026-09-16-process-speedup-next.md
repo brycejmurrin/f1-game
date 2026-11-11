@@ -1,5 +1,7 @@
 # Process speed-up: the next fifteen — plans
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — several items exist (tools/ci/remote-group.mjs is item 6; the docs-only commit path is item 9); the rest is an open backlog, so check each against tools/ before use.
 
 Base: the `claude/agent-dev-process-optimization-t7bqz8` branch after the

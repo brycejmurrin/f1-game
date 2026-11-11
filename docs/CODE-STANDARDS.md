@@ -3,13 +3,15 @@
 The house style for every file under `js/`. Sources: the Airbnb JavaScript
 Style Guide, the Google JavaScript Style Guide, MDN's JavaScript code style
 guide and *clean-code-javascript*, filtered through what this repo already
-proves with tests (`AGENTS.md` §Critical conventions, `tests/unit/global-registry.test.mjs`,
+proves with tests (`.claude/rules/game-code.md`, `tests/unit/global-registry.test.mjs`,
 `tests/unit/shared-math.test.mjs`, `tests/data/ratchets.json`). Where a
 published guide and a repo guard disagree, the guard wins — it was written after
 a measured failure.
 
 This page is a checklist, not an essay. Each rule is short enough to apply while
-reading a file top to bottom.
+reading a file top to bottom. A rule marked **ADVISORY** has no lint or test behind it
+and the tree does not follow it yet: apply it to code you write or touch, never as a
+tree-wide sweep.
 
 ## 0. What never changes in a style pass
 
@@ -27,7 +29,7 @@ Frozen surfaces (rename = a broken guard or a broken player save):
 | The one global each file assigns (`const Foo = (function () { … })();`) | `global-registry.test.mjs` |
 | `G` façade member names and `Module.create(G)` shape | `check-gctx.mjs`, `types/game-ctx.d.ts` |
 | `window.__apex` hook names | `hooks-documented.test.mjs`, `docs/DEBUG-HOOKS.md` |
-| The 114-member `scenery(api)` contract | `scenery-api-contract.test.mjs` |
+| The `scenery(api)` contract (its size is `CONTRACT_SIZE`) | `scenery-api-contract.test.mjs` |
 | Cross-file method names (`Tracks.curvature`, `M4.clamp`, …) | `scan-globals.mjs` + the caller |
 | `apex26.*` localStorage keys, DOM ids and CSS classes | player saves; `shell-ids.mjs`, `css-*` tests |
 | Shader uniform/attribute names, GLSL/WGSL/TSL source | `backend-surface-parity`, render specs |
@@ -41,7 +43,7 @@ Anything in `.claude/skills/slim-bloat/references/do-not.md` stays as it is.
 
 ## 1. Module shape
 
-Every file is one strict-mode IIFE assigning one global (`AGENTS.md`). Inside
+Every file is one strict-mode IIFE assigning one global (`.claude/rules/game-code.md`). Inside
 it, in this order:
 
 1. One-line header comment: what the module is and the one fact a reader must
@@ -108,7 +110,15 @@ Rules:
 
 ## 3. Declarations and values
 
-- `const` by default; `let` only when reassigned; never `var`.
+- `const` by default; `let` only when reassigned; no `var` in new code. ADVISORY:
+  nothing lints it and older function-local `var`s remain (the GLX/WGX renderer files
+  among them); convert one only in a line you are already editing. The deliberate exception is deliberate: a module global that a second script must
+  re-declare is a top-level `var` — the `LAZY_AUDIO` and `LAZY_RACE_SESSION` modules
+  reassign the bindings their title-boot stubs (`js/audio/stub.js`,
+  `js/race/session-stub.js`) declared (`tools/manifest.cjs`, `ensureAudio` in
+  `js/core/lazy-bundles.js`), and `js/render/shared/glx-facade.js` reuses a `GLX` already on
+  `window`. A `const` there throws a redeclaration error at load; leave those `var`s alone
+  (`frozen-globals.test.mjs` accepts both forms).
 - One declaration per line for anything with an initialiser. A run of related
   scratch scalars may share a line only inside a hot loop (`let a = 0, b = 0;`).
 - Object and array literals, never `new Object()` / `new Array(n)` (typed
@@ -152,7 +162,9 @@ Rules:
 - `switch`: `default` last; a `case` that declares a variable gets braces.
 - `try`/`catch` only around the call that can throw. An empty `catch` needs
   the one-line reason (`bareCatches` ratchet); a `catch` that only logs uses
-  `Log.warn`. Omit the binding when unused: `catch {`.
+  `Log.warn`. Omit the binding when unused: `catch {` — ADVISORY: most of the tree still
+  writes `catch (e)` / `catch (_)` and nothing lints it, so change it only in a line you
+  are already editing.
 
 ## 6. Duplication and helpers
 
@@ -175,7 +187,9 @@ Rules:
 The rule is *why, not what*. Code says what it does; a comment says what the
 code cannot: the constraint, the measurement, the bug it prevents.
 
-**Remove:**
+**Remove** (ADVISORY: no guard enforces this list, and the tree still carries many
+section banners and dated comments; `node tools/check/trim-comments.mjs <paths>` strips
+dividers and closed banners in files you name):
 
 - A comment that restates the next line (`// increment i`).
 - Divider bars (`// ─────`), section banners that name the obvious.

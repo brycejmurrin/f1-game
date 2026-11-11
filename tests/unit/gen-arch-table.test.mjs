@@ -110,6 +110,22 @@ test("headerSentence handles the three header shapes js/ uses", () => {
     "reads e.g. this file, js/track/tracks.js, for context.");
 });
 
+test("headerSentence skips a @ts-check pragma, a shebang and a test file's own name (audit W27)", () => {
+  assert.equal(headerSentence("// @ts-check\n/* Foo — the real header. More. */\nconst Foo = 1;"), "Foo — the real header.");
+  assert.equal(headerSentence("#!/usr/bin/env node\n// @ts-check\n// does the thing.\n"), "does the thing.");
+  assert.equal(headerSentence("/* x.test.mjs — pins the X contract. */\n"), "pins the X contract.");
+});
+
+test("the coverage table never attaches a continuation note to the file below it", async () => {
+  const { describeFile, isContinuation } = await import("../../tools/docs/gen-coverage-table.mjs");
+  assert.ok(isContinuation("...and the REAL RACE"));
+  assert.ok(!isContinuation("Field-step pose snapshots"));
+  const notes = new Map([["a.test.mjs", "...and the other thing."], ["b.test.mjs", "Lead note for b."]]);
+  assert.equal(describeFile("a.test.mjs", "test('a title long enough', () => {});", notes), "a title long enough");
+  assert.equal(describeFile("b.test.mjs", "test('b title long enough', () => {});", notes), "Lead note for b.");
+  assert.equal(describeFile("b.test.mjs", "/* b — own header wins. */\n", notes), "b — own header wins.");
+});
+
 test("fileGlobal finds the real global, and treats js/game.js as the documented exception", () => {
   assert.equal(fileGlobal("js/data/teams.js", 'const Teams = (function () {\n  "use strict";\n'), "Teams");
   assert.equal(fileGlobal("js/car/crest-paths.js", 'const CrestPaths = Object.freeze({\n'), "CrestPaths");
