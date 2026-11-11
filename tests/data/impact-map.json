@@ -5667,7 +5667,6 @@
         "tests/unit/save-schema-registry.test.mjs"
       ],
       "*": [
-        "tests/unit/ghost.test.mjs",
         "tests/unit/store-registry.test.mjs"
       ]
     },

@@ -4,10 +4,21 @@
 
 > **GEOMETRY CAVEAT: this trace is the 2002-present 4.010 km layout. Formula One raced the 4.262 km, 15-turn version used from 1975 to 1985; that configuration no longer exists on the ground.**
 
-> **FRAME DEBT:** `startFrac` 0.2170 (moved 2026-11-10 from 0.1226, which sat BEFORE the final
-> chicane, onto the pit straight after it) / `sceneryStartFrac` 0 → `_sceneryShift` ≈ 0.740.
+> **FRAME DEBT:** `startFrac` 0.1226 / `sceneryStartFrac` 0 → `_sceneryShift` ≈ 0.844.
 > Pit / S/F landmarks use `sl()`; corner props stay on authored `K()`. Do not
 > retune frame keys without a per-circuit probe (`docs/tracks/START-LINES.md`).
+
+> **START LINE — DO NOT MOVE IT AFTER THE CHICANE (verdict 2026-11-11, #5287).** A
+> 2026-11-10 pass (W12) moved `startFrac` 0.1226 → 0.2170, onto the straight after
+> the built left-right chicane, reading that chicane as the final one. It is the
+> FIRST corner (Earste chicane, "first left"), so the move was reverted before
+> landing. Evidence: en.wikipedia "Circuit Zolder" puts Bianchi at turn 4, and the
+> `K()`-framed Bianchi kit sits on the apex 0.2170 numbered T1, with every
+> corner-named kit three numbers off (`node tools/track/corner-frames.cjs zolder`);
+> the built lap runs R16 m right → 580 m → left-right chicane → 616 m. Whether the
+> S/F sits before the chicane (0.1226, chicane reading) or one corner earlier
+> before the R16 right (kit reading) needs a surveyed coordinate:
+> `docs/tracks/START-LINES.md` "Zolder: NOT moved".
 
 ## 1. Setting
 

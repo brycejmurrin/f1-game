@@ -163,27 +163,34 @@ on all eleven:
 | donington | 0.00040 | R | R, Redgate — **stale (line now 0.9072): see "Moved 2026-11-10"** |
 | anderstorp | 0.00011 | R | R |
 | brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale (line now 0.1226): see "Moved 2026-11-10"** |
-| zolder | 0.00015 | R | R — **stale: see "Moved 2026-11-10"** |
+| zolder | 0.00015 | R | R — **stale (line now 0.1226, kept on purpose): see "Zolder: NOT moved"** |
 | dijon | 0.00001 | R | R |
 | buddh | 0.00002 | R | R |
 | mont_tremblant | 0.00087 | R | R |
 
-### Moved 2026-11-10: zolder (donington and brands_hatch still owed)
+### Measured 2026-11-10: donington and brands_hatch owed; zolder NOT moved
 
 The table above describes v0. A later "MEASURED" pass moved these three lines
-off v0 (onto the nearest straight holding R >= 1500 m across the grid) and
-landed each on the WRONG straight: donington 0.9072 sits on the Starkey straight
-before the Esses, brands_hatch 0.1226 on the Stirlings-Clearways link, zolder
-0.1226 before the final chicane (audit 2026-11-09, W12).
+off v0 (onto the nearest straight holding R >= 1500 m across the grid). The
+2026-11-09 audit (W12) read each as landing on the WRONG straight: donington
+0.9072 on the Starkey straight before the Esses, brands_hatch 0.1226 on the
+Stirlings-Clearways link, zolder 0.1226 "before the final chicane".
 
-**zolder — moved**: 0.1226 → **0.2170** (node 23/106), the pit straight after the
-final chicane; grid max |k| 0.00029, 324 m to the first turn-in. Placement by
-circuit shape (no surveyed coordinate: within one control node, ~40 m). `turns`
-re-seated onto the same physical apexes; the `sl()`-keyed pit/S-F scenery
-follows the line, the rest stays on `sceneryStartFrac`. The new resample phase
-exposed a 6.4 m node radius in the final chicane, cleared by moving
-`path.pts[15]` 1 m. Positional ghosts recorded before the move are dropped on
-load (`SaveSchemaRegistry.LINE_REV`); lap times stay valid.
+**Zolder: NOT moved — 0.1226 stays (verdict 2026-11-11, #5287).** W12 moved it
+to 0.2170, after the built left-right chicane it took for the final one; the
+move was reverted before landing because that chicane is the FIRST corner.
+Evidence: (1) en.wikipedia "Circuit Zolder" (noise limits: "just after turn 4
+(Bianchi)"); the Lucien Bianchi kit, authored on the fixed scenery frame `K()`,
+sits on the built apex that 0.2170 numbered T1, and every corner-named kit
+landed on a built apex in the same three-off order (`corner-frames.cjs`);
+(2) shape: the built lap runs tight right (R16 m) → 580 m straight → left-right
+chicane (52 m) → 616 m straight. The real T1 is the Earste chicane ("first
+left"), and Jochen Rindt bocht is the right onto the pit straight, so the line
+belongs on the 580 m straight BEFORE the chicane, where 0.1226 already sits
+(~55 m before it). The kit labels read one corner earlier (Earste on the R16
+right, S/F before it); the two readings differ by one corner and both put the
+line before the chicane. Do not move it after the chicane again; a re-survey
+needs a surveyed S/F coordinate, not either reading alone.
 
 **donington, brands_hatch — measured, NOT moved**. The right nodes are known:
 donington **0.2577** (node 25/97, pit straight Goddards → Redgate, grid max |k|

@@ -561,7 +561,7 @@
       //     the chicane memorial as one small low building).
       //     https://motorsportguides.com/a-pilgrimage-to-zolder-where-gilles-villeneuve-lost-his-life/
       {
-        const a = anchor(K(sl(0.028)), 1, 46);   // 46, not 54: from the moved line (2026-11-10) 54 m reached the parallel back straight
+        const a = anchor(K(sl(0.028)), 1, 54);
         if (a && !onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           const gy = terrainYAt(a.c[0], a.c[2]);
@@ -854,7 +854,7 @@
       // === 13. s 0.715 +1 22 — BOLDERBERGHAARSPELDBOCHT (T7) =============
       // No spectatorHill under the stand — flatCoplanar with its own risers
       // (6 spots at line 586). The grandstandEx already reads as the bank.
-      grandstandEx(0.7146, 1, 30, 48, null, null);   // 0.7146 (was 0.7153): the line move shifted the node phase ~2 m onto the hairpin slope (buried 5 -> 8; here 2)
+      grandstandEx(0.7153, 1, 30, 48, null, null);
       guardrail(0.700, 0.734, 1, 22, RAIL);
       // Short tyre bank on the inside only — full-span + facing outside bank
       // self-clipped on the hairpin chord (1.16 m cyl×cyl @ racing ~0.56,
