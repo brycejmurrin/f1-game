@@ -102,7 +102,7 @@ resolution.
    `VISUAL_FIELD_REGISTRY`), `visualTier`; a team SIGNATURE clone needs `equivalent` (same cost/stats).
    Browser shots below: AFTER angles only (SKILL.md § BEFORE pack).
 7. **Node gates before any browser** (no server, edit-loop safe): `npm run test:garage-unit`
-   (its file list is the `package.json` script; it includes `parts-distinct-mesh` — every option must
+   (its file list is `test:garage-unit` in `tests/groups.json`; it includes `parts-distinct-mesh` — every option must
    change the hashed mesh); plus
    `node --test tests/unit/parts-ladder.test.mjs` (a new-stats row must be worth buying: not dominated on
    all four stats) and `factory-ai-setup`. `parts-visual-distinctness` (the STYLE/SIGNATURE cost-and-stat

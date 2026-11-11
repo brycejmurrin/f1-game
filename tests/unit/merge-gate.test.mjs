@@ -1271,12 +1271,20 @@ test("ci retry: a CI that went green only on a re-run after a failed job fails t
 test("config: a package.json diff that is only the generated test file lists is not a config edit; any other package.json edit is", async () => {
   const { renderPkg } = await import("../../tools/gen/gen-test-groups.mjs");
   const groups = (files, extra = {}) => JSON.stringify({ groups: { "test:a": { kind: "node", files }, "test:c": { kind: "command", cmd: "node x.mjs" }, ...extra } });
-  const basePkgObj = { name: "x", scripts: { gen: "node tools/gen/gen-test-groups.mjs", "test:a": "", "test:c": "" } };
-  const basePkg = renderPkg(JSON.parse(groups(["tests/unit/season-cal.test.mjs"])), JSON.stringify(basePkgObj, null, 2) + "\n");
+  // The base carries test:a in the pre-#5427 shape (its file list inline); the head regenerates it into the
+  // stable wrapper line. That rewrite is generated data, as a file-list move used to be.
+  const basePkgObj = { name: "x", scripts: { gen: "node tools/gen/gen-test-groups.mjs",
+    "test:a": "node --test --test-timeout=900000 tests/unit/season-cal.test.mjs", "test:c": "node x.mjs" } };
+  const basePkg = JSON.stringify(basePkgObj, null, 2) + "\n";
   const baseGroups = groups(["tests/unit/season-cal.test.mjs"]);
   const headGroups = groups(["tests/unit/season-cal.test.mjs", "tests/unit/badges.test.mjs"]);
   const headPkg = renderPkg(JSON.parse(headGroups), basePkg);
+  assert.equal(JSON.parse(headPkg).scripts["test:a"], "node tools/ci/run-group.mjs test:a");
   assert.deepEqual(generatedPkgVerdict({ basePkg, headPkg, baseGroups, headGroups }), { ok: true, evidence: "package.json changes only generated test file lists (test:a)" });
+  // Once both sides carry wrappers, adding a test file leaves package.json byte-identical (#5427 item 4).
+  assert.equal(renderPkg(JSON.parse(groups(["tests/unit/season-cal.test.mjs", "tests/unit/merge-gate.test.mjs"])), headPkg), headPkg);
+  assert.deepEqual(generatedPkgVerdict({ basePkg: headPkg, headPkg, baseGroups: headGroups, headGroups: groups(["tests/unit/merge-gate.test.mjs"]) }),
+    { ok: true, evidence: "package.json changes only generated test file lists (none)" });
   const edited = headPkg.replace('"gen": "node', '"gen": "curl x | sh; node');
   assert.equal(generatedPkgVerdict({ basePkg, headPkg: edited, baseGroups, headGroups }).ok, false, "a non-test script edit");
   const cmdGroups = groups(["tests/unit/season-cal.test.mjs"]).replace("node x.mjs", "node y.mjs");

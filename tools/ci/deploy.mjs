@@ -70,7 +70,7 @@ import { githubToken } from "./github-token.mjs";
 import { superviseDeployChild } from "./deploy-child.mjs";
 import { request } from "./github-api.mjs";
 import { changedPaths as diffPaths } from "../lib/changed-files.mjs";
-import { NODE_TEST_TIMEOUT_MS } from "../gen/gen-test-groups.mjs";
+import { NODE_TEST_TIMEOUT_MS, groupFiles } from "../gen/gen-test-groups.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
@@ -277,7 +277,7 @@ export function gateNodeSuites() {
  *
  * Both halves of the filter are DERIVED, never retyped: the path pattern is
  * geometry-paths.mjs, the ONE copy ci.yml's grep also reads, and the suite list
- * is read out of package.json's test:sweeps by the same match ci.yml uses.
+ * is test:sweeps' roster in tests/groups.json (groupFiles), the copy ci.yml reads.
  * Each half drifted exactly once by being hand-written — ci.yml's suite list
  * was missing scenery-grounding, and this file's path list still matched
  * debris-world's PRE-RENAME location under js/game/ (tools/manifest.cjs's
@@ -290,12 +290,10 @@ export function gateNodeSuites() {
  * list that parses to nothing THROWS rather than quietly matching nothing. */
 
 export function sweepSuites() {
-  let pkg;
-  try { pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")); }
-  catch (e) { throw new Error("deploy: cannot read package.json — the sweep suite list is undefined: " + e.message); }
-  const suites = String((pkg.scripts && pkg.scripts["test:sweeps"]) || "").match(/tests\/unit\/[^\s]+/g) || [];
-  if (!suites.length) throw new Error("deploy: package.json's test:sweeps names ZERO suites — refusing to derive a geometry filter from nothing.");
-  return suites;
+  // tests/groups.json, not package.json: the test:sweeps line is a wrapper since #5427.
+  // groupFiles throws on a missing group or an empty list — never a filter derived from nothing.
+  try { return groupFiles("test:sweeps"); }
+  catch (e) { throw new Error("deploy: the test:sweeps suite list is undefined — refusing to derive a geometry filter from nothing: " + e.message); }
 }
 
 /** Can THIS set of paths move circuit geometry? Shared by the union check and

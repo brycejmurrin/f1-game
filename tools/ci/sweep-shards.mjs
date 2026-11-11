@@ -9,9 +9,9 @@
  * weights and deterministic LPT packing.  Unknown files get a conservative
  * fallback so adding a suite cannot silently make one shard enormous.
  */
-import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { groupFiles, loadGroups } from "../gen/gen-test-groups.mjs";
 
 const SWEEP_TIMINGS_SEC = Object.freeze({
   "tests/unit/baked-model-road-guard.test.mjs": 8.121,
@@ -64,10 +64,9 @@ export function planSweepShards(files, { shards = 4, timings = SWEEP_TIMINGS_SEC
   }));
 }
 
-function sweepFilesFromPackage(pkgPath = "package.json") {
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-  const script = String(pkg.scripts?.["test:sweeps"] || "");
-  return script.match(/tests\/unit\/[^\s]+/g) || [];
+/** test:sweeps' suites, from tests/groups.json (package.json's line is a wrapper since #5427). */
+function sweepFiles(groupsPath = "tests/groups.json") {
+  return groupFiles("test:sweeps", loadGroups(groupsPath));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
@@ -78,7 +77,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   };
   const shard = Number(valueAfter("--shard", 0));
   const shards = Number(valueAfter("--shards", 4));
-  const files = sweepFilesFromPackage(valueAfter("--package", "package.json"));
+  const files = sweepFiles(valueAfter("--groups", "tests/groups.json"));
   const plan = planSweepShards(files, { shards });
   if (!Number.isInteger(shard) || shard < 1 || shard > plan.length) {
     console.error(`--shard must be between 1 and ${plan.length}`);

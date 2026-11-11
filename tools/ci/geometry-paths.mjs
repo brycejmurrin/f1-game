@@ -56,6 +56,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { groupFiles } from "../gen/gen-test-groups.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MANIFEST = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
@@ -271,13 +272,11 @@ export function targetedSuites(files, order = sweepOrder()) {
   return [...hit].sort((a, b) => (rank.get(a) ?? 1e9) - (rank.get(b) ?? 1e9) || a.localeCompare(b));
 }
 
-/** package.json's test:sweeps file list — the one copy ci.yml and deploy.mjs
- *  both read. Empty (never a throw) here: ordering is cosmetic. */
+/** test:sweeps' file list from tests/groups.json — the one copy ci.yml and
+ *  deploy.mjs both read (package.json's line is a wrapper since #5427). Empty
+ *  (never a throw) here: ordering is cosmetic. */
 export function sweepOrder() {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
-    return String((pkg.scripts && pkg.scripts["test:sweeps"]) || "").match(/tests\/unit\/[^\s]+/g) || [];
-  } catch (_) { return []; }
+  try { return groupFiles("test:sweeps"); } catch (_) { return []; }
 }
 
 /** The alternatives this pattern names, split by shape, for the existence test

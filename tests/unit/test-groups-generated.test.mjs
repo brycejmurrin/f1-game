@@ -14,7 +14,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { nodeGroupPhases } from "../../tools/ci/run-node-group.mjs";
-import { loadGroups, commandFor, filesOnly, nodeFlags, NODE_TEST_TIMEOUT_MS } from "../../tools/gen/gen-test-groups.mjs";
+import { loadGroups, commandFor, expandedCommand, expandScript, expandScripts, filesOnly, groupDef, groupFiles, nodeFlags,
+  renderPkg, resolveGroupArgv, wrapperGroup, NODE_TEST_TIMEOUT_MS } from "../../tools/gen/gen-test-groups.mjs";
+import { parseRunGroupArgs } from "../../tools/ci/run-group.mjs";
 import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -89,11 +91,18 @@ test("shared benchmark policy generates wrappers only for affected Node groups a
     ["--test", ...nodeFlags(def), ...extra, "bench-a"], ["--test", ...nodeFlags(def), ...extra, "bench-b"],
     ["--test", ...nodeFlags(def), ...extra, "ordinary-a", "ordinary-b"],
   ]);
-  assert.equal(commandFor(def, isolated, "fixture"), "node tools/ci/run-node-group.mjs fixture ordinary-a bench-a ordinary-b bench-b --");
-  assert.equal(commandFor(def), `node --test --test-timeout=${NODE_TEST_TIMEOUT_MS} --test-concurrency=2 ordinary-a bench-a ordinary-b bench-b`);
-  assert.equal(commandFor({ kind: "node", flags: ["--test-timeout=5"], files: ["x"] }), "node --test --test-timeout=5 x", "a group-owned bound wins");
-  assert.equal(commandFor({ kind: "browser", files: ["bench-a"] }, isolated), "node tools/ci/run-playwright.mjs bench-a");
-  assert.equal(commandFor({ kind: "command", cmd: "unchanged" }, isolated), "unchanged");
+  // #5427 item 4: the package.json line is ONE stable wrapper per group (isolated or not: run-group.mjs runs
+  // nodeGroupPhases); the full flags-and-files command survives as expandedCommand for string readers.
+  assert.equal(commandFor(def, isolated, "fixture"), "node tools/ci/run-group.mjs fixture");
+  assert.equal(commandFor(def, [], "test:x"), "node tools/ci/run-group.mjs test:x");
+  assert.throws(() => commandFor(def), /needs its group name/);
+  assert.equal(expandedCommand(def), `node --test --test-timeout=${NODE_TEST_TIMEOUT_MS} --test-concurrency=2 ordinary-a bench-a ordinary-b bench-b`);
+  assert.equal(expandedCommand({ kind: "node", flags: ["--test-timeout=5"], files: ["x"] }), "node --test --test-timeout=5 x", "a group-owned bound wins");
+  assert.equal(commandFor({ kind: "browser", files: ["bench-a"] }, isolated, "test:b"), "node tools/ci/run-playwright.mjs --group test:b");
+  assert.equal(expandedCommand({ kind: "browser", flags: ["--project=xr"], files: ["bench-a"] }), "node tools/ci/run-playwright.mjs --project=xr bench-a");
+  assert.equal(commandFor({ kind: "browser", flags: ["--project=render"] }, isolated, "test:render"), "node tools/ci/run-playwright.mjs --project=render",
+    "a group with no file list keeps its literal line: nothing in it moves");
+  assert.equal(commandFor({ kind: "command", cmd: "unchanged" }, isolated, "test:c"), "unchanged");
   assert.deepEqual(nodeGroupPhases({ kind: "node", files: ["bench-a"] }, isolated), [["--test", `--test-timeout=${NODE_TEST_TIMEOUT_MS}`, "bench-a"]], "no empty pool may trigger Node test discovery");
 });
 
@@ -174,5 +183,74 @@ test("isolated group wrappers refuse extra paths and separate option values befo
     assert.equal(result.status, 1);
     assert.match(result.stderr, /extra test paths and separate option values unsupported; use --option=value/);
     assert.equal(fs.existsSync(f.events), false, "invalid forwarded arguments must launch no test phase");
+  }
+});
+
+// #5427 item 4: adding or removing a test FILE edits tests/groups.json alone, never package.json.
+test("package.json test lines carry no file list: one stable wrapper per node/browser group with files", () => {
+  for (const [name, def] of Object.entries(doc.groups)) {
+    const line = pkg.scripts[name];
+    if (def.kind === "command") { assert.equal(line, def.cmd, name); continue; }
+    if (!(def.files || []).length) { assert.equal(wrapperGroup(line), null, `${name} has no files and keeps its literal line`); continue; }
+    assert.equal(wrapperGroup(line), name, `${name}: ${line}`);
+    assert.doesNotMatch(line, /tests\//, `${name} names a test file in package.json — the roster belongs in tests/groups.json`);
+    if (def.kind === "browser") assert.match(line, /run-playwright/, "readers detect browser groups by run-playwright");
+    assert.equal(expandScript(line), expandedCommand(def), `${name} expands to its full command for string readers`);
+  }
+  // A new file in every existing group leaves package.json byte-identical.
+  const text = fs.readFileSync(path.join(ROOT, "package.json"), "utf8");
+  const grown = structuredClone(doc);
+  for (const def of Object.values(grown.groups)) if (def.kind !== "command" && def.files?.length) def.files.push("tests/unit/test-groups-generated.test.mjs");
+  assert.equal(renderPkg(grown, text), text);
+});
+
+test("an unknown group, a wrong kind or an empty list fails loudly, never runs zero tests", () => {
+  const fixture = { groups: { "test:n": { kind: "node", files: ["a.test.mjs"] },
+    "test:b": { kind: "browser", flags: ["--project=p"], files: ["tests/specs/smoke.spec.js"] },
+    "test:e": { kind: "browser", files: [] }, "test:c": { kind: "command", cmd: "x" } } };
+  assert.throws(() => groupDef("test:nope", fixture), /not in tests\/groups\.json/);
+  assert.throws(() => groupDef("test:n", fixture, "browser"), /node group, not browser/);
+  assert.throws(() => groupDef("test:e", fixture, "browser"), /empty file list/);
+  assert.throws(() => groupFiles("test:e", fixture), /empty file list/);
+  assert.throws(() => groupFiles("test:nope", fixture), /not in tests\/groups\.json/);
+  assert.throws(() => expandScript("node tools/ci/run-group.mjs test:nope", fixture), /not in tests\/groups\.json/);
+  assert.equal(expandScript("node --test a.test.mjs", fixture), "node --test a.test.mjs", "a literal line passes through");
+  assert.deepEqual(expandScripts({ "test:n": "node tools/ci/run-group.mjs test:n" }, fixture),
+    { "test:n": `node --test --test-timeout=${NODE_TEST_TIMEOUT_MS} a.test.mjs` });
+  assert.deepEqual(groupFiles("test:n", fixture), ["a.test.mjs"]);
+  // run-playwright.mjs --group: flags, files, then the npm-forwarded tail, the order the literal line gave.
+  assert.deepEqual(resolveGroupArgv(["--group", "test:b", "--timeout=5", "--shard=1/2"], fixture),
+    ["--project=p", "tests/specs/smoke.spec.js", "--timeout=5", "--shard=1/2"]);
+  assert.deepEqual(resolveGroupArgv(["tests/specs/smoke.spec.js"], fixture), ["tests/specs/smoke.spec.js"], "no --group: unchanged");
+  assert.throws(() => resolveGroupArgv(["--group", "test:nope"], fixture), /not in tests\/groups\.json/);
+  assert.throws(() => resolveGroupArgv(["--group", "test:n"], fixture), /node group, not browser/);
+  assert.throws(() => resolveGroupArgv(["--group", "test:e"], fixture), /empty file list/);
+  assert.throws(() => resolveGroupArgv(["--x", "--group", "test:b"], fixture), /comes first/);
+  assert.throws(() => resolveGroupArgv(["--group", "test:b"], { groups: { "test:b": { kind: "browser", files: ["tests/specs/zz-none-*.spec.js"] } } }),
+    /matches no file/);
+});
+
+test("a browser group's globs resolve to the files npm's shell used to expand", () => {
+  for (const [name, def] of Object.entries(doc.groups)) {
+    if (def.kind !== "browser" || !(def.files || []).length) continue;
+    const files = resolveGroupArgv(["--group", name]).slice((def.flags || []).length);
+    assert.ok(files.length >= def.files.length, `${name} resolved to fewer files than it names`);
+    for (const f of files) assert.ok(!f.includes("*") && fs.existsSync(path.join(ROOT, f)), `${name}: ${f}`);
+  }
+  const collisions = resolveGroupArgv(["--group", "test:collisions"]);
+  assert.ok(collisions.length > 1 && collisions.every((f) => /^tests\/specs\/collision[^/]*\.spec\.js$/.test(f)), collisions.join(" "));
+});
+
+test("run-group.mjs: npm-forwarded options reach every phase; the group must come first", () => {
+  assert.deepEqual(parseRunGroupArgs(["test:x"]), { script: "test:x", skipTf: false, extraArgs: [] });
+  assert.deepEqual(parseRunGroupArgs(["test:x", "--skip-tf", "--test-name-pattern=a b"]),
+    { script: "test:x", skipTf: true, extraArgs: ["--test-name-pattern=a b"] });
+  assert.deepEqual(parseRunGroupArgs(["test:x", "--", "--test-reporter=dot"]).extraArgs, ["--test-reporter=dot"]);
+  assert.throws(() => parseRunGroupArgs([]), /usage/);
+  assert.throws(() => parseRunGroupArgs(["--skip-tf", "test:x"]), /usage/);
+  for (const [args, re] of [[["test:nope"], /not in tests\/groups\.json/], [["test:smoke"], /browser group, not node/], [[], /usage/]]) {
+    const r = spawnSync(process.execPath, ["tools/ci/run-group.mjs", ...args], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
+    assert.equal(r.status, 2, `${args.join(" ")}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, re);
   }
 });

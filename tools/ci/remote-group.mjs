@@ -54,6 +54,7 @@ import { gitTry } from "../lib/git-run.mjs";
 import { defaultRemoteWorkers } from "../lib/browser-workers.mjs";
 import { CI_BUCKETS, MIN_SAMPLES, declaredTests, specSecPerTest } from "./select-budget.mjs";
 import { specsOf } from "./select-specs.mjs";
+import { expandScript } from "../gen/gen-test-groups.mjs";
 import { inBuckets, loadDb, median, TIMINGS_FILE } from "./spec-timings.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -107,7 +108,8 @@ export const MIN_PIECE_SEC = 120;
  *  expanded) — what a packed plan can split; null when it is not: `--project=…`,
  *  an env prefix, no files, and the count shard (`--shard=i/n`) must stay. */
 export function groupFiles(group, scripts) {
-  const cmd = String((scripts || {})[`test:${group}`] || "");
+  // A wrapper line (#5427) is read as its tests/groups.json flags + files.
+  const cmd = String(expandScript((scripts || {})[`test:${group}`] || ""));
   const toks = cmd.split(/\s+/).filter(Boolean);
   if (toks[0] !== "node" || toks[1] !== "tools/ci/run-playwright.mjs") return null;
   const files = toks.slice(2);

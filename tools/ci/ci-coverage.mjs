@@ -11,6 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { expandScripts } from "../gen/gen-test-groups.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -26,7 +27,8 @@ function expand(token) {
   return ALL_SPECS.filter((s) => rx.test(s));
 }
 
-const scripts = JSON.parse(read("package.json")).scripts || {};
+// Wrapper lines (#5427) expanded: a group's spec list lives in tests/groups.json.
+const scripts = expandScripts(JSON.parse(read("package.json")).scripts || {});
 // A group script resolves to the spec tokens on its command line. Groups that
 // name no spec (test:render drives a whole PROJECT) resolve to
 // nothing here and are reported as such rather than silently counted.
