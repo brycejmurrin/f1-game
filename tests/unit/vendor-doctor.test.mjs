@@ -7,11 +7,34 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { VENDORS, checkVendor, main, scrub, savedSignIns } from "../../tools/ci/vendor-doctor.mjs";
-import { secondAccountEnv, codexEnv, runVendor } from "../../tools/ci/vendor-run.mjs";
+import { VENDORS, checkVendor, checkSecondClaude, main, scrub, savedSignIns } from "../../tools/ci/vendor-doctor.mjs";
+import { secondAccountEnv, codexEnv, runVendor, main as runMain } from "../../tools/ci/vendor-run.mjs";
 
 const SECRET = "xai-ABCDEFGHIJKLMNOPQRSTUVWX";
 const fakeRun = (table) => async (bin, argv) => table[`${bin} ${argv.join(" ")}`] ?? { code: 127, out: "" };
+
+test("all --parallel starts every vendor together, streams completion order and refuses writes", async () => {
+  const started = [], finished = [], emitted = [];
+  let startedAtFirstFinish;
+  const vendors = ["codex", "cursor", "grok", "claude"];
+  const spawnImpl = async (bin) => {
+    const vendor = bin === "cursor-agent" ? "cursor" : bin;
+    started.push(vendor);
+    await new Promise((resolve) => setTimeout(resolve, (4 - vendors.indexOf(vendor)) * 20));
+    if (!finished.length) startedAtFirstFinish = [...started];
+    finished.push(vendor);
+    return { code: 0, out: JSON.stringify({ result: "DONE" }) };
+  };
+  const argv = ["all", "--parallel", "--cwd", process.cwd(), "--prompt", "q"];
+  const deps = { env: { APEX_CLAUDE_CONFIG_DIR: "/b" }, spawnImpl, onRow: (row) => emitted.push(row.vendor) };
+  const rows = await runMain(argv, deps);
+  assert.deepEqual(startedAtFirstFinish, vendors, "all vendors start before the first finishes");
+  assert.deepEqual(rows.map((row) => row.vendor), vendors);
+  assert.deepEqual(finished, [...vendors].reverse());
+  assert.deepEqual(emitted, finished, "onRow streams each completion immediately");
+  await assert.rejects(runMain([...argv, "--write"], deps), /--parallel cannot be combined with --write/);
+  assert.deepEqual(started, vendors, "the rejected write starts no vendors");
+});
 
 test("Codex checks version and login in the saved home without exposing the saved auth", async () => {
   const b64 = Buffer.from('{"tokens":{"access_token":"saved-secret"}}').toString("base64");
@@ -78,6 +101,36 @@ test("scrub masks e-mails, keys, bearer tokens, account ids and terminal codes",
   assert.equal(s, "✓ <email> <key> Bearer <key> account <id>");
 });
 
+test("scrub masks JWTs, GitHub tokens and secret assignments without masking placeholders again", () => {
+  const jwt = "eyJ" + "a".repeat(12) + "." + "b_".repeat(8) + "." + "c-".repeat(8);
+  const value = "dummy" + "x".repeat(12);
+  const samples = [
+    [jwt, "<jwt>"],
+    [`Bearer ${jwt}`, "Bearer <key>"],
+    ...["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"].map((prefix) =>
+      [prefix + "a_".repeat(10), "<key>"]),
+    [`"access_token": "${value}"`, '"access_token": "<redacted>"'],
+    ...["client_secret", "PASSWORD", "db_passwd", "service_api_key", "apiKey", "api-key"].map((key) =>
+      [`${key}=${value}`, `${key}=<redacted>`]),
+    [`secret : '${value}'`, "secret : '<redacted>'"],
+    [`token=${jwt}`, "token=<jwt>"],
+    ["An ordinary sentence containing token has no assignment.", "An ordinary sentence containing token has no assignment."],
+    ["password=" + "x".repeat(7), "password=" + "x".repeat(7)],
+    ["access_token=<key>", "access_token=<key>"],
+    ...["<jwt>", "<email>", "<id>"].map((placeholder) => [`secret='${placeholder}'`, `secret='${placeholder}'`]),
+  ];
+  for (const [input, expected] of samples) assert.equal(scrub(input), expected);
+});
+
+test("scrub is linear on long runs with no match", () => {
+  for (const input of ["x".repeat(300000), "x".repeat(300000) + "=", "a.".repeat(150000), "eyJ" + "a".repeat(300000)]) {
+    const t0 = Date.now();
+    const out = scrub(input);
+    assert.ok(Date.now() - t0 < 1500, `scrub took ${Date.now() - t0} ms on ${input.length} characters`);
+    assert.equal(out, input);
+  }
+});
+
 test("every argv is a read: no launch, send, exec, followup, cancel or delete", () => {
   for (const [name, v] of Object.entries(VENDORS)) {
     for (const argv of [v.version, v.login]) {
@@ -98,6 +151,33 @@ test("savedSignIns reports variable names, never values", () => {
   assert.deepEqual([row.claudeB, row.codex, row.next], ["APEX_CLAUDE_B_OAUTH_TOKEN", "APEX_CODEX_HOME", []]);
   assert.ok(!JSON.stringify(row).includes(SECRET));
   assert.equal(savedSignIns({}).next.length, 2);
+});
+
+test("checkSecondClaude runs `claude auth status` as the second account and reports the variable name, never the token", async () => {
+  const calls = [];
+  const none = await checkSecondClaude({ env: { PATH: "/bin" }, run: async (...a) => { calls.push(a); return { code: 0, out: "" }; } });
+  assert.equal(calls.length, 0, "no saved sign-in runs nothing");
+  assert.deepEqual(none, { vendor: "claude-b", via: null, login: false,
+    next: ["save a `claude setup-token` token as APEX_CLAUDE_B_OAUTH_TOKEN in the cloud environment"] });
+  const host = { PATH: "/bin", CLAUDE_CODE_REMOTE: "1", CLAUDE_CODE_OAUTH_TOKEN: "host-token", ANTHROPIC_BASE_URL: "https://x", APEX_CLAUDE_B_OAUTH_TOKEN: SECRET };
+  const ok = await checkSecondClaude({ env: host, run: async (bin, argv, o) => {
+    calls.push([bin, argv, o.env, fs.existsSync(path.dirname(o.env.CLAUDE_CONFIG_DIR))]);
+    return { code: 0, out: JSON.stringify({ loggedIn: true, email: "b@example.com" }) };
+  } });
+  const [bin, argv, child, tmpExisted] = calls[0];
+  assert.deepEqual([bin, argv, ok.via, ok.login, ok.next], ["claude", ["auth", "status"], "APEX_CLAUDE_B_OAUTH_TOKEN", true, []]);
+  assert.equal(child.CLAUDE_CODE_OAUTH_TOKEN, SECRET);
+  assert.deepEqual(Object.keys(child).filter((k) => /^(CLAUDE_CODE_|ANTHROPIC_)/.test(k)), ["CLAUDE_CODE_OAUTH_TOKEN"], "none of the host's CLAUDE_CODE_* / ANTHROPIC_*");
+  assert.ok(tmpExisted && child.CLAUDE_CONFIG_DIR.startsWith(os.tmpdir()), "the config dir lives in a temp dir during the run");
+  assert.ok(!fs.existsSync(path.dirname(child.CLAUDE_CONFIG_DIR)), "the temp dir is removed afterwards");
+  assert.ok(!JSON.stringify(ok).includes(SECRET) && !JSON.stringify(ok).includes("b@example.com"));
+  const bad = await checkSecondClaude({ env: host, run: async () => ({ code: 1, out: "Not logged in" }) });
+  assert.equal(bad.login, false);
+  assert.match(bad.next[0], /^sign in: .*claude setup-token.*APEX_CLAUDE_B_OAUTH_TOKEN/);
+  let both;
+  const bothOk = await checkSecondClaude({ env: { ...host, APEX_CLAUDE_CONFIG_DIR: "/b" }, run: async (_b, _a, o) => { both = o.env; return { code: 1, out: "Not logged in" }; } });
+  assert.deepEqual([bothOk.via, both.CLAUDE_CODE_OAUTH_TOKEN, both.CLAUDE_CONFIG_DIR], ["APEX_CLAUDE_CONFIG_DIR", undefined, "/b"], "both set: the config dir wins, no token reaches the child");
+  assert.match(bothOk.next[0], /CLAUDE_CONFIG_DIR="\$APEX_CLAUDE_CONFIG_DIR" claude auth login/);
 });
 
 test("the second-account env drops the host session's identity and carries the saved token only to the child", () => {
@@ -171,11 +251,14 @@ test("runVendor builds read-only argv per vendor, scrubs the answer and reports 
 test("runVendor --verify proves a write run itself and counts the changed paths; a read-only run calls neither", async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-cwd-"));
   const host = { PATH: "/bin" };
-  const fake = (verifyCode) => {
+  const BEFORE = { code: 0, out: " M scratch/dirty.txt\n" };
+  const AFTER = { code: 0, out: " M scratch/dirty.txt\n?? scratch/new.txt\n!! scratch/x.txt\n" };
+  const fake = (verifyCode, git = [BEFORE, AFTER]) => {
     const calls = [];
+    let g = 0;
     const spawnImpl = async (bin, argv, o) => {
       calls.push([bin, argv, o]);
-      if (bin === "git") return { code: 0, out: " M a.txt\n?? b.txt\n" };
+      if (bin === "git") return git[Math.min(g++, git.length - 1)];
       if (bin === "bash") return { code: verifyCode, out: verifyCode ? "not ok 1 - lap time\n# fail 1" : "# pass 3" };
       return { code: 0, out: JSON.stringify({ result: "DONE" }) };
     };
@@ -184,6 +267,19 @@ test("runVendor --verify proves a write run itself and counts the changed paths;
   const red = fake(1);
   const bad = await runVendor("cursor", { cwd, prompt: "q", write: true, verify: "npm test", env: host, spawnImpl: red.spawnImpl });
   assert.deepEqual([bad.changed, bad.verify.code, bad.ok], [2, 1, false], "the agent's DONE does not beat a red verify");
+  const gits = red.calls.filter((c) => c[0] === "git");
+  assert.equal(gits.length, 2, "one git call before the turn and one after it");
+  assert.deepEqual(gits[0][1], ["status", "--porcelain", "--ignored=matching", "--untracked-files=all"]);
+  assert.deepEqual([gits[1][2].input, gits[1][2].timeoutMs, gits[1][2].env], [null, 30000, host]);
+  const order = red.calls.map((c) => c[0]);
+  assert.deepEqual([order[0], order[1], order[2]], ["git", "cursor-agent", "git"], "git runs before and after the agent's turn");
+  const failed = fake(0, [BEFORE, { code: 128, out: "" }]);
+  const unknown = await runVendor("cursor", { cwd, prompt: "q", write: true, env: host, spawnImpl: failed.spawnImpl });
+  assert.equal(unknown.changed, null, "a failing second git call gives null");
+  const failedFirst = fake(0, [{ code: 128, out: "" }, AFTER]);
+  assert.equal((await runVendor("cursor", { cwd, prompt: "q", write: true, env: host, spawnImpl: failedFirst.spawnImpl })).changed, null);
+  const same = fake(0, [BEFORE, BEFORE]);
+  assert.equal((await runVendor("cursor", { cwd, prompt: "q", write: true, env: host, spawnImpl: same.spawnImpl })).changed, 0, "a file dirty before and after is not counted");
   assert.match(bad.verify.tail, /# fail 1$/);
   const bash = red.calls.find((c) => c[0] === "bash");
   assert.deepEqual(bash[1], ["-c", "npm test"]);

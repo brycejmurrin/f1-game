@@ -13,6 +13,7 @@
  *   node tools/ci/vendor-doctor.mjs --only cursor,grok
  */
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,10 +49,18 @@ const NEXT = Object.freeze({
 export function scrub(text) {
   return String(text ?? "")
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
-    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "<email>")
+    // Every pattern below can only START at the beginning of a run of its own character class (a literal prefix, a
+    // \b, or a lookbehind), so a long run without a match is scanned once: linear, not quadratic.
+    .replace(/(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "<email>")
     .replace(/\b(?:sk-|xai-|crsr_|grok_|key_)[A-Za-z0-9_-]{12,}/g, "<key>")
     .replace(/\bBearer\s+\S+/gi, "Bearer <key>")
-    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<id>");
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<id>")
+    .replace(/(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "<jwt>")
+    .replace(/\b(?:gh[pousr]_|github_pat_)\w{20,}/g, "<key>")
+    // Consume each whole key once; checking its name separately avoids overlapping greedy scans.
+    .replace(/(?<![\w-])([\w-]+)(["']?\s*[=:]\s*["']?)([^\s"']{8,})/g,
+      (match, key, separator, value) => /token|secret|password|passwd|api_key|apikey|api-key/i.test(key)
+        && !/<(?:key|jwt|email|id|redacted)>/.test(value) ? `${key}${separator}<redacted>` : match);
 }
 
 /** Bounded child process: no shell, no stdin, output capped; resolves `{ code, out }` and never rejects. */
@@ -109,12 +118,49 @@ export function savedSignIns(env = process.env) {
       ...(has("APEX_CODEX_AUTH_JSON_B64") || has("APEX_CODEX_HOME") ? [] : ["codex: save base64 of ~/.codex/auth.json as APEX_CODEX_AUTH_JSON_B64 and set APEX_CODEX_HOME, or `codex login --device-auth` each session"])] };
 }
 
+/** The child env for a second Claude account: its own token or config dir, none of the hosting session's identity. */
+export function secondAccountEnv(env, { tmpDir } = {}) {
+  const token = env.APEX_CLAUDE_B_OAUTH_TOKEN, dir = env.APEX_CLAUDE_CONFIG_DIR;
+  if (!token && !dir) throw new Error("claude needs APEX_CLAUDE_B_OAUTH_TOKEN or APEX_CLAUDE_CONFIG_DIR (the second account)");
+  const out = {};
+  for (const [k, v] of Object.entries(env)) {
+    if (/^(CLAUDE_|CLAUDECODE$|ANTHROPIC_|CCR_|APEX_CLAUDE_|APEX_CODEX_)/.test(k)) continue;
+    out[k] = v;
+  }
+  if (dir) out.CLAUDE_CONFIG_DIR = dir;
+  else { out.CLAUDE_CONFIG_DIR = path.join(tmpDir, "claude-b-config"); out.CLAUDE_CODE_OAUTH_TOKEN = token; }
+  return out;
+}
+
+/** Whether the second Claude account's saved sign-in answers `claude auth status`: the variable NAME and a boolean only. */
+export async function checkSecondClaude({ run = runBin, env = process.env } = {}) {
+  const via = env.APEX_CLAUDE_CONFIG_DIR ? "APEX_CLAUDE_CONFIG_DIR" : env.APEX_CLAUDE_B_OAUTH_TOKEN ? "APEX_CLAUDE_B_OAUTH_TOKEN" : null;
+  if (!via) return { vendor: "claude-b", via: null, login: false, next: ["save a `claude setup-token` token as APEX_CLAUDE_B_OAUTH_TOKEN in the cloud environment"] };
+  const tmpDir = via === "APEX_CLAUDE_B_OAUTH_TOKEN" ? fs.mkdtempSync(path.join(os.tmpdir(), "vendor-doctor-")) : null;
+  try {
+    const r = await run("claude", VENDORS.claude.login, { env: secondAccountEnv(env, { tmpDir }) });
+    const out = scrub(r.out);
+    let json = null;
+    try { json = JSON.parse(out.trim()); } catch { /* plain-text status */ }
+    const login = r.code === 0 && (json?.loggedIn === true || (/logged in/i.test(out) && !/not logged in/i.test(out)));
+    const next = login ? [] : r.code === 127 ? [`install: ${NEXT.claude.install}`]
+      : via === "APEX_CLAUDE_B_OAUTH_TOKEN" ? ["sign in: APEX_CLAUDE_B_OAUTH_TOKEN did not sign in; save a fresh `claude setup-token` token of the second account as APEX_CLAUDE_B_OAUTH_TOKEN"]
+      : ["sign in: run `CLAUDE_CONFIG_DIR=\"$APEX_CLAUDE_CONFIG_DIR\" claude auth login` once as the second account"];
+    return { vendor: "claude-b", via, login, next };
+  } finally {
+    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const i = argv.indexOf("--only");
   const names = i >= 0 ? String(argv[i + 1] || "").split(",").filter(Boolean) : Object.keys(VENDORS);
   const rows = [];
   for (const name of names) rows.push(await checkVendor(name, deps));
-  if (i < 0) rows.push(savedSignIns(deps.env || process.env));
+  if (i < 0) {
+    rows.push(savedSignIns(deps.env || process.env));
+    rows.push(await checkSecondClaude({ run: deps.run, env: deps.env }));
+  }
   return rows;
 }
 
