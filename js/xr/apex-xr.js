@@ -1,6 +1,7 @@
 /* Apex 26 — ApexXR: thin façade over XRPlan + XrSession for boot / settings.
  *
- * Owns the cached plan, capability probe → apex26.xrCaps latch, bootPick()
+ * Owns the cached plan, capability probe → apex26.xrCaps latch (written through
+ * XrBoot.storeVrCaps, the one writer), bootPick()
  * and noteFallback() for the post-boot ladder.
  * Does NOT own the immersive session — that stays XrSession.
  *
@@ -34,6 +35,12 @@ const ApexXR = (function () {
   }
   function ssSet(k, v) {
     try { sessionStorage.setItem(k, v); return true; } catch (_) { return false; }
+  }
+
+  // The one apex26.xrCaps writer is the eager XrBoot.storeVrCaps (it must hold when
+  // no XR bundle loads); this module only reads LS_CAPS.
+  function storeCaps(vr) {
+    if (typeof XrBoot !== "undefined" && XrBoot.storeVrCaps) XrBoot.storeVrCaps(vr);
   }
 
   function readPrefs() {
@@ -83,11 +90,11 @@ const ApexXR = (function () {
         try {
           const vr = !!(await navigator.xr.isSessionSupported("immersive-vr"));
           caps.vr = vr;
-          lsSet(LS_CAPS, vr ? "1" : "0");
+          storeCaps(vr);
         } catch (_) { /* keep caps.vr from syncCapsFromCache */ }
       } else {
         caps.vr = false;
-        lsSet(LS_CAPS, "0");
+        storeCaps(false);
       }
       _caps = caps;
       _plan = null; // invalidate so plan() re-resolves
@@ -158,6 +165,7 @@ const ApexXR = (function () {
 
   function invalidate() {
     _plan = null;
+    _caps = null;   // re-read apex26.xrCaps: XrBoot.recheck may have rewritten it
   }
 
   return {
