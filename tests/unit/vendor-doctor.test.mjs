@@ -144,13 +144,56 @@ test("runVendor builds read-only argv per vendor, scrubs the answer and reports 
   await runVendor("grok", { cwd, prompt: "q", env: { GROK_API_KEY: SECRET }, spawnImpl });
   assert.equal(seen.at(-1)[2].XAI_API_KEY, SECRET, "the stored GROK_API_KEY reaches Grok Build under the name it reads");
   await runVendor("grok", { cwd, prompt: "q", write: true, env: {}, spawnImpl });
-  assert.ok(seen.at(-1)[1].join(" ").includes("--permission-mode acceptEdits --allow Edit --allow Write"), "Grok write mode pre-approves edits");
+  assert.ok(seen.at(-2)[1].join(" ").includes("--permission-mode acceptEdits --allow Edit --allow Write"), "Grok write mode pre-approves edits");
   const curWrite = await runVendor("cursor", { cwd, prompt: "q", write: true, env: {}, spawnImpl });
-  assert.ok(seen.at(-1)[1].includes("--sandbox") && seen.at(-1)[1].includes("enabled") && !seen.at(-1)[1].includes("--force"), "cursor write uses --sandbox enabled");
+  assert.ok(seen.at(-2)[1].includes("--sandbox") && seen.at(-2)[1].includes("enabled") && !seen.at(-2)[1].includes("--force"), "cursor write uses --sandbox enabled");
   const cancelled = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 0, out: '{"text":"I will","stopReason":"cancelled"}\npermission required: Edit was not run' }) });
-  assert.equal(cancelled.ok, false, "a cancelled headless Grok run is not a pass");
+  const NOTE = "cancelled: a step needed an approval a headless run cannot give";
+  assert.deepEqual([cancelled.ok, cancelled.text, cancelled.note], [false, "I will", NOTE], "a cancelled Grok run without proof is not a pass, but its text is kept");
+  const cancelledOut = '{"text":"I will","stopReason":"cancelled"}\npermission required: Edit was not run';
+  const proven = await runVendor("grok", { cwd, prompt: "q", env: {}, verify: "true",
+    spawnImpl: async (bin) => bin === "bash" ? { code: 0, out: "ok" } : { code: 0, out: cancelledOut } });
+  assert.deepEqual([proven.ok, proven.note], [true, NOTE], "a passing verify proves a cancelled run and the note stays");
+  const guard = "Never describe a file, symbol or result you have not read in this run. If something the task names does not exist, say so and stop.";
+  const rulesOf = (argv) => argv[argv.indexOf("--rules") + 1];
+  assert.ok(rulesOf(seen.find((s) => s[1].includes("--rules"))[1]).startsWith(`${guard}\n\n`), "the guard leads --rules with no AGENTS.md");
+  fs.writeFileSync(path.join(cwd, "AGENTS.md"), "RULES-BODY");
+  await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl });
+  const withAgents = rulesOf(seen.at(-1)[1]);
+  assert.ok(withAgents.startsWith(`${guard}\n\n`) && withAgents.endsWith("RULES-BODY"), "the guard precedes the AGENTS.md text");
+  fs.rmSync(path.join(cwd, "AGENTS.md"));
   const gone = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 127, out: "" }) });
   assert.deepEqual([gone.ok, gone.error], [false, "cli_not_found"]);
   await assert.rejects(runVendor("codex", { cwd: "/nope", prompt: "q" }), /existing directory/);
   assert.equal(fs.readdirSync(cwd).length, 0, "the temp directory is removed");
+});
+
+test("runVendor --verify proves a write run itself and counts the changed paths; a read-only run calls neither", async () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-cwd-"));
+  const host = { PATH: "/bin" };
+  const fake = (verifyCode) => {
+    const calls = [];
+    const spawnImpl = async (bin, argv, o) => {
+      calls.push([bin, argv, o]);
+      if (bin === "git") return { code: 0, out: " M a.txt\n?? b.txt\n" };
+      if (bin === "bash") return { code: verifyCode, out: verifyCode ? "not ok 1 - lap time\n# fail 1" : "# pass 3" };
+      return { code: 0, out: JSON.stringify({ result: "DONE" }) };
+    };
+    return { calls, spawnImpl };
+  };
+  const red = fake(1);
+  const bad = await runVendor("cursor", { cwd, prompt: "q", write: true, verify: "npm test", env: host, spawnImpl: red.spawnImpl });
+  assert.deepEqual([bad.changed, bad.verify.code, bad.ok], [2, 1, false], "the agent's DONE does not beat a red verify");
+  assert.match(bad.verify.tail, /# fail 1$/);
+  const bash = red.calls.find((c) => c[0] === "bash");
+  assert.deepEqual(bash[1], ["-c", "npm test"]);
+  assert.equal(bash[2].env, host, "verify runs with the host env, not the child env");
+  assert.equal(bash[2].timeoutMs, 300000);
+  const green = fake(0);
+  const good = await runVendor("cursor", { cwd, prompt: "q", write: true, verify: "npm test", env: host, spawnImpl: green.spawnImpl });
+  assert.deepEqual([good.changed, good.verify.code, good.ok], [2, 0, true]);
+  const ro = fake(1);
+  const read = await runVendor("cursor", { cwd, prompt: "q", env: host, spawnImpl: ro.spawnImpl });
+  assert.ok(!ro.calls.some((c) => c[0] === "git" || c[0] === "bash"), "a read-only run without verify calls neither git nor bash");
+  assert.deepEqual([read.ok, "changed" in read, "verify" in read], [true, false, false]);
 });

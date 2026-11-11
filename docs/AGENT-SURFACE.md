@@ -406,6 +406,12 @@ GitHub (the PR body, labels and comments) is the only bus between sessions; a
 Claude session reaches its own children through the host's session tools, never
 through this server. What that means on this surface:
 
+One exception since 2026-11-10 (D-032): `tools/ci/vendor-run.mjs` runs one headless turn of the Codex, Cursor,
+Grok or second-account Claude CLI as a LOCAL worker in a directory, on sign-ins Bryce saved in the cloud
+environment; `tools/ci/vendor-doctor.mjs` reports their state, reads only. It starts no vendor cloud agent and
+opens no tunnel, `--verify CMD` makes the runner prove the work itself, and the MCP tools below are unchanged.
+
+
 - `apex_cursor_agents` is **reads only**: `list`, `status`, `wait`, `usage`,
   `artifacts`, `artifact`, `transcript`, `call`, `digest`, `allowed`. The write
   verbs `launch`, `followup`, `cancel`, `archive` and `delete` are refused by the

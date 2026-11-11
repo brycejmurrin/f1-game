@@ -8,6 +8,11 @@
  *
  *   node tools/ci/vendor-run.mjs <codex|cursor|grok> --cwd DIR --prompt "…" [--write] [--timeout 600] [--model M]
  *   node tools/ci/vendor-run.mjs all --cwd DIR --prompt-file FILE        (each in turn, one JSON line each)
+ *   node tools/ci/vendor-run.mjs <vendor> --cwd DIR --prompt "…" --write --verify "node --test t.mjs"
+ * `--verify CMD` runs `bash -c CMD` in DIR after a turn that exited 0 and adds `verify: { code, tail }`; ok then
+ * decides ok (exit 0 and verify 0), so the runner proves the work instead of trusting the agent. A runner's optional
+ * `note({out})` adds `note` to the row; without verify, ok needs exit 0, non-empty text and no note. A `--write` run adds `changed`:
+ * the count of `git status --porcelain` lines in DIR (null when git fails).
  * `claude` runs the Claude CLI under ANOTHER account, never the hosting session's. Give it one of:
  *   APEX_CLAUDE_B_OAUTH_TOKEN  a `claude setup-token` token of that account, saved by Bryce in the cloud environment
  *   APEX_CLAUDE_CONFIG_DIR     that account's config directory (`CLAUDE_CONFIG_DIR=<dir> claude auth login` once)
@@ -21,6 +26,8 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { codexHome, scrub } from "./vendor-doctor.mjs";
+
+const GROK_GUARD = "Never describe a file, symbol or result you have not read in this run. If something the task names does not exist, say so and stop.";
 
 export const RUNNERS = Object.freeze({
   codex: {
@@ -41,9 +48,10 @@ export const RUNNERS = Object.freeze({
     bins: ["grok"],
     argv: ({ cwd, write, model, promptFile, rules }) => ["--prompt-file", promptFile, "--cwd", cwd, "--output-format", "json",
       "--permission-mode", write ? "acceptEdits" : "plan", ...(write ? ["--allow", "Edit", "--allow", "Write"] : []),
-      ...(rules ? ["--rules", rules] : []), ...(model ? ["-m", model] : [])],
-    // A headless Grok run that needed an approval it could not ask for ends `cancelled`: that is a failure, not an answer.
-    text: ({ out }) => { const j = wholeJson(out); return j?.stopReason === "cancelled" ? "" : (j?.result ?? j?.text ?? lastText(j) ?? ""); },
+      "--rules", `${GROK_GUARD}\n\n${rules ?? ""}`, ...(model ? ["-m", model] : [])],
+    // The text is kept even when the run ended `cancelled` (an approval a headless run cannot give); `note` flags it.
+    text: ({ out }) => { const j = wholeJson(out); return j?.result ?? j?.text ?? lastText(j) ?? ""; },
+    note: ({ out }) => wholeJson(out)?.stopReason === "cancelled" ? "cancelled: a step needed an approval a headless run cannot give" : null,
     // Grok Build reads XAI_API_KEY; the cloud environment stores the same key as GROK_API_KEY.
     env: (env) => (env.XAI_API_KEY || !env.GROK_API_KEY ? env : { ...env, XAI_API_KEY: env.GROK_API_KEY }),
   },
@@ -122,7 +130,7 @@ function spawnBounded(bin, argv, { cwd, input, timeoutMs, env }) {
 
 /** One turn. `spawnImpl` is injected by the unit test; `tmpDir` holds the prompt and last-message files. */
 export async function runVendor(vendor, { cwd, prompt, write = false, model = null, timeoutMs = 600000, env = process.env,
-  spawnImpl = spawnBounded, tmpDir } = {}) {
+  spawnImpl = spawnBounded, tmpDir, verify = null } = {}) {
   const r = RUNNERS[vendor];
   if (!r) throw new Error(`unknown vendor: ${vendor} (one of ${Object.keys(RUNNERS).join(", ")})`);
   if (!cwd || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error("--cwd must be an existing directory");
@@ -143,8 +151,20 @@ export async function runVendor(vendor, { cwd, prompt, write = false, model = nu
       if (res.code !== 127) break;
     }
     const text = res.code === 127 ? "" : scrub(r.text({ ...ctx, out: res.out })).trim();
-    return { vendor, ok: res.code === 0 && text.length > 0, code: res.code, ms: Date.now() - t0, write,
-      text: text.slice(0, 8000), ...(res.code === 0 ? {} : { error: res.code === 127 ? "cli_not_found" : res.code === 124 ? "timeout" : scrub(res.out).slice(-400) }) };
+    const ms = Date.now() - t0;
+    const extra = {};
+    if (write) {
+      const st = await spawnImpl("git", ["status", "--porcelain"], { cwd: ctx.cwd, input: null, timeoutMs: 30000, env });
+      extra.changed = st.code === 0 ? String(st.out).split("\n").filter((l) => l.trim()).length : null;
+    }
+    if (verify && res.code === 0) {
+      const v = await spawnImpl("bash", ["-c", verify], { cwd: ctx.cwd, input: null, timeoutMs: 300000, env });
+      extra.verify = { code: v.code, tail: scrub(v.out).slice(-300) };
+    }
+    const note = res.code === 127 || !r.note ? null : r.note({ ...ctx, out: res.out });
+    const ok = res.code === 0 && (extra.verify ? extra.verify.code === 0 : text.length > 0 && !note);
+    return { vendor, ok, code: res.code, ms, write, text: text.slice(0, 8000), ...extra, ...(note ? { note } : {}),
+      ...(res.code === 0 ? {} : { error: res.code === 127 ? "cli_not_found" : res.code === 124 ? "timeout" : scrub(res.out).slice(-400) }) };
   } finally {
     if (!tmpDir) fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -156,7 +176,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const which = argv[0];
   const file = flag(argv, "--prompt-file");
   const opts = { cwd: flag(argv, "--cwd"), prompt: file ? fs.readFileSync(file, "utf8") : flag(argv, "--prompt"),
-    write: argv.includes("--write"), model: flag(argv, "--model") || null,
+    write: argv.includes("--write"), model: flag(argv, "--model") || null, verify: flag(argv, "--verify") || null,
     timeoutMs: Number(flag(argv, "--timeout") || 600) * 1000, ...deps };
   const env = opts.env || process.env;
   const names = which === "all" ? Object.keys(RUNNERS).filter((n) => n !== "claude" || env.APEX_CLAUDE_CONFIG_DIR || env.APEX_CLAUDE_B_OAUTH_TOKEN) : [which];
