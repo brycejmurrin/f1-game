@@ -423,3 +423,49 @@ test("SOUND OFF: a street-wall strike still shakes, vibrates and rumbles, silent
   assert.deepEqual({ shake, vib, rum }, { shake: 1, vib: 1, rum: 1 }, "the feel fires once");
   assert.equal(c.collideT, WALL_SFX_REARM, "the re-arm paces the feel with sound off too");
 });
+
+// #4947: wall-strike severity and wall-align were raw m/s and a literal 60 Hz
+// (xOver * 60 + |speed| * 0.15; |speed| / 8). PACE is a ground-speed scale, so
+// the same hit read harder at OVERALL SPEED 1.338 and softer at 0.84, and a
+// 120 Hz step halved it. Now std-scale through ctx.vStd with xOver / dt.
+function sevAt(pace, dt, latStd = 6, vStdSpeed = 40) {
+  const { ctx: vctx, WallClamp } = load();
+  let sev = null, promoted = null;
+  vctx.DebrisWorld = { active: () => true, wallImpact: () => {}, promoteBarrier: (_c, _side, s) => { promoted = s; } };
+  const c = {
+    s: 10, x: 5 + latStd * pace * dt, human: false, isPlayer: false, speed: vStdSpeed * pace,
+    vLat: 0, head: 0, wasOnWall: false, wallT: 0, wallHits: 0, collideT: 0,
+  };
+  WallClamp.apply(c, baseCtx({ dt, vStd: (v) => v / pace, incidentSim: { notifyWall: (_c, _side, s) => { sev = s; } } }));
+  assert.equal(promoted, sev, "barrier promotion and the incident sim read one severity");
+  return sev;
+}
+
+test("wall severity: the same std-scale hit is the same severity at any PACE and step rate (#4947)", () => {
+  const ref = sevAt(1, 1 / 60);
+  assert.ok(Math.abs(ref - (6 * (1 / 60) * 60 + 40 * 0.15)) < 1e-9, `PACE 1 / 60 Hz keeps the tuned value: ${ref}`);
+  for (const pace of [0.84, 1.338]) {
+    for (const dt of [1 / 60, 1 / 120]) {
+      const s = sevAt(pace, dt);
+      assert.ok(Math.abs(s - ref) < 1e-9, `PACE ${pace} dt ${dt}: sev ${s} vs ${ref}`);
+    }
+  }
+});
+
+test("wall-align: the nose walks onto the tangent at the same rate for the same std speed at any PACE (#4947)", () => {
+  const head = (pace) => {
+    const { WallClamp } = load();
+    const c = noseInCar({ speed: 4 * pace });   // 4 vStd m/s: inside the |v|/8 ramp
+    WallClamp.apply(c, baseCtx({ vStd: (v) => v / pace }));
+    return c.head;
+  };
+  const ref = head(1);
+  assert.ok(ref !== -0.4, "the nose moved");
+  for (const pace of [0.84, 1.338]) assert.ok(Math.abs(head(pace) - ref) < 1e-12, `PACE ${pace}: head ${head(pace)} vs ${ref}`);
+});
+
+test("game.js hands WallClamp its vStd (#4947)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const line = src.split("\n").find((l) => l.startsWith("const _wallCtx = "));
+  assert.ok(line && /\bvStd\b/.test(line), "_wallCtx carries vStd");
+});
