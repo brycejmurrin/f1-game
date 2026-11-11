@@ -59,6 +59,25 @@ const SKIP = new Set([MANIFEST.PATHS.GLX]);
 
 const noop = () => {};
 
+// ECMAScript globals the game reads in hot code; aliased as script-scope
+// lexicals in each context (see createGame). Only names this Node has.
+const VM_INTRINSICS = ["Math", "Number", "Object", "Array", "String", "Boolean", "Symbol", "JSON", "Reflect",
+  "Map", "Set", "WeakMap", "WeakSet", "Date", "Promise", "Error", "TypeError", "RangeError",
+  "ArrayBuffer", "DataView", "Float32Array", "Float64Array", "Int8Array", "Int16Array", "Int32Array",
+  "Uint8Array", "Uint8ClampedArray", "Uint16Array", "Uint32Array",
+  "isFinite", "isNaN", "parseFloat", "parseInt"].filter((n) => typeof globalThis[n] !== "undefined");
+
+// The GLX stub's frustum: six planes that pass everything (p·x + 1e9 ≥ -r for
+// any point the game draws). Written into the caller's pool when one is given.
+const OPEN_PLANES = Array.from({ length: 6 }, () => new Float32Array(4));
+function fillOpenPlanes(out) {
+  for (let i = 0; i < 6; i++) {
+    const p = out[i] || (out[i] = new Float32Array(4));
+    p[0] = 0; p[1] = 0; p[2] = 0; p[3] = 1e9;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // DOM stubs
 // ---------------------------------------------------------------------------
@@ -391,7 +410,9 @@ function makeGlx(record) {
       instances: matrices && matrices.length ? matrices.length / 16 : 0, idxCount: 0, visible: 0,
     }),
     updateInstances: noop, cullInstances: noop, drawInstanced: noop, castShadowInstanced: noop, freeInstancedBatch: noop,
-    makeFrustumPlanes: () => [],
+    // Six all-pass planes (n = 0, w = 1e9): render()'s car cull indexes
+    // planes[0..5], so an empty array threw on the first rival frame (#5056).
+    makeFrustumPlanes: (vp, out) => fillOpenPlanes(out || OPEN_PLANES),
     aabbInFrustum: () => true,
     envProbeReady: () => false, envProbeReset: noop,
     gpuErrors: () => 0,
@@ -485,6 +506,15 @@ function buildSandbox(opts) {
   sandbox.parent = sandbox; sandbox.top = sandbox; sandbox.frames = sandbox;
 
   const ctx = vm.createContext(sandbox);
+
+  // Built-in reads through a contextified global go through V8's interceptor:
+  // `Math.abs` x1e7 measured 107-130 ns a read here against ~1 ns in the main
+  // context, so every VM profile over-weighted math-heavy code (#5056). A
+  // script-scope lexical is resolved before the global, so alias the realm's
+  // OWN intrinsics (same objects: identity, results and the physics digest are
+  // unchanged) before js/ loads. Nothing in js/ declares or reassigns these.
+  // opts.intrinsics === false skips it (the A/B in tests/unit/game-vm-pump.test.mjs).
+  if (opts.intrinsics !== false) vm.runInContext(`const { ${VM_INTRINSICS.join(", ")} } = this;`, ctx, { filename: "game-vm:intrinsics" });
 
   // Realm-native constructors (Event subclasses, Image, observers) so
   // `instanceof` and `new` inside the game see this context's own intrinsics.
@@ -692,11 +722,14 @@ async function settle(pred, maxTurns) {
  *           takeovers run headless (see runRapierScript) — OPT-IN
  *   seat    "pin" (default: McLaren, empty parts sheet) | "shipped" (no garage
  *           seed — the GarageDefaults car a fresh browser boots)
+ *   intrinsics false skips the script-scope aliases of Math, Number, … (on by
+ *           default; they make built-in reads main-context fast, #5056)
  *   allowScriptErrors  true keeps a lazily injected script's load error in
  *           record.scripts instead of rejecting (createGame and race() reject
  *           by default; see assertScriptsLoaded)
  *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly({untilAllFlagged}),
- *             settle(pred), flushTimers(), record, bootMs, trackMs }
+ *             settle(pred), flushTimers(), pumpFrame(now) (throws on a frame
+ *             fault), record, bootMs, trackMs }
  */
 async function createGame(opts) {
   opts = opts || {};
@@ -903,7 +936,19 @@ async function createGame(opts) {
         }
       },
       flushTimers: (onlyDue) => timers.flush(onlyDue),
-      pumpFrame: (now) => { const q = world.rafQueue.splice(0); for (const fn of q) fn(now != null ? now : performance.now()); return q.length; },
+      // Run the queued rAF callbacks once. The game's LoopHealth swallows a
+      // throwing frame into a "frame fault" console line (and only rethrows at
+      // its cap), so a pumped frame that faulted would otherwise read as clean:
+      // check the record and throw the fault (#5056). Returns callbacks run.
+      pumpFrame: (now) => {
+        const q = world.rafQueue.splice(0), mark = record.console.length;
+        for (const fn of q) fn(now != null ? now : performance.now());
+        for (let i = mark; i < record.console.length; i++) {
+          const line = record.console[i][1];
+          if (/frame fault/.test(line)) { const e = new Error("game-vm: pumped frame faulted: " + line.slice(0, 400)); e.record = record; throw e; }
+        }
+        return q.length;
+      },
       resourceSnapshot,
       close,
     };

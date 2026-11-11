@@ -95,7 +95,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/frame-math.mjs** | Pure framing math for frame-report.mjs: projection, ray-cast vs boxes/terrain, occlusion, horizon, motion, flags. | — |
 | **lib/game-vm-pool.cjs** | Pool of game-vm contexts in worker threads: one circuit's probe per worker, JSON back — assertions stay in the parent. | — |
 | **lib/game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | — |
-| **lib/gate-receipt.mjs** | Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one, github-mcp-guard.sh requires it. | steward |
+| **lib/gate-receipt.mjs** | Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one as a local record; no hook reads it. | steward |
 | **lib/generated-paths.mjs** | Generator outputs, one list: deploy.mjs regenerates them at merge. | — |
 | **lib/git-run.mjs** | Shared git helpers: gitRun {code,out,err}, gitMust (throws), gitOut (throwing stdout), gitTry ("" on failure). | — |
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
@@ -368,7 +368,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
 | **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |
 | **perf/session-budgets.mjs** | Session perf budgets: hang ceilings vs recorded phone lines for garage, grid, frames and heap. | — |
-| **perf/vm-alloc-census.mjs** | VM allocation-per-frame census: JS bytes per race frame in the real game loop vs a checked-in baseline (--update). | — |
+| **perf/vm-alloc-census.mjs** | VM alloc census: object vs boxed-double bytes per race frame in the real game loop vs a baseline (--update). | — |
 | **perf/vm-leak-census.mjs** | VM leak census: live GPU handles, event listeners and timers across race → QUIT TO MENU cycles (count-based, exact). | — |
 
 ### `tools/gfx/`
@@ -387,11 +387,13 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | renderer-debug |
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
-| **gfx/gpu-mem-census.mjs** | Requested WebGL2 allocation estimates by format, with explicit-delete accounting and coverage limits. | renderer-debug / playwright-probe |
+| **gfx/gpu-mem-census.mjs** | Requested WebGL2 or WebGPU (--webgpu) allocation estimates by format, with explicit-delete accounting. | renderer-debug / playwright-probe |
+| **gfx/gpu-mem-webgpu.mjs** | Page-side WebGPU allocation wrapper: bytes by format and usage, label + stack per create. | renderer-debug |
 | **gfx/knob-ab.mjs** | Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats noise. | renderer-debug |
 | **gfx/live-frame-census.mjs** | Phone-shaped driven race per backend x track: frame/JS percentiles, GC, slow GL/WebGPU calls, mid-race pipelines. | mcp-probe |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
 | **gfx/mem-cycles-lib.mjs** | gpu-game-check --mem-cycles helpers: an in-page live GPUBuffer/GPUTexture counter and the per-cycle plateau verdict. | mcp-probe |
+| **gfx/pass-census-lib.mjs** | Pure helpers for pass-census --park: the exact cell, its key, the baseline compare and --collect. | renderer-debug |
 | **gfx/pass-census.mjs** | Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657. | renderer-debug / playwright-probe |
 | **gfx/readback-garage-oracle.mjs** | Measures readPixels during menu→garage→close; optional race-entry path. | — |
 | **gfx/readback-quit-menu-oracle.mjs** | Garage close → UI Start Race (Bahrain) → grid + ~20s throttle → pause → 2-tap quit. | — |
@@ -700,7 +702,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
-| **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (actor = owner, no app), decision: comments, label events. |
+| **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (owner, no app), byAgent, decision: comments, label events. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok for harness edits, gen + ratchets. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
@@ -715,6 +717,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/queue-depth.mjs** | Informational queue gauge, never a push hold: queued + running JOBS by OS vs 40 Linux / 5 macOS slots. |
 | **ci/ready-sweep.mjs** | Stale-`ready` sweep (reads only): each ready issue's `file:line` cites against the tree, and the "ready over cap" row. |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA and base SHA. |
+| **ci/reuse-draft-selected.mjs** | Ready flip: reuse the same-sha draft run's selected-spec legs when its plan, base and the deploy tip are unchanged. |
 | **ci/run-node-group.mjs** | Run isolated Node benchmarks before the ordinary pool, forwarding npm arguments to every phase. |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |
 | **ci/select-budget.mjs** | Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else 7.5 s/test (llvmpipe). |
