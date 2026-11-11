@@ -516,12 +516,22 @@ test.describe("Time Trial — sector splits", () => {
       // calls, painted = HUD ticks that set .sec-flash (asserted after the unfreeze below).
       secFlash: typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
     }));
+    // Gate on frames DRAWN, not wall time (as results-flow does, #5442): CI run
+    // 42981194015 saw calls 1 / painted 0 / flash still 0.35 after a 5 s wall
+    // window, i.e. no HUD tick at all. The HUD ticks once per drawn race frame
+    // and the flash lives 3 ticks (0.35 at -0.1), so 8 drawn frames with no
+    // paint is a real HUD miss; fewer means the box drew nothing (not a verdict).
+    const frame0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
     await page.evaluate(() => window.__apex.freeze(false));
-    const flashed = await page.waitForFunction(() => window.__secFlashSeen === true,
-      null, { polling: 100, timeout: 5000 }).then(() => true, () => false);
-    const secFlashAfter = await page.evaluate(() =>
-      typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent");
-    test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState, secFlashAfter }) });
+    await page.waitForFunction((f0) => {
+      const s = window.__apex.hudSecFlash();
+      return (s && s.painted >= 1) || window.__apex.cameraState().renderFrame >= f0 + 8;
+    }, frame0, { polling: 100, timeout: 0 });
+    const flashed = await page.evaluate(() => window.__secFlashSeen === true);
+    const [secFlashAfter, frame1] = await page.evaluate(() => [
+      typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
+      window.__apex.cameraState().renderFrame]);
+    test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState, secFlashAfter, frame0, frame1 }) });
     // The flash is asserted on the seam (W32 row 10): GameHud.secFlash()
     // counts flashSector() calls and the HUD ticks that set .sec-flash, in the
     // same branch that toggles the class. calls 0 = game.js never flashed the
@@ -531,7 +541,7 @@ test.describe("Time Trial — sector splits", () => {
     // painted > 0 points at the observer, not the game.
     expect(secFlashAfter, "__apex.hudSecFlash() seam missing").toEqual(expect.objectContaining({ last: 0 }));
     expect(secFlashAfter.calls, "game.js never called hud.flashSector for the S1 crossing").toBeGreaterThanOrEqual(1);
-    expect(secFlashAfter.painted, "flashSector ran but the HUD never painted .sec-flash").toBeGreaterThanOrEqual(1);
+    expect(secFlashAfter.painted, `flashSector ran but the HUD never painted .sec-flash in ${frame1 - frame0} drawn frames`).toBeGreaterThanOrEqual(1);
   });
 });
 
