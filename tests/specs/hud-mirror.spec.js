@@ -231,12 +231,14 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   // ON THE SOFTWARE PATH THE BANDS ARE NOT OPTIONAL, on either backend. Only
   // GLX used to require them, so a null TLX capture skipped the upside-down
   // check below entirely — and TLX is the backend whose glass shipped upside
-  // down (2026-10-13, header above). Software path = a readable presented frame:
-  // #game-soft holds pixels, or the backend offers capturePixels().
+  // down (2026-10-13, header above). Software path = #game-soft holds pixels, or
+  // the page runs on a software rasterizer (PerfGov.softwareRaster()). Not "GLX
+  // offers capturePixels()": the GLX global exists under TLX on a real GPU too,
+  // where that capture reads nothing (Metal lane, run 43071089530, job 130706726216).
   const readable = await page.evaluate(() => {
     const soft = document.getElementById("game-soft");
-    return !!(soft && soft.width > 0)
-      || (typeof GLX !== "undefined" && typeof GLX.capturePixels === "function");
+    if (soft && soft.width > 0) return true;
+    return typeof PerfGov !== "undefined" && typeof PerfGov.softwareRaster === "function" && !!PerfGov.softwareRaster();
   });
   if (requirePixels) expect(bands, "GLX presents through #game-soft").toBeTruthy();
   if (readable) expect(bands, "a readable presented frame must yield glass bands (software path)").toBeTruthy();
