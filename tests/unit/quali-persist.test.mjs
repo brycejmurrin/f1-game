@@ -688,7 +688,7 @@ test("id-less tracks with the same sample count do not share the curvature cache
   assert.equal(q.carLap(c, a, 1), tS);
 });
 
-test("quali bias (#1566): a one-lap specialist AI is quicker on Saturday, zero-mean, never the player", () => {
+test("quali bias (#1566): a one-lap specialist is quicker on Saturday, zero-mean, keyed by driver not by seat", () => {
   const ratings = (qb) => ({ get: (code) => ({ consistency: 90, qualiBias: code === "HAM" ? qb : 0 }), style01: (v) => Math.max(-1, Math.min(1, (v || 0) / 30)) });
   const lap = (qb, isPlayer = false) => {
     const { q } = loadQuali({ ratings: ratings(qb), cars: [car("p1", "VER", "Verstappen", "rb", true), car("p2", "HAM", "Hamilton", "me", isPlayer)] });
@@ -698,5 +698,5 @@ test("quali bias (#1566): a one-lap specialist AI is quicker on Saturday, zero-m
   assert.ok(quick < flat && flat < slow, `${quick} < ${flat} < ${slow}`);
   assert.ok(Math.abs((flat - quick) - (slow - flat)) <= 0.002, "symmetric (times are rounded to the ms): a zero-mean column leaves the field mean where it was");
   assert.ok(Math.abs(quick / flat - 0.997) < 2e-5, `at most 0.3 % of the lap (${quick} / ${flat})`);
-  assert.equal(lap(30, true), lap(0, true), "a player's simulated lap ignores it");
+  assert.equal(lap(30, true), lap(30, false), "the same driver simulates the same lap whichever car is the player (career.spec grid isolation)");
 });

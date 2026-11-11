@@ -233,8 +233,9 @@ const Quali = (function () {
       const r = DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat));
       const spread = EXEC_SPREAD * (1 - r.consistency / 100);
       const draw = Career.hash(seed, round, "quali", c.driverId || c.code) - 0.5;
-      // Quali bias (#1566, AI style axis): ±QUALI_BIAS of the lap; never a player's.
-      return base * (1 + draw * 2 * spread) * (c.isPlayer || c.human || !r.qualiBias ? 1 : 1 - QUALI_BIAS * DriverRatings.style01(r.qualiBias));
+      // Quali bias (#1566, style axis): ±QUALI_BIAS of a SIMULATED lap, keyed by driver code like the
+      // spread above (not by which car is the player, or the grid would depend on the seat); a driven lap never gets here.
+      return base * (1 + draw * 2 * spread) * (r.qualiBias ? 1 - QUALI_BIAS * DriverRatings.style01(r.qualiBias) : 1);
     }
 
     function drivenMap(driven) {
