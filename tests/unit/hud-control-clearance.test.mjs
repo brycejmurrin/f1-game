@@ -10,10 +10,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { analyzeOverlap, overlapArea } from "../../tools/lib/hud-geometry.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CSS = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
 const HUD_JS = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+const RULES = cssRules(CSS);
 
 const box = (key, role, x, y, w, h, round = false) => ({
   key, role, visible: true, exists: true,
@@ -30,9 +32,11 @@ test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => 
   // --dock-r-w is 0 on desktop so the home right: calc stays put there.
   // Do NOT max() with anchor(left): #1191's tether overshot into #announce
   // when wrap-reverse under-measured --dock-r-w (Pages notched-landscape).
-  assert.match(CSS,
-    /body:not\(\.desktop\) #hud-sectors\s*\{[\s\S]*?--dock-r-w/,
-    "phone #hud-sectors takes --dock-r-w (tilt has no steer-* class)");
+  // Read the rule itself: a lazy `[\s\S]*?` from the selector ran on past its `}`
+  // and found --dock-r-w in the NEXT rule after `right:` was deleted.
+  assert.equal(decl(RULES, "body:not(.desktop) #hud-sectors", "right"),
+    "calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px))",
+    "phone #hud-sectors takes --dock-r-w in its own right: (tilt has no steer-* class)");
   assert.doesNotMatch(CSS,
     /body:not\(\.desktop\) #hud-sectors\s*\{[^}]*position-anchor:\s*--apex-dock-right/,
     "phone sectors must not tether via max(anchor(left)) — that shoved S1–S3 into #announce");
@@ -42,8 +46,8 @@ test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => 
 });
 
 test("CSS: touch #hud-rel is capped above the left dock (steer / BRAKE)", () => {
-  assert.match(CSS,
-    /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\)[\s\S]{0,500}?max-height:\s*min\(42svh/,
+  assert.match(decl(RULES, "body:not(.desktop) #hud-rel:not([data-hl-user])", "max-height") || "",
+    /^min\(42svh,/,
     "touch RELATIVE has a height cap so five rows cannot cover the pedals");
 });
 

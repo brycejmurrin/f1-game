@@ -40,6 +40,17 @@ function matchesSimple(el, sel) {
   return true;
 }
 
+/* Remove ONE registration of fn for type t, and nothing when fn was never
+   added: a bare splice(indexOf(fn), 1) took indexOf's -1 to mean "the last
+   listener", so a destroy() that removed the wrong reference still emptied the
+   list and its "removes every subscription" test could not fail. */
+function unlisten(map, t, fn) {
+  const l = map.get(t);
+  if (!l) return;
+  const i = l.indexOf(fn);
+  if (i >= 0) l.splice(i, 1);
+}
+
 function descendants(el, out = []) {
   for (const c of el.children) { out.push(c); descendants(c, out); }
   return out;
@@ -121,7 +132,7 @@ export function makeDom(opts = {}) {
       querySelector: (sel) => query(el, sel, false)[0] || null,
       querySelectorAll: (sel) => query(el, sel, true),
       addEventListener: (t, fn) => { if (!listeners.has(t)) listeners.set(t, []); listeners.get(t).push(fn); },
-      removeEventListener: (t, fn) => { const l = listeners.get(t); if (l) l.splice(l.indexOf(fn), 1); },
+      removeEventListener: (t, fn) => unlisten(listeners, t, fn),
       dispatchEvent: (ev) => dispatch(el, ev),
       focus: () => { activeElement = el; },
       blur: () => { if (activeElement === el) activeElement = null; },
@@ -172,7 +183,7 @@ export function makeDom(opts = {}) {
     querySelector: (sel) => query(documentElement, sel, false)[0] || null,
     querySelectorAll: (sel) => query(documentElement, sel, true),
     addEventListener: (t, fn) => { if (!docListeners.has(t)) docListeners.set(t, []); docListeners.get(t).push(fn); },
-    removeEventListener: (t, fn) => { const l = docListeners.get(t); if (l) l.splice(l.indexOf(fn), 1); },
+    removeEventListener: (t, fn) => unlisten(docListeners, t, fn),
     dispatchEvent: (ev) => { const l = docListeners.get(ev.type); if (l) for (const fn of [...l]) fn.call(document, ev); return true; },
     execCommand: () => false,
   });

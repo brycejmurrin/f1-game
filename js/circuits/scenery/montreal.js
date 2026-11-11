@@ -109,7 +109,7 @@
 
       for (const side of [-1, 1]) {
         for (const [s0, s1, gap] of [
-          // foldback bands: Senna S and L'Épingle (built apex turns[11] 0.6178;
+          // foldback bands: Senna S (T1-T2) and L'Épingle T10 (built apex turns[9] 0.6178;
           // was 0.55-0.59, 250 m early on the straight — corner-frames W5).
           [0.0, 0.05, 2.5], [0.05, 0.09, 3.5], [0.09, 0.60, 2.5],
           [0.60, 0.64, 3.5], [0.64, 1.0, 2.5],
@@ -864,8 +864,8 @@
       tower(K(0.40), 1, 220, 14, 46,
         { col: [0.78, 0.62, 0.40], seg: 6, cap: true, capCol: [0.8, 0.3, 0.2], mast: 10 });
 
-      // ── L'Épingle hairpin grandstands — wave-6 required landmark. ─────────
-      // L'Épingle is the real-world turn 10; in THIS def it is turns[11]
+      // ── L'Épingle (T10) hairpin grandstands — wave-6 required landmark. ─────────
+      // L'Épingle is the FIA turn 10; in THIS def it is turns[9]
       // (racing frac 0.6178, built |k| 0.062 → r ≈ 16 m, k < 0 = RIGHT-hander),
       // so its OUTSIDE is side −1 and the inside bulb is side +1. Re-seated
       // 2026-11-10 from 0.55 (the kit stood ~250 m early on the approach
@@ -880,7 +880,7 @@
       {
         const CONC = [0.70, 0.72, 0.74], CONC2 = [0.64, 0.66, 0.68];
         const TEAL_F = [0.18, 0.48, 0.52];
-        const HP = 0.6178;  // def.turns[11], the hairpin apex
+        const HP = 0.6178;  // def.turns[9] (T10), the hairpin apex
         const stand = (dst, s, gap, len, rows, fascia) => {
           const a = anchor(K(s), -1, gap);
           const b = [a.r, a.u, a.t];
@@ -927,13 +927,13 @@
       // Apex blocks on the inside only (+1): the outside (−1) is the tyre wall
       // below, and a gap-3 block there clipped the kit furniture at the apex.
       for (let j = 0; j < 3; j++) place(K(0.614 + j * 0.004), 1, 3, [3, 0.84, 4], (j % 2) ? KERB_R : KERB_W);
-      // Hairpin tyre walls + marshal post: braking-zone and apex OUTSIDE (−1).
+      // T10 hairpin tyre walls + marshal post: braking-zone and apex OUTSIDE (−1).
       tyreWall(0.598, 0.607, -1, 4.5, [0.85, 0.30, 0.20]);
       tyreWall(0.608, 0.628, -1, 4.5, [0.90, 0.85, 0.20]);
       marshalPost(K(0.605), -1, 9);
       billboard(K(0.600), -1, 11, 12, 4, [0.24, 0.30, 0.62]);
 
-      // DETAIL 2026-10-05: hairpin stand livery densify + billboards (sheet-04).
+      // DETAIL 2026-10-05: T10 hairpin stand livery densify + billboards (sheet-04).
       // End fascias on the three outside stands (side −1, same nodes) and
       // Canadian GP brand boards round the hairpin; re-seated with the stands.
       {
@@ -985,7 +985,7 @@
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.20
       });
       // Left verge: infield trees along the Casino straight, split around the
-      // three outside stands at the turns[11] apex (0.6138-0.6218, side −1).
+      // three outside stands at the T10 turns[9] apex (0.6138-0.6218, side −1).
       for (const [s0, s1] of [[0.58, 0.608], [0.628, 0.65]]) forestEdge(s0, s1, -1, 28, {
         density: 0.60, hMin: 7, hMax: 12,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
@@ -1044,8 +1044,8 @@
           { kind: "slab", wall: [0.74, 0.76, 0.80], window: [0.52, 0.64, 0.76], floor: 3 });
       }
 
-      // Final chicane — def turns[13] 0.8983 (k < 0, RIGHT, r ≈ 20 m) flicking LEFT
-      // at 0.905 onto the pit straight. Entry outside = −1, exit outside = +1
+      // Final chicane T13-T14 — turns[12] 0.8983 (k < 0, RIGHT, r ≈ 20 m) flicking LEFT
+      // at T14 turns[13] 0.9052 onto the pit straight. Entry outside = −1, exit outside = +1
       // (the Wall of Champions, below). Re-seated 2026-11-10 from 0.915-0.935.
       for (const side of [-1, 1]) {
         // +1 starts one block later: at 0.896 the inside-apex block sank 0.27 m

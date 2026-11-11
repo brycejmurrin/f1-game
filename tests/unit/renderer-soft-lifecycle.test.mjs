@@ -10,6 +10,7 @@ import vm from "node:vm";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { glxSoftHarness } from "../helpers/glx-soft-harness.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -317,6 +318,32 @@ test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
     assert.match(body, /_softPresentWaiters\.indexOf\(waiter\)/);
     assert.match(body, /_softPresentWaiters\.splice\(i, 1\)/);
     assert.match(body, /_softPresentWaiters\.push\(waiter\)/);
+  }
+});
+
+test("GLX soft-present: a timed-out waiter is really removed (the real soft.js, run)", async () => {
+  // The pins above read the TEXT of the timeout path; this runs it. A waiter
+  // left on the list after its timeout keeps blitIfDue() reading back the
+  // framebuffer on every present for a capture nobody is waiting on.
+  const h = glxSoftHarness();
+  await assert.rejects(h.soft.awaitSoftPresent(5), /awaitSoftPresent timeout after 5 ms/);
+  h.soft.blitIfDue();
+  assert.equal(h.blitTries(), 0, "no waiter is left, so a present does not enter the readback path");
+  assert.equal(h.reads(), 0);
+  // …and a live waiter still drives exactly one readback and resolves on it.
+  const live = h.soft.awaitSoftPresent(1000);
+  h.soft.blitIfDue();
+  assert.ok((await live) >= 1, "the waiter resolves on the next blit generation");
+  assert.equal(h.reads(), 1);
+  h.soft.blitIfDue();
+  assert.equal(h.reads(), 1, "a satisfied waiter is gone too");
+  // TLX and WGX share the shape; their timeout must splice the waiter it pushed, guarded on a hit.
+  for (const file of ["js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+    const src = read(file);
+    const at = src.indexOf("awaitSoftPresent(timeoutMs)");
+    assert.match(src.slice(at, at + 1600),
+      /setTimeout\(function \(\) \{\s*const i = _softPresentWaiters\.indexOf\(waiter\);\s*if \(i >= 0\) _softPresentWaiters\.splice\(i, 1\);/,
+      file + ": the timeout splices the waiter it pushed");
   }
 });
 
