@@ -103,6 +103,9 @@ const PhonePadPage = (function () {
     // Sensor state — what padSession reads on every send.
     let roll = null, thr = 0, brk = 0, held = 0, steer = 0, steeringMode = "tilt";
     let session = null;
+    // This page's peer id, sent in every hello: the game lets a re-dial from the
+    // phone it ALLOWed straight back in, and asks again for any other.
+    const peerId = opts.peerId || PhonePadCodec.makePeerId();
     let sensorOn = false;
     let lastHud = null;
     const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held, steer: () => steeringMode === "touch" ? steer : null };
@@ -479,14 +482,49 @@ const PhonePadPage = (function () {
       try {
         await deps.prefetchIce();
         if (attempt !== owner) return { ok: false, error: "cancelled" };
-        const transport = owner.transport = deps.rtc({ role: "guest", name: "pad" });
+        let transport = owner.transport = deps.rtc({ role: "guest", name: "pad" });
         if (!transport) { say("WebRTC is unavailable in this browser.", true); return { ok: false, error: "no_transport" }; }
         let answered = null;
+        // `listen` is the swap's own token: with `reanswer` the rendezvous keeps
+        // listening after it resolves, and a link that is up (or a cancel) stops it.
+        const listen = { stopped: false, get cancelled() { return owner.cancelled || this.stopped; } };
+        // The padSession wired to `transport` once the swap resolved, and its
+        // generation: a callback from a superseded session (or one that fires
+        // while padSession() is still building it) checks `gen`, not the object.
+        let bound = null, bindGen = 0;
+        // A newer offer was answered on a FRESH transport: the session (if any)
+        // moves onto it; the superseded one closes without reading as a drop.
+        const rebind = (old) => {
+          const prev = bound;
+          if (prev) { bound = null; session = null; bindGen++; prev.close(); bind(); }
+          else { try { old.close(); } catch (_) { /* never opened */ } }
+        };
         const done = await deps.swap({
-          code, slot: "answer", want: "offer", token: owner,
+          code, slot: "answer", want: "offer", token: listen,
+          // A STALE OFFER LATCH. A re-dial can hear the offer the game posted for
+          // the link that just died (a relay replays it, or the game re-hosts a
+          // moment later); answered, the game drops that answer and the phone sat
+          // on it until the connect timeout. With reanswer the rendezvous hands
+          // a NEWER offer to reply() again (js/net nostr; ignored where absent).
+          reanswer: true,
           onTick: () => { if (attempt === owner && !session) say("Looking for the game… (room code " + code + ")"); },
           reply: async (invite) => {
             if (attempt !== owner) return null;
+            if (answered && answered.ok) {
+              // A newer offer while the first answer is still unconnected. Up (or
+              // connecting on DTLS) means the first was the live one: keep it.
+              const st = transport.stats ? transport.stats() : null;
+              if (transport.status === "open" || (st && st.connection === "connected")) return null;
+              // An answered RTCPeerConnection cannot take a second offer: a fresh one answers it.
+              const fresh = deps.rtc({ role: "guest", name: "pad" });
+              if (!fresh) return null;
+              const res = await deps.acceptInvite(fresh, invite, { pad: PhonePadCodec.PROTO });
+              if (attempt !== owner || !res.ok) { try { fresh.close(); } catch (_) { /* never opened */ } return null; }
+              const old = transport;
+              transport = owner.transport = fresh; answered = res;
+              rebind(old);
+              return res.code;
+            }
             say("Found it — connecting…");
             const res = await deps.acceptInvite(transport, invite, { pad: PhonePadCodec.PROTO });
             if (attempt !== owner) return null;
@@ -516,11 +554,16 @@ const PhonePadPage = (function () {
           return why;
         }
         say("Connecting…");
+        function bind() {
+        const gen = ++bindGen;
         const active = PhonePad.padSession(transport, src, {
           now: opts.now || null,   // test seam: the harness's stepped clock, so both wire ends agree
+          peerId,
           onHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
           onOpen: () => {
-            say(sensorOn || sensor ? "Connected — tilt to steer." : "Connected — pedals and buttons only.");
+            if (gen !== bindGen) return;
+            listen.stopped = true;   // the link is up: no later offer is answered
+            say((sensorOn || sensor ? "Connected — tilt to steer." : "Connected — pedals and buttons only.") + " If the game asks, tap ALLOW on its screen.");
             if (dom.body) dom.body.classList.add("linked");
             if (opts.onOpen) opts.onOpen();
           },
@@ -530,7 +573,8 @@ const PhonePadPage = (function () {
             if (dom.healthAge) { const age = h.ageMs == null ? "" : Math.round(h.ageMs / 100) * 100 + " ms since acknowledged sample"; if (dom.healthAge.textContent !== age) dom.healthAge.textContent = age; }
           },
           onClose: (why) => {
-            if (attempt !== owner) return;
+            if (attempt !== owner || gen !== bindGen) return;   // a cancel, or a session rebind() replaced
+            bound = null; listen.stopped = true;
             steer = 0; steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.health) dom.health.textContent = "INPUT DISCONNECTED"; if (dom.steer) dom.steer.hidden = true;
             attempt = null; owner.cancelled = true; connecting = false;
             session = null;
@@ -547,11 +591,14 @@ const PhonePadPage = (function () {
             if (again) { redial = code; redialNow(); }
           },
         });
-        if (attempt !== owner) { active.close(); return { ok: false, error: "cancelled" }; }
-        session = active;
-        redialTries = 0;   // a link is up: a later drop gets the full backoff again
+        if (attempt !== owner || gen !== bindGen) { active.close(); return null; }   // closed while it was being built
+        bound = session = active;
         const tick = () => { if (session !== active) return; active.pump(); requestAnimationFrame(tick); };
         if (typeof requestAnimationFrame === "function") requestAnimationFrame(tick);
+        return active;
+        }
+        if (attempt !== owner || !bind()) return { ok: false, error: "cancelled" };
+        redialTries = 0;   // a link is up: a later drop gets the full backoff again
         return { ok: true };
       } finally {
         if (attempt === owner) {
