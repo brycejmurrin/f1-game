@@ -114,20 +114,27 @@ async function crossLappedFlag(page) {
     const a = window.__apex, playerId = a.carAt().id;
     a.freeze(true);
     // A two-lap race permits a genuine lap deficit: RaceControl requires
-    // lap > 1 even after the leader flags. Neutral input holds without reverse.
-    a.setInput({ steer: 0, throttle: false, brake: false });
-    let leader = false, fieldSeconds = 0;
-    for (; fieldSeconds < 300 && a.info().state === "race"; fieldSeconds++) {
-      a.step(1 / 60, 60);
-      if (a.cars().some(c => c.id !== playerId && a.carAt(c.id)?.finished)) { leader = true; break; }
-    }
-    const lapAtLeaderFlag = a.carAt().lap;
-    const startedUnfinished = !a.carAt().finished;
-    let crossed = false;
+    // lap > 1 even after the leader flags. The human CRAWLS (CRAWL m/s) until the
+    // leader flags rather than parking: a player stationary for 60 s under green
+    // is retired (W26 row 5, AiDrive.stallSweep, STALL_V 1 m/s) and that ends the race.
     // Controller follows the existing autopilot.spec.js braking-envelope and
     // pure-pursuit input driver; it does not write any physics or timing state.
     const distances = Array.from({ length: 26 }, (_, i) => 5 + i * 6);
     let previous = a.carAt().prog, stalled = 0, heldSpeed = 30;
+    const CRAWL = 3;
+    let leader = false, fieldSeconds = 0;
+    for (let frame = 0; frame < 300 * 60 && a.info().state === "race"; frame++) {
+      const p = a.probe();
+      const lead = Math.max(8, Math.min(38, p.speed * .6));
+      const steer = Math.max(-1, Math.min(1, 2.4 * (Math.atan2(p.k * lead * lead * .5 - p.x, lead) - p.angle)));
+      a.setInput({ steer, throttle: p.speed < CRAWL, brake: false }); a.step(1 / 60, 1);
+      if (a.cars().some(c => c.id !== playerId && a.carAt(c.id)?.finished)) {
+        leader = true; fieldSeconds = (frame + 1) / 60; break;
+      }
+    }
+    const lapAtLeaderFlag = a.carAt().lap;
+    const startedUnfinished = !a.carAt().finished && !a.carAt().retired;
+    let crossed = false;
     for (let frame = 0; frame < 300 * 60 && a.info().state === "race"; frame++) {
       const p = a.probe(), points = a.scan(distances);
       const look = Math.max(9, p.speed * .4);
