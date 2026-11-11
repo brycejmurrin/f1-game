@@ -154,7 +154,7 @@ test("runShardArgs: the plan is untrusted text — every unit is checked against
   assert.equal(piece.args.filter((a) => /\.spec\.js$/.test(a)).length, 1, "…alone");
   // Count mode: no plan lists → npm run test:<group> -- --shard=i/n (the group's own flags ride along).
   const c = runShardArgs({ group: "proj", plan: '{"matrix":[{"shard":1,"total":2},{"shard":2,"total":2}]}', shard: "2", total: "2", workers: "" }, FAKE_SCRIPTS);
-  assert.deepEqual(c, { runs: [{ cmd: "npm", args: ["run", "test:proj", "--", "--timeout=900000", "--shard=2/2"] }], mode: "count" });
+  assert.deepEqual(c, { runs: [{ cmd: "npm", args: ["run", "test:proj", "--", "--timeout=900000", "--shard=2/2"] }], mode: "count", units: [] }, "a --project group records no units (it never counts for a dropped spec, #5480)");
   assert.equal(runShardArgs({ group: "plain", plan: "", shard: "1", total: "4", workers: "" }, FAKE_SCRIPTS).mode, "count", "an empty plan is a count plan");
   // Refusals: a path outside the group, a shell-ish string, a piece beyond MAX_PIECES, a mismatched matrix, a bad shard, an unknown group, broken JSON.
   const bad = (shards, extra = {}) => runShardArgs({ group: "plain", plan: JSON.stringify({ matrix: [], shards }), shard: "1", total: String(shards.length), workers: "", ...extra }, FAKE_SCRIPTS);
@@ -170,7 +170,7 @@ test("runShardArgs: the plan is untrusted text — every unit is checked against
   assert.ok(runShardArgs({ group: "plain", plan: "", shard: "0", total: "4", workers: "" }, FAKE_SCRIPTS).error);
   assert.ok(runShardArgs({ group: "plain", plan: "", shard: "1", total: "4", workers: "1; id" }, FAKE_SCRIPTS).error);
   assert.ok(runShardArgs({ group: "proj", plan: JSON.stringify({ matrix: [], shards: [[]] }), shard: "1", total: "1", workers: "" }, FAKE_SCRIPTS).error, "a packed plan cannot drive a --project group");
-  assert.deepEqual(bad([[]]), { empty: true, mode: "time" }, "an empty list is a no-op shard, not a red");
+  assert.deepEqual(bad([[]]), { empty: true, mode: "time", units: [] }, "an empty list is a no-op shard, not a red");
 });
 
 test("liveRun: a live run of THIS group on THIS sha is reused, else the newest green one; another sha, group or branch is not", () => {

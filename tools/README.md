@@ -692,6 +692,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/debug-unit.mjs** | Wrapper: npm run debug:unit -- <file> loads vm-debug-preload so vm-loaded js/ is file://-debuggable. |
 | **ci/dispatch.mjs** | The Actions dispatcher: launches, takeovers, deploy:red fixers, nudges, digests, the Board; --fire starts workers. |
+| **ci/dropped-group-runs.mjs** | Ready verdict: a dropped spec counts only when a same-head, same-base browser-group run ran it green on attempt 1. |
 | **ci/file-verdict-reporter.mjs** | A `node --test` reporter writing per-file event counts, so a group runner can refuse an exit 0 that verified nothing. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |

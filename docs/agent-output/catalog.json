@@ -886,6 +886,11 @@
       ]
     },
     {
+      "path": "tools/ci/dropped-group-runs.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/file-verdict-reporter.mjs",
       "classification": "ambiguous",
       "outputPolicy": "protocol-only"

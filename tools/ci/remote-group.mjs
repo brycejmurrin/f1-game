@@ -19,6 +19,7 @@
 //   node tools/ci/remote-group.mjs ui --no-wait         # dispatch, print the run URL, exit
 //   node tools/ci/remote-group.mjs --watch <run-id>     # watch a run already dispatched
 //   node tools/ci/remote-group.mjs ui --force           # dispatch even when this sha already has a live or green run
+//   (an open PR on the branch: the run tests its merge ref and its ready verdict can count a dropped spec, #5480)
 //   GROUP=ui PLAN='{…}' SHARD=1 TOTAL=4 node tools/ci/remote-group.mjs --run-shard   # the workflow's shard step
 //
 // SHARDS ARE PACKED BY TIME, NOT COUNT (2026-10-14). `--shard=i/n` splits a
@@ -54,6 +55,7 @@ import { gitTry } from "../lib/git-run.mjs";
 import { defaultRemoteWorkers } from "../lib/browser-workers.mjs";
 import { CI_BUCKETS, MIN_SAMPLES, declaredTests, specSecPerTest } from "./select-budget.mjs";
 import { specsOf } from "./select-specs.mjs";
+import { GROUP_RECORD_TITLE, groupRecordLine } from "./dropped-group-runs.mjs";
 import { inBuckets, loadDb, median, TIMINGS_FILE } from "./spec-timings.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -195,7 +197,9 @@ export function runShardArgs({ group, plan, shard, total, workers, timeoutMs = 9
     try { parsed = JSON.parse(String(plan)); } catch { return { error: "plan is not JSON" }; }
   }
   if (!parsed || !Array.isArray(parsed.shards)) {
-    return { runs: [{ cmd: "npm", args: ["run", `test:${g}`, "--", ...flags, `--shard=${i}/${n}`] }], mode: "count" };
+    // A count shard runs test i/n of the whole group: its units are every group file's i/n piece (all n cover it).
+    const all = groupFiles(g, scripts) || [];
+    return { runs: [{ cmd: "npm", args: ["run", `test:${g}`, "--", ...flags, `--shard=${i}/${n}`] }], mode: "count", units: all.map((f) => `${f}#${i}/${n}`) };
   }
   const files = groupFiles(g, scripts);
   if (!files) return { error: `test:${g} is not a plain file list; a packed plan cannot drive it` };
@@ -209,11 +213,11 @@ export function runShardArgs({ group, plan, shard, total, workers, timeoutMs = 9
     if (m && SPEC_RE.test(u.file) && files.includes(u.file) && Number(m[1]) <= Number(m[2]) && Number(m[2]) <= MAX_PIECES) { pieces.push(u); continue; }
     return { error: `shard ${i} lists a unit outside test:${g}: ${JSON.stringify(u).slice(0, 80)}` };
   }
-  if (!plain.length && !pieces.length) return { empty: true, mode: "time" };
+  if (!plain.length && !pieces.length) return { empty: true, mode: "time", units: [] };
   const runs = [];
   if (plain.length) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", ...plain, ...flags] });
   for (const u of pieces) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", u.file, ...flags, `--shard=${u.shard}`] });
-  return { runs, mode: "time" };
+  return { runs, mode: "time", units: [...plain, ...pieces.map((u) => `${u.file}#${u.shard}`)] };
 }
 
 /** A run of THIS group on THIS branch for THIS sha that makes a new dispatch
@@ -325,6 +329,36 @@ export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N]
   --interval <s> poll period (min 10, default 30). An unknown flag prints this usage and exits 2, before any dispatch.`;
 export const KNOWN_FLAGS = ["--shards", "--gl", "--workers", "--ref", "--no-wait", "--force", "--timeout", "--interval", "--plan", "--run-shard", "--watch"];
 
+/** The open PR whose head is `branch`, as the dispatch's `pr` input: "" when there is none, the lookup fails, or
+ *  the branch's browser-group.yml predates the input (a dispatch with an unknown input is a 422). */
+export function prInput(branch, { get = (q) => api("GET", q), show = (ref) => gitTry(["show", ref], { cwd: ROOT }) } = {}) {
+  if (!/\bpr:\s*\n\s+description:/.test(String(show(`origin/${branch}:.github/workflows/${WORKFLOW}`) || ""))) return "";
+  const r = get(`pulls?state=open&head=${encodeURIComponent(`${REPO.split("/")[0]}:${branch}`)}&per_page=5`);
+  const n = Array.isArray(r?.json) && r.json.length === 1 ? r.json[0]?.number : null;
+  return Number.isInteger(n) && n > 0 ? String(n) : "";
+}
+
+/** The commit pair this shard tested: on a PR merge ref (APEX_PR_MERGE=1, browser-group.yml's `pr` input) the
+ *  merge commit's parents (base, head); on a branch head, head only (base=none, never counted for a PR verdict). */
+export function testedPair(catFile, prMerge) {
+  const parents = [...String(catFile || "").matchAll(/^parent ([0-9a-f]{40})$/gm)].map((m) => m[1]);
+  if (prMerge) return parents.length === 2 ? { base: parents[0], head: parents[1] } : { base: "", head: "" };
+  return null;
+}
+
+/** The shard's `apex-group` record (tools/ci/dropped-group-runs.mjs reads it): one annotation, written from what
+ *  this checkout and this plan actually ran, never from a dispatch input. */
+function shardRecord(gl, units, code) {
+  const cat = gitTry(["cat-file", "-p", "HEAD"], { cwd: ROOT });
+  let pair = testedPair(cat, process.env.APEX_PR_MERGE === "1");
+  if (!pair) pair = { base: "", head: String(gitTry(["rev-parse", "HEAD"], { cwd: ROOT }) || "").trim() };
+  const line = groupRecordLine({
+    head: pair.head, base: pair.base, gl, flaky: process.env.APEX_FAIL_ON_FLAKY === "1",
+    group: String(process.env.GROUP || "").trim(), ok: code === 0, units,
+  });
+  console.log(`::notice title=${GROUP_RECORD_TITLE}::${line}`);
+}
+
 async function main() {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(USAGE);
@@ -343,7 +377,11 @@ async function main() {
     if (w.error) { console.error("remote-group --run-shard: " + w.error); return 3; }
     const r = runShardArgs({ group: process.env.GROUP, plan: process.env.PLAN, shard: process.env.SHARD, total: process.env.TOTAL, workers: w.workers }, allScripts);
     if (r.error) { console.error("remote-group --run-shard: " + r.error); return 3; }
-    if (r.empty) { say(`shard ${process.env.SHARD}/${process.env.TOTAL}: the plan gave it no specs (fewer specs than shards) — nothing to run`); return 0; }
+    if (r.empty) {
+      say(`shard ${process.env.SHARD}/${process.env.TOTAL}: the plan gave it no specs (fewer specs than shards) — nothing to run`);
+      shardRecord(gl, [], 0);
+      return 0;
+    }
     let code = 0;
     for (const u of r.runs) {   // every unit runs even after a red, so one shard reports all its failures
       say(`shard ${process.env.SHARD}/${process.env.TOTAL} (${r.mode}): ${u.cmd} ${u.args.join(" ")}`);
@@ -351,6 +389,7 @@ async function main() {
       const st = run.status == null ? 1 : run.status;
       if (st !== 0 && code === 0) code = st;
     }
+    shardRecord(gl, r.units, code);
     return code;
   }
   const interval = Math.max(10, +opt("--interval", 30)) * 1000;
@@ -390,6 +429,11 @@ async function main() {
   }
   // A live or green run of this group on this exact sha answers the question already.
   const sha = git("rev-parse", "--verify", "-q", `origin/${branch}`) || git("rev-parse", "HEAD");
+  // THE PR'S MERGE REF (#5480). With an open PR on the branch (and a browser-group.yml there that takes `pr`), the
+  // run tests refs/pull/<n>/merge and records the commit pair, so a ready verdict whose plan dropped one of this
+  // group's specs can count it (tools/ci/dropped-group-runs.mjs). A green branch-head run does not count for that.
+  const pr = prInput(branch);
+  if (pr) say(`testing PR #${pr}'s merge ref (a dropped spec of its ready plan counts this run when it is green on attempt 1)`);
   if (!argv.includes("--force")) {
     const r = api("GET", `actions/workflows/${WORKFLOW}/runs?event=workflow_dispatch&branch=${encodeURIComponent(branch)}&per_page=20`);
     const have = liveRun(r.json?.workflow_runs, { branch, group: p.group, sha });
@@ -398,14 +442,14 @@ async function main() {
       if (argv.includes("--no-wait")) { say(`watch: node tools/ci/remote-group.mjs --watch ${have.run.id}`); return 0; }
       return watch(have.run.id, { interval, deadline });
     }
-    if (have?.kind === "green") { say(`= group passed — ${p.group} on ${branch} @${sha.slice(0, 9)} is already green: ${have.run.html_url} (--force to re-run)`); return 0; }
+    if (have?.kind === "green" && !pr) { say(`= group passed — ${p.group} on ${branch} @${sha.slice(0, 9)} is already green: ${have.run.html_url} (--force to re-run)`); return 0; }
   }
   const since = Date.now();
   const plan = JSON.stringify({ matrix: p.matrix, ...(p.shards ? { shards: p.shards } : {}) });
   const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
     ref: branch,
     // Always pass resolved workers (GL + group aware) so empty UI input still gets the plan default.
-    inputs: { group: p.group, plan, gl, workers: w.workers },
+    inputs: { group: p.group, plan, gl, workers: w.workers, ...(pr ? { pr } : {}) },
   });
   if (d.error) { say(`= group unknown — dispatch failed: ${d.error}`); return 3; }
   let runId = d.json?.workflow_run_id || null;
