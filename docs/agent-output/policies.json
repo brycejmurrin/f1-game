@@ -1281,6 +1281,11 @@
       "presentation": "native",
       "preserve": "MB units, actual mobile/desktop workload and optional --json destination; do not suppress the largest allocations."
     },
+    "tools/gfx/gpu-mem-webgpu.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/gfx/knob-ab.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1300,6 +1305,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
+    },
+    "tools/gfx/pass-census-lib.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "--collect prints the whole baseline JSON on stdout (it is redirected into a file); conflicts go to stderr with exit 1."
     },
     "tools/gfx/pass-census.mjs": {
       "action": "keep-native",
