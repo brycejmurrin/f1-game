@@ -344,12 +344,18 @@ test.describe("results-flow — desktop cooldown ownership", () => {
     await step("cooldown hands input to the player", page.waitForFunction(
       () => window.__apex.ceremony().inputOwner === "player", null, { polling: 100, timeout: 5000 }));
     const before = await page.evaluate(() => window.__apex.carAt());
+    // Gate on frames drawn, not wall time: a loaded software-GPU runner can draw no
+    // frame at all in 5 s (Pages #5084: 7-8 s a round trip), and dt is clamped to 1/4 s,
+    // so 8 frames are always enough sim time to move the car past +1 m.
+    const f0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
     await page.keyboard.down("ArrowUp");
     try {
       await step("held ArrowUp advances the finished car", page.waitForFunction(
-        prog => window.__apex.carAt().prog > prog + 1, before.prog, { polling: 100, timeout: 5000 }));
+        ([prog, f]) => window.__apex.carAt().prog > prog + 1 || window.__apex.cameraState().renderFrame >= f + 8,
+        [before.prog, f0], { polling: 100, timeout: 0 }));
     } finally { await page.keyboard.up("ArrowUp"); }
     const after = await page.evaluate(() => window.__apex.carAt());
+    expect(after.prog, "held ArrowUp advances the finished car").toBeGreaterThan(before.prog + 1);
     expect(after.finished).toBe(true);
     expect(after.finishT).toBe(before.finishT); expect(after.lap).toBe(before.lap);
     expect(await page.evaluate(() => window.__apex.ceremony().cameraOwner)).toBe("chase");
