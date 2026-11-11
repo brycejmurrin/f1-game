@@ -125,7 +125,7 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   const gpuDevice = await page.evaluate(() => window.__bpp.gpuDevice);
   // Whether this run took TLX's soft-blit path (software adapter or headless): the spec exempts that path's readback
   // buffers and asserts the path was on whenever it does (#5387).
-  const soft = await page.evaluate(() => { try { const b = GLX.__tlx.backendState(); return { softAdapter: !!b.softAdapter, headless: !!b.headless, reads: b.softRead ? b.softRead.gen | 0 : 0 }; } catch (_) { return null; } });
+  const soft = await page.evaluate(() => { try { const b = GLX.__tlx.backendState(); return { softAdapter: !!b.softAdapter, headless: !!b.headless, softBlit: !!b.softBlit, reads: b.softRead ? b.softRead.gen | 0 : 0 }; } catch (_) { return null; } });
   const out = { hook, forceGL, warm, gpuDevice, replay, gov, soft, windows };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/idle-pipeline-churn-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
