@@ -217,7 +217,8 @@ test("native photo export awaits the share outcome and reports a cancelled or fa
   for (const outcome of ["success", "cancel", "failure"]) {
     let resolve, reject, saved, calls = 0;
     const held = new Promise((yes, no) => { resolve = yes; reject = no; });
-    const b = boot({ nativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); } } });
+    const b = boot({ nativeDownload: { viable: () => true, isCancelled: (e) => e.name === "AbortError",
+      saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); } } });
     b.api.open(); await b.api.capture();
     const pending = b.api.exportPhoto();
     await b.api.exportPhoto();
@@ -229,9 +230,12 @@ test("native photo export awaits the share outcome and reports a cancelled or fa
     assert.equal(calls, 1, "a second tap must not overlap the native chooser");
     assert.equal(b.api.state().busy, false, "download does not take ownership of capture/close busy state");
     assert.equal(b.dom.byId("ps-close").disabled, false);
-    if (outcome === "success") resolve(); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    if (outcome === "success") resolve();
+    else reject(Object.assign(new Error(outcome === "cancel" ? "Share canceled" : "disk full"), { name: outcome === "cancel" ? "AbortError" : "Error" }));
     await pending;
-    assert.match(b.dom.byId("ps-message").textContent, outcome === "success" ? /PNG download requested/ : outcome === "cancel" ? /Download failed: Share canceled/ : /Download failed: disk full/);
+    // A dismissed share sheet is the player's choice, never "Download failed" (#5040).
+    assert.equal(b.dom.byId("ps-message").textContent,
+      outcome === "success" ? "PNG download requested." : outcome === "cancel" ? "Download cancelled." : "Download failed: disk full");
     await b.api.exportPhoto();
     assert.equal(calls, 2, "settlement allows a later export after success, cancellation, or failure");
   }
@@ -240,7 +244,8 @@ test("native photo export awaits the share outcome and reports a cancelled or fa
 test("library DOWNLOAD shares the in-flight guard with PNG export and permits retry after a cancelled share", async () => {
   let reject, calls = 0;
   const held = new Promise((resolve, no) => { reject = no; });
-  const b = boot({ nativeDownload: { viable: () => true, saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
+  const b = boot({ nativeDownload: { viable: () => true, isCancelled: (e) => e.name === "AbortError",
+    saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
   b.api.open({ source: "garage" }); await b.api.capture(); await b.api.savePhoto();
   const row = b.dom.byId("ps-library").children[0];
   const download = row.children.find((child) => child.textContent === "DOWNLOAD");
@@ -248,8 +253,8 @@ test("library DOWNLOAD shares the in-flight guard with PNG export and permits re
   await b.api.exportPhoto();
   assert.equal(calls, 1, "library double taps and the PNG action cannot overlap native sharing");
   assert.equal(b.dom.byId("ps-close").disabled, false);
-  reject(new Error("Share canceled")); await turn();
-  assert.match(b.dom.byId("ps-message").textContent, /Download failed: Share canceled/);
+  reject(Object.assign(new Error("Share canceled"), { name: "AbortError" })); await turn();
+  assert.equal(b.dom.byId("ps-message").textContent, "Download cancelled.");
   download.click(); await turn();
   assert.equal(calls, 2);
   assert.match(b.dom.byId("ps-message").textContent, /Photo download requested/);
@@ -258,7 +263,8 @@ test("library DOWNLOAD shares the in-flight guard with PNG export and permits re
 test("closing and reopening during a photo export stays usable and ignores stale completion feedback", async () => {
   let finish, calls = 0;
   const held = new Promise((resolve) => { finish = resolve; });
-  const b = boot({ nativeDownload: { viable: () => true, saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
+  const b = boot({ nativeDownload: { viable: () => true, isCancelled: (e) => e.name === "AbortError",
+    saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
   b.api.open({ source: "garage" }); await b.api.capture();
   const pending = b.api.exportPhoto(); await turn();
   b.api.close(false); b.api.open({ source: "garage" }); await b.api.capture();

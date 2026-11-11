@@ -43,6 +43,8 @@ export const STAGE_DIRS = Object.freeze([
  */
 export const STAGE_EXCLUDE = Object.freeze([
   "assets/atlases",
+  // Blender scene sources (2.4 MB) for tools/gen garage bakes; the game loads the baked output only.
+  "assets/source",
 ]);
 
 /** True when repo-relative `rel` is, or is inside, a STAGE_EXCLUDE entry. */
