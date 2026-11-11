@@ -170,12 +170,15 @@ async function body({ page }) {
       const pb = await page.evaluate(() => { const p = window.__apex.menuPrep(); return p && { t: p.trackId, k: p.key, w: !!p.world }; });
       log({ cycle, id, at: "menu", quietMs, pb, ...menu });
       if (id === CIRCUITS[CIRCUITS.length - 1]) {
-        const t0 = await page.evaluate(() => ({ now: Math.round(performance.now()), building: Tracks.building(), log: (window.__bpLog || []).slice(-6) }));
+        const ex = () => page.evaluate(() => { const g = window.__apex.garagePrebuild(); const e = g && g.exterior; return e && { status: e.status, trackId: e.trackId, gen: e.generation, attempts: e.attempts, stats: e.stats && { buildWallMs: e.stats.buildWallMs, maxSliceMs: e.stats.maxSliceMs } }; });
+        const ex0 = await ex();
         let endAt = null;
-        { const w0 = Date.now(); try { await page.waitForFunction(() => !Tracks.building(), null, { polling: 250, timeout: 30000 }); endAt = Date.now() - w0; } catch (_) { endAt = null; } }
-        const after = endAt != null && t0.building ? await censusAfterGc(page, cdp) : null;
-        log({ cycle, at: "heap", heapMB: menu.heapMB, census: t0, endAfterMs: endAt, heapAfterMB: after && after.heapMB,
-          bpAfter: await page.evaluate(() => (window.__bpLog || []).slice(-6)) });
+        if (ex0 && ex0.status === "loading") {
+          const w0 = Date.now();
+          try { await page.waitForFunction(() => { const g = window.__apex.garagePrebuild(), e = g && g.exterior; return !e || e.status !== "loading"; }, null, { polling: 250, timeout: 90000 }); endAt = Date.now() - w0; } catch (_) { endAt = -1; }
+        }
+        const after = endAt != null && endAt >= 0 ? await censusAfterGc(page, cdp) : null;
+        log({ cycle, at: "heap", heapMB: menu.heapMB, ex0, endAfterMs: endAt, ex1: await ex(), heapAfterMB: after && after.heapMB });
       }
       expect(cycleCensusIssues(menu), "menu census must observe the requested renderer and usable counters").toEqual([]);
       expect(menu.aliveTracks.length, `cycle ${cycle}, menu after ${id}: ${menu.aliveTracks.join(", ")} still reachable after GC`).toBeLessThanOrEqual(1);
@@ -258,6 +261,6 @@ test("SCRATCH rcm E", async ({ page }) => {
   try { await body({ page }); } catch (e) { err = String(e && e.message || e).replace(/\s+/g, " ").slice(0, 300); }
   let rows = []; try { rows = JSON.parse(fs.readFileSync("artifacts/logs/race-cycle-memory.json", "utf8")); } catch (_) {}
   const menus = rows.filter((r) => r.at === "menu").map((r) => ({ c: r.cycle, id: r.id, heap: r.heapMB, alive: r.aliveTracks, pb: r.pb }));
-  const heaps = rows.filter((r) => r.at === "heap").map((r) => ({ c: r.cycle, heap: r.heapMB, census: r.census, endAfterMs: r.endAfterMs, heapAfterMB: r.heapAfterMB, bpAfter: r.bpAfter }));
+  const heaps = rows.filter((r) => r.at === "heap").map((r) => ({ c: r.cycle, heap: r.heapMB, ex0: r.ex0, endAfterMs: r.endAfterMs, ex1: r.ex1, heapAfterMB: r.heapAfterMB }));
   throw new Error("MEASURE " + JSON.stringify({ err, menus, heaps }));
 });
