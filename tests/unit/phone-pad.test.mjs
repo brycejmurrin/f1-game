@@ -1099,7 +1099,7 @@ test("host(): a linked phone whose WIRE dies is hosted again on the SAME code; t
   assert.equal(g.ctl.state().phase, "waiting");
   g.room.onFail({ error: "timeout", message: "Nobody joined." });
   assert.equal(g.ctl.state().phase, "failed"); assert.equal(g.ui.lostN, 1, "the page restores its camera and button");
-  assert.match(g.ui.said.at(-1), /^!Nobody joined/);
+  assert.equal(g.ui.said.at(-1), "!Nobody joined.");   // the room service's own message, passed through
   g.ctl.cancel();
   assert.equal(pairs[1][1].status, "closed", "cancel closes the re-link's transport too");
 });
@@ -2217,7 +2217,8 @@ test("host(): a re-link from the ALLOWed phone is let back in; another peer on t
 
 test("the codec carries the page's peer id in its hello, hex only (W26 row 11b)", () => {
   const id = PhonePadCodec.makePeerId();
-  assert.match(id, /^[0-9a-f]{32}$/);
+  assert.equal(id.length, 32);
+  assert.equal(Buffer.from(id, "hex").toString("hex"), id, "128 bits of lowercase hex: it survives a hex round-trip");
   assert.notEqual(PhonePadCodec.makePeerId(), id);
   assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, id)).id, id);
   assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, "<script>")).id, undefined, "a junk id is dropped at encode");

@@ -110,9 +110,23 @@ test("#10 a tyre-wear level changed after boot survives a quit to the menu", asy
 
 // The code survey's two flow items (W2 follow-up). Neither is observable in the
 // VM — audio is silent there and gfx has no warm to await — so pin the source.
-test("survey: update() returns after a natural-flag endRace (no engine / brake-cue / rival audio over the results)", () => {
-  const src = gameSource();
-  assert.match(src, /RaceCeremony\.want\(true\); G\.endRace\(\); return; \}/, "update() must return after endRace()");
+test("survey: update() returns after a natural-flag endRace (no engine / brake-cue / rival audio over the results)", async () => {
+  // Behavioural: sound on, the player retired so the race flags naturally (RaceControl.finishDelay →
+  // G.endRace), stepped one tick at a time; no engine parameter may be set after endRace() in that tick.
+  // Red without the `return` (one setEngine after the flag).
+  const p = await drive(), G = g.G, A = g.apex, GA = g.sandbox.GameAudio;
+  A.step(1, 1); A.retire(G.cars.indexOf(p), "test");
+  const origSet = GA.setEngine, origEnd = G.endRace;
+  let ended = false, calls = 0, after = 0;
+  GA.setEngine = function () { calls++; if (ended) after++; return origSet.apply(this, arguments); };
+  G["endRace"] = function () { ended = true; return origEnd.apply(this, arguments); };
+  G.soundOn = true;
+  try {
+    for (let t = 0; t < 600 * 60 && G.state === "race"; t++) A.step(1 / 60, 1);
+    assert.ok(ended && G.state === "results", `the race did not flag (state ${G.state})`);
+    assert.ok(calls > 0, "the engine audio ran during the race (the spy discriminates)");
+    assert.equal(after, 0, "engine audio was set after endRace() on the flag tick");
+  } finally { GA.setEngine = origSet; G["endRace"] = origEnd; G.soundOn = false; }
 });
 test("survey: loadTrackStepped re-checks live() after the warm await, before it frees the world", () => {
   const src = gameSource();

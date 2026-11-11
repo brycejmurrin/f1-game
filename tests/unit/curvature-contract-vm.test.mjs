@@ -94,7 +94,7 @@ function placeAt(r, s, speed) {
 for (const id of CIRCUITS) {
   test(`${id}: with assists off, swapping the arc and the racing line changes nothing the player does`, async () => {
     const r = await setup(id);
-    assert.ok(r.TABLES.includes("curv") && r.TABLES.includes("line"), `the track carries no curv/line tables: ${r.TABLES}`);
+    assert.deepEqual(["curv", "line"].filter((t) => !r.TABLES.includes(t)), [], `tables missing from the track (has ${r.TABLES})`);
     for (const pl of r.places) {
       for (const input of INPUTS) {
         for (const speed of [20, 55]) {

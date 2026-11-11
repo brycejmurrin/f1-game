@@ -2,7 +2,7 @@
  *
  * The state machine and the measured pit loss are a browser concern
  * (tests/specs/pit-lane.spec.js). What is checkable here is the part that has to
- * be right on all 42 circuits before anything is driven:
+ * be right on every circuit in the roster (Tracks.LIST) before anything is driven:
  *
  *  - the window WRAPS the start/finish line, because that is where every
  *    circuit's pit straight is. A naive `s >= a && s <= b` is wrong for every
