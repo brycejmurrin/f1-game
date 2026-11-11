@@ -8820,22 +8820,26 @@
     },
     "js/garage/setup-presets.js": {
       "apply": [
-        "tests/unit/player-tools-ui.test.mjs"
+        "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/setup-tune.test.mjs"
       ],
       "list": [
-        "tests/unit/player-tools-ui.test.mjs"
+        "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/setup-tune.test.mjs"
       ],
       "mount": [
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "preview": [
-        "tests/unit/player-tools-ui.test.mjs"
+        "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/setup-tune.test.mjs"
       ],
       "remove": [
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "save": [
-        "tests/unit/player-tools-ui.test.mjs"
+        "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/setup-tune.test.mjs"
       ],
       "write": [
         "tests/unit/player-tools-ui.test.mjs",
@@ -8964,6 +8968,10 @@
       ],
       "isDefault": [
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/setup-tune.test.mjs"
+      ],
+      "keyFor": [
+        "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
       "mods": [
@@ -13244,6 +13252,7 @@
         "tests/unit/overtake-mode.test.mjs"
       ],
       "*": [
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-pins.test.mjs",
