@@ -901,6 +901,8 @@ test("#5256 (Bryce 2026-11-11, option A): in landscape touch the top band's anch
   const at = css.indexOf("@media (orientation: landscape) {\n  body:not(.desktop) { --hud-btn-z: 1.5;");
   assert.ok(at > 0, "the landscape touch pin");
   assert.match(css.slice(at, at + 160), /--tap-hud: calc\(var\(--tap-root\) \* 1\.5\);/, "the band is 66 px whatever BUTTON SIZE says");
-  // fitHud's side cap reserves the same footprint there, so the tower budget is BUTTON-SIZE-independent too.
-  assert.match(read("js/ui/hud.js"), /const bz = vpW\(\) > vpH\(\) && !document\.body\.classList\.contains\("desktop"\) \? 1\.5/);
+  // fitHud's side cap reserves the REAL 44 px pair there (bz 1): the pinned plate is capRow's to clear, and reserving the
+  // 1.5 footprint shrank the band to 0.81 at BUTTON 237 (hud-layout "moved sector plate", run 43004647712). Independent
+  // of BUTTON SIZE either way: measured 1.12 at 100 / 175 / 237 % on 852x393, HUD 122.
+  assert.match(read("js/ui/hud.js"), /const bz = vpW\(\) > vpH\(\) && !document\.body\.classList\.contains\("desktop"\) \? 1\s/);
 });
