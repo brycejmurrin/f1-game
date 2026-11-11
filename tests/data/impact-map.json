@@ -9828,6 +9828,7 @@
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs",
@@ -15328,6 +15329,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
@@ -15565,6 +15567,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
@@ -15602,6 +15605,7 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs",
+        "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
@@ -15671,6 +15675,7 @@
       ],
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs",
+        "tests/unit/tlx-closures-4674.test.mjs",
         "tests/unit/tlx-post-orient-cover-webgpu.test.mjs"
       ]
     },
@@ -15788,6 +15793,10 @@
       "_decalAppend": [
         "tests/unit/tlx-hunt4.test.mjs"
       ],
+      "_decalDrop": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs"
+      ],
       "_fail": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs"
@@ -15799,11 +15808,21 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "_hideUndrawnInstanced": [
-        "tests/unit/tlx-fail-scope.test.mjs"
+        "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-inst-root-3104.test.mjs"
+      ],
+      "_instAdd": [
+        "tests/unit/tlx-inst-root-3104.test.mjs"
       ],
       "_instColorAttr": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
+      ],
+      "_instRemove": [
+        "tests/unit/tlx-inst-root-3104.test.mjs"
+      ],
+      "_instShow": [
+        "tests/unit/tlx-inst-root-3104.test.mjs"
       ],
       "_kidsBegin": [
         "tests/unit/tlx-fail-scope.test.mjs",
@@ -15819,9 +15838,11 @@
       ],
       "_mirWarmSwap": [
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-inst-root-3104.test.mjs"
       ],
       "_mirWarmUnswap": [
+        "tests/unit/tlx-inst-root-3104.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "_mul4Col": [
@@ -15837,7 +15858,8 @@
       "_showInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-inst-root-3104.test.mjs"
       ],
       "_softBlitNotify": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -16252,6 +16274,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
@@ -16262,6 +16285,10 @@
       ]
     },
     "js/render/three/tsl-fx.js": {
+      "_decalDrop": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs"
+      ],
       "decalMaterialFor": [
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -16280,6 +16307,7 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "updateFrame": [
+        "tests/unit/tlx-closures-4674.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "*": [
@@ -16299,6 +16327,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-smith-root.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
@@ -16350,6 +16379,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-shader-trims.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ]
