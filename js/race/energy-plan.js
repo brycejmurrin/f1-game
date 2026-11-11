@@ -17,15 +17,10 @@
  * the plan: a TT lap is the player's own run.
  * Reads no track curvature: the only track input is the timing-sector index.
  *
- * FORECAST (#1629): the same module learns what each sector COSTS. `learn(sec,
- * dE, boosted)` takes the net battery change over one completed sector (the
- * player's, from game.js at each sector exit) into a running mean + variance per
- * (sector, boosted). `forecast()` walks the plan from the current sector and
- * predicts the battery at each sector exit with a 0..1 confidence (more laps
- * and a tighter spread raise it; an unlearned sector is 0 and assumed flat).
- * `setOverride(sec, dE)` is the explicit manual override: it replaces the
- * learned mean for that sector (confidence 1) until cleared with null.
- * Display/agent only: nothing here is read by physics.
+ * FORECAST (#1629): learn() folds each completed sector's net battery change
+ * (the player's) into a mean/variance per (sector, boosted); forecast() walks the
+ * plan and predicts each sector exit with a 0..1 confidence; setOverride() pins a
+ * sector. Display/agent only: physics reads none of it.
  */
 const EnergyPlan = (function () {
   "use strict";
@@ -37,7 +32,7 @@ const EnergyPlan = (function () {
   // Per car: the sector the plan last acted on (or found already satisfied),
   // so it fires at most once per entry.
   const seen = new WeakMap();
-  const secE0 = new WeakMap();   // per car: battery at the start of its current sector (#1629)
+  const secE0 = new WeakMap();   // per car: battery at its sector start (#1629)
 
   /** A clean 3-entry plan, or null when `p` is not one. */
   function clean(p) {
@@ -77,81 +72,58 @@ const EnergyPlan = (function () {
     return flip;
   }
 
-  // ---- forecast (#1629) ----
-  // stats[sec][boosted?1:0] = {n, mean, m2} (Welford); override[sec] = number|null
-  let stats = [[null, null], [null, null], [null, null]];
-  let override = [null, null, null];
-  /** Fold one completed sector's net energy change (-1..1) into the model. */
+  // ---- forecast (#1629) ---- stats[sec][boosted] = {n, mean, m2} (Welford)
+  let stats, override;
+  function reset() { stats = [[null, null], [null, null], [null, null]]; override = [null, null, null]; }
+  reset();
   function learn(sec, dE, boosted) {
     if (!(sec >= 0 && sec < 3) || !Number.isFinite(dE)) return false;
-    const k = boosted ? 1 : 0;
-    const s = stats[sec][k] || (stats[sec][k] = { n: 0, mean: 0, m2: 0 });
-    s.n++;
+    const k = boosted ? 1 : 0, s = stats[sec][k] || (stats[sec][k] = { n: 0, mean: 0, m2: 0 });
     const d = dE - s.mean;
-    s.mean += d / s.n;
-    s.m2 += d * (dE - s.mean);
+    s.n++; s.mean += d / s.n; s.m2 += d * (dE - s.mean);
     return true;
   }
-  /** Explicit manual override of a sector's expected energy change; null clears. */
+  /** null clears the override. */
   function setOverride(sec, dE) {
-    if (!(sec >= 0 && sec < 3)) return false;
-    if (dE == null) { override[sec] = null; return true; }
-    if (!Number.isFinite(dE)) return false;
-    override[sec] = dE;
+    if (!(sec >= 0 && sec < 3) || (dE != null && !Number.isFinite(dE))) return false;
+    override[sec] = dE == null ? null : dE;
     return true;
   }
-  function reset() {
-    stats = [[null, null], [null, null], [null, null]];
-    override = [null, null, null];
-  }
-  /** {mean, conf, n, overridden} for one sector under a boosted/unboosted wish. */
   function sectorModel(sec, boosted) {
     if (override[sec] != null) return { mean: override[sec], conf: 1, n: 0, overridden: true };
     const s = stats[sec][boosted ? 1 : 0];
     if (!s) return { mean: 0, conf: 0, n: 0, overridden: false };
-    const sd = s.n > 1 ? Math.sqrt(s.m2 / (s.n - 1)) : 0.1;
-    const conf = (1 - Math.exp(-s.n / 2)) / (1 + 8 * sd);   // 1 lap ~0.4, 3 tight laps ~0.77
-    return { mean: s.mean, conf: Math.min(1, Math.max(0, conf)), n: s.n, overridden: false };
+    const sd = s.n > 1 ? Math.sqrt(s.m2 / (s.n - 1)) : 0.1;   // 1 lap ~0.4, 3 tight laps ~0.77
+    return { mean: s.mean, conf: Math.min(1, Math.max(0, (1 - Math.exp(-s.n / 2)) / (1 + 8 * sd))), n: s.n, overridden: false };
   }
-  /** Boosted-ness a sector will run at, given its policy and the live toggle. */
-  function boostedFor(pol, liveBoost) { return pol === "deploy" ? true : pol === "save" ? false : !!liveBoost; }
-  /** Predict battery at each sector exit starting in sector `fromSec` with `energy`.
-   *  Returns {rows:[{sec,policy,boosted,start,end,conf}], end, conf}; confidence is the
-   *  weakest link. `p` defaults to the current plan. */
+  /** Battery at each sector exit from `fromSec`: {rows:[{sec,policy,boosted,start,end,conf}], end, conf (weakest)}. */
   function forecast(energy, fromSec, liveBoost, p) {
-    const pl = clean(p) || current;
-    let e = Math.min(1, Math.max(0, +energy || 0));
-    let conf = 1;
-    const rows = [];
+    const pl = clean(p) || current, rows = [];
+    let e = Math.min(1, Math.max(0, +energy || 0)), conf = 1;
     for (let i = 0; i < 3; i++) {
-      const sec = ((fromSec | 0) + i) % 3;
-      const pol = pl[sec];
-      const boosted = boostedFor(pol, liveBoost && i === 0);
-      const m = sectorModel(sec, boosted);
-      const start = e;
+      const sec = ((fromSec | 0) + i) % 3, pol = pl[sec];
+      const boosted = pol === "deploy" || (pol !== "save" && !!(liveBoost && i === 0));
+      const m = sectorModel(sec, boosted), start = e;
       e = Math.min(1, Math.max(0, e + m.mean));
       conf = Math.min(conf, m.conf);
       rows.push({ sec, policy: pol, boosted, start, end: e, conf: m.conf });
     }
     return { rows, end: e, conf };
   }
-  /** game.js, player car at a sector change: learn the sector just left (forward, race only) and stamp the new start. */
+  /** game.js, the player at a sector change. A WeakMap, not a car field: cars sit at V8's fast-property cap. */
   function sectorExit(c, fwd, tt) {
-    const e0 = secE0.get(c);   // a WeakMap, not a car field: cars sit at V8's fast-property cap
+    const e0 = secE0.get(c);
     if (fwd && !tt && e0 != null) learn(c._secIdx, c.energy - e0, !!c.boostOn);
     secE0.set(c, c.energy);
   }
-  /** The __apex.ersForecast payload for car `c` (null-safe); `o` = {override, reset}. */
+  /** __apex.ersForecast; `o` = {override, reset}. */
   function report(c, o) {
     o = o || {};
     if (o.reset) reset();
     if (Array.isArray(o.override)) o.override.forEach((v, i) => setOverride(i, v));
-    const sec = c && c._secIdx != null ? c._secIdx : 0;
-    return { plan: plan(), energy: c ? c.energy : null, sector: c ? c._secIdx : null, forecast: forecast(c ? c.energy : 0, sec, c && c.boostOn), learned: learned() };
+    return { plan: plan(), energy: c ? c.energy : null, sector: c ? c._secIdx : null, forecast: forecast(c ? c.energy : 0, c && c._secIdx != null ? c._secIdx : 0, c && c.boostOn), learned: learned() };
   }
-  function learned() {
-    return stats.map((pair, sec) => ({ sec, off: sectorModel(sec, false), on: sectorModel(sec, true), override: override[sec] }));
-  }
+  function learned() { return stats.map((_, sec) => ({ sec, off: sectorModel(sec, false), on: sectorModel(sec, true), override: override[sec] })); }
   return Object.freeze({ KEY, POLICIES, NEUTRAL, clean, plan, setPlan, fromStore, isNeutral, wantsFlip, toggleFor, learn, setOverride, reset, forecast, learned, sectorExit, report });
 })();
 Object.freeze(EnergyPlan);
