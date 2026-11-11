@@ -84,3 +84,18 @@ test("TLX exports pinMesh and car-draw pins the deploy-only draws through the fe
   const cm = fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8");
   assert.ok(cm.includes("_gfx.pinMesh(_rearLightSet)"), "car-mesh pins the rear-light set (the 2026 ERS light code's flash)");
 });
+
+// #5387: a wrapper's render object (object UBO + bind group) is re-minted on its next draw once the prune drops it.
+// At 20 s idle every lap re-minted the scenery the last lap drew (lap census run 42941313887: spa lap 2 minted 286
+// wrappers, monaco lap 2 pruned 321). The idle limit must outlast the longest lap: Spa took 126 s at the census pace.
+test("a scenery wrapper unseen for one lap survives the prune; one idle past the limit is still dropped", () => {
+  const P = pool();
+  const LONGEST_LAP_MS = 130000;
+  const now = 1000000;
+  const lapAgo = P.add({}, "kerb", now - LONGEST_LAP_MS);
+  const stale = P.add({}, "freedDecal", now - P.PRUNE_IDLE_MS - 1);
+  P.prunePool(now);
+  assert.equal(P.PRUNE_IDLE_MS, 600000, "PRUNE_IDLE_MS is Bryce's 600 s (#5387)");
+  assert.deepEqual(P.dropped, [stale], "only the wrapper idle past PRUNE_IDLE_MS is dropped");
+  assert.deepEqual(P.meshPool, [lapAgo], "the wrapper last drawn one lap ago keeps its render object");
+});

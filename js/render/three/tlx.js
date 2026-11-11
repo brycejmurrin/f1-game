@@ -3005,7 +3005,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1: uploads only through uploadStream (a dirty producer)
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
-        geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
+        geo.__tlxPin = true;   // a stream idle past PRUNE_IDLE_MS (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
         slot.geo = geo; slot.ib = ib; slot.cap = cap; slot.builds = (slot.builds | 0) + 1;   // memState().churn
         return true;
       }
@@ -4040,7 +4040,12 @@ const TLX = (function () {
         for (const p of caches.values()) pinPipe(p);
         return _pinnedPipes.size;
       }
-      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
+      // IDLE = LONGER THAN A LAP (#5387). At 20 s every lap's scenery outlived its wrappers (a lap is 60-130 s), so
+      // each lap dropped and re-minted them: render object, object UBO and bind group per wrapper, up to 49 bind
+      // groups in one frame (lap census, run 42941313887: spa lap 2 minted 286, monaco lap 2 pruned 321). At 600 s
+      // the second lap minted 2. Cost: ~100 more live wrappers at peak, +70-120 KB of UBOs, +0.2-1.0 MB JS heap;
+      // geometry is never the prune's (releaseGeometry frees a track's on its free). Bryce's choice, 2026-11-11.
+      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 600000;
       function prunePool(now) {
         const pin = typeof pinPipelines === "function" ? pinPipelines : null;   // typeof: sandboxed prunePool bodies
         if (pin && !_pinArmed) pin();   // arm the pin at the first present, before any warm builds a pipeline
@@ -4218,7 +4223,7 @@ const TLX = (function () {
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
-      // pool's 20-second idle sweep keeps a disposed track's BufferGeometry
+      // pool's idle sweep (PRUNE_IDLE_MS) keeps a disposed track's BufferGeometry
       // attributes strongly reachable while the replacement track is built —
       // exactly the synchronous peak game.js frees the old track to avoid.
       function releaseGeometry(geo) {
@@ -4288,7 +4293,7 @@ const TLX = (function () {
         ud.tlxLgRoad = rec && rec.lg ? 1 : 0;   // PER-CHUNK ROAD: the road draw only
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
-        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~20 s resolution)
+        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~seconds resolution)
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
         // will NEVER promote m.matrix → matrixWorld. The renderer uploads
         // matrixWorld as the model matrix: writing only `.matrix` leaves every
@@ -7058,7 +7063,7 @@ const TLX = (function () {
                   o.rUboKB = inf.memory.uniformBuffersSize != null ? +(inf.memory.uniformBuffersSize / 1024).toFixed(1) : null;
                   // Live RenderObjects (three's _objects cache). The per-object
                   // arm's buffer count is only comparable PER render object:
-                  // prunePool drops a wrapper's render object after 20 s idle
+                  // prunePool drops a wrapper's render object after PRUNE_IDLE_MS idle
                   // (dropWrapper), so the raw count follows how long a sample
                   // took, not the layout.
                   const ro = renderer._objects && renderer._objects._renderObjects;
