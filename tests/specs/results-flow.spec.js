@@ -114,20 +114,27 @@ async function crossLappedFlag(page) {
     const a = window.__apex, playerId = a.carAt().id;
     a.freeze(true);
     // A two-lap race permits a genuine lap deficit: RaceControl requires
-    // lap > 1 even after the leader flags. Neutral input holds without reverse.
-    a.setInput({ steer: 0, throttle: false, brake: false });
-    let leader = false, fieldSeconds = 0;
-    for (; fieldSeconds < 300 && a.info().state === "race"; fieldSeconds++) {
-      a.step(1 / 60, 60);
-      if (a.cars().some(c => c.id !== playerId && a.carAt(c.id)?.finished)) { leader = true; break; }
-    }
-    const lapAtLeaderFlag = a.carAt().lap;
-    const startedUnfinished = !a.carAt().finished;
-    let crossed = false;
+    // lap > 1 even after the leader flags. The human CRAWLS (CRAWL m/s) until the
+    // leader flags rather than parking: a player stationary for 60 s under green
+    // is retired (W26 row 5, AiDrive.stallSweep, STALL_V 1 m/s) and that ends the race.
     // Controller follows the existing autopilot.spec.js braking-envelope and
     // pure-pursuit input driver; it does not write any physics or timing state.
     const distances = Array.from({ length: 26 }, (_, i) => 5 + i * 6);
     let previous = a.carAt().prog, stalled = 0, heldSpeed = 30;
+    const CRAWL = 3;
+    let leader = false, fieldSeconds = 0;
+    for (let frame = 0; frame < 300 * 60 && a.info().state === "race"; frame++) {
+      const p = a.probe();
+      const lead = Math.max(8, Math.min(38, p.speed * .6));
+      const steer = Math.max(-1, Math.min(1, 2.4 * (Math.atan2(p.k * lead * lead * .5 - p.x, lead) - p.angle)));
+      a.setInput({ steer, throttle: p.speed < CRAWL, brake: false }); a.step(1 / 60, 1);
+      if (a.cars().some(c => c.id !== playerId && a.carAt(c.id)?.finished)) {
+        leader = true; fieldSeconds = (frame + 1) / 60; break;
+      }
+    }
+    const lapAtLeaderFlag = a.carAt().lap;
+    const startedUnfinished = !a.carAt().finished && !a.carAt().retired;
+    let crossed = false;
     for (let frame = 0; frame < 300 * 60 && a.info().state === "race"; frame++) {
       const p = a.probe(), points = a.scan(distances);
       const look = Math.max(9, p.speed * .4);
@@ -337,12 +344,18 @@ test.describe("results-flow — desktop cooldown ownership", () => {
     await step("cooldown hands input to the player", page.waitForFunction(
       () => window.__apex.ceremony().inputOwner === "player", null, { polling: 100, timeout: 5000 }));
     const before = await page.evaluate(() => window.__apex.carAt());
+    // Gate on frames drawn, not wall time: a loaded software-GPU runner can draw no
+    // frame at all in 5 s (Pages #5084: 7-8 s a round trip), and dt is clamped to 1/4 s,
+    // so 8 frames are always enough sim time to move the car past +1 m.
+    const f0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
     await page.keyboard.down("ArrowUp");
     try {
       await step("held ArrowUp advances the finished car", page.waitForFunction(
-        prog => window.__apex.carAt().prog > prog + 1, before.prog, { polling: 100, timeout: 5000 }));
+        ([prog, f]) => window.__apex.carAt().prog > prog + 1 || window.__apex.cameraState().renderFrame >= f + 8,
+        [before.prog, f0], { polling: 100, timeout: 0 }));
     } finally { await page.keyboard.up("ArrowUp"); }
     const after = await page.evaluate(() => window.__apex.carAt());
+    expect(after.prog, "held ArrowUp advances the finished car").toBeGreaterThan(before.prog + 1);
     expect(after.finished).toBe(true);
     expect(after.finishT).toBe(before.finishT); expect(after.lap).toBe(before.lap);
     expect(await page.evaluate(() => window.__apex.ceremony().cameraOwner)).toBe("chase");
