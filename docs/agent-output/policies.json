@@ -761,6 +761,11 @@
       "presentation": "native",
       "preserve": "Unknown API/base forces no reuse; no stdout prose"
     },
+    "tools/ci/reuse-draft-selected.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Any lookup doubt or moved tip forces no reuse; stdout is GITHUB_OUTPUT lines only"
+    },
     "tools/ci/run-group.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
