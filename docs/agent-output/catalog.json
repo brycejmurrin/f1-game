@@ -1207,6 +1207,8 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
+        "test:scratch-churnd",
+        "test:scratch-rcmd",
         "test:shimmer",
         "test:smoke",
         "test:stall-reload-sw",
@@ -4283,6 +4285,14 @@
     {
       "name": "test:results-flow",
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
+    },
+    {
+      "name": "test:scratch-churnd",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-churnd-r1.spec.js tests/specs/scratch-churnd-r2.spec.js tests/specs/scratch-churnd-r3.spec.js tests/specs/scratch-churnd-r4.spec.js tests/specs/scratch-churnd-r5.spec.js tests/specs/scratch-churnd-r6.spec.js tests/specs/scratch-churnd-r7.spec.js tests/specs/scratch-churnd-r8.spec.js"
+    },
+    {
+      "name": "test:scratch-rcmd",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcmd-r1.spec.js tests/specs/scratch-rcmd-r2.spec.js tests/specs/scratch-rcmd-r3.spec.js tests/specs/scratch-rcmd-r4.spec.js tests/specs/scratch-rcmd-r5.spec.js tests/specs/scratch-rcmd-r6.spec.js"
     },
     {
       "name": "test:service-worker",
