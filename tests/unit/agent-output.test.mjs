@@ -85,13 +85,13 @@ test('artifact directory symlinks are rejected and presentation failure preserve
   const output = presentMcpResult(result, { root });
   assert.equal(output.isError, true);
   assert.equal(output.content[0].text, 'original failure');
-  assert.match(output.presentationError, /real directory/);
+  assert.equal(output.presentationError, "artifact directory must be a real directory");
   const originalWrite = process.stderr.write;
   let warning = '';
   process.stderr.write = (chunk) => { warning += chunk; return true; };
   try { assert.equal(presentMcpResult(result, { root, level: 'full' }), result); }
   finally { process.stderr.write = originalWrite; }
-  assert.match(warning, /presentation error/);
+  assert.equal(warning, "Agent output presentation error: could not retain original output: artifact directory must be a real directory. Returning full original result.\n");
 });
 test('CLI defaults compact, preserves failing exit and exact separately retained streams', (t) => {
   const root = fixture(t);
@@ -146,7 +146,7 @@ test('diagnostic finds middle failure lines in long logs', (t) => {
   const log = 'routine\n'.repeat(4000) + 'Error: central failure\n    at broken.js:10\n' + 'routine\n'.repeat(4000);
   const run = cli(root, ['--output-level', 'diagnostic', '--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)})`]);
   assert.equal(run.status, 0);
-  assert.match(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), /central failure/);
+  assert.equal(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), "[[\"routine\",\"routine\",\"Error: central failure\",\"    at broken.js:10\",\"routine\",\"routine\",\"routine\"]]");
 });
 
 test('compact retains actionable middle failures and reported test counts', t => {
@@ -155,7 +155,7 @@ test('compact retains actionable middle failures and reported test counts', t =>
   const result = cli(root, ['--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)});process.exitCode=7`]);
   assert.equal(result.status, 7);
   const data = JSON.parse(result.stdout);
-  assert.match(JSON.stringify(data.stdout.diagnostics), /missing fixture alpha/);
+  assert.equal(JSON.stringify(data.stdout.diagnostics), "[[\"Error: missing fixture alpha\",\"    at load.js:22\",\"routine\"]]");
   assert.equal(data.stdout.testCounts.fail, 1);
   assert.equal(data.stdout.testCounts.pass, 14);
   assert.equal(fs.readFileSync(path.join(root, data.stdout.artifact.path), 'utf8'), log);
@@ -216,7 +216,7 @@ test('spec failure markers are actionable even when their names contain no error
   const source = path.join(root, 'spec.log'); fs.writeFileSync(source, log);
   const run = cli(root, ['--', process.execPath, '-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1]));process.exitCode=1', source]);
   assert.equal(run.status, 1);
-  assert.match(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), /✖ wrong pose/);
+  assert.equal(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), "[[\"✖ wrong pose at tools/agent-run.mjs:3\"]]");
 });
 
 test('capture and performance phase logs retain semantic final reports and validity evidence', t => {
@@ -225,7 +225,7 @@ test('capture and performance phase logs retain semantic final reports and valid
   const log = '[capture] measuring phase\n' + JSON.stringify(report, null, 2) + '\n';
   const run = cli(root, ['--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)})`]);
   const summary = JSON.parse(run.stdout).stdout;
-  assert.match(summary.reportScope, /final JSON/);
+  assert.equal(summary.reportScope, "final JSON report; complete phase log retained in artifact");
   assert.equal(summary.data.valid, false);
   assert.equal(summary.data.units, 'ms');
   assert.equal(summary.data.baseline, 16.7);

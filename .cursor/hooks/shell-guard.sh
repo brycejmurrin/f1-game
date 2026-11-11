@@ -5,7 +5,9 @@
 # must obey). Cursor's beforeShellExecution sends {"command", "cwd", ...} and
 # reads {"permission": "allow"|"deny"|"ask", "user_message", "agent_message"};
 # Codex's PreToolUse sends Claude's shape {"tool_input": {"command"}} and reads
-# Claude's hookSpecificOutput (https://cursor.com/docs/agent/hooks). Exit 2
+# Claude's hookSpecificOutput (https://cursor.com/docs/agent/hooks). Cursor's
+# per-call payloads carry no subagent id (only subagentStart does), so the
+# subagent rules cannot run in Cursor; an id, when present, is passed through. Exit 2
 # blocks in every host. For Cursor the guard's answer is mapped onto Cursor's
 # flat JSON, so the agent reads WHY (stderr alone reaches only the hook log).
 # The commit gate is .githooks/pre-commit and the push rules .githooks/pre-push
@@ -18,7 +20,8 @@ NORM=$(printf '%s' "$RAW" | python3 -c '
 import json,sys
 d=json.load(sys.stdin)
 if not isinstance(d.get("tool_input"), dict):
-    d={"tool_name":"Bash","tool_input":{"command":d.get("command","")},"cwd":d.get("cwd",""),"_cursor":1}
+    d={"tool_name":"Bash","tool_input":{"command":d.get("command","")},"cwd":d.get("cwd",""),"_cursor":1,
+       "agent_id":d.get("agent_id") or d.get("subagent_id") or ""}
 print(json.dumps(d))') || NORM=""
 if [ -z "$NORM" ]; then   # an unreadable payload is a deny in both shapes, never a silent pass
   echo "shell-guard: could not read the hook payload; the Bash guard did NOT run." >&2

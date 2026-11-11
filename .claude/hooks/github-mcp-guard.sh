@@ -31,13 +31,14 @@ try:
 except Exception:
     sys.stderr.write("BLOCKED: github-mcp-guard could not read the hook payload, so this GitHub call is refused (fail closed).\n"); sys.exit(2)
 name = str(d.get("tool_name") or "")
+if name.startswith("MCP:"):
+    name = name[4:]                                    # Cursor's preToolUse spelling in a cloud agent
 if name and "__" not in name:
     name = "mcp__github__" + name                      # Cursor's bare name
-ti = d.get("tool_input")
+ti = d.get("tool_input", {})
 if isinstance(ti, str):
     try: ti = json.loads(ti or "{}")
-    except Exception: ti = None
-if ti is None: ti = {}
+    except Exception: ti = None                         # unparsable: refused below for a guarded tool
 if not name or not GUARDED.search(name):
     sys.exit(0)
 if not isinstance(ti, dict):
