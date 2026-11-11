@@ -315,41 +315,16 @@ function buildSecRows() {
   if (els.hudLimits) _limitsDots = els.hudLimits.querySelector("span");
 }
 
-// THE AHEAD/BEHIND GAP READOUT SPELLS ITSELF TO FIT ITS SLOT.
-//
-// `.hud-gaps` sits between the minimap and the CENTRED POS/LAP row, and that slot
-// CLOSES as HUD SIZE grows — the map pushes the widget right while `.hud-top`
-// grows left. Measured at 1000px wide: 266px of slot at 100%, 151 at 150%, 33 at
-// 200%, against a 117px readout in the full spelling.
-//
-// `innerWidth / scale` is the slot's proxy: halving the window and doubling the
-// HUD are the same squeeze, and the whole left cluster is in one `zoom` group so
-// the relationship is linear. Two responses, in order of what they cost:
-//
-//   1. SHORTEN. Drop the driver code and the "s" — the ARROW already says which
-//      side and the number is what a driver reads mid-corner. Full spelling is
-//      ~111px, short is ~70px.
-//   2. DROP. Below `.hud-top`'s bottom edge, still beside the map, where the
-//      strip runs clear to the far side of the screen. Costs the widget its
-//      alignment with the top of the minimap and nothing else.
-//
-// The thresholds are per BREAKPOINT because the >=1200px ladder makes both walls
-// of the slot worse at once: a 140px minimap (vs 96) starts the widget further
-// right, and fatter `.hud-box` padding starts `.hud-top` further left. MEASURED
-// slack, full spelling: 1000@150% (ratio 667) +27, 1000@175% (571) -38 but short
-// fits at +13, 1000@200% (500) short still -50; 1280@150% (853) +25, 1280@175%
-// (731) -64 and short would be -16 too, 1280@200% (640) -105. So narrow gets a
-// shorten band between 550 and 640 and drops below it; wide has no useful
-// shorten band at all and drops straight away at 800.
-//
-// Every read here is cheap. Both custom properties are
-// INLINE declarations this file's own passes write (applyScale writes
-// --hud-scale; the fit pass writes --hud-z-top when its cap binds) — string
-// reads, not getComputedStyle, so they force no style or layout pass — and
-// the width is the cached vpW() (innerWidth itself lays out on Android). The
-// gaps strip PAINTS at the capped --hud-z-top, so that is the divisor when present; the raw slider is only the fallback
-// before the first fit. Nothing here asks the layout engine anything, so it
-// can simply run every tick and follow a window resize for free.
+// THE AHEAD/BEHIND GAP READOUT SPELLS ITSELF TO FIT ITS SLOT. `.hud-gaps` sits
+// between the minimap and the centred POS/LAP row, a slot that closes as HUD SIZE
+// grows (1000px wide: 266px at 100%, 151 at 150%, 33 at 200%; full spelling ~111px,
+// short ~70px). `innerWidth / scale` is its proxy. Responses: SHORTEN (drop the
+// code and "s"), then DROP below `.hud-top`. Thresholds are per breakpoint: the
+// >=1200px ladder's 140px minimap and fatter padding squeeze both walls, so wide
+// has no useful shorten band (measured slack: 1000@150% +27, @175% short +13,
+// @200% short -50; 1280@150% +25, @175% -64). Every read is cheap: inline custom
+// properties this file writes (--hud-scale, --hud-z-top, the painted cap when
+// present) and the cached vpW(), never layout, so it runs every tick.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
 const GAP_DROP_AT  = { narrow: 550, wide: 800 };
 // Set by fitHud() from the real measured fit; null until it has run against a
