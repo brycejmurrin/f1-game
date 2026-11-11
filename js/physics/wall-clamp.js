@@ -15,7 +15,6 @@ const WallClamp = (function () {
 
   const clamp = M4.clamp;
   const _lim = { r: 0, l: 0, laneMin: 0, side: 0 };
-  const _vId = (v) => v;   // ctx.vStd absent (unit VMs): PACE 1
 
   // Hard lateral clamp + incidence scrub + pit/gantry limits + human writeback.
   // Mutates `c` (x, speed, head, vLat, wallT, wasOnWall, wallHits, collideT,
@@ -25,7 +24,7 @@ const WallClamp = (function () {
   //   track, dt, steer, postLim, smp,
   //   wrapS(s), worldFromTrack(s, x, smp),
   //   soundOn (bool), incidentSim ({ notifyWall }),
-  //   vStd(v) — game.js vStd: speeds into the PACE-1 scale (a VM ctx without it reads PACE 1),
+  //   vStd — optional (absent: PACE 1),
   //   addShake(delta) — optional; street incidence FX (game.js owns shake)
   function apply(c, ctx) {
     const track = ctx.track;
@@ -38,7 +37,7 @@ const WallClamp = (function () {
     const soundOn = ctx.soundOn;
     const incidentSim = ctx.incidentSim;
     const addShake = ctx.addShake;
-    const vStd = ctx.vStd || _vId;
+    const kStd = ctx.vStd ? ctx.vStd(1) : 1;   // vStd is linear in v
 
     // Same candidate-position boundary as contact separation and incident takeover.
     const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, postLim);
@@ -58,10 +57,8 @@ const WallClamp = (function () {
         // the bespoke xPinned clamp below is UNCHANGED; broken panels are never a
         // collision surface for the car (that would be R3). promoteBarrier gates
         // on its own severity minimum and is a no-op when the flag is off.
-        // Std-scale (#4947): xOver / dt is the lateral speed into the wall, so
-        // the severity is the same hit at any OVERALL SPEED and step rate. At
-        // PACE 1 and the 60 Hz FIXED_DT it equals the old xOver * 60 + |v| * 0.15.
-        const _wallSev = vStd(dt > 0 ? xOver / dt : 0) + vStd(Math.abs(c.speed || 0)) * 0.15;
+        // #4947: std-scale, any PACE / step rate (= xOver*60 form at PACE 1, 60 Hz)
+        const _wallSev = ((dt > 0 ? xOver / dt : 0) + Math.abs(c.speed || 0) * 0.15) * kStd;
         DebrisWorld.promoteBarrier(c, into, _wallSev);
         // Incident sim (R2 airborne): a GENUINELY hard wall strike launches this
         // car into a bounded 6-DoF Rapier tumble (queued now, promoted in preStep).
@@ -125,7 +122,7 @@ const WallClamp = (function () {
           // velocity to justify being turned (unscaled, a stopped car snaps
           // parallel in ~0.2 s).
           const wallAlign = (1 - Math.exp(-(4 + incidence * 8) * dt))
-                          * clamp(vStd(Math.abs(c.speed)) / 8, 0, 1);   // 8 vStd m/s (#4947)
+                          * clamp(Math.abs(c.speed) * kStd / 8, 0, 1);
           c.head -= rel * wallAlign;
           if (c.isPlayer && !c.wasOnWall && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
         }

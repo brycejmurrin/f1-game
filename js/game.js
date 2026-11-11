@@ -5251,7 +5251,7 @@ function updateCar(c, dt, ranked) {
   // Collide keeps the post-contact soft clamp; peers editing walls own this file.
   _wallCtx.track = track; _wallCtx.dt = dt; _wallCtx.steer = steer; _wallCtx.soundOn = soundOn;
   WallClamp.apply(c, _wallCtx);
-  Damage.observe(c, dt, vT);   // damage record (js/race/damage.js): barrier strikes + pit repair; the HUD reads it, physics only via opt-in DamageHandling (pf.damage)
+  Damage.observe(c, dt, vT);   // damage record (js/race/damage.js); read by the HUD and opt-in DamageHandling
   c.brakeDemand = braking ? brakeLvl : 0; c.throttleDemand = onThrottle && !braking ? throttleLvl : 0; c.steerCommand = steer;
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   // Visual nose yaw. The player uses its REAL heading relative to the track

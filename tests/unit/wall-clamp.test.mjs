@@ -389,6 +389,7 @@ test("game.js hands WallClamp.apply a pooled ctx, not a per-call literal", () =>
   assert.match(game, /WallClamp\.apply\(c, _wallCtx\);/);
   assert.doesNotMatch(game, /WallClamp\.apply\(c, \{/);
   assert.match(game, /const _wallCtx = \{[^\n]*addShake\(d\)/);
+  assert.match(game, /const _wallCtx = \{[^\n]*\bvStd\b/, "#4947: _wallCtx carries vStd");
 });
 
 for (const side of [-1, 1]) {
@@ -462,10 +463,4 @@ test("wall-align: the nose walks onto the tangent at the same rate for the same 
   const ref = head(1);
   assert.ok(ref !== -0.4, "the nose moved");
   for (const pace of [0.84, 1.338]) assert.ok(Math.abs(head(pace) - ref) < 1e-12, `PACE ${pace}: head ${head(pace)} vs ${ref}`);
-});
-
-test("game.js hands WallClamp its vStd (#4947)", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const line = src.split("\n").find((l) => l.startsWith("const _wallCtx = "));
-  assert.ok(line && /\bvStd\b/.test(line), "_wallCtx carries vStd");
 });
