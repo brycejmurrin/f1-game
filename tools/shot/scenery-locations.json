@@ -348,15 +348,15 @@
       "track": "brands_hatch",
       "name": "Pit Straight Stand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.978373,
+      "frac": 0.977375,
       "target": [
-        234.53,
-        -15.5,
-        392.32
+        226.12,
+        -5.34,
+        -23.68
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 32.3,
-      "viewDistanceM": 32.3,
+      "nearestRoadDistanceM": 32.4,
+      "viewDistanceM": 32.4,
       "source": "tests/data/landmarks/brands_hatch.json; js/circuits/scenery/brands_hatch.js"
     },
     {
@@ -365,11 +365,11 @@
       "track": "brands_hatch",
       "name": "Desire Wilson Stand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.997935,
+      "frac": 0.997978,
       "target": [
-        164.41,
-        -16.3,
-        423.82
+        300.58,
+        -8.1,
+        6.13
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 29.7,
@@ -382,11 +382,11 @@
       "track": "brands_hatch",
       "name": "Paddock Hill Stand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.016478,
+      "frac": 0.015448,
       "target": [
-        97.44,
-        -14.79,
-        452.02
+        363.91,
+        -8,
+        32.78
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 27,
@@ -401,13 +401,30 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.038105,
       "target": [
-        14.26,
-        -17.11,
-        484.06
+        439.35,
+        -11.49,
+        109.89
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 27,
-      "viewDistanceM": 27,
+      "nearestRoadDistanceM": 27.1,
+      "viewDistanceM": 27.1,
+      "source": "tests/data/landmarks/brands_hatch.json; js/circuits/scenery/brands_hatch.js"
+    },
+    {
+      "id": "brands_hatch/kentagon",
+      "modelId": "brands-kentagon",
+      "track": "brands_hatch",
+      "name": "Kentagon",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.017605,
+      "target": [
+        344.02,
+        -10.06,
+        102.4
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 45,
+      "viewDistanceM": 45,
       "source": "tests/data/landmarks/brands_hatch.json; js/circuits/scenery/brands_hatch.js"
     },
     {
@@ -3600,11 +3617,6 @@
     {
       "track": "anderstorp",
       "modelId": "anderstorp-press-stand",
-      "reason": "superseded by the pit complex"
-    },
-    {
-      "track": "brands_hatch",
-      "modelId": "brands-kentagon",
       "reason": "superseded by the pit complex"
     },
     {

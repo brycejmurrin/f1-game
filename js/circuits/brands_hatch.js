@@ -18,12 +18,9 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // The real start/finish line on the Brabham straight (2026-11-11, #5316):
-    // driver61 Brands Hatch circuit guide, Start/Finish 51°21'37.1"N
-    // 0°15'37.2"E, projected (import-circuit-path project(), re-stitched OSM
-    // ring index-identical to pts) 0.9 m from control node 29/106. Was 0.1226
-    // on the Stirlings-Clearways link (docs/tracks/START-LINES.md). Pits stay
-    // on the default +1 (driver's right, infield), as driver61 describes.
+    // MEASURED: v0 sits in a 136 m-radius corner with the 182 m grid behind
+    // it, so the line moves to the nearest node holding R >= 1500 m across the
+    // whole grid zone (radius there: 6482 m).
     //
     // startFrac is an INDEX fraction into the control points, NOT an arc
     // fraction. The points are not arc-uniform, so this value comes from
@@ -33,7 +30,7 @@
     // sceneryStartFrac keeps the dressing on the v0 origin it was authored
     // against, so props, landmarks and corner boards stay on their real corners
     // while only the line and grid move.
-    startFrac: 0.2736,
+    startFrac: 0.1226,
     sceneryStartFrac: 0.0000,
     name: "BRANDS HATCH",
     gp: "British GP",
@@ -65,8 +62,8 @@
     // turns: the 11 strongest curvature peaks of THIS centreline in lap order,
     // 11 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
-    sectors: [0.36, 0.65],  // ~1/3 and ~2/3 of the lap from the real line, each on a straight (2026-11-11) — not FIA-published splits
-    turns: [0.0679, 0.1509, 0.1645, 0.222, 0.3259, 0.522, 0.5345, 0.6034, 0.704, 0.7659, 0.88],
+    sectors: [0.27, 0.703],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
+    turns: [0.0268, 0.2147, 0.2977, 0.3113, 0.3688, 0.4727, 0.6688, 0.6813, 0.7502, 0.8508, 0.9127],
     furniture: { tree: "broad", fol: [0.20, 0.38, 0.18], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],
