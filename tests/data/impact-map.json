@@ -3227,6 +3227,7 @@
     "js/car/crest-draw.js": {
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
@@ -3514,6 +3515,7 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "paint": [
+        "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-stations.test.mjs"
       ],
@@ -3521,13 +3523,13 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "*": [
-        "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/garage-followups.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ]
     },
     "js/car/livery-graphics.js": {
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -3555,6 +3557,7 @@
         "tests/unit/livery-stations.test.mjs"
       ],
       "paint": [
+        "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-stations.test.mjs"
       ],
       "*": [
@@ -3586,6 +3589,7 @@
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/fin-design.test.mjs",
+        "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-contrast.test.mjs"
       ],
       "crestKeepsPlate": [
@@ -5414,6 +5418,7 @@
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/fin-design.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/garage-followups.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
@@ -8742,18 +8747,27 @@
       "resetSetupCam": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "restoreCamera": [
+        "tests/unit/garage-followups.test.mjs"
+      ],
       "sequenceLook": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "setHomeView": [
+        "tests/unit/garage-followups.test.mjs"
+      ],
       "setSetupAero": [
         "tests/unit/garage-aero-no-camera.test.mjs",
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-followups.test.mjs"
       ],
       "setSetupSpin": [
+        "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "setupZoom": [
-        "tests/unit/garage-aero-no-camera.test.mjs"
+        "tests/unit/garage-aero-no-camera.test.mjs",
+        "tests/unit/garage-followups.test.mjs"
       ],
       "spMeshBust": [
         "tests/unit/garage-mesh.test.mjs",
