@@ -1289,6 +1289,8 @@
     "tests/unit/vegas-day-strip.test.mjs",
     "// Vehicle tick scratch: grip and wheel bags are reused, and the player step matches the fresh-literal path.",
     "tests/unit/vehicle-tick-alloc.test.mjs",
+    "// Vendor doctor (reads only): CLI / sign-in / key state per vendor, no key or e-mail in the row. ~0.1 s.",
+    "tests/unit/vendor-doctor.test.mjs",
     "// Vendored licence files: every vendor/ package has one and a declared SPDX licence matches its text (#3092). < 0.1 s.",
     "tests/unit/vendor-licences.test.mjs",
     "tests/unit/verify-live.test.mjs",
