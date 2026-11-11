@@ -1058,6 +1058,13 @@ VM bench, Monza start straight (`tests/unit/player-dynamics-vm.test.mjs`):
 Not yet: ABS/TC levels and the default-ON decision (a characterization
 re-baseline). Detail: `docs/notes/WHEEL-STATE-2026-10-19.md`.
 
+**Record keys (#5024, Bryce 2026-11-11: "Yes, separate key").** WheelState ON (no assist,
+but a different tyre model) and GRIP STEER above OFF each give a lap its own leaderboard
+and ghost class: `SessionPhys.controls` adds `wheelState: "on"` / `gripSteer: <level>` to
+`recordControls()` only when not OFF, so every key recorded before them stays valid. A
+STANDARD daily runs with both OFF (`prepareDaily`, session-only, restored after) and
+`accept()` refuses a lap if either is turned back on.
+
 ### Wear, and the stop
 
 > Until 2026-09-14 this section read "Two things this does NOT do", and the

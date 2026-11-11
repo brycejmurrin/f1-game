@@ -1177,13 +1177,13 @@ function careerFitted(teamId) {
 }
 function getTeamParts(teamId) {
   const c = careerFitted(teamId);
-  if (c) return c.fitted;
+  if (c) return { ...c.fitted };   // a COPY: the garage edits it, and a conflicted save must not mutate the live build (#5044)
   return store.get("parts." + teamId, {});
 }
 function saveTeamParts(teamId, parts) {
   const c = careerFitted(teamId);
-  if (c) { if (Career.conflicted && Career.conflicted()) return; c.fitted = parts; Career.save(); return; }
-  store.set("parts." + teamId, parts);
+  if (c) { if (Career.conflicted && Career.conflicted()) return false; c.fitted = parts; Career.save(); return true; }
+  store.set("parts." + teamId, parts); return true;
 }
 
 // ---------- liveries (custom paint jobs) ----------
@@ -1479,6 +1479,9 @@ function makeCars() {
     const catalogPace = aiSetup ? buildPace(Parts.resolveSetup({ ...factoryParts.setup,
       aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts) : 1;
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
+    // The hire, like catalogPace: aero/ERS reset (aeroLoad/ersDeploy below carry them), against the team's own
+    // factory build (all-stock for the custom team, which has no works build), clamped to the tier ladder (#5035).
+    const matePace = ti === teamIdx ? DriverRatings.ladderPace(buildPace(Parts.resolveSetup({ ...savedParts.setup, aero: factoryParts.setup.aero, ers: factoryParts.setup.ers }, team), factoryParts), team.tier, TIER_V) : 1;
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
     // other case, so free play and driver careers are untouched.
@@ -1533,7 +1536,7 @@ function makeCars() {
         // development rides along in the same number the tier always contributed,
         // so the per-car update below is unchanged in shape. paceMult() is exactly
         // 1 outside career, making GP/TT bit-identical.
-        tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : isP ? 1 : catalogPace),
+        tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? matePace : isP ? 1 : catalogPace),
         // Tread class for gripMult(c); null on an AI car means "fits the right tyre" (wear off; a pit plan gets its set's tread in applyCompound).
         tread: (isP || mate) ? (resolvedParts.options.tyres.wetTread || 0) : null,
         // The fitted catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md
@@ -3066,7 +3069,7 @@ const G = {
   get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   get announcer() { return announcer; },   // js/audio/announcer.js — AudioPanel drives its switch and voice
   get raceRadio() { return raceRadio; },   // js/race/race-radio.js — AudioPanel drives chatter + commentary
-  recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
+  recordControls: () => SessionPhys.controls({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return lapRec.ttRecord; }, set ttRecord(v) { lapRec.ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
   set timeTrial(v) { session = v ? "tt" : "race"; },
@@ -4340,8 +4343,8 @@ function quitToMenu() {
   if (!frozen && !gfxContextLost() && soloPlayerDone() && !postFinishWait()) {
     if (!pendingFinishQuit) announce("SETTLING FINISH — RETURNING TO MENU", 4, "info");
     pendingFinishQuit = true;
-    setPaused(false);   // normal physics gives runners their corrected-time opportunity
-    return;
+    setPaused(false, "restart");   // normal physics gives runners their corrected-time opportunity ("restart": no 3-2-1)
+    if (!paused && !document.hidden) return;   // the rotate blocker re-paused (portrait) or the tab is hidden: physics never steps, so quit now (#5027)
   }
   pendingFinishQuit = false;
   clearRaceEntrySoften();
@@ -6088,8 +6091,8 @@ function updateCarBicycle(c, dt, ranked, S) {
     // tracks curvature k, but if the car is ALREADY yawing into the corner
     // faster than k needs, adding more lock just cuts it to the apex. Ease the
     // assist by how far the current yaw rate exceeds the rate that follows the
-    // road (rNeed = v·k). Same-sign only, so it does nothing at steady state
-    // (yaw ≈ rNeed), on straights (k ≈ 0), or while countersteering a slide —
+    // road (rNeed = v·k; +r is nose RIGHT, +k LEFT, so into-corner is -r/rNeed). Nothing at steady state
+    // (|r| ≈ |rNeed|), on straights (k ≈ 0), or while countersteering a slide —
     // it only bites on the transient overshoot. This is the right answer to
     // "taper the assist at speed": tie it to actual over-rotation, not raw speed
     // (a blanket speed taper would just make the car understeer wide).
@@ -6112,12 +6115,7 @@ function updateCarBicycle(c, dt, ranked, S) {
     // apex, herding the car back to the middle and fighting any line of your own.
     const hFrenet = frenetH(c.s, c.x);
     const kPath = k / hFrenet;
-    let yawEase = 1;
-    const rNeed = c.speed * kPath;
-    if (rNeed !== 0) {
-      const ratio = (c.yawRateCur || 0) / rNeed;   // >1 = rotating faster than needed
-      if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
-    }
+    const yawEase = playerForces.assistYawEase(c.yawRateCur, c.speed * kPath);
     const assistDelta = -driveTune.ROAD_FOLLOW * (driveTune.WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * kPath * yawEase * offAssistFade;
     // Racing-line slider. TrackLine.at is the AI's line; lineW (0 on a straight) scales the PULL, never the target:
     // a target of x·w steered every straight toward the centre at full strength. Front tyre, not c.x.
@@ -8571,16 +8569,15 @@ function tickBody(now) {
     // waits for a fresh present (headed GLX has no preserved buffer).
     if (XrBoot.comfort() || setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
         (!paused || !els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
-      // NO governor here: paused preview frames are vsync-cheap, so the governor
-      // only ever stepped the scale UP toward full res — each step a complete
-      // render-target reallocation. The scale simply stays where the race left it
-      // (and photo mode pins its own — see enterPhotoMode).
+      // NO governor here: it only ever stepped the scale UP on these paused frames (each step a full
+      // render-target reallocation), so the scale stays where the race left it (photo mode pins its own).
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(dt); // dt already clamped to 1/4 s (#5030)
       const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
         els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
-      // Settings cadence gate: retain skipped dt for sky motion; tuners/photo/scrub/garage stay live.
+      // SETTINGS alone draws at 20 Hz, a full race frame each, not vsync-cheap on a phone (#5049); skipped dt is
+      // carried for the sky. Tuners/photo/scrub/garage stay live.
       if (settingsOnly) RenderRate.observe(_dtMs);
-      if (settingsOnly ? RenderRate.gate(dt, _dtMs, XrBoot.comfort(), true) : RenderRate.force(dt, _dtMs))
+      if (settingsOnly ? RenderRate.settle(dt, _dtMs, XrBoot.comfort()) : RenderRate.force(dt, _dtMs))
         render(Math.min(RenderRate.dt(), setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
     }
     GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
@@ -9284,7 +9281,7 @@ els.resNext.onclick = () => {
 
 function setPaused(p, why) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
-  if (p) { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); }   // paused: the frame budget is free for the ghost write
+  if (p) { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); clearTimeout($("pm-calib")._t); }   // paused: the frame budget is free for the ghost write; a newer pause cancels RECALIBRATE's resume
   // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
   // #carsetup; a Start/P press or RESUME on a pause card stacked over it
   // (hidden tab) must not run the race UNDER the garage, where the box timer
@@ -9403,7 +9400,8 @@ SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
 platformSession.wireInstall();
 applyMirrorControls();
 // The zero is taken a beat after the tap (thumb off the glass, phone settled), still behind the pause card.
-$("pm-calib").onclick = () => { setTimeout(() => { Input.calibrate(); setPaused(false, "recalibrate"); }, 300); };
+// ONE handle (#5027): a double tap re-arms it, a newer pause clears it, and it never resumes a hidden tab.
+$("pm-calib").onclick = () => { const b = $("pm-calib"); clearTimeout(b._t); b._t = setTimeout(() => { if (!paused || document.hidden) return; Input.calibrate(); setPaused(false, "recalibrate"); }, 300); };
 platformSession.wirePhone();
 keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 window.addEventListener("apexcontrollerprofilechange", () => { if (keyBinds) keyBinds.render(); if (controllerProfileUi) controllerProfileUi.refresh(); });

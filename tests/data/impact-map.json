@@ -7599,6 +7599,7 @@
         "tests/specs/wake-lock.spec.js",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
+        "tests/unit/game-flow-5100-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -8934,7 +8935,8 @@
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs"
+        "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/team-parts-conflict.test.mjs"
       ]
     },
     "js/garage/setup-tune.js": {
@@ -10057,7 +10059,8 @@
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "*": [
-        "tests/specs/lighting-tuner-grade.spec.js"
+        "tests/specs/lighting-tuner-grade.spec.js",
+        "tests/unit/game-flow-5100-vm.test.mjs"
       ]
     },
     "js/net/bytes.js": {
@@ -11388,6 +11391,9 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/phone-recorder.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
+      ],
+      "settle": [
+        "tests/unit/render-rate.test.mjs"
       ]
     },
     "js/perf/renderer-picker.js": {
@@ -14302,6 +14308,9 @@
       ]
     },
     "js/race/session-phys.js": {
+      "controls": [
+        "tests/unit/session-records-assists.test.mjs"
+      ],
       "*": [
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/ghost-share.test.mjs",
@@ -14310,6 +14319,9 @@
       ]
     },
     "js/race/session-records.js": {
+      "accept": [
+        "tests/unit/session-records-assists.test.mjs"
+      ],
       "begin": [
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/radio-voice.test.mjs"
@@ -14324,20 +14336,24 @@
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/session-records-assists.test.mjs",
         "tests/unit/setup-trial-session.test.mjs"
       ],
       "current": [
         "tests/unit/daily-challenge.test.mjs",
-        "tests/unit/ghost-share.test.mjs"
+        "tests/unit/ghost-share.test.mjs",
+        "tests/unit/session-records-assists.test.mjs"
       ],
       "finish": [
         "tests/unit/ghost-share.test.mjs"
       ],
       "prepareDaily": [
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-assists.test.mjs"
       ],
       "restoreDaily": [
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/session-records-assists.test.mjs"
       ],
       "*": [
         "tests/unit/global-registry.test.mjs"
