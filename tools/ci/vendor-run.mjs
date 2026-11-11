@@ -25,7 +25,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { codexHome, scrub } from "./vendor-doctor.mjs";
+import { codexHome, scrub, secondAccountEnv } from "./vendor-doctor.mjs";
+
+export { secondAccountEnv };
 
 const GROK_GUARD = "Never describe a file, symbol or result you have not read in this run. If something the task names does not exist, say so and stop.";
 
@@ -63,20 +65,6 @@ export const RUNNERS = Object.freeze({
     env: secondAccountEnv,
   },
 });
-
-/** The child env for a second Claude account: its own token or config dir, none of the hosting session's identity. */
-export function secondAccountEnv(env, { tmpDir } = {}) {
-  const token = env.APEX_CLAUDE_B_OAUTH_TOKEN, dir = env.APEX_CLAUDE_CONFIG_DIR;
-  if (!token && !dir) throw new Error("claude needs APEX_CLAUDE_B_OAUTH_TOKEN or APEX_CLAUDE_CONFIG_DIR (the second account)");
-  const out = {};
-  for (const [k, v] of Object.entries(env)) {
-    if (/^(CLAUDE_|CLAUDECODE$|ANTHROPIC_|CCR_|APEX_CLAUDE_|APEX_CODEX_)/.test(k)) continue;
-    out[k] = v;
-  }
-  if (dir) out.CLAUDE_CONFIG_DIR = dir;
-  else { out.CLAUDE_CONFIG_DIR = path.join(tmpDir, "claude-b-config"); out.CLAUDE_CODE_OAUTH_TOKEN = token; }
-  return out;
-}
 
 /** Codex child env: APEX_CODEX_HOME selects the sign-in directory; a saved auth.json seeds it once, mode 0600. */
 export function codexEnv(env) {

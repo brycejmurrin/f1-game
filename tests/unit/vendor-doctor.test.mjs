@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { VENDORS, checkVendor, main, scrub, savedSignIns } from "../../tools/ci/vendor-doctor.mjs";
+import { VENDORS, checkVendor, checkSecondClaude, main, scrub, savedSignIns } from "../../tools/ci/vendor-doctor.mjs";
 import { secondAccountEnv, codexEnv, runVendor } from "../../tools/ci/vendor-run.mjs";
 
 const SECRET = "xai-ABCDEFGHIJKLMNOPQRSTUVWX";
@@ -98,6 +98,33 @@ test("savedSignIns reports variable names, never values", () => {
   assert.deepEqual([row.claudeB, row.codex, row.next], ["APEX_CLAUDE_B_OAUTH_TOKEN", "APEX_CODEX_HOME", []]);
   assert.ok(!JSON.stringify(row).includes(SECRET));
   assert.equal(savedSignIns({}).next.length, 2);
+});
+
+test("checkSecondClaude runs `claude auth status` as the second account and reports the variable name, never the token", async () => {
+  const calls = [];
+  const none = await checkSecondClaude({ env: { PATH: "/bin" }, run: async (...a) => { calls.push(a); return { code: 0, out: "" }; } });
+  assert.equal(calls.length, 0, "no saved sign-in runs nothing");
+  assert.deepEqual(none, { vendor: "claude-b", via: null, login: false,
+    next: ["save a `claude setup-token` token as APEX_CLAUDE_B_OAUTH_TOKEN in the cloud environment"] });
+  const host = { PATH: "/bin", CLAUDE_CODE_REMOTE: "1", CLAUDE_CODE_OAUTH_TOKEN: "host-token", ANTHROPIC_BASE_URL: "https://x", APEX_CLAUDE_B_OAUTH_TOKEN: SECRET };
+  const ok = await checkSecondClaude({ env: host, run: async (bin, argv, o) => {
+    calls.push([bin, argv, o.env, fs.existsSync(path.dirname(o.env.CLAUDE_CONFIG_DIR))]);
+    return { code: 0, out: JSON.stringify({ loggedIn: true, email: "b@example.com" }) };
+  } });
+  const [bin, argv, child, tmpExisted] = calls[0];
+  assert.deepEqual([bin, argv, ok.via, ok.login, ok.next], ["claude", ["auth", "status"], "APEX_CLAUDE_B_OAUTH_TOKEN", true, []]);
+  assert.equal(child.CLAUDE_CODE_OAUTH_TOKEN, SECRET);
+  assert.deepEqual(Object.keys(child).filter((k) => /^(CLAUDE_CODE_|ANTHROPIC_)/.test(k)), ["CLAUDE_CODE_OAUTH_TOKEN"], "none of the host's CLAUDE_CODE_* / ANTHROPIC_*");
+  assert.ok(tmpExisted && child.CLAUDE_CONFIG_DIR.startsWith(os.tmpdir()), "the config dir lives in a temp dir during the run");
+  assert.ok(!fs.existsSync(path.dirname(child.CLAUDE_CONFIG_DIR)), "the temp dir is removed afterwards");
+  assert.ok(!JSON.stringify(ok).includes(SECRET) && !JSON.stringify(ok).includes("b@example.com"));
+  const bad = await checkSecondClaude({ env: host, run: async () => ({ code: 1, out: "Not logged in" }) });
+  assert.equal(bad.login, false);
+  assert.match(bad.next[0], /^sign in: .*claude setup-token.*APEX_CLAUDE_B_OAUTH_TOKEN/);
+  let both;
+  const bothOk = await checkSecondClaude({ env: { ...host, APEX_CLAUDE_CONFIG_DIR: "/b" }, run: async (_b, _a, o) => { both = o.env; return { code: 1, out: "Not logged in" }; } });
+  assert.deepEqual([bothOk.via, both.CLAUDE_CODE_OAUTH_TOKEN, both.CLAUDE_CONFIG_DIR], ["APEX_CLAUDE_CONFIG_DIR", undefined, "/b"], "both set: the config dir wins, no token reaches the child");
+  assert.match(bothOk.next[0], /CLAUDE_CONFIG_DIR="\$APEX_CLAUDE_CONFIG_DIR" claude auth login/);
 });
 
 test("the second-account env drops the host session's identity and carries the saved token only to the child", () => {
