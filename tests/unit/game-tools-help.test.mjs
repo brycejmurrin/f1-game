@@ -43,8 +43,6 @@ const CASES = [
   ["tools/shot/shot.mjs", /shot\.mjs/],
   ["tools/car/livery-contrast.mjs", /livery-contrast/],
   ["tools/net/rtc-e2e.mjs", /rtc-e2e/],
-  // W25 row 13 (2026-11): the three-peer sibling had no --help at all and ran the whole handshake.
-  ["tools/net/rtc-e2e-3p.mjs", /rtc-e2e-3p/],
   ["tools/track/graph-parity.cjs", /graph-parity/],
   ["tools/gfx/glx-call-census.mjs", /glx-call-census/],
   ["tools/gen/gen-shell.mjs", /gen-shell/],
@@ -104,6 +102,14 @@ for (const rel of PARSED) {
     assert.match(r.stderr, /unknown flag --no-such-flag/);
   });
 }
+
+// W25 row 13 (2026-11): the three-peer sibling had no --help at all and ran the whole handshake.
+test("rtc-e2e-3p.mjs --help prints its usage line and exits 0 without booting Chromium", () => {
+  const r = runFast("tools/net/rtc-e2e-3p.mjs", "--help");
+  assert.equal(r.error, undefined, `--help did not return within ${FAST_MS} ms`);
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  assert.equal(r.stdout.split("\n")[0], "usage: node tools/net/rtc-e2e-3p.mjs");
+});
 
 test("gen-shell.mjs refuses an unknown flag instead of writing", () => {
   const r = spawnSync(process.execPath, ["tools/gen/gen-shell.mjs", "--bogus"], { cwd: ROOT, encoding: "utf8", timeout: 20000 });
