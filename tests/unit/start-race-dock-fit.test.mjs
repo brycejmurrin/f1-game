@@ -3,7 +3,7 @@
  * The red (PR #5397's run 42981717423, scratch run 42986046359: ~1 boot in 4 on a clean tip): at the
  * owner's 852x393 cell with BUTTON 245 %, named-controls.spec.js read GAS 684.2..860.6 x 162.8..339.1 and
  * BRAKE -26.7..149.7 — the pedals at raw BUTTON SIZE, 176 px, off the right and top edges. Recorded live
- * (DOM mutation trace, every boot): startRaceBody forced `updateHud(true)` inside the debrisPrime span,
+ * (DOM mutation trace, every boot): startRaceBody in js/game.js forced `updateHud(true)` inside the debrisPrime span,
  * BEFORE `in-race` and showTouchControls(true). That fit measured an empty dock (dockH 0), so capDock
  * stayed Infinity, --hud-z-dock was removed and --hud-cap published the dock as unlimited; the dock then
  * appeared uncapped until the first HUD tick of the render loop wrote the cap (~150 ms locally, longer on
@@ -22,7 +22,7 @@ import { symbolSource } from "../helpers/game-source.mjs";
 const body = symbolSource("async function startRaceBody(");
 
 test("startRaceBody: the first forced HUD fit comes after the dock is shown", () => {
-  assert.ok(body.length > 1000, "startRaceBody found in js/game.js");
+  assert.ok(body.length > 1000, "startRaceBody found in the game source");
   const shown = body.indexOf("showTouchControls(true);");
   const inRace = body.indexOf('document.body.classList.add("in-race");');
   const forced = body.indexOf("updateHud(true)");
