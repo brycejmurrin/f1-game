@@ -21,7 +21,7 @@ const SHELL = read("index.html");
 const CSS = read("css/responsive.css");
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
-function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
+function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = false } = {}) {
   const dom = makeDom();
   const panel = dom.byId("pm-panel-appearance");
   // The shell's TITLE SCREEN fold: summary + body, REPLAY INTRO last in the body.
@@ -50,8 +50,9 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
   const get = dom.document.getElementById;
   dom.document.getElementById = (id) => (dom.has(id) ? get(id) : null);
   const data = Object.assign({}, stored);
-  const store = { get: (k, d) => (k in data ? data[k] : d), set: (k, v) => { if (v === null) delete data[k]; else data[k] = v; } };
-  const timers = [];
+  const writes = [];   // every store.set: a synchronous localStorage write + subscriber notify on a phone
+  const store = { get: (k, d) => (k in data ? data[k] : d), set: (k, v) => { writes.push(k); if (v === null) delete data[k]; else data[k] = v; } };
+  const timers = [], frames = [];
   const observers = [];
   class MutationObserver {
     constructor(fn) { this.fn = fn; observers.push(this); }
@@ -63,6 +64,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
     innerWidth: 1000, innerHeight: 500,
   };
   if (fx) sb.TitleFx = fx;   // js/ui/title-fx.js's three title looks (loads first in the shell)
+  if (raf) { sb.requestAnimationFrame = (fn) => frames.push(fn); sb.cancelAnimationFrame = (n) => { frames[n - 1] = null; }; }
   sb.window = sb;
   const ctx = vm.createContext(sb);
   for (const f of ["js/ui/setting-row.js", "js/ui/title-layout.js", "js/ui/screen-looks.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
@@ -73,7 +75,9 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
     for (const o of observers) if (o.target === dom.body && o.opts.attributeFilter.includes("data-shape")) o.fn();
   };
   const mutated = (el) => { for (const o of observers) if (o.target === el) o.fn(); };
-  return { dom, M, data, panel, titleBody, html: dom.documentElement, timers, rotate, mutated };
+  /** Run the queued animation frames (raf: true boots only). */
+  const tick = () => { const todo = frames.splice(0); for (const fn of todo) if (fn) fn(); };
+  return { dom, M, data, writes, panel, titleBody, html: dom.documentElement, timers, rotate, mutated, tick };
 }
 
 test("normalize clamps every field and reads junk as shipped", () => {
@@ -240,11 +244,14 @@ test("editor: a pointer drag moves a piece in screen percent, the corner handle 
   const d = ptr(dom, btns, "pointerdown", 500, 400);
   assert.equal(d.defaultPrevented, true, "no focus, no text selection");
   ptr(dom, btns, "pointermove", 600, 350);
-  assert.equal(data.titleLayout.wide.btns.x, 10, "100 px of 1000 is 10vw");
-  assert.equal(data.titleLayout.wide.btns.y, -10, "-50 px of 500 is -10vh");
+  assert.equal(html.style.getPropertyValue("--tl-btns-x"), "10vw", "100 px of 1000 is 10vw, painted live");
+  assert.equal(html.style.getPropertyValue("--tl-btns-y"), "-10vh", "-50 px of 500 is -10vh");
+  assert.equal(data.titleLayout, undefined, "stored only when the finger lifts");
   ptr(dom, btns, "pointermove", 650, 400, 2);
-  assert.equal(data.titleLayout.wide.btns.x, 10, "another pointer does not steer it");
+  assert.equal(html.style.getPropertyValue("--tl-btns-x"), "10vw", "another pointer does not steer it");
   ptr(dom, btns, "pointerup", 600, 350);
+  assert.equal(data.titleLayout.wide.btns.x, 10);
+  assert.equal(data.titleLayout.wide.btns.y, -10);
   ptr(dom, btns, "pointermove", 900, 350);
   assert.equal(data.titleLayout.wide.btns.x, 10, "released");
   assert.equal(html.style.getPropertyValue("--tl-btns-x"), "10vw");
@@ -265,6 +272,42 @@ test("editor: a pointer drag moves a piece in screen percent, the corner handle 
   const click = { type: "click", bubbles: true };
   dom.dispatch(dom.byId("mb-race"), click);
   assert.ok(click.defaultPrevented && click.propagationStopped, "a door's click is swallowed while editing");
+});
+
+test("editor: a drag paints once per frame and writes the store once, at the release (#4933)", () => {
+  const { dom, data, writes, html, tick } = editing({}, { raf: true });
+  const btns = dom.byId("menu-buttons");
+  writes.length = 0;
+  ptr(dom, btns, "pointerdown", 500, 400);
+  for (let i = 1; i <= 20; i++) {
+    ptr(dom, btns, "pointermove", 500 + i * 5, 400);
+    if (i % 2 === 0) { tick(); assert.equal(html.style.getPropertyValue("--tl-btns-x"), i / 2 + "vw", "frame " + i / 2 + " paints the latest pointer"); }
+  }
+  assert.deepEqual(writes, [], "no store write while the finger is down");
+  ptr(dom, btns, "pointermove", 610, 400);
+  ptr(dom, btns, "pointerup", 610, 400);
+  assert.deepEqual(writes, ["titleLayout"], "exactly one write, at the release");
+  assert.equal(data.titleLayout.wide.btns.x, 11, "the unpainted last move is not lost");
+  tick();
+  assert.deepEqual(writes, ["titleLayout"], "a cancelled frame writes nothing later");
+  // A slider: every input paints, the release (`change`) stores once.
+  const { dom: d2, writes: w2, html: h2 } = boot();
+  const y = d2.byId("pm-tl-btns-y");
+  for (const v of ["1", "2", "3", "4"]) { y.value = v; d2.dispatch(y, { type: "input" }); }
+  assert.equal(h2.style.getPropertyValue("--tl-btns-y"), "4vh");
+  assert.deepEqual(w2, [], "no write per input event");
+  d2.dispatch(y, { type: "change" });
+  assert.deepEqual(w2, ["titleLayout"]);
+});
+
+test("a live draft never masks a store write made by someone else (Undo, a profile)", () => {
+  const { M, data } = boot();
+  M.set({ btns: { x: 12 } }, undefined, true);
+  assert.equal(M.current().btns.x, 12, "the draft paints and reads back");
+  data.titleLayout = { v: 2, wide: { btns: { x: -7 } } };   // AppearanceStudio's undo writes the store
+  assert.equal(M.current().btns.x, -7, "the newer store value wins");
+  assert.equal(M.commit(), false, "and the stale draft is dropped, not saved over it");
+  assert.equal(data.titleLayout.wide.btns.x, -7);
 });
 
 test("editor: keys nudge, size and cycle the pieces; the bar's steps and RESET PIECE", () => {
@@ -340,8 +383,10 @@ test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, slider
   dom.dispatch(x, { type: "pointerdown" });
   assert.equal(html.dataset.appearancePeek, "title", "holding a slider shows the title screen (ScreenLooks' peek)");
   x.value = "-25"; dom.dispatch(x, { type: "input" });
+  assert.equal(html.style.getPropertyValue("--tl-btns-x"), "-25vw", "an input paints");
+  assert.equal(data.titleLayout, undefined, "…and waits for the release to store");
+  dom.dispatch(x, { type: "change" });
   assert.equal(data.titleLayout.wide.btns.x, -25, "stored for the shape the screen is in");
-  assert.equal(html.style.getPropertyValue("--tl-btns-x"), "-25vw");
   assert.equal(dom.byId("pm-tl-btns-x-v").textContent, "25% left");
   assert.equal(sum.textContent, "TITLE LAYOUT · CUSTOM");
   timers.at(-1).fn();

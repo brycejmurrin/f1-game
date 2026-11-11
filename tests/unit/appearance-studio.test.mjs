@@ -135,6 +135,7 @@ test("Menu customization exposes the existing editor and retains persistence, fo
   studio.undo(); assert.equal(title.current().btns.size, 100);
   const x = dom.byId("pm-tl-btns-x"); x.value = "11";
   dom.dispatch(x, { type: "input", bubbles: true });
+  dom.dispatch(x, { type: "change", bubbles: true });   // the thumb's release stores it (#4933)
   assert.equal(title.current().btns.x, 11);
   await new Promise(resolve => setTimeout(resolve, 360));
   assert.equal(studio.undo(), true, "the adopted fold still records owner input for Undo");

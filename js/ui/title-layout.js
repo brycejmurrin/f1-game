@@ -108,8 +108,13 @@ const TitleLayout = (function () {
   }
   const isShape = (s) => s === "wide" || s === "tall";
   /** Both shapes, from whatever is stored. A v1 object is BOTH shapes. */
+  // A drag's or a slider's layout in flight (#4933): painted, stored once by commit() at the gesture's end.
+  // A write by anyone else (Undo, a profile) since the draft began wins over it.
+  let draft = null, draftBase = null;
   function all() {
     const raw = store.get(KEY, null);
+    if (draft && raw !== draftBase) draft = null;
+    if (draft) return { wide: normalize(draft.wide), tall: normalize(draft.tall) };
     if (raw && typeof raw === "object" && raw.v === 2) return { wide: normalize(raw.wide), tall: normalize(raw.tall) };
     return { wide: normalize(raw), tall: normalize(raw) };
   }
@@ -268,14 +273,23 @@ const TitleLayout = (function () {
       new MutationObserver(scheduleFit).observe(mb, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
     }
   }
-  /** Store `v` as one shape's layout (default: the current shape). */
-  function set(v, sh) {
+  /** Store `v` as one shape's layout (default: the current shape). `live`:
+   *  paint it now and keep it out of the store until commit(). */
+  function set(v, sh, live) {
     const s = isShape(sh) ? sh : shape();
     const a = all();
     a[s] = normalize(v);
-    save(a);
+    if (live) { draft = a; draftBase = store.get(KEY, null); } else { draft = null; save(a); }
     if (s === shape()) apply(a[s]);
     return a[s];
+  }
+  /** Store what live set()s painted, once; false when there was nothing. */
+  function commit() {
+    if (!draft) return false;
+    const a = draft;
+    draft = null;
+    save(a);
+    return true;
   }
   /** A request the box cannot give is not stored (#5199): after set(l) the fit
    *  runs now, and a SIZE it is holding (--tf) or an offset it pulled back from
@@ -285,7 +299,7 @@ const TitleLayout = (function () {
    *  half of each LEFT / RIGHT range moved nothing; measured 2026-11-10).
    *  Offsets are vw / vh of the ICB, and --tf-dx is already in the piece's
    *  own px, so the percent is exact under any zoom. Wide shapes only. */
-  function hold(l, part, k) {
+  function hold(l, part, k, live) {
     const e = part === "art" || !doc ? null : doc.getElementById(part === "btns" ? "menu-buttons" : "menu-brand");
     if (!e || !e.style || shape() !== "wide" || !(k === "size" || k === "x" || k === "y")) return l;
     fit();
@@ -308,11 +322,11 @@ const TitleLayout = (function () {
     else v += pull(g("--tf-dy"), root.clientHeight);
     if (num(v, k) === p[k]) return l;
     p[k] = num(v, k);
-    return set(l);
+    return set(l, undefined, live);
   }
   function resetShape(sh) { return set(null, sh); }
   /** RESET ALL: both shapes back to shipped. */
-  function reset() { store.set(KEY, null); apply(null); return normalize(null); }
+  function reset() { draft = null; store.set(KEY, null); apply(null); return normalize(null); }
   /** COPY TO `to`: the OTHER shape's layout becomes `to`'s too. */
   function copyTo(to) {
     const s = to === "tall" ? "tall" : "wide";
@@ -405,12 +419,14 @@ const TitleLayout = (function () {
       inp.addEventListener("input", () => {
         let l = current();
         l[part][k] = num(parseFloat(inp.value), k);
-        l = hold(set(l), part, k);
+        l = hold(set(l, undefined, true), part, k, true);
         // The thumb shows what was stored: WIDTH 1..19 is 20, a held request is the edge.
         if (String(l[part][k]) !== inp.value) inp.value = String(l[part][k]);
         out.textContent = pctTxt(k, l[part][k]); paintSum();
         peek(true, 900);
       });
+      // The store write waits for the thumb's release (`change`), not each input.
+      inp.addEventListener("change", () => { if (commit()) paintSum(); });
       inp.addEventListener("pointerdown", () => peek(true));
       inp.addEventListener("pointerup", () => peek(true, 500));
       inp.addEventListener("pointercancel", () => peek(false));
@@ -592,7 +608,8 @@ const TitleLayout = (function () {
   function exit() {
     if (!ed.on) return;
     const E = ed.els;
-    ed.on = false; ed.drag = null;
+    finish();
+    ed.on = false;
     root.removeAttribute("data-tl-edit");
     E.layer.hidden = true;
     E.art.hidden = true;
@@ -688,12 +705,25 @@ const TitleLayout = (function () {
     }
     ed.drag = { id: e.pointerId, part, mode, x0: e.clientX, y0: e.clientY, from, c };
   }
+  /* A pointermove only records the pointer; one rAF paints the latest (#4933).
+     Each frame paints and fits live; the store is written once, in finish(). */
   function move(e) {
     const d = ed.drag;
     if (!ed.on || !d || e.pointerId !== d.id) return;
+    d.at = [e.clientX, e.clientY];
+    if (typeof requestAnimationFrame !== "function") { step(); return; }
+    if (!d.raf) d.raf = requestAnimationFrame(step);
+  }
+  function step() {
+    const d = ed.drag;
+    if (!d || !d.at) return;
+    if (d.raf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(d.raf);
+    d.raf = 0;
+    const e = { clientX: d.at[0], clientY: d.at[1] };
+    d.at = null;
     const l = current(), p = l[d.part], w = win();
     if (d.mode === "move") {
-      const f = zoomOf(d.part, d.from.size);
+      const f = d.zoom || (d.zoom = zoomOf(d.part, d.from.size));   // measured once per drag
       p.x = num(d.from.x + (e.clientX - d.x0) / (w.innerWidth || 1) * 100 / f, "x");
       p.y = num(d.from.y + (e.clientY - d.y0) / (w.innerHeight || 1) * 100 / f, "y");
     } else {
@@ -702,11 +732,17 @@ const TitleLayout = (function () {
       const r0 = Math.hypot(d.x0 - d.c[0], d.y0 - d.c[1]) || 1;
       p.size = num(d.from.size * Math.hypot(e.clientX - d.c[0], e.clientY - d.c[1]) / r0, "size");
     }
-    const h = set(l);
-    if (d.mode === "move") hold(hold(h, d.part, "x"), d.part, "y"); else hold(h, d.part, "size");
+    const h = set(l, undefined, true);
+    if (d.mode === "move") hold(hold(h, d.part, "x", true), d.part, "y", true); else hold(h, d.part, "size", true);
     paintEd();
   }
-  function up(e) { if (ed.drag && e.pointerId === ed.drag.id) ed.drag = null; }
+  /** The gesture's end: paint the last position, then the one store write. */
+  function finish() {
+    if (ed.drag) step();
+    ed.drag = null;
+    commit();
+  }
+  function up(e) { if (ed.drag && e.pointerId === ed.drag.id) finish(); }
 
   function onKey(e) {
     if (!ed.on || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -728,5 +764,5 @@ const TitleLayout = (function () {
   }
 
   return Object.freeze({ KEY, DEFAULT, LIM, LAYOUTS, SIDES, SHAPES, normalize, isDefault, vars, shape, all, current, apply,
-    fit, set, reset, resetShape, copyTo, build, enter, exit, screenShipped, get editing() { return ed.on; } });
+    fit, set, commit, reset, resetShape, copyTo, build, enter, exit, screenShipped, get editing() { return ed.on; } });
 })();
