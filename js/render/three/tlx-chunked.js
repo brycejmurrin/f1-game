@@ -627,6 +627,7 @@
       }
       if (!s) s = slots[si] = { n: 0, ids: [], geo: null, arr: null, res: [], rc: [], rn: 0, rb: 0, r2: [], c2: [] };
       const g = s.geo || (s.geo = new THREE.BufferGeometry());
+      if (!g.__tlxKind) g.__tlxKind = "mv" + si + ":c" + mesh.chunks.length + ":n" + n + ":" + String(mesh.__primeR || "never").slice(-12) + ":al" + (mesh.__dbgAl || "");   // SCRATCH #5387
       if (!g.boundingSphere) {
         g.boundingSphere = new THREE.Sphere();
         const src = vis[0].geo;

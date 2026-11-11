@@ -2182,12 +2182,14 @@ const TLX = (function () {
       const _chunkPrimeZ = new Float32Array(16);
       function _primeMergeSlot(rec, order) {
         const mesh = rec.chunked, mat = rec.mat;
-        if (!mesh || !mesh.chunks || mesh.chunks.length < 2 || (mesh._tlxMv && mesh._tlxMv[0])) return false;
-        if ((mat && (mat.transparent || mat.depthWrite === false)) || rec.al < 1) return false;   // the merge path never takes these
+        if (mesh) mesh.__primeR = (mesh.__primeR || "") + "s";   // SCRATCH: seen by a prime frame
+        if (!mesh || !mesh.chunks || mesh.chunks.length < 2 || (mesh._tlxMv && mesh._tlxMv[0])) { if (mesh) mesh.__primeR += (mesh._tlxMv && mesh._tlxMv[0]) ? "H" : "C"; return false; }
+        if ((mat && (mat.transparent || mat.depthWrite === false)) || rec.al < 1) { mesh.__primeR += "T"; return false; }   // the merge path never takes these
         const vis = chunkedSys.visList;
         vis[0] = mesh.chunks[0]; vis[1] = mesh.chunks[1];
         const g = chunkedSys.mergeVisible(mesh, 2, 0);
-        if (!g) return false;
+        if (!g) { mesh.__primeR += "N"; return false; }
+        mesh.__primeR += "P";
         acquireMesh(g, _chunkPrimeZ, mat, rec).renderOrder = order;
         _chunkPrimeN++;
         return true;
