@@ -1678,7 +1678,7 @@ export function analyseMirrorAllocs(beats) {
 }
 
 // #4783 row 6: the armed window's passes that carry a depth attachment, as "depth view | colour attachments" counts
-// (gpu-game-check's beginRenderPass wrapper). `shadow` marks a shadow-map pass: three sets no texture labels, so it is
+// (gpu-game-check's beginRenderPass wrapper). `shadow` marks a shadow-map pass. The wrapper's view signature is size and format only, so it is
 // told by its shape, a SQUARE depth attachment of side 256 or more (tlx-shadow.js: sun 512 to 2048, car 256 or 1024,
 // lamp 256 or 512; the scene, mirror and post targets are not square and the env probe's faces are 64).
 export function analyseDepthTargets(pairs, frames) {

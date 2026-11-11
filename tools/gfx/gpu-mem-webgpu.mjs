@@ -84,7 +84,7 @@ export function gpuMemInstall(M, opts, root) {
     life: { Texture: { created: 0, destroyed: 0 }, Buffer: { created: 0, destroyed: 0 } },
     unknown: [], unknownCount: 0,
     // The create log (#4710): armed windows only, one row per kind + label + bytes + call site.
-    armed: !!o.armed, stacks: o.stacks !== false, maxSites: o.maxSites || 400, sites: new Map(), siteOverflow: 0, armedCreates: 0,
+    armed: !!o.armed, stacks: o.stacks !== false, maxSites: o.maxSites || 400, sites: new Map(), siteOverflow: 0, armedCreates: 0, armedBuffers: 0, armedTextures: 0,
   };
   const site = () => {
     if (!st.stacks) return "";
@@ -104,6 +104,7 @@ export function gpuMemInstall(M, opts, root) {
   const note = (kind, label, bytes) => {
     if (!st.armed) return;
     st.armedCreates++;
+    if (kind === "createBuffer") st.armedBuffers++; else st.armedTextures++;
     const key = kind + " :: " + (label || "(none)") + "#" + bytes + "B :: " + site();
     let r = st.sites.get(key);
     if (!r) {
@@ -165,7 +166,7 @@ export function gpuMemSnapshot(top, root) {
   return { api: "webgpu", texMB: mb(texB), bufMB: mb(bufB), texBytes: texB, bufBytes: bufB, tex: st.tex.size, buffers: st.buf.size,
     cat: Object.entries(cat).sort((a, b) => b[1].b - a[1].b || b[1].n - a[1].n).map(([k, v]) => ({ k, n: v.n, mb: mb(v.b), bigMB: mb(v.big) })),
     big, life: JSON.parse(JSON.stringify(st.life)), unknown: st.unknown.slice(), unknownCount: st.unknownCount,
-    armedCreates: st.armedCreates, siteOverflow: st.siteOverflow, sites: sites.slice(0, top || 40) };
+    armedCreates: st.armedCreates, armedBuffers: st.armedBuffers, armedTextures: st.armedTextures, siteOverflow: st.siteOverflow, sites: sites.slice(0, top || 40) };
 }
 
 /** The init-script text: the arithmetic, then the wrapper, before any page script runs. */
@@ -176,10 +177,9 @@ export function createAttribution(snap, frames, top = 12) {
   if (!snap || !Array.isArray(snap.sites)) return { note: "no WebGPU create log (no GPUDevice wrapped on this leg)" };
   if (!(frames > 0)) return { note: "no window frames" };
   const per = (n) => +(n / frames).toFixed(3);
-  const of = (kind) => snap.sites.filter((r) => r.site.startsWith(kind + " :: "));
-  const sum = (rows) => rows.reduce((s, r) => s + r.n, 0);
   const rows = snap.sites.slice(0, top).map((r) => ({ site: r.site, n: r.n, perFrame: per(r.n), kb: +(r.bytes / 1024).toFixed(1) }));
-  return { frames, creates: snap.armedCreates, buffersPerFrame: per(sum(of("createBuffer"))), texturesPerFrame: per(sum(of("createTexture"))),
+  return { frames, creates: snap.armedCreates, // From the wrapper's own totals, never from the rows: the rows are a top-N cut (run 42979981148 summed 285 of 323).
+    buffersPerFrame: per(snap.armedBuffers | 0), texturesPerFrame: per(snap.armedTextures | 0),
     // armedCreates counts every create; the rows stop at maxSites distinct sites, so say how many fell off.
     unattributed: snap.siteOverflow, rows };
 }

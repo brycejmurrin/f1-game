@@ -694,7 +694,7 @@ try {
       };
       window.__gcHitch = {
         arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hUpGroup.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null; _hDraws = 0; _hDepthT.clear();
-          try { const gm = window.GPUDevice && window.GPUDevice.prototype.__gmw; if (gm) { gm.sites.clear(); gm.armedCreates = 0; gm.siteOverflow = 0; gm.armed = true; } } catch (_) { /* no WebGPU on this leg */ }
+          try { const gm = window.GPUDevice && window.GPUDevice.prototype.__gmw; if (gm) { gm.sites.clear(); gm.armedCreates = 0; gm.armedBuffers = 0; gm.armedTextures = 0; gm.siteOverflow = 0; gm.armed = true; } } catch (_) { /* no WebGPU on this leg */ }
           _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
         // Close the window where the DRIVING stops, so the A/B phases that
         // follow never enter the per-frame series or the spike analysis.

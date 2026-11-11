@@ -76,7 +76,7 @@ test("armed, every create is one row per kind + label + bytes + site; the site c
     { site: "createBuffer :: (none)#59400B :: ", n: 3, bytes: 178200 },
     { site: "createBuffer :: bindingBuffer7_object#208B :: ", n: 1, bytes: 208 },
   ]);
-  assert.deepEqual([s.armedCreates, s.siteOverflow], [5, 1]);
+  assert.deepEqual([s.armedCreates, s.armedBuffers, s.armedTextures, s.siteOverflow], [5, 4, 1, 1]);
   st.armed = false;
   dev.createBuffer({ size: 8, usage: 8 });
   assert.equal(snap().armedCreates, 5);
@@ -94,11 +94,11 @@ test("install is idempotent and reports false where there is no GPUDevice", () =
 });
 
 test("createAttribution turns the armed log into per-frame rows and names a missing log", () => {
-  const snap = { armedCreates: 5, siteOverflow: 1, sites: [
+  const snap = { armedCreates: 5, armedBuffers: 4, armedTextures: 1, siteOverflow: 1, sites: [
     { site: "createBuffer :: (none)#59400B :: createAttribute :: mirrorEnd (tlx.js:5830:28)", n: 3, bytes: 178200 },
     { site: "createTexture :: (none)#16B :: x :: y", n: 1, bytes: 16 },
   ] };
-  assert.deepEqual(createAttribution(snap, 10), { frames: 10, creates: 5, buffersPerFrame: 0.3, texturesPerFrame: 0.1, unattributed: 1, rows: [
+  assert.deepEqual(createAttribution(snap, 10), { frames: 10, creates: 5, buffersPerFrame: 0.4, texturesPerFrame: 0.1, unattributed: 1, rows: [
     { site: "createBuffer :: (none)#59400B :: createAttribute :: mirrorEnd (tlx.js:5830:28)", n: 3, perFrame: 0.3, kb: 174 },
     { site: "createTexture :: (none)#16B :: x :: y", n: 1, perFrame: 0.1, kb: 0 },
   ] });
