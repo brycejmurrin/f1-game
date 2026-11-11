@@ -37,7 +37,8 @@ const MAX_EAGER_SCRIPTS = 317;
 // 8.22 MB: lowered by #4978 rows 1+4 (tip 8,228,695 → 8,198,163 raw, −30.5 KB).
 // 8.18 MB: lowered by #4748 career-backup → LAZY_CAREER_UI (tip 8,213,577 → 8,159,200 raw, −54.4 KB).
 // 8.07 MB: lowered by #4978 row 2 perf rig → LAZY_PERF (8,159,200 → 8,045,152 raw, −114.0 KB).
-const MAX_EAGER_BYTES = 8_070_000;
+// 8.047 MB: lowered by #4978 row 3 METRICS painter → LAZY_PERF metrics-panel.js (8,045,152 → 8,022,367 raw, −22.8 KB).
+const MAX_EAGER_BYTES = 8_047_000;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");
