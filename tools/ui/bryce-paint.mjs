@@ -2,8 +2,8 @@
 // @doc Owner-phone acceptance: PAINTED text/tap sizes, safe box, page scroll per window × UI SIZE; measure or check.
 // bryce-paint.mjs — the measuring half of tests/specs/bryce-phone-paint.spec.js (issue #5262).
 //
-//   node tools/ui/bryce-paint.mjs                                  # every cell: 3 windows × UI SIZE 61/109/51/40 × 7 screens
-//   node tools/ui/bryce-paint.mjs --window standalone --ui-scale 61 --screens title,settings
+//   node tools/ui/bryce-paint.mjs                                  # every cell: 3 windows × UI SIZE 70/109 × 7 screens
+//   node tools/ui/bryce-paint.mjs --window standalone --ui-scale 70 --screens title,settings
 //   node tools/ui/bryce-paint.mjs --check                          # compare with tests/data/bryce-phone-paint.json; exit 1 on a difference
 //   node tools/ui/bryce-paint.mjs --write                          # record the measured counts as the ceilings (only ever lower one by hand or by this)
 //   --profile live|legacy   --no-profile   --json   --verbose (list every offender, not the first five)
@@ -31,7 +31,7 @@ const MENU = new Set(["title", "select", "garage", "settings"]);
 export const ACCEPT_ROOTS = Object.freeze({ title: "#overlay", select: "#select", garage: "#carsetup", settings: "#pmsettings", hud: "body", pause: "#pausemenu", results: "#results" });
 export const cellKey = (window, uiScale) => `${window}@${uiScale}`;
 
-export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,safari,w844] [--ui-scale 61,109,51,40] [--screens title,select,garage,settings,hud,pause,results]
+export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,safari,w844] [--ui-scale 70,109] [--screens title,select,garage,settings,hud,pause,results]
                                      [--profile live|legacy] [--no-profile] [--check | --write] [--json] [--verbose]
   Painted sizes on Bryce's phone (tools/lib/bryce-phone.mjs + tools/lib/paint-floor.mjs): text >= 12 px, taps >= 44 px, nothing outside
   the safe box, no page scroll. --check compares with ${CEILINGS_FILE} (exit 1 on any difference); --write records the counts.
@@ -160,7 +160,7 @@ export function ceilingsFrom(measured, prev = {}) {
     for (const [screen, paint] of Object.entries(screens)) if (!paint.error) cells[cell][screen] = paintCounts(paint);
   }
   return {
-    doc: "Owner-phone acceptance ceilings (issue #5262): the EXACT number of painted-size violations per cell (window@UI SIZE) and screen, measured by `node tools/ui/bryce-paint.mjs --write` and asserted by tests/specs/bryce-phone-paint.spec.js. taps = controls painting under 44 px; text = text nodes painting under 12 px; outside = items crossing the safe box; blocked = controls covered at their centre; scroll = the page scrolls. A count may only go DOWN (the spec fails above and below it). The small-UI-SIZE reds wait on decision #5235. Never raise a number to get green.",
+    doc: "Owner-phone acceptance ceilings (issue #5262): the EXACT number of painted-size violations per cell (window@UI SIZE) and screen, measured by `node tools/ui/bryce-paint.mjs --write` and asserted by tests/specs/bryce-phone-paint.spec.js. taps = controls painting under 44 px; text = text nodes painting under 12 px; outside = items crossing the safe box; blocked = controls covered at their centre; scroll = the page scrolls. A count may only go DOWN (the spec fails above and below it). A phone stops at UI SIZE 70 % (#5235, landed with #5384), so the cells are 70 (the owner's stored 61 paints at 70) and 109. Never raise a number to get green.",
     floors: { tap: 44, text: 12 },
     kinds: [...PAINT_KINDS],
     // Known offenders: "cell screen kind" → the issue that fixes them. Hand-written, kept across --write; the exact

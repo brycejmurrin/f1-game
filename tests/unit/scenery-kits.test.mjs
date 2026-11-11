@@ -849,9 +849,13 @@ test("Sector M fascia attaches to track-facing walls and canopy fits its declare
   circuits.interlagos(api);
   assert.equal(parts.length, 5, "all authored facade parts remain");
   const [lower, upper, yellow, green, canopy] = parts;
-  assert.ok(anchors.some(a => a.k === 1 && a.side === -1 && a.gap === 62));
+  // The tribuna stands opposite the pits: +1 since the FIA 2026 pit-lane
+  // drawing moved Interlagos's pits to -1 (2026-11-10); the track-facing wall
+  // is the one toward x = 0 on either side.
+  const trib = anchors.find(a => a.k === 1 && a.gap === 62);
+  assert.ok(trib && trib.side === 1, `tribuna anchor ${JSON.stringify(trib)}`);
   for (const [wall, band] of [[lower, yellow], [upper, green]]) {
-    const face = wall.center[0] + wall.size[0] / 2;
+    const face = wall.center[0] - trib.side * wall.size[0] / 2;
     assert.ok(band.center[0] - band.size[0] / 2 < face && band.center[0] + band.size[0] / 2 > face);
     for (const axis of [1, 2]) assert.ok(Math.abs(band.center[axis] - wall.center[axis]) + band.size[axis] / 2 <= wall.size[axis] / 2);
   }

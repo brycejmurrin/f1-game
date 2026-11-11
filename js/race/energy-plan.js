@@ -7,7 +7,8 @@
  *   deploy — BOOST is switched ON as the car enters the sector;
  *   save   — BOOST is switched OFF as the car enters the sector (it harvests).
  *
- * The plan acts ONLY on a sector-entry edge, and only by asking for the same
+ * The plan acts at most ONCE per sector entry (at the entry, or later in the
+ * sector when a DEPLOY waited on a flat battery), and only by asking for the same
  * BOOST toggle a press makes (game.js reads `toggleFor` beside
  * Input.consumeBoostToggle). So the player can still press BOOST mid-sector
  * to override, the existing gates (battery, box, caution, pit limiter) still
@@ -24,7 +25,8 @@ const EnergyPlan = (function () {
   const POLICIES = Object.freeze(["manual", "deploy", "save"]);
   const NEUTRAL = Object.freeze(["manual", "manual", "manual"]);
   let current = NEUTRAL.slice();
-  // Per car: the sector the plan last acted on, so it fires once per entry.
+  // Per car: the sector the plan last acted on (or found already satisfied),
+  // so it fires at most once per entry.
   const seen = new WeakMap();
 
   /** A clean 3-entry plan, or null when `p` is not one. */
@@ -56,8 +58,13 @@ const EnergyPlan = (function () {
     const sec = c._secIdx;
     if (sec == null) return false;
     if (seen.get(c) === sec) return false;
-    seen.set(c, sec);
-    return wantsFlip(current[sec], !!c.boostOn, c.energy || 0);
+    const pol = current[sec], on = !!c.boostOn;
+    const flip = wantsFlip(pol, on, c.energy || 0);
+    // Stamp only once the plan acts or its wish already holds (MANUAL, DEPLOY
+    // with BOOST on, SAVE with it off). A DEPLOY a flat battery blocked at
+    // entry stays pending and acts when charge returns, once, in that sector.
+    if (flip || pol !== "deploy" || on) seen.set(c, sec);
+    return flip;
   }
   return Object.freeze({ KEY, POLICIES, NEUTRAL, clean, plan, setPlan, fromStore, isNeutral, wantsFlip, toggleFor });
 })();
