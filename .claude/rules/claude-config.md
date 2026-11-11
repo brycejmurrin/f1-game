@@ -35,7 +35,10 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
 - `bash-guard.sh` (Bash) refuses kills by name (`pkill`, `killall`, `pgrep`/`pidof` into `kill`) and a kill of a
   Chromium pid unless that kill carries `APEX_KILL_OK=1`; `git commit --no-verify` / `-n` and a hooks-path write or
   override; `gh run cancel` / `gh pr merge` / `gh pr ready` with any global flags, and their REST / GraphQL forms;
-  and for a subagent (payload `agent_id`) a browser run or a write to a guard file. It exports `APEX_SUBAGENT=1`
+  every other GitHub write from a shell (a gh subcommand that is not a known read, `gh api` with a write method or
+  fields and no explicit GET, a GraphQL mutation, a curl / wget write to api.github.com; an agent setting
+  `APEX_GH_OWNER_WRITE`): agents write through the GitHub MCP tools, which GitHub marks as the app's (owner decision
+  2026-11-11); and for a subagent (payload `agent_id`) a browser run or a write to a guard file. It exports `APEX_SUBAGENT=1`
   into a subagent's interpreter commands, and `launchChromium` (`tools/lib/harness.mjs`) refuses under it.
   `mcp-browser-guard.sh` judges an MCP call on its name and input (`apex_eval {vm:true}`, `debugger_node_test`,
   a tree-kind `apex_job_start` are no browser): a subagent never drives one, and the main session opens none beside a

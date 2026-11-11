@@ -118,6 +118,9 @@ test("the shell adapter blocks what bash-guard blocks, from Cursor's and Codex's
   assert.equal(JSON.parse(cursor.stdout).agent_message.slice(0, why.length), why, "Cursor reads WHY");
   assert.equal(guard({ tool_name: "Bash", tool_input: { command: "git commit --no-verify -m x" } }).status, 2, "Codex shape: --no-verify");
   assert.equal(guard({ command: "gh pr merge 1", cwd: ROOT }).status, 2, "gh pr merge");
+  assert.equal(guard({ command: "gh api -X POST repos/a/b/issues/1/labels -f 'labels[]=x'", cwd: ROOT }).status, 2, "Cursor shape: a gh label write");
+  assert.equal(guard({ tool_name: "Bash", tool_input: { command: "gh pr comment 1 -b x" } }).status, 2, "Codex shape: a gh comment");
+  assert.equal(guard({ command: "gh pr view 1 --json headRefOid", cwd: ROOT }).status, 0, "a gh read passes");
   assert.equal(guard({ command: "ls -la", cwd: ROOT }).status, 0, "an ordinary command passes");
   assert.equal(guard("not json").status, 2, "an unreadable payload is a deny");
 });

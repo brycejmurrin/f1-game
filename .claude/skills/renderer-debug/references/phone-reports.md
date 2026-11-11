@@ -25,8 +25,8 @@ The owner's device path is TLX on WebGPU (Metal), `THREE PATH: WEBGPU`
 ## Dispatching the census
 
 On your pushed branch:
-`gh workflow run gpu-census.yml --ref <branch> -f track=… -f tod=…`
-(or the GitHub MCP `actions_run_trigger`); agent tokens dispatch fine.
+the GitHub MCP `actions_run_trigger` on `gpu-census.yml` (ref `<branch>`, inputs `track`, `tod`, …);
+never `gh workflow run`: a gh write is recorded as Bryce's own act and `bash-guard.sh` refuses it.
 
 Only a request-only leg (`leg`, `lf_*`, `lrm_*` in
 `.github/gpu-census-request.json`; the dispatch form is at GitHub's input cap) still goes by

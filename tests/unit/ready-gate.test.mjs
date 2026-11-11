@@ -242,7 +242,7 @@ test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label ca
   let [rc, text] = go(["--pr", "7"], 0);
   assert.equal(rc, 0);
   assert.deepEqual(seen.at(-1), ["--pr", "7"]);
-  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "10 min", "re-run ready-gate", "gh api -X POST repos/brycejmurrin/f1-game/issues/7/labels -f 'labels[]=land'"];
+  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "10 min", "re-run ready-gate", "issue_write", "issue_number=7", "FULL current list + land"];
   assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls and the receipt-age note are printed");
   [rc, text] = go(["--pr", "7"], 1);
   assert.equal(rc, 1);

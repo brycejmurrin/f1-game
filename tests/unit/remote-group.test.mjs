@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import { browserGroups, planMatrix, parseWorkers, resolveWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE,
-  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin } from "../../tools/ci/remote-group.mjs";
+  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin, ownerWriteGate, OWNER_OPT_IN } from "../../tools/ci/remote-group.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -262,4 +262,18 @@ test("--ref still refreshes origin/<branch>: the sha, the green lookup and the w
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/remote-group.mjs"), "utf8");
   const call = src.indexOf("fetchOrigin(branch);"), refGate = src.indexOf('if (!argv.includes("--ref")) {', call);
   assert.ok(call > 0 && refGate > call, "main fetches before it branches on --ref");
+});
+
+test("the dispatch is an owner write: it says so and refuses unless the owner's opt-in is set (decision 2026-11-11)", () => {
+  assert.equal(OWNER_OPT_IN, "APEX_GH_OWNER_WRITE");
+  for (const env of [{}, { APEX_GH_OWNER_WRITE: "" }, { APEX_GH_OWNER_WRITE: "0" }, { APEX_GH_OWNER_WRITE: "yes" }]) {
+    const g = ownerWriteGate(env);
+    assert.equal(g.ok, false, JSON.stringify(env));
+    assert.match(g.lines.join("\n"), /GitHub write .*owner's own act[\s\S]*refused/);
+  }
+  const g = ownerWriteGate({ APEX_GH_OWNER_WRITE: "1" });
+  assert.equal(g.ok, true);
+  assert.match(g.lines[0], /GitHub write/, "the opt-in still prints what the dispatch is");
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/remote-group.mjs"), "utf8");
+  assert.ok(src.indexOf("ownerWriteGate()") < src.indexOf('api("POST"'), "the gate runs before the dispatch POST");
 });

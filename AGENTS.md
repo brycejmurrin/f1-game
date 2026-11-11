@@ -20,8 +20,8 @@ tests/unit/agent-config.test.mjs`. Then CI runs on the PR (rule 13). Commands an
 
 ## Verification — scale it to the change
 What to run for each kind of change is the table in `docs/VERIFICATION.md` §By change. Agents do not run browser tests
-locally: a draft push gets the fast tier plus a selected browser shard on CI, and `node tools/ci/remote-group.mjs <group>`
-runs a whole group on the pushed branch. Interactive browser pokes (MCP) stay, one browser at a time.
+locally: a draft push gets the fast tier plus a selected browser shard on CI; a whole group (`remote-group.mjs`) is
+Bryce's opt-in. Write to GitHub by MCP only, never `gh`. Interactive MCP browser pokes stay, one at a time.
 
 Session rules. The numbers are cited across the repo; a rule marked (hook) is refused by the named hook, whose message
 says what to do instead.

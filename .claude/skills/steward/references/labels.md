@@ -1,9 +1,15 @@
 # Labels — the state machine
 
 Source of truth: `.github/labels.json` (name, colour, description); this table adds where each goes and what a
-session does with it. Applying a new row to GitHub is `gh label create` by hand. Add and remove labels with
-`gh api -X POST …/issues/<n>/labels -f 'labels[]=<name>'` / `gh api -X DELETE …/issues/<n>/labels/<name>`, never the MCP `labels`
-field (it replaces the whole list).
+session does with it. A new row reaches GitHub through Bryce (no MCP tool creates a label).
+
+**Adding or removing a label** (owner decision 2026-11-11: agents never write with `gh`, whose writes GitHub records
+as Bryce's own click; `bash-guard.sh` refuses them). Use the GitHub MCP `issue_write` (method `update`; a PR is an
+issue) with the FULL label list:
+1. Read the current names: `gh api repos/<o>/<r>/issues/<n> --jq '[.labels[].name]'` (or `issue_read`).
+2. Send that list plus (or minus) the one name: the `labels` field REPLACES the whole list, so a partial list drops
+   the rest (`github-mcp-guard.sh` asks before one that would drop `hold`).
+3. Read the names back; if anything but your one name changed (an Action labelled in between), restore it the same way.
 
 | label | on | meaning |
 |---|---|---|
