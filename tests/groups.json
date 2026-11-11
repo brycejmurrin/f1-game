@@ -928,6 +928,7 @@
     "tests/unit/retired-card.test.mjs",
     "// #3297: retro (2000s) shift lights flash 9↔8 at the limiter, never dark; reduced motion stays on 9.",
     "tests/unit/retro-shift-lights.test.mjs",
+    "tests/unit/reuse-draft-selected.test.mjs",
     "tests/unit/ribbon-cpu-release.test.mjs",
     "// The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit",
     "// sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy",
