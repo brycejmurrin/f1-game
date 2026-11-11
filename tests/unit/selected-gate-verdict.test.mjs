@@ -296,3 +296,12 @@ test("#5241 G5: selected=success with a started shard that left no testcase, or 
   assert.equal(selectedGateVerdict({ ...base, evidence: { started: ["a-1"], junit: ["a-1"], downloadFailed: true } }).ok, false);
   assert.equal(selectedGateVerdict({ ...base, selected: "skipped", evidence: { started: [], junit: [] } }).ok, true, "an empty plan has no shard to prove");
 });
+
+test("#5304: groups the runner fan-out could not represent are named on the verdict line, never a verdict of their own", () => {
+  const ok = selectedGateVerdict({ ...base, unrepresented: "test:perf-race-entry test:stall-reload-sw" });
+  assert.equal(ok.ok, true);
+  assert.match(ok.reason, /not run on this PR: test:perf-race-entry, test:stall-reload-sw, nightly rota covers them$/);
+  assert.equal(selectedGateVerdict({ ...base, unrepresented: "" }).reason, selectedGateVerdict({ ...base }).reason);
+  const red = selectedGateVerdict({ ...base, dropped: "1", unrepresented: "test:perf-session" });
+  assert.equal(red.ok, false, "naming never exempts a drop");
+});

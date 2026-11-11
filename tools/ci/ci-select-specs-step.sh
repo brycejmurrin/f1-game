@@ -105,7 +105,13 @@ node -e '
   console.log(`dropped ${dropped} routed spec(s) this plan cannot run`);
   require("fs").appendFileSync(process.env.GITHUB_OUTPUT,
     `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`
-    + `dropped=${dropped}\nreason=${r.reason}\ncircuits=${(r.circuits || []).join(",")}\n`);
+    + `dropped=${dropped}\nreason=${r.reason}\ncircuits=${(r.circuits || []).join(",")}\n`
+    + `unrepresented=${(r.runnerUnrepresented || []).join(" ")}\n`);
+  // Groups the runner fan-out could not represent (every spec over budget) are said where a person reads them.
+  if ((r.runnerUnrepresented || []).length && process.env.GITHUB_STEP_SUMMARY) {
+    require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+      `**Not run on this PR:** ${r.runnerUnrepresented.join(", ")} (runner fan-out; every spec in the group is over budget), nightly rota covers them\n`);
+  }
   // AN EMPTY PLAN IS A PASS ONLY FOR A DOCS-ONLY (OR EMPTY) DIFF (audit W31).
   // select() puts the boot floor in every other plan; a code diff that still
   // has no job and dropped nothing (a drop reds the verdict on its own) means

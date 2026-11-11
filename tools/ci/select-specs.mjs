@@ -1490,18 +1490,33 @@ export const RUNNER_PATHS = [
 ];
 // A readable spec with at least one declared test (null = unreadable, not "zero").
 const hasTests = (f) => { const n = declaredTests(f); return Number.isFinite(n) && n >= 1; };
-export function perGroupSpecs(scripts = pkgScripts(), db = timings()) {
-  const out = [];
+// A REPRESENTATIVE NEVER TAKES OVER-BUDGET POOL ROOM (2026-11-11, #5304's first full-tier run). A spec that
+// declares >= the gate's per-test timeout (and is not measured cheap) can only run in the capped over-budget
+// pool; the single-spec perf/memory
+// groups (perf-race-entry 1200 s, perf-boost-press-pipelines-gl 900 s, perf-session-budgets 720 s,
+// stall-reload-sw 600 s) filled it and pushed out a ROUTED spec (new-hooks.spec.js), which the verdict
+// rightly redded. A representative now comes only from specs the budgeted shards take. A group with none
+// gets no fan-out representative and is NAMED (`unrepresented`): the select summary and the verdict line say
+// "not run on this PR: <groups>, nightly rota covers them". A diff that touches such a spec or its source still
+// routes it as usual; only the runner fan-out case changes, and nothing is exempt from the dropped count.
+export function perGroupPlan(scripts = pkgScripts(), db = timings()) {
+  const out = [], unrepresented = [];
   for (const [name, cmd] of Object.entries(scripts).sort(([a], [b]) => a.localeCompare(b))) {
     if (!name.startsWith("test:") || name === "test") continue;
     if (!/^node tools\/ci\/run-playwright\.mjs\b/.test(cmd) || /--project=/.test(cmd)) continue;
     const pool = specsOf([name], scripts).filter((f) => fs.existsSync(path.join(ROOT, f))
       && !FIXED_GATE_SPECS.has(f) && !MANUAL_OPT_IN_SPECS.has(f) && !isTwinned(f) && hasTests(f));
     if (!pool.length) continue;
+    // The same test the plan uses to send a spec to the over-budget pool (counted[].overBudget, above).
+    const shardable = pool.filter((f) => maxDeclaredTimeout(f) < SELECTED_GATE.perTestTimeoutSec * 1000 || measuredCheap(f, db));
+    if (!shardable.length) { unrepresented.push(name); continue; }
     const cost = (f) => declaredTests(f) * specSecPerTest(f, db).sec;
-    out.push(pool.sort((a, b) => cost(a) - cost(b) || a.localeCompare(b))[0]);
+    out.push(shardable.sort((a, b) => cost(a) - cost(b) || a.localeCompare(b))[0]);
   }
-  return [...new Set(out)].sort();
+  return { specs: [...new Set(out)].sort(), unrepresented: unrepresented.sort() };
+}
+export function perGroupSpecs(scripts = pkgScripts(), db = timings()) {
+  return perGroupPlan(scripts, db).specs;
 }
 
 // ROUTES pick-tests' RULES do not name (audit W31 row 2). A vendored library or
@@ -1595,6 +1610,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const unmatched = changed.filter((f) => !pickAll([f]).size && !TRACKED.some((re) => re.test(f))
     && !DOCS_ONLY.some((re) => re.test(f)));
   const runner = changed.some((f) => RUNNER_PATHS.some((re) => re.test(f)));
+  const runnerPlan = runner ? perGroupPlan() : { specs: [], unrepresented: [] };
   const otherCircuit = (f) => {
     const m = FOUNDATION.exec(f);
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
@@ -1602,7 +1618,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // Specs that race a touched circuit (specsRacing, T2): routed, budgeted.
   const racing = specsRacing(racingCircuitIds(changed));
   const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...impactAffected,
-    ...standalone, ...extras, ...(runner ? perGroupSpecs() : []), ...specs, ...racing])]
+    ...standalone, ...extras, ...runnerPlan.specs, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, lightDiff ? [] : routed);
   // Docs-only PRs skip the selected matrix at the plan (required check
@@ -1639,7 +1655,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // `circuits` is set only when EVERY changed path is circuit-scoped: it is
   // what lets a per-circuit loop skip the other 51 circuits, so a diff that
   // also touches the engine must leave it empty (the whole fleet runs).
-  const r = { reason, changed: changed.length, tracked, unmatched, floored, runner, groups: browserGroups,
+  const r = { reason, changed: changed.length, tracked, unmatched, floored, runner, runnerUnrepresented: runnerPlan.unrepresented, groups: browserGroups,
               circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
@@ -1689,6 +1705,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `SELECTION PARTIAL: ${r.unmatched.length} path(s) no rule claims (${r.unmatched.slice(0, 6).join(", ")}${r.unmatched.length > 6 ? ", …" : ""}); the boot floor runs for them — add a route.`);
   if (r.floored) console.error(`FLOOR: the ${FLOOR_GROUP} specs (boot) are in the plan — a code diff never runs nothing`);
   if (r.runner) console.error("RUNNER CHANGED: one spec from every browser group is in the plan");
+  if (r.runnerUnrepresented?.length) console.error(
+    `NOT RUN ON THIS PR (runner fan-out; every spec in the group is over budget): ${r.runnerUnrepresented.join(", ")}, nightly rota covers them`);
   if (r.racing?.length) console.error(
     `RACES A TOUCHED CIRCUIT (${r.circuitsTouched.join(", ")}): ${r.racing.length} spec(s) routed, budgeted like a group's`);
   for (const s of r.failedDropped || []) console.error(

@@ -2006,6 +2006,35 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
     for (const f of ["tools/ci/run-playwright.mjs", "tests/helpers/fixtures.js", "tests/helpers/global-setup.js"]) assert.ok(sel([f]).runner, f);
   });
 
+  test("W31 row 1: a runner representative never takes over-budget pool room, so it can never displace a routed spec", () => {
+    // #5304's first full-tier run: the single-spec perf/memory groups' only specs declare 600-1200 s per test,
+    // so as representatives they could only sit in the capped over-budget pool, and they pushed out the ROUTED
+    // new-hooks.spec.js (dropped=1, verdict red). Representatives now come only from shardable specs.
+    const plan = W31.perGroupPlan();
+    for (const f of plan.specs) assert.ok(W31.maxDeclaredTimeout(f) < W31.SOLO_OWN_TIMEOUT_SEC * 1000, `${f} is solo-class`);
+    const r = sel(["tests/helpers/fixtures.js", "js/agent/apex.js"]);
+    // capacityFallback rows are ordinary leftovers packed into room left AFTER the pool's own candidates.
+    const pool = new Set([...(r.overBudgetRun || []).filter((x) => !x.capacityFallback), ...r.overBudgetSpecs].map((x) => x.file));
+    assert.deepEqual(plan.specs.filter((f) => pool.has(f)), [], "no representative takes over-budget pool room");
+    assert.deepEqual([...r.overBudgetSpecs, ...r.skipped].map((x) => x.file), [], "nothing routed is dropped");
+    assert.ok(new Set(planned(r)).has("tests/specs/new-hooks.spec.js"), "the routed hooks spec runs");
+    // The groups left without a representative are named, never silently skipped.
+    assert.ok(plan.unrepresented.length > 0 && plan.unrepresented.every((g) => g.startsWith("test:")), String(plan.unrepresented));
+    assert.deepEqual(r.runnerUnrepresented, plan.unrepresented);
+  });
+
+  test("W31 row 1: a diff to a perf spec or its source still routes it; only the runner fan-out changed", () => {
+    for (const [files, spec] of [
+      [["tests/specs/perf-race-entry.spec.js"], "tests/specs/perf-race-entry.spec.js"],
+      [["tests/helpers/perf-race-entry.mjs"], "tests/specs/perf-race-entry.spec.js"],
+      [["sw.js"], "tests/specs/perf-sw-cache-hit.spec.js"],
+    ]) {
+      const r = sel(files);
+      assert.ok(new Set(planned(r)).has(spec), `${files} -> ${spec}`);
+      assert.deepEqual(r.runnerUnrepresented, [], `${files}: not a runner diff`);
+    }
+  });
+
   test("W31 row 1: an empty plan is a pass only for a docs diff (non-browser code diffs get the floor)", () => {
     const tools = sel(["tools/check/ratchets.mjs"]);
     assert.ok(tools.shards.length > 0 && tools.floored, "a tools/ diff with no browser group still runs the floor");
