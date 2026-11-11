@@ -4,7 +4,7 @@
 /**
  * coverage-merge — one report for both halves of the suite.
  *
- *   APEX_JS_COVERAGE=1 node tools/ci/test-bg.mjs tiny            # browser half
+ *   APEX_JS_COVERAGE=1 node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # browser half (one spec)
  *   NODE_V8_COVERAGE=artifacts/coverage-node npm run test:game-vm-b   # node half
  *   node tools/ci/coverage-merge.mjs                               # merge both
  *   node tools/ci/coverage-merge.mjs --json                        # summary only
@@ -36,7 +36,6 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const ARTIFACTS = path.join(ROOT, "artifacts");
-const NODE_DIR = path.join(ARTIFACTS, "coverage-node");
 const REPORT_DIR = path.join(ARTIFACTS, "coverage-report");
 
 /** Directories a default merge reads: coverage-<port>/ (browser) + coverage-node/. */

@@ -53,6 +53,24 @@ const build = (opts) => {
 const meshBatches = (t) => t.graph.batches({ instancedOnly: true }).batches.filter((b) => b.model.startsWith("mesh:"));
 const sum = (a) => a.reduce((x, y) => x + y, 0);
 
+test("requested model height uses real mesh bounds and keeps sway materials", () => {
+  const env = buildContext(), def = env.Tracks.LIST.find((d) => d.id === ID);
+  const mesh = env.sandbox.Assets.modelSync("pine_lod0");
+  const ys = Array.from(mesh.pos).filter((_, i) => i % 3 === 1);
+  const height = Math.max(...ys) - Math.min(...ys), requested = 12;
+  const materials = Array.from(mesh.mat);
+  def.scenery = (api) => api.bakedModel("pine_lod0", 0, -1, 100, { height: requested, scale: 99 });
+  const track = env.Tracks.build(def);
+  const pine = track.modelInstances.pine_lod0;
+  assert.ok(pine, "the real bakedModel path must place the requested tree");
+  assert.equal(pine.n, 1);
+  assert.equal(pine.xf[4], Math.fround(requested / height), "stored Float32 scale uses actual bounds and overrides scale");
+  assert.deepEqual(Array.from(mesh.mat), materials, "source materials and v3 sway weights are untouched");
+  assert.deepEqual(new Set(materials.map(m => Math.floor(m))), new Set([5, 6]), "whole-tree softness is valid only for WOOD/FOLIAGE vertices");
+  assert.ok(materials.some(m => m > 6 && m < 6.5));
+  env.trim(0); env.release(track);
+});
+
 test("the batch API on: repeated placements leave the soup, one-offs stay copies", () => {
   const on = build(), off = build({ flag: false });
   const rec = on.modelInstances;

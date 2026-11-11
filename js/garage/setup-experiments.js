@@ -12,11 +12,33 @@ const SetupExperiments = (function () {
     function capture(team) {
       if (team && !csVisitTunes.has(team.id)) csVisitTunes.set(team.id, SetupTune.get(team.id));
     }
-    function visit(team) { csVisitTunes = new Map(); csTuneExperiments = new Map(); capture(team); }
-    function close() { csTuneExperiments.clear(); if (trialUi) { trialUi.dispose(); trialUi = null; } }
-    // RESET TO WORKS. Every slider writes the store on input; the stat bars and
+    // A slider drag fires `input` per pixel; each SetupTune.set is a JSON write to
+    // localStorage plus a store revision bump that re-keys the garage preview. Commit
+    // 75 ms after the last input (the livery pickers' cadence, setup-sheet.js
+    // scheduleLivPreview) and at once on `change`; every other write path flushes
+    // first, so it lands in the same order as before.
+    let tunePend = null;   // { team, patch, timer, after }
+    function flushTune() {
+      const p = tunePend;
+      if (!p) return;
+      tunePend = null;
+      clearTimeout(p.timer);
+      SetupTune.set(p.team, p.patch);
+      p.after();
+    }
+    function queueTune(teamId, k, v, after, now) {
+      if (tunePend && tunePend.team !== teamId) flushTune();
+      if (!tunePend) tunePend = { team: teamId, patch: {}, timer: null, after };
+      tunePend.patch[k] = v; tunePend.after = after;
+      clearTimeout(tunePend.timer);
+      if (now) flushTune(); else tunePend.timer = setTimeout(flushTune, 75);
+    }
+    function visit(team) { flushTune(); csVisitTunes = new Map(); csTuneExperiments = new Map(); capture(team); }
+    function close() { flushTune(); csTuneExperiments.clear(); if (trialUi) { trialUi.dispose(); trialUi = null; } }
+    // RESET TO WORKS. Every slider writes the store (debounced, above); the stat bars and
     // the player's mods follow through recomputePlayerMods on the next race.
     function build(container, team) {
+      flushTune();
       if (trialUi) { trialUi.dispose(); trialUi = null; }
       const wrap = document.createElement("div");
       // Not cs-liv-editor: that class widens the car reserve and translucents the
@@ -56,7 +78,15 @@ const SetupExperiments = (function () {
         inp.type = "range"; inp.min = r.min; inp.max = r.max; inp.step = r.step; inp.value = cur[k];
         inp.dataset.csTune = k;
         inp.setAttribute("aria-label", r.label);
-        inp.oninput = () => { csTuneExperiments.delete(team.id); SetupTune.set(team.id, { [k]: parseFloat(inp.value) }); refresh(); };
+        const edit = (now) => {
+          csTuneExperiments.delete(team.id);
+          const v = parseFloat(inp.value);
+          b.textContent = v + r.unit;   // the readout follows the thumb; the store follows the debounce
+          if (coachRefresh) coachRefresh();   // a manual edit ends an applied experiment at once
+          queueTune(team.id, k, v, refresh, now);
+        };
+        inp.oninput = () => edit(false);
+        inp.onchange = () => edit(true);
         lab.appendChild(span); lab.appendChild(inp);
         wrap.appendChild(lab);
         rows[k] = { b, inp };
@@ -77,11 +107,11 @@ const SetupExperiments = (function () {
       wrap.appendChild(note);
       const reset = document.createElement("button"); reset.type = "button"; reset.className = "cs-liv-ed-cancel";
       reset.textContent = "RESET TO WORKS";
-      reset.onclick = () => { csTuneExperiments.delete(team.id); SetupTune.reset(team.id); if (G.soundOn) GameAudio.uiTick(); refresh(); };
+      reset.onclick = () => { flushTune(); csTuneExperiments.delete(team.id); SetupTune.reset(team.id); if (G.soundOn) GameAudio.uiTick(); refresh(); };
       wrap.appendChild(reset);
       restore = document.createElement("button"); restore.type = "button"; restore.className = "cs-liv-ed-cancel";
       restore.textContent = "RESTORE PREVIOUS SETUP";
-      restore.onclick = () => { csTuneExperiments.delete(team.id); SetupTune.set(team.id, previous); refresh(); };
+      restore.onclick = () => { flushTune(); csTuneExperiments.delete(team.id); SetupTune.set(team.id, previous); refresh(); };
       wrap.appendChild(restore);
 
       const coach = document.createElement("div"); coach.className = "chip-row";
@@ -119,6 +149,7 @@ const SetupExperiments = (function () {
         b.onclick = () => { symptom = item; coachRefresh(); }; coach.appendChild(b); chips.push(b);
       }
       apply.onclick = () => {
+        flushTune();
         if (!symptom || csTuneExperiments.has(team.id)) return;
         const before = SetupTune.get(team.id), patch = SetupTune.experiment(symptom.id, before);
         if (!patch) return;
@@ -126,6 +157,7 @@ const SetupExperiments = (function () {
         csTuneExperiments.set(team.id, { before, after, symptom: symptom.id }); refresh();
       };
       undo.onclick = () => {
+        flushTune();
         const saved = csTuneExperiments.get(team.id);
         if (!saved) return;
         if (sameTune(SetupTune.get(team.id), saved.after)) SetupTune.set(team.id, saved.before);
@@ -133,7 +165,7 @@ const SetupExperiments = (function () {
       };
       wrap.append(coach, advice, apply, undo);
       if (typeof SetupTrials !== "undefined" && G.setupTrialRestart) trialUi = SetupTrials.mount(wrap, {
-        teamId: team.id, store: G.store, baseline: previous, candidateNow: () => SetupTune.get(team.id),
+        teamId: team.id, store: G.store, baseline: previous, candidateNow: () => { flushTune(); return SetupTune.get(team.id); },
         launch: options => G.setupTrialRestart(options), cancelRuntime: () => { if (G.setupTrialCancel) G.setupTrialCancel(); }, refresh,
       });
 

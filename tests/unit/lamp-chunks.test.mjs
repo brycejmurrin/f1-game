@@ -269,7 +269,7 @@ test("a full drag costs ONE bake, not one per input event", () => {
  * GLX binds a chunk's list per draw and WGX passes (offset, count) in a
  * per-draw uniform. THREE HAS NEITHER — every visible chunk is drawn from one
  * pooled mesh sharing ONE material, so there is nowhere to put a per-chunk
- * value. (Checked in vendor/three-0.186.1 rather than assumed:
+ * value. (Checked in vendor/three-0.187.0 rather than assumed:
  * `nodeUniformDrawId` is declared only when `object.isBatchedMesh` and set only
  * in the BatchedMesh branch of WebGLBackend._draw, so `drawIndex` reads nothing
  * from a plain Mesh.) What three CAN read is positionWorld — and the chunks are
@@ -557,6 +557,13 @@ test("ChunkBins.bin: centroid cells, vertex AABBs, emission order, absolute indi
   assert.deepEqual([o.mn, o.mx], [[0, 0, 0], [10, 1, 10]]);
   assert.deepEqual([...e.idx], [3, 4, 5]);
   assert.deepEqual([e.mn, e.mx], [[60, -1, 0], [110, 2, 5]], "the AABB is the vertices', so it may leave its own cell");
+});
+
+test("the rear-view inset has its own lamp cap, and the phone budget stays the measured floor", () => {
+  const LightBudget = new Function(readFileSync(join(ROOT, "js/render/shared/light-budget.js"), "utf8") + "\nreturn LightBudget;")();
+  assert.equal(LightBudget.MIRROR, 8);
+  assert.equal(LightBudget.MOBILE, 24);
+  assert.ok(LightBudget.MIRROR < LightBudget.MOBILE);
 });
 
 test("the GLX and TLX chunked builders bin through ChunkBins (no private copy of the key)", () => {

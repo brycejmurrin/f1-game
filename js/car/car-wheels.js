@@ -2,6 +2,27 @@
 "use strict";
 
 const CarWheels = (function () {
+  // Matches PhysicsConsts.WHEEL_R / Car3D wheel radius (m). One home for the
+  // presentation spin math so createGarage and the race phase step cannot drift.
+  const WHEEL_R = 0.34;
+  const TWO_PI = Math.PI * 2;
+  // speed (m/s) → axle angle delta (rad) for one frame. Front axle scales by
+  // (1 − lock) so a lock-up freezes the fronts while the rears keep rolling.
+  // Pure: no DOM, no G, no mesh — unit-tested in wheel-phase-math.test.mjs.
+  // Returns ONE reused scratch (#5057 row 3: was a fresh {rear, front} per car per frame,
+  // 1,320 objects/s on a 22-car grid); read both fields before the next call.
+  const _step = { rear: 0, front: 0 };
+  function phaseStep(speed, dt, wheelR, lock) {
+    const r = wheelR > 0 ? wheelR : WHEEL_R;
+    const spin = (speed || 0) / r * (dt || 0);
+    const L = lock == null ? 0 : lock;
+    _step.rear = spin; _step.front = spin * (1 - L);
+    return _step;
+  }
+  function wrapPhase(rad) {
+    const x = (rad || 0) % TWO_PI;
+    return x < 0 ? x + TWO_PI : x;
+  }
   // LIVERY WHEEL TINTS (livery rimTint / caliperTint / sidewallInk): paint-only overrides of the brakes catalog
   // colours for ALL four wheels. A field is a [r,g,b] 0..1 array (resolved livery) or "#rrggbb".
   // Unset = NO_TINTS = today's catalog colour. `key` joins every wheel mesh cache key so a livery
@@ -33,6 +54,55 @@ const CarWheels = (function () {
       key: "|w" + q255(rim) + ";" + q255(cal) + (ink ? ";" + q255(ink) : "") + (surf ? ";f" + surf : "") });
     _tintMemo.set(liv, t);
     return t;
+  }
+  // Available on the first garage visit, before the race-session bundle loads.
+  // Fitted mesh layers are built once; all rolling and steering use transforms.
+  function createGarage(gfx) {
+    let key = "", meshes = null;
+    const local = new Float32Array(16), world = new Float32Array(16);
+    function release() {
+      if (meshes && gfx.freeMesh) for (const mesh of meshes) gfx.freeMesh(mesh);
+      meshes = null; key = "";
+    }
+    function prepare(next, liv, tiers) {
+      if (meshes && key === next) return;
+      release();
+      const v = tiers._visual || {}, t = v.tyres, b = v.brakes, w = v.wheels, tint = tints(liv);
+      const band = t && t.band || Car3D.TYRE_BAND[tiers.tyres] || Car3D.TYRE_BAND[1];
+      const cal = tint.cal || (b && b.cal) || Car3D.BRAKE_CALIPER[tiers.brakes];
+      const rim = tint.rim || (b && b.rim);
+      const f = Car3D.buildWheelLayers(.32, band, cal, rim, false, t, b, w, tint.ink, tint.surf);
+      const r = Car3D.buildWheelLayers(.38, band, cal, rim, false, t, b, w, tint.ink, tint.surf);
+      const pending = [];
+      try {
+        for (const data of [f.rotating, f.fixed, r.rotating, r.fixed]) pending.push(gfx.createMesh(data));
+      } catch (error) {
+        if (gfx.freeMesh) for (const mesh of pending) gfx.freeMesh(mesh);
+        throw error;
+      }
+      meshes = pending; key = next;
+    }
+    const opts = { doubleSided: true };
+    function draw(base, distance, steer, material) {
+      if (!meshes) return;
+      Object.setPrototypeOf(opts, material);
+      // angle = distance / R (same as integrating v/R·dt along the path).
+      const spin = (distance || 0) / WHEEL_R, cp = Math.cos(spin), sp = Math.sin(spin);
+      for (let axle = 0; axle < 2; axle++) for (let side = -1; side <= 1; side += 2) {
+        const a = axle ? 0 : steer, ca = Math.cos(a), sa = Math.sin(a);
+        for (let fixed = 0; fixed < 2; fixed++) {
+          const c = fixed ? 1 : cp, s = fixed ? 0 : sp;
+          local.fill(0); local[0] = ca; local[2] = -sa;
+          local[4] = sa * s; local[5] = c; local[6] = ca * s;
+          local[8] = sa * c; local[9] = -s; local[10] = ca * c;
+          local[12] = side * (axle ? .76 : .79); local[13] = .34;
+          local[14] = axle ? -1.6 : 1.7; local[15] = 1;
+          M4.mulTo(world, base, local);
+          gfx.draw(meshes[axle * 2 + fixed], world, opts);
+        }
+      }
+    }
+    return { prepare, draw, release };
   }
   function create(context) {
     const { SURFACES, TYRE, INTAKE } = context;
@@ -643,6 +713,27 @@ const CarWheels = (function () {
           }
         }
       }
+      // SPIN CUE — a valve stem, rim balance weight and one sidewall paint dash.
+      // Default medium is a 3-spoke slick with a continuous band: rotationally
+      // near-symmetric, so at chase distance (and under the wagon-wheel effect)
+      // the rim looks frozen even when the phase advances. These marks ride the
+      // ROTATING mesh only; calipers stay on fixedOut. Cheap (a few boxes/quads).
+      // Metal cues stay on the rim lip (≤ rimR·1.05): parts-physics pins the
+      // outer tyre band (radius > 0.30 m) as rubber-only on an open rim.
+      {
+        const stemA = 0.55, stemR = rimR * 1.04, weightA = stemA + Math.PI;
+        const STEM = [0.72, 0.74, 0.78], WEIGHT = [0.90, 0.86, 0.18], DASH = [0.94, 0.90, 0.55];
+        for (const ss of [[x0, -1], [x1, 1]]) {
+          const dir = ss[1];
+          addBox(out, ss[0] + dir * 0.018, cy + stemR * Math.cos(stemA), cz + stemR * Math.sin(stemA),
+                 0.014, 0.018, 0.018, STEM, SURFACES.metal);
+          addBox(out, ss[0] + dir * 0.008, cy + rimR * 1.01 * Math.cos(weightA), cz + rimR * 1.01 * Math.sin(weightA),
+                 0.010, 0.024, 0.016, WEIGHT, SURFACES.metal);
+          const xb = ss[0] + dir * 0.007, a0 = 1.20, a1 = 1.55;
+          const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, P(r * 0.78, a0), P(r * 0.78, a1), P(r * 0.70, a1), P(r * 0.70, a0), DASH, SURFACES.rubber);
+        }
+      }
       const calOut = fixedOut || out;
       const cr = r * 0.78;
       const calA = brakeStyle && brakeStyle.caliperPos || 0;
@@ -719,6 +810,6 @@ const CarWheels = (function () {
     return { addWheel, buildWheel, buildWheelLayers };
   }
 
-  return { create, tints };
+  return { create, tints, createGarage, phaseStep, wrapPhase, WHEEL_R };
 })();
 Object.freeze(CarWheels);

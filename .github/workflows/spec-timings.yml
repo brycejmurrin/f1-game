@@ -82,9 +82,20 @@ jobs:
     # Only the deploy branch's runs. A feature branch measures the same specs on
     # the same runners, but it may also be measuring a spec mid-edit, and the
     # record is meant to describe what ships. A dispatch is always allowed.
+    # Only a SUCCESSFUL Pages run (2026-10-27, review WP-W1): a pending-replaced
+    # (cancelled) train still fired this job, a 77 s full-history checkout on
+    # each of 371 cancelled runs in 14 d, and it measures a train that never shipped.
+    # Only a run of THIS repository that no pull request started: `head_branch`
+    # is a name, and a fork can carry a branch of the same name, so the branch
+    # test alone does not say the run measured the deploy branch.
+    # https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_run
     if: >-
       ${{ github.event_name == 'workflow_dispatch'
-          || github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' }}
+          || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
+              && github.event.workflow_run.head_repository.full_name == github.repository
+              && github.event.workflow_run.event != 'pull_request'
+              && github.event.workflow_run.event != 'pull_request_target'
+              && github.event.workflow_run.conclusion == 'success') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job force-pushes the bot/spec-timings side branch
         with:
@@ -122,11 +133,15 @@ jobs:
           set -u
           mkdir -p junit-in
           if [ -z "${RUN_ID:-}" ]; then
-            # A dispatch has no triggering run: take the newest successful CI
-            # run on the deploy branch instead.
-            RUN_ID=$(gh run list --workflow=ci.yml --branch=claude/f1-game-project-26h3ng \
-                       --status=success --limit=1 --json databaseId --jq '.[0].databaseId' || true)
-            echo "dispatch: newest successful CI run is ${RUN_ID:-none}"
+            # A dispatch has no triggering run: take the newest successful
+            # train (pages.yml, the same workflow the trigger above names) on
+            # the deploy branch instead. ci.yml has no push trigger, so its
+            # runs on that branch name are pull_request runs; pages.yml runs on
+            # push, schedule and dispatch, and the jq keeps those events only.
+            RUN_ID=$(gh run list --workflow=pages.yml --branch=claude/f1-game-project-26h3ng \
+                       --status=success --limit=20 --json databaseId,event \
+                       --jq '[.[] | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch")][0].databaseId // empty' || true)
+            echo "dispatch: newest successful train run is ${RUN_ID:-none}"
           fi
           case "${RUN_ID:-}" in "") echo "found=false" >> "$GITHUB_OUTPUT"; exit 0 ;; esac
           gh run download "$RUN_ID" --pattern 'spec-timings-junit-*' --dir junit-in || true

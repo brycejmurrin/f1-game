@@ -40,7 +40,7 @@ async function profileRtc(argv) {
   }
 }
 
-export async function main(args = process.argv.slice(2)) {
+async function main(args = process.argv.slice(2)) {
   const command = args[0] || "help";
   if (["help", "--help", "-h"].includes(command)) {
     process.stdout.write(`js-debugger-mcp — a separate stateful debugger server (Node22+, no browser launch)

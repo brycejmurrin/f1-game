@@ -1,7 +1,5 @@
 # Design loop — spine top / side, fin, any paint row
 
-Moved out of `SKILL.md` on 2026-10-26 to keep the skill body an index.
-
 ## Design loop — spine top / side, fin, any paint row
 
 1. **Placement, no browser** (0.2 s): `node tools/car/spine-station.mjs --team=X --png=artifacts/spine`

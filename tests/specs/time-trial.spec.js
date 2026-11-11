@@ -4,9 +4,26 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, test as journeyTest } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { saveSharedCard } from "../helpers/share-card.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
+
+// #3892: the armed label must fit its own cell — one box, nothing clipped, and
+// no overlap with any other pause button (the old "RESTART — TAP AGAIN" wrapped
+// and its second line hid under the next row at 844x390).
+const armedFit = (page, id) => page.evaluate((id) => {
+  const b = document.getElementById(id);
+  const r = b.getBoundingClientRect();
+  // Every visible pause button: STRATEGY sits in a nested row, not the stack.
+  const hit = [...document.querySelectorAll("#pausemenu button")]
+    .filter((o) => o !== b && !o.contains(b) && !b.contains(o) && o.checkVisibility())
+    .map((o) => ({ id: o.id, r: o.getBoundingClientRect() }))
+    .filter(({ r: o }) => o.left < r.right - 0.5 && r.left < o.right - 0.5 && o.top < r.bottom - 0.5 && r.top < o.bottom - 0.5)
+    .map((o) => o.id);
+  return { clipped: b.scrollHeight > b.clientHeight || b.scrollWidth > b.clientWidth, hit };
+}, id);
 
 journeyTest.describe("Practice return journeys — phone landscape", () => {
   // Keep literal test(...) calls visible to the static CI budget counter.
@@ -28,6 +45,109 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
   test.afterEach(async ({ pageErrors, consoleLines }) => {
     expect(pageErrors).toEqual([]);
     expect(consoleLines.filter(line => line.startsWith("error:"))).toEqual([]);
+  });
+
+  test("personal Daily history, practice pathway and energy review are reachable by touch", async ({ page }, testInfo) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    await page.evaluate(({ today, yesterday }) => localStorage.setItem("apex26.daily.v1", JSON.stringify({
+      days: { [today]: { best: 70, classes: { standard: { best: 71.2 }, open: { best: 70 } } }, [yesterday]: { best: 72 } },
+      streak: { count: 2, last: today },
+    })), { today, yesterday });
+    await page.reload();
+    await page.waitForFunction(() => !!window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    expect(await page.evaluate('AppearanceOpts.setHelp("off")')).toBe("off");
+    await expect(page.locator("html")).toHaveAttribute("data-menu-help", "off");
+    const homeGeometry = await page.locator("#menu-buttons").evaluate(el => ({
+      height: el.clientHeight, scrollHeight: el.scrollHeight,
+      doors: [...el.querySelectorAll("button")].map(node => [node.id, node.offsetWidth, node.offsetHeight]),
+    }));
+    expect(homeGeometry.scrollHeight, "Home still fits before opening personal history").toBeLessThanOrEqual(homeGeometry.height + 1);
+    await expect(page.locator("#menu-buttons #daily-history")).toHaveCount(0);
+    await page.locator("#mb-saves").tap();
+    await expect(page.locator("#pm-panel-files")).toBeVisible();
+    await expect(page.locator("#daily-history")).toBeVisible();
+    await page.locator("#daily-history > summary").tap();
+    await expect(page.locator("html")).toHaveAttribute("data-menu-help", "off");
+    await expect(page.locator("#daily-history-list")).toBeVisible();
+    await expect(page.locator("#daily-history")).toContainText(today);
+    await expect(page.locator("#daily-history")).toContainText(yesterday);
+    await expect(page.locator("#daily-history")).toContainText("71.200s");
+    await expect(page.locator("#daily-history")).toContainText("legacy / mixed classes");
+    const dailyFit = await page.locator("#daily-history").evaluate(el => ({
+      clipped: el.scrollWidth > el.clientWidth + 1,
+      tapHeight: el.querySelector("summary").getBoundingClientRect().height,
+    }));
+    expect(dailyFit.clipped).toBe(false);
+    expect(dailyFit.tapHeight).toBeGreaterThanOrEqual(44);
+    await testInfo.attach("daily-history-phone", { body: await page.screenshot(), contentType: "image/png" });
+    await page.locator("#daily-history > summary").tap();
+    await page.locator("#pm-settings-close").tap();
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    expect(await page.locator("#menu-buttons").evaluate(el => ({
+      height: el.clientHeight, scrollHeight: el.scrollHeight,
+      doors: [...el.querySelectorAll("button")].map(node => [node.id, node.offsetWidth, node.offsetHeight]),
+    })), "Saves and Data must return the same Home geometry").toEqual(homeGeometry);
+
+    await page.locator("#mb-practice").tap();
+    await page.locator("#sel-go").tap();
+    await page.locator("#rs-go").tap();
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: BOOT_MS });
+    await expect(page.locator("#loading")).toBeHidden();
+    await page.locator("#pausebtn").tap();
+    await page.locator("#pm-practice").tap();
+    await page.locator("#pm-practice-pathway > summary").tap();
+    await expect(page.locator("#pm-practice-pathway")).toContainText("not verified drill completion");
+    await page.locator("#pm-practice-pathway").getByRole("button", { name: "CHOOSE 2. Brake release into a turn", exact: true }).tap();
+    await expect(page.locator("#pm-drill-sel")).toHaveValue("trail");
+    await page.locator("#pm-practice-pathway").getByRole("checkbox").first().check();
+    await expect(page.locator("#pm-practice-pathway").getByRole("checkbox").first()).toBeChecked();
+    await testInfo.attach("practice-pathway-phone", { body: await page.screenshot(), contentType: "image/png" });
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-review").tap();
+    await page.locator("#pm-last-lap-energy > summary").tap();
+    await expect(page.locator("#pm-last-lap-energy")).toContainText("Complete one full clean lap");
+    await testInfo.attach("energy-review-phone", { body: await page.screenshot(), contentType: "image/png" });
+  });
+
+  // ROW 3 (2026-11-10): at 844x390 the full brief filled the hero section, so
+  // the still flexed to nothing — #sel-map-btn painted at y 330-405 against a
+  // 390 viewport, the TURNS / LENGTH band rose over the GOAL row and the foot
+  // cut it. The section never scrolls on the phone card, so every part must be
+  // on screen, above the foot, and GOAL clear of the numbers.
+  test("the Practice picker fits the phone: map, GOAL and the numbers on screen, apart", async ({ page }) => {
+    await page.locator("#mb-practice").tap();
+    await expect(page.locator("#select-title")).toHaveText("PRACTICE");
+    await expect(page.locator("#practice-brief")).toBeVisible();
+    await expect(page.locator("#practice-goal-row")).toBeVisible();
+    await expect(page.locator("#sel-inner")).toHaveAttribute("data-density", "compact");
+    const stats = ["#sel-preview-meta > div:nth-child(2)", "#sel-preview-meta > div:nth-child(3)"];
+    for (const sel of stats) await expect(page.locator(sel)).toBeVisible();
+    const settled = await page.evaluate(settleLayout, { root: "#sel-inner" });
+    expect(settled.stable, "the picker layout settled").toBe(true);
+    const fit = await page.evaluate((stats) => {
+      const box = (sel) => {
+        const r = document.querySelector(sel).getBoundingClientRect();
+        return { sel, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      };
+      return {
+        vh: innerHeight, vw: innerWidth,
+        foot: box("#sel-inner > .sheet-foot"),
+        map: box("#sel-map-btn"), goal: box("#practice-goal-row"),
+        stats: stats.map(box),
+      };
+    }, stats);
+    const overlap = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+    for (const r of [fit.map, fit.goal, ...fit.stats]) {
+      expect(r.top, `${r.sel} top inside the viewport`).toBeGreaterThanOrEqual(0);
+      expect(r.bottom, `${r.sel} bottom inside the viewport`).toBeLessThanOrEqual(fit.vh);
+      expect(r.bottom, `${r.sel} clear of the foot`).toBeLessThanOrEqual(fit.foot.top + 0.5);
+      expect(r.left, `${r.sel} left inside the viewport`).toBeGreaterThanOrEqual(0);
+      expect(r.right, `${r.sel} right inside the viewport`).toBeLessThanOrEqual(fit.vw);
+    }
+    for (const s of fit.stats) expect(overlap(fit.goal, s), `GOAL row overlaps ${s.sel}`).toBe(false);
+    expect(fit.goal.bottom, "GOAL sits above the still").toBeLessThanOrEqual(fit.map.top + 0.5);
   });
 
   test("cancelling Practice twice leaves ordinary TT and Race pickers usable", async ({ page }) => {
@@ -77,9 +197,11 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
       // It distinguishes a real restart from merely dismissing the pause card.
       await page.evaluate(() => window.__apex.setLap(2));
       await page.locator("#pm-restart").tap();
-      await expect(page.locator("#pm-restart")).toHaveText("RESTART — TAP AGAIN");
+      await expect(page.locator("#pm-restart")).toHaveText("TAP AGAIN");
+      expect(await armedFit(page, "pm-restart")).toEqual({ clipped: false, hit: [] });
       expect(await page.evaluate(() => window.__apex.timing().lap)).toBe(2);
       await expect(page.locator("#pausemenu")).toBeVisible();
+      await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 });   // a younger real tap is a double tap
       await page.locator("#pm-restart").tap();
       await expect.poll(() => page.evaluate(() => window.__apex.timing()?.lap), { timeout: BOOT_MS }).toBe(0);
       await expect(page.locator("#pausemenu")).toBeHidden();
@@ -95,9 +217,11 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
 
       await page.locator("#pausebtn").tap();
       await page.locator("#pm-quit").tap();
-      await expect(page.locator("#pm-quit")).toHaveText("QUIT TO MENU — TAP AGAIN");
+      await expect(page.locator("#pm-quit")).toHaveText("TAP AGAIN");
+      expect(await armedFit(page, "pm-quit")).toEqual({ clipped: false, hit: [] });
       await expect(page.locator("#pausemenu")).toBeVisible();
       await expect(page.locator("#overlay")).toBeHidden();
+      await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 });   // a younger real tap is a double tap
       await page.locator("#pm-quit").tap();
       await expect(page.locator("#overlay")).toBeVisible();
       for (const selector of ["#pausemenu", "#loading", "#results", "#race-settings", "#select"])
@@ -389,6 +513,20 @@ test.describe("Time Trial — results panel", () => {
     expect(title).toContain("TIME TRIAL");
   });
 
+  test("a personal-best ghost puts a SHARE CARD chip on TT results (#1547)", async ({ page }) => {
+    await enterTT(page);
+    await page.evaluate(() => window.__apex.park(0));
+    // A synthetic 80 s lap at 20 Hz becomes the stored best (Ghost is a page global).
+    await page.evaluate(() => {
+      Ghost.startLap();
+      for (let i = 0; i <= 1600; i++) Ghost.record(i / 20, i * 2.5, 0);
+      Ghost.finishLap(80, null);
+    });
+    await page.evaluate(() => window.__apex.finishRace());
+    await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
+    await saveSharedCard(page, "#res-ghost-card", /^apex26-lap-[a-z0-9-]+\.png$/);
+  });
+
   test("TRY AGAIN button shown in TT results", async ({ page }) => {
     await enterTT(page);
     await page.evaluate(() => window.__apex.park(0));
@@ -553,11 +691,15 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
       await document.fonts.ready;
     }, device.safe);
     const press = async selector => device.touch ? page.locator(selector).tap() : page.locator(selector).click();
-    const rows = [];
+    const rows = [], helpSettlements = [];
 
     try {
-      for (const pct of [40,80,100,130,150,200]) {
+      // A PHONE'S UI SIZE STOPS AT 70 % (#5235, js/ui/scale.js phoneUi: coarse pointer and a short side <= 500 px);
+      // a tablet and a desktop keep the full 40 %. The slider's own `min` is the contract, so it is asserted.
+      const uiMin = device.touch && Math.min(device.viewport.width, device.viewport.height) <= 500 ? 70 : 40;
+      for (const pct of [uiMin,80,100,130,150,200]) {
         await press('#mb-settings'); await press('#pm-open-appearance');
+        await expect(page.locator('#pm-uiscale'), `${device.name}: UI SIZE minimum`).toHaveAttribute('min', String(uiMin));
         await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); }, pct);
         await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
         await press('#pm-settings-close'); await press('#pm-open-driving');
@@ -658,19 +800,15 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await expect(page.locator('#overlay')).toBeVisible();
         await page.locator('#mb-help').scrollIntoViewIfNeeded();
         await press('#mb-help');
-        // The sheet reopens with the shape/density it had at the PREVIOUS UI
-        // SIZE; SheetShape reclassifies it a frame or two later (fit cap, then
-        // density). An anchor jump taken before that lands in the old layout,
-        // and the reflow then carries #htp-driving out of the pane (desktop
-        // 200%, run 38985530584: wide rail -> compact strip, ratio 0). Jump
-        // only once a classify pass changes nothing.
-        await page.waitForFunction(() => {
-          const el = document.getElementById('howtoplay-inner');
-          if (!el || !el.dataset.shape || !el.dataset.density) return false;
-          const before = el.dataset.shape + '|' + el.dataset.density;
-          window.SheetShape.reclassify();
-          return before === el.dataset.shape + '|' + el.dataset.density;
-        }, null, {polling:100, timeout:10000});
+        // At 200%, the side rail can become a chip strip after reopening.
+        // Observed pane width changed 900 -> 1252 and scroll extent 12872 ->
+        // 8506 (report44573). One unchanged shape/density pass did not establish
+        // a quiet reading pane. Observe actual geometry before the real click;
+        // the bounded observer does not force classification or move the target.
+        const settlement = await page.evaluate(settleLayout, { root: '#howtoplay .pane' });
+        helpSettlements.push({ pct, settlement });
+        expect(settlement.stable, `Help reading pane at ${pct}%`).toBe(true);
+        expect(settlement.truncated, `Help reading pane sample at ${pct}%`).toBe(false);
         await press('#htp-contents a[href="#htp-driving"]');
         await expect(page.locator('#htp-driving')).toBeInViewport();
         await expect(page.locator('#htp-contents a[href="#htp-driving"]')).toHaveAttribute('aria-current','true');
@@ -685,6 +823,7 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#htp-close'); await expect(page.locator('#overlay')).toBeVisible();
       }
     } finally {
+      await info.attach('help-pane-settlements.json',{body:JSON.stringify(helpSettlements,null,2),contentType:'application/json'});
       await info.attach('zoom-measurements.json',{body:JSON.stringify(rows,null,2),contentType:'application/json'});
     }
     expect(errors).toEqual([]);

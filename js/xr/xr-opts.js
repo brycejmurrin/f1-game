@@ -143,7 +143,7 @@ const XROpts = (function () {
       ["off", "OFF"],
       ["on", "ON"],
     ]);
-    modeRow.row.title = "Arm VR mode. Reload after changing. On an immersive-vr headset the boot picks WebGL2 (GLX) or experimental WebGPU (TLX). Does not change your 2D RENDERER pick.";
+    modeRow.row.title = "Arm VR mode: loads VR support at start-up and shows ENTER VR on a phone. On a renderer that cannot present to a headset, ENTER VR switches to THREE WebGL2 for that visit and reloads (never mid-race); your RENDERER pick comes back afterwards.";
     SettingRow.wire(modeRow.row, {
       read: () => (xr() ? "on" : "off"),
       write: (v) => {
@@ -157,7 +157,7 @@ const XROpts = (function () {
       ["webgl2", "WEBGL2 (RECOMMENDED)"],
       ["webgpu", "WEBGPU (EXPERIMENTAL)"],
     ]);
-    backendRow.row.title = "WebGL2 is the shippable Quest path (GLX). WebGPU is experimental (TLX + three XRManager) and falls back to WebGL2 when navigator.gpu or XRGPUBinding is missing. Reload to apply.";
+    backendRow.row.title = "VR presents through WebGL2 (THREE WebGL2) either way: a WebGPU headset session is not wired yet, so WEBGPU is kept as a preference only. Reload to apply.";
     SettingRow.wire(backendRow.row, {
       read: () => xrBackend(),
       write: (v) => {
@@ -193,12 +193,14 @@ const XROpts = (function () {
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => {
+      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
     else initUI();
   }
 
   return {
-    KEY_XR, KEY_BACKEND, KEY_INPUT, DEF_XR, DEF_BACKEND,
     xrInput, setXrInput,
     xr, setXr, xrBackend, setXrBackend, initUI, onCaps, capsVr,
   };

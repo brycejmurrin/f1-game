@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -39,11 +40,11 @@ function loadCamFeel(disk, extra) {
     ...(extra || {}),
   };
   vm.runInNewContext(
-    ["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"]
+    ["fov-mode.js", "feel.js"]
       .map((f) => fs.readFileSync(path.join(root, "js/camera", f), "utf8")).join("\n")
-      + "\nthis.exported = CamFeel;",
+      + "\nthis.exported = CamFeel; this.DriveLens = CamFeel.lens;",
     ctx);
-  return { CamFeel: ctx.exported, store };
+  return { CamFeel: ctx.exported, DriveLens: ctx.DriveLens, store };
 }
 
 test("follow is exact with no dt and eases when a frame has one", () => {
@@ -189,6 +190,16 @@ test("buzz / free-look scope tables stay aligned", () => {
   for (const sp of [0, 0.5, 1]) assert.equal(CamFeel.modeFov("helmet", sp, 1), CamFeel.modeFov("cockpit", sp, 1));
 });
 
+test("DriveLens public surface is apply only; family helpers stay internal", () => {
+  const { DriveLens } = loadCamFeel();
+  assert.deepEqual(Object.keys(DriveLens).sort(), ["apply"]);
+  const ctx0 = { sp: 0.5, yaw: 0.2, brake: 0.1, slip: 0 };
+  assert.equal(DriveLens.apply("chase", null, null, ctx0), 4 * 0.5 + 2 * 0.2 + 2 * 0.1);
+  assert.equal(DriveLens.apply("heli", null, null, ctx0), 8 * 0.5 + 3 * 0.2);
+  assert.equal(DriveLens.apply("cockpit", null, null, ctx0), 1.5 * 0.5 + 1 * 0.1);
+  assert.equal(DriveLens.apply("unknown", null, null, ctx0), null);
+});
+
 test("helmet drive rates match cockpit so a mode switch does not retune the lens", () => {
   const { CamFeel } = loadCamFeel();
   const att = { yawRateCur: 0.4, baPitch: 0.02 };
@@ -208,6 +219,17 @@ test("speed vignette defaults off and persists", () => {
   CamFeel.setSpeedVignette(true);
   assert.equal(CamFeel.speedVignette(), true);
   assert.equal(store.get("speedVignette"), true);
+});
+
+test("speed vignette lives in #hud, first child, behind every HUD element (#3952)", () => {
+  const src = fs.readFileSync(path.join(root, "js/camera/feel.js"), "utf8");
+  // #overlay is hidden during races; #hud (z-index 10) is its own stacking context.
+  assert.match(src, /getElementById\("hud"\)/);
+  assert.match(src, /hud\.insertBefore\(_vigEl, hud\.firstChild\)/);
+  assert.match(src, /pointer-events:none;z-index:-1;/);
+  assert.doesNotMatch(src, /getElementById\("overlay"\)/);
+  const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
+  assert.match(css, /#hud \{ position: fixed; inset: 0; pointer-events: none; z-index: 10; \}/);
 });
 
 test("vantage.js routes FOV and look-back through CamFeel", () => {
@@ -321,16 +343,26 @@ test("mouse free-look holds while the right button is held still", () => {
   assert.ok(live.freeLookState().yaw < b * 0.2, "Input reporting the button up recentres through tickRace");
 });
 
-test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched look-back all reset", () => {
-  const { CamFeel } = loadCamFeel();
-  CamFeel.setLookBackLatch(true);
-  CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, lookHeld: true });
-  assert.equal(CamFeel.shouldLookBack("cockpit", false), true, "latched at the flag");
-  CamFeel.follow("sp:chase", 1, 4, 0);
-  CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch();
-  assert.equal(CamFeel.shouldLookBack("cockpit", false), false, "the next race does not start looking backwards");
-  assert.equal(CamFeel.follow("sp:chase", 0, 4, 0.016), 0, "the speed-FOV follow starts fresh, not from the last race's top speed");
-  CamFeel.setLookBackLatch(false);
+test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched look-back all reset", async () => {
+  // The REAL snapGameCam in the game VM (js/game.js, exposed on the G facade):
+  // latch a look-back, look round and build up a follow, then snap — the same
+  // CamFeel global game.js reads must come out of the cut clean.
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const CamFeel = g.sandbox.CamFeel;
+    CamFeel.setLookBackLatch(true);
+    CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, lookHeld: true });
+    assert.equal(CamFeel.shouldLookBack("cockpit", false), true, "latched at the flag");
+    CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, mouseDx: 200, mouseHeld: true });
+    assert.ok(CamFeel.freeLookState().yaw > 10, "the drag looked right");
+    CamFeel.follow("sp:chase", 1, 4, 0);
+    g.G.snapGameCam();
+    assert.equal(CamFeel.shouldLookBack("cockpit", false), false, "the next race does not start looking backwards");
+    assert.equal(CamFeel.freeLookState().yaw, 0, "the glance does not carry over the cut");
+    assert.equal(CamFeel.follow("sp:chase", 0, 4, 0.016), 0, "the speed-FOV follow starts fresh, not from the last race's top speed");
+    CamFeel.setLookBackLatch(false);
+  } finally { g.close(); }
 });
 
 // A snap (startRace / restart → snapGameCam) must also zero the eased bend
@@ -342,7 +374,7 @@ test("a snapped chase frame clears the bend hang the next live frame eases from"
   const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
     GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
     Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
-  vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+  vm.runInContext(["js/core/mat4.js", ...["fov-mode.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage-ride.js", "js/camera/vantage.js"]
     .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams;", ctx);
   const live = (s) => ctx.GC.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, dt: 1 / 60, att: {} }).eye[0];
   K = 0.06; for (let i = 0; i < 180; i++) live(500);       // sit in a left hairpin
@@ -363,7 +395,7 @@ test("a TV-director solve never perturbs the player's bend hang", () => {
     const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
       GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
       Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
-    vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+    vm.runInContext(["js/core/mat4.js", ...["fov-mode.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage-ride.js", "js/camera/vantage.js"]
       .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams; this.CF = CamFeel;", ctx);
     return ctx;
   };
@@ -394,7 +426,7 @@ test("look-back mirrors the player's solve only; extra.noLook opts out (bug-hunt
       Input: { lookingBack: () => back },
       GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
       Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
-    vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+    vm.runInContext(["js/core/mat4.js", ...["fov-mode.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage-ride.js", "js/camera/vantage.js"]
       .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams;", ctx);
     const extra = { carPos: [0, 500], carHead: 0, snap: true, att: {} };
     if (noLook) extra.noLook = true;

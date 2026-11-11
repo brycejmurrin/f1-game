@@ -165,9 +165,9 @@ function hose(out, pts, rad, col, seg, mid) {
 }
 
 // The shared material ids, so the bay names the same surfaces the track does
-// rather than keeping a second copy that can drift. Read lazily: every use is
-// inside a build function, so TrackGeom (manifest position 77, this file 121)
-// is always up by then and this needs no HARD_EDGES pair.
+// rather than keeping a second copy that can drift. Read at eval (HARD_EDGES
+// pairs this file after TrackGeom in tools/manifest.cjs); the fallback object
+// is only for a harness that loads the module alone.
 const MAT = (typeof TrackGeom !== "undefined" && TrackGeom.MAT)
   ? TrackGeom.MAT : { FLAT: 0, CONCRETE: 1, METAL: 4, ASPHALT: 16 };
 
@@ -288,6 +288,28 @@ const LOOKS = {
              band: (c1) => c1, key: GREY(0.90), outline: [0.94, 0.55, 0.14] },
     backWall: "frame",
   },
+  // Wet-race / rain-ready bay: cool overcast panelling, dark gloss resin with
+  // pale safety lanes — pairs with the rain lighting mood for a Spa weekend.
+  rainready: {
+    label: "Rain ready",
+    wall: { dado: () => [0.28, 0.32, 0.34], stripe: (c1, c2) => mix([0.55, 0.62, 0.70], c2, 0.35),
+            panel: () => [0.42, 0.46, 0.50], skirt: GREY(0.06), seam: "joint", jointPitch: 1.80, back: null },
+    ceil: [0.30, 0.34, 0.38], truss: "rails", ceilLed: "grid",
+    floor: { slab: [0.08, 0.10, 0.12], inner: [0.12, 0.15, 0.18], paint: GREY(0.88), walk: [0.70, 0.74, 0.78],
+             band: (c1) => mix(GREY(0.55), c1, 0.35), key: GREY(0.90), outline: [0.72, 0.78, 0.84], wetBands: true },
+    backWall: "header",
+  },
+  // Qualifying night: deep charcoal walls, bright linear strips, white floor
+  // box under a framed back wall — the Saturday-night parc-fermé read.
+  qualify: {
+    label: "Qualifying night",
+    wall: { dado: () => [0.08, 0.09, 0.12], stripe: (c1, c2) => mix([0.85, 0.88, 0.95], c2, 0.25),
+            panel: () => [0.04, 0.05, 0.08], skirt: GREY(0.02), seam: "slat", back: (c1) => scale(c1, 0.40) },
+    ceil: GREY(0.012), truss: "stock", ceilLed: "strips", hotStrips: true,
+    floor: { slab: GREY(0.035), inner: GREY(0.050), paint: GREY(0.94), walk: (c1, c2) => scale(c2, 0.75),
+             band: (c1, c2) => c2, key: GREY(0.92), outline: GREY(0.90) },
+    backWall: "frame",
+  },
 };
 const LOOK_IDS = Object.keys(LOOKS);
 let _look = "stock";
@@ -308,7 +330,8 @@ const look = () => LOOKS[_look] || null;
 // Resolve a look colour slot: a fixed [r,g,b] or a function of the livery.
 const lookCol = (v, c1, c2) => (typeof v === "function" ? v(c1, c2) : v);
 
-  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, BOX_F, WALL_KEYED, sideOnly, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
-    mix, LOOKS, LOOK_IDS, setLook, lookId, look, lookCol };
+  // BOX_F / WALL_KEYED / sideOnly / mix stay module-local: only block/cyl/tube + LOOKS use them.
+  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
+    LOOKS, LOOK_IDS, setLook, lookId, look, lookCol };
 })();
 if (typeof window !== "undefined") window.GaragePrims = GaragePrims;

@@ -217,6 +217,7 @@ test("the cockpit hood and nose keep the livery", () => {
 test("no shipped livery dresses the cockpit forearms in a pale slab", () => {
   const ctx = { Log: { info() {}, warn() {}, error() {} }, GaragePrims: { block() {} } };
   vm.createContext(ctx);
+  vm.runInContext(readFileSync("js/car/cockpit-rig.js", "utf8"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(readFileSync("js/car/car-mesh.js", "utf8") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({ createMesh: (d) => ({ d }), freeMesh() {} });
   const offenders = [];

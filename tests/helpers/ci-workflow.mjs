@@ -32,19 +32,6 @@ export const rendererJob = must("renderer-macos job", ciWorkflow.split("\n  rend
 // A step of the `select` plan job since 2026-10-15 (a job of its own before).
 export const rendererFilter = must("renderer filter step",
   ciWorkflow.split("      - name: Does this diff touch the renderer?\n")[1]?.split("\n      - name: ")[0]);
-// THE BODY MARKER (2026-10-26): a PR-body line starting `CI: run` opts a draft in like the run-ci label. The colon is
-// `:` because a literal `: ` ends a YAML plain scalar; ci.yml's `on:` notes say why each piece is there.
-export const ciRunMarker = (x) => `contains(format('{0}{1}', fromJSON('"\\n"'), ${x}), fromJSON('"\\nCI\\u003a run"'))`;
-export const RUN_CI_LABEL = "contains(github.event.pull_request.labels.*.name, 'run-ci')";
-export const PR_ACTIVE =
-  `(github.event_name != 'pull_request' || !github.event.pull_request.draft || ${RUN_CI_LABEL} || ${ciRunMarker("github.event.pull_request.body")})`;
-export const LABEL_OK = "(github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft))";
-export const EDIT_START = `(github.event.pull_request.draft && github.event.changes.body && !${RUN_CI_LABEL} && `
-  + `${ciRunMarker("github.event.pull_request.body")} && !${ciRunMarker("github.event.changes.body.from")})`;
-export const EDIT_OK = `(github.event.action != 'edited' || ${EDIT_START})`;
-export const LABEL_NOISE = "(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft))";
-export const EDIT_NOISE = `(github.event_name == 'pull_request' && github.event.action == 'edited' && !${EDIT_START})`;
-
 /**
  * Evaluate a workflow template (`text ${{ expr }} text`) for the expression subset ci.yml's gates use: string
  * literals ('' escapes), context paths with `.*.` filters, ! && || == != and parentheses (JS has the same

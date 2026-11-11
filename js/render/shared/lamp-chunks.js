@@ -33,6 +33,18 @@ const LampChunks = (function () {
   function buildTable(lights, chunks, knob) {
     const cap = capFor(knob), n = (lights.length / 15) | 0, nc = chunks.length;
     const lists = new Array(nc);
+    // Position and radius, packed and stripped of dead radii, in source order.
+    // The chunk loop streams that list instead of gathering stride-15 floats
+    // it will skip. The order is what the stable distance tie depends on.
+    const live = new Int32Array(n), pack = new Float64Array(n * 4);
+    let nLive = 0;
+    for (let i = 0; i < n; i++) {
+      const o = i * 15, rad = lights[o + 6];
+      if (!(rad > 0)) continue;
+      const k = nLive * 4;
+      pack[k] = lights[o]; pack[k + 1] = lights[o + 1]; pack[k + 2] = lights[o + 2]; pack[k + 3] = rad;
+      live[nLive++] = i;
+    }
     // Retain only the nearest cap, not an object for every reaching lamp. The
     // max-heap puts the farthest (latest source index on a tie) at the root;
     // sorting that bounded heap gives the old stable nearest-first order.
@@ -54,13 +66,13 @@ const LampChunks = (function () {
     for (let c = 0; c < nc; c++) {
       const ch = chunks[c];
       let m = 0;
-      for (let i = 0; i < n; i++) {
-        const o = i * 15, rad = lights[o + 6];
-        if (!(rad > 0)) continue;
+      for (let j = 0; j < nLive; j++) {
+        const k = j * 4, rad = pack[k + 3];
         // Frustum.aabbDist2 (js/render/shared/frustum.js): the same reach test the
         // chunk culls use, call-time so this module still evaluates alone.
-        const d2 = Frustum.aabbDist2(ch.min, ch.max, lights[o], lights[o + 1], lights[o + 2]);
+        const d2 = Frustum.aabbDist2(ch.min, ch.max, pack[k], pack[k + 1], pack[k + 2]);
         if (!(d2 <= rad * rad)) continue;
+        const i = live[j];
         if (m < cap) {
           let p = m++;
           idx[p] = i; dist[p] = d2;

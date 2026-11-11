@@ -1,12 +1,17 @@
 // @ts-check
 /** Playwright preflight: require the Apex shell within one 10-second budget. */
 import http from 'http';
+import { ensureBuilt, builtLine } from '../../tools/gen/ensure-built.mjs';
 
 /**
  * @param {import('@playwright/test').FullConfig} config
  * @param {Parameters<typeof waitForServer>[1]} [options]
  */
 async function globalSetup(config, options) {
+  // The served generated files are gitignored (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): build what is missing
+  // or stale before the first page loads, whatever started the run (run-playwright, test-bg, CI, npx playwright).
+  const built = builtLine(ensureBuilt());
+  if (built) console.log(`✓ ${built}`);
   const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3456';
   await waitForServer(baseURL, options);
   console.log(`✓ dev server ready at ${baseURL}`);

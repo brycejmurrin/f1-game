@@ -129,7 +129,9 @@ test.describe("Garage livery churn", () => {
         if (!t.isRenderTargetTexture && !t.isDepthTexture) {
           C.made++;
           const im = t.image || {};
-          C.log.push({ n: C.made, name: t.name, w: im.width, h: im.height,
+          // version > 1 with no GPU texture yet = a re-filled draft spare drawn for the first time; 1 = a fresh mint
+          // (uihunt4-flows-1030 #7: #4212's one late 1024x1280 is the player preview atlas on the post-pause edit).
+          C.log.push({ n: C.made, name: t.name, w: im.width, h: im.height, v: t.version, img: im.constructor && im.constructor.name,
             stack: (new Error().stack || "").split("\n").slice(2, 10).map((l) => l.trim().replace(/https?:\/\/[^/]+\//, "")).join(" | ") });
         }
         return c(t, o);

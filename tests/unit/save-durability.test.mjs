@@ -10,10 +10,13 @@ const src = (file) => fs.readFileSync(new URL("../../" + file, import.meta.url),
 // A transactional async fixture: readwrite transactions commit in creation
 // order, requests can enqueue more work, and aborts never publish staged puts.
 function database() {
-  const dbs = new Map(), handles = []; let failures = 0;
+  const dbs = new Map(), handles = []; let failures = 0, losses = 0, down = false;
   return {
     dbs, handles, failNext() { failures++; },
+    // iOS: the next transaction dies with UnknownError and the handle is dead; no close event.
+    loseNext() { losses++; }, down(on) { down = on; },
     open(name) {
+      if (down) { const r = {}; queueMicrotask(() => { if (r.onerror) r.onerror(); }); return r; }
       if (!dbs.has(name)) dbs.set(name, new Map());
       const stores = dbs.get(name); let tail = Promise.resolve();
       let closed = false;
@@ -26,16 +29,23 @@ function database() {
           const tx = { oncomplete: null, onerror: null, onabort: null };
           const operations = []; let active = false, busy = false, staged;
           const fail = mode === "readwrite" && failures > 0; if (fail) failures--;
+          const lose = !fail && losses > 0; if (lose) { losses--; closed = true; }
+          const gone = Object.assign(Error("Connection to Indexed Database server lost. Refresh the page to try again."), { name: "UnknownError" });
           const finish = () => {
             if (operations.length || busy) { drain(); return; }
-            if (fail) { if (tx.onabort) tx.onabort(); }
+            if (lose) { tx.error = gone; if (tx.onabort) tx.onabort({ target: tx }); }
+            else if (fail) { if (tx.onabort) tx.onabort(); }
             else { if (mode === "readwrite") stores.set(s, staged); if (tx.oncomplete) tx.oncomplete(); }
             release();
           };
           const drain = () => {
             if (!active || busy) return; busy = true;
             queueMicrotask(() => {
-              while (operations.length) { const [r, fn] = operations.shift(); r.result = fn(); if (r.onsuccess) r.onsuccess(); }
+              while (operations.length) {
+                const [r, fn] = operations.shift();
+                if (lose) { r.error = gone; if (r.onerror) r.onerror({ target: r }); continue; }
+                r.result = fn(); if (r.onsuccess) r.onsuccess();
+              }
               busy = false; setImmediate(finish);
             });
           };
@@ -151,8 +161,9 @@ test("storage health and lazy restore history survive denied getters and recover
 test("restore history is bounded per slot, captures only explicit boundaries and never fills primary storage", async () => {
   const h = boot(); await h.store.mirror.ready; const p = points(h); const before = h.disk.size;
   assert.equal((await p.capture("driver", 0, save(), { reason: "autosave" })).ok, false);
+  assert.equal((await p.capture("driver", 0, save(), { reason: "import" })).reason, "explicit-boundary-required", "no caller passes the bare import boundary");
   for (let r = 0; r < 5; r++) assert.equal((await p.capture("driver", 0, save(r), { reason: "round" })).durable, true);
-  await p.capture("myteam", 1, save(9, "myteam"), { reason: "import" });
+  await p.capture("myteam", 1, save(9, "myteam"), { reason: "before-import" });
   assert.deepEqual(Array.from((await p.list("driver", 0)).items, (x) => x.summary.round), [4, 3, 2]);
   assert.equal((await p.list("myteam", 1)).items.length, 1); assert.equal(h.disk.size, before);
   assert.equal((await p.capture("driver", 0, { ...save(), large: "x".repeat(70000) }, { reason: "round" })).ok, false);
@@ -497,4 +508,73 @@ test("SAVE RETRY heals unrelated settings in a read-only career tab and still re
     assert.equal(h.store.writeFailed(), null);
     await h.store.mirrorFlush();
   }
+});
+
+// #4997 — iOS WebKit drops IndexedDB connections behind a suspended Home Screen
+// app. The close event is not reliable there (WebKit bugs 273827, 277615): the
+// first sign is transaction() throwing InvalidStateError or an UnknownError abort.
+test("restore points reopen after a dropped connection: close event, silent InvalidStateError, UnknownError abort", async () => {
+  const drops = {
+    "close event": (db) => db.forceClose(true),
+    "silent drop": (db) => db.forceClose(false),
+    "UnknownError abort": (_db, idb) => idb.loseNext(),
+  };
+  for (const [label, drop] of Object.entries(drops)) {
+    const h = boot(); await h.store.mirror.ready; const p = points(h);
+    assert.equal((await p.capture("driver", 0, save(1), { reason: "round" })).durable, true);
+    const before = h.idb.handles.length, old = h.idb.handles[before - 1];
+    drop(old, h.idb);
+    const r = await p.capture("driver", 0, save(2), { reason: "round" });
+    assert.equal(r.ok && r.durable, true, label + ": the round capture lands on a fresh connection");
+    assert.equal(h.idb.handles.length, before + 1, label + ": the dead handle is never reused");
+    assert.equal(p.health()[0].state, "saved", label);
+    const listed = await p.list("driver", 0);
+    assert.deepEqual(listed.items.map((x) => x.summary.round), [2, 1], label + ": the earlier point survives");
+    // A read is the first operation to find the next drop.
+    drop(h.idb.handles[h.idb.handles.length - 1], h.idb);
+    const again = await p.list("driver", 0);
+    assert.equal(again.ok, true, label + ": VIEW RESTORE POINTS reads after a drop");
+    assert.equal(again.items.length, 2, label);
+  }
+});
+test("a RESTORE after a dropped connection still keeps its before-restore point", async () => {
+  const h = boot({ navigator: undefined }); await h.store.mirror.ready; const p = points(h, { inCareer: () => false });
+  assert.equal(h.store.write("career.driver.0", save(1)).ok, true);
+  await p.capture("driver", 0, save(1), { reason: "round" });
+  h.store.write("career.driver.0", save(4));
+  const id = (await p.list("driver", 0)).items[0].id;
+  h.idb.handles[h.idb.handles.length - 1].forceClose(false);
+  const token = await p.preview("driver", 0, id);
+  assert.equal(token.ok, true);
+  h.idb.handles[h.idb.handles.length - 1].forceClose(false);
+  const done = await p.restore(token);
+  assert.equal(done.ok, true, JSON.stringify(done));
+  assert.equal(h.store.get("career.driver.0").season.round, 1);
+  assert.ok((await p.list("driver", 0)).items.some((x) => x.reason === "before-restore" && x.summary.round === 4));
+  await h.store.mirrorFlush();
+});
+test("restore points fail closed while IndexedDB cannot be reopened, keep prior points, and recover without a reload", async () => {
+  const h = boot(); await h.store.mirror.ready; const p = points(h);
+  await p.capture("driver", 0, save(1), { reason: "round" });
+  h.idb.handles[h.idb.handles.length - 1].forceClose(false); h.idb.down(true);
+  const lost = await p.capture("driver", 0, save(2), { reason: "round" });
+  assert.equal(lost.ok, false); assert.equal(lost.durable, false); assert.equal(lost.reason, "history-unavailable");
+  assert.equal(p.health()[0].state, "unavailable");
+  assert.equal((await p.list("driver", 0)).ok, false);
+  h.idb.down(false);
+  assert.equal((await p.capture("driver", 0, save(3), { reason: "round" })).durable, true);
+  assert.deepEqual((await p.list("driver", 0)).items.map((x) => x.summary.round), [3, 1]);
+});
+test("mirror treats an UnknownError abort as a dead connection: the batch is kept and lands on a reopened handle", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  h.block(true); h.store.write("career.driver.0", save(8));
+  h.idb.loseNext();
+  assert.equal(await h.store.mirrorFlush(), false);
+  assert.equal(h.store.mirror.pending, 1, "the only durable copy of a quota-refused save is retained");
+  assert.equal(h.store.mirror.supported, false, "the dead handle is forgotten");
+  assert.equal(await h.store.mirrorFlush(), true);
+  assert.equal(h.idb.handles.length, 2);
+  assert.equal(JSON.parse(h.idb.dbs.get("apex26-store").get("kv").get("apex26.career.driver.0").v).season.round, 8);
+  const next = boot({ idb: h.idb }); await next.store.mirror.ready;
+  assert.equal(next.store.get("career.driver.0").season.round, 8, "the save survives the next launch");
 });

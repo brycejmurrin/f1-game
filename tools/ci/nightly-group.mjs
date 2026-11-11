@@ -21,6 +21,8 @@
  *         node tools/ci/nightly-group.mjs --list     # the whole rotation
  */
 import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const GROUPS = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8")).groups;
 
@@ -30,7 +32,7 @@ export const EXCLUDED = {
   "test": "the whole suite — hours, and the point of a rotation is to fit one night",
   "test:gfx": "macOS/Metal, and it already has its own renderer-macos job",
   "test:xr": "IWER emulated-VR — path-gated xr job in ci.yml, not a nightly rotation slot",
-  "test:webkit": "WebKit iPhone-path proxy — dispatch-only webkit-leg.yml, not a nightly rotation slot",
+  "test:webkit": "WebKit iPhone-path proxy — opt-in `npm run test:webkit` on a macOS host, not a nightly rotation slot",
   "test:baseline": "the golden trial runs itself on the nightly, non-blocking",
   "test:gallery": "a screenshot gallery with no assertions — nothing to go red",
   "test:render": "a PARTITION (--project=render), not a topical group: every RENDER_SPECS file also sits in a topical group the rota already runs",
@@ -95,7 +97,7 @@ export function groupForDay(day) {
   return ROTATION[((day % ROTATION.length) + ROTATION.length) % ROTATION.length];
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const arg = process.argv.slice(2).find((a) => a.startsWith("--day=")); 
   if (process.argv.includes("--list")) {
     for (let i = 0; i < ROTATION.length; i++) console.log(`${i}\t${bare(ROTATION[i])}`);

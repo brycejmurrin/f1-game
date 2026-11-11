@@ -1,7 +1,7 @@
 // Round 4 size table (B·D1c): part sizes in mm, ray-cast on the built mesh, for Bryce's
-// "some are too big" review. node design-preview/bodies/measure.mjs [team] [--json]
+// "some are too big" review. node design-preview/concept-bodies/measure.mjs [team] [--json]
 // IDS=team,highnose,... picks rows. The shipped envelope is team + the six shipped bodies.
-import { build, cast, Teams } from "./fit-probe.mjs";
+import { build, cast } from "./fit-probe.mjs";
 const mm = (v) => Math.round(v * 1000);
 const up = (o, ks, lo = 0.1) => ks.flatMap((k) => o[k] || []).filter((y) => y > lo);
 export function dims(id, team = "mclaren") {
@@ -24,9 +24,9 @@ export function dims(id, team = "mclaren") {
   r.covHalfW = mm(cw);
   return r;
 }
-export const SHIPPED = ["team", "needle", "brick", "anteater", "arched", "wedge", "barge"];
-export const NEW = ["highnose", "sharkfin", "stepnose", "lowline"];
-export function table(team = "mclaren", ids = [...SHIPPED, ...NEW]) {
+const SHIPPED = ["team", "needle", "brick", "anteater", "arched", "wedge", "barge"];
+const NEW = ["highnose", "sharkfin", "stepnose", "lowline"];
+function table(team = "mclaren", ids = [...SHIPPED, ...NEW]) {
   return Object.fromEntries(ids.map((id) => [id, dims(id === "team" ? undefined : id, team)]));
 }
 if (import.meta.url === `file://${process.argv[1]}`) {

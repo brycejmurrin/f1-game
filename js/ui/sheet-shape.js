@@ -60,6 +60,10 @@ window.SheetShape = (function () {
   const PAIR_HYST = 8;
   const RAIL_HYST = 12;
   const WIDE_HYST = 16;
+  /* --page-at band: room is read from the HOST (roomOwn), not from the sheet's
+     own content, so a few px of band is enough; the density band is 40 because
+     a compact layout is shorter than its normal one and would re-measure itself. */
+  const PAGE_HYST = 12;
 
   function classifyFlag(el, w, cssVar, attr, hyst, onVal = "on", offVal = "off") {
     const raw = getComputedStyle(el).getPropertyValue(cssVar);
@@ -139,6 +143,23 @@ window.SheetShape = (function () {
    * the fixed footer fixed. */
   const SHORT_DEFAULT = 380;
   const SHORT_HYST = 40;   // hysteresis, same reason as the others
+  /* Fit-cap band (UI contract 2026-11-06 gap 14). A Safari toolbar show/hide
+     or a keyboard settle moves the host by a few px; without a band every one
+     re-zoomed the sheet (C: select 1.027 ↔ off across the toolbar). */
+  const FIT_HYST = 0.03;
+
+  /* THE ONE INPUT (UI contract 2026-11-06 rule 1): the layout viewport —
+     documentElement.clientWidth/Height — never innerWidth/innerHeight, which
+     on iOS is the VISUAL viewport (pinch, keyboard) and on a Home Screen
+     landscape launch can still hold the portrait pair while CSS already lays
+     out landscape (#5152: body classified tall + normal, every screen on the
+     wrong tier until a resize that never came). The unit harness has no layout
+     (clientWidth 0): inner* is the fallback there only. */
+  function viewportPx() {
+    const r = document.documentElement;
+    const w = r ? r.clientWidth : 0, h = r ? r.clientHeight : 0;
+    return (w > 0 && h > 0) ? [w, h] : [window.innerWidth, window.innerHeight];
+  }
 
   /* THE FOURTH ANSWER: can this sheet afford the requested UI zoom and still
    * have a functional content row? Most sheets can simply scroll, but dense
@@ -171,7 +192,17 @@ window.SheetShape = (function () {
     if (!available) return;
     const desired = parseFloat(getComputedStyle(document.documentElement)
       .getPropertyValue("--ui-scale")) || 1;
-    const fitted = Math.max(0.4, Math.min(desired, available / at));
+    /* NEVER BELOW 100 %. A cap under the shipped size made type smaller than
+       the player never asked for (circuit detail painted 0.954 in an 852x283
+       Safari tab); a sheet that cannot fit at 1.0 scrolls its list instead
+       (contract rule 3). A UI SIZE under 100 % is the player's own floor. */
+    const floor = Math.min(1, desired);
+    let fitted = Math.max(floor, Math.min(desired, available / at));
+    /* ±FIT_HYST: keep the cap already painted while the new answer is within
+       the band and the sheet is still capped; a release (fitted reaches the
+       preference) is never held back. */
+    const prev = parseFloat(el.style.getPropertyValue("--sheet-scale"));
+    if (prev >= floor && fitted < desired - 0.001 && Math.abs(fitted - prev) <= FIT_HYST) fitted = prev;
     const capped = fitted < desired - 0.001;
     const next = capped ? String(Math.round(fitted * 1000) / 1000) : "";
     if (el.style.getPropertyValue("--sheet-scale") !== next) {
@@ -256,6 +287,29 @@ window.SheetShape = (function () {
     }
   }
 
+  /* IS THERE ROOM FOR FIXED CHROME? A sheet with a head and a foot pinned
+   * around one scroller needs a minimum of its own px for that scroller to be
+   * worth having. Most sheets answer a short room with the fit cap above
+   * (--fit-at: shrink the zoom). A sheet that must paint the requested UI SIZE
+   * (race settings: "requested enlargement reaches the sheet", ui-scale.spec.js
+   * "Race setup adaptive task") answers it by re-flowing instead: head, body
+   * and foot scroll as ONE page. `--page-at` is that threshold, in the sheet's
+   * own units and read against the host's room like --compact-at; the sheet's
+   * CSS keys the one-page layout on `data-page="on"`. MEASURED 667x320 at UI
+   * SIZE 200 %, TEXT large (2026-11-07): the compact wide race sheet had 152 own
+   * px of room, head 56 + foot 58 left #rs-body 36 own px — with the fit cap the
+   * sheet painted 1.38 of the asked 2.0; at 844x390 the same cap would have
+   * painted 1.0. Absent --page-at (the default) nothing is written. */
+  function classifyPage(el, hOwn) {
+    const at = parseFloat(getComputedStyle(el).getPropertyValue("--page-at"));
+    if (!at) { if (el.dataset.page) delete el.dataset.page; return; }
+    const was = el.dataset.page === "on";
+    const h = roomOwn(el, hOwn);
+    const now = was ? h < at + PAGE_HYST : h < at;
+    const next = now ? "on" : "off";
+    if (el.dataset.page !== next) el.dataset.page = next;
+  }
+
   /* READ ALL, THEN WRITE ALL. Interleaving getBoundingClientRect with classify()
      (dataset / CSS vars / zoom) forces a style+layout flush per sheet — on the
      iPhone race-select open that was a measurable hitch beside the track
@@ -301,6 +355,7 @@ window.SheetShape = (function () {
        MEASURED 852×393 @115%: career guides sat ~39px past the sheet until
        this order flipped. */
     classifyDensity(el, hOwn);
+    classifyPage(el, hOwn);
     classifyRail(el, wOwn, hOwn);
     classifyPair(el, wOwn);
   }
@@ -404,8 +459,9 @@ window.SheetShape = (function () {
     if (!b) return;
     const scale = parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
-    const wOwn = window.innerWidth / scale;
-    const hOwn = window.innerHeight / scale;
+    const [vw, vh] = viewportPx();
+    const wOwn = vw / scale;
+    const hOwn = vh / scale;
     classifyDensity(b, hOwn);
     classifyFlag(b, wOwn, "--wide-at", "width", WIDE_HYST, "wide", "narrow");
     /* ZOOM-CORRECT BODY ORIENTATION. `@media (orientation: portrait)` reads the
@@ -538,7 +594,7 @@ window.SheetShape = (function () {
      The guards are load-bearing, do not simplify them out:
        - vv.scale > 1.01: pinch zoom also shrinks vv.height; that is not a
          keyboard and padding the screen for it would be wrong.
-       - kb < 15% of innerHeight: URL-bar show/hide and Safari's tab-bar
+       - kb < 15% of the layout height: URL-bar show/hide and Safari's tab-bar
          collapse arrive as small vv.height deltas; svh already owns those.
          Every real keyboard is far taller than 15% of any phone viewport.
        - "scroll" listener: iOS often PANS the visual viewport (offsetTop
@@ -560,8 +616,15 @@ window.SheetShape = (function () {
     let raf = 0;
     const apply = () => {
       raf = 0;
-      let kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      if (vv.scale > 1.01 || kb < window.innerHeight * 0.15) kb = 0;
+      /* THE MINUEND IS THE LAYOUT VIEWPORT (viewportPx, rule 1), not innerHeight.
+         A Home Screen landscape launch can hold the portrait innerHeight (852)
+         while visualViewport already says 393: 852 − 393 = 459 passed the 15%
+         guard and every .screen opened from the title carried 459px of
+         padding-bottom in a 393px window (#5167 part E, reproduced in Chromium
+         with the stale pair stubbed). The ICB is what .screen's inset: 0 spans. */
+      const lh = viewportPx()[1];
+      let kb = Math.max(0, lh - vv.height - vv.offsetTop);
+      if (vv.scale > 1.01 || kb < lh * 0.15) kb = 0;
       kb = Math.round(kb);
       if (kb === last) return;
       last = kb;
@@ -601,7 +664,7 @@ window.SheetShape = (function () {
     /* AND THE LAYOUT VIEWPORT, which is the other half of the subtraction.
        These two were the visualViewport pair alone — every event a keyboard
        opening or closing produces, and not every event that changes the
-       answer. `window.innerHeight` is the minuend, and ROTATING THE PHONE is
+       answer. The layout height is the minuend, and ROTATING THE PHONE is
        the one thing that moves it without necessarily moving vv.height again
        afterwards.
        The failure was a latch, not a flicker. A phone rotated out of
@@ -641,12 +704,40 @@ window.SheetShape = (function () {
      settle ask below is what closes that half; the unit test pins it. */
   const SETTLE_MS = [250, 700, 1500];
   let settleTimers = [];
+  /* FOCUS FOLLOWS THE ROTATION (UI hunt 2026-10-29 #12). A layer's scroller
+     keeps its scrollTop while a resize reflows it (CAREER 844x390 → portrait:
+     #cr-body grew 765→1374 px at scrollTop 25), stranding the focused control
+     outside the scroller. Here, not per screen: this settle runs on every
+     resize/rotation AND at the iOS late-settle times; TopModal has no resize
+     hook and ScrollFade's settle ends before iOS's rotation does. Only the
+     nearest scroller moves, and only when focus is outside its box.
+     ONCE PER VIEWPORT SIZE: the late settles land at a size already handled,
+     and by then the player may have scrolled on purpose — snapping focus back
+     fought that scroll (photo-studio-conditions retried on exactly this). */
+  let focusKeptAt = "";
+  function keepFocusVisible() {
+    const size = viewportPx().join("x");
+    if (size === focusKeptAt) return;
+    focusKeptAt = size;
+    const el = document.activeElement, UL = window.UiLayers;
+    const layer = el && el.scrollIntoView && UL && UL.top && UL.top();
+    if (!layer || el === layer || !layer.contains(el)) return;
+    // Either axis: the career guide's contents rail is a SIDEWAYS strip at 844x390 (uihunt4 #5).
+    const sc = (v) => v === "auto" || v === "scroll";
+    for (let p = el.parentElement; p; p = p === layer ? null : p.parentElement) {
+      const h = p.scrollHeight - p.clientHeight > 1, w = p.scrollWidth - p.clientWidth > 1;
+      const cs = (h || w) && getComputedStyle(p);
+      if (!cs || !((h && sc(cs.overflowY)) || (w && sc(cs.overflowX)))) continue;
+      const a = el.getBoundingClientRect(), b = p.getBoundingClientRect();
+      if (a.top < b.top - 1 || a.bottom > b.bottom + 1 || a.left < b.left - 1 || a.right > b.right + 1) el.scrollIntoView({ block: "nearest", inline: "nearest" });
+      return;
+    }
+  }
   function settleViewport() {
     reclassify();
     applyKeyboard();
-    /* ScrollFade's own settle is 120/400 ms — shorter than iOS's rotation
-       animation — so a late shape flip would leave sf-* / thumb tokens on
-       the pre-rotation boxes. Poke it whenever we re-ask. */
+    keepFocusVisible();
+    // ScrollFade settles in 120/400 ms, inside iOS's rotation: re-poke it with every re-ask.
     if (window.ScrollFade && typeof window.ScrollFade.refresh === "function") {
       window.ScrollFade.refresh();
     }
@@ -664,9 +755,9 @@ window.SheetShape = (function () {
       // detailRO already carry ("Without that guard this is a classic RO
       // feedback loop", it says).
       //
-      // classify() writes SEVEN layout-affecting things onto the element it was
+      // classify() writes EIGHT layout-affecting things onto the element it was
       // just told about — --sheet-scale, --sheet-eff-scale, data-fit, data-shape,
-      // data-density, data-rail, data-pair — and --sheet-scale IS that element's
+      // data-density, data-page, data-rail, data-pair — and --sheet-scale IS that element's
       // `zoom` (css/components.css). So every delivery changed the observed box
       // and re-delivered. The per-threshold hysteresis cannot close the cycle,
       // because the cycle HOPS between thresholds: a scale step moves the local
@@ -728,6 +819,34 @@ window.SheetShape = (function () {
     addEventListener("pageshow", onViewport, { passive: true });
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", onViewport, { passive: true });
+    }
+    /* THE LAYOUT VIEWPORT'S OWN SIGNAL (UI contract 2026-11-06 rule 1). resize
+       and orientationchange are WINDOW events keyed to innerWidth/innerHeight,
+       the pair iOS leaves on the portrait numbers at a Home Screen landscape
+       launch (#5152, #5167) or settles after its last event (the timers above
+       are a bounded guess at when). A media query is evaluated against the
+       ICB, the box CSS lays out and viewportPx() reads: its change fires when
+       THAT flips, with or without a window event behind it, and at the moment
+       it does rather than at 250/700/1500 ms. Same path, so shape, density,
+       the keyboard band and focus all re-ask from the settled box. The three
+       listeners below are the title's "turned the phone" signals that do not
+       go through the window's size pair; each is idempotent through
+       onViewport, so a browser that fires all four costs four comparisons. */
+    try {
+      const mql = typeof matchMedia === "function" ? matchMedia("(orientation: portrait)") : null;
+      if (mql && typeof mql.addEventListener === "function") mql.addEventListener("change", onViewport);
+      else if (mql && typeof mql.addListener === "function") mql.addListener(onViewport);
+    } catch (_) { /* no media queries here: the window events above still answer */ }
+    try {
+      // screen.orientation (iOS 16.4+): the OS's rotation notice, not a size.
+      const so = window.screen && window.screen.orientation;
+      if (so && typeof so.addEventListener === "function") so.addEventListener("change", onViewport, { passive: true });
+    } catch (_) { /* older WebKit: no ScreenOrientation */ }
+    // Back from the app switcher turned the other way: a suspended Home Screen
+    // app can resume in the other orientation with no resize for the turn it
+    // slept through. pageshow above is the bfcache half; this is the other.
+    if (typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState !== "hidden") onViewport(); }, { passive: true });
     }
     watchVisibility();
     watchScale();
@@ -794,5 +913,31 @@ window.SheetShape = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, observe, reclassify, shapeOf: (el) => (el && el.dataset.shape) || null };
+  /* THE MEASURED LAYOUT, AS NUMBERS (UI contract 2026-11-06 rule 8): the
+     spec matrix asserts this, a screenshot is sign-off only. `sheet` is the
+     sheet element; the viewport pair is the ICB (what every tier reads),
+     `inner` is kept beside it so a stale-launch disagreement is visible. */
+  function layoutProbe(sheet) {
+    if (!sheet || !sheet.getBoundingClientRect) return null;
+    const cs = getComputedStyle(sheet), host = sheet.parentElement;
+    const hs = host ? getComputedStyle(host) : null;
+    const r = sheet.getBoundingClientRect();
+    const zoom = parseFloat(sheet.style.getPropertyValue("--sheet-scale"))
+      || parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+    const b = document.body.dataset;
+    return {
+      id: sheet.id, density: sheet.dataset.density || null, shape: sheet.dataset.shape || null,
+      pair: sheet.dataset.pair || null, fit: sheet.dataset.fit || null, page: sheet.dataset.page || null,
+      sheetScale: sheet.style.getPropertyValue("--sheet-scale") || null, zoom,
+      own: { w: sheet.clientWidth, h: sheet.clientHeight },
+      painted: { x: r.left, y: r.top, w: r.width, h: r.height },
+      host: host ? { h: host.clientHeight, padTop: parseFloat(hs.paddingTop) || 0, padBottom: parseFloat(hs.paddingBottom) || 0 } : null,
+      kb: document.documentElement.style.getPropertyValue("--kb") || null,
+      container: cs.containerType || null,
+      viewport: viewportPx(), inner: [window.innerWidth, window.innerHeight],
+      body: { density: b.density || null, shape: b.shape || null, width: b.width || null },
+    };
+  }
+
+  return { scan, observe, reclassify, layoutProbe };
 })();

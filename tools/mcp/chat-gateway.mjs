@@ -12,6 +12,17 @@ import {ListToolsRequestSchema,CallToolRequestSchema} from '@modelcontextprotoco
 import {hostToolNamesSchema, doctorWithCatalog} from './doctor-catalog.mjs';
 export const UPSTREAMS = ['apex-tools','apex-lsp','js-debugger','playwright-official','chrome-devtools'];
 export const RELEASE = 'f1_gateway_browser_release';
+// These apex-tools refusals happen before a harness/browser is launched. Runtime
+// errors and transport failures are deliberately excluded: their browser may live.
+function preflightRefusal(response) {
+  if (!response.isError) return false;
+  const bodies = [response.structuredContent];
+  for (const block of response.content || []) {
+    if (block.type !== 'text') continue;
+    try { bodies.push(JSON.parse(block.text)); } catch { /* ordinary error text */ }
+  }
+  return bodies.some(body => ['bad_args', 'local_only'].includes(body?.error));
+}
 export async function createGateway({root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'), connect}={}) {
   const clients=new Map(); let routes,queue=Promise.resolve(),owner=null,debugAttached=false;
   const configured=connect?null:JSON.parse(fs.readFileSync(path.join(root,'.mcp.json'),'utf8')).mcpServers;
@@ -60,10 +71,13 @@ export async function createGateway({root=path.resolve(path.dirname(fileURLToPat
         const body = await doctorWithCatalog(root, request.arguments);
         return {isError: !body.ok, content: [{type: 'text', text: JSON.stringify(body)}], structuredContent: body};
       }
-      const browser=['playwright-official','chrome-devtools'].includes(route.upstream)||(route.upstream==='apex-tools'&&/^Browser\b/i.test(route.tool.description||''));
+      const vmEval=route.upstream==='apex-tools'&&route.original==='apex_eval'&&request.arguments?.vm===true;
+      const browser=!vmEval&&(['playwright-official','chrome-devtools'].includes(route.upstream)||(route.upstream==='apex-tools'&&/^Browser\b/i.test(route.tool.description||'')));
       if(browser&&owner&&owner!==route.upstream)return {isError:true,content:[{type:'text',text:'Another browser mode owns this session. Close/release it first.'}]};
+      const previousOwner=owner;
       if(browser)owner=route.upstream;
       const response=await (await upstream(route.upstream)).callTool({name:route.original,arguments:request.arguments||{}},undefined,{timeout:180000});
+      if(browser&&!previousOwner&&route.upstream==='apex-tools'&&preflightRefusal(response))owner=null;
       if(!response.isError&&request.name==='playwright_official__browser_close')owner=null;
       if(!response.isError&&request.name==='js_debugger__debugger_attach')debugAttached=true;
       if(!response.isError&&request.name==='js_debugger__debugger_detach')debugAttached=false;

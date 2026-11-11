@@ -2,10 +2,7 @@
  * F1 24/25's uniform "blanket" rain. Pure maths — no G, no clock of its own: WeatherArc (js/race/weather-arc.js)
  * owns the arc and hands this module its constants and the shared race clock.
  *
- * WHY LOCAL. Spa's microclimate leaves one part of the 7 km lap wet and another dry
- * (https://www.grandprix247.com/formula-1-news/rain-over-spa-francochamps-could-turn-the-belgian-grand-prix-into-a-lottery-f1-preview);
- * Red Bull Ring FP2 2016 was drying from T2 while T9 was still very wet, and F1's forecaster (Ubimet) can miss a
- * single cell by ~500 m (https://www.formula1.com/en/latest/features/2016/9/how-weather-forecasting-works-in-f1.html).
+ * WHY LOCAL: real circuits dry in one sector while another is still wet.
  * Notes: docs/notes/WEATHER-ROADMAP-2026-10-14.md.
  *
  * THE CELL is { c0, h, v, life, total }: its centre starts at lap fraction c0, it covers ±h of the lap, drifts at
@@ -27,7 +24,8 @@ const RainCells = (function () {
   const SEGS = 24;           // the lap's wetness grid: ~290 m segments at Spa, ~140 m at Monaco
   const LOCAL_ODDS = 0.35;   // the share of road-wetting MIXED plans that arrive as a local shower
 
-  // A 32-bit FNV-1a of the key → [0, 1) (forecast.js h01's mixer). No Math.random, no wall clock.
+  // 32-bit FNV-1a of the key, then the forecast mixer, → [0, 1). Forecast draws through RainCells.h01 too (the
+  // former WxHash.fnv01). Not Hash32.unit: that finaliser differs, and these draws are pinned. No Math.random.
   function h01(str) {
     let h = 0x811c9dc5;
     for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
@@ -154,6 +152,6 @@ const RainCells = (function () {
     return out;
   }
 
-  return { SEGS, LOCAL_ODDS, forPlan, covered, strength, flips, segWet, segFrac, sample, sectors, h01 };
+  return { SEGS, forPlan, strength, segWet, segFrac, sample, sectors, h01 };
 })();
 Object.freeze(RainCells);

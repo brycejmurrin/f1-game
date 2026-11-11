@@ -12,6 +12,7 @@
  * Run: node --test tests/unit/career-round2.test.mjs
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -27,7 +28,7 @@ const IDS = ["albert_park", "shanghai", "suzuka", "miami", "montreal", "monaco",
 
 function load(n = 24, realParts = false) {
   const stored = new Map();
-  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console, Set, Map, WeakSet, Infinity, Error });
+  const ctx = vm.createContext({ I18n: i18nStub(),  Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console, Set, Map, WeakSet, Infinity, Error });
   ctx.window = ctx;
   ctx.GameStore = {
     CAREER_V: 1,
@@ -54,7 +55,9 @@ function load(n = 24, realParts = false) {
 }
 const started = (opts = {}) => {
   const h = load(opts.n, opts.realParts);
-  h.Career.start(Object.assign({ flavour: "driver", teamId: "haas", seed: 9 }, opts.start));
+  // calendar "24": these cases pin the stamp mechanism on Tracks.SEASON, the 24-round
+  // set every pre-2026-11-10 save carries (the 2026 REAL default: season-calendar-default.test.mjs).
+  h.Career.start(Object.assign({ flavour: "driver", teamId: "haas", seed: 9, calendar: "24" }, opts.start));
   h.Career.engage(true);
   return h;
 };
@@ -71,8 +74,10 @@ const adoptAfterLoad = (h) => {
 };
 const raced = (h) => h.run("Tracks.LIST")[h.Career.trackIndex()].id;
 
-// This build is obtainable through the garage in the OPEN era; every option
-// remains legal when Aston Martin's works-based cap falls from 1740 to 1530.
+// This build is obtainable through the garage in the OPEN era. The 2030
+// POWERTRAIN FREEZE bans by stat class (#5038), so Aston Martin's own
+// sig_astonmartin_ers (full_attack's twin) and hydro_synth go too: its works-based
+// cap falls from 1740 to 1335 (1530 when a twin could dodge the ban).
 const CAP_BUILD = {
   engine: "stock", aero: "minimal", suspension: "carbon_pushrods", brakes: "brembo_evo",
   tyres: "hypersoft", ers: "sig_astonmartin_ers", gearbox: "seamless_shift", fuel: "hydro_synth",
@@ -94,7 +99,7 @@ test("an era cap fall refits only researched parts and persists a legal budget w
   assert.equal(Career.budget(), 1740);
   c.season.round = Career.roundsTotal();
   Career.rollover();
-  assert.equal(Career.budget(), 1530);
+  assert.equal(Career.budget(), 1335);
   assert.ok(Parts.getCost(c.fitted, team) <= Career.budget(), "the effective race build obeys the new cap");
   assert.deepEqual([...c.owned], owned, "research is never confiscated");
   assert.equal(c.money, money, "refitting owned parts is free");
@@ -510,4 +515,22 @@ test("constructors' countback: equal points rank by the best finishes of BOTH ca
   assert.deepEqual(order, ["zed", "mid", "aye", "cee"],
     "a win beats any number of seconds, then more seconds, then (a full tie) the stable id order");
   assert.ok(SeasonCal.rankTeams({ teamPts: { x: 5, y: 9 } }, "x", "y") > 0, "points still decide first");
+});
+
+test("Career.owned() is memoised: 100 reads walk the catalog once; a research invalidates (perf hunt 9)", () => {
+  const h = started();
+  let walks = 0;
+  const opts = [{ id: "free_a", cost: 0 }, { id: "paid_b", cost: 50 }];
+  h.ctx.Parts.CATALOG = [{ id: "engine", get options() { walks++; return opts; } }];
+  const team = h.Career.data().team;
+  let s = null;
+  for (let i = 0; i < 100; i++) s = h.Career.owned(team);
+  assert.equal(walks, 1, "one catalog walk (one Set built) for 100 unchanged reads");
+  assert.equal(s.has("free_a"), true, "cost-0 options are owned");
+  assert.equal(s.has("paid_b"), false);
+  h.Career.data().owned.push("paid_b");
+  const s2 = h.Career.owned(team);
+  assert.equal(walks, 2, "a pushed id rebuilds the set");
+  assert.equal(s2.has("paid_b"), true);
+  assert.equal(h.Career.owned("not_my_team"), null, "another team is still null");
 });

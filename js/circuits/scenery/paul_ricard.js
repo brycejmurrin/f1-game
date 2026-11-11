@@ -7,9 +7,9 @@
 (window.TrackScenery = window.TrackScenery || {})["paul_ricard"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, ds, pyMin, hash, every, along, anchor, vadd, onTrack,
-        pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
+        pine, tree, bush, ridge, building, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, modelGroup, prop, runoffApron,
+        fence, guardrail, modelGroup, prop,
         cameraTower, sponsorHoarding, signBoard, terrainYAt, recordBarrier,
         addBox, addCyl, addCone, addFrustum, addPrism } = api;
 
@@ -266,23 +266,19 @@
           };
           const seg = rowSeg(side * (rows - 1) * depth / 2);
           if (seg <= 0) return;
-          // Scaffold rake: two tube legs per station carrying the whole tier.
           out._mat = MAT.METAL;
-          for (const f of [0.25, 0.85]) {
-            const back = f * rows * depth, up = f * rows * rise;
-            addCyl(out, vadd(vadd(a.c, a.r, side * back), a.u, up * 0.5),
-              0.09, up + 0.4, [0.62, 0.64, 0.68], 5, b);
-          }
           // Diagonal brace — the giveaway that this is a temporary frame.
           addBox(out, vadd(vadd(a.c, a.r, side * rows * depth * 0.55),
             a.u, rows * rise * 0.55), [rows * depth * 1.2, 0.10, 0.10],
             [0.62, 0.64, 0.68], b);
+          const seated = [];
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.5 + r * rise;
             const rs = rowSeg(side * back) || seg;
             if (rs <= 0) continue;
             const tier = addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
               [depth, rise + 0.14, rs], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
+            seated[r] = tier !== false;
             // Thin, scattered crowd — a Paul Ricard grandstand is rarely full.
             // Never on a tier the road guard dropped: the figure floats (0.937).
             const h = hash(k * 13 + r * 7);
@@ -292,6 +288,25 @@
               a.t, (h - 0.5) * rs * 0.8), a.u, up + 0.55),
               [0.5, 0.9, 0.55], h < 0.8 ? [0.80, 0.34, 0.28] : [0.30, 0.40, 0.66], b);
             out._mat = MAT.METAL;
+          }
+          // Scaffold rake: two tube legs per station carrying the whole tier.
+          // TRAP A + B (docs/SCENERY-API.md §2): addCyl's `c` is the BASE, so
+          // the old `up * 0.5` centre put every foot half a tier-height in the
+          // air (158 of 162 stations, up to 2.24 m) and the head 1.8 m through
+          // the top row. Each leg now hangs from the centre of the tier over
+          // it down to 0.2 m into the ground under ITS OWN foot — after the
+          // tiers, so a row the road guard dropped leaves no lone pole.
+          for (const f of [0.25, 0.85]) {
+            const back = f * rows * depth, row = Math.min(rows - 1, Math.round(back / depth));
+            if (!seated[row]) continue;
+            const head = vadd(vadd(a.c, a.r, side * back), a.u, 0.5 + row * rise);
+            let foot = head, len = 0;
+            for (let it = 0; it < 2; it++) {   // a.u leans with the gradient: re-sample under the foot
+              const g = terrainYAt(foot[0], foot[2]);
+              len = (head[1] - (g != null ? g : a.c[1] + 0.3) + 0.2) / Math.max(0.5, a.u[1]);
+              foot = vadd(head, a.u, -len);
+            }
+            if (len >= 0.3) addCyl(out, foot, 0.09, len, [0.62, 0.64, 0.68], 5, b);
           }
           out._mat = 0;
         });
@@ -419,7 +434,7 @@
           addCyl(stage, vadd(a.c, a.u, 20), 0.10, 7, [0.86, 0.86, 0.88], 5, b);
           // Windsock on its own mast beside the tower — 16 m along the
           // tangent and 6 m across from the anchor's single ground sample.
-          // TRAP B (docs/SCENERY-GROUNDING.md §2): resample the ground
+          // TRAP B (docs/SCENERY-API.md §2): resample the ground
           // actually under the mast rather than reusing a.c's height.
           const w = vadd(vadd(a.c, a.t, 16), a.r, -6);
           const wy = terrainYAt(w[0], w[2]);
@@ -524,7 +539,7 @@
       // gptoday / RaceFans same weekend. Outside of Tour → right of racing
       // (paddock side = side −1 in this file's convention). Channel length /
       // wall height approximate — no FIA drawing scaled here.
-      // Placed just past Tour apex (0.940) at gap 22 with a short bay — mid-
+      // Placed at 0.940, just past the FIA 2022 T15 apex (0.925; T14 is 0.908), at gap 22 with a short bay — mid-
       // corner spans at gap 14–28 were footprint-rejected on the ribbon fold.
       {
         const a = anchor(K(0.940), -1, 22);
@@ -559,7 +574,7 @@
       }
       for (let i = 0; i < 3; i++) signBoard(K(0.463 + i * 0.010), 1, 8, "braking", 3 - i);   // into the chicane
       signBoard(K(0.052), -1, 8, "corner", 1);
-      signBoard(K(0.705), -1, 9, "corner", 8);
+      signBoard(K(0.705), -1, 9, "corner", 10);   // FIA 2022 T10 (Signes, apex 0.7135)
       // Posted panels, not the theme's LED ribbon: this run stands along the
       // pit straight, where the pit complex rejects the apron, so a post-less
       // ribbon hung 0.15 m over bare ground (24 unsupported prims).
@@ -611,7 +626,7 @@
               // terrainYAt on a different skirt and burying prims 5+ m deep.
               addBox(out, vadd(a.c, a.u, 1.05), [0.85, 1.5, 112],
                 alt ? VINE : VINE_D, b);
-              // TRAP B (docs/SCENERY-GROUNDING.md §2): the posts walk up to
+              // TRAP B (docs/SCENERY-API.md §2): the posts walk up to
               // 54 m along the tangent from a.c's single ground sample —
               // reusing that height stranded them up to ~2 m in the air on
               // this rolling plateau. Re-seat each post on the ground

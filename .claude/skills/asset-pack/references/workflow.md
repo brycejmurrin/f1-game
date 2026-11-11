@@ -11,13 +11,12 @@ mismatch.
 
 ## MAT layers
 
-17 slots — `MAT.FLAT(0)` … `MAT.ASPHALT(16)`. Must match `TrackGeom.MAT`
-(`js/track/core/geom.js`) and `MAT_LAYERS` in both `tools/gen/assets.mjs` and
-`js/render/shared/assets.js`. The count `17` is also hardcoded in every backend's
-shader/uniform sizing; `tests/unit/assets-pack.test.mjs` ("the shader's layer count
-matches the MAT table size") names each site — change the count there first and let
-it list what else to edit. Miss one and the extra layer's scale silently reads
-`0.0` (GLX) or is dropped (TLX/WGX).
+One slot per `TrackGeom.MAT` id (`js/track/core/geom.js`, `MAT.FLAT` … `MAT.ASPHALT`). Must match
+`MAT_LAYERS` in both `tools/gen/assets.mjs` and `js/render/shared/assets.js`. The layer count is also
+a literal in every backend's shader/uniform sizing; `tests/unit/assets-pack.test.mjs` ("the shader's
+layer count matches the MAT table size") reads `MAT_LAYERS` from `js/render/shared/assets.js` and pins
+those literals to it (read the test for the list) — so that `MAT_LAYERS` is the one you edit by hand.
+Miss one and the extra layer's scale silently reads `0.0` (GLX) or is dropped (TLX/WGX).
 
 **Never bake:** `GLASS`, `FLAG`, `FLAT` — glass needs mirror read; flags are
 vertex-displaced; FLAT is the no-material id.
@@ -38,19 +37,18 @@ vertex-displaced; FLAT is the no-material id.
    drift between `TrackGeom.MAT` and the pack — not a texture problem.
 
 2. **Check the pack offline** (Node only, writes nothing; expect
-   `verify: OK` under the 8 MB budget; `tests/unit/assets-pack.test.mjs` is the
+   `verify: OK` under the budget it prints; `tests/unit/assets-pack.test.mjs` is the
    guard incl. MAT-id lockstep) — or **regenerate synthetic pack**
-   (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes;
-   `bake*` is denied to agents in `.claude/settings.json`, so Bryce runs it):
+   (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes; Bryce runs it):
    ```sh
    node tools/gen/assets.mjs bake-synthetic
    node tools/gen/assets.mjs verify
    ```
-   `verify` enforces CC0 / **Apex26-Procedural** licence allow-list, recorded model/material-strip hashes, PNG decodability/dimensions,
-   high/low tier licence/MAT/scale consistency, and **8 MB** total budget.
+   `verify` enforces the licence allow-list, recorded hashes, PNG and tier consistency, and the
+   size budget (`tools/gen/assets.mjs` `verify`).
 
 3. **A/B the blend** without reloading JS (BROWSER-ONLY: `__apex` needs a live
-   page — `mcp-probe`, or `apex_eval`; no Node-VM route). Tarmac is MAT 16, so
+   page — `mcp-probe`, or `apex_eval`; no Node-VM route). Tarmac is `MAT.ASPHALT`, so
    `matTex(0)` vs `matTex(1)` on any track is the textured-vs-procedural tarmac
    A/B; confirm `__apex.assets()` reads `supported:true, uploaded:true` first,
    else both arms are procedural and the A/B proves nothing:
@@ -61,7 +59,7 @@ vertex-displaced; FLAT is the no-material id.
    Blend is **multiplicative** — per-track tarmac tint and racing-line wear
    survive.
 
-4. **Slice a generated 4×4 atlas** onto scenery MAT slots (Bryce runs it: `bake*` is denied to agents; `bake-atlas`
+4. **Slice a generated 4×4 atlas** onto scenery MAT slots (Bryce runs it; `bake-atlas`
    leaves ASPHALT unmapped and stamps `generated:<file>#col,row`; the committed
    pack is `bake-synthetic` output — `materials.layers` in
    `assets/pack/manifest.json` is the live list):
@@ -80,47 +78,52 @@ vertex-displaced; FLAT is the no-material id.
 6. **Validate**:
    ```sh
    node --test tests/unit/assets-pack.test.mjs
-   npm test -- tests/specs/assets-api.spec.js   # the pack's own spec; session only (a subagent reports it unverified)
+   node tools/ci/pick-tests.mjs                # the browser group(s) this change needs
    ```
+   The pack's own spec `tests/specs/assets-api.spec.js` is a browser spec: never run it locally
+   (AGENTS.md rule 5). It runs on the PR; to run its group on the pushed branch:
+   `node tools/ci/remote-group.mjs <group>`.
    Visual: **lighting-tuner** or **renderer-debug** on a track
    with varied surfaces.
 
 7. **Ship** — commit `assets/pack/` when regenerated. Nothing to bump
    ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump); run
    `node tools/gen/gen-shell.mjs --check` if you touched `js/` or `css/`. Pack
-   URLs rely on SW cache generation + revalidation, not shell `?v=`.
+   URLs rely on the network-first manifest and its `?h=<md5>` file URLs (`sw.js`), not shell `?v=`.
 
 ## One material garbled on ONE backend (e.g. grass, TLX only)
 
 Static trace, no browser (line anchors drift — grep the names). Every backend
-does `tex = array[layer = MAT id]`, `uv = wp.xz / scale[mid]` (wall-like ids
-1,2,4,5,7,12,13,14 use `(wp.x|wp.z, wp.y)`), `albedo * tex.rgb * 2`, only for
-mid 1..16 with scale > 0 — the same numbers in `glsl-lit.js` `matTexUV`,
+does `tex = array[layer = MAT id]`, `uv = wp.xz / scale[mid]` (the `matWallLike`
+ids use `(wp.x|wp.z, wp.y)`), `albedo * tex.rgb * 2`, only for
+mid 1..top MAT id with scale > 0 — the same numbers in `glsl-lit.js` `matTexUV`,
 `wgsl-chunks.js` `matTexUV`/`matUvLit`, `tsl-lit.js` `matTexUV`/`matTexLayer`.
-Whole road/surface wrong colour (single id, e.g. tarmac = MAT 16, not a seam)? First A/B
+Whole road/surface wrong colour (single id, e.g. tarmac = `MAT.ASPHALT`, not a seam)? First A/B
 `matTex(0)` vs `matTex(1)` per backend (Workflow step 3), then check the per-track tarmac
-tint, `colorSpace = NoColorSpace` on the array (no sRGB decode), and the TLX road draw
-(`opts.surfaceId === 16` in `tlx.js`, `lgRoad` in `tsl-lit.js`). Mixed-id seams:
+tint, `colorSpace = NoColorSpace` on the array (no sRGB decode), and the TLX road texture
+sample: `matTexLayer` (a clamp to the MAT range) and `matAlbedoNode.sample(uv).depth(int(matTexLayer(mid)))` in
+`tsl-lit.js` (`lgRoad` there, and the `opts.surfaceId` road check in `tlx.js`, are the road-LAMP gate, not the texture). Mixed-id seams:
 Diff these seams, in order:
 1. **Layer index**: TLX `surfaceId = floor(matA + 0.5)` where `matA` is a SMOOTH
    `attribute("mat")` (GLX/WGX: `flat vMat`), so a triangle spanning two
    materials interpolates the id and samples a neighbouring layer; then
    `.depth(int(matTexLayer(mid)))` truncates. First suspect for mixed-id seams.
 2. **Sampling state** (`tlx.js` `createTextureArray` vs the 1x1 placeholders
-   `grey()`): repeat wrap, LinearMipmapLinear, aniso 4 must match or WGSL
+   `grey()`): wrap, filter and anisotropy must match or WGSL
    compiles a `textureLoad` edge-texel read (flat grass/asphalt on WebGPU).
    Pinned by `gfx-backend-canary.test.mjs` "TLX placeholder material arrays…".
-3. **Pixel bytes**: TLX reads the PNGs back through a scratch WebGL2 context
-   (`readbackTextureLayers`; 2d-canvas readback is colour-managed and neutralises
-   the pack). A wrong-but-not-flat pack = check the readback and the layer order. The array is a
+3. **Pixel bytes**: TLX fills the layer bytes through `Assets.readLayerBytesAsync` (the DEFAULT:
+   PIXEL_PACK_BUFFER + fence); a layer it refuses drops to `fill2dLayer` (2d canvas, colour-managed, so
+   that layer flattens toward grey). `localStorage apex26.tlxPackAsync = "0"` forces the old sync
+   `readbackTextureLayers` path — that is the A/B. A wrong-but-not-flat pack = check those bytes and the layer order. The array is a
    `DataArrayTexture` (no `flipY`; GLX resets `UNPACK_FLIP_Y` to false for `texSubImage3D`). The `flipY = true`
    in `createTexture` is the decal-atlas path, not the pack.
 4. **Bake side**: the layer itself (`tools/gen/assets.mjs` GRASS row of
    `ATLAS_PRESETS.generated`, `SCALES`). If GLX/WGX look right it is not this.
 
 Parity gates (all static): `tests/unit/assets-pack.test.mjs` (MAT_LAYERS /
-`uMatTexScale[17]` / manifest ids; backend layer allocation/upload invariants are pinned in the updated
-asset/renderer contracts; inspect GLX/TLX/WGX together when changing MAT count), the canary tests
+`uMatTexScale` / manifest ids; the unpinned literals are listed in §MAT layers — inspect GLX/TLX/WGX
+together when changing the MAT count), the canary tests
 above and `webgpu-lifecycle.test.mjs` (WGX `textureSample` uniform-CF).
 Per-backend pixel truth is BROWSER-ONLY: `matTex(0)` vs `matTex(1)` per
 backend, `__apex.assets()` `uploaded:true`. Record which of 1-4 was ruled out.
@@ -128,13 +131,13 @@ backend, `__apex.assets()` `uploaded:true`. Record which of 1-4 was ruled out.
 ## Common mistakes
 
 - Assuming upload alone changes the render — `matTexMix` must be > 0
-  (shipped default 1.0). The pack is fetched at boot regardless (game.js
-  `Assets.load()`); at 0 it is uploaded but blends nothing.
+  (it ships ON: AGENTS.md). The pack is fetched at the first idle slice after boot
+  regardless (game.js `kickPack`); at 0 it is uploaded but blends nothing.
 - MAT id drift — grep `TrackGeom.MAT`, `tools/gen/assets.mjs` `MAT`, and
   manifest `layers` together.
 - Baking GLASS/FLAG/FLAT.
 - Skipping `verify` — licence or md5 drift fails CI via
   `tests/unit/assets-pack.test.mjs`.
 - Bumping `?v=` for pack-only changes.
-- Rebaking during Playwright — SW + HTTP cache can serve the old pack.
+- Rebaking under an open page — it keeps the arrays it uploaded; reload it.
 - Expecting normal maps on mobile tier — check `__apex.assets().tier`.

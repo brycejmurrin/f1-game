@@ -1,6 +1,6 @@
 ---
 name: new-track
-description: "Use when adding or registering a circuit in js/circuits/, editing a layout, geometry, metadata, palette, bridges or elevation (hill, crest, dip), or the in-game TRACK DESIGNER (js/editor/, MY CIRCUITS, share codes). Corner/grade diagnosis → agent-view; accuracy → survey-track; props → scenery-dress."
+description: "Use when adding a circuit or changing its layout, geometry, metadata, bridges or elevation (hill, crest, dip) in js/circuits/, or the in-game TRACK DESIGNER. Not corner/grade diagnosis → agent-view; matching the real place → survey-track; props → scenery-dress."
 ---
 
 # Author or edit a track
@@ -13,15 +13,14 @@ of everything about that circuit**: its real centreline (`path`), curated markin
 pair, `js/circuits/scenery/<id>.js`. The engine (`js/track/tracks.js`) reads
 `TrackDefs`, builds a Catmull-Rom spline from `path` (a def without one is a build
 error naming the circuit — there is no hand-authored fallback), and extrudes the
-road, terrain, and prop meshes. **Circuit files have no `<script>` tag:** the shell
-carries only the generated picker meta (`js/track/circuit-meta.js` — `npm run gen` rewrites it,
-never hand-edit; AGENTS.md rule 11), and a full def hydrates per pick through `LAZY_CIRCUIT`
-(`tools/manifest.cjs`; `ensureCircuit` in `js/core/lazy-bundles.js`).
+road, terrain, and prop meshes. Circuit loading, generated picker meta (built at deploy, never committed:
+`npm run gen` or `node tools/gen/ensure-built.mjs` rebuilds `js/track/circuit-meta.js`), and the
+manifest contract live in [AGENTS.md §Layout](../../../AGENTS.md#layout).
 
 ## Track-definition schema
 
 Required keys: `id` (= filename), `name`, `gp`, `country`, `night`, `classic`, `theme`,
-`lengthKm`, `baseHW`, and `path: { len, pts }` (the real centreline from
+`lengthKm`, `baseHW`, `tyreSeverity` (`tests/unit/tyre-model.test.mjs` reads it from every def file), and `path: { len, pts }` (the real centreline from
 `tools/track/import-circuit-path.mjs`). Optional: `reverse`/`startFrac`, `street`, `banked`,
 `pal`, `sectors`/`turns` (racing-lap fracs), dressing rows (`furniture`, `kit`, `standSet`,
 `barrier`, `cityStyle`), `bridges`, `elevations`. The annotated def with every field →
@@ -42,6 +41,6 @@ Coordinates are +Y up, arc position `s` in metres (0 → `track.total`), lateral
 ## Load on demand
 
 - Every def field, annotated → [references/schema.md](references/schema.md).
-- Add/edit workflow and the measured gotchas → [references/workflow.md](references/workflow.md). Start at its step 0: check the id is not already registered (madrid is).
+- Add/edit workflow and the measured gotchas → [references/workflow.md](references/workflow.md). Start at its step 0: check the id is not already registered (madrid is). A NEW circuit is the def + `scenery/<id>.js` + a `tests/data/def-factory-golden.json` row, its id appended LAST in `CIRCUITS` (steps 1-2).
 - The in-game TRACK DESIGNER (`js/editor/`: custom circuits, share codes, the WYSIWYG validator, themes/props) → [references/editor.md](references/editor.md).
 - Siblings: corner/grade diagnosis → agent-view; a realism or grounding pass → survey-track; props → scenery-dress.

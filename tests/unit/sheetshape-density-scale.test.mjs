@@ -40,6 +40,7 @@ function boot({ queuedFrames = false } = {}) {
           if (k === "--sheet-scale") return p.sheetScale || el.style.getPropertyValue(k);
           if (k === "--ui-scale") return el.style.getPropertyValue(k) || p.uiScale || "";
           if (k === "--fit-at") return p.fitAt || "";
+          if (k === "--page-at") return p.pageAt || "";
           return "";
         },
         get zoom() { return p.uiScale || "1"; },
@@ -166,4 +167,53 @@ test("unrelated HUD style mutations never schedule UI SIZE classification", () =
     b.styleMutation();
     assert.equal(b.frames.size, 0, "unchanged UI SIZE schedules no frame or loop");
   }
+});
+
+
+// --page-at (#5153 gap 16, race settings): a sheet that must paint the requested
+// UI SIZE answers a room too short for fixed chrome by re-flowing as one page,
+// not by shrinking. The threshold reads the HOST's room in the sheet's own units
+// (room ÷ declared --ui-scale), like --compact-at; nothing is written without it.
+test("--page-at writes data-page from the host's room in own units, with a small band", () => {
+  const { dom, sheet, props } = boot();
+  const host = dom.document.createElement("div");
+  host.id = "race-settings";
+  host._client = 320; host.currentCSSZoom = 1;
+  host._rect = { left: 0, top: 0, right: 667, bottom: 320, width: 667, height: 320 };
+  const el = dom.document.createElement("div");
+  el.classList.add("sheet"); el._client = 304;
+  el._rect = { left: 0, top: 8, right: 667, bottom: 312, width: 667, height: 304 };
+  el.currentCSSZoom = 1;
+  dom.document.body.appendChild(host); host.appendChild(el);
+  props.set(el, { compactAt: "480px", pageAt: "220px" });
+  props.set(host, { padTop: "8px", padBottom: "8px" });
+  props.set(dom.document.documentElement, { uiScale: "1" });
+  props.set(dom.document.body, { compactAt: "380px", uiScale: "1" });
+
+  sheet.observe(el);
+  assert.equal(el.dataset.page, "off", "304 own px of room holds fixed chrome at UI SIZE 100%");
+  assert.equal(el.dataset.density, "compact");
+
+  // The sheet is pinned to its host (max-height 100%), so its own client box
+  // follows the zoom: 304 painted px are 304 ÷ scale own px.
+  const scale = (z) => {
+    props.get(dom.document.documentElement).uiScale = String(z);
+    props.get(dom.document.body).uiScale = String(z);
+    el._client = Math.round(304 / z);
+    sheet.reclassify();
+  };
+  // UI SIZE 200 %: the same 304 px of room is 152 own px — under 220.
+  scale(2);
+  assert.equal(el.dataset.page, "on", "152 own px of room re-flows as one page");
+
+  // Release needs the band: 1.35 → 225 own px stays on; 1.3 → 234 releases.
+  scale(1.35);
+  assert.equal(el.dataset.page, "on", "225 own px is inside the 12 px band");
+  scale(1.3);
+  assert.equal(el.dataset.page, "off", "234 own px releases the one-page layout");
+
+  // No --page-at: the attribute is removed, not left stale.
+  props.set(el, { compactAt: "480px" });
+  sheet.reclassify();
+  assert.equal(el.dataset.page, undefined, "a sheet without --page-at carries no data-page");
 });

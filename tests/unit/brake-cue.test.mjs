@@ -65,13 +65,49 @@ test("condition estimate is conservative, smoothly monotone, and sensory-only", 
   assert.equal(dry.lat, 22); assert.equal(dry.brake, 22, "never promise extra grip");
 });
 
-test("condition cues default off and OFF performs no curvature reads or haptics", () => {
+test("condition cues default ON (#2177), an explicit false turns them off, and slider OFF performs no curvature reads or haptics", () => {
   const ctx = { window: {}, M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, performance: { now: () => 100 }, Tracks: { curvature() { throw new Error("OFF sampled track"); } }, Input: { rumble() { throw new Error("OFF rumbled"); }, vibrate() { throw new Error("OFF vibrated"); } } };
   vm.runInNewContext(src, ctx);
   const cue = ctx.BrakeCue.create({ paused: false, state: "race", player: { speed: 40 }, track: { total: 1000 } });
-  assert.equal(cue.debug().conditionAware, false);
+  assert.equal(cue.debug().conditionAware, true, "an unset key is the calibrated default");
+  const store = (v) => ({ get: (k, d) => (k === "conditionCues" && v !== undefined ? v : d) });
+  assert.equal(ctx.BrakeCue.create({ store: store(false) }).debug().conditionAware, false, "the checkbox turns it off");
+  assert.equal(ctx.BrakeCue.create({ store: store(undefined) }).debug().conditionAware, true);
   cue.setConditionAware(true); cue.setLevel(1); cue.tick();
   assert.equal(cue.debug().urgency, 0);
+});
+
+// ── #2177: the condition-aware estimate (default ON) against the AI brakeTarget reference ──
+// Calibration (monza/silverstone/spa, dry and rain on slicks): docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md.
+const settle = (player) => BrakeCue.conditionCapacity(player, { LAT_MAX: 22, BRAKE: 22, DOWNFORCE: 0.65 }, {}, 10);
+const RAIN_SLICK = { _cueConditionGrip: 0.72, _cueCornering: 1, _cueBraking: 1 }, DRY = { _cueConditionGrip: 1, _cueCornering: 1, _cueBraking: 1 };
+
+test("#2177 row 1: same corner, same speed — rain on slicks is MORE urgent than the dry", () => {
+  const dry = settle(DRY), rain = settle(RAIN_SLICK);
+  assert.ok(rain.lat < dry.lat && rain.brake < dry.brake, "the estimate only ever lowers grip");
+  for (const [v, R, d] of [[50, 40, 70], [60, 90, 120], [45, 25, 50]]) {
+    const uDry = BrakeCue.urgencyOf(v, 1 / R, d, 0, dry.lat, dry.brake, dry.df, 60.5);
+    const uRain = BrakeCue.urgencyOf(v, 1 / R, d, 0, rain.lat, rain.brake, rain.df, 60.5);
+    assert.ok(uRain > uDry, `v ${v} R ${R} d ${d}: rain ${uRain.toFixed(3)} > dry ${uDry.toFixed(3)}`);
+  }
+});
+
+test("#2177 row 2: at top speed a corner the car takes flat on its aero load stays under URGENCY_GATE, dry and rain", () => {
+  const vTop = 60.5, R = 150, d = 50;
+  // Without the aero term the bare sqrt(lat·R) = 57 m/s calls a brake the car never needs (the old flat call).
+  assert.ok(BrakeCue.urgencyOf(vTop, 1 / R, d, 0, 22, 22) >= BrakeCue.URGENCY_GATE, "bare estimate: a false call");
+  for (const c of [settle(DRY), settle(RAIN_SLICK)])
+    assert.ok(BrakeCue.urgencyOf(vTop, 1 / R, d, 0, c.lat, c.brake, c.df, vTop) < BrakeCue.URGENCY_GATE, `lat ${c.lat.toFixed(1)}: flat stays quiet`);
+  // ...while a genuine braking zone still calls with the aero term in.
+  const rain = settle(RAIN_SLICK);
+  assert.ok(BrakeCue.urgencyOf(vTop, 1 / 40, d, 0, rain.lat, rain.brake, rain.df, vTop) >= BrakeCue.URGENCY_GATE);
+});
+
+test("#2177: aero corner speed is the bare sqrt(lat·R) at df 0 and the AI envelope otherwise", () => {
+  for (const R of [20, 80, 300, 5000]) {
+    assert.equal(BrakeCue.urgencyOf(50, 1 / R, 60, 0, 22, 22, 0, 60), BrakeCue.urgencyOf(50, 1 / R, 60, 0, 22, 22), "df 0 is bit-identical");
+    assert.ok(BrakeCue.urgencyOf(50, 1 / R, 60, 0, 22, 22, 0.65, 60) <= BrakeCue.urgencyOf(50, 1 / R, 60, 0, 22, 22), "aero never adds urgency");
+  }
 });
 
 // ── tick(): the ON path, with a stub track (P1-18) ──────────────────────────────────────────────
@@ -139,9 +175,21 @@ test("BrakeCue.urgencyOf and DrivingCues.urgencyOf are the same function of thei
   const DC = vm.runInNewContext("DrivingCues", cx);
   let checked = 0;
   for (const v of [0, 7, 8, 20, 45, 70]) for (const k of [0, 1 / 2000, 1 / 200, 1 / 40, 1 / 12, -1 / 40])
-    for (const d of [0, 10, 60, 150]) for (const ax of [0, -10, 5]) for (const [lat, br] of [[22, 22], [11, 9]]) {
-      assert.equal(DC.urgencyOf(v, k, d, ax, lat, br), BrakeCue.urgencyOf(v, k, d, ax, lat, br), `v=${v} k=${k} d=${d} ax=${ax} lat=${lat} brake=${br}`);
+    for (const d of [0, 10, 60, 150]) for (const ax of [0, -10, 5]) for (const [lat, br] of [[22, 22], [11, 9]]) for (const [df, vt] of [[undefined, undefined], [0.65, 60.5]]) {
+      assert.equal(DC.urgencyOf(v, k, d, ax, lat, br, df, vt), BrakeCue.urgencyOf(v, k, d, ax, lat, br, df, vt), `v=${v} k=${k} d=${d} ax=${ax} lat=${lat} brake=${br} df=${df}`);
       checked++;
     }
   assert.ok(checked > 500);
+});
+
+test("#2177: condition-aware, the wet lookahead keeps its seconds of warning (BRAKE/brake longer)", () => {
+  const run = (grip) => {
+    const r = cueRig({ vt: 72, speed: 60, cornerAt: 110 });
+    Object.assign(r.G.player, { _cueConditionGrip: grip, _cueCornering: 1, _cueBraking: 1 });
+    for (let i = 0; i < 120; i++) { r.cue.tick(); r.advance(1000 / 60); }   // settle the 0.6 s smoothing; the car is held at s 0
+    return r.cue.debug();
+  };
+  const dry = run(1), wet = run(0.72);
+  assert.equal(dry.urgency, 0, "dry, notch 6 looks 90 m: the corner at 110 m is not yet a call");
+  assert.ok(wet.urgency >= 0.12, `rain on slicks looks ~125 m and calls it (urgency ${wet.urgency})`);
 });

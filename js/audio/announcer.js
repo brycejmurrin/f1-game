@@ -886,6 +886,8 @@ var Announcer = (function () {
     };
   }
 
-  return { create, inert, script, rows, fit, seconds, pickVoice, storyRows, wrapRows, CHANNEL, PREFERRED };
+  // fit / PREFERRED stay module-local: script() and pickVoice() use them; no
+  // outside caller reaches for Announcer.fit or Announcer.PREFERRED.
+  return { create, inert, script, rows, seconds, pickVoice, storyRows, wrapRows, CHANNEL };
 })();
 Object.freeze(Announcer);

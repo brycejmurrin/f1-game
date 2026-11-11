@@ -25,6 +25,7 @@ function loadMesh() {
   vm.createContext(ctx);
   for (const f of ["js/core/mat4.js", "js/physics/consts.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   vm.runInContext(read("js/car/car-materials.js") + "\n;this.CarMaterials = CarMaterials;", ctx, { filename: absSrc("js/car/car-materials.js") });
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({ createMesh(d) { const m = { d }; made.push(m); return m; }, freeMesh(m) { freed.push(m); } });
   return { CarMesh: ctx.CarMesh, made, freed, ctx };

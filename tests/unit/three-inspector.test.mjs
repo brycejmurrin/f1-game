@@ -10,18 +10,18 @@ import vm from "node:vm";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
-import { WebGPURenderer, InspectorBase } from "../../vendor/three-0.186.1/three.webgpu.min.js";
+import { WebGPURenderer, InspectorBase } from "../../vendor/three-0.187.0/three.webgpu.min.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 test("inspector files are vendored, hash-pinned, and licensed (core only, no extensions)", () => {
-  const m = JSON.parse(read("vendor/three-0.186.1/MANIFEST.json"));
+  const m = JSON.parse(read("vendor/three-0.187.0/MANIFEST.json"));
   const ins = Object.keys(m.files).filter((f) => f.startsWith("addons/inspector/"));
   assert.ok(ins.includes("addons/inspector/Inspector.js") && ins.includes("addons/inspector/tabs/Memory.js"));
   assert.ok(!ins.some((f) => f.includes("extensions/")), "extensions are not vendored");
   for (const f of ins) {
-    const buf = fs.readFileSync(path.join(ROOT, "vendor/three-0.186.1", f));
+    const buf = fs.readFileSync(path.join(ROOT, "vendor/three-0.187.0", f));
     assert.equal(crypto.createHash("sha256").update(buf).digest("hex"), m.files[f].sha256, f);
   }
   assert.ok(m.files["LICENSE.txt"]);

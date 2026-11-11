@@ -29,7 +29,7 @@ const TLX = read("js/render/three/tlx.js");
 
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
@@ -61,6 +61,9 @@ test("lit receiver metadata survives translucent/noAlphaWrite overlays without c
   });
   const rows = [];
   for (const variant of [{}, { chunked: true }, { instanced: true }]) {
+    // A material created while MRT is already on is born on the MRT key.
+    // This loop's "before" row has to be the single-target program.
+    lit.setSsrMrt(false);
     const opaque = lit.makeMaterial(variant);
     const glass = lit.makeMaterial({ ...variant, alpha: 0.4 });
     const noAW = lit.makeMaterial({ ...variant, noAlphaWrite: true });
@@ -107,6 +110,53 @@ test("lit receiver metadata survives translucent/noAlphaWrite overlays without c
       assert.equal(r.opaque.mrtNode, r.write);
       assert.equal(r.glass.mrtNode, r.keep, "repeated frame toggles reuse node identity");
     }
+  }
+});
+
+test("a lit material created while scene MRT is on is born on that program key", () => {
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, {
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), ssrTag: true, maxLights: 16,
+  });
+  const early = lit.makeMaterial({});
+  assert.equal(early.customProgramCacheKey(), "tlx-lit");
+  assert.equal(early.mrtNode, null);
+  lit.setSsrMrt(true);
+  assert.equal(early.customProgramCacheKey(), "tlx-lit-mrt", "materials that already exist still move onto the MRT key");
+  const born = lit.makeMaterial({});
+  const glass = lit.makeMaterial({ alpha: 0.4 });
+  const chunk = lit.makeMaterial({ chunked: true });
+  assert.equal(born.customProgramCacheKey(), "tlx-lit-mrt");
+  assert.equal(born.mrtNode, early.mrtNode, "born opaque shares the memoized write node");
+  assert.equal(glass.customProgramCacheKey(), "tlx-lit-mrt-keep");
+  const blend = glass.mrtNode.getBlendMode("ssrTag");
+  assert.equal(blend.blendSrc, THREE.ZeroFactor);
+  assert.equal(blend.blendDst, THREE.OneFactor);
+  assert.equal(chunk.customProgramCacheKey(), "tlx-lit-ch-mrt");
+  lit.setSsrMrt(false);
+  const off = lit.makeMaterial({});
+  assert.equal(off.customProgramCacheKey(), "tlx-lit");
+  assert.equal(off.mrtNode, null);
+  assert.equal(born.mrtNode, null, "turning MRT off clears materials born while it was on");
+});
+
+test("GGX, Smith and Schlick compile once per lit program", async () => {
+  const count = (src, name, ret) => ({
+    decl: (src.match(new RegExp(`\\b${ret}\\s+${name}\\s*\\(`, "g")) || []).length,
+    uses: (src.match(new RegExp(`\\b${name}\\s*\\(`, "g")) || []).length,
+  });
+  // uses counts the declaration too: one function plus the lobe calls
+  // (GGX 4, Smith 4, Schlick 6 — lamp, lamp coat, sun, sun coat, and both env Fresnels).
+  const want = { apexGgx: 5, apexSmithGGX: 5, apexSchlick: 7 };
+  const expectOnce = (src, label) => {
+    for (const [name, ret] of [["apexGgx", "float"], ["apexSmithGGX", "float"], ["apexSchlick", "vec3"]]) {
+      const c = count(src, name, ret);
+      assert.equal(c.decl, 1, `${label} ${name} declarations`);
+      assert.equal(c.uses, want[name], `${label} ${name} mentions`);
+    }
+  };
+  for (const opts of [{ clearcoat: 0.8, carPaint: 1 }, { clearcoat: 0.8, carPaint: 1, finishX: 1 }]) {
+    const { src } = await litGLSL({}, opts);
+    expectOnce(src, opts.finishX ? "fx" : "base");
   }
 });
 
@@ -326,15 +376,75 @@ test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once p
   const cull = fnSource(CH, "function cull(mesh, vp, eye, cullDist, fog) {");
   assert.doesNotMatch(cull, /_visList\.length\s*=/, "length = 0 / = n frees V8's backing store; the returned n is the contract");
   assert.match(cull, /_visList\[n\+\+\] = ch;/);
-  assert.match(fnSource(CH, "function free(mesh) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");
-  for (const site of [/const n = chunkedSys\.cull\([^;]+;\s*const vis = chunkedSys\.visList;\s*for \(let (\w) = 0; \1 < n; \1\+\+\)/g])
-    assert.ok((TLX.match(site) || []).length >= 2, "every visList reader loops to the returned n");
+  assert.match(fnSource(CH, "function free(mesh, freedGeos) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");
+  // Present and the mirror both draw through _drawChunked. Its fallback walks
+  // visList to the returned n; mergeVisible does the same on the shared list.
+  // The shadow caster is the other reader and still loops i < n.
+  assert.equal((TLX.match(/_drawChunked\(rec, i,/g) || []).length, 2, "present and the mirror both draw through the one reader");
   const present = TLX.indexOf("        present(opts) {");
   const rt = TLX.indexOf("const refuseTab = () => {");
   assert.ok(rt > 0 && rt < present, "refuseTab is hoisted out of present()");
   assert.equal((TLX.match(/const refuseTab = /g) || []).length, 1);
 });
 
+// Hunt 6 lead 1 (REFUTED): particles.js keeps _vertA / _vertB across frames, so the wrapped stream is built ONCE and
+// each dirty frame is one ranged upload of the payload, never a new buffer. Driven the way particles.js draw() calls it.
+// streams(P): memState().churn.streamNew's sum over these slots (slot.builds).
+const streams = (P) => P.partStreams.reduce((n, s) => n + (s.builds | 0), 0);
+test("hunt 6: 600 particle frames on stable arrays build each stream once; only a reallocation re-wraps (churn.streamNew)", () => {
+  const P = bootParticles();
+  const vertA = new Float32Array(256 * 60), vertB = new Float32Array((256 + 72) * 60);
+  let uploadsA = 0, uploadsB = 0;
+  for (let f = 0; f < 600; f++) {
+    const dirtyA = f % 3 === 0, pb = 60 * (1 + (f % 7));
+    const vA = P.partStreams[0].ib ? P.partStreams[0].ib.version : -1, vB = P.partStreams[1].ib ? P.partStreams[1].ib.version : -1;
+    P.api.drawParticles(vertA, 1200, false, dirtyA);
+    P.api.drawParticles(vertB, pb, true, true);
+    if (P.partStreams[0].ib.version !== vA) uploadsA++;
+    if (P.partStreams[1].ib.version !== vB) uploadsB++;
+    assert.equal(P.partStreams[1].ib.updateRanges[0].count, pb, "the additive upload is the payload, not the array");
+  }
+  assert.equal(streams(P), 2, "one wrap per blend group for the whole run");
+  assert.deepEqual(P.disposed, [], "no stream geometry freed");
+  assert.equal(uploadsA, 200, "alpha: one upload per dirty frame only");
+  assert.equal(uploadsB, 600);
+  P.api.drawParticles(new Float32Array((256 + 400) * 60), 1200, false, true);   // rainSeed grew _vertA
+  assert.equal(streams(P), 3, "a reallocation is the one re-wrap");
+  assert.equal(P.disposed.length, 1);
+});
+// Hunt 6 lead 2: the REAL acquireMesh / prunePool. A wrapper is minted per (geo, mat, occurrence) once and reused, so
+// churn.poolNew moves only on a new peak; a pruned wrapper is re-minted (a new three RenderObject) when drawn again.
+test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune + re-draw is counted (churn.poolNew/poolPruned)", () => {
+  const pruneAt = TLX.indexOf("      const PRUNE_EVERY_MS =");
+  const mk = new Function("THREE", `"use strict";
+    const meshPool = [], meshByGeo = new Map(), scene = new THREE.Scene(), dropped = [];
+    let _poolBatch = 0, _poolNow = 0, _r6 = false, _pruneLast = -Infinity, _pinArmed = true, _kidBatch = -1, _kids = null, _kidN = 0;
+    const fallbackMat = () => null, dropWrapper = (m) => dropped.push(m), poolRoot = null;
+    ${TLX.slice(pruneAt, TLX.indexOf("\n", pruneAt))}
+    ${fnSource(TLX, "function prunePool(now) {")}
+    ${fnSource(TLX, "function acquireMesh(geo, matrixArr, material, rec) {")}
+    return { frame(now, draws) { _poolBatch++; _poolNow = now; prunePool(now); return draws.map(([g, m]) => acquireMesh(g, null, m, null)); },
+      acquireMesh, prunePool, dropped };`);
+  const P = mk(THREE);
+  const geos = [0, 1, 2].map(() => new THREE.BufferGeometry());
+  const mats = [new THREE.MeshBasicNodeMaterial(), new THREE.MeshBasicNodeMaterial()];
+  const draws = [[geos[0], mats[0]], [geos[0], mats[0]], [geos[1], mats[0]], [geos[1], mats[1]], [geos[2], mats[1]]];
+  const first = P.frame(0, draws);
+  assert.equal((P.acquireMesh.n | 0), 5, "one wrapper per occurrence");
+  for (let f = 1; f <= 600; f++) {
+    const got = P.frame(f * 16, f % 2 ? draws : draws.slice(0, 3));   // a draw set that varies frame to frame
+    got.forEach((m, i) => assert.equal(m, first[i], "the same wrapper for the same (geo, mat, occurrence)"));
+  }
+  assert.equal((P.acquireMesh.n | 0), 5, "600 frames, no new wrapper");
+  assert.equal((P.prunePool.n | 0), 0);
+  P.frame(20000, draws.slice(0, 2));   // under 20 s idle: nothing goes
+  assert.equal((P.prunePool.n | 0), 0);
+  P.frame(31000, draws.slice(0, 2));   // > 20 s on: the three wrappers not drawn since ~9.6 s idle out
+  assert.equal((P.prunePool.n | 0), 3);
+  assert.equal(P.dropped.length, 3);
+  P.frame(31016, draws);
+  assert.equal((P.acquireMesh.n | 0), 8, "drawn again after a prune: re-minted, and counted");
+});
 // R6: the REAL pool-root functions (_kidsBegin / _poolShow) and acquireMesh's parenting, driven the way
 // present() / mirrorEnd() drive them, rendered by three r186 over the fake GL: three draws exactly the
 // acquired wrappers and walks nothing else.
@@ -595,7 +705,7 @@ test("R1: the AI material is the lit instanced fragment on its own program key; 
   assert.equal(ai.customProgramCacheKey(), "ai-" + inst.customProgramCacheKey());
   assert.match(TLX, /draw\(mesh, model, opts\) \{\s*if \(opts && opts\.coalesce && mesh && mesh\.geo && _coAppend\(mesh\.geo, model, opts\)\) return;/);
   assert.match(fnSource(TLX, "async function warmFxPrograms() {"), /await _coWarm\(\);/);
-  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo, true\);/);
+  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo, !_ownershipFreeDepth\);/);
   assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
   assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
   assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);
@@ -723,7 +833,7 @@ test("B14: tsl-lit groups the shadow, bake, lamp-grid, material-array and env-cu
   const ids = THREE_PATCH_IDS();
   assert.ok(ids.includes(13));
 });
-function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.186.1/MANIFEST.json")).patches; }
+function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.187.0/MANIFEST.json")).patches; }
 
 // R8 / A2 (lane TLX-2): the prop batches as attribute-instanced plain Meshes (tlx.js _aiMesh), on the REAL
 // R1 instance step and lit material, three r186 WebGL2 over the fake GL.
@@ -834,7 +944,8 @@ test("shared bind groups: last-owner eviction, context isolation and robust keys
   t.after(() => renderer.dispose());
   const manager = renderer._bindings;
   const uniforms = (...ids) => [{ isNodeUniformsGroup: true, uniforms: ids.map(id => ({ nodeUniform: { node: { id } } })) }];
-  const shared = (bindings) => manager.getSharedBindGroup("render", bindings);
+  // r187: getSharedBindGroup(bindGroup, renderContext) takes the builder's BindGroup (name + bindings).
+  const shared = (bindings) => manager.getSharedBindGroup({ name: "render", bindings });
   assert.notEqual(shared(uniforms(1, 23)), shared(uniforms(12, 3)), "uniform IDs have delimiters");
   assert.notEqual(shared([{nodeUniform: {id: 123}}]), shared(uniforms(123)), "standalone uniforms have their own prefix");
   const tex = name => [{ isSampler: true, isSampledTexture: true, texture: null, textureNode: {id: 7}, name, release() {} }];
@@ -953,4 +1064,164 @@ test("#3115 F8/F9: the per-frame sky update/derive and lit updateFrame mint no c
   // updateFrame's `|| [..]` defaults only mint when a frame field is absent; the sky path has none at all.
   for (const head of ["function derive()", "function update(sky)"])
     assert.doesNotMatch(body(sky, head), /(?:=|\|\|)\s*\[\s*[-\d]/, head + " mints a literal array per call");
+});
+
+// Perf hunt 6 (TLX-L1, cars F3/F4): exact-zero gates as REAL control flow in the compiled lit fragment, each body
+// free of derivatives and implicit-LOD samples (WebKit rejects them in non-uniform flow). Bit-identity is by
+// construction (weight 0 / multiplier 0); pixels still need gfx-probe + gpu-census.yml.
+for (const language of ["WGSL", "GLSL"]) test(`hunt 6: pit-lane, sun-disc and weave gates wrap their work in ${language}`, async () => {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  try {
+    await renderer.init();
+    renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+    const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+      ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+    const g = new THREE.BufferGeometry();
+    for (const [n, k] of [["position", 3], ["normal", 3], ["color", 3], ["mat", 1], ["trk", 3]])
+      g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3), k));
+    const B = language === "WGSL" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
+    const b = new B(new THREE.Mesh(g, lit.makeMaterial({ clearcoat: 0.8, carPaint: 1 })), renderer);
+    b.camera = new THREE.PerspectiveCamera(); b.scene = new THREE.Scene(); b.build();
+    const lines = b.fragmentShader.split("\n"), stacks = [], stack = [];
+    for (const [i, l] of lines.entries()) {   // the enclosing block headers of every line
+      for (const _ of l.match(/\}/g) || []) stack.pop();
+      stacks.push(stack.slice());
+      for (const _ of l.match(/\{/g) || []) stack.push(i);
+    }
+    const at = (re) => { const i = lines.findIndex(l => re.test(l)); assert.ok(i >= 0, `${language}: ${re}`); return i; };
+    const gate = (i, re) => {
+      const h = stacks[i].find(j => re.test(lines[j]));
+      assert.ok(h !== undefined, `${language}: ${lines[i].trim().slice(0, 90)} sits under ${re}`);
+      return h;
+    };
+    const clean = (h) => {
+      const body = lines.filter((_, k) => stacks[k].includes(h));
+      assert.ok(body.length > 0, `${language}: ${lines[h].trim()} has a body`);
+      const deriv = /\b(?:dpdx|dpdy|fwidth|dFdx|dFdy|textureSample|texture)\s*\(/;
+      assert.deepEqual(body.filter(l => deriv.test(l)), [], `${language}: derivative inside ${lines[h].trim()}`);
+    };
+    // L1: the pit lane runs under the uniform y > 0, its paint under the wrapped-window test.
+    const modRe = /(\w+) = (?:tsl_mod_float|mod)\( \( \( \w+ - ([\w.]+)\.x \) \+ (\w+) \), \3 \)/;
+    const modI = at(modRe), [, through, U] = lines[modI].match(modRe);
+    const lenM = lines[at(new RegExp(`\\w+ = ${U.replace(".", "\\.")}\\.y;`))].trim().split(" ")[0];
+    const lenH = gate(modI, new RegExp(`^\\s*if \\( \\( ${lenM} > 0\\.0 \\) \\)`));
+    for (const c of ["0.1, 0.36, 0.86", "0.15, 0.16, 0.19"])
+      clean(gate(at(new RegExp(`vec3(?:<f32>)?\\( ${c} \\)`)), new RegExp(`^\\s*if \\( \\( ${through} <= ${lenM} \\) \\)`)));
+    clean(lenH);
+    assert.ok(!stacks[at(/vec3(?:<f32>)?\( 0\.95, 0\.95, 0\.97 \)/)].includes(lenH), "white paint stays outside the pit gate");
+    // F4: the clearcoat sun disc runs only when its uniform multiplier is non-zero.
+    const discI = at(/pow\( max\( dot\(.*32\.0 \)/);
+    const glRe = /^\s*if \( \( ([\w.]+) != 0\.0 \) \)\s*\{?$/;
+    const glH = gate(discI, glRe), glint = lines[glH].match(glRe)[1];
+    assert.equal(lines.findIndex(l => l.trim().startsWith(`${glint} =`)), -1, "the disc gate reads a uniform (uniform control flow)");
+    assert.ok(lines[discI].includes(glint), "the gate is the disc's own multiplier");
+    clean(glH);
+    // F3: the carbon weave's sin/cos run only where its distance fade is above 0.
+    const fadeRe = /^\s*if \( \( (nodeVar\d+) > 0\.0 \) \)/;
+    const wvH = gate(at(/190\.0/), fadeRe), fade = lines[wvH].match(fadeRe)[1];
+    at(new RegExp(`${fade} = clamp\\( \\( 1\\.0 - \\( \\( \\w+ - 10\\.0 \\) / 10\\.0`));   // the weave gate is wvFade
+    clean(wvH);
+  } finally { renderer.dispose(); }
+});
+
+// GPU hunt 3 (#4272 item 5): the hunt-1 exact-zero gates as REAL control flow in every backend's compiled shader.
+//   S1  cloudShadow's FBM runs only where the sun-shadow factor it multiplies is > 0 (0 * x == 0, x >= 0).
+//   S2  the car-map taps run only where the static PCF result is > 0 (min(0, csh) == 0, csh >= 0).
+//   P5-3 the lens-dirt fetch runs only when its value is read: bloom on (else bloomSample == 0), or the flare
+//        branch can run (uniform flareStr > 0 and sunUV on screen).
+// `headersAt` returns the block headers enclosing a source offset (comments blanked), so a single-line `if (..) { }`
+// counts too. Pixels still need the parent's Dawn run, gfx-probe and gpu-census.yml.
+function headersAt(src, idx) {
+  const s = src.replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length)), stack = [];
+  let start = 0;
+  for (let i = 0; i < idx; i++) {
+    const ch = s[i];
+    if (ch === "{") { stack.push(s.slice(start, i).trim()); start = i + 1; }
+    else if (ch === "}") { stack.pop(); start = i + 1; }
+    else if (ch === ";") start = i + 1;
+  }
+  return stack;
+}
+const sitesOf = (src, re) => [...src.matchAll(new RegExp(re.source, "g"))].map((m) => m.index);
+function assertGated(label, src, re, headerRe, n) {
+  const at = sitesOf(src, re);
+  assert.equal(at.length, n, `${label}: ${n} ${re} sites`);
+  for (const i of at) assert.ok(headersAt(src, i).some((h) => headerRe.test(h)), `${label}: ${re} at ${i} sits under ${headerRe}`);
+}
+
+test("GPU hunt 3: GLX and WGX gate cloudShadow, the car taps and the lens-dirt fetch on their exact-zero factor", async () => {
+  const { extractGlsl, extractWgsl } = await import("../../tools/check/shader-validate.mjs");
+  const src = Object.fromEntries([...extractGlsl(), ...extractWgsl()].map((s) => [s.id, s.source]));
+  const lit = (id, call, car) => {
+    assertGated(id, src[id], call, /^if \(shadow > 0\.0\)$/, 1);
+    assertGated(id, src[id], car, /^if \((?:uCarShadowOn|F\.params6\.y) > 0\.5 && sh > 0\.0\)$/, 4);
+  };
+  lit("LIT_FS", /cloudShadow\(vWorldPos\)/, /texture\(uCarShadowMap,/);
+  lit("WGSLChunks.LIT", /cloudShadow\(in\.wpos\)/, /textureSampleCompareLevel\(carShadowTex,/);
+  assertGated("COMPOSITE_FS", src.COMPOSITE_FS, /texture\(uDirt,/,
+    /^if \(uLensDirt > 0\.001 && \(uBloomAmt > 0\.001 \|\| \(uFlareStr > 0\.0 && uSunUV\.x >= 0\.0/, 1);
+  assertGated("WGSLPost.COMPOSITE", src["WGSLPost.COMPOSITE"], /textureSampleLevel\(dirtTex,/,
+    /^if \(lensDirt > 0\.001 && \(bloomAmt > 0\.001 \|\| \(flareStr > 0\.0 && sunUV\.x >= 0\.0/, 1);
+});
+
+for (const language of ["WGSL", "GLSL"]) test(`GPU hunt 3: TLX gates cloudShadow and the car taps on their exact-zero factor in ${language}`, async () => {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  try {
+    await renderer.init();
+    renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+    const dt = () => { const t = new THREE.DepthTexture(4, 4); t.compareFunction = THREE.LessEqualCompare; return t; };
+    const shadow = { S: { enabled: true, carEnabled: true, lampEnabled: false }, sunTex: dt(), carTex: dt(), sunSize: 4, carSize: 4 };
+    const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow,
+      ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+    const g = new THREE.BufferGeometry();
+    for (const [n, k] of [["position", 3], ["normal", 3], ["color", 3], ["mat", 1], ["trk", 3]])
+      g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3), k));
+    const B = language === "WGSL" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
+    const b = new B(new THREE.Mesh(g, lit.makeMaterial({ clearcoat: 0.8, carPaint: 1 })), renderer);
+    b.camera = new THREE.PerspectiveCamera(); b.scene = new THREE.Scene(); b.build();
+    const src = b.fragmentShader;
+    // S1: the cloud deck projection (* 0.0052) sits under `if (V > 0.0)` where V is the factor the cloud term multiplies.
+    const gatedBy = (v) => new RegExp(`${v} = \\( ${v} \\* \\( 1\\.0 - `).test(src);
+    assertGated(`${language} S1`, src, /vec2(?:<f32>)?\( 0\.0052 \)/, {
+      test: (h) => { const m = h.match(/^if \( \( (nodeVar\d+) > 0\.0 \) \)$/); return !!m && gatedBy(m[1]); } }, 1);
+    // S2: the 4 car taps (the 4-tap compare sampler; the sun map has 8) sit under `carShadowOn > 0.5 && sh > 0.0`,
+    // sh being the static map's 8-tap mean.
+    const tapRe = language === "WGSL" ? /textureSampleCompare\( (\w+),/g : /texture\( (\w+), vec3\(/g;
+    const taps = {};
+    for (const m of src.matchAll(tapRe)) (taps[m[1]] = taps[m[1]] || []).push(m.index);
+    assert.deepEqual(Object.values(taps).map((a) => a.length).sort(), [4, 8], `${language}: one sun (8) and one car (4) compare sampler`);
+    const shRe = /^if \( \( \( [\w.]+ > 0\.5 \) && \( (nodeVar\d+) > 0\.0 \) \) \)$/;
+    const isSh = (h) => { const m = h.match(shRe); return !!m && new RegExp(`${m[1]} = \\( nodeVar\\d+ \\* 0\\.125 \\)`).test(src); };
+    for (const i of Object.values(taps).find((a) => a.length === 4))
+      assert.ok(headersAt(src, i).some(isSh), `${language}: car tap at ${i} sits under the static-sh gate`);
+  } finally { renderer.dispose(); }
+});
+
+test("GPU hunt 3 (TLX-P5-3): the TLX composite fetches lens dirt only under lensDirt && (bloom || on-screen flare)", async () => {
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  const post = globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true, chunks: globalThis.TLXShaders.chunks(THREE, TSL),
+    shadow: null, viz: null, ssrTag: false, softDest: () => null, wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 });
+  try {
+    post.resize(320, 180);
+    const I = new THREE.Matrix4().toArray(), n0 = fg.shaders.length;
+    await post.warm({ reflect: 0, carReflect: 0, bloom: 0.5, ssao: 0.5, godray: 0, exposure: 1 },
+      { proj: I, invProj: I, invVP: I, viewProj: I, time: 0, sunVS: [0, 0, -1] });
+    const gateRe = /^if \( \( \( [\w.]+ > 0\.001 \) && \( \( [\w.]+ > 0\.001 \) \|\| \( \( \( \( \( [\w.]+ > 0\.0 \) && \( ([\w.]+)\.x >= 0\.0 \)/;
+    const comps = fg.shaders.slice(n0).filter((s) => sitesOf(s, /vec3\( 2\.2 \)/).length);
+    assert.equal(comps.length, 1, "one composite carries the dirt veil");
+    const src = comps[0];
+    const veil = sitesOf(src, /vec3\( 2\.2 \)/);
+    assert.equal(veil.length, 1, "one veil add");
+    const H = headersAt(src, veil[0]).find((h) => gateRe.test(h));
+    assert.ok(H, "the veil add sits under lensDirt > 0.001 && (bloomAmt > 0.001 || flareStr > 0 && sunUV on screen)");
+    // The fetch feeding the veil sits in that same block: the one texture() whose sampler is read nowhere else.
+    const taps = [...src.matchAll(/texture\( (\w+),/g)];
+    const dirt = taps.filter((m) => headersAt(src, m.index).includes(H));
+    assert.equal(dirt.length, 1, "exactly one fetch under the dirt gate");
+    assert.equal(taps.filter((m) => m[1] === dirt[0][1]).length, 1, "the dirt sampler is fetched nowhere else (no ungated twin)");
+  } finally { post.dispose(); renderer.dispose(); }
 });

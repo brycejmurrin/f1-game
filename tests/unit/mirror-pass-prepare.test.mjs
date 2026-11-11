@@ -74,7 +74,7 @@ test("preparation follows real eligibility, quality and current layout", async (
   const ready = h.mp.prepareRace(); h.render();
   h.frameEl.getBoundingClientRect = () => ({width:500,height:140});
   h.render(); assert.equal(await ready, true);
-  assert.deepEqual(h.calls.find(c => c[0] === "begin").slice(1,3), [400,112], "latest layout and min quality, not a guessed fixed target");
+  assert.deepEqual(h.calls.find(c => c[0] === "begin").slice(1,3), [200,56], "latest layout and min quality, not a guessed fixed target");
   h.G.state="race"; h.render();
   assert.equal(h.calls.filter(c => c[0] === "begin").length, 2, "even cadence-limited quality draws the first live frame");
 });

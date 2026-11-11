@@ -12,6 +12,7 @@ function makeFixture(options = {}) {
   vm.createContext(sandbox);
   for (const [file, name] of [
     ['js/track/core/geom.js', 'TrackGeom'], ['js/track/scenery/graph.js', 'TrackGraph'],
+    ['js/track/scenery/landforms.js', 'SceneryLandforms'],
     ['js/track/scenery/nature.js', 'SceneryNature'], ['js/track/scenery/models.js', 'TrackModels'],
     ['js/track/scenery/circuit-kit.js', 'CircuitKit'],
   ]) vm.runInContext(fs.readFileSync(path.join(ROOT, file), 'utf8') + '\nthis.' + name + '=' + name, sandbox);
@@ -35,7 +36,7 @@ function makeFixture(options = {}) {
   const ctx = { ...geom, ...emit, out, track, n: 16, ds: 4,
     hw: Array(16).fill(8), px: Array.from({ length: 16 }, (_, i) => i * 40),
     py: Array(16).fill(0), pz: Array(16).fill(0),
-    def: { id: 'fixture' }, theme: 'green', terrainYAt: options.ground || (() => 0),
+    def: { id: 'fixture', furniture: options.furniture }, theme: 'green', terrainYAt: options.ground || (() => 0),
     groundYAt: () => 0, onTrack: () => false, rejBox: options.rejectBox || (() => false),
     massBlocked: () => false, barrierClear: () => true, hash: () => 0.2,
     upOf: () => [0, 1, 0], bankOffsetAt: () => 0,
@@ -43,6 +44,8 @@ function makeFixture(options = {}) {
     note: (...args) => { notes.push(args); return args; },
     unnote: (rec) => { const i = notes.lastIndexOf(rec); if (i >= 0) notes.splice(i, 1); },
     noteSuppressed: (...args) => notes.push(args),
+    bakedModel: options.bakedModel,
+    clearTreeDist: (k, side, dist) => dist,
     instance: (key, placement, build, metadata, opts) => {
       if (options.instanceResult !== undefined) return options.instanceResult;
       const replay = opts && opts.roundNormals ? { ...emit, roundNormals: geom.roundNormals } : emit;
@@ -52,6 +55,38 @@ function makeFixture(options = {}) {
   const nature = sandbox.SceneryNature.create(ctx);
   return { ctx, nature, graph, out, notes, calls, sandbox };
 }
+
+test("opt-in baked pines share explicit/deferred planting occupancy", () => {
+  const stamps = [];
+  const f = makeFixture({ furniture: { bakedPines: true },
+    bakedModel: (...args) => { stamps.push(args); return true; } });
+  const dist = 24 + f.nature.canopyR("pine", 12);
+  f.nature.pine(0, 1, dist, 12, [.2, .35, .18]);
+  f.ctx.along = (s0, s1, step, visit) => visit(0);
+  f.nature.forestEdgeNow(0, 1, 1, 24, { hMin: 12, hMax: 12, pineFrac: 1, spacing: 40, density: .1 });
+  f.nature.pine(0, 1, dist, 12, [.2, .35, .18]);
+  assert.equal(stamps.length, 1, "overlapping ranks must not stamp the same trunk twice");
+  assert.equal(stamps[0][0], "pine_lod0");
+  assert.equal(stamps[0][4].height, 12);
+  assert.equal(f.graph.stats().nodes, 0, "successful pack placement must not also emit a procedural pine");
+  assert.equal(f.out._mat, 0);
+});
+
+test("missing baked pine restores the exact procedural fallback", () => {
+  const plain = makeFixture(), missing = makeFixture({ furniture: { bakedPines: true }, bakedModel: () => false });
+  for (const f of [plain, missing]) f.nature.pine(0, 1, 24, 12, [.2, .35, .18]);
+  for (const key of ["pos", "nrm", "col", "mat", "idx"])
+    assert.deepEqual(missing.out[key], plain.out[key], key);
+  missing.nature.pine(0, 1, 24, 12, [.2, .35, .18]);
+  assert.equal(missing.graph.stats().nodes, 1, "fallback also reserves one shared spot");
+});
+
+test("circuits without the pine opt-in do not query the baked pack", () => {
+  const f = makeFixture({ bakedModel: () => { throw new Error("unexpected pack lookup"); } });
+  f.nature.pine(0, 1, 24, 12, [.2, .35, .18]);
+  assert.equal(f.graph.stats().nodes, 1);
+  assert.ok(f.out.pos.length > 0);
+});
 
 test("lobed crowns preserve canonical/fused normals, sway and finite recipe budgets", () => {
   for (const mobile of [false, true]) for (let variant = 0; variant < 3; variant++) {

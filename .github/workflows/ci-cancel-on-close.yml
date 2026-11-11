@@ -9,7 +9,7 @@ name: Cancel CI of a closed PR
 #
 # Two mechanisms, cheapest first:
 # 1. This workflow's run joins ci.yml's PR concurrency group,
-#    `ci-<pull_request.head.ref>` (ci.yml resolves to exactly that for a
+#    `ci-pr-<pull_request.number>` (ci.yml resolves to exactly that for a
 #    pull_request event), with cancel-in-progress. Concurrency groups are
 #    repository-wide across workflows, so creating this run cancels that PR's
 #    pending or running CI at once — no runner needed for the cancel itself.
@@ -17,8 +17,9 @@ name: Cancel CI of a closed PR
 #    ("…any previously in-progress or pending job will be canceled, regardless
 #    of the workflow"; read 2026-10-15)
 # 2. One seconds-long job then cancels whatever else is still queued or
-#    running for that branch from a pull_request event (Docs guards, a
-#    straggler), via the REST API.
+#    running for this PR from a pull_request event (Docs guards, a
+#    straggler), via the REST API. The list is by branch name, so each run is
+#    kept only when its head repository is this PR's and it names no other PR.
 #    https://docs.github.com/en/rest/actions/workflow-runs#cancel-a-workflow-run
 #
 # Reopening the PR starts a fresh CI run in the same group, so nothing is lost.
@@ -35,15 +36,17 @@ on:
     types: [closed]
 
 concurrency:
-  group: ci-${{ github.event.pull_request.head.ref }}
+  group: ci-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
-  actions: write
   contents: read
 
 jobs:
   cancel-stragglers:
+    permissions:
+      contents: read
+      actions: write
     name: Cancel the closed PR's other runs
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -53,6 +56,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR: ${{ github.event.pull_request.number }}
           SELF: ${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -61,7 +66,9 @@ jobs:
           # https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository
           for st in queued in_progress pending waiting requested; do
             gh api -X GET "repos/$REPO/actions/runs" -f branch="$BRANCH" -f event=pull_request -f status="$st" -f per_page=100 \
-              --jq '.workflow_runs[] | "\(.id) \(.name)"' | while read -r id name; do
+              --jq '.workflow_runs[] | select(.head_repository.full_name == env.HEAD_REPO)
+                    | select((.pull_requests | length) == 0 or any(.pull_requests[]; .number == (env.PR | tonumber)))
+                    | "\(.id) \(.name)"' | while read -r id name; do
               [ "$id" = "$SELF" ] && continue
               echo "cancel $id ($name)"
               gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null || echo "  (already finishing)"

@@ -262,53 +262,75 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
   let fwY = fwWpos.y;
   var albedo = *albedo_ptr;
   var rough = *rough_ptr;
+  // Exact-zero gates (perf hunt 9): near is 0 past 90 m, each named fade past
+  // its own range; a term scaled by an exactly-zero weight (or a mix() at t == 0)
+  // is skipped, so the output is bit-identical. No derivatives inside: fwWpos
+  // (fwY/fwHc) is hoisted by the caller (WGSL uniformity, WEBGPU-PARITY §5a).
   if (mid == 1) {
     albedo = albedo * (1.0 + (svnoise(wpos.xz * 0.09 + y * 0.05) - 0.5) * 0.16 * far);
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 6.0) - 0.5) * 0.10 * near);
-    if (wall) {
-      albedo = albedo * (1.0 - smoothstep(max(0.05, fwY / 1.25), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near);
+    if (near > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 6.0) - 0.5) * 0.10 * near);
+      if (wall) {
+        albedo = albedo * (1.0 - smoothstep(max(0.05, fwY / 1.25), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near);
+      }
     }
     rough = min(1.0, rough + 0.08 * far);
   } else if (mid == 2) {
     let ch = 0.20; let bl = 0.42; let mort = 0.06;
     let row = floor(y / ch); let off = (row % 2.0) * 0.5 * bl;
-    let bx = fract((hc + off) / bl); let by = fract(y / ch);
-    let mortAA = max(mort, max(fwHc, fwY));
-    let joint = max(smoothstep(mortAA, 0.0, min(bx, 1.0 - bx) * bl),
-                    smoothstep(mortAA, 0.0, min(by, 1.0 - by) * ch));
     let bh = svnoise(vec2<f32>(floor((hc + off) / bl), row) * 1.3);
     let brick = albedo * (0.82 + bh * 0.42) * vec3<f32>(1.06, 0.99, 0.92);
-    let mortar = mix(albedo, vec3<f32>(0.60, 0.58, 0.55), 0.6);
-    albedo = mix(brick, mortar, joint * near);
+    if (near > 0.0) {
+      let bx = fract((hc + off) / bl); let by = fract(y / ch);
+      let mortAA = max(mort, max(fwHc, fwY));
+      let joint = max(smoothstep(mortAA, 0.0, min(bx, 1.0 - bx) * bl),
+                      smoothstep(mortAA, 0.0, min(by, 1.0 - by) * ch));
+      let mortar = mix(albedo, vec3<f32>(0.60, 0.58, 0.55), 0.6);
+      albedo = mix(brick, mortar, joint * near);
+    } else {
+      albedo = brick;   // == mix(brick, mortar, 0.0)
+    }
     rough = min(1.0, rough + 0.12 * far);
   } else if (mid == 3) {
     let pw = 1.6; let ph = 1.4; let mull = 0.11;
-    let gx = fract(hc / pw); let gy = fract(y / ph);
-    let mullAA = max(mull, max(fwHc / pw, fwY / ph));
-    let bar = max(smoothstep(mullAA, 0.0, min(gx, 1.0 - gx)),
-                  smoothstep(mullAA, 0.0, min(gy, 1.0 - gy)));
     albedo = albedo * (1.0 + (svnoise(vec2<f32>(floor(hc / pw), floor(y / ph)) * 1.7) - 0.5) * 0.5 * far);
-    albedo = mix(albedo, albedo * 0.32, bar * near);
-    rough = mix(rough, min(rough, 0.12), near);
+    if (near > 0.0) {
+      let gx = fract(hc / pw); let gy = fract(y / ph);
+      let mullAA = max(mull, max(fwHc / pw, fwY / ph));
+      let bar = max(smoothstep(mullAA, 0.0, min(gx, 1.0 - gx)),
+                    smoothstep(mullAA, 0.0, min(gy, 1.0 - gy)));
+      albedo = mix(albedo, albedo * 0.32, bar * near);
+      rough = mix(rough, min(rough, 0.12), near);
+    }
   } else if (mid == 4) {
     let brushFade = clamp(1.0 - (vd - 26.0) / 29.0, 0.0, 1.0);
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade);
+    if (brushFade > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade);
+    }
     rough = clamp(rough - 0.15 * far, 0.05, 1.0);
   } else if (mid == 5) {
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near);
-    albedo = albedo * (1.0 - smoothstep(max(0.05, fwHc / 0.35), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near);
+    if (near > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near);
+      albedo = albedo * (1.0 - smoothstep(max(0.05, fwHc / 0.35), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near);
+    }
   } else if (mid == 6) {
-    let d = svnoise(wpos.xz * 2.4 + wpos.y * 1.6) * 0.6 + svnoise(wpos.xz * 9.0) * 0.4 * near;
+    var d = svnoise(wpos.xz * 2.4 + wpos.y * 1.6) * 0.6;
+    if (near > 0.0) { d = d + svnoise(wpos.xz * 9.0) * 0.4 * near; }
     albedo = albedo * (1.0 + (d - 0.5) * 0.34 * far);
     albedo.g = albedo.g * (1.0 + (d - 0.5) * 0.10 * far);
   } else if (mid == 7) {
     let weaveFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade);
+    if (weaveFade > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade);
+    }
   } else if (mid == 8) {
-    albedo = albedo * (1.0 + (svnoise(wpos.xz * 5.0) - 0.5) * 0.12 * near
-                          + sin(wpos.x * 0.7 + svnoise(wpos.xz * 0.2) * 6.0) * 0.05 * far);
+    var m8 = 1.0;
+    if (near > 0.0) { m8 = m8 + (svnoise(wpos.xz * 5.0) - 0.5) * 0.12 * near; }
+    albedo = albedo * (m8 + sin(wpos.x * 0.7 + svnoise(wpos.xz * 0.2) * 6.0) * 0.05 * far);
   } else if (mid == 9) {
-    let g = svnoise(wpos.xz * 3.5) * 0.6 + svnoise(wpos.xz * 14.0) * 0.4 * near - 0.5;
+    var g = svnoise(wpos.xz * 3.5) * 0.6;
+    if (near > 0.0) { g = g + svnoise(wpos.xz * 14.0) * 0.4 * near; }
+    g = g - 0.5;
     albedo = albedo * (1.0 + g * 0.22 * far);
     albedo.g = albedo.g * (1.0 + g * 0.08 * far);
   } else if (mid == 10) {
@@ -320,23 +342,31 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     albedo = albedo * (1.0 + s * 0.10 * far);
     albedo.b = albedo.b * (1.0 - s * 0.05 * far);
     let sparkleFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);
-    albedo = albedo * (1.0 + (svnoise(wpos.xz * 24.0) - 0.5) * 0.06 * sparkleFade);
+    if (sparkleFade > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(wpos.xz * 24.0) - 0.5) * 0.06 * sparkleFade);
+    }
     rough = clamp(rough - 0.10 * far, 0.05, 1.0);
   } else if (mid == 12) {
     let ty = fract(y / 0.34);
     let shadeAA = clamp(1.0 - (fwY / 0.34) * 6.0, 0.0, 1.0);
     albedo = albedo * (0.88 + sin(ty * 3.14159) * shadeAA * 0.16);
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near);
+    if (near > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near);
+    }
     rough = min(1.0, rough + 0.10 * far);
   } else if (mid == 13) {
-    let cell = floor(vec2<f32>(hc, y) * 1.3);
-    let f = fract(vec2<f32>(hc, y) * 1.3) - hash21(cell) * 0.12;
-    let d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
-    let jointAA = max(0.16, max(fwHc * 1.3, fwY * 1.3));
-    let joint = smoothstep(0.0, jointAA, d);
-    let block = albedo * (0.80 + hash21(cell) * 0.4);
     let mortar = mix(albedo, vec3<f32>(0.42, 0.40, 0.37), 0.65);
-    albedo = mix(mortar, block, joint * near);
+    if (near > 0.0) {
+      let cell = floor(vec2<f32>(hc, y) * 1.3);
+      let f = fract(vec2<f32>(hc, y) * 1.3) - hash21(cell) * 0.12;
+      let d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+      let jointAA = max(0.16, max(fwHc * 1.3, fwY * 1.3));
+      let joint = smoothstep(0.0, jointAA, d);
+      let block = albedo * (0.80 + hash21(cell) * 0.4);
+      albedo = mix(mortar, block, joint * near);
+    } else {
+      albedo = mortar;   // == mix(mortar, block, 0.0)
+    }
     rough = min(1.0, rough + 0.18 * far);
   } else if (mid == 14) {
     let ridgePhase = hc * 7.5;
@@ -347,7 +377,9 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     rough = min(1.0, rough + 0.14 * far);
   } else if (mid == 16) {
     albedo = albedo * (1.0 + (svnoise(wpos.xz * 0.035) - 0.5) * 0.10 * far);
-    albedo = albedo * (1.0 + (svnoise(wpos.xz * 7.0) - 0.5) * 0.13 * near);
+    if (near > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(wpos.xz * 7.0) - 0.5) * 0.13 * near);
+    }
     rough = min(1.0, rough + 0.10 * far);
   }
   var tuv = vec2<f32>(0.0);
@@ -745,7 +777,15 @@ fn cloudShadow(wp: vec3<f32>) -> f32 {
   let t = (360.0 - wp.y) / max(F.sunDir.y, 0.15);
   let cT = F.params0.z * F.params5.y;
   let cp = (wp.xz + F.sunDir.xz * t) * 0.0052 + vec2<f32>(cT * 0.012, cT * 0.005);
-  return smoothstep(0.54 - cover * 0.40, 0.92, cloudFBM(cp)) * cover;
+  // cloudFBM(cp) unrolled with an edge0 early-out (perf hunt 9): octave 2 adds
+  // 0.25 * svnoise <= 0.25 (svnoise is a mix of fract() hashes, <= 1), so when
+  // octave 1 plus 0.2501 cannot pass edge0 the smoothstep is exactly 0 and the
+  // second octave is skipped. Same ops and order as cloudFBM otherwise.
+  let edge0 = 0.54 - cover * 0.40;
+  let s1 = 0.0 + 0.5 * svnoise(cp);
+  if (s1 + 0.2501 <= edge0) { return 0.0; }
+  let s = s1 + 0.25 * svnoise(cp * 2.03 + 1.7);
+  return smoothstep(edge0, 0.92, s) * cover;
 }
 
 // NEAREST reads (GLX's blocker sampler): the map is r32float, unfilterable.
@@ -903,28 +943,32 @@ fn lampContrib(Lt : Light, isShadowLamp : bool, wpos : vec3<f32>, N : vec3<f32>,
   if (F.params3.x > 0.0) {
     acc.col = acc.col + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeWl);
   }
-  // GGX specular from the lamp (same microfacet BRDF as the sun).
-  // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
-  // so wet roads / walls still streak a lamp you can see, not only the pool.
-  let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
-  let Hl = normalize(Ld + V);
-  let NoHl = max(dot(N, Hl), 0.0);
-  let VoHl = max(dot(V, Hl), 0.0);
-  let Dl = D_GGX(NoHl, a);
-  let Vl = V_SmithGGX(NoV, NoLl, a);
-  let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-  let radianceS = lcol * (att * spotS * lampSh);
-  var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
-  lspec = lspec / (1.0 + lspec);
-  acc.col = acc.col + lspec;
-  // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
-  // crisp low-roughness lens glint over the softer base highlight (GLX js/render/glx/shaders/glsl-lit.js).
-  if (clearcoat > 0.001) {
-    let Dcc = D_GGX(NoHl, 0.03);
-    let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
-    let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
-    var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
-    acc.col = acc.col + 2.2 * ccl / (2.2 + ccl);
+  // A lamp facing away (NoLl == 0) zeroes every term below: skip GGX + clearcoat
+  // (GLX glsl-lit.js and TLX gate the same; dominant on 28-32-lamp nights — perf hunt 7).
+  if (NoLl > 0.0) {
+    // GGX specular from the lamp (same microfacet BRDF as the sun).
+    // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
+    // so wet roads / walls still streak a lamp you can see, not only the pool.
+    let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
+    let Hl = normalize(Ld + V);
+    let NoHl = max(dot(N, Hl), 0.0);
+    let VoHl = max(dot(V, Hl), 0.0);
+    let Dl = D_GGX(NoHl, a);
+    let Vl = V_SmithGGX(NoV, NoLl, a);
+    let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+    let radianceS = lcol * (att * spotS * lampSh);
+    var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+    lspec = lspec / (1.0 + lspec);
+    acc.col = acc.col + lspec;
+    // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
+    // crisp low-roughness lens glint over the softer base highlight (GLX js/render/glx/shaders/glsl-lit.js).
+    if (clearcoat > 0.001) {
+      let Dcc = D_GGX(NoHl, 0.03);
+      let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+      let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
+      var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
+      acc.col = acc.col + 2.2 * ccl / (2.2 + ccl);
+    }
   }
   return acc;
 }
@@ -1300,18 +1344,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (detail > 0.0) {
     let wp = in.wpos.xz;
     let fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
-    let n = svnoise(wp * 0.35) * 0.60 + svnoise(wp * 2.1) * 0.40 * fineFade;
+    // Exact-zero gates (GLX LIT_FS parity, perf hunt 8): past 125 m the fine octave and past
+    // 63 m the crack block multiply by 0, so their noise is skipped; the result is unchanged.
+    var n = svnoise(wp * 0.35) * 0.60;
+    if (fineFade > 0.0) { n = n + svnoise(wp * 2.1) * 0.40 * fineFade; }
     albedo = albedo * (1.0 + (n - 0.5) * detail);
     patchM = svnoise(wp * 0.055 + vec2<f32>(9.1));
     let pm = smoothstep(0.52, 0.72, patchM);
     albedo = albedo * (1.0 - pm * 0.05 * min(detail * 4.0, 1.0));
     // Sparse cracks (GLX lit.js): ridge-noise lines, zone-masked, near-field only.
     let crackFade = clamp(1.0 - (vDist - 18.0) / 45.0, 0.0, 1.0);
-    let cr = abs(svnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
-    let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
-    let crack = (1.0 - smoothstep(0.015, crAA, cr))
-              * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
-    albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
+    if (crackFade > 0.0) {
+      let cr = abs(svnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
+      let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
+      let crack = (1.0 - smoothstep(0.015, crAA, cr))
+                * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
+      albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
+    }
     albedo = max(albedo, vec3<f32>(0.0));
   }
   // PEARLESCENT / FLIP PAINT (mirrors js/render/glx/shaders/glsl-lit.js). Interference
@@ -1431,23 +1480,26 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
     // reference; GLX glsl-lit.js constant for constant: two octaves of
     // world-space surface noise (~7.7 m, ~3.4 m), fixed real locations.
-    let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7)) * 0.70 + svnoise(in.wpos.xz * 0.29 + vec2<f32>(11.3)) * 0.30;
-    // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
-    // drains to the gutters (0.75 → 1.25), the low side of a banked turn holds
-    // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
-    var pool = 1.0;
-    if (vTrk.z > 0.5) {
-      let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
-      let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
-      let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
-      // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
-      pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
-    }
-    // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows, so
-    // drying shrinks the pools to their deepest spots first. params10.y = PUDDLES.
+    // Exact-zero gate (as GLX/TLX): puddle carries pg * upFace * (1 - porous), so skip the noise where it is 0.
     let pg = clamp(smoothstep(0.6, 1.0, wetness) * F.params10.y, 0.0, 1.0);
-    let plo = 1.0 - 0.38 * pg;
-    puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace * (1.0 - porous);
+    if (pg > 0.0 && upFace > 0.0 && porous < 0.5) {
+      let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7)) * 0.70 + svnoise(in.wpos.xz * 0.29 + vec2<f32>(11.3)) * 0.30;
+      // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
+      // drains to the gutters (0.75 → 1.25), the low side of a banked turn holds
+      // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
+      var pool = 1.0;
+      if (vTrk.z > 0.5) {
+        let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+        let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
+        let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
+        // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
+        pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+      }
+      // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows, so
+      // drying shrinks the pools to their deepest spots first. params10.y = PUDDLES.
+      let plo = 1.0 - 0.38 * pg;
+      puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace * (1.0 - porous);
+    }
     // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
     // constant for constant: two cell grids of impact rings as a normal tilt
     // on the pooled water; the GGX lobes and the sky reflection below read N.
@@ -1595,7 +1647,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         // they cast nothing. biasTerm × params6.y (= carBoxScale when armed, 0
         // when not — same gate as GLX uCarBiasScale); carLightVP is the
         // Z01-remapped matrix the car map was rasterised with.
-        if (F.params6.y > 0.5) {
+        // S2 exact-zero gate: csh >= 0, so min(0.0, csh) == 0 — skip the car taps when every static tap read 0.
+        if (F.params6.y > 0.5 && sh > 0.0) {
           let cc = F.carLightVP * vec4<f32>(in.wpos, 1.0);
           let cn = cc.xyz / cc.w;
           let cuv = vec2<f32>(cn.x * 0.5 + 0.5, 0.5 - cn.y * 0.5);
@@ -1621,7 +1674,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // matching glsl-lit.js (cloudShadow is skipped on back-faces too).
     // CLOUD SHADOW DEPTH knob (F.params5.z; GLX parity). _writeFrame always packs
     // the resolved value (0.80 default), so 0 here means a real "no cloud shade".
-    shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z);
+    // S1 exact-zero gate: shadow >= 0 here, and 0 * (1 - cloud * dim) == 0 — skip cloudShadow's FBM there.
+    if (shadow > 0.0) { shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z); }
   }
   let litNoL = NoL * keyMul * shadow;
   var color = albedo * (amb + F.sunColor.xyz * litNoL * (1.0 - metalness));
@@ -1793,11 +1847,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         envCC = mix(envCC, envReal, clamp(envProbeStr, 0.0, 1.0));
       }
     }
-    // Specular-AA sun disc in the mirror (GLX: alpha~0.0705 → exponent).
-    let ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
-    let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
-    envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
-          * F.params7.y * shadow * keyMul;
+    // Specular-AA sun disc in the mirror (GLX: alpha~0.0705 → exponent); glint 0
+    // (the mirror pass) adds exactly 0, so skip it on that uniform.
+    if (F.params7.y != 0.0) {
+      let ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
+      let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
+      envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
+            * F.params7.y * shadow * keyMul;
+    }
     ccTrans = 1.0 - envW * 0.94;
     color = color * ccTrans;
     var addCC = envCC * envW;
@@ -2142,7 +2199,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // mistDensity (uploaded wgx.js d[78], == GLX uGroundMist) and gates the whole block
     // exactly like GLX (if uGroundMist > 0.001) — no fogDensity proxy, so clear/dry
     // air is a true no-op. MIST HEIGHT (params3.w) sets the vertical falloff.
-    if (mistK > 0.001) {
+    // dRamp is 0 inside 8 m: mistAmt is then exactly 0 and mix(color, mistCol, 0)
+    // == color, so the cloudFBM mist patch is skipped there (perf hunt 9).
+    let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
+    if (mistK > 0.001 && dRamp > 0.0) {
       let mh = max(F.params3.w, 0.05);
       let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
       // GLX parity (glsl-lit.js): band = exp(-lowH * (0.09 / mh)). The old WGX form
@@ -2151,7 +2211,6 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       // ceiling — a washed translucent band over the road on misty day circuits.
       let band = exp(-lowH * (0.09 / mh));
       let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
-      let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
       // HEAVY MIST fill (GLX parity, glsl-lit.js): fog-weather mist closes its gaps.
       let mistFill = smoothstep(1.1, 1.5, mistK);
       let mistPatch = smoothstep(0.35, 0.72, cloudFBM(mp));
@@ -2402,12 +2461,20 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     // a flat pale wash, plus faint azimuthal variation. Day-only and faded under
     // overcast, so dusk/dawn/night and grey days are untouched. DAY SKY BLUE knob
     // scales the band; clamp keeps the blend valid when the knob pushes past 1.
-    if (daytime > 0.0) {
+    // Exact-zero gates (perf hunt 9): both terms carry (1 - overcast), so a full
+    // overcast (cloud >= 1) skips the block; the band is 0 at bandLM == 0 (up >=
+    // 0.55) and the vnoise azimuth at azFade == 0 (up >= 0.5). Bit-identical.
+    if (daytime > 0.0 && overcast < 1.0) {
       let bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
-      let deepBlue = vec3<f32>(0.10, 0.30, 0.72);
-      c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * daySkyBlue, 0.0, 1.0));
-      let az = vnoise(vec2<f32>(atan2(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
-      c = c * (1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up)));
+      if (bandLM > 0.0) {
+        let deepBlue = vec3<f32>(0.10, 0.30, 0.72);
+        c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * daySkyBlue, 0.0, 1.0));
+      }
+      let azFade = 1.0 - smoothstep(0.0, 0.5, up);
+      if (azFade > 0.0) {
+        let az = vnoise(vec2<f32>(atan2(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
+        c = c * (1.0 + az * 0.05 * daytime * (1.0 - overcast) * azFade);
+      }
     }
     // Golden-hour + low-sun band: both amounts are 0 when sunE >= 0.72
     // (GLX SKY_FS). Default day / night moon-key skip; dawn/dusk still enter.
@@ -2453,11 +2520,15 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * cloudDef, 0.0, 1.0));
       // Twilight / day horizon cloud-bank (GLX SKY_FS): distant cumulus on a
       // compressed plane so the low gameplay sky band isn't a plain wash.
-      let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
-      let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
-      let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
-                  * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
-      cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      // Exact-zero gate (GLX SKY_FS hunt 2 G3): the band fade is exactly 0 once up >= 0.26,
+      // so bankCov == 0 and max(cov, 0) is cov (cov >= 0). Skips the fbm(bp) (perf hunt 8).
+      if (up < 0.27) {
+        let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
+        let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
+        let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
+                    * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
+        cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      }
       cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }
     covRay = cov;
@@ -2583,14 +2654,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(c, 1.0);
 }`;
 
+  // hash / vnoise / brdf stay module-local: only LIT/SKY interpolate them;
+  // nothing outside this file reads WGSLChunks.hash|vnoise|brdf.
   return {
-    // named leaves (for future passes to compose)
-    hash,
-    vnoise,
+    // named leaves still composed by WGSLPost via window.WGSLChunks
     tonemap,
     fullscreenTri,
     colourGradeLeaf,
-    brdf,
     // real shaders, pre-composed from the leaves above
     SKY,
     LIT,

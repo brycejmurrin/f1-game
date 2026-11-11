@@ -63,6 +63,45 @@ const SettingsNav = (function () {
     }
   }
 
+  /* #4798 settings-lazy gate. Row-wiring initialisers (SettingRow.wire and the
+     like: no eval-time state, nothing a player sees before Settings) queue here
+     instead of running in the DOMContentLoaded task. The queue flushes, in
+     registration order, on the first Settings page enter, the first pointerdown
+     or keydown anywhere (capture, so it precedes the click / key it serves), or
+     idle (4 s cap). A complete document (tests, late loads) runs fn at once. */
+  let lazyQ = null;
+  function flushLazy() {
+    const q = lazyQ;
+    if (!q) return;
+    lazyQ = null;
+    if (typeof document !== "undefined") for (const t of ["pointerdown", "keydown"]) document.removeEventListener(t, flushLazy, true);
+    for (const fn of q) { try { fn(); } catch (e) { Log.warn("game", "SettingsNav.lazy init failed: " + (e && e.message)); } }
+  }
+  function lazy(fn) {
+    if (typeof fn !== "function") return;
+    if (typeof document === "undefined" || document.readyState === "complete") { fn(); return; }
+    if (lazyQ) { lazyQ.push(fn); return; }
+    lazyQ = [fn];
+    for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, flushLazy, true);
+    if (typeof requestIdleCallback === "function") requestIdleCallback(flushLazy, { timeout: 4000 });
+    else setTimeout(flushLazy, 1500);
+  }
+  // First in enterFns: a page's rows are wired before any other enter handler reads them.
+  enterFns.push(flushLazy);
+
+  // LAZY_UI_PRESETS: APPEARANCE's LAYOUT PRESET row (js/ui/layout-presets.js)
+  // loads on the first APPEARANCE enter; a failed load logs and the next enter retries.
+  let presetsLoad = null;
+  const presetsLoaded = new Set();
+  enterFns.push((id) => {
+    const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
+    if (id !== "appearance" || presetsLoad || typeof LayoutPresets !== "undefined" || !R || !R.LAZY_UI_PRESETS
+        || typeof ScriptLoader === "undefined") return;
+    const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); };
+    presetsLoad = ScriptLoader.create().load(R.LAZY_UI_PRESETS, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
+      .then((ok) => { if (!ok || typeof LayoutPresets === "undefined") fail(); }, fail);
+  });
+
   function panels() {
     return Object.fromEntries(Object.keys(routes).filter((id) => id !== "home").map((id) => [id, panel(id)]));
   }
@@ -248,8 +287,11 @@ const SettingsNav = (function () {
         n.id = "audioset-offline"; n.className = "adv-help"; n.setAttribute("role", "status");
         panel.insertBefore(n, panel.firstChild);
       }
+      // A role=status filled as it is inserted is not announced: say it once (uihunt4 #2).
+      const say = failed && (n.hidden || !n.textContent) && typeof LiveRegion !== "undefined";
       n.textContent = "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD";
       n.hidden = !failed;
+      if (say) LiveRegion.say(n.textContent, "hud");
     }
 
     function back() {
@@ -312,8 +354,10 @@ const SettingsNav = (function () {
     live = {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return
-      // to a stale element from an earlier dialog instance.
-      showCurrent: () => { originDoor = null; direct = false; stack.length = 0; if (search) search.cancel(); show("home", false); },
+      // to a stale element from an earlier dialog instance, and empty the
+      // search (a close is not signalled here: invalidate() also runs when a
+      // result steps into Race Settings, which returnToSearch() comes back from).
+      showCurrent: () => { originDoor = null; direct = false; stack.length = 0; if (search) search.reset(); show("home", false); },
       returnToSearch: () => { direct = false; stack.length = 0; show("home", false); return !!search && search.restore(); },
       showDirect: (id, focus) => { direct = true; stack.length = 0; show(id, focus); },
       current: () => current,
@@ -330,6 +374,7 @@ const SettingsNav = (function () {
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
+    lazy, flushLazy,
   };
 })();
 Object.freeze(SettingsNav);

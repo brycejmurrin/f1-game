@@ -1,5 +1,7 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+Summary: Why every size-ratchet number moved, 2026-08 → 2026-09-03; the live numbers are `tests/data/ratchets.json`.
+
 ## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
 
 `js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
@@ -1930,7 +1932,7 @@ the page renders, and counting them made every new js file a ratchet edit.
 
 ```
 Silent failure is this codebase's most-repeated defect shape, and the register
-in docs/ARCHITECTURE-REVIEW.md says so in several places. The 2026-08 cleanup
+in docs/notes/ARCHITECTURE-REVIEW.md says so in several places. The 2026-08 cleanup
 hit a live one: js/core/store.js swallowed a localStorage write failure while
 its cache went on answering reads, so on iOS Safari Private Browsing (quota
 ZERO) a whole career saved perfectly, read back correctly all session, and was
@@ -3664,7 +3666,7 @@ itself lives in `js/car/car-body-geom.js`. Each new line hooks the emit closures
 so it stays there and is not extracted.
 ## 2026-10-20 — PR #3188 (cursor/garage-research-surfaces-7b41): six study body profiles
 
-`js/car/car3d.js` +40 via `tests/data/ratchets.d/cursor--garage-shape-refinement-3c9a.json` (the
+`js/car/car3d.js` +40 via `ratchets.d/cursor--garage-shape-refinement-3c9a.json (folded)` (the
 branch's lineage name). The PR's own geometry, +37 net on the tip after #3151: curved-nose paint
 carried into the shared chassis, seated nose strips, the noseCurve arm and its wing-mounted foot,
 and the clean-wing carbon gates for caldra/rovik/senzo/talven/orvex/nacrel. No extraction: each

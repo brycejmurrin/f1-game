@@ -33,7 +33,6 @@ const BenchCapture = (function () {
   function clean(s, n) { return String(s == null ? "" : s).replace(/(https?:\/\/[^\s?#)]*)[?#][^\s)]*/g, "$1").slice(0, n || CAP.msg); }
   function push(a, v, cap) { a.push(v); if (a.length > cap) a.shift(); }
 
-  // ---- pure: tests/unit/bench-capture.test.mjs ------------------------------------------------------------------
   // Keep every warn/error, the first CAP.info info lines and every 5th after, newest CAP.logs overall.
   function sampleLogs(records, seen) {
     const out = [], s = seen || { info: 0 };
@@ -88,7 +87,6 @@ const BenchCapture = (function () {
     return { bytes: n, trimmed };
   }
 
-  // ---- live readers -----------------------------------------------------------------------------------------------
   let _G = null;
   // The bound renderer façade: G.gfx (TLX / GLX), or the GLX global and its __tlx.
   function gfx() {
@@ -188,7 +186,6 @@ const BenchCapture = (function () {
     }, (e) => { into.gpu.adapter = "failed: " + clean(e && e.name, 40); }), null);
   }
 
-  // ---- the live leg -----------------------------------------------------------------------------------------------
   let _leg = null;
   function wrapCompiles(L) {
     const undo = [];
@@ -337,7 +334,8 @@ const BenchCapture = (function () {
   }
   function clearCrumb() { safe(() => { const s = typeof GameStore !== "undefined" && GameStore.store; if (s) s.rawDel(CRUMB); else localStorage.removeItem(CRUMB); }, null); }
 
-  return { VERSION, CRUMB, CAP, GAPS, sampleLogs, gapStats, passTimes, compileStats, budget, clean,
+  // GAPS / clean stay module-local (gapStats + log/error paths use them; no external callers).
+  return { VERSION, CRUMB, CAP, sampleLogs, gapStats, passTimes, compileStats, budget,
     legStart, step, legEnd, recover, active: () => !!_leg };
 })();
 

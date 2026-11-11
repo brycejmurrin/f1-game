@@ -34,6 +34,10 @@ export const DEVICES = Object.freeze({
   // Injected as --sal/--sar/--sat/--sab like hud-layout.spec.js: headless
   // Chromium reports env(safe-area-inset-*) as 0.
   "phone-landscape-844x390": { w: 844, h: 390, touch: true, ins: { sal: 47, sar: 47, sat: 0, sab: 21 } },
+  // The owner's iPhone (tools/lib/bryce-phone.mjs BRYCE_WINDOWS; issue #5262): Home Screen app and Safari tab. Named
+  // cells, not a matrix axis. `owner`: hud-survey seeds his live settings export unless --settings names another file.
+  "bryce-852x393": { w: 852, h: 393, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "standalone" },
+  "bryce-852x368": { w: 852, h: 368, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "safari" },
   "phone-portrait-390x844": { w: 390, h: 844, touch: true, ins: { sal: 0, sar: 0, sat: 47, sab: 34 } },
   // iPhone 15/16 Pro Max portrait (lead-only; HUD Desk readable-floor shots).
   "phone-portrait-430x932": { w: 430, h: 932, touch: true, ins: { sal: 0, sar: 0, sat: 59, sab: 34 } },
@@ -136,7 +140,7 @@ export const TRACK_RE = /^[a-z][a-z0-9_-]{0,39}$/;
 
 export const DEFAULT_CELL = Object.freeze({
   device: "desktop-1280", track: "monza", cam: "chase", profile: "standard", layout: "full", map: "on", gaps: "on",
-  mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "off", textSize: "normal",
+  mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "high", textSize: "normal",
   hudScale: null, uiScale: null, btnScale: null, tyres: "on", hud: "on", tod: "day", steer: "default", profileLive: "none", portrait: "race", off: Object.freeze([]),
 });
 export const BOOT_KNOBS = Object.freeze(["device", "track", "profile", "layout", "steer", "portrait"]);
@@ -275,11 +279,12 @@ export const QUICK = Object.freeze([
   { name: "chase-hud150", hudScale: 150 },
   { name: "phoneL-chase", device: "phone-landscape-844x390" },
   { name: "phoneL-cockpit", device: "phone-landscape-844x390", cam: "cockpit" },
+  { name: "phoneL-helmet", device: "phone-landscape-844x390", cam: "helmet" },
   { name: "phoneP-chase", device: "phone-portrait-390x844" },
 ]);
 export const FULL_DIMS = Object.freeze({
   device: MATRIX_DEVICES,
-  cam: ["chase", "cockpit", "visor", "hood", "heli", "tv"],
+  cam: ["chase", "cockpit", "helmet", "visor", "hood", "heli", "tv"],
   profile: ENUMS.profile,
   // AUTO resolves to FULL (js/ui/hud.js resolveMetricsLayout), and each layout
   // value is a BOOT: device x layout pairs alone cost 5 x 4 = 20 pages.
@@ -411,7 +416,7 @@ export function exhaustiveRaw(base = {}) {
     // Every HudElements toggle switched off on its own.
     for (const id of Object.keys(ELEMENT_TOGGLES)) out.push({ ...b, off: [id] });
     // Night under the readability knobs: plates are tuned against a day sky.
-    for (const x of [{ theme: "light" }, { contrast: "high" }, { cvd: "deutan" }]) out.push({ ...b, ...x, tod: "night" });
+    for (const x of [{ theme: "light" }, { contrast: "off" }, { cvd: "deutan" }]) out.push({ ...b, ...x, tod: "night" });
   }
   const pw = pairwise({ device: MATRIX_DEVICES, cam: CAMS, profile: ENUMS.profile, layout: ["full", "timing", "driver", "compact"],
     preset: Object.keys(PRESETS), hudScale: [70, null, 150] }, { valid: fullValid, only: EXHAUSTIVE_PAIRS });
@@ -437,8 +442,8 @@ export const LEADS = Object.freeze([
   { name: "lead02-base", device: PL, steer: "buttons", hudScale: 150, lead: "baseline for lead 2" },
   ...[["x40", { gearbox: { x: 40 } }], ["s200", { gearbox: { s: 200 } }]].map(([n, p]) => ({
     name: `lead02-gearbox-${n}`, device: PL, steer: "buttons", hudScale: 150, preset: p,
-    lead: `SPEED & GEAR ${n} must leave --hud-z-bot / --hud-z-dock unchanged`,
-    checks: [{ type: "varSame", var: "--hud-z-bot", vs: "lead02-base" }, { type: "varSame", var: "--hud-z-dock", vs: "lead02-base" }] })),
+    lead: `SPEED & GEAR ${n} must not shrink --hud-z-bot and must leave --hud-z-dock unchanged`,
+    checks: [{ type: "varSame", var: "--hud-z-bot", vs: "lead02-base", noShrink: true }, { type: "varSame", var: "--hud-z-dock", vs: "lead02-base" }] })),
   // 3. MAP y+40: the dock cap must not move; the limits chip stays sane.
   { name: "lead03-map-y40", device: PL, preset: { map: { y: 40 } }, lead: "MAP y+40: dock cap unchanged, #hud-limits on-screen",
     checks: [{ type: "varSame", var: "--hud-z-dock", vs: "lead01-base" }, { type: "onScreen", keys: ["limits"], pool: "transient" }] },
@@ -450,11 +455,15 @@ export const LEADS = Object.freeze([
   // live switch to BROADCAST. Since #843 each HUD STYLE keeps its own layout
   // (js/ui/hud-layout.js SIX LAYOUTS), so the move is written into the
   // broadcast style's other set (presetProf) — a STANDARD-set move no longer
-  // reaches the BROADCAST HUD at all, by design.
+  // reaches the BROADCAST HUD at all, by design. The move is IN RANGE for
+  // BROADCAST's left-anchored tower (x+3): a saved entry is never clamped, so
+  // the old x-30 (a centred-tower habit) put it at -374 by design (#3267).
   { name: "lead05-base", profileLive: "broadcast", lead: "baseline for lead 5 (STANDARD boot, live switch to BROADCAST)" },
-  { name: "lead05-broadcast-moved", profileLive: "broadcast", presetProf: "broadcast", preset: { tower: { x: -30 }, map: { y: 10 } },
-    lead: "BROADCAST-style other-set TOWER x-30 + MAP y+10, then a live switch to BROADCAST: tower on-screen, map moved once",
-    checks: [{ type: "onScreen", keys: ["tower", "map"] }, { type: "shift", key: "map", vs: "lead05-base", axis: "y", pct: 10, tolPct: 3 }] },
+  { name: "lead05-broadcast-moved", profileLive: "broadcast", presetProf: "broadcast", preset: { tower: { x: 3 }, map: { y: 10 } },
+    lead: "BROADCAST-style other-set TOWER x+3 + MAP y+10, then a live switch to BROADCAST: tower on-screen, map placed once",
+    // No shift-vs-base check: a saved MAP entry anchors at the top edge (y 8 + 10 %), while the unmoved BROADCAST map
+    // hangs below the tower, so the two differ by ~13 px, not 10 %. The absolute spot is asserted in hud-layout.spec.js.
+    checks: [{ type: "onScreen", keys: ["tower", "map"] }] },
   // 6. Light theme: tower digits must read against their plate.
   { name: "lead06-light-contrast", theme: "light", lead: "LIGHT theme: .hud-top .hud-value contrast vs plate >= 4.5",
     checks: [{ type: "contrast", sel: ".hud-top .hud-value", min: 4.5 }] },
@@ -539,8 +548,12 @@ export function evaluateChecks(cell, rec, byId = () => null) {
       if (!base || !base.records) { add(`baseline ${ch.vs} not measured (run it in the same survey)`, "info"); return; }
       if (ch.type === "varSame") {
         const a = vars(base)[ch.var], b = vars(rec)[ch.var];
-        const na = num(a), nb = num(b);
-        if (a === b || (na != null && nb != null && Math.abs(na - nb) <= (ch.tol ?? 0.005))) add(`${ch.var} ${JSON.stringify(b)} = baseline — OK`, "info");
+        let na = num(a), nb = num(b);
+        // noShrink: the var is a CAP, and an empty value is "uncapped" (the player's own number). A moved or
+        // scaled cluster leaves the row's width budget (data-hl-user), so the rest may grow, never shrink (#3270).
+        if (ch.noShrink) { if (a === "" || a == null) na = Infinity; if (b === "" || b == null) nb = Infinity; }
+        if (ch.noShrink && na != null && nb != null && nb >= na) add(`${ch.var} ${JSON.stringify(a)} → ${JSON.stringify(b)} (not below baseline) — OK`, "info");
+        else if (a === b || (na != null && nb != null && Math.abs(na - nb) <= (ch.tol ?? 0.005))) add(`${ch.var} ${JSON.stringify(b)} = baseline — OK`, "info");
         else add(`${ch.var} ${JSON.stringify(a)} → ${JSON.stringify(b)} vs ${ch.vs}${na != null && nb != null && nb < na ? " (DROPPED)" : ""}`,
           na != null && nb != null && nb < na ? "high" : (na == null) !== (nb == null) ? "high" : "medium");
       } else {
@@ -728,7 +741,11 @@ export function expectedVisibility(cell, ctx = {}) {
     want("rotateDevice", portraitBlock, gateWhy);
     return E;
   }
-  want("tower", true, "no setting hides the timing tower (css/hud.css)");
+  // The tower is a container: with POS, LAP, TIME and BEST all toggled off (DELTA shows only with a
+  // best lap or ghost, never at the start) it has no children and a zero box by design (#3268).
+  const towerEmpty = ["pos", "lap", "time", "best"].every((t) => (cell.off || []).includes(t));
+  if (towerEmpty) want("tower", false, "every tower plate is toggled off (HudElements), so the empty tower has no box (css/hud.css)");
+  else want("tower", true, "no setting hides the timing tower (css/hud.css)");
   for (const k of ["pos", "lap", "time"]) want(k, true, "the timing tower's POS / LAP / TIME plates");
   want("best", !(minimal || broadcast || lay === "driver" || lay === "compact"),
     "BEST drops under MINIMAL / BROADCAST / layout DRIVER|COMPACT (css/hud.css)");
@@ -744,8 +761,9 @@ export function expectedVisibility(cell, ctx = {}) {
   camRule("gearbox", !(cockpitCam || bcam), "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR; a helmet (the visor) paints the chip on every device");
   // css/track-detail.css: body.cockpit-cam #hud-speed { display: none } at EVERY size (the >= 900x600 limit
   // this rule had was a false "missing" on every phone cockpit cell; salvaged from PR #1316).
+  // A helmet keeps it on every device: its GEAR pill covers the wheel LCD's digits (UI-HUNT-2-HUD).
   camRule("speed", !(cockpitCam || (broadcast && bcam)),
-    "cockpit-cam always hides the floating speed (wheel LCD); BROADCAST + broadcast cam hides .hud-bottom");
+    "cockpit-cam always hides the floating speed (wheel LCD); a helmet keeps it (the GEAR pill covers the LCD); BROADCAST + broadcast cam hides .hud-bottom");
   for (const k of ["energy", "ot", "aero"]) {
     if (minimal || lay === "timing" || lay === "compact") want(k, false, "dropped by MINIMAL / TIMING / COMPACT");
     else camRule(k, !(bcam || (cockpitSet && !desktop && !placed.has(k)) || (helmetSet && k !== "energy" && !desktop && !placed.has(k))),
@@ -835,6 +853,16 @@ export function classifyFindings(cell, m, { minFontPx = 10, analyze = analyzeOve
       add("tinyText", [r.key], `${r.key} renders "${r.minFontText || ""}" at ${r.minFontPx}px (< ${minFontPx}px)`, r.minFontPx < 8 ? "high" : "medium");
     }
   }
+  // WCAG 2.2 SC 1.4.3: ink below 4.5:1 (3:1 from 18.66px up) against its effective plate over mid-grey.
+  for (const r of recs) {
+    if (!shown(r) || r.role === "overlay") continue;
+    let worst = null;
+    for (const k of r.inks || []) {
+      const ratio = contrastRatio(k.fg, k.bg);
+      if (ratio != null && ratio < (k.big ? 3 : 4.5) && (!worst || ratio < worst.ratio)) worst = { ...k, ratio };
+    }
+    if (worst) add("contrast", [r.key], `${r.key} "${worst.text}" ${worst.fg} on ${worst.bg || "transparent"} is ${worst.ratio}:1 at ${worst.px}px (< ${worst.big ? 3 : 4.5}:1)`, worst.ratio < 3 ? "high" : "medium");
+  }
   // Overlaps on the transient set (announce / limits / flag forced on with
   // their widest text, as hud-layout.spec does) when the runner measured it.
   const pool = m.transientRecords && m.transientRecords.length ? m.transientRecords : recs;
@@ -872,7 +900,7 @@ export function applyChecks(cells) {
 }
 
 export function rankFindings(findings) {
-  const order = ["pageError", "lead", "missing", "unexpected", "overlap", "offscreen", "unsafe", "tinyText", "noEffect"];
+  const order = ["pageError", "lead", "missing", "unexpected", "overlap", "offscreen", "unsafe", "tinyText", "contrast", "noEffect"];
   return [...findings].sort((a, b) => (SEVERITY[b.severity] - SEVERITY[a.severity])
     || (order.indexOf(a.kind) - order.indexOf(b.kind)) || a.cell.localeCompare(b.cell));
 }

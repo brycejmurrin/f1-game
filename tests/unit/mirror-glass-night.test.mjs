@@ -27,6 +27,7 @@ function loadMesh() {
   vm.createContext(ctx);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(read("js/physics/consts.js"), ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({
     createMesh(d) { const m = { d }; made.push(m); return m; },

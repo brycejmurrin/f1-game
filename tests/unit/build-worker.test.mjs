@@ -78,6 +78,27 @@ await worker.send({ type: "init", files: vmFiles.map((f) => "http://x/" + f + "?
 
 test("the worker loads the page's build modules and answers ready", () => {
   assert.deepEqual(worker.posted.map((m) => m.type), ["ready"]);
+  const ready = worker.posted[0];
+  assert.equal(ready.files, vmFiles.length);
+  assert.equal(ready.warmMs, 0, "no fetch in this VM: nothing to warm");
+  assert.ok(ready.importMs >= 0);
+});
+
+test("a multi-file init fetches every script before the first importScripts", async () => {
+  const order = [];
+  const w = spawnWorker({
+    importScripts(_ctx, ...files) { order.push("import:" + files.join(",")); },
+  });
+  w.ctx.fetch = async () => {
+    order.push("fetch");
+    return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(1) };
+  };
+  await w.send({ type: "init", files: ["http://x/a.js?v=1", "http://x/b.js?v=1", "http://x/c.js?v=1"] });
+  const firstImport = order.findIndex((s) => s.startsWith("import:"));
+  assert.equal(order.slice(0, firstImport).filter((s) => s === "fetch").length, 3, order.join(" "));
+  assert.deepEqual(order.slice(firstImport), ["import:http://x/a.js?v=1", "import:http://x/b.js?v=1", "import:http://x/c.js?v=1"]);
+  assert.equal(w.posted.at(-1).type, "ready");
+  assert.ok(w.posted.at(-1).warmMs >= 0);
 });
 
 test("importScripts retries transient scenery failures with a cache-busted URL", async () => {
@@ -121,6 +142,14 @@ for (const id of ["monza", "vegas"]) {
     for (const g of [msg.track.roadGeo, msg.track.terrainGeo]) {
       for (const k of ["pos", "nrm", "col", "mat", "idx"]) assert.ok(ArrayBuffer.isView(g[k]), k + " is typed in the post");
       assert.ok(g.idx instanceof Uint32Array);
+    }
+    for (const r of msg.recs) {
+      const g = r.args && r.args[0];
+      if (!g) continue;
+      for (const k of ["pos", "nrm", "col", "uv", "idx"]) {
+        const a = g[k];
+        if (a && a.length > 32) assert.ok(ArrayBuffer.isView(a), id + " rec " + k + " len " + a.length + " still a plain array");
+      }
     }
     assert.ok(ArrayBuffer.isView(msg.track.roadGeo.trk), "the road's track coords are typed too");
 

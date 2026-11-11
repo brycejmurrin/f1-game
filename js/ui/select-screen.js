@@ -14,6 +14,7 @@ const Menus = (function () {
 
 function create(G) {
 Log.info("ui", "Menus.create");
+if (typeof GfxEscalation !== "undefined" && GfxEscalation.noteCleanMenuBoot) GfxEscalation.noteCleanMenuBoot();
 // Stable helpers from the game.js closure.
 // No tickUi: every handler here already plays uiSelect, and a tickUi after it
 // was a second blip on one click (the track and team tiles).
@@ -147,7 +148,10 @@ if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarni
 // consume it once here so the title explains the hitch instead of looking like
 // a silent kick to the menu.
 const CTX_LOST_NOTICE_KEY = "apex26.ctxLostNotice";
+const CTX_LOST_NEED_RELOAD_KEY = "apex26.ctxLostNeedReload";
+const CTX_LOST_EXHAUSTED_KEY = "apex26.ctxLostExhausted";
 const CTX_LOST_NOTICE_MSG = "Graphics reset — retrying with lighter settings";
+const CTX_LOST_EXHAUSTED_MSG = "Graphics keep resetting — reload or pick another RENDERER";
 let ctxLostNotice = $("ctx-lost-notice");
 if (!ctxLostNotice) {
   ctxLostNotice = document.createElement("aside");
@@ -206,21 +210,63 @@ const showCtxLostNotice = () => {
   } catch (_) { /* blocked storage: still show the card once if we were called */ pending = true; }
   if (!pending || !ctxLostNotice || G.state !== "menu") return;
   ctxLostNotice.hidden = false;
+  let exhausted = false;
+  try { exhausted = sessionStorage.getItem(CTX_LOST_EXHAUSTED_KEY) === "1"; } catch (_) { /* blocked storage */ }
+  if (exhausted) try { sessionStorage.removeItem(CTX_LOST_EXHAUSTED_KEY); } catch (_) { /* one-shot copy */ }
+  const msg = exhausted ? CTX_LOST_EXHAUSTED_MSG : CTX_LOST_NOTICE_MSG;
   const detail = $("ctx-lost-notice-detail");
-  if (detail) detail.textContent = CTX_LOST_NOTICE_MSG;
+  if (detail) detail.textContent = msg;
   if (!ctxLostSpoken) {
     ctxLostSpoken = true;
-    const said = CTX_LOST_NOTICE_MSG + ". Press Retry to start again.";
+    const said = msg + ". Press Retry to start again.";
     if (typeof LiveRegion !== "undefined") LiveRegion.say(said, "save");
     else if ($("announce-live")) $("announce-live").textContent = said;
   }
-  if (G.announce) G.announce(CTX_LOST_NOTICE_MSG, 5, "info");
+  if (G.announce) G.announce(msg, 5, "info");
 };
 if ($("ctx-lost-dismiss")) $("ctx-lost-dismiss").onclick = () => hideCtxLostNotice();
 if ($("ctx-lost-retry")) $("ctx-lost-retry").onclick = () => {
+  let needReload = false;
+  try { needReload = sessionStorage.getItem(CTX_LOST_NEED_RELOAD_KEY) === "1"; } catch (_) { /* blocked storage */ }
+  if (needReload) {
+    try { sessionStorage.setItem(CTX_LOST_NOTICE_KEY, "1"); } catch (_) { /* explain the reload */ }
+    try { sessionStorage.removeItem(CTX_LOST_NEED_RELOAD_KEY); } catch (_) { /* one reload per click */ }
+    hideCtxLostNotice();
+    try { location.reload(); } catch (_) { /* harness */ }
+    return;
+  }
   hideCtxLostNotice();
   if (G.startRace) G.startRace();
 };
+// Title/menu only: any race entry or state hop off "menu" must drop the card —
+// RETRY/DISMISS are not the only ways out (RACE!, Data Hub daily, quali sheet…).
+const bindCtxLostNoticeOnMenuExit = () => {
+  if (G.startRace) {
+    const raceStart = G.startRace;
+    Object.defineProperty(G, "startRace", {
+      configurable: true,
+      enumerable: true,
+      value(...args) {
+        hideCtxLostNotice();
+        return raceStart.apply(G, args);
+      },
+    });
+  }
+  const stateDesc = Object.getOwnPropertyDescriptor(G, "state");
+  if (stateDesc && stateDesc.get && stateDesc.set) {
+    Object.defineProperty(G, "state", {
+      configurable: true,
+      enumerable: stateDesc.enumerable,
+      get() { return stateDesc.get.call(G); },
+      set(v) {
+        const wasMenu = stateDesc.get.call(G) === "menu";
+        stateDesc.set.call(G, v);
+        if (wasMenu && v !== "menu") hideCtxLostNotice();
+      },
+    });
+  }
+};
+bindCtxLostNoticeOnMenuExit();
 showCtxLostNotice();
 
 /** Title menu after quitToMenuAfterCtxLost: screens, inert, doors, home preview latch. */
@@ -276,14 +322,26 @@ const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion:
 // Touch / coarse pointer: startViewTransition snapshots the title WebGL layer
 // and blocks the main thread on return (D·IP2 BrowserStack iPhone: 1.2 s worst
 // frame title←select). Same direct-apply path as reduced motion — the crossfade
-// is not worth a hitch on the phone Bryce plays on.
+// is not worth a hitch on the phone Bryce plays on (fadeIn below replaces it).
 const vtPhone = window.matchMedia
   ? (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)
   : false;
+// The phone still gets a transition, just not a snapshot: whatever screen the
+// swap reveals fades in over 120 ms (design pass #3, lane 2c's proposal). An
+// opacity animation runs on the compositor, so the WebGL title is never read
+// back, and the swap itself stays synchronous.
+const SHOWN = "#overlay:not([hidden]), .screen:not([hidden])";
+const fadeIn = (fn) => {
+  const before = new Set(document.querySelectorAll(SHOWN));
+  fn();
+  for (const s of document.querySelectorAll(SHOWN)) {
+    if (!before.has(s) && s.animate) s.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: "cubic-bezier(0, 0, 0.2, 1)" });
+  }
+};
 const vt = (fn) => {
   if (!document.startViewTransition || vtReduce.matches
-    || document.documentElement.dataset.motion === "reduce"
-    || vtPhone) { fn(); return; }
+    || document.documentElement.dataset.motion === "reduce") { fn(); return; }
+  if (vtPhone) { fadeIn(fn); return; }
   let applied = false;
   const run = () => { if (applied) return; applied = true; fn(); };
   try {
@@ -324,6 +382,11 @@ function driverLabel(d, placeholderNum) {
   return (placeholderNum && !(d.num > 1)) ? last : "#" + d.num + " " + last;
 }
 
+/** Team-tile crest bitmap edge for a device pixel ratio: 32 CSS px x dpr x 1.5, never under 48 or over 128. */
+function swatchPx(dpr) {
+  const d = +dpr > 0 ? +dpr : 1;
+  return Math.max(48, Math.min(128, Math.round(32 * 1.5 * d)));
+}
 function teamSwatch(t) {
   const sw = document.createElement("span");
   sw.className = "tm-colour";
@@ -341,7 +404,10 @@ function teamSwatch(t) {
   // wall and the car share.
   if (typeof LiveryTex !== "undefined" && LiveryTex.paintSwatch) {
     const c = document.createElement("canvas");
-    c.width = 48; c.height = 48;
+    // Backing store follows the panel: .tm-colour is a 32 CSS px box (css/select.css), so the fixed 48 px
+    // this used to be put 48 texels on 99 device px on a DPR-3 phone (measured 0.49 px per device px,
+    // docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F4). x1.5 covers a zoomed sheet; 128 bounds 22 tiles.
+    c.width = c.height = swatchPx(typeof window !== "undefined" ? window.devicePixelRatio : 1);
     c.setAttribute("aria-hidden", "true");
     LiveryTex.paintSwatch(c.getContext("2d"), crestId, liv || { c1, c2 }, c.width, c.height);
     sw.appendChild(c);
@@ -575,10 +641,14 @@ function applyTrackSearch(value) {
   ScrollFadeRefresh();
 }
 
-function trackInFilter(t, filter, favs) {
+// SEASON / CLASSICS follow SeasonCal.list(), not the `classic` flag (W34; select-season-tab.test.mjs).
+const seasonIds = () => calendarIdSet(typeof SeasonCal !== "undefined" ? SeasonCal : null);
+// The CLASSIC badge: a flagged circuit that this season's calendar does not race.
+const classicBadge = (t, ids) => !!t.classic && calendarGroup(t, ids) === "classic";
+
+function trackInFilter(t, filter, favs, ids) {
   if (!t) return false;
-  if (filter === "season") return !(t.classic || t.custom);
-  if (filter === "classic") return !!t.classic;
+  if (filter === "season" || filter === "classic") return calendarGroup(t, ids === undefined ? seasonIds() : ids) === filter;
   if (filter === "custom") return !!t.custom;
   if (filter === "fav") return (favs || favList()).includes(t.id);
   if (filter === "daily-open") return !!(G.daily && t.id === G.daily.plan().trackId);
@@ -591,10 +661,11 @@ function trackInFilter(t, filter, favs) {
 // chip actually shows.
 function snapTrackToFilter(filter = visibleTrackFilter()) {
   const favs = favList();
+  const ids = seasonIds();
   const cur = Tracks.LIST[G.trackIdx];
   if (keepActiveId && !pinnedActive(cur)) keepActiveId = null;
-  if (trackInFilter(cur, filter, favs) || pinnedActive(cur)) return;
-  const i = Tracks.LIST.findIndex((t) => trackInFilter(t, filter, favs));
+  if (trackInFilter(cur, filter, favs, ids) || pinnedActive(cur)) return;
+  const i = Tracks.LIST.findIndex((t) => trackInFilter(t, filter, favs, ids));
   if (i < 0) return;
   G.trackIdx = i;
   store.set("trackId", Tracks.LIST[i].id);
@@ -720,11 +791,12 @@ function trackFilterBar() {
 // stylesheet; the .trb badges stay in the DOM (hidden in the strip) because the
 // SEASON filter's "no classics shown" contract is asserted on them.
 function trackTile(t, i, opts) {
+  const classic = classicBadge(t, opts && opts.calIds !== undefined ? opts.calIds : seasonIds());
   const row = document.createElement(opts && opts.readOnly ? "div" : "button");
   if (!(opts && opts.readOnly)) row.type = "button";
   row.className = "track-row" + (opts && opts.active ? " active" : "");
   row.dataset.trackIdx = String(i);
-  row.dataset.kind = t.custom ? "custom" : t.classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
+  row.dataset.kind = t.custom ? "custom" : classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
   row.setAttribute("aria-label", t.name);
   // The country is the tooltip: five USA tiles and three Italian ones need
   // it, and the strip has no room for a second line of text under each flag.
@@ -752,7 +824,7 @@ function trackTile(t, i, opts) {
   nm.textContent = t.name;
   if (t.night) { const b = document.createElement("span"); b.className = "trb trb-night"; b.textContent = "NIGHT"; nm.appendChild(b); }
   if (t.street) { const b = document.createElement("span"); b.className = "trb trb-street"; b.textContent = "STREET"; nm.appendChild(b); }
-  if (t.classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
+  if (classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
   if (t.custom) { const b = document.createElement("span"); b.className = "trb trb-custom"; b.textContent = "CUSTOM"; nm.appendChild(b); }
   row.appendChild(nm);
   return row;
@@ -781,6 +853,9 @@ function revealActiveTile() {
 
 function buildSelect(opts) {
   const inPlace = !!(opts && opts.inPlace);
+  // A menu door (the title is still up) opens a fresh picker: last visit's
+  // search must not reopen it pre-filtered. Returns and in-place rebuilds keep it.
+  if (!inPlace && els.overlay && !els.overlay.hidden) trackQuery = "";
   // ONE QUESTION: WHERE. WHO and WHAT are chosen in the garage via YOUR CAR.
   // NEXT opens race settings. The only thing that differs between modes here
   // is what the screen is called and what the foot button promises next.
@@ -870,14 +945,16 @@ function buildSelect(opts) {
     snapTrackToFilter();
     const favs = favList();
     const filter = visibleTrackFilter();
+    const calIds = seasonIds();
     Tracks.LIST.forEach((t, i) => {
-      if (!trackInFilter(t, filter, favs) && !(i === G.trackIdx && pinnedActive(t))) return;
-      const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
+      if (!trackInFilter(t, filter, favs, calIds) && !(i === G.trackIdx && pinnedActive(t))) return;
+      const grp = calendarGroup(t, calIds);
+      const g = grp === "custom" ? "MY CIRCUITS" : grp === "classic" ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       // Filter chips name the view. A vertical CLASSICS/SEASON divider squeezed
       // the ~500 strip, ate end slack, and clipped the last flag (apex7/11).
-      const row = trackTile(t, i, { active: i === G.trackIdx });
+      const row = trackTile(t, i, { active: i === G.trackIdx, calIds });
       row.dataset.trackGroup = g;
-      row.dataset.search = [t.name, t.country, t.custom ? "custom mine" : t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
+      row.dataset.search = [t.name, t.country, grp === "custom" ? "custom mine" : grp, t.street ? "street" : "", t.night ? "night" : ""]
         .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
       if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
@@ -964,7 +1041,7 @@ function buildSelect(opts) {
 // screen's preview card and the TRACK DETAIL modal's sparkline. Both were
 // hand-written canvas blocks that agreed line for line except for which element
 // carries the hidden state and what the x variable was called — the shape where
-// a fix lands in one copy and not the other (docs/ARCHITECTURE-REVIEW.md §8).
+// a fix lands in one copy and not the other (docs/notes/ARCHITECTURE-REVIEW.md §8).
 // LOCAL, not a new global: it is one screen's drawing, and Menus already owns it.
 //   cv      the <canvas> to paint
 //   t       the circuit def
@@ -976,7 +1053,6 @@ function drawElevProfile(cv, t, showEl) {
   if (!cv || !target) return false;
   const py = TrackMaps.elevProfile(t);
   if (!(py && py.length > 2 && TrackMaps.elevRange(t) > 2)) { target.hidden = true; return false; }
-  target.hidden = false;
   // The HTML attributes (280x36 / 240x48) were the backing store forever while
   // CSS stretched the element to width: 100% — a 600px panel scaled the buffer
   // 2.5x horizontally and 1.0x vertically, smearing the 8px labels wide. Size
@@ -988,7 +1064,13 @@ function drawElevProfile(cv, t, showEl) {
   const bw = Math.max(1, Math.round(boxW * ratio)), bh = Math.max(1, Math.round(boxH * ratio));
   if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
   const ew = boxW, eh = boxH;
-  const eg = cv.getContext("2d");
+  // A canvas keeps its first context type for life: getContext("2d") is null
+  // when another type is already bound, or when the browser will not allocate
+  // a 2D store. setTransform on that null is the race-select overlay (#4469,
+  // three forced to GL on SwiftShader). Hide the sparkline instead.
+  const eg = cv.getContext ? cv.getContext("2d") : null;
+  if (!eg) { target.hidden = true; return false; }
+  target.hidden = false;
   eg.setTransform(ratio, 0, 0, ratio, 0, 0);
   eg.clearRect(0, 0, ew, eh);
   let mn = Infinity, mx = -Infinity;
@@ -1074,6 +1156,15 @@ watchHero(document.getElementById("sel-hero"));
 // glyph; a circuit with no still keeps the hero's own gradient. The token
 // guards a slow decode landing after the player has already moved on.
 let stillToken = 0;
+// Hero ~ full width: a DPR-3 phone takes the 1600 px file (#5223). STILL_1X_ONLY have no 2x file.
+const STILL_SIZES = "100vw";
+const STILL_1X_ONLY = ["baku", "estoril", "imola", "watkins_glen", "zolder"];
+/** "" = the 800 px file only (no 2x file, Save-Data, 2G). */
+function stillSrcset(id, conn) {
+  if (STILL_1X_ONLY.includes(id) || (conn && (conn.saveData || /2g$/.test(conn.effectiveType || "")))) return "";
+  const base = "assets/stills/" + id;
+  return base + ".webp 800w, " + base + "-1600.webp 1600w";
+}
 function showStill(t) {
   const img = document.getElementById("sel-still");
   if (!img) return;
@@ -1086,7 +1177,15 @@ function showStill(t) {
   img.hidden = true;
   img.dataset.id = t.id;
   img.onload = () => { if (token === stillToken) img.hidden = false; };
-  img.onerror = () => { if (token === stillToken) img.hidden = true; };
+  // A failed 2x load retries the 800 px file once; only a second failure hides the still.
+  img.onerror = () => {
+    if (token !== stillToken) return;
+    if (img.getAttribute("srcset")) { img.removeAttribute("srcset"); img.removeAttribute("sizes"); img.src = src; return; }
+    img.hidden = true;
+  };
+  const set = stillSrcset(t.id, typeof navigator !== "undefined" ? navigator.connection : null);
+  if (set) { img.sizes = STILL_SIZES; img.srcset = set; }
+  else { img.removeAttribute("srcset"); img.removeAttribute("sizes"); }
   img.src = src;
 }
 
@@ -1136,6 +1235,21 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // used to leave the canvas at its HTML attrs / zero CSS box until idle paint —
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
+/** The outline's slot inside the hero: 62 % of its width, ~60 % of its height —
+    capped at the map button's CONTENT box, which the phone card (css/select.css,
+    compact + wide) pads so the lower-third numbers band stays clear of the
+    outline (#5153 gap 13). */
+function previewMapSlot(hero, sheet, map) {
+  const compact = !!(sheet && sheet.dataset.density === "compact");
+  let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const btn = map && map.parentElement;
+  if (compact && btn && btn.clientHeight > 0) {
+    const bs = getComputedStyle(btn);
+    const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
+    if (room > 0) slotH = Math.min(slotH, room);
+  }
+  return { slotW: hero.clientWidth * 0.62, slotH };
+}
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
   if (!els.selPreviewMap || !t) return;
@@ -1143,8 +1257,7 @@ function sizePreviewMapBox(t) {
   const sheet = hero && hero.closest(".sheet");
   if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
   const map = els.selPreviewMap;
-  const compact = !!(sheet && sheet.dataset.density === "compact");
-  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const { slotW, slotH } = previewMapSlot(hero, sheet, map);
   let a = 520 / 300;
   if (previewMapsCached(t) && typeof TrackMaps !== "undefined" && TrackMaps.aspect) {
     try { a = TrackMaps.aspect(t) || a; } catch (_) { /* keep default */ }
@@ -1175,8 +1288,7 @@ function paintTrackPreviewMaps(t) {
   if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
   drawElevProfile(document.getElementById("sel-preview-elev"), t);
   const map = els.selPreviewMap;
-  const compact = !!(sheet && sheet.dataset.density === "compact");
-  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const { slotW, slotH } = previewMapSlot(hero, sheet, map);
   const fit = TrackMaps.fitCanvas(map, slotW, slotH, t, true);
   const ratio = Math.min(3, Math.max(1, (map.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
   if (ratio > 1.01) {
@@ -1258,7 +1370,7 @@ function updateTrackPreview() {
     const kinds = [];
     if (t.night) kinds.push(["trb trb-night", "NIGHT RACE"]);
     if (t.street) kinds.push(["trb trb-street", "STREET CIRCUIT"]);
-    if (t.classic) kinds.push(["trb trb-classic", "CLASSIC"]);
+    if (classicBadge(t, seasonIds())) kinds.push(["trb trb-classic", "CLASSIC"]);
     if (t.custom) kinds.push(["trb trb-custom", "CUSTOM CIRCUIT"]);
     if (t.banked) kinds.push(["trb", "BANKED"]);
     factsEl.textContent = "";
@@ -1535,6 +1647,24 @@ return {
 };
 }
 
-return { create };
+/** The season calendar's ids, or null (then the `classic` flag decides). */
+function calendarIdSet(cal) {
+  if (!cal || typeof cal.list !== "function") return null;
+  let l;
+  try { l = cal.list(); } catch (_) { return null; }
+  if (!Array.isArray(l) || !l.length) return null;
+  const ids = new Set();
+  for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
+  return ids.size ? ids : null;
+}
+/** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
+function calendarGroup(t, ids) {
+  if (!t) return null;
+  if (t.custom) return "custom";
+  if (ids) return ids.has(t.id) ? "season" : "classic";
+  return t.classic ? "classic" : "season";
+}
+
+return { create, calendarIdSet, calendarGroup };
 })();
 Object.freeze(Menus);

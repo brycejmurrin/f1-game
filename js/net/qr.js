@@ -332,6 +332,7 @@ const NetQr = (function () {
     return qr;
   }
 
-  return { encode, draw, QUIET, MAX_VERSION, byteCapacity, capacity: () => byteCapacity(MAX_VERSION) };
+  // MAX_VERSION / byteCapacity stay module-local; capacity() is the public size pin.
+  return { encode, draw, QUIET, capacity: () => byteCapacity(MAX_VERSION) };
 })();
 Object.freeze(NetQr);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // merge-gate.mjs — the landing gate: the CI check named `gate` (.github/workflows/land.yml), runnable locally.
-// @doc Landing gate (`gate` check): open, no `hold`, Plan closed, CI green, gen:check + ratchets on the merge, base distance.
+// @doc Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok for harness edits, gen + ratchets.
 // @section runner
 // @skill steward
 //
@@ -9,23 +9,36 @@
 // nothing (no receipt, no bus line), reads no bus, and pins no session identity: the branch ruleset requires the
 // `gate` check and `land.yml` arms auto-merge when it is green.
 //
-//   node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--check] [--max-behind N] [--json <path>]
+//   node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--check] [--trusted] [--json <path>]
 //
 // Rows (all must pass; each prints `= gate <row>: ok|FAIL <reason>`, then one final `= merge-gate passed|refused …`
 // line, which land.yml reads as the check title):
 //   open      the PR is open and not a draft, and its head is the `--sha` the workflow gated (when given)
-//   hold      no `hold` label (replaces the body line `MERGE-HOLD:`, which is no longer read)
-//   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored)
-//   ci        the `CI` check-run is `success` on the PR's current head, newest attempt
-//   gen       the head merges clean onto the current base tip in a throw-away worktree, and `gen:check` passes there
+//   hold      no `hold` label, and the label events walked oldest first: once Bryce has set `hold` in person
+//             (performed_via_github_app null), the PR stays held until a LATER unlabel of his own; any other
+//             unlabel or re-label in between changes nothing. A hold only an agent ever set is lifted by any
+//             removal. (provenance, docs/plans/2026-11-03-agent-surface-reset.md §4.3; tools/ci/lib/provenance.mjs)
+//   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored);
+//             a body with no Plan fails, except a fold bot's PR (author `*[bot]`), whose body has none
+//   ci        the `CI` check-run from the GitHub Actions app, in the check suite of a ci.yml workflow run, is
+//             `success` on the PR's current head, newest attempt; a run that went green only on a re-run after a
+//             failed job (`run_attempt` > 1) fails the row
+//   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
+//             name) needs the `config-ok` label, last added by Bryce in person, and newer than the last push that
+//             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
+//             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
+//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
-//   distance  the PR's merge-base is at most N (default 2) GAME merges behind the base tip: a game merge is a
-//             first-parent merge commit on the base whose diff touches js/ css/ assets/ index.html or sw.js
-//             (replaces GAME-SLOT pacing: red trains were 13.3 % when a merge landed after the PR's green vs 4.3 %)
+// The `distance` row (merge-base at most N game merges behind the tip) was retired 2026-11-03 (plan §6): gen and
+// ratchets already run on the real merge result, which is what catches composition reds; the row only bought syncs.
 //
-// Exit: 0 every row ok, 2 a row failed, 1 usage or API/git error. `--check` is accepted (the workflow's spelling)
-// and is the only behaviour. `--json <path>` writes the row summary there; nothing else is written outside the
+// `--trusted` evaluates only the rows that run no code from the PR (open, hold, plan, ci, config): GitHub reads only,
+// nothing checked out or run. land.yml's `trusted-rows` job runs it, so `post` never takes those rows from the
+// artifact of the leg that ran the PR's scripts (WP-L2).
+//
+// Exit: 0 every row ok, 2 a row failed, 3 waiting on CI, 1 usage or API/git error. `--check` is accepted (the
+// workflow's spelling). `--json <path>` writes the row summary there; nothing else is written outside the
 // throw-away worktree under artifacts/merge-gate/.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -33,21 +46,40 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, DEPLOY } from "./github-api.mjs";
 import { planVerdict } from "./ready-gate.mjs";
+import { renderPkg } from "../gen/gen-test-groups.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { OWNER, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
 export const REQUIRED_CHECK = "CI";
-/** The label that vetoes a landing (plan §4.1: whoever sets it removes it; Bryce can always remove it). */
+/** The only app whose `CI` check-run counts: ci.yml runs under GitHub Actions. Any token with `checks: write` can
+ * create a check-run named `CI`, but only under its OWN app, so a run from another app (or none) is ignored. */
+export const CI_APP = "github-actions";
+/** The workflow file whose run must own the `CI` check-run: a job named `CI` in any OTHER workflow (a PR can add one)
+ * is an Actions-app check-run too, so the app alone does not pin it (r2 landing-design, WP-L3e). */
+export const CI_WORKFLOW = "ci.yml";
+/** The label that vetoes a landing (plan §4.1); since 2026-11-03 only Bryce's own click lifts it (the hold row). */
 export const HOLD_LABEL = "hold";
-/** Game merges are the ones a Pages train ships; the distance row counts them. */
-export const GAME_PATH = /^(js\/|css\/|assets\/|index\.html$|sw\.js$)/;
-export const isGamePath = (p) => GAME_PATH.test(String(p || "").replace(/^\.\//, ""));
-export const gameFiles = (files) => (files || []).filter(isGamePath);
-/** Default for --max-behind (plan §4.3: N = 2 to start). */
-export const MAX_BEHIND = 2;
+/** The label Bryce adds in person to let a PR that edits the agent harness land (the config row). */
+export const CONFIG_LABEL = "config-ok";
+/** The paths whose edit needs CONFIG_LABEL: the hooks, settings, workflows and actions that enforce every other rule,
+ *  the CI tools that compute this gate and the dispatcher, the MCP and hook tooling, the generated-path list, the
+ *  package scripts, every host's hook and agent config, the tracked memory and the issue templates. */
+export const CONFIG_PATH = new RegExp("^(" + [
+  "\\.claude/hooks/", "\\.claude/settings(\\.local)?\\.json$", "\\.claude/agents/", "\\.claude/memory/",
+  "\\.github/workflows/", "\\.github/actions/", "\\.github/ISSUE_TEMPLATE/", "\\.githooks/", "\\.mcp\\.json$",
+  "tools/ci/", "tools/hooks/", "tools/mcp/", "tools/lib/generated-paths\\.mjs$", "package\\.json$",
+  "\\.cursor/hooks", "\\.codex/hooks",
+].join("|") + ")");
+export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
+export const configFiles = (files) => (files || []).filter(isConfigPath);
+/** The paths a pulls/<n>/files or compare row names: `filename`, and `previous_filename` for a rename. Pure. */
+export const filePaths = (rows) => (rows || []).flatMap((f) => [f?.filename, f?.previous_filename]).filter(Boolean);
 /** Row order, which is also print order. */
-export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "gen", "ratchets", "distance"]);
+export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "gen", "ratchets"]);
+/** The rows `--trusted` evaluates: none of them runs code from the PR. */
+export const TRUSTED_ROWS = Object.freeze(ROWS.filter((k) => k !== "gen" && k !== "ratchets"));
 
 const row = (ok, evidence) => ({ ok: !!ok, evidence });
 const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, encoding: "utf8", timeout: 120_000, ...extra });
@@ -58,97 +90,180 @@ const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, enco
 export function openVerdict(pull) {
   if (!pull || !pull.state) return row(false, "no pull request");
   if (pull.state !== "open") return row(false, `PR is ${pull.state}${pull.merged ? " (merged)" : ""}`);
-  if (pull.draft) return row(false, "still a draft: pass ready-gate.mjs and mark it ready first");
+  if (pull.draft) return row(false, "draft: flip ready first — ready-gate, then update_pull_request draft:false, then land");
   return row(true, "open and ready for review");
 }
 
-/** hold: no `hold` label. Labels may be strings or `{ name }` objects (the API's shape). Pure. */
-export function holdVerdict(labels) {
+/** hold: no `hold` label, and (when the PR's label events are given) the `hold` events walked in order (created_at,
+ *  then list order): an owner's in-person `labeled` sets a hold that only a LATER owner `unlabeled` clears; nothing
+ *  anyone else does in between clears it. Labels may be strings or `{ name }` objects (the API's shape); `events`
+ *  null skips the provenance half (pure callers without events). Pure. */
+export function holdVerdict(labels, events = null, owner = OWNER) {
   const names = (labels || []).map((l) => String(typeof l === "string" ? l : l?.name || "").toLowerCase());
-  return names.includes(HOLD_LABEL) ? row(false, `the \`${HOLD_LABEL}\` label is set: whoever set it removes it (Bryce can always remove it)`) : row(true, `no \`${HOLD_LABEL}\` label`);
+  if (names.includes(HOLD_LABEL)) return row(false, `the \`${HOLD_LABEL}\` label is set: whoever set it removes it; one ${owner} set, only his own click`);
+  const at = (e) => Date.parse(e?.created_at || "") || 0;
+  const walk = labelEvents(events, HOLD_LABEL).map((e, i) => ({ e, i })).sort((a, b) => at(a.e) - at(b.e) || a.i - b.i).map((x) => x.e);
+  let ownerHold = null, lifted = null;
+  for (const e of walk) {
+    if (e.event === "labeled" && byOwner(e, owner)) ownerHold = e;
+    else if (e.event === "unlabeled") { lifted = e; if (ownerHold && byOwner(e, owner)) ownerHold = null; }
+  }
+  if (ownerHold) {
+    return row(false, `hold set by ${owner} at ${ownerHold.created_at || "?"} was not removed by ${owner} himself (last unlabel: ${lifted ? `${describeActor(lifted)} at ${lifted.created_at || "?"}` : "none recorded"}): still held until he removes it`);
+  }
+  return row(true, lifted ? `no \`${HOLD_LABEL}\` label (last removed by ${describeActor(lifted)})` : `no \`${HOLD_LABEL}\` label`);
 }
 
-/** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan at all passes. Pure. */
-export function planRow(body) {
+/** config: a diff touching a CONFIG_PATH needs the `config-ok` label whose newest `labeled` event is the owner's own
+ *  click; a diff touching none passes. `files` are the PR's changed paths (filePaths over pulls/<n>/files). `push`
+ *  (configPushState) binds the label to the head: "after" (a CONFIG_PATH push came after the label) fails, "unknown"
+ *  waits; null skips the binding (pure callers only). Pure. */
+export function configVerdict(files, labels, events = null, owner = OWNER, push = null) {
+  const touched = configFiles(files);
+  if (!touched.length) return row(true, `no config path (harness, CI tools, agent config) in the diff (${(files || []).length} file(s))`);
+  const shown = touched.slice(0, 4).join(", ") + (touched.length > 4 ? ", …" : "");
+  const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
+  const last = newestLabelEvent(events, CONFIG_LABEL);
+  if (!names.includes(CONFIG_LABEL)) return row(false, `needs ${CONFIG_LABEL} from ${owner}: the diff edits ${shown}`);
+  if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
+    return row(false, `needs ${CONFIG_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (the diff edits ${shown})`);
+  }
+  if (push?.state === "after") return row(false, `needs a fresh ${CONFIG_LABEL} from ${owner}: ${push.evidence} after his label at ${last.created_at || "?"} (remove and re-add it)`);
+  if (push?.state === "unknown") return { ...row(false, `${CONFIG_LABEL} from ${owner} found, head push not resolved yet: ${push.evidence}`), pending: true };
+  return row(true, `${CONFIG_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
+}
+
+/**
+ * When did the head get pushed relative to the owner's `config-ok` at `labelAt`? Reads ci.yml's pull_request runs of
+ * this PR (server timestamps; a commit date can say anything). The head is covered when the label is newer than the
+ * head's first run. Otherwise the head at label time is the head of the newest run created before the label, and the
+ * compare from it to the head must touch no CONFIG_PATH.
+ * → { state: "covered"|"after"|"unknown", evidence }. Side effects only through `request`.
+ */
+export function configPushState({ pr, head, headRef, labelAt, request }) {
+  const t = (iso) => Date.parse(iso || "") || 0;
+  const L = t(labelAt);
+  if (!L) return { state: "unknown", evidence: "no config-ok label time" };
+  const runs = listAll(`actions/workflows/${CI_WORKFLOW}/runs?event=pull_request&branch=${encodeURIComponent(headRef || "")}`, request, (j) => j?.workflow_runs, 10);
+  if (runs.error) return { state: "unknown", evidence: `${CI_WORKFLOW} runs: ${runs.error}` };
+  const mine = runs.rows.filter((w) => (w?.pull_requests || []).some((p) => Number(p?.number) === Number(pr)) && t(w.created_at));
+  const onHead = mine.filter((w) => String(w.head_sha || "").toLowerCase() === head);
+  if (!onHead.length) return { state: "unknown", evidence: `no ${CI_WORKFLOW} pull_request run of PR #${pr} on ${head.slice(0, 8)} yet` };
+  const pushedAt = Math.min(...onHead.map((w) => t(w.created_at)));
+  if (L > pushedAt) return { state: "covered", evidence: `labelled after the head ${head.slice(0, 8)} was pushed` };
+  const before = mine.filter((w) => t(w.created_at) < L).sort((a, b) => t(b.created_at) - t(a.created_at))[0];
+  if (!before) return { state: "after", evidence: `no run of PR #${pr} predates the label, so the head ${head.slice(0, 8)} was pushed` };
+  const from = String(before.head_sha || "").toLowerCase();
+  const cmp = request(`compare/${encodeURIComponent(from)}...${encodeURIComponent(head)}`);
+  if (cmp.error) return { state: "unknown", evidence: `compare ${from.slice(0, 8)}...${head.slice(0, 8)}: ${cmp.error}` };
+  const files = cmp.json?.files;
+  if (!Array.isArray(files) || files.length >= 300) return { state: "after", evidence: `the compare ${from.slice(0, 8)}...${head.slice(0, 8)} is unreadable or truncated, so a push` };
+  const hit = configFiles(filePaths(files));
+  return hit.length
+    ? { state: "after", evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
+    : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no config path` };
+}
+
+/** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan fails (skill steward
+ *  §Open: every agent PR carries one), except on a fold bot's PR (`author` a `*[bot]` login). Pure. */
+export function planRow(body, author = "") {
   const p = planVerdict(body);
+  if (p.state === "none" && !/\[bot\]$/.test(String(author || ""))) return row(false, "no ## Plan checklist in the body (skill steward §Open) — add the template's Plan and close it");
   if (p.state === "open") {
     const shown = p.open.slice(0, 3).map((t) => `"${t}"`).join(", ");
     return row(false, `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why`);
   }
-  return row(true, p.state === "none" ? "no ## Plan checklist in the body" : `Plan closed (${p.items} items)`);
-}
-
-/** ci: the required check-run on the head, newest attempt (highest id), success only. Pure. */
-export function ciVerdict(checkRuns, name = REQUIRED_CHECK) {
-  let best = null;
-  for (const c of checkRuns || []) {
-    if (!c || c.name !== name) continue;
-    if (!best || (c.id || 0) > (best.id || 0)) best = c;
-  }
-  if (!best) return row(false, `no ${name} check-run on the head yet`);
-  if (best.status !== "completed") return row(false, `${name} ${best.status}`);
-  return best.conclusion === "success" ? row(true, `${name} success (check-run ${best.id})`) : row(false, `${name} ${best.conclusion}`);
+  return row(true, p.state === "none" ? "no ## Plan checklist in the body (a fold bot's PR)" : `Plan closed (${p.items} items)`);
 }
 
 /**
- * Game merges on the base between the PR's merge-base (exclusive) and the tip (inclusive). `commits` is the base's
- * first-parent history, NEWEST first, each `{ sha, parents, files }`; the walk stops at `mergeBase`. A commit counts
- * when it is a merge (two or more parents) and its first-parent diff touches a game path. Pure.
- * @returns {{ count: number, shas: string[], reached: boolean }} reached: the merge-base was found in the list
+ * ci: the required check-run on the head from `app` (CI_APP), newest attempt (highest id), success only. `suites`
+ * (a Set of check-suite ids of the ci.yml workflow runs on the head, ciSuitesFor) pins it to ci.yml: a check-run of
+ * that name in another workflow's suite is ignored. `null` skips the pin (pure callers only). Pure.
  */
-export function gameMergesBehind(commits, mergeBase) {
-  const shas = [];
-  let reached = false;
-  for (const c of commits || []) {
-    if (!c) continue;
-    if (c.sha === mergeBase) { reached = true; break; }
-    if ((c.parents || []).length > 1 && gameFiles(c.files).length) shas.push(c.sha);
+export function ciVerdict(checkRuns, name = REQUIRED_CHECK, app = CI_APP, suites = null) {
+  let best = null;
+  for (const c of checkRuns || []) {
+    if (!c || c.name !== name || c.app?.slug !== app) continue;
+    if (suites && !suites.has(c.check_suite?.id)) continue;
+    if (!best || (c.id || 0) > (best.id || 0)) best = c;
   }
-  return { count: shas.length, shas, reached };
+  // Not finished is "waiting", not "refused": a `land` label added while CI still runs must not paint `gate` red.
+  if (!best) return { ...row(false, `no ${name} check-run${suites ? ` from ${CI_WORKFLOW}` : ""} on the head yet`), pending: true };
+  if (best.status !== "completed") return { ...row(false, `${name} ${best.status}`), pending: true };
+  return best.conclusion === "success" ? { ...row(true, `${name} success (check-run ${best.id})`), suite: best.check_suite?.id ?? null } : row(false, `${name} ${best.conclusion}`);
 }
 
-/** distance: the merge-base is at most `max` game merges behind the tip. Pure. */
-export function distanceVerdict(commits, mergeBase, max = MAX_BEHIND) {
-  const d = gameMergesBehind(commits, mergeBase);
-  // A merge-base off the first-parent line (a PR stacked on another branch): every walked merge landed after it.
-  const where = d.reached ? "" : " (merge-base off the base's first-parent line: every merge since it counts)";
-  const list = d.shas.slice(0, 4).map((s) => s.slice(0, 8)).join(", ");
-  if (d.count > max) return row(false, `base is ${d.count} game merge(s) ahead of the merge-base (max ${max}): ${list}${d.count > 4 ? ", …" : ""}${where} — sync-pr.mjs (merge the base tip), push, and let CI re-run`);
-  return row(true, `${d.count} game merge(s) between the merge-base and the base tip (max ${max})${where}`);
+/** The one config path a generator owns in part: package.json's `test:*` scripts (tools/gen/gen-test-groups.mjs). */
+export const GENERATED_PKG = "package.json";
+const GROUP_KINDS = new Set(["node", "browser"]);
+
+/**
+ * Is the package.json diff ONLY the generated `test:*` file lists? Inputs are the texts at the merge base and the
+ * head. Holds when (1) the deploy branch's own generator (renderPkg) run on the head's tests/groups.json and the BASE
+ * package.json reproduces the head package.json byte for byte, so nothing outside the `test:*` scripts changed, and
+ * (2) every changed script belongs to a `node`/`browser` group whose kind and flags equal the base's, so only file
+ * lists moved (a `command` group, a new group, or a flag change stays a config edit). Any parse or generator error
+ * refuses. → { ok, evidence }. Pure.
+ */
+export function generatedPkgVerdict({ basePkg, headPkg, baseGroups, headGroups, render = renderPkg }) {
+  let bp, hp, bg, hg, expected;
+  try { bp = JSON.parse(basePkg); hp = JSON.parse(headPkg); bg = JSON.parse(baseGroups); hg = JSON.parse(headGroups); }
+  catch (e) { return row(false, `package.json / tests/groups.json unreadable: ${e.message}`); }
+  try { expected = render(hg, basePkg); } catch (e) { return row(false, `the test-groups generator refused the head's tests/groups.json: ${e.message}`); }
+  if (expected !== headPkg) return row(false, "package.json carries edits the test-groups generator does not reproduce");
+  const names = [...new Set([...Object.keys(bp.scripts || {}), ...Object.keys(hp.scripts || {})])].filter((k) => bp.scripts?.[k] !== hp.scripts?.[k]);
+  for (const k of names) {
+    const b = bg.groups?.[k], h = hg.groups?.[k];
+    if (!b) return row(false, `script ${k} has no group at the base (a new group is a config edit)`);
+    if (!GROUP_KINDS.has(b.kind) || (h && (h.kind !== b.kind || JSON.stringify(h.flags || []) !== JSON.stringify(b.flags || []))))
+      return row(false, `script ${k}: its group's kind or flags changed (only file lists are generated data)`);
+  }
+  return row(true, `package.json changes only generated test file lists (${names.join(", ") || "none"})`);
+}
+
+/** Read one file at `ref` through the contents API → its text, or null. */
+function fileAt(request, file, ref) {
+  const r = request(`contents/${file}?ref=${encodeURIComponent(ref)}`);
+  if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") return null;
+  return Buffer.from(r.json.content, "base64").toString("utf8");
+}
+
+/** The generated-lists check for PR head `head` (merge base from compare). → { ok, evidence }. */
+export function generatedPkgCheck({ head, base, request }) {
+  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
+  const mb = cmp.json?.merge_base_commit?.sha;
+  if (cmp.error || !mb) return row(false, `merge base of ${head.slice(0, 8)} unreadable${cmp.error ? `: ${cmp.error}` : ""}`);
+  const texts = [["basePkg", "package.json", mb], ["headPkg", "package.json", head], ["baseGroups", "tests/groups.json", mb], ["headGroups", "tests/groups.json", head]]
+    .map(([k, f, ref]) => [k, fileAt(request, f, ref)]);
+  const missing = texts.filter(([, v]) => v == null).map(([k]) => k);
+  if (missing.length) return row(false, `could not read ${missing.join(", ")}`);
+  return generatedPkgVerdict(Object.fromEntries(texts));
+}
+
+/** Job conclusions that make an earlier attempt red (a cancelled or skipped job is not a failure). */
+const RED_JOB = new Set(["failure", "timed_out", "startup_failure"]);
+
+/**
+ * ci, retry half: the ci.yml run that owns the green `CI` check-run passed only on a re-run (`run_attempt` > 1) and an
+ * earlier attempt had a red job → the row fails (AGENTS.md rule 9: a pass that needed a retry is a red). `run` is the
+ * workflow run ({ id, run_attempt }); reads actions/runs/<id>/attempts/<n>/jobs for each earlier attempt.
+ * → { ok, evidence } | { error }. Side effects only through `request`.
+ */
+export function ciRetryVerdict(run, request) {
+  const attempt = Number(run?.run_attempt) || 1;
+  if (attempt <= 1) return row(true, "first attempt");
+  const red = [];
+  for (let n = 1; n < attempt; n++) {
+    const jobs = listAll(`actions/runs/${run.id}/attempts/${n}/jobs`, request, (j) => j?.jobs, 5);
+    if (jobs.error) return { error: `jobs of ${CI_WORKFLOW} run ${run.id} attempt ${n}: ${jobs.error}` };
+    for (const j of jobs.rows) if (RED_JOB.has(j?.conclusion)) red.push(`${j.name} (attempt ${n}: ${j.conclusion})`);
+  }
+  if (!red.length) return row(true, `attempt ${attempt}; earlier attempts had no failed job`);
+  return row(false, `${REQUIRED_CHECK} passed only on re-run ${attempt} of ${CI_WORKFLOW} run ${run.id}: ${red.slice(0, 3).join(", ")}${red.length > 3 ? ", …" : ""} failed before — a pass that needed a retry is a red: push a fresh commit, or quarantine the test by name in tests/data/flaky-quarantine.json`);
 }
 
 // ---- git-backed rows --------------------------------------------------------------------------------------
-
-/**
- * The base's first-parent history from `tip` down to and including `mergeBase`, in gameMergesBehind's shape. Only
- * merge commits carry a file list (the only ones the distance row counts). `cwd` has both refs fetched.
- */
-export function baseHistory({ tip, mergeBase, cwd = ROOT, run = git } = {}) {
-  const list = run(["rev-list", "--first-parent", "--parents", tip, `^${mergeBase}^@`], cwd);
-  if (list.status !== 0) return { error: `rev-list failed: ${(list.stderr || "").trim().split("\n")[0]}` };
-  const commits = [];
-  for (const line of list.stdout.split("\n").filter(Boolean)) {
-    const [sha, ...parents] = line.trim().split(/\s+/);
-    let files = [];
-    if (parents.length > 1) {
-      const d = run(["diff-tree", "--no-commit-id", "--name-only", "-r", parents[0], sha], cwd);
-      if (d.status !== 0) return { error: `diff-tree ${sha.slice(0, 8)} failed: ${(d.stderr || "").trim().split("\n")[0]}` };
-      files = d.stdout.split("\n").filter(Boolean);
-    }
-    commits.push({ sha, parents, files });
-  }
-  return { commits };
-}
-
-/** The distance row for a real clone: merge-base of `head` and `tip`, then baseHistory. `{ row, error? }`. */
-export function distanceFor({ head, tip, cwd = ROOT, max = MAX_BEHIND, run = git } = {}) {
-  const mb = run(["merge-base", head, tip], cwd);
-  if (mb.status !== 0) return { error: `merge-base of ${String(head).slice(0, 8)} and ${String(tip).slice(0, 8)} failed (shallow clone? fetch-depth: 0)` };
-  const mergeBase = mb.stdout.trim();
-  const h = baseHistory({ tip, mergeBase, cwd, run });
-  if (h.error) return { error: h.error };
-  return { row: distanceVerdict(h.commits, mergeBase, max), mergeBase };
-}
 
 /**
  * The shrink-only ratchets, run on the MERGE RESULT (cwd = the merged worktree): tools/check/ratchets.mjs (file and
@@ -159,7 +274,8 @@ export function distanceFor({ head, tip, cwd = ROOT, max = MAX_BEHIND, run = git
 /**
  * The environment for code from the merge result (gen:check, the ratchet tests): the PR's own scripts run there, so
  * no token and none of the runner's file-command paths (GITHUB_OUTPUT, GITHUB_ENV, …) a script could write a forged
- * gate verdict or a check run through. land.yml's `gate` job holds `checks: write`. Pure.
+ * verdict through. Defence in depth only: the parent's environment is readable by the same uid, so land.yml runs this
+ * gate in a job whose token is read-only (`land-gate`), and a separate job with no repo code posts the check. Pure.
  */
 export function untrustedEnv(env = process.env) {
   const out = { ...env };
@@ -201,22 +317,35 @@ export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
 
 /**
  * Fetch the base and the head branch, merge `head` onto the base tip in a throw-away worktree, run gen:check
- * there, then the ratchets. Returns { ok, evidence, tip, ratchets?, error? }: `error` marks a git failure the gate
+ * and the scenery catalog digest there, then the ratchets. Returns { ok, evidence, tip, ratchets?, error? }: `error` marks a git failure the gate
  * reports as exit 1 (not a row); `ratchets` is absent when the merge or gen:check already refused.
  */
-export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge } = {}) {
-  const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
-  const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
-  const fail = (why) => { cleanup(); return { ok: false, evidence: why, tip: "" }; };
+/**
+ * Fetch the base tip and the PR head's objects (nothing is checked out or run). Returns { tip } or { error }: the
+ * first step of the throw-away merge; `--trusted` reads GitHub only and never calls it.
+ */
+export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = {}) {
   const f1 = git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${base}:refs/remotes/origin/${base}`], cwd);
-  if (f1.status !== 0) return { ok: false, evidence: `fetch ${base} failed: ${(f1.stderr || "").trim().split("\n")[0]}`, tip: "", error: true };
+  if (f1.status !== 0) return { error: `fetch ${base} failed: ${(f1.stderr || "").trim().split("\n")[0]}` };
   if (headRef) git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`], cwd);
   // A fork's branch is not under refs/heads here; GitHub mirrors every PR head as refs/pull/<n>/head.
   if (git(["cat-file", "-e", `${head}^{commit}`], cwd).status !== 0) git(["fetch", "--quiet", "--no-tags", "origin", `+refs/pull/${pr}/head:refs/remotes/origin/pr/${pr}`], cwd);
   if (git(["cat-file", "-e", `${head}^{commit}`], cwd).status !== 0) {
-    return { ok: false, evidence: `head ${head.slice(0, 8)} is not in this clone (fetch its branch${headRef ? " " + headRef : ""})`, tip: "", error: true };
+    return { error: `head ${head.slice(0, 8)} is not in this clone (fetch its branch${headRef ? " " + headRef : ""})` };
   }
-  const tip = git(["rev-parse", `refs/remotes/origin/${base}`], cwd).stdout.trim();
+  return { tip: git(["rev-parse", `refs/remotes/origin/${base}`], cwd).stdout.trim() };
+}
+
+/** The catalog child's exit code for "no sourceDigest field": the gate then runs the generator's full `--check`. */
+const NO_DIGEST = 3;
+export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge } = {}) {
+  const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
+  const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
+  const fetched = fetchForGate({ pr, head, headRef, cwd, base });
+  if (fetched.error) return { ok: false, evidence: fetched.error, tip: "", error: true };
+  const tip = fetched.tip;
+  // A refusal carries the fetched tip: land.yml compares it with the deploy tip at post time (2026-10-27 23:20Z, #3964).
+  const fail = (why) => { cleanup(); return { ok: false, evidence: why, tip }; };
   cleanup();
   const add = git(["worktree", "add", "--detach", wt, tip], cwd);
   if (add.status !== 0) return { ok: false, evidence: `worktree add failed: ${(add.stderr || "").trim().split("\n")[0]}`, tip, error: true };
@@ -232,9 +361,31 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
     const first = `${gen.stdout || ""}\n${gen.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => l && !/^>|^npm /.test(l)).slice(-3).join(" | ");
     return fail(`gen:check fails on the merge onto ${tip.slice(0, 8)}: ${first || "see output"} — sync-pr.mjs (it runs npm run gen) and push`);
   }
+  // The full scenery generator builds every circuit (~2 min), so gen:check
+  // deliberately omits it. Its cheap input fingerprint must still hold on THIS
+  // merge: a green head can inherit a stale catalog from a changed base (#4160).
+  // A catalog with NO sourceDigest field (the committed fingerprint made every garage/scenery PR conflict on one
+  // line, tooling hunt 2026-11-09 row 2) is not waved through: the child exits NO_DIGEST and the generator's own
+  // `--check` rebuilds every circuit on this merge and compares (about a minute). A digest that is present must
+  // still be well-formed and equal. Keep PR code in a child with the same stripped environment as gen:check.
+  let catalog = run(process.execPath, ["-e", [
+    "const fs = require('node:fs');",
+    "const { scenerySourceDigest } = require('./tools/shot/scenery-source-hash.cjs');",
+    "const stored = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8')).sourceDigest;",
+    `if (stored === undefined) process.exit(${NO_DIGEST});`,
+    "if (typeof stored !== 'string' || !/^[a-f0-9]{64}$/.test(stored)) throw new Error('catalog sourceDigest is missing or malformed');",
+    "if (stored !== scenerySourceDigest(process.cwd())) throw new Error('catalog sourceDigest does not match scenery inputs');",
+  ].join("\n")], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 60_000, maxBuffer: 1 << 20 });
+  const rebuilt = !catalog.error && catalog.status === NO_DIGEST;
+  if (rebuilt) catalog = run(process.execPath, ["tools/shot/gen-scenery-locations.cjs", "--check"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
+  if (catalog.error || catalog.status !== 0) {
+    const detail = catalog.error?.message || `${catalog.stdout || ""}\n${catalog.stderr || ""}`.split("\n")
+      .map((line) => line.trim()).find((line) => /Error:|catalog is stale/.test(line)) || `exit ${catalog.status}`;
+    return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${detail} — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`);
+  }
   const rat = ratchets({ cwd: wt, run });
   cleanup();
-  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check 0`, tip, ratchets: rat };
+  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog ${rebuilt ? "rebuild check" : "digest"} 0`, tip, ratchets: rat };
 }
 
 // ---- evaluator and CLI --------------------------------------------------------------------------------------
@@ -254,10 +405,44 @@ function checkRunsFor(sha, request) {
 }
 
 /**
- * Every row for PR `pr`. Side effects only through the injected `request` (GitHub), `localMerge` (the throw-away
- * merge) and `distance` (git). Returns { ok, rows, pr, head, base, tip } or { error } for an API/git failure.
+ * The check-suite ids of the ci.yml workflow runs on `sha` (the workflow-file endpoint, path re-checked), so the ci
+ * row reads only ci.yml's own `CI` check-run. Returns { suites: Set } or { error }.
  */
-export function evaluate({ pr, sha = "", request = api, root = ROOT, maxBehind = MAX_BEHIND, localMerge = localMergeGenCheck, distance = distanceFor } = {}) {
+export function ciSuitesFor(sha, request) {
+  const suites = new Set(), runs = new Map();
+  const want = `.github/workflows/${CI_WORKFLOW}`;
+  for (let page = 1; page <= 5; page++) {
+    const r = request(`actions/workflows/${CI_WORKFLOW}/runs?head_sha=${encodeURIComponent(sha)}&per_page=100${page > 1 ? `&page=${page}` : ""}`);
+    if (r.error) return { error: r.error };
+    const batch = r.json?.workflow_runs || [];
+    for (const w of batch) if (String(w?.path || "").replace(/@.*$/, "") === want && w.check_suite_id != null) { suites.add(w.check_suite_id); runs.set(w.check_suite_id, w); }
+    if (batch.length < 100) break;
+  }
+  return { suites, runs };
+}
+
+/** Every page of a list endpoint through `request` → { rows } | { error }. A full last allowed page is an error
+ *  (fail closed): on an oldest-first list the rows past it are the newest ones. */
+export function listAll(pathQs, request, pick = (j) => j, maxPages = 30) {
+  const out = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const r = request(`${pathQs}${pathQs.includes("?") ? "&" : "?"}per_page=100&page=${page}`);
+    if (r.error) return { error: r.error };
+    const batch = pick(r.json);
+    const rows = Array.isArray(batch) ? batch : [];
+    out.push(...rows);
+    if (rows.length < 100) return { rows: out };
+  }
+  return { error: `more than ${maxPages} pages of 100: truncated, refusing to judge a partial list` };
+}
+
+/**
+ * Every row for PR `pr`. Side effects only through the injected `request` (GitHub) and `localMerge` (the throw-away
+ * merge). The hold and config rows read the PR's label events (provenance) and the config row its changed files.
+ * Returns { ok, rows, pr, head, base, tip } or { error } for an API/git failure.
+ */
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER } = {}) {
+  const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
   const pull = one.json || {};
@@ -267,59 +452,93 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, maxBehind =
   rows.open = openVerdict(pull);
   const want = String(sha || "").toLowerCase();
   if (rows.open.ok && want && !(head.startsWith(want) || want.startsWith(head))) rows.open = row(false, `PR head is ${head.slice(0, 8)}, not the --sha ${want.slice(0, 8)} this run gated: a newer push gets its own run`);
-  rows.hold = holdVerdict(pull.labels);
-  rows.plan = planRow(pull.body);
+  // The label events: who added or removed `hold` / `config-ok`, and through which app (provenance).
+  const ev = listAll(`issues/${pr}/events`, request, (j) => j, 10);
+  if (ev.error) return { error: `events of PR #${pr}: ${ev.error}` };
+  rows.hold = holdVerdict(pull.labels, ev.rows, owner);
+  rows.plan = planRow(pull.body, pull.user?.login || "");
   if (!head) return { error: `PR #${pr}: no head sha` };
   const checks = checkRunsFor(head, request);
   if (checks.error) return { error: `check-runs on ${head.slice(0, 8)}: ${checks.error}` };
-  rows.ci = ciVerdict(checks.list);
+  const ci = ciSuitesFor(head, request);
+  if (ci.error) return { error: `${CI_WORKFLOW} runs on ${head.slice(0, 8)}: ${ci.error}` };
+  rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
+  if (rows.ci.ok) {
+    const retry = ciRetryVerdict(ci.runs?.get(rows.ci.suite), request);
+    if (retry.error) return { error: retry.error };
+    rows.ci = retry.ok ? row(true, rows.ci.evidence) : retry;
+  }
+  const files = listAll(`pulls/${pr}/files`, request);
+  if (files.error) return { error: `files of PR #${pr}: ${files.error}` };
+  let changed = filePaths(files.rows), generated = null;
+  // package.json whose only change is the generated test lists is not a config edit (adding a unit test touches it).
+  const pkgRow = files.rows.find((f) => f?.filename === GENERATED_PKG);
+  if (pkgRow && !pkgRow.previous_filename && configFiles(changed).includes(GENERATED_PKG)) {
+    generated = generatedPkgCheck({ head, base, request });
+    if (generated.ok) changed = changed.filter((f) => f !== GENERATED_PKG);
+  }
+  const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
+  const needsPush = configFiles(changed).length && cfgLast?.event === "labeled" && byOwner(cfgLast, owner);
+  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
+  rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
+  if (generated) rows.config = { ...rows.config, evidence: `${rows.config.evidence}; ${generated.ok ? generated.evidence : `package.json counted as a config edit: ${generated.evidence}`}` };
   let tip = "";
   if (!rows.open.ok) {
-    for (const k of ["gen", "ratchets", "distance"]) rows[k] = row(false, "not evaluated: the PR is not open and ready");
+    for (const k of order.filter((r) => r === "gen" || r === "ratchets")) rows[k] = row(false, "not evaluated: the PR is not open and ready");
+  } else if (trusted) {
+    // GitHub only (no git, no PR code): land.yml post requires this tip to equal the land-gate leg's (#4592).
+    const b = request(`branches/${encodeURIComponent(base)}`);
+    if (b.error) return { error: `branch ${base}: ${b.error}` };
+    tip = String(b.json?.commit?.sha || "").toLowerCase();
+    if (!tip) return { error: `branch ${base}: no tip sha` };
   } else {
     const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
     if (g.error) return { error: g.evidence };
-    tip = g.tip;
+    tip = g.tip || "";
     rows.gen = row(g.ok, g.evidence);
     rows.ratchets = g.ratchets ? row(g.ratchets.ok, g.ratchets.evidence) : row(false, "not evaluated: the merge or gen:check refused first");
-    const d = distance({ head, tip, cwd: root, max: maxBehind });
-    if (d.error) return { error: d.error };
-    rows.distance = d.row;
   }
   const ordered = {};
-  for (const k of ROWS) ordered[k] = rows[k];
-  return { ok: ROWS.every((k) => ordered[k].ok), rows: ordered, pr, head, base, tip };
+  for (const k of order) ordered[k] = rows[k];
+  const ok = order.every((k) => ordered[k].ok);
+  // Waiting: every row that is not ok is a pending one (only `ci` can be), so the verdict is not known yet.
+  const waiting = !ok && order.every((k) => ordered[k].ok || ordered[k].pending);
+  return { ok, waiting, rows: ordered, pr, head, base, tip, trusted: !!trusted };
 }
 
 /** The printed rows: one `= gate <row>: ok|FAIL <reason>` line each, then the summary line. Pure. */
 export function rowLines(v) {
-  const lines = ROWS.filter((k) => v.rows?.[k]).map((k) => `= gate ${k}: ${v.rows[k].ok ? "ok" : "FAIL"} ${v.rows[k].evidence}`);
-  lines.push(`= merge-gate ${v.ok ? "passed" : "refused"} — ${ROWS.filter((k) => v.rows?.[k]).map((k) => `${k}=${v.rows[k].ok ? "ok" : "FAIL"}`).join(" ")} pr=#${v.pr} sha=${v.head || ""} tip=${v.tip || ""}`);
+  const mark = (r) => (r.ok ? "ok" : r.pending ? "WAIT" : "FAIL");
+  const lines = ROWS.filter((k) => v.rows?.[k]).map((k) => `= gate ${k}: ${mark(v.rows[k])} ${v.rows[k].evidence}`);
+  lines.push(`= merge-gate ${v.ok ? "passed" : v.waiting ? "waiting" : "refused"} — ${ROWS.filter((k) => v.rows?.[k]).map((k) => `${k}=${mark(v.rows[k])}`).join(" ")} pr=#${v.pr} sha=${v.head || ""} tip=${v.tip || ""}`);
   return lines;
 }
 
-const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--check] [--max-behind N] [--json <path>]
+const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--check] [--trusted] [--json <path>]
   The landing gate: the CI check named \`gate\` (land.yml), also runnable locally with a GitHub token
   (GH_TOKEN / GITHUB_TOKEN or \`gh auth token\`). Rows, each printed as \`= gate <row>: ok|FAIL <reason>\`, then one
   final \`= merge-gate passed|refused …\` line (the check title):
-    open (open, not a draft, head = --sha when given), hold (no \`hold\` label), plan (Plan closed; \`land:\` items
-    exempt), ci (\`CI\` success on the head), gen (clean merge onto the current base tip + gen:check),
-    ratchets (on that merge result), distance (merge-base at most N game merges behind the base tip; default ${MAX_BEHIND}).
-  Exit 0 all rows ok, 2 a row failed, 1 usage or API/git error. Writes nothing but an optional --json summary.`;
+    open (open, not a draft, head = --sha when given), hold (no \`hold\` label; a hold ${OWNER} set in person is lifted
+    only by a later click of his own, an agent's hold by anyone), plan (Plan present and closed; \`land:\` items exempt), ci (\`CI\` success on
+    the head), config (a diff touching a config path — harness, CI tools, agent config; see CONFIG_PATH — needs
+    \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), gen (clean merge onto the current base tip + gen:check), ratchets (on
+    that merge result).
+  --trusted: only the rows that run no PR code (open, hold, plan, ci, config); land.yml's trusted-rows job.
+  A row still waiting on CI prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other row ok, CI not
+  finished), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
 
-export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, distance = distanceFor, write = fs.writeFileSync } = {}) {
+export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, write = fs.writeFileSync, owner = OWNER } = {}) {
   exitIfHelp(argv, USAGE);
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
   if (!Number.isInteger(pr) || pr < 1) { log("= merge-gate error — --pr <n> is required"); return 1; }
-  const maxBehind = opt("--max-behind") == null ? MAX_BEHIND : Number(opt("--max-behind"));
-  if (!Number.isInteger(maxBehind) || maxBehind < 0) { log("= merge-gate error — --max-behind expects a non-negative integer"); return 1; }
-  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, maxBehind, localMerge, distance });
+  if (argv.includes("--max-behind")) { log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03 (header of this file)"); return 1; }
+  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner });
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }
   for (const l of rowLines(v)) log(l);
   const jsonPath = opt("--json");
-  if (jsonPath) write(path.resolve(root, jsonPath), JSON.stringify({ ...v, maxBehind, at: new Date().toISOString() }, null, 2) + "\n");
-  return v.ok ? 0 : 2;
+  if (jsonPath) write(path.resolve(root, jsonPath), JSON.stringify({ ...v, at: new Date().toISOString() }, null, 2) + "\n");
+  return v.ok ? 0 : v.waiting ? 3 : 2;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));

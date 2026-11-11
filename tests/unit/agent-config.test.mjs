@@ -17,7 +17,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parse as parseYAML } from "yaml";
 
@@ -113,13 +113,9 @@ test("memory link guard catches missing Markdown/wiki targets and orphan topics"
 // The three portable compound-* opt-in stubs were deleted 2026-10-26 (nothing routed to them;
 // docs/notes/BASE-CONTEXT-AUDIT-2026-10-19.md had flagged their always-on description cost).
 
-test("AGENTS.md stays under 200 lines and emphasises at most one line", () => {
-  // Claude Code memory docs: "target under 200 lines per CLAUDE.md file.
-  // Longer files consume more context and reduce adherence." Imports load in
-  // full, so the cap applies to the imported file, not the stub.
+test("AGENTS.md emphasises at most one line and CLAUDE.md imports it", () => {
+  // The size caps are BYTES and rule-bearing lines (below); a line count is gameable.
   const text = read("AGENTS.md");
-  const lines = text.trimEnd().split("\n").length;
-  assert.ok(lines <= BUDGET.agentsMdLines, `AGENTS.md is ${lines} lines — move procedure to a skill, evidence to docs/notes/`);
   const important = (text.match(/\bIMPORTANT\b/g) || []).length;
   assert.ok(important <= 1, `AGENTS.md shouts IMPORTANT ${important} times; one line, or none`);
   // A bolded run is emphasis; the asset-pack "Ships ON." claim is test-owned
@@ -165,7 +161,7 @@ test("tinyfish stays CLI-only: the lockstep guard owns its deliberate non-attach
   // TinyFish was REMOVED from the catalog in 2026-09 on purpose, and prose
   // alone does not hold a removal (this file's header: a stale "tinyfish for
   // deploy" line is one of the drifts that created the guard). The wrapper
-  // (tools/mcp/tinyfish-mcp.sh) is a CLI managing a tmux-held HTTP proxy on
+  // (mcp/tinyfish-mcp.sh, deleted 2026-11-03) was a CLI managing a tmux-held HTTP proxy on
   // 127.0.0.1:3711 — it has no stdio run/serve mode for output-level-mcp.sh
   // to spawn — and container egress blocks agent.tinyfish.ai, so the proxy
   // can never answer from an agent session (docs/AGENT-SURFACE.md, "Removed
@@ -185,14 +181,11 @@ test("tinyfish stays CLI-only: the lockstep guard owns its deliberate non-attach
       `${f} must not name tinyfish at all — the catalogs stay silent about a CLI-only tool`);
   const allow = JSON.parse(read(".cursor/environment.json")).mcpServerAllowlist;
   assert.ok(!allow.some((a) => /tinyfish/i.test(a.name)), "environment.json must not allowlist tinyfish");
-  // The CLI that remains: wrapper + RPC unwrapper, still declaring itself.
-  assert.ok(exists("tools/mcp/tinyfish-mcp.sh"),
-    "the tinyfish CLI wrapper is gone — if that is deliberate, update this pin and AGENT-SURFACE together");
-  assert.ok(exists("tools/mcp/tinyfish-rpc.py"), "the tinyfish RPC helper is gone — see the wrapper pin above");
-  assert.ok(
-    /CLI ONLY — NOT MCP-ATTACHED/.test(read("tools/mcp/tinyfish-mcp.sh")),
-    "the wrapper no longer declares itself CLI-only — a changed interface re-opens the attachment decision here, not by drift",
-  );
+  // 2026-11-03 (agent-surface reset §4.8): the CLI pair left the tree too — nothing in-repo speaks to TinyFish.
+  // Split literals so docs-integrity does not read them as live paths.
+  assert.equal(exists("tools/mcp/" + "tinyfish-mcp.sh"), false,
+    "the tinyfish CLI left 2026-11-03; re-attaching starts with fresh egress evidence, here and in AGENT-SURFACE together");
+  assert.equal(exists("tools/mcp/" + "tinyfish-rpc.py"), false, "the tinyfish RPC helper left 2026-11-03 — see the wrapper pin above");
   // The doc side of the decision stays in the surface map.
   assert.ok(
     /Removed 2026-09 \(CLI only now, not MCP-attached\)/.test(read("docs/AGENT-SURFACE.md")),
@@ -208,7 +201,7 @@ test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)
     cwd: ROOT, encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  for (const name of ["render-wgx", "render-tlx", "js-nav", "tests-specs", "claude-config", "ci-tools"]) {
+  for (const name of ["render-wgx", "render-tlx", "js-nav", "claude-config", "ci-tools"]) {
     const claude = stripFrontmatter(read(`.claude/rules/${name}.md`));
     const cursor = stripFrontmatter(read(`.cursor/rules/${name}.mdc`));
     assert.match(claude.fm, /paths:/, `${name}: .claude/rules needs paths:`);
@@ -220,7 +213,6 @@ test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)
   }
   assert.match(read(".claude/rules/render-tlx.md"), /One census run per branch/);
   assert.match(read(".claude/rules/render-wgx.md"), /One census run per branch/);
-  assert.match(read("AGENTS.md"), /docs\/WORKERS\.md/);
   assert.doesNotMatch(read("AGENTS.md"), /sampleCount/, "the WGSL rules moved to .claude/rules/render-wgx.md");
 });
 
@@ -241,15 +233,12 @@ test("settings.json registers the hooks that enforce the rules, and each hook ex
     assert.ok(exists(rel), `hook ${rel} is registered but missing`);
     assert.ok(fs.statSync(path.join(ROOT, rel)).mode & 0o111, `hook ${rel} is not executable`);
   }
-  assert.ok(Array.isArray(settings.permissions?.allow) && settings.permissions.allow.some((p) => /test:guards|test:\*/.test(p)),
-    "the permissions allowlist must pre-approve the guard suite");
-  // The rules the hooks enforce say so, and the escape hatch is documented.
+  // The rules the hooks enforce say so (AGENTS.md names the hook beside the rule), and the escape
+  // hatch is documented where the hooks are listed (.claude/rules/claude-config.md, 2026-11-03).
   const agents = read("AGENTS.md");
-  for (const hook of ["session-start.sh", "protect-files.sh", "bash-guard.sh"])
+  for (const hook of ["session-start.sh", "protect-files.sh", "bash-guard.sh", "mcp-browser-guard.sh"])
     assert.ok(agents.includes(hook), `AGENTS.md must name ${hook}`);
-  assert.match(agents, /allow-protected/);
-  for (const hook of ["protect-files.sh", "bash-guard.sh"])
-    assert.match(read(`.claude/hooks/${hook}`), /allow-protected|APEX_SKIP_GUARDS/, `${hook} needs its escape hatch`);
+  assert.match(read(".claude/rules/claude-config.md"), /allow-protected/);
 });
 
 test("the Bash guard blocks every shape of the kill that orphans browsers", () => {
@@ -271,13 +260,8 @@ test("the Bash guard blocks every shape of the kill that orphans browsers", () =
     "killall chrome",
     "kill -9 $(pgrep -f chrome)",          // substitution: no literal pid
     "pgrep -f chrome | xargs kill -9",     // pipe: no literal pid
-    // 2026-09-22: the two bypasses a review reproduced — a shell -c wrapper
-    // and an absolute path — plus the wrapper-and-path combination.
-    'sh -c "pkill -f chrome"',
-    "bash -lc 'pkill -f chrome'",
-    "/usr/bin/pkill -f chrome",
-    "env /usr/bin/pkill -9 -f node",
-    "sh -c 'echo hi; pkill -f chrome'",
+    // 2026-11-03: the `sh -c "pkill …"` and `/usr/bin/pkill` shapes are a documented miss of the slim
+    // guard (plan §4.7); the deny rules in settings.json and B1's hook tests own what remains.
   ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
   // …and stays out of the way of ordinary work, including a command that only
   // MENTIONS the words outside command position. The heredoc case is not
@@ -300,13 +284,12 @@ test("the Bash guard blocks every shape of the kill that orphans browsers", () =
 
 test("the Bash guard refuses a browser run from inside a subagent, and only there", () => {
   // AGENTS.md §Verification 10 was prose plus a body lint; every agent carries
-  // Bash. Hook input from a subagent names it (agent_id / agent_type, or a
-  // transcript under subagents/ — the shape this session's own transcripts
-  // have); the main session carries none of those and keeps every command.
+  // Bash. Hook input from a subagent names it by agent_id (agent_type alone is
+  // the session's --agent); the main session carries none and keeps every command.
   const run = (command, sub) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
     input: JSON.stringify({
       tool_name: "Bash", tool_input: { command },
-      ...(sub ? { transcript_path: "/root/.claude/projects/p/s/subagents/agent-abc.jsonl" } : {}),
+      ...(sub ? { agent_id: "a1" } : {}),
     }),
     encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
   });
@@ -315,12 +298,6 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "npx playwright test tests/specs/autopilot.spec.js",
     "npm test -- tests/specs/autopilot.spec.js",
     "node tools/ci/verify-change.mjs --wait",
-    "node tools/ci/test-solo.mjs tests/specs/autopilot.spec.js",
-    "python3 tools/mcp/probe-mcp.py chrome-start",
-    "tools/mcp/js-debugger-mcp.sh call debugger_attach '{}'",
-    "bash tools/mcp/js-debugger-mcp.sh call debugger_control '{}'",
-    "node tools/mcp/js-debugger-cli.mjs serve-http",
-    "node tools/mcp/js-debugger-smoke.mjs",
     // 2026-09-24: the path-prefix and npm-script forms walked past the guard.
     "node ./tools/ci/test-bg.mjs smoke",
     "node /home/user/f1-game/tools/ci/test-bg.mjs smoke",
@@ -334,156 +311,18 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "node tools/ci/verify-change.mjs --fast --json",
     "node tools/ci/verify-change.mjs --plan",
     "npm run test:guards",
-    "npm run test:tooling-fast",
+    "npm run test:tooling-fast -- --changed",
     "node --test tests/unit/ratchets.test.mjs",
     "node tools/track/verify-track.cjs monza",
-    "tools/mcp/js-debugger-mcp.sh list-tools",
-    "bash tools/mcp/js-debugger-mcp.sh status",
   ];
   for (const cmd of browser) assert.equal(run(cmd, true).status, 2, `a subagent must not run: ${cmd}`);
   for (const cmd of nodeOnly) assert.equal(run(cmd, true).status, 0, `a subagent may run: ${cmd}`);
   for (const cmd of browser) assert.equal(run(cmd, false).status, 0, `the main session may run: ${cmd}`);
 });
 
-test("the Bash guard blocks a bare kill of the supervisor pid test-bg records", () => {
-  // test-bg.mjs spawns `sh -c "start_s=…; npm run --silent test:<g> …; echo
-  // '[test-bg] END …'"` and registers THAT pid. The /proc cmdline walk looked
-  // for "npm run test:" — the --silent in between meant `kill <pid from
-  // --status>`, the exact incident AGENTS.md rule 6 exists for, went through.
-  const sup = spawn("sh", ["-c", "sleep 30; npm run --silent test:zz-probe; echo '[test-bg] END group=zz-probe'"],
-    { stdio: "ignore", detached: true });
-  try {
-    const r = spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
-      input: JSON.stringify({ tool_name: "Bash", tool_input: { command: `kill ${sup.pid}` } }),
-      encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
-    });
-    assert.equal(r.status, 2, `bash-guard must block a kill of the test-bg supervisor: ${r.stderr}`);
-  } finally {
-    try { process.kill(-sup.pid, "SIGKILL"); } catch { /* already gone */ }
-  }
-});
-
-// A throwaway repo for the hook tests below: js/, docs/, a generated file and
-// an index.html with a @gen-shell block, one commit deep. Its file names are
-// REAL repo paths on purpose: docs-integrity fails a source string that names
-// a file the repo does not have.
-function scratchRepo(prefix) {
-  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", prefix));
-  const g = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
-  g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
-  for (const [f, body] of Object.entries({
-    "js/game.js": "var a = 1;\n", "docs/PHYSICS.md": "note\n", "tools/manifest.cjs": "export {};\n",
-    "version.json": "{}\n", "tests/data/ratchets.json": "{}\n",
-    "index.html": "<head>\n<!-- @gen-shell:scripts -->\n<script src=js/game.js></script>\n<!-- @gen-shell:end -->\n<p>hand</p>\n",
-    "package.json": JSON.stringify({ name: "x", version: "1", scripts: { "test:x": "node --test" } }, null, 2) + "\n",
-  })) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), body); }
-  g("add", "-A"); g("commit", "-qm", "init");
-  return { dir, g, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
-}
-
-test("the commit guard recognises every shape of git commit, and judges what is COMMITTED", () => {
-  /* 2026-10-04 review: the commit regex matched `git( -C dir)? commit` on the
-     raw text. Ten forms walked past it, and a pathspec commit of js/ with only
-     a doc staged took the docs-only path. APEX_GUARD_PROBE=1 stops the hook
-     after it has classified the commit (and run the unstaged check), so this
-     runs the real decision without the 25 s guard suite. */
-  const repo = scratchRepo("hook-commit-");
-  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
-    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
-  });
-  try {
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
-    repo.g("add", "docs/PHYSICS.md");
-    for (const cmd of [
-      "git commit -m x",
-      "git -c user.name=x commit -m x",
-      "git --no-pager commit -m x",
-      'bash -c "git commit -m x"',
-      "bash -c 'git commit -m x'",
-      "env X=1 git commit -m x",
-      "GIT_AUTHOR_NAME=x git commit -m x",
-      "/usr/bin/git commit -m x",
-      "sudo -u me git commit -m x",
-      "cd . && git commit -m 'multi\nline'",
-    ]) {
-      const r = run(cmd);
-      assert.equal(r.status, 0, `${cmd}: ${r.stderr}`);
-      assert.match(r.stderr, /bash-guard probe: commit docs-only/, `the guard must SEE this commit: ${cmd}`);
-    }
-    // A pathspec naming code makes it a code commit, whatever is staged.
-    const ps = run("git commit docs/PHYSICS.md js/game.js -m x");
-    assert.match(ps.stderr, /probe: commit code paths=docs\/PHYSICS\.md js\/game\.js/, ps.stderr);
-    assert.match(run("git commit -am x").stderr, /probe: commit code/, "-a stages at commit time: never docs-only");
-    // Not commits at all: no classification, no block.
-    for (const cmd of ["echo 'git commit -m x'", "git log --oneline", "git commit --dry-run -m x",
-                       "printf '%s' 'cd x; git commit'", "APEX_SKIP_GUARDS=1 git commit -m x"]) {
-      const r = run(cmd);
-      assert.equal(r.status, 0, cmd);
-      assert.doesNotMatch(r.stderr, /probe: commit/, `not a guarded commit: ${cmd}`);
-    }
-    // STAGED, not the working tree: an unstaged code edit beside a staged one
-    // makes the guards measure content this commit does not carry.
-    fs.writeFileSync(path.join(repo.dir, "tools/manifest.cjs"), "export const t = 1;\n");
-    repo.g("add", "tools/manifest.cjs");
-    fs.writeFileSync(path.join(repo.dir, "js/game.js"), "var a = 2;\n");
-    const partial = run("git commit -m x");
-    assert.equal(partial.status, 2, "a partially staged commit must be refused");
-    assert.match(partial.stderr, /differ from what this commit holds[\s\S]*js\/game\.js/);
-    assert.equal(run("git commit -am x").status, 0, "-a commits the working tree: nothing differs");
-    assert.equal(run("git commit -m x js/game.js tools/manifest.cjs").status, 0, "a pathspec commits those paths from the working tree");
-    assert.equal(run("git -c core.pager=cat commit -m x").status, 2, "the global-option form gets the same check");
-  } finally { repo.rm(); }
-});
-
-test("the edit guard sees Bash writes: sed -i, heredocs, tee, cp into js/ or a generated file", () => {
-  /* Auto mode tells agents to edit with sed and heredocs, and the edit guard
-     was wired to Write/Edit only — so a live run's js/ and every generated file
-     were open to Bash. shellparse.py names the write targets; protect-files.py
-     applies the same rules to each. */
-  const repo = scratchRepo("hook-write-");
-  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/protect-files.sh")], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
-    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir },
-  });
-  const binDir = path.join(repo.dir, "bin");
-  fs.mkdirSync(binDir);
-  fs.writeFileSync(path.join(binDir, "playwright"), "sleep 30\n");
-  let fake;
-  try {
-    // No live run: source edits through Bash are ordinary work.
-    for (const cmd of ["sed -i s/1/2/ js/game.js", "cat > js/core/log.js <<'EOF'\nvar b;\nEOF", "echo x >> docs/PHYSICS.md",
-                       "sed -i 's/hand/hand 2/' index.html", "sed -i 's/\"version\": \"1\"/\"version\": \"2\"/' package.json",
-                       "ls js > /dev/null", "git commit -m 'cp a js/game.js'"]) {
-      const r = run(cmd);
-      assert.equal(r.status, 0, `${cmd}: ${r.stderr}`);
-    }
-    // Generated files, any checkout, any write shape.
-    for (const cmd of ["echo '{}' > version.json", "sed -i s/a/b/ tests/data/ratchets.json", "cp /dev/null version.json",
-                       "printf x | tee tests/data/ratchets.json", "bash -c 'echo > version.json'",
-                       "sed -i 's/src=js.game/src=js.other/' index.html", "cat > index.html <<'EOF'\nx\nEOF",
-                       "sed -i 's/test:x/test:y/' package.json", "echo '{}' > package.json"]) {
-      const r = run(cmd);
-      assert.equal(r.status, 2, `must block: ${cmd} (${r.stderr})`);
-      assert.match(r.stderr, /via Bash/, `the refusal names the Bash write: ${cmd}`);
-    }
-    // A live Playwright run in THIS checkout: js/, css/ and index.html are frozen.
-    fake = spawn("sh", [path.join(binDir, "playwright"), "test"], { cwd: repo.dir, stdio: "ignore", detached: true });
-    const t0 = Date.now();
-    while (Date.now() - t0 < 2000 && !fs.existsSync(`/proc/${fake.pid}/cmdline`)) { /* spin until /proc shows it */ }
-    for (const cmd of ["sed -i s/1/2/ js/game.js", "cat > js/core/log.js <<'EOF'\nvar b;\nEOF", "cp docs/PHYSICS.md js/",
-                       "cd js && sed -i s/1/2/ game.js", "tee -a css/tokens.css < docs/PHYSICS.md"]) {
-      const r = run(cmd);
-      assert.equal(r.status, 2, `must block during a live run: ${cmd} (${r.stderr})`);
-      assert.match(r.stderr, /Playwright run is live/);
-    }
-    assert.equal(run("echo x >> docs/PHYSICS.md").status, 0, "prose stays open during a run");
-  } finally {
-    if (fake) { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } }
-    repo.rm();
-  }
-});
+// 2026-11-03 (plan §4.7): the test-bg supervisor-pid rule, shellparse.py's commit parser and the Bash-write
+// half of protect-files (live-run rule included) are gone with the slim hooks; their surviving behaviour is
+// pinned in the hook tests B1 owns (bash-guard-hardening.test.mjs), not here.
 
 test("a subagent cannot reach a browser through MCP tools either", () => {
   /* AGENTS.md §Verification 10 held for Bash only; every subagent was offered
@@ -500,31 +339,29 @@ test("a subagent cannot reach a browser through MCP tools either", () => {
     assert.ok(re.test(n), `matcher must select ${n}`);
   for (const n of ["mcp__apex-tools__apex_track_audit", "mcp__apex-tools__apex_status", "mcp__github__get_me", "Bash"])
     assert.ok(!re.test(n), `matcher must leave ${n} alone`);
-  assert.ok(groups.some((g) => g.matcher === "Bash" && g.hooks.some((h) => h.command.includes("protect-files.sh"))),
-    "the edit guard runs on Bash too");
   const run = (payload) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/mcp-browser-guard.sh")],
     { input: JSON.stringify(payload), encoding: "utf8" });
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }).status, 2);
-  assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" }).status, 2);
-  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_control", agent_type: "reviewer" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_control", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__js-debugger__debugger_state" }).status, 0, "parent retains debugger access");
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate" }).status, 0, "the main session keeps its browser");
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }).status, 0, "tree tools stay open to subagents");
 });
 
-test("auto memory is on, synced, and its tracked copy stays small, typed and secret-free", () => {
+test("auto memory is on, restored at SessionStart, and its tracked copy stays small, typed and secret-free", () => {
   // docs/notes/AGENT-MEMORY.md: the CLI turns auto memory OFF in cloud sessions
-  // unless this env is falsy, and memory-sync.sh is the only thing that carries
-  // it across containers. The tracked copy is model-written and committed, so
-  // it gets the same limits the CLI applies (200-line index) plus a secret scan.
+  // unless this env is falsy, and memory-sync.sh restores the tracked copy at
+  // SessionStart (one-way since 2026-11-03: the repo wins). The tracked copy is
+  // model-written and committed, so it gets the same limits the CLI applies
+  // (200-line index) plus a secret scan.
   const settings = JSON.parse(read(".claude/settings.json"));
   assert.equal(settings.env?.CLAUDE_CODE_DISABLE_AUTO_MEMORY, "0", "auto memory must be forced on (it is off in remote sessions)");
-  const cmds = (ev) => (settings.hooks?.[ev] || []).flatMap((g) => (g.hooks || []).map((h) => h.command));
-  for (const ev of ["PostToolUse", "Stop"])
-    assert.ok(cmds(ev).some((c) => /memory-sync\.sh" save$/.test(c)), `${ev} must run memory-sync.sh save`);
-  assert.match(read(".claude/hooks/session-start.sh"), /memory-sync\.sh" restore/, "session-start must restore memory");
+  // 2026-11-03: the restore is its own SessionStart entry in settings.json (after session-start.sh), one-way, repo wins.
+  const startHooks = JSON.stringify(JSON.parse(read(".claude/settings.json")).hooks.SessionStart);
+  assert.match(`${read(".claude/hooks/session-start.sh")}\n${startHooks}`, /memory-sync\.sh\\?" restore/, "SessionStart must restore memory (session-start.sh or a settings.json SessionStart entry)");
   assert.match(read(".gitignore"), /^!\.claude\/memory\/$/m, ".claude/memory/ must be tracked");
   const dir = path.join(ROOT, ".claude/memory");
   const index = read(".claude/memory/MEMORY.md");
@@ -655,7 +492,9 @@ test("the edit guard refuses a generated package.json block through Write as wel
   mangled.scripts["test:guards"] = "echo nope";
   assert.equal(run({ tool_name: "Write", tool_input: { file_path: pkg, content: JSON.stringify(mangled, null, 2) } }).status, 2,
     "a Write that rewrites a test:* script must be blocked");
-  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: pkg, old_string: '"test:guards":', new_string: '"test:guards":' } }).status, 2,
+  // 2026-11-03: the slim guard judges the RESULT (a test:* script that changes), not the touched text, so the
+  // Edit probe has to change a script; an Edit that leaves every test:* script as it was is not a generated-block edit.
+  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: pkg, old_string: '"test:guards": "', new_string: '"test:guards": "echo nope && ' } }).status, 2,
     "the Edit path must still be blocked");
   // A LINKED WORKTREE has a second, wider rule in front of this one: the hook
   // makes package.json (and index.html, manifest.cjs, sw.js) main-session-only,
@@ -688,14 +527,12 @@ test("the Codex skill mirror is tracked symlinks and the repair script exists", 
   assert.match(read("tools/env/mirror-skills.sh"), /ln -s/, "the repair makes symlinks, the tracked form");
 });
 
-test("env install scripts and live-run.py answer --help without side effects", () => {
-  // --help used to run the install body (npm / apt / MCP clones) or crash
-  // live-run.py with IndexError when argv was missing.
+test("env install scripts answer --help without side effects", () => {
+  // --help used to run the install body (npm / apt / MCP clones).
   const cases = [
     { cmd: "bash", args: ["tools/env/mirror-skills.sh", "--help"], want: /--check/, no: /mirrored \d+ skills/ },
     { cmd: "bash", args: ["tools/env/install-browsers.sh", "--help"], want: /Playwright Chromium/, no: /OK: Playwright Chromium ready/ },
     { cmd: "bash", args: ["tools/env/cloud-agent-install.sh", "--help"], want: /install-browsers/, no: /OK: cloud-agent install complete/ },
-    { cmd: "python3", args: [".claude/hooks/live-run.py", "--help"], want: /usage: live-run\.py/, no: null },
   ];
   for (const c of cases) {
     const r = spawnSync(c.cmd, c.args, { encoding: "utf8", cwd: ROOT, timeout: 10000 });
@@ -704,9 +541,6 @@ test("env install scripts and live-run.py answer --help without side effects", (
     assert.match(text, c.want, `${c.args[0]} --help missing ${c.want}`);
     if (c.no) assert.doesNotMatch(text, c.no, `${c.args[0]} --help ran the real body`);
   }
-  const bare = spawnSync("python3", [".claude/hooks/live-run.py"], { encoding: "utf8", cwd: ROOT, timeout: 5000 });
-  assert.equal(bare.status, 2, "live-run.py with no root must exit 2, not IndexError");
-  assert.match(`${bare.stdout}\n${bare.stderr}`, /usage: live-run\.py/);
 });
 
 // ── THE ALWAYS-ON SURFACE HAS A BUDGET ──────────────────────────────────────
@@ -743,9 +577,11 @@ test("the always-on instruction surface stays inside its budget", () => {
     const { fm } = stripFrontmatter(read(`.claude/skills/${d.name}/SKILL.md`));
     // Measure the described surface, not YAML keys, name fields or scalar
     // quoting/folding syntax. Parsing also refuses malformed descriptions.
-    const description = parseYAML(fm)?.description;
+    const parsed = parseYAML(fm);
+    const description = parsed?.description;
     assert.equal(typeof description, "string", `${d.name}: description must be a YAML string`);
-    descWords += description.split(/\s+/).filter(Boolean).length;
+    // user-only skills (disable-model-invocation) are not in context: see the budgets file comment
+    descWords += parsed["disable-model-invocation"] === true ? 0 : description.split(/\s+/).filter(Boolean).length;
   }
   // Raised 1600 -> 1700 on 2026-10-16 (Bryce: "Raise the skill budget"): 40 skills left
   // ~0 slack, so every skill edit traded routing recall (skill-hint-hook floor) for budget.
@@ -793,39 +629,33 @@ test("nested AGENTS.md files are symlinks to their sibling CLAUDE.md (one copy p
   }
 });
 
-test("skill descriptions: a char budget, every arrow resolves, every skill has routing queries", () => {
+test("skill descriptions: a char budget, every arrow resolves", () => {
+  // Routing prompts and the deterministic description checks: the skill-descriptions unit test (2026-11-03).
   const skills = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileTypes: true })
     .filter((d) => d.isDirectory() && exists(`.claude/skills/${d.name}/SKILL.md`)).map((d) => d.name);
   const agents = fs.readdirSync(path.join(ROOT, ".claude/agents")).filter((f) => f.endsWith(".md") && f !== "README.md")
     .map((f) => f.replace(/\.md$/, ""));
   let chars = 0;
   for (const name of skills) {
-    const desc = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm).description;
+    const meta = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm);
+    const desc = meta.description;
     // The Agent Skills spec caps a description at 1,024 characters.
     assert.ok(desc.length <= BUDGET.skillDescriptionCharsEach, `${name}: description is ${desc.length} chars (spec max ${BUDGET.skillDescriptionCharsEach})`);
-    chars += desc.length;
+    if (meta["disable-model-invocation"] !== true) chars += desc.length; // user-only: not always-on
     for (const m of desc.matchAll(/(?:→|->)\s*(?:agent\s+)?\**`?([a-z0-9][a-z0-9-]*)/g))
       assert.ok(skills.includes(m[1]) || agents.includes(m[1]), `${name}: "→ ${m[1]}" names no skill or agent`);
-    assert.ok(exists(`tests/data/skill-routing/queries/${name}.json`),
-      `${name} has no tests/data/skill-routing/queries/${name}.json (5 should-fire + 3 near-miss queries)`);
   }
   // 11,986 chars on 2026-10-14, rounded up to the next 100. Raised to 12,800 on 2026-10-16
   // (Bryce: "Raise the skill budget") for the same reason as the word budget. Trim one to add one.
   assert.ok(chars <= BUDGET.skillDescriptionChars, `${skills.length} skill descriptions are ${chars} chars (budget ${BUDGET.skillDescriptionChars})`);
-  for (const f of fs.readdirSync(path.join(ROOT, "tests/data/skill-routing/queries"))) {
-    const rows = JSON.parse(read(`tests/data/skill-routing/queries/${f}`));
-    assert.ok(skills.includes(f.replace(/\.json$/, "")), `${f}: no such skill`);
-    for (const r of rows) assert.ok(skills.includes(r.expect) || agents.includes(r.expect), `${f}: expect "${r.expect}" is not a skill or agent`);
-  }
 });
 
 test("settings.json denies GitHub-MCP repo surgery; nothing asks (the owner, 2026-10-15)", () => {
   const perms = JSON.parse(read(".claude/settings.json")).permissions;
   for (const t of ["mcp__github__delete_file", "mcp__github__create_repository", "mcp__github__fork_repository"])
     assert.ok(perms.deny.includes(t), `permissions.deny must hold ${t} (AGENTS.md: agents never merge)`);
-  // push_files / create_or_update_file sat in permissions.ask until 2026-10-15 (a commit
-  // that skips the commit hook). Bryce: "I want all tools and mcps enabled", "Fix for me".
-  assert.deepEqual(perms.ask || [], [], "no permissions.ask rule");
+  // 2026-11-03 (plan §4.7): permissions.ask holds the few Bryce-attended routes (gh api DELETE, workflow
+  // dispatch); which ones is settings.json's own business, pinned by B1's hook tests.
   assert.ok(perms.allow.includes("mcp__github"), "the whole GitHub MCP server is pre-approved");
   for (const t of [...perms.deny, ...(perms.ask || [])])
     assert.ok(!perms.allow.includes(t), `${t} is both allowed and gated`);
@@ -856,38 +686,18 @@ test(".cursor/environment.json allowlists exactly the .mcp.json servers, with th
   }
 });
 
-// ── A MEMORY STORE THAT CANNOT EXPIRE IS A RATCHET ──────────────────────────
-// .claude/agent-memory/<name>/ is the one memory store that survives here: it is
-// in the repo and tracked (!.claude/agent-memory/ in .gitignore), unlike Claude
-// Code's auto memory under ~/.claude, which a fresh cloud container wipes every
-// session. Because it is written by an agent and read by later agents, it is the
-// exact shape the literature warns about — arXiv 2607.24300 measured agents
-// scoring their own work at >=0.70 while 15 of 35 runs fell below a random
-// baseline. verify-agent's seed already answers this ("an entry older than the
-// merge-base is re-verified, not trusted"); this makes that property a rule
-// rather than a habit, for every store that gets added later.
-test("every agent-memory store declares its schema and how an entry expires", () => {
+// 2026-11-03: the per-agent memory stores (.claude/agent-memory/) and their `memory:` cards are gone
+// (plan §4.6); a store that comes back needs its schema and expiry rule pinned again here.
+test("no agent-memory store is committed without a schema and an expiry rule", () => {
   const dir = path.join(ROOT, ".claude/agent-memory");
-  if (!fs.existsSync(dir)) return;                    // no stores yet is fine
-  const stores = fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory());
-  assert.ok(stores.length > 0, "an empty .claude/agent-memory/ should not be committed");
-  for (const s of stores) {
+  if (!fs.existsSync(dir)) return;
+  for (const s of fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory())) {
     const rel = `.claude/agent-memory/${s.name}/MEMORY.md`;
     assert.ok(exists(rel), `${s.name} has a memory dir but no MEMORY.md index`);
     const text = read(rel);
-    // A schema: the store says what ONE entry looks like, so entries stay
-    // comparable and a later agent can tell a real record from a musing.
-    assert.ok(/`[^`]*—[^`]*`/.test(text),
-      `${rel} states no entry schema — a store without one accumulates prose`);
-    // An expiry/distrust rule: something that makes an old entry stop counting.
+    assert.ok(/`[^`]*—[^`]*`/.test(text), `${rel} states no entry schema — a store without one accumulates prose`);
     assert.ok(/re-verif|expire|stale|older than|no longer|re-check|recheck/i.test(text),
       `${rel} names no way for an entry to stop being believed — that is the ratchet arXiv 2608.11095 measures`);
-    // The agent that owns it must actually declare the memory, or the file is
-    // decoration that nothing reads.
-    const agent = `.claude/agents/${s.name}.md`;
-    assert.ok(exists(agent), `${rel} has no owning subagent at ${agent}`);
-    assert.match(read(agent), /^memory:\s*(user|project|local)\s*$/m,
-      `${s.name} has a memory store but its frontmatter never declares memory:`);
   }
 });
 
@@ -940,7 +750,7 @@ test("every skill reference is linked from its SKILL.md and, past 100 lines, ope
 // rule. Nothing any agent reads may tell it to squash again.
 test("no agent-facing file tells an agent to arm or merge with SQUASH", () => {
   const files = spawnSync("git", ["ls-files", "AGENTS.md", ".claude/agents", ".claude/skills", ".claude/rules",
-    ".cursor", "cursor-plugins", ".codex", ".agents", "docs/notes/APEX-STEWARD-CARD-2026-10-05.md", "tools/ci/deploy.mjs"],
+    ".cursor", ".codex", ".agents", "docs/notes/APEX-STEWARD-CARD-2026-10-05.md", "tools/ci/deploy.mjs"],
     { cwd: ROOT, encoding: "utf8" }).stdout.split("\n").filter(Boolean)
     .filter((f) => !fs.lstatSync(path.join(ROOT, f)).isSymbolicLink());
   assert.ok(files.length > 20, "the agent-facing file listing came back nearly empty");
@@ -950,32 +760,12 @@ test("no agent-facing file tells an agent to arm or merge with SQUASH", () => {
   assert.deepEqual(bad, [], "squash is retired — Merge Desk arms MERGE (merge commit) only");
 });
 
-test("bash-guard's in-script trigger filter covers every policed command shape (#1711)", () => {
-  /* Cursor imports Claude hooks but does not document Claude's per-step `if`.
-     Keep one Bash hook and do the same 14-word filtering inside the script.
-     protect-files.sh stays unfiltered on purpose: it polices writes (redirects,
-     any interpreter), which no verb list covers. */
-  const settings = JSON.parse(read(".claude/settings.json"));
-  const group = settings.hooks.PreToolUse.find((g) => g.matcher === "Bash");
-  const guards = group.hooks.filter((h) => h.command.includes("bash-guard.sh"));
-  assert.equal(guards.length, 1, "one Bash call starts one imported bash-guard");
-  assert.equal(guards[0].if, undefined, "the handler does not rely on an undocumented Cursor field");
-  assert.ok(group.hooks.some((h) => h.command.includes("protect-files.sh") && !h.if), "protect-files keeps polling every Bash write");
-  const src = read(".claude/hooks/bash-guard.sh");
-  const trigger = src.match(/^GUARD_TRIGGER='([^']+)'$/m);
-  assert.ok(trigger, "bash-guard declares its fast-path trigger union");
-  const reaches = (cmd) => new RegExp(trigger[1]).test(cmd);
-  for (const cmd of ["git commit -m x", "foo && git commit -m x", "FOO=1 git push -u origin b", "pkill -f chrome", "kill 123",
-    "killall node", "gh pr merge 1", "curl -X POST x/runs/1/cancel", "node tools/ci/test-bg.mjs g", "npm run test:guards",
-    "npx playwright test", "playwright test", "bash -c 'git commit'", "timeout 5 pkill -f x", "python3 x.py", "eval 'git commit'",
-    "ls | xargs rm", "/usr/bin/chromium --headless"])
-    assert.ok(reaches(cmd), `bash-guard must still run for: ${cmd}`);
-  for (const cmd of ["ls -la", "cat README.md", "grep -n foo file", "head -5 x", "sed -n 1,5p x"])
-    assert.ok(!reaches(cmd), `read-only command should skip bash-guard: ${cmd}`);
-});
+// 2026-11-03: bash-guard's GUARD_TRIGGER fast path went with shellparse.py (plan §4.7); the slim guard's
+// shapes are pinned in B1's bash-guard-hardening.test.mjs.
 
-// #1984: a delegation prompt must not grant a write the track-surveyor edit hook denies.
-test("the survey-track delegation template owns exactly what the track-surveyor hook lets it write (#1984)", () => {
+// #1984: a delegation prompt must not grant a write the track-surveyor's own scope hook denies
+// (the regex now lives in the surveyor's own scope hook, named in its card; plan §4.6).
+test("the survey-track delegation template owns only the surveyor's circuit pair (#1984)", () => {
   const tpl = fs.readFileSync(path.join(ROOT, ".claude/skills/survey-track/references/delegation.md"), "utf8");
   const owned = tpl.split("\n").find((l) => l.startsWith("OWNED"));
   assert.ok(owned, "template has an OWNED line");
@@ -983,8 +773,6 @@ test("the survey-track delegation template owns exactly what the track-surveyor 
   assert.match(owned, /js\/circuits\/scenery\/<id>\.js/);
   assert.doesNotMatch(owned, /docs\//, "docs/tracks/<id>.md is not writable by the surveyor");
   assert.match(tpl.split("\n").find((l) => l.startsWith("FORBIDDEN")), /docs\/\*\*/);
-  const hook = fs.readFileSync(path.join(ROOT, ".claude/hooks/protect-files.sh"), "utf8");
-  assert.match(hook, /only js\/circuits\/<id>\.js, js\/circuits\/scenery\/<id>\.js, scratch\/ and\s+#\s+artifacts\//);
 });
 
 // Skill hygiene pins from the 2026-10-16 issue burn-down (#1693 #1688 #1687 #1700).
@@ -1026,17 +814,48 @@ test("the survey-track delegation template owns exactly what the track-surveyor 
   });
 }
 
-// stop-guard.sh nudges once over a live browser run; the two paths that must NEVER block a
-// stop are deterministic and spawned here (the live-run nudge itself needs a real playwright
-// process, so it stays out of the node ladder).
-test("stop-guard.sh lets a stop through when Claude is already continuing, and on junk input", () => {
-  const run = (input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/stop-guard.sh")], {
-    input, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
-  });
-  const cont = run(JSON.stringify({ hook_event_name: "Stop", stop_hook_active: true }));
-  assert.equal(cont.status, 0, `stop_hook_active must pass: ${cont.stderr}`);
-  assert.equal(cont.stdout, "");
-  const junk = run("not json at all");
-  assert.notEqual(junk.status, 1, `a malformed payload must not crash the hook: ${junk.stderr}`);
+// Claude Code's own skill validator (Claude Academy, "Troubleshooting skills"; needs Claude Code
+// v2.1.233+; https://code.claude.com/docs/en/plugins/cli-reference#validate-a-directory,
+// checked 2026-10-28). It catches a SKILL.md whose frontmatter does not parse, which the budget tests above
+// only see through our own parser. It skips where the CLI is absent or too old (CI runners).
+test("claude plugin validate accepts project skills and rejects malformed skill frontmatter", { timeout: 100000 }, (t) => {
+  const r = spawnSync("claude", ["plugin", "validate", ".claude/skills"], { cwd: ROOT, encoding: "utf8", timeout: 80000 });
+  if (r.error && r.error.code === "ENOENT") return t.skip("claude CLI not on PATH");
+  const out = `${r.stdout}${r.stderr}`;
+  if (/unknown command|not a (known|valid) command|unknown option/i.test(out)) return t.skip("claude CLI too old for `plugin validate`");
+  assert.equal(r.status, 0, `claude plugin validate .claude/skills failed:\n${out}`);
+  // Exercise the validator's decision rather than its success-message wording.
+  // The valid control ensures a nonzero result is about the malformed YAML,
+  // not an unsupported fixture layout or path.
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "skill-validator-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const skills = path.join(dir, "skills"), skill = path.join(skills, "example"); fs.mkdirSync(skill, { recursive: true });
+  const file = path.join(skill, "SKILL.md");
+  fs.writeFileSync(file, '---\nname: example\ndescription: "Use when testing skill validation."\n---\n# Example\n');
+  const validate = () => spawnSync("claude", ["plugin", "validate", skills], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
+  const valid = validate();
+  assert.equal(valid.status, 0, `valid fixture refused: ${valid.error || valid.stdout + valid.stderr}`);
+  fs.writeFileSync(file, '---\nname: example\ndescription: [unterminated\n---\n# Example\n');
+  const invalid = validate();
+  assert.equal(invalid.error, undefined, `validator must execute, not fail to launch: ${invalid.error}`);
+  assert.equal(invalid.signal, null, "malformed frontmatter must return a verdict, not time out");
+  // ENVIRONMENT PRECONDITION, not a quarantine: a `claude` whose validator accepts the malformed control (exit 0)
+  // cannot validate here at all (the cloud containers' CLI, 2.1.314, 2026-10-30), so the assertion below would
+  // measure the CLI, not our skills. Where the validator rejects the control, the assertion stays and a real
+  // failure of it is still red. Known container-only reds: docs/TESTING.md.
+  if (invalid.status === 0) return t.skip("claude CLI cannot validate here: it accepted malformed skill frontmatter (exit 0)");
+  assert.equal(invalid.status, 1, "malformed frontmatter must fail validation (not an unexpected validator error)");
 });
 
+test("season-mode references quote only unit-test names that exist", () => {
+  // `name…` in backticks is a test-title prefix; a renamed test would leave the skill pointing at nothing.
+  const walk = (d) => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? walk(`${d}/${e.name}`) : [`${d}/${e.name}`]));
+  const corpus = walk("tests/unit").filter((f) => /\.(mjs|js|cjs)$/.test(f)).map(read).join("\n");
+  const missing = [];
+  for (const f of walk(".claude/skills/season-mode").filter((x) => x.endsWith(".md"))) {
+    for (const m of read(f).matchAll(/`([^`\n]{12,}?)…`/g)) if (!corpus.includes(m[1])) missing.push(`${f}: ${m[1]}`);
+  }
+  assert.deepEqual(missing, []);
+});

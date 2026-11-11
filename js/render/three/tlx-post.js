@@ -39,8 +39,12 @@
  *   resolve doesn't expose the resolved DEPTH") described r184. Phones and
  *   the native-WebGPU path keep the single-sample recipe (FXAA carries the
  *   AA): core WebGPU cannot resolve a depth attachment. The ssrTag attachment
- *   is resolved too, so a tag averages across an edge (accepted). No
- *   invalidateFramebuffer either (three owns attachment lifecycle).
+ *   is resolved too, so a tag averages across an edge (accepted). Scene
+ *   depth/tag: depthEnd() invalidates (WebGL2) or discardHint (WebGPU patch 17)
+ *   when no post reader needs them; three's MSAA resolve path also invalidates.
+ *   Post ping-pong colour targets clear on every overwrite (runPass autoClear),
+ *   so a tile GPU never reloads their prior contents — see
+ *   docs/notes/TLX-FB-INVALIDATE-AUDIT-2026-10-28.md (#2649).
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.postChain = (THREE, TSL, ctx) => ({ enabled, hdrOk,
@@ -118,7 +122,9 @@
     let hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend);
     // BLOOM FORMAT (hunt D6): R11F_G11F_B10F as GLX when it is RENDERABLE (and
     // blendable — the UP passes add): WebGL2 needs EXT_color_buffer_float (not
-    // the half-float one: iOS Safari stays RGBA16F); WebGPU the
+    // the half-float one; the probe below decides per device, and iOS is
+    // reported to expose it, web3dsurvey ~100 %, so do not assume RGBA16F
+    // there); WebGPU the
     // "rg11b10ufloat-renderable" feature three requests whenever the adapter
     // has it. Every bloom reader takes .rgb only. apex26.tlxBloom11=0 reverts.
     let bloom11 = false;
@@ -162,6 +168,19 @@
       const k = localStorage.getItem("apex26.tlxScene11");
       if (k === "0") scene11 = false; else if (k === "1") scene11 = _r11Blendable;
     } catch (_) { /* no storage: the default above */ }
+    // PHONE FORMAT TRIMS (#2649, docs/notes/TLX-WEBGPU-PASS-AUDIT-2026-10-27.md). WebGPU leg only, each OFF
+    // until a device A/B (they change stored precision; the arms are listed on #3954), latched for the chain:
+    //   apex26.tlxMir11=1 (scene11 only): the mirror's colour takes the scene's rg11b10, so three's pipeline
+    //     key (it holds attachment 0's format) matches the scene's again and the mirror reuses its pipelines
+    //     (A·W14), which an rgba16float mirror under an rg11b10 scene cannot; also 4 B/px instead of 8.
+    //   apex26.tlxTag8=1: ssrTag r8unorm (1 B/px) on scene AND mirror (three keys on attachment 0 only, so
+    //     the two must agree). Tags are 0.35 / 0.75 / alpha / 1 against 0.42-0.55 / 0.85-0.95 steps.
+    //   apex26.tlxGodray11=1: the godray pair rg11b10 on frames whose alpha carries no folded AO (night).
+    const _isWgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    const _fmtOn = (k) => { try { return localStorage.getItem(k) === "1"; } catch (_) { return false; } };
+    const mir11 = scene11 && _fmtOn("apex26.tlxMir11");
+    const tag8 = _isWgpu && _fmtOn("apex26.tlxTag8");
+    const gr11Knob = _r11Blendable && _fmtOn("apex26.tlxGodray11");
     // sceneHdr is fixed for the chain's life — hdr is decided once at factory time.
     let _sceneHdr = hdr ? 1 : 0;
 
@@ -280,6 +299,7 @@
     const bk = renderer.backend || {};
     if (tagOn && sceneRT.textures && sceneRT.textures[1]) {
       if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) sceneRT.textures[1].format = THREE.RedFormat;
+      if (tag8) sceneRT.textures[1].type = THREE.UnsignedByteType;
       sceneRT.textures[1].name = "ssrTag";
       sceneRT.textures[1].generateMipmaps = false;
       sceneRT.textures[1].colorSpace = THREE.NoColorSpace;
@@ -342,10 +362,13 @@
       }
       return true;
     }
-    function ensureGR() {
+    let _gr11 = false;   // the live godray pair is rg11b10 (apex26.tlxGodray11)
+    function ensureGR(r11) {
+      if (godrayRT && _gr11 !== r11) releaseGR();   // a fold arriving needs the alpha back
       if (!godrayRT) {
-        godrayRT = makeRT(1, 1, hdrType);
-        godrayBlurRT = makeRT(1, 1, hdrType);
+        _gr11 = r11;
+        godrayRT = r11 ? makeRT(1, 1, THREE.UnsignedInt101111Type, THREE.RGBFormat) : makeRT(1, 1, hdrType);
+        godrayBlurRT = r11 ? makeRT(1, 1, THREE.UnsignedInt101111Type, THREE.RGBFormat) : makeRT(1, 1, hdrType);
         layoutHalf();
         bindFixedGR();
       }
@@ -492,6 +515,17 @@
 
     // fullscreen runner
     quad = new THREE.QuadMesh();
+    // QuadMesh.render() swaps three's own full-screen vertex node in for the
+    // draw only; compileAsync(quad) builds the material's (null) one, a
+    // different program, so no quad compile warm ever matched a draw (W6).
+    // Capture that node once and pin it on each pass material (setQuadMat):
+    // render() then swaps in the same node, and a compile keys its program.
+    let _quadVN = null;
+    quad.render({ render(q) { _quadVN = q.material.vertexNode; } });
+    function setQuadMat(mat) {
+      if (_quadVN && mat && !mat.vertexNode) mat.vertexNode = _quadVN;
+      quad.material = mat;
+    }
     let compileJobs = null;
     // load=false CLEARS first (only called inside present(), which restores
     // autoClear): a full-viewport NoBlending quad overwrites every pixel, so a
@@ -500,21 +534,46 @@
     // A-W1 draw warm (drawWarm below): every pass DRAWS once into its own
     // target under a 1x1 scissor, so the driver's first-draw work (ANGLE-Metal's
     // pipeline state, vertex/format conversion) lands in the warm, not on the
-    // race's first frames. Never the canvas (target null): a draw there would
-    // present a fresh, black drawing buffer for the rest of the warm.
-    let _scissorWarm = false, _warmDraws = 0, _warmSc = null;   // the scissor scratch, made on the first warm draw
+    // race's first frames. Never a DRAW to the canvas (target null): it would
+    // present a fresh, black drawing buffer for the rest of the warm. A canvas
+    // pass (FXAA, SGSR, the mirror over SGSR) is COMPILED there instead:
+    // compileAsync takes the target, MRT and depth synchronously, so it keys
+    // the pipeline present() draws. Census 41021224706 (Dawn/Metal) built
+    // FXAA's mid-race (createShaderModule x2 from runPass): the WebGPU post
+    // warm() is off and no warm reached a canvas pass.
+    let _scissorWarm = false, _warmDraws = 0, _warmSc = null, _warmCanvas = 0, _warmCanvasOnly = false, _warmFlipUp = false;
+    // Canvas compiles run ONE AT A TIME: compileAsync parks its context, handler and promise list on the renderer for
+    // its whole run, so the two a draw warm issues (SGSR, then FXAA, across the upscale switch) overlapped and one
+    // pipeline went unbuilt (W6 flaked ~1 in 10). Each job sets the state it keys on, calls, and puts it back at once.
+    let _warmCompiles = Promise.resolve();
+    function compileCanvas(mat) {
+      const mrt = renderer.getMRT();
+      const job = () => {
+        const rt = renderer.getRenderTarget(), mrt0 = renderer.getMRT();
+        setQuadMat(mat); renderer.setRenderTarget(null); renderer.setMRT(mrt);
+        try { return renderer.compileAsync(quad, quad.camera); } finally { renderer.setRenderTarget(rt); renderer.setMRT(mrt0); }
+      };
+      _warmCompiles = _warmCompiles.then(job).catch(() => { /* the live draw builds it then */ });
+    }
     function runPass(mat, target, load) {
       if (compileJobs) { compileJobs.push({ mat, target }); return; }
       if (_scissorWarm) {
-        if (!target) return;
-        (_warmSc || (_warmSc = target.scissor.clone())).copy(target.scissor); target.scissor.set(0, 0, 1, 1);
-        quad.material = mat;
+        if (!target) {
+          compileCanvas(mat);
+          _warmCanvas++;
+          return;
+        }
+        if (_warmCanvasOnly) return;
+        // r187 scissors a bound target by its OWN scissorTest, not renderer.setScissorTest (which gates the canvas).
+        const st0 = target.scissorTest;
+        (_warmSc || (_warmSc = target.scissor.clone())).copy(target.scissor); target.scissor.set(0, 0, 1, 1); target.scissorTest = true;
+        setQuadMat(mat);
         renderer.setRenderTarget(target);
         renderer.autoClear = false;   // a clear (WebGPU loadOp) ignores the scissor
-        try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); }
+        try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); target.scissorTest = st0; }
         return;
       }
-      quad.material = mat;
+      setQuadMat(mat);
       renderer.setRenderTarget(target);
       renderer.autoClear = !load;
       quad.render(renderer);
@@ -532,6 +591,12 @@
       if (_mirTex) { _mirRect[0] = rect[0]; _mirRect[1] = rect[1]; _mirRect[2] = rect[2]; _mirRect[3] = rect[3]; }
       _mirHdr = !!hdr;
       _mirFlip = flip !== false;
+    }
+    // Quit-to-menu (#4219): tlx.js disposes the mirror target, so no texture node may keep naming it.
+    function releaseMirror() {
+      _mirTex = null;
+      if (P && P.mirror) P.mirror.tex.value = blackTex;
+      if (P && P.fxaa && P.fxaa.mirTex) P.fxaa.mirTex.value = blackTex;
     }
     // The rect / hdr / flip uniforms are shared by the mirror pass and the
     // FXAA fold (tsl-post.js mirrorU); false = no mirror this frame.
@@ -723,7 +788,6 @@
         setPersp(U, F.invProj, F.proj);
         const sv = F.sunVS || [0, 0, -1];
         U.sunVS.value.set(sv[0], sv[1], sv[2]);
-        U.texel.value.set(1 / aoW, 1 / aoH);
         U.strength.value = aoStr;
         U.radius.value = gk("ssaoRadius");          // AO RADIUS knob
         const csOn = contactStr > 0 && F.proj && F.sunVS;
@@ -749,7 +813,7 @@
       }
 
       // 0b) Volumetric sun shafts + lamp beams (js/render/glx/shaders/glsl-post.js)
-      const haveGR = wantGR && ensureGR();
+      const haveGR = wantGR && ensureGR(gr11Knob && !aoFold);
       if (haveGR) {
         const U = P.godray.U;
         U.invVP.value.fromArray(F.invVP);
@@ -761,7 +825,8 @@
         const scl = F.sunColor || [1, 1, 1];
         U.sunColor.value.set(scl[0], scl[1], scl[2]);
         U.str.value = sunGR ? grStr : 0.0;
-        U.time.value = F.time || 0;
+        // gCloud reads time only under cloudCover > 0.001: a clear sky skips the frame-varying write (as hazeTime).
+        if ((F.cloud || 0) > 0.001) U.time.value = F.time || 0;
         U.cloudCover.value = F.cloud || 0;
         U.cloudSpeed.value = F.cloudSpeed != null ? F.cloudSpeed : 1;
         // Lamp volumetrics: nearest-12 to the eye + the mapped-lamp slot.
@@ -960,7 +1025,8 @@
       const hz = o.haze;
       C.hazeUV.value.set(hz ? hz.u : -9, hz ? hz.v : -9);
       C.hazeStr.value = hz ? hz.str : 0;
-      C.hazeTime.value = F.time || 0;
+      // Read only under hazeStr > 0 (tsl-post.js): a frame-varying write nothing reads is one writeBuffer a frame.
+      if (hz) C.hazeTime.value = F.time || 0;
       C.ssrThick.value = gk("ssrThick");
       // Camera-aware SSR extent (game.js sets these per camera; onboard cams get
       // a raised top cutoff and a pulled-in near fade).
@@ -1009,7 +1075,7 @@
         runPass(P.composite.mat, ldrRT);
         P.fxaa.tex.value = ldrRT.texture;
         P.fxaa.U.texel.value.set(1 / pW, 1 / pH);
-        const useUpscale = !!(P.sgsr && aaRT && ctx.wantSpatialUpscale && ctx.wantSpatialUpscale());
+        const useUpscale = !!(P.sgsr && aaRT && !!(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()) !== _warmFlipUp);
         if (useUpscale) {
           if (P.fxaa.mirTex) fxaaMirror(false);   // FXAA -> aaRT: the inset goes on after SGSR
           runPass(P.fxaa.mat, aaRT);
@@ -1200,7 +1266,7 @@
           // runPass, the same eight sites). Compiling `quad` itself with the job's material is
           // exactly what runPass does, so the hit is guaranteed whatever the key
           // contains.
-          quad.material = job.mat;
+          setQuadMat(job.mat);
           await renderer.compileAsync(quad, quad.camera);
           if (performance.now() >= deadline) break;
         }
@@ -1217,14 +1283,19 @@
     // number of passes drawn; the chain's last-frame state is restored.
     function drawWarm(opts, frame) {
       const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest, mc = _mirComposites, n0 = _warmDraws;
-      const sc0 = renderer.getScissorTest();
+      _warmCanvas = 0;
       try {
-        _scissorWarm = true;
-        renderer.setScissorTest(true);
+        _scissorWarm = true;   // runPass sets each target's own scissorTest + 1x1 rect
         present(opts, frame);
+        // The other side of the upscale switch, canvas passes only: a render
+        // scale crossing 1.0 mid-race swaps FXAA->canvas for SGSR->canvas.
+        if (P.sgsr && aaRT && !viz) {
+          _warmCanvasOnly = true; _warmFlipUp = true;
+          present(opts, frame);
+        }
       } finally {
+        _warmCanvasOnly = false; _warmFlipUp = false;
         _scissorWarm = false;
-        renderer.setScissorTest(sc0);
         Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest; _mirComposites = mc;
       }
       return _warmDraws - n0;
@@ -1235,7 +1306,7 @@
       const target = renderer.getRenderTarget(), previousTex = P.mirror.tex.value;
       try {
         P.mirror.tex.value = tex;   // use the live mipmapped mirror sampling state
-        quad.material = P.mirror.mat;
+        setQuadMat(P.mirror.mat);
         renderer.setRenderTarget((typeof ctx.softDest === "function" ? ctx.softDest() : null) || null);
         await renderer.compileAsync(quad, quad.camera);
       } finally {
@@ -1250,6 +1321,7 @@
       hdrOk: () => hdr,
       sceneTarget: () => sceneRT,
       tagOn: () => tagOn,   // R3: false = one colour attachment, present() must not set the ssrTag MRT
+      targetFormats: () => ({ mir11, tag8 }),   // tlx.js _mirTarget: the mirror's attachments follow the scene's
       // UnsignedByte composite (FXAA input) — the screenshot / soft-present
       // source. three's readRenderTargetPixelsAsync → backend.copyTextureToBuffer
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
@@ -1263,6 +1335,7 @@
       resize,
       warm,
       drawWarm,   // A-W1
+      warmSettled: () => _warmCompiles,   // the draw warm's canvas compiles have landed
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
       needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
@@ -1271,12 +1344,27 @@
       dispose,
       viz,
       setMirror,
+      releaseMirror,
       mirrorComposites: () => _mirComposites,
       state: () => ({
         on: true,
         hdr,
         attachments: tagOn ? 2 : 1,
         sceneFormat: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",   // phoneperf: the scene colour attachment
+        // Every post attachment's format (#2649 audit): what a phone readout should show on the WebGPU leg.
+        formats: {
+          scene: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",
+          tag: !tagOn ? null : tag8 ? "r8" : (_isWgpu || bk.drawBuffersIndexedExt) ? (hdr ? "r16f" : "r8") : (hdr ? "rgba16f" : "rgba8"),
+          mirror11: mir11,
+          bloom: bloom11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",
+          godray: !godrayRT ? null : _gr11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",
+          ssao: "r8", ldr: "rgba8",
+        },
+        // Counted oracle (#2649): godray pair colour bytes (2 targets × bpp).
+        // RGBA16F = 8 B/px, rg11b10 = 4 B/px (GLX hdr3 parity). Half of post size.
+        // apex26.tlxGodray11 only takes effect on unfolded frames (no AO-in-alpha).
+        godrayPairBytes: !godrayRT ? 0 : grW * grH * (_gr11 ? 4 : hdr ? 8 : 4) * 2,
+        godray11: _gr11,
         ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
         tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2

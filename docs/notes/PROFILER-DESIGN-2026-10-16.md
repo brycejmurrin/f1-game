@@ -47,7 +47,7 @@ Sources: three.js forum "WebGPU r181: stats-gl no longer compatible with WebGPU"
 (https://developer.mozilla.org/en-US/docs/Web/API/GPUQuerySet).
 
 Measured on the tree:
-- `vendor/three-0.186.1/three.webgpu.min.js` contains `Inspector`, `TimestampQueryPool`, `trackTimestamp`, `resolveTimestampsAsync`,
+- `vendor/three-0.187.0/three.webgpu.min.js` contains `Inspector`, `TimestampQueryPool`, `trackTimestamp`, `resolveTimestampsAsync`,
   `timestampWrites` — the timestamp plumbing is in the core bundle. The Inspector **UI addon is not vendored** (`addons/` has only
   `tsl`, `webxr`), so a drop-in Inspector panel would need a vendor addition plus a licence/`MANIFEST.json` entry.
 - TLX already sets `renderer.backend.trackTimestamp` and awaits `resolveTimestampsAsync("render")` (`tlx.js` ~1074/4152): frame-level

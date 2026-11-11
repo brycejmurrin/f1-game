@@ -2,7 +2,7 @@
  *
  * The state machine and the measured pit loss are a browser concern
  * (tests/specs/pit-lane.spec.js). What is checkable here is the part that has to
- * be right on all 42 circuits before anything is driven:
+ * be right on every circuit in the roster (Tracks.LIST) before anything is driven:
  *
  *  - the window WRAPS the start/finish line, because that is where every
  *    circuit's pit straight is. A naive `s >= a && s <= b` is wrong for every
@@ -33,6 +33,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { createRequire } from "node:module";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -50,6 +51,7 @@ function load() {
   // The pit complex model (TrackPit) is what PitLane reads its pitch and, on
   // a built track, its window and row from — loaded beside it, as the game does.
   vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-geom.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   return vm.runInContext("PitLane", ctx);
 }
@@ -238,7 +240,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real 
   ] }] };
   // The AI's planner, for think(): the plan fires on its lap and not before.
   ctx.AiDrive = { pitNow: (x) => (x.wrongTread ? "weather" : x.wear >= 1 ? "worn" : x.lapsToStop <= 0 && x.stopsLeft > 0 ? "plan" : ""),
-                  compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6 } };
+                  compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6, FUEL_WEAR: 0.22 } };
   // The garage row order. Real Teams.LIST is 12 entries; the count is what sets
   // how wide the row is, so the stub carries the same number rather than a
   // convenient few — a row that fits at 4 teams and not at 12 is the bug.
@@ -247,6 +249,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real 
                        "cadillac", "custom"].map((id) => ({ id })) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   if (real) vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-geom.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   const track = real ? real.track : { total, n: 1346, def: {} };
@@ -1075,6 +1078,7 @@ function laneOn(straightM, total = 5386) {
   ctx.Tracks = { sample: () => { throw new Error("entry geometry must not sample"); },
                  curvature: curvatureStub(track) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-geom.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   return { Pl, track, entry: Pl.entryRunM(track), zone: Pl.zoneOf(track) };
@@ -1130,6 +1134,7 @@ test("a circuit may still override the entry by hand", () => {
   track.def = { pitZone: { entryM: 275 } };
   ctx.Tracks = { sample: () => { throw new Error("no"); }, curvature: curvatureStub(track) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-geom.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   assert.equal(Pl.zoneOf(track).lenM, 275 + P.EXIT_M, "an authored entryM was ignored");
@@ -1139,10 +1144,13 @@ test("the entry read is the ONLY curvature this module does", () => {
   // Curvature channel: surface. It may decide WHERE the lane is, once per
   // circuit, and must never reach a driving car — so it belongs in zone
   // resolution and nowhere near update(), committing() or the box.
-  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  const lane = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  const src = readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8");
   // CALLS, not mentions: the availability guard (`!Tracks.curvature`) names it
   // without reading it, and counting that as a read would make this assertion
   // about spelling rather than about the contract.
+  const laneReads = lane.split("\n").filter((l) => /Tracks\.curvature\s*\(/.test(l) && !/^\s*(\/\/|\*)/.test(l));
+  assert.equal(laneReads.length, 0, `the state machine calls curvature: ${laneReads.join(" | ")}`);
   const reads = src.split("\n").filter((l) => /Tracks\.curvature\s*\(/.test(l) && !/^\s*(\/\/|\*)/.test(l));
   assert.equal(reads.length, 1, `curvature is CALLED ${reads.length} times, not once: ${reads.join(" | ")}`);
   const fn = src.slice(src.indexOf("function entryRunM"), src.indexOf("function zoneOf"));
@@ -1291,6 +1299,7 @@ test("windowOf names a rival's window for the gap chips: P<lap> within three lap
 function strategySession(laps) {
   const s = commitSession();
   const { ctx, G } = s;
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-strategy.js"), "utf8") + "\n;globalThis.AiStrategy = AiStrategy;", ctx, { filename: absSrc("js/physics/ai-strategy.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8") + "\n;globalThis.AiDrive = AiDrive;", ctx, { filename: absSrc("js/physics/ai-drive.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + "\n;globalThis.SportingRegs = SportingRegs;", ctx, { filename: absSrc("js/race/sporting-regs.js") });
   ctx.TyreModel.AI_CLASS = {
@@ -1374,6 +1383,31 @@ test("a worn AI stop counts the current lap toward payback", () => {
     "a cliff set with ~1.5-lap payback must still box when 2 laps remain incl. current");
 });
 
+test("a caution pull counts the lap the car is on before calling the next set long enough", () => {
+  // lapsToFlag is lapsTarget - lap + 1. fits asked whether the NEXT set reaches
+  // the flag with lapsTarget - lap, so a free stop was allowed onto a set one
+  // lap short — the second stop the guard was written to prevent (Bahrain,
+  // 12 laps, SC on lap 2). A planned later stop is already a c.lap index
+  // (arms when the counter reaches it); only the flag fallback was short.
+  const { pits, car, G } = strategySession(12);
+  G.cautionLevel = () => 3;
+  const c = car(0);
+  c.human = false; c.local = false;
+  c.lap = 2; c.pitStops = 0; c.tyreWear = 0.5;
+  c.tyre = { code: "S", tread: 0, life: 0.48 };
+  // Hard is the set a stop NOW would fit. 9.5 × 1.1 = 10.45, which covers
+  // lapsTarget - lap (10) and not the 11 laps still owed, including this one.
+  c.pitPlan = { stops: 1, seq: ["soft", "hard"], stints: [6, 6], lapsAt: [6], pitLossLaps: 0.2 };
+  G.tyres.planLaps = (life) => (life >= 1 ? 9.5 : 40);
+  assert.equal(pits.think(c), "",
+    "9.5 laps must not be called enough for 11 laps to the flag");
+  assert.equal(!!c.pitArmed, false, "the refused pull must not arm");
+  // 10 × 1.1 = 11: the same car, a set that does reach, still takes the free stop.
+  G.tyres.planLaps = (life) => (life >= 1 ? 10 : 40);
+  assert.equal(pits.think(c), "caution",
+    "a set that covers the lap the car is on still takes the safety-car stop");
+});
+
 test("AUTO fits the plan's letter, and the HUD names the set the crew will fit", () => {
   const { pits, car } = strategySession(5);                // under the rule's minimum: no rule
   const c = car(0);
@@ -1443,6 +1477,7 @@ test("in a wet race an AI's planned stop fits the wet tread, not the plan's slic
   const { pits, car } = commitSession({ weather: "rain" });
   const c = car(0);
   c.human = false; c.local = false; c.lap = 8; c.pitStops = 0; c.tyreWear = 0.4;
+  c.s = 0;   // AT THE LINE: the numbers below are whole laps (the part of a lap already driven comes off `left`)
   c.tyre = { code: "W", tread: 2 };
   c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [8, 17], lapsAt: [8] };
   // On the RIGHT wet tyre the dry plan's lap is not a stop: the wet stint is
@@ -1461,6 +1496,7 @@ test("wetLapsToStop: the wet stint is cut midway between a fresh set reaching th
   s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
   const c = s.car(0);
   c.human = false; c.local = false; c.lap = 8; c.pitStops = 0; c.tyreWear = 0.4;
+  c.s = 0;   // AT THE LINE: the numbers below are whole laps (the part of a lap already driven comes off `left`)
   c.tyre = { code: "W", tread: 2 };
   c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [8, 17], lapsAt: [8] };
   const run = (lapsOn, lapsLeft) => {
@@ -1472,14 +1508,56 @@ test("wetLapsToStop: the wet stint is cut midway between a fresh set reaching th
   assert.deepEqual(run(1, 2), [5, 1], "one lap on the set plans on the fresh life, not the measured rate");
   // Two laps on: the measured 5 laps. round((7 + 13) / 2) − 8 = 2.
   assert.deepEqual(run(2, 5), [2, 1], "two laps on, the measured rate cuts the stint");
-  // 17 × 1.1 ≥ 18: the set reaches the flag (the margin `fits` uses), so no stop is left.
+  // Three laps on, the measured laps are de-fuelled (#5252): mean fuel over laps 5-7 is 0.80, over
+  // 8-25 0.38, so × (1 + 0.22·0.80) / (1 + 0.22·0.38) = 1.085. 17 → 18.45 ≥ 18: no stop is left.
   assert.deepEqual(run(3, 17), [99, 0], "a set that reaches the flag with the 1.1 margin stops no more");
-  // 16 × 1.1 < 18: round((7 + 24) / 2) − 8 = 8.
-  assert.deepEqual(run(3, 16), [8, 1], "16 laps left is short of the flag, so it still stops");
+  // 15 → 16.28, × 1.1 < 18: round((7 + 8 + 16.28) / 2) − 8 = 8.
+  assert.deepEqual(run(3, 15), [8, 1], "15 laps left is short of the flag, so it still stops");
   // No measured tyre hooks: no wet re-cut, no stop.
   delete s.G.tyres.lapsLeft;
   seen.length = 0; s.pits.think(c);
   assert.deepEqual(seen[0], [99, 0]);
+});
+
+test("wetLapsToStop counts what is LEFT of the lap the car is on, not the whole lap", () => {
+  // VM, monaco rain seed 7, 5 laps, wear real: every AI boxed wet-for-wet at wear ~0.38-0.54 with
+  // a set that would have reached the flag at ~0.95. Late in lap 2 of 5: 3.05 laps to run, 3.13 on the set.
+  const s = commitSession({ weather: "rain" });
+  const seen = [];
+  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  const c = s.car(0);
+  s.G.lapsTarget = 5;
+  c.human = false; c.local = false; c.lap = 2; c.pitStops = 0; c.tyreWear = 0.384;
+  c.tyre = { code: "W", tread: 2 };
+  c.pitPlan = { stops: 0, seq: ["soft"], stints: [5], lapsAt: [] };
+  s.G.tyres.lapsOn = () => 2; s.G.tyres.lapsLeft = () => 3.13;
+  c.s = s.G.track.total * 0.95;
+  s.pits.think(c);
+  assert.deepEqual(seen[0], [99, 0], "0.05 + 3 laps to run on a set with 3.13: it reaches the flag");
+  c.s = 0; seen.length = 0;
+  s.pits.think(c);
+  assert.equal(seen[0][1], 1, "at the START of that lap the same set is a lap short, and still stops");
+});
+
+test("wetLapsToStop de-fuels the measured rate: a set that reaches the flag on a lighter tank stays out (#5252)", () => {
+  // VM, singapore rain seed 5, 5 laps, wear real: 8 of 21 AI boxed wet-for-wet at the start of lap 3,
+  // wear 0.43, lapsLeft 2.65 — the straight line through two full-tank laps — and the 13 that stayed
+  // out reached the flag at wear 0.92-0.95, because wear runs (1 + 0.22·fuel) and the tank empties.
+  const s = commitSession({ weather: "rain" });
+  const seen = [];
+  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  const c = s.car(0);
+  c.human = false; c.local = false; c.lap = 3; c.pitStops = 0; c.tyreWear = 0.431;
+  c.tyre = { code: "W", tread: 2 };
+  c.pitPlan = { stops: 0, seq: ["soft"], stints: [5], lapsAt: [] };
+  s.G.tyres.lapsOn = () => 2; s.G.tyres.lapsLeft = () => 2.646;
+  c.s = s.G.track.total * 0.004;
+  const run = (laps) => { s.G.lapsTarget = laps; seen.length = 0; s.pits.think(c); return seen[0]; };
+  // 2.996 to run; 2.646 × 1.1 = 2.91 read short. De-fuelled: mean fuel 0.90 over laps run, 0.40 to run,
+  // × 1.198 / 1.088 = 1.101 → 2.91 laps, × 1.1 = 3.21: it reaches the flag.
+  assert.deepEqual(run(5), [99, 0], "the marginal wet set in a 5-lap race goes to the flag");
+  // The same set in an 8-lap race really runs out (2.91 laps for 6 to run) and still stops once.
+  assert.equal(run(8)[1], 1, "a wet set that cannot reach the flag still stops");
 });
 
 test("lossS is the lane's net cost in seconds, and estimate agrees with it off a caution", () => {
@@ -1545,11 +1623,35 @@ test("held is the lane's own states, and never a position on the road", () => {
 });
 
 test("stuck is the nearest car ahead, not any car inside the window", () => {
-  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
-  const fn = src.slice(src.indexOf("function rivalsOf"), src.indexOf("function think"));
-  assert.match(fn, /aheadGap = -gap/);
-  assert.match(fn, /ahead && aheadGap < S\.STUCK_GAP_S/);
-  assert.doesNotMatch(fn, /-gap < S\.STUCK_GAP_S && !inLane/);
+  // think() runs the real rivalsOf (the real AiDrive.STRAT: STUCK_GAP_S 1.0 s)
+  // and latches c._stuckFrom on the progress where it first read STUCK.
+  const { pits, G } = strategySession(20);
+  const ai = (prog, pitStops) => ({ human: false, local: false, speed: 40, lap: 8, prog, pitStops,
+    pitState: "none", tyre: { code: "M", tread: 0 }, tyreWear: 0.5, lapsOnSet: 8 });
+  const c = ai(1000, 0);
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [10, 10], lapsAt: [10], pitLossLaps: 0.2 };
+  const near = ai(1020, 0);    // 0.5 s up the road
+  const far = ai(1036, 0);     // 0.9 s: still inside the window, but not the car in front
+  G.cars = [c, near, far];   // the window's LAST car is the far one (the old latch)
+  const stuck = () => { c._stuckFrom = null; pits.think(c); return c._stuckFrom != null; };
+  assert.equal(stuck(), true, "behind an unstopped car on the same stops, inside 1 s: stuck");
+  assert.equal(c._stuckFrom, 1000, "latched on the progress it started at");
+  // The car directly ahead has already stopped (fresher rubber): not stuck,
+  // whatever the backmarker further up the window is doing.
+  near.pitStops = 1;
+  assert.equal(stuck(), false, "the nearest car ahead is on fresher rubber, so the undercut is not ours");
+  // We have stopped and it has not: we are stuck behind it on our fresher set.
+  near.pitStops = 0; far.pitStops = 0; c.pitStops = 1;
+  c.pitPlan = { stops: 2, seq: ["medium", "hard", "soft"], stints: [5, 5, 10], lapsAt: [5, 10], pitLossLaps: 0.2 };
+  assert.equal(stuck(), true, "a car on older rubber than ours, directly ahead, holds us up");
+  // Nearest in the lane: not a car we are stuck behind, even with one behind it in the window.
+  c.pitStops = 0;
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [10, 10], lapsAt: [10], pitLossLaps: 0.2 };
+  near.pitState = "lane";
+  assert.equal(stuck(), false, "the car ahead is already in the lane");
+  // Outside the window: 1.5 s up the road is not stuck.
+  near.pitState = "none"; near.prog = 1060; far.prog = 1080;
+  assert.equal(stuck(), false, "1.5 s ahead is free air");
 });
 
 // ── A box with no garage behind it is a place in the FAST lane (L16) ─────────
@@ -1775,6 +1877,7 @@ test("HUD plan and actual Strategy share one caution field scan and preserve vis
   const root = mk(); root.hidden = true;
   ctx.document = { body: { classList: { contains: () => false } }, getElementById: id => id === "hud-strat" ? root : null, createElement: mk };
   ctx.HudElements = { isOn: () => true };
+  withI18n(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/ui/hud-strategy.js"), "utf8"), ctx, { filename: absSrc("js/ui/hud-strategy.js") });
   const S = vm.runInContext("HudStrategy", ctx);
   const view = () => JSON.stringify([root.children, root.attrs]);

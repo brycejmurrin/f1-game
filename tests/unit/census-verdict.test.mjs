@@ -28,26 +28,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const TOOL = path.join(ROOT, "tools/gfx/census-verdict.mjs");
 const WF = parseYAML(fs.readFileSync(path.join(ROOT, ".github/workflows/gpu-census.yml"), "utf8"));
 
-test("historical garage A/B only runs for its explicit full push request; normal census keeps four controls", (t) => {
+test("the census runs only tracked tools: four controls, no scratch/ scripts, no pinned old run ids, no non-circuit track", (t) => {
   const plan = WF.jobs.plan, split = plan.steps.find((s) => s.id === "split");
-  assert.equal(plan.outputs.garage_ab, "${{ steps.split.outputs.garage_ab }}");
   const steps = WF.jobs.census.steps;
-  const experiment = ["Garage exact-revision WebGPU A/B", "Validate garage A/B measurements",
-    "Upload garage A/B before control legs", "Garage A/B verdict"];
-  const expected = ["${{ needs.plan.outputs.garage_ab == 'true' }}",
-    "${{ always() && needs.plan.outputs.garage_ab == 'true' }}",
-    "${{ always() && needs.plan.outputs.garage_ab == 'true' }}",
-    "${{ !cancelled() && needs.plan.outputs.garage_ab == 'true' }}"];
-  for (let i = 0; i < experiment.length; i++)
-    assert.equal(steps.find((s) => s.name === experiment[i])?.if, expected[i], experiment[i]);
   // The opt-in relaunch step (#3235) is not a control: ci-gpu-census.test.mjs pins it.
   const controls = steps.filter((s) => s.name?.startsWith("Game check —") && !s.name.includes("first and second launch"));
   assert.equal(controls.length, 4);
   for (const step of controls) assert.equal(step.if, "${{ needs.plan.outputs.census_only != 'true' }}");
   assert.equal(steps.find((s) => s.name === "Verdict — fail the job on what the game reported").if,
     "${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}");
-  assert.equal(WF.jobs.garage_reanalysis.if,
-    "${{ needs.plan.outputs.run != 'false' && needs.plan.outputs.reanalysis == 'true' }}");
+  // scratch/ is untracked (only .gitkeep), so a step running a script from it can only fail.
+  const text = fs.readFileSync(path.join(ROOT, ".github/workflows/gpu-census.yml"), "utf8");
+  assert.doesNotMatch(text.replace(/^\s*#.*$/gm, ""), /node scratch\//, "no step runs an untracked scratch/ script");
+  assert.doesNotMatch(text, /run-id:/, "no step downloads artifacts of a fixed (expiring) run");
+  assert.deepEqual(Object.keys(WF.jobs), ["plan", "census"]);
+  for (const out of ["garage_ab", "reanalysis", "livery"]) assert.equal(plan.outputs[out], undefined, `${out} output retired`);
 
   const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-experiment-"));
@@ -63,21 +58,40 @@ test("historical garage A/B only runs for its explicit full push request; normal
         const at = line.indexOf("="); return [line.slice(0, at), line.slice(at + 1)];
       }));
     };
-    const historical = { leg: "garage-retry-63a1", census_only: false };
-    const dispatch = output("workflow_dispatch", historical);
+    const dispatch = output("workflow_dispatch", { leg: "render-live-matrix-2572" });
     if (!dispatch) return;
-    assert.equal(dispatch.garage_ab, "false", "a default dispatch ignores an inherited historical request");
+    assert.equal(dispatch.live_matrix, "false", "a dispatch ignores an inherited request leg");
     assert.equal(dispatch.census_only, "false", "the ordinary four controls still run");
-    assert.equal(output("schedule", historical).garage_ab, "false", "nightlies never rerun pinned historical A/B");
-    assert.equal(output("push", historical).garage_ab, "true", "the original explicit experiment leg opts in");
-    assert.equal(output("push", { ...historical, census_only: true }).garage_ab, "false", "adapter-only requests skip the experiment too");
-    assert.equal(output("push", { leg: "another-experiment" }).garage_ab, "false");
-    const reanalysis = output("push", { leg: "garage-reanalysis-367dc", census_only: true });
-    assert.equal(reanalysis.garage_ab, "false");
-    assert.equal(reanalysis.reanalysis, "true", "preserved-capture reanalysis remains independent");
-    assert.equal(output("push", { leg: "garage-livery-perf", census_only: true }).livery, "true", "the livery census opts in by leg");
-    assert.equal(output("workflow_dispatch", { leg: "garage-livery-perf" }).livery, "false", "dispatch and nightly never run it");
+    assert.equal(output("push", { leg: "render-live-matrix-2572", census_only: true }).live_matrix, "true", "the matrix opts in by leg");
+    assert.equal(output("push", { leg: "live-frame", census_only: true }).live_frame, "true", "the frame census opts in by leg");
+    assert.equal(output("schedule", { leg: "live-frame" }).live_frame, "false", "nightlies never run a request leg");
+    const retired = output("push", { images: "macos-13,ubuntu-20.04,macos-14" });
+    assert.equal(retired.images, '["macos-latest"]', "retired runner images are not on the allowlist");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the plan's validate step fails fast on a non-circuit track or an off-allowlist input, reading inputs from env", (t) => {
+  const plan = WF.jobs.plan, ids = plan.steps.map((s) => s.id);
+  const v = plan.steps.find((s) => s.id === "validate");
+  assert.ok(v && ids.indexOf("validate") < ids.indexOf("split"), "validate runs before split");
+  assert.equal(plan.steps[0].if, undefined, "dispatch checks out too: validate reads tools/manifest.cjs");
+  assert.doesNotMatch(v.run, /\$\{\{/, "no expression is inlined into the script; inputs arrive through env");
+  for (const k of ["INPUT_TRACK", "INPUT_IMAGES", "INPUT_LS", "INPUT_FORCE"]) assert.match(v.env[k], /^\$\{\{ inputs\./, k);
+  const js = v.run.slice(v.run.indexOf("\n", v.run.indexOf("<<'JS'")) + 1).split("\nJS")[0];
+  const run = (env) => spawnSync(process.execPath, ["-"], { cwd: ROOT, input: js, encoding: "utf8", timeout: 10000,
+    env: { PATH: process.env.PATH, EVENT: "workflow_dispatch", ...env } });
+  assert.equal(run({}).status, 0, run({}).stdout + run({}).stderr);
+  assert.equal(run({ INPUT_TRACK: "monaco,spa", INPUT_LS: "apex26.garageEvidence=phone apex26.forceMobileTier=1",
+    INPUT_FORCE: "sky,env", INPUT_CLOCK: "0", INPUT_TOD: "night", INPUT_CAM: "chase>cockpit", INPUT_ENTRY: "menu-full",
+    INPUT_MEM_CYCLES: "16", INPUT_IMAGES: "macos-latest,windows-latest" }).status, 0);
+  for (const [env, why] of [[{ INPUT_TRACK: "urban-gallery" }, "not a circuit id"], [{ INPUT_IMAGES: "macos-13" }, "is not one of"],
+    [{ INPUT_LS: "apex26.a=1 $(id)" }, "is not apex26"], [{ INPUT_FORCE: "1;id" }, "comma list"], [{ INPUT_CLOCK: "24" }, "hour 0-23"],
+    [{ INPUT_TOD: "noon" }, "day|night"], [{ INPUT_MEM_CYCLES: "17" }, "0-16"], [{ INPUT_CAM: "drone" }, "helmet|chase"],
+    [{ INPUT_ENTRY: "teleport" }, "api|menu"]]) {
+    const r = run(env);
+    assert.equal(r.status, 1, JSON.stringify(env));
+    assert.match(r.stdout, new RegExp(`::error title=gpu-census input::.*${why.replace(/[|$()]/g, "\\$&")}`), JSON.stringify(env));
+  }
 });
 
 // What a healthy macos-latest run writes (run 38550895790): both TLX legs
@@ -146,15 +160,41 @@ test("a healthy hardware run passes and prints one block per leg in the fixed or
   assert.ok(rows.some((r) => /wgx: {3}bound=true softPresent=false headlessUa=true$/.test(r)));
 });
 
+test("a leg with an upload summary prints one uploads: row, its classes, and at most five sites (perf hunt 6)", () => {
+  const site = (i) => `writeBuffer :: #256B :: updateBinding :: car.js:${i} <- ` + "x".repeat(300);
+  const uploadsSummary = { kbPerFrame: 214, callsPerFrame: 90.6,
+    rows: Array.from({ length: 8 }, (_, i) => ({ site: site(i), kbPerFrame: 20 - i, nPerFrame: 4, share: 0.1 })),
+    groups: [{ cls: "uniform", share: 0.612 }, { cls: "attribute", share: 0.3 }] };
+  const { rows } = legReport("webgpu", tlx({}, { uploadsSummary }), { hardware: true });
+  const at = rows.findIndex((r) => /^\s+uploads: /.test(r));
+  assert.equal(rows.filter((r) => /^\s+uploads: /.test(r)).length, 1);
+  assert.equal(rows[at].trim(), "uploads: 90.6 calls/f 214 KB/f — uniform 61% attribute 30%");
+  const sites = rows.slice(at + 1).filter((r) => /KB\/f\s+4x writeBuffer/.test(r));
+  assert.equal(sites.length, 5);
+  assert.ok(sites.every((r) => r.length < 220), "a site is truncated");
+  assert.equal(legReport("webgpu", tlx(), { hardware: true }).rows.filter((r) => /^\s+uploads: /.test(r)).length, 0, "no summary, no row");
+});
+
+test("a leg prints one ugroups: row and one mirror: row when the census carries them (GPU hunt 3)", () => {
+  const uploadGroups = [{ group: "object", nPerFrame: 60.2, kbPerFrame: 6.6 }, { group: "render", nPerFrame: 20, kbPerFrame: 2.7 }];
+  const mirrorWindow = { frames: 500, quality: ["lite", "lite"], drawnPerFrame: 1, glassPerFrame: 1, rendersPerFrame: 1, allocs: 0, churnPerFrame: { poolNew: 0.2 } };
+  const { rows } = legReport("webgpu", tlx({}, { uploadGroups, mirrorWindow }), { hardware: true });
+  assert.deepEqual(rows.filter((r) => /^\s+ugroups: /.test(r)).map((r) => r.trim()), ["ugroups: object 60.2/f 6.6KB | render 20/f 2.7KB"]);
+  assert.deepEqual(rows.filter((r) => /^\s+mirror: /.test(r)).map((r) => r.trim()),
+    ["mirror: drawn 1/f glass 1/f renders 1/f allocs 0 rung lite>lite churn poolNew=0.2/f"]);
+  const bare = legReport("webgpu", tlx(), { hardware: true }).rows;
+  assert.equal(bare.filter((r) => /^\s+(ugroups|mirror): /.test(r)).length, 0, "no data, no rows");
+});
+
 test("TLX off the direct present path fails a hardware run while the native pin is in force (promoted 2026-10-14)", () => {
   const blit = { backendState: { ...tlx().gfx.backendState, softBlit: true } };
   let r = run({ legs: healthy({ webgpu: tlx(blit) }) });
   assert.equal(r.bad.length, 1, r.bad.join("\n"));
-  assert.match(r.bad[0], /^webgpu: TLX is soft-blitting .* apex26\.wgxCapture=0 pinned/);
+  assert.equal(r.bad[0], "webgpu: TLX is soft-blitting (GPU readback + putImageData every frame) on a hardware adapter with apex26.wgxCapture=0 pinned — the pin is no longer honoured, and every number on this leg timed the readback");
   // Absence is not a pass: a TLX leg that stopped reporting softBlit fails.
   const gone = { backendState: { ...tlx().gfx.backendState, softBlit: undefined } };
   r = run({ legs: healthy({ webgl2: tlx(gone) }) });
-  assert.match(r.bad.join("\n"), /webgl2: NO softBlit reported on a hardware TLX leg/);
+  assert.equal(r.bad.join("\n"), "webgl2: NO softBlit reported on a hardware TLX leg — the present-path check would pass vacuously");
   // A dispatch that overrides the pin asked for the readback: reported, not gated.
   r = run({ legs: healthy({ webgpu: tlx(blit) }), cap: "1" });
   assert.deepEqual(r.bad, []);
@@ -170,7 +210,7 @@ test("WGX off the swapchain fails a hardware run whether or not the UA is headle
   for (const headlessUa of [true, false]) {
     const r = run({ legs: healthy({ wgx: wgx({ wgxSoftPresent: true, headlessUa }) }) });
     assert.equal(r.bad.length, 1, `headlessUa=${headlessUa}: ${r.bad.join("\n")}`);
-    assert.match(r.bad[0], /^wgx: WGX is soft-presenting \(CPU blit\) on a hardware adapter with apex26\.wgxCapture=0 pinned/);
+    assert.equal(r.bad[0], "wgx: WGX is soft-presenting (CPU blit) on a hardware adapter with apex26.wgxCapture=0 pinned — the swapchain path is off, every frame pays a readback + putImageData");
   }
   const r = run({ legs: healthy({ wgx: wgx({ wgxSoftPresent: true }) }), cap: "1" });
   assert.deepEqual(r.bad, [], "an overridden pin is reported, not gated");
@@ -178,7 +218,7 @@ test("WGX off the swapchain fails a hardware run whether or not the UA is headle
   // Not bound wins over soft-present: one root cause, one line.
   const nb = run({ legs: healthy({ wgx: wgx({ wgx: false, wgxSoftPresent: undefined }) }) });
   assert.equal(nb.bad.length, 1);
-  assert.match(nb.bad[0], /WGX did not bind/);
+  assert.equal(nb.bad[0], "wgx: WGX did not bind on a hardware adapter (fell back to GLX, or the surface stopped reporting) — this leg proved nothing about js/render/webgpu/");
 });
 
 test("every pre-existing gate still fails: missing leg, unfinished leg, GPU and shader errors, env faces, softAdapter, unknown census", () => {
@@ -229,7 +269,7 @@ test("the CLI: step env in, rows to the summary and stdout, ::error:: lines and 
     fs.writeFileSync(path.join(dir, "game-wgx-macos-latest.json"), JSON.stringify(wgx({ wgxSoftPresent: true })));
     r = spawnSync(process.execPath, [TOOL], { cwd: dir, encoding: "utf8", env });
     assert.equal(r.status, 1);
-    assert.match(r.stderr, /::error::REAL-GPU GATE: wgx: WGX is soft-presenting/);
+    assert.equal(r.stderr, "::error::REAL-GPU GATE: wgx: WGX is soft-presenting (CPU blit) on a hardware adapter with apex26.wgxCapture=0 pinned — the swapchain path is off, every frame pays a readback + putImageData\n");
     r = spawnSync(process.execPath, [TOOL], { cwd: dir, encoding: "utf8", env: { ...env, CENSUS_LS: "apex26.wgxCapture=1" } });
     assert.equal(r.status, 0, "CENSUS_LS reaches the gate: an overridden pin is not gated");
     // Flags beat env, so the same tool runs by hand on a downloaded artifact.

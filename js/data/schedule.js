@@ -17,8 +17,8 @@ const DataSchedule = (function () {
     const dateOnly = iso.length === 10;
     const d = new Date(dateOnly ? iso + "T12:00:00Z" : iso);
     if (isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString(undefined, dateOnly ? { day: "numeric", month: "short", timeZone: "UTC" }
-                                                    : { day: "numeric", month: "short" });
+    return I18n.date(d, dateOnly ? { day: "numeric", month: "short", timeZone: "UTC" }
+                                  : { day: "numeric", month: "short" });
   }
 
   function dateLabel(r) {
@@ -103,7 +103,7 @@ const DataSchedule = (function () {
 
   function create({ el, emptyMsg }) {
     function sessionTime(startMs) {
-      return new Date(startMs).toLocaleString(undefined, {
+      return I18n.date(new Date(startMs), {
         weekday: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short"
       });
     }
@@ -120,7 +120,7 @@ const DataSchedule = (function () {
           shownMinute = minute;
         }
         if (minute !== labelledMinute) {
-          clock.setAttribute("aria-label", left > 0 ? "Race starts in " + countdown(left) : "Race started");
+          clock.setAttribute("aria-label", left > 0 ? I18n.t("hub.raceStarts", {in: countdown(left)}, "Race starts in {in}") : I18n.t("hub.raceStarted", null, "Race started"));
           labelledMinute = minute;
         }
       }
@@ -152,14 +152,15 @@ const DataSchedule = (function () {
       tick();
       if (typeof MutationObserver === "undefined" || typeof document === "undefined") return dispose;
       observer = new MutationObserver(sync);
-      // `hidden` anywhere (an ancestor can hide the hub), but child lists only inside the hub, where this
-      // node is attached and detached. Watching every child list of the document ran sync() after each HUD
-      // text write for the rest of the session once the hub had been opened (it keeps this node cached).
-      // Observing one target twice replaces its options, hence two targets or the original single call.
+      // visible() reads only this node's ancestor chain, which runs through the hub: watch `hidden` and child
+      // lists inside the hub, and `hidden` on the hub's own ancestors (body, html) — nothing else. Watching
+      // every child list of the document ran sync() after each HUD text write for the rest of the session once
+      // the hub had been opened (it keeps this node cached); watching `hidden` on the whole document did the
+      // same for every HUD show/hide after the hub CLOSED, the observer living on with the cached node.
       const hub = typeof document.getElementById === "function" ? document.getElementById("datahub") : null;
       if (hub && hub !== document.documentElement) {
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], subtree: true });
-        observer.observe(hub, { childList: true, subtree: true });
+        observer.observe(hub, { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true });
+        for (let n = hub.parentElement; n; n = n.parentElement) observer.observe(n, { attributes: true, attributeFilter: ["hidden"] });
       } else {
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true });
       }
@@ -239,7 +240,7 @@ const DataSchedule = (function () {
       if (r.time) {
         const t = new Date(Number.isFinite(raceInstant(r)) ? raceInstant(r) : `1970-01-01T${r.time}`);
         if (!isNaN(t.getTime())) {
-          main.appendChild(el("div", "dh-race-time", t.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })));
+          main.appendChild(el("div", "dh-race-time", I18n.date(t, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })));
         }
       }
       row.appendChild(main);
@@ -248,18 +249,91 @@ const DataSchedule = (function () {
       return row;
     }
 
-    function loadSchedule() {
+    // ADD TO CALENDAR: one .ics for the NEXT weekend or the whole season, built from the list already
+    // on screen (no fetch). The reminder lives for the tab only; VALARM is best-effort per client.
+    function saveIcs(races, whole, alarmMin) {
+      const text = DataIcs.build(races, { alarmMin, name: whole ? "F1 " + new Date().getFullYear() + " · Apex 26" : (races[0].name || "Grand Prix") });
+      const blob = new Blob([text], { type: "text/calendar;charset=utf-8" });
+      const name = DataIcs.fileName(races, whole);
+      if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) return NativeDownload.saveBlob(blob, name);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 10000);
+    }
+
+    function icsBar(items, next) {
+      const bar = el("div");
+      bar.setAttribute("data-ics", "bar");
+      const pick = el("select", "dh-pick-select");
+      pick.setAttribute("data-ics", "alarm");
+      pick.setAttribute("aria-label", I18n.t("hub.icsReminder", null, "Reminder before each session"));
+      for (const [min, label] of [[0, "No reminder"], [15, "15 min before"], [30, "30 min before"], [60, "1 h before"], [1440, "1 day before"]]) {
+        const opt = el("option", null, label);
+        opt.value = String(min);
+        if (min === 30) opt.selected = true;
+        pick.appendChild(opt);
+      }
+      function button(label, kind, races, whole) {
+        const b = el("button", null, label);
+        b.type = "button";
+        b.setAttribute("data-ics", kind);
+        if (!races.length) b.disabled = true;
+        b.addEventListener("click", function () {
+          Promise.resolve(saveIcs(races, whole, Number(pick.value))).catch(function (e) { Log.warn("data", "apex26: ics export failed", e); });
+        });
+        return b;
+      }
+      bar.appendChild(button("ADD RACE WEEKEND", "weekend", next ? [next] : [], false));
+      bar.appendChild(button("ADD WHOLE SEASON", "season", items, true));
+      bar.appendChild(pick);
+      const note = el("div", null, "Times: Jolpica F1, unofficial. Reminders depend on your calendar app.");
+      note.setAttribute("data-ics", "note");
+      bar.appendChild(note);
+      return bar;
+    }
+
+    // Next year's calendar is often unpublished on 1 January (Jolpica answers
+    // /2027.json with total "0"): show LAST season, labelled as such, rather
+    // than an empty tab. A finished season has no next race and nothing worth
+    // adding to a calendar, so it gets no NEXT tile and no ADD buttons.
+    function seasonItems() {
+      const year = new Date().getFullYear();
       return F1API.schedule().then((items) => {
+        if (items && items.length) return { items, year, lastSeason: false };
+        return Promise.resolve(F1API.schedule(year - 1)).then((prev) => ({
+          items: prev || [], year: year - 1, lastSeason: !!(prev && prev.length), wanted: year
+        }));
+      });
+    }
+
+    function loadSchedule() {
+      return seasonItems().then(({ items, year, lastSeason, wanted }) => {
         const wrap = el("div", "dh-tabbody");
         if (!items || !items.length) {
           wrap.appendChild(emptyMsg("No calendar data available yet."));
           return wrap;
         }
         const now = Date.now();
+        if (lastSeason) {
+          wrap.setAttribute("data-season", "last");
+          const note = el("p", null, `The ${wanted} calendar isn't published yet. Showing the ${year} season.`);
+          note.setAttribute("data-role", "last-season");
+          wrap.appendChild(note);
+          wrap.appendChild(el("h3", "dh-section", `LAST SEASON · ${year} CALENDAR`));
+          const grid = el("div", "dh-race-grid");
+          for (const r of items) grid.appendChild(raceRow(r, false));
+          wrap.appendChild(grid);
+          return wrap;
+        }
         const next = nextRace(items, now);
         let nextMarked = false;
         if (next) wrap.appendChild(nextTile(next, wrap));
-        wrap.appendChild(el("h3", "dh-section", `${new Date().getFullYear()} CALENDAR`));
+        wrap.appendChild(icsBar(items, next));
+        wrap.appendChild(el("h3", "dh-section", `${year} CALENDAR`));
         const grid = el("div", "dh-race-grid");
         for (const r of items) {
           const isNext = !nextMarked && isUpcoming(r, now);
@@ -274,6 +348,6 @@ const DataSchedule = (function () {
     return { loadSchedule };
   }
 
-  return { create, raceInstant, fmtDate, dateLabel, isUpcoming, nextRace, weekendSessions, countdown, nextFlipAt };
+  return { create, raceInstant, dateLabel, isUpcoming, nextRace, weekendSessions, countdown, nextFlipAt };
 })();
 Object.freeze(DataSchedule);

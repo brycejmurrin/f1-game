@@ -113,3 +113,19 @@ test("portrait blocker can exit the race", async ({ page }) => {
   await expect(page.locator("#overlay")).toBeVisible();
   await expect(page.locator("body")).not.toHaveClass(/in-race/);
 });
+
+// #4323: the pause card comes back with focus where the player left it.
+test("pause card regains its focused control after a rotation round trip", async ({ page }) => {
+  test.setTimeout(300_000);
+  await startPortraitRace(page);
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.locator("#rotate-device")).toBeHidden();
+  await expect(page.locator("#pausemenu")).toBeVisible();
+  await page.locator("#pm-howto").focus();
+  await expect(page.locator("#pm-howto")).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("#pausemenu")).toBeHidden();
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.locator("#pausemenu")).toBeVisible();
+  await expect(page.locator("#pm-howto")).toBeFocused();
+});

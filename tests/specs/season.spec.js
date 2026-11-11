@@ -2,6 +2,7 @@
 // Season mode: round progression, points accumulation, standings panel visibility.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
+import { saveSharedCard } from "../helpers/share-card.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -27,7 +28,13 @@ async function startSeasonRace(page, laps) {
   await page.locator("#cs-done").click();
   await page.locator("#carsetup").waitFor({ state: "hidden" });
   await page.locator("#race-settings").waitFor({ state: "visible" });
-  if (laps != null) {
+  if (laps === "full") {
+    // The FULL distance is the round's own race length (the select's last option),
+    // so it follows whichever circuit opens the calendar: 57 was Bahrain's, round 1
+    // of the 24-round list; the 2026 REAL default opens at Albert Park.
+    const full = await page.locator("#rs-laps-sel option").last().getAttribute("value");
+    await page.locator("#rs-laps-sel").selectOption(String(full));
+  } else if (laps != null) {
     await page.locator("#rs-laps-sel").selectOption(String(laps));   // a setting row: value, not label
   }
   // Accept race settings. A championship weekend now opens with QUALIFYING —
@@ -54,12 +61,17 @@ test.describe("Season — mode flags", () => {
     expect(info.timeTrial).toBe(false);
   });
 
-  for (const laps of [10, 25, 57]) {
-    test(`does not end a ${laps}-lap race at 360 seconds`, async ({ page }) => {
+  for (const laps of [10, 25, "full"]) {
+    test(`does not end a ${laps === "full" ? "full-distance" : laps + "-lap"} race at 360 seconds`, async ({ page }) => {
       await startSeasonRace(page, laps);
       const state = await page.evaluate(() => {
         window.__apex.go();
         window.__apex.headless(true);
+        // The AI drives the player's car: a player parked for 60 s under green is
+        // retired (W26 row 5, AiDrive.stallSweep), which would end the race for a
+        // reason that is not the time cap this test is about.
+        const me = window.__apex.carRoles().findIndex((r) => r.local);
+        window.__apex.carRole(me, { human: false });
         window.__apex.step(1, 361);
         return window.__apex.info().state;
       });
@@ -129,6 +141,19 @@ test.describe("Season — standings panel", () => {
     await expect(rows.first()).toBeVisible();
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
+    // #1546/#1548: the championship SHARE CARD chip opens the preview sheet;
+    // SAVE IMAGE downloads the real PNG (headless Chromium has no Web Share).
+    await saveSharedCard(page, "#standings-card", /^apex26-standings-round-1\.png$/);
+  });
+
+  test("race results carry a tappable SHARE CARD chip (#1546)", async ({ page }) => {
+    await startSeasonRace(page);
+    await page.evaluate(() => window.__apex.park(0));
+    await page.evaluate(() => window.__apex.finishRace());
+    await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
+    const box = await page.locator("#res-race-card").boundingBox();
+    expect(box && box.height).toBeGreaterThanOrEqual(24);
+    await saveSharedCard(page, "#res-race-card", /^apex26-race-[a-z0-9-]+\.png$/);
   });
 
   test("migrates legacy code points to a stable identity before a custom code edit", async ({ page }) => {

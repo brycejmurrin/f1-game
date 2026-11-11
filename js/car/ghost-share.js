@@ -387,8 +387,8 @@ const GhostShare = (function () {
   }
 
   return {
-    MAGIC, encode, decode, fileExport, installGuest, clearGuest, guest, hasGuest,
-    bestTime, at, timeAt, consumeHash, withoutGhost, contextNotice,
+    encode, decode, fileExport, installGuest, clearGuest, guest, hasGuest,
+    bestTime, at, timeAt, consumeHash, contextNotice,
   };
 })();
 Object.freeze(GhostShare);

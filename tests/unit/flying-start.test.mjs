@@ -14,6 +14,12 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+// FlyingStart run-up scalars stay module-local; pin the documented values here.
+const HANDOVER_S = 3, MARGIN_S = 2.5, MIN_RUN_M = 150, MAX_RUN_FRAC = 0.3;
+function runUpMetres(vDrop, total) {
+  const want = Math.max(MIN_RUN_M, (vDrop > 0 ? vDrop : 0) * (HANDOVER_S + MARGIN_S));
+  return total > 0 ? Math.min(want, total * MAX_RUN_FRAC) : want;
+}
 
 // production only calls update() in "count" and "race" (game.js update(); never in the menu), so the rigs do too.
 function rig({ session = "quali", timeTrial = false, practice = false, real = false, total = 5000, dropV = 60 } = {}) {
@@ -49,22 +55,22 @@ test("qualifying: the first countdown frame drops the car in at speed before the
   assert.equal(r.G.state, "race", "no gantry: straight to green");
   assert.equal(r.player.speed, 60, "at the AI's drop speed for that piece of road");
   assert.equal(r.player.lap, 0);
-  const run = r.FS.runUpMetres(60, 5000);
-  assert.equal(run, 60 * (r.FS.HANDOVER_S + r.FS.MARGIN_S), "hand-over plus margin, at speed");
+  const run = runUpMetres(60, 5000);
+  assert.equal(run, 60 * (HANDOVER_S + MARGIN_S), "hand-over plus margin, at speed");
   assert.equal(r.player.prog, -run, "before the line: the run-up is never timed");
   assert.equal(r.player.s, 5000 - run);
   assert.equal(r.player.x, 0);
   assert.equal(r.player.human, false, "the AI holds the wheel for the run-up");
   assert.equal(r.player.isPlayer, true, "…but the camera, HUD and audio stay on the player's car");
   assert.equal(r.player.launchOn, false, "no launch model on a car already at speed");
-  assert.deepEqual(r.plate, [r.FS.HANDOVER_S]);
+  assert.deepEqual(r.plate, [HANDOVER_S]);
   assert.match(r.said[0], /QUALIFYING · FLYING LAP/);
 });
 
 test("the hand-over counts down on the plate, then GO gives the wheel back and recalibrates", () => {
   const r = rig();
   r.G.state = "count"; r.fs.update(1 / 60);
-  for (let i = 0; i < 60 * r.FS.HANDOVER_S + 2; i++) r.fs.update(1 / 60);
+  for (let i = 0; i < 60 * HANDOVER_S + 2; i++) r.fs.update(1 / 60);
   assert.equal(r.player.human, true);
   assert.equal(r.seated.length, 1, "the hand-over re-seeds the heading from the road at the current s");
   assert.deepEqual(r.plate.slice(0, 4), [3, 2, 1, "GO"]);
@@ -120,9 +126,14 @@ test("a session quit mid-countdown (update() never runs in the menu) does not hi
 });
 
 test("the run-up is clamped: never closer than the floor, never most of a short lap", () => {
-  const { FS } = rig();
-  assert.equal(FS.runUpMetres(5, 5000), FS.MIN_RUN_M);
-  assert.equal(FS.runUpMetres(90, 1000), 1000 * FS.MAX_RUN_FRAC);
+  assert.equal(runUpMetres(5, 5000), MIN_RUN_M);
+  assert.equal(runUpMetres(90, 1000), 1000 * MAX_RUN_FRAC);
+  const floor = rig({ dropV: 5 });
+  floor.G.state = "count"; floor.fs.update(1 / 60);
+  assert.equal(floor.player.prog, -MIN_RUN_M, "live place uses the floor");
+  const short = rig({ total: 1000, dropV: 90 });
+  short.G.state = "count"; short.fs.update(1 / 60);
+  assert.equal(short.player.prog, -(1000 * MAX_RUN_FRAC), "live place uses the lap frac cap");
 });
 
 test("the qualifying model is a flying lap too: no standing start charged", () => {

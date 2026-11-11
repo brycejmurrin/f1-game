@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["indianapolis"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
-        px, pz, hw, tree, bush, ridge, building, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, hw, tree, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, prop, waterSurface,
+        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
         floodMast, cameraTower, sponsorHoarding, signDigit, indexSolid,
-        bleacher, scaffoldStand, seat, groundedSegments,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        bleacher, scaffoldStand, seat,
+        addBox, addCyl, addFrustum } = api;
 
       const LEAF = [0.22, 0.44, 0.20], LEAF_D = [0.16, 0.36, 0.17];
       const CONC = [0.74, 0.73, 0.70];

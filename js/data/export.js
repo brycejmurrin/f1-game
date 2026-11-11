@@ -2,6 +2,49 @@
 const DataExport = (function () {
   "use strict";
 
+  // Private archive codec: independent of hub instances, DOM and OpenF1.
+  const CRC_TABLE = (function () {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes) {
+    let crc = -1;
+    for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xff];
+    return (crc ^ -1) >>> 0;
+  }
+  function makeZip(files) {  // files: [{name, data: Uint8Array}]
+    const enc = new TextEncoder();
+    const u16 = function (n) { return [n & 255, (n >>> 8) & 255]; };
+    const u32 = function (n) { return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; };
+    const parts = [], central = [];
+    let offset = 0;
+    files.forEach(function (f) {
+      const nameB = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+      const local = [].concat(u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+        u32(crc), u32(sz), u32(sz), u16(nameB.length), u16(0));
+      parts.push(new Uint8Array(local), nameB, f.data);
+      central.push({ nameB: nameB, crc: crc, sz: sz, offset: offset });
+      offset += local.length + nameB.length + sz;
+    });
+    const cdStart = offset;
+    const cd = [];
+    central.forEach(function (c) {
+      const hdr = [].concat(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+        u32(c.crc), u32(c.sz), u32(c.sz), u16(c.nameB.length), u16(0), u16(0), u16(0), u16(0),
+        u32(0), u32(c.offset));
+      cd.push(new Uint8Array(hdr), c.nameB);
+      offset += hdr.length + c.nameB.length;
+    });
+    const end = new Uint8Array([].concat(u32(0x06054b50), u16(0), u16(0),
+      u16(central.length), u16(central.length), u32(offset - cdStart), u32(cdStart), u16(0)));
+    return new Blob(parts.concat(cd, [end]), { type: "application/zip" });
+  }
+
   function create(ctx) {
     const { el, clear } = ctx;
     const hubOpen = ctx.isOpen || function () { return true; };
@@ -27,8 +70,43 @@ const DataExport = (function () {
       }
       function sleepCk(ms) { ck(); return sleep(ms).then(ck); }
 
+      // F1API.cancelAll() is global: TELEMETRY's COMPARE abort, leaving WATCH
+      // mid-load, any tab's own reset all reject THIS gather's request too.
+      // While the hub is still open that cancel was not meant for the export:
+      // retry the step (a cached answer makes the retry cheap). A closed hub
+      // fails ck() and stops the gather as before.
+      const FOREIGN_CANCEL_RETRIES = 3;
+      function again(fn, what) {
+        let left = FOREIGN_CANCEL_RETRIES;
+        function run() {
+          return fn().catch(function (e) {
+            if (e && e.cancelled && hubOpen() && left-- > 0) {
+              log("· " + what + " interrupted by another Data Hub tab — retrying");
+              return sleepCk(1000).then(run);
+            }
+            throw e;
+          });
+        }
+        return run();
+      }
+
+      // OpenF1 reuses circuit_short_name across Pre-Season Testing weekends
+      // (and Testing vs the Bahrain GP: both "Sakhir"). One ZIP entry per
+      // circuit: keep a Grand Prix lap over a testing one, and never spend a
+      // second Testing fetch on a key we already hold.
+      const testingKeys = Object.create(null);
+      function isTestingMeeting(m) {
+        return /test/i.test(String((m && m.name) || ""));
+      }
+
       function tryMeeting(m, retrying) {
         const key = m.circuit || m.name;
+        const have = Object.prototype.hasOwnProperty.call(out.circuits, key);
+        const incomingTest = isTestingMeeting(m);
+        if (have && (incomingTest || !testingKeys[key])) {
+          log("· already have " + key);
+          return Promise.resolve(true);
+        }
         return F1API.sessionsForMeeting(m.meetingKey).then(function (ss) {
           const s = ss.find(function (x) { return /quali/i.test(x.name || ""); }) ||
                     ss.find(function (x) { return /race/i.test(x.name || ""); }) ||
@@ -76,6 +154,8 @@ const DataExport = (function () {
                       circuit: m.circuit, country: m.country, driver: d.code,
                       lapDur: fl.lapDuration, sf: trace[0], nLoc: loc.length, trace: trace
                     };
+                    if (incomingTest) testingKeys[key] = true;
+                    else delete testingKeys[key];
                     log("✓ " + key + "  pts=" + trace.length + " (" + (d.code || ("#" + d.num)) + ")");
                     return true;
                   });
@@ -110,13 +190,14 @@ const DataExport = (function () {
         list.forEach(function (m, i) {
           chain = chain.then(function () {
             log("Circuit " + (i + 1) + "/" + list.length + " · " + (m.circuit || m.name || "unknown"));
-            return tryMeeting(m, false).then(function (ok) { if (!ok) missed.push(m); });
+            return again(function () { return tryMeeting(m, false); }, m.circuit || m.name || "circuit")
+              .then(function (ok) { if (!ok) missed.push(m); });
           }).then(function () { return i < list.length - 1 ? sleepCk(GAP) : null; });
         });
         return chain.then(function () { return missed; });
       }
 
-      return F1API.meetings(year).then(function (ms) {
+      return again(function () { return F1API.meetings(year); }, "meetings list").then(function (ms) {
         log("meetings: " + ms.length + " — gathering (~10 min, paced to avoid rate limits)…");
         return pass(ms).then(function (missed) {
           if (!missed.length) return;
@@ -127,48 +208,6 @@ const DataExport = (function () {
         log("done — " + Object.keys(out.circuits).length + " circuits captured");
         return out;
       });
-    }
-
-    const CRC_TABLE = (function () {
-      const t = new Uint32Array(256);
-      for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-        t[n] = c >>> 0;
-      }
-      return t;
-    })();
-    function crc32(bytes) {
-      let crc = -1;
-      for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xff];
-      return (crc ^ -1) >>> 0;
-    }
-    function makeZip(files) {  // files: [{name, data: Uint8Array}]
-      const enc = new TextEncoder();
-      const u16 = function (n) { return [n & 255, (n >>> 8) & 255]; };
-      const u32 = function (n) { return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; };
-      const parts = [], central = [];
-      let offset = 0;
-      files.forEach(function (f) {
-        const nameB = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
-        const local = [].concat(u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
-          u32(crc), u32(sz), u32(sz), u16(nameB.length), u16(0));
-        parts.push(new Uint8Array(local), nameB, f.data);
-        central.push({ nameB: nameB, crc: crc, sz: sz, offset: offset });
-        offset += local.length + nameB.length + sz;
-      });
-      const cdStart = offset;
-      const cd = [];
-      central.forEach(function (c) {
-        const hdr = [].concat(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
-          u32(c.crc), u32(c.sz), u32(c.sz), u16(c.nameB.length), u16(0), u16(0), u16(0), u16(0),
-          u32(0), u32(c.offset));
-        cd.push(new Uint8Array(hdr), c.nameB);
-        offset += hdr.length + c.nameB.length;
-      });
-      const end = new Uint8Array([].concat(u32(0x06054b50), u16(0), u16(0),
-        u16(central.length), u16(central.length), u32(offset - cdStart), u32(cdStart), u16(0)));
-      return new Blob(parts.concat(cd, [end]), { type: "application/zip" });
     }
 
     function safeName(s) { return String(s || "circuit").replace(/[^a-z0-9_-]+/gi, "_"); }
@@ -272,7 +311,12 @@ const DataExport = (function () {
           log("Ready to download.");
           Log.info("data", "export gather done");
         }).catch(function (e) {
-          if (e && e.cancelled) { log("Cancelled — data hub closed."); Log.info("data", "export gather cancelled"); return; }
+          if (e && e.cancelled) {
+            log(hubOpen() ? "Stopped — another Data Hub tab kept cancelling requests. Press Gather to try again."
+              : "Cancelled — data hub closed.");
+            Log.info("data", "export gather cancelled");
+            return;
+          }
           log("ERROR: " + (e && e.message || e));
           Log.warn("data", "export gather fail");
         }).then(function () { running = false; gatherBtn.textContent = "Gather"; });

@@ -48,6 +48,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -302,21 +303,21 @@ test("quitToMenu() during a race load cancels it: the body does not go on to cou
   } finally { barrier.release(); g.ctx.RaceEntryProfile = profile; g.close(); }
 });
 
-test("a second startRace() after the first passed raceIndex++ joins it: one race, round +1, state stays count", async () => {
+test("a second startRace() while the first is in flight joins it: one race, round +1 once committed, state stays count", async () => {
   const g = await createGame({ track: "monza", carMeshes: false });
   const profile = g.ctx.RaceEntryProfile, barrier = entryBarrier();
   try {
     const G = g.G;
     G.quitToMenu();
     const round0 = G.raceRound;
-    // Mesh warming follows raceIndex++; keep that real entry request pending
-    // while the duplicate arrives, irrespective of the earlier await count.
+    // raceIndex++ commits after the last await (#4484); keep the real entry
+    // request pending at mesh warming while the duplicate arrives.
     g.ctx.RaceEntryProfile = { ...profile, spanAsync(name, fn) {
       return profile.spanAsync(name, name === "warmCarAssets" ? async () => { await barrier.hold(); return fn(); } : fn);
     } };
     const first = G.startRace();
     assert.equal(await g.settle(barrier.entered), true, "the first body has reached mesh warming");
-    assert.equal(G.raceRound, round0 + 1, "the first body is past raceIndex++");
+    assert.equal(G.raceRound, round0, "the first body has not committed its race yet");
     const second = G.startRace();
     assert.equal(second, first, "the in-flight request is shared, not restarted");
     barrier.release();
@@ -353,7 +354,7 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("async function startRaceBody()") + 6000);
   assert.match(body, /let sessionOk = await ensureRaceSession\(\);/);   // #2625: a `let`, so RETRY on the loading card can re-run the load
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
-  assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
+  assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("ensureAudio()"), "the abort comes before anything starts the race");
 });
 
 test("RESUME holds a solo race ~1.2 s on the start plate, a pause cancels it, and a net race resumes at once", async () => {
@@ -488,7 +489,7 @@ test("3.2 a real race (Data Hub JUMP IN) is never diverted into a qualifying she
     const G = g.G;
     G.daily.stop(); G.timeTrial = false; G.practice = false;
     G.raceGrid = "quali";
-    vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+    evalRealRace(g.ctx);
     const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
     const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
     const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -756,7 +757,7 @@ test("launch: Data Hub JUMP IN (opts.intro) plays the garage drive-out before th
       g.sandbox.GLX.makeFrustumPlanes = () => null;   // the VM's stub returns [] (no planes): the menu grid's rivals would index into it
       G.daily.stop(); G.timeTrial = false; G.practice = false;
       G.quitToMenu();   // the hub is opened from the menu (createGame leaves a race running)
-      vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+      evalRealRace(g.ctx);
       const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
       const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
       const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));

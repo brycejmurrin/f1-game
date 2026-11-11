@@ -674,7 +674,7 @@ interface GameCtx {
   readonly gfx: GfxBackend | null;
   /** LOCAL predictor + Newton read — never a global search. See its comment. */
   readonly trackFrom: (px: number, pz: number, sPredicted: number) => { s: number; x: number };
-  readonly worldFromTrack: (s: number, x: number) => { x: number; z: number };
+  readonly worldFromTrack: (s: number, x: number, out?: { p: number[]; t: number[]; r: number[] }) => { x: number; z: number };
 
   // ── Model constants published for js/race/quali-model.js and the net layer ──────
   /** The race-entry stopwatch (js/game.js startRace): one row per phase, in
@@ -795,8 +795,8 @@ interface GameCtx {
   readonly holdCaution: (level: number, cause?: string) => number;
   /** Clear race-control, incident and debris ownership before a deterministic episode restart. */
   readonly resetEpisodeOwners: () => void;
-  /** Read-only rendered camera damping anchors and independent simulation/render clocks. */
-  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; };
+  /** Read-only rendered camera damping anchors and independent simulation/render clocks; `warming`/`liveTicks` are tickBody's holds (__apex.info()). */
+  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; warming: boolean; liveTicks: number; };
   /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
   readonly ttDistance: number;
   /** True while an #announce message is still on screen — a coach mark waits for it. */
@@ -880,7 +880,10 @@ declare const DebrisWorld: GameModuleFactory;
 declare const GameHud: GameModuleFactory;
 // js/ui/hud-minimap.js: GameHud.create builds it from the same ctx (#1656).
 declare const HudMinimap: GameModuleFactory;
+// js/ui/hud-radio-lane.js: GameHud.create builds it from the same ctx (#3261).
+declare const HudRadioLane: GameModuleFactory;
 declare const GameResults: GameModuleFactory;
+declare const GameResultsSheet: GameModuleFactory;
 declare const IncidentSim: GameModuleFactory;
 declare const LightStore: GameModuleFactory;
 declare const Menus: GameModuleFactory;
@@ -890,6 +893,10 @@ declare const Photomode: GameModuleFactory;
 declare const FreeCam: GameModuleFactory;
 declare const ReplayBuf: GameModuleFactory;
 declare const ResultsCam: GameModuleFactory;
+declare const RaceCeremony: GameModuleFactory;
+declare const CooldownLap: GameModuleFactory;
+declare const ParcFerme: GameModuleFactory;
+declare const RacePodium: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;

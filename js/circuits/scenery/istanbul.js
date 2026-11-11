@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["istanbul"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
         pine, tree, bush, ridge, building, grandstandEx,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,

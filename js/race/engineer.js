@@ -532,6 +532,6 @@ var RaceEngineer = (function () {
     return { update, reset, callFor, senseOf, forecast };
   }
 
-  return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, DIRECTIONAL, BOX_CALLS };
+  return { create, WEAR_STEPS, AXLE_SPLIT, COLD_CALL, QUIET_S, DIRECTIONAL, BOX_CALLS };
 })();
 Object.freeze(RaceEngineer);

@@ -8,7 +8,13 @@
    autoTier 4 shed uses the same gate).
 
    Keys: `apex26.gfxSsao`, `apex26.gfxGodrays` — raw lane, "1"/"0", unset = ON.
-   Read per frame, so the answer is held in a variable, not re-read from storage. */
+   Read per frame, so the answer is held in a variable, not re-read from storage.
+
+   PostFxOpts.debris (the former DebrisOpts module, folded in 2026-11-10): the DEBRIS switch. The Rapier
+   side-world (js/physics/debris-world.js) is a perf lever — a WASM physics world every frame — so it gets a row,
+   not only a console flag. Nothing here touches DebrisWorld at eval. The key is the one DebrisWorld reads,
+   `apex26.debris`, raw lane, "1"/"0": its create() reads it once at boot to decide whether to start the 2.2 MB
+   Rapier import, so the switch has two halves: setEnabled() now, the key at the next boot. */
 const PostFxOpts = (function () {
   "use strict";
 
@@ -40,6 +46,28 @@ const PostFxOpts = (function () {
     if (!state.godrays) { po.godray = 0; po.lampVol = 0; }
     return po;
   }
+  const DEBRIS_KEY = "debris";   // apex26.debris — raw lane, "1"/"0", default OFF
+  // The stored value, else SettingsDefaults' shipped default — deliberately NOT
+  // DebrisWorld.status().enabled: `_enabled` is false until game.js calls
+  // create(), and this row wires on DOMContentLoaded, which can come first.
+  // Matched to create() exactly: only the raw string "1" enables the side-world.
+  function debrisOn() {
+    return store.raw(`apex26.${DEBRIS_KEY}`) === "1";
+  }
+  function setDebris(want) {
+    const v = !!want;
+    // rawSet swallows a blocked write itself (and records store.broken), so a
+    // failure here costs the next boot, never this session's live half.
+    store.rawSet(`apex26.${DEBRIS_KEY}`, v ? "1" : "0");
+    // Live half: setEnabled(false) destroys the world; setEnabled(true) starts
+    // the lazy Rapier load if this boot never did.
+    try {
+      if (typeof DebrisWorld !== "undefined" && DebrisWorld.setEnabled) DebrisWorld.setEnabled(v);
+    } catch (_) { /* the stored half still reaches the next boot */ }
+    return v;
+  }
+  const debris = Object.freeze({ KEY: DEBRIS_KEY, on: debrisOn, set: setDebris });
+
   // lookPostShed (GRAPHICS: LOW or measured/crash tier 4): zero look-defining strengths
   // before present(). autoTier alone left LOW with full bloom/SSAO/god-rays on tile GPUs.
   function lookPostOff() {
@@ -60,7 +88,14 @@ const PostFxOpts = (function () {
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
-    // Silent writes for the same reason as DebrisOpts: no G here to gate the UI blip.
+    // Silent writes: uiSelect() blips unconditionally and every call site supplies
+    // its own `if (G.soundOn)` gate; this module has no G (DrivingLineOpts is the same).
+    // DEBRIS OFF is a frame budget the player gets back; the race is otherwise unchanged.
+    SettingRow.wire("pm-debris", {
+      values: SettingRow.labels(["off", "on"]),
+      read: () => (debrisOn() ? "on" : "off"),
+      write: (v) => setDebris(v === "on"),
+    });
     SettingRow.wire("pm-ssao", {
       values: SettingRow.labels(["off", "on"]),
       read: () => (state.ssao ? "on" : "off"),
@@ -74,10 +109,13 @@ const PostFxOpts = (function () {
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => {
+      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
     else initUI();
   }
 
-  return { KEYS, set, ssaoOn, godraysOn, gate, lookPostOff, applyLookShed, initUI };
+  return { KEYS, set, ssaoOn, godraysOn, gate, lookPostOff, applyLookShed, initUI, debris };
 })();
 Object.freeze(PostFxOpts);

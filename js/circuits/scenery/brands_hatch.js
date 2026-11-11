@@ -40,7 +40,7 @@
         guardrail, fence, wall, tyreWall, marshalPost, cameraTower,
         broadcastCompound,
         billboard, signBoard, sponsorHoarding, gantry,
-        place, groundPatch, ridge, addBox } = api;
+        place, groundPatch, ridge, addBox, bakedModel } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       // Frame selector for the shared helpers below: block 1 and the far-lap
@@ -932,4 +932,14 @@
       farHill(0.46, 1, 1140, 1886, 96, -37);
       farHill(0.68, -1, 1020, 1517, 67, -30);
       farHill(0.88, 1, 1050, 1640, 80, -33);
+
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      // Paddock/pit complex travels with sl(); bowl/woods cameras stay in ID frame.
+      for (const s of [0.030, 0.045, 0.055]) bakedModel("k_tentlong", K(sl(s)), 1, 70, { scale: 2.4 });
+      bakedModel("k_camera_exclusive", K(sl(0.014)), -1, 13, { scale: 3 }); // Paddock Hill
+      for (const [s, side] of [[0.076, -1], [0.190, -1], [0.378, -1], [0.914, -1]])
+        bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
   };

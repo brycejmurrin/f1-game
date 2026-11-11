@@ -19,7 +19,8 @@
  * "Simple" packs use flat factors, the atlas ones a small gradient png). No
  * skins, animations, Draco, sparse accessors. Anything unsupported is skipped
  * with a reason, never a crash — a pack is dozens of models and one bad file
- * must not sink the rest.
+ * must not sink the rest. When EVERY file is skipped the run exits 2
+ * (importExitCode), so import-models.yml commits nothing.
  *
  *   node tools/gen/import-models.mjs <dir> [--mat CONCRETE] [--height 12 | --scale 5] [--prefix q_]
  *
@@ -373,6 +374,23 @@ function main() {
   console.table(rows);
   const ok = rows.filter((r) => !r.skipped).length;
   console.log(`imported ${ok}/${files.length} -> assets/pack/models/`);
+  const code = importExitCode(rows);
+  if (code) console.error(`import-models: none of the ${files.length} model file(s) imported; see the skipped reasons above`);
+  return code;
 }
 
-main();
+/**
+ * Exit status for an import run. A partial import exits 0: a pack is dozens of
+ * models and one unsupported file is skipped with its reason in the table, the
+ * rest still ship. An import where every file was skipped (unsupported, over
+ * --max-verts, or a parse error) exits 2, so the workflow stops before it
+ * commits a pack that gained nothing.
+ * @param {{ skipped?: string }[]} rows one row per model file found
+ */
+export function importExitCode(rows) {
+  const list = rows || [];
+  return list.length && list.every((r) => r.skipped) ? 2 : 0;
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) process.exitCode = main();

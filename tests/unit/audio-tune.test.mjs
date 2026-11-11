@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 // A REAL device rate. The sub-octave layer derives its frequency from
 // ctx.sampleRate, so the 8 kHz stand-in this harness used to fake put it under
@@ -66,7 +66,7 @@ function idleSampleSrc() {
 const live = new Set();
 function node(kind, counts) {
   if (counts) counts[kind] = (counts[kind] || 0) + 1;
-  const self = { kind, connections: [], connect(t) { self.connections.push(t); return t; }, disconnect() { live.delete(self); }, start(t) { self.startAt = t; }, stop(t) { self.stopAt = t; }, type: "", loop: false,
+  const self = { kind, connections: [], unplugs: 0, connect(t) { self.connections.push(t); return t; }, disconnect() { self.unplugs++; live.delete(self); }, start(t) { self.startAt = t; }, stop(t) { self.stopAt = t; }, type: "", loop: false,
            loopStart: 0, loopEnd: 0, buffer: null, onended: null, fftSize: 0, frequencyBinCount: 0,
            getFloatFrequencyData() {}, gain: param(1), frequency: param(440), detune: param(0),
            Q: param(1), playbackRate: param(1) };
@@ -119,9 +119,12 @@ function boot(opts) {
   };
   if (opts && opts.realWatch) sb.RealRace = { isWatch: () => true, status: () => { throw new Error("WATCH guard must not build a status snapshot"); } };
   if (opts && opts.Audio) sb.Audio = opts.Audio;
+  if (opts && opts.ErsLayer) sb.ErsLayer = opts.ErsLayer;
+  if (opts && opts.search != null) { sb.location = { search: opts.search }; sb.URLSearchParams = URLSearchParams; }
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
+  if (opts && opts.realErs) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/ers-layer.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/ers-layer.js") });
   vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   // The crackle scheduler is TIME-driven: it fires when ctx.currentTime passes
@@ -138,8 +141,8 @@ function boot(opts) {
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
 // it: init + release decodes the fake buffers, then startEngine picks samples.
-async function sampleEngine() {
-  const { GameAudio, release } = boot();
+async function sampleEngine(opts) {
+  const { GameAudio, release } = boot(opts);
   GameAudio.init();
   await release();
   GameAudio.startEngine();
@@ -247,8 +250,8 @@ const TUNE_IDENTITY = Object.freeze({
   limiter: 1, limRate: 1, limPitch: 1, boost: 1, boostPitch: 1,
   whine: 1, harvest: 1, wind: 1, screech: 1, brakes: 1, shift: 1, rivals: 1, reverb: 1, overrun: 1,
 });
-async function neutralEngine() {
-  const A = await sampleEngine();
+async function neutralEngine(opts) {
+  const A = await sampleEngine(opts);
   A.setTune(TUNE_IDENTITY);
   return A;
 }
@@ -401,7 +404,9 @@ test("moving muted layers retain fade-tail pitch, then stop scheduling and re-ai
     for (const key of keys) A.setLayer(key, false);
     ctxTime(0.05); frame(0.3);
     const gains = [...live].filter((n) => n._apexMuteUntil !== undefined);
-    assert.equal(gains.length, samples ? 6 : 5, "the sample sub-layer is absent on the synth core");
+    // "ers" stays in `keys` but owns no engine gain: the MGU-K whine is ErsLayer's
+    // (absent in this harness), not the legacy ersGain chain that rendered at 0 (audit W19).
+    assert.equal(gains.length, samples ? 5 : 4, "the sample sub-layer is absent on the synth core");
     const rows = gains.map((gain) => {
       const direct = [...live].find((n) => n.connections.includes(gain) && n.kind !== "gain");
       const source = [...live].find((n) => n.kind === "osc" && n.connections.includes(direct)) || direct;
@@ -435,7 +440,7 @@ test("moving muted layers retain fade-tail pitch, then stop scheduling and re-ai
     assert.ok(rows.some((r, i) => r.pitch.sets > rapid[i]), "rapid re-mute gets a fresh tail window");
     A.stopEngine(); A.startEngine(); frame(0.2);
     const fresh = [...live].filter((n) => n._apexMuteUntil !== undefined);
-    assert.equal(fresh.length, samples ? 6 : 5);
+    assert.equal(fresh.length, samples ? 5 : 4);
     assert.ok(fresh.every((n) => !gains.includes(n)), "restart creates fresh graph-owned deadlines");
   }
 });
@@ -790,7 +795,8 @@ test("the LIMITER is three knobs: depth that never inverts the gate, a rate, and
 });
 
 test("BOOST is the ERS layers' level and the rev lift under deploy", async () => {
-  const A = await neutralEngine();
+  // ersLevel() reads ErsLayer.deployLevel(): boot the real layer, as the game does (audit W19).
+  const A = await neutralEngine({ realErs: true });
   const deploying = () => A.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
   const coasting = () => A.setEngine(0.7, 0, false, 0.7, 6, {});
   A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
@@ -1773,7 +1779,8 @@ test("a downshift flares the note, then it settles; an upshift does not", async 
 });
 
 test("car SFX levels follow the car's own state, never the road's curvature", () => {
-  const sb = { Math, Number, Object, GameAudio: {} };
+  let wallMs = 0;   // one update() per 16 ms frame here; substeps are the next test
+  const sb = { Math, Number, Object, GameAudio: {}, performance: { now: () => (wallMs += 16) } };
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
   const sent = [], guns = [];
@@ -1803,6 +1810,32 @@ test("car SFX levels follow the car's own state, never the road's curvature", ()
   // A new race's car starting mid-state does not fire a phantom gun.
   S.update({ speed: 0, pitState: "box" });
   assert.equal(guns.length, 2, "a fresh car resets the edge");
+});
+
+// #5052: game.js calls update() on every physics substep (up to 5 a frame) for the wheel-gun
+// edges; setCarSfx's three aimGain + surf filter ran on each. Levels go once per frame now,
+// an on/off flip at once, and the edges still fire on the substep they happen.
+test("car SFX levels go out once per frame across substeps; flips and pit edges are not delayed (#5052)", () => {
+  let wallMs = 1000;
+  const sb = { Math, Number, Object, GameAudio: {}, performance: { now: () => wallMs } };
+  const vctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
+  const sent = [], guns = [];
+  sb.GameAudio.setCarSfx = (o) => sent.push({ ...o });
+  sb.GameAudio.pitGun = (t) => guns.push(t);
+  const G = { vTop: () => 100, isWetRoad: () => false, raceT: 10 };
+  const S = vm.runInContext("CarSfx", vctx).create(G);
+  const car = { speed: 50, frontUtil: 1.05, pitState: "none" };
+  const frame = (steps, each) => { wallMs += 16; for (let k = 0; k < steps; k++) { if (each) each(k); S.update(car); G.raceT += 1 / 240; } };
+  frame(4);
+  assert.equal(sent.length, 1, "four substeps of one frame: one level write");
+  for (let i = 0; i < 9; i++) frame(4, (k) => { car.frontUtil = 1.05 + 0.001 * k; });
+  assert.equal(sent.length, 10, "ten frames: ten writes, not forty");
+  frame(4, (k) => { car.frontUtil = k >= 2 ? 0.9 : 1.05; });
+  assert.equal(sent.length, 12, "scrub ending mid-frame is sent on that substep");
+  assert.equal(sent[11].scrub, 0);
+  frame(4, (k) => { if (k === 1) car.pitState = "box"; if (k === 3) car.pitState = "out"; });
+  assert.deepEqual(guns, [false, true], "pit edges fire on their own substeps");
 });
 
 test("a rewind that jumps the race clock across a pit edge re-seeds wheel guns silently", () => {
@@ -2545,4 +2578,328 @@ test("boost activation is quiet when ERS is muted or its trim is zero", async ()
   assert.equal(A.boostState().peak, 0);
   A.setTune({ boost: 1 }); A.deployBoost();
   assert.ok(A.boostState().peak > 0 && A.boostState().peak <= 0.15, "stock whoosh is below the old 0.3 peak");
+});
+
+test("setEngine hands ErsLayer one record rewritten each frame, not a fresh 12-field literal (perf hunt 6)", () => {
+  const seen = [];
+  const ErsLayer = { update: (st) => seen.push({ ref: st, deploy: st.deploy, energy: st.energy, boost: st.boost }) };
+  const { GameAudio, ctxTime } = boot({ ErsLayer });
+  GameAudio.init();
+  GameAudio.startEngine();
+  const frame = (deploy) => { ctxTime(1 / 60); GameAudio.setEngine(0.7, 0, false, 0.6, 5, { deploy, energy: 0.8, ax: 2 }); };
+  frame(0); frame(1); frame(0.5);
+  assert.ok(seen.length >= 3, "ErsLayer is fed every frame");
+  const tail = seen.slice(-3);
+  assert.ok(tail.every((r) => r.ref === tail[0].ref), "the same record every frame");
+  assert.deepEqual(tail.map((r) => r.deploy), [0, 1, 0.5], "…carrying each frame's values when update reads it");
+  assert.deepEqual(tail.map((r) => r.boost), [false, true, true]);
+});
+
+// A signal host over a fake context whose params LOG every scheduling call with
+// its time, so a one-shot's envelope can be read back exactly. Each call's
+// events are the slice logged after it began (a pooled node keeps its history).
+function loggingSignal() {
+  const counts = {}, sources = [];
+  const lp = (v) => {
+    const p = { value: v, log: [] };
+    for (const m of ["setValueAtTime", "linearRampToValueAtTime", "exponentialRampToValueAtTime"])
+      p[m] = (x, t) => { p.log.push([m, x, t]); p.value = x; };
+    p.cancelScheduledValues = (t) => { p.log.push(["cancel", null, t]); };
+    return p;
+  };
+  const mk = (kind) => {
+    counts[kind] = (counts[kind] || 0) + 1;
+    const n = { kind, type: "", connections: [], disconnected: 0, gain: lp(1), frequency: lp(350), Q: lp(1),
+      connect(t) { n.connections.push(t); return t; }, disconnect() { n.disconnected++; },
+      start(t, off) { n.startAt = t; n.offset = off; }, stop(t) { n.stopAt = t; } };
+    if (kind === "src") sources.push(n);
+    return n;
+  };
+  const ctx = { currentTime: 1, sampleRate: SR, createGain: () => mk("gain"), createBiquadFilter: () => mk("biquad"),
+    createOscillator: () => mk("osc"), createBufferSource: () => mk("src"),
+    createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }) };
+  const bus = mk("bus");
+  const vctx = vm.createContext({ Math, Map, Object, Float32Array, console });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/signal.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/signal.js") });
+  const sig = vm.runInContext("GameAudioSignal", vctx).create({ context: () => ctx, bus: () => bus, sfxOk: () => true, now: () => ctx.currentTime });
+  // One burst's observable plan: the filter and gain its source feeds, and the
+  // non-cancel events those params received during this call.
+  const fire = (call) => {
+    const mark = new Map();
+    const seen = (p) => { if (!mark.has(p)) mark.set(p, p.log.length); };
+    for (const s of sources) for (const f of s.connections) { seen(f.frequency); seen(f.Q); for (const g of f.connections) seen(g.gain); }
+    const before = sources.length;
+    call();
+    assert.equal(sources.length, before + 1, "each burst plays exactly one new one-shot source");
+    const src = sources[sources.length - 1], f = src.connections[0], g = f.connections[0];
+    const since = (p) => p.log.slice(mark.has(p) ? mark.get(p) : 0).filter((e) => e[0] !== "cancel");
+    return { src, f, g, type: f.type, q: f.Q.value, freq: f.frequency.value, freqEvents: since(f.frequency), gainEvents: since(g.gain), bus: g.connections[0] === bus };
+  };
+  return { sig, ctx, counts, sources, fire };
+}
+
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+function assertEvents(got, want, label) {
+  assert.equal(got.length, want.length, `${label}: ${JSON.stringify(got)}`);
+  for (let i = 0; i < want.length; i++) {
+    assert.equal(got[i][0], want[i][0], `${label} #${i} method`);
+    assert.ok(near(got[i][1], want[i][1]) && near(got[i][2], want[i][2]), `${label} #${i}: ${got[i]} != ${want[i]}`);
+  }
+}
+// Pre-pool code: a fixed-frequency burst set frequency.value (no event); the pool
+// sets it at t0 instead. Both mean "this frequency from t0", and nothing else.
+function assertFixedFreq(b, hz, t0, label) {
+  assert.ok(near(b.freq, hz), `${label}: frequency ${b.freq} != ${hz}`);
+  for (const e of b.freqEvents) assert.ok(e[0] === "setValueAtTime" && near(e[1], hz) && near(e[2], t0), `${label}: stray frequency event ${e}`);
+}
+
+test("noise one-shots keep the pre-pool envelope, filter and timing on every voice reuse (perf: pooled noiseBurst)", () => {
+  // Expected plans captured on the pre-pool signal.js (fresh source+biquad+gain per call).
+  const { sig, ctx, fire } = loggingSignal();
+  for (let round = 0; round < 12; round++) {   // more calls than voices, so each shape lands on a REUSED voice
+    ctx.currentTime += 0.5;
+    const t0 = ctx.currentTime;
+    const pop = fire(() => sig.noise(0.04, 0.045, 3100));
+    assert.equal(pop.type, "lowpass");
+    assert.equal(pop.q, 1, "lowpass noise keeps the default Q even after a hiss used the voice");
+    assertFixedFreq(pop, 3100, t0, "pop");
+    assertEvents(pop.gainEvents, [["setValueAtTime", 0.0001, t0], ["linearRampToValueAtTime", 0.04, t0 + 0.005], ["exponentialRampToValueAtTime", 0.0001, t0 + 0.05]], "pop gain");
+    assert.ok(near(pop.src.startAt, t0) && near(pop.src.stopAt, t0 + 0.145) && pop.bus, "pop source window and routing");
+    assert.ok(pop.src.offset >= 0 && pop.src.offset <= 3 - 0.195, "pop reads the shared pool from a random offset");
+
+    const h = fire(() => sig.hiss(0.03, 0.16, 3800, 1300));
+    assert.equal(h.type, "bandpass");
+    assert.ok(near(h.q, 1.4));
+    assertEvents(h.freqEvents, [["setValueAtTime", 3800, t0], ["exponentialRampToValueAtTime", 1300, t0 + 0.16]], "hiss frequency");
+    assertEvents(h.gainEvents, [["setValueAtTime", 0.0001, t0], ["linearRampToValueAtTime", 0.03, t0 + 0.008], ["exponentialRampToValueAtTime", 0.0001, t0 + 0.168]], "hiss gain");
+    assert.ok(near(h.src.stopAt, t0 + 0.26));
+
+    const s = fire(() => sig.scrapeNoise(0.2, 0.3));
+    assert.equal(s.type, "bandpass");
+    assert.ok(near(s.q, 1.2));
+    assertFixedFreq(s, 2600, t0, "scrape");
+    assertEvents(s.gainEvents, [["setValueAtTime", 0.0001, t0], ["linearRampToValueAtTime", 0.2, t0 + 0.02], ["exponentialRampToValueAtTime", 0.0001, t0 + 0.32]], "scrape gain");
+
+    const d = fire(() => sig.noise(0.07, 0.03, 2600, 0.09));   // a delayed rumble tick
+    const td = t0 + 0.09;
+    assertFixedFreq(d, 2600, td, "delayed");
+    assertEvents(d.gainEvents, [["setValueAtTime", 0.0001, td], ["linearRampToValueAtTime", 0.07, td + 0.005], ["exponentialRampToValueAtTime", 0.0001, td + 0.035]], "delayed gain");
+    assert.ok(near(d.src.startAt, td) && near(d.src.stopAt, td + 0.13));
+  }
+});
+
+test("noise one-shots reuse a fixed filter/gain pool, and overlapping or delayed bursts never cut one another", () => {
+  const { sig, ctx, counts, sources } = loggingSignal();
+  // 20 bursts inside 40 ms (a pit stop's rattles), half of them delayed: more
+  // than the pool, all sounding at once. None may be cut short.
+  for (let i = 0; i < 20; i++) { ctx.currentTime += 0.002; sig.noise(0.05, 0.045, 3000, (i % 2) * 0.12); }
+  assert.equal(sources.length, 20, "every burst is its own source");
+  assert.equal(sources.filter((s) => s.disconnected > 0).length, 0, "no sounding burst was disconnected to make room");
+  const built = { biquad: counts.biquad, gain: counts.gain };
+  // A sustained lift: 200 pops at 15 a second. The graph must not grow.
+  ctx.currentTime += 1;
+  for (let i = 0; i < 200; i++) { ctx.currentTime += 1 / 15; sig.noise(0.05, 0.045, 3000); }
+  assert.equal(sources.length, 220);
+  assert.equal(counts.biquad - built.biquad, 0, `200 spaced pops built ${counts.biquad - built.biquad} more filters`);
+  assert.equal(counts.gain - built.gain, 0, `200 spaced pops built ${counts.gain - built.gain} more gains`);
+  // A reused voice drops its finished source, so the pool never accretes inputs.
+  const wired = sources.slice(20).filter((s) => s.disconnected === 0);
+  assert.ok(wired.length <= 8, `${wired.length} finished sources still wired into the pool (at most one per voice)`);
+});
+
+test("overrun pops and the wastegate reuse a fixed pool of filter/gain nodes as the pop count grows", async () => {
+  const { GameAudio: A, release, counts, ctxTime } = boot();
+  A.init(); await release(); A.startEngine();
+  const snap = () => ({ src: counts.src || 0, biquad: counts.biquad || 0, gain: counts.gain || 0 });
+  const drive = (frames, ax) => { for (let i = 0; i < frames; i++) { ctxTime(0.05); A.setEngine(0.8, 0, false, 0.7, 5, { ax }); } };
+  const a = snap();
+  drive(20, 8); drive(40, -4);
+  const b = snap();
+  for (let k = 0; k < 6; k++) { drive(20, 8); drive(40, -4); }
+  const c = snap();
+  const early = b.src - a.src, pops = c.src - a.src;
+  assert.ok(early >= 6 && pops > early * 5, `precondition: many more pops later (${early} then ${pops} in all)`);
+  // The pool fills lazily to the peak overlap, so it may still add a voice late,
+  // but never past its size: filters <= 8 noise voices, gains <= 8 noise + 8 blip.
+  assert.ok(b.biquad - a.biquad <= 8, `first lift built ${b.biquad - a.biquad} filters for ${early} pops`);
+  assert.ok(c.biquad - a.biquad <= 8, `${pops} pops (and seven wastegate dumps) built ${c.biquad - a.biquad} filters`);
+  assert.ok(c.gain - a.gain <= 16, `${pops} pops built ${c.gain - a.gain} gains`);
+});
+
+test("windFromSpeed writes into a caller's record and matches the fresh-object form", () => {
+  const A = await_boot();
+  const out = { gain: -1, hz: -1 };
+  for (const s of [0, 0.04, 0.05, 0.25, 0.6, 1, 1.4, -0.2]) {
+    const fresh = A.windFromSpeed(s);
+    assert.equal(A.windFromSpeed(s, out), out, "the record passed in is the one returned");
+    assert.equal(out.gain, fresh.gain, `gain at ${s}`);
+    assert.equal(out.hz, fresh.hz, `hz at ${s}`);
+  }
+  assert.notEqual(A.windFromSpeed(0.5), A.windFromSpeed(0.5), "without a record each call still returns its own object");
+});
+
+test("rain restarts (pause/resume, weather flips) reuse one 4 s loop buffer instead of regenerating it", () => {
+  const { GameAudio: A, ctx, flushTimers } = boot();
+  const { buffers } = observeBuffers(ctx);
+  A.init(); A.startEngine();
+  const rainBufs = () => buffers.filter((b) => b.length === SR * 4).length;
+  const rainLoop = () => [...live].find((n) => n.kind === "src" && n.loop && n.buffer && n.buffer.length === SR * 4 && n.stopAt == null);
+  A.startRain(0.1);
+  const first = rainLoop();
+  assert.ok(first, "the rain loop is playing");
+  A.stopRain(); flushTimers();
+  A.startRain(0.1);
+  const second = rainLoop();
+  assert.ok(second && second !== first, "the restart plays a fresh source");
+  assert.equal(second.buffer, first.buffer, "…over the same cached noise buffer");
+  A.stopRain(); flushTimers(); A.startRain(0.2);
+  assert.equal(rainBufs(), 1, "three rain starts generated the 4 s buffer once");
+});
+
+// ── audio idle (ON by default since #5053; ?lab=noAudioIdle is the off switch) ─
+// The rival pass-by pool, the crowd bed + cheers and the ERS layer looped through
+// menus at gain 0. With idle on, stopEngine() unplugs their output gains from
+// the bus once the fades are done, and startEngine() plugs them back.
+async function idleRig(search) {
+  const b = boot({ search });
+  const all = [];
+  for (const k of Object.keys(b.ctx)) {
+    if (!k.startsWith("create") || typeof b.ctx[k] !== "function" || k === "createBuffer") continue;
+    const make = b.ctx[k];
+    b.ctx[k] = (...a) => { const n = make(...a); all.push(n); return n; };
+  }
+  for (const file of ["js/physics/consts.js", "js/audio/ers-layer.js", "js/audio/rivals.js", "js/audio/crowd.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var"), b.vctx, { filename: absSrc(file) });
+  const mods = vm.runInContext("({ RivalAudio, ErsLayer, CrowdAudio })", b.vctx);
+  b.GameAudio.init();
+  await b.release();
+  b.GameAudio.startEngine();
+  const unplugs = () => all.reduce((s, n) => s + n.unplugs, 0);
+  const plugs = () => all.reduce((s, n) => s + n.connections.length, 0);
+  const pans = () => mods.RivalAudio.passByVoices().map((v) => v.pan);
+  // A pause → menu → resume cycle, with the deferred disconnects flushed.
+  const menu = () => { b.GameAudio.stopEngine(); b.ctx.currentTime += 1; b.flushTimers(); };
+  return { ...b, ...mods, all, unplugs, plugs, pans, menu };
+}
+
+test("?lab=noAudioIdle leaves the layer graph plugged in through a menu cycle", async () => {
+  const sig = (r) => r.all.map((n) => n.kind + ":" + n.connections.length + ":" + n.unplugs).join(",");
+  const runs = [];
+  for (const search of ["?lab=noAudioIdle", "?lab=rivalEps,noAudioIdle", "?lab= noAudioIdle"]) {
+    const r = await idleRig(search);
+    assert.equal(r.CrowdAudio.inspect().attached, true, "precondition: the crowd bed is built");
+    assert.equal(r.ErsLayer.attached(), true, "precondition: the ERS layer is built");
+    assert.equal(r.pans().length, 4, "precondition: four pass-by voices");
+    r.menu();
+    assert.equal(r.pans().reduce((s, p) => s + p.unplugs, 0), 0, `${search}: no pass-by panner is unplugged`);
+    assert.equal(r.CrowdAudio.inspect().bedGain.unplugs, 0, `${search}: the crowd bed stays plugged in`);
+    r.GameAudio.startEngine();
+    runs.push({ sig: sig(r), unplugs: r.unplugs(), plugs: r.plugs() });
+  }
+  assert.equal(runs[1].sig, runs[0].sig, "the off switch works beside another lab");
+  assert.equal(runs[2].sig, runs[0].sig, "…and with stray whitespace");
+});
+
+test("by default (#5053) the rival, crowd and ERS outputs unplug in menus and come back on race entry", async () => {
+  const off = await idleRig("?lab=noAudioIdle");
+  const on = await idleRig(null);
+  const u0off = off.unplugs(), u0on = on.unplugs();
+  assert.equal(u0on, u0off, "nothing is unplugged while racing");
+  off.menu(); on.menu();
+  // 4 pass-by panners + crowd bed + 4 desktop cheer gains + 4 ERS gains = 13.
+  // Red on fcb2b81 (before #5053): the default unplugged 0.
+  assert.equal((on.unplugs() - u0on) - (off.unplugs() - u0off), 13, "the menu unplugs 13 layer outputs");
+  for (const p of on.pans()) assert.equal(p.unplugs, 1, "every pass-by panner is unplugged");
+  assert.equal(on.CrowdAudio.inspect().bedGain.unplugs, 1, "the crowd bed is unplugged");
+  assert.equal(on.ErsLayer.attached(), true, "the ERS layer keeps its nodes: unplugged, not torn down");
+  // Nothing new is created and the context is untouched (iOS unlock path).
+  const nOn = on.all.length, nOff = off.all.length;
+  const p0off = off.plugs(), p0on = on.plugs();
+  off.GameAudio.startEngine(); on.GameAudio.startEngine();
+  assert.equal((on.plugs() - p0on) - (off.plugs() - p0off), 13, "race entry plugs the same 13 outputs back");
+  assert.equal(on.all.length - nOn, off.all.length - nOff, "race entry creates no extra node (nothing is rebuilt)");  const bus = on.pans()[0].connections[0];
+  for (const p of on.pans()) {
+    assert.equal(p.connections.length, 2, "each panner is connected again");
+    assert.equal(p.connections[1], bus, "…to the same bus");
+  }
+  const bed = on.CrowdAudio.inspect().bedGain;
+  assert.equal(bed.connections.length, 2, "the crowd bed is connected again");
+  // …and the restored pool takes a param write on the first race frame.
+  const me = { s: 100, x: 0, speed: 50, rpm: 9000 }, rival = { s: 106, x: 1, speed: 70, rpm: 9000 };
+  const R = on.RivalAudio.create({ track: { total: 1000 }, cars: [me, rival] });
+  const g = on.RivalAudio.passByVoices()[0].gain.gain, sets = g.sets;
+  R.collect(me);
+  assert.ok(g.sets > sets && g.value > 0, "the reconnected pass-by voice is aimed on the first collect()");
+});
+
+test("audio idle: a resume inside the fade window never unplugs anything", async () => {
+  const on = await idleRig(null);
+  const u0 = on.unplugs();
+  on.GameAudio.stopEngine();
+  on.GameAudio.startEngine();       // back in the race before the 500 ms timer
+  on.ctx.currentTime += 1;
+  on.flushTimers();                 // the stale idle timer fires with the engine on
+  assert.equal(on.pans().reduce((s, p) => s + p.unplugs, 0), 0, "the pass-by pool stays plugged in");
+  assert.equal(on.CrowdAudio.inspect().bedGain.unplugs, 0, "the crowd bed stays plugged in");
+  assert.ok(on.unplugs() >= u0);
+});
+
+// ── audit W19 (2026-11-09) ──────────────────────────────────────────────────
+// Row 4: the OSCILLATOR FALLBACK (heard before the sample decodes, or when it
+// cannot) pitched by GEAR: the same full rev read 1105 Hz in 1st and 537 Hz in
+// 8th. Pitch is rpm alone on both cores (tools/check/audio-test.cjs asserts it
+// for the sample rate; this pins the synth saws).
+test("the synth fallback's pitch is the same at the same rev in every gear", () => {
+  const A = synthEngine();
+  const saws = () => [...live].filter((n) => n.kind === "osc" && (n.type === "sawtooth" || n.type === "square") && n.stopAt == null);
+  const read = (rev, gear) => {
+    for (let i = 0; i < 4; i++) A.setEngine(rev, 0, false, rev, gear, {});
+    return saws().map((n) => +n.frequency.value.toFixed(3));
+  };
+  for (const rev of [0, 0.5, 1]) {
+    const g1 = read(rev, 1), g8 = read(rev, 8), g4 = read(rev, 4);
+    assert.ok(g1.length >= 3, "precondition: the three synth voices are live");
+    assert.deepEqual(g1, g4, `rev ${rev}: 1st and 4th sing the same note`);
+    assert.deepEqual(g8, g4, `rev ${rev}: 8th and 4th sing the same note`);
+  }
+  const lo = Math.max(...read(0, 3)), hi = Math.max(...read(1, 3));
+  assert.ok(hi > lo * 4, `the note still climbs with rpm (${lo} -> ${hi} Hz)`);
+});
+
+// Row 5: the legacy in-engine ERS whine (ersOsc/ersHp/ersGain) was built,
+// started and torn down every race but rendered at gain 0 behind ErsLayer.
+test("the engine graph builds no legacy ERS whine; ersLevel() is ErsLayer's deploy level", async () => {
+  // Without ErsLayer the engine alone must hold no 720 Hz whine oscillator (ErsLayer's
+  // own deploy voice also starts at 720 Hz, so the check runs where it is absent).
+  const { GameAudio: B, release: relB } = boot();
+  B.init(); await relB(); B.startEngine();
+  B.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
+  const legacy = [...live].filter((n) => n.kind === "osc" && n.type === "sine" && n.frequency.value >= 700 && n.frequency.value <= 1400 && n.stopAt == null);
+  assert.equal(legacy.length, 0, "no legacy ERS sine in the engine graph");
+  assert.equal(B.ersLevel(), 0, "no ErsLayer: a 0, never a throw");
+  const { GameAudio: A, release } = boot({ realErs: true });
+  A.init(); await release(); A.startEngine();
+  A.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
+  assert.ok(A.ersLevel() > 0, "deploying reads the ErsLayer whine");
+});
+
+// #5052: a rival voice's level drifts with distance and revs, and aimGain's absolute 1e-4 floor
+// never let it settle: two slowly closing rivals cost ~400 gain writes per 600 frames.
+test("two slowly closing rivals settle: gain within 3 %, rate within 0.004 (#5052)", async () => {
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init(); await release(); A.startEngine();
+  const all = () => [...live].reduce((n, nd) => n + nd.gain.sets + nd.playbackRate.sets, 0);
+  const rows = (i) => [
+    { slot: 0, lat: 2, arc: 30 - i * 0.02, rev: 0.80 + 0.003 * Math.sin(i * 0.3), approach: 1.2 },
+    { slot: 1, lat: -3, arc: 45 - i * 0.01, rev: 0.75 + 0.003 * Math.sin(i * 0.5), approach: 0.6 },
+  ];
+  for (let i = 0; i < 60; i++) { ctxTime(1 / 60); A.setRivals(rows(i)); }
+  const s0 = all();
+  for (let i = 60; i < 660; i++) { ctxTime(1 / 60); A.setRivals(rows(i)); }
+  const sets = all() - s0;
+  assert.ok(sets < 200, `gain + rate writes over 600 frames: ${sets}`);
+  const g = A.rivalState().map((v) => v.gain);
+  assert.ok(g[0] > 0 && g[1] > 0, "both voices are still audible");
+  A.setRivals([]);
+  assert.deepEqual(A.rivalState().map((v) => v.gain), A.rivalState().map(() => 0), "a hard 0 still mutes exactly");
 });

@@ -58,7 +58,11 @@ export const SENTENCE_MAX = 160;
 export function headerSentence(src) {
   const lines = src.split("\n");
   let i = 0;
-  while (i < lines.length && (/^\s*$/.test(lines[i]) || /^\s*"use strict";\s*$/.test(lines[i]))) i++;
+  // Skip what is not prose: blanks, `"use strict";`, a shebang, and a bare
+  // `// @ts-check` / `// @ts-nocheck` pragma — 164 coverage rows read "@ts-check"
+  // (alone or as a prefix) before this skip (audit W27, 2026-11-09).
+  const skip = (l) => /^\s*$/.test(l) || /^\s*"use strict";\s*$/.test(l) || /^#!/.test(l) || /^\s*\/\/\s*@ts-(?:no)?check\s*$/.test(l);
+  while (i < lines.length && skip(lines[i])) i++;
   let text;
   if (/^\s*\/\*/.test(lines[i] || "")) {
     const rest = lines.slice(i).join("\n");
@@ -70,7 +74,8 @@ export function headerSentence(src) {
     text = buf.join("\n");
   } else return null;
   text = text.split("\n").map((l) => l.replace(/^\s*\*+ ?/, "")).join(" ").replace(/\s+/g, " ").trim();
-  text = text.replace(/^Apex 26 — /, "").replace(/^js\/[\w/.-]+\.js — /, "");
+  text = text.replace(/^@ts-(?:no)?check\s+/, "").replace(/^Apex 26 — /, "").replace(/^js\/[\w/.-]+\.js — /, "")
+    .replace(/^[\w.-]+\.(?:test|spec)\.(?:mjs|cjs|js) — /, "");
   const m = /^(.*?[.!?])(?:\s+(?=[A-Z(`"[])|$)/.exec(text);
   let s = (m ? m[1] : text).trim();
   if (!s) return null;
@@ -108,9 +113,12 @@ export function rosterOf() {
   add(MANIFEST.FULL, "tag");
   for (const [k, v] of Object.entries(MANIFEST.DEFERRED)) add(v, `DEFERRED:${k}`);
   add(MANIFEST.LAZY_AGENT, "LAZY_AGENT");
+  add(MANIFEST.LAZY_DEV || [], "LAZY_DEV");
+  add(MANIFEST.OVERLAY_PAGE || [], "OVERLAY_PAGE");
   add(MANIFEST.LAZY_RACE, "LAZY_RACE");
   add(MANIFEST.LAZY_RACE_SESSION || [], "LAZY_RACE_SESSION");
   add(MANIFEST.LAZY_TRACK_BUILD || [], "LAZY_TRACK_BUILD");
+  add(MANIFEST.LAZY_GARAGE_EXTERIOR || [], "LAZY_GARAGE_EXTERIOR");
   add(MANIFEST.LAZY_CIRCUIT || [], "LAZY_CIRCUIT");
   add(MANIFEST.LAZY_SCENERY, "LAZY_SCENERY");
   add(MANIFEST.LAZY_DATA, "LAZY_DATA");
@@ -120,6 +128,8 @@ export function rosterOf() {
   add(MANIFEST.LAZY_XR || [], "LAZY_XR");
   add(MANIFEST.LAZY_CAM_EDITOR || [], "LAZY_CAM_EDITOR");
   add(MANIFEST.LAZY_CAREER_UI || [], "LAZY_CAREER_UI");
+  add(MANIFEST.LAZY_UI_PRESETS || [], "LAZY_UI_PRESETS");
+  add(MANIFEST.LAZY_RESULTS_SHEET || [], "LAZY_RESULTS_SHEET");
   return out;
 }
 

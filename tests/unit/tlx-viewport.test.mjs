@@ -156,7 +156,7 @@ test("enabled: uv(view) is bound to the view's size uniform", () => {
 test("post lazy targets use their logical rect on first activation and reopening", async () => {
   // Real post orchestration and TSL graphs; record uniforms at each draw.
   // No renderer compilation or GPU is needed to observe binding order.
-  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const ctx = vm.createContext({ window: {},
     localStorage: { getItem: (key) => key === "apex26.tlxAoFold" ? "0" : null },
     Log: { info() {} },
@@ -235,7 +235,7 @@ test("texture rebind updates ratio and edge clamp immediately, without a global 
 
 // Real post factories and Three graph objects; intercept only GPU drawing.
 // Assert uniforms at submission, not only after present() has completed.
-import * as RealThree from "../../vendor/three-0.186.1/three.webgpu.min.js";
+import * as RealThree from "../../vendor/three-0.187.0/three.webgpu.min.js";
 function postFixture() {
   const ctx = { Log: { info() {}, warn() {} }, localStorage: { getItem() { return null; } } };
   ctx.window = ctx; vm.createContext(ctx);

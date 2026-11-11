@@ -22,9 +22,52 @@ var RadioVoice = (function () {
     comm: "announcer",
   });
   // Prosody per channel: flat and official, calm and explanatory, quick and
-  // clipped. On iOS every English voice sounds the same (the platform returns
-  // no voice list and picks its own), so prosody is the ONLY differentiator
-  // there and has to carry the distinction alone.
+  // clipped. It is the differentiator of last resort: where getVoices() comes
+  // back empty (Chrome's first read, a synth with nothing installed) the
+  // platform picks one voice for everything and prosody carries the channel
+  // alone. iOS is NOT that case — it returns a PARTIAL list (the preinstalled
+  // voices; downloaded ones are missing, bugs.webkit.org/show_bug.cgi?id=290497)
+  // — so there each channel gets its own voice from VOICE_LADDER below.
+  // THE DEFAULT VOICE PER CHANNEL, when the player has not picked one. The old
+  // default was the first three voices of the alphabetised English list, which
+  // on an iPhone is Aaron / Albert / Arthur — Albert being one of Apple's
+  // novelty voices — so race control could come out of a joke voice. Each
+  // channel now walks its own ladder, like js/audio/announcer.js PREFERRED, and
+  // a voice one channel took is skipped by the next (control, then coach, then
+  // radio), so the three stay three voices wherever the list allows.
+  //   control: flat, official, British — Race Control reads like the FIA.
+  //   coach:   calm and explanatory — a clear US/AU voice.
+  //   radio:   the race engineer, quick — a second British/Irish/AU male.
+  // Names cover Apple (iOS/macOS preinstalled), Google (Chrome) and Microsoft
+  // (Edge/Windows) English voices.
+  const NOVELTY = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|kathy|organ|pipe organ|ralph|superstar|trinoids|whisper|wobble|zarvox|fred|grandma|grandpa)\b/i;
+  const VOICE_LADDER = Object.freeze({
+    control: [/^daniel\b/i, /^google uk english male/i, /\b(ryan|george)\b/i, /^(arthur|oliver|malcolm)\b/i, /^en[-_]gb/i],
+    coach: [/^samantha\b/i, /^google us english/i, /\b(aria|jenny|zira)\b/i, /^(karen|moira|tessa|nicky|ava|allison|susan)\b/i, /^en[-_](us|au)/i],
+    radio: [/^(arthur|oliver|gordon|aaron|rishi|tom|evan|nathan)\b/i, /^google uk english/i, /\b(thomas|guy|david|mark)\b/i, /^daniel\b/i, /^en[-_](gb|ie|au|in)/i],
+  });
+  const LADDER_ORDER = ["control", "coach", "radio"];
+  function ladderHit(rung, v) { return rung.test(v.name || "") || (rung.source.startsWith("^en") && rung.test(v.lang || "")); }
+  /** Pure over the list (the test hands it any platform's voices): the voice a
+   *  channel gets with no stored pick. Never a novelty voice while any other is
+   *  listed; null only for an empty list. */
+  function pickChannelVoice(speaker, list) {
+    const all = (Array.isArray(list) ? list : []).filter(Boolean);
+    if (!all.length) return null;
+    const plain = all.filter((v) => !NOVELTY.test(v.name || ""));
+    const pool = plain.length ? plain : all;
+    const taken = new Set();
+    const order = LADDER_ORDER.indexOf(speaker) >= 0 ? LADDER_ORDER : [speaker];
+    for (const sp of order) {
+      const ladder = VOICE_LADDER[sp] || [];
+      let hit = null;
+      for (const rung of ladder) { hit = pool.find((v) => !taken.has(v) && ladderHit(rung, v)); if (hit) break; }
+      if (!hit) hit = pool.find((v) => !taken.has(v)) || pool[0];
+      if (sp === speaker) return hit;
+      taken.add(hit);
+    }
+    return pool[0];
+  }
   const TONE = Object.freeze({
     control: { pitch: 0.9, rate: 1.05 },
     coach: { pitch: 1.0, rate: 0.95 },
@@ -227,6 +270,21 @@ var RadioVoice = (function () {
     catch (e) { return false; }
   }
 
+  /** The language the voices are filtered by: the SPOKEN-LANGUAGE setting ("auto" follows the
+   *  UI language). Separate from the captions' language, and never part of any replay seed. */
+  function spokenLang(pref, uiLang) {
+    const p = String(pref || "auto");
+    const base = (l) => String(l || "en").slice(0, 2).toLowerCase();
+    return p === "auto" ? base(uiLang) : base(p);
+  }
+  /** False only when the platform lists voices and none speaks `lang`. An EMPTY list is Safari
+   *  (it picks a voice itself), so "unknown" speaks; a populated list without the language is the
+   *  caption-only path. */
+  function hasVoiceFor(all, lang) {
+    if (!all || !all.length) return true;
+    return all.some((v) => v && String(v.lang || "").toLowerCase().startsWith(lang));
+  }
+
   /**
    * THE WHOLE POLICY, as a pure function: no DOM, no speechSynthesis, no clock.
    * Every refusal carries a `reason`, which is what the node tests assert on.
@@ -237,6 +295,7 @@ var RadioVoice = (function () {
     if (!o.enabled) { out.reason = "off"; return out; }
     if (!o.soundOn) { out.reason = "master-off"; return out; }
     if (!o.api) { out.reason = "no-api"; return out; }
+    if (o.noVoice) { out.reason = "no-voice"; return out; }   // spoken language has no system voice: the card stays written
     // The radio is about something happening NOW at 300 km/h. The title
     // screen's "SAVE CONFLICT — reload career" card is not radio and must not
     // be read aloud at somebody browsing menus.
@@ -532,27 +591,39 @@ var RadioVoice = (function () {
       const t = G.store.get("voiceTune", null);
       return t && typeof t === "object" ? t : {};
     }
+    let allVoices = [], voicesLang = "";
+    /** The SPOKEN language ("spokenLang" setting; "auto" = the UI language). */
+    function spoken() {
+      let pref = "auto";
+      try { pref = G.store.get("spokenLang", "auto"); } catch (e) { pref = "auto"; }
+      return spokenLang(pref, typeof document !== "undefined" && document.documentElement ? document.documentElement.lang : "en");
+    }
+    // The recorded packs are English: any other spoken language goes through the system voices.
+    const recordedOk = () => spoken() === "en";
+    function noVoice() { voicesFor(false); return !hasVoiceFor(allVoices, spoken()); }
     // NEVER called from create(): boot must not wait on a voice list, and on
     // Chrome the first read is empty anyway.
     function voicesFor(remoteOk) {
       if (!api) return [];
+      const lang = spoken();
+      if (voicesLang !== lang) { voices = voicesAny = null; voicesLang = lang; }
       const cached = remoteOk ? voicesAny : voices;
       if (cached) return cached;
       let all = [];
       try { all = timed("getVoices", () => synth.getVoices()) || []; } catch (e) { all = []; }   // a synth mid-teardown throws
-      const lang = (typeof document !== "undefined" && document.documentElement.lang) || "en";
+      allVoices = all;
       // ONE read of the platform, TWO lists: everything in this language, and
       // the local-only subset. See REMOTE_OK above for which channel gets which
       // — the local filter is the race radio's correctness rule and the
       // announcer's handicap, so it is applied per channel and not here.
-      voicesAny = all.filter((v) => v && String(v.lang || "").startsWith(lang.slice(0, 2)))
+      voicesAny = all.filter((v) => v && String(v.lang || "").toLowerCase().startsWith(lang))
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
       voices = voicesAny.filter((v) => v.localService);
       return remoteOk ? voicesAny : voices;
     }
-    // An EMPTY list is not a refusal. Safari returns nothing from getVoices()
-    // and picks a system default itself, so voice = null is the Safari path and
-    // it must still speak — prosody alone then carries the channel.
+    // An EMPTY list is not a refusal: voice = null lets the platform pick its
+    // default and the line must still speak — prosody alone then carries the
+    // channel. (iOS returns a partial list, not an empty one: VOICE_LADDER.)
     /* The player's pick by NAME, else the shipped spread.
      *
      * BY NAME AND NOT BY INDEX, because the index is not stable: the list is
@@ -576,8 +647,7 @@ var RadioVoice = (function () {
       if (speaker === "announcer" && typeof Announcer !== "undefined") {
         const pick = Announcer.pickVoice(v, want); if (pick) return v.find(x => x.name === pick.name) || null;
       }
-      const i = { control: 0, coach: 1, radio: 2 }[speaker] || 0;
-      return v[i % v.length];
+      return pickChannelVoice(speaker, v);
     }
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
     function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
@@ -590,7 +660,9 @@ var RadioVoice = (function () {
       const lap1 = [];
       const rest = [];
       for (const sp of Object.keys(PACK_VOICE)) {
-        const on = sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn;
+        // The announcer pack only ever speaks comm lines, and say() mutes those with the announcer off: TEAM RADIO
+        // alone used to fetch and keep its ~4-6 MB .bin for nothing (perf hunt 7).
+        const on = sp === "announcer" ? ann && announcerPackOn() : enabled && packOn;
         if (!on) continue;
         (sp === "radio" ? lap1 : rest).push(recordedPack(sp));
       }
@@ -608,6 +680,11 @@ var RadioVoice = (function () {
       const poll = () => {
         gatePoll = null;
         if (G.state === "race" || G.state === "count") { pack.raceLoadGate(false); return; }
+        // A start that exits before count (stale, quit, ctx lost, failed quali order) lands on the
+        // title with no loading cover: release, or the latch and this poll outlive it. (The state
+        // reads "menu" during the load itself too; the cover's phase is what tells them apart.)
+        const ls = G.loadingScreen;
+        if (G.state === "menu" && !(ls && ls.phase && ls.phase())) { pack.raceLoadGate(false); return; }
         gatePoll = setTimeout(poll, 400);
       };
       gatePoll = setTimeout(poll, 800);
@@ -661,7 +738,7 @@ var RadioVoice = (function () {
       // dropped as "too-long" with no retry.
       const hold = pack ? pack.remaining("spotter") : 0;
       if (hold > 0) lead = Math.max(+lead || 0, Number.isFinite(hold) ? hold + 0.08 : SPOTTER_DECODE_LEAD_S);
-      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
+      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune, noVoice: !!api && !recordedOk() && noVoice() });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs, secs: p.secs || 0 };
       // A card that will not be spoken still REPLACES the one on screen: its
       // words stop with it (and its deadline, which would later cut this card's
@@ -672,10 +749,10 @@ var RadioVoice = (function () {
       ensureVoices();
       stop();
       activeKind = kind || "race";
-      if (speakPack(p)) return true;
+      if (recordedOk() && speakPack(p)) return true;
       // RECORDED: the card carries a line its pack cannot say (or is still
       // fetching) — never speech synthesis in a race (PACK_VOICE above).
-      if (pack && packOn && PACK_VOICE[p.speaker]) {
+      if (recordedOk() && pack && packOn && PACK_VOICE[p.speaker]) {
         activeKind = "";
         last.reason = pack.ready && !pack.ready(recordedPack(p.speaker)) ? "pack-loading" : "not-recorded";
         return false;
@@ -713,7 +790,7 @@ var RadioVoice = (function () {
       current = tok;
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       if (!audition) armSquelch(p);
-      deadline = setTimeout(stop, p.leadMs + p.budgetMs + 400);
+      deadline = setTimeout(stop, p.leadMs + p.budgetMs + PACK_STOP_TAIL_S * 1000);
       return true;
     }
     function speakPlanned(p) {
@@ -996,9 +1073,11 @@ var RadioVoice = (function () {
     };
   }
 
-  return { create, inert, plan, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
+  // hashSeed / PACK_STOP_TAIL_S stay module-local (speakPack deadline +
+  // radioBand/squelchPlan seeds); no outside caller reaches for them.
+  return { create, inert, plan, pickChannelVoice, spokenLang, hasVoiceFor, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
            PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S,
-           ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S, PACK_STOP_TAIL_S,
-           radioBand, squelchPlan, hashSeed, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
+           ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S,
+           radioBand, squelchPlan, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
 })();
 Object.freeze(RadioVoice);

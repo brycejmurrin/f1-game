@@ -72,6 +72,9 @@ function action(input) {
     case 'wait':
       shape(['selector', 'state']);
       return { type, selector: selector(input.selector), state: state(input.state) };
+    case 'rememberFocus':
+      shape(['id', 'selector']);
+      return { type, id: slug(input.id, 'focus witness id'), selector: selector(input.selector) };
     case 'checkpoint':
       shape(['label']);
       return { type, label: text(input.label, 'label', 160) };
@@ -91,9 +94,23 @@ function action(input) {
   }
 }
 
+/** Shared by replay validation and the direct Node helper, so zero never disables the timeout. */
+export function validateFocusOracle(input) {
+  fields(input, ['type', 'selector', 'afterReplacement', 'timeoutMs', 'stableMs'], 'focus oracle');
+  if (input.type !== 'focus') fail('expected focus oracle');
+  const timeoutMs = number(input.timeoutMs ?? 3000, 'focus timeoutMs', 200, 10000, true);
+  const stableMs = number(input.stableMs ?? 150, 'focus stableMs', 100, 1000, true);
+  if (stableMs >= timeoutMs) fail('focus stableMs must be less than timeoutMs');
+  return { type: input.type, selector: selector(input.selector), afterReplacement: slug(input.afterReplacement, 'focus witness id'), timeoutMs, stableMs };
+}
+
 function oracle(input) {
   object(input, 'oracle');
   switch (input.type) {
+    case 'focus': return validateFocusOracle(input);
+    case 'feedback':
+      fields(input, ['type', 'selector', 'text'], 'feedback oracle');
+      return { type: input.type, selector: selector(input.selector), text: text(input.text, 'feedback text') };
     case 'binding': {
       fields(input, ['type', 'selector', 'runtime', 'saved'], 'binding oracle');
       const scalar = (v, nullable = false) => {

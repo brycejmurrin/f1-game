@@ -13,6 +13,17 @@
  * Nightly V8 coverage is still a follow-up.
  * No per-group test counts: any PR that adds a test would stale every other
  * one on merge (#2808); readers count with declaredTests() in select-budget.
+ * No positional counters either (2026-10-28): module and circuit rows carried
+ * `order`, their index in the manifest roster, so one added module renumbered
+ * every later row. #4020 and #3982 each added a js/ module, landed 3.5 min
+ * apart, and git merged the two renumberings clean into a stale file (`order`
+ * 341 vs 342) that failed gen:check on every PR until #4054 regenerated it.
+ * Nothing read the field, so it is dropped rather than replaced by an `after:`
+ * link (that still rewrites one neighbour per insertion). A row is keyed and
+ * sorted by its path or id alone, so an insertion is one added row and two
+ * insertions merge to their union in either landing order (pinned by
+ * tests/unit/gen-agent-index-order.test.mjs). Load order lives only in
+ * tools/manifest.cjs: read FULL, DEFERRED and the LAZY_* lists there.
  *
  *   node tools/docs/gen-agent-index.mjs
  *   node tools/docs/gen-agent-index.mjs --check
@@ -202,11 +213,12 @@ function groupsTable() {
   return sortById(rows, (r) => r.id, (r) => r.script);
 }
 
-function circuitsTable() {
-  const rows = MANIFEST.CIRCUITS.map((id, order) => {
+/** Circuit rows sorted by id. No roster index (header): `ids` is injectable for the merge test. */
+export function circuitsTable(ids = MANIFEST.CIRCUITS) {
+  const rows = ids.map((id) => {
     const file = MANIFEST.circuitPath(id);
     const head = readRepo(file).slice(0, 5000);
-    return { id, file, order, classic: /classic:\s*true/.test(head) };
+    return { id, file, classic: /classic:\s*true/.test(head) };
   });
   return sortById(rows, (r) => r.id, (r) => r.file);
 }
@@ -215,18 +227,15 @@ function circuitsTable() {
 // it showed ceilings the ratchets.d fragments had already moved, and nothing read it. Applying the fragments
 // instead would make every commit-hook auto-raise stale this generated file. The live ceilings are
 // `node tools/check/ratchets.mjs` (base + fragments).
-function modulesTable() {
+/** Module rows sorted by path. No load-order counter (header): `roster` (path → label) is injectable for the merge test. */
+export function modulesTable(roster = rosterOf()) {
   const out = [];
-  let order = 0;
-  for (const [rel, roster] of rosterOf()) {
-    const row = { path: rel, global: fileGlobal(rel, readRepo(rel)), order, roster };
-    out.push(row);
-    order += 1;
-  }
+  for (const [rel, label] of roster) out.push({ path: rel, global: fileGlobal(rel, readRepo(rel)), roster: label });
   return sortById(out, (r) => r.path, (r) => r.roster || "");
 }
 
-export function buildIndex(manifest = agentHelpFromSource()) {
+/** `opts.roster` / `opts.circuits` replace the manifest's lists (tests only). */
+export function buildIndex(manifest = agentHelpFromSource(), opts = {}) {
   return {
     generatedBy: "tools/docs/gen-agent-index.mjs",
     apiVersion: manifest.apiVersion ?? null,
@@ -234,8 +243,8 @@ export function buildIndex(manifest = agentHelpFromSource()) {
     conventions: typeof manifest.conventions === "string" ? manifest.conventions : "",
     hooks: flattenHooks(manifest),
     groups: groupsTable(),
-    circuits: circuitsTable(),
-    modules: modulesTable(),
+    circuits: circuitsTable(opts.circuits),
+    modules: modulesTable(opts.roster),
   };
 }
 

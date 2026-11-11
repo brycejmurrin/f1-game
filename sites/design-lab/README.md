@@ -47,7 +47,7 @@ opening the HTML through `file://` is insufficient. No framework, bundler,
 package installation or credentials are required by the gallery itself.
 
 For new native captures and portable export, use the existing
-[capture workflow](../../docs/CAPTURE-REVIEW.md). Retain recorded revisions,
+[capture workflow](../../docs/UI-MAP.md). Retain recorded revisions,
 hashes and archive/current status when preparing a new Design Lab data record.
 
 ## Updating the hosted site

@@ -20,6 +20,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/driving-line-opts.js"), "utf8").replace(/^const\b/gm, "var");
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 
+/* The REAL palette table, so the LINE COLOUR row is held to what the shaders get. */
+const REAL_PALETTES = (() => {
+  const sb = { Math, Float32Array, console, M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/driving-line.js"), "utf8"), ctx,
+    { filename: absSrc("js/render/shared/driving-line.js") });
+  return vm.runInContext("DrivingLine.PALETTES", ctx);
+})();
+
 /* A stub SettingRow that records what was claimed, and a DrivingLine that
    records what was set — the module under test is the wiring between them. */
 function load({ stored = {}, readyState = "complete" } = {}) {
@@ -34,6 +44,7 @@ function load({ stored = {}, readyState = "complete" } = {}) {
       raw: (k) => stored[k],
     } },
     DrivingLine: {
+      PALETTES: REAL_PALETTES,
       setPalette: (v) => { line._palette = v; return v; },
       palette: () => line._palette,
       setOpacity: (v) => { line._opacity = v; return v; },
@@ -63,6 +74,20 @@ test("every row it claims is a real set-row in the shell, and it claims all thre
   assert.ok(SHELL.includes('id="pm-brakecue"'), "steer BRAKE CUE range keeps pm-brakecue");
   assert.ok(!SHELL.includes('id="pm-brakecue" class="set-row"'),
     "the set-row must not reuse the slider id");
+});
+
+test("LINE COLOUR offers the palette table's ids and labels, in its order", () => {
+  const { rows } = load();
+  assert.deepEqual(JSON.parse(JSON.stringify(rows.get("pm-linecolor").values)), [
+    ["f1", "F1 GREEN"], ["cyan", "CYAN"], ["blue", "BLUE"], ["white", "WHITE"],
+    ["purple", "PURPLE"], ["pink", "PINK"], ["safe", "COLOUR-BLIND"]]);
+});
+
+test("a new main colour round-trips under the unchanged drivingLinePalette key", () => {
+  const { rows, line, written } = load({ stored: { drivingLinePalette: "cyan" } });
+  assert.equal(line._palette, "cyan", "a stored main colour restores at eval");
+  rows.get("pm-linecolor").write("purple");
+  assert.equal(written.drivingLinePalette, "purple");
 });
 
 test("the stored values reach DrivingLine AT EVAL, before any DOM event", () => {

@@ -277,6 +277,19 @@ const DataTelemetryModel = (function () {
   }
   // OpenF1 DRS codes: 10/12/14 = wing open, everything else closed/eligible.
   function drsOpen(v) { return v === 10 || v === 12 || v === 14; }
+  // 2026 RULES HAVE NO DRS: OpenF1's car_data sends `drs: null` on every 2026
+  // sample (session 11412, checked 2026-11-10). The channel, its legend toggle,
+  // the gauge pill and the "DRS —" summary exist only when some sample of some
+  // lane carries a value.
+  function hasDrs(laps) {
+    const list = Array.isArray(laps) ? laps : [];
+    for (let i = 0; i < list.length; i++) {
+      const car = list[i] && list[i].car;
+      if (!Array.isArray(car)) continue;
+      for (let j = 0; j < car.length; j++) if (car[j] && car[j].drs != null) return true;
+    }
+    return false;
+  }
 
   function speedUnit() {
     return typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph" ? "mph" : "km/h";
@@ -344,8 +357,8 @@ const DataTelemetryModel = (function () {
     return { driverColor, laneColors };
   }
 
-  return { create, speedUnit, speedValue, speedText, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen,
-           CHANNELS, PADL, PADR, PADY, chartX, chanRaw, chanNorm, sampleAt, clipCar, cumDist,
+  return { create, speedUnit, speedValue, speedText, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen, hasDrs,
+           CHANNELS, PADL, PADR, PADY, chartX, chanNorm, sampleAt, clipCar, cumDist,
            distAtT, timeAtDist, brakingDuel, locAt, dropStrays, locBounds, gapLimitMs, isGap };
 })();
 Object.freeze(DataTelemetryModel);

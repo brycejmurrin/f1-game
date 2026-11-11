@@ -99,6 +99,8 @@
   :where(body:not([data-density="compact"])) #tc-frame { transform: translate(72px, 0); }
 }
 
+/* Wide, tablet and fold rules are @layer layout at the end of this file. */
+
 /* ---------- LARGE PORTRAIT (iPad upright, a rotated monitor) ---------- */
 /* Keeps the stacked composition — a tall screen has height to spend, not width —
    but not the phone's SIZES. A 340px button column centred in an 834px iPad left
@@ -119,8 +121,8 @@
      32vw yields on the same physical width. */
   :where(body:not([data-density="compact"])) #menu-hero,
   :where(body:not([data-density="compact"])) #menu-primary,
-  :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), 660px, 100%); }
-  :where(body:not([data-density="compact"])) #menu-explore { width: min(calc(66 * var(--vwz)), 660px, 100%); }
+  :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), var(--col-max), 100%); }
+  :where(body:not([data-density="compact"])) #menu-explore { width: min(calc(66 * var(--vwz)), var(--col-max), 100%); }
   :where(body:not([data-density="compact"])) #menu-buttons { gap: 14px; }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { font-size: clamp(20px, calc(2.4 * var(--vwz)), 28px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: clamp(14px, calc(1.5 * var(--vwz)), 18px); }
@@ -166,8 +168,25 @@
 :root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
+  animation-delay: 0s !important; /* as tokens.css: a staggered row must not wait either */
   transition-duration: 0.01ms !important;
 }
+/* …BUT NEVER ON GEOMETRY THE TITLE FIT MEASURES (#5150). The brand carries
+   no transition of its own, so under the rule above its initial
+   `transition-property: all` gets the 0.01ms — and a transition returns its
+   PREVIOUS rectangle (and the previous value of every var() it reads, --tf
+   included) until the next frame, even at 0.01ms. js/ui/title-layout.js
+   fit() then read #menu-brand where the last layout had left it and pulled
+   it the wrong way (measured TITLE Y +50 % at 852x393: top 436 in a 393 box,
+   2026-11-06). css/hud.css documents the same trap for fitHud and cures it
+   the same way: paint-only properties keep their 0.01ms, geometry is instant.
+   #menu-buttons already transitions `filter` alone (css/title.css). */
+:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) {
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
+}
+/* #hud-restore's display:none lives in deferred touch-controls.css; until it
+   lands (~19 s on Slow 4G) the bare button sat top-left over the title. */
+body:not(.hud-hidden) #hud-restore { display: none; }
 /* A hidden tab stops spending frames on a menu nobody can see. */
 #overlay[data-paused] *,
 #overlay[data-paused] *::before,
@@ -227,15 +246,18 @@
    MOVES ARE `translate`, SIZES ARE `zoom`. The individual `translate` / `scale`
    properties compose with the intro's `transform` keyframes instead of
    replacing them. Size is zoom on the two UI pieces so a bigger cluster still
-   takes up layout room and scrolls like the shipped one; the drawing is not a
-   grid item, so it scales from its foot. */
+   takes up layout room; the drawing is not a grid item, so it scales from its
+   foot. EVERY VALUE HERE IS A REQUEST, THE BOX IS THE LAW (#5150): --tf is
+   the fit js/ui/title-layout.js writes when a size would not fit the
+   overlay's content box in landscape, and --tf-dx / --tf-dy pull an offset
+   back by exactly its overrun (css/title.css documents both tokens). */
 :root[data-title-layout] #menu-buttons {
-  translate: var(--tl-btns-x, 0) var(--tl-btns-y, 0);
-  zoom: calc(var(--ui-scale) * var(--tl-btns-size, 1));
+  translate: calc(var(--tl-btns-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-btns-y, 0px) + var(--tf-dy, 0px));
+  zoom: calc(var(--ui-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
 }
 :root[data-title-layout] #menu-brand {
-  translate: var(--tl-title-x, 0) var(--tl-title-y, 0);
-  zoom: calc(var(--ui-scale) * var(--tl-title-size, 1));
+  translate: calc(var(--tl-title-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-title-y, 0px) + var(--tf-dy, 0px));
+  zoom: calc(var(--ui-scale) * var(--tl-title-size, 1) * var(--tf, 1));
 }
 :root[data-title-layout] #title-car {
   translate: var(--tl-art-x, 0) var(--tl-art-y, 0);
@@ -243,11 +265,26 @@
   transform-origin: 50% 100%;
 }
 /* WIDTH: a share of the SCREEN, whatever the cluster's size. --vwz already
-   undoes --ui-scale; dividing by the size undoes the cluster's own zoom. The
-   rows then fill the cluster instead of their per-shape shipped widths. */
+   undoes --ui-scale; dividing by the size undoes the cluster's own zoom, and
+   dividing by the fit (--tf, #5150) keeps the share while the fit shrinks
+   everything else. The rows then fill the cluster instead of their per-shape
+   shipped widths. */
 :root[data-title-btnw] #menu-buttons {
-  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
+  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1));
   max-width: none; min-width: 0; justify-self: center;
+}
+/* THE FLOOR IS THE TRACK (#5167 part F, UI contract 2026-11-06 §4.1: "width
+   as a share of the viewport without a floor" goes). On a landscape phone the
+   request cannot go under the column the shipped title gives the doors.
+   Measured 2026-11-09 at 852x393 (insets 59/21/59) with Bryce's export,
+   WIDTH 20: a 170px cluster centred in a 330px track, 17 doors in one column,
+   the fit at 0.628, labels painting at 9.7px, the four utility doors one per
+   row and 90px of dead track beside them. 100% here is the grid area (the
+   overlay's second column, in the cluster's own px under its zoom), so a
+   request narrower than that fills the track exactly as AUTO does, and a
+   wider request still widens the cluster, which the fit still contains. */
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
+  width: max(100%, calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1)));
 }
 :root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min
@@ -324,3 +361,45 @@
 
 
 } /* @layer overlays */
+
+@layer layout {
+/* Beats @layer responsive. 1fr tracks pinned the wordmark to the left edge at
+   2560 (741px hole). 1440×900 stays under 1920, so the title-desktop golden holds.
+   --bp-wide is 1920px; a media query cannot read a custom property. */
+@media (min-width: 1920px) and (orientation: landscape) {
+  :where(body:not([data-density="compact"])) #overlay {
+    grid-template-columns: minmax(0, min(var(--col-max), var(--layout-active))) minmax(0, min(var(--col-max), var(--layout-active)));
+    justify-content: center;
+    column-gap: clamp(calc(var(--gap) * 4), 4vw, calc(var(--gap) * 8));
+  }
+  :where(body:not([data-density="compact"])) #menu-brand,
+  :where(body:not([data-density="compact"])) #menu-buttons {
+    width: min(100%, var(--col-max));
+    justify-self: center;
+  }
+}
+
+/* Upright tablet: centre the doors in the leftover row. Phones and compact stay put. */
+@media (orientation: portrait) and (min-width: 700px) {
+  :where(body:not([data-density="compact"])) #menu-buttons { align-content: safe center; }
+}
+
+/* Two viewport segments: keep the shell on the first pane, off the hinge. */
+@media (horizontal-viewport-segments: 2) {
+  :where(#overlay, .screen) {
+    width: var(--seg-w);
+    max-width: var(--seg-w);
+    margin-inline: 0 auto;
+    box-sizing: border-box;
+    padding-inline-end: max(var(--safe-r), var(--fold-gap));
+  }
+}
+@media (vertical-viewport-segments: 2) {
+  :where(#overlay, .screen) {
+    max-height: var(--seg-h);
+    margin-block: 0 auto;
+    box-sizing: border-box;
+    padding-block-end: max(var(--safe-b), var(--fold-gap-y));
+  }
+}
+} /* @layer layout */

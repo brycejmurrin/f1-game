@@ -21,7 +21,7 @@ const ThermalDrift = (() => {
   const EMA_ALPHA = 0.15;        // ~6 windows: a minute, not a hitch
   const OVER = 0.12;             // 12 % slower than the baseline p50 ...
   const MIN_OVER_MS = 1.0;       // ... and by at least a millisecond (a 60 fps floor jitters by less)
-  const COOL_WINDOWS = 6;        // after a step, one minute before it may fire again
+  const COOL_WINDOWS = 6;        // one minute, counted on the same windows that rebuild the baseline
   const MAX_STEPS = 4;           // the ladder is finite; a session never needs more
   const MIN_WINDOW_FRAMES = 20;  // a window of a few frames (a menu stall) is no evidence
 
@@ -33,13 +33,17 @@ const ThermalDrift = (() => {
       const m = ok ? p50(buf) : 0;
       buf = []; ms = 0; win++;
       if (!ok || win <= WARM_WINDOWS) return;
+      // The cooldown minute IS the re-baseline. Waiting to decrement `cool` until
+      // the new baseline existed added a second silent minute (measured ~140 s
+      // from the step to the next due, against the documented one minute).
+      if (cool > 0) cool--;
       if (!baseline) {
         base.push(m);
         if (base.length >= BASE_WINDOWS) { baseline = p50(base.slice()); ema = baseline; }
         return;
       }
       ema += (m - ema) * EMA_ALPHA;
-      if (cool > 0) { cool--; return; }
+      if (cool > 0) return;
       if (steps < MAX_STEPS && ema > baseline * (1 + OVER) && ema - baseline >= MIN_OVER_MS) due = true;
       else due = false;
     }
@@ -52,7 +56,7 @@ const ThermalDrift = (() => {
         if (ms >= WINDOW_MS) closeWindow();
         return due;
       },
-      /** The governor moved a rung: measure the cheaper state afresh and wait a minute. */
+      /** The governor moved a rung: measure the cheaper state afresh. The cooldown minute is those windows. */
       stepped() { steps++; due = false; baseline = 0; base = []; ema = 0; cool = COOL_WINDOWS; win = 0; buf = []; ms = 0; },
       /** The session restarted (new race): forget everything. */
       reset() { buf = []; ms = 0; win = 0; base = []; baseline = 0; ema = 0; cool = 0; steps = 0; due = false; },

@@ -4,7 +4,10 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "hungaroring",
-    pit: { side: -1 },   // the pit complex (TrackPit): the paddock is on the left of the main straight
+    // FIA 2026 Doc 5 circuit map + pit-lane drawing put the pits on the driver's RIGHT
+    // (infield, inside T14); flipping to side 1 needs the authored pit-side scenery
+    // mirrored in the same change (WIP: scratch/w12/hungaroring-pitflip-scenery-wip.diff).
+    pit: { side: -1 },
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.7 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -29,22 +32,25 @@
     // bumps left ~59% of the lap dead-flat between the T1 plunge and mid-sector
     // crest — stair-step basin. hasRealElevation(id) ignores elevations keys.
     bankZones: [
-      { frac: 0.1888, angleDeg: 3.0, widthM: 100 },   // T1 downhill right
-      { frac: 0.2961, angleDeg: 3.5, widthM: 150 },   // T2
+      { frac: 0.1888, angleDeg: 3.0, widthM: 100 },   // T2 downhill right
+      { frac: 0.2961, angleDeg: 3.5, widthM: 150 },   // T3 exit / T4 approach
       { frac: 0.3474, angleDeg: 6.0, widthM: 90 },    // T4 — the banked left
-      { frac: 0.5197, angleDeg: 3.0, widthM: 170 },   // hilltop sweep
-      { frac: 0.8506, angleDeg: 3.0, widthM: 70 },    // T11
-      { frac: 0.9624, angleDeg: 3.5, widthM: 190 },   // final long right
+      { frac: 0.5197, angleDeg: 3.0, widthM: 170 },   // hilltop sweep (near T7)
+      { frac: 0.8506, angleDeg: 3.0, widthM: 70 },    // T13
+      { frac: 0.9624, angleDeg: 3.5, widthM: 190 },   // final long right (after T14)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors/turns: sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.32, 0.68],
-    // FIA 2025 map topology checked against the built racing centreline.
-    // T2/T14 have several curvature peaks but each is ONE physical corner;
-    // retain both chicane corners T6/T7 and the distinct left-hand T10.
+    // turns: one apex per numbered corner T1-T14 of the FIA 2026 event map (Hungarian
+    // GP Doc 5 "Circuit Map, Pit Lane Drawing, Emergency Exits Map and Red Zone",
+    // 23 July 2026), checked against the built racing centreline. The map also labels
+    // two kinks with suffixes, not counted here: T1A, the right-hand kink on the run
+    // from T1 to T2 (racing ~0.12-0.14), and T12A, the left bend into the T13 hairpin
+    // (racing ~0.81). T2/T14 have several curvature peaks but each is ONE corner.
     turns: [0.0898, 0.1989, 0.2502, 0.3602, 0.4225, 0.4922, 0.4995, 0.5408, 0.5710, 0.6159, 0.6627, 0.7544, 0.8240, 0.8818],
     furniture: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true, treeCrown: "columnar" },  // dry straw-olive, dusty bowl
     kit: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },

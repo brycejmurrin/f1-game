@@ -233,8 +233,139 @@ async function randomiseGreen(page, seed) {
   return page.evaluate(() => TrackDesigner.state());
 }
 
+for (const viewport of [{ width: 844, height: 390 }, { width: 390, height: 844 }]) {
+  test(`library deletion keeps keyboard focus and cancels stale confirmation at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await bootClean(page); await openDesigner(page); await page.setViewportSize(viewport);
+    for (const seed of [7, 11, 23]) {
+      await randomiseGreen(page, seed);
+      expect((await page.evaluate((s) => { TrackDesigner.setName("Focus circuit " + s); return TrackDesigner.save(); }, seed)).ok).toBe(true);
+    }
+    const root = page.locator("#trackdesigner"), library = root.getByRole("tab", { name: "MY CIRCUITS", exact: true });
+    const cards = root.locator('#td-pane-library .td-card');
+    await library.press("Enter");
+    await expect(library).toBeFocused(); // A rebuild must not steal focus from outside the card grid.
+    await expect(cards).toHaveCount(3);
+    const middleName = await cards.nth(1).locator("strong").innerText();
+    const middle = cards.filter({ has: page.locator("strong", { hasText: middleName }) });
+    await middle.getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    // Leaving the pane withdraws destructive intent; returning needs two presses again.
+    await root.getByRole("tab", { name: "DESIGN", exact: true }).press("Enter");
+    await library.press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE", exact: true })).toBeVisible();
+    await middle.getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.nth(1).getByRole("button", { name: "EDIT", exact: true })).toBeFocused();
+    // Delete the final row, then the only row: previous EDIT, then the library tab.
+    for (const remaining of [1, 0]) {
+      await cards.last().getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+      await expect(cards.last().getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(cards).toHaveCount(remaining);
+      if (remaining) await expect(cards.last().getByRole("button", { name: "EDIT", exact: true })).toBeFocused();
+      else await expect(library).toBeFocused();
+    }
+    await expect(root.locator(".td-empty")).toContainText("No saved circuits yet");
+  });
+
+  test(`invalid native file import keeps its status readable and focus in place at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await bootClean(page); await openDesigner(page); await page.setViewportSize(viewport);
+    const root = page.locator("#trackdesigner"), trigger = root.locator('[data-role="file-menu"] > summary');
+    await trigger.press("Enter");
+    const chooser = page.waitForEvent("filechooser");
+    await root.getByRole("button", { name: "IMPORT", exact: true }).press("Enter");
+    await (await chooser).setFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from("{ malformed circuit") });
+    const status = root.locator('[data-role="workspace-status"] .td-msg');
+    await expect(status).toHaveText("Not an Apex 26 circuit file");
+    await expect(status).toHaveAttribute("role", "status");
+    await expect(status).toHaveAttribute("aria-live", "polite");
+    await expect(status).toBeVisible();
+    await expect(trigger).toBeFocused();
+    const bounds = await status.evaluate((e) => {
+      const range = document.createRange(); range.selectNodeContents(e);
+      const text = [...range.getClientRects()];
+      const vv = visualViewport, view = { left: vv ? vv.offsetLeft : 0, top: vv ? vv.offsetTop : 0,
+        right: (vv ? vv.offsetLeft + vv.width : document.documentElement.clientWidth),
+        bottom: (vv ? vv.offsetTop + vv.height : document.documentElement.clientHeight) };
+      const clips = text.map((r) => Math.max(view.left - r.left, r.right - view.right, view.top - r.top, r.bottom - view.bottom, 0));
+      for (let node = e; node; node = node.parentElement) {
+        const cs = getComputedStyle(node), r = node.getBoundingClientRect();
+        const sx = node.offsetWidth ? r.width / node.offsetWidth : 1, sy = node.offsetHeight ? r.height / node.offsetHeight : 1;
+        const left = r.left + node.clientLeft * sx, top = r.top + node.clientTop * sy;
+        for (const t of text) clips.push(Math.max(
+          /hidden|clip|auto|scroll/.test(cs.overflowX) ? Math.max(left - t.left, t.right - left - node.clientWidth * sx) : 0,
+          /hidden|clip|auto|scroll/.test(cs.overflowY) ? Math.max(top - t.top, t.bottom - top - node.clientHeight * sy) : 0, 0));
+      }
+      return { lines: text.length, clipped: Math.max(0, ...clips), overflow: Math.max(e.scrollHeight - e.clientHeight, 0) };
+    });
+    expect(bounds.lines).toBeGreaterThan(0);
+    expect(bounds.clipped, JSON.stringify(bounds)).toBeLessThanOrEqual(1);
+    expect(bounds.overflow, JSON.stringify(bounds)).toBeLessThanOrEqual(1);
+  });
+}
+
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
+
+  test("pending START FROM preserves a real map drag before pointer release", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+    await page.evaluate(() => { TrackDesigner.setMode("edit"); TrackDesigner.setSelectionMode("point"); });
+    const before = await page.evaluate(() => TrackDesigner.state());
+    expect(await page.evaluate(() => !!Tracks.LIST.find(d => d.id === "monza")._metaOnly)).toBe(true);
+    let release, requested;
+    const gate = new Promise(resolve => { release = resolve; }), request = new Promise(resolve => { requested = resolve; });
+    await page.route("**/js/circuits/monza.js*", async route => { requested(); await gate; await route.continue(); });
+    await page.evaluate(() => {
+      window.__tdPendingResult = null;
+      TrackDesigner.startFrom("monza").then(result => { window.__tdPendingResult = result; });
+    });
+    await request;
+    const at = await page.evaluate(() => {
+      const p = TrackDesigner.state().design.pts, r = document.querySelector("#trackdesigner .td-stage > canvas").getBoundingClientRect();
+      const x0 = Math.min(...p.map(q => q[0])), x1 = Math.max(...p.map(q => q[0])), z0 = Math.min(...p.map(q => q[1])), z1 = Math.max(...p.map(q => q[1]));
+      const scale = Math.min(Math.round(r.width) / Math.max(60, x1 - x0), Math.round(r.height) / Math.max(60, z1 - z0)) * 0.82;
+      return { x: r.x + Math.round(r.width) / 2 + (p[4][0] - (x0 + x1) / 2) * scale, y: r.y + Math.round(r.height) / 2 + (p[4][1] - (z0 + z1) / 2) * scale };
+    });
+    await page.mouse.move(at.x, at.y); await page.mouse.down();
+    await page.mouse.move(at.x + 30, at.y - 15, { steps: 4 });
+    release();
+    await expect.poll(() => page.evaluate(() => window.__tdPendingResult)).toBe(false);
+    const live = await page.evaluate(() => TrackDesigner.state());
+    expect(live.design).toEqual(before.design); expect(live.undo).toBe(before.undo);
+    await page.mouse.up();
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.design.name).toBe(before.design.name); expect(after.design.pts).not.toEqual(before.design.pts);
+    expect(after.undo).toBe(before.undo + 1);
+    await page.screenshot({ path: testInfo.outputPath("pending-hydration-map-drag.png") });
+    expect(await page.evaluate(() => { TrackDesigner.undo(); return TrackDesigner.state().design.pts; })).toEqual(before.design.pts);
+    await page.unroute("**/js/circuits/monza.js*");
+  });
+
+  test("START FROM hydrates an unvisited circuit and saves a reloadable remix", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page);
+    const before = await page.evaluate(() => ({ ids: Tracks.LIST.map((d) => d.id), stub: !!Tracks.LIST.find((d) => d.id === "monza")._metaOnly }));
+    expect(before.stub, "Monza has not been selected or raced").toBe(true);
+    expect(await page.evaluate(() => TrackDesigner.startFrom("monza"))).toBe(true);
+    const saved = await page.evaluate(() => {
+      const verdict = TrackDesigner.preview(), result = TrackDesigner.save();
+      return { ok: verdict.ok, result, ids: Tracks.LIST.filter((d) => !d.custom).map((d) => d.id), design: TrackDesigner.state().design };
+    });
+    expect(saved.ok).toBe(true); expect(saved.result.ok).toBe(true);
+    expect(saved.ids).toEqual(before.ids);
+    expect(saved.design.name).toBe("MONZA REMIX");
+    await page.screenshot({ path: testInfo.outputPath("hydrated-monza-remix.png") });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
+    await openDesigner(page);
+    expect(await page.evaluate(() => TrackDesigner.state().design.originId)).toBe(saved.result.id);
+    const reloaded = await page.evaluate(() => { TrackDesigner.preview(); return TrackDesigner.state(); });
+    expect(reloaded.ok).toBe(true); expect(reloaded.design.pts).toEqual(saved.design.pts);
+  });
 
   for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) {
     test(`draft recovery and saved identity survive reload at ${viewport.width}px`, async ({ page }) => {

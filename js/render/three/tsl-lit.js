@@ -62,7 +62,7 @@
   // the same 192 and squeaks under with a lean hand-written shader; three/TSL
   // adds its own block on top and goes OVER, so the shader fails to LINK and
   // every lit surface draws nothing — while textured/emissive ones still draw.
-  // 16 lamps = 64 rows (LightBudget.LITE). Same _liteGpu gate as samples/outputType in tlx.js.
+  // 16 lamps = 64 rows (LightBudget.LITE). Same _liteGpu gate as antialias/outputType in tlx.js.
 
   function lit(THREE, TSL, ctx) {
     // Read from ctx so the cap is decided at factory time, BEFORE the TSL graph
@@ -538,28 +538,37 @@
     }
 
     /* BRDF leaves (js/render/glx/shaders/glsl-lit.js) — plain node composition, inlined */
-    const D_GGX = (NoH, a) => {
+    // LAYOUT, not style. Each lobe (lamp, lamp clearcoat, sun, sun clearcoat)
+    // and both env Fresnels inlined its own copy, and the fx program inlined
+    // the set again. Pure arguments only — the same rule as apexMatBumpHeight.
+    const D_GGX = Fn(([NoH, a]) => {
       const a2 = a.mul(a);
       const d = NoH.mul(NoH).mul(a2.sub(1.0)).add(1.0);
       return a2.div(max(d.mul(d).mul(PI), 1e-6));
-    };
+    }).setLayout({ name: "apexGgx", type: "float", inputs: [
+      { name: "NoH", type: "float" }, { name: "a", type: "float" }] });
     // Height-correlated Smith visibility (folds in 1/(4 NoL NoV)).
+    // The view root stays a JS arrow: the lamp loop caches it in a sentinel
+    // and passes it in, so a layout here would compile the sqrt twice.
     const smithViewRoot = (NoV, a) => {
       const a2 = a.mul(a);
       return sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2));
     };
-    const V_SmithGGX = (NoV, NoL, a, viewRoot) => {
+    const V_SmithGGX = Fn(([NoV, NoL, a, viewRoot]) => {
       const a2 = a.mul(a);
-      const gv = NoL.mul(viewRoot || sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2)));
+      const gv = NoL.mul(viewRoot);
       const gl = NoV.mul(sqrt(NoL.mul(NoL).mul(a2.oneMinus()).add(a2)));
       return float(0.5).div(max(gv.add(gl), 1e-5));
-    };
+    }).setLayout({ name: "apexSmithGGX", type: "float", inputs: [
+      { name: "NoV", type: "float" }, { name: "NoL", type: "float" },
+      { name: "a", type: "float" }, { name: "viewRoot", type: "float" }] });
     // Roughness-aware Schlick (f90 capped by the caller — Frostbite trick).
-    const F_Schlick = (VoH, f0, f90) => {
+    const F_Schlick = Fn(([VoH, f0, f90]) => {
       const v = VoH.oneMinus();
       const v2 = v.mul(v);
       return f0.add(vec3(f90).sub(f0).mul(v2.mul(v2).mul(v)));
-    };
+    }).setLayout({ name: "apexSchlick", type: "vec3", inputs: [
+      { name: "VoH", type: "float" }, { name: "f0", type: "vec3" }, { name: "f90", type: "float" }] });
 
     /* cloud shadows (js/render/glx/shaders/glsl-lit.js) */
     // 2-octave FBM (per-pass tuning — matches LIT's cloudFBM, unrolled).
@@ -701,8 +710,9 @@
             });
             // Dynamic CAR map min-combine (js/render/glx/shaders/glsl-lit.js): ortho, so no
             // perspective divide; same bias; fixed tight 4-tap PCF.
+            // S2 exact-zero gate: csh >= 0, so min(0, csh) == 0 — no car taps when every static tap read 0.
             if (carShadowOn) {
-              If(U.carShadowOn.greaterThan(0.5), () => {
+              If(U.carShadowOn.greaterThan(0.5).and(sh.greaterThan(0.0)), () => {
                 const cc = U.carLightVP.mul(vec4(wp, 1.0));
                 const cs = cc.xyz.mul(0.5).add(0.5).toVar();
                 If(cs.x.greaterThan(0.0).and(cs.x.lessThan(1.0))
@@ -786,7 +796,7 @@
       // call — 5.2 KB and ~25 node variables each, 31 KB of the 99 KB lit
       // fragment. Pure: no uniform, texture, varying or derivative read (the
       // fwidth widths are the caller's, passed in), which is what makes the
-      // layout legal at all — see vendor/three-0.186.1/PATCHES.md §4 and
+      // layout legal at all — see vendor/three-0.187.0/PATCHES.md §4 and
       // tsl-chunks.js. WGX declares the same helper as a real WGSL function
       // (wgsl-chunks.js `fn matBumpHeight`), so this is parity, not novelty.
       // `mid` stays float: TSL compares it with .equal(1.0), never as an int.
@@ -815,8 +825,9 @@
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
         .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
       // DERIVATIVES UNCONDITIONAL (roadMarkings / WGX fs_main pattern): fwidth
-      // inside If(inRange)/If(matWallLike) is non-uniform CF → hard WGSL error
-      // on TLX-WebGPU. Hoist footprints; branches only consume them.
+      // inside If(inRange)/If(matWallLike) is non-uniform CF — undefined values,
+      // and a hard WGSL error on Firefox (r187 switches derivative_uniformity off
+      // everywhere else). Hoist footprints; branches only consume them.
       const an0 = abs(N);
       const hc0 = select(an0.x.greaterThan(an0.z), wp.z, wp.x).toVar();
       const y0 = wp.y.toVar();
@@ -904,7 +915,7 @@
      * per draw; WGX passes (offset, count) in a per-draw uniform. Three has
      * neither: every visible chunk is drawn from one pooled mesh sharing ONE
      * material, and a uniform belongs to the material. `drawIndex` looks like
-     * the way out and is not — in vendor/three-0.186.1 both the declaration of
+     * the way out and is not — in vendor/three-0.187.0 both the declaration of
      * `nodeUniformDrawId` and its only assignment are gated on
      * `object.isBatchedMesh`, so a plain Mesh reads nothing.
      *
@@ -997,7 +1008,8 @@
     // 17-layer array. Sampling `.depth(int(mid))` and `uMatTexScale[mid]` raw
     // is OOB on every painted/tyre/carbon fragment: SwiftShader/WebGL then
     // returns black (or discards), so the whole car vanishes. Clamp the layer for the
-    // hoisted sample (derivative_uniformity forbids an early-out around it)
+    // hoisted sample (an early-out around it is non-uniform CF: undefined
+    // derivatives, and a compile error on Firefox where r187 keeps the check)
     // and keep the apply-gate on the REAL id so cars stay procedural.
     const matTexLayer = (mid) => clamp(mid, float(0.0), float(16.0));
     const matTexInPack = (mid) => mid.greaterThanEqual(1.0).and(mid.lessThanEqual(16.0));
@@ -1119,56 +1131,59 @@
         // band strobe. Soft knee on the RAW footprint (same 0.10/0.55 as WGX).
         const mip = clamp(fwX.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
         const base = max(edge, band.mul(dash)).toVar();
-
-        // THE PIT LANE (mirror of GLX/WGX roadMarkings): the outermost strip of
-        // the road across the window, separated by a solid line. `through` uses
-        // the wrapped interval because the window straddles the start/finish
-        // line on every circuit.
-        const L = float(U.pitLane.w).toVar();
-        const lenM = float(U.pitLane.y).toVar();
-        const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
-        const laneW = min(float(PIT_LANE_W), max(float(PIT_LANE_MIN), hw.mul(2.0).sub(PIT_MIN_RACING))).toVar();
-        const lx = hw.sub(laneW).mul(U.pitLane.z).toVar();
-        // WIDER than an edge line (0.20 against 0.10): the boundary is an
-        // instruction, not a hint about where the tarmac stops.
-        const pitBand = smoothstep(aaX.mul(-1.0).add(0.20), aaX.add(0.20), abs(x.sub(lx))).oneMinus().toVar();
-        const fadeIn = smoothstep(0.0, 2.0, through).toVar();
-        const fadeOut = smoothstep(0.0, 6.0, lenM.sub(through)).toVar();
-        const hasLane = select(lenM.greaterThan(0.0), float(1.0), float(0.0)).toVar();
-        const inWin = select(through.lessThanEqual(lenM), float(1.0), float(0.0)).toVar();
-        const gate = hasLane.mul(inWin).toVar();
-        // Everything on the pit side of the boundary — still branchless, and via
-        // select() rather than step(): step is NOT in this file's TSL destructure
-        // and a missing symbol here fails ASYNCHRONOUSLY, which is the exact
-        // failure mode the header warns about (boots clean, draws wrong). select
-        // is already the idiom two lines up.
-        const inLane = select(x.sub(lx).mul(U.pitLane.z).greaterThanEqual(0.0), float(1.0), float(0.0)).toVar();
-        // THE ENTRANCE bar. NOT gated by fadeIn, for the GLX reason: fading in
-        // the very mark that says "the lane starts here" defeats the mark.
-        const bar = smoothstep(0.4, 1.0, through).sub(smoothstep(2.4, 3.0, through)).mul(inLane).toVar();
-        // YOUR BOX, mirroring GLX and WGX: two transverse ends and two rails, so
-        // it reads as a bay you park IN. Branchless throughout — select(), never
-        // step(), because step is not in this file's TSL destructure and a missing
-        // symbol here fails ASYNCHRONOUSLY (boots clean, draws wrong).
-        const hasBox = select(float(U.pitBox.y).greaterThan(0.0), float(1.0), float(0.0)).toVar();
-        const dBox = abs(through.sub(U.pitBox.x)).toVar();
-        const bEnds = smoothstep(0.12, 0.30, abs(dBox.sub(U.pitBox.y))).oneMinus().toVar();
-        const bSpan = select(dBox.lessThan(float(U.pitBox.y)), float(1.0), float(0.0)).toVar();
-        const bRails = max(smoothstep(0.12, 0.30, abs(x.sub(lx))).oneMinus(),
-                           smoothstep(0.12, 0.30, abs(abs(x).sub(hw))).oneMinus()).toVar();
-        const boxM = max(bEnds, bSpan.mul(bRails)).mul(inLane).mul(hasBox).toVar();
-        const pitLine = max(max(pitBand.mul(fadeIn), bar), boxM).mul(fadeOut).mul(gate).mul(mip).toVar();
-        const pitFill = inLane.mul(fadeIn).mul(fadeOut).mul(gate).toVar();
-
         const m = base.mul(mip).toVar();
 
         albedo.assign(mix(albedo, vec3(0.95, 0.95, 0.97), m));
         rough.assign(mix(rough, 0.55, m));    // paint is smoother than tarmac
-        // The lane SURFACE, then its blue boundary + entrance. Mirrors GLX
-        // pitFloor / pitPaint and WGX PIT_FLOOR / PIT_PAINT.
-        albedo.assign(mix(albedo, vec3(0.15, 0.16, 0.19), pitFill.mul(0.35)));
-        albedo.assign(mix(albedo, vec3(0.10, 0.36, 0.86), pitLine));
-        rough.assign(mix(rough, 0.55, pitLine));
+        // GLX's two branches (uniform y first, then the window): the skipped work
+        // mixes with weight exactly 0, and the bodies hold no derivative. w is the lap
+        // length (> 0; 1 when absent), so mod() never sees 0 (PitLane.laneUniform).
+        const lenM = float(U.pitLane.y).toVar();
+        If(lenM.greaterThan(0.0), () => {
+          // THE PIT LANE (mirror of GLX/WGX roadMarkings): the outermost strip of
+          // the road across the window, separated by a solid line. `through` uses
+          // the wrapped interval because the window straddles the start/finish
+          // line on every circuit.
+          const L = float(U.pitLane.w).toVar();
+          const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
+          If(through.lessThanEqual(lenM), () => {
+            const laneW = min(float(PIT_LANE_W), max(float(PIT_LANE_MIN), hw.mul(2.0).sub(PIT_MIN_RACING))).toVar();
+            const lx = hw.sub(laneW).mul(U.pitLane.z).toVar();
+            // WIDER than an edge line (0.20 against 0.10): the boundary is an
+            // instruction, not a hint about where the tarmac stops.
+            const pitBand = smoothstep(aaX.mul(-1.0).add(0.20), aaX.add(0.20), abs(x.sub(lx))).oneMinus().toVar();
+            const fadeIn = smoothstep(0.0, 2.0, through).toVar();
+            const fadeOut = smoothstep(0.0, 6.0, lenM.sub(through)).toVar();
+            // Everything on the pit side of the boundary — still branchless, and via
+            // select() rather than step(): step is NOT in this file's TSL destructure
+            // and a missing symbol here fails ASYNCHRONOUSLY, which is the exact
+            // failure mode the header warns about (boots clean, draws wrong). select
+            // is already the idiom two lines up.
+            const inLane = select(x.sub(lx).mul(U.pitLane.z).greaterThanEqual(0.0), float(1.0), float(0.0)).toVar();
+            // THE ENTRANCE bar. NOT gated by fadeIn, for the GLX reason: fading in
+            // the very mark that says "the lane starts here" defeats the mark.
+            const bar = smoothstep(0.4, 1.0, through).sub(smoothstep(2.4, 3.0, through)).mul(inLane).toVar();
+            // YOUR BOX, mirroring GLX and WGX: two transverse ends and two rails, so
+            // it reads as a bay you park IN. Branchless throughout — select(), never
+            // step(), because step is not in this file's TSL destructure and a missing
+            // symbol here fails ASYNCHRONOUSLY (boots clean, draws wrong).
+            const hasBox = select(float(U.pitBox.y).greaterThan(0.0), float(1.0), float(0.0)).toVar();
+            const dBox = abs(through.sub(U.pitBox.x)).toVar();
+            const bEnds = smoothstep(0.12, 0.30, abs(dBox.sub(U.pitBox.y))).oneMinus().toVar();
+            const bSpan = select(dBox.lessThan(float(U.pitBox.y)), float(1.0), float(0.0)).toVar();
+            const bRails = max(smoothstep(0.12, 0.30, abs(x.sub(lx))).oneMinus(),
+                               smoothstep(0.12, 0.30, abs(abs(x).sub(hw))).oneMinus()).toVar();
+            const boxM = max(bEnds, bSpan.mul(bRails)).mul(inLane).mul(hasBox).toVar();
+            const pitLine = max(max(pitBand.mul(fadeIn), bar), boxM).mul(fadeOut).mul(mip).toVar();
+            const pitFill = inLane.mul(fadeIn).mul(fadeOut).toVar();
+
+            // The lane SURFACE, then its blue boundary + entrance. Mirrors GLX
+            // pitFloor / pitPaint and WGX PIT_FLOOR / PIT_PAINT.
+            albedo.assign(mix(albedo, vec3(0.15, 0.16, 0.19), pitFill.mul(0.35)));
+            albedo.assign(mix(albedo, vec3(0.10, 0.36, 0.86), pitLine));
+            rough.assign(mix(rough, 0.55, pitLine));
+          });
+        });
       });
       return vec4(albedo, rough);
     });
@@ -1205,7 +1220,9 @@
       If(inRange.and(far.greaterThan(0.001)), () => {
         If(mid.equal(1.0), () => {          // CONCRETE — panels + speckle + seams
           albedo.mulAssign(vnoise(wp.xz.mul(0.09).add(y.mul(0.05))).sub(0.5).mul(0.16).mul(far).add(1.0));
-          albedo.mulAssign(vnoise(vec2(hc, y).mul(6.0)).sub(0.5).mul(0.10).mul(near).add(1.0));
+          If(near.greaterThan(0.0), () => {   // exact-zero gate (hunt 2 G4, as GLX)
+            albedo.mulAssign(vnoise(vec2(hc, y).mul(6.0)).sub(0.5).mul(0.10).mul(near).add(1.0));
+          });
           // fwidth-AA the seam on the PRE-fract coordinate (js/render/glx/shaders/glsl-lit.js)
           const seam = smoothstep(max(float(0.05), fwY125), 0.0,
             abs(fract(y.div(1.25)).sub(0.5)).sub(0.46)).mul(0.14).mul(near);
@@ -1237,28 +1254,37 @@
           rough.assign(mix(rough, min(rough, 0.12), near));
         }).ElseIf(mid.equal(4.0), () => {   // METAL — brushed streaks, glossier
           const brushFade = clamp(vd.sub(26.0).div(29.0).oneMinus(), 0.0, 1.0);   // 26-55 m
-          albedo.mulAssign(vnoise(vec2(hc.mul(40.0), y.mul(2.0))).sub(0.5).mul(0.12).mul(brushFade).add(1.0));
+          If(brushFade.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(vec2(hc.mul(40.0), y.mul(2.0))).sub(0.5).mul(0.12).mul(brushFade).add(1.0));
+          });
           rough.assign(clamp(rough.sub(far.mul(0.15)), 0.05, 1.0));
         }).ElseIf(mid.equal(5.0), () => {   // WOOD — grain + plank seams
-          albedo.mulAssign(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).sub(0.5).mul(0.18).mul(near).add(1.0));
+          If(near.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).sub(0.5).mul(0.18).mul(near).add(1.0));
+          });
           // normalized-space AA (as glass) — js/render/glx/shaders/glsl-lit.js
           albedo.mulAssign(smoothstep(max(float(0.05), fwHc035), 0.0,
             abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46)).mul(0.16).mul(near).oneMinus());
         }).ElseIf(mid.equal(6.0), () => {   // FOLIAGE — dapple + green variation
-          const d = vnoise(wp.xz.mul(2.4).add(wp.y.mul(1.6))).mul(0.6)
-            .add(vnoise(wp.xz.mul(9.0)).mul(0.4).mul(near));
+          const d = vnoise(wp.xz.mul(2.4).add(wp.y.mul(1.6))).mul(0.6).toVar();
+          If(near.greaterThan(0.0), () => { d.addAssign(vnoise(wp.xz.mul(9.0)).mul(0.4).mul(near)); });
           albedo.mulAssign(d.sub(0.5).mul(0.34).mul(far).add(1.0));
           albedo.y.mulAssign(d.sub(0.5).mul(0.10).mul(far).add(1.0));
         }).ElseIf(mid.equal(7.0), () => {   // FABRIC — fine weave speckle
           const weaveFade = clamp(vd.sub(26.0).div(34.0).oneMinus(), 0.0, 1.0);   // 26-60 m
-          albedo.mulAssign(vnoise(vec2(hc, y).mul(26.0)).sub(0.5).mul(0.14).mul(weaveFade).add(1.0));
+          If(weaveFade.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(vec2(hc, y).mul(26.0)).sub(0.5).mul(0.14).mul(weaveFade).add(1.0));
+          });
         }).ElseIf(mid.equal(8.0), () => {   // SAND — grain + dune ripple
-          albedo.mulAssign(vnoise(wp.xz.mul(5.0)).sub(0.5).mul(0.12).mul(near)
+          const sandG = float(0.0).toVar();
+          If(near.greaterThan(0.0), () => { sandG.assign(vnoise(wp.xz.mul(5.0)).sub(0.5).mul(0.12).mul(near)); });
+          albedo.mulAssign(sandG
             .add(sin(wp.x.mul(0.7).add(vnoise(wp.xz.mul(0.2)).mul(6.0))).mul(0.05).mul(far))
             .add(1.0));
         }).ElseIf(mid.equal(9.0), () => {   // GRASS — bladed clumps + tone
-          const g = vnoise(wp.xz.mul(3.5)).mul(0.6)
-            .add(vnoise(wp.xz.mul(14.0)).mul(0.4).mul(near)).sub(0.5);
+          const g = vnoise(wp.xz.mul(3.5)).mul(0.6).toVar();
+          If(near.greaterThan(0.0), () => { g.addAssign(vnoise(wp.xz.mul(14.0)).mul(0.4).mul(near)); });
+          g.subAssign(0.5);
           albedo.mulAssign(g.mul(0.22).mul(far).add(1.0));
           albedo.y.mulAssign(g.mul(0.08).mul(far).add(1.0));
         }).ElseIf(mid.equal(10.0), () => {  // ROCK — craggy multi-scale tone
@@ -1271,14 +1297,18 @@
           albedo.mulAssign(s.mul(0.10).mul(far).add(1.0));
           albedo.z.mulAssign(s.mul(0.05).mul(far).oneMinus());
           const sparkleFade = clamp(vd.sub(26.0).div(34.0).oneMinus(), 0.0, 1.0);   // 26-60 m
-          albedo.mulAssign(vnoise(wp.xz.mul(24.0)).sub(0.5).mul(0.06).mul(sparkleFade).add(1.0));
+          If(sparkleFade.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(wp.xz.mul(24.0)).sub(0.5).mul(0.06).mul(sparkleFade).add(1.0));
+          });
           rough.assign(clamp(rough.sub(far.mul(0.10)), 0.05, 1.0));
         }).ElseIf(mid.equal(12.0), () => {  // ROOF — ridged courses, warm bands
           const ty = fract(y.div(0.34));
           const shadeAA = clamp(fwTy.mul(6.0).oneMinus(), 0.0, 1.0);   // ridge-sine AA (js/render/glx/shaders/glsl-lit.js)
           const shade = sin(ty.mul(3.14159)).mul(shadeAA);
           albedo.mulAssign(shade.mul(0.16).add(0.88));
-          albedo.mulAssign(vnoise(vec2(hc.mul(2.0), floor(y.div(0.34))).mul(3.0)).sub(0.5).mul(0.14).mul(near).add(1.0));
+          If(near.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(vec2(hc.mul(2.0), floor(y.div(0.34))).mul(3.0)).sub(0.5).mul(0.14).mul(near).add(1.0));
+          });
           rough.assign(min(1.0, rough.add(far.mul(0.10))));
         }).ElseIf(mid.equal(13.0), () => {  // STONE — jittered blocks, deep mortar
           const cell = floor(vec2(hc, y).mul(1.3));
@@ -1303,7 +1333,9 @@
           // whole race, so it gets tone variation rather than pattern. No
           // fract()/sin() term at all — nothing here can strobe, only soften.
           albedo.mulAssign(vnoise(wp.xz.mul(0.035)).sub(0.5).mul(0.10).mul(far).add(1.0));
-          albedo.mulAssign(vnoise(wp.xz.mul(7.0)).sub(0.5).mul(0.13).mul(near).add(1.0));
+          If(near.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(wp.xz.mul(7.0)).sub(0.5).mul(0.13).mul(near).add(1.0));
+          });
           rough.assign(min(1.0, rough.add(far.mul(0.10))));
         });
       });
@@ -1467,10 +1499,13 @@
         const weave = float(0.5).toVar();
         const wvT = vec2(0.0).toVar();
         If(carbonFinish.or(carbonSurface), () => {
-          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
           const wvFade = clamp(vd.sub(10.0).div(10.0).oneMinus(), 0.0, 1.0).toVar();
-          weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
-          wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
+          // wvFade 0 (>= 20 m) leaves weave 0.5 / wvT 0 exactly; no derivative inside.
+          If(wvFade.greaterThan(0.0), () => {
+            const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
+            weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
+            wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
+          });
         });
         // FORGED CARBON (38): irregular chips faded to their mean 2/3 over 10-20 m (CarMaterialShade.FORGED; glsl-lit.js).
         const fgM = float(0.667).toVar();
@@ -1613,7 +1648,8 @@
           const crAA = max(float(0.075), fwidth(cr).add(0.015)).toVar();
           const gxz = wp.xz;
           const fineFade = clamp(vd.sub(35.0).div(90.0).oneMinus(), 0.0, 1.0);
-          const n = vnoise(gxz.mul(0.35)).mul(0.60).add(vnoise(gxz.mul(2.1)).mul(0.40).mul(fineFade));
+          const n = vnoise(gxz.mul(0.35)).mul(0.60).toVar();
+          If(fineFade.greaterThan(0.0), () => { n.addAssign(vnoise(gxz.mul(2.1)).mul(0.40).mul(fineFade)); });
           albedo.mulAssign(n.sub(0.5).mul(matU.detail).add(1.0));
           patchM.assign(vnoise(gxz.mul(0.055).add(9.1)));
           const pm = smoothstep(0.52, 0.72, patchM);
@@ -1764,27 +1800,32 @@
           // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
           // reference; GLX glsl-lit.js constant for constant: two octaves of
           // world-space surface noise (~7.7 m, ~3.4 m), fixed real locations.
-          const pn = vnoise(wp.xz.mul(0.13).add(4.7)).mul(0.70).add(vnoise(wp.xz.mul(0.29).add(11.3)).mul(0.30));
-          // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
-          // crown drains to the gutters (0.75 centre → 1.25 edge) and the low side
-          // of a banked turn holds the water (lateral downhill from the screen
-          // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
-          // chunked (city prop) variant, which has no road.
-          const pool = float(1.0).toVar();
-          if (trkA) {
-            If(trkA.z.greaterThan(0.5), () => {
-              const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
-              const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
-              const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
-              // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
-              pool.assign(mix(float(0.75), float(1.25), smoothstep(0.35, 0.95, abs(lat))).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
-            });
-          }
-          // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows,
-          // so drying shrinks the pools to their deepest spots first.
+          // Exact-zero gate (as GLX): puddle = ...*pg*upFace*(1-porous), so the noise, pool and
+          // smoothsteps are skipped where the weight is 0 (wetness < 0.6, PUDDLES 0, walls, porous). pg is
+          // uniform-only; the body has no derivatives (they are hoisted above).
           const pg = clamp(smoothstep(0.6, 1.0, U.wetness).mul(U.puddles), 0.0, 1.0);
-          const plo = pg.mul(0.38).oneMinus();
-          puddle.assign(smoothstep(plo, plo.add(0.20), pn.mul(pool)).mul(pg).mul(upFace).mul(porous.oneMinus()));
+          If(pg.greaterThan(0.0).and(upFace.greaterThan(0.0)).and(porous.lessThan(0.5)), () => {
+            const pn = vnoise(wp.xz.mul(0.13).add(4.7)).mul(0.70).add(vnoise(wp.xz.mul(0.29).add(11.3)).mul(0.30));
+            // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
+            // crown drains to the gutters (0.75 centre → 1.25 edge) and the low side
+            // of a banked turn holds the water (lateral downhill from the screen
+            // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
+            // chunked (city prop) variant, which has no road.
+            const pool = float(1.0).toVar();
+            if (trkA) {
+              If(trkA.z.greaterThan(0.5), () => {
+                const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
+                const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
+                const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
+                // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
+                pool.assign(mix(float(0.75), float(1.25), smoothstep(0.35, 0.95, abs(lat))).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
+              });
+            }
+            // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows,
+            // so drying shrinks the pools to their deepest spots first.
+            const plo = pg.mul(0.38).oneMinus();
+            puddle.assign(smoothstep(plo, plo.add(0.20), pn.mul(pool)).mul(pg).mul(upFace).mul(porous.oneMinus()));
+          });
           // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
           // two cell grids of impact rings, a normal tilt on the pooled water that
           // the GGX lobes and the sky reflection below read (N is a toVar).
@@ -1845,8 +1886,10 @@
         // shades on Ngeo. Skip the taps when the result cannot contribute.
         const shadow = float(1.0).toVar();
         If(NoL.greaterThan(0.0).or(clearcoat.greaterThan(0.001)), () => {
-          const sunSh = sampleShadow ? sampleShadow(wp, Nvary) : float(1.0);
-          shadow.assign(sunSh.mul(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()));
+          if (!sampleShadow) { shadow.assign(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()); return; }
+          // S1 exact-zero gate: sunSh (>= 0) == 0 makes the product 0 whatever the cloud FBM returns.
+          shadow.assign(sampleShadow(wp, Nvary));
+          If(shadow.greaterThan(0.0), () => { shadow.assign(shadow.mul(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus())); });
         });
         const litNoL = NoL.mul(shadow).mul(U.keyMul).toVar();
 
@@ -2083,7 +2126,7 @@
         // sun Cook-Torrance specular, soft-clipped (js/render/glx/shaders/glsl-lit.js)
         If(NoL.greaterThan(0.0), () => {
           const D = D_GGX(NoH, a);
-          const Vis = V_SmithGGX(NoV, NoL, a);
+          const Vis = V_SmithGGX(NoV, NoL, a, smithViewRoot(NoV, a));
           const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
           const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
           // soft knee, asymptote U.specKnee (def 4): sun glints can reach bloom (GLX)
@@ -2108,7 +2151,7 @@
           If(NoLg.greaterThan(0.0), () => {
             const ccA = min(sqrt(ccSaaVar.mul(0.25).add(0.035 * 0.035)), 0.30);
             const Dc = D_GGX(NoHg, ccA);
-            const Vc = V_SmithGGX(NoVg, NoLg, ccA);
+            const Vc = V_SmithGGX(NoVg, NoLg, ccA, smithViewRoot(NoVg, ccA));
             const Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), float(1.0)).x;
             const ccCol = vec3(U.sunColor).mul(Dc.mul(Vc).mul(Fc)).mul(NoLg)
               .mul(shadow).mul(U.keyMul).mul(clearcoat).toVar();
@@ -2154,12 +2197,15 @@
             const cubeRefl = cubeTexture(envCubeNode, Rg, rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
-          // sun disc in the mirror: pow-400 lobe widened by the AA variance
-          const ccDiscA = sqrt(ccSaaVar.mul(0.25).add(0.0705 * 0.0705));
-          const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
-          envCC.addAssign(vec3(U.sunColor)
-            .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
-            .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
+          // sun disc in the mirror: pow-400 lobe widened by the AA variance. A finite
+          // term times carSunGlint 0 (the mirror pass, MIRROR_TUNE) adds exactly 0: skip it.
+          If(U.carSunGlint.notEqual(0.0), () => {
+            const ccDiscA = sqrt(ccSaaVar.mul(0.25).add(0.0705 * 0.0705));
+            const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
+            envCC.addAssign(vec3(U.sunColor)
+              .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
+              .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
+          });
           ccTrans.assign(envW.mul(0.94).oneMinus());
           color.mulAssign(ccTrans);                             // absorb under the mirror
           const addCC = envCC.mul(envW).toVar();
@@ -2728,6 +2774,10 @@
       m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = vertexMotionNode());
       pinProgram(m, (o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit")) + (ud.tlxFx ? "-fx" : ""));
+      // Born on the program the pass already wants. setSsrMrt() only walks
+      // materials that exist when it runs; one created mid-frame used to
+      // compile the single-target key, then the MRT key on the next present.
+      if (_ssrOn) m.mrtNode = ud.tlxKeepSsrTag ? packed.mrtKeep : packed.mrt;
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;
@@ -2849,8 +2899,10 @@
     // Arm the second HDR attachment (ssrTag) only for the main scene render.
     // Env faces and the canvas fallback must keep mrtNode null — same
     // material, one color target.
+    let _ssrOn = false;
     function setSsrMrt(on) {
-      if (!SSR_TAG) return;
+      if (!SSR_TAG || _ssrOn === !!on) return;   // a repeated state walks nothing (materials minted later take _ssrOn)
+      _ssrOn = !!on;
       for (let i = 0; i < _mats.length; i++) {
         const m = _mats[i];
         const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced, !!m.userData.tlxFx);

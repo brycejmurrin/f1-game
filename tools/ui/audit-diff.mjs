@@ -25,7 +25,12 @@ export function rowFindings(row) {
   return out;
 }
 
-const cellKey = (r) => r.screen + "|" + r.viewport;
+// Identity of one cell: screen | viewport, plus the theme when it is not the
+// default dark (theme-axis.mjs), so a `--theme=dark,light` run's rows neither
+// overwrite nor diff against each other, and every pre-axis row (no `theme`,
+// measured dark) keeps the key it always had.
+export const auditCellKey = (r) => r.screen + "|" + r.viewport + (r.theme && r.theme !== "dark" ? "|" + r.theme : "");
+const cellKey = auditCellKey;
 
 /**
  * Diff two parsed audit.json objects ({rows:[…]}).
@@ -51,6 +56,15 @@ export function diffAudits(before, after) {
   return { added, removed, skipped, missing, compared };
 }
 
+/** The diff's verdict: NEW when `after` gained a finding, EMPTY when no cell
+ *  was compared at all (every cell skipped, or no rows) — nothing measured is
+ *  not a pass, and it used to print `= diff ok` — else ok. */
+export function diffVerdict(d) {
+  if (d.added.length) return "NEW";
+  if (!d.compared) return "EMPTY";
+  return "ok";
+}
+
 /** Human summary lines; the last line starts `= diff`. */
 export function formatDiff(d) {
   const lines = [];
@@ -58,15 +72,16 @@ export function formatDiff(d) {
   for (const x of d.removed) lines.push(`- ${x.cell}  ${x.finding}`);
   for (const c of d.skipped) lines.push(`? ${c}  skipped (unmeasured; re-run that cell alone)`);
   if (d.missing.length) lines.push(`  ${d.missing.length} baseline cell(s) not in the new run (out of scope)`);
-  lines.push(`= diff ${d.added.length ? "NEW" : "ok"}: ${d.compared} cells compared, `
+  lines.push(`= diff ${diffVerdict(d)}: ${d.compared} cells compared, `
     + `${d.added.length} new, ${d.removed.length} fixed, ${d.skipped.length} skipped`);
   return lines;
 }
 
-/** CLI body: prints the diff; returns 1 when `after` has a finding `before` lacked. */
+/** CLI body: prints the diff; returns 1 when `after` has a finding `before`
+ *  lacked, or when no cell was compared (EMPTY). */
 export function runDiff(beforePath, afterPath) {
   const read = (p) => JSON.parse(fs.readFileSync(p, "utf8"));
   const d = diffAudits(read(beforePath), read(afterPath));
   for (const l of formatDiff(d)) console.log(l);
-  return d.added.length ? 1 : 0;
+  return diffVerdict(d) === "ok" ? 0 : 1;
 }

@@ -1,13 +1,13 @@
 ---
 name: css-play
-description: "Use when iterating one menu/HUD stylesheet (padding, font-size, safe area, tap target, chip) with screenshots, or restructuring screens/DOM/token system (BEM/CUBE/ITCSS). Cramped screen → ui-menu-a11y; full matrix → survey-ui-matrix; dead CSS → slim-bloat."
+description: "Use when tweaking one menu or HUD element (padding, font size, safe area, tap target) with screenshots, or restructuring screens, DOM or design tokens (BEM/CUBE/ITCSS). Not for: a cramped screen → ui-menu-a11y; the whole-UI review → survey-ui-matrix; dead CSS → slim-bloat."
 ---
 
 # Playing with menu / HUD CSS
 
 Host the working tree, open **one** screen, dump structured DOM, edit `css/`,
-hot-swap the stylesheet, screenshot. No cache bump in the loop (`bump-cache`
-only stamps the deploy's staged copy).
+hot-swap the stylesheet, screenshot. For cache behavior, read
+[check-changes bump-cache and shell/cache](../check-changes/references/bump.md).
 
 ## When to Use
 
@@ -17,8 +17,10 @@ only stamps the deploy's staged copy).
   families, a screen layer, splitting `index.html`, class counts) →
   [references/restructure.md](references/restructure.md) first.
 
-**Not this skill:** a cramped / clipped screen, a short landscape phone, UI scale
-(**ui-menu-a11y** owns the fit; this skill keeps the edit loop once you are in it); whole matrix → **survey-ui-matrix**.
+Routing rule (the same in both descriptions): a visual tweak on a NAMED element (more padding on
+the pause chips, a bigger font) stays here; a screen that does not FIT or clips (short landscape
+phone, UI scale) → **ui-menu-a11y**, which owns the diagnosis and hands back this edit loop.
+Whole matrix → **survey-ui-matrix**.
 One Escape/a11y bug → **ui-menu-a11y**.
 Canvas / 3D → **playwright-probe**.
 
@@ -43,11 +45,12 @@ id) does it REPLACE the path, so give the whole route: settings DISPLAY panel =
 Door and screen ids drift: read them from `--list` (catalog ids are a subset of
 `SCREENS` in `tools/ui/menu-screens.mjs`), not from this file.
 Every step here is a browser run (Chromium via harness.mjs): session only, never a
-subagent (AGENTS.md rule 10; bash-guard refuses it), never beside a Playwright group.
-`--help`/`--list` need none. The default viewport is the phone touch shape (852×393);
+subagent (AGENTS.md rule 10; no hook catches this CLI, so the rule is on you), never beside a Playwright group.
+`--help`/`--list` need none. The default viewport is a phone touch shape (`--help`);
 Bryce's own is `--viewport 844x390` — shoot that first. `--desktop` is the exception.
 
-Who owns a row (tune-row, set-row, the pause sheet): [references/loop.md §Who owns a row](references/loop.md#who-owns-a-row).
+Who owns a row (tune-row, set-row, the pause sheet and its chips): [references/loop.md §Who owns a row](references/loop.md#who-owns-a-row).
+An edit that changes nothing on screen: a LATER `@layer` or a more specific rule wins (loop.md §3).
 
 ## Hard don'ts
 
@@ -56,19 +59,20 @@ Who owns a row (tune-row, set-row, the pause sheet): [references/loop.md §Who o
 3. **One browser at a time** — [mcp-probe traps](../mcp-probe/references/traps-chrome.md).
 4. **Do not run `layout-audit` per edit or for one screen.** That is the matrix: once, as a restructure's before-count only.
 5. **A change to TYPE METRICS invalidates a pixel golden — re-bless in the SAME
-   commit.** `tests/specs/menu-baseline.spec.js` holds six blessed PNGs; the
-   title, select and garage screens are pixel-compared at a 1% tolerance. A
-   font-size, tracking, weight or gap change relays text and blows that budget.
-   Which sheets select it is code, not prose: `node tools/ci/pick-tests.mjs`
-   (group `baseline`) and `select-specs.mjs` (the spec) — when neither names it
-   for your sheet, run the spec yourself. Regenerate on this box and REVIEW the
-   diff, never accept it blind:
+   commit.** `tests/specs/menu-baseline.spec.js` holds the blessed PNGs (`ls tests/specs/menu-baseline.spec.js-snapshots`),
+   pixel-compared at a tight tolerance (the spec). A font-size, tracking, weight or
+   gap change relays text and blows that budget. CI group `baseline` proves it; which
+   sheets select it is code, not prose: `node tools/ci/pick-tests.mjs`. Never run the
+   spec locally (AGENTS.md rule 5): push, then request it on the branch on the
+   platform the goldens were captured on (SwiftShader; the spec header says why):
 
    ```sh
-   npm test -- tests/specs/menu-baseline.spec.js            # does it still match?
-   npm run test:baseline -- --update-snapshots              # re-bless all six; only the moved one changes
+   node tools/ci/remote-group.mjs baseline --gl swiftshader   # does it still match?
    ```
 
+   No CI job writes goldens. On a red, download the shard's `playwright-artifacts-baseline-*`
+   artifact (`gh run download`), REVIEW each `-actual`/`-diff` PNG, never accept it blind,
+   copy only the moved `-actual` over its golden, commit it with the CSS, re-request the group.
    Skipping the re-bless has left `menu-baseline` red on the deploy branch and blocked Pages.
 
 Live MCP session (already on localhost): `browser_resize` →
@@ -90,6 +94,7 @@ Live MCP session (already on localhost): `browser_resize` →
 
 Use `--tokens` for computed design-token/control evidence. Build offline screenshot
 reviews from the emitted `review.json` with `tools/ui/review-captures.mjs`.
+Does each customization knob value change the picture? `node tools/ui/look-diff.mjs --touch` pixel-diffs every value against the default (DEAD / SUBTLE / VISIBLE, contact sheet).
 See [free design tooling](../../../docs/DESIGN-TOOLS.md) for bounded manifests and
 comparison controls. Accessibility scanning and interpretation stay with
 **ui-menu-a11y**; existing browser ownership rules apply.

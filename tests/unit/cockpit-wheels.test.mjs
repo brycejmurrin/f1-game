@@ -30,6 +30,7 @@ function loadOpts(disk, search = "", withCams = false) {
   vm.runInContext(read("js/camera/cockpit-opts.js") + "\n;this.CockpitOpts = CockpitOpts;", ctx, { filename: absSrc("js/camera/cockpit-opts.js") });
   if (withCams) {
     vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
+    vm.runInContext(read("js/camera/vantage-ride.js"), ctx, { filename: absSrc("js/camera/vantage-ride.js") });
     vm.runInContext(read("js/camera/vantage.js") + "\n;this.GameCams = GameCams;", ctx, { filename: absSrc("js/camera/vantage.js") });
   }
   return { opts: ctx.CockpitOpts, cams: ctx.GameCams, store };
@@ -42,6 +43,7 @@ function loadMesh(extra = {}, gfxExtra = {}) {
   vm.createContext(ctx);
   vm.runInContext(read("js/core/mat4.js"),ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(read("js/physics/consts.js"),ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({
     createMesh(d) { const m = { d }; made.push(m); return m; },

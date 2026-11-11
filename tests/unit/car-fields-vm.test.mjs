@@ -493,3 +493,43 @@ test("game.js declares its scratch literals through CarFields.warmDoubles, and t
   assert.equal(on.hash, off.hash, "warmDoubles changed the simulation");
   assert.deepEqual([on.pitV, off.pitV], [true, false], "the source-twin probe sees the warm (and its absence)");
 });
+
+// ---- perf hunt 9: every key the step writes is in the literal (#4270 §3) ----------------------------------------
+// _aiBoost, _aiOtFire, _aiBr and _aiOtPull took 18 keys AFTER their literal (street, towVmax, ourVmax, ourPace, …),
+// so each bag walked a chain of map transitions on its first fill. The literal now names every key, in the order the
+// step writes them; the values are the ones the step stores, so the sim is unchanged (the hash test above).
+test("the AiDrive ctx bags gain no key after their literal (each real ctx keeps its source twin's key set)", async () => {
+  const g = await boot();
+  try {
+    const real = {}, A = g.ctx.AiDrive;
+    for (const [name, [fn, arg]] of Object.entries(CTX_ENTRY)) {
+      const orig = A[fn];
+      A[fn] = function () { if (!real[name]) real[name] = arguments[arg]; return orig.apply(this, arguments); };
+    }
+    g.apex.setInput({ throttle: true, steer: 0.15 });
+    for (let i = 0; i < 900; i++) g.step(1, 1 / 60);
+    const twins = gameTwins(g), added = {};
+    for (const [name, o] of Object.entries(real)) {
+      const declared = new Set(Object.keys(twins[name].twin));
+      const extra = Object.keys(o).filter((k) => !declared.has(k));
+      if (extra.length) added[name] = extra;
+    }
+    for (const name of ["_aiBr", "_aiBoost"]) assert.ok(real[name], name + " was handed to AiDrive (the probe ran)");
+    assert.deepEqual(added, {}, "keys stored after the literal: declare them in the literal, in write order");
+  } finally { g.close(); }
+});
+
+// ---- perf hunt 9: a netplay host's wireId() reads, never adds (#4270 §7 survey) --------------------------------
+// wireId() cached c._wireId lazily, so every car took one more key, and a new map, at a host's first tick (netplay
+// calls G.wireId on the whole field each tick). CarFields now predeclares it (undefined); the cache fills that slot.
+test("G.wireId on every car adds no key: _wireId is predeclared and the cache fills it", async () => {
+  const g = await boot();
+  try {
+    const G = g.G, before = G.cars.map((c) => Object.keys(c).length);
+    assert.ok(G.cars.every((c) => "_wireId" in c && c._wireId === undefined), "predeclared, still undefined (offline audio keys unchanged)");
+    const ids = G.cars.map((c) => G.wireId(c));
+    assert.deepEqual(G.cars.map((c) => Object.keys(c).length), before, "wireId() added a key to a car");
+    assert.deepEqual(G.cars.map((c) => c._wireId), ids, "the cache holds wireId()'s value");
+    assert.equal(new Set(ids).size, ids.length, "one wire id per car");
+  } finally { g.close(); }
+});

@@ -2,8 +2,8 @@
 // WebKit iPhone-path boot probe — JavaScriptCore + WebKit WebGL as a proxy for
 // the phone's three-WebGL2 path (`apex26.gfxBackend=three` + `tlxForceGL=1`).
 //
-// Selected ONLY by Playwright project `webkit` (`npm run test:webkit` /
-// `.github/workflows/webkit-leg.yml`). Default Chromium projects ignore this
+// Selected ONLY by Playwright project `webkit` (`npm run test:webkit`, on a
+// macOS host). Default Chromium projects ignore this
 // file. Playwright-core 1.63.0 pins WebKit 26.6 — a proxy, not iOS Safari.
 //
 // Writes artifacts/webkit-leg/report.json (boot, first race frame, short

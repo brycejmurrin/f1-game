@@ -115,13 +115,13 @@ for (const [shapeName, viewport] of SHAPES) {
           requestAnimationFrame(() => requestAnimationFrame(resolve));
         }));
         // Wait for production stylesheet activation; never repair the page.
+        // EVERY deferred sheet, not three of them (#3505): index.html flips ~27
+        // `media=print` links to `all` on load. settings-controls.css (gold ON,
+        // sound-button gap) and experience.css (lower-door ink) were not awaited,
+        // so a late load changed the capture while it stayed stable.
         await page.waitForFunction(() => {
-          const need = ["fonts-hud.css", "select.css", "carsetup.css"];
           const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
-          return need.every((frag) => {
-            const l = links.find((x) => (x.getAttribute("href") || "").includes(frag));
-            return !!(l && l.media === "all" && l.sheet);
-          });
+          return links.length > 0 && links.every((l) => (l.media === "all" || l.media === "") && !!l.sheet);
         }, null, { polling: 100, timeout: BOOT_MS });
         await page.evaluate(async () => {
           await Promise.all([
@@ -155,6 +155,15 @@ for (const [shapeName, viewport] of SHAPES) {
           const fb = ctx.measureText(sample).width;
           return Math.abs(tit - fb) > 2;
         }, null, { polling: 100, timeout: BOOT_MS });
+        // The sound label is rewritten by AriaState (textContent drops the
+        // data-fold span until it re-wraps), and a stray pointer or focus lights
+        // a door: wait for the wrap, park the pointer, blur.
+        if (screenName === "title") {   // the other goldens keep their natural focus ring
+          await page.waitForFunction(() => !!document.querySelector("#soundbtn [data-fold]"),
+            null, { polling: 100, timeout: 15_000 });
+          await page.mouse.move(0, 0);
+          await page.evaluate(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); });
+        }
         await page.waitForTimeout(600);   // let the sheet settle and measure
         if (screenName === "title") {
           // Capture the natural top of the destination scroller. RACE must
@@ -192,6 +201,10 @@ for (const [shapeName, viewport] of SHAPES) {
               return Object.fromEntries(props.map((p) => [p, cs.getPropertyValue(p)]));
             };
             return {
+              controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+              activeElement: document.activeElement ? document.activeElement.id || document.activeElement.tagName : null,
+              sheets: [...document.querySelectorAll('link[rel="stylesheet"]')]
+                .map((l) => ({ href: l.getAttribute("href"), media: l.media, sheet: !!l.sheet })),
               userAgent: navigator.userAgent, devicePixelRatio,
               viewport: { width: innerWidth, height: innerHeight },
               fonts: [...document.fonts].map((f) => ({ family: f.family, style: f.style, weight: f.weight, status: f.status })),

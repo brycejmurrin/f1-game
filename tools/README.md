@@ -1,8 +1,9 @@
 # Apex 26 dev tools
 
 Headless Node scripts for verifying and inspecting the game without a browser
-window. Most pair with a **skill** in `.claude/skills/` (which explains when/how
-to use them) — this index is the quick map. Run from the repo root. Disposable
+window. The **Suggested skill** column names the `.claude/skills/` skill a tool's
+author pointed at; the generator checks only that the skill exists, so the skill
+may not mention the tool — this index is the quick map. Run from the repo root. Disposable
 output never goes to `/tmp`: use `artifacts/tmp/` for batch logs/probes and
 `scratch/` for human-reviewed captures, renders, and profiles.
 
@@ -27,7 +28,7 @@ the tool's own header.
 
 Local glTF validation and approval-gated zero-spend procedural Blender room drafts.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **assets/gltf-check.mjs** | Validate local glTF/GLB assets, resource containment and budgets; optionally deduplicate into a separate GLB. | asset-pack |
 | **assets/procedural-room.py** | Build zero-spend Blender room drafts, mesh-derived plans and approval-gated glTF exports. | asset-pack |
@@ -36,7 +37,7 @@ Local glTF validation and approval-gated zero-spend procedural Blender room draf
 
 Root — the load-order truth and the car studio page; every consumer hardcodes these paths.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **agent-run.mjs** | Runs commands with selectable output levels and saved stdout/stderr; --read retrieves without rerunning. | check-changes |
 | **carview.html** | Standalone isolated car photo studio (no track, no game.js): Car3D + LiveryTex via GLX; headless API `window.CARVIEW`. | playwright-probe |
@@ -47,8 +48,11 @@ Root — the load-order truth and the car studio page; every consumer hardcodes 
 
 Bounded agent-output helpers: private artifact retention, subprocess ownership, and the wrappers that present compact/diagnostic/full results (kept out of tools/lib so they do not false-trigger fleet geometry sweeps).
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
+| **agent/inbox-store.mjs** | Rebuildable SQLite projection of GitHub thread comments; bounded inbox queries and atomic refreshes. | — |
+| **agent/inbox.mjs** | Read GitHub thread comments into a rebuildable SQLite inbox; bounded sync, list, get and status JSON. | steward |
+| **agent/message.mjs** | Validate and encode untrusted versioned GitHub agent-message envelopes. | — |
 | **agent/output.mjs** | Shared bounded agent output with private, retrievable original artifacts. | — |
 | **agent/process.mjs** | Owns subprocess lifecycles: forwards cancellation and bounds cleanup of descendants after exits and explicit timeouts. | — |
 
@@ -56,7 +60,7 @@ Bounded agent-output helpers: private artifact retention, subprocess ownership, 
 
 Stream Grok Bot ReadTranscript JSONL dumps: search, export, digest (line-by-line; no SQLite / no UI).
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **transcripts/cli.mjs** | Stream Grok Bot ReadTranscript JSONL dumps: search / export / digest. | — |
 | **transcripts/lib/args.mjs** | Arg parser for tools/transcripts/cli.mjs — rejects unknown flags. | — |
@@ -69,10 +73,11 @@ Stream Grok Bot ReadTranscript JSONL dumps: search, export, digest (line-by-line
 
 Shared harnesses and helpers other tools load: the browser+server harness, the two Node-VM harnesses, the output-path contract, the WebGPU flag set.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **lib/ai-ratings-math.mjs** | Pure Pearson / means / style zero-mean helpers for `ai-ratings.mjs` (personality dial census). | — |
 | **lib/browser-workers.mjs** | GL-aware Playwright / capture worker defaults (llvmpipe vs SwiftShader). | — |
+| **lib/bryce-phone.mjs** | ONE "Bryce's phone" preset for every UI tool and spec: window, DPR, safe-area insets, UA, his settings export. | — |
 | **lib/census-entry.mjs** | gpu-game-check's --entry api\|menu\|menu-full and --cam A>B parsing, its menu-prep wait and its race gate. | — |
 | **lib/centreline-kinks.cjs** | Centreline kink scan: nodes whose chord-to-chord turn radius is below the road half-width (#2209). | — |
 | **lib/changed-files.mjs** | `git diff` path lists naming BOTH ends of a rename, so a file moved out of a watched directory still routes its rules. | — |
@@ -83,7 +88,6 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/cursor-transcript.mjs** | Parse Cursor run streams into rows: chat, tool calls (args, outcome, result head), failures, results; modes + masking. | steward |
 | **lib/custom-survey-locations.mjs** | Native custom-design imports and source-located authored scenery targets (no browser). | — |
 | **lib/deploy-status.mjs** | deploy.mjs verdict markers (`= deploy start/done` in artifacts/logs/deploy.log) and the reader for --status/--wait. | — |
-| **lib/fleet-block.mjs** | The one parser of a PR body's fleet block: first value of a key wins, HTML comments and placeholders skipped. | — |
 | **lib/flicker-metric.mjs** | Pure per-pixel temporal-instability metric for `shot/flicker-gate.mjs`: luma, flip masks, 8-connected clusters, verdict. | playwright-probe |
 | **lib/flyby-audit.cjs** | Fleet audit of the pre-race FLYBY path (FlybySeq.solve) in the node VM: jumps, lift, ground, grid sightline, pan rate. | playwright-probe |
 | **lib/frame-fleet.mjs** | Pure FLEET half of frame-report.mjs: compact per-circuit reports, worst-frame summary, and the old-vs-new diff. | — |
@@ -103,14 +107,17 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
 | **lib/over-road-scan.cjs** | Pure over-road triangle scan shared by tests/specs/terrain-over-road.spec.js (runs in the page) and its unit test. | — |
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
+| **lib/paint-floor.mjs** | PAINTED size of every on-screen control and text node (own px × zoom × transform): what a thumb and an eye get. | — |
 | **lib/pr-snapshot.mjs** | Shared per-PR GitHub reads (list, PR, files, checks, runs, jobs, comments) behind one ETag cache on disk. | — |
 | **lib/presentation.mjs** | Bounded presentation diagnostics, late-resource cleanup, and scene-specific picker receipts for probes. | — |
+| **lib/proc-stat-reader.mjs** | Bound shared Linux proc-stat descriptors while reading fresh process metadata on every sample. | — |
 | **lib/process-tree.mjs** | Process-tree shutdown shared by Apex jobs and bounded diagnostic supervisors. | — |
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
 | **lib/road-position-checks.cjs** | Position-based road-ribbon checks (running width/advance, skirt depth+attachment, vertical continuity) for verify-track. | — |
 | **lib/run-pid.mjs** | Pidfile + tree kill behind `tooling-fast.mjs --stop` and `sync-pr.mjs --stop`; no pgrep -f, no hand-typed PID. | — |
 | **lib/screenshot-gallery.cjs** | Shared offline screenshot pages: native navigation, image expansion and responsive cards, without scripts. | — |
 | **lib/session-contracts.mjs** | Normalize hosted tool envelopes and diagnose session capability prerequisites without calling remote services. | check-changes |
+| **lib/shot-match.mjs** | Pure matcher: where and at what SCALE a live element's pixels appear in a phone screenshot (zero-mean NCC). | — |
 | **lib/solid-in-road.cjs** | Solid-in-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass prims whose XZ hull stands on tarmac. | scenery-dress |
 | **lib/stuck-census.mjs** | Per-car AI stuck / rescue event tracker (pure; the VM loop lives in tools/check/ai-stuck.mjs). | ai-racecraft |
 | **lib/survey-scenarios.mjs** | Named survey locations, camera recipes and bounded reproducible scenario plans. | — |
@@ -128,44 +135,46 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 
 The test runner and the release pipeline: what to run, how to run it in the background, what CI selected, and the deploy.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
+| **ci/claude-agents.mjs** | Claude Code CLI adapter, reads only: auth status, the remembered cloud-address registry and local session reads. | — |
 | **ci/cursor-agents.mjs** | Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched. | steward |
 | **ci/deploy-child.mjs** | Bounded deploy child supervision, including descendants and cooperative shutdown. | — |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
+| **ci/guards-report.mjs** | Names EVERY failing guard in a `node --test` TAP log with its fix command (efficiency review 2026-10-30, finding 4). | — |
 | **ci/guards-verdict.mjs** | Commit-gate verdict cache for test:guards (#2889 slice 1). | check-changes |
-| **ci/lane-preamble.mjs** | Prints the TOOLING block for a UI-survey launch prompt: exact audit commands with names checked against the catalog. | steward |
 | **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
-| **ci/measure-pr-ci-after-close.mjs** | 24 h scan: PR ci.yml job-minutes starting after close + peak-hour PR wall median (#2213, epic #1949). | steward |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
+| **ci/path-overlap.mjs** | Advisory delegation overlap against open-PR diffs and supplied sibling briefs; GET-only, never a reservation. | steward |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
 | **ci/poll-live-shell.mjs** | Poll github.io until the live shell matches this deploy, a newer train | — |
-| **ci/pr-body.mjs** | Edits one PR-body Plan item, Status or fleet key, or adds a label, on the LIVE body via REST. | steward |
+| **ci/pr-wait.mjs** | Explain one PR's current wait from bounded GET evidence, without polling or changing GitHub. | steward |
 | **ci/prune-branches.mjs** | Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first. | check-changes |
 | **ci/ready-gate.mjs** | Pre-flip gate: open draft, Plan closed, Structural guards or the local tooling-fast stamp green on the tip, memory ok. | steward |
 | **ci/release-provenance.mjs** | Proves the deployed revision by combining local git ancestry with live shell SHA/build metadata. | — |
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
-| **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so the always-on riders (vm-a1 / vm-a2 / slow arms) do not double-bill. | — |
+| **ci/run-group.mjs** | PR-only topical runner: `--skip-tf` drops exactly the files the guards shards ran for this diff (no double run). | — |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, verdicts, live run); `--pr` adds live PR state. | check-changes |
 | **ci/session-transcript.mjs** | Digest saved `list_events` pages into a timeline: prompts, replies, commands, MCP calls, subagents, errors. | steward |
+| **ci/ship-pr.mjs** | Runs ready-gate on a draft PR; on a pass prints the two calls that land it (MCP draft:false flip, `land` label). | ship |
 | **ci/sweep-shards.mjs** | Deterministic measured-time packing for the geometry sweep CI matrix. | — |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
+| **ci/verification-receipt.mjs** | Source-bound evidence for ordinary local verification; never a landing permission. | — |
 | **ci/verify-live.mjs** | Post-deploy byte and SHA-256 verification for the shell, secondary pages, service worker, and lazy assets. | — |
 | **ci/wait-for.mjs** | The generic background waiter: block until the 1-min load drops, a file is non-empty, or a pid is gone (exit 0 / 124). | — |
-| **ci/webkit-leg-summary.mjs** | Markdown job summary for webkit-leg.yml from artifacts/webkit-leg/report.json. | — |
 
 ### `tools/check/`
 
 Static guards over the source — a red exit here is a defect, not a report.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **check/ai-band.mjs** | Rubber-band profile: dead zone, forward/reverse, _bandNow vs gap — Melder checklist. | ai-racecraft |
 | **check/ai-field.mjs** | Field behaviour of the AI race: pace spread, stringing out, settled vs oscillating passes, dwell, mistake rate. | ai-racecraft |
@@ -179,6 +188,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
+| **check/brake-cue-calibrate.mjs** | Brake-cue calibration (VM): cue call point vs AiDrive.brakeTarget, dry/rain on slicks, conditionCues off/on. | tune-physics |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
 | **check/check-js-types.mjs** | Type-checks the JS files that opt in with `// @ts-check` (JSDoc + the repo's local tsc, noEmit). | check-changes |
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
@@ -203,8 +213,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **check/shader-validate.mjs** | glslang over the GLX GLSL ES 3.00 shaders, naga (advisory) over the WGX WGSL; offline, skips LOUDLY without the binary. | renderer-debug |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
-| **check/skill-routing-eval.py** | Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none). | agent-config |
-| **check/skill-smoke.mjs** | Plan or execute one bounded offline contract per canonical skill; retain explicit unverified browser/device scope. | — |
+| **check/skill-routing-eval.py** | Routes the phone.json prompts through the REAL skill set via `claude -p`; scores which skill fired (correct/wrong/none). | agent-config |
 | **check/track-oracle.mjs** | Golden track-query grid (VM): Tracks.sample/banking/onKerb/wallAt/inPitLane as raw doubles for the apex-26 port gate. | agent-view |
 | **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`. | — |
 | **check/trim-comments.mjs** | Strips dividers, closed banners and loc pointers; `--headers` shortens headers; `--narrative` needs explicit paths. | slim-bloat |
@@ -213,35 +222,30 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/vstd-lint.mjs** | REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant. | tune-physics |
 | **check/workflow-lint.mjs** | actionlint + zizmor over .github/workflows, offline; skips LOUDLY (fails under --require) without the binary. | check-changes |
 
-### `tools/archive/`
-
-One-shot probes kept for provenance; each cited only by its dated note (tools/archive/README.md).
-
-| Tool | Does | Paired skill |
-|---|---|---|
-| **archive/ci/measure-guard-commit.mjs** | Measure commit-guard wall time vs a direct test:guards run (#2647). | check-changes |
-| **archive/gen/trees/measure-tree-budget.mjs** | Read-only: builds via track-build-vm, compacts with TrackHiddenFaces like | scenery-dress |
-| **archive/gfx/decal-bake-probe.mjs** | Compare production decal bake pixels on WebGL2: five cases, baseline ref and JSON artifact. | — |
-| **archive/net/rtc-sync-probe.mjs** | Two real peers: the lights-out skew between them and the race-clock drift, in ms (archived probe). | multiplayer-debug |
-| **archive/perf/devicefarm-boot.mjs** | AWS Device Farm: cold boot to menu-interactive time of the live game in Safari on a real iPhone. | — |
-| **archive/perf/ers-deploy-census.mjs** | First-ERS-deploy pipeline census: every three createRenderPipeline across the first BOOST deploy, named | — |
-| **archive/perf/touch-boost-probe.mjs** | BUTTONS-mode pedal → BOOST tap hitch probe: CDP touch sequence at 844x390, frame gaps + traced main-thread work. | — |
-
 ### `tools/gen/`
 
 Author-time generation: the generated doc blocks, the shell, and the asset bakes.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **gen/assets.mjs** | Author-time asset bake CLI: `bake-synthetic[-models]`, `bake-atlas`, `bake-model`, `verify` (licence + md5 + budget). | asset-pack |
 | **gen/bake-elevation.mjs** | Offline elevation baker — precomputes per-track elevation profiles into a `CircuitElevations` global. | new-track |
 | **gen/bake-flyby.mjs** | Bakes a copied `window.FlybyShots = [...]` blob into js/camera/flyby-seq.js's DEFAULT shot list. | playwright-probe |
+| **gen/blender/assemble-entrance-camera.py** | Assemble exported entrance car samples and Blender camera controls. | — |
+| **gen/blender/crew-body.py** | Blender-authors the pit crew body (overalls, full-face helmet, gloves, pit shoes) into js/garage/crew-draw.js. | — |
 | **gen/blender/crew-choreo.py** | Blender-authors garage enter/leave crew variants and the in-race pit crew into js/garage/crew-choreo.js. | — |
+| **gen/blender/garage-camera-rigs.py** | Blender-authors moving garage camera rigs (crane, orbit, dolly, rear track, drone, steadicam) into js/garage/arrival.js. | — |
+| **gen/blender/garage-entrance-camera.py** | Author and export editable Blender entrance camera blocking. | — |
+| **gen/blender/garage-entrance.py** | Author and export the entrance car rig from evaluated Blender scenes. | — |
+| **gen/blender/garage-light-cues.py** | Blender-authors the garage LIGHT CUES (lights up, flashes, beacon, pulse, lights out, spot) into js/garage/scene.js. | — |
+| **gen/blender/garage-previz.py** | Editable Blender previz of the garage arrival / drive-out (bay, shutter, car, keyed camera) from arrival-poses JSON. | — |
+| **gen/blender/garage_entrance_camera_export.py** | Export saved entrance camera F-curves without rebuilding the source. | — |
 | **gen/compress-audio.mjs** | Cap soundtrack bitrate: re-encode listed assets/music tracks to 128 kbps from their git originals; --check scans frames. | — |
+| **gen/ensure-built.mjs** | Builds missing or stale gitignored site outputs (BUILT_PATHS) for serve, test and deploy entries. | check-changes |
 | **gen/garage-defaults.mjs** | Apply an exported GARAGE file to the shipped defaults in `js/data/garage-defaults.js`; `--check` reports drift. | — |
 | **gen/gen-arch-table.mjs** | Generates the module index block of `docs/ARCHITECTURE.md` from the manifest + each file's header; `--check` drift. | check-changes |
 | **gen/gen-changelog.mjs** | Validates `docs/changelog.d` fragments (`--check`); `--fold` writes them into `CHANGELOG.md` under the build. | check-changes |
-| **gen/gen-circuit-meta.mjs** | Extracts circuit picker metadata into js/track/circuit-meta.js (LAZY_CIRCUIT hydrates). | check-changes |
+| **gen/gen-circuit-meta.mjs** | Builds js/track/circuit-meta.js (circuit picker metadata; a gitignored build product, LAZY_CIRCUIT hydrates). | check-changes |
 | **gen/gen-cursor-rules.mjs** | Emit `.cursor/rules/*.mdc` from `.claude/rules` (`paths`→`globs`, else `alwaysApply`); `--check`. | agent-config |
 | **gen/gen-flags-table.mjs** | Regenerates the DevFlags table in `docs/DEBUG-HOOKS.md` from `js/core/dev-flags.js`; `--check`. | check-changes |
 | **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
@@ -262,6 +266,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
 | **gen/trees/bake-trees.mjs** | Manual tool: `npm i --no-save @dgreenheck/ez-tree three` (never a package.json | scenery-dress |
 | **gen/trees/caps.mjs** | Frozen LOD0/LOD1 triangle caps from the 2026-10-19 tree-budget measurement | scenery-dress |
+| **gen/trees/install-trees.mjs** | Run after `node tools/gen/trees/bake-trees.mjs`. Writes models/<species>_lod<n>.bin and one manifest | asset-pack |
 | **gen/vendor-three.mjs** | Vendors three.js (patch, terser-minify, write vendor/three-<ver>/ + MANIFEST.json); `--check` verifies hashes. | check-changes |
 | **gen/voice-audition.mjs** | Generate a 12-call voice audition with Kokoro, OpenAI or ElevenLabs; credentials stay author-side. | audio-debug |
 | **gen/voice-corpus.mjs** | Races the game VM and writes radio lines by channel to `tools/gen/voice-corpus.json` for voicepack.mjs. | audio-debug |
@@ -271,16 +276,17 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 
 Agent-facing generated pages: the coverage table, the hook index and the static impact map.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **docs/gen-agent-index.mjs** | Regenerates `docs/agent-index.json`, `docs/AGENT-HOOKS.md` and `tests/data/impact-map.json`; `--check`. | agent-view |
-| **docs/gen-coverage-table.mjs** | Regenerates the per-file coverage page from each suite's header (or its groups.json note); `--check`. | check-changes |
+| **docs/gen-coverage-table.mjs** | Builds the per-file coverage page (artifacts/, never committed) from each suite's header or groups.json note. | check-changes |
+| **docs/knowledge-gc.mjs** | docs/notes retention: lists uncited notes; `--apply` archives them and repoints links; `--index`; `--move`. | slim-bloat |
 
 ### `tools/shot/`
 
 Headless observation of the running game: framed screenshots, one-expression evals, the agent surface, a CPU profile.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **shot/ab-gallery.mjs** | Capture matched game views or import image pairs into an appendable, portable A/B comparison gallery. | — |
 | **shot/agent.mjs** | Agent toolbelt CLI — boots headless and calls one agent-view surface (`world`/`track`/`scene`/`rollout`/`help`). | agent-view |
@@ -338,7 +344,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 
 The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and the A/B delta against a git ref.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **perf/boost-press-census.mjs** | BOOST per-press pipeline census: counts three createRenderPipeline per spaced press vs equal no-BOOST windows. | — |
 | **perf/cpuprofile-summary.mjs** | Summarise a .cpuprofile: self ms by file, top-N self and inclusive ms by function url:line. | — |
@@ -348,7 +354,9 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/devicefarm-opus-probe.mjs** | A·H18's Opus decodeAudioData probe (#3710): the function devicefarm-iphone.mjs `opus` serialises into Safari. | — |
 | **perf/devicefarm-syslog.mjs** | Device Farm iOS syslog -> WebContent footprint dumps, process memory limits, jetsam/kill and GPU-buffer lines. | — |
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
+| **perf/first-race-census.mjs** | First-race pipeline census: TLX WebGPU on Lavapipe, one driven first lap; every createRenderPipeline after | — |
 | **perf/garage-census.mjs** | Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style. | mcp-probe |
+| **perf/hot-bench.mjs** | VM microbench of step, physState and nodeAt: 6x hang ceiling vs a checked-in per-call baseline. | — |
 | **perf/idle-pipeline-census.mjs** | Idle pipeline-churn census: three createRenderPipeline per equal idle race window (GAS held, no BOOST). | — |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
 | **perf/lit-wgsl-census.mjs** | Hash the WGSL a TLX WebGPU race compiles (lavapipe) and diff two trees: does a change re-key Safari's pipeline cache? | — |
@@ -357,8 +365,8 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/mesh-census.mjs** | Mesh census (#2657/#2631): main/mirror tris by distance band and source. | playwright-probe / renderer-debug |
 | **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace \| step) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
-| **perf/race-entry-timer.mjs** | Time one race entry: boot, race() → track flip, settle, stages, Log records; APEX_PIN / APEX_PROFILE knobs. | — |
 | **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |
+| **perf/session-budgets.mjs** | Session perf budgets: hang ceilings vs recorded phone lines for garage, grid, frames and heap. | — |
 | **perf/vm-alloc-census.mjs** | VM allocation-per-frame census: JS bytes per race frame in the real game loop vs a checked-in baseline (--update). | — |
 | **perf/vm-leak-census.mjs** | VM leak census: live GPU handles, event listeners and timers across race → QUIT TO MENU cycles (count-based, exact). | — |
 
@@ -366,7 +374,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 
 Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **gfx/batch-visible-probe.mjs** | Read-only probe: is one instanced scenery batch (cota yellow tecpro) submitted and lit-visible on software or hardware. | — |
 | **gfx/census-verdict.mjs** | Reads one image's census + four game-check JSONs, prints the Verdict rows and fails on what the game reported. | renderer-debug |
@@ -374,7 +382,6 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
 | **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with software, Lavapipe or verified hardware Chromium paths. | renderer-debug / mcp-probe |
-| **gfx/gl-object-census.mjs** | GL object census: WebGL2 create/delete counts (VAO, program, shader, buffer, texture, FBO, RBO) per circuit visit. | renderer-debug / mcp-probe |
 | **gfx/gltf-selftest.mjs** | Self-test for the `js/render/shared/gltf.js` GLB loader (Node ESM, no deps). | renderer-debug |
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | renderer-debug |
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
@@ -390,6 +397,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
+| **gfx/stall-reload-sw-oracle.mjs** | Matched deploy-tip vs fix-head stall watchdog stress (SwiftShader, three+GL). | — |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
 | **gfx/wgx-capture.mjs** | Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback). | renderer-debug |
 | **gfx/wgx-lavapipe-probe.mjs** | Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`. | renderer-debug / mcp-probe |
@@ -400,7 +408,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 
 Circuit geometry and scenery: the build guard, the baseline-gated audits, the survey and the start-line maths.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **track/aero-zone-turns.cjs** | Pairs each geometry-detected straight with the `def.turns[]` indices bounding it, so an aero-zone claim can be checked. | agent-view |
 | **track/audit-circuit.cjs** | One circuit's offline audits in one call (verify/float/clip/coplanar/props/ground) vs baselines; `--json`, `--checks`. | survey-track |
@@ -409,6 +417,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/centreline-kinks.cjs** | Lists single-node centreline kinks (node radius < half-width) per circuit; `--gate` pins counts, `--update` lowers. | — |
 | **track/clip-audit.cjs** | PROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`. | scenery-dress |
 | **track/coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
+| **track/corner-frames.cjs** | Fleet audit: turns[] on curvature peaks, bankZones and corner-labelled scenery kits on the corner they name. | survey-track |
 | **track/designer-code.mjs** | Headless designer share-code checker: decode APXT1/APXT2 via editor-vm, validate + insight summary; `--json`. | new-track |
 | **track/float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |
 | **track/footprint-support.cjs** | Advisory full-footprint support checks for substantial box masses; exact vertical contacts, review shot jobs. | scenery-dress |
@@ -417,6 +426,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/import-circuit-path.mjs** | Projects a `bacinger/f1-circuits` GeoJSON feature into a circuit def's `path`; `--self-check` diffs committed traces. | new-track |
 | **track/line-audit.mjs** | Audits the baked racing line on real circuits: slope, clamp time, corner-time / lap-time gains, tighter corners. | agent-view |
 | **track/measure-props-over-road.mjs** | Prop geometry on/above the racing line for ONE track; JSON report, `--shots` writes PNGs to `artifacts/tmp/`. | scenery-dress |
+| **track/merge-surveyor.mjs** | The track-surveyor hand-back: scope check, merge --no-ff, verify-track, worktree remove; --dry-run prints the plan. | survey-track |
 | **track/props-tris.cjs** | Per-circuit props triangles after hidden-face strip + vertex compaction; proves compaction render-identical. | scenery-dress |
 | **track/refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data; tests never call it or the network. | new-track |
 | **track/rotate-markings.cjs** | Rotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them; `--check`. | new-track |
@@ -426,6 +436,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/survey-gallery-lib.cjs** | Shared helpers for build-gallery / pr-survey-panel: survey branch list, raw GitHub URLs, git blobs. | — |
 | **track/survey-gallery-page.cjs** | Offline circuit gallery: pre-rendered captures, native circuit navigation and recipe downloads. | — |
 | **track/survey-track.mjs** | One-command circuit survey: aerial/orbit/driver-eye shots per spot plus a flagged ground-profile probe; `--oblique`. | survey-track |
+| **track/surveyor-scope.mjs** | Hand-back scope check: lists files a track-surveyor branch changed outside its circuit pair (exit 1 if any). | survey-track |
 | **track/track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **track/track-verts.cjs** | Per-circuit vertex + model-diagnostics dump for exact before/after diffing (`--diff before.json`). | agent-view |
 | **track/tumftm-import.mjs** | Converts TUMFTM racetrack-database CSV centrelines into track-designer apex26.track envelopes (LGPL-attributed). | new-track |
@@ -435,7 +446,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 
 The car and the garage: option sweeps, livery and crest rendering, career economics.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **car/audit-aero.mjs** | Thin alias → `render-car.mjs --preset=wing` (three wing views). Prefer the parent. | garage-parts-livery |
 | **car/audit-parts.mjs** | Capture every catalog part, body style and finish with validated selection and resumable evidence. | garage-parts-livery |
@@ -465,18 +476,22 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 
 Blender authoring and deterministic runtime motion exports for the garage crew.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
+| **garage/arrival-poses.mjs** | Samples the real GarageArrival poses (pit stop, race start, after-race home) to JSON frames for the Blender previz. | — |
 | **garage/author-crew-motion.py** | Authors editable Blender garage guide actions and exports deterministic runtime motion curves. | — |
+| **garage/author-departure.py** | Authors the garage departure blocking scene and exports allocation-light transform samples. | — |
 
 ### `tools/ui/`
 
 Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) they share.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **ui/audit-diff.mjs** | Library behind `layout-audit --diff <before.json>`: added / fixed findings per screen\|viewport cell (no browser). | survey-ui-matrix |
 | **ui/audit-summary.mjs** | Bounded summary of a layout-audit audit.json: totals, worst cells, per-screen rollup, one cell expanded on request. | survey-ui-matrix |
+| **ui/bryce-paint.mjs** | Owner-phone acceptance: PAINTED text/tap sizes, safe box, page scroll per window × UI SIZE; measure or check. | — |
+| **ui/bryce-phone.mjs** | Print the shared "Bryce's phone" preset, or boot the page on it and prove the emulation took (--measure). | — |
 | **ui/circuit-axis.mjs** | The `--circuits` axis for the two menu screens that draw a circuit (#select preview, #track-detail) in the fit tools. | survey-ui-matrix |
 | **ui/css-play.mjs** | One-screen CSS edit loop: host the tree, open a menu, dump structured DOM, hot-swap a stylesheet, screenshot. | css-play |
 | **ui/design-evidence.mjs** | Computed design tokens, axe accessibility evidence and standalone screenshot reviews. | css-play |
@@ -486,25 +501,40 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/explorer/catalog.mjs** | UI explorer mission recipes and independent-browser task briefs. | — |
 | **ui/explorer/core.mjs** | Validated UI replay data, semantic atlas states and bounded delta debugging without executable input. | — |
 | **ui/explorer/css-evidence.mjs** | Bounded CDP inherited and container CSS candidates with explicit unavailable evidence. | — |
+| **ui/explorer/fault-schedule.mjs** | Replay bounded lazy-script faults through an existing session/action adapter; no browser controller. | — |
 | **ui/explorer/inspector.mjs** | Read-only UI inspection: semantic controls, explicit live bindings, hit tests, CDP styles and state differences. | — |
 | **ui/explorer/modes.mjs** | Eight UI exploration modes sharing bounded evidence, replay and a real navigation graph. | — |
 | **ui/explorer/report.mjs** | Offline UI explorer evidence report with native navigation, linked state graph and safe local artifacts. | — |
+| **ui/explorer/summary.mjs** | Offline summaries of saved explorer JSON (replay bundles, inspections); no browser, no inference beyond the data. | — |
 | **ui/explorer/transitions.mjs** | Bounded adaptive classification histories and forward/reverse viewport path comparisons. | — |
 | **ui/fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
+| **ui/flows.mjs** | UI interaction flows (844x390 touch): doors, double-tap, focus, Escape, Back, persist, search, rotate, D-pad; --diff. | ui-menu-a11y |
+| **ui/flows/core.mjs** | UI flows pure core: flags, catalogs, evidence → pass/fail/warn/skip rows, --diff, flows.md. | ui-menu-a11y |
+| **ui/flows/probes.mjs** | UI flows browser probes: real taps/keys, one fresh context per check group; evidence for flows/core.mjs. | ui-menu-a11y |
+| **ui/issue-shots.mjs** | Download the screenshots attached to an issue or PR (body + comments) so a worker can open and measure them. | — |
 | **ui/layout-audit.mjs** | ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`. | survey-ui-matrix |
+| **ui/look-diff.mjs** | Pixel-diff each ScreenLooks/PauseOpts/TitleLayout knob value vs the default: DEAD/SUBTLE/VISIBLE + contact sheet. | css-play |
+| **ui/look-diff/core.mjs** | Library for look-diff: knob catalog read in a vm, args, pixel/geometry diff, DEAD/SUBTLE/VISIBLE classes. | css-play |
 | **ui/menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
 | **ui/menu-fit.mjs** | DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport. | survey-ui-matrix |
 | **ui/menu-mock.mjs** | Menu layout shots (SCREENS x VIEWPORTS), 3D off, one boot per pointer: boxes, tap/overflow/text numbers, cell cache. | survey-ui-matrix |
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
+| **ui/phone-shot-diff.mjs** | Compare a phone screenshot with the live page on the Bryce-phone preset: which elements are a different SIZE. | — |
+| **ui/probe-sheets-contract.mjs** | UI contract PR D (#5153) measurement probe: the five sheets (select, race settings, career hub, pause, results) in the | — |
+| **ui/profile-survey.mjs** | Owner-profile screen survey: all menu screens at contract windows A/C/D/As, seeded from the settings export. | — |
+| **ui/reach-score.mjs** | Offline two-thumb reach + dead-space score per menu screen from layout-audit DOM dumps or explorer inspections. | survey-ui-matrix |
 | **ui/review-captures.mjs** | Build a portable offline screenshot review from a bounded local evidence manifest. | css-play |
+| **ui/tap-floor.mjs** | Shared tap floors (WCAG 24 + body `--tap`) and in-page measure (label union, ÷ zoom) for the layout tools. | survey-ui-matrix |
+| **ui/theme-axis.mjs** | The `--theme=` axis (dark / light) for layout-audit: sets the context colorScheme AND the game's own uiTheme setting. | survey-ui-matrix |
+| **ui/ui-reset.mjs** | Shared door-first overlay reset (resetOverlays, titleUsable): hidden=true only as a logged fallback. | survey-ui-matrix |
 | **ui/ui-scale-axis.mjs** | The `--scale=` axis (40–200 % interface size) shared by layout-audit, menu-fit and fit-audit. | survey-ui-matrix |
 
 ### `tools/lighting/`
 
 The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign package.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **lighting/ab-lighting.mjs** | A/B harness for every tunable lighting constant — each knob rendered committed vs swapped; out → `scratch/captures/`. | lighting-tuner |
 | **lighting/lighting-tuner-sweep.mjs** | Does each LIGHTING TUNER slider change the image? Sharded, resumable, paired A→B→A' sampling per (condition, knob). | lighting-tuner |
@@ -517,11 +547,12 @@ The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign 
 
 ### `tools/mcp/`
 
-MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair.
+MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools bridge, the phone report pair.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
-| **mcp/apex-extras.mjs** | Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit. | check-changes |
+| **mcp/apex-claude-agents.mjs** | Existing-server Claude tool descriptor and handler (reads only); no separate server or credential store. | — |
+| **mcp/apex-extras.mjs** | Handlers for apex_track (track session), apex_job_* (background CLIs), apex_profile and apex_ui_fit / apex_ui_shot. | check-changes |
 | **mcp/apex-report.js** | Browser paste, not a node tool: one diagnostic JSON bundle from a live page (diag, GL identity, log ring, errors). | mcp-probe |
 | **mcp/apex-tools-mcp.mjs** | Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock). | check-changes |
 | **mcp/apex-tools-mcp.sh** | Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `serve`); `help`/`call`/`smoke` from a shell. | check-changes |
@@ -535,15 +566,14 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/cdmcp-lamps.py** | Night lamp screenshot suite via chrome-devtools MCP (Qatar, Singapore, Bahrain, Monza); `--port`, `--only`, `--limit`. | mcp-probe |
 | **mcp/cdmcp-measure.py** | Background-friendly Chromium MCP measure suite: boot (network/console/LCP), ui floors, full(+heap); `= run` verdict. | mcp-probe |
 | **mcp/chat-gateway.mjs** | Portable namespaced chat MCP gateway with serialized browser ownership and explicit release. | mcp-probe |
-| **mcp/check-chat-browser.mjs** | Probe local game boot and F1Dev diagnostics through the canonical gateway; no hosted claim. | — |
 | **mcp/check-chat-contract.mjs** | Check a live stdio gateway catalog against a saved host tool-name snapshot and harmless status call. | mcp-probe |
-| **mcp/check-doctor-catalog.mjs** | Check doctor catalog: canonical F1 environment and plugin support. | — |
 | **mcp/chrome-devtools-mcp.sh** | Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`. | mcp-probe |
 | **mcp/chrome-devtools-runtime.mjs** | Version gate for chrome-devtools-mcp: materialize the Apex 1.7.0 fixes; 1.11.0 passes unpatched; else fail closed. | — |
 | **mcp/debug-chrome.mjs** | CLI + apex_debug_chrome: start/status/stop the shared headless Chromium (CDP 9222) that debug MCPs attach to. | — |
-| **mcp/diagnostics-tools.mjs** | Typed background diagnostics and bounded report queries for Apex MCP. | renderer-debug / mcp-probe |
+| **mcp/diagnostics-tools.mjs** | Typed diagnostics job schema and plan for apex_job_start (the apex_diagnostics wrap left 2026-11-03). | renderer-debug / mcp-probe |
 | **mcp/doctor-catalog.mjs** | Doctor catalog: canonical F1 environment and plugin support. | — |
 | **mcp/garage-plan.mjs** | Browser-free bounded garage matrix planning over canonical cameras and livery fields. | garage-parts-livery |
+| **mcp/ios-console.mjs** | CLI: tail the console of an iPhone Safari tab via ios-webkit-debug-proxy (status, tabs, console); needs phone and cable. | — |
 | **mcp/job-admission.mjs** | Atomic cross-owner admission and complete manifests for durable Apex jobs. | — |
 | **mcp/js-debugger-boot.cjs** | Child-process auto-attach bootloader for debugger_node_test (NODE_OPTIONS=--require): every Node | — |
 | **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
@@ -559,7 +589,6 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/lsp-eval.mjs** | apex-lsp vs grep on fixed code questions with known answers: correctness, output chars, time; `--json`. | — |
 | **mcp/lsp-mcp.mjs** | Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics. | — |
 | **mcp/lsp-mcp.sh** | apex-lsp MCP wrapper: serve (stdio), or def\|refs\|sym\|hover\|diag from a shell over TypeScript 7 `tsc --lsp`. | — |
-| **mcp/lsp-navigation-bench.mjs** | Measure real-tree LSP navigation latency and output size, with cold/first queries separated from warm queries. | — |
 | **mcp/mcp-cli.mjs** | chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`. | mcp-probe |
 | **mcp/mcp-listing-cost.mjs** | Sizes each .mcp.json server's tools/list: tool count, chars, est. tokens, names-only cost. `--json`, `--entry`. | agent-config |
 | **mcp/mcp-preflight.sh** | Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only. | mcp-probe |
@@ -567,10 +596,8 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/output-level-mcp.mjs** | Wrap a stdio MCP server with bounded output levels and saved-result retrieval. | — |
 | **mcp/output-level-mcp.sh** | Agent MCP entrypoint: compact by default; outputLevel diagnostic/full and saved-result retrieval for every tool. | check-changes |
 | **mcp/playwright-mcp.sh** | Official `@playwright/mcp@0.0.79` wrapper (help/status/run): the `playwright-official` stdio server. | survey-ui-matrix / css-play / mcp-probe |
-| **mcp/probe-mcp.py** | Passthrough for every Chrome DevTools + TinyFish MCP tool (`chrome_*` / `tinyfish_*`): list-tools / call / serve. | mcp-probe |
+| **mcp/probe-mcp.py** | Passthrough for every Chrome DevTools MCP tool (`chrome_*`): list-tools / call / serve, plus the chrome daemon. | mcp-probe |
 | **mcp/report-server.mjs** | Localhost half of `apex-report.js`: serves the tree to a PHONE and collects the bundle it posts back. | mcp-probe |
-| **mcp/tinyfish-mcp.sh** | Local TinyFish MCP proxy helper: `setup`/`start`/`stop`/`status`/`fetch`/`search`/`deploy-check`/`deploy-js` on :3711. | mcp-probe |
-| **mcp/tinyfish-rpc.py** | Unwraps TinyFish `fetch_content`/`search` JSON-RPC results: `unwrap` / `deploy-summary` / `live-build` / `tool-names`. | mcp-probe |
 | **mcp/ui-tools.mjs** | Bounded semantic UI inspection and saved inspection comparison for Apex MCP. | ui-menu-a11y |
 | **mcp/workflow-harness-client.mjs** | CLI client for bounded workflow-harness calls with file-based probe arguments. | — |
 | **mcp/workflow-harness-core.mjs** | Core contracts for frozen-source workflow experiments; imported by the server and fixture tests. | — |
@@ -580,7 +607,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 
 Self-contained three.js pages of engine-built cars and circuits, for hosts that cannot render an MCP Apps panel.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **viewer/build-viewer.mjs** | Writes one self-contained three.js viewer page of engine-built team cars and circuits, to open or publish. | playwright-probe |
 | **viewer/viewer-data.mjs** | Viewer payloads: Tracks.build circuits as compact JSON, and the js/car sources the page builds cars from. | playwright-probe |
@@ -591,7 +618,7 @@ Self-contained three.js pages of engine-built cars and circuits, for hosts that 
 
 WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **net/nostr-local.cjs** | A Nostr relay on localhost so the ROOM CODE path can be tested without a public relay. | multiplayer-debug |
 | **net/nostr-probe.mjs** | Which public relays will actually carry our signalling? Probes each and reports. | multiplayer-debug |
@@ -599,58 +626,19 @@ WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers.
 | **net/rtc-e2e-room.mjs** | The ROOM CODE path end to end, against a relay we run (`nostr-local.cjs`). | multiplayer-debug |
 | **net/rtc-e2e.mjs** | A REAL WebRTC handshake between two pages (`npm run rtc:e2e`) — the one path the loopback transport cannot cover. | multiplayer-debug |
 
-### `tools/environment/`
-
-Canonical F1 environment installation, recovery, plugin packages and lifecycle regressions.
-
-| Tool | Does | Paired skill |
-|---|---|---|
-| **environment/activate.sh** | Activate: canonical F1 environment and plugin support. | — |
-| **environment/bin/f1-build-plugins** | F1 build plugins: canonical F1 environment and plugin support. | — |
-| **environment/bin/f1-env** | F1 env: canonical F1 environment and plugin support. | — |
-| **environment/bind-canonical.sh** | Bind canonical: canonical F1 environment and plugin support. | — |
-| **environment/boot-chat-mcp.sh** | Boot chat mcp: canonical F1 environment and plugin support. | — |
-| **environment/build-plugins.py** | Build plugins: canonical F1 environment and plugin support. | — |
-| **environment/check-chat-mcp-health.py** | Check chat mcp health: canonical F1 environment and plugin support. | — |
-| **environment/environment/install-dependencies.sh** | Install dependencies: canonical F1 environment and plugin support. | — |
-| **environment/environment/install-local-plugins.sh** | Install local plugins: canonical F1 environment and plugin support. | — |
-| **environment/environment/install-tools.sh** | Install tools: canonical F1 environment and plugin support. | — |
-| **environment/environment/plugin-install.sh** | Plugin install: canonical F1 environment and plugin support. | — |
-| **environment/environment/preflight.sh** | Preflight: canonical F1 environment and plugin support. | — |
-| **environment/environment/resume.sh** | Resume: canonical F1 environment and plugin support. | — |
-| **environment/environment/test-environment.py** | Test environment: canonical F1 environment and plugin support. | — |
-| **environment/environment/test-health.py** | Test health: canonical F1 environment and plugin support. | — |
-| **environment/environment/validate-shaders.mjs** | Validate shaders: canonical F1 environment and plugin support. | — |
-| **environment/environment/verify.sh** | Verify: canonical F1 environment and plugin support. | — |
-| **environment/fixtures/lifecycle-echo.mjs** | Lifecycle echo: canonical F1 environment and plugin support. | — |
-| **environment/install-environment.sh** | Install environment: canonical F1 environment and plugin support. | — |
-| **environment/launch-mcp.sh** | Launch mcp: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs** | Packaging.test: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-dev-tools/scripts/agent-readiness.mjs** | Agent readiness: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-dev-tools/scripts/apex-tools-bridge.mjs** | Apex tools bridge: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-dev-tools/scripts/github-fleet.cjs** | Github fleet: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-dev-tools/scripts/readiness.mjs** | Readiness: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js** | browser.js: F1 diagnostic helper from the connected plugin. | — |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs** | compare.mjs: F1 diagnostic helper from the connected plugin. | — |
-| **environment/plugin-sources/f1-dev-tools/tests/agent-setup.test.mjs** | Agent setup.test: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-dev-tools/tests/bridge.test.mjs** | Bridge.test: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs** | Packaging.test: canonical F1 environment and plugin support. | — |
-| **environment/plugin-sources/f1-dev-tools/tests/readiness.test.mjs** | Readiness.test: canonical F1 environment and plugin support. | — |
-| **environment/setup.sh** | Setup: canonical F1 environment and plugin support. | — |
-| **environment/test-plugin-build.py** | Test plugin build: canonical F1 environment and plugin support. | — |
-| **environment/test-stdio-lifecycle.py** | Test stdio lifecycle: canonical F1 environment and plugin support. | — |
-
 ### `tools/env/`
 
 Container bootstrap: browsers and the Cursor Cloud install.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **env/apex-memory.mjs** | List, show, and retire `.claude/memory` topic files from any host; no assume-unchanged. | agent-config |
 | **env/chat-mcp-service.mjs** | Idempotent private tunnel startup, bounded restart supervision and environment readiness diagnostics. | mcp-probe |
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
+| **env/codex-cloud-history.py** | Export archived or selected Codex Cloud transcripts and native subagents through read-only history APIs. | — |
 | **env/configure-chat-mcp.mjs** | Derive a full-gateway private runtime profile from an existing tunnel profile without changing identities. | mcp-probe |
 | **env/ensure-mcp-ready.sh** | MCP bootstrap: Playwright chrome symlink, chrome-devtools clone, browser cache env, mcp-smoke (no Chromium). | check-changes |
+| **env/install-blender.sh** | Opt-in Blender 4.2.23 LTS install (the version the crew exporters pin), SHA-256 verified; --plan never installs. | — |
 | **env/install-browsers.sh** | Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs. | — |
 | **env/install-lint-bins.sh** | Pinned, checksummed install of actionlint, shellcheck, zizmor, glslang and naga into artifacts/bin. | — |
 | **env/mirror-skills.sh** | Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback). | agent-config |
@@ -659,21 +647,23 @@ Container bootstrap: browsers and the Cursor Cloud install.
 
 Electron desktop packaging: stage the Pages allow-list into a site folder the shell serves over app://.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
 | **desktop/minify-worker.mjs** | Bounded persistent Terser workers; write disposable results before the stage publishes them. | — |
-| **desktop/minify.mjs** | Deploy-only minify of the staged js/ tree (terser, names kept, unlinked .map beside each file). | check-changes |
+| **desktop/minify.mjs** | Deploy-only minify of the staged js/ (terser, names kept, unlinked .map), css/*.css and index.html (#5050). | check-changes |
 | **desktop/pack-dry-run.mjs** | Desktop pack dry-run: stage + stamp to a temp dir, check every electron-builder input, build no installer. | check-changes |
 | **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
 | **desktop/stage.mjs** | Stage the deployable site folder (Pages / Electron) from the shared allow-list; optional content-hash stamp. | check-changes |
 
 ### `tools/hooks/`
 
-Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason trailer.
+Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-only Bash, the surveyor's and the reviewer's write scopes.
 
-| Tool | Does | Paired skill |
+| Tool | Does | Suggested skill |
 |---|---|---|
-| **hooks/ratchet-reason.mjs** | Commit-hook ratchet absorb: 20 lines silent, 40 with a Ratchet-Reason trailer. | slim-bloat |
+| **hooks/readonly-bash.sh** | PreToolUse Bash hook for read-only subagents: an allowlist of read commands; `READONLY_BASH_ALLOW` is the one exception. | agent-config |
+| **hooks/scratch-md-only.sh** | PreToolUse Write\|Edit hook for the surface reviewer: the only writable path is scratch/**.md (its report). | agent-config |
+| **hooks/surveyor-scope.sh** | PreToolUse Write\|Edit hook for track-surveyor: writes land only in the circuit pair, scratch/** or artifacts/**. | survey-track |
 
 ## Test runner & coverage
 
@@ -689,7 +679,6 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **check/tolerance-diff.mjs** | Fails a PR that loosens a test tolerance (toBeCloseTo digits, a bound, tol/eps) beside production edits. |
 | **check/vm-filename-lint.mjs** | Flags a vm source load in tests/unit or tests/helpers with a relative filename, which breakpoints and coverage miss. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
-| **ci/archive-sessions.mjs** | Applies the archive rule to a saved list_sessions page: ARCHIVE (role tag, agent-made, idle, PR done) or KEEP, why. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
 | **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha from its ci.yml / pages.yml runs. |
 | **ci/base-verdict.sh** | Whose red is it? One line naming the last deploy-branch CI verdict below this head, with its failed job names. |
@@ -702,16 +691,16 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/debug-unit.mjs** | Wrapper: npm run debug:unit -- <file> loads vm-debug-preload so vm-loaded js/ is file://-debuggable. |
-| **ci/dispatch.mjs** | Hourly dispatcher: plans launches, needs-owner takeovers, deploy:red fixers, archives and the Board from GitHub state. |
+| **ci/dispatch.mjs** | The Actions dispatcher: launches, takeovers, deploy:red fixers, nudges, digests, the Board; --fire starts workers. |
+| **ci/file-verdict-reporter.mjs** | A `node --test` reporter writing per-file event counts, so a group runner can refuse an exit 0 that verified nothing. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
 | **ci/github-api.mjs** | The one GitHub REST client: token on curl stdin, 5xx/429 backoff, ETag/304 GETs, JSON bodies; repo constants. |
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
-| **ci/js-debugger-smoke.mjs** | CI/agent smoke: js-debugger `list-tools` + no-browser cpuprofile-summary. No daemon, no Chromium (W25d / #3117). |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
-| **ci/launch-gate.mjs** | Quota gate for create_session: saved get_session page -> launch-gate receipt (rate_limit allowed, or typed override). |
-| **ci/merge-gate.mjs** | Landing gate (`gate` check): open, no `hold`, Plan closed, CI green, gen:check + ratchets on the merge, base distance. |
+| **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (actor = owner, no app), decision: comments, label events. |
+| **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok for harness edits, gen + ratchets. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
@@ -720,10 +709,11 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
+| **ci/preflip-probe.mjs** | Pre-flip probe: merge the deploy tip into a PR head in a temp worktree, run ratchets + fixture audit + diff units. |
 | **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
-| **ci/publish-shots.mjs** | Legacy screenshot branch publisher; use tools/shot/publish-evidence.mjs for new evidence outside Git history. |
-| **ci/queue-depth.mjs** | Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok\|hold`. |
-| **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |
+| **ci/queue-depth.mjs** | Informational queue gauge, never a push hold: queued + running JOBS by OS vs 40 Linux / 5 macOS slots. |
+| **ci/ready-sweep.mjs** | Stale-`ready` sweep (reads only): each ready issue's `file:line` cites against the tree, and the "ready over cap" row. |
+| **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA and base SHA. |
 | **ci/run-node-group.mjs** | Run isolated Node benchmarks before the ordinary pool, forwarding npm arguments to every phase. |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |
 | **ci/select-budget.mjs** | Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else 7.5 s/test (llvmpipe). |
@@ -732,14 +722,14 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/selected-gate-verdict.mjs** | Selected-specs gate verdict: failed or cancelled shards require a successful rerun. |
 | **ci/spec-staleness.mjs** | Replays select-specs over recent history to rank tests/specs/*.spec.js by how long since CI last selected one. |
 | **ci/spec-timings.mjs** | Merges junit/reporter durations into `tests/data/spec-timings.json` (bounded, per env); `--check` flags 2x growth. |
-| **ci/test-bg.mjs** | Starts test groups in the BACKGROUND and hands back a log to tail; sequential by default (`--parallel`, `--wait`). |
+| **ci/test-bg.mjs** | Runs ONE browser spec in the BACKGROUND under a one-run lock and a loadavg gate; `--status`, `--wait`, `--stop`. |
 | **ci/test-coverage-audit.mjs** | Coverage guard (`npm run test:audit`): every spec / unit file must be reachable from a topical `test:<group>` script. |
 | **ci/test-honesty.mjs** | Finds tests that pass by not testing: bare `test.skip`/`fixme`/`todo` without a `SKIP-OK:` reason, and empty bodies. |
 | **ci/test-observed.mjs** | Which tests have I never seen run? Declared spec titles (espree) vs every title any `artifacts/logs/` run reported. |
 | **ci/test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`; refuses (exit 3) while busy (`--max-load`). Foreground. |
 | **ci/tooling-fast.mjs** | Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list. |
 | **ci/tooling-timings.mjs** | Refresh tests/data/tooling-fast-timings.json from CI: median per-file durations out of green guards-shard logs. |
-| **ci/verify-change.mjs** | ONE diff-aware `--fast` gate plus test batches; full tooling-fast is the pre-push floor; plan JSON reports budget. |
+| **ci/verify-change.mjs** | ONE diff-aware `--fast` gate; `tooling-fast --changed` is the local floor, CI runs the tiers; plan JSON has the budget. |
 | **lib/circuit-scope.cjs** | `scope(ids)` keeps the circuits APEX_CIRCUITS names (all when unset); audit `--all` and sweep loops read it. |
 | **lib/stale-rows.mjs** | Which stale baseline rows a fleet sweep fails: all locally, a PR's own circuits on a PR, none on the train (#2183). |
 
@@ -750,42 +740,27 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | File | Read by |
 |---|---|
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
-| **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
-| **ci/dispatch.json** | `ci/dispatch.mjs` |
-| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/bash-guard-hardening.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
-| **environment/ENVIRONMENT.md** | `environment/MCP-STARTUP-SKILL.md`, `environment/bind-canonical.sh`, `environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md` |
-| **environment/MCP-STARTUP-SKILL.md** | `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/install-environment.sh` |
-| **environment/PLUGIN-BUILD.md** | `environment/bind-canonical.sh` |
-| **environment/plugin-sources/.agents/plugins/marketplace.json** | `environment/install-environment.sh` |
-| **environment/plugin-sources/f1-cloud-mcp/.app.json** | `environment/build-plugins.py`, `environment/test-plugin-build.py` |
-| **environment/plugin-sources/f1-cloud-mcp/.codex-plugin/plugin.json** | `environment/build-plugins.py`, `environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs`, `environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs`, `environment/test-plugin-build.py`, `tests/unit/f1-dev-tools.test.mjs`, `tests/unit/pick-tests.test.mjs` |
-| **environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md** | `check/bloat-scan.mjs`, `check/doctor.mjs`, `check/skill-routing-eval.py`, `check/skill-smoke.mjs`, `check/tree-counts.mjs`, `ci/lane-preamble.mjs`, `env/mirror-skills.sh`, `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/build-plugins.py`, `environment/install-environment.sh`, `environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/workflows.md`, `environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs`, `gen/gen-tools-readme.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/bash-guard-hardening.test.mjs`, `tests/unit/bootstrap-doctor.test.mjs`, `tests/unit/change-driver-tools.test.mjs`, `tests/unit/change-kind.test.mjs`, `tests/unit/f1-dev-tools.test.mjs`, `tests/unit/hud-survey.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/pick-tests.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/rulebook-guards.test.mjs`, `tests/unit/select-specs.test.mjs`, `tests/unit/skill-progressive.test.mjs`, `tests/unit/skill-routing-eval.test.mjs`, `tests/unit/test-bg-waste.test.mjs`, `tests/unit/validation-cli.test.mjs` |
-| **environment/plugin-sources/f1-dev-tools/.app.json** | `environment/build-plugins.py`, `environment/test-plugin-build.py` |
-| **environment/plugin-sources/f1-dev-tools/.codex-plugin/plugin.json** | `environment/build-plugins.py`, `environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs`, `environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs`, `environment/test-plugin-build.py`, `tests/unit/f1-dev-tools.test.mjs`, `tests/unit/pick-tests.test.mjs` |
-| **environment/plugin-sources/f1-dev-tools/executor/.mcp.json** | `ci/deploy.mjs`, `environment/build-plugins.py`, `environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md`, `environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs`, `environment/test-plugin-build.py`, `gen/gen-output-surface.mjs`, `gen/move-tree.mjs`, `mcp/apex-tools-mcp.mjs`, `mcp/apex-tools-mcp.sh`, `mcp/browser-http.mjs`, `mcp/browserstack-mcp.sh`, `mcp/chat-gateway.mjs`, `mcp/chrome-devtools-mcp.sh`, `mcp/lsp-mcp.mjs`, `mcp/mcp-cli.mjs`, `mcp/mcp-listing-cost.mjs`, `mcp/mcp-preflight.sh`, `mcp/mcp-smoke.mjs`, `mcp/playwright-mcp.sh`, `mcp/probe-mcp.py`, `mcp/tinyfish-mcp.sh`, `tests/manual/probe-mcp.test.mjs`, `tests/manual/tinyfish-mcp.test.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/agent-output-config.test.mjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs`, `tests/unit/environment-json.test.mjs`, `tests/unit/f1-dev-tools.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/js-debugger-transport.test.mjs`, `tests/unit/lsp-mcp.test.mjs`, `tests/unit/mcp-cli.test.mjs`, `tests/unit/mcp-smoke.test.mjs`, `tests/unit/output-surface.test.mjs` |
-| **environment/plugin-sources/f1-dev-tools/executor/mcp.json** | `ci/deploy.mjs`, `environment/build-plugins.py`, `environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md`, `environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs`, `environment/test-plugin-build.py`, `gen/gen-output-surface.mjs`, `gen/move-tree.mjs`, `manifest.cjs`, `mcp/apex-tools-mcp.mjs`, `mcp/apex-tools-mcp.sh`, `mcp/browser-http.mjs`, `mcp/browserstack-mcp.sh`, `mcp/chat-gateway.mjs`, `mcp/chrome-devtools-mcp.sh`, `mcp/lsp-mcp.mjs`, `mcp/mcp-cli.mjs`, `mcp/mcp-listing-cost.mjs`, `mcp/mcp-preflight.sh`, `mcp/mcp-smoke.mjs`, `mcp/playwright-mcp.sh`, `mcp/probe-mcp.py`, `mcp/tinyfish-mcp.sh`, `tests/manual/probe-mcp.test.mjs`, `tests/manual/tinyfish-mcp.test.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/agent-output-config.test.mjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs`, `tests/unit/environment-json.test.mjs`, `tests/unit/f1-dev-tools.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/js-debugger-transport.test.mjs`, `tests/unit/lsp-mcp.test.mjs`, `tests/unit/mcp-cli.test.mjs`, `tests/unit/mcp-smoke.test.mjs`, `tests/unit/output-surface.test.mjs` |
-| **environment/plugin-sources/f1-dev-tools/plugin.json** | `environment/build-plugins.py`, `environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs`, `environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs`, `environment/test-plugin-build.py`, `tests/unit/f1-dev-tools.test.mjs`, `tests/unit/pick-tests.test.mjs` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md** | `check/bloat-scan.mjs`, `check/doctor.mjs`, `check/skill-routing-eval.py`, `check/skill-smoke.mjs`, `check/tree-counts.mjs`, `ci/lane-preamble.mjs`, `env/mirror-skills.sh`, `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/build-plugins.py`, `environment/install-environment.sh`, `environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/workflows.md`, `environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs`, `gen/gen-tools-readme.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/bash-guard-hardening.test.mjs`, `tests/unit/bootstrap-doctor.test.mjs`, `tests/unit/change-driver-tools.test.mjs`, `tests/unit/change-kind.test.mjs`, `tests/unit/f1-dev-tools.test.mjs`, `tests/unit/hud-survey.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/pick-tests.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/rulebook-guards.test.mjs`, `tests/unit/select-specs.test.mjs`, `tests/unit/skill-progressive.test.mjs`, `tests/unit/skill-routing-eval.test.mjs`, `tests/unit/test-bg-waste.test.mjs`, `tests/unit/validation-cli.test.mjs` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/codex-workflows.md** | `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md** | `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/codex-workflows.md` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md** | `check/bloat-scan.mjs`, `check/doctor.mjs`, `check/skill-routing-eval.py`, `check/skill-smoke.mjs`, `check/tree-counts.mjs`, `ci/lane-preamble.mjs`, `env/mirror-skills.sh`, `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/build-plugins.py`, `environment/install-environment.sh`, `environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/workflows.md`, `environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs`, `gen/gen-tools-readme.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/bash-guard-hardening.test.mjs`, `tests/unit/bootstrap-doctor.test.mjs`, `tests/unit/change-driver-tools.test.mjs`, `tests/unit/change-kind.test.mjs`, `tests/unit/f1-dev-tools.test.mjs`, `tests/unit/hud-survey.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/pick-tests.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/rulebook-guards.test.mjs`, `tests/unit/select-specs.test.mjs`, `tests/unit/skill-progressive.test.mjs`, `tests/unit/skill-routing-eval.test.mjs`, `tests/unit/test-bg-waste.test.mjs`, `tests/unit/validation-cli.test.mjs` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md** | `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/garage-parts.md** | `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/profiling.md** | `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md** | `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/ui-inspection.md** | `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md` |
-| **environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/workflows.md** | `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md` |
+| **ci/dispatch.json** | `ci/dispatch.mjs`, `ci/lib/provenance.mjs`, `tests/unit/dispatch.test.mjs` |
+| **ci/worker-prompt.md** | `ci/dispatch.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-transport.test.mjs` |
+| **perf/baselines/hot-bench.json** | `perf/hot-bench.mjs`, `tests/unit/perf-hot-bench.test.mjs` |
 | **perf/baselines/vm-alloc.json** | `perf/vm-alloc-census.mjs`, `tests/unit/perf-vm-alloc-budget.test.mjs` |
-| **shot/scenery-locations.json** | `ci/deploy.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
+| **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `ci/tooling-fast.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/agent-scope-hooks.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/prepush-floor.test.mjs`, `tests/unit/track-shot-survey.test.mjs`, `track/merge-surveyor.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/dijon-clips-coplanar.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
+| **track/corner-names/jerez.json** | — |
+| **track/corner-names/kyalami.json** | — |
+| **track/corner-names/magny_cours.json** | — |
+| **track/corner-names/mexico.json** | — |
+| **track/corner-names/miami.json** | — |
+| **track/corner-names/montreal.json** | — |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |
 | **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/specs/f1-track-accuracy.spec.js`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |
 | **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/props-tri-ratchet.test.mjs`, `tests/unit/select-specs.test.mjs` |
+| **track/verify-track-baseline.json** | `tests/unit/verify-track-def-checks.test.mjs`, `track/verify-track.cjs` |
 
 ## Conventions
 

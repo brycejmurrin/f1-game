@@ -22,7 +22,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
-function boot({ joinMs } = {}) {
+function boot({ joinMs, listenMs, stableMs } = {}) {
   const sockets = [];
   class FakeWebSocket {
     constructor(url) {
@@ -66,6 +66,8 @@ function boot({ joinMs } = {}) {
   let patched = src.replace('import("@trystero-p2p/nostr")', "__importNostr()").replace(/^const\b/gm, "var");
   // A shortened guest find-window, so the reply-deadline case runs in seconds.
   if (joinMs) patched = patched.replace("const JOIN_TIMEOUT_MS = 12000", "const JOIN_TIMEOUT_MS = " + joinMs);
+  if (listenMs) patched = patched.replace("const LISTEN_TIMEOUT_MS = 300000", "const LISTEN_TIMEOUT_MS = " + listenMs);
+  if (stableMs) patched = patched.replace("Date.now() - openAt >= 5000", "Date.now() - openAt >= " + stableMs);
   vm.runInContext(patched, ctx, { filename: absSrc("js/net/nostr.js") });
   const NetNostr = vm.runInContext("NetNostr", ctx);
   const tick = () => new Promise((r) => setTimeout(r, 20));
@@ -120,6 +122,29 @@ test("a socket the browser dropped is reopened, and once at return to the foregr
   room.stop();
   await h.tick();
   assert.equal(h.listeners.size, 0, "stop() removes the visibility listener");
+});
+
+test("a relay that opens then closes keeps backing off; one that stayed up is retried at 1 s (#4472)", async () => {
+  const h = boot({ stableMs: 150 });
+  const room = await h.NetNostr.directExchange({ code: "ABCDEF", send: "OFFER", onJoiner: () => {} });
+  await h.untilSockets(2);
+  const url = h.sockets[0].url;
+  const count = () => h.sockets.filter((s) => s.url === url).length;
+  h.sockets[0].open(); h.sockets[0].drop();                      // flap 1: closes at once
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(count(), 2, "first retry after 1 s");
+  h.sockets.filter((s) => s.url === url)[1].open(); h.sockets.filter((s) => s.url === url)[1].drop();   // flap 2
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(count(), 2, "second retry waits 2 s, not 1 s: the open did not reset the backoff");
+  await new Promise((r) => setTimeout(r, 1000));
+  assert.equal(count(), 3, "second retry after 2 s");
+  const third = h.sockets.filter((s) => s.url === url)[2];
+  third.open();
+  await new Promise((r) => setTimeout(r, 200));                  // stayed open past stableMs
+  third.drop();
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(count(), 4, "a socket that stayed up earns the 1 s backoff again");
+  room.stop();
 });
 
 test("after stop() a closing socket is not reopened", async () => {
@@ -268,4 +293,111 @@ test("a replayed old offer is ignored; a fresh offer is still answered (created_
   assert.ok(w.sent.some((f) => f.startsWith('["EVENT"')), "answer published for fresh offer");
   token.cancelled = true;
   await p;
+});
+
+// A relay replays an offer the host already used for an earlier guest (inside
+// the 300 s created_at slack). The guest answered it, latched, and ignored the
+// host's current offer; the host dropped the answer as wrong_offer.
+async function guestHears(h, w, text, createdAt) {
+  const sealed = await h.NetRendezvous.seal("ABCDEF", text, "offer");
+  w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(sealed), created_at: createdAt }]) });
+  for (let i = 0; i < 10; i++) await h.tick();
+}
+for (const reanswer of [true, false]) {
+  test(`a guest ${reanswer ? "answers" : "(without reanswer) ignores"} a NEWER offer after answering a replayed one`, async () => {
+    const h = boot();
+    const replies = [];
+    const token = { cancelled: false };
+    const p = h.NetNostr.directExchange({ code: "ABCDEF", token, reanswer,
+      reply: async (offer) => { replies.push(offer); return "ANSWER-" + offer; } });
+    await h.untilSockets(1);
+    const w = h.sockets[0];
+    w.open();
+    const now = Math.floor(Date.now() / 1000);
+    await guestHears(h, w, "CONSUMED-OFFER", now - 60);   // replayed: inside the slack
+    assert.deepEqual(replies, ["CONSUMED-OFFER"], "the first offer heard is answered at once");
+    await guestHears(h, w, "CONSUMED-OFFER", now - 55);   // a re-post of the same offer
+    await guestHears(h, w, "OLDER-OFFER", now - 120);     // signed earlier by the host
+    assert.equal(replies.length, 1, "neither a re-post nor an older offer is answered again");
+    await guestHears(h, w, "CURRENT-OFFER", now);         // the host's live offer
+    if (reanswer) {
+      assert.deepEqual(replies, ["CONSUMED-OFFER", "CURRENT-OFFER"], "the newer offer is answered");
+      const published = w.sent.filter((f) => f.startsWith('["EVENT"')).length;
+      assert.ok(published >= 2, "both answers reached the wire");
+    } else {
+      assert.equal(replies.length, 1, "control: the default exchange still latches");
+    }
+    token.cancelled = true;
+    await p;
+  });
+}
+
+test("a guest's re-answer that fails keeps the answer already on the wire, and re-answers are bounded", async () => {
+  const h = boot();
+  const replies = [];
+  const token = { cancelled: false };
+  const p = h.NetNostr.directExchange({ code: "ABCDEF", token, reanswer: true,
+    reply: async (offer) => { replies.push(offer); return offer === "B" ? null : "ANSWER-" + offer; } });
+  await h.untilSockets(1);
+  const w = h.sockets[0];
+  w.open();
+  const now = Math.floor(Date.now() / 1000);
+  await guestHears(h, w, "A", now - 10);
+  await guestHears(h, w, "B", now - 9);        // reply refuses (e.g. already connected)
+  let settledEarly = false;
+  p.then(() => { settledEarly = true; });
+  for (let i = 0; i < 10; i++) await h.tick();
+  assert.equal(settledEarly, false, "a failed re-answer does not fail the exchange");
+  for (let k = 0; k < 6; k++) await guestHears(h, w, "C" + k, now - 8 + k);
+  assert.equal(replies.length, 1 + h.NetNostr.REANSWER_MAX, "at most REANSWER_MAX further offers are answered");
+  token.cancelled = true;
+  await p;
+});
+
+// A relay refusing our event for its timestamp means this device's clock is
+// off; the advice blamed the room code ("Every room relay is refusing this code").
+test("a relay refusing our event as too old says the clock is off, not the code", async () => {
+  const h = boot();
+  const advised = [];
+  const room = await h.NetNostr.directExchange({ code: "ABCDEF", send: "OFFER", onJoiner: () => {},
+    onFail: (r) => advised.push(r) });
+  await h.untilSockets(2);
+  const [a] = h.sockets;
+  a.open();
+  for (let i = 0; i < 300 && !a.sent.some((f) => f.startsWith('["EVENT"')); i++) await h.tick();
+  const ev = JSON.parse(a.sent.find((f) => f.startsWith('["EVENT"')))[1];
+  a.onmessage({ data: JSON.stringify(["OK", ev.id, false, "invalid: created_at too early"]) });
+  assert.equal(advised.length, 1, "advised once");
+  assert.equal(advised[0].error, "clock_skew");
+  assert.equal(advised[0].advisory, true);
+  assert.match(advised[0].message, /clock/i);
+  assert.doesNotMatch(advised[0].message, /this code/i);
+  a.onmessage({ data: JSON.stringify(["OK", ev.id, false, "blocked: pubkey not admitted"]) });
+  assert.equal(advised.length, 1, "no second, contradicting advisory");
+  assert.ok(h.NetNostr.CLOCK_REFUSAL.test("invalid: event creation date is too far off from the current time"));
+  assert.ok(!h.NetNostr.CLOCK_REFUSAL.test("blocked: pubkey not in our web of trust"));
+  room.stop();
+});
+
+test("the ICE-restart listener holds one socket set for a race, not a re-dial every JOIN window (perf hunt 6)", async (t) => {
+  // Scaled clock, 1/120: JOIN 12 s -> 100 ms, LISTEN 300 s -> 2.5 s, so one
+  // real second is a fake 120 s of healthy racing. The loop is transport.js
+  // answerRestart: a quiet relay ("expired") is worth another listen.
+  const SCALE = 120, joinMs = 12000 / SCALE, listenMs = 300000 / SCALE, fake120s = 120000 / SCALE;
+  const race = async (listen) => {
+    const h = boot({ joinMs, listenMs });
+    assert.equal(h.NetNostr.LISTEN_TIMEOUT_MS, listenMs, "the patch took");
+    const token = { cancelled: false }, t0 = Date.now();
+    setTimeout(() => { token.cancelled = true; }, fake120s);
+    let r = null;
+    do r = await h.NetNostr.directExchange({ code: "R3STRT", token, listen, reply: async () => null });
+    while (r && r.error === "expired" && !token.cancelled);
+    assert.ok(Date.now() - t0 >= fake120s, "the listener ran the whole window");
+    return h.sockets.length;
+  };
+  const relays = 2;   // the stub's apex26.nostrRelays
+  const before = await race(false), after = await race(true);
+  t.diagnostic(`sockets per fake 120 s with ${relays} relays: ${before} (JOIN window) -> ${after} (listen window)`);
+  assert.equal(after, relays, "one WebSocket (one TLS handshake) per relay for the whole fake 120 s");
+  assert.ok(before >= 2 * relays, `control: the JOIN-window listener re-dialled (${before} sockets)`);
 });

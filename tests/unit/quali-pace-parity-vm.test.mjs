@@ -56,7 +56,7 @@ async function medianRatio(track, pace) {
 }
 
 for (const track of ["monza", "monaco"]) {
-  test(track + ": the modelled field's lap tracks the driven lap at every PACE", { timeout: 240000 }, async (t) => {
+  test(`${track}: the modelled field's lap tracks the driven lap at every PACE`, { timeout: 240000 }, async (t) => {
     const at = {};
     for (const pace of PACES) at[pace] = await medianRatio(track, pace);
     const ref = at[1].ratio;

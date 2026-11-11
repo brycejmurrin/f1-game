@@ -397,13 +397,13 @@ test("every tyre and pit call the engineer (js/race/engineer.js) makes composes 
 
 test("the positions, gaps and spotter calls a line can carry are all recorded", () => {
   for (let p = 1; p <= 22; p++) assert.ok(hasKey("p " + p), "P" + p);
-  for (const g of [0.1, 0.9, 1.4, 5.5, 9.9]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g);
+  for (const g of [0.1, 0.9, 1.4, 5.5, 9.9, 9.96, 9.99, 10]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g + " -> " + RadioLines.gapText(g));
   for (const k of Object.keys(Spotter.KEYS)) assert.ok(hasKey(k), "spotter: " + k);
 });
 
 // ── 3. RadioVoice hands a covered line to the pack ──────────────────────────
 
-function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTune = null } = {}) {
+function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTune = null, announcer = undefined } = {}) {
   const spoken = [], packCalls = [], ensures = [], kept = [];
   const synth = { speaking: false, speak(u) { spoken.push(u.text); }, cancel() {}, resume() {}, getVoices: () => [] };
   let onEnd = null;
@@ -422,7 +422,7 @@ function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTu
   });
   const saved = new Map(packOn == null ? [] : [["radioPack", packOn]]);
   if (voiceTune) saved.set("voiceTune", voiceTune);
-  const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
+  const G = { soundOn: true, state: "race", announcer, store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
   const v = sb.RadioVoice.create(G);
   v.setEnabled(true);
   return { v, spoken, packCalls, ensures, kept, ducks, saved, reload: () => sb.RadioVoice.create(G), end: () => onEnd && onEnd() };
@@ -649,6 +649,78 @@ test("VoicePack keeps one transmission per channel: the engineer never cuts the 
   assert.equal(handles[0].stopped, false, "a new engineer line does not cut the spotter either");
   P.stop();
   assert.equal(handles.every((h) => h.stopped), true, "stop() with no channel cuts everything");
+});
+
+test("VoicePack start notification requires decoded, valid, actually scheduled audio", async (t) => {
+  for (const outcome of ["played", "decode-failed", "no-handle", "preempted", "invalid", "rebuilt", "budget-expired"]) {
+    await t.test(outcome, async () => {
+      const man = { binary: integrity(8), clips: { "car left": [0, 4, 0.5] } };
+      let resolveDecode, rejectDecode, now = 0, gen = 1, valid = true, starts = 0, plays = 0;
+      const sb = sandbox(["js/audio/voice-pack.js"], {
+        GameAudio: { now: () => now, ctxGen: () => gen,
+          decodeClip: () => new Promise((resolve, reject) => { resolveDecode = resolve; rejectDecode = reject; }),
+          radioVoice: (_parts, at) => { plays++; return outcome === "no-handle" ? null : { end: at + 0.5, stop() {} }; } },
+        fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(man), arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+      });
+      const p = sb.VoicePack.create({}); await p.load("george");
+      assert.equal(p.speak("george", "car left", { channel: "intro", budgetS: 1,
+        valid: () => valid, onStart: () => { starts++; } }), true);
+      await new Promise((r) => setImmediate(r));
+      assert.equal(starts, 0, "accepted audio still awaits decoding");
+      if (outcome === "preempted") p.stop("intro");
+      if (outcome === "invalid") valid = false;
+      if (outcome === "rebuilt") gen++;
+      if (outcome === "budget-expired") now = 2;
+      if (outcome === "decode-failed") rejectDecode(new Error("decode failed"));
+      else resolveDecode({ duration: 0.5 });
+      await new Promise((r) => setImmediate(r));
+      assert.equal(starts, outcome === "played" ? 1 : 0);
+      assert.equal(plays, ["played", "no-handle"].includes(outcome) ? 1 : 0);
+      p.stop("intro");
+      assert.equal(starts, outcome === "played" ? 1 : 0, "termination never repeats the start notification");
+    });
+  }
+});
+
+test("a throwing or invalid start observer never releases playing audio or advances its completion", async (t) => {
+  for (const observer of ["throws", "number", "object"]) for (const terminal of ["stop", "end"]) {
+    await t.test(`${observer}, then ${terminal}`, async () => {
+      const man = { binary: integrity(8), clips: { "car left": [0, 4, 0.5] } };
+      const timers = new Map(), handles = [], logs = [];
+      let seq = 0, ends = 0, starts = 0;
+      const sb = sandbox(["js/audio/voice-pack.js"], {
+        setTimeout(fn, ms) { const id = ++seq; timers.set(id, { fn, ms }); return id; },
+        clearTimeout(id) { timers.delete(id); },
+        Log: { info: (_channel, msg) => logs.push(msg) },
+        GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => Promise.resolve({ duration: 0.5 }),
+          radioVoice: (_parts, at) => {
+            const h = { end: at + 0.5, stopped: false, stop() { h.stopped = true; } };
+            handles.push(h); return h;
+          } },
+        fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(man), arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+      });
+      const p = sb.VoicePack.create({}); await p.load("george");
+      const onStart = observer === "throws" ? () => { starts++; throw new Error("caption paint failed"); }
+        : observer === "number" ? 7 : {};
+      assert.equal(p.speak("george", "car left", { channel: "intro", onStart, onEnd: () => { ends++; } }), true);
+      await new Promise((r) => setImmediate(r));
+      assert.equal(handles.length, 1, "the real pack scheduled an audio handle");
+      assert.equal(p.busy("intro"), true, "observer failures cannot orphan the playing handle");
+      assert.equal(handles[0].stopped, false);
+      assert.equal(ends, 0, "the queue cannot advance while this handle is playing");
+      assert.equal(starts, observer === "throws" ? 1 : 0);
+      assert.ok(logs.some((msg) => msg.includes(observer === "throws" ? "caption paint failed" : "observer is not a function")),
+        "observer errors remain diagnosable");
+      const finish = Array.from(timers.values()).find((timer) => timer.ms < 1000).fn;
+      if (terminal === "stop") {
+        p.stop("intro"); assert.equal(handles[0].stopped, true, "the lane still owns its stop handle");
+      } else finish();
+      assert.equal(p.busy("intro"), false);
+      assert.equal(ends, 1);
+      finish(); p.stop("intro");
+      assert.equal(ends, 1, "late termination stays idempotent");
+    });
+  }
 });
 
 test("a failed fetch is retried later instead of disabling the pack for the session", async () => {
@@ -1361,4 +1433,17 @@ test("a twin naming an unknown container or a path is ignored", async () => {
     assert.equal(P.debug().formats.george.fmt, "mp3");
     assert.ok(!urls.some((u) => u.includes("..") || u.endsWith("opus.bin")), urls.join());
   }
+});
+
+// Perf hunt 7: the announcer's pack (fable, ~4-6 MB kept in the JS heap) speaks only commentary, which say()
+// mutes with the ANNOUNCER switch off — TEAM RADIO alone used to fetch and keep it anyway.
+test("the announcer pack is fetched only while the announcer speaks", () => {
+  const staged = (r, id) => r.ensures.some((x) => x === id);
+  const off = radio({ announcer: { enabled: () => false } });
+  off.v.prepare();
+  assert.equal(staged(off, "george"), true, "the race radio still prepares its own pack");
+  assert.equal(staged(off, "fable"), false, "announcer off: no presenter pack");
+  const on = radio({ announcer: { enabled: () => true } });
+  on.v.prepare();
+  assert.equal(staged(on, "fable"), true, "announcer on: the presenter pack is staged");
 });

@@ -38,19 +38,38 @@ const ruleDecls = (css, sel) => {
 };
 const phaseCard = (phase) => ruleDecls(readCssSource("css/overlays.css"), `#loading[data-phase="${phase}"] #ld-card`);
 
-/** LoadingScreen's module surface, evaluated on its own — the same `const` ->
- *  `var` rewrite tests/unit/flyby-panel.test.mjs uses for the other UI modules. */
+/** LoadingCard + LoadingScreen, evaluated alone — the same `const` → `var`
+ *  rewrite tests/unit/flyby-panel.test.mjs uses for the other UI modules. */
 function load() {
   const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console };
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb,
+    { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
+  assert.ok(sb.LoadingCard, "js/ui/loading-card.js assigns the LoadingCard global");
   assert.ok(sb.LoadingScreen, "js/ui/loading-screen.js assigns the LoadingScreen global");
-  return sb.LoadingScreen;
+  return sb;
 }
 
-const LS = load();
+const { LoadingCard: LC, LoadingScreen: LS } = load();
 const { CARD, CARD_KEYS, clampCard, cardPristine, cardVars } = LS;
+
+/** Pure keys LoadingScreen must keep as the same references LoadingCard exports. */
+const PURE_KEYS = [
+  "FLY_MS", "isAutomation", "CARD_MS", "SHORT_FLY_MS", "SKIP_GRACE_MS", "SKIP_STREAK", "FLY_MAX_MS",
+  "flyMsFor", "packSettled", "warmPresentReady", "metaRows", "nextSkips",
+  "CARD", "CARD_KEYS", "clampCard", "cardPristine", "cardVars",
+  "isGridShot", "gridField", "gridLayout", "gridColour", "gridInk", "GRID_ROW_MIN",
+];
+
+test("LoadingScreen re-exports LoadingCard's pure helpers by reference", () => {
+  for (const k of PURE_KEYS) {
+    assert.ok(Object.prototype.hasOwnProperty.call(LC, k), `LoadingCard missing ${k}`);
+    assert.ok(Object.prototype.hasOwnProperty.call(LS, k), `LoadingScreen missing re-export ${k}`);
+    assert.equal(LS[k], LC[k], `${k} must be the same reference on LoadingScreen`);
+  }
+});
 
 test("the registry is complete: every key has a range, a step, a label and a default inside it", () => {
   assert.ok(CARD_KEYS.length >= 3, "size and both axes, at least");
@@ -112,7 +131,9 @@ test("cardVars emits parseable CSS for every input, hostile ones included", () =
     // be a percentage of the card, so the same saved number would move a scaled
     // card further than an unscaled one.
     assert.match(v["--ld-card-x"], /^-?[0-9]+(\.[0-9]+)?vw$/, JSON.stringify(v));
-    assert.match(v["--ld-card-y"], /^-?[0-9]+(\.[0-9]+)?vh$/, JSON.stringify(v));
+    // svh, not vh (UI scaling contract gap 22): 100vh is the TALL viewport under a
+    // phone's dynamic toolbar, so a vh offset moved the card further in Safari.
+    assert.match(v["--ld-card-y"], /^-?[0-9]+(\.[0-9]+)?svh$/, JSON.stringify(v));
     for (const s of Object.values(v)) assert.ok(!/NaN|undefined|Infinity/.test(s), s);
   }
 });
@@ -137,7 +158,7 @@ test("the shipped default is the card that ships TODAY: no offset, no rescale", 
   const v = cardVars(null);
   assert.equal(v["--ld-card-scale"], "1");
   assert.equal(v["--ld-card-x"], "0vw");
-  assert.equal(v["--ld-card-y"], "0vh");
+  assert.equal(v["--ld-card-y"], "0svh");
 });
 
 /* ── THE LETTERBOX ─────────────────────────────────────────────────────────
@@ -242,6 +263,8 @@ function harness(stored = {}, storeOverride = null, docEl = null, nav = undefine
   };
   if (nav !== undefined) sb.navigator = nav;
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb,
+    { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
   const races = [];
@@ -537,7 +560,11 @@ test("the skip hint is a run-phase pseudo-element that waits ~3 s — no new she
   assert.ok(rule, "the hint rule is keyed on the run phase");
   assert.match(rule[1], /content:\s*"[^"]*RACE[^"]*"/i);
   assert.match(rule[1], /opacity:\s*0\b/, "hidden until its fade");
-  assert.match(rule[1], /animation:[^;]*\b3s\b/, "fades in after ~3 s");
+  // The delay is pinned !important: both reduced-motion backstops (tokens.css,
+  // responsive.css) zero animation-delay, and the hint must still wait its turn.
+  assert.ok(/animation-delay:\s*3s\s*!important/.test(rule[1])
+    && /:root\[data-motion="reduce"\][^{]*\{[^}]*animation-delay:\s*0s\s*!important/.test(read("css/responsive.css")),
+    "fades in after ~3 s under reduced motion too, while MOTION: REDUCED zeroes every other delay like the OS backstop");
   assert.ok(!/data-phase="(card|hold)"\] #ld-card::after/.test(css), "no hint on the card fallback or the editor's hold");
   assert.ok(!/id="ld-(skip|hint)"/.test(read("index.html")), "the hint must not be a DOM node — shellNodes is at its ceiling");
 });
@@ -666,7 +693,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
     GameAudio: { radioLeadS: () => 0.43, radioSting: (ch, life) => stings.push(life) },
   };
   sb.window = sb;
-  for (const f of ["js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-screen.js"]) {
+  for (const f of ["js/camera/flyby-clear.js", "js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-card.js", "js/ui/loading-screen.js"]) {
     vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   }
   const screen = sb.LoadingScreen.create({
@@ -746,7 +773,7 @@ test("the turn on camera is tagged on the map, and only redrawn when it changes"
 });
 
 test("FlybySeq.airCorner: 0 until a corner shot is solved, and reset() clears it", () => {
-  const sb = modules(["js/camera/flyby-seq.js"]);
+  const sb = modules(["js/camera/flyby-clear.js", "js/camera/flyby-seq.js"]);
   assert.equal(sb.FlybySeq.airCorner(), 0);
   sb.FlybySeq.reset();
   assert.equal(sb.FlybySeq.airCorner(), 0);
@@ -852,7 +879,7 @@ test("stop() and a skip cut a radio check that is on air", () => {
 });
 
 test("FlybySeq.shotAt names the shot solve() cuts to, without planning it", () => {
-  const F = modules(["js/camera/flyby-seq.js"]).FlybySeq;
+  const F = modules(["js/camera/flyby-clear.js", "js/camera/flyby-seq.js"]).FlybySeq;
   assert.equal(F.shotAt(0).id, F.DEFAULT[0].id);
   assert.equal(F.shotAt(1).id, "grid-mine");
   assert.equal(F.shotAt(0.87).id, "grid-front");
@@ -933,9 +960,11 @@ test("flyMsFor: habitual short cut waits for warmReady (would fail before the wa
 
 test("metaRows: a circuit gets its facts; a real race joined mid-race gets the lap, your place, tyres, stops, leader and flag", () => {
   const metaRows = (...a) => JSON.parse(JSON.stringify(LS.metaRows(...a)));   // the module's arrays are another realm's
-  const track = { id: "baku", name: "BAKU", lengthKm: 6.003, night: true };
+  // Baku races in daylight (night: false since 2026-11-10); "default" reads DAY, an explicit night pick reads NIGHT.
+  const track = { id: "baku", name: "BAKU", lengthKm: 6.003, night: false };
   assert.deepEqual(metaRows({ track, laps: 12, weather: "dry", tod: "default" }, 20),
-    [["LAPS", "12"], ["LENGTH", "6.003 km"], ["TURNS", "20"], ["WEATHER", "DRY"], ["TIME", "NIGHT"]]);
+    [["LAPS", "12"], ["LENGTH", "6.003 km"], ["TURNS", "20"], ["WEATHER", "DRY"], ["TIME", "DAY"]]);
+  assert.deepEqual(metaRows({ track, laps: 12, weather: "dry", tod: "night" }, 20).at(-1), ["TIME", "NIGHT"]);
   const story = {
     lap: 40, realLaps: 51, grid: false, leader: { code: "RUS" }, out: [{}, {}, {}, {}, {}, {}], cautions: [],
     you: { running: true, pos: 5, gap: { s: 3.3, lapsDown: 0 }, tyre: { compound: "medium", age: 8 }, stops: [31, 36] },
@@ -1129,4 +1158,90 @@ test("loading weather distinguishes storm from dry in normal, grid and mid-race 
     const rows = JSON.parse(JSON.stringify(LS.metaRows({ track: { lengthKm: 5 }, laps: 12, weather: "storm", tod: "day", real }, 10)));
     assert.deepEqual(rows.find(([label]) => label === "WEATHER"), ["WEATHER", "STORM"]);
   }
+});
+
+/* ── THE CARD FITS THE WINDOW (UI scaling contract gap 22, PR #5156) ──────
+ * Measured 2026-11-06 at the owner's export with a radio caption up: the card
+ * stood 374-400 px tall in 283-393 px windows and ran 68-87 px past the top
+ * edge. The cap is written against the SAFE box in svh; the body is the child
+ * that gives; the card itself never scrolls (its ::after is the skip hint). */
+test("the loading card is capped to the safe box in svh and its body is the giving child", () => {
+  const css = readCssSource("css/loading.css");
+  const rules = cssRules(css);
+  const card = rules.find((r) => r.selector === "#ld-card");
+  assert.ok(card, "#ld-card rule");
+  const cap = card.decls.get("max-height") || "";
+  assert.match(cap, /100svh/, "the cap is in svh, so the Safari toolbar shortens the card instead of sliding it: " + cap);
+  assert.match(cap, /var\(--safe-t\)/, "the cap subtracts the top safe inset: " + cap);
+  assert.match(cap, /var\(--safe-b\)/, "the cap subtracts the bottom safe inset: " + cap);
+  assert.doesNotMatch(cap, /(^|[^s])vh\b/, "no raw vh in the cap: " + cap);
+  // The cap is in the card's OWN layout px: `scale` paints the layout box times
+  // the player's CARD SIZE times the window's fit, so both divide the cap, and a
+  // CARD Y that lifts the card costs the same room above the top edge (measured
+  // 2026-11-07 at the owner's export, CARD SIZE 1.14 / CARD Y -14: the capped
+  // layout box painted 373.7 px into a 332.4 px cap and the top sat at -83).
+  assert.match(cap, /\/ \(var\(--ld-card-scale, 1\) \* var\(--ld-fit, 1\)\)/, "the cap divides by CARD SIZE x fit: " + cap);
+  assert.match(cap, /\+ min\(var\(--ld-card-y, 0px\), 0px\)/, "a lift (negative CARD Y) comes off the cap, a drop buys nothing: " + cap);
+  assert.equal(card.decls.get("scale"), "calc(var(--ld-card-scale, 1) * var(--ld-fit, 1))", "one paint scale: CARD SIZE x fit");
+  assert.match(card.decls.get("width") || "", /100% \/ \(var\(--ld-card-scale, 1\) \* var\(--ld-fit, 1\)\)/, "the width cap divides by the same product");
+  const screen = rules.find((r) => r.selector === "#loading");
+  assert.equal(screen.decls.get("grid-template-rows"), "minmax(0, 1fr)", "the row is the safe box, not the card: an auto row grew to a tall layout box and started at the top");
+  assert.equal(screen.decls.get("align-items"), "unsafe end", "an overflowing layout box stays anchored at the bottom instead of the start fallback");
+  assert.equal(card.decls.get("display"), "flex");
+  assert.equal(card.decls.get("flex-direction"), "column");
+  assert.doesNotMatch(card.decls.get("margin-bottom") || "", /(^|[^s])vh\b/, "the margin below is svh too");
+  assert.notEqual(card.decls.get("overflow"), "hidden", "the card does not clip: its ::after is the skip hint above it");
+  const body = rules.find((r) => r.selector === "#ld-body");
+  assert.ok(body, "#ld-body rule");
+  assert.equal(body.decls.get("min-height"), "0", "the body may shrink under the wordmark");
+  assert.equal(body.decls.get("overflow"), "hidden", "the body keeps the facts inside the plate");
+  const map = rules.find((r) => r.selector === "#ld-map");
+  assert.equal(map.decls.get("max-height"), "100%", "the map shrinks first: fitCanvas's inline height is a maximum");
+});
+
+/* ── fitCard: the ratio that brings the painted card inside the window ─────
+ * The stylesheet's cap is read at fit 1 (computed max-height, px), the natural
+ * height with the cap lifted, and their ratio is written as --ld-fit. Measured
+ * 2026-11-07 at the owner's export: C 852x283 cap 184.6 / natural 328 -> 0.563
+ * (the card paints 210 px tall, top at 13); A 393 -> 0.742; D 390 -> 0.735. */
+function fitHarness({ cap, natural, hidden = false }) {
+  const writes = [];
+  const card = {
+    style: { props: {}, maxHeight: "", setProperty(k, v) { this.props[k] = v; writes.push([k, v, card.style.maxHeight]); } },
+    get offsetHeight() { return card.style.maxHeight === "none" ? natural : Math.min(natural, cap); },
+  };
+  const els = { "ld-card": card, loading: { hidden } };
+  const sb = { Math, Object, Array, Number, String, JSON, isFinite, parseFloat, console, Log: { warn() {} },
+    getComputedStyle: (el) => ({ maxHeight: el === card ? cap + "px" : "" }), document: { createElement: () => ({}) } };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-card.js") });
+  vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
+  sb.LoadingScreen.fitCard((id) => els[id]);
+  return { card, writes };
+}
+
+test("fitCard writes the cap/natural ratio when the content is taller than the window leaves, and 1 when it fits (gap 22)", () => {
+  const tall = fitHarness({ cap: 184.6, natural: 328 });
+  assert.equal(tall.card.style.props["--ld-fit"], "0.563", "C at the owner's export: 184.6 / 328");
+  assert.equal(tall.card.style.maxHeight, "", "the inline max-height override is lifted only for the measurement");
+  assert.deepEqual(tall.writes.map(([k, v]) => [k, v]), [["--ld-fit", "1"], ["--ld-fit", "0.563"]], "fit 1 first, so the cap is read at the player's own size");
+  const fits = fitHarness({ cap: 356, natural: 328 });
+  assert.equal(fits.card.style.props["--ld-fit"], "1", "nothing to shrink: the player's CARD SIZE paints as authored");
+  const edge = fitHarness({ cap: 328, natural: 328.4 });
+  assert.equal(edge.card.style.props["--ld-fit"], "1", "half a pixel is not a clip");
+  const hid = fitHarness({ cap: 184.6, natural: 328, hidden: true });
+  assert.equal(hid.card.style.props["--ld-fit"], undefined, "a hidden screen has no box to measure: left alone");
+});
+
+test("fitCard runs after every reveal and whenever the card's geometry or the window changes; the mini-DOM harness has no layout and is left alone", () => {
+  const src = read("js/ui/loading-screen.js");
+  assert.match(src.slice(src.indexOf("function applyCard()"), src.indexOf("function root()")), /fitCard\(\$\);/, "applyCard: the editor's sliders re-fit");
+  assert.match(src.slice(src.indexOf("function setPhase(p)"), src.indexOf("function teamWipe()")), /fitCard\(\$\);/, "setPhase: after the screen is unhidden");
+  assert.match(src, /addEventListener\("resize", \(\) => \{ if \(phase\) fitCard\(\$\); \}\)/, "the window changed under a card that is up (Safari's toolbar)");
+  assert.match(src, /typeof getComputedStyle !== "function" \|\| typeof c\.offsetHeight !== "number"\) return;/, "no layout engine, no fit");
+  const h = harness();
+  h.run();
+  assert.equal(h.els["ld-card"].style.props["--ld-fit"], undefined, "the stub card is never scaled by a guessed fit");
+  const cap = read("js/ui/captions.js");
+  assert.match(cap.slice(cap.indexOf("function paintLoading("), cap.indexOf("function applyDom()")), /el\.hidden = false;\n\s*refitCard\(\);[\s\S]*if \(el\) el\.hidden = true;\n\s*refitCard\(\);/, "the radio caption is the card's tallest late arrival: captions.js re-fits on show and hide");
 });

@@ -30,7 +30,6 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { readFileSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -211,7 +210,16 @@ const STRIP = {
   //   strip-after 255274 → 255214.
   // → #3280 cantilever gantries keep one mast (2026-10-26): the two Monaco
   //   spans lose their second leg pair. Emission 274147 → 274099, strip-after 255214 → 255176.
-  monaco: { before: 274099, after: 255176 },
+  // → #4967 outside-of-bend tier rows run their full chord (2026-11-09): same
+  //   emission, longer risers enclose 5 fewer triangles; strip-after 255176 → 255181.
+  // → #5079 pit taper pocket capped (2026-11-10): the street barrier now runs
+  //   along the exit taper (nodes 37-41) at the lane wall instead of the 14 m
+  //   run-off default. Emission 274099 → 274383, strip-after 255181 → 255453.
+  // → #5084 / #5088 (PR #5254, 2026-11-10): city.js awning posts are left out where the
+  //   ground is above the awning (-24 emitted); the street-panel skirt buries its
+  //   bottom faces (buried 633 → 722, bottom 661 → 668). Emission on top of #5079 274383 → 274359,
+  //   strip-after 255453 → 255333.
+  monaco: { before: 274359, after: 255333 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -262,8 +270,13 @@ const STRIP = {
   //   clear the steel stand. Emission 321026 → 315410, strip-after 291892 → 286386.
   // → #3859 D scenery train fix (2026-10-26): Curva Grande stonePines at gap 22.
   //   Re-measured on the mega wave 5 merged tree: 315410 → 315393, strip-after
-  //   286386 → 286363.
-  monza: { before: 315393, after: 286363 },
+  //   286386 → 286363. #3374: stand-span pine clear + lake hedge split → 313432 / 284510.
+  // → #4967 outside-of-bend tier rows run their full chord, Curva Grande bowl gap 24 → 25
+  //   (2026-11-09): longer rows and crowd bands. Emission 313432 → 313768, strip-after 284510 → 284782.
+  // → #5080 (PR #5254, 2026-11-10): the Rettifilo gravel is trimmed per cell instead
+  //   of dropped whole; cells under the asphalt are left out. Emission 313768 → 313916,
+  //   strip-after 284782 → 284930.
+  monza: { before: 313916, after: 284930 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
@@ -288,16 +301,33 @@ for (const [id, want] of Object.entries(STRIP)) {
 test("the props accumulators start at a per-circuit estimate and spare capacity stays small (M-6)", () => {
   // The sealed geometry is a VIEW of the accumulator: its buffer is the capacity that stays resident.
   // Doubling from 8192 left up to 2x of it (vegas: 129.7 MB of buffers for 73.8 MB of data).
-  const ratios = {};
-  for (const id of ["monza", "vegas", "silverstone"]) {
-    const t = build(id);
-    const pos = t.propsGeo.pos;
-    ratios[id] = +(pos.buffer.byteLength / pos.byteLength).toFixed(3);
-    ctxOnce().trim(0);
+  const ctx = ctxOnce(), original = ctx.sandbox.TrackModels, calls = [], ratios = {};
+  // Observe allocations rather than prescribing the expression used to select one.
+  ctx.sandbox.TrackModels = { ...original, scratch(estimate) {
+    calls.push(estimate);
+    return original.scratch(estimate);
+  } };
+  try {
+    let last;
+    for (const id of ["monza", "vegas", "silverstone"]) {
+      const first = calls.length, t = build(id);
+      assert.equal(calls[first], Math.round(t.total * 100), `${id}: per-circuit initial allocation`);
+      const pos = t.propsGeo.pos;
+      ratios[id] = +(pos.buffer.byteLength / pos.byteLength).toFixed(3);
+      ctx.trim(0);
+      last = t;
+    }
+    console.log("M-6 props capacity/data:", JSON.stringify(ratios));
+    for (const id in ratios) assert.ok(ratios[id] < 1.3, `${id}: capacity ${ratios[id]}x the data`);
+    const first = calls.length;
+    const steps = ctx.sandbox.TrackBuildProps.buildSteps(last, {
+      region: { intersects: () => false, maxVertices: 240000, maxIndices: 720000 }, skipPits: true,
+    });
+    for (let step = steps.next(); !step.done; step = steps.next()) { /* exhaust regional build */ }
+    assert.equal(calls[first], 8192, "regional build starts with a bounded allocation");
+    ctx.release(last);
+  } finally {
+    ctx.sandbox.TrackModels = original;
+    ctx.trim(0);
   }
-  console.log("M-6 props capacity/data:", JSON.stringify(ratios));
-  for (const id in ratios) assert.ok(ratios[id] < 1.3, `${id}: capacity ${ratios[id]}x the data`);
-  // And the estimate reaches scratch(): the first allocation is the estimate, not 8192.
-  const src = readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
-  assert.match(src, /const out = TrackModels\.scratch\(Math\.round\(track\.total \* \d+\)\)/, "build-props passes a per-circuit estimate");
 });

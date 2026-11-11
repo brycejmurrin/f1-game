@@ -26,25 +26,27 @@ const AppearanceStudio = (function () {
     titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
-    lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null,
+    lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null, lookDesigner: null,
     homeScene: shipped("homeScene", "photo"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
   // motion is NULLABLE: unset = follow the OS / touch auto comfort (CamComfort,
   // TitleFx); an explicit "on" would override both, so the Studio never pins it.
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
-  // Cosmetic presets must not replace readability, comfort or unit preferences.
-  const PRESET_PRESERVE = ["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits"];
-  const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups" };
+  // Cosmetic presets must not replace readability, comfort, unit, size or layout
+  // preferences (#5058): a preset value never names one of these keys, and a
+  // screen look the preset names is merged into the current one, not replaced.
+  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "pauseLayout", "pauseSide", "pauseDim"]);
+  const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups", lookDesigner: "designer" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
-    pause: ["lookPause"], datahub: ["lookDatahub"], select: ["lookSelect"],
+    pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
-    hud: ["hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    hud: ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
     popups: ["lookPopups"] });
   const PRESETS = Object.freeze([
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
     { id: "paddock", name: "TEAM PADDOCK", note: "Your team, your garage", values: { menuAccent: "team", hudAccent: "team", homeScene: "garage", backgroundMotion: "ambient", lookCareer: { density: "roomy" } } },
     { id: "broadcast", name: "BROADCAST", note: "Timing and race context", values: { menuAccent: "cyan", hudAccent: "cyan", hudProfile: "broadcast", homeScene: "night", backgroundMotion: "still", lookDatahub: { tabs: "underline", stripes: "on" } } },
-    { id: "focus", name: "FOCUS", note: "Quiet menus, clear track", values: { homeScene: "static", hudProfile: "minimal", hudMetricsLayout: "compact", hudMapVis: "auto", hudGapsVis: "auto", motion: "reduce", titleIntro: "off", menuWash: "soft", titleArt: "soft" } },
-    { id: "sunlight", name: "SUNLIGHT", note: "Bright, solid and readable", values: { homeScene: "static", uiTheme: "light", uiContrast: "high", textSize: "large", lookPopups: { dim: "solid" }, lookRace: { dim: "solid" }, lookCareer: { dim: "solid" } } },
+    { id: "focus", name: "FOCUS", note: "Quiet menus, clear track", values: { homeScene: "static", hudProfile: "minimal", hudMetricsLayout: "compact", hudMapVis: "auto", hudGapsVis: "auto", titleIntro: "off", menuWash: "soft", titleArt: "soft" } },
+    { id: "sunlight", name: "SUNLIGHT", note: "Bright, solid and readable", values: { homeScene: "static", uiTheme: "light", lookPopups: { dim: "solid" }, lookRace: { dim: "solid" }, lookCareer: { dim: "solid" } } },
   ]);
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const isObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
@@ -122,6 +124,7 @@ const AppearanceStudio = (function () {
     const p = PRESETS.find((v) => v.id === id); if (!p) return false;
     const current = snapshot(), next = Object.assign({}, DEFAULTS, p.values);
     for (const key of PRESET_PRESERVE) next[key] = current[key];
+    for (const key in LOOKS) next[key] = p.values[key] ? Object.assign({}, current[key], p.values[key]) : current[key];
     const result = applySnapshot(next, { scope: chosenScope, render: false });
     activePreset = id; render(); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + (result.durable ? "." : " for this session; browser storage is unavailable.")); return true;
   }
@@ -184,7 +187,7 @@ const AppearanceStudio = (function () {
     else if (previewPage === "select") { plate.append(node("h3", "", "TRACK SELECTOR"), node("p", "", "CLASSICS     SEASON")); for (const name of ["MONZA", "SUZUKA", "MONACO"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "garage") { plate.append(node("h3", "", "GARAGE"), node("p", "", "CAR SETUP")); for (const name of ["ENGINE", "AERO", "CHASSIS", "LIVERY"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "hud") {
-      plate.append(node("h3", "", s.hudProfile.toUpperCase() + " HUD"), node("div", "as-preview-door", "P3     LAP 4 / 12"), node("div", "as-preview-speed", "287 " + (s.speedUnits === "mph" ? "KM/H → 178 MPH" : "KM/H")));
+      plate.append(node("h3", "", s.hudProfile.toUpperCase() + " HUD"), node("div", "as-preview-door", "P3     LAP 4 / 12"), node("div", "as-preview-speed", s.speedUnits === "mph" ? "178 MPH" : "287 KM/H"));
       if (s.hudGapsVis !== "off" && s.hudProfile !== "minimal") plate.appendChild(node("p", "", "P2 NOR +1.2     P4 LEC −0.8"));
       if (s.hudMetricsLayout !== "compact") plate.appendChild(node("p", "", s.hudMetricsLayout === "timing" ? "S1 28.412     S2 31.090" : "TYRES 82%     ENERGY 64%"));
     } else { plate.append(node("h3", "", "RACE RESULTS")); for (const name of ["1   NORRIS", "2   VERSTAPPEN", "3   YOU · +8 POSITIONS"]) plate.appendChild(node("div", "as-preview-door", name)); plate.appendChild(node("p", "", "CONTINUE")); }
@@ -280,9 +283,18 @@ const AppearanceStudio = (function () {
     // copy of theme, accents, sizes and contrast; the studio adopts them rather
     // than building second rows. HUD style / size / layout and reduce motion
     // live on HUD & CAMERA and ACCESSIBILITY: the studio jumps there.
-    const adopt = (box, id) => { const home = document.querySelector("#" + id); if (home) box.appendChild(home); };
+    const adopt = (box, id) => { const home = document.querySelector("#" + id); if (home) box.appendChild(home); return home; };
     const jump = (box, text, page, target) => { const b = node("button", "as-jump", text + " \u203a"); b.className = "adv-more-btn"; b.type = "button"; b.dataset.settingsJump = page; b.dataset.jumpTarget = target; box.appendChild(b); };
-    const menu = group(controls, "MENU · GLOBAL"); adopt(menu, "pm-appearance-menu"); jump(menu, "REDUCE MOTION is in ACCESSIBILITY", "a11y", "pm-motion-sel");
+    const menu = group(controls, "MENU CUSTOMIZATION"); menu.id = "ap-menu-customization";
+    controls.insertBefore(menu, profile);
+    // Reuse the real editor door: its owner keeps Home-only gating, Escape
+    // and focus restoration, including after the door moves out of its fold.
+    if (typeof TitleLayout !== "undefined" && TitleLayout.build) TitleLayout.build();
+    const editMenu = adopt(menu, "pm-tl-edit"); if (editMenu) editMenu.textContent = "EDIT MAIN MENU";
+    menu.appendChild(node("p", "as-note", "From Home, move and size buttons, title and artwork. Landscape and portrait save separately."));
+    const titleScreen = adopt(menu, "pm-titlescreen"); if (titleScreen) titleScreen.dataset.studioHome = "title";
+    adopt(menu, "pm-appearance-menu");
+    jump(menu, "REDUCE MOTION is in ACCESSIBILITY", "a11y", "pm-motion-sel");
     const hud = group(controls, "RACE HUD"); adopt(hud, "pm-appearance-hud"); jump(hud, "HUD STYLE is in HUD & CAMERA", "display", "pm-hudprofile-sel"); jump(hud, "HUD SIZE is in HUD & CAMERA", "display", "pm-hudscale"); jump(hud, "HUD LAYOUT is in HUD & CAMERA", "display", "pm-hudmetrics-sel");
     const sceneBox = group(controls, "SCENE · HOME"); choice(sceneBox, "Scene", "homeScene", [["auto", "Mix environments"], ["garage", "Garage"], ["night", "Night garage"], ["studio", "Studio"], ["track", "Circuit"], ["pitlane", "Pit lane"], ["static", "Static"], ["photo", "My photo"]]); choice(sceneBox, "Home camera", "homeCamera", [["auto", "Auto"], ["hero", "Hero"], ["front", "Front"], ["side", "Side"], ["rear", "Rear"]]); choice(sceneBox, "Background motion", "backgroundMotion", [["still", "Off"], ["ambient", "On"]]); ui.sceneNote = node("p", "as-note"); sceneBox.append(ui.sceneNote, button("PHOTO STUDIO & MY BACKGROUND", () => { if (hooks.openPhoto) hooks.openPhoto(); else say("Photo Studio becomes available after the game finishes loading."); }));
     ui.photoBox = node("section", "as-photo-picker"); ui.photoBox.setAttribute("aria-label", "Saved menu background photos");
@@ -334,6 +346,7 @@ const AppearanceStudio = (function () {
     }
     render();
     if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
+      { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
       { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system colour color" },
       { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
       { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },
@@ -350,6 +363,6 @@ const AppearanceStudio = (function () {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
     else initUI();
   }
-  return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
+  return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, PRESET_PRESERVE, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
     applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, attach, setPreviewFrame, notify: say, initUI });
 })();

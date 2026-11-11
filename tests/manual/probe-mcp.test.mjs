@@ -1,6 +1,6 @@
-// probe-mcp.test.mjs — unified Chrome DevTools + TinyFish bridge, CLI ONLY.
+// probe-mcp.test.mjs — the Chrome DevTools bridge, CLI ONLY (its tinyfish_* half left 2026-11-03).
 // Not MCP-attached since 2026-09 (.mcp.json is apex-tools / playwright-official
-// / chrome-devtools). Does NOT launch Chromium or hit TinyFish (CI-safe). The
+// / chrome-devtools). Does NOT launch Chromium (CI-safe). The
 // chrome-start daemon + call auto-routing is why the CLI stays. Lives in
 // tests/manual/ (2026-09-10): `node --test tests/manual/probe-mcp.test.mjs`,
 // gated nowhere; the mcp-cli / gfx-probe / Chrome-flag assertions are in
@@ -22,10 +22,10 @@ test("probe-mcp.py exists and says it is a CLI, not an attached server", () => {
   const src = fs.readFileSync(PROBE, "utf8");
   assert.match(src, /NOT MCP-ATTACHED/);
   assert.match(src, /chrome_/);
-  assert.match(src, /tinyfish_/);
   assert.match(src, /def serve|cmd_serve|"serve"/);
   assert.match(src, /chrome-devtools-mcp\.sh|cdmcp/);
-  assert.match(src, /tinyfish-mcp\.sh/);
+  assert.ok(!/class TinyfishBackend|TINYFISH_SH|MOCK_TINYFISH/.test(src), "the tinyfish backend is gone");
+  assert.equal(fs.existsSync(path.join(ROOT, "tools/mcp", "tinyfish-mcp" + ".sh")), false);   // docs-integrity: not a path literal
 });
 
 test(".mcp.json does NOT register probe — chrome-devtools is the attached Chrome MCP", () => {
@@ -34,6 +34,7 @@ test(".mcp.json does NOT register probe — chrome-devtools is the attached Chro
   assert.deepEqual(Object.keys(raw.mcpServers).sort(), [
     "apex-lsp",
     "apex-tools",
+    "browserstack",
     "chrome-devtools",
     "js-debugger",
     "playwright-official",
@@ -50,9 +51,8 @@ test(".mcp.json does NOT register probe — chrome-devtools is the attached Chro
   assert.match(help.stdout, /not in \.mcp\.json/);
 });
 
-test("probe-mcp status stays usable when tinyfish is down", () => {
+test("probe-mcp status answers from the chrome wrapper alone", () => {
   const src = fs.readFileSync(PROBE, "utf8");
-  assert.match(src, /tinyfish DOWN/);
   assert.match(src, /return 0 if r\.returncode == 0 else 1/);
   const r = spawnSync("python3", [PROBE, "status"], {
     encoding: "utf8",
@@ -61,7 +61,8 @@ test("probe-mcp status stays usable when tinyfish is down", () => {
   });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /=== chrome-devtools ===/);
-  assert.match(r.stdout, /=== tinyfish ===/);
+  assert.match(r.stdout, /=== chrome daemon ===/);
+  assert.doesNotMatch(r.stdout, /tinyfish/);
 });
 
 test("probe-mcp help lists serve / list-tools / call / status", () => {
@@ -72,10 +73,9 @@ test("probe-mcp help lists serve / list-tools / call / status", () => {
   assert.match(r.stdout, /call/);
   assert.match(r.stdout, /status/);
   assert.match(r.stdout, /chrome_/);
-  assert.match(r.stdout, /tinyfish_/);
 });
 
-test("probe-mcp route resolves chrome_ and tinyfish_ prefixes", () => {
+test("probe-mcp route resolves the chrome_ prefix and refuses the retired tinyfish_ one", () => {
   const r = spawnSync("python3", [PROBE, "route", "chrome_navigate_page"], {
     encoding: "utf8",
   });
@@ -86,9 +86,8 @@ test("probe-mcp route resolves chrome_ and tinyfish_ prefixes", () => {
   const t = spawnSync("python3", [PROBE, "route", "tinyfish_fetch_content"], {
     encoding: "utf8",
   });
-  assert.equal(t.status, 0, t.stderr);
-  assert.match(t.stdout, /backend=tinyfish/);
-  assert.match(t.stdout, /tool=fetch_content/);
+  assert.notEqual(t.status, 0);
+  assert.match(t.stderr, /tinyfish_\* left on 2026-11-03/);
 });
 
 test("probe-mcp route rejects unprefixed tool names", () => {
@@ -96,7 +95,7 @@ test("probe-mcp route rejects unprefixed tool names", () => {
     encoding: "utf8",
   });
   assert.notEqual(r.status, 0);
-  assert.match(`${r.stdout}\n${r.stderr}`, /chrome_|tinyfish_/);
+  assert.match(`${r.stdout}\n${r.stderr}`, /chrome_/);
 });
 
 test("probe-mcp serve handshake (mock) advertises prefixed tools", () => {
@@ -145,9 +144,8 @@ test("probe-mcp serve handshake (mock) advertises prefixed tools", () => {
   const names = (listed.result.tools || []).map((t) => t.name);
   assert.ok(names.includes("chrome_navigate_page"), names.slice(0, 10));
   assert.ok(names.includes("chrome_evaluate_script"), names);
-  assert.ok(names.includes("tinyfish_fetch_content"), names);
-  assert.ok(names.includes("tinyfish_search"), names);
-  assert.ok(names.length >= 50, `expected full catalog, got ${names.length}`);
+  assert.ok(!names.some((n) => n.startsWith("tinyfish_")), names);
+  assert.ok(names.length >= 40, `expected full catalog, got ${names.length}`);
   const failed = JSON.parse(lines[2]);
   assert.equal(failed.result.isError, true,
     "stdio MCP must preserve tool-level isError instead of inventing a JSON-RPC error");
@@ -245,7 +243,7 @@ test("chrome daemon (mock): healthz, /call routing, CLI auto-route to a live dae
 });
 
 test("tools/list without mock does not spawn backends (Cursor discovery)", () => {
-  // Live ensure() used to start Chromium + tinyfish ensure during tools/list.
+  // Live ensure() used to start Chromium during tools/list.
   // Cursor then marked project-0-f1-game-probe as error and cached 0 tools.
   const env = { ...process.env };
   delete env.PROBE_MCP_MOCK;
@@ -263,14 +261,13 @@ test("tools/list without mock does not spawn backends (Cursor discovery)", () =>
   const listed = JSON.parse(lines[1]);
   const names = (listed.result.tools || []).map((t) => t.name);
   assert.ok(names.includes("chrome_navigate_page"), names.slice(0, 8));
-  assert.ok(names.includes("tinyfish_fetch_content"), names.slice(0, 8));
-  assert.ok(names.length >= 50, `static catalog too small: ${names.length}`);
+  assert.ok(names.length >= 40, `static catalog too small: ${names.length}`);
 });
 
-test("tools/list still advertises both catalogs when a backend ensure() throws", () => {
-  // The cloud host (apex-wrap) lists tools ONCE. A throw from tinyfish.ensure()
+test("tools/list still advertises the catalog when the backend ensure() throws", () => {
+  // The cloud host (apex-wrap) lists tools ONCE. A throw from a backend ensure()
   // used to empty the whole catalog for the session. FAIL_BACKENDS forces that
-  // path; the static fallback must still name chrome_* and tinyfish_*.
+  // path; the static fallback must still name chrome_*.
   const env = { ...process.env, PROBE_MCP_FAIL_BACKENDS: "1" };
   const init = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
   const tools = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
@@ -285,8 +282,7 @@ test("tools/list still advertises both catalogs when a backend ensure() throws",
   const listed = JSON.parse(lines[1]);
   const names = (listed.result.tools || []).map((t) => t.name);
   assert.ok(names.includes("chrome_navigate_page"), names.slice(0, 8));
-  assert.ok(names.includes("tinyfish_fetch_content"), names.slice(0, 8));
-  assert.ok(names.length >= 50, `fallback catalog too small: ${names.length}`);
+  assert.ok(names.length >= 40, `fallback catalog too small: ${names.length}`);
 });
 
 test("probe-mcp help documents the persistent daemon commands", () => {

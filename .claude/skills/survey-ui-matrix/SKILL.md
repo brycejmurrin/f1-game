@@ -1,128 +1,76 @@
 ---
 name: survey-ui-matrix
-description: "Use when reviewing the whole UI (every screen) across phone landscape 844x390, orientations, viewport shapes, UI scale and pointer type: clipping, truncation, tap targets, overflow, screenshots — before a restructure or to prove a CSS change regressed nothing. One cramped screen → ui-menu-a11y; restructure → css-play."
+description: "Use when reviewing every screen across phone landscape (844x390), orientations, viewport sizes, UI scale and touch vs mouse, or proving a CSS change broke nothing. Not for: one cramped screen → ui-menu-a11y; restructuring → css-play; game screenshots → playwright-probe."
 ---
 
 # Surveying the whole UI across the whole matrix
 
-**One rule:** every `layout-audit.mjs` / `menu-mock.mjs` call except `--help` is the
-PARENT's — `bash-guard.sh` matches the tool name in a subagent, not whether it launches Chromium, so
-`--list`, `--report` and `--diff` (no browser) are parent-only too (AGENTS.md rule 10). Delegate only
-artifact analysis: subagents return defect tables with screenshot paths and missing cells; the parent
-applies fixes via `css-play` or `ui-menu-a11y`.
+A layout bug is never "on a screen": it is a **cell** of screen × viewport × scale × pointer.
+One CLI owns the menu matrix: `tools/ui/layout-audit.mjs`. The race HUD has its own (`apex_hud_survey`, below).
+The phone-landscape contract (the ONE layout per screen, the windows to test, the ranked gaps) is
+`docs/notes/UI-CONTRACT-2026-11-06.md`; how the scaling system got here is `docs/notes/UI-HISTORY-2026-11-06.md`.
 
-## Default-first visual verification
+## Gotchas
 
-Bryce's profile first: 844×390 landscape, touch (`ios-iphone-landscape-844`; fleet-core). Then fresh shipped
-appearance and device input defaults (AGENTS.md §Seeing the game); stress scales,
-imported settings and legacy looks are separately labelled comparisons. Record requested scale and painted zoom.
-Inspect original full-size images with DOM/computed-style evidence. Thumbnails and zero inspector findings are
-insufficient. Exercise real scrolling both ways, the final action, keyboard focus visibility, and state retention
-through resizing and disclosure changes. Capture initial, mid-scroll, end, return, open/closed, and focus/rotation checkpoints. Show individual original captures when reporting usability.
+- **Parent-only.** In a subagent `bash-guard.sh` §2 refuses by name every `tools/ui/*audit*.mjs`
+  (layout-audit, fit-audit, audit-diff) and every `tools/shot/*.mjs` but frame-report/cam-corners/cam-motion
+  (hud-mock, hud-survey, publish-evidence), even `--help`/`--list`/`--diff`. `menu-mock.mjs` and
+  `explorer.mjs` are not matched but launch Chromium: parent-only by AGENTS.md rule 10. Subagents analyse
+  finished artifacts only.
+- **Bryce's cell is not the default.** `--viewport`'s default (`--help`) is not Bryce's 844x390 profile,
+  `ios-iphone-landscape-844` (AGENTS.md §Critical conventions). Name it explicitly, and run it first. For
+  HUD/touch reviews seed his real export `tests/data/settings-defaults-export.json` (`hud-survey.mjs
+  --settings`, `explorer.mjs --settings`); layout-audit and menu-mock boot fresh shipped settings.
+- **Sizes are catalog names, scale is a percent.** `--scale=125`, not `1.25` (range: `tools/ui/ui-scale-axis.mjs`);
+  viewports are `VIEWPORTS` names in `tools/ui/menu-screens.mjs` only. A free-form size needs a new `VIEWPORTS`
+  row. `menu-fit.mjs` is DEPRECATED except `--safe=` notch insets.
+- **A run MERGES into `artifacts/layout-audit/audit.json`** by screen|viewport(|theme, `--theme=dark,light`): copy it to `audit.before.json`
+  BEFORE the edit, or the regression baseline is gone.
+- **Zero findings is not green.** `ui-audit.spec.js` asserts nothing; thumbnails and an empty inspector are
+  insufficient. A skipped or timed-out cell is unmeasured, never a pass.
+- **One tap-floor rule:** `tools/ui/tap-floor.mjs` (`judgeTap`, `measureTapTarget`; test
+  `tests/unit/ui-reset-tap-floor.test.mjs`) is what every tool judges by; a hand probe installs it, never
+  re-derives it. Also hide `#game` before any capture and wait out the dialog transition ([probes.md](references/probes.md) §1).
 
-## Prerequisites
+## Workflow
 
-`apex_ui_mission_plan` (MCP) plans the matrix — screens × viewports × pointer — before any capture.
+1. **Plan the matrix** (no browser, parent-only): `node tools/ui/layout-audit.mjs --list`, and cross-check
+   the screen roots in `index.html` against `SCREENS` ([setup.md](references/setup.md) §Enumerate).
+2. **Baseline** (if proving a CSS change; needs an earlier run's `audit.json`, else take the baseline from step 3 first): `cp artifacts/layout-audit/audit.json artifacts/layout-audit/audit.before.json`.
+3. **Bryce's cell first**, pictures AND DOM, as ONE background task (AGENTS.md rule 4), after
+   `mkdir -p artifacts/logs`:
+   `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*' --shots --dom > artifacts/logs/layout-audit-844.log 2>&1`.
+   Browser runs need `/proc/loadavg` < 3 and no live Playwright run (AGENTS.md rules 5, 7).
+4. **Widen to the scoped axes** (a background task with a log, like step 3), e.g. the whole "0.8-1.5x, touch + mouse" ask in one run:
+   `node tools/ui/layout-audit.mjs --screens='*' --viewports='ios-*,desktop-*' --scale=80,100,150 --shots`.
+   Fast look first with `menu-mock.mjs`; title-path only is `--survey` (`npm run ui:survey`), all menus fast
+   is `--gallery` ([cli.md](references/cli.md)).
+5. **Interactive checkpoints** layout-audit cannot give (scroll both ways, final action, focus, rotation /
+   roundtrip): `apex_ui_inspect`, `tools/ui/explorer.mjs`, or MCP after the batch job exits
+   ([verification.md](references/verification.md) §Default-first).
+6. **Stop** when every scoped cell has a row or a "clean" mark. The verdict is the defect table sorted by
+   failure mode ([probes.md](references/probes.md) §4), not a pass count. Fixes go through `css-play` or `ui-menu-a11y`.
+7. **Prove no regression**: re-run the same scope, then
+   `node tools/ui/layout-audit.mjs --diff=artifacts/layout-audit/audit.before.json` (exit 1 on a new finding;
+   [verification.md](references/verification.md) §Regression).
+8. **Hand off**: publish selected captures with
+   `node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug> --publish`; the PR body
+   lists unmeasured cells as not run and records the `= diff` line. At most two read-only reviewers, over finished artifacts.
 
-Browsers and Playwright MCP come from the SessionStart hook (AGENTS.md rule 1).
+## References
 
-A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
-viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
-
-Run Bryce's cell FIRST — it is NOT the default (`--viewport` defaults to `ios-iphone-landscape`, 852x393):
-`node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*'`.
-
-```sh
-# NO BROWSER (exits before any launch; all but --help still parent-only): --help, --list, --report, --diff
-node tools/ui/layout-audit.mjs --help
-node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (counts are in its output)
-# BROWSER (Chromium, as do fit-audit/menu-fit below unless --help; /proc/loadavg < 3, no Playwright run live;
-#   at >= 3 reap your own Chrome (AGENTS.md rule 7), wait once, else report the cells unmeasured):
-node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
-node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
-node tools/ui/layout-audit.mjs --screen=settings # one cell
-node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
-# Numbers companion (type/spacing floors): node tools/ui/fit-audit.mjs
-# Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21
-```
-
-Axes: pointer = viewport family (`ios-*` touch/coarse, `desktop-*` mouse/fine);
-orientation = `*-portrait` / `*-landscape` names; no ultrawide row exists — add one to
-`VIEWPORTS` (`tools/ui/menu-screens.mjs`). The whole "0.8-1.5x, touch + mouse" ask is one run:
-`node tools/ui/layout-audit.mjs --screens='*' --viewports='ios-*,desktop-*' --scale=80,100,150 --shots`.
-Which tool: menu-mock = look fast; layout-audit = numbers of record; fit-audit = type/spacing floors; menu-fit = free-form size.
-
-Flags (header of `layout-audit.mjs`): `--screens=a,b` / `--viewports=ios-*`
-(wildcard = prefix), `--scale=100,130` (40-200), `--circuits=`, `--shots`, `--dom`,
-`--jobs=N`, `--gallery`, `--screen=ID` + `--viewport=NAME`, `--force`, `--report`
-(summarize the last gallery), `--diff=` (below), `--out=DIR`.
-
-**Pseudo-locale stress:** pass `--lang=en-XA` on any layout-audit run (geometry,
-`--gallery`, or `--screen=`). The harness boots with `?lang=en-XA` so `I18n` expands
-strings via `js/core/i18n-pseudo.js` — use this when hunting clipping, truncation,
-and tap targets on longer labels before translating real locales.
-
-`--scale` takes a PERCENT (`--scale=125`; `1.25` throws). Viewports are catalog
-names only (`VIEWPORTS`, `menu-screens.mjs`; shortest is 852x344), so a free-form
-size such as 568x320 is `menu-fit.mjs 568x320 --scale=125` (its own 18 screens,
-not the full catalog) or `fit-audit.mjs --sizes=568x320 --scale=125` (12), or a new
-`VIEWPORTS` row for the full catalog.
-
-Order: 1. `--list` and diff against `index.html` dialogs (no browser, but parent-only; setup.md
-§Enumerate). 2. Measure/capture (browser-only). 3. Stop when every cell of
-screens x viewports x scales you scoped has a row or a "clean" mark; the verdict
-is the defect table sorted by failure mode (probes.md §6), not a pass count.
-
-**Proving a CSS change regressed no other shape.** Before editing: `cp artifacts/layout-audit/audit.json
-artifacts/layout-audit/audit.before.json` (a run MERGES into audit.json by screen|viewport, so
-the baseline is gone once you re-run). After: re-run the same `--screens/--viewports/--scale`
-scope, then `node tools/ui/layout-audit.mjs --diff=artifacts/layout-audit/audit.before.json`
-(no browser, parent-only): `+`/`-` lines per cell, `= diff ok|NEW` last, exit 1 on any new
-clipped/offscreen/docOverflowX/tinyTaps/underHardware/starved/error finding; a skipped cell is
-listed as unmeasured, never a pass. Add `fit-audit.mjs --scale=` for type/spacing floors (no
-exit code) and `test:baseline` (6 pixel PNGs) for identity. Record baseline path, scope and the
-`= diff` line.
-
-## Fastest look at the MENUS and sheets: `tools/ui/menu-mock.mjs` (~1-2 s a cell)
-
-The same trick for every `menu-screens.mjs` screen: 3D off, one boot per pointer shape (touch-mobile / pointer-desktop),
-viewport + safe-area insets changed in place, JPEG at device scale 1, labelled boxes (controls yellow, tap/off-screen red),
-`index.md` with tap / off-screen / clipped / small-text per cell and a `sheet.jpg`. 24 cells (8 screens x 3 viewports)
-took 57 s cold and 1 s warm. Look-fast only: `layout-audit` / `fit-audit` stay the numbers of record.
-
-```sh
-node tools/ui/menu-mock.mjs                                                                  # title,settings,racesettings,results,quali,pause @ 844x390
-node tools/ui/menu-mock.mjs --screens=select,garage --viewports='ios-*,desktop-1280x800' --format jpeg
-node tools/ui/menu-mock.mjs --screens='*' --viewports=ios-iphone-landscape-844 --list         # cells, no browser (parent-only)
-```
-Shared pieces (held rAF, boxes, CDP capture, contact sheet, content-hash cache) live in `tools/lib/ui-mock-core.mjs`.
-
-Interactive poking: Playwright MCP (`tools/mcp/playwright-mcp.sh`) or Chrome DevTools MCP.
-
-## Hand-off and evidence
-
-Shape (one parent, at most two reviewers): the parent runs the survey as ONE background job logging to
-`artifacts/logs/` (AGENTS.md rule 4) and spawns at most two read-only reviewers over the finished
-artifacts — never over a live run. Publish the selected captures with
-`node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug> --publish`
-(`docs/EVIDENCE-STORAGE.md`); the PR body links the release assets, lists unmeasured cells as not run,
-and records the `= diff` line when proving no regression.
-
-## Load on demand
-
-- Race HUD: [`references/hud-mock.md`](references/hud-mock.md) (look-fast), [`references/hud-survey.md`](references/hud-survey.md) (devices x cameras x settings; MCP `apex_hud_survey` / `apex_hud_shot` / `apex_hud_mock`)
-- Probe recipes and viewport catalogue: [`references/probes.md`](references/probes.md)
-- Environment setup (browsers, MCP): [`references/setup.md`](references/setup.md)
-
-## Capture identity
-
-For device-profile captures use the shared `tools/lib/ui-device-profile.mjs`
-resolver rather than constructing `{hasTouch, viewport}` alone. See
-[`MOBILE-UI-EMULATION.md`](../../../docs/notes/MOBILE-UI-EMULATION.md).
-Explorer supports `--device 'iPhone 13' --settings FILE` for a supplied baseline;
-without `--settings` the context uses fresh shipped settings. Follow the user's
-requested baseline. Preserve the import result and actual scale in evidence.
-Full-screen geometry cells, browser-content device profiles, custom CSS resize
-stress cases and DPR1 optimized probes are distinct. Do not infer CSS dimensions
-or browser Page Zoom from screenshot pixel dimensions. Record the actual engine;
-iPhone UA in Chromium does not establish Safari behavior.
+- [references/cli.md](references/cli.md): read when choosing a tool or flag: layout-audit flags, the axes,
+  free-form sizes, pseudo-locale, `menu-mock.mjs`, which tool does what.
+- [references/setup.md](references/setup.md): read before the first MCP measurement (server port, the
+  four-step ritual, instrument check) or when enumerating screens from source.
+- [references/probes.md](references/probes.md): read when a hand-rolled measurement looks wrong, when
+  reaching or resetting a screen, or when a CSS change "did nothing".
+- [references/verification.md](references/verification.md): read when judging usability from captures,
+  proving no regression, recording device-profile identity, or writing the evidence hand-off.
+- [references/hud-mock.md](references/hud-mock.md): read when you need a fast look at the race HUD layout
+  (MCP `apex_hud_mock`).
+- [references/hud-survey.md](references/hud-survey.md): read when the HUD must be measured across devices ×
+  cameras × settings with the 3D frame behind it (MCP `apex_hud_survey` / `apex_hud_shot`).
+- Other skills: cache-bust rules [../check-changes/references/bump.md](../check-changes/references/bump.md);
+  Chrome MCP setup and park-before-Playwright [../mcp-probe/references/traps-chrome.md](../mcp-probe/references/traps-chrome.md);
+  dead-space-beside-cramped design findings [../css-play/references/restructure.md](../css-play/references/restructure.md).

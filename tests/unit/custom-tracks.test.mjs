@@ -16,6 +16,10 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { bootEditor } from "../helpers/editor-vm.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { cssRules, ruleFor } from "../helpers/css-rules.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -172,6 +176,30 @@ test("fractional hill lengths keep the saved id through registration and reload"
   assert.equal(reloaded.C.list().length, 1, "re-saving the input never duplicates the circuit");
 });
 
+test("non-flat node heights drop legacy cosine elevations (no stack on the built road)", () => {
+  const { C, Tracks } = boot();
+  const pts = ellipse();
+  const heights = pts.map((_, i) => (i === 10 ? 15 : 0));
+  const elev = [{ s: 0.25, halfM: 250, rise: 20 }];
+  const elevOnly = C.sanitize(design({ pts, elevations: elev }));
+  const both = C.sanitize(design({ pts, heights, elevations: elev }));
+  assert.ok(elevOnly.elevations && elevOnly.elevations.length === 1, "flat heights keep cosine hills");
+  assert.equal(both.elevations, null, "sanitize drops elevations when heights move a node");
+  assert.ok(both.heights[10] > 0);
+  const range = (tr) => {
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < tr.n; i++) { lo = Math.min(lo, tr.py[i]); hi = Math.max(hi, tr.py[i]); }
+    return hi - lo;
+  };
+  const rawBoth = C.toRaw(both);
+  assert.equal(rawBoth.elevations, null, "toRaw also refuses to stack");
+  const hOnly = C.sanitize(design({ pts, heights }));
+  const from = (raw) => Tracks.buildCenterline(Tracks._vmContext.TrackDef.fromRaw(raw), { line: false });
+  const trH = from(C.toRaw(hOnly));
+  const trBoth = from(rawBoth);
+  assert.ok(Math.abs(range(trBoth) - range(trH)) < 0.05, "built relief matches heights-only, not heights+cosine");
+});
+
 test("hill canonicalization preserves stable legacy geometry and sampled identities", () => {
   const { C } = boot();
   const legacy = design({ elevations: [{ s: 0.5, halfM: 23, rise: 1.25 }],
@@ -235,16 +263,41 @@ test("toRaw hands the factory what a circuit file would author", () => {
   assert.equal(T.get("nope"), T.PRESETS.parkland, "unknown preset → parkland");
 });
 
-test("the picker knows the custom tail (source contract)", () => {
-  const src = read("js/ui/select-screen.js");
-  assert.match(src, /\["custom", "MY CIRCUITS"\]/, "a MY CIRCUITS chip");
-  assert.match(src, /filter === "season"\) return !\(t\.classic \|\| t\.custom\)/, "SEASON hides customs");
-  assert.match(src, /filter === "custom"\) return !!t\.custom/, "MY CIRCUITS shows only customs");
-  assert.match(src, /trb trb-custom/, "the CUSTOM badge");
-  assert.match(read("css/race-setup.css"), /\.trb-custom \{/, "…styled");
-  assert.match(read("js/career/season-ui.js"), /!t\.custom && !used\.has/, "the season shelf never offers a custom");
-  assert.match(read("js/net/lobby-settings.js"), /Tracks\.LIST\[d\.track\]\.custom\) return null/, "the guest refuses a custom index without a circuit body");
-  assert.match(read("js/core/lazy-bundles.js"), /!def\.scenery && !sceneryResident/, "ensureScenery fetches nothing for an inline closure");
+// The custom tail of the picker, run as behaviour over the real registry (a
+// saved design installed by CustomTracks into the engine's Tracks.LIST). The
+// other three surfaces that once rode a source regex here are behaviour tests
+// beside their modules: the season shelf (setup-screens-state "never offers a
+// custom circuit"), the VS FRIEND guest (lobby-settings "a custom LIST index
+// without a circuit body is refused") and ensureScenery (lazy-bundles-prefetch
+// "inline scenery closure fetches nothing").
+test("the picker's filters and tile know a custom circuit (select-screen trackInFilter / trackTile over the real LIST)", () => {
+  const ev = bootEditor({ customTracks: { v: 1, items: [design()] } });
+  const sel = read("js/ui/select-screen.js");
+  const dom = makeDom();
+  const sb = { document: dom.document, G: { daily: null }, favList: () => [], Flags: { svg: () => "" }, A11yOpts: undefined };
+  const filters = /^const trackFilters = .*;$/m.exec(sel);
+  assert.ok(filters, "the chip table");
+  // SEASON / CLASSICS go through calendarGroup over SeasonCal's id set (W34); no SeasonCal here,
+  // so the `classic` flag decides, as calendarGroup's fallback does.
+  const calendar = ["const seasonIds = ", "const classicBadge = "].map((h) => {
+    const m = new RegExp("^" + h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ".*;$", "m").exec(sel);
+    assert.ok(m, h);
+    return m[0].replace(/^const/, "var");
+  }).join("\n") + "\n" + fnSource(sel, "function calendarIdSet(") + "\n" + fnSource(sel, "function calendarGroup(");
+  vm.runInNewContext(filters[0].replace(/^const/, "var") + "\n" + calendar + "\n" + fnSource(sel, "function trackInFilter(") + "\n" + fnSource(sel, "function trackTile("), sb, { filename: absSrc("js/ui/select-screen.js") });
+  assert.ok(sb.trackFilters.some(([id, label]) => id === "custom" && label === "MY CIRCUITS"), "a MY CIRCUITS chip");
+  const L = ev.Tracks.LIST, custom = L.filter((t) => t.custom), classic = L.find((t) => t.classic && !t.custom);
+  assert.equal(custom.length, 1, "the saved design is on the LIST");
+  const ids = (f) => [...L.filter((t) => sb.trackInFilter(t, f, [])).map((t) => t.id)];
+  assert.deepEqual(ids("custom"), [custom[0].id], "MY CIRCUITS shows only customs");
+  assert.equal(ids("season").includes(custom[0].id), false, "SEASON hides customs…");
+  assert.equal(ids("season").includes(classic.id), false, "…and classics");
+  assert.ok(ids("all").includes(custom[0].id), "ALL keeps it");
+  const tile = sb.trackTile(custom[0], L.indexOf(custom[0]));
+  assert.equal(tile.dataset.kind, "custom");
+  const badges = [...tile.querySelectorAll(".trb")].map((b) => b.textContent);
+  assert.deepEqual(badges, ["CUSTOM"], "the CUSTOM badge, alone");
+  assert.ok(ruleFor(cssRules(read("css/race-setup.css")), ".trb-custom"), "…styled");
 });
 
 test("sanitize: bank angle in [1, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {
@@ -560,6 +613,15 @@ test("a TRACK DESIGNER retry after a partial load failure injects only the files
   assert.ok(!attempts[2].includes("js/editor/shape.js"), "a file that already ran is not re-injected");
   assert.deepEqual(redeclared, [], "no file was evaluated twice (no 'already declared' overlay)");
   assert.equal(evaluated.size, LAZY_EDITOR.length, "every file ran exactly once in the end");
+});
+
+test("a rejected editor load is not cached: the next ensureEditor retries", async () => {
+  const { ctx, C } = boot(); let calls = 0;
+  ctx.ApexRoster = { LAZY_EDITOR: ["js/editor/shape.js"], LAZY_EDITOR_EDGES: [] };
+  const api = C.create({ soundOn: false }, { load: () => (++calls === 1 ? Promise.reject(new Error("net")) : Promise.resolve(false)) });
+  await assert.rejects(api.ensureEditor(), /net/);
+  assert.equal(await api.ensureEditor(), false);
+  assert.equal(calls, 2, "the second call asked the loader again");
 });
 
 test("overlapping share-link decodes only open and strip the latest fragment", async () => {

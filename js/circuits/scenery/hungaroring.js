@@ -6,13 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["hungaroring"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
-              mountain, peak, ridge, tree, pine, bush, hedge, grandstand, grandstandEx, spectatorHill,
-              bleacher, broadcastCompound, cameraTower, building, motorhome, tower,
+      const { K, lapBounds, out, MAT, n, ds, pyMin, hash, every, backdrop, ridge, tree, bush, hedge, grandstandEx, spectatorHill,
+              bleacher, broadcastCompound, cameraTower,
               billboard, marshalPost, fence, guardrail, tyreWall,
-              anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
-              seat, foundation, cantilever, lampPost,
-              forestEdge, along, modelGroup, overheadSpan, groundPatch, groundedSegments,
+              anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, foundation, cantilever, lampPost,
+              forestEdge, modelGroup, overheadSpan, groundPatch, groundedSegments,
               recordBarrier, circuitKit, pal, ATM, terrainYAt } = api;
 
       // FRAMES. This file is authored against the scenery origin (sceneryStartFrac

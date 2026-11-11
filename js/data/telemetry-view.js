@@ -12,24 +12,41 @@ const DataTelemetryView = (function () {
     const { buildTransport, buildGauges, attachScrub, pauseAnim, paintFrame, updateTextSummary } = player;
     const fmtLap = (sec) => Dom.fmtLap(sec, "—");
 
+    // THE WINDOW IN THE CARD'S OWN PX (UI scaling contract gap 23). These canvases
+    // live inside the zoomed .dh-card, so a raw innerHeight * 0.38 painted 38 % of
+    // the SCREEN, not of the box the chart is drawn in — at UI SIZE 150 % the trace
+    // overran its card. The layout viewport (documentElement.client*, never the
+    // stale-on-launch inner*) divided by the host's zoom is the right box; the
+    // mini-dom tests (telemetry-view-resize, telemetry-trace) have only inner*.
+    let host = null;   // the detail pane being filled; CssZoom.of(host) is the card's zoom
+    function view() {
+      const d = typeof document !== "undefined" ? document.documentElement : null;
+      const win = typeof window !== "undefined" ? window : null;
+      const w = (d && d.clientWidth) || (win && win.innerWidth) || 0;
+      const h = (d && d.clientHeight) || (win && win.innerHeight) || 0;
+      const z = (host && typeof CssZoom !== "undefined" && CssZoom.of) ? CssZoom.of(host) : 1;
+      return { w: w / z, h: h / z };
+    }
     function shortLS() {
-      return typeof window !== "undefined" && window.innerHeight < 520 && window.innerWidth > window.innerHeight;
+      const v = view();
+      return v.h > 0 && v.h < 520 && v.w > v.h;
     }
     // A PORTRAIT PHONE has height to spare and no width. At the landscape
     // 190/600 a 336 px trace was 106 px tall: seven channels in a strip, the
     // two left axes printed over each other and the gap chart's title under
     // its own line. It scrolls anyway, so it gets a taller trace instead.
     function tallNarrow(w) {
-      return w < 480 && typeof window !== "undefined" && window.innerHeight > window.innerWidth * 1.2;
+      const v = view();
+      return w < 480 && v.h > v.w * 1.2;
     }
     function chartH(w, compact) {
       const base = Math.round(w * (tallNarrow(w) ? 0.56 : w < 480 ? 190 / 600 : 220 / 600));
-      if (compact && shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.38));
+      if (compact && shortLS()) return Math.min(base, Math.round(view().h * 0.38));
       return base;
     }
     function deltaH(w) {
       const base = Math.round(tallNarrow(w) ? Math.max(64, w * 0.2) : w * (72 / 600));
-      if (shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.12));
+      if (shortLS()) return Math.min(base, Math.round(view().h * 0.12));
       return base;
     }
 
@@ -42,13 +59,14 @@ const DataTelemetryView = (function () {
       const nameEl = el("span", "dh-tname", (t.d.name || dcode(t.d)));
       nameEl.title = t.d.name || dcode(t.d);
       ht.appendChild(nameEl);
-      if (dupNum[t.d.num] > 1 && t.sessionLabel) ht.appendChild(el("span", "dh-lane-ses", t.sessionLabel));
+      if (DataTabUtils.sessionSuffix(dupNum, t.d.num, t.sessionLabel)) ht.appendChild(el("span", "dh-lane-ses", t.sessionLabel));
       if (role) ht.appendChild(el("span", "dh-tsect", role));
       buildTail(ht);
       return ht;
     }
 
     function buildTelemetryView(detail, tels) {
+      host = detail;
       lifecycle.stop();
       const laps = tels.filter(function (t) { return t.car && t.car.length; });
       if (!laps[0]) {
@@ -118,7 +136,10 @@ const DataTelemetryView = (function () {
       view.updateSummary = function () { updateTextSummary(view); };
       // per-driver visibility: visible = primary (solid), visibleC = compare (dashed)
       view.visibleC = {};
-      CHANNELS.forEach(function (ch) { view.visible[ch.id] = view.visibleC[ch.id] = !ch.off; });
+      view.hasDrs = DataTelemetryModel.hasDrs(view.laps);
+      CHANNELS.forEach(function (ch) {
+        view.visible[ch.id] = view.visibleC[ch.id] = !ch.off && (ch.id !== "drs" || view.hasDrs);
+      });
       view.colP = view.laneCols[0]; view.colC = view.laneCols[1] || null;
       view._dup = _dupForView;
       function scan(car) {
@@ -193,7 +214,7 @@ const DataTelemetryView = (function () {
       if (view.compare) {
         // driver key: each lane's code chip in its own trace/dot colour
         view.laps.forEach(function (t, i) {
-          const badge = (dupNum[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
+          const badge = DataTabUtils.sessionSuffix(dupNum, t.d.num, t.sessionLabel);
           const chip = el("span", "dh-codechip", dcode(t.d) + badge + " · " + laneRole(i));
           chip.setAttribute("aria-label", dcode(t.d) + " " + laneRole(i).toLowerCase());
           const col = view.laneCols[i];
@@ -203,6 +224,7 @@ const DataTelemetryView = (function () {
         });
       }
       CHANNELS.forEach(function (ch) {
+        if (ch.id === "drs" && !view.hasDrs) return;   // no DRS in the data (2026): no toggle for it
         function toggleBtn(cls, on, title) {
           const b = el("button", "dh-legend-item " + cls + (on ? "" : " dh-off"));
           b.type = "button"; b.title = title;
@@ -282,7 +304,7 @@ const DataTelemetryView = (function () {
         }
         // one map-legend chip per lane, in that lane's colour
         view.laps.forEach(function (t, i) {
-          const badge = (dupNum[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
+          const badge = DataTabUtils.sessionSuffix(dupNum, t.d.num, t.sessionLabel);
           mkey.appendChild(mchip(view.laneCols[i], dcode(t.d) + badge + " · " + laneRole(i)));
         });
         // track colouring key: slow (blue) -> fast (red), sectors marked S2/S3

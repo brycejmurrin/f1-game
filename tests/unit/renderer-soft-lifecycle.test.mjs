@@ -44,7 +44,7 @@ function postHarness(factoryThrows = false) {
       if (this.depthTexture) this.depthTexture.dispose();
     }
   }
-  class QuadMesh { constructor() { this.material = null; } }
+  class QuadMesh { constructor() { this.material = null; } render() {} }
   const THREE = {
     DataTexture, DepthTexture, RenderTarget, QuadMesh, Texture,
     NoColorSpace: "none", HalfFloatType: "f16", UnsignedByteType: "u8",

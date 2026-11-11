@@ -23,18 +23,18 @@ function ctx2d(calls) {
     clearRect: () => { calls.clear++; }, fillRect() {}, fill() {}, stroke: () => { calls.stroke++; },
     save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc: () => { calls.arc++; },
     moveTo() {}, lineTo() {}, closePath() {},
-    createRadialGradient: () => grad, createLinearGradient: () => grad,
+    createRadialGradient: () => { calls.gradients++; return grad; }, createLinearGradient: () => { calls.gradients++; return grad; },
     createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
     getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {},
   };
 }
 
-function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
-  const calls = { clear: 0, stroke: 0, arc: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
-  const live = { visor };
+function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "", G = undefined } = {}) {
+  const calls = { clear: 0, stroke: 0, arc: 0, gradients: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
+  const live = { visor, helmet };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
-    hasAttribute: (k) => k === "data-helmet-cam" && helmet,
+    hasAttribute: (k) => k === "data-helmet-cam" && live.helmet,
     setAttribute: (k, v) => { calls.attrs[k] = v; },
     removeAttribute: (k) => { delete calls.attrs[k]; },
     style: { setProperty: (k, v) => { calls.props[k] = v; }, removeProperty: (k) => { delete calls.props[k]; } },
@@ -56,6 +56,7 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
     CockpitOpts: { visor: () => live.visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
     ...(picker ? { RendererPicker: picker } : {}),
+    ...(G ? { G } : {}),
   });
   seedLog(ctx);
   const V = vm.runInContext(read("js/fx/visor-optics.js") + ";VisorOptics", ctx, { filename: absSrc("js/fx/visor-optics.js") });
@@ -67,6 +68,13 @@ const NIGHT = { ...DAY, sunDir: [0, -0.4, 0.9], sunColor: [0.02, 0.02, 0.03], am
 // One stride-15 lamp at (x, z), 10 m up, aimed down: [x,y,z, r,g,b, rad, dir, cosInner, cosOuter, bleed, vol, glare].
 // The colour is the fixture's energy (track-lights.js ePhys sizes a flood in the thousands).
 const lamp = (x, z, rgb = [12000, 11500, 10000]) => [x, 10, z, ...rgb, 40, 0, -1, 0, 0.9, 0.5, 0.1, 0, 1];
+
+test("visor public surface drops the unused _reset test hook", () => {
+  const { V } = load();
+  assert.equal(V._reset, undefined, "VisorOptics._reset had zero callers — removed from the export");
+  assert.equal(typeof V.sceneFromG, "function");
+  assert.equal(typeof V.stats, "function");
+});
 
 test("visor port: a wide aperture with a clear centre on the phone, the desktop and a tall phone", () => {
   const { V } = load();
@@ -297,8 +305,22 @@ test("visor tick: falls back to camState + lightState without visorScene, and re
   assert.ok(V.stats().sun > 0 && V.stats().glints === 0, "the fallback has the sun but no lamp positions");
   const bare = load({ apex: null });
   bare.V.tick(1 / 60, true, 0, false);
-  assert.equal(bare.V.stats().paints, 0, "no agent API: the port stands, the light layer waits");
+  assert.equal(bare.V.stats().paints, 0, "no scene source at all: the port stands, nothing is painted");
   assert.ok(bare.calls.attrs["data-visor-port"] === "1");
+  assert.equal(bare.calls.inserted.hidden, true, "…and the empty light layer is not shown before a scene exists");
+});
+
+test("visor tick: a Pages build WITHOUT the dev API (__apex null) still paints the glint from game.js's G", () => {
+  // Perf hunt 9: readScene() returned null unless window.__apex existed, and only bindAgent (the LAZY_AGENT
+  // inject) set visorScene — so a player's build never painted the helmet visor glint (0 paints in 30 ticks).
+  const G = { camEye: DAY.eye, camTgt: DAY.tgt, camFov: DAY.fov, _lastFloodEmit: 0,
+    frame: { sunDir: DAY.sunDir, sunColor: DAY.sunColor, exposure: 1, ambientSky: DAY.ambientSky, lights: null, tailStart: 0 } };
+  const { V, calls } = load({ apex: null, G });
+  for (let i = 0; i < 30; i++) V.tick(1 / 60, true, 0, false);
+  const st = V.stats();
+  assert.ok(st.paints > 0, `paints from G with no __apex (${st.paints})`);
+  assert.ok(st.sun > 0, "the sun glint is lit");
+  assert.equal(calls.inserted.hidden, false, "the light layer shows once a scene painted");
 });
 
 test("visor tick: a bad knob or a throwing canvas never reaches the render loop", () => {
@@ -315,6 +337,19 @@ test("visor tint: the lens colour is the resolved --visor-lens token (css/tokens
   assert.deepEqual([...load({ color: "neutral" }).V.tintRGB("neutral")], [12, 12, 20], "rgb()");
   assert.deepEqual([...load({ color: "ice" }).V.tintRGB("ice")], [35, 59, 80], "whitespace around the token");
   assert.deepEqual([...load({ color: "rose" }).V.tintRGB("rose")], [76, 45, 60], "an unresolved token falls back to the table");
+});
+
+test("visor tint: the lens colour is read once per port build, never per repaint (a forced style recalc)", () => {
+  const { V, ctx, listeners } = load({ visor: "smoke", color: "amber", apex: { visorScene: () => DAY } });
+  let reads = 0;
+  const gcs = ctx.getComputedStyle;
+  ctx.getComputedStyle = (el) => { reads++; return gcs(el); };
+  for (let i = 0; i < 60; i++) V.tick(1 / 15, true, 0, false);
+  assert.ok(V.stats().paints >= 30, "the light layer repainted all along");
+  assert.equal(reads, 1, "one --visor-lens read for the port build, none per paint");
+  for (const fn of listeners) fn("visorColor", "ice");
+  V.tick(1 / 15, true, 0, false);
+  assert.equal(reads, 2, "a lens colour change re-reads it with the port rebuild");
 });
 
 test("visor clear (audit4 R1): Droplets.clear() at race exit takes the light layer down with the water", () => {
@@ -386,4 +421,151 @@ test("visor blend (#3657): plus-lighter on WebGPU only; WebGL2, GLX and an unkno
   }
   const css = read("css/helmet-visor.css");
   assert.match(css, /body\[data-visor-blend="over"\] #fx-visor \{ mix-blend-mode: normal; \}/, "the stylesheet drops the blend on the over arm");
+});
+
+test("mobile visor pressure suspends moving optics and recovers immediately while paused", () => {
+  const { V, ctx, calls } = load({ apex: { visorScene: () => DAY }, refraction: "medium" });
+  let pressure = false, writes = 0;
+  ctx.GLX = { isMobile: true };
+  ctx.PerfGov = { lookPostShed: () => pressure };
+  const set = ctx.document.body.setAttribute;
+  ctx.document.body.setAttribute = (k, v) => { if (k === "data-visor-shed") writes++; set(k, v); };
+  V.tick(1 / 60, true, 30, false);
+  const before = V.stats().paints, port = calls.props["--visor-port"], maps = calls.bendMaps;
+  pressure = true;
+  for (let i = 0; i < 600; i++) V.tick(1 / 60, true, 30, false);
+  assert.deepEqual([V.stats().paints, calls.bendMaps, calls.inserted.hidden, V.stats().shed, writes], [before, maps, true, true, 1]);
+  assert.deepEqual([calls.attrs["data-visor-shed"], calls.props["--visor-port"]], ["1", port]);
+  pressure = false;
+  V.tick(0, true, 30, false);
+  assert.deepEqual([V.stats().paints, V.stats().shed, calls.inserted.hidden, calls.attrs["data-visor-shed"], calls.props["--visor-port"]], [before + 1, false, false, undefined, port]);
+  V.tick(0, true, 30, false);
+  assert.equal(V.stats().paints, before + 1, "a paused recovery paints once");
+});
+
+test("mobile visor pressure avoids cold canvas and refraction builds; desktop and absent governor stay active", () => {
+  const mobile = load({ apex: { visorScene: () => DAY }, refraction: "strong" });
+  mobile.ctx.GLX = { isMobile: true };
+  mobile.ctx.PerfGov = { lookPostShed: () => true };
+  for (let i = 0; i < 600; i++) mobile.V.tick(1 / 60, true, 30, false);
+  assert.deepEqual([mobile.V.stats().paints, mobile.calls.bendMaps, mobile.calls.inserted, mobile.calls.attrs["data-visor-port"]], [0, 0, null, "1"]);
+  for (const [isMobile, gov] of [[false, { lookPostShed: () => true }], [true, undefined], [true, {}]]) {
+    const { V, ctx } = load({ apex: { visorScene: () => DAY } });
+    ctx.GLX = { isMobile };
+    if (gov) ctx.PerfGov = gov;
+    for (let i = 0; i < 600; i++) V.tick(1 / 60, true, 30, false);
+    assert.deepEqual([V.stats().paints, V.stats().shed], [150, false]);
+  }
+});
+
+test("mobile visor shedding clears on race exit, visor OFF, non-onboard and non-helmet views", () => {
+  for (const exit of [({ V }) => V.clear(), ({ V }) => V.tick(0, false, 0, false), ({ V, live }) => { live.visor = "off"; V.tick(0, true, 0, false); }, ({ V, live }) => { live.helmet = false; V.tick(0, true, 0, false); }]) {
+    const arm = load({ apex: { visorScene: () => DAY } });
+    arm.ctx.GLX = { isMobile: true };
+    arm.ctx.PerfGov = { lookPostShed: () => true };
+    arm.V.tick(1 / 60, true, 0, false);
+    assert.deepEqual([arm.V.stats().shed, arm.calls.attrs["data-visor-shed"]], [true, "1"]);
+    exit(arm);
+    assert.deepEqual([arm.V.stats().shed, arm.calls.attrs["data-visor-shed"]], [false, undefined]);
+  }
+});
+
+test("adaptive visor budgets reduce cadence and lamp work without changing canvas size", () => {
+  const scene = { ...NIGHT, lights: new Float32Array(Array.from({ length: 8 }, (_, i) => lamp((i - 4) * 1.5, -30 - i)).flat()), tailStart: 8, floodEmit: 1 };
+  const rows = [];
+  for (const [pressure, name, hz, glints] of [[0, "full", 15, 8], [1, "reduced", 10, 4], [2, "minimal", 6, 2]]) {
+    const { V, ctx, calls } = load({ apex: { visorScene: () => scene }, reflections: "strong", refraction: "medium" });
+    ctx.GLX = { isMobile: true };
+    ctx.GfxQuality.current = () => "medium";
+    ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => false, tier: () => 2 };
+    for (let i = 0; i < 600; i++) V.tick(1 / 60, true, 30, false);
+    const s = V.stats();
+    assert.deepEqual([s.budget, s.paintHz, s.paints, s.glints, s.w, s.h], [name, hz, hz * 10, glints, 844, 390]);
+    assert.equal(calls.bendMaps, pressure < 2 ? 1 : 0);
+    rows.push(calls.gradients / s.paints);
+  }
+  assert.ok(rows[0] > rows[1] && rows[1] > rows[2] && rows[2] > 0, `gradient work decreases while retaining highlights: ${rows}`);
+});
+
+test("adaptive visor transitions repaint once while paused and rebuild deferred refraction on recovery", () => {
+  const { V, ctx, calls, win } = load({ apex: { visorScene: () => DAY }, refraction: "medium", beams: 0 });
+  let pressure = 0;
+  ctx.GLX = { isMobile: true };
+  ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => false };
+  V.tick(1 / 60, true, 30, false);
+  let paints = V.stats().paints;
+  const gradients = calls.gradients;
+  for (const p of [1, 2, 0]) {
+    pressure = p;
+    V.tick(0, true, 30, false);
+    assert.equal(V.stats().paints, ++paints);
+    V.tick(0, true, 30, false);
+    assert.equal(V.stats().paints, paints);
+  }
+  assert.equal(calls.gradients - gradients, gradients * 3, "beams OFF remains OFF after recovery in the same daylight scene");
+  pressure = 2;
+  V.tick(0, true, 30, false);
+  win.innerWidth = 390; win.innerHeight = 844;
+  V.tick(0, true, 30, false);
+  assert.equal(calls.bendMaps, 1, "minimal resize defers displacement-map allocation");
+  pressure = 0;
+  V.tick(0, true, 30, false);
+  assert.deepEqual([calls.bendMaps, V.stats().w, V.stats().h], [2, 390, 844]);
+  V.tick(0, true, 30, false);
+  assert.equal(calls.bendMaps, 2);
+});
+
+test("adaptive visor respects reduced motion, avoids catch-up bursts and ignores desktop pressure", () => {
+  for (const [mobile, pressure, reduced, expectedHz] of [[true, 1, true, 8], [true, 2, true, 6], [false, 2, false, 15]]) {
+    const { V, ctx } = load({ apex: { visorScene: () => DAY } });
+    ctx.GLX = { isMobile: mobile };
+    ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => false };
+    V.tick(1 / 60, true, 30, reduced);
+    assert.equal(V.stats().paintHz, expectedHz);
+    const before = V.stats().paints;
+    V.tick(10, true, 30, reduced);
+    assert.equal(V.stats().paints, before + 1, "a long frame produces only one paint");
+    V.tick(0, true, 30, reduced);
+    assert.equal(V.stats().paints, before + 1, "no paused catch-up");
+  }
+});
+
+test("adaptive visor clears profile attributes on every exit from each pressure level", () => {
+  for (const pressure of [1, 2, 4]) {
+    for (const exit of [({ V }) => V.clear(), ({ V }) => V.tick(0, false, 0, false), ({ V, live }) => { live.visor = "off"; V.tick(0, true, 0, false); }, ({ V, live }) => { live.helmet = false; V.tick(0, true, 0, false); }]) {
+      const arm = load({ apex: { visorScene: () => DAY } });
+      arm.ctx.GLX = { isMobile: true };
+      arm.ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => pressure === 4 };
+      arm.V.tick(1 / 60, true, 30, false);
+      assert.ok(arm.calls.attrs["data-visor-budget"]);
+      exit(arm);
+      assert.deepEqual([arm.calls.attrs["data-visor-budget"], arm.calls.attrs["data-visor-shed"], arm.V.stats().paintHz], [undefined, undefined, 0]);
+    }
+  }
+});
+
+test("#5018 visor projects through the lens the world was drawn with: the fitted FOV (G.lens.fovY) and the camera roll", () => {
+  const DEG = Math.PI / 180, fitted = 46.62, raw = 64;
+  const G = { camEye: DAY.eye, camTgt: DAY.tgt, camFov: raw, camRoll: 0, lens: { fovY: fitted * DEG }, _lastFloodEmit: 0,
+    frame: { sunDir: [0.3, 0.2, -0.93], sunColor: DAY.sunColor, exposure: 1, ambientSky: DAY.ambientSky, lights: null, tailStart: 0 } };
+  const { V } = load({ apex: null, G });
+  const scene = V.sceneFromG(G);
+  assert.ok(Math.abs(scene.fov - fitted) < 1e-9, "the fitted FOV, not the raw camFov");
+  const sun = V.lightMap(scene, 844, 390, { level: 1 }).sun, old = V.lightMap({ ...scene, fov: raw }, 844, 390, { level: 1 }).sun;
+  // The pinhole the renderer uses: x = w/2 + (h/2)/tan(fovY/2) * right·d / fwd·d  (camera looks down -z, right = +x).
+  const want = 422 + (195 / Math.tan(fitted * DEG / 2)) * 0.3 / 0.93;
+  assert.ok(Math.abs(sun.x - want) < 0.5, `glint at the M4 projection (${sun.x.toFixed(1)} vs ${want.toFixed(1)})`);
+  const k = (old.x - 422) / (sun.x - 422);
+  assert.ok(Math.abs(k - Math.tan(fitted * DEG / 2) / Math.tan(raw * DEG / 2)) < 0.01, `the raw camFov sat ${(100 - k * 100).toFixed(0)} % too near the centre`);
+  // Before the first rendered frame (lens.fovY 0) the raw FOV is the fallback.
+  assert.equal(V.sceneFromG({ ...G, lens: { fovY: 0 } }).fov, raw);
+  // Roll: game.js tilts up by right·sin(roll); a sun dead ahead and above then leans off the centre line.
+  const up = { ...scene, sunDir: [0, 0.3, -0.954] };
+  const level = V.lightMap(up, 844, 390, { level: 1 }).sun;
+  const rolled = V.lightMap({ ...up, roll: 0.2 }, 844, 390, { level: 1 }).sun;
+  assert.ok(Math.abs(level.x - 422) < 0.5);
+  const r = Math.hypot(level.x - 422, level.y - 195), ang = Math.atan(Math.sin(0.2));   // the view matrix's actual tilt
+  assert.ok(Math.abs(rolled.x - (422 - r * Math.sin(ang))) < 0.5 && Math.abs(rolled.y - (195 - r * Math.cos(ang))) < 0.5,
+    `the glint rolls with the horizon (${rolled.x.toFixed(1)}, ${rolled.y.toFixed(1)})`);
+  assert.equal(V.sceneFromG({ ...G, camRoll: 0.2 }).roll, 0.2);
 });

@@ -1,0 +1,19 @@
+{
+  "track": "monza",
+  "windows": 3,
+  "warmSteps": 80,
+  "generousRatio": 6,
+  "strictRatio": 1.75,
+  "spreadRatio": 4,
+  "benches": {
+    "step": { "iters": 80, "msPerCall": 1.663 },
+    "physState": { "iters": 200, "msPerCall": 0.011 },
+    "nodeAt": { "iters": 2000, "msPerCall": 0.002 }
+  },
+  "measured": "2026-10-29",
+  "runs": {
+    "step": [1.632, 1.664, 1.663],
+    "physState": [0.011, 0.011, 0.011],
+    "nodeAt": [0.002, 0.002, 0.002]
+  }
+}

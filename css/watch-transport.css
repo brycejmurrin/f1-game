@@ -34,6 +34,11 @@
 .watch-transport [data-wt="timeline"] { display: flex; align-items: center; gap: var(--gap); margin-top: var(--gap); }
 .watch-transport [data-wt="track"] { flex: 1; position: relative; min-width: 0; }
 .watch-transport [data-wt="seek"] { display: block; width: 100%; margin: 0; height: 32px; accent-color: var(--red); cursor: pointer; }
+/* A THUMB SCRUBS THE TIMELINE: 32px sat under the --tap floor the buttons
+   above already meet. Coarse pointers only, so a mouse keeps the slim bar;
+   the markers overlay is inset:0 on the track and the timeline row centres
+   its items, so the taller hit box does not move them. */
+@media (pointer: coarse) { .watch-transport [data-wt="seek"] { height: max(32px, var(--tap)); } }
 .watch-transport [data-wt="markers"] { position: absolute; inset: 0 calc(var(--gap) * 2 / 3); pointer-events: none; }
 .watch-transport [data-wt="markers"] i { position: absolute; top: 0; height: 5px; width: 2px; background: var(--dim); }
 .watch-transport [data-kind="pit"], .watch-transport [data-kind="fastest"] { background: var(--sec-best) !important; }
@@ -53,7 +58,11 @@ body.watch-controls-on :is(#hud-rel, #hud-strat, #hud-inputs, .touchbtn, #campic
 body.watch-controls-on :is(#btn-cam, #announce, #lights) { display: none !important; }
 body.watch-controls-on[data-helmet-cam] #hud::before { content: none; }
 body.watch-controls-on #bc-tower {
-  max-height: calc(100svh - 180px - var(--sat) - var(--sab));
+  /* The tower stops above the bar that is actually there: --wt-h is the bar's
+     painted height, written by WatchTransport's ResizeObserver (UI scaling
+     contract gap 19). Four window-band constants (100/150/180/260) used to
+     guess it; the 100 px phone guess sat under a 172 px bar. */
+  max-height: calc(100svh - var(--wt-h, 180px) - var(--sat) - var(--sab) - 2 * var(--gap));
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y;
 }
@@ -65,16 +74,54 @@ body:has(> .screen:not([hidden])) .watch-transport, body.photo-mode .watch-trans
   .watch-transport [data-wt="camera-field"] { flex: 1 1 120px; }
   .watch-transport [data-wt="name"] { display: none; }
 }
+/* THE PHONE BAR — one row (UI scaling contract gap 19). MEASURED 2026-11-06 at the
+   owner's export with insets: the three-row bar (controls 52 + timeline 52 +
+   chapters 52 + pads) was 172.7 px — 44 % of the 852×393 Home Screen window and
+   61 % of the 852×283 Safari one (79 % with the chapter drawer open). Now:
+   play · prev · next · DRIVER · the seek with its clocks as micro captions · ⋯,
+   and the ⋯ opens a POPOVER above the bar (right-aligned, inside the bar, so
+   inside the safe area) with SPEED, CAMERA, AUTO, FOLLOW LOCK, PHOTO and the
+   chapter picker + JUMP. WatchTransport docks the nodes on this same query
+   (matchMedia); desktop windows keep the inline bar untouched. The target:
+   the closed bar ≤ 35 % of the shortest window; the open popover never covers
+   the bar's own row. */
 @media (max-height: 520px) and (min-width: 600px) {
   .watch-transport { padding: calc(var(--gap) * 2 / 3) var(--gap); }
   .watch-transport [data-wt="caption"], .watch-transport label > span { display: none; }
-  .watch-transport [data-wt="timeline"] { margin-top: 0; }
-  .watch-transport [data-wt="controls"] { flex-wrap: nowrap; gap: calc(var(--gap) / 3); }
-  .watch-transport [data-wt="driver-field"], .watch-transport [data-wt="camera-field"] { flex: 1 1 90px; }
+  .watch-transport [data-wt="controls"] { flex-wrap: nowrap; align-items: center; gap: calc(var(--gap) / 3); }
+  .watch-transport [data-wt="driver-field"] { flex: 0 1 150px; }
   .watch-transport button, .watch-transport select { padding-inline: calc(var(--gap) * 2 / 3); font-size: var(--fs-micro); }
-  body.watch-controls-on #bc-tower { max-height: calc(100svh - 100px - var(--sat) - var(--sab)); }
-  /* An opened chapter drawer: the picker and JUMP share a row (JUMP wrapped onto its own, 70% of an 844x390 screen).
-     ::details-content is the flex box here, not <details> (Chrome 131 / Safari 18.4; older engines keep the stack). */
+  /* The seek joins the row and takes what the buttons leave; the clocks shrink to captions. */
+  .watch-transport [data-wt="timeline"] { flex: 1 1 0; min-width: 120px; margin-top: 0; gap: calc(var(--gap) / 2); order: 0; }
+  .watch-transport [data-wt="timeline"] > span { font-size: var(--fs-micro); color: var(--dim); }
+  /* ⋯ last on the row; the popover hangs off it. */
+  .watch-transport [data-wt="more"] { position: relative; flex: 0 0 auto; order: 1; min-width: 0; }
+  .watch-transport [data-wt="more"] > summary {
+    list-style: none; cursor: pointer; display: grid; place-items: center;
+    height: var(--tap); min-width: var(--tap); padding: 0 calc(var(--gap) * 2 / 3);
+    border: 1px solid var(--card-line); border-radius: var(--r-md); background: var(--panel);
+    font: 700 var(--fs-3) var(--font-ui); line-height: 1;
+  }
+  .watch-transport [data-wt="more"] > summary::-webkit-details-marker { display: none; }
+  .watch-transport [data-wt="more"] > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .watch-transport [data-wt="more"][open] > summary { border-color: var(--red); background: var(--plate-on); }
+  .watch-transport [data-wt="more-box"] {
+    position: absolute; right: 0; bottom: calc(100% + var(--gap)); z-index: 1;
+    width: min(420px, calc(100vw - var(--sal) - var(--sar) - 4 * var(--gap)));
+    max-height: calc(100svh - var(--wt-h, 64px) - var(--sat) - 3 * var(--gap));
+    overflow-y: auto; overscroll-behavior-y: contain;
+    display: flex; flex-wrap: wrap; align-items: end; gap: calc(var(--gap) / 2);
+    padding: var(--gap);
+    background: color-mix(in oklab, var(--bg) 96%, transparent);
+    border: 1px solid var(--card-line); border-radius: var(--r-lg);
+    box-shadow: var(--edge), var(--lift-2);
+  }
+  .watch-transport [data-wt="more-box"] label > span { display: block; }
+  .watch-transport [data-wt="more-box"] :is([data-wt="speed-field"], [data-wt="camera-field"]) { flex: 1 1 40%; }
+  .watch-transport [data-wt="more-box"] :is([data-wt="auto"], [data-wt="lock"], [data-wt="photo"]) { flex: 1 1 auto; }
+  /* The chapter picker is a row of the popover, not a drawer of its own: its summary goes, JUMP shares the row. */
+  .watch-transport [data-wt="more-box"] [data-wt="chapters"] { flex: 1 1 100%; margin-top: 0; }
+  .watch-transport [data-wt="more-box"] [data-wt="chapters"] > summary { display: none; }
   .watch-transport [data-wt="chapters"]::details-content { display: flex; align-items: end; gap: calc(var(--gap) / 3); }
   .watch-transport [data-wt="chapter-field"] { flex: 1 1 0; }
   .watch-transport [data-wt="chapter-jump"] { flex: 0 0 auto; }
@@ -84,11 +131,9 @@ body:has(> .screen:not([hidden])) .watch-transport, body.photo-mode .watch-trans
   .watch-transport [data-wt="driver-field"], .watch-transport [data-wt="camera-field"] { flex: 1 1 40%; }
   .watch-transport [data-wt="caption"] { gap: calc(var(--gap) / 3); }
   .watch-transport [data-wt="director"] { display: none; }
-  body.watch-controls-on #bc-tower { max-height: calc(100svh - 260px - var(--sat) - var(--sab)); }
 }
 @media (max-height: 520px) and (max-width: 740px) {
   .watch-transport [data-wt="controls"] { flex-wrap: wrap; }
-  body.watch-controls-on #bc-tower { max-height: calc(100svh - 150px - var(--sat) - var(--sab)); }
 }
 
 .watch-transport [data-wt="chapters"] { margin-top: calc(var(--gap) / 2); min-width: 0; }

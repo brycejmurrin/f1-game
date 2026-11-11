@@ -308,6 +308,6 @@ const DesignerScenery = (function () {
     filter(); filterObjects(); showSection(section);
     return { root, refresh, placement: (kind) => ({ side: kind === "gantry" ? 1 : side, gap: gaps[kind], mode: placementMode, count: placementMode === "range" ? copies : 1 }) };
   }
-  return { create, matches, PRESETS, CATEGORIES };
+  return { create, PRESETS };
 })();
 Object.freeze(DesignerScenery);

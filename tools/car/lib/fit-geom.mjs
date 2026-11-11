@@ -76,7 +76,7 @@ export const FIT = Object.freeze({
 export const CAR_FILES = Object.freeze(["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
   "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js", "js/car/helmets.js",
   "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js",
-  "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/car-mesh.js"]);
+  "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/cockpit-rig.js", "js/car/car-mesh.js"]);
 
 export function loadCar(root) {
   const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array,

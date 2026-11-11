@@ -28,7 +28,7 @@ const TLX = read("js/render/three/tlx.js");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
@@ -154,9 +154,11 @@ test("A-H4: sun -> lamp -> lamp -> car rewrites in ONE frame: each draw sees its
   }
 });
 
-test("A-H4 control: the same instrument catches the hazard — a Stream InstancedMesh caster redrawn after a rewrite draws stale rows", async (t) => {
-  // tlxCasterAttr=0 with the caster's InstancedBufferAttribute forced to Stream: three relays its matrices into the
-  // buffer it draws once per frame per render object, so the second lamp pass of the frame reads the first's rows.
+test("r187: a Stream InstancedMesh caster redrawn after a rewrite draws the NEW rows (the per-frame relay is gone)", async (t) => {
+  // r186 relayed an InstancedMesh's matrices into a separate buffer once per frame per render object, so a second
+  // Stream draw in one frame read the first's rows (the hazard A-H1/A-H4 designed around). r187's
+  // createInstanceMatrixNode reads the columns straight from instanceMatrix's own buffer, so the rewrite reaches the
+  // GPU through the attribute version. The attribute caster stays the default (A-H4); this pins the upstream change.
   const IBA = THREE.InstancedBufferAttribute.prototype, own = Object.prototype.hasOwnProperty.call(IBA, "setUsage"), base = IBA.setUsage;
   IBA.setUsage = function () { return base.call(this, THREE.StreamDrawUsage); };
   try {
@@ -164,16 +166,15 @@ test("A-H4 control: the same instrument catches the hazard — a Stream Instance
     const b = batchOf(40);
     h.pass("sun", [[b, mats(40, 1), 40]]); h.pass("lamp", [[b, mats(9, 1), 9]]);
     await h.frame();
-    // The buffer it draws is three's relay of instanceMatrix (InstanceNode): the one GL buffer of the padded size.
     const pad = h.caster(b).instanceMatrix.count * 64;
     const drawn = [...h.gm.mem.entries()].filter(([, u8]) => u8.length === pad).map(([k]) => k);
     assert.equal(drawn.length, 1, "one padded instance buffer");
     h.gm.watch = drawn[0];
     const rows = (k) => { const s = h.gm.draws[0].snap; return Array.from(new Float32Array(s.buffer, 0, k * 16)); };
     h.bytes(() => h.pass("lamp", [[b, mats(9, 3), 9]]));
-    assert.deepEqual(rows(9), Array.from(mats(9, 3)), "the frame's first lamp draw is relayed");
+    assert.deepEqual(rows(9), Array.from(mats(9, 3)), "the frame's first lamp draw");
     h.bytes(() => h.pass("lamp", [[b, mats(9, 4), 9]]));
-    assert.deepEqual(rows(9), Array.from(mats(9, 3)), "the second draws the FIRST pass's rows: stale — what the attribute caster cannot do");
+    assert.deepEqual(rows(9), Array.from(mats(9, 4)), "the second draw reads its own rows under Stream on r187");
   } finally { if (own) IBA.setUsage = base; else delete IBA.setUsage; }
 });
 
@@ -544,6 +545,32 @@ test("A·W14: decal glows share one program; each material keeps its own glow", 
   fg.reset();
   await renderer.compileAsync(scene, camera);
   assert.equal(fg.counts.linkProgram || 0, 1, `four glows link ONE program (was one per glow): ${fg.counts.linkProgram}`);
+});
+
+test("a decal created while scene MRT is on is born on the MRT key", () => {
+  if (!globalThis.TLXShaders.fx) vm.runInThisContext(read("js/render/three/tsl-fx.js"), { filename: absSrc("js/render/three/tsl-fx.js") });
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: true, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+  const fx = globalThis.TLXShaders.fx(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), sharedUniforms: true, lit });
+  const tex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  const early = fx.decalMaterialFor(tex, 0.35);
+  assert.equal(early.customProgramCacheKey(), "tlx-fx-decal");
+  fx.setSsrMrt(true);
+  assert.equal(early.customProgramCacheKey(), "tlx-fx-decal-mrt");
+  const tex2 = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+  const born = fx.decalMaterialFor(tex2, 1.6);
+  assert.equal(born.customProgramCacheKey(), "tlx-fx-decal-mrt");
+  assert.equal(born.mrtNode, early.mrtNode, "one tag node for decals born before and after the arm");
+  const glass = fx.mirrorGlassMaterial(tex);
+  assert.equal(glass.customProgramCacheKey(), "tlx-fx-mirror-glass");
+  assert.equal(glass.mrtNode, null, "mirror glass keeps the scene MRT tag and has no node of its own");
+  fx.setSsrMrt(false);
+  const tex3 = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1);
+  const off = fx.decalMaterialFor(tex3, 0.5);
+  assert.equal(off.customProgramCacheKey(), "tlx-fx-decal");
+  assert.equal(off.mrtNode, null);
+  assert.equal(born.mrtNode, null);
+  assert.equal(glass.mrtNode, null);
 });
 
 // A·W14: the caster warm with NO caster in any pool (a night grid: no sun pass, no lamp reached yet) compiled

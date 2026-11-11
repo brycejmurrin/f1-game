@@ -60,6 +60,7 @@ const ControllerProfiles = (function () {
     return { activate, save, reset, reload, replace, data: read,
       current: () => current ? { id: current, label: current, saved, count: read().devices.length } : null };
   }
-  return { create, clean, KEY, MAX, idOf };
+  // idOf stays module-local: create.activate owns pad-id slicing; no external caller.
+  return { create, clean, KEY, MAX };
 })();
 Object.freeze(ControllerProfiles);

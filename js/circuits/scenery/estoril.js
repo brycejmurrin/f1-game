@@ -6,11 +6,10 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["estoril"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
-        tree, bush, ridge, mountain, grandstandEx, spectatorHill, sponsorHoarding,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, seat, bush, ridge, mountain, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum, forestEdge, cameraTower, acacia, circuitKit } = api;
+        addBox, addCyl, addFrustum, cameraTower, acacia, circuitKit } = api;
 
       const LIME = [0.95, 0.94, 0.90], LIME_D = [0.86, 0.85, 0.80];
       const TILE = [0.68, 0.33, 0.21], TILE_D = [0.54, 0.27, 0.18];

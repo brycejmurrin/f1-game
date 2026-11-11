@@ -1,1 +1,0 @@
-Improved: Track Designer now has numbered modes, collapsible advanced sections, separate library and help views, remembered inspector scroll positions, an always available checks summary, a scenery summary, and grouped sharing and file actions.

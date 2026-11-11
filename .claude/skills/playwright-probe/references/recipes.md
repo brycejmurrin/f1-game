@@ -4,13 +4,14 @@ Load from the SKILL.md index when the task needs this detail.
 
 ## Contents
 - UI screens (DOM, not canvas)
-- `apex-capture cameras` — 12 modes, no drift
+- `apex-capture cameras` — a subset, no drift
 - Why one server + Chromium workers
 - Environment gotchas (already handled in the tools — replicate in custom harnesses)
 - Backends and display
 - Galleries and image budget
 - Custom-harness skeleton (parent-owned browser)
 - Shared Playwright fixtures (`tests/helpers/fixtures.js`)
+- Tunnel before/after (Monaco bore, GLX and TLX)
 
 ## UI screens (DOM, not canvas)
 
@@ -24,13 +25,11 @@ Portrait UI uses `{width:390,height:844}`; in-race shots must use **landscape**
 (including near-black checks for soft captures; byte size alone is not proof) — so a broken render fails CI-style without opening every file. Both
 tools start their own server + Chromium; no setup beyond `npm install`.
 
-## `apex-capture cameras` — 12 modes, no drift
+## `apex-capture cameras` — a subset, no drift
 
-The harness hardcodes 12 of the game's **20** `CAM_MODES` (`js/camera/mode-switch.js`):
-`chase`, `far`, `cockpit`, `hood`, `overhead`, `heli`, `reverse`, `side`,
-`cinematic`, `low`, `tcam`, `rear` — **`drift`, `visor`, `trackside`, `rival`,
-`pitwall`, `drone`, `tv`, `helmet` are omitted**. It also hardcodes
-`park(0.1)` (10% lap) for every shot; a different fraction needs a custom sweep
+The harness's `CAMS` array (`tools/shot/apex-capture.mjs`) hardcodes a subset of the game's
+`CAM_MODES` (`js/camera/mode-switch.js`); **`drift` and the later modes are omitted** — diff the
+two lists. It also hardcodes one `park()` fraction for every shot; a different fraction needs a custom sweep
 with `previewCam(mode, frac)` (mode FIRST — it is validated first and the call
 silently returns `false` if the arguments are swapped) or a fork of
 `tools/shot/apex-capture.mjs`.
@@ -39,18 +38,18 @@ To include one of them (e.g. **drift**), append it to the `CAMS` array in `apex-
 run a one-off):
 
 ```sh
-node tools/shot/apex-eval.mjs monza "(a.park(0.18), a.camera('drift'), a.snapCam())"
+node tools/shot/apex-eval.mjs monza "(a.park(<f>), a.camera('drift'), a.snapCam())"   # <f> from monza.js turns
 # then screenshot the canvas, or duplicate the cameras fanout with CAMS.push('drift')
 ```
 
 For arbitrary lap fractions without forking, use `shot.mjs` with your `frac` arg
-or a `previewCam` loop (see `cameras.md`).
+or a `previewCam` loop (the cameras reference, SKILL.md §References).
 
 ## Why one server + Chromium workers
 
 `tools/shot/apex-capture.mjs` uses **one async Node static server** and fans jobs
-across separate Chromium worker processes. For sweeps (12 camera modes, 52
-tracks, day/night/wet variants), the shared server handles concurrent asset
+across separate Chromium worker processes. For sweeps (camera modes, every
+track, day/night/wet variants), the shared server handles concurrent asset
 GETs while workers pull the next job as they finish. Extra Python servers only
 helped asset fetch; they are not the current harness.
 
@@ -70,7 +69,7 @@ helped asset fetch; they are not the current harness.
 3. **Free ports**, don't hardcode — bind `:0` and read back the port, or you'll
    collide with a leftover server.
 4. **Wait for readiness**: `{ polling: 100 }` on every rendering-page `waitForFunction`
-   (AGENTS.md rule 9; `tools/check/wait-polling-lint.mjs`):
+   (enforced by `tools/check/wait-polling-lint.mjs`):
    `waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS })` then
    `race(id)` then
    `waitForFunction(t => __apex.info().track === t, id, { polling: 100, timeout: BOOT_MS })` then a
@@ -87,7 +86,7 @@ helped asset fetch; they are not the current harness.
    ```
    **`shot.mjs` calls `snapCam()` automatically for `park` mode**; for `orbit` /
    `eye` / `cinematic` / `trackside` it sets `dbgCam` directly (no snapCam — and
-   never call snapCam after orbit; see `cameras.md`). Waiting longer is not a
+   never call snapCam after orbit; see the cameras reference). Waiting longer is not a
    fix (the ease is slow and `freeze()` can hold it). Symptom: eye-to-car distance
    in the hundreds of metres when chase should read ~5.8 m.
 
@@ -105,11 +104,11 @@ helped asset fetch; they are not the current harness.
 
 ## Backends and display
 
-- Pinning: `apex-eval` / `flicker-gate` default to TLX; pin with `--backend three|webgl2|webgpu`
-  (apex-eval) / `--backend three` (flicker-gate; its default webgl2 = GLX). A `GLX.*()` read under
+- Pinning: `apex-eval` defaults to TLX (`--backend three|webgl2|webgpu`); `flicker-gate` defaults
+  to GLX (`webgl2`; pass `--backend three` for TLX). A `GLX.*()` read under
   the TLX default answers for TLX. `shot.mjs` takes `--backend three|webgl2|webgpu` (default three;
-  webgl2 costs ~4 min a boot on SwiftShader vs ~40 s for TLX); the `apex_eval` / `apex_shot` MCP
-  wraps pass none.
+  a webgl2 boot on SwiftShader costs minutes, TLX under a minute); the `apex_eval` MCP wrap takes
+  `backend`, `apex_shot` takes none.
 - Soft present: WGX on SwiftShader needs `tools/gfx/gfx-probe.mjs` for the visible `#game`
   (soft-present blit), never a raw canvas screenshot; HeadlessChrome GLX hides `#game` (opacity 0,
   reads black) and blits onto `#game-soft` — await `awaitSoftPresent()` then capture that.
@@ -179,12 +178,12 @@ test('example', async ({ page, pageErrors, racePage }) => {
 
 `racePage` navigates to `/` and waits for `window.__apex` (`BOOT_MS` from the fixtures) before
 handing the page to the test. `pageErrors` collects every `pageerror` event.
-```
 
 ## Tunnel before/after (Monaco bore, GLX and TLX)
 
-`park` is the chase rig and sits behind the car; use `eye` or `cinematic` inside a bore. Mid-bore fracs
-come from `node tools/shot/flicker-gate.mjs --list` (`monaco-tunnel-vault` 0.47, `monaco-tunnel-top` 0.49).
+`park` is the chase rig and sits behind the car; use `eye` (`eyeAt(frac, 0, 2.5)`) inside a bore.
+`cinematic`/`orbit` put the eye `--dist` out (45 m default), in the rock: only with a small `--dist`. Mid-bore fracs
+come from `node tools/shot/flicker-gate.mjs --list` (`monaco-tunnel-vault`, `monaco-tunnel-top`).
 
 ```sh
 node tools/shot/backend-compare.mjs monaco 0.47 eye --backends webgl2,three --out artifacts/cmp/before --label tunnel-mid

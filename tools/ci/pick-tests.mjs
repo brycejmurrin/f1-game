@@ -13,13 +13,13 @@
  *   node tools/ci/pick-tests.mjs --staged        # only what is staged
  *   node tools/ci/pick-tests.mjs --since HEAD~3
  *   node tools/ci/pick-tests.mjs js/car/parts.js js/ui/hud.js   # explicit paths
- *   node tools/ci/pick-tests.mjs --bg            # print the background-run command
+ *   node tools/ci/pick-tests.mjs --bg            # print only the remote-group.mjs commands
  *   node tools/ci/pick-tests.mjs --json         # machine-readable, for CI
  *
  * `--json` exists because the human output is PROSE and a CI selector reading
  * it becomes a silent consumer of an unversioned format. Two of its lines are
  * live traps for an unanchored `test:<group>` grep: the zero-match message
- * names `test:tiny`, and the batching lines name `tools/ci/test-bg.mjs <groups>`.
+ * names `test:tiny`, and the run lines name `tools/ci/remote-group.mjs <group>`.
  * The JSON shape is asserted by tests/unit/pick-tests.test.mjs, so it cannot drift
  * out from under a consumer the way the prose can.
  *
@@ -38,11 +38,10 @@
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, noDeployBaseMessage, resolveDeployBase, untrackedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -50,14 +49,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // tests/unit/pick-tests.test.mjs asserts this against pages.yml, so the two cannot
 // drift apart silently the way a comment naming a branch would.
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
-// Kept in step with tools/ci/test-bg.mjs: WORKERS is its formula, and a batch
-// is ONE group because test-bg's default cap is 1 (sequential; `--parallel`
-// is the opt-in). The old cores/2 batches printed two-group commands that
-// test-bg then started only the first of.
-const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
-const WORKERS = +process.env.WORKERS || (os.cpus().length <= 4 ? 1 : 2);
-const MAX_GROUPS = 1;
-
 /* [matcher, groups, why] — matcher is a RegExp over the repo-relative path.
    Every rule that matches contributes its groups; the union is what runs. */
 export const RULES = [
@@ -214,25 +205,30 @@ export const RULES = [
   [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
   [/^js\/perf\/(phone-recorder|soak-run)\.js/, ["phone-recorder"], "PHONE TEST recorder + AUTO SOAK (#1633)"],
+  // Post-flag ceremony + finish journeys (#1584 slice 5 / #4071); FLOW.md and USAGE-PATHS.md folded into
+  // ARCHITECTURE-MAP.md on 2026-11-03 (D-001 §4.9).
+  [/^docs\/ARCHITECTURE-MAP\.md$/, ["results-flow"], "post-flag ceremony, ResultsCam finish table and the R11–R13 finish journeys"],
+  [/^tests\/specs\/results-flow\.spec\.js$/, ["results-flow"], "ceremony browser gate"],
+  [/^js\/race\/(cooldown-lap|parc-ferme|ceremony)\.js$/, ["results-flow"], "ceremony phase modules (slices 1–4)"],
   [/^js\/perf\/(metrics-overlay|race-entry-profile)\.js/, ["perf-frametime", "ui"], "frametime bench seam + metrics overlay"],
   [/^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
   [/^tests\/specs\/perf-frametime\.spec\.js/, ["perf-frametime"], "SwiftShader frame-time regression lane (soft by default)"],
   [/^tests\/helpers\/perf-frametime\.mjs/, ["perf-frametime", "tooling-fast"], "frametime baseline compare math"],
+  [/^tools\/perf\/session-budgets\.mjs|^tests\/helpers\/perf-session\.mjs/, ["perf-session", "tooling-fast"], "session hang ceilings and the software-GL session spec"],
   [/^tests\/data\/perf-frametime-baseline\.json/, ["perf-frametime"], "committed frametime baseline — regen via APEX_UPDATE_BASELINE"],
   [/^js\/perf\//, ["ui"], "the quality preset, renderer picker and the overlays — DOM screens"],
   [/^js\/input\//, ["input"], ""],
   [/^js\/input\/controller-profiles\.js$/, ["steering-unit"], "controller-profiles.test.mjs — per-device maps, legacy migration and input-owner release"],
   // PHONE AS CONTROLLER: its node suite (phone-pad.test.mjs) is in steering-unit,
   // and the roll math it shares with input.js is asserted there too.
-  [/^js\/input\/(phone-pad|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],
+  [/^js\/input\/(phone-pad(?:-codec|-page)?|pedal-travel|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],
   // WebXR Phase 0: seated-rig math + controller remoteSample mapping + session
   // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
   // the optional iwer Playwright smoke is test:xr (not selected by path alone).
   [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
-  // WebKit iPhone-path proxy (#2705): dispatch-only webkit-leg.yml + project
-  // `webkit`. Local Linux cannot install WebKit host libs here; structural
-  // guards still cover the config + group registration.
-  [/^\.github\/workflows\/webkit-leg\.yml$/, ["tooling-fast", "webkit"], "WebKit dispatch leg — structural guards + the boot group it runs"],
+  // WebKit iPhone-path proxy (#2705): opt-in project `webkit` (`npm run test:webkit`,
+  // a macOS host; its never-run webkit-leg.yml was deleted 2026-10-27). Local Linux
+  // cannot install WebKit host libs here; structural guards cover the config.
   [/^tests\/specs\/webkit-boot\.spec\.js$/, ["webkit", "tooling-fast"], "WebKit boot probe (project=webkit only)"],
   [/^js\/share\//, ["state-unit"], "share-card data/layout/painter and Daily Challenge delivery hook"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
@@ -261,8 +257,7 @@ export const RULES = [
   [/^js\/garage\/setup-tune\.js/, ["garage-unit"], "setup-tune.test.mjs"],
   [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
-  [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
-  [/^js\/ui\/post-fx-opts\.js/, ["state-unit"], "post-fx-opts.test.mjs"],
+  [/^js\/ui\/post-fx-opts\.js/, ["state-unit"], "post-fx-opts.test.mjs + debris-opts.test.mjs (PostFxOpts.debris)"],
   [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
   [/^js\/ui\/a11y-opts\.js/, ["state-unit"], "a11y-opts.test.mjs"],
   [/^js\/ui\/hud-elements\.js/, ["state-unit", "ui"], "hud-elements.test.mjs"],
@@ -273,6 +268,8 @@ export const RULES = [
   [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
   [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],
   [/^js\/ui\/screen-looks\.js/, ["state-unit"], "screen-looks.test.mjs (also run title-layout + pause-opts: both peek through it)"],
+  [/^js\/ui\/look-avail\.js/, ["state-unit"], "screen-looks.test.mjs (VM-loads look-avail.js beside screen-looks.js)"],
+  [/^js\/ui\/layout-presets\.js/, ["state-unit"], "layout-presets.test.mjs (VM-loads screen-looks, pause-opts and title-layout too)"],
   [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
   // .test.mjs in steering-unit, but the file reaches further than that: it
@@ -308,6 +305,9 @@ export const RULES = [
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
   [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
   [/^vendor\/trystero-[^/]+\//, ["net-unit"], "vendored action framing, payload bounds and peer cleanup — net-trystero-api.test.mjs"],
+  // Same-named suite: real-race-script.test.mjs lives in state-unit. The
+  // directory rule below names hooks and lifecycle-unit, which do not run it.
+  [/^js\/data\/real-race-script\.js$/, ["state-unit"], "real-race-script.test.mjs — the OpenF1 script builder"],
   [/^js\/data\//, ["hooks", "lifecycle-unit"], "the hook contracts (data-lifecycle + telemetry-compare ride test:hooks) and the async-lifecycle twins"],
   [/^sw\.js|^manifest\.json/, ["service-worker"], ""],
   [/^worker\//, ["net-unit"], "the rendezvous Durable Object"],
@@ -366,7 +366,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
     ...(manifest.LAZY_EDITOR || []), ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
-    ...(manifest.LAZY_CAREER_UI || []),
+    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_RESULTS_SHEET || []),
   ];
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }
@@ -426,6 +426,115 @@ export function pick(files) {
   return groups;
 }
 
+// SPECS THE GROUP RULES CANNOT NAME (orchestration review 2026-10-29, Part 2 finding 2).
+// RULES map a path to a GROUP; two cases escape them and cost a CI cycle each:
+//  1. a spec that loads a module STANDALONE (`addScriptTag({ url: "/js/ui/photo-studio.js" })`, a
+//     readFileSync of a js path) breaks when that module gains a dependency the spec never loads (#4188:
+//     photo-studio.spec.js needed a `DrivingLine` stub, found on the third CI cycle);
+//  2. the shared UI layer (a module every menu/sheet spec exercises) lands in group `ui`, which a local floor
+//     does not run (#4194: three full tiers on specs it could not run).
+const SPEC_LOAD_LINE = /addScriptTag|readFileSync|require\(|import\(|\burl\s*:|\bpath\s*:|path\.join|\bgoto\(/;
+
+/** Specs whose source loads a changed js/ or css/ file by path. @returns {{spec:string,module:string}[]} */
+export function standaloneSpecs(files, opts = {}) {
+  const mods = files.filter((f) => /^(?:js|css)\/.+\.(?:js|css)$/.test(f));
+  if (!mods.length) return [];
+  const dir = opts.specsDir || path.join(ROOT, "tests/specs");
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith(".spec.js")); } catch (_) { return []; }
+  const read = opts.read || ((n) => fs.readFileSync(path.join(dir, n), "utf8"));
+  const out = [];
+  for (const n of names) {
+    let text = "";
+    try { text = read(n); } catch (_) { continue; }
+    const lines = text.split("\n").filter((l) => SPEC_LOAD_LINE.test(l));
+    for (const m of mods) {
+      const hit = lines.some((l) => new RegExp(`["'\`](?:\\./|/)?${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`]`).test(l));
+      if (hit) out.push({ spec: `tests/specs/${n}`, module: m });
+    }
+  }
+  return out;
+}
+
+/** The shared UI layer: modules every menu/sheet/settings spec runs through, and the specs that exercise them. */
+export const SHARED_UI_LAYER = Object.freeze({
+  files: /^js\/ui\/(?:dom|modal|setting-row|menu-nav|layers|aria-state|live-region|css-zoom|key-binds|experience|dock-layout|editor-workspace)\.js$/,
+  specs: Object.freeze([
+    "tests/specs/menu-keyboard.spec.js",
+    "tests/specs/menu-traversal.spec.js",
+    "tests/specs/menu-survey.spec.js",
+    "tests/specs/settings-reload.spec.js",
+    "tests/specs/ui-audit.spec.js",
+    "tests/specs/ui-button-touch.spec.js",
+    "tests/specs/ui-resize.spec.js",
+    "tests/specs/ui-scale.spec.js",
+    "tests/specs/photo-studio.spec.js",
+  ]),
+});
+
+/** @returns {{spec:string,module:string}[]} the shared-UI specs a changed file reaches. */
+export function sharedUiSpecs(files) {
+  const hit = files.find((f) => SHARED_UI_LAYER.files.test(f));
+  return hit ? SHARED_UI_LAYER.specs.map((spec) => ({ spec, module: hit })) : [];
+}
+
+/** Every spec to name for a diff, with why: standalone loaders then the shared UI layer (deduped by spec). */
+export function extraSpecs(files, opts = {}) {
+  const seen = new Map();
+  for (const r of standaloneSpecs(files, opts)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "loads-module-standalone" });
+  for (const r of sharedUiSpecs(files)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "shared-ui-layer" });
+  return [...seen.values()].filter((r) => fs.existsSync(path.join(opts.root || ROOT, r.spec)) || opts.read);
+}
+
+// NEW-MODULE / NEW-GLOBAL CHECKLIST. The same five-point list is one paragraph in .claude/rules/game-code.md.
+export const NEW_MODULE_CHECKLIST = Object.freeze([
+  "the eager shell is at its budget (tests/unit/boot-load-budget.test.mjs): prefer the LAZY lists in tools/manifest.cjs over EAGER",
+  "VM stubs: race-session-lazy, results-cam and ui-sheets-audit load modules by hand; add the new module (and any global it reads) there",
+  "types/game-ctx.d.ts: declare what the module takes from G / exposes on it",
+  "docs/agent-index.json (`npm run gen`) and the agentHelp size ratchet (tests/unit/agent-help-size*.test.mjs)",
+  "a new tools/perf/*.mjs also needs its entry in docs/agent-output/policies.json",
+]);
+
+/** Lines of a unified diff that add a top-level IIFE global or a `window.X =` assignment. */
+export function addedGlobals(diffText) {
+  const out = [];
+  for (const line of String(diffText || "").split("\n")) {
+    if (!line.startsWith("+") || line.startsWith("+++")) continue;
+    const m = /^\+(?:(?:const|var|let)\s+([A-Z][A-Za-z0-9_]*)\s*=\s*(?:\(|function|async)|(?:window|globalThis)\.([A-Z][A-Za-z0-9_]*)\s*=)/.exec(line);
+    if (m) out.push(m[1] || m[2]);
+  }
+  return out;
+}
+
+/** Added paths (new js/ modules, new tools/perf scripts) plus names of globals added in changed js. */
+export function newModuleTriggers(added, globals = []) {
+  const mods = added.filter((f) => /^js\/.+\.js$/.test(f) || /^tools\/perf\/[^/]+\.mjs$/.test(f));
+  return { modules: mods, globals: [...new Set(globals)] };
+}
+
+function gitLines(args) {
+  try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\n").filter(Boolean); }
+  catch (_) { return []; }
+}
+
+/** Added-vs-deploy paths and added globals for the working diff (best effort: no git -> nothing). */
+function addedSinceBase(explicit) {
+  // No HEAD~1 fallback (audit W6): without a deploy base only the untracked files count as added.
+  const base = resolveDeployBase(DEPLOY_BRANCH, { cwd: ROOT })?.sha || "";
+  const added = new Set([...(base ? gitLines(["diff", "--name-only", "--diff-filter=A", base]) : []),
+    ...gitLines(["ls-files", "--others", "--exclude-standard"])]);
+  if (explicit) for (const f of explicit) if (fs.existsSync(path.join(ROOT, f)) && !gitLines(["cat-file", "-e", `HEAD:${f}`]).length && !gitLines(["ls-tree", "HEAD", f]).length) added.add(f);
+  let globals = [];
+  if (base) {
+    const diff = gitLines(["diff", "-U0", base, "--", "js"]).join("\n");
+    globals = addedGlobals(diff);
+  }
+  for (const f of added) if (/^js\/.+\.js$/.test(f)) {
+    try { globals.push(...addedGlobals(fs.readFileSync(path.join(ROOT, f), "utf8").split("\n").map((l) => `+${l}`).join("\n"))); } catch (_) { /* gone */ }
+  }
+  return { added: [...added], globals };
+}
+
 // Validate the selector before consulting git or starting any verification.
 export function validateSelectionArgs(argv, flags = ["--staged", "--bg", "--json", "--help", "-h"]) {
   const allowed = new Set(flags);
@@ -470,7 +579,6 @@ function changedFiles(argv) {
   // answers a different question and looks like a real answer).
   const explicit = argv.filter((a, n) => !a.startsWith("--") && !(since >= 0 && n === since + 1));
   if (explicit.length) return explicit;
-  const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
   // Rename sources too (ledger M36): --name-only lists only the destination.
   if (argv.includes("--staged")) return changedPaths(["--cached"], { cwd: ROOT });
   if (since >= 0 && argv[since + 1]) return changedPaths([argv[since + 1]], { cwd: ROOT });
@@ -482,14 +590,35 @@ function changedFiles(argv) {
   // the repo — which reads as "run everything", i.e. the tool silently gives up
   // exactly when it is asked the real question. It is kept as a fallback only
   // for a clone that has no deploy branch.
-  let base = "";
-  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "origin/main", "main", "HEAD~1"]) {
-    try { base = git(["merge-base", "HEAD", ref]); break; } catch (_) { /* try the next */ }
-  }
+  // No base is a REFUSAL (audit W6, 2026-11-10). The chain used to fall through
+  // origin/main, main and HEAD~1 — printing one `fatal: Not a valid object name`
+  // per missing ref — and answered for the last commit only, which reads as a
+  // real answer for the whole branch. origin/main is gone with it: main is a
+  // stale fork, and a merge-base with it is not this branch's change either.
+  const base = resolveDeployBase(DEPLOY_BRANCH, { cwd: ROOT });
+  if (!base) { const e = new Error(noDeployBaseMessage(DEPLOY_BRANCH, "pick-tests")); e.code = "NO_DEPLOY_BASE"; throw e; }
+  changedFiles.base = base;
   const out = new Set(changedPaths(["HEAD"], { cwd: ROOT }));
-  if (base) for (const f of changedPaths([base], { cwd: ROOT })) out.add(f);
-  for (const f of git(["ls-files", "--others", "--exclude-standard"]).split("\n")) if (f) out.add(f);
+  for (const f of changedPaths([base.sha], { cwd: ROOT })) out.add(f);
+  for (const f of untrackedPaths({ cwd: ROOT })) out.add(f);
   return [...out];
+}
+
+/** Prose for the specs the group rules cannot name, and the new-module checklist when the diff adds one. */
+function printExtras(files, argv) {
+  const specs = extraSpecs(files);
+  if (specs.length) {
+    console.log(`\n${specs.length} spec(s) the group rules do not name (the PR's selected shard runs them; one group on the pushed branch: node tools/ci/remote-group.mjs <group>; never run them locally, AGENTS.md rule 5):`);
+    for (const r of specs) console.log(`    ${r.spec}  (${r.kind === "shared-ui-layer" ? "shared UI layer" : "loads"} ${r.module})`);
+  }
+  const explicit = argv.filter((a, n) => !a.startsWith("--") && !(argv.indexOf("--since") >= 0 && n === argv.indexOf("--since") + 1));
+  const { added, globals } = addedSinceBase(explicit);
+  const trig = newModuleTriggers(added, globals);
+  if (trig.modules.length || trig.globals.length) {
+    console.log(`\nNEW MODULE / GLOBAL (${[...trig.modules, ...trig.globals.map((g) => `global ${g}`)].join(", ")}) - checklist:`);
+    for (const c of NEW_MODULE_CHECKLIST) console.log(`    [ ] ${c}`);
+    console.log("    (.claude/rules/game-code.md §New module)");
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -501,10 +630,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   // tools-runnable.test.mjs fails even though the selector itself is fine.
   // That smoke used to pass accidentally whenever the working tree had diffs.
   const USAGE = `Usage: node tools/ci/pick-tests.mjs [options] [paths…]
-  (no args)     groups for files not yet on ${DEPLOY_BRANCH}, plus the working tree
+  (no args)     groups for files not yet on ${DEPLOY_BRANCH} (origin/, else local; neither: exit 4), plus the working tree and untracked files
   --staged      only staged files
   --since <ref> files changed since <ref>
-  --bg          print tools/ci/test-bg.mjs batch commands only
+  --bg          print tools/ci/remote-group.mjs commands only (one per browser group)
   --json        machine-readable {reason,files,groups} (asserted by pick-tests.test.mjs)
   --help        this message
 
@@ -513,7 +642,15 @@ An unknown option prints this usage and exits 2.`;
   if (argv.includes("--help") || argv.includes("-h")) { console.log(USAGE); process.exit(0); }
   try { validateSelectionArgs(argv); } catch (e) { console.error(`${e.message}\n${USAGE}`); process.exit(2); }
 
-  const files = changedFiles(argv);
+  let files;
+  try { files = changedFiles(argv); }
+  catch (e) {
+    if (e.code !== "NO_DEPLOY_BASE") throw e;
+    if (argv.includes("--json")) console.log(JSON.stringify({ reason: "no-deploy-base", files: [], groups: [], error: e.message }));
+    else console.error(e.message);
+    process.exit(4);
+  }
+  const base = changedFiles.base || null;
 
   // --json short-circuits BEFORE any prose path, deliberately. The two early
   // exits below ("no changed files", "no rule matched") are the cases a
@@ -525,28 +662,34 @@ An unknown option prints this usage and exits 2.`;
     const g = pick(files);
     const pkgJ = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
     const named = [...g.keys()].filter((n) => pkgJ.scripts[`test:${n}`]).sort();
+    const specs = extraSpecs(files).map((r) => ({ spec: r.spec, kind: r.kind, because: r.module }));
     console.log(JSON.stringify({
       // "none" — nothing changed, run nothing. "unmatched" — files changed but
       // no rule claimed them, so the selection is NOT trustworthy and the
       // caller must fall back to a full run. "matched" — groups is the answer.
       ...selectionReceipt(files, pkgJ.scripts),
+      ...(base ? { base: `${base.ref}@${base.sha}` } : {}),
       files,
       groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
+      specs,
+      // An empty list read as "no spec needed" to a cold agent (MCP-REFINE-2026-10-30): name where the spec comes from.
+      ...(specs.length || !files.length ? {} : { specsNote: `groups, not specs: for the ONE pre-push spec run select-specs --files ${files.slice(0, 3).join(",")}${files.length > 3 ? ",…" : ""} (its floor field)` }),
     }));
     process.exit(0);
   }
 
   if (!files.length) {
-    console.log("no changed files — nothing to run");
+    console.log(`no changed files${base ? ` vs ${base.ref} (merge-base ${base.sha.slice(0, 12)})` : ""} — nothing to run`);
     process.exit(0);
   }
   const groups = pick(files);
-  console.log(`${files.length} changed file(s):`);
+  console.log(`${files.length} changed file(s)${base ? ` vs ${base.ref} (merge-base ${base.sha.slice(0, 12)}, untracked included)` : ""}:`);
   for (const f of files.slice(0, 20)) console.log(`    ${f}`);
   if (files.length > 20) console.log(`    … and ${files.length - 20} more`);
 
   if (!groups.size) {
     console.log("\nno rule matched — run `npm run test:tiny` and use your judgement");
+    printExtras(files, argv);
     process.exit(0);
   }
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
@@ -557,26 +700,16 @@ An unknown option prints this usage and exits 2.`;
   console.log(`\n${names.length} group(s) to run:`);
   for (const g of names) console.log(`    test:${g.padEnd(14)} ${[...groups.get(g)][0]}`);
 
-  // BATCHED, because this is deliberately biased toward running too much and a
-  // wide selection pasted as one command oversubscribes the box. Every worker
-  // drives a SwiftShader Chromium, and past the core count they fail on their
-  // own timeouts — which read as a broken change rather than a busy machine.
-  // test-bg.mjs enforces the same cap, so an unbatched paste is now refused
-  // rather than silently producing fake failures; this just prints the shape it
-  // will accept. (Doing this in the suggester alone would not have been enough:
-  // the rule was in AGENTS.md and docs/TESTING.md the whole time, and this tool
-  // still handed out a nine-group command.)
-  const batches = [];
-  for (let i = 0; i < names.length; i += MAX_GROUPS) batches.push(names.slice(i, i + MAX_GROUPS));
-  const cmds = batches.map((b) => `node tools/ci/test-bg.mjs ${b.join(" ")}`);
+  // Browser groups run on GitHub's runners, never on this box (AGENTS.md rule 5,
+  // 2026-11-03): the PR's tiers run what these rules name on every push, and
+  // `remote-group.mjs <group>` answers "is this whole group green on my pushed
+  // branch?" on four llvmpipe shards. The local floor stays `tooling-fast --changed`.
+  const cmds = names.filter((g) => groupsJson()[`test:${g}`]?.kind === "browser").map((g) => `node tools/ci/remote-group.mjs ${g}`);
   if (argv.includes("--bg")) {
     console.log("\n" + cmds.join("\n"));
-  } else {
-    console.log(`\nrun them in the background, with logs — ONE BATCH AT A TIME` +
-      ` (${CORES} cores, ${WORKERS} workers per group):`);
+  } else if (cmds.length) {
+    console.log(`\nthe PR run covers them; one whole group on the PUSHED branch (never locally):`);
     for (const c of cmds) console.log(`    ${c}`);
   }
-  if (batches.length > 1) {
-    console.log(`\nwait for each batch before starting the next:  node tools/ci/test-bg.mjs --wait`);
-  }
+  printExtras(files, argv);
 }

@@ -167,6 +167,11 @@ function create(G, deps) {
   const condReset = button("RESET CONDITIONS", () => resetCond(), "ps-cond-reset");
   const condGroup = group("TIME & WEATHER", [todRow, wxRow, condReset,
     mk("p", { className: "adv-help", textContent: "Changes the light and weather for this photo only. Your race and results stay as they were." })]);
+  // DRIVING LINE: show or hide the suggested-line ribbon for this photo only (DrivingLine.setPhoto), put back on close.
+  const lineRow = select("Driving line", [["on", "Shown"], ["off", "Hidden"]], () => (DrivingLine.shown() ? "on" : "off"),
+    (v) => { if (st.busy || st.closing || isGarage()) return; DrivingLine.setPhoto(v === "on"); }, "ps-line");
+  const lineGroup = group("DRIVING LINE", [lineRow,
+    mk("p", { className: "adv-help", textContent: "Shows or hides the racing line for this photo only. Your DRIVING LINE setting stays as it is." })]);
   function paintCond() {
     for (const [id, row, v] of [["ps-tod", todRow, G.setTimeOfDay()], ["ps-weather", wxRow, G.weather()]]) {
       SettingRow.paint(row, v);
@@ -369,6 +374,7 @@ function create(G, deps) {
       subjectGroup,
       carGroup,
       condGroup,
+      lineGroup,
       lightGroup,
       looksGroup,
       group("COMPOSITION", [
@@ -472,7 +478,8 @@ function create(G, deps) {
       E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
     }
     placeCar();
-    condGroup.hidden = isGarage();
+    condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
+    if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();
     if (!isGarage()) {
       cond.tod = G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond();
@@ -509,6 +516,7 @@ function create(G, deps) {
   function finishClose(back) {
     if (!st.open && !st.closing) return;
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
+    if (!isGarage()) DrivingLine.setPhoto(null);
     endLight();
     const returnTo = st.back; st.generation++; st.open = false; st.back = null; st.closing = false;
     if (releaseCar) { releaseCar(); releaseCar = null; }
@@ -720,10 +728,12 @@ function create(G, deps) {
     if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 12 * 1024 * 1024) { say("Choose a PNG, JPEG or WebP photo under 12 MB."); return; }
     const gen = st.generation, opts = options(); busy(true);
     try {
-      const image = await createImageBitmap(file, { resizeWidth: 1024, resizeQuality: "high" });
+      // Decode at native size; keepSource already downscales (never upscales). A forced
+      // resizeWidth:1024 used to enlarge small personal photos (hunt F4).
+      const image = await createImageBitmap(file);
       try {
         if (gen !== st.generation) return;
-        if (image.height > 4096) throw new Error("Choose a photo with a less extreme aspect ratio");
+        if (image.width > 8192 || image.height > 8192) throw new Error("Choose a photo with a less extreme aspect ratio");
         keepSource(image, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false; say("Personal photo imported. Save it or use it as your menu background.");
       }
       finally { image.close(); }
@@ -757,5 +767,6 @@ function create(G, deps) {
   const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto, hasCar };
   live = api; busy(false); return api;
 }
-return Object.freeze({ create, background, setBackground, crop, filename, ASPECTS, LIMIT, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
+// ASPECTS / LIMIT stay module-private (crop + library only); no external callers.
+return Object.freeze({ create, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
 })();

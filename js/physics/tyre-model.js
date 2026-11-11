@@ -213,6 +213,15 @@ const TyreModel = (function () {
   const W_KERB = 0.35;
   const W_OFF = 1.20;
   const LOAD_MIN = 0.20, LOAD_MAX = 3.0;
+  // OFF-ROAD IS ONE PRICE FOR EVERY CAR (#4936). W_OFF used to sit inside each path's
+  // clamp, before that path's own divisor, so a metre of grass cost the player
+  // W_OFF/LOAD_REF = 2.45 load units and the AI W_OFF/LOAD_AI_REF = 0.98: the
+  // player's stint paid ~2.5x for the same excursion. It is now added AFTER the
+  // divide, on the shared normalised scale, at the player's existing price, so the
+  // player's load is unchanged to the bit and the AI pays the same for the same grass.
+  // LOAD_MAX_N is the player's old ceiling on that scale, shared by both paths.
+  const W_OFF_N = W_OFF / LOAD_REF;
+  const LOAD_MAX_N = LOAD_MAX / LOAD_REF;
 
   // Squared, not linear, for two reasons: tyre energy is not linear in load, and
   // it is what makes a tidy lap materially cheaper than a scrappy one — the
@@ -222,8 +231,8 @@ const TyreModel = (function () {
     const lng = clamp(fin(c.axFrac, 0), 0, 1);
     const slide = clamp(fin(c.skidIntensity, 0), 0, 1);
     const raw = clamp(LOAD_IDLE + W_LAT * lat * lat + W_LONG * lng * lng + W_SLIDE * slide
-      + (c.onKerb ? W_KERB : 0) + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX);
-    return raw / LOAD_REF;
+      + (c.onKerb ? W_KERB : 0), LOAD_MIN, LOAD_MAX);
+    return Math.min(LOAD_MAX_N, raw / LOAD_REF + (c.offroad ? W_OFF_N : 0));
   }
 
   // The AI has no slip angle to read, so its lateral term is implicit: a car
@@ -262,7 +271,8 @@ const TyreModel = (function () {
   // Tight, because unlike the player's path this one carries no geometry — only
   // consistency and longitudinal accel — so one divisor fits the calendar
   // instead of straddling a range the way LOAD_REF must. Divided AFTER the
-  // clamp, exactly as humanLoad does, so the two paths stay the same shape.
+  // clamp, exactly as humanLoad does, so the two paths stay the same shape; the
+  // off-road price (W_OFF_N) is added after that divide on both (#4936).
   const LOAD_AI_REF = 1.23;
   // An AI car's SIGNED longitudinal accel. `accSm` is engine pull only: written
   // on the throttle branch, never below 0 and stale under the brake, so the
@@ -275,8 +285,8 @@ const TyreModel = (function () {
   function aiLoad(c, aTop) {
     const cons = clamp(fin(c.consistency, 0.75), 0, 1);
     const lng = clamp(fin(Math.abs(aiLong(c)) / Math.max(1, aTop), 0), 0, 1);
-    return clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng
-      + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX) / LOAD_AI_REF;
+    return Math.min(LOAD_MAX_N, clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng,
+      LOAD_MIN, LOAD_MAX) / LOAD_AI_REF + (c.offroad ? W_OFF_N : 0));
   }
 
   // ── GRIP ──────────────────────────────────────────────────────────────────
@@ -985,7 +995,12 @@ const TyreModel = (function () {
     function lapsLeft(c) {
       if (!on() || !c || !c.tyre) return null;
       const w = spent(c), n = lapsOn(c);
-      const life = n >= 1 && w > 0.02 ? n / w : planLaps(c.tyre.life, G.lapsTarget);
+      // WEAR IS CONTINUOUS, lapsOn IS WHOLE LAPS: n / w late in a lap divided n laps by the wear
+      // of nearly n + 1, so the rate read up to (n + 1) / n high — 2.0 laps left on a set that had
+      // 2.6 (measured, monaco rain, 5 laps: the whole AI field boxed wet-for-wet on it, and the
+      // HUD's laps-left sawtoothed down through every lap). Count the part of this lap driven.
+      const len = G.track && G.track.total, at = len > 0 && Number.isFinite(c.prog) ? Math.max(0, c.prog - (c._progGift || 0)) / len : 0;
+      const life = n >= 1 && w > 0.02 ? (n + (at - Math.floor(at))) / w : planLaps(c.tyre.life, G.lapsTarget);
       return Math.max(0, life * (1 - Math.min(1, w)));
     }
 
@@ -1032,12 +1047,25 @@ const TyreModel = (function () {
       };
     }
 
+    // A WET ROAD AT THE LIGHTS FITS THE WEATHER'S TREAD to a car that carries its
+    // own garage slick (the player, a MY TEAM mate), as the field is fitted. The
+    // garage does not show the race's weather when the set is chosen, and a slick
+    // on a wet road is 0.72 grip against a field at 0.97: with wear off there is
+    // no pit lane at all, and with wear on it was a forced stop on lap 1 that a
+    // 3-lap race never recovers (Bryce's decision, #5251). A treaded set of their
+    // own stays theirs; the garage slick comes back at a stop on a dry road.
+    function sessionStartRecord(c, tread) {
+      const rec = startRecord(c, tread);
+      if (!(tread > 0) || !c || !c.tyreOpt || !rec || rec.tread > 0) return rec;
+      return classRecord(classForTread(tread));
+    }
+
     return {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
       lapsOn, spent, lapsLeft, belowWindow, info, severity, ambient, trackTemp,
       level: () => level, setLevel, on, planLaps,
-      classRecord, optionRecord, applyCompound, startRecord,
+      classRecord, optionRecord, applyCompound, startRecord: sessionStartRecord,
     };
   }
 

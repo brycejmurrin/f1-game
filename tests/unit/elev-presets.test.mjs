@@ -74,6 +74,41 @@ test("Flat / Rolling / Hilly presets write node heights; deterministic; undo-sha
   assert.ok(E.isFlat(cleared.heights));
 });
 
+test("pinning the start does not leave a wall where the lap closes", () => {
+  const E = load();
+  // Dense oval: the old feather scaled only the last three points, so seed 54
+  // stepped 18 m → 4 m on one chord (30 %) and 8.5 m → 0 m across the start (20 %).
+  const gradeRed = 0.15; // TrackValidate.LIMITS.gradeRed
+  function worstGrade(pts, h) {
+    let g = 0, seam = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const gg = Math.abs(h[(i + 1) % h.length] - h[i]) / d;
+      if (gg > g) g = gg;
+      if (i === pts.length - 1) seam = gg;
+    }
+    return { g, seam };
+  }
+  const known = oval(80, 900, 550);
+  const knownH = E.apply("hilly", known, { seed: 54 }).heights;
+  const knownG = worstGrade(known, knownH);
+  assert.equal(knownH[0], 0, "start stays pinned");
+  assert.ok(knownG.g <= gradeRed, "hilly seed 54 grade " + (knownG.g * 100).toFixed(1) + "% is a wall");
+  assert.ok(knownG.seam < 0.10, "closing chord grade " + (knownG.seam * 100).toFixed(1) + "%");
+  for (const style of ["rolling", "hilly"]) {
+    for (const n of [12, 40, 80]) {
+      for (let seed = 1; seed <= 40; seed++) {
+        const pts = oval(n, 900, 550);
+        const h = E.apply(style, pts, { seed }).heights;
+        assert.equal(h[0], 0);
+        const w = worstGrade(pts, h);
+        assert.ok(w.g <= gradeRed, style + " n=" + n + " seed " + seed + " grade " + (w.g * 100).toFixed(1) + "%");
+      }
+    }
+  }
+});
+
 test("unknown style → flat; short pts → flat", () => {
   const E = load();
   assert.equal(E.apply("mystery", oval(10)).style, "flat");

@@ -1,9 +1,9 @@
 /* Fresh solo setup trials use normal race construction; never restore a world checkpoint. */
 const SetupTrialSession = (() => {
   "use strict";
-  // Match SessionRecords.PHYS, but read the boot-time facade directly: the
-  // lazy session records stub has no config until normal start loads its bundle.
-  const PHYS = ["PACE", "DRIFT", "FRONT_GRIP", "PLAYER_GRIP", "ROAD_FOLLOW", "STEER_EXPO", "STEER_MAX_SLIP", "STEER_SPEED_REF", "WHEELBASE", "YAW_DAMP", "YAW_INERTIA", "raceLineAssist"];
+  // SessionPhys.PHYS is the comparable-session physics list. The records module
+  // is lazy, so a title-time trial reads it from the boot module.
+  const PHYS = SessionPhys.PHYS;
   const STATIC = ["physics", "car", "parts", "track", "weather", "assists"];
   const copy = value => JSON.parse(JSON.stringify(value));
   const key = value => JSON.stringify(value, (_k, v) => v && typeof v === "object" && !Array.isArray(v)

@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { BUILT_PATHS } from "../../tools/lib/generated-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -99,12 +100,19 @@ const linkResolves = (dir, href) => {
 // exist yet by definition — so dropping the exemption would turn the next
 // planning session red. archive/ is skipped wholesale, so the archived copies
 // are covered either way.
+// A directory whose name carries an ISO date is one research or review batch: a
+// dated record, exempt like archive/.
+const SKIP_DOC_DIR = /^(archive|research|tracks|superpowers)$|\d{4}-\d{2}-\d{2}$/;
 const LIVE_DOCS = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (/archive|research|tracks|superpowers/.test(e.name)) continue;
+      // ANCHORED (audit 2026-11-09): the bare /archive|research|…/ also skipped
+      // the dated batch directories under docs/notes/ and docs/plans/
+      // by substring. Those are dated records and stay exempt — but by the
+      // DATED rule (SKIP_DOC_DIR), stated, not by accident.
+      if (SKIP_DOC_DIR.test(e.name)) continue;
       walk(rel);
     } else if (e.name.endsWith(".md")) LIVE_DOCS.push(rel);
   }
@@ -154,23 +162,79 @@ function stripMovedBlock(text) {
   return end < 0 ? text : text.slice(0, at) + text.slice(end + 2);
 }
 
-function brokenPathsIn(file) {
+function brokenPathsIn(file, re = PATH_RE) {
   const bad = [];
   let text = read(file);
   if (file === "tools/manifest.cjs") text = stripMovedBlock(text);
-  for (const m of new Set(text.match(PATH_RE) || [])) {
+  for (const m of new Set(text.match(re) || [])) {
     if (PLACEHOLDERS.has(m) || m.includes("<") || m.includes("*")) continue;
     if (!fs.existsSync(path.join(ROOT, m))) bad.push(m);
   }
   return bad;
 }
 
+// THE WIDE FORM FOR DOCS (audit 2026-11-09). PATH_RE knew eight prefixes and seven
+// extensions, so 46 dead backticked paths under .claude/, .github/, desktop/,
+// mobile/ and types/ — hooks that were deleted, workflows that retired, agents
+// that were renamed — passed the check that exists to catch exactly them. Prose
+// names config and workflow files as often as code, so the doc scan takes every
+// tracked top-level tree and every extension the repo ships. Source comments keep
+// the narrow PATH_RE: widening that is its own sweep.
+const DOC_PATH_RE = /(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs|desktop|mobile|types|\.claude|\.github|\.cursor|\.codex|\.agents)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|mdc|sh|py|ts|yml|yaml|toml|html|txt|patch))(?![A-Za-z0-9])/g;
+
+// A DATED RECORD is exempt: a doc whose own name or directory carries an ISO date
+// (docs/notes/HOOKS-SECURITY-2026-10-26.md, docs/plans/research-2026-09-16/…) was
+// true on that date and names files that have since moved, by design — the same
+// reason docs/archive/ is skipped. Undated docs describe the current tree.
+// A doc that opens with a history banner (`> **Historical record` within its
+// first 12 lines) has declared the same thing in prose: docs/notes/ carries such
+// banners on the checklists and notes whose plan has shipped.
+const HISTORY_BANNER = /^> \*\*(Historical|Superseded|Archived)\b/m;
+const isDatedRecord = (doc) => /\d{4}-\d{2}(-\d{2})?/.test(doc)
+  || HISTORY_BANNER.test(read(doc).split("\n").slice(0, 12).join("\n"));
+
+// Paths a live doc may name although they are not in the tree, each with why.
+// Gitignored output (local settings, built notices) is answered by git itself
+// below; this list is for the rest. Keep it short.
+const DOC_ABSENT_OK = new Map([
+  // Named as RETIRED: the doc's point is that the file is gone.
+  ["tools/ci/claude-transcript.py", /AGENT-SURFACE\.md/],
+  [".github/workflows/docs-guards.yml", /TESTING\.md/],
+  // An instruction to CREATE the file locally for a dev run.
+  ["desktop/dev-app-update.yml", /DESKTOP-TEST-PLAN\.md/],
+]);
+const gitIgnored = (paths) => {
+  if (!paths.length) return new Set();
+  try {
+    const out = cp.execSync("git check-ignore --no-index --stdin", { cwd: ROOT, input: paths.join("\n") });
+    return new Set(out.toString("utf8").split("\n").filter(Boolean));
+  } catch (e) { return new Set(String(e.stdout || "").split("\n").filter(Boolean)); }   // exit 1 = none ignored
+};
+
 test("live docs reference only files that exist", () => {
-  const broken = [];
-  for (const doc of LIVE_DOCS)
-    for (const p of brokenPathsIn(doc)) broken.push(`${doc} -> ${p}`);
+  const candidates = [];
+  for (const doc of LIVE_DOCS) {
+    if (isDatedRecord(doc)) continue;
+    for (const p of brokenPathsIn(doc, DOC_PATH_RE)) {
+      if (DOC_ABSENT_OK.get(p)?.test(doc)) continue;
+      candidates.push([doc, p]);
+    }
+  }
+  const ignored = gitIgnored([...new Set(candidates.map(([, p]) => p))]);
+  const broken = candidates.filter(([, p]) => !ignored.has(p)).map(([d, p]) => `${d} -> ${p}`);
   assert.deepEqual(broken, [],
     "a doc points at a path that no longer exists — update the doc, or add a placeholder if it is illustrative");
+});
+
+test("the dated-record exemption and DOC_PATH_RE still see what they claim to", () => {
+  const dated = ["docs", "notes", "review-2099-01-01"].join("/");
+  assert.ok(isDatedRecord(`${dated}/hooks-models-cleanup.md`));
+  assert.ok(!isDatedRecord("docs/notes/AGENT-MEMORY.md"));
+  for (const p of [".claude/hooks/x.py", ".github/workflows/ci.yml", "desktop/main.cjs", "types/game-ctx.d.ts", "mobile/a.html"])
+    assert.deepEqual(`see \`${p}\``.match(DOC_PATH_RE), [p], p);
+  // Anchored: a name that merely CONTAINS a skipped word is walked.
+  for (const d of ["trackside", "research-notes", "archived-ideas"]) assert.ok(!SKIP_DOC_DIR.test(d), d);
+  for (const d of ["archive", "research", "research-2099-01-01", "ops-research-2099-01-01"]) assert.ok(SKIP_DOC_DIR.test(d), d);
 });
 
 // Source files that are ALLOWED to name a path that does not resolve, with the
@@ -180,6 +244,9 @@ const SOURCE_EXEMPT = new Map([
   // manifest records where it would slot in. It is legitimately absent until
   // someone bakes a profile.
   ["js/track/circuit-elevations.js", /bake-elevation|manifest\.cjs|track\/tracks\.js|docs-integrity/],
+  // A RETIRED generator output (tools/lib/generated-paths.mjs RETIRED_PATHS, 2026-11-10): deleted from git on
+  // purpose. The conflict cure and its tests must name the old path to take its deletion on an old branch.
+  ["docs/TESTING-COVERAGE.md", /generated-paths\.mjs|ci\/deploy\.mjs|gen-coverage-table\.mjs|deploy-tool\.test\.mjs|agent-indexes\.test\.mjs|docs-integrity/],
   // Synthetic fixture HTML fed to the service worker under test — a string it
   // must rewrite, not a file it must find.
   ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
@@ -448,7 +515,7 @@ test("the gate ladder is a ladder, and no doc commits its sizes", async () => {
   assert.deepEqual([f.fast, f.gate, f.disk], [fast.length, gate.size, disk], "the report tool measures the same ladder");
   const SIZES = [/\d+ of \d+ unit\s+files/, /The other \d+ have taken deploys red/, /<!-- GENERATED: ladder -->/,
     /\| `npm run test:tooling-fast` \| \d+ of \d+/];
-  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"]) {
+  for (const doc of ["AGENTS.md", "docs/VERIFICATION.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"]) {
     const text = read(doc);
     for (const re of SIZES) assert.doesNotMatch(text, re, `${doc} commits a ladder size (${re}) — every PR adding a test file would conflict on it; point at gen-ladder-figures.mjs instead`);
   }
@@ -459,7 +526,7 @@ test("ci.yml makes the derived figures advisory off pull requests, and only ther
   // but pull_request — the merged tip cannot regenerate itself — and must not
   // leak onto pull requests, where the PR is the one that regenerates.
   const ci = read(".github/workflows/ci.yml");
-  const shards = [...ci.matchAll(/name: Tooling-fast shard [1234]\/4[\s\S]*?run: node tools\/ci\/tooling-fast\.mjs --jobs=4 --shard=[1234]\/4/g)];
+  const shards = [...ci.matchAll(/name: Tooling-fast shard [1234]\/4[\s\S]*?run: node tools\/ci\/tooling-fast\.mjs \$\{GUARDS_CHANGED:\+--changed\} --jobs=4 --shard=[1234]\/4/g)];
   assert.equal(shards.length, 4, "all four tooling-fast shards must exist so Structural guards can split");
   for (const m of shards) {
     assert.match(m[0], /APEX_DOCS_FIGURES_ADVISORY: \$\{\{ github\.event_name != 'pull_request' && '1' \|\| '' \}\}/,
@@ -504,7 +571,7 @@ test("README's season round list names exactly the non-classic circuits", () => 
 // A BARE `name.js` in a live doc names a file by basename alone, so the path
 // check above never sees it — which is how `debrisworld.js`, `light-presets.js`
 // and `light-store.js` outlived the files they named by weeks. Each backticked
-// bare basename must be the basename of a tracked file. Exempt: lines that say
+// bare basename must name a tracked file or an existing canonical build product. Exempt: lines that say
 // they are history (historical / old / split from / was / former), and
 // docs/plans/, whose proposals name files that do not exist yet by definition
 // (the superpowers exemption above, for the same reason).
@@ -514,7 +581,8 @@ const BARE_JS_ALLOW = new Map([
 ]);
 test("live docs name only real files in backticked bare `name.js` tokens", () => {
   if (!TRACKED) return;                         // outside a checkout there is no index to consult
-  const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
+  const built = BUILT_PATHS.filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const bases = new Set([...TRACKED.files, ...built].map((f) => path.basename(f)));
   const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
   const bad = [];
   let seen = 0;
@@ -532,7 +600,7 @@ test("live docs name only real files in backticked bare `name.js` tokens", () =>
     });
   }
   assert.ok(seen >= 1, "no live doc names a backticked bare .js file — the scan checked nothing");
-  assert.deepEqual(bad, [], "a live doc names a .js file no tracked file is called — write its real path, or mark the line historical");
+  assert.deepEqual(bad, [], "a live doc names a .js file no tracked file or existing build product is called — write its real path, or mark the line historical");
 });
 
 // A BARE test-file name (`foo.test.mjs`, `foo.spec.js`) is how TESTING.md's coverage
@@ -647,7 +715,9 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
   const on = Number(def[1]) > 0;
   const agents = read("AGENTS.md");
-  const section = agents.slice(agents.indexOf("Baked asset pack"), agents.indexOf("`window.__apex` dev API"));
+  // The slice ends at the next H2 (the `window.__apex` section it used to end at left AGENTS.md on 2026-11-03).
+  const start = agents.indexOf("Baked asset pack");
+  const section = agents.slice(start, agents.indexOf("\n## ", start));
   assert.ok(section, "the baked-asset-pack section moved");
   assert.equal(/\*\*Ships ON\.\*\*/.test(section), on,
     `matTexMix def is ${def[1]}, so the asset-pack section must say "Ships ON" iff that is > 0`);
@@ -656,7 +726,7 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // WGX implements createTextureArray / setMaterialMaps — the old "WGX does not"
   // trap sent agents hunting a missing port that already shipped.
   assert.doesNotMatch(section, /WGX does not/);
-  assert.match(section, /GLX,\s*\n?TLX, and WGX implement it|GLX,\s*TLX, and WGX implement it/);
+  assert.match(section, /GLX,\s*TLX,\s*and\s*WGX\s*implement it/);
 
   // …and the same claim, outside the slice. The check above reads only the text
   // BETWEEN "Baked asset pack" and "`window.__apex` dev API", so the __apex hook
@@ -791,10 +861,22 @@ test("docs/README.md indexes every directory under docs/", () => {
     for (const sub of fs.readdirSync(path.join(ROOT, "docs/archive"), { withFileTypes: true }))
       if (sub.isDirectory()) dirs.push(`archive/${sub.name}/`);
   }
-  // A directory counts as indexed when the path appears anywhere in the file:
-  // some are linked as a directory row, others only through a link to a file
-  // inside them (notes/, research/). Either is discoverable, which is the point.
-  const missing = dirs.filter((d) => !index.includes(d));
+  // A directory counts as indexed when a LINK in the index (docs/README.md, or the
+  // NOTES-INDEX.md it hands the notes/plans/archive tables to) resolves to the
+  // directory or to a file inside it. This was a substring test on the README
+  // text until 2026-11-09, so "plans/" was satisfied by "archive/plans/" and any
+  // prose mention counted as an index row (audit W27).
+  void index;
+  const targets = [];
+  for (const src of ["docs/README.md", "docs/NOTES-INDEX.md"]) {
+    if (!fs.existsSync(path.join(ROOT, src))) continue;
+    for (const m of read(src).matchAll(/\]\(([^)\s#]+)(?:#[^)]*)?\)/g)) {
+      if (/^[a-z]+:/i.test(m[1])) continue;
+      const rel = path.relative(path.join(ROOT, "docs"), path.resolve(ROOT, path.dirname(src), m[1])).split(path.sep).join("/");
+      targets.push(rel.replace(/\/$/, ""));
+    }
+  }
+  const missing = dirs.filter((d) => !targets.some((t) => t === d.slice(0, -1) || t.startsWith(d)));
   assert.deepEqual(missing, [], "a directory under docs/ is unreachable from docs/README.md");
 });
 
@@ -1053,6 +1135,7 @@ test("Supersedes: / Superseded by: pairs in docs/notes are two-way and indexed",
         assert.ok(fs.existsSync(path.join(ROOT, oldRel)), `docs/notes/${f} supersedes ${old}, which does not exist`);
         const back = read(oldRel).split("\n").filter((l) => /^Superseded by:/.test(l)).flatMap(links);
         assert.ok(back.includes(f), `${oldRel} needs a line "Superseded by: [..](${f})" — the old note must point at its replacement`);
+        // The built notes table (knowledge-gc.mjs --index) flags it from the Superseded by: line itself; a hand row must say it.
         const row = index.split("\n").find((l) => l.includes(`(notes/${path.posix.basename(old)})`));
         if (row) assert.match(row, /superseded/i, `docs/README.md's row for notes/${old} must say it is superseded (by ${f})`);
       }

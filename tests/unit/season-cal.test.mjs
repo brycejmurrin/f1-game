@@ -254,6 +254,17 @@ test("unchanged setup preserves the first qualifying grid without writing the sa
   assert.equal(changed.season.config.laps, 10);
 });
 
+test("a refused save (invalid) is not inherited by a no-op APPLY as STORAGE IS FULL", () => {
+  const { S } = load();
+  S.engage("season");
+  const season = S.restart();
+  assert.equal(S.save(null).durable, false, "invalid save is refused");
+  const result = S.applyConfig({ ...S.config(), trackIds: [...S.config().trackIds] });
+  assert.equal(result.ok, true);
+  assert.equal(result.season, season);
+  assert.equal(result.durable, true, "nothing was written, so nothing is session-only");
+});
+
 test("unchanged setup preserves round and sprint progress, and session-only save status", () => {
   for (const progress of [{ round: 2 }, { round: 0, stage: "race" }]) {
     const { S, writes, store } = load({ seasonCfg: { sprint: true } });
@@ -703,7 +714,7 @@ test("a race nobody took the flag in pays the shortened-race scale by the leader
   assert.equal(pay(1, 10).pts.d0 || 0, 0, "under two laps: no points");
   assert.deepEqual([0, 4, 5].map((i) => pay(2, 10).pts["d" + i] || 0), [6, 1, 0], "2 laps to 25 %: column 1, top five");
   assert.deepEqual([0, 8, 9].map((i) => pay(4, 10).pts["d" + i] || 0), [13, 1, 0], "25-50 %: column 2, top nine");
-  assert.deepEqual([0, 3, 9].map((i) => pay(5, 10).pts["d" + i] || 0), [19, 10, 1], "50-75 %: column 3");
+  assert.deepEqual([0, 3, 6, 9].map((i) => pay(5, 10).pts["d" + i] || 0), [19, 9, 5, 1], "50-75 %: column 3 (19-14-12-9-8-6-5-3-2-1)");
   assert.equal(pay(8, 10).pts.d0, 25, "75 % or more: the full table");
   assert.equal(pay(null).pts.d0, 25, "a race that saw the flag is never shortened");
   assert.equal(pay(4, 10, "d0").lastFl, undefined, "no fastest-lap point below 50 %");
@@ -825,7 +836,7 @@ test("2026 REAL: exactly the six real sprint weekends, per round", () => {
 
 test("2026 REAL leaves the other presets and old configs exactly as they were", () => {
   const { S, tracks } = load();
-  assert.deepEqual([...S.PRESETS.map((p) => p.id)], ["full", "real2026", "12", "8", "5", "classics"]);
+  assert.deepEqual([...S.PRESETS.map((p) => p.id)], ["real2026", "full", "12", "8", "5", "classics"]);
   assert.deepEqual(JSON.parse(JSON.stringify(S.preset("full"))), { trackIds: tracks.SEASON.map((t) => t.id) },
     "a calendar preset sets no format");
   assert.deepEqual([...S.preset("8").trackIds], tracks.SEASON.map((t) => t.id).slice(0, 8));
@@ -992,9 +1003,25 @@ test("rankTeams: points, then the team's tier, then the id — one order for eve
   assert.match(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), /SeasonCal\.rankTeams\(career\.season, a\.id, b\.id\)/);
 });
 
-test("boot's migrate-and-save never writes back a season load() refused (game.js)", () => {
-  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season, \{ migration: true \}\);/);
+test("boot's migrate-and-save never writes back a season load() refused (game.js)", async () => {
+  // The REAL boot in the game VM over a stored season naming a circuit this
+  // build does not know: the stored calendar survives byte for byte, and boot
+  // does not even try to save the lossy read (no refused save, no warning).
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const lossy = { round: 1, pts: { d0: 25 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco", "nosuch"] } };
+  const writes = [];
+  const g = await createGame({ carMeshes: false, storage: { season: lossy }, onSandbox(sandbox) {
+    const ls = sandbox.localStorage, set = ls.setItem.bind(ls);
+    ls.setItem = (k, v) => { if (k === "apex26.season") writes.push(v); return set(k, v); };
+  } });
+  try {
+    const SC = g.sandbox.SeasonCal;
+    assert.equal(SC.lastLoadLossy(), true, "boot's load() read the unknown circuit as lossy");
+    assert.equal(writes.length, 0, "boot wrote nothing to apex26.season");
+    assert.deepEqual(JSON.parse(g.sandbox.localStorage.getItem("apex26.season")), lossy, "the stored season keeps its unknown circuit");
+    assert.notEqual(SC.saveStatus().reason, "unknown circuit", "boot never attempted to save the lossy read");
+    assert.equal(g.record.console.filter(([, m]) => /SeasonCal\.save refused/.test(m)).length, 0, "no refused-save warning at boot");
+  } finally { g.close(); }
 });
 
 test("mid-weekend reads the season's own config: the title menu (flow gp) still says AFTER THE SPRINT", () => {
@@ -1106,8 +1133,8 @@ test("the champion is the season.pts leader even when that seat is no longer on 
   };
   const ctx = vm.createContext({ document: { createElement: mk }, SeasonCal: S, Teams: { LIST: [], POINTS }, GameAudio: {} });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResults = GameResults;", ctx, { filename: absSrc("js/ui/results-sheet.js") });
-  ctx.GameResults.create(G).buildChampion();
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResultsSheet = GameResultsSheet;", ctx, { filename: absSrc("js/ui/results-sheet.js") });
+  ctx.GameResultsSheet.create(G).buildChampion();
   assert.deepEqual(said, ["YOU IS WORLD CHAMPION!"], "the table leader, not the best car on the final grid");
   const ranking = els.resultsTable.children.find((r) => r.getAttribute("role") === "list"
     && r.getAttribute("aria-label") === "Final driver standings");

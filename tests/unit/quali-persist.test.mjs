@@ -12,11 +12,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/quali-model.js"), "utf8");
@@ -139,6 +141,34 @@ test("begin() restores a driven persist instead of resimming", () => {
   assert.equal(G.season.qualiOrder[0].t, 69.9, "begin must not overwrite persist with a sim");
 });
 
+test("restoring a saved grid projects live metadata without modifying its inputs", () => {
+  const raw = Object.freeze([
+    Object.freeze({ id: "p2", t: 70.1, human: 1, code: "OLD", name: "Old name" }),
+    Object.freeze({ id: "p1", t: "71.4", human: 0, noTime: 1 }),
+  ]);
+  const cars = [car("p1", "NEW", "Current driver", "new-team", true), car("p2", "HAM", "Hamilton", "me", false)];
+  const beforeCars = structuredClone(cars), beforeRaw = structuredClone(raw);
+  const { q } = loadQuali({ season: { qualiOrder: raw, round: 0 }, cars });
+  const rows = q.results();
+  assert.equal(rows[0].code, "HAM");
+  assert.equal(rows[0].name, "Hamilton");
+  assert.equal(rows[0].human, true);
+  assert.equal(Object.hasOwn(rows[0], "noTime"), false);
+  assert.equal(rows[1].code, "NEW");
+  assert.equal(rows[1].name, "Current driver");
+  assert.equal(rows[1].team, "new-team");
+  assert.equal(rows[1].isPlayer, true);
+  assert.equal(rows[1].human, false);
+  assert.equal(rows[1].t, "71.4", "legacy positive strings retain their stored representation");
+  assert.equal(rows[1].gap, 1.3, "gap arithmetic still coerces the legacy stored time");
+  assert.equal(rows[1].noTime, true);
+  assert.deepEqual(cars, beforeCars);
+  assert.deepEqual(raw, beforeRaw);
+  rows[1].name = "Changed sheet row";
+  assert.equal(cars[0].name, "Current driver");
+  assert.equal(q.results()[1].name, "Current driver", "public rows remain detached from cached classification");
+});
+
 test("simulate(0) does not persist an all-AI provisional", () => {
   const { q, G } = loadQuali({ season: { round: 0 } });
   const rows = q.simulate(0);
@@ -211,8 +241,8 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
       "a clear(true) anywhere else is legitimate only for a one-off GP, and must say so");
   assert.match(fs.readFileSync(path.join(ROOT, "js/career/season-cal.js"), "utf8"), /delete season\.qualiOrder/,
     "award() must forget the weekend's order — without it qualiResults() stays truthy for the rest of the championship and every later grid comes off round 1's times (pages.yml 1888/1889, 2026-09-02)");
-  assert.match(GAME, /if \(settles\) quali\.clear\(\)/,
-    "the in-memory classification must go when the round scores, or it outlives the order award() deleted");
+  // `if (settles) quali.clear()` — the in-memory classification goes when the
+  // round scores — is proven by behaviour in the VM test "award-time clear".
   // THE FRIEND-RACE GATE IS ARMED INSIDE openQuali, FROM ITS ARGUMENT. It used
   // to be armed by openQualiForNet AFTER calling it — but openQuali is async and
   // suspends on its first await, so its own reset ran a microtask later and wiped
@@ -298,7 +328,7 @@ test("persistOrder skips a conflicted career save", () => {
 // what is pinned is the row shape the sheet consumes and what it draws from it.
 const SHEET_SRC = fs.readFileSync(path.join(ROOT, "js/ui/quali-sheet.js"), "utf8");
 
-function loadSheet({ dom = false } = {}) {
+function loadSheet({ dom = false, globals = {} } = {}) {
   class El {
     constructor(tag) { this.tag = tag; this.className = ""; this.style = {}; this.children = []; this.hidden = true; this._t = ""; }
     get textContent() { return this._t; }
@@ -314,13 +344,32 @@ function loadSheet({ dom = false } = {}) {
     Teams: { LIST: [{ id: "rb", color: [1, 0, 0] }, { id: "me", color: [0, 0, 1] }] },
     ScrollFade: { refresh() { refreshed++; } },
     document: { createElement: (tag) => new El(tag) },
+    ...globals,
   };
   vm.createContext(ctx);
   seedLog(ctx);
+  withI18n(ctx);
   if (dom) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/dom.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/dom.js") });
   vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/quali-sheet.js") });
   return { sheet: ctx.QualiSheet.create(G), els, refreshed: () => refreshed };
 }
+
+// UI hunt 3: the pole BADGE card is built already filled, which a screen
+// reader does not announce; open() says it once the sheet is up.
+test("a driven pole's badge is spoken when the sheet opens; no badge, no line", () => {
+  const said = [], timers = [];
+  const globals = { LiveRegion: { say: (t, k) => said.push([t, k]) }, setTimeout: (fn) => timers.push(fn),
+    Badges: { onPole: () => ["pole"], labelOf: () => "POLE SITTER" } };
+  const { sheet, els } = loadSheet({ globals });
+  sheet.open([{ pos: 1, code: "VER", name: "Max", team: "me", isPlayer: true, human: true, t: 60, gap: 0 }]);
+  assert.equal(els.get("q-table").children.at(-1).className, "res-personal", "the card is on the sheet");
+  timers.splice(0).forEach((fn) => fn());
+  assert.deepEqual(said, [["BADGE UNLOCKED POLE SITTER", "save"]]);
+  const quiet = loadSheet({ globals: { ...globals, Badges: { onPole: () => [], labelOf: () => "" } } });
+  quiet.sheet.open([{ pos: 2, code: "VER", name: "Max", team: "me", isPlayer: true, human: true, t: 61, gap: 1 }]);
+  timers.splice(0).forEach((fn) => fn());
+  assert.equal(said.length, 1);
+});
 
 test("the sheet paints quali.rows(): a rival's DRIVEN lap is tagged, the title carries the player's P", () => {
   const { q } = loadQuali({ season: { round: 0 } });
@@ -392,13 +441,49 @@ test("an in-memory classification does not follow the player to another circuit"
   assert.equal(q.order(G.cars), null, "and must not grid off them either");
 });
 
-test("award-time clear: game.js drops the memory when the round scores", () => {
-  // The stamp above catches a CHANGE of circuit; this catches a calendar that
-  // visits one twice. Both are needed — neither subsumes the other.
-  assert.match(GAME, /if \(settles\) quali\.clear\(\);/,
-    "a scored round must drop the in-memory classification with the persist award() deletes");
+test("award-time clear: career's hand-rolled return to the title clears the memory too", () => {
   assert.match(CAREER_UI, /G\.qualiClear\(\);/,
     "career's hand-rolled return to the title must clear it too");
+});
+
+// The stamp above catches a CHANGE of circuit; this catches a calendar that
+// visits one twice. Both are needed — neither subsumes the other. The REAL game
+// in the VM: a season round qualifies (RACE SETTINGS → QUALIFYING sheet → TO
+// THE GRID), races, and scores at the flag; the in-memory classification must
+// go with it. qualiResults() is not on the façade, so it is read where the game
+// reads it: RACE SETTINGS' GO button offers qualifying only while
+// qualiResults() is null (js/race/race-settings.js buildRaceSettings).
+test("award-time clear: game.js drops the memory when the round scores", async () => {
+  const { createGame, settle } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g.apex, G = g.G, $ = (id) => g.sandbox.document.getElementById(id);
+    a.headless(true);
+    const S = vm.runInContext("SeasonCal", g.ctx);
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.flow = "season"; G.session = "race";
+    const r = S.applyConfig(Object.assign(S.fresh(), { quali: true, trackIds: ["monza", "spa"] }));
+    G.season = r.season; G.trackIdx = S.trackIndex(0); G.raceLaps = 3;
+    G.openRaceSettings("select");
+    const qLabel = $("rs-go").textContent;
+    assert.match(qLabel, /^START (?!RACE)/, `no classification yet: GO qualifies (${qLabel})`);
+    $("rs-go").onclick();   // → openQuali(): the sheet simulates the session
+    await settle(() => G.session === "quali" && !$("quali").hidden, 4000);
+    G.openRaceSettings("select");
+    assert.equal($("rs-go").textContent, "START RACE", "qualified: a classification is in memory, GO races");
+    $("race-settings").hidden = true;   // only read for its GO label; the quali sheet is still the screen
+    const before = G.cars;
+    $("q-go").onclick();   // TO THE GRID
+    await settle(() => G.cars !== before && (G.state === "count" || G.state === "race"), 4000);
+    assert.equal(G.session, "race");
+    const round0 = G.season.round;
+    a.go(); g.step(60); a.finishRace();
+    assert.equal(G.state, "results");
+    assert.ok(G.season.round > round0, `the round scored (round ${round0} → ${G.season.round})`);
+    assert.equal(G.track.def.id, "monza", "still on the circuit the classification is stamped for");
+    G.openRaceSettings("results");
+    assert.equal($("rs-go").textContent, qLabel, "a scored round dropped the in-memory classification: GO qualifies again");
+  } finally { g.close(); }
 });
 
 // ── the grid is a pure function of (seed, round) ────────────────────────────
@@ -552,4 +637,53 @@ test("the quali sheet prints pole with three decimals, like its gaps", () => {
   const table = els.get("q-table");
   assert.equal(table.children[0].children[3].textContent, "1:21.163");
   assert.equal(table.children[1].children[3].textContent, "+0.004");
+});
+
+test("a duel's trimmed field restores the saved order of the field that qualified (W18 #7)", () => {
+  // startRace trims a duel to [player, rival] AFTER qualifying, so the order
+  // saved for CONTINUE names the whole field. A reload then refused it (id count
+  // mismatch) and reopened QUALIFYING.
+  const me = car("p1", "VER", "Verstappen", "rb", true);
+  const rival = Object.assign(car("p3", "LEC", "Leclerc", "me", false), { duelRival: true });
+  const { q } = loadQuali({
+    cars: [me, rival],
+    season: {
+      round: 0,
+      qualiOrder: [
+        { id: "p3", t: 70.1, human: false },
+        { id: "p2", t: 70.5, human: false },
+        { id: "p1", t: 71.0, human: true },
+      ],
+    },
+  });
+  const grid = q.order([me, rival]);
+  assert.ok(grid, "the saved order is accepted for the trimmed field");
+  assert.deepEqual(JSON.parse(JSON.stringify(grid.map((c) => c.driverId))), ["p3", "p1"], "in the order they qualified");
+});
+
+test("outside a duel a saved order naming a car no longer in the field is still refused", () => {
+  const me = car("p1", "VER", "Verstappen", "rb", true);
+  const other = car("p3", "LEC", "Leclerc", "me", false);
+  const { q } = loadQuali({
+    cars: [me, other],
+    season: { round: 0, qualiOrder: [{ id: "p3", t: 70.1 }, { id: "p2", t: 70.5 }, { id: "p1", t: 71.0, human: true }] },
+  });
+  assert.equal(q.order([me, other]), null);
+});
+
+// #4343: the |curvature| cache keyed on track.def.id alone, so two id-less tracks
+// with the same sample count shared one cache and the second lap was the first's.
+test("id-less tracks with the same sample count do not share the curvature cache (#4343)", () => {
+  const { q, ctx } = loadQuali();
+  ctx.Tracks.curvature = (t) => t.k;
+  const c = car("p1", "VER", "Verstappen", "rb", true);
+  const straight = { n: 80, total: 4000, k: 0 };
+  const twisty = { n: 80, total: 4000, k: 0.02 };
+  const tS = q.carLap(c, straight, 1);
+  const tT = q.carLap(c, twisty, 1);
+  assert.ok(tT > tS * 1.05, `the twisty track is slower: ${tT} vs ${tS}`);
+  assert.equal(q.carLap(c, straight, 1), tS, "and the first track still reads its own cache");
+  // Tracks with ids still key on the id (unchanged path).
+  const a = { n: 80, total: 4000, k: 0, def: { id: "x" } };
+  assert.equal(q.carLap(c, a, 1), tS);
 });

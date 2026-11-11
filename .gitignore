@@ -14,8 +14,10 @@
 node_modules/
 node_modules
 # Regenerable output
-scratch/
-artifacts/
+scratch/*
+!scratch/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
 # Generated galleries and screenshot runs are published as release assets.
 # Keep the gallery builders in tools/ tracked; these are root output folders.
 /gallery/
@@ -48,6 +50,14 @@ assets/pack/src/
 # became TRACKED — which then blocked two deploys as a dirty tree.
 **/__pycache__/
 
+# Built, not committed (2026-10-28, "Build at deploy"): generated files the site
+# serves. tools/gen/ensure-built.mjs builds them in a checkout and stage.mjs in the
+# deploy; the list is BUILT_PATHS in tools/lib/generated-paths.mjs
+# (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
+/js/track/circuit-meta.js
+# Retired generator outputs (RETIRED_PATHS, same file): built into artifacts/ on demand.
+/docs/TESTING-COVERAGE.md
+
 # Electron desktop spike — staged site + builder output (never commit)
 desktop/dist/
 desktop/dist-site/
@@ -66,3 +76,10 @@ mobile/www/
 .smart-env/
 .claude/allow-protected
 .claude/allow-context-cap
+
+# Secrets never belong in the repo (audit 2026-11-09, W24 row 9): dotenv files,
+# private keys and certificates. `.env.example` is the one template allowed.
+.env*
+!.env.example
+*.pem
+*.key

@@ -24,7 +24,7 @@ const EXPORT = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf
 const MANIFEST = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
 const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
 
-function button(id, text) {
+function button(id, text, listenerSink) {
   const attrs = new Map();
   const cls = new Set();
   return {
@@ -36,10 +36,22 @@ function button(id, text) {
     setAttribute: (k, v) => attrs.set(k, String(v)),
     removeAttribute: (k) => attrs.delete(k),
     closest(sel) { return sel.split(",").map((s) => s.trim()).includes("#" + id) ? this : null; },
+    click() {
+      let stopped = false;
+      const ts = performance.now();
+      const ev = {
+        type: "click", target: this, isTrusted: false, detail: 1, timeStamp: ts,
+        stopImmediatePropagation() { stopped = true; },
+        stopPropagation() { stopped = true; },
+        preventDefault() {},
+      };
+      for (const l of listenerSink) if (l.type === "click" && l.capture) l.fn(ev);
+      if (!stopped && !this.disabled) listenerSink._handled?.push(this.id);
+    },
   };
 }
 
-function load({ stored = {}, readyState = "complete", looks = null } = {}) {
+function load({ stored = {}, readyState = "complete", looks = null, secondary = null, modalShield = null } = {}) {
   const timers = new Map();
   let nextTimer = 1;
   const written = {};
@@ -47,10 +59,11 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   const painted = [];
   const observers = [];
   const html = { dataset: {} };
-  const quit = button("pm-quit", "QUIT TO MENU");
-  const restart = button("pm-restart", "RESTART RACE");
-  const resume = button("pm-resume", "RESUME");
   const listeners = [];
+  listeners._handled = null;
+  const quit = button("pm-quit", "QUIT TO MENU", listeners);
+  const restart = button("pm-restart", "RESTART RACE", listeners);
+  const resume = button("pm-resume", "RESUME", listeners);
   const pausemenu = {
     id: "pausemenu", hidden: false,
     addEventListener: (type, fn, capture) => listeners.push({ type, fn, capture }),
@@ -63,7 +76,7 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   };
   const ids = new Map([["pausemenu", pausemenu], ["pm-pausemenu-sum", summary],
     ["pm-pausemenu-body", pauseBody],
-    ["pm-quit", quit], ["pm-restart", restart], ["pm-resume", resume]]);
+    ["pm-quit", quit], ["pm-restart", restart], ["pm-resume", resume], ["pausebtn", button("pausebtn", "Pause")]]);
   const document = {
     readyState, documentElement: html, _handlers: {},
     getElementById: (id) => ids.get(id) || null,
@@ -82,6 +95,7 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   const ctx = vm.createContext({
     Math, console, Object, Array, JSON, String, Number,
     Date: { now: () => now },
+    performance: { now: () => now },
     GameStore: { store: {
       get: (k, d) => (k in stored ? stored[k] : d),
       set: (k, v) => { written[k] = v; stored[k] = v; },
@@ -111,15 +125,18 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   });
   // ScreenLooks loads AFTER pause-opts.js, so a stub is installed after eval
   // too — the module must read it at call time, never capture it.
+  if (secondary) ctx.InputHoldButtons = secondary;
+  if (modalShield) ctx.TopModal = modalShield;
   vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   if (looks) ctx.ScreenLooks = looks;
   // A click as the browser dispatches it: capture listeners on #pausemenu
   // first; unless one stopped it, the button's own handler (js/game.js) runs.
   const handled = [];
-  function press(btn) {
+  listeners._handled = handled;
+  function press(btn, extra = {}) {
     let stopped = false, prevented = false;
     const ev = {
-      type: "click", target: btn,
+      type: "click", target: btn, timeStamp: now, ...extra,
       stopImmediatePropagation() { stopped = true; },
       stopPropagation() { stopped = true; },
       preventDefault() { prevented = true; },
@@ -128,11 +145,17 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
     if (!stopped && !btn.disabled) handled.push(btn.id);
     return { stopped, prevented };
   }
+  function pointerUp(btn, extra = {}) {
+    const ev = {
+      type: "pointerup", target: btn, pointerType: "touch", button: 0, isTrusted: true, ...extra,
+    };
+    for (const l of listeners) if (l.type === "pointerup" && l.capture) l.fn(ev);
+  }
   return {
     M: vm.runInContext("PauseOpts", ctx),
     html, written, wired, painted, observers, timers, listeners, document, pausemenu, summary,
     pauseBody, bodyKids, built,
-    quit, restart, resume, press, handled,
+    quit, restart, resume, press, pointerUp, handled,
     advance: (ms) => { now += ms; },
     runTimers: () => { for (const t of [...timers.values()]) t.fn(); timers.clear(); },
   };
@@ -244,6 +267,7 @@ test("wiring waits for DOMContentLoaded while deferred scripts still run", () =>
   document._handlers.DOMContentLoaded();
   assert.equal(wired.size, 4);
   assert.equal(listeners.filter((l) => l.type === "click" && l.capture === true).length, 1, "ONE capture-phase listener on #pausemenu");
+  assert.equal(listeners.filter((l) => l.type === "pointerup" && l.capture === true).length, 1, "ONE capture-phase pointerup on #pausemenu");
 });
 
 test("CONFIRM QUIT: the first press arms, the second runs the game's handler", () => {
@@ -251,7 +275,7 @@ test("CONFIRM QUIT: the first press arms, the second runs the game's handler", (
   const first = press(quit);
   assert.ok(first.stopped, "unarmed press never reaches js/game.js");
   assert.deepEqual(handled, []);
-  assert.equal(quit.textContent, "QUIT TO MENU — TAP AGAIN");
+  assert.equal(quit.textContent, "TAP AGAIN");
   assert.ok(quit.classList.contains("armed"));
   assert.equal(quit.getAttribute("aria-label"), "Confirm: quit to menu");
   assert.ok(M.isArmed("pm-quit"));
@@ -267,7 +291,7 @@ test("RESTART arms the same way; arming one button disarms the other", () => {
   const { press, handled, quit, restart } = load();
   press(quit);
   press(restart);
-  assert.equal(restart.textContent, "RESTART — TAP AGAIN");
+  assert.equal(restart.textContent, "TAP AGAIN");
   assert.equal(restart.getAttribute("aria-label"), "Confirm: restart race");
   assert.equal(quit.textContent, "QUIT TO MENU", "QUIT disarmed");
   assert.ok(!quit.classList.contains("armed"));
@@ -278,24 +302,22 @@ test("RESTART arms the same way; arming one button disarms the other", () => {
   assert.equal(restart.textContent, "RESTART RACE");
 });
 
-test("the arm expires after ARM_MS: on its timer, and by age when the timer is late", () => {
-  const { press, handled, quit, timers, runTimers, advance, M } = load();
+test("the arm expires on ARM_MAX_MS wall-clock idle (setTimeout, not rAF)", () => {
+  const { press, handled, quit, timers, advance, runTimers, M } = load();
+  assert.equal(M.ARM_MAX_MS, 5000);
   press(quit);
-  assert.equal([...timers.values()][0].ms, 5000);
-  assert.equal(M.ARM_MS, 5000);
+  assert.equal(quit.textContent, "TAP AGAIN");
+  assert.equal(timers.size, 1, "one wall-clock expiry timer");
+  advance(4999);
+  assert.equal(quit.textContent, "TAP AGAIN");
   runTimers();
   assert.equal(quit.textContent, "QUIT TO MENU");
   assert.ok(!quit.classList.contains("armed"));
-  press(quit);
-  assert.deepEqual(handled, [], "after expiry the next press arms again");
-  advance(5001);                        // a throttled tab: the timer has not fired yet
-  press(quit);
-  assert.deepEqual(handled, [], "a stale arm is a fresh question");
-  assert.ok(quit.classList.contains("armed"));
+  assert.deepEqual(handled, []);
 });
 
-test("hiding the pause card disarms; other buttons pass through untouched", () => {
-  const { press, handled, quit, resume, pausemenu, observers } = load();
+test("hiding the pause card disarms; resume and Escape drop the arm and pass through", () => {
+  const { press, handled, quit, resume, pausemenu, observers, document, M } = load();
   press(quit);
   const mo = observers[0];
   assert.deepEqual(JSON.parse(JSON.stringify(mo.opts.attributeFilter)), ["hidden"]);
@@ -304,6 +326,16 @@ test("hiding the pause card disarms; other buttons pass through untouched", () =
   assert.ok(!quit.classList.contains("armed"));
   assert.ok(!press(resume).stopped);
   assert.deepEqual(handled, ["pm-resume"]);
+  pausemenu.hidden = false;
+  press(quit);
+  assert.ok(M.isArmed("pm-quit"));
+  press(resume);
+  assert.equal(quit.textContent, "QUIT TO MENU", "RESUME is another option: the arm drops");
+  assert.deepEqual(handled, ["pm-resume", "pm-resume"]);
+  press(quit);
+  document._handlers.keydown({ key: "Escape" });
+  assert.ok(!M.isArmed("pm-quit"), "Escape disarms while the card is open");
+  assert.equal(quit.textContent, "QUIT TO MENU");
 });
 
 test("a disabled RESTART (multiplayer) is never armed; CONFIRM OFF passes straight through", () => {
@@ -321,6 +353,160 @@ test("a disabled RESTART (multiplayer) is never armed; CONFIRM OFF passes straig
   c.press(c.quit);
   c.M.setConfirm("off");
   assert.ok(!c.quit.classList.contains("armed"));
+});
+
+// UI hunt 2026-10-29 #1: a 175 ms thumb double tap sent both presses to #pm-quit.
+test("a real press younger than ARM_MIN_MS on the wall clock is the same double tap: swallowed, still armed", () => {
+  const { press, handled, quit, advance, M } = load();
+  const tap = { isTrusted: true, detail: 1 };
+  assert.equal(M.ARM_MIN_MS, 350);
+  assert.equal(M.armAge(), Infinity, "nothing armed");
+  press(quit, tap);
+  advance(175);
+  assert.equal(M.armAge(), 175);
+  assert.ok(press(quit, tap).stopped, "the double tap's second click never reaches the game's handler");
+  assert.deepEqual(handled, []);
+  assert.ok(M.isArmed("pm-quit"), "the arm stays up");
+  advance(200);
+  assert.ok(!press(quit, tap).stopped, "a deliberate second tap commits");
+  assert.deepEqual(handled, ["pm-quit"]);
+  // Keyboard activation (detail 0) and a script's el.click() (untrusted) are never ghosts.
+  for (const ev of [{ isTrusted: true, detail: 0 }, { isTrusted: false, detail: 1 }]) {
+    const r = load();
+    r.press(r.restart, ev);
+    assert.ok(!r.press(r.restart, ev).stopped);
+    assert.deepEqual(r.handled, ["pm-restart"]);
+  }
+});
+
+test("late-handled taps: wall clock confirms after input lag; event timeStamp ghost does not block", () => {
+  const tap = { isTrusted: true, detail: 1 };
+  const TS0 = 50_000;
+  // (1) tap 2 handled late (wall) with a young event timeStamp still confirms
+  {
+    const { press, handled, quit, advance } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    advance(2000);
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 10 }).stopped);
+    assert.deepEqual(handled, ["pm-quit"]);
+  }
+  // (2) six seconds of wall time expires the arm before confirm
+  {
+    const { press, handled, quit, advance, timers } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    advance(6000);
+    for (const t of [...timers.values()]) t.fn(); timers.clear();
+    assert.equal(quit.textContent, "QUIT TO MENU");
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 6000 }).stopped, "re-arms after expiry");
+    assert.equal(quit.textContent, "TAP AGAIN");
+    assert.deepEqual(handled, []);
+  }
+  // (3) two taps 150 ms apart on the wall stay a ghost double tap
+  {
+    const { press, handled, quit, advance, M } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    advance(150);
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 150 }).stopped);
+    assert.deepEqual(handled, []);
+    assert.ok(M.isArmed("pm-quit"));
+  }
+  // (4) wall age past ARM_MIN_MS confirms even when event timeStamps look like a ghost
+  {
+    const { press, handled, quit, advance } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    advance(400);
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 5 }).stopped);
+    assert.deepEqual(handled, ["pm-quit"]);
+    assert.equal(quit.textContent, "QUIT TO MENU");
+  }
+});
+
+test("QF: both taps handled in ONE late batch (stalled main thread): 400 ms real gap confirms", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  assert.equal(h.quit.textContent, "TAP AGAIN");
+  h.advance(3);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
+  h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
+  assert.deepEqual(h.handled, ["pm-quit"], "a deliberate 400 ms second tap quits even when handled late");
+});
+
+test("QF: tap 2 handled after a >5 s stall but only 400 ms after tap 1 confirms (no silent re-arm)", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  h.advance(6000);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
+  h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+test("QF: a real thumb double tap (150 ms event gap) handled late is still swallowed", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  h.advance(2);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 150 });
+  assert.ok(h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 150 }).stopped);
+  assert.deepEqual(h.handled, []);
+  assert.ok(h.M.isArmed("pm-quit"));
+});
+
+test("pointerup confirms an armed guarded button once wall age passes ARM_MIN_MS", () => {
+  const h = load();
+  h.press(h.quit);
+  h.advance(400);
+  h.pointerUp(h.quit);
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+test("one tap only arms; pointerup plus native click never double-quits or re-arms", () => {
+  const h = load();
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.equal(h.quit.textContent, "TAP AGAIN");
+  assert.deepEqual(h.handled, []);
+  h.advance(400);
+  h.pointerUp(h.quit, { isTrusted: true });
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.deepEqual(h.handled, ["pm-quit"], "exactly one quit handler from pointerup + native click");
+  assert.equal(h.quit.textContent, "QUIT TO MENU");
+  assert.ok(!h.M.isArmed("pm-quit"));
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.equal(h.quit.textContent, "TAP AGAIN", "next deliberate tap re-arms only");
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+test("b0b89dc: a 15.5 s stall keeps TAP AGAIN until ARM_MAX_MS then disarms; late confirm still works", () => {
+  const tap = { isTrusted: true, detail: 1 };
+  const TS0 = 50_000;
+  {
+    const { press, handled, quit, advance, timers, M } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    assert.equal(quit.textContent, "TAP AGAIN");
+    assert.equal(timers.size, 1);
+    advance(15_500);
+    for (const t of [...timers.values()]) t.fn(); timers.clear();
+    assert.equal(quit.textContent, "QUIT TO MENU", "wall expiry clears a stuck arm");
+    assert.ok(!M.isArmed("pm-quit"));
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 15_500 }).stopped, "next tap re-arms");
+    assert.deepEqual(handled, []);
+  }
+  {
+    const { press, handled, quit, pausemenu, observers } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    pausemenu.hidden = true;
+    observers[0].fn();
+    pausemenu.hidden = false;
+    assert.equal(quit.textContent, "QUIT TO MENU");
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 20_000 }).stopped, "after close/reopen the tap re-arms");
+    assert.equal(quit.textContent, "TAP AGAIN");
+    assert.deepEqual(handled, []);
+  }
 });
 
 test("js/game.js keeps its handlers and the multiplayer restart guard untouched", () => {
@@ -447,4 +633,21 @@ test("dialog backdrop animations respect the explicit in-game reduced-motion pre
   assert.deepEqual(animated.map(r => r.selector), [':root:not([data-motion="reduce"]) dialog.screen.dim[open]::backdrop'],
     "normal-motion dialogs retain their entrance animation; the in-game motion override excludes backdrops too");
   assert.ok(animated[0].context.some(c => c.includes("prefers-reduced-motion: no-preference")));
+});
+
+
+test("secondary PAUSE wires once and preserves trusted gesture metadata for the modal shield", () => {
+  const registered = [], seen = []; let block = false;
+  const h = load({ secondary: { secondaryTap: (el, opts) => registered.push({ el, opts }) },
+    modalShield: { onClickShield(e) { seen.push(e); if (block) e.preventDefault(); } } });
+  h.M.initUI(); h.M.initUI();
+  assert.equal(registered.length, 1, "pause bridge registration is idempotent");
+  assert.equal(registered[0].el.id, "pausebtn");
+  const source = { target: registered[0].el, isTrusted: true, clientX: 712, clientY: 44, timeStamp: 1234 };
+  assert.equal(registered[0].opts.beforeActivate(source), true);
+  assert.equal(seen[0].isTrusted, true); assert.equal(seen[0].target, source.target);
+  assert.deepEqual([seen[0].clientX, seen[0].clientY, seen[0].timeStamp], [712, 44, 1234]);
+  assert.equal(seen[0].detail, 1, "the original touch is recorded as a semantic pointer activation");
+  block = true;
+  assert.equal(registered[0].opts.beforeActivate(source), false, "an active shield can reject the activation");
 });

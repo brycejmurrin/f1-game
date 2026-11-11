@@ -34,6 +34,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 const ROOT_C = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -220,18 +221,15 @@ test("the shipped rule is the scaled one", () => {
  * passing at |dX| between 2.0 and 3.4 m drove through drawn bodywork.
  *
  * Pure arithmetic again: the extents are a function of psi alone, so the hole
- * and its closure are both a table. The functions here mirror collide.js; the
- * live-source assertions below stop them drifting apart.
+ * and its closure are both a table. The blend is the REAL yawMix, evaluated
+ * from the collide.js source slice (YAW_LO .. "Both cars can be human"), so a
+ * retuned floor or ceiling there moves every number below.
  */
 const HL_T = 2.4, WL_T = 1.0;
-const LO_T = 20 * Math.PI / 180, HI_T = 60 * Math.PI / 180;
-const mix = (psi) => {
-  const a = Math.abs(psi);
-  if (!(a > LO_T)) return 0;
-  if (a >= HI_T) return 1;
-  const t = (a - LO_T) / (HI_T - LO_T);
-  return t * t * (3 - 2 * t);
-};
+const COLLIDE_SRC = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
+const YAW_SLICE = COLLIDE_SRC.slice(COLLIDE_SRC.indexOf("  const YAW_LO ="), COLLIDE_SRC.indexOf("  // Both cars can be human"));
+const { yawMix: mix } = vm.runInNewContext(
+  YAW_SLICE + "\n({ yawMix });", {}, { filename: absSrc("js/physics/collide.js") });
 const eLongT = (p) => { const k = mix(p); return k === 0 ? HL_T : HL_T * (1 - k) + k * (HL_T * Math.abs(Math.cos(p)) + WL_T * Math.abs(Math.sin(p))); };
 const eLatT  = (p) => { const k = mix(p); return k === 0 ? WL_T : WL_T * (1 - k) + k * (HL_T * Math.abs(Math.sin(p)) + WL_T * Math.abs(Math.cos(p))); };
 const deg = (d) => d * Math.PI / 180;
@@ -528,7 +526,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
   pause();
   assert.equal(instantReplayButton().hidden, false, "the actual solo loop offers instant replay after three seconds");
   g.sandbox.document.getElementById("pm-resume").onclick();
-  vm.runInContext(readFileSync(join(ROOT_C, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(g.ctx);
   const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
   const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
   const fixture = JSON.parse(readFileSync(join(ROOT_C, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));

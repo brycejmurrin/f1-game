@@ -154,28 +154,11 @@ const WGX = (function () {
   const CHUNK_IDX_CAP = 16384;                          // u32 indices (65536 B)
   const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 48
 
-  // Keyed on the DEVICE (IS_MOBILE), not the memory tier — the same key
-  // js/render/glx/shadow.js uses, and for its reason: GRAPHICS: HIGH on a phone
-  // must not 4x the snap-cache redraw cost (terrain+road+whole city re-rasterised
-  // into the map every ~10 m of travel). This read MOBILE_TIER, which handed a
-  // HIGH-tier phone a 2048² map GLX would never give it — 12 MB of jetsam-counted
-  // GPU memory plus the redraw stall, on the least-ready backend.
-  const SHADOW_SIZE = WGX_LITE ? 1024 : 2048;          // sun depth-map resolution
-  const CAR_SHADOW_SIZE = 1024;                         // dynamic car-only shadow map (matches GLX)
-  // The dynamic CAR shadow map is DESKTOP-ONLY in GLX (js/render/glx/shadow.js
-  // creates carTex only `if (ok && !core.IS_MOBILE)` — "a per-frame pass is the
-  // HIGH-tier lag, not a memory cap"). WGX allocated the full 1024² depth texture
-  // on EVERY tier and only gated the PASS, and gated it on MOBILE_TIER — so a
-  // phone paid 4 MB for a texture nothing ever rendered into, and a HIGH-tier
-  // phone additionally ran a whole-car depth pass per frame that GLX refuses on
-  // any phone. Shrink the texture to 1×1 on phones: binding 8 stays a valid
-  // depth texture (the layout demands one), and the shader never samples it
-  // because params6.y (SHD.carArmed) stays 0 with the pass gated off below.
-  const CAR_SHADOW_ALLOC = WGX_LITE ? 1 : CAR_SHADOW_SIZE;
-  // Static graph batches set the high-water mark; dense circuits exceed 40.
+  // Sun / car / lamp map sizes live in WGXShadow.init (wgx-shadow.js). The
+  // frame UBO's PCF texel (d[74]) reads SHD.SHADOW_SIZE so it cannot drift
+  // from the depth texture. Static graph batches set the high-water mark;
+  // dense circuits exceed 40.
   const SHADOW_SLOTS = MAX_DRAWS;
-  const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
-  const SHADOW_MODEL_F32_STRIDE = SHADOW_MODEL_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
 
   // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
   // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
@@ -237,7 +220,6 @@ const WGX = (function () {
     ],
   };
   const MAT_TEX_LAYERS = 17;
-  const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
   // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
   // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
   // Desktop GRAPHICS: ULTRA keeps 4×; every other preset (and unset = the
@@ -389,7 +371,8 @@ const WGX = (function () {
         // runtime output probe's loss ladder to GLX, which renders fine.
         // `soft(ware|pipe)` not bare `soft` — that substring matched any
         // "Microsoft" description.
-        _softAdapterLocal = !!(adapter.isFallbackAdapter
+        // Chrome 136+ reports the fallback flag on GPUAdapterInfo; Chrome 140 removed GPUAdapter.isFallbackAdapter.
+        _softAdapterLocal = !!((info && info.isFallbackAdapter) || adapter.isFallbackAdapter
             || /HeadlessChrome/i.test(ua)
             || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft(ware|pipe)/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }
@@ -1009,6 +992,7 @@ const WGX = (function () {
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
     const ENV_SIZE = 64;
+    const ENV_LOD_MAX = 2.5;   // wgsl-chunks.js envCube taps: rough (<= 1) * 2.5
     const ENV_CULL_M = 150;
     // Face cameras. WebGPU render-to-texture is y-DOWN (framebuffer row 0 is
     // NDC top) where GL's is y-up, so GLX's GL-correct up-vectors store every
@@ -1136,7 +1120,8 @@ const WGX = (function () {
     let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
         _skidCap = 0, _skidScratch = null;
     let pLine = null, lineUBO = null, lineFxBG = null, lineVBO = null, _lineCap = 0;   // DRIVING LINE ribbon
-    const _lineU = new Float32Array(24);   // LineU: viewProj (16) + params (4) + params2 (4)
+    const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];   // opts.cols fallback (F1 GREEN)
+    const _lineU = new Float32Array(36);   // LineU: viewProj (16) + params (4) + params2 (4) + 3 colour vec4 (12)
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
@@ -3038,7 +3023,8 @@ const WGX = (function () {
         _allocFail("createTexMesh", e);
         return { _wgx: "texmesh", _phase: 4 };
       }
-      return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16" };
+      // pos / uv / idx kept: drawMirrorGlass bounds the glass's mirror LOD from them (perf hunt 6, PostCommon.mipFootprintLod).
+      return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16", pos, uv, idx };
     }
 
     // Chunked mesh: spatial XZ cells with AABBs (port of GLX.createChunkedMesh).
@@ -3245,7 +3231,7 @@ const WGX = (function () {
       const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (f.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
       d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.15) * _hf;
-      d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
+      d[74] = 1 / SHD.SHADOW_SIZE;    // texel size for PCF — same source as the depth map
       d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.001;   // SHADOW BIAS knob (same 0.001 fallback as GLX)
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
       d[76] = (T && T.bounceK     != null) ? T.bounceK     : 0.04;  // BOUNCE (per-lamp bounce-fill strength, == GLX uBounceK; NOT ambient)
@@ -3917,7 +3903,10 @@ const WGX = (function () {
     let _envInitFailed = false;   // a partial envInit is never retried: see the catch
     function envInit() {
       if (envCubeTex || _envInitFailed) return;
-      const envMips = Math.floor(Math.log2(ENV_SIZE)) + 1;
+      // Perf hunt 5 W1: every envCube tap is textureSampleLevel(.., rough * 2.5) with rough <= 1 after the SAA
+      // clamp (wgsl-chunks.js), so a trilinear tap reads level 3 at most. Levels 4-6 of the 64 px cube were built
+      // and never read: 18 of the ladder's 36 passes per cube (the census's 64x64/rgba16float wide-frame rows).
+      const envMips = Math.min(Math.floor(Math.log2(ENV_SIZE)) + 1, Math.ceil(ENV_LOD_MAX) + 1);
       try {
         envCubeTex = device.createTexture({
           size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
@@ -4022,16 +4011,17 @@ const WGX = (function () {
       if (!envCubeTex || !litPass || !_envEncoder) return;
       _flushLitRings();
       litPass.end();
+      _envFacesMask |= 1 << face;
+      // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
+      // !_envProbeLive left mip0 updating while higher LODs froze at the first
+      // capture — lacquer roughness LOD stayed at the start-line reflection.
+      // W3: recorded into the face's own encoder, after its pass (queue order kept): one submit, not two.
+      if (_envFacesMask === 63) _generateMips(envCubeTex, 6, _envEncoder);
       device.queue.submit([_envEncoder.finish()]);
       litPass = null; encoder = null; _envEncoder = null;
       _activeFrameBG = frameBindGroup;
-      _envFacesMask |= 1 << face;
       if (_envFacesMask === 63) {
         _envFacesMask = 0;
-        // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
-        // !_envProbeLive left mip0 updating while higher LODs froze at the first
-        // capture — lacquer roughness LOD stayed at the start-line reflection.
-        _generateMips(envCubeTex, 6);
         if (!_envProbeLive) {
           _envProbeLive = true;
           envCubeView = envSampleView;   // main frame group now mirrors the real world
@@ -4055,9 +4045,16 @@ const WGX = (function () {
     // the composite reads at the level params.z names, through _mirSamp
     // (mipmapFilter linear — linearSampler has none). _generateMips rebuilds the
     // chain after each mirror submit.
-    let mirSampleView = null, _mirSamp = null;
+    // Perf hunt 6 (the WGX twin of hunt 5 F1): mipLevelCount is what a tap reads, not the full chain. The inset's
+    // explicit lod reads floor(lod)..floor(lod)+1; the glass's implicit LOD, bounded per draw by
+    // PostCommon.mipFootprintLod (_mirGlassLod: session max), reads up to ceil(lod + 0.25) + 1. Unbounded twice in
+    // a row (or no CPU arrays) latches the full chain; one unbounded frame does not; a zero viewProj is no bound.
+    // Grow-only: mirrorBegin re-allocates when the count it needs exceeds the target's. As on TLX, the frame that
+    // first raises the need (a glass's first bound, a rect change on a skipped mirror frame) reads the old count once.
+    let mirSampleView = null, _mirSamp = null, _mirGlassLod = -Infinity, _mirGlassInf = 0;
+    const _mirBox = [0, 0, 0, 0];
     let _mirPassSeq = 0;   // bumped per mirrorBegin: a batch's mirror instance view is valid only for the pass that culled it
-    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
+    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true, _mirAllocs = 0;   // flip false: the broadcast PiP
     let _mirInPass = 0, _mirDone = false;   // P2: insets drawn inside the final pass; this frame's inset is already drawn
     let _mirUBO = null, _mirBG = null;
     // The live glass's group (drawMirrorGlass): built lazily on mirSampleView,
@@ -4069,22 +4066,40 @@ const WGX = (function () {
       try { if (mirDepthTex) mirDepthTex.destroy(); } catch (_) { /* already invalid */ }
       mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; _mirGlassBG = null; mirW = mirH = 0; _mirRenders = 0;
     }
+    // The inset's pixel rect in the present target (the composite's viewport), or null when none is drawn.
+    function _mirInsetBox() {
+      if (!_mirRect) return null;
+      const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
+      const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
+      const w = Math.min(cw - x, Math.round(_mirRect[2] * cw)), h = Math.min(ch - y, Math.round(_mirRect[3] * ch));
+      if (w < 2 || h < 2 || x < 0 || y < 0) return null;
+      _mirBox[0] = x; _mirBox[1] = y; _mirBox[2] = w; _mirBox[3] = h;
+      return _mirBox;
+    }
+    const _mirLodFor = (tw, th, b) => Math.max(0, Math.log2(Math.max(tw / b[2], th / b[3])));
+    function _mirLevels(w, h) {
+      const full = Math.floor(Math.log2(Math.max(w, h))) + 1, b = _mirInsetBox();
+      if (_mirGlassLod === Infinity) return full;
+      let need = b ? Math.floor(_mirLodFor(w, h, b)) + 2 : 1;
+      if (_mirGlassLod > -Infinity) need = Math.max(need, Math.ceil(_mirGlassLod + 0.25) + 1);
+      return Math.max(1, Math.min(full, need));
+    }
     function mirrorBegin(frame, w, h) {
       // litPass/encoder set = begin() already ran this frame (or a probe face
       // is open): refuse rather than steal the pass.
       if (_lost || WGX_MINIMAL || _mirDead || !skyPipeline || litPass || encoder) return false;
       w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
-      if (!mirTex || w !== mirW || h !== mirH) {
-        _mirrorFree();
+      const lv = _mirLevels(w, h);
+      if (!mirTex || w !== mirW || h !== mirH || lv > mirTex.mipLevelCount) {
+        _mirrorFree();   // a grow drops the views, both bind groups and (with the texture) its __wgxMipLadder
         try {
-          mirTex = device.createTexture({ size: [w, h], format: SCENE_FORMAT,
-            mipLevelCount: Math.floor(Math.log2(Math.max(w, h))) + 1,
+          mirTex = device.createTexture({ size: [w, h], format: SCENE_FORMAT, mipLevelCount: lv,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           mirView = mirTex.createView({ baseMipLevel: 0, mipLevelCount: 1 });
           mirSampleView = mirTex.createView();
           mirDepthTex = device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: _transientRenderUsage() });   // P6: clear + discard only
           mirDepthView = mirDepthTex.createView();
-          mirW = w; mirH = h;
+          mirW = w; mirH = h; _mirAllocs++;   // lifetime: _mirRenders restarts on each (GPU hunt 3)
         } catch (e) {
           _mirrorFree(); _mirDead = true;
           try { Log.warn("gfx", "WGX mirror allocation failed — mirror off:", e && e.message); } catch (_) { /* harness */ }
@@ -4137,16 +4152,15 @@ const WGX = (function () {
       if (pass && !_insetInPass) return;
       if (_mirDone) return;
       if (!_mirRect || !mirSampleView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
-      const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
-      const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
-      const w = Math.min(cw - x, Math.round(_mirRect[2] * cw)), h = Math.min(ch - y, Math.round(_mirRect[3] * ch));
-      if (w < 2 || h < 2 || x < 0 || y < 0) return;
+      const b = _mirInsetBox();
+      if (!b) return;
+      const x = b[0], y = b[1], w = b[2], h = b[3];
       if (!_mirUBO) _mirUBO = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       if (!_mirSamp) _mirSamp = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" });
       if (!_mirBG) _mirBG = device.createBindGroup({ layout: blitPipeline.getBindGroupLayout(0), entries: [
         { binding: 0, resource: mirSampleView }, { binding: 1, resource: _mirSamp }, { binding: 2, resource: { buffer: _mirUBO } }] });
       // z = the mip level for this minification (target texels per rect pixel, log2).
-      const lod = Math.max(0, Math.log2(Math.max(mirW / w, mirH / h)));
+      const lod = _mirLodFor(mirW, mirH, b);
       _blitParams(_mirData, exposure, T);
       _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = lod;   // y = flip left-right (0: the broadcast PiP)
       if (o) {
@@ -4203,6 +4217,12 @@ const WGX = (function () {
       _setIB(litPass, mesh.ibuf, mesh.indexFormat);
       litPass.drawIndexed(mesh.count);
       _mirGlass++;
+      if (_mirGlassLod < Infinity && (frameVPGpu[11] !== 0 || frameVPGpu[15] !== 0)) {   // Z01 leaves the x/y/w rows as GL's
+        const l = !mesh.pos || !mesh.uv ? Infinity
+          : PostCommon.mipFootprintLod(mesh.pos, mesh.uv, mesh.idx, model, frameVPGpu, width, height, mirW, mirH);
+        if (l < Infinity) { _mirGlassInf = 0; _mirGlassLod = Math.max(_mirGlassLod, l); }
+        else if (++_mirGlassInf >= 2 || !(l === l) || !mesh.pos) _mirGlassLod = Infinity;
+      }
       return true;
     }
 
@@ -5377,8 +5397,12 @@ const WGX = (function () {
       _lineU[16] = (opts && opts.speed) || 0;
       _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
       _lineU[18] = 1.6;                     // emissive strength: a constant, no producer sends one
-      _lineU[19] = opts && opts.palette ? 1 : 0;   // colour-blind palette (params.w)
+      _lineU[19] = 0;                              // params.w spare (was the 0|1 palette flag)
       _lineU[20] = (opts && opts.opacity) || 1;    // LINE OPACITY (params2.x)
+      // LINE COLOUR (DrivingLine.PALETTES): onPace / lift / brake rgb into the
+      // colOnPace / colLift / colBrake vec4s at floats 24 / 28 / 32; F1 GREEN when absent.
+      const lc = (opts && opts.cols) || LINE_COLS_F1;
+      for (let k = 0; k < 3; k++) { const o = 24 + k * 4; _lineU[o] = lc[k * 3]; _lineU[o + 1] = lc[k * 3 + 1]; _lineU[o + 2] = lc[k * 3 + 2]; }
       device.queue.writeBuffer(lineUBO, 0, _lineU);
       _setPipe(litPass, pLine);
       _setBG0(litPass, lineFxBG);
@@ -5932,8 +5956,12 @@ const WGX = (function () {
       mirrorEnd,
       mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
       mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
-        renders: _mirRenders, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip }),
+        renders: _mirRenders, allocs: _mirAllocs, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip,
+        mips: mirTex ? mirTex.mipLevelCount : 0, glassLod: _mirGlassLod }),
       drawMirrorGlass,
+      // Quit-to-menu (#4219): destroy both textures and drop the composite / glass bind groups naming them
+      // (_mirrorFree; WebKit holds a destroyed texture while a bind group references it). mirrorBegin re-allocates.
+      releaseMirror() { if (_mirEncoder) return false; _mirrorFree(); return true; },
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 

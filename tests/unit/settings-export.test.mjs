@@ -87,7 +87,7 @@ function boot(opts = {}) {
     career: () => plain(SettingsExport.collectCareer()),
     loadSettings: (o) => plain(SettingsExport.applySettings(o, G)),
     loadGarage: (o) => plain(SettingsExport.applyGarage(o)),
-    loadCareer: (o, revisions) => plain(SettingsExport.applyCareer(o, revisions)) };
+    loadCareer: async (o, revisions) => plain(await SettingsExport.applyCareer(o, revisions)) };
 }
 
 function bootImportUI(opts = {}) {
@@ -130,7 +130,7 @@ function bootImportUI(opts = {}) {
 }
 
 test("visor optics and water settings survive both backup modes and reject invalid choices", () => {
-  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast" };
+  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
   const disk = Object.fromEntries(Object.entries(values).map(([key, value]) => ["apex26." + key, value]));
   for (const mode of ["all", "changes"]) {
     const saved = boot({ disk }).collect(mode);
@@ -143,16 +143,27 @@ test("visor optics and water settings survive both backup modes and reject inval
   }
   const defaults = boot().collect("all").settings.camera;
   assert.deepEqual(Object.fromEntries(Object.keys(values).map(key => [key, defaults[key]])), {
-    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal",
+    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal", helmetVisorDropSize: "100",
   });
   assert.equal(defaults.helmetVisorBeams, "100", "the VISOR BEAMS slider exports as a percent, 100 by default");
   const beams = boot({ disk: { "apex26.helmetVisorBeams": "160" } }).collect("changes");
   assert.equal(beams.settings.camera.helmetVisorBeams, "160");
   const invalid = boot({ disk }).collect("changes");
-  for (const key of Object.keys(values)) invalid.settings.camera[key] = "invalid";
+  const choices = Object.keys(values).filter(key => key !== "helmetVisorDropSize");
+  for (const key of choices) invalid.settings.camera[key] = "invalid";
   const target = boot();
   target.loadSettings(invalid);
-  for (const key of Object.keys(values)) assert.equal(target.disk.has("apex26." + key), false);
+  for (const key of choices) assert.equal(target.disk.has("apex26." + key), false);
+  for (const percent of ["50", "125.5", "200"]) {
+    target.loadSettings({ format: "apex26-settings-v1", settings: { camera: { helmetVisorDropSize: percent } } });
+    assert.equal(target.disk.get("apex26.helmetVisorDropSize"), percent, "drop size retains its raw numeric percent string");
+    assert.equal(target.collect("changes").settings.camera.helmetVisorDropSize, percent);
+  }
+  const reset = target.loadSettings({ format: "apex26-settings-v1", settings: { camera: { helmetVisorDropSize: defaults.helmetVisorDropSize } } });
+  assert.equal(reset.applied, 1);
+  assert.equal(target.disk.get("apex26.helmetVisorDropSize"), "100", "restoring the exported default resets the size");
+  assert.equal(target.collect("all").settings.camera.helmetVisorDropSize, "100", "reset restores the shipped percent");
+  assert.equal(target.collect("changes").settings.camera?.helmetVisorDropSize, undefined, "reset no longer appears changed");
 });
 
 test("backup controls mount once in their own settings page, outside renderer options", () => {
@@ -520,6 +531,22 @@ test("SAVE ALL from a desktop does not pin desktop defaults on a phone", () => {
   assert.equal(phone.collect("all").settings.display.resMode, null, "the phone keeps its own resolution default");
 });
 
+// UI hunt 3: a device-picked BUILD IN BACKGROUND was pinned ON by an ALL file,
+// and an unset JSON row was restored as the literal "null".
+test("SAVE ALL keeps unset rows unset on the target: no pinned auto-pick, no literal null", () => {
+  const file = boot().collect("all");
+  assert.equal(file.settings.display.buildWorker, null, "unset build worker exports unset");
+  const g = Object.values(file.settings).find((grp) => Object.prototype.hasOwnProperty.call(grp, "uiScale"));
+  assert.equal(g.uiScale, null);
+  const writes = [];
+  const target = boot({ store: { set(k, v) { writes.push([k, v]); } } });
+  target.SettingsExport.applySettings(file, target.G);
+  const ui = writes.find(([k]) => k === "uiScale");
+  assert.ok(ui, "the row is still written");
+  assert.equal(ui[1], undefined, "an unset JSON row is removed (store.set undefined), never stored as null");
+  assert.equal(target.collect("all").settings.display.buildWorker, null, "the target keeps its own auto-pick");
+});
+
 test("unset gfxBackend exports as null on touch and desktop alike", () => {
   assert.equal(boot({ mobile: true }).collect("all").settings.display.gfxBackend, null);
   assert.equal(boot({ mobile: false }).collect("all").settings.display.gfxBackend, null);
@@ -698,7 +725,8 @@ test("restoring default motion restores OS preference following", () => {
   assert.equal(saved.settings.a11y.motion, null);
   const target = boot({ disk: { "apex26.motion": '"reduce"' } });
   target.loadSettings(saved);
-  assert.equal(target.disk.get("apex26.motion"), "null");
+  assert.equal(target.GameStore.store.get("motion", null), null, "unset again: the key is removed, readers default to the OS");
+  assert.notEqual(target.disk.get("apex26.motion"), '"reduce"');
   const bad = target.loadSettings({ format: "apex26-settings-v1", settings: {
     a11y: { motion: "unknown" }, driving: { steerMode: null },
   } });
@@ -1285,9 +1313,9 @@ test("an empty store still produces a valid career file", () => {
   assert.equal(f.count, 0);
 });
 
-test("loading a career file migrates slots and refuses non-career keys", () => {
+test("loading a career file migrates slots and refuses non-career keys", async () => {
   const b = boot({ career: true });
-  const r = b.loadCareer({
+  const r = await b.loadCareer({
     format: "apex26-career-v1",
     careers: {
       "career.driver.0": { flavour: "driver", money: 250, driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
@@ -1309,9 +1337,9 @@ test("loading a career file migrates slots and refuses non-career keys", () => {
   assert.equal(b.disk.has("apex26.career.driver.9"), false);
 });
 
-test("a career slot with poisoned money is skipped, not restored as a zero-credit career", () => {
+test("a career slot with poisoned money is skipped, not restored as a zero-credit career", async () => {
   const b = boot({ career: true });
-  const r = b.loadCareer({ format: "apex26-career-v1", careers: {
+  const r = await b.loadCareer({ format: "apex26-career-v1", careers: {
     "career.driver.0": { flavour: "driver", money: "abc", driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
     "career.driver.1": { flavour: "driver", money: 250, driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
   } });
@@ -1321,23 +1349,23 @@ test("a career slot with poisoned money is skipped, not restored as a zero-credi
   assert.ok(r.skipped >= 1);
 });
 
-test("a career file of the wrong shape is refused whole", () => {
-  assert.equal(boot({ career: true }).loadCareer({ format: "apex26-garage-v1", careers: {} }).ok, false);
-  assert.equal(boot({ career: true }).loadCareer(null).ok, false);
+test("a career file of the wrong shape is refused whole", async () => {
+  assert.equal((await boot({ career: true }).loadCareer({ format: "apex26-garage-v1", careers: {} })).ok, false);
+  assert.equal((await boot({ career: true }).loadCareer(null)).ok, false);
   for (const careers of [null, [], "bad", 3]) {
-    assert.equal(boot({ career: true }).loadCareer({ format: "apex26-career-v1", careers }).ok, false);
+    assert.equal((await boot({ career: true }).loadCareer({ format: "apex26-career-v1", careers })).ok, false);
   }
-  assert.equal(boot({ career: true }).loadCareer({ format: "apex26-settings-v1", careers: {} }).ok, false);
+  assert.equal((await boot({ career: true }).loadCareer({ format: "apex26-settings-v1", careers: {} })).ok, false);
 });
 
-test("career round-trip: export then import restores the slot through migrateCareer", () => {
+test("career round-trip: export then import restores the slot through migrateCareer", async () => {
   const src = boot({ career: true, disk: {
     "apex26.career.driver.0": JSON.stringify(CAREER_SAVE),
     "apex26.careerSlot": JSON.stringify("driver:0"),
   } });
   const file = src.career();
   const dst = boot({ career: true });
-  const r = dst.loadCareer(file);
+  const r = await dst.loadCareer(file);
   assert.equal(r.ok, true);
   assert.equal(r.failed, 0);
   const got = JSON.parse(dst.disk.get("apex26.career.driver.0"));
@@ -1349,7 +1377,6 @@ test("career round-trip: export then import restores the slot through migrateCar
 
 test("careerRow injects file controls without a static shell id in index.html", () => {
   const src = read("js/ui/settings-export.js");
-  assert.match(src, /function careerRow\(/);
   assert.match(src, /cr-career-save/);
   assert.match(src, /cr-career-load/);
   assert.equal(/id="cr-career-file"/.test(read("index.html")), false,
@@ -1400,7 +1427,8 @@ test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker re
   assert.match(html, /<div id="pm-buildworker" class="set-row"[\s\S]*?<select id="pm-buildworker-sel"/, "a static SettingRow in the renderer levers");
   const client = fs.readFileSync(path.join(root, "js/track/build-client.js"), "utf8");
   assert.match(client, /SettingRow\.wire\("pm-buildworker", \{ values: SettingRow\.labels\(\["off", "on"\]\)/);
-  assert.match(client, /else document\.addEventListener\("DOMContentLoaded", initUI/, "wired after js/ui/setting-row.js has loaded");
+  // #4798: still never before DCL (setting-row.js loads after this file), now through the settings-lazy gate.
+  assert.match(client, /else document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?SettingsNav\.lazy\(initUI\); else initUI\(\);/, "wired after js/ui/setting-row.js has loaded");
   const reg = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
   assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "1",/, "exported and imported with the other settings, default ON");
 });
@@ -1441,16 +1469,16 @@ test("SEC2-2: LOAD SETTINGS / CAREER FILE refuse an oversized file before readin
   assert.equal(read, 1, "a normal-sized file still reads");
 });
 
-test("SEC2-2: a career file with more than 16 bag keys is refused", () => {
+test("SEC2-2: a career file with more than 16 bag keys is refused", async () => {
   const b = boot({ career: true });
   const careers = {};
   for (let i = 0; i < 17; i++) careers["junk" + i] = i;
-  const r = b.loadCareer({ format: "apex26-career-v1", careers });
+  const r = await b.loadCareer({ format: "apex26-career-v1", careers });
   assert.equal(r.ok, false);
   assert.match(r.reason, /too many/);
   const ok = {};
   for (let i = 0; i < 16; i++) ok["junk" + i] = i;
-  assert.equal(b.loadCareer({ format: "apex26-career-v1", careers: ok }).ok, true, "16 keys is within the cap (all skipped as non-career)");
+  assert.equal((await b.loadCareer({ format: "apex26-career-v1", careers: ok })).ok, true, "16 keys is within the cap (all skipped as non-career)");
 });
 
 // #2191: the legacy motion branch did `(groups.a11y ||= {}).motion = …`, which
@@ -1504,13 +1532,13 @@ test("career export preserves opaque future saves in every slot without altering
   }
 });
 
-test("future final row refuses the entire mixed legacy import before slots or selection change", () => {
+test("future final row refuses the entire mixed legacy import before slots or selection change", async () => {
   const version = boot({ career: true }).careerVersion;
   for (const flavour of ["driver", "myteam"]) {
     const b = boot({ career: true, disk: { "apex26.careerSlot": '"myteam:1"',
       "apex26.career.driver.0": JSON.stringify({ ...CAREER_SAVE, money: 100 }) } });
     const before = [...b.disk.entries()];
-    const result = b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
+    const result = await b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
       "career.driver.0": { ...CAREER_SAVE, v: 0, money: "120" },
       "career.driver.1": CAREER_SAVE,
       careerSlot: "driver:0",
@@ -1523,9 +1551,9 @@ test("future final row refuses the entire mixed legacy import before slots or se
   }
 });
 
-test("future preflight retains legacy migration, scope and slot/selection revision gates", () => {
+test("future preflight retains legacy migration, scope and slot/selection revision gates", async () => {
   const b = boot({ career: true });
-  const result = b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
+  const result = await b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
     "career.driver.0": { ...CAREER_SAVE, v: 0, money: "120" },
     "career.driver.1": CAREER_SAVE, careerSlot: "driver:0",
     season: { round: 4 }, "daily.v1": { days: {} }, customTeam: { name: "Other" },
@@ -1537,7 +1565,7 @@ test("future preflight retains legacy migration, scope and slot/selection revisi
   for (const changed of ["career.driver.0", "careerSlot"]) {
     const h = boot({ career: true, store: { keyRevision: (key) => key === changed ? 1 : 0 } });
     const before = [...h.disk.entries()];
-    const refused = h.loadCareer({ format: h.SettingsExport.CAREER_FORMAT,
+    const refused = await h.loadCareer({ format: h.SettingsExport.CAREER_FORMAT,
       careers: { "career.driver.0": CAREER_SAVE, careerSlot: "driver:0" } },
     { expectedRevisions: { "driver:0": 0 }, expectedSelectionRevision: 0 });
     assert.equal(refused.reason, "conflict", changed);

@@ -35,7 +35,7 @@
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.sky = (THREE, TSL, ctx) =>
  *         ({ node, fallbackNode, uniforms, update,
- *            cacheStep, cacheWarm, cacheState, dispose })   // the cache four: no-ops without ctx.cache
+ *            cacheStep, cacheWarm, cacheDrawWarm, cacheState, dispose })   // the cache five: no-ops without ctx.cache
  * fallbackNode is a zenith→horizon screen-Y mix (no ray reconstruction).
  * tlx.js arms it on software GL: the full SKY_FS node either misses
  * (fog Color → beige void) or reconstructs rays badly against the HDR
@@ -259,15 +259,15 @@
       // Corona, aureole and disc.
       const cd = (1 - overcast * 0.92) * (1 - night);
       D.coronaDamp.value = cd;
-      const sw = [lerp(sc.x, sc.x * 1.18, golden), lerp(sc.y, sc.y * 0.52, golden), lerp(sc.z, sc.z * 0.24, golden)];
-      set3(D.sunWarm, sw[0], sw[1], sw[2]);
+      const sw0 = lerp(sc.x, sc.x * 1.18, golden), sw1 = lerp(sc.y, sc.y * 0.52, golden), sw2 = lerp(sc.z, sc.z * 0.24, golden);   // locals: no per-frame array
+      set3(D.sunWarm, sw0, sw1, sw2);
       D.aurExp.value = lerp(20.0, 8.0, golden);
       const ak = (golden * 0.55 + 0.55) * cd * U.coronaAureole.value;
-      set3(D.aurCol, sw[0] * ak, sw[1] * ak, sw[2] * ak);
+      set3(D.aurCol, sw0 * ak, sw1 * ak, sw2 * ak);
       D.squash.value = lerp(1.0, lerp(1.0, 1.6, golden), U.sunSquash.value);
       D.discOut.value = lerp(0.018, 0.028, golden) * U.sunDiscSize.value;
       D.discIn.value = U.sunDiscSize.value * 0.006;
-      set3(D.discCore, lerp(2.3, sw[0] * 2.8, golden), lerp(2.2, sw[1] * 2.8, golden), lerp(1.9, sw[2] * 2.8, golden));
+      set3(D.discCore, lerp(2.3, sw0 * 2.8, golden), lerp(2.2, sw1 * 2.8, golden), lerp(1.9, sw2 * 2.8, golden));
       // Star spawn window; the dither's time step (float32 like the GPU's floor).
       D.starThresh.value = Math.min(0.9994, 1.0 - U.starDensity.value * (1.0 - 0.9968));
       const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
@@ -419,6 +419,33 @@
       C.fo1[0] = F.o1.value.x; C.fo1[1] = F.o1.value.y; C.fo2[0] = F.o2.value.x; C.fo2[1] = F.o2.value.y;
       C.foT[0] = F.oT.value.x; C.foT[1] = F.oT.value.y; C.fob[0] = F.ob.value.x; C.fob[1] = F.ob.value.y;
       cacheSync();
+    }
+    /** The draw warm (tlx.js drawWarmStage): one zero-height band into the
+     * back target, so the bake's pipeline is built by render(), keyed exactly
+     * as cacheStep's. cacheWarm's compileAsync takes renderer.depth (true)
+     * while render() takes the target's depthBuffer (false here), so on WebGPU
+     * the compiled pipeline never matched: census 41021224706 built it
+     * mid-race from cacheStep. y0 = y1 collapses the band: no texel changes.
+     * Returns the number of draws (0 or 1). */
+    function cacheDrawWarm(renderer) {
+      if (!C || C.dead || !renderer) return 0;
+      const t = renderer.getRenderTarget(), mrt = renderer.getMRT ? renderer.getMRT() : null, ac = renderer.autoClear;
+      const y0 = C.F.y0.value, y1 = C.F.y1.value;
+      try {
+        if (mrt) renderer.setMRT(null);
+        renderer.autoClear = false;
+        C.F.y0.value = -1; C.F.y1.value = -1;
+        renderer.setRenderTarget(C.rts[1 - C.front]);
+        renderer.render(C.scene, C.cam);
+        return 1;
+      } catch (_) {
+        return 0;   // cacheStep reports a real failure; the warm only loses its head start
+      } finally {
+        C.F.y0.value = y0; C.F.y1.value = y1;
+        renderer.autoClear = ac;
+        renderer.setRenderTarget(t);
+        if (mrt) renderer.setMRT(mrt);
+      }
     }
     /** The warm scopes its target/MRT too: optional-cache retirement must
      * happen after these references are released, including compile rejection. */
@@ -793,7 +820,7 @@
       return vec4(mix(U.zenith, U.horizon, t), 1.0);
     })();
 
-    return { node, fallbackNode, uniforms: U, update, cacheStep, cacheWarm, cacheState, dispose };
+    return { node, fallbackNode, uniforms: U, update, cacheStep, cacheWarm, cacheDrawWarm, cacheState, dispose };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { sky });

@@ -9,16 +9,19 @@
 }
 [data-career-part="nav"]::-webkit-scrollbar { display: none; }
 [data-career-part="nav"] .sel-chip {
-  flex: 0 0 auto;
+  /* Grow to fill the row when the chips fit, never shrink: too narrow still pans. */
+  flex: 1 0 auto;
   font-style: normal;
   text-transform: none;
 }
 [data-career-part="nav"] [aria-current="location"] { border-color: var(--red); background: var(--carbon); }
 .cr-nextrace { padding: 0; overflow: hidden; border-color: var(--career-team, var(--red)); }
-.cr-nextrace > img { display: block; width: 100%; aspect-ratio: 2.4; object-fit: cover; }
+/* display/width come from career.css `#cr-nextrace img, .cr-nextrace img`. */
+.cr-nextrace > img { aspect-ratio: 2.4; object-fit: cover; }
 .cr-nextrace > div { padding: var(--pad); }
 .cr-nextrace, [data-career-part="story"], [data-results-part="story"] { font-style: normal; }
-.cr-nextrace .cr-nr-name { margin: 0; font-style: italic; font-size: var(--fs-6); }
+/* italic is already on .cr-nr-name in career.css; this only retunes size + margin. */
+.cr-nextrace .cr-nr-name { margin: 0; font-size: var(--fs-6); }
 [data-career-part="facts"] { display: flex; flex-wrap: wrap; gap: var(--gap); font-size: var(--label); color: var(--dim); }
 [data-career-part="objective"] { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: 0; }
 [data-career-part="objective"] strong { color: var(--text); }
@@ -86,19 +89,25 @@
 }
 /* Short phone landscape: the story + podium was taller than the sheet body,
    so overflow:hidden on .sheet clipped the name row and left P1–P3 looking
-   empty. Drop the team line, tighten type/padding, keep names in view. */
-@media (orientation: landscape) and (max-height: 500px) {
-  [data-results-part="story"] { padding: calc(var(--pad) * 0.55); margin-bottom: calc(var(--pad) * 0.45); }
-  [data-results-part="podium"] { gap: calc(var(--gap) * 0.5); padding-top: calc(var(--pad) * 0.45); }
-  [data-results-part="podium"] > li { padding: calc(var(--pad) * 0.4); gap: 2px; }
-  [data-results-part="podium"] > li > strong { font-size: var(--fs-4); }
-  [data-results-part="podium"] > li > strong + span { font-size: var(--fs-micro); }
-  [data-results-part="podium"] small { display: none; }
-}
+   empty. Drop the team line, tighten type/padding, keep names in view.
+   Keyed on the RESULTS sheet's own density (the ceremony podium, unzoomed and
+   outside any sheet, on the body tier), not the zoom-blind
+   `(orientation: landscape) and (max-height: 500px)` (UI contract 2026-11-06
+   §7 gap 24, handed to #5153 PR D). */
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="story"] { padding: calc(var(--pad) * 0.55); margin-bottom: calc(var(--pad) * 0.45); }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] { gap: calc(var(--gap) * 0.5); padding-top: calc(var(--pad) * 0.45); }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] > li { padding: calc(var(--pad) * 0.4); gap: 2px; }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] > li > strong { font-size: var(--fs-4); }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] > li > strong + span { font-size: var(--fs-micro); }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] small { display: none; }
 @media (prefers-reduced-motion: no-preference) {
   :root:not([data-motion="reduce"]) [data-results-part="story"] { animation: career-reveal 240ms ease-out both; }
-  :root:not([data-motion="reduce"]) [data-results-part="podium"] > li { animation: career-reveal 240ms ease-out backwards; animation-delay: calc(var(--podium-place) * 55ms); }
+  /* PODIUM COUNTDOWN (design pass 3E): P3, then P2, then P1, the order a real
+     podium is called, so the winner lands last (~0.64 s). Tiles only: RACE
+     AGAIN sits in the sheet foot and takes a tap from the first frame. */
+  :root:not([data-motion="reduce"]) [data-results-part="podium"] > li { animation: podium-in var(--dur-3) var(--ease-spring) calc((3 - var(--podium-place)) * 160ms) both; }
   :root:not([data-motion="reduce"]) [data-career-part="calendar"] > li[aria-current] { animation: career-reveal 240ms ease-out; }
 }
+@keyframes podium-in { from { opacity: 0; transform: translateY(18px); } }
 @keyframes career-reveal { from { opacity: 0.7; transform: translateY(calc(var(--gap) * 0.5)); } to { opacity: 1; transform: translateY(0); } }
 }

@@ -28,7 +28,7 @@ export function imageFormatFor(outPath, { jpegFlag = false } = {}) {
   return { type: "png", quality: undefined };
 }
 
-export function defaultOutPath(ROOT, { trackId, frac, cam, type = "png" }) {
+function defaultOutPath(ROOT, { trackId, frac, cam, type = "png" }) {
   const safeTrackId = assertSafePathToken(trackId, "track id");
   const safeCam = assertSafePathToken(cam, "camera");
   const ext = type === "jpeg" ? "jpg" : "png";

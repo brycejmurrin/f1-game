@@ -600,6 +600,132 @@
     // RETURNED n is the contract (every caller loops j < n), entries past it are
     // stale references to a live world's chunks, and free() still empties it.
     const _visList = [];
+    const _ic = new Int32Array(1024);
+    // One geometry per pass slot (0 main, 1 mirror) holding the visible chunks'
+    // indices. The chunks already share vertex attributes, so concatenating
+    // indices draws the same triangles. A repeated visible set returns the
+    // cached geometry and does not touch the index buffer.
+    function mergeVisible(mesh, n, slot) {
+      const vis = _visList;
+      if (!(n > 1) || !mesh || !mesh.chunks) return null;
+      const slots = mesh._tlxMv || (mesh._tlxMv = []);
+      const si = slot | 0;
+      let s = slots[si];
+      if (s && s.n === n) {
+        let same = true;
+        for (let i = 0; i < n; i++) if (s.ids[i] !== vis[i]) { same = false; break; }
+        if (same) return s.geo;
+      }
+      let cnt = 0, Ctor = null;
+      const ic = n <= _ic.length ? _ic : new Int32Array(n);
+      for (let i = 0; i < n; i++) {
+        const ix = vis[i] && vis[i].geo && vis[i].geo.index, a = ix && ix.array;
+        if (!a) return null;
+        const c = ix.count != null ? ix.count : (a.length / (ix.itemSize || 1));
+        ic[i] = c; cnt += c;
+        if (!Ctor || a.BYTES_PER_ELEMENT > Ctor.BYTES_PER_ELEMENT) Ctor = a.constructor;
+      }
+      if (!s) s = slots[si] = { n: 0, ids: [], geo: null, arr: null, res: [], rc: [], rn: 0, rb: 0, r2: [], c2: [] };
+      const g = s.geo || (s.geo = new THREE.BufferGeometry());
+      if (!g.boundingSphere) {
+        g.boundingSphere = new THREE.Sphere();
+        const src = vis[0].geo;
+        for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
+      }
+      let tot = mesh._tlxIdxTotal;
+      if (!(tot > 0)) {
+        tot = 0;
+        for (let k = 0; k < mesh.chunks.length; k++) {
+          const ch = mesh.chunks[k], ix = ch.geo && ch.geo.index;
+          ch._tlxCi = k;   // record order, which cull lists in: the run search below is one merge walk
+          if (ix) tot += ix.count;
+        }
+        mesh._tlxIdxTotal = tot;
+      }
+      // GPU hunt 3 (#4272 item 3; census 41030658536: 200-920 KB index rewrites when the FIRST visible chunk
+      // changed): a sliding window. The chunks the buffer holds (s.res from offset s.rb, drawn or not) keep their
+      // offsets; the new set keeps its longest run shared with them in place and writes only the chunks before and
+      // after it, so a head chunk leaving uploads nothing and one entering uploads itself. The GPU draws the same
+      // indices in the same order from a moved drawRange.start. A fresh array, or a set that does not fit around
+      // its run, rewrites from scratch, centred.
+      let fresh = !s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor, made = null;
+      if (fresh) {
+        // 1.5x headroom (capped at the record's whole index count): the window's slack, and a widening view
+        // replaces the buffer O(log) times, not on every new high.
+        const grow = s.arr && s.arr.constructor === Ctor ? s.arr.length : 0;
+        const cap = Math.max(cnt, Math.min(tot, Math.ceil(Math.max(cnt, grow) * 1.5)));
+        const old = g.index;
+        s.arr = new Ctor(cap);
+        const ia = made = new THREE.BufferAttribute(s.arr, 1);
+        // The vendor's narrow-index opt-in (PATCHES §20), as packIndex marks every
+        // chunk's own index: unmarked, three's WebGPU backend swaps ia.array for a
+        // Uint32 copy at creation, every later write below lands in the orphaned
+        // s.arr, and each changed visible set re-uploads the FIRST set's indices.
+        if (s.arr instanceof Uint16Array) ia.__apexUint16Index = true;
+        g.setIndex(ia);
+        // The replaced index's GPU buffer, now held by nothing but the GC.
+        if (old && ctx && ctx.releaseAttribute) ctx.releaseAttribute(old);
+      }
+      const dst = s.arr, res = s.res, rc = s.rc;
+      let bi = 0, bj = 0, bl = 0, bc = 0, P = 0;   // longest shared run: res[bi..], vis[bj..], bl chunks, bc indices at P
+      for (let i = 0, j = 0, o = s.rb, ri = 0, rj = 0, rl = 0, rn = 0, rp = 0; !fresh && i < s.rn && j < n;) {
+        const a = res[i], b = vis[j];
+        if (a === b && rc[i] === ic[j]) {
+          if (rl > 0 && ri + rl === i && rj + rl === j) { rl++; rn += ic[j]; } else { ri = i; rj = j; rl = 1; rn = ic[j]; rp = o; }
+          if (rn > bc) { bc = rn; bi = ri; bj = rj; bl = rl; P = rp; }
+          o += rc[i]; i++; j++;
+        } else if (a._tlxCi < b._tlxCi) { o += rc[i]; i++; } else j++;
+      }
+      let pre = 0;
+      for (let i = 0; i < bj; i++) pre += ic[i];
+      let start = P - pre;
+      if (!(bl > 0 && start >= 0 && start + cnt <= dst.length)) {
+        // A set drifting off one end restarts at the other, so a steady drive along the arc (record order) spends
+        // the whole slack before the next rewrite. Even: a Uint16 range starts 4-byte aligned.
+        start = P = (bl > 0 ? (start < 0 ? dst.length - cnt : 0) : (dst.length - cnt) >> 1) & ~1;
+        fresh = true; bi = bj = bl = bc = pre = 0;
+      }
+      const end = start + cnt, post = end - (P + bc);
+      let o = start, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      for (let i = 0; i < n; i++) {
+        const ch = vis[i], a = ch.geo.index.array, c = ic[i];
+        if (i < bj || i >= bj + bl) {
+          if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
+          else for (let k = 0; k < c; k++) dst[o + k] = a[k];
+        }
+        o += c; s.ids[i] = ch;
+        const mn = ch.min, mx = ch.max;
+        if (!mn || !mx) continue;
+        if (mn[0] < x0) x0 = mn[0]; if (mn[1] < y0) y0 = mn[1]; if (mn[2] < z0) z0 = mn[2];
+        if (mx[0] > x1) x1 = mx[0]; if (mx[1] > y1) y1 = mx[1]; if (mx[2] > z1) z1 = mx[2];
+      }
+      // What the buffer now holds: the new set, plus the old chunks on a side it did not write (still intact).
+      const r2 = s.r2, c2 = s.c2;
+      let m = 0, rb = start;
+      if (bl > 0 && pre === 0) { rb = s.rb; for (let i = 0; i < bi; i++) { r2[m] = res[i]; c2[m++] = rc[i]; } }
+      for (let i = 0; i < n; i++) { r2[m] = vis[i]; c2[m++] = ic[i]; }
+      if (bl > 0 && post === 0) for (let i = bi + bl; i < s.rn; i++) { r2[m] = res[i]; c2[m++] = rc[i]; }
+      s.res = r2; s.rc = c2; s.r2 = res; s.c2 = rc; s.rn = m; s.rb = rb; s.n = n;
+      g.setDrawRange(start, cnt);
+      // three r186 uploads each queued range with its own writeBuffer / bufferSubData, in list order, then clears
+      // the list (both backends): a range still queued never reached the GPU (the pass did not draw), so it stays.
+      // A new attribute queues none: three's create uploads the whole array and leaves the ranges for the NEXT
+      // update to re-send.
+      const attr = g.index, ur = attr.updateRanges || (attr.updateRanges = []);
+      if (attr !== made && (pre > 0 || fresh)) ur.push({ start, count: fresh ? cnt : pre });
+      if (post > 0 && !fresh) ur.push({ start: end - post, count: post });
+      if (ur.length > 4) {   // many owed ranges: one span covers them
+        let a = Infinity, b = 0;
+        for (const r of ur) { if (r.start < a) a = r.start; if (r.start + r.count > b) b = r.start + r.count; }
+        ur.length = 0; ur.push({ start: a, count: b - a });
+      }
+      if (ur.length) attr.needsUpdate = true;   // a set inside what the buffer holds moves the draw range alone
+      const bs = g.boundingSphere, cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5, cz = (z0 + z1) * 0.5;
+      const ct = bs.center || (bs.center = new THREE.Vector3());
+      ct.x = cx; ct.y = cy; ct.z = cz;
+      bs.radius = Math.hypot(x1 - cx, y1 - cy, z1 - cz) || 0;
+      return g;
+    }
     function cull(mesh, vp, eye, cullDist, fog) {
       const chunks = mesh && mesh.chunks;
       if (!chunks || !vp) return 0;
@@ -625,7 +751,7 @@
      * A ZERO-LENGTH VIEW, NOT null. Every three site that touches .array after
      * upload wants a PROPERTY OF THE TYPE, never the data, and each one is a
      * null dereference away from taking the renderer down (all four verified
-     * against vendor/three-0.186.1/three.webgpu.min.js):
+     * against vendor/three-0.187.0/three.webgpu.min.js):
      *
      *   node builder      attribute.array.constructor, on every pass it has not
      *                     compiled before — the env probe threw on 41 WebGL2 /
@@ -649,7 +775,16 @@
      * never use one. */
     function releaseMirrors(mesh) {
       if (!mesh || !mesh.chunks || !mesh.chunks.length || mesh._mirrorsFreed) return;
-      mesh._mirrorsFreed = true;
+      mesh._mirrorsFreed = true;   // the release is DECIDED (once per mesh); _mirrorsKept says it kept them
+      // NOT ON THE WEBGPU BACKEND (r187). Every pipeline (re-)resolve builds the vertex-layout cache key from
+      // EVERY attribute's array: WebGPUAttributeUtils.getVertexBufferLayout reads
+      // `geometryAttribute.array.BYTES_PER_ELEMENT` and _getVertexFormat `array.constructor`, uploaded or not.
+      // A never-seen chunk entering the frustum, or a parked shadow-pool mesh taking a chunk geometry, is a new
+      // RenderObject, so a nulled array throws a TypeError there — caught, but the shadow map switches off for
+      // the session or the main pass falls down its ladder. The zero-length view three would accept is barred
+      // by the hardware A/B below (gpu-census 26 vs 27), so WebGPU keeps the mirrors. WebGL2 reads the array
+      // only at first upload (WebGLAttributeUtils.createAttribute), which every shared attribute has passed.
+      if (ctx && ctx.isWebGPU && ctx.isWebGPU()) { mesh._mirrorsKept = true; return; }
       // NULL, matching what shipped. Read the r185 SOURCE (not the minified
       // bundle) before touching this: src/renderers/webgpu/utils/
       // WebGPUAttributeUtils.js and its webgl-fallback sibling.
@@ -678,7 +813,7 @@
       // Releasing chunk mirrors is therefore only sound if EVERY chunk has been
       // uploaded first. Nothing establishes that today.
       const atts = mesh.chunks[0].geo.attributes;
-      for (const k in atts) if (atts[k]) atts[k].array = null;
+      for (const k in atts) if (atts[k]) { if (ctx && ctx.noteNulled) ctx.noteNulled(atts[k]); atts[k].array = null; }
       // The per-chunk INDEX arrays stay. three's WebGPU backend sizes the index
       // buffer from the array's byte length, so freeing them yields a ZERO-BYTE
       // index buffer: "Index range ... does not fit in index buffer size (0)",
@@ -687,24 +822,69 @@
       // carries the same rule and the same reason.
     }
 
-    function free(mesh) {
+    // Dispose a set of freed geometries that SHARE their vertex attributes (every chunk and merge slot of a mesh
+    // holds the same attribute objects). r187's geometry dispose (Geometries.initGeometry onDispose) deletes only
+    // the attributes the geometry STILL holds, and only for a geometry three initialised (drew), so stripping the
+    // attributes first — what releases the CPU arrays — left the shared GPU vertex buffers alive whenever no
+    // drawn, unstripped geometry was disposed after them (a mesh drawn only through its merge slots). Each shared
+    // attribute is disposed ONCE here: BufferAttribute.dispose() fires the listener three's Attributes armed at
+    // upload (Attributes.update), which destroys the buffer; a never-uploaded attribute has none and is a no-op.
+    // The index stays on the geometry, so g.dispose() still frees it.
+    function disposeShared(geos) {
+      const attrs = new Set();
+      for (const g of geos) {
+        if (!g || !g.attributes) continue;
+        for (const k in g.attributes) if (g.attributes[k]) attrs.add(g.attributes[k]);
+      }
+      for (const a of attrs) { try { if (typeof a.dispose === "function") a.dispose(); } catch (_) { /* already gone */ } }
+      for (const g of geos) {
+        if (!g) continue;
+        if (g.attributes) { const names = Object.keys(g.attributes); for (let k = 0; k < names.length; k++) delete g.attributes[names[k]]; }
+        try { g.dispose(); } catch (_) { /* already gone */ }
+      }
+      return attrs.size;
+    }
+
+    function free(mesh, freedGeos) {
       if (!mesh) return;
+      const mark = (g) => { if (g && freedGeos) freedGeos.add(g); };
+      const owned = [];   // unbatched: disposed together at the end (disposeShared), merge slots and chunks alike
+      const dropGeo = (g) => {
+        if (!g) return;
+        mark(g);
+        releaseGeometry(g);
+        if (!freedGeos) owned.push(g);   // batched: tlx.js flushChunkedOwnership disposes the whole batch
+      };
+      const mv = mesh._tlxMv;
+      if (mv) {
+        mesh._tlxMv = null;
+        for (let i = 0; i < mv.length; i++) {
+          const g = mv[i] && mv[i].geo;
+          if (!g) continue;
+          // The merged draw's wrapper is keyed on THIS geometry, not a chunk.
+          // three r186 drops a RenderObject only when the object or the material
+          // dispatches "dispose" (a geometry dispose only clears vertex state),
+          // so geometry.dispose() alone left the wrapper in the pool and the
+          // previous circuit's merge slot in renderer._objects on the next race.
+          dropGeo(g);
+          mv[i].geo = null;
+        }
+      }
       _visList.length = 0;   // the last cull's list may be this mesh's chunks: a dropped world must not sit in module scratch
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
-          if (ch.geo) { releaseGeometry(ch.geo); ch.geo.dispose(); ch.geo = null; }
+          if (ch.geo) { dropGeo(ch.geo); ch.geo = null; }
           if (ch.wrap) ch.wrap.geo = null;
         }
         mesh.chunks = null;
         mesh.geo = null;
-        return;
-      }
-      if (mesh.geo) { releaseGeometry(mesh.geo); mesh.geo.dispose(); mesh.geo = null; }
+      } else if (mesh.geo) { dropGeo(mesh.geo); mesh.geo = null; }
+      if (owned.length) disposeShared(owned);
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
-    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free };
+    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free, disposeShared, mergeVisible };
   }
 
   // THE ROAD SPLIT (B·H10, docs/notes/LIVE-FRAME-H10-2026-10-20.md). TLX draws the road as ONE mesh

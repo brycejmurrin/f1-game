@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import vm from "vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -95,7 +96,7 @@ test("ensureRaceSession reinjects real PitLane and calls onRaceSessionReady", as
 
 // #2625: a never-resolving file makes ScriptLoader call onSlow; the loading card's line changes.
 test("ensureRaceSession slow load shows SLOW CONNECTION on the loading card", async () => {
-  const loader = src("js/core/script-loader.js"), bundles = src("js/core/lazy-bundles.js"), screen = src("js/ui/loading-screen.js");
+  const loader = src("js/core/script-loader.js"), bundles = src("js/core/lazy-bundles.js"), card = src("js/ui/loading-card.js"), screen = src("js/ui/loading-screen.js");
   const gp = { textContent: "Please wait" }, root = { hidden: false };
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
@@ -112,7 +113,7 @@ test("ensureRaceSession slow load shows SLOW CONNECTION on the loading card", as
       head: { appendChild() { /* never loads */ } },
     },
   });
-  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;\n" + screen + "\nthis.LoadingScreen = LoadingScreen;", ctx);
+  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;\n" + card + "\n" + screen + "\nthis.LoadingScreen = LoadingScreen;", ctx);
   vm.runInContext(bundles + `
     const lb = LazyBundles.create({ els, loadBackendScripts: (f, e, o) => ScriptLoader.create().load(f, e, Object.assign({ slowMs: 30, deadlineMs: 5000 }, o)), getContext() {}, onRaceSessionReady() {} });
     globalThis.__ensure = lb.ensureRaceSession;`, ctx);
@@ -123,7 +124,7 @@ test("ensureRaceSession slow load shows SLOW CONNECTION on the loading card", as
 
 // #2625: on failure the card offers Retry and Back to menu.
 test("LoadingScreen.failed shows Retry + Back to menu and resolves the choice", async () => {
-  const screen = src("js/ui/loading-screen.js");
+  const screen = src("js/ui/loading-card.js") + "\n" + src("js/ui/loading-screen.js");
   const mk = () => {
     const els = {}, mkEl = () => { const e = { children: [], listeners: {}, textContent: "", appendChild(c) { e.children.push(c); }, remove() { e.removed = true; }, addEventListener(t, f) { e.listeners[t] = f; } }; return e; };
     els.loading = { hidden: false }; els["ld-gp"] = mkEl(); els["ld-text"] = mkEl();
@@ -144,8 +145,77 @@ test("LoadingScreen.failed shows Retry + Back to menu and resolves the choice", 
   assert.equal(await ctx.LoadingScreen.failed(), "back");
 });
 
-test("startRace retries the race-session load on Retry and quits to menu on Back", () => {
-  const g = src("js/game.js");
-  assert.match(g, /while \(!sessionOk && !stale\(\) && await LoadingScreen\.failed\(\) === "retry"\) sessionOk = await ensureRaceSession\(\)/);
-  assert.match(g, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\)/);
+test("startRace retries the race-session load on Retry and quits to menu on Back", async () => {
+  // The REAL startRaceBody (runStartRaceBody below): the load fails, the card
+  // answers, and the body either loads again or falls through to the menu.
+  let r = await runStartRaceBody({ sessionSeq: [false, true], choices: ["retry"] });
+  assert.equal(r.v, "built", "fail -> Retry -> loaded: the race builds");
+  assert.equal(r.loads, 2, "Retry re-ran ensureRaceSession");
+  assert.equal(r.asked, 1, "the card asked once");
+  assert.deepEqual(r.log, [], "no quit on a successful retry");
+  r = await runStartRaceBody({ sessionSeq: [false, false, true], choices: ["retry", "retry"] });
+  assert.equal(r.v, "built"); assert.equal(r.loads, 3, "every Retry loads again"); assert.equal(r.asked, 2);
+  r = await runStartRaceBody({ sessionSeq: [false, false], choices: ["retry", "back"] });
+  assert.equal(r.v, false); assert.equal(r.loads, 2); assert.equal(r.asked, 2);
+  assert.deepEqual(r.log, ["quitToMenu"], "Back after a failed retry quits to the menu");
+  r = await runStartRaceBody({ sessionSeq: [false], choices: ["back"] });
+  assert.equal(r.v, false); assert.equal(r.loads, 1, "Back never loads again"); assert.deepEqual(r.log, ["quitToMenu"]);
+});
+
+// WP-G4 (review 2026-10-27 r2 F4): Career.markWeekendStarted() stamps
+// season.startedRound, escrows planning and saves. It ran right after the first
+// yield, so a failed session load + BACK, a save conflict or a lost GPU context
+// locked the round's brief with no race run. Run the REAL startRaceBody in a VM
+// with every dependency stubbed (game-vm UA: no yields) and read the stamp.
+function runStartRaceBody({ sessionOk = true, conflict = false, ctxLost = false, sessionSeq = null, choices = null } = {}) {
+  const season = { round: 5 }, log = [];
+  // sessionSeq: successive ensureRaceSession() results; choices: successive LoadingScreen.failed() answers.
+  const seq = sessionSeq ? [...sessionSeq] : null, picks = choices ? [...choices] : null, n = { loads: 0, asked: 0 };
+  const STOP = new Error("past the mark");
+  const fn = () => {}, obj = new Proxy({}, { get: (t, k) => (k === "then" ? undefined : fn) });
+  const ctx = vm.createContext({
+    navigator: { userAgent: "Mozilla/5.0 apex-game-vm" }, window: { LightPresets: {} },
+    RaceEntryProfile: obj, LoadingScreen: { failed: async () => { n.asked++; return picks && picks.length ? picks.shift() : "back"; } }, loadingScreen: obj,
+    isCareer: () => true,
+    Career: { conflicted: () => conflict, markWeekendStarted() { if (!conflict) season.startedRound = season.round; } },
+    ensureRaceSession: async () => { n.loads++; return seq ? !!seq.shift() : sessionOk; }, ensureAudio: async () => true, lazyBundles: { ensureResultsSheet: async () => true }, ensureLightPresets: async () => true,
+    quitToMenu: () => log.push("quitToMenu"), quitToMenuAfterCtxLost: () => log.push("ctxLost"), announce: fn,
+    radioVoice: obj, flow: "race", season, SeasonCal: { conflicted: () => false, canRace: () => true },
+    resultsCam: obj, RaceCeremony: { resetLive: fn }, _roadReflectionTransition: {}, IncidentSim: obj, raceCtl: obj, wxArc: obj, DebrisWorld: obj,
+    banner: obj, raceMessageHistory: null, announcer: {}, hud: {}, _menuGate: {},
+    loadTrack: fn, trackIdx: 0, gfxContextLost: () => ctxLost, releaseFieldScratch: () => { throw STOP; },
+  });
+  vm.runInContext(symbolSource("async function startRaceBody()") + "\nglobalThis.__run = startRaceBody;", ctx, { filename: "vm-slice:startRaceBody" });
+  return ctx.__run().then((v) => ({ v, season, log, ...n }), (e) => { if (e !== STOP) throw e; return { v: "built", season, log, ...n }; });
+}
+
+test("startRaceBody locks the career brief only once the session loaded, no conflict and the track built", async () => {
+  let r = await runStartRaceBody({ sessionOk: false });
+  assert.equal(r.v, false); assert.deepEqual(r.log, ["quitToMenu"]);
+  assert.notEqual(r.season.startedRound, r.season.round, "session bundle failed + BACK: no race ran, the brief stays open");
+  r = await runStartRaceBody({ conflict: true });
+  assert.equal(r.v, false); assert.notEqual(r.season.startedRound, r.season.round, "save conflict: quit before the stamp");
+  r = await runStartRaceBody({ ctxLost: true });
+  assert.equal(r.v, false); assert.deepEqual(r.log, ["ctxLost"]);
+  assert.notEqual(r.season.startedRound, r.season.round, "GPU context lost during the build: no race ran");
+  r = await runStartRaceBody();
+  assert.equal(r.v, "built"); assert.equal(r.season.startedRound, r.season.round, "a race that reaches makeCars locks the brief");
+});
+
+
+test("optional garage exterior coalesces loading and retries without holding a race-session promise", async () => {
+  const manifest = require("../../tools/manifest.cjs"), files = manifest.LAZY_GARAGE_EXTERIOR;
+  assert.deepEqual(files, ["js/garage/exterior-geometry.js", "js/garage/exterior.js"]);
+  let settle, calls = 0;
+  const pending = new Promise(resolve => { settle = resolve; });
+  const ctx = vm.createContext({ ApexRoster: { ...manifest, LAZY_RACE_SESSION: ["test-session.js"] }, window: {}, Log: {warn(){}},
+    loadScripts(list, _edges, options) { calls++; assert.deepEqual(Array.from(list), files); assert.equal(options.strict, true); if (calls === 1) return pending; ctx.GarageExterior = {}; ctx.GarageExteriorGeometry = {}; return Promise.resolve(true); } });
+  vm.runInContext(src("js/core/lazy-bundles.js"), ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  const bundles = vm.runInContext("LazyBundles", ctx).create({els:{},loadBackendScripts:ctx.loadScripts});
+  const first = bundles.ensureGarageExterior();
+  assert.equal(bundles.ensureGarageExterior(), first); assert.equal(calls, 1);
+  assert.equal(await bundles.ensureRaceSession(), true, "resident race session never waits for optional exterior");
+  settle(false); assert.equal(await first, false);
+  assert.equal(await bundles.ensureGarageExterior(), true); assert.equal(calls, 2, "a failed optional fetch can retry");
+  assert.equal(await bundles.ensureGarageExterior(), true); assert.equal(calls, 2, "resident globals need no extra fetch");
 });

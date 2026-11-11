@@ -6,12 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["zandvoort"] =
   function (api) {
-      const { K, out, MAT, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane, seat, track,
-              addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, addMountain, anchor, vadd, onTrack, hash, every,
+      const { K, out, MAT, n, pyMin, seat, track,
+              addBox, addCyl, addPrism, addCone, addFrustum, addMountain, anchor, vadd, onTrack, hash, every,
               along, runoffApron, bowlSeatWall,
-              modelGroup, waterSurface, waterBand, groundPatch,
-              mountain, peak, bush, terrainYAt, hedge, grandstand, grandstandEx, tower,
-              pine, tree, forestEdge,
+              modelGroup, waterSurface, groundPatch, peak, bush, terrainYAt, hedge, grandstandEx, tower,
+              pine, forestEdge,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier } = api;
 
       const sand      = [0.81, 0.75, 0.58];

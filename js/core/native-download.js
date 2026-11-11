@@ -130,6 +130,17 @@ const NativeDownload = (function () {
     return { ok: true, name: name, uri: uri };
   }
 
+  function toast(msg) {
+    try {
+      const d = document.createElement("div");
+      d.setAttribute("role", "alert");
+      d.style.cssText = "position:fixed;left:5vw;bottom:16px;padding:8px;background:#111;color:#fff;font:700 14px sans-serif;z-index:9999;pointer-events:none";
+      d.textContent = msg;
+      document.body.appendChild(d);
+      setTimeout(function () { d.remove(); }, 5000);
+    } catch (e) { /* no DOM in Node VM tests */ }
+  }
+
   function clickTarget(ev) {
     const t = ev && ev.target;
     if (!t) return null;
@@ -153,7 +164,9 @@ const NativeDownload = (function () {
     }).then(function (blob) {
       return saveBlob(blob, name);
     }).catch(function (err) {
-      log("native download failed: " + (err && err.message ? err.message : err));
+      const m = err && err.message ? err.message : err;
+      try { Log.warn("ui", "native download failed: " + m); } catch (e) { log("native download failed: " + m); }
+      if (!isCancelled(err)) toast("EXPORT FAILED — " + name + " was not saved");
     });
   }
 
@@ -168,6 +181,7 @@ const NativeDownload = (function () {
 
   try { install(); } catch (e) { /* document absent in Node VM tests */ }
 
-  return { viable, saveBlob, install, safeName, isCancelled };
+  // install() runs at module load; keep it private (viable/saveBlob/safeName/isCancelled are the public seams).
+  return { viable, saveBlob, safeName, isCancelled };
 })();
 Object.freeze(NativeDownload);

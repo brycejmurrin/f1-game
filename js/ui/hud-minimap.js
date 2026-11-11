@@ -18,7 +18,11 @@ let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
                               // bitmap size but need different path transforms
 let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
-let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
+let _mmPitP = null, _mmYou = "";   // the "P"'s local px + map node, and the resolved --you; set with the bg
+let minimapBgCues = false;
+const SECTOR_DASH = [[6, 3], [2, 3], [6, 2, 2, 2]];
+// --you before the bg has resolved it: CvdPalette's row for the current mode (#1595).
+const mmYou = () => _mmYou || (typeof CvdPalette !== "undefined" && CvdPalette.hex("you")) || "#fff";
 
 function drawMinimap() {
   const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
@@ -41,6 +45,7 @@ function drawMinimap() {
   // Keep the bounded retry while the fit has no laid-out box, and the track
   // invalidation path (minimapBg null) so a newly visible map measures afresh.
   const root = document.documentElement, body = document.body;
+  const cbCues = root.dataset.cbCues === "on";
   const measureKey = vpW() + "x" + vpH() + "|" + body.className
     + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
     + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
@@ -63,8 +68,9 @@ function drawMinimap() {
   }
   // pre-render the static track outline once; reuse as a cheap blit every HUD frame
   const bgKey = _mmBgKey;   // no string built per HUD tick
-  if (!minimapBg || minimapBgKey !== bgKey) {
+  if (!minimapBg || minimapBgKey !== bgKey || minimapBgCues !== cbCues) {
     minimapBgKey = bgKey;
+    minimapBgCues = cbCues;
     minimapBg = document.createElement("canvas");
     minimapBg.width = W; minimapBg.height = H;
     const mc = minimapBg.getContext("2d");
@@ -91,6 +97,7 @@ function drawMinimap() {
       const from = Math.floor(splits[s] * n);
       const to = s === 2 ? n - 1 : Math.max(from, Math.floor(splits[s + 1] * n));
       mc.strokeStyle = SC[s];
+      if (cbCues) mc.setLineDash(SECTOR_DASH[s]);
       mc.beginPath();
       for (let i = from; i <= to; i++) {
         const p = map[i % n];
@@ -102,6 +109,16 @@ function drawMinimap() {
         mc.lineTo(8 + p0[0] * (cssW - 16), 8 + p0[1] * (cssH - 16));
       }
       mc.stroke();
+      if (cbCues) {
+        mc.setLineDash([]);
+        const p = map[Math.floor((from + to) / 2)];
+        const x = Math.max(12, Math.min(cssW - 12, 8 + p[0] * (cssW - 16)));
+        const y = Math.max(8, Math.min(cssH - 8, 8 + p[1] * (cssH - 16)));
+        mc.font = "700 10px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
+        mc.strokeStyle = "black"; mc.fillStyle = "#fff"; mc.lineWidth = 3;
+        mc.strokeText("S" + (s + 1), x, y); mc.fillText("S" + (s + 1), x, y);
+        mc.lineWidth = 2;
+      }
     }
     mc.globalAlpha = 1;
     // Activation-zone highlight, slightly thicker, in the AERO chip's own blue
@@ -119,6 +136,34 @@ function drawMinimap() {
           mc.lineTo(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16));
         }
         mc.stroke();
+        if (cbCues) {
+          // AERO activation zones share the chip's terminology. Cross-hatches
+          // and text preserve their identity without blue, only in this cached
+          // background: no font work or extra layout reads on steady HUD ticks.
+          mc.strokeStyle = "#fff"; mc.lineWidth = 1;
+          mc.beginPath();
+          let sinceHatch = 6;
+          for (let i = from2; i < to2; i++) {
+            const p = map[i % n], next = map[(i + 1) % n];
+            const dx = (next[0] - p[0]) * (cssW - 16), dy = (next[1] - p[1]) * (cssH - 16);
+            const length = Math.hypot(dx, dy);
+            if (length > 0 && sinceHatch >= 6) {
+              const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+              mc.moveTo(x - dy / length * 4, y + dx / length * 4);
+              mc.lineTo(x + dy / length * 4, y - dx / length * 4);
+              sinceHatch = 0;
+            }
+            sinceHatch += length;
+          }
+          mc.stroke();
+          const start = map[from2 % n];
+          const x = Math.max(20, Math.min(cssW - 20, 8 + start[0] * (cssW - 16)));
+          const y = Math.max(8, Math.min(cssH - 8, 8 + start[1] * (cssH - 16)));
+          mc.font = "700 9px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
+          mc.strokeStyle = "black"; mc.fillStyle = "#fff"; mc.lineWidth = 3;
+          mc.strokeText("AERO", x, y); mc.fillText("AERO", x, y);
+          mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
+        }
       }
     }
     // THE PIT LANE: a light dashed run from where the entry road peels off
@@ -148,7 +193,7 @@ function drawMinimap() {
       // The map's own "--you" (the token the cue and the tyre chip carry the
       // stop in), read once per rebuild: a resolved colour is not a hot read.
       _mmYou = (typeof getComputedStyle === "function"
-        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "#aeea00";
+        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "";
     }
   }
   // Canvas resize resets 2D context state, so the transform is set every
@@ -202,10 +247,14 @@ function drawMinimap() {
       // Skip only the GHOST dot on a bad s — returning here would take the
       // player's own white marker (drawn below) down with it for the session.
       if (gp) {
-        mm.fillStyle = "rgba(120, 220, 255, 0.95)";
-        mm.beginPath();
-        mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
-        mm.fill();
+        if (cbCues) {
+          mmPitMark(mm, 8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 6, "rgba(120, 220, 255, 0.95)", "G", true);
+        } else {
+          mm.fillStyle = "rgba(120, 220, 255, 0.95)";
+          mm.beginPath();
+          mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
+          mm.fill();
+        }
       }
     }
   }
@@ -221,15 +270,15 @@ function drawMinimap() {
   if (_mmPitP && pits && pits.worthStopping && !inPit && pits.worthStopping(player)) {
     const d = pits.toEntry(player), ip = Math.floor(player.s / track.total * n) % n;
     if (d > 0 && d < pits.cueM && Number.isFinite(ip)) {
-      mm.strokeStyle = _mmYou; mm.lineWidth = 2;
+      mm.strokeStyle = mmYou(); mm.lineWidth = 2;
       mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
       mm.stroke();
     }
     if (player.pitArmed && !motionReduced()) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
-    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, _mmYou);
+    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, mmYou());
     mm.globalAlpha = 1;
   }
-  mm.fillStyle = inPit ? _mmYou : "#fff";
+  mm.fillStyle = inPit ? mmYou() : "#fff";
   mm.beginPath();
   mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
   mm.fill();
@@ -247,10 +296,11 @@ function mmRun(ctx, map, n, i0, steps, cssW, cssH) {
 }
 /** The "P" disc at the peel-off, radius `r` in local px. Rendered once per
  *  (radius, fill, ratio) into a small canvas and blitted: a per-frame `font`
- *  set + `fillText` was 980 ms of a 30 s window (TLX-PERF-HUNT-5 F1). */
+ *  set + `fillText` was 980 ms of a 30 s window (TLX-PERF-HUNT-5 F1).
+ *  The optional letter/ring reuses that cache for the colourblind ghost cue. */
 const _mmPitGlyph = new Map();
-function mmPitMark(ctx, x, y, r, fill) {
-  const key = r + "|" + fill + "|" + _mmRatio;
+function mmPitMark(ctx, x, y, r, fill, letter = "P", ring = false) {
+  const key = letter + "|" + ring + "|" + r + "|" + fill + "|" + _mmRatio;
   let g = _mmPitGlyph.get(key);
   if (g === undefined) {
     if (_mmPitGlyph.size > 8) _mmPitGlyph.clear();   // fill is --you: a theme change is a new key
@@ -261,19 +311,23 @@ function mmPitMark(ctx, x, y, r, fill) {
     if (gc) {
       const L = cw / _mmRatio, c = L / 2;
       gc.setTransform(_mmRatio, 0, 0, _mmRatio, 0, 0);
-      gc.fillStyle = fill; gc.beginPath(); gc.arc(c, c, r, 0, Math.PI * 2); gc.fill();
+      gc.fillStyle = fill; gc.strokeStyle = fill; gc.lineWidth = 1.5;
+      gc.beginPath(); gc.arc(c, c, r, 0, Math.PI * 2); if (ring) gc.stroke(); else gc.fill();
       gc.fillStyle = "#14161c"; gc.font = "700 " + (r + 2) + "px system-ui, sans-serif";
+      if (ring) gc.fillStyle = fill;
       gc.textAlign = "center"; gc.textBaseline = "middle";
-      gc.fillText("P", c, c + 0.5);
+      gc.fillText(letter, c, c + 0.5);
       g = { cv, L };
     }
     _mmPitGlyph.set(key, g);
   }
   if (g) { ctx.drawImage(g.cv, x - g.L / 2, y - g.L / 2, g.L, g.L); return; }
-  ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = fill; ctx.strokeStyle = fill; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); if (ring) ctx.stroke(); else ctx.fill();
   ctx.fillStyle = "#14161c"; ctx.font = "700 " + (r + 2) + "px system-ui, sans-serif";
+  if (ring) ctx.fillStyle = fill;
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("P", x, y + 0.5);
+  ctx.fillText(letter, x, y + 0.5);
 }
 
 return {

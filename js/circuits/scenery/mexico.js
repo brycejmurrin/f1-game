@@ -8,13 +8,13 @@
   function (api) {
       const { K, lapBounds, out, n, px, pz, pyMin, place, backdrop, groundPlane,
               addBox, addCyl, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
-              building, motorhome, grandstandEx, billboard, tree, hedge, fence,
+              building, motorhome, grandstandEx, billboard, hedge, fence,
               guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
-              modelGroup, groundPatch, groundedSegments,
+              modelGroup, groundPatch,
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit, terrainYAt,
-              indexSolid, seat, floodMast, lampPost: apiLampPost } = api;
+              indexSolid, seat, floodMast, lampPost: apiLampPost, bakedModel } = api;
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
       // Pit straight sides. The engine's pit complex (garages, pit wall) takes
       // pit.side +1, the RIGHT: the infield of this clockwise lap, where the
@@ -125,10 +125,11 @@
       const SOLID = [
         [0.965, 1.000, STAND], [0.000, 0.032, STAND],   // main grandstand run
         [0.048, 0.063,  1], [0.048, 0.063, -1],   // named enclosures 1-2
-        [0.108, 0.132,  1],                       // T1 two-deck + rear stand
+        [0.114, 0.126,  1],                       // named enclosure (ex-0.245)
         [0.158, 0.172,  1], [0.190, 0.210,  1], [0.190, 0.210, -1],
-        [0.212, 0.268,  1],                       // Esses standing terrace
-        [0.238, 0.252, -1], [0.278, 0.292,  1], [0.338, 0.352, -1],
+        [0.236, 0.260, -1],                       // T1 two-deck + rear stand
+        [0.574, 0.606,  1],                       // Esses (T7) standing terrace
+        [0.278, 0.292,  1], [0.338, 0.352, -1],
         [0.412, 0.428,  1], [0.448, 0.462, -1], [0.513, 0.527,  1],
         [0.568, 0.582, -1], [0.648, 0.662,  1],
         [0.888, 0.958,  1], [0.898, 0.912, -1], [0.912, 0.968, -1],
@@ -330,11 +331,15 @@
                    roof: r > 0.5 ? [0.86, 0.30, 0.22] : [0.20, 0.48, 0.30] });
       }
 
-      grandstandEx(0.12, 1,  9, 80, null, GREEN,
-                   { livery: "navy", tiers: 2, roof: "cantilever", endWalls: true });
-      grandstandEx(0.12, 1, 30, 80, null, ORANGE,
-                   { livery: "concrete", roof: "flat" });
-      kerb(0.12, 1, 9); kerb(0.115, -1, 8);
+      // T1 (built apex 0.2571, right-hander): the two-deck and its rear stand
+      // on the OUTSIDE (left) of the braking zone, window 0.239-0.257. They
+      // stood at 0.12, ~590 m up the pit straight; the named stand that had
+      // this spot took their old one (named[], 0.12 right).
+      grandstandEx(0.248, -1,  9, 80, null, GREEN,
+                   { livery: "navy", tiers: 2, roof: "cantilever", endWalls: true });   // T1
+      grandstandEx(0.248, -1, 30, 80, null, ORANGE,
+                   { livery: "concrete", roof: "flat" });   // T1
+      kerb(0.257, 1, 9); kerb(0.266, -1, 8);   // T1 apex (inside) + exit (outside)
 
       for (const side of [-1, 1]) {
         grandstandEx(0.20, side, 8, 48, null, side < 0 ? ORANGE : PINK,
@@ -504,7 +509,7 @@
       // Park / sports midfield plazas — compact so a fold never lands a
       // patch over another leg (mexico-plaza-deportes was footprint-rejected).
       for (const [s, side, gap, sz, col, id] of [
-        [0.22,  1, 42, [36, 0.4, 40], LAWN,  "mexico-park-lawn-esses"],
+        [0.22,  1, 42, [36, 0.4, 40], LAWN,  "mexico-park-lawn-t1"],
         [0.28, -1, 48, [40, 0.4, 44], LAWN,  "mexico-park-lawn-mid"],
         [0.36,  1, 55, [44, 0.4, 48], LAWN,  "mexico-park-lawn-city"],
         [0.42, -1, 42, [32, 0.4, 36], PLAZA, "mexico-plaza-horquilla"],
@@ -518,7 +523,7 @@
       }
       // Discrete service pads further out than the verges
       for (const [s, side, gap, id] of [
-        [0.24,  1, 24, "mexico-svc-esses"],
+        [0.24,  1, 24, "mexico-svc-t1"],
         [0.38, -1, 26, "mexico-svc-city"],
         [0.44,  1, 24, "mexico-svc-horquilla"],
         [0.56, -1, 28, "mexico-svc-deportes"],
@@ -855,7 +860,7 @@
       const MEX_ROOFS  = ["cantilever", "flat", "truss"];
       const named = [
         [0.055,  1, 10, 56, ORANGE], [0.055, -1, 11, 48, PINK],
-        [0.165,  1, 10, 50, PINK],   [0.245, -1, 10, 52, GREEN],
+        [0.165,  1, 10, 50, PINK],   [0.120,  1, 10, 52, GREEN],
         [0.285,  1, 11, 46, ORANGE], [0.345, -1, 10, 48, PINK],
         [0.455, -1, 11, 44, GREEN],  [0.520,  1, 10, 50, ORANGE],
         [0.575, -1, 10, 46, PINK],   [0.655,  1, 11, 48, GREEN],
@@ -871,10 +876,11 @@
           endWalls: i % 5 === 0,
         });
       }
-      // Ends before the T7 right-hander (built R ~33 m at 0.255): carried
-      // through it, the inside rows 20-33 m off the road folded onto
-      // themselves (1.85 m, clip-audit 2026-10-05).
-      terrace(0.215, 0.248,  1, 20, { rows: 4, rise: 1.6, depth: 2.6,
+      // Esses standing terrace, on the OUTSIDE (right) of T7, the left-hander
+      // that opens the Esses (built apex 0.5836). It stood at 0.215-0.248, on
+      // the INSIDE of the T1 braking zone (the T1 right-hander, built R ~35 m
+      // at 0.257, is the corner its old note called "T7").
+      terrace(0.578, 0.602,  1, 20, { rows: 4, rise: 1.6, depth: 2.6,
         crowd: crowdCols, density: 0.6, step: 9 });
       // Span ends at 0.945 (was 0.965): with the generic city pass off the rows
       // past it emit and read as unsupported over the falling ground (ground-audit
@@ -893,17 +899,20 @@
           bush(k, side, 8.5 + hash(k * 73 + side) * 1.5, PARKGRN);
         }
       });
-      // Tyre stacks on the corner apexes that had none.
-      tyreWall(0.055, 0.075, -1, 4.5, ORANGE);
-      tyreWall(0.235, 0.255,  1, 4.5, PINK);
-      tyreWall(0.285, 0.305, -1, 4.5, GREEN);
-      tyreWall(0.415, 0.435, -1, 4.5, ORANGE);
-      tyreWall(0.505, 0.525,  1, 4.5, PINK);
-      tyreWall(0.645, 0.665, -1, 4.5, GREEN);
-      tyreWall(0.925, 0.945,  1, 4.5, ORANGE);
-      // Kerb accents at the remaining apexes.
-      for (const [s, side] of [[0.06, -1], [0.24, 1], [0.29, -1], [0.34, 1],
-                               [0.52, 1], [0.58, -1], [0.65, -1], [0.93, 1]]) {
+      // Tyre stacks on the OUTSIDE of the corner apexes (built def.turns; +k =
+      // left, so a right-hander's outside is -1). Three of the old seven stood
+      // on straights (0.055, 0.415, 0.645) and three on an inside.
+      tyreWall(0.250, 0.262, -1, 4.5, ORANGE);   // T1
+      tyreWall(0.273, 0.283,  1, 4.5, PINK);     // T2
+      tyreWall(0.287, 0.299, -1, 4.5, GREEN);    // T3
+      tyreWall(0.450, 0.462,  1, 4.5, ORANGE);   // T4
+      tyreWall(0.503, 0.515, -1, 4.5, PINK);     // T6
+      tyreWall(0.669, 0.681, -1, 4.5, GREEN);    // T10
+      tyreWall(0.932, 0.944, -1, 4.5, ORANGE);   // T16
+      // Apex kerb accents on the INSIDE of the remaining apexes. Not T5: its
+      // inside strip (+1 at 0.4701, built R ~28 m) is guard-dropped (place=2).
+      for (const [s, side] of [[0.2776, -1], [0.2891, 1], [0.4531, -1],   // T2 T3 T4
+                               [0.5066, 1], [0.5836, -1], [0.6721, 1], [0.9346, 1]]) { // T6 T7 T10 T16
         kerb(s, side, 8);
       }
       // Boulevard lamp posts down the park straights.
@@ -1094,4 +1103,11 @@
               lit: true, windowCol: [0.94, 0.84, 0.54], floor: 7 });
         }
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.975, 0.0, 0.025]) bakedModel("k_tentlong", K(s), 1, 80, { scale: 2.4 });
+      for (const [s, side] of [[0.2571, -1], [0.4531, -1], [0.6721, -1], [0.8261, -1], [0.9496, -1]])
+        bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
     };

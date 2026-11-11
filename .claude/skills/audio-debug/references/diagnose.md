@@ -17,22 +17,22 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 |---|---|
 | Engine (sample core) | `assets/sfx/f1_engine.mp3` looped and pitched via `playbackRate` (`f1_rev.mp3` is on disk but nothing loads it) |
 | Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass until samples decode |
-| Pitch curve | `baseRate()` in `engine.js`: `RATE_IDLE·idle + RATE_SPAN·revRange·rev^curve`, then × boost pitch, `rateTrim`, `pitch` and `revFlare` |
+| Pitch curve | `baseRate()` in `engine.js` (`RATE_IDLE`/`RATE_SPAN` scaled by the tune's `idle`/`revRange`, rev bent by `curve`), then × boost pitch, `rateTrim`, `pitch` and `revFlare` |
 | Pitch, per gear | Sample core: no gear term, one rev = one note in every gear (synth fallback: per-gear `gIdle`/`gSpan`). `rev` = `rpmFor(gear, speed)` normalised, 1 at the top of each gear; `GameAudio.rate()` reads it |
-| Gravel | Sine at the crank rate (`f0/3`, 18–140 Hz) into `engGain.gain`; depth `(1-rev)²` × GRAVEL trim; `gravelDepth()` / `gravelHz()` |
-| Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()` |
-| Limiter, top gear | The cut is a 0.5 s burst fading over 0.5 s to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
-| Turbo whine + wastegate | Sine ~1500 Hz tracking rev; a falling hiss once per lift after ≥0.5 s under load (`wastegateState()`) |
+| Gravel | Sine at the crank rate into `engGain.gain`; depth falls with rev, × GRAVEL trim; `gravelDepth()` / `gravelHz()` |
+| Rev limiter | Square LFO into `engGain.gain` near the rev ceiling, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()` |
+| Limiter, top gear | The cut is a short burst fading to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
+| Turbo whine + wastegate | Sine tracking rev; a falling hiss once per lift after a spell under load (`wastegateState()`) |
 | MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / soft sine while deploying + the low-register deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
 | Brakes | Bandpass noise, gain = deceleration × speed; `brakeLevel()` |
-| Gear shift | Saw crack + click × SHIFT trim (`shiftState()`; silent cue: below); the rev-cut duck is the engine's. A DOWNSHIFT also blips `revFlare` (+5% rate, ~90 ms); an upshift does not |
+| Gear shift | Saw crack + click × SHIFT trim (`shiftState()`; silent cue: below); the rev-cut duck is the engine's. A DOWNSHIFT also blips `revFlare` (a brief rate lift); an upshift does not |
 | Overrun | Irregular crackle one-shots on a trailing throttle (`overrunState()`) |
 | Wind / tyre screech / sub | Speed² bandpass noise / slip-driven bandpass noise / sine an octave under `f0` |
 | Collision thud | White-noise burst scaled to impact `dv` |
 | Rivals / space | Panned, Doppler-shifted voice pool / generated-IR convolver per venue (desktop only) |
-| Team radio FX | `radioSting(channel, seconds)`: click, 300 Hz–3.4 kHz hiss bed, squelch tail. Fired by `showAnnounce` (race/count only); `coach` is silent by design |
+| Team radio FX | `radioSting(channel, seconds)`: click, band-limited hiss bed, squelch tail. Fired by `showAnnounce` (race/count only); `coach` is silent by design |
 | Team radio level | `setRadioFx` / `radioFxLevel()`, store `apex26.radioFx`. NOT a filter on the voice — speechSynthesis has no node in this graph and no browser exposes its output |
-| Music | `startMusic()` / `stopMusic()` over `assets/music/`. Desktop decodes to PCM (2 cached); a phone STREAMS one `<audio>` into `musicGain` (`streamMusic()`, `soundtrack.js`) |
+| Music | `startMusic()` / `stopMusic()` over `assets/music/`. Desktop decodes to PCM (small decode cache); a phone STREAMS one `<audio>` into `musicGain` (`streamMusic()`, `soundtrack.js`) |
 | Music streaming A/B | `localStorage apex26.musicStream` `"1"`/`"0"` forces the path; `sw.js` leaves `Range` music requests to the network (Safari needs 206) |
 
 Every tune knob is a constant multiplier, never a function of rev: pitch stays
@@ -54,11 +54,9 @@ During a race `#soundbtn` is **hidden**. Open pause → MUSIC & SOUND
 | Volumes | `#as-mvol` / `#as-svol` | `setMusicVolume` / `setSfxVolume` |
 | Radio FX | `#as-rfx` | `setRadioFx` — sfx bus, so it is independent of the TEAM RADIO voice switch |
 
-Turning **music** off and expecting silence is the common mistake — the
-engine idle still hums on the **sfx** bus. That is correct.
+Music OFF leaves the engine humming on the sfx bus (SKILL.md table); that is correct.
 
-`setPaused(true)` calls `GameAudio.stopEngine()`; resume calls
-`GameAudio.startEngine()` again when `soundOn` is true (independent of music).
+`setPaused(true)` / resume: see §Music cuts out on pause.
 
 ## Pitch curve
 
@@ -68,11 +66,7 @@ oscillator frequencies. After an edit, reload — WebAudio does not hot-reload
 ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump). Confirm with `GameAudio.rate()` at the
 same speed. A player-side complaint about the SHAPE of the curve (idle too
 high, top not high enough) is a tune question first: `__apex.audioTune({ idle,
-revRange, curve, pitch })` covers a 50:1 spread before any code changes.
-
-```js
-GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
-```
+revRange, curve, pitch })` (ranges: `__apex.audio().range`) covers a wide spread before any code changes.
 
 ## Diagnosing silence or flat pitch
 
@@ -81,35 +75,38 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
 2. `GameAudio.debug().samplesReady` — if `false`, MP3s have not decoded
    (network/CORS, or CC0 files absent); synth fallback should be active.
    `usingSamples` says which core is running.
-3. Suspended AudioContext (autoplay; silent on iPhone or the first tap): a
-   user gesture resumes it, but only an activation-triggering event counts —
-   `touchend`, `pointerup`, `click`, a key press; NOT `pointerdown` (touch) or
-   `touchstart`. The real `GameAudio` arrives with the lazy audio bundle
-   (`js/core/lazy-bundles.js`, `LAZY_AUDIO`); until then calls hit `stub.js`,
-   and the bundle runs `GameAudio.init()` only when
-   `navigator.userActivation.hasBeenActive`. After the first tap read
-   `navigator.userActivation.hasBeenActive` and `GameAudio.debug().contextState`
-   (on the phone profile, 844×390 touch). Script-dispatched events do not
-   establish trusted user activation; programmatic probes work only after
-   unlock. Handlers doubled after a failed bundle load point at the bundle's
-   `onAudioReady` path, not at `engine.js`.
+3. Suspended AudioContext (silent on iPhone / first tap). First read
+   `GameAudio._stub`: `true` means the lazy audio bundle (`LAZY_AUDIO`) has
+   not landed and every call hits `js/audio/stub.js` (which has no `enabled()`).
+   The unlock is `audioGestureUnlock` in `js/core/lazy-bundles.js`: capture
+   listeners on `AUDIO_GESTURES` (the activation-triggering events; read the
+   array — `pointerdown` for touch and `touchstart` are not activation events).
+   Each trusted gesture kicks `ensureAudio()` and, once the real bundle is in
+   and `G.soundOn`, calls `GameAudio.init()` INSIDE the gesture until
+   `GameAudio.context().state === "running"`, then disarms. A title tap whose
+   `touchend` lands before the bundle evaluates leaves the context suspended:
+   the bundle's own `init()` (restoreOnEngine, gated on
+   `navigator.userActivation.hasBeenActive`) runs outside a gesture, so only the
+   NEXT tap unlocks it — that is the first-tap-silent shape. engine.js's
+   `resumeIfNeeded` listeners only recover a
+   context that already exists (iOS lock / interruption). After the first tap
+   read `GameAudio._stub`, `GameAudio.context().state` and
+   `navigator.userActivation.hasBeenActive` (phone profile, 844×390 touch).
+   Script-dispatched events are untrusted and never unlock. Handlers doubled
+   after a failed bundle load point at the bundle's `onAudioReady` path, not at
+   `engine.js`.
 4. Chrome DevTools → **Web Audio** — confirm oscillators / buffer sources
    reach the destination.
 5. `__apex.timing().raceT` should be increasing. A frozen sim means
    `setEngine()` never runs and pitch stays at the last value.
-6. Flat only at top speed: that is `rev` pinned at 1 (`rpmFor` caps at
-   `MAX_RPM·1.04` — `rpmFor` in `js/race/pace-math.js`; `MAX_RPM` 15000 /
-   `IDLE_RPM` 5000 in `js/physics/consts.js`; `revFrac` is clamped 0..1 in
-   `js/game.js` just before the `GameAudio.setEngine` call), not a bug in the curve. Above 98.5%
-   revs the limiter chops, and in top gear it fades to a steady note after
-   `LIM_HOLD` + `LIM_FADE` (`limiterHeld()`, `limiterDepth()`). Read
+6. Flat only at top speed: that is `rev` pinned at 1 (`rpmFor` in
+   `js/race/pace-math.js` caps just past `MAX_RPM`; `IDLE_RPM` / `MAX_RPM` in
+   `js/physics/consts.js`; `revFrac` is clamped in
+   `js/game.js` just before the `GameAudio.setEngine` call), not a bug in the curve. The limiter
+   fade in top gear is in the Layers table. Read
    `GameAudio.rate()` (or `__apex.audio().rate`) at two speeds in top gear:
-   equal = pinned by design. `apex_eval` boots Chromium (parent only); the
-   Node VM has no AudioContext, so `rate()` is 0 there. To
+   equal = pinned by design. The Node VM has no AudioContext, so `rate()` is 0 there. To
    widen the top, raise `__apex.audioTune({ revRange })` or bend `curve`.
-
-The AudioContext itself is a private var — not exposed. Use
-`GameAudio.debug().samplesReady` and `centroidHz()`.
 
 ## Gear-shift cue silent
 
@@ -119,7 +116,7 @@ Search `GameAudio.shift` in `js/game.js`: manual-gear branches and the auto
 `soundOn && c.local` (+ `state === "race"` on the auto path), so a VS FRIEND
 rival's shift is deliberately mute. In `engine.js` `shift()` returns at once
 unless `sfxOk()` (ctx exists, master AND sfx bus on); there is no layer switch
-for it. The remaining gate is the SHIFT trim (`#as-t-shift`, range 0–3, `0` =
+for it. The remaining gate is the SHIFT trim (`#as-t-shift`; `0` =
 silent gearbox; the rev-cut duck is separate and survives it).
 
 Read it: `GameAudio.shiftState()` → `{ fired, peak }` (not in `__apex.audio()`;
@@ -136,14 +133,13 @@ look at the callers.
 cracks; the heel-and-toe pitch flare (`revFlare`) is DOWNSHIFT-only (`shift(false)`),
 so a missing blip on an upshift is by design. For a missing downshift blip check
 `shiftState().fired` rises, then that the engine is running (`debug().engineOn`;
-`shift()` sets the flare only when `engineOn`). The flare is +5% playbackRate
-decaying over ~90 ms on the sample core only (the synth fallback ignores it; `GameAudio.carSfx().revFlare` reads it) and is not scaled by the SHIFT trim
+`shift()` sets the flare only when `engineOn`). The flare (Layers table) is sample core only (the synth fallback ignores it; `GameAudio.carSfx().revFlare` reads it) and is not scaled by the SHIFT trim
 (a trim of 0 silences the crack, not the flare).
 
 ## Music cuts out on pause / never resumes
 
-Pausing does NOT stop music: `setPaused(true)` (`js/game.js`) stops only the
-engine and skid; the soundtrack keeps playing under the pause card. Music stops
+Pausing does NOT stop music: `setPaused(true)` (`js/game.js`) stops the engine,
+skid, rain and the radio voice, never music; the soundtrack keeps playing under the pause card. Music stops
 for exactly these reasons, so find which one applies:
 
 1. Hidden tab / lock (`onVisibility` in `engine.js`): `stopMusic()` + `ctx.suspend()`,
@@ -155,8 +151,8 @@ for exactly these reasons, so find which one applies:
 3. Every track failed to decode (or, streaming, raised a media `error`) → `musicLoadFailed` stops the list (`audio-recovery.test.mjs`).
    A refused stream `play()` (`NotAllowedError`, iOS with no gesture) warns and retries on the next `startMusic`.
 4. Resume with SOUND off: `setPaused(false)` restarts music only when `soundOn`.
-5. Not a cut-out: the engine duck (`musicGain` × `1 − 0.25·rev`, released by `stopEngine`)
-   and the radio duck (`setRadioDuck`, ×0.35 while a line is on air) only LOWER it.
+5. Not a cut-out: the engine duck (`musicGain` lowered with rev, `duckTgt` in `soundtrack.js`, released by
+   `stopEngine`) and the radio duck (`setRadioDuck`, while a line is on air) only LOWER it.
    A music level stuck low after pause = `radioDuck` never released (`voice-pack` / `radio-voice` callers).
 
 There is no "music is playing" getter: read `GameAudio.debug().contextState` plus
@@ -164,4 +160,4 @@ DevTools → Web Audio (browser). Node level: `node --test tests/unit/audio-reco
 pins the failed-decode advance, no `resume()` in a hidden tab, the game.js resume wiring
 (`setPaused` starts music again), the hide→show restart (`hiding resumes a track from its position…`,
 `a quick hide -> show does not rebuild…`) and the per-source radio duck (`music duck is held per source…`).
-The engine duck level (`1 − 0.25·rev`) has no unit pin; add one to that file's stub-ctx `boot()`.
+The engine duck level has no unit pin; add one to that file's stub-ctx `boot()`.

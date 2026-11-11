@@ -7,7 +7,7 @@
  *   LIGHT   a <canvas id="fx-visor"> composited with mix-blend-mode: plus-lighter (screen where unsupported), so
  *           reflections are ADDED light and can never grey the scene — on WebGPU. On the WebGL2 path (TLX's WebGL2
  *           backend, GLX) the layer composites as plain "over" instead (blendMode(), #3657). Repainted at ~15 Hz
- *           from the scene lighting the game already publishes through window.__apex (visorScene(), else camState() + lightState()):
+ *           from the scene lighting game.js publishes on G (sceneFromG; else window.__apex visorScene() / camState() + lightState()):
  *           the sun's glint and its double-reflection ghost, a Fresnel rim sheen on the sun's side, one glint per
  *           flood / street lamp / tail-light in view (projected through the camera, so they slide with heading),
  *           and a chromatic fringe along the rim that scales with VISOR REFRACTION. Every term is proportional to
@@ -17,14 +17,20 @@
  *
  * The lighting→visor mapping (lightMap) and the port geometry (portPath) are pure functions, unit-tested in
  * tests/unit/visor-optics.test.mjs. Droplets.tick (js/fx/droplets.js, game.js's per-frame onboard-overlay
- * heartbeat) calls tick(); nothing here touches the simulation. Phone-cheap by construction: one 2D canvas at
- * 1 css px per device px, ≤ 14 gradients per repaint, no layout reads in the loop. */
+ * heartbeat) calls tick(); nothing here touches the simulation. One CSS-pixel canvas with a phone budget
+ * for repaint cadence and decorative complexity; synchronous paint statistics exclude compositor cost. */
 const VisorOptics = (function () {
   "use strict";
 
   const HZ = 15;                     // repaint rate; the compositor blends the last frame in between
   const HZ_REDUCED = 8;              // prefers-reduced-motion: the glints still follow the heading, more slowly
   const MAX_GLINTS = 8;              // the brightest lamps in view
+  const BUDGETS = [
+    { name: "full", hz: HZ, glints: MAX_GLINTS, beams: true },
+    { name: "reduced", hz: 10, glints: 4, beams: false },
+    { name: "minimal", hz: 6, glints: 2, beams: false },
+    { name: "off", hz: 0, glints: 0, beams: false },
+  ];
   const LAMP_GAIN = 1.5;             // glint = GAIN·√(energy/d²)·beam: a Bahrain flood (12 000) at 50 m saturates, a Monaco soffit (40) at 10 m ≈ 0.9
   // An eye adapted to daylight sees a lamp's reflection against the light already in the scene, not against black:
   // glints scale by 1/(1 + ADAPT·max(0, daylight − DARK)). Night (moon key + sky ≈ 0.14) keeps every glint; a dusk
@@ -44,8 +50,13 @@ const VisorOptics = (function () {
 
   let _cv = null, _ctx = null, _looked = false;
   let _blend = "", _blendParam, _blendT = -Infinity;
-  let _w = 0, _h = 0, _shown = false, _acc = 1, _bendLevelBuilt = "";
+  let _w = 0, _h = 0, _shown = false, _shed = false, _acc = 1, _bendLevelBuilt = "";
+  let _budget = 0, _paintHz = HZ;
   let _portKey = "", _bendKey = "", _paths = null, _svg = null;
+  // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
+  // restyling every frame that is a forced style recalc of the page, and the 15 Hz paint asked for it on every
+  // repaint (39 forced reads per 15 s in a rain race here, up to 2.4 ms each on a desktop CPU).
+  let _lens = null, _portW = 0, _portH = 0, _portV = "", _portC = "", _portS = "";
   const _stats = { ticks: 0, paints: 0, msLast: 0, msMax: 0, msSum: 0, glints: 0, sun: 0, rim: 0, lamp: 0, msBend: 0, msLookup: 0, errors: 0 };
   const _tmpSun = [0, 0, 0], _glintBuf = [];
   const _basis = { fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
@@ -121,7 +132,8 @@ const VisorOptics = (function () {
 
   // ---------- camera (pure) ----------
 
-  function camBasis(eye, tgt, out) {
+  // `roll` (G.camRoll, rad) tilts the basis as game.js's view matrix does (#5018).
+  function camBasis(eye, tgt, out, roll) {
     const o = out || { fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
     let fx = tgt[0] - eye[0], fy = tgt[1] - eye[1], fz = tgt[2] - eye[2];
     const fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
@@ -132,6 +144,14 @@ const VisorOptics = (function () {
     o.fwd[0] = fx; o.fwd[1] = fy; o.fwd[2] = fz;
     o.right[0] = rx; o.right[1] = 0; o.right[2] = rz;
     o.up[0] = -rz * fy; o.up[1] = rz * fx - rx * fz; o.up[2] = rx * fy;
+    const sr = roll ? Math.sin(roll) : 0;
+    if (sr && rl > 1e-6) {
+      const ux = rx * sr, uz = rz * sr;                                  // u = worldUp + right·sin(roll)
+      let sx = fy * uz - fz, sy = fz * ux - fx * uz, sz = fx - fy * ux;   // right' = fwd × u
+      const sl = Math.hypot(sx, sy, sz) || 1; sx /= sl; sy /= sl; sz /= sl;
+      o.right[0] = sx; o.right[1] = sy; o.right[2] = sz;
+      o.up[0] = sy * fz - sz * fy; o.up[1] = sz * fx - sx * fz; o.up[2] = sx * fy - sy * fx;   // up' = right' × fwd
+    }
     return o;
   }
 
@@ -162,12 +182,12 @@ const VisorOptics = (function () {
    *  (VISOR REFLECTIONS); `fringe` is the chromatic rim amount (VISOR REFRACTION); `smoke` marks the tinted lens
    *  (its inner reflections read stronger against the darker transmitted scene). Every intensity is 0..~1.5 and
    *  proportional to light actually reaching the shield: a dark scene returns zeros. */
-  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1 } = {}) {
+  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1, glintLimit = MAX_GLINTS } = {}) {
     const out = { sun: null, ghost: null, rays: null, rim: null, glints: [], fringe: 0, haze: 0, bloom: clampTo(bloom, 0, 2.5) };
     if (!scene || !scene.eye || !scene.tgt || !(level > 0)) return out;
     // VISOR BEAMS: one scale for every streak — the lamps' beams, the sun's rays, the star flares; 0 keeps the glints alone.
     const bm = Number.isFinite(beams) ? clampTo(beams, 0, 2) : 1;
-    const basis = camBasis(scene.eye, scene.tgt, _basis);
+    const basis = camBasis(scene.eye, scene.tgt, _basis, scene.roll);
     const exp = scene.exposure > 0 ? scene.exposure : 1;
     const gain = level * (smoke ? 1.25 : 1);
     const base = Math.max(1, Math.min(w, h));
@@ -255,7 +275,7 @@ const VisorOptics = (function () {
         _glintBuf.push({ x, y, k: kl, d: dl, rgb: [L[i + 3] / m * 255, L[i + 4] / m * 255, L[i + 5] / m * 255], bx: bl > 1e-3 ? bx / bl : 0, by: bl > 1e-3 ? by / bl : 1, beam });
       }
       _glintBuf.sort((a, b) => b.k - a.k);
-      const n = Math.min(MAX_GLINTS, _glintBuf.length);
+      const n = Math.min(MAX_GLINTS, Math.max(0, glintLimit | 0), _glintBuf.length);
       for (let i = 0; i < n; i++) {
         const g = _glintBuf[i];
         const k = clampTo(g.k * gain * (0.7 + 0.3 * clampTo(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
@@ -291,7 +311,13 @@ const VisorOptics = (function () {
     return _knobs;
   }
 
+  // The scene comes from game.js's G façade (the script-scope `const G`, read by name like
+  // js/perf/race-entry-profile.js does) — NOT only through window.__apex: the agent surface is LAZY_AGENT, absent
+  // on a player's Pages build, and gating on it left the visor glint unpainted for every player.
   function readScene() {
+    try {
+      if (typeof G !== "undefined" && G && G.frame) return sceneFromG(G);
+    } catch (_) { /* G mid-boot: try the agent surface */ }
     const A = typeof window !== "undefined" ? window.__apex : null;
     if (!A) return null;
     try {
@@ -352,6 +378,26 @@ const VisorOptics = (function () {
     return Number.isFinite(n) ? clampTo(n, 0, 2) : 1;
   }
   function _low() { return typeof GfxQuality !== "undefined" && GfxQuality.current && GfxQuality.current() === "low"; }
+  // Read measured/crash pressure, never the user's tier floor: a healthy MEDIUM phone stays full.
+  // Reuse the governor's settling/latch policy; resizing this canvas on each step would add allocation hitches.
+  function _pressureBudget() {
+    if (typeof GLX === "undefined" || !GLX.isMobile || typeof PerfGov === "undefined") return 0;
+    if (typeof PerfGov.lookPostShed === "function" && PerfGov.lookPostShed()) return 3;
+    const p = typeof PerfGov.autoShed === "function" ? PerfGov.autoShed() : 0;
+    return p >= 2 ? 2 : p >= 1 ? 1 : 0;
+  }
+  function _syncBudget(budget) {
+    if (budget === _budget) return false;
+    _budget = budget; _shed = budget === 3;
+    if (document.body) {
+      if (_shed) document.body.setAttribute("data-visor-shed", "1");
+      else document.body.removeAttribute("data-visor-shed");
+      if (budget) document.body.setAttribute("data-visor-budget", String(budget));
+      else document.body.removeAttribute("data-visor-budget");
+    }
+    _acc = 1;   // a profile change repaints once immediately, including while paused
+    return true;
+  }
 
   function _lookup() {
     if (_looked) return _cv;
@@ -379,7 +425,11 @@ const VisorOptics = (function () {
 
   function _size() {
     if (typeof window === "undefined") return false;
-    const w = Math.max(1, window.innerWidth | 0), h = Math.max(1, window.innerHeight | 0);
+    // The layout viewport (ICB) the fixed 100% layer is laid out in, not inner*: a Home Screen landscape launch can hold
+    // the portrait inner* pair with no resize to follow, and a 393x852 store stretched over the 852x393 box bent the
+    // port (#5201). No layout (unit harness): inner*.
+    const de = document.documentElement, bw = de ? de.clientWidth | 0 : 0, bh = de ? de.clientHeight | 0 : 0, box = bw > 0 && bh > 0;
+    const w = Math.max(1, box ? bw : window.innerWidth | 0), h = Math.max(1, box ? bh : window.innerHeight | 0);
     if (w === _w && h === _h && (!_cv || _cv.width === w)) return false;
     _w = w; _h = h;
     if (_cv) { _cv.width = w; _cv.height = h; }   // 1 css px per device px: the layer is soft light, never detail
@@ -410,18 +460,20 @@ const VisorOptics = (function () {
   function _port() {
     if (!_helmet() || typeof document === "undefined" || !document.body || !document.body.style) return;
     const visor = _opt("visor", "off"), color = _opt("visorColor", "neutral"), strength = _opt("visorIntensity", "light");
-    const key = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;
-    if (key === _portKey) return;
-    _portKey = key;
+    if (_portKey && _w === _portW && _h === _portH && visor === _portV && color === _portC && strength === _portS) return;   // no per-frame key string
+    _portW = _w; _portH = _h; _portV = visor; _portC = color; _portS = strength;
+    _portKey = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;
     // OFF is no visor at all: the eye-port (bezel, cheek pads, oval falloff) goes with it, or the plain helmet
     // view keeps an oval frame the player switched off.
     if (visor === "off") {
+      _lens = null;
       document.body.style.removeProperty("--visor-port");
       document.body.removeAttribute("data-visor-port");
       return;
     }
     const tinted = visor === "smoke";
-    document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: tinted ? tintRGB(color) : null, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
+    _lens = tinted ? tintRGB(color) : null;
+    document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: _lens, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
     document.body.setAttribute("data-visor-port", "1");
   }
 
@@ -625,15 +677,17 @@ const VisorOptics = (function () {
    *  (the last paint stays). vs is unused today (kept for the airflow/heat ideas); reduced: prefers-reduced-motion. */
   function tick(dt, on, vs, reduced) {
     const helmet = _helmet();
-    if (!helmet) { _show(false); return; }
+    if (!helmet) { _syncBudget(0); _show(false); return; }
     let resized = _size();
     _port();                                                   // the aperture: CLEAR / TINTED build it, OFF clears it
     const visor = _opt("visor", "off");
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
-    if (visor === "off" || !on || _low()) { _show(false); return; }
+    const changed = _syncBudget(visor !== "off" && on ? _pressureBudget() : 0);
+    if (visor === "off" || !on || _low() || _shed) { _show(false); return; }
+    const budget = BUDGETS[_budget];
     // The world filter is independent of the reflection canvas, including on resize.
     const t2 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
-    _bend();
+    if (_budget < 2) _bend();
     if (t2 && _bendKey && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
     if (!(level > 0)) { _show(false); return; }
     const t1 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
@@ -641,21 +695,21 @@ const VisorOptics = (function () {
     if (_size()) resized = true;                               // idempotent: sizes a canvas _lookup just made (visor first turned on mid-helmet)
     if (t1 && !_stats.msLookup) _stats.msLookup = r2(performance.now() - t1);
     _syncBlend(t1 || Date.now());
-    _show(true);
-    const hz = reduced ? HZ_REDUCED : HZ;
+    const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);
     _acc += dt > 0 ? dt : 0;
     if (!resized && _acc < 1 / hz) return;
-    if (!(dt > 0) && !resized) return;                         // paused: keep the last paint
-    _acc = 0;
+    if (!(dt > 0) && !resized && !changed) return;              // a paused profile change still refreshes once
+    _acc = resized || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
-    if (!scene) return;
-    const fringe = FRINGE[_opt("visorRefraction", "off")] || 0;
-    const beams = _beams();
+    if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden
+    _show(true);
+    const fringe = _budget < 2 ? FRINGE[_opt("visorRefraction", "off")] || 0 : 0;
+    const beams = budget.beams ? _beams() : 0;
     const kn = readKnobs(t0 || 0);
     let m;
     try {
-      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? tintRGB(_opt("visorColor", "neutral")) : null, bloom: kn.bloom, glare: kn.glare, beams });
+      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null, bloom: kn.bloom, glare: kn.glare, beams, glintLimit: budget.glints });
       _paint(m);
     } catch (e) {
       // Cosmetic layer: a bad frame (a non-finite gradient, a hook mid-rebuild) must never take the render loop
@@ -672,23 +726,24 @@ const VisorOptics = (function () {
 
   /** Probe / test surface: paint counts, CPU ms per paint and the last map's headline intensities. */
   function stats() {
-    return { shown: _shown, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
+    return { shown: _shown, shed: _shed, budget: BUDGETS[_budget].name, paintHz: _shown ? _paintHz : 0, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
              msAvg: _stats.paints ? r2(_stats.msSum / _stats.paints) : 0, glints: _stats.glints, sun: _stats.sun, rim: _stats.rim, lamp: _stats.lamp,
              port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
   }
-  function clear() { _show(false); }
-  /** Tests: forget the cached canvas and keys (a new stub DOM). */
-  function _reset() { _looked = false; _cv = _ctx = _paths = _svg = null; _w = _h = 0; _shown = false; _acc = 1; _portKey = _bendKey = _bendLevelBuilt = _blend = ""; _blendParam = undefined; _blendT = -Infinity; for (const k of Object.keys(_stats)) _stats[k] = 0; }
+  function clear() { _syncBudget(0); _show(false); }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
     return {
-      eye: G.camEye, tgt: G.camTgt, fov: G.camFov,
+      // The lens the world was drawn with: G.lens.fovY is the fitted FOV, not the raw camFov (#5018).
+      eye: G.camEye, tgt: G.camTgt, fov: G.lens && G.lens.fovY > 0 ? G.lens.fovY * 180 / Math.PI : G.camFov, roll: G.camRoll || 0,
       sunDir: G.frame.sunDir, sunColor: G.frame.sunColor, exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       ambientSky: G.frame.ambientSky, lights: G.frame.lights, tailStart: G.frame.tailStart, floodEmit: G._lastFloodEmit,
     };
   }
 
-  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
+  // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
+  // close over them; no js/ or test reader used the public VisorOptics.* forms.
+  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);

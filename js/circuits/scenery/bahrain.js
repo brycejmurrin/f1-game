@@ -6,12 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["bahrain"] =
   function (api) {
-      const { def, K, lapBounds, out, MAT, n, ds, px, pz, pyMin, hash, vadd,
-        place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid, addMountain,
+      const { def, K, lapBounds, out, MAT, n, ds, pyMin, hash, vadd,
+        place, anchor, addBox, addCyl, addFrustum, addPyramid, addMountain,
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
         floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
-        modelGroup, groundPatch, bleacher, onTrack, every, terrainYAt,
+        modelGroup, groundPatch, onTrack, every, terrainYAt,
         circuitKit } = api;
 
       // Fractions stay in the scenery frame rooted at sceneryStartFrac.

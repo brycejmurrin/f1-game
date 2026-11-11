@@ -4,8 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { parse } from "acorn";
-import * as THREE from "../../vendor/three-0.186.1/three.webgpu.min.js";
+import { vendorModule, bindImports } from "../helpers/vendor-class.mjs";
+import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -23,24 +23,25 @@ function load(ctx, paths) {
 
 // Exact vendor ownership code, including the strong RenderObjects Set and
 // object/material event cleanup. Only hash/compiler/backend managers are stubs.
-const vendor = read("vendor/three-0.186.1/three.webgpu.min.js");
-const tree = parse(vendor, { ecmaVersion: "latest", sourceType: "module" });
-const cls = (name) => {
-  const n = tree.body.find((n) => n.type === "ClassDeclaration" && n.id.name === name);
-  assert.ok(n, `vendored lifecycle class ${name}`);
-  return vendor.slice(n.start, n.end);
-};
-const { RO, ROs } = new Function(`let rb=0; ${cls("nb")} ${cls("ob")} return {RO:nb,ROs:ob};`)();
+// Located by method names (terser renames the classes on every regeneration), with the module-level
+// declarations they read (vendor-class.mjs).
+const vendor = vendorModule(read("vendor/three-0.187.0/three.webgpu.min.js"));
+const roNode = vendor.classWith("getDynamicCacheKey", "getMaterialCacheKey");
+const rosNode = vendor.classWith("createRenderObject", "getChainMap");
+const { code: roCode, imports: roImports } = vendor.closure([roNode, rosNode]);
+const roCtx = bindImports(roImports, THREE, TSL);
+const { RO, ROs } = new Function(...Object.keys(roCtx), `${roCode} return {RO:${roNode.id.name},ROs:${rosNode.id.name}};`)(...Object.values(roCtx));
 RO.prototype.getDynamicCacheKey = () => 0;
 RO.prototype.getCacheKey = () => 0;
 function shadowHarness() {
-  const originalTarget = {}, nodes = { delete() {} }, bindings = { deleteForRender() {} };
+  const originalTarget = {}, nodes = { delete() {} }, bindings = { deleteForRender() {} }, lightsNode = new THREE.EventDispatcher();
   let target = originalTarget, fail = false, material, scene, deletes = 0, geometryDisposals = 0;
   const renderer = { render() {}, backend: { isWebGPUBackend: true, deleteVertexState() {} },
     coordinateSystem: THREE.WebGPUCoordinateSystem, _currentSourceMaterial: null,
     getRenderTarget: () => target, setRenderTarget(t) { target = t; } };
   const pipelines = { backend: renderer.backend, delete() { deletes++; } };
-  const ros = new ROs(renderer, nodes, {}, pipelines, bindings, {});
+  const geometries = { deleteVertexState() {} }; // r187 releases the vertex state through Geometries
+  const ros = new ROs(renderer, nodes, geometries, pipelines, bindings, {});
   ros.getChainMap = () => ({ delete() {} });
   renderer.compileAsync = async (s, camera) => {
     scene = s;
@@ -51,7 +52,7 @@ function shadowHarness() {
         m.geometry.__counted = true;
         m.geometry.addEventListener("dispose", () => geometryDisposals++);
       }
-      ros.createRenderObject(nodes, {}, renderer, m, m.material, s, camera, null, {}, null, "default");
+      ros.createRenderObject(nodes, geometries, renderer, m, m.material, s, camera, lightsNode, {}, null, "default"); // r187 listens on the lights node
     });
     if (fail) throw Error("injected partial compile failure");
   };

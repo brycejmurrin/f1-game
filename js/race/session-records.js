@@ -1,7 +1,7 @@
 /* Comparable time-trial classes and lap configuration continuity. */
 "use strict";
 var SessionRecords = (function () {
-  const PHYS = ["PACE", "DRIFT", "FRONT_GRIP", "PLAYER_GRIP", "ROAD_FOLLOW", "STEER_EXPO", "STEER_MAX_SLIP", "STEER_SPEED_REF", "WHEELBASE", "YAW_DAMP", "YAW_INERTIA", "raceLineAssist"];
+  const PHYS = SessionPhys.PHYS;
   function create(G) {
     let key = null, revision = -1, spoiled = false, dailyRestore = null;
     let comparedGuest = null, comparedKey = null;
@@ -135,6 +135,7 @@ var SessionRecords = (function () {
     function board(id) { return id === Ghost.track() ? comparableBoard(id) : GameStore.ttBoard(id); }
     return { begin, current, config, sample, sampleInput, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };
   }
-  return { create, PHYS };
+  // PHYS stays on SessionPhys (boot) and is module-local here via SessionPhys.PHYS.
+  return { create };
 })();
 Object.freeze(SessionRecords);

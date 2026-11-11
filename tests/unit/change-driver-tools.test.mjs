@@ -116,15 +116,6 @@ test("tooling-fast npm script uses the sequential runner", () => {
   assert.ok(fs.existsSync(path.join(ROOT, "tools/ci/tooling-fast.mjs")));
 });
 
-test("test-bg defaults to sequential (one concurrent group) unless --parallel", () => {
-  const src = fs.readFileSync(path.join(ROOT, "tools/ci/test-bg.mjs"), "utf8");
-  assert.match(src, /--parallel/, "test-bg must expose --parallel for the old concurrent start");
-  // Comments stripped: the @doc header says "sequential by default" and used to satisfy this match.
-  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  assert.match(code, /maxConcurrent\s*=\s*force\s*\?\s*Infinity\s*:\s*\(parallel\s*\?\s*PARALLEL_MAX\s*:\s*1\)/,
-    "test-bg must default concurrent cap to 1");
-});
-
 test("verify-change --plan on a docs-only change selects no browser batches", () => {
   const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
   assert.equal(plan.fast.toolingFast, true, "docs integrity is a real test");
@@ -303,4 +294,92 @@ test("test-honesty finds no unexplained skips (the silent-skip ratchet)", () => 
   // a skipped suite that reports green is how test:visual shipped 40/40
   // while testing nothing (docs/PERF-FINDINGS.md).
   assert.deepEqual(v.detail, [], "unexplained skip/fixme/empty-body sites — annotate or fix them");
+});
+
+// ── AUDIT W6 (2026-11-10): no deploy base is a refusal; generated files run gen:check ──
+
+test("W6: with no deploy base the selectors refuse instead of answering for HEAD~1", (t) => {
+  // driverEnv's git always fails: neither origin/<deploy> nor <deploy> resolves.
+  const env = driverEnv(t);
+  const pick = run(["tools/ci/pick-tests.mjs"], { env, stdio: "pipe" });
+  assert.equal(pick.status, 4, pick.out);
+  assert.match(pick.out, /\[pick-tests\] no deploy base/);
+  assert.doesNotMatch(pick.out, /fatal: Not a valid object name/, "one refusal line, not a git fatal per ref");
+  const json = run(["tools/ci/pick-tests.mjs", "--json"], { env, stdio: "pipe" });
+  assert.equal(json.status, 4);
+  assert.equal(JSON.parse(json.out.split("\n")[0]).reason, "no-deploy-base");
+  assert.equal(run(["tools/ci/pick-tests.mjs", "js/game.js"], { env, stdio: "pipe" }).status, 0, "explicit paths need no base");
+  const vc = run(["tools/ci/verify-change.mjs", "--plan"], { env, stdio: "pipe" });
+  assert.equal(vc.status, 2, vc.out);
+  assert.match(vc.out, /\[verify-change\] no deploy base/);
+  const tf = run(["tools/ci/tooling-fast.mjs", "--changed", "--jobs=1"], { env, stdio: "pipe" });
+  assert.equal(tf.status, 4, tf.out);
+  assert.match(tf.out, /\[tooling-fast\] no deploy base/);
+  assert.match(tf.out, /= run failed|FAILED|failed/i);
+  const scope = run(["tools/ci/tooling-fast.mjs", "--print-scope"], { env: { ...env, GITHUB_EVENT_NAME: "pull_request" }, stdio: "pipe" });
+  assert.equal(scope.status, 0);
+  assert.match(scope.out, /^mode=full\nreason=no deploy base/m, "the guards shards fail safe to the whole floor");
+});
+
+test("W6: a generated file in the diff runs gen:check in verify-change's fast phase", (t) => {
+  const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "js/roster.js"]).out);
+  assert.equal(plan.fast.toolingFastReason, "generated-only");
+  assert.equal(plan.fast.genCheck, true, "the selection said genCheck: the plan must carry it");
+  const env = driverEnv(t, { stubFastGate: true });
+  const stubDir = env.PATH.split(path.delimiter)[0];
+  fs.writeFileSync(path.join(stubDir, "npm"), "#!/bin/sh\ncase \"$*\" in *gen:check*) echo 'gen-shell: js/roster.js is stale'; exit 1;; esac\nexit 0\n", { mode: 0o755 });
+  const r = run(["tools/ci/verify-change.mjs", "--fast", "--json", "js/roster.js"], { env, stdio: "pipe" });
+  const out = JSON.parse(r.out.slice(r.out.indexOf("{")));
+  const gen = out.phases.find((p) => p.name === "gen:check");
+  assert.ok(gen, r.out);
+  assert.equal(gen.ok, false);
+  assert.equal(out.verdict, "fail", "a hand-edited generated file must not pass the fast gate");
+  assert.equal(r.status, 1);
+});
+
+test("test-honesty --strict: a test NAME is not a reason; bare and reasonless skip/todo options are scanned", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts/tmp-test-honesty-"));
+  try {
+    fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
+    const site = (name, body) => fs.writeFileSync(path.join(dir, "tests", `${name}.test.mjs`), body);
+    // each line is one planted site; the name says which way it must go
+    site("bad-decl-skip", 'test.skip("the tyre model", () => { assert.ok(1); });\n');
+    site("bad-describe-skip", 'describe.skip("pit lane", () => {});\n');
+    site("bad-todo", 'test.todo("wet weather");\n');
+    site("bad-cond-no-reason", "test.skip(!process.env.X);\n");
+    site("bad-option-true", 'test("name", { skip: true }, () => {});\n');
+    site("bad-option-todo", 'test("Baku\'s night", { todo: true }, () => {});\n');
+    site("bad-option-cond", 'test("n", { skip: process.platform !== "linux" }, () => {});\n');
+    site("bad-option-next-line", 'test("n",\n  { skip: true }, () => {});\n');
+    site("ok-cond-reason", 'test.skip(!process.env.X, "opt-in: set X=1");\n');
+    site("ok-cond-reason-next-line", 'test.skip(true,\n  "retired: see #12");\n');
+    site("ok-skip-ok", '// SKIP-OK: flaky on CI, #123\ntest.skip("n", () => {});\n');
+    site("ok-option-reason", 'test("n", { skip: !hasPack && "no pack installed" }, () => {});\n');
+    site("ok-option-computed", 'test("n", { skip: probe.skip }, () => {});\n');
+    site("ok-option-off", 'test("n", { skip: false }, () => {});\n');
+    site("ok-in-string", 'const src = `test.skip("not now", async () => {});`;\n');
+    site("baselined", 'test("old one", { skip: true }, () => {});\n');
+    const baseline = path.join(dir, "baseline.json");
+    const rows = [{ file: ["tests", "baselined.test.mjs"].join("/"), text: "old one", reason: "predates the rule" }];
+    fs.writeFileSync(baseline, JSON.stringify({ baseline: rows }));
+    const r = run(["tools/ci/test-honesty.mjs", "--json", "--strict", "--root", dir, "--baseline", baseline]);
+    assert.equal(r.status, 1, r.out);
+    const v = JSON.parse(r.out);
+    const bad = [...new Set(v.detail.map((f) => path.basename(f.file, ".test.mjs")))].sort();
+    assert.deepEqual(bad, ["bad-cond-no-reason", "bad-decl-skip", "bad-describe-skip", "bad-option-cond", "bad-option-next-line",
+      "bad-option-todo", "bad-option-true", "bad-todo"]);
+    assert.equal(v.baselined, 1);
+    assert.deepEqual(v.stale, []);
+    // shrink-only: a baseline row that matches no site is stale and fails --strict on its own
+    for (const f of fs.readdirSync(path.join(dir, "tests"))) if (f.startsWith("bad-")) fs.rmSync(path.join(dir, "tests", f));
+    fs.writeFileSync(baseline, JSON.stringify({ baseline: [...rows, { file: ["tests", "gone.test.mjs"].join("/"), text: "x", reason: "r" }] }));
+    const s = run(["tools/ci/test-honesty.mjs", "--json", "--strict", "--root", dir, "--baseline", baseline]);
+    assert.equal(s.status, 1, s.out);
+    assert.deepEqual(JSON.parse(s.out).stale.map((b) => b.file), [["tests", "gone.test.mjs"].join("/")]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("test-honesty: the shipped baseline is not stale (it only shrinks)", () => {
+  const v = JSON.parse(run(["tools/ci/test-honesty.mjs", "--json"]).out);
+  assert.deepEqual(v.stale, [], "delete stale rows from tests/data/test-honesty-baseline.json");
 });

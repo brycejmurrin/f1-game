@@ -25,8 +25,7 @@ const CircuitKit = (function () {
   };
 
   function finiteVector(value, length) {
-    return Array.isArray(value) && value.length === length &&
-      value.every(Number.isFinite);
+    return LandmarkKit.finiteVector(value, length);
   }
 
   function validSize(value) {
@@ -40,11 +39,7 @@ const CircuitKit = (function () {
   }
 
   function boundedCount(value, fallback, maximum) {
-    if (value === undefined) return fallback;
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return 0;
-    const rounded = Math.round(numeric);
-    return rounded > 0 && rounded <= maximum ? rounded : 0;
+    return LandmarkKit.boundedCount(value, fallback, maximum);
   }
 
   function validFrame(frame) {

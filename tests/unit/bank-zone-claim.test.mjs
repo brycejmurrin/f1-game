@@ -53,3 +53,37 @@ test("a lone loose zone still re-seats onto its nearest apex", () => {
   assert.ok(near(prof.lift, 0.25) > 1);
   assert.equal(near(prof.lift, 0.75), 0);
 });
+
+test("a near-straight loose zone (≤ BANK_RESEAT_M) does not claim its apex", () => {
+  // Corners only ±30 m of curvature so a zone 50 m off the apex is LOOSE, yet
+  // closer than BANK_RESEAT_M (60 m) so it stays put. Claiming that apex would
+  // push a farther loose zone onto the wrong corner (hunt 2026-10-27).
+  const HALF = 30;
+  const curv = (s) => {
+    const f = ((s / TOTAL) % 1 + 1) % 1;
+    return CORNERS.some((c) => Math.abs(f - c) * TOTAL < HALF) ? 0.02 : 0;
+  };
+  const ctx = vm.createContext({
+    TrackGeom: { cross: () => [0, 1, 0], MAT: { SAND: 1, SNOW: 2, CONCRETE: 3, GRASS: 0 } },
+    TrackSpline: { curvature: (_t, s) => curv(s), cr: () => 0 },
+    TrackSpace: { wrap01: (v) => ((v % 1) + 1) % 1 },
+    M4: { lerp: (a, b, t) => a + (b - a) * t },
+  });
+  const src = absSrc("js/track/core/mesh.js");
+  vm.runInContext(fs.readFileSync(src, "utf8") + "\nglobalThis.TrackMesh = TrackMesh;", ctx, {
+    filename: absSrc("js/track/core/mesh.js"),
+  });
+  const TM = ctx.TrackMesh;
+  const liftAt = (lift, f) => lift[Math.round(f * N) % N];
+  const both = TM.bankingProfile(track([
+    { frac: 0.255, angleDeg: 12, widthM: 40 }, // 50 m past corner 1 — stay, do not claim
+    { frac: 0.40, angleDeg: 25, widthM: 60 },  // nearest apex is still corner 1
+  ]));
+  const solo = TM.bankingProfile(track([{ frac: 0.40, angleDeg: 25, widthM: 60 }]));
+  assert.ok(liftAt(both.lift, 0.25) > 1, "corner 1 is banked (far zone may re-seat there)");
+  assert.ok(
+    liftAt(both.lift, 0.25) >= liftAt(solo.lift, 0.25) * 0.9,
+    "corner 1 keeps the far zone's bank (not forced onto corner 2 by a near claim)",
+  );
+  assert.equal(liftAt(both.lift, 0.75), 0, "corner 2 stays flat — far zone was not displaced");
+});

@@ -41,7 +41,6 @@ const InputBindings = (function () {
   }
 
   function create({ onKeysChanged, onPadBindingChanged, activePad }) {
-    // ---- key bindings ------------------------------------------------------
     // Every driving key is a BINDING, not a literal: KEY_ACTIONS is the list the
     // CONTROLS page (js/ui/key-binds.js) renders and HOW TO PLAY reads, keyMap is
     // the live table (two physical-key slots per action, e.code values so WASD
@@ -194,7 +193,6 @@ const InputBindings = (function () {
       return KEY_NAMES[code] || code.toUpperCase();
     }
 
-    // ---- controller bindings -----------------------------------------------
     // The same shape for the pad: PAD_ACTIONS is the list the CONTROLS page
     // renders, padMap the live table (two button-index slots per action, W3C
     // "standard" mapping), the defaults the layout the game always had. Steering
@@ -211,7 +209,7 @@ const InputBindings = (function () {
       { id: "camera",    label: "CAMERA",      def: [8, null] },
       { id: "lookBack",  label: "LOOK BACK",   def: [11, null] },
       { id: "recover",   label: "RECOVER",     def: [10, null] },
-      { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down; d-pad up is ACTIVE AERO
+      { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down (13); ACTIVE AERO is its own row (12)
       { id: "mirror",    label: "MIRROR",      def: [null, null] },   // every standard button is taken; bind one on CONTROLS
       { id: "pause",     label: "PAUSE",       def: [9, null] },
     ];
@@ -304,7 +302,6 @@ const InputBindings = (function () {
       return names[index] || `BTN ${index}`;
     }
 
-
     return {
       keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, loadLayoutMap,
       keyAction: (code) => codeToAction[normCode(code)] || null,
@@ -314,6 +311,7 @@ const InputBindings = (function () {
     };
   }
 
-  return { create, HOLD_MODE_ACTIONS, holdModeDefaults, parseHoldMode };
+  // HOLD_MODE_ACTIONS stays module-local: parseHoldMode / holdModeDefaults own the list.
+  return { create, holdModeDefaults, parseHoldMode };
 })();
 Object.freeze(InputBindings);

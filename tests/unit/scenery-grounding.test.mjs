@@ -1,6 +1,6 @@
 // Regression ratchet: floating scenery must not grow.
 //
-// docs/SCENERY-GROUNDING.md §1 is the reason this file exists. The engine has
+// docs/SCENERY-API.md §1 is the reason this file exists. The engine has
 // strong HORIZONTAL guards on scenery — onTrack, rejBox, blockAt, recordBarrier
 // all answer "is this thing on the racing line?" — and had no vertical one at
 // all, so "is this thing standing on anything?" was left to each caller's
@@ -47,7 +47,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // it. `elevated` is therefore the wrong number to gate on; `floating` is the
 // defect list.
 //
-// Known-legitimate flags that the caps still carry (docs/SCENERY-GROUNDING.md
+// Known-legitimate flags that the caps still carry (docs/SCENERY-API.md
 // §4): suspended rides (Abu Dhabi's coasterLoop, Ferris wheel rims) and
 // AIRCRAFT IN FLIGHT — madrid's Barajas airliner on final approach (alt 90 m,
 // 632 m off-track) and mexico's equivalent. The gap the audit reports for
@@ -173,8 +173,8 @@ for (const guard of ["clear", "road", "unsupported"]) {
     h.sandbox.TrackScenery.jerez = (api) => {
       const sl = (f) => (f + Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4) % 1;
       const seats = Array.from({ length: 8 }, (_, i) => {
-        const k = api.K(sl(0.973 + i * 0.0068));
-        const gap = i === 7 ? 33 : 27;
+        const k = api.K(sl(0.9866 + i * 0.0068));   // the loop as authored since #5078 moved the line
+        const gap = 31;
         const a = api.anchor(k, 1, gap);
         assert.equal(api.onTrack(a.c[0], a.c[2], 10), false);
         assert.ok(Math.abs(api.terrainYAt(a.c[0], a.c[2]) - a.c[1] - 0.3) < 1e-8);

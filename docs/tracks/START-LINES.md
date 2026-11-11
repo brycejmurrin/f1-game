@@ -1,7 +1,7 @@
 # Start/finish lines — the derivation, the values, and what moving them touches
 
 Campaign closed — this doc is the live reference for `startFrac`. It positions the
-start/finish line, and 22 of 40 circuits put it inside a corner. This is the fix and the evidence.
+start/finish line, and 22 of the 40 circuits of that campaign put it inside a corner. This is the fix and the evidence.
 
 ---
 
@@ -147,7 +147,7 @@ These did not come from the upstream trace file — `tools/track/stitch-osm-ring
 recovered them from OpenStreetMap — so there was no "already begins at the line"
 property to inherit. The stitcher instead rotates the ring so vertex 0 sits mid
 the LONGEST STRAIGHT RUN, which is the pit straight on all eleven, and every one
-ships `startFrac: 0.0000`.
+shipped `startFrac: 0.0000` (several have since moved; the defs are the truth).
 
 That is a placement rule, not a surveyed line. It satisfies the convention's own
 straightness check — mean |curvature| over the 120 m centred on s=0, bar 0.004
@@ -159,14 +159,49 @@ on all eleven:
 | fuji | 0.00000 | R | R, the long right at the end of the 1.5 km straight |
 | okayama | 0.00004 | R | R |
 | korea | 0.00001 | L | L — the lap runs anti-clockwise |
-| jerez | 0.00108 | R | R, Expo |
-| donington | 0.00040 | R | R, Redgate |
+| jerez | 0.00002 | R | R, Expo '92. Re-surveyed 2026-11-10 (#5078): v0 is NOT the pit straight (it is two corners early), so jerez ships `startFrac: 0.2169` on the real 600 m straight, first apex R at 364 m |
+| donington | 0.00040 | R | R, Redgate — **stale (line now 0.9072): see "Moved 2026-11-10"** |
 | anderstorp | 0.00011 | R | R |
-| brands_hatch | **0.00619** | R | R, Paddock Hill Bend |
-| zolder | 0.00015 | R | R |
+| brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale (line now 0.1226): see "Moved 2026-11-10"** |
+| zolder | 0.00015 | R | R — **stale (line now 0.1226, kept on purpose): see "Zolder: NOT moved"** |
 | dijon | 0.00001 | R | R |
 | buddh | 0.00002 | R | R |
 | mont_tremblant | 0.00087 | R | R |
+
+### Measured 2026-11-10: donington and brands_hatch owed; zolder NOT moved
+
+The table above describes v0. A later "MEASURED" pass moved these three lines
+off v0 (onto the nearest straight holding R >= 1500 m across the grid). The
+2026-11-09 audit (W12) read each as landing on the WRONG straight: donington
+0.9072 on the Starkey straight before the Esses, brands_hatch 0.1226 on the
+Stirlings-Clearways link, zolder 0.1226 "before the final chicane".
+
+**Zolder: NOT moved — 0.1226 stays (verdict 2026-11-11, #5287).** W12 moved it
+to 0.2170, after the built left-right chicane it took for the final one; the
+move was reverted before landing because that chicane is the FIRST corner.
+Evidence: (1) en.wikipedia "Circuit Zolder" (noise limits: "just after turn 4
+(Bianchi)"); the Lucien Bianchi kit, authored on the fixed scenery frame `K()`,
+sits on the built apex that 0.2170 numbered T1, and every corner-named kit
+landed on a built apex in the same three-off order (`corner-frames.cjs`);
+(2) shape: the built lap runs tight right (R16 m) → 580 m straight → left-right
+chicane (52 m) → 616 m straight. The real T1 is the Earste chicane ("first
+left"), and Jochen Rindt bocht is the right onto the pit straight, so the line
+belongs on the 580 m straight BEFORE the chicane, where 0.1226 already sits
+(~55 m before it). The kit labels read one corner earlier (Earste on the R16
+right, S/F before it); the two readings differ by one corner and both put the
+line before the chicane. Do not move it after the chicane again; a re-survey
+needs a surveyed S/F coordinate, not either reading alone.
+
+**donington, brands_hatch — measured, NOT moved**. The right nodes are known:
+donington **0.2577** (node 25/97, pit straight Goddards → Redgate, grid max |k|
+0.00017, 124 m to Redgate turn-in); brands_hatch **0.2736** (node 29/106, Brabham
+straight, 216 m to the Paddock Hill turn-in). Moving them carries each file's
+`sl()`-keyed frontage onto the real pit straight, into infield scenery authored
+for the old line: donington's clip-audit went 7 → 10 severe (hedge on hedge at
+the new line), brands_hatch 1 → 5 (pits, team offices, retail, tents and the
+Kentagon reach across the ~70-100 m paddock to the Cooper straight's forest edge
+and lock-ups; one house sat on a desire path the old pit complex had
+superseded). Each needs a scenery pass with the move.
 
 **Brands Hatch is over the bar and that is correct.** Its pit straight genuinely
 curves right as it runs to the rim before the track drops into Paddock Hill —
@@ -214,8 +249,8 @@ see `docs/notes/JEDDAH-START-2201-2026-10-18.md`). **bahrain moved 0.2250 → 0.
   (1052 m, heading N), followed by R hairpin / L / R kink / 524 m / R = T1–T4.
   `pit.side` flipped −1 → +1 to match; turns re-seated by the
   rotate-markings formula (shift 0.27027); sectors left alone (see §6).
-- jeddah: no usable source found. Its current 0.9625 measures **in a corner**
-  (mean |k| 0.0173), so it is the one circuit still known-wrong.
+- jeddah: no usable source found then; its 0.9625 measured **in a corner**
+  (mean |k| 0.0173). Superseded: moved to 0.9160 on 2026-10-18 (top of this page).
 
 For the record and not as an instruction: the v0 convention — 39/40 straight,
 19/22 coordinate-confirmed — predicts **0.0** for both, and both measure dead

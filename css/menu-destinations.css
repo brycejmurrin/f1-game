@@ -33,7 +33,7 @@
 /* Compact Home (Oct-15 shape). */
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-template-rows: repeat(5, max-content); row-gap: calc(var(--gap)*.15); --home-g: calc(var(--gap)*.2); padding-block: calc(var(--gap)/8); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-retention, #menu-explore, #menu-create) { display: flex; width: 100%; gap: var(--home-g); }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { flex-direction: column; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero:has(#mb-continue:not([hidden])) { flex-direction: column; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) { grid-column: 2; align-self: start; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { display: grid; grid-template-columns: 1fr 1fr; gap: var(--home-g); width: 100%; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-retention, #menu-explore, #menu-create) > .bigbtn { flex: 1 1 0; width: auto; min-width: 0; }
@@ -53,12 +53,14 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { grid-row: 2; align-self: end; justify-self: end; width: calc(50% - var(--home-g)/2); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-row: 3; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 4; }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { grid-column: 2; grid-row: 5; align-self: start; width: 100%; min-height: 0; }
+/* grid-column/row + align-self for this sel already live in menus.css
+   (title-home-scene-prepaint pin); restating them here was cascade-dead. */
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { width: 100%; min-height: 0; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .mb-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
   display: inline-flex; justify-content: center; align-items: center; gap: calc(var(--gap)/8);
   font-size: clamp(.7rem, calc(1.6*var(--vwz)), var(--fs-micro)); line-height: 1.05; text-align: center; font-style: normal; font-weight: 700;
-  padding: calc(var(--gap)/10) calc(var(--gap)/8); min-height: 32px; box-sizing: border-box;
+  padding: calc(var(--gap)/10) calc(var(--gap)/8); min-height: 40px; box-sizing: border-box;
   height: auto; max-height: none; min-width: 0; letter-spacing: 0; white-space: normal; text-wrap: balance; overflow-wrap: normal; overflow: hidden;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn .btn-ico { width: .85em; height: .85em; flex: none; margin: 0; }
@@ -67,9 +69,6 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary:has(#mb-standings:not([hidden])) > .bigbtn { font-size: clamp(.6rem, calc(1.25*var(--vwz)), var(--fs-micro)); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(.7rem, calc(1.7*var(--vwz)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
 @media (max-width: 700px) { :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .btn-ico { display: none; } }
-.dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
-.dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-paint); }
-.dh-developer-tools > button { margin-top: calc(var(--gap) * .3); }
 /* Dense Home: portrait, desktop and tablet (any viewport 520px tall or more, or portrait) share the landscape shape. Groups dissolve into one 2-column grid, so every door is one
    tile; pairs/threes/utilities are flex rows. Compact-wide (phone landscape) keeps its own rules above. */
 @media (min-height: 520px), (max-aspect-ratio: 1/1) {
@@ -90,6 +89,7 @@ body #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #m
 body #overlay #menu-buttons .btn-ico { flex: none; margin: 0; width: .8em; height: .8em; }
 body #overlay #menu-buttons .mb-sub { display: none; }
 body #overlay #menu-buttons :is(#mb-career, #menu-retention) .mb-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body:not([data-density="compact"]) #overlay #menu-buttons #mb-career .mb-sub { white-space: normal; text-wrap: balance; }
 body #overlay #menu-buttons #menu-secondary > .bigbtn { font-size: var(--fs-micro); min-height: max(44px, var(--tap-paint)); font-weight: 700; overflow-wrap: anywhere; /* #3304 */ }
 body #overlay #menu-buttons :is(#menu-create, #menu-secondary) .btn-ico { display: none; }
 body[data-shape="wide"] #overlay { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
@@ -128,33 +128,57 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   align-content: safe center; pointer-events: auto;
   container: title-menu / inline-size;
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
+/* THE BRAND COLUMN IS NOT A BUTTONS SETTING (#5167 part F). These three rules
+   used to share the no-stored-layout gate above, so a stored WIDTH or LAYOUT
+   on the DOORS handed the brand to the live-home plate rules in css/menus.css:
+   measured 2026-11-09 at 852x393 with Bryce's export, the wordmark fell from
+   56 to 36 own px, the disclaimer vanished and a --scrim-heavy plate 380x160
+   sat behind the brand. The brand's type, margin and small print are the
+   same whatever the cluster was told; only SIDE moves the column, and these
+   rules do not care which column they are in. */
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
   align-self: start; margin-top: calc(4 * var(--vhz));
   background: transparent; width: 100%;
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #title {
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #title {
   font-size: min(calc(7.2 * var(--vwz)), 21cqi);
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #tc-frame {
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
+/* The car's placement and the DAILY door's wrap are the phone composition,
+   not a buttons setting (#5167 part F, same reason as the brand rules). */
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #tc-frame {
   transform: translate(69px, 145px) scale(0.902);
 }
 :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
   flex-wrap: nowrap;
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
+/* The utility row SHARES its row whatever WIDTH the doors were given; only a
+   stored LAYOUT (STACK / ROW) composes it differently. Under a stored WIDTH
+   these four kept `width: 100%` from the destination rule above with
+   `flex-basis: auto`, so each took a row of its own: measured 2026-11-09 at
+   852x393 with Bryce's export, four rows of 27.6px for SETTINGS, USE AS
+   CONTROLLER, HOW TO PLAY and SAVES & DATA, 137 own px the fit paid for
+   (--tf 0.695 with the cluster already at its track). */
+:root:where(:not([data-title-btns])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
   flex: 1 1 0; width: auto; min-width: min-content;
   overflow-wrap: normal;
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-retention > .bigbtn { white-space: normal; }
-/* All six Play/Garage tiles share adaptive columns. Reading preferences grow
-   the minimum, allowing fewer columns and scrolling when text is enlarged. */
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-retention > .bigbtn { white-space: normal; }
+/* The six Play/Garage tiles on three tracks: two whole rows, never 4+2 with a
+   hole (design pass #1). THE TRACKS ARE A SHARE OF THE CLUSTER'S OWN WIDTH AND
+   NOTHING ELSE (#5150, UI contract §3 rule 2: zoom scales type inside a fitted
+   box, it never decides the box). This was `30% * --ui-compact-text²`, one
+   destination per row at UI SIZE 200 %: a ~10-row column that the never-scroll
+   fit in js/ui/title-layout.js could only make fit by shrinking the cluster to
+   zoom 0.47 at 734x343 (CI run 42285504262 on e144a336), so 200 % painted the
+   doors SMALLER than 100 %. Three tracks at every size keep the cluster short
+   and the fit near 1; the enlarged labels wrap inside their doors instead. */
 @media (min-width: 700px) and (max-height: 500px) {
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay {
     grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
   }
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
-    grid-template-columns: repeat(auto-fit, minmax(min(calc(5.5rem * var(--ui-compact-text, 1)), 100%), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(30%, 1fr));
     grid-template-rows: none; grid-auto-rows: max-content;
   }
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-garage) { display: contents; }
@@ -169,12 +193,25 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: none; grid-auto-rows: max-content;
   max-width: 100%;
-  max-height: max(var(--tap), calc(100% - 2 * max(var(--tl-btns-y, 0px), calc(-1 * var(--tl-btns-y, 0px)))));
+  /* 100%, not 100% minus twice the Y offset: that cap kept a MOVED cluster on
+     screen by shrinking its box and scrolling the rest, which is the scroll
+     #5150 forbids. The offset clamp in js/ui/title-layout.js keeps it on
+     screen now, and the fit sizes the content to the whole box. */
+  max-height: 100%;
   align-self: center; align-content: start; pointer-events: auto;
   container: title-menu / inline-size;
 }
+/* One column; the ROWS stay the compact Home shape's (hero 1, play 2 with
+   GARAGE in its spare cell, explore 3, create 4, utilities 5 — the rules
+   above and css/menus.css). `grid-row: auto` here used to flatten them, so
+   GARAGE took a full row of its own under a half-empty PRACTICE row:
+   measured 2026-11-09 at 852x393 with Bryce's export, 47.7 own px more for
+   the fit to pay for (#5167 part F). */
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
-  grid-column: 1; grid-row: auto; width: 100%; min-width: 0;
+  grid-column: 1; width: 100%; min-width: 0;
+}
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > #menu-garage {
+  width: calc(50% - var(--home-g) / 2);
 }
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { flex-wrap: wrap; }
 :root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-column: 1; }
@@ -200,5 +237,247 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 
 @container title-menu (max-width: 20rem) {
   #overlay #menu-buttons #menu-create .btn-ico { display: none; }
+}
+/* Tall Home (tablet, laptop, desktop): the play doors say what they do.
+   Short landscape (the 390px phone) keeps one-line tiles. A half-width
+   tile cannot hold "YOU AGAINST THE CLOCK" on one line, so the subtitle
+   wraps on spaces instead of ending in an ellipsis. */
+@media (min-width: 700px) and (min-height: 720px) {
+  body #overlay #menu-buttons :is(#menu-primary, #mb-garage) .mb-sub {
+    display: block;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    text-wrap: wrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+    line-height: 1.15;
+    letter-spacing: 0.02em;
+    max-width: 100%;
+    color: color-mix(in oklab, var(--text) 82%, transparent);
+  }
+  body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) {
+    height: auto;
+    min-height: calc(var(--hrow) + 1.15em);
+    overflow: visible;
+  }
+  body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) > span { min-width: 0; max-width: 100%; }
+}
+@media (min-height: 520px), (max-aspect-ratio: 1/1) {
+  body #overlay #menu-buttons #menu-secondary > .bigbtn {
+    overflow-wrap: normal;
+    word-break: normal;
+    text-wrap: balance;
+    line-height: 1.1;
+  }
+}
+/* 1440p and 21:9: a measure, not half the monitor. Local tokens — no
+   responsive-foundation PR was open (searched 2026-10-29). */
+@media (min-width: 1680px) and (min-height: 700px) {
+  body[data-shape="wide"] #overlay {
+    --menu-fit-brand: 34rem;
+    --menu-fit-doors: 40rem;
+    grid-template-columns: minmax(16rem, var(--menu-fit-brand)) minmax(22rem, var(--menu-fit-doors));
+    justify-content: center;
+    column-gap: clamp(2rem, 4vw, 6rem);
+    padding-inline: max(var(--safe-l, 0rem), 3rem) max(var(--safe-r, 0rem), 3rem);
+  }
+  body[data-shape="wide"] #overlay #menu-buttons { width: min(var(--menu-fit-doors), 100%); justify-self: end; }
+}
+@media (max-width: 380px) {
+  body #overlay #menu-buttons { --hg: 6px; --hrow: 44px; }
+  body #overlay #menu-buttons .bigbtn {
+    padding-inline: calc(var(--gap) * 0.45);
+    font-size: max(var(--fs-micro), 14px);
+    min-height: 44px;
+  }
+  /* The utility row sticks over the rooms under it. A 92% scrim let
+     PHOTO STUDIO read through SETTINGS on a 375px phone. */
+  body #overlay #menu-buttons.sf-scroll #menu-secondary {
+    background: var(--bg);
+  }
+}
+/* Destination presentation: one quiet control family, with category names taken
+   from the same accessible grouping used by navigation. Geometry and
+   custom layout attributes above remain authoritative. NOT ON A SHORT
+   LANDSCAPE SCREEN (#5199): this restyle (#4291, 2026-10-30) is what took the
+   italic, slanted doors and the orange CAREER hero off Bryce's phone; the
+   PHONE LANDSCAPE HOME block at the end of this file owns that screen. */
+@media (min-height: 520px), (max-aspect-ratio: 1/1) {
+#overlay #menu-buttons .bigbtn {
+  transform: none; border-radius: var(--r-sm);
+  font-style: normal; box-shadow: none;
+  background: var(--surf-1); border-color: var(--plate-line);
+}
+#overlay #menu-buttons .bigbtn > span { transform: none; }
+#overlay #menu-buttons #mb-career {
+  background: color-mix(in oklab, var(--red) 45%, var(--carbon));
+  color: var(--hud-ink-light); border-color: transparent;
+}
+#overlay #menu-buttons #mb-career .mb-sub { color: inherit; }
+#overlay #menu-buttons .bigbtn::before { background: none; }
+#overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
+}
+/* At comfortable heights the destinations retain their groups instead of
+   dissolving into a field of equal tiles. DOM order is the reading order. */
+@media (min-height: 1000px) and (min-aspect-ratio: 1/1) {
+#overlay #menu-buttons :is(#menu-primary, #menu-explore, #menu-create) {
+  border-top: 1px solid var(--plate-line);
+  padding-top: calc(var(--gap) * .5);
+}
+
+  :root:not([data-title-btns]) #overlay #menu-buttons { display: flex; flex-direction: column; gap: var(--gap); }
+  :root:not([data-title-btns]) #overlay #menu-buttons :is(#menu-hero, #menu-primary, #menu-garage) {
+    display: flex; flex-wrap: wrap; gap: var(--hg); width: 100%;
+  }
+  :root:not([data-title-btns]) #overlay #menu-buttons #menu-hero { flex-direction: column; }
+  :root:not([data-title-btns]) #overlay #menu-buttons #menu-primary > .bigbtn { flex: 1 1 max(calc(50% - var(--hg)), calc(8rem * var(--ui-compact-text, 1) * var(--ui-compact-text, 1))); width: auto; }
+  :root:not([data-title-btns]) #overlay #menu-buttons :is(#menu-primary, #menu-explore, #menu-create)::before {
+    content: attr(aria-label); flex: 0 0 100%;
+    color: var(--steel); font-size: var(--fs-micro); font-weight: 700;
+    letter-spacing: var(--ls-2); text-align: start;
+  }
+  :root:not([data-title-btns]) #overlay #menu-buttons .bigbtn {
+    justify-content: flex-start; text-align: start;
+    padding: calc(var(--gap) * .65) var(--gap);
+  }
+  :root:not([data-title-btns]) #overlay #menu-buttons .bigbtn > span { align-items: flex-start; text-align: start; }
+  :root:not([data-title-btns]) #overlay #menu-buttons :is(#menu-primary, #menu-garage, #menu-explore) .mb-sub {
+    display: block; white-space: normal; overflow: visible; text-overflow: clip;
+    color: var(--steel); letter-spacing: 0; line-height: 1.3;
+  }
+  :root:not([data-title-btns]) #overlay #menu-buttons #menu-secondary { gap: var(--hg); }
+}
+@media (hover: hover) and (pointer: fine) {
+  #overlay #menu-buttons .bigbtn:hover { border-color: var(--steel); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #overlay #menu-buttons .bigbtn { transition: none; }
+  #overlay #menu-buttons .bigbtn:active { transform: none; }
+}
+/* ---------- PHONE LANDSCAPE HOME (#5199) ----------
+   ONE composition for every short landscape screen, keyed on the layout
+   viewport alone: the complement of the Dense Home query above. It does not
+   read body[data-density], the home scene or a stored TITLE LAYOUT, because
+   each of those used to select a different title on the same phone:
+     - density "normal" at 852x393 (measured 2026-11-10 with UI SIZE 60 %:
+       393 / 0.6 = 655 own px, over --compact-at 600) fell out of every
+       compact rule: one door per line for CAREER, DAILY, PRACTICE, GARAGE and
+       VISUAL STUDIO, mode subtitles back, 11 uneven rows — Bryce's screenshot;
+     - #4291 flattened the doors; a stored WIDTH changed the row count
+       (docs/notes/UI-HISTORY-2026-11-06.md item 7).
+   THE ROWS (tests/unit/title-rows.test.mjs pins them): CAREER MODES hero with
+   its subtitle; CONTINUE | DAILY TIME TRIAL with theirs; RACE | TIME TRIAL;
+   RACE A FRIEND | SEASON; PRACTICE | GARAGE; WATCH | DATA HUB; three creation
+   doors; four utility doors. No other subtitle. THE LOOK is the house .bigbtn
+   (css/components.css) and the play-door plate (css/menus.css): italic, the
+   -6deg slant, the red leading edge, the red gradient hero.
+   WIDTH (html[data-title-btnw], --tl-btns-w 20..100) runs from the shipped
+   54 % column at 20 to 80 % of the content box at 100 by moving the split, so
+   every step moves the cluster's edge and the brand keeps its own column; SIZE is the cluster's zoom (css/responsive.css) and the fit
+   in js/ui/title-layout.js is still the law: nothing here scrolls. */
+@media (max-height: 519px) and (min-aspect-ratio: 1/1) {
+body[data-shape="wide"]:not([hidden]) #overlay {
+  /* WIDTH moves the SPLIT, so the doors never cover the brand (#5150 rule 3;
+     the first cut grew the cluster over the brand's column and every WIDTH
+     40+ cell of tests/specs/title-fit.spec.js overlapped it): 46 / 54 at 20,
+     20 / 80 at 100. The wordmark is sized in cqi, so the brand shrinks with
+     its track. */
+  --home-t: clamp(0, calc((var(--tl-btns-w, 20) - 20) / 80), 1);
+  grid-template-columns: minmax(0, calc(46% - 26% * var(--home-t))) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); column-gap: 0; align-items: center;
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand {
+  grid-column: 1; grid-row: 1; align-self: start; align-items: flex-start; text-align: start;
+  width: 100%; margin-top: calc(4 * var(--vhz)); padding: 0; background: transparent;
+  /* The same base zoom with or without a stored layout, at either density and
+     at ANY UI SIZE (it was --ui-scale under html[data-title-layout] and
+     min(--ui-scale, 1) without: a stored TITLE SIZE 100 painted the brand 9 %
+     bigger at 109 %, and UI SIZE 51 % halved it). On this screen the pieces
+     are sized by TITLE LAYOUT's SIZE and by the fit; UI SIZE under 100 % does
+     not shrink them (measured 2026-11-10: at 51 % the doors were a 129 px strip
+     with 6.9 px labels in a 356 px box). */
+  zoom: calc(var(--tl-title-size, 1) * var(--tf, 1));
+  --vwz: 1vw; --vhz: 1vh;
+}
+:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-brand { grid-column: 2; }
+body[data-shape="wide"]:not([hidden]) #overlay #title { font-size: min(calc(6 * var(--vwz)), 21cqi); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-meta { align-items: flex-start; margin-top: var(--gap); gap: calc(var(--gap) / 2); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #soundbtn { font-size: calc(var(--fs-micro) * .6 * var(--ui-compact-brand-text, 1)); margin: 0; min-height: 0; padding: calc(var(--gap) * .7) var(--gap); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #disclaimer { font-size: calc(var(--fs-micro) * .52 * var(--ui-compact-brand-text, 1)); margin: 0; white-space: normal; text-wrap: balance; max-width: 100%; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons {
+  --home-g: calc(var(--gap) * .45);
+  /* The cluster IS its track, never wider: a percent width does not shrink
+     under zoom, so a cluster 0.016 px over the box sent the fit through all
+     six passes (0.899) and WIDTH 100 painted SMALLER doors than 90 (measured
+     2026-11-10 on the first cut's 100% + 85.185%). */
+  grid-column: 2; grid-row: 1; justify-self: stretch; align-self: center;
+  width: 100%; min-width: 0; max-width: none; height: auto; max-height: none;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: max-content;
+  gap: var(--home-g); align-content: center; margin: 0; padding-block: 0; pointer-events: auto;
+  background: transparent; border: 0;
+  zoom: calc(max(1, var(--ui-compact-scale)) * var(--tl-btns-size, 1) * var(--tf, 1));
+}
+:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay { grid-template-columns: minmax(0, 1fr) minmax(0, calc(46% - 26% * var(--home-t))); }
+:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-column: 1; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-primary, #menu-garage) { display: contents; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-explore, #menu-create, #menu-secondary) { grid-column: 1 / -1; grid-row: auto; width: 100%; min-height: 0; align-self: auto; justify-self: auto; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { display: flex; flex-flow: row nowrap; gap: var(--home-g); width: 100%; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-hero { flex-direction: column; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn {
+  --home-row: 31px;
+  display: flex; flex: 1 1 0; flex-flow: row nowrap; align-items: center; justify-content: center; gap: .45em;
+  grid-column: auto; grid-row: auto; width: 100%; min-width: 0; height: auto; max-height: none; min-height: var(--home-row); box-sizing: border-box;
+  margin: 0; padding: calc(var(--gap) / 6) calc(var(--gap) * .6);
+  font-size: calc(var(--fs-4) * .74 * var(--ui-compact-text, 1)); font-style: italic; font-weight: 700;
+  line-height: 1.08; letter-spacing: 0; text-align: center;
+  white-space: normal; text-wrap: balance; overflow-wrap: normal; hyphens: none; overflow: hidden;
+  transform: skewX(-6deg); border-radius: var(--r-md);
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn:active { transform: skewX(-6deg) scale(.98); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: 0; min-width: 0; max-width: 100%; text-align: center; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .btn-ico { flex: none; margin: 0; width: .95em; height: .95em; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
+  background: linear-gradient(90deg, var(--red) 0 4px, transparent 4px) border-box, color-mix(in oklab, var(--carbon) 88%, var(--text) 9%);
+  border-color: var(--plate-line);
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #mb-career { --home-row: 37px; flex: none; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-retention .bigbtn { --home-row: 33px; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .mb-sub { display: none; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#mb-career, #menu-retention) .mb-sub {
+  display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: calc(var(--fs-micro) * .62 * var(--ui-compact-text, 1)); line-height: 1.1; letter-spacing: .06em;
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-create .bigbtn { font-size: calc(var(--fs-micro) * .74 * var(--ui-compact-text, 1)); padding-inline: calc(var(--gap) / 3); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-secondary .bigbtn {
+  --home-row: 28px; font-size: calc(var(--fs-micro) * .64 * var(--ui-compact-text, 1)); line-height: 1.05;
+  padding: calc(var(--gap) / 8) calc(var(--gap) / 4);
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-create, #menu-secondary) .btn-ico { display: none; }
+/* LAYOUT: STACK is one door per line, ROW the six play doors on one line. */
+:root[data-title-btns="stack"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-template-columns: minmax(0, 1fr); }
+:root[data-title-btns="stack"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) { flex-direction: column; }
+:root[data-title-btns="row"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+/* TOUCH PAINT FLOOR (#5213; docs/notes/UI-HISTORY-2026-11-06.md item 8). Under a finger a SIZE
+   under 100 paints as 100, a door is 44 px there, a label 12. js/ui/title-layout.js re-flows
+   ([data-home-rows] 7, 5) before it shrinks; [data-home-floor="off"] is the fit winning. */
+@media (pointer: coarse) {
+body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) {
+  --home-b: max(1, var(--ui-compact-scale));
+  zoom: calc(var(--home-b) * max(1, var(--tl-btns-size, 1)) * var(--tf, 1));
+}
+body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) .bigbtn { min-height: calc(44.2px / var(--home-b)); }
+body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-create .bigbtn { font-size: max(calc(var(--fs-micro) * .74 * var(--ui-compact-text, 1)), calc(var(--fs-micro) * .86 / var(--home-b))); }
+body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-secondary .bigbtn { font-size: max(calc(var(--fs-micro) * .64 * var(--ui-compact-text, 1)), calc(var(--fs-micro) * .86 / var(--home-b))); }
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #menu-hero { flex-direction: row; }
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #menu-retention { display: contents; }
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #mb-career { flex: 1 1 0; }
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="5"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="5"] #menu-explore { display: contents; }
+}
+}
+@media (max-height: 519px) and (min-aspect-ratio: 1/1) and (prefers-reduced-motion: reduce) {
+  body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn:active { transform: skewX(-6deg); }
 }
 }

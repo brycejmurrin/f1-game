@@ -1,23 +1,22 @@
 # Memory index
 
-Claude Code auto memory for this repo, synced by `.claude/hooks/memory-sync.sh`
-(cloud sessions): one line per memory linking its topic file, detail in the
-topic file. User preferences and corrections only — a measured lesson belongs in
-`docs/notes/`, a rule in a hook or test. Coordination rules live in
-`docs/WORKERS.md` and AGENTS.md §Coordination; do not restate them here. An entry that contradicts the current code or AGENTS.md is stale:
-fix or delete it, do not follow it. Hosts: `npm run memory:list` /
-`memory:show` / `memory:retire` (docs/notes/AGENT-MEMORY.md).
+Claude Code auto memory for this repo: one line per memory linking its topic
+file, detail in the topic file. User preferences and corrections only — a
+measured fact belongs in the doc that uses it or a `docs/notes/` note with a `Re-measure-by:` line, a rule
+in a hook or test, a decision in `docs/DECISIONS.md` (`D-NNN`). Coordination
+rules live in AGENTS.md §Coordination; do not restate them here. The tracked
+copy is the only store: `session-start.sh` restores it into the live memory dir
+one way (repo wins), and an edit is committed like any doc edit (docs/notes/AGENT-MEMORY.md).
+An entry that contradicts the current code or AGENTS.md is stale: fix or delete
+it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:retire`.
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews, tests and walkthroughs: one reviewer per skill
 - [Survey then fix](survey-then-fix.md) — after an audit, land the ranked gap list the same session; the user asks "fix all of those"
 - [User plays on a phone](user-plays-on-phone.md) — phone landscape and touch are the owner’s actual play setup
 - [User timezone: Pacific](user-timezone-pacific.md) — the owner’s time zone is America/Los_Angeles
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
-- [Ask via AskUserQuestion](ask-via-askuserquestion.md) — Bryce-attended sessions only; unattended worker sessions use `needs-decision`
 - [Preview must look different](preview-must-look-different.md) — design sheets must differ in the picture (pixel-diff, close-up framing), not just in mm metrics; Bryce: "they all look the same"
-- [Synced plugins in child sessions](synced-plugins-not-in-child-sessions.md) — 2026-10-18 limitation; re-verified 2026-10-26 that child sessions list plugin skills
-- [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it
-- [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first
-- [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — Bryce 2026-10-26: reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR
-- [Fan out with subagents](fan-out-with-subagents.md) — 2026-10-26: multi-part fleet tasks go to worker subagents in worktrees
-- [Train ratchet standing OK](train-ratchet-standing-ok.md) — Bryce 2026-10-26: tree-ratchet +1..+3 from train combinations may be raised with a stated reason, no per-case ask
+- [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it (D-006)
+- [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first (D-013)
+- [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR (D-017)
+- [Bryce's settings profile](bryce-settings-profile.md) — tests/data/settings-live-export-2026-11-10.json is his CURRENT Home Screen app export (UI SIZE 70, BUTTON 143); shipped phone sizes are too big for him

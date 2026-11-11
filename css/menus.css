@@ -87,7 +87,7 @@
 /* The live save line ships its first-time text in the shell (like #mb-season
    beside it) and refreshCareerButton only rewrites it, so the button never
    changes height after boot. One line, always: the returning-player string is
-   the long one and must not wrap. See docs/PERF-FINDINGS.md 4a. */
+   the long one and must not wrap. See docs/notes/PERF-FINDINGS.md 4a. */
 #mb-career-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 #menu-buttons .bigbtn > span { min-width: 0; max-width: 100%; }
 /* On the red hero the 72% mix measured under 4.5:1 against the gradient's
@@ -211,6 +211,7 @@
   #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:hover::before { opacity: 1; }
 }
 #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active::before { opacity: 1; }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active { box-shadow: var(--press-lit); }
 #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
 /* The hero keeps its red and its resting glow, but its hover heat is now the
    same opacity fade: the hot gradient lives on ::before, the face stays on
@@ -264,8 +265,10 @@
 /* ON A PLATE, like #soundbtn beside it. The title art now runs under the brand
    column on every phone shape (and the desktop), and a 14px line of small
    print painted straight onto two cars' worth of strokes was the one thing
-   a real device found hard to read. Same --plate-opaque and hairline the
-   sound chip uses, so the two read as one row of chrome; padding in --gap
+   a real device found hard to read. Same --plate-opaque as the sound chip,
+   but no visible hairline: an outlined plate read as a third button (design
+   pass 2c). The border stays, transparent, so forced colours still draw it.
+   Padding in --gap
    only (rawSpacing is at zero slack); width: fit-content so the plate hugs
    the text whether the column centres or left-aligns it. */
 #disclaimer {
@@ -274,7 +277,7 @@
   padding: calc(var(--gap) * 0.4) calc(var(--gap) * 0.8);
   border-radius: var(--r-sm);
   background: var(--plate-opaque);
-  border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+  border: 1px solid transparent;
 }
 /* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
    "which version am I running", not a label anyone should read while racing. */
@@ -330,7 +333,6 @@ html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"]
   display: flex; align-items: center; justify-content: flex-start; gap: 0.45em;
 }
 html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"])) #overlay :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { flex: none; margin: 0; }
-html[data-home-live] :where(body[data-shape="tall"]) #overlay { grid-template-rows: auto minmax(0, 1fr); }
 html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
   align-self: stretch; align-content: start; min-height: 0; max-height: 100%;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
@@ -380,6 +382,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
   flex: 1 1 0; min-width: 0; width: auto;
 }
+@media (max-width:480px){:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary{flex-wrap:wrap}}
 :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
 }
@@ -392,12 +395,6 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   min-height: var(--tap-paint); height: auto; max-height: none;
-}
-@media (max-height: 460px) {
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { --_3305: clamp(0, calc((var(--ui-compact-text, 1) - 1.001) * 999), 1); }
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary,#menu-explore,#menu-hero,#menu-retention,#menu-garage) .bigbtn {
-    min-height: max(var(--tap-min), var(--tap-paint), calc(40px + (2.75em - 40px) * var(--_3305))) !important;
-  }
 }
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
 /* Tall live Home: two-band grid + menu row (all widths; was duplicated 699/700). */
@@ -836,14 +833,18 @@ html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"]
    while they paint at 125%. The requested --ui-scale remains untouched for the
    slider, sheet layouts and density classifier. */
 @media (max-width: 899px), (max-height: 699px) {
+  /* `* var(--tf, 1)` on both: the FIT (css/title.css, js/ui/title-layout.js,
+     #5150) rides on whatever zoom a piece carries. The viewport units below
+     stay keyed on the cap alone, so the fit scales a piece uniformly, --vwz
+     type included (css/title.css says why). */
   :where(body[data-density="compact"]) #menu-brand {
-    zoom: var(--ui-compact-brand-scale);
+    zoom: calc(var(--ui-compact-brand-scale) * var(--tf, 1));
     --vwz: calc(1vw / var(--ui-compact-brand-scale));
     --vhz: calc(1vh / var(--ui-compact-brand-scale));
     --svhz: calc(1svh / var(--ui-compact-brand-scale));
   }
   :where(body[data-density="compact"]) #menu-buttons {
-    zoom: var(--ui-compact-scale);
+    zoom: calc(var(--ui-compact-scale) * var(--tf, 1));
     /* Keep the skewed button tips inside the menu's clipping box. */
     padding-inline: calc(var(--gap) + var(--gap) * 0.25 / var(--ui-compact-scale));
     --vwz: calc(1vw / var(--ui-compact-scale));

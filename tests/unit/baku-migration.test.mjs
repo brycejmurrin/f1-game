@@ -63,6 +63,11 @@ test("Baku owns its coordinate space and protected scenery sectors", () => {
       // #3340: Neftchilar +1 — theme-dress neonTowers buried night_pass orbit;
       // authored cityFront/towers in scenery/baku.js own that skyline.
       { kinds: ["city"], s0: 0.58, s1: 0.97, side: 1 },
+      // Day theme (2026-11-10): street_day's generic city boxes landed inside
+      // the authored S/F neon towers (clip-audit 6 m); the S/F straight is the
+      // authored skyline's, both sides, across the line.
+      { kinds: ["city"], s0: 0.97, s1: 1, side: undefined },
+      { kinds: ["city"], s0: 0, s1: 0.07, side: undefined },
     ],
   );
   // The 14 m castle rise is asserted by what it BUILDS (crest height and

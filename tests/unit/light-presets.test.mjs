@@ -14,7 +14,7 @@
  * conditions nobody checks after an unrelated rename.
  *
  * This is the same shape as the stale golden baseline found in the 2026-08 pass
- * (A18 in docs/ARCHITECTURE-REVIEW.md): a committed ARTIFACT that encodes the
+ * (A18 in docs/notes/ARCHITECTURE-REVIEW.md): a committed ARTIFACT that encodes the
  * state of another file, where the two can diverge without anything being
  * syntactically wrong. Those are exactly the ones worth a guard, because the
  * failure mode is silence rather than an error.
@@ -187,13 +187,14 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
   for (const [id, want] of Object.entries(DAWN_DRY_HOIST)) {
     assert.equal(shared[id], want, `*|dawn|dry.${id}`);
   }
-  assert.equal(shared.sunAzim, undefined,
-    "sunAzim stays per-track (paul_ricard 144.5 vs fleet 128.5)");
+  // sunAzim: 51 of 52 tracks pinned 128.5 per row; it is the stamp's now and
+  // only paul_ricard keeps its own 144.5 (checked resolved, below).
+  assert.equal(shared.sunAzim, 128.5, "*|dawn|dry.sunAzim is the fleet 128.5");
   const redundant = [];
   for (const key of Object.keys(P)) {
     if (!/\|dawn\|dry$/.test(key) || key.startsWith("*")) continue;
     const o = P[key];
-    for (const [id, want] of Object.entries(DAWN_DRY_HOIST)) {
+    for (const [id, want] of Object.entries({ ...DAWN_DRY_HOIST, sunAzim: 128.5 })) {
       if (Object.prototype.hasOwnProperty.call(o, id) && o[id] === want) {
         redundant.push(`${key}.${id}=${o[id]}`);
       }
@@ -207,7 +208,7 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
  *  the shipped presets, for one (track, tod, weather). Returns the live LT after
  *  apply(), so a layering bug in LightStore fails the tests built on it. */
 function resolveLive(trackId, tod, wx, extra = {}) {
-  const defs = vm.createContext({ GLX: { isMobile: false }, Math, Object });
+  const defs = vm.createContext({ GLX: { isMobile: !!extra.mobile }, Math, Object });
   vm.runInContext(read("js/lighting/knobs.js"), defs, { filename: absSrc("js/lighting/knobs.js") });
   const TUNE_DEFS = vm.runInContext("LightKnobs.TUNE_DEFS", defs);
   const ctx = vm.createContext({
@@ -226,8 +227,9 @@ function resolveLive(trackId, tod, wx, extra = {}) {
     raceTimeOfDay: tod, raceWeather: wx, state: "race",
     applyRaceSettings() {}, isWetRoad: () => false, initRainDrops() {},
   };
-  vm.runInContext("LightStore", ctx).create(G).apply();
-  return { LT: vm.runInContext("LightTune.LT", ctx), TUNE_DEFS };
+  const store = vm.runInContext("LightStore", ctx).create(G);
+  store.apply();
+  return { LT: vm.runInContext("LightTune.LT", ctx), TUNE_DEFS, store, stored };
 }
 
 test("*|dawn|dry hoisted knobs resolve identically on every track", () => {
@@ -251,6 +253,36 @@ test("*|dawn|dry hoisted knobs resolve identically on every track", () => {
   }
   assert.deepEqual(drift, [],
     "every track must resolve the hoisted dawn|dry knobs to the shared stamp");
+});
+
+test("dawn sunAzim resolves 128.5 on every track but paul_ricard (144.5), in every weather", () => {
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  const wrong = [];
+  for (const track of circuits) for (const wx of ["dry", "fog", "rain"]) {
+    const want = track === "paul_ricard" ? 144.5 : 128.5;
+    const { LT } = resolveLive(track, "dawn", wx);
+    if (LT.sunAzim !== want) wrong.push(`${track}|dawn|${wx} sunAzim=${LT.sunAzim} want ${want}`);
+  }
+  assert.deepEqual(wrong, []);
+});
+
+// ENV REFLECTION's knob default is OFF on phones (the probe's extra world pass
+// can drop a mobile GL context), but the shared *|dawn|wet stamp pins 0.96 and
+// turned it on for every device. On mobile the presets are capped at the knob's
+// `shippedMax`; desktop keeps the stamp, and the player's own value still wins.
+test("carEnvCube: a shipped preset cannot turn the env probe on on mobile; desktop and the player unchanged", () => {
+  for (const track of ["spa", "monaco", "bahrain"]) {
+    assert.equal(resolveLive(track, "dawn", "wet").LT.carEnvCube, 0.96, `${track} desktop keeps the stamp`);
+    const m = resolveLive(track, "dawn", "wet", { mobile: true });
+    assert.equal(m.LT.carEnvCube, 0, `${track} mobile: the stamp must not enable the probe`);
+    m.store.set("carEnvCube", 0.5); m.store.persist();
+    assert.equal(m.LT.carEnvCube, 0.5, `${track} mobile: the player's slider still reaches the probe`);
+    const r = resolveLive(track, "dawn", "wet", { mobile: true, saved: m.stored.lightTune });
+    assert.equal(r.LT.carEnvCube, 0.5, `${track} mobile: the player's saved value survives a reload`);
+  }
+  for (const tod of ["dawn", "day", "dusk", "night"]) for (const wx of ["dry", "wet", "rain", "overcast", "fog"])
+    assert.equal(resolveLive("monza", tod, wx, { mobile: true }).LT.carEnvCube, 0, `monza|${tod}|${wx} mobile`);
 });
 
 test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () => {
@@ -284,14 +316,82 @@ test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () 
 
 test("day rain resolves the shared wet grade on every track (storm inherits it)", () => {
   // Bryce 2026-10-21: per-track saturation 0.80-0.92 washed rain out paler than dry.
+  // M37 presets: lamp trio matches *|day|dry / *|day|wet (no mast wash / tunnel floor).
   const P = presets(), stamp = P["*|day|rain"], drift = [];
-  assert.deepEqual({ ...stamp }, { saturation: 1.05, contrast: 1.12, exposureMul: 0.92 });
+  assert.deepEqual({ ...stamp }, {
+    saturation: 1.05, contrast: 1.12, exposureMul: 0.92,
+    lampLevel: 0, alwaysLampFloor: 0.13, floodEmitMul: 0.08,
+  });
   const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
     .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
   assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
   for (const track of circuits) {
     const { LT } = resolveLive(track, "day", "rain");
     for (const [id, want] of Object.entries(stamp)) if (LT[id] !== want) drift.push(`${track}|day|rain.${id}=${LT[id]} want ${want}`);
+  }
+  assert.deepEqual(drift, []);
+});
+
+test("M37: day rain/overcast/fog share the dry/wet day lamp floor on every track", () => {
+  // Without *|day|{rain,overcast,fog} lamp stamps, LightStore fell through to
+  // TUNE_DEFS lampLevel 0.26 / floodEmitMul 1.0 / alwaysLampFloor 0 — Monaco
+  // tunnel always-on at 0.26 instead of the 0.13 day floor (docs/BUGS.md M37).
+  const P = presets();
+  const DAY_LAMP = { lampLevel: 0, alwaysLampFloor: 0.13, floodEmitMul: 0.08 };
+  for (const wx of ["dry", "wet", "rain", "overcast", "fog"]) {
+    const stamp = P[`*|day|${wx}`];
+    assert.ok(stamp, `expected LightPresets['*|day|${wx}']`);
+    for (const [id, want] of Object.entries(DAY_LAMP)) {
+      assert.equal(stamp[id], want, `*|day|${wx}.${id}`);
+    }
+  }
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
+  const drift = [];
+  for (const wx of ["rain", "overcast", "fog"]) {
+    for (const track of circuits) {
+      const { LT } = resolveLive(track, "day", wx);
+      for (const [id, want] of Object.entries(DAY_LAMP)) {
+        if (LT[id] !== want) drift.push(`${track}|day|${wx}.${id}=${LT[id]} want ${want}`);
+      }
+    }
+  }
+  assert.deepEqual(drift, []);
+});
+
+test("M37: dawn rain/overcast/fog share dawn lamp pools (47+ rain fallthrough)", () => {
+  // dawn|rain had no shared stamp: 47 circuits resolved lampLevel to the 0.26
+  // knob default while dawn|wet ships 0.13. Rain inherits wet-dawn pools;
+  // overcast/fog inherit dry-dawn pools (weather does not brighten lamps).
+  const P = presets();
+  const wet = P["*|dawn|wet"], dry = P["*|dawn|dry"];
+  assert.equal(P["*|dawn|rain"].lampLevel, wet.lampLevel);
+  assert.equal(P["*|dawn|rain"].floodEmitMul, wet.floodEmitMul);
+  for (const wx of ["overcast", "fog"]) {
+    assert.equal(P[`*|dawn|${wx}`].lampLevel, dry.lampLevel);
+    assert.equal(P[`*|dawn|${wx}`].floodEmitMul, dry.floodEmitMul);
+  }
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
+  const drift = [];
+  for (const track of circuits) {
+    const rain = resolveLive(track, "dawn", "rain").LT;
+    // Per-track dawn|rain lamp pins (abudhabi/jeddah/qatar/singapore/vegas) win.
+    if (!P[`${track}|dawn|rain`] || typeof P[`${track}|dawn|rain`].lampLevel !== "number") {
+      if (rain.lampLevel !== wet.lampLevel) drift.push(`${track}|dawn|rain.lampLevel=${rain.lampLevel}`);
+      if (rain.floodEmitMul !== wet.floodEmitMul) drift.push(`${track}|dawn|rain.floodEmitMul=${rain.floodEmitMul}`);
+    }
+    for (const wx of ["overcast", "fog"]) {
+      const LT = resolveLive(track, "dawn", wx).LT;
+      const pin = P[`${track}|dawn|${wx}`];
+      if (pin && typeof pin.lampLevel === "number") continue;
+      if (LT.lampLevel !== dry.lampLevel) drift.push(`${track}|dawn|${wx}.lampLevel=${LT.lampLevel}`);
+      if (!(pin && typeof pin.floodEmitMul === "number") && LT.floodEmitMul !== dry.floodEmitMul) {
+        drift.push(`${track}|dawn|${wx}.floodEmitMul=${LT.floodEmitMul}`);
+      }
+    }
   }
   assert.deepEqual(drift, []);
 });

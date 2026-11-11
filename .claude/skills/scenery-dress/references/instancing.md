@@ -28,7 +28,7 @@ Not for first-time dressing (`SKILL.md`), spline/elevation (**agent-view**) or G
 node tools/track/graph-parity.cjs <id>            # or --all
 BASE=<ref> node tools/track/graph-parity.cjs --all
 npm run test:tooling-fast
-npm test -- tests/specs/instanced-draw.spec.js   # BROWSER, one spec, background (parent only)
+node tools/ci/remote-group.mjs gfx               # instanced-draw.spec.js (browser) runs in CI group gfx, pushed branch
 node tools/track/verify-track.cjs <id>
 ```
 
@@ -58,12 +58,8 @@ judging a `graph-parity` mismatch.
    - Use `NODE_COLOR` (`"@node"`) + `place.col` for per-placement tint.
 
 3. **Parity gate** — geometry must match exactly:
-   ```sh
-   node tools/track/graph-parity.cjs <id>
-   BASE=<pre-migration-ref> node tools/track/graph-parity.cjs --all
-   ```
-   Default `BASE=HEAD` only checks working-tree drift; on a clean `js/track`+`js/circuits` it refuses (exit 2, "nothing to compare"; the MCP tool requires `base`).
-   Tolerance is 1e-6 m on positions; indices and `mat` must match exactly.
+   Commands: Quick Reference (use `BASE=<pre-migration-ref>`). Default `BASE=HEAD` only checks working-tree drift; on a clean `js/track`+`js/circuits` it refuses (exit 2, "nothing to compare"; the MCP tool requires `base`).
+   Positions match within the tool's `POS_TOL`; indices and `mat` must match exactly.
 
    Pine parity vs a pre-re-param `HEAD` is *expected* to fail (a documented look change,
    SCENE-GRAPH-PLAN §6/S4): move `BASE` forward before judging.
@@ -79,12 +75,8 @@ judging a `graph-parity` mismatch.
    discrete keys) before expecting instancing savings.
 
 5. **Fast contract** (`node --test tests/unit/track-graph.test.mjs`, <1 s) **then GL wiring** (browser):
-   ```sh
-   npm run test:tooling-fast
-   npm test -- tests/specs/instanced-draw.spec.js   # BROWSER, one spec, background (AGENTS.md rule 4)
-   ```
-   A subagent reports it not run. The whole `gfx` group (`node tools/ci/remote-group.mjs gfx`, pushed
-   branch) only when the TLX/GLX instanced-draw path itself changed.
+   `instanced-draw.spec.js` runs in CI group `gfx` (`node tools/ci/remote-group.mjs gfx`, pushed
+   branch); request it when the TLX/GLX instanced-draw path itself changed.
 
 6. **Ship** — `npm run gen:check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) if you edited `js/`. Visual spot-check:
    **playwright-probe** on a dense track (Spa, Vegas).
@@ -95,13 +87,11 @@ non-uniform XZ scale; otherwise the node lands in `bakeOnly` (caller must
 
 **Hand-off record** (PR body): emitter + `meta.kind`, `BASE=<ref>` used and its
 `parity exact` line, the `+K -> bake` count before/after, `track-graph.test.mjs`
-result; Not run: `instanced-draw.spec.js` (browser) when you could not run it.
+result; the `gfx` group's result, or "Not run: gfx" when it was not requested.
 
 ### Common mistakes
 
-- **Skipping `BASE=<ref>`** — `npm run test:graph-parity` (no `BASE`) diffs
-  HEAD vs the working tree, so it says nothing about a committed migration
-  (a clean tree exits 2); name the pre-migration ref.
+- **Skipping `BASE=<ref>`** — a committed migration needs the pre-migration ref (step 3).
 - **Replay through UNGUARDED emitters** — bypasses on-track rejection.
 - **Unique `key` per placement** — defeats define-once.
 - **Ignoring `bakeOnly`** — partially suppressed nodes or radial ops with

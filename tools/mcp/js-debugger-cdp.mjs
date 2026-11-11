@@ -12,7 +12,7 @@ export function localUrl(raw, websocket = false) {
 // T7: /json/list also lists service_worker and worker targets; each has its own page-style
 // WebSocket, so the same Debugger/Runtime session attaches to them directly. #2957: a Node
 // inspector (`node --inspect[-brk]=PORT`, incl. a `node --test` child) lists `type:"node"`.
-export const TARGET_TYPES = { page: ["page"], service_worker: ["service_worker"], worker: ["worker"], node: ["node"], all: ["page", "service_worker", "worker", "node"] };
+const TARGET_TYPES = { page: ["page"], service_worker: ["service_worker"], worker: ["worker"], node: ["node"], all: ["page", "service_worker", "worker", "node"] };
 // The default lists pages AND node targets: Chrome never lists node rows and Node never lists
 // pages, so a bare `debugger_targets` on a Node port no longer returns [] (#2957).
 export async function targets(endpoint, kind = "default") {

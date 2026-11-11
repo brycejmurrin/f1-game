@@ -416,10 +416,12 @@ function makeGpuHarness(opts = {}) {
                 Object.defineProperty(o, "device", { value: "", enumerable: false });
                 return o;
               })()
+            // Chrome 140+: the fallback flag lives on GPUAdapterInfo only (GPUAdapter.isFallbackAdapter removed).
             : (opts.softAdapter
-              ? {}
+              ? { isFallbackAdapter: true }
               : { vendor: "test", architecture: "test", device: "mock-gpu" }),
-          isFallbackAdapter: !!(opts.softAdapter || opts.softAdapterNonEnum),
+          // Pre-140 Chrome kept it on the adapter; opts.legacyFallback keeps that shape covered.
+          ...(opts.legacyFallback ? { isFallbackAdapter: true } : {}),
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
@@ -1198,6 +1200,41 @@ test("the WGX mirror pass runs with the lamp shadow off; the main pass after it 
   gfx.present({});
 });
 
+// #4219 (perf hunt 7): quit-to-menu frees the mirror's colour + depth textures, and no bind group the next
+// frame builds may name them (WebKit holds a destroyed texture while one does). mirrorBegin re-allocates.
+test("WGX releaseMirror destroys the mirror textures, drops their bind groups, is idempotent, and re-allocates lazily", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const groups = [], createBindGroup = h.device.createBindGroup;
+  h.device.createBindGroup = (desc) => { groups.push(desc); return createBindGroup(desc); };
+  const t0 = h.textures.length;
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+  const mir = h.textures.slice(t0);
+  assert.equal(mir.length, 2, "colour + depth");
+  assert.equal(gfx.releaseMirror(), false, "never while the mirror pass records");
+  gfx.mirrorEnd();
+  gfx.mirrorRect([0.1, 0.1, 0.3, 0.1]);
+  assert.equal(gfx.begin({}), true); gfx.present({});
+  const names = (g) => g.entries.some((e) => e.resource && mir.includes(e.resource.texture));
+  assert.ok(groups.some(names), "the composite's group names the mirror view");
+  assert.equal(gfx.releaseMirror(), true);
+  assert.ok(mir.every((t) => t.destroyed), "both textures destroyed");
+  const st = gfx.mirrorState();
+  assert.deepEqual([st.ready, st.w, st.h, st.dead], [false, 0, 0, false]);
+  assert.equal(gfx.releaseMirror(), true, "a second release is safe");
+  groups.length = 0;
+  assert.equal(gfx.begin({}), true); gfx.present({});
+  assert.ok(!groups.some(names), "no bind group built after the release names a freed texture");
+  const t1 = h.textures.length;
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true, "the next mirror pass re-allocates");
+  gfx.mirrorEnd();
+  assert.equal(h.textures.length - t1, 2);
+  assert.equal(gfx.mirrorState().w, 64);
+  gfx.begin({}); gfx.present({});
+  assert.ok(groups.some((g) => g.entries.some((e) => e.resource && e.resource.texture === h.textures[t1])), "a fresh composite group on the new view");
+});
+
 // 1b-F4 (hunt 3): frame.allLights is ONE buffer refilled in place (frame-lights.js), so a rebuild:true
 // tuner edit (LAMP DENSITY / POOL RADIUS) re-orders it under the same identity while the caster keeps
 // Night + mirror (the phone's onboard default): the mirror packs its own re-ranked lamp list and the forward
@@ -1694,8 +1731,8 @@ test("WGSL closes the documented GLX look gaps", () => {
     "the non-indexed merge is gated on vertex_index being provably dead");
   assert.match(WGX_SOURCE, /&& contig && vidDead && nightOK\) \{/,
     "and on contiguity, and on the night stand-down");
-  assert.match(WGX_SOURCE, /const nightOK = indexed \|\| !maskL;/,
-    "the night stand-down is ROAD-only — indexed meshes keep merging as today");
+  assert.match(WGX_SOURCE, /const nightOK = indexed \|\| !maskL \|\| \(run\.m0 === _lm0 && run\.m1 === _lm1\);/,
+    "an equal night mask still merges; a wider road mask does not; indexed meshes keep merging");
   assert.match(WGX_SOURCE, /hasTrk roads are (?:core\.)?createMesh pieces/,
     "hasTrk roads stay on createMesh pieces (chunks=null)");
   assert.match(WGX_SOURCE, /g2Layout/);
@@ -1866,7 +1903,13 @@ test("software / empty-info adapter boots WGX (soft-present, MSAA 1)", async () 
   const gfx = await h.create();
   assert.ok(gfx, "SETTINGS ▸ WEBGPU must stay on WGX on software adapters");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+  assert.equal(gfx.softPresent(), true, "adapter.info.isFallbackAdapter (Chrome 140 shape) marks it software");
   assert.equal(h.WGX.lastFailure(), null);
+  const legacy = makeGpuHarness({ legacyFallback: true });
+  const g2 = await legacy.create();
+  assert.equal(g2.softPresent(), true, "the pre-140 GPUAdapter.isFallbackAdapter still counts");
+  const hw = makeGpuHarness({});
+  assert.equal((await hw.create()).softPresent(), false, "a hardware adapter is not soft");
 });
 
 test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", async () => {
@@ -2989,7 +3032,83 @@ test("WGX mirror frame records its mip ladder into the mirror's own submit", asy
   gfx.mirrorEnd();
   const passes = h.passCalls.filter(([n]) => n === "beginRenderPass").length - passes0;
   assert.equal(h.submitCount - submits0, 1, "one submit for the mirror pass AND its mips");
-  assert.ok(passes >= 1 + 6, `the mirror pass plus the 6-level mip ladder still record (${passes} passes)`);
+  assert.equal(passes, gfx.mirrorState().mips, `the mirror pass plus its (mips - 1)-pass ladder (${passes} passes)`);
+});
+
+test("perf hunt 6: WGX sizes the mirror chain to the levels its taps read (inset lod, bounded glass, full when unbounded)", async () => {
+  // Hunt 5 F1's TLX rule on WGX: the inset's textureSampleLevel at lod reads floor(lod)..floor(lod)+1, the glass's
+  // implicit LOD (PostCommon.mipFootprintLod, session max) up to ceil(lod + 0.25) + 1; two unbounded frames in a
+  // row latch the full chain. The old code built all 9 levels of a 256x64 target (8 ladder passes) every frame.
+  const h = makeGpuHarness({ recordPass: true, reflectTextures: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const opens = () => h.passCalls.filter(([n]) => n === "beginRenderPass").length;
+  const mirrorFrame = () => {
+    const p0 = opens();
+    assert.equal(gfx.mirrorBegin({}, 256, 64), true);
+    gfx.mirrorEnd();
+    return opens() - p0 - 1;   // ladder passes: all but the mirror's own
+  };
+  const mesh = gfx.createTexMesh({ pos: [-1, -1, -1, 1, -1, 1, 1, 1, 1, -1, 1, -1], nrm: Array(12).fill(0),
+    uv: [0.4, 0.22, 1, 0.22, 1, 0.78, 0.4, 0.78], idx: [0, 1, 2, 0, 2, 3] });
+  const model = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const glassFrame = (viewProj) => {
+    assert.equal(gfx.begin({ viewProj }), true);
+    assert.equal(gfx.drawMirrorGlass(mesh, model, null), true);
+    gfx.present({});
+  };
+  gfx.mirrorRect([0.4, 0.1, 0.2, 0.06]);
+  assert.equal(gfx.mirrorState().mips || 0, 0, "nothing allocated yet");
+  const first = mirrorFrame();
+  const lod = Math.max(256 / Math.round(0.2 * 320), 64 / Math.round(0.06 * 180));
+  const inset = Math.floor(Math.log2(lod)) + 2;
+  assert.ok(inset < 9, `the bounded inset count (${inset})`);
+  assert.equal(first, inset - 1, "the ladder is the bounded count, sized from the rect on the first frame");
+  assert.equal(gfx.mirrorState().mips, inset, `inset only: levels 0..floor(lod)+1 (lod ${Math.log2(lod).toFixed(2)})`);
+  assert.equal(mirrorFrame(), inset - 1, "and stays there");
+  // A small, distant glass (x/y scaled 0.05, flat w = 1): a bounded LOD above the inset's.
+  const far = new Float32Array([0.05, 0, 0, 0, 0, 0.05, 0, 0, 0, 0, 0.1, 0, 0, 0, 0, 1]);
+  glassFrame(far);
+  const gl = gfx.mirrorState().glassLod;
+  assert.ok(Number.isFinite(gl), `a bounded glass LOD (${gl})`);
+  const glass = Math.min(9, Math.ceil(gl + 0.25) + 1);
+  assert.ok(glass > inset && glass < 9, `the glass needs more than the inset and less than the full chain (${glass})`);
+  assert.equal(mirrorFrame(), glass - 1, "grown to the glass's count on the next mirrorBegin");
+  assert.equal(gfx.mirrorState().mips, glass);
+  // A zero viewProj (no frame camera yet) is no bound: nothing changes.
+  glassFrame(new Float32Array(16));
+  assert.equal(gfx.mirrorState().glassLod, gl, "a zero viewProj is skipped");
+  // w = z: the quad straddles the eye plane, so the bound is unbounded. One frame does not latch; two in a row do.
+  const straddle = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0]);
+  glassFrame(straddle);
+  assert.equal(mirrorFrame(), glass - 1, "one unbounded frame does not latch");
+  glassFrame(far);
+  glassFrame(straddle);
+  glassFrame(straddle);
+  assert.equal(gfx.mirrorState().glassLod, Infinity, "two unbounded frames in a row latch");
+  assert.equal(mirrorFrame(), 8, "the full 9-level chain (8 ladder passes) from then on");
+});
+
+test("perf hunt 5 W1/W3: a full env cube builds 4 levels (18 ladder passes, not 36) inside the face-5 submit", async () => {
+  // Every envCube tap is textureSampleLevel(.., rough * 2.5) with rough <= 1, so level 3 is the highest a trilinear
+  // tap reads; the census's 64x64/rgba16float wide-frame rows were the 7-level ladder (6 faces x 6 levels).
+  const h = makeGpuHarness({ recordPass: true, reflectTextures: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const opens = () => h.passCalls.filter(([k]) => k === "beginRenderPass").map(([, a]) => a[0]);
+  const perFace = [];
+  for (let f = 0; f < 6; f++) {
+    const s0 = h.submitCount, p0 = opens().length;
+    assert.ok(gfx.envFaceBegin(f, [0, 0, 0], {}), `face ${f} opens`);
+    gfx.envFaceEnd(f);
+    perFace.push({ submits: h.submitCount - s0, passes: opens().length - p0 });
+  }
+  const cube = h.textures.find((t) => t.desc.size && t.desc.size[2] === 6 && t.desc.dimension === "2d" && t.desc.size[0] === 64);
+  assert.ok(cube, "the env cube texture");
+  assert.equal(cube.desc.mipLevelCount, 4, "64 px cube: levels 0-3, the ones an LOD <= 2.5 tap reads");
+  assert.deepEqual(perFace.slice(0, 5).map((r) => r.passes), [1, 1, 1, 1, 1], "faces 0-4: the face pass alone");
+  assert.equal(perFace[5].passes, 1 + 6 * 3, "face 5: its pass plus 6 layers x 3 levels");
+  assert.deepEqual(perFace.map((r) => r.submits), [1, 1, 1, 1, 1, 1], "the ladder rides face 5's own submit");
 });
 
 test("WGX mirror-pass cull gets its own pack, buffer and cell-set key: main and mirror no longer evict each other", async () => {
@@ -3792,6 +3911,33 @@ test("optional post publishes the complete successful buffer set", () => {
   const h = isolatedPost(); h.post.buildPost();
   assert.equal(h.owned.length, 6); assert.ok(h.owned.every((b) => b.destroys === 0));
   assert.ok(h.core.pComposite); assert.equal(h.core.ssrUBO, h.owned[5]);
+});
+
+test("SSAO and god-ray blur pipelines share one shader module", () => {
+  const h = isolatedPost();
+  h.core.SSAO_FORMAT = "r8unorm";
+  h.core.POST_HDR_FORMAT = "rgba16float";
+  const byCode = new Map();
+  const pipelines = [];
+  const origMod = h.core.device.createShaderModule;
+  const origPipe = h.core.device.createRenderPipeline;
+  h.core.device.createShaderModule = (desc) => {
+    const mod = origMod(desc);
+    const list = byCode.get(desc && desc.code) || [];
+    list.push(mod);
+    byCode.set(desc && desc.code, list);
+    return mod;
+  };
+  h.core.device.createRenderPipeline = (desc) => { pipelines.push(desc); return origPipe(desc); };
+  h.post.buildPost();
+  const blurMods = byCode.get("blur") || [];
+  assert.equal(blurMods.length, 1, "BLUR is compiled once");
+  const blur = blurMods[0];
+  const blurPipes = pipelines.filter((p) => p.fragment && p.fragment.module === blur);
+  assert.equal(blurPipes.length, 2, "r8 and hdr blur stay two pipelines");
+  assert.equal(blurPipes[0].vertex.module, blur);
+  assert.equal(blurPipes[1].vertex.module, blur);
+  assert.notEqual(blurPipes[0].fragment.targets[0].format, blurPipes[1].fragment.targets[0].format);
 });
 
 for (const scoped of [false, true]) test(`exhausted spatial variants retire the UBO (scoped=${scoped})`, async () => {

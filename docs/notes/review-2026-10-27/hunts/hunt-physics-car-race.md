@@ -1,0 +1,4 @@
+# Opus hunt: js/physics, js/car, js/race (2026-10-27)
+F1 med bug js/physics/collide.js:355 orientedResponse — player yawed >20° → oriented path; collideFx fires only on `last` pass after restitution leaves closing=0 → FX/damage floor 0.15 for any hit (spun car hit at 40 m/s = minimum audio/shake/damage). Fix: gate collideFx on j.magnitude>CORR_EPS && firstPairFx(a,b) using that pass's closing; route carImpact/notifyCar via firstPairFx. Test: yawVis 0.6 human vs AI closing 30 m/s, assert impact>0.5. CODE-TRACED
+F2 low perf js/physics/grip-steer.js:72,75,78,113 — GripSteer.apply returns a fresh literal each tick; forPlayer's _out pool is defeated. Fix: optional out param. Test: vehicle-tick-alloc identity check. CODE-TRACED
+§Physics: no violation found. Not covered: ai-drive rest, incident-sim, aero-zones, most of js/race and js/car.

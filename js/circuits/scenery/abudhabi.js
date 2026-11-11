@@ -6,13 +6,13 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["abudhabi"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox, seat,
-        anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, grandstandEx, billboard,
-        gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
+      const { K, lapBounds, out, MAT, pyMin, place, addBox, seat,
+        anchor, onTrack, hash, vadd, building, motorhome, tower, grandstandEx, billboard,
+        gantry, palm, bush, hedge, addCyl, addCone, addFrustum,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
-        cityFront, forestEdge, backdrop, mountain, ferrisWheel, landmarkKit,
+        cityFront, backdrop, mountain, ferrisWheel, landmarkKit,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit,
-        bleacher, sailCanopy, floodMast, underpassPortal } = api;
+        bleacher, sailCanopy, floodMast } = api;
 
       const LED_TEAL  = [0.20, 0.85, 0.95];
       const LED_MAG   = [0.95, 0.18, 0.72];

@@ -31,7 +31,7 @@ const PEEK_LAYER = RESP + "\n" + OVERLAYS;
 const TARGETS = { pausemenu: "dialog", datahub: "dialog", select: "div", "race-settings": "dialog",
   career: "div", carsetup: "div", trackdesigner: "dialog", standings: "dialog", pmsettings: "dialog", overlay: "div" };
 
-function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
+function boot({ stored = {}, settingsOpen = true, withPause = false, win = null, avail = true } = {}) {
   const dom = makeDom();
   const mk = (tag, id, parent) => { const e = dom.makeElement(tag, id); (parent || dom.body).appendChild(e); return e; };
   for (const [id, tag] of Object.entries(TARGETS)) mk(tag, id);
@@ -76,11 +76,15 @@ function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
     addEventListener: (t, fn, cap) => { if (!winL.has(t)) winL.set(t, []); winL.get(t).push({ fn, cap }); },
   };
   sb.window = sb;
+  if (win) Object.assign(sb, win);   // innerWidth / innerHeight: the availability checks read the viewport
   const ctx = vm.createContext(sb);
-  const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js"];
+  // js/ui/look-avail.js is lazy (LAZY_UI_PRESETS, the first APPEARANCE enter); it repaints the built folds on eval.
+  const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js",
+    ...(avail ? ["js/ui/look-avail.js"] : [])];
   for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const M = vm.runInContext("ScreenLooks", ctx);
   const P = withPause ? vm.runInContext("PauseOpts", ctx) : null;
+  const A = avail ? vm.runInContext("LookAvail", ctx) : null;
   /** Fire a window CAPTURE listener the way the browser would, with spies. */
   const fire = (type, extra = {}) => {
     const ev = Object.assign({ type, defaultPrevented: false, stopped: false }, extra);
@@ -89,7 +93,7 @@ function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
     for (const { fn, cap } of winL.get(type) || []) if (cap) fn(ev);
     return ev;
   };
-  return { dom, M, P, data, timers, observers, fire, html: dom.documentElement, panel, general, pauseBody, tsBody, replay,
+  return { dom, M, P, A, data, timers, observers, fire, sb, winL, html: dom.documentElement, panel, general, pauseBody, tsBody, replay,
     get reclassified() { return reclassified; } };
 }
 
@@ -193,6 +197,31 @@ test("density / columns knobs re-run SheetShape so the tier follows at once", ()
 });
 
 /* ── folds ────────────────────────────────────────────────────────────── */
+test("#5054: with the settings router, rows build on the first APPEARANCE enter only; search knows every knob before", () => {
+  const enters = [], registered = [];
+  const nav = { onEnter: (fn) => enters.push(fn) };
+  const search = { register: (owner, rows) => registered.push([owner, rows.length]) };
+  const { dom, timers, panel, M } = boot({ settingsOpen: false, win: { SettingsNav: nav, SettingsSearch: search } });
+  const knobs = M.SCREENS.reduce((n, s) => n + s.knobs.length, 0);
+  assert.deepEqual(registered, [["screen-looks", knobs]], "descriptors registered at arm, before any row");
+  assert.equal(enters.length, 1);
+  assert.equal(dom.has("pm-look-datahub"), false, "no fold at boot (title intro)");
+  assert.equal(timers.length, 0, "no timer fallback builds it later");
+  enters[0]("audio");
+  assert.equal(dom.has("pm-look-datahub"), false, "another page builds nothing");
+  enters[0]("appearance");
+  assert.ok(dom.has("pm-look-datahub") && dom.has("pm-look-pause-style"), "APPEARANCE builds every fold");
+  const n = panel.children.length;
+  enters[0]("appearance");
+  assert.equal(panel.children.length, n, "a second enter mounts nothing");
+  assert.equal(registered.length, 1, "build does not re-register search");
+});
+
+test("#5054: settings already showing APPEARANCE when the router arms builds at once", () => {
+  const { dom } = boot({ settingsOpen: true, win: { SettingsNav: { onEnter() {} } } });
+  assert.ok(dom.has("pm-look-datahub"));
+});
+
 test("build: one fold per screen after TITLE SCREEN, in registry order; pause rows join PAUSE MENU; mount once", () => {
   const { dom, M, panel, pauseBody, tsBody, replay } = boot();
   const kids = panel.children;
@@ -392,7 +421,6 @@ test("a peek swallows only the dismissing click, not the next one", () => {
   const src = read("js/ui/screen-looks.js");
   const fn = src.slice(src.indexOf("function onPointer"), src.indexOf("function onClick"));
   assert.doesNotMatch(fn, /700/);
-  assert.match(fn, /pk\.swallowGen/);
   assert.match(fn, /setTimeout\(\(\) => \{ if \(pk\.swallowGen === gen\) pk\.swallowClick = false; \}, 0\)/);
   assert.match(fn, /pointerup/);
   assert.match(fn, /pointercancel/);
@@ -429,4 +457,131 @@ test("designer: the knob is in the settings export, and the CSS keeps the tap fl
   const editor = read("css/editor.css");
   assert.match(editor, /:root\[data-look-designer-size\] #trackdesigner \{[^}]*--tap: max\(44px, calc\(24px \/ var\(--td-zoom\)\)\)/, "floors are re-derived against the designer's own zoom");
   assert.match(editor, /zoom: var\(--td-zoom\);/, "the dialog zooms by UI SIZE x DESIGNER SIZE");
+});
+
+/* ── availability: values that change nothing on this screen size (G4) ──── */
+// 844x390 at the touch default UI SIZE (109 %, js/ui/scale.js): the profile
+// the look-diff CLI (UI layout program G4) measured 41 DEAD values on (2026-10-30).
+test("availability: the pure checks answer the measured phone no-ops, and only those", () => {
+  const { M, A } = boot();
+  // P is the phone (coarse pointer, short side 390 < 600): ROOMY and the career SPLIT are requests the
+  // box clamps there (#5153 gap 11, measured docs/notes/UI-PR-D-MEASURE-2026-11-06.md); M is the same
+  // window with a mouse, where the CSS gate lets them through.
+  const P = A.env(844, 390, 1.09), D = A.env(1600, 1000, 1), Mo = A.env(844, 390, 1.09, true);
+  assert.equal(P.phone, true); assert.equal(D.phone, false); assert.equal(Mo.phone, false);
+  const look = (id, o) => Object.assign(M.normalize(id, {}), o || {});
+  // [env, screen, knob, value, overrides, expected reason substring, or "" ]
+  const ROWS = [
+    // RACE joined its siblings at --compact-at 480 (#5153 gap 16), so the phone rows read the same.
+    ...["select", "race", "career", "garage", "popups"].flatMap((id) => [[P, id, "density", "tight", null, "Already tight"],
+      [P, id, "density", "roomy", null, "phone-sized window keeps the compact"], [Mo, id, "density", "roomy", null, ""], [D, id, "density", "tight", null, ""]]),
+    [P, "pause", "music", "hide", null, "Short landscape"], [P, "pause", "build", "hide", null, "Short landscape"],
+    [D, "pause", "music", "hide", null, ""],
+    [P, "select", "names", "hide", null, "flags only"], [P, "select", "names", "hide", { density: "roomy" }, "flags only"], [Mo, "select", "names", "hide", { density: "roomy" }, ""],
+    [P, "race", "cols", "two", null, "two columns"], [P, "race", "cols", "one", null, ""], [P, "race", "cols", "two", { w: 60 }, ""],
+    [P, "career", "layout", "stacked", null, "already stacks"], [P, "career", "layout", "split", null, "phone-sized window keeps the stacked"],
+    [Mo, "career", "layout", "split", null, ""],
+    [D, "career", "layout", "split", null, "already splits"], [D, "garage", "glass", "solid", null, "SHIPPED is already"],
+  ];
+  for (const [e, id, k, v, o, want] of ROWS) {
+    const got = A.why(id, k, v, look(id, o), e);
+    assert.ok(want === "" ? got === "" : got.indexOf(want) >= 0, `${id}.${k}=${v} ${JSON.stringify(o)} -> "${got}"`);
+  }
+  // Knob-level: WIDTH notes (slider stays live) on the phone only; CAREER's dependents switch with COLUMNS.
+  const KNOBS = [
+    ...["datahub", "select", "race", "career", "popups"].map((id) => [P, id, "w", null, false]), [D, "race", "w", null, null],
+    ...["split", "side"].flatMap((k) => [[P, "career", k, null, true], [P, "career", k, { layout: "split" }, true], [Mo, "career", k, { layout: "split" }, null], [D, "career", k, { layout: "stacked" }, true]]),
+  ];
+  for (const [e, id, k, o, off] of KNOBS) {
+    const kn = A.whyKnob(id, k, look(id, o), e);
+    assert.equal(kn ? kn.off : null, off, `${id}.${k} ${JSON.stringify(o)}`);
+  }
+  // Nothing else is ever marked.
+  const MARKED = new Set(["density", "music", "build", "names", "cols", "layout", "glass"]);
+  for (const s of M.SCREENS) for (const n of s.knobs) if (n.kind === "cycle" && !MARKED.has(n.k))
+    for (const [v] of n.values) for (const e of [P, D]) assert.equal(A.why(s.id, n.k, v, look(s.id), e), "", `${s.id}.${n.k}=${v}`);
+});
+
+test("availability: the fold disables moot values with a reason, keeps the stored value, re-reads on resize", () => {
+  const stored = { lookCareer: { side: "swapped", density: "tight" } };
+  const { dom, M, data, sb, winL, observers } = boot({ stored, win: { innerWidth: 844, innerHeight: 390 } });
+  const state = () => ({
+    tight: dom.byId("pm-look-career-density-sel").children.find((o) => o.value === "tight").disabled,
+    densityWhy: dom.byId("pm-look-career-density-why").textContent.split(":")[0],
+    shown: dom.byId("pm-look-career-density-sel").value,
+    described: dom.byId("pm-look-career-density-sel").getAttribute("aria-describedby"),
+    sideOff: dom.byId("pm-look-career-side-sel").disabled, splitOff: dom.byId("pm-look-career-split").disabled,
+    widthOff: dom.byId("pm-look-select-w").disabled, widthWhy: !dom.byId("pm-look-select-w-why").hidden,
+  });
+  // 844x390 with a coarse pointer is a phone-sized window (#5153 gap 11): TIGHT is already the
+  // answer there and ROOMY is a request the box clamps, so both are moot and the line names both
+  // (ROOMY is the first value in the knob); a stored SPLIT is clamped too, so SIDE stays off.
+  const roomy = () => dom.byId("pm-look-career-density-sel").children.find((o) => o.value === "roomy").disabled;
+  assert.deepEqual(state(), { tight: true, densityWhy: "ROOMY", shown: "tight", described: "pm-look-career-density-why",
+    sideOff: true, splitOff: true, widthOff: false, widthWhy: true });
+  assert.equal(roomy(), true, "ROOMY is moot on a phone-sized window");
+  assert.match(dom.byId("pm-look-career-density-why").textContent, /ROOMY: A phone-sized window keeps the compact layout\. TIGHT: Already tight/);
+  M.set("career", "layout", "split");
+  assert.equal(state().sideOff, true, "a stored SPLIT is clamped on the phone: SIDE stays off");
+  Object.assign(sb, { innerWidth: 1600, innerHeight: 1000 });
+  for (const { fn } of winL.get("resize") || []) fn();
+  assert.equal(state().sideOff, false, "a write re-reads the dependents: SPLIT pairs on the desk");
+  assert.equal(roomy(), true, "ROOMY stays moot on the desk, for the old reason: already roomy at 976 own px");
+  assert.match(dom.byId("pm-look-career-density-why").textContent, /^ROOMY: Already roomy/);
+  M.set("career", "layout", "auto");
+  assert.deepEqual(state(), { tight: false, densityWhy: "ROOMY", shown: "tight", described: "pm-look-career-density-why",
+    sideOff: true, splitOff: true, widthOff: false, widthWhy: false });   // stored TIGHT keeps CAREER stacked
+  assert.deepEqual(plain(data.lookCareer), { side: "swapped", density: "tight" }, "nothing rewritten");
+  assert.ok(observers.some((o) => o.target === dom.body && o.opts.attributeFilter.includes("data-density")), "watches SheetShape's body answer");
+});
+
+test("lazy LookAvail: before it loads a peek shows the real screen and no line shows; its eval repaints the folds", () => {
+  const b = boot({ avail: false, win: { innerWidth: 844, innerHeight: 390 } });
+  const lines = () => ["pm-look-career-density-why", "pm-look-select-w-why"].map((id) => b.dom.byId(id).hidden);
+  b.M.peek("select", 0);
+  assert.deepEqual([b.dom.byId("sel-tracks").children.length, lines()], [0, [true, true]]);
+  b.M.endPeek();
+  vm.runInContext(read("js/ui/look-avail.js").replace(/^const\b/gm, "var"), b.sb, { filename: absSrc("js/ui/look-avail.js") });
+  assert.deepEqual(lines(), [false, false], "the forced repaint");
+  b.M.peek("select", 0);
+  assert.ok(b.dom.byId("sel-tracks").children.length >= 6, "stand-ins once loaded");
+});
+
+test("external ScreenLooks.set repaints built cycle controls (layout preset path)", () => {
+  const { dom, M, data } = boot({ win: { innerWidth: 844, innerHeight: 390 } });
+  const sel = () => dom.byId("pm-look-career-density-sel");
+  assert.equal(sel().value, "auto", "starts at shipped default");
+  M.set("career", "density", "roomy");
+  assert.deepEqual(plain(data.lookCareer), { density: "roomy" }, "stored off-default");
+  assert.equal(M.read("career").density, "roomy");
+  assert.equal(sel().value, "roomy", "the row matches storage without a reload");
+});
+
+test("external onChange repaint does not overwrite a focused range slider value", () => {
+  const { dom, M } = boot();
+  const slider = dom.byId("pm-look-popups-w");
+  slider.focus();
+  slider.value = "115";
+  dom.dispatch(slider, { type: "input" });
+  assert.equal(M.read("popups").w, 115);
+  M.set("popups", "w", 80);
+  assert.equal(M.read("popups").w, 80, "storage updates from an external set");
+  assert.equal(slider.value, "115", "paintRows keeps the focused thumb");
+  slider.blur();
+  M.set("popups", "corners", "pill");
+  assert.equal(slider.value, "80", "after blur the row follows storage again");
+});
+
+test("vocabulary (G8): SIDE knobs read LEFT / RIGHT, ROW HEIGHT means row height; stored ids are unchanged", () => {
+  const { M } = boot({ stored: { lookCareer: { side: "swapped" }, lookGarage: { side: "left" } } });
+  const knob = (id, k) => M.SCREENS.find((s) => s.id === id).knobs.find((n) => n.k === k);
+  assert.deepEqual(plain({
+    career: [knob("career", "side").label, knob("career", "side").values, M.read("career").side],
+    garage: [knob("garage", "side").label, knob("garage", "side").values, M.read("garage").side],
+    rows: ["datahub", "popups", "select"].map((id) => knob(id, "rows").label),
+  }), {
+    career: ["CALENDAR SIDE", [["swapped", "LEFT"], ["shipped", "RIGHT"]], "swapped"],
+    garage: ["PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "left"],
+    rows: ["ROW HEIGHT", "ROW HEIGHT", "STRIP ROWS"],
+  });
 });

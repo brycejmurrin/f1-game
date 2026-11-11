@@ -107,7 +107,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 usage: bash tools/env/cloud-agent-install.sh [--help|--check-npm-prefix]
 
 Cursor Cloud dashboard install: best-effort mesa/vulkan/xvfb, then
-install-browsers.sh, then the chrome-devtools / tinyfish MCP clones.
+install-browsers.sh, then the chrome-devtools MCP clone.
 Idempotent. Exit 0 when the snapshot already has usable deps.
 
   --check-npm-prefix  only run the npm prefix=/ cure (nvm PATH + cargo
@@ -123,6 +123,16 @@ fi
 
 # Always cure before any npm use (install-browsers.sh, MCP clones).
 ensure_npm_prefix
+
+# Arm the commit gate (2026-10-28 split: .githooks/pre-commit is the one owner of
+# test:guards for every host). install-browsers.sh installs with --ignore-scripts,
+# so package.json "prepare" never ran on a Cloud VM and core.hooksPath stayed
+# unset (docs/notes/AGENT-GUARDS-2026-10-14.md). Relative, so each worktree runs
+# its own copy; bash-guard.sh refuses a commit while no pre-commit hook would run.
+if [[ -f "$ROOT/.githooks/pre-commit" && "$(git -C "$ROOT" config --get core.hooksPath 2>/dev/null || true)" != ".githooks" ]]; then
+  git -C "$ROOT" config core.hooksPath .githooks && echo "core.hooksPath set to .githooks (the commit gate)" \
+    || echo "WARN: could not set core.hooksPath=.githooks — commits will be refused until npm run prepare" >&2
+fi
 
 need_pkg() {
   dpkg -s "$1" >/dev/null 2>&1
@@ -169,23 +179,11 @@ ensure_mcp_clones() {
     fi
   fi
 
-  if [[ "${APEX_SKIP_TINYFISH_SETUP:-}" != "1" ]]; then
-    if [[ -f "$ROOT/scratch/tinyfish-mcp-server/dist/index.js" ]]; then
-      echo "tinyfish MCP clone already built"
-    else
-      echo "Cloning tinyfish MCP (best-effort; deploy-check needs setup)…"
-      if ! bash "$ROOT/tools/mcp/tinyfish-mcp.sh" setup; then
-        echo "WARN: tinyfish setup failed — run tools/mcp/tinyfish-mcp.sh setup" >&2
-      fi
-    fi
-  fi
-
-  # Dashboard secret / .env override the tracked fallback in tinyfish-mcp.sh.
-  # This script never embeds a key. Custom key: https://agent.tinyfish.ai/home
-  if [[ -z "${TINYFISH_API_KEY:-}" && ! -f "$ROOT/scratch/tinyfish-mcp-server/.env" ]]; then
-    echo "NOTE: TINYFISH_API_KEY unset — tinyfish-mcp.sh uses its tracked fallback. Custom key: https://agent.tinyfish.ai/home"
-  fi
 }
+
+# The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28): build
+# them before anything serves the checkout. Node builtins only; idempotent.
+node "$ROOT/tools/gen/ensure-built.mjs" || echo "WARN: ensure-built failed — run node tools/gen/ensure-built.mjs" >&2
 
 if ! bash "$ROOT/tools/env/install-browsers.sh"; then
   system_browser="$(node "$ROOT/tools/lib/chromium-path.mjs" --path || true)"

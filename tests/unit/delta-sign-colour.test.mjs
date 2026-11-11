@@ -51,8 +51,8 @@ test("the source really does use one sign convention for both deltas", () => {
 
 test("a positive delta is the SLOWER colour on every widget that uses it", () => {
   for (const base of BEHIND_IS_POS)
-    assert.equal(tokenFor(base, "dh-pos"), "--slower",
-      `.${base}.dh-pos must be --slower: dh-pos means "behind" in telemetry-player.js`);
+    assert.equal(tokenFor(base, "dh-pos"), "--slower-ink",
+      `.${base}.dh-pos must be --slower-ink (the red TEXT ink): dh-pos means "behind" in telemetry-player.js`);
 });
 
 test("a negative delta is the FASTER colour on every widget that uses it", () => {

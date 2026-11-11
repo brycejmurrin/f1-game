@@ -84,7 +84,7 @@
      rev-light green/red/blue, the pedals and the LCD, which stays a dark
      screen in either theme, like a real one. --team is the car's colour
      from the dash (the HUD's --accent); until one arrives it is --accent. */
-  :root { --fg: var(--text); --line: var(--plate-line); --team-c: var(--team, var(--accent));
+  :root { --team-c: var(--team, var(--accent));
           --warn: #f6d200; --bad: #ff4d4d; --ok: #5ef08a; --blue: #4c8dff;
           --weave: repeating-linear-gradient(45deg, var(--carbon) 0 2px, color-mix(in oklab, var(--carbon) 78%, #000) 2px 4px); }
   :root[data-menu-accent="team"] { --red: var(--team, #e10600); }
@@ -124,6 +124,37 @@
   #status.bad { color: var(--text); font-weight: 600; }
   #status.bad::before { content: ""; display: inline-block; width: .55em; height: .55em; margin-right: .5em; border-radius: 50%; background: var(--red); vertical-align: .08em; }
   body.linked #pair { display: none; }
+  /* TWO WRAPPERS, ONE COLUMN until the phone lies down: #pair-copy (the
+     heading, the instructions, the camera view) and #pair-act (the controls)
+     dissolve into #pair's column, and `order` keeps the camera view under
+     SCAN as it always was. */
+  #pair-copy, #pair-act { display: contents; }
+  #scan-box, #pair-act > :not(#scan) { order: 1; }
+  /* SHORT LANDSCAPE: SIDE BY SIDE. Reasoned from the rules at 844x390
+     (2026-11-10, no insets, TEXT large): one column was padding 32 + heading
+     ~34 + a 34ch paragraph of ~5 lines ~119 + SCAN ~56 + "or" ~21 + code ~56 +
+     CONNECT ~56 + status 2.8em ~48 + 6 gaps x 8 = ~470 in a 390 box, centred,
+     so the column overflowed BOTH edges and the document grew (417 reported; the
+     overflow under the fold; the half above it was simply unreachable). As two
+     columns the copy is ~34 + 8 + 119 = 161 and the controls ~269, each
+     centred in 358. Scanning hides the instructions so the camera view takes
+     their place under the heading, capped to what the height leaves. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #pair { flex-direction: row; align-items: safe center; gap: 32px; }
+    #pair-copy, #pair-act { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap); min-width: 0; }
+    #pair-copy { flex: 0 1 auto; }
+    #pair-act { flex: none; }
+    #pair-copy:has(#scan-box:not([hidden])) > p { display: none; }
+    #scan-box { width: min(40vw, calc(100dvh - 96px - var(--sat) - var(--sab))); }
+  }
+  /* NOTHING GROWS THE DOCUMENT. html/body are overflow: hidden, which stops a
+     scroll gesture but not the scroll extent: a pairing column taller than the
+     window, or the rim rotated with the phone (its bounding box grows with
+     the angle), still made scrollHeight > innerHeight. Each screen clips its
+     own box; the pairing screen scrolls inside itself (safe-centred, so the
+     top is reachable) if a raised TEXT SIZE still overflows it. */
+  #pair { overflow-y: auto; overscroll-behavior: contain; justify-content: safe center; touch-action: pan-y; }
+  #ctl, #menupad { overflow: hidden; }
 
   /* THE WHEEL — only once linked. Landscape: left grip | face | right grip.
      The rim (an SVG outline) sits behind everything and rotates with the
@@ -154,13 +185,13 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
   .shift small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
   .tap { font-size: 16px; letter-spacing: .1em; display: none; }
-  .shift.on, .tap.on { color: var(--fg); border-color: var(--team-c); box-shadow: inset 0 0 0 2px var(--team-c); }
+  .shift.on, .tap.on { border-color: var(--team-c); box-shadow: inset 0 0 0 2px var(--team-c); }
   .pedal { flex: 1 1 0; border-radius: 26px; border: 2px solid var(--plate-line); background: var(--weave);
            font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
            padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
   .pedal::before { content: ""; position: absolute; inset: 14px; border-radius: 18px; border: 1px dashed var(--card-line); }
   .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; transition: height 80ms; }
-  .pedal.on { color: var(--fg); }
+  .pedal.on { color: var(--text); }
   /* --travel: the pedal's live level (phone-pad.js hold): full on the touch, easing as the thumb slides up. */
   #gas.on { border-color: var(--ok); }   #gas.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(94,240,138,.16); }
   #brake.on { border-color: var(--bad); } #brake.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(255,77,77,.16); }
@@ -252,7 +283,7 @@
   #leds span:nth-child(-n+5).on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
   #leds span:nth-child(n+6):nth-child(-n+10).on { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
   #leds span:nth-child(n+11).on { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
-  #screen.redline ~ #leds span, #screen.redline + #leds span { animation: strobe .12s steps(2) infinite; }
+  #screen.redline ~ #leds span { animation: strobe .12s steps(2) infinite; }
   @keyframes strobe { to { opacity: .25; } }
   #screen { flex: 1 1 0; min-height: 0; border-radius: 12px; border: 3px solid var(--card-line); background: #05060a;
             box-shadow: inset 0 0 24px rgba(0,0,0,.9), 0 0 0 1px #000; padding: 6px 10px;
@@ -295,7 +326,7 @@
      grips, the phone held like a rim — so portrait gets no squeezed layout,
      it gets a card that says which way to turn. The tilt maths follows the
      screen angle already, so the moment the phone turns the wheel is there. */
-  #rotate { display: none; position: absolute; inset: 0; z-index: 5; background: var(--bg); color: var(--fg);
+  #rotate { display: none; position: absolute; inset: 0; z-index: 5; background: var(--bg);
             flex-direction: column; justify-content: center; align-items: center; gap: 14px; text-align: center;
             padding: 24px; font-weight: 700; letter-spacing: .06em; }
   #rotate svg { width: 72px; height: 72px; color: var(--team-c); animation: turn 1.4s ease-in-out infinite alternate; }
@@ -334,14 +365,18 @@
 </head>
 <body>
 <section id="pair" class="grain">
+  <div id="pair-copy">
   <h1>APEX 26 <span>·</span> PHONE CONTROLLER</h1>
   <p>Scan the QR code the game shows under Settings › CONTROLS › PHONE AS CONTROLLER, or type its room code and tap CONNECT. Hold the phone sideways like a wheel and tilt it to steer.</p>
-  <button id="scan" class="bigbtn alt" type="button">SCAN QR CODE</button>
   <div id="scan-box" hidden><video id="scan-video" playsinline muted aria-label="Camera view for scanning the game's QR code"></video><i aria-hidden="true"></i></div>
+  </div>
+  <div id="pair-act">
+  <button id="scan" class="bigbtn alt" type="button">SCAN QR CODE</button>
   <div id="pair-or" aria-hidden="true">or type the code</div>
   <input id="code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" aria-label="Room code" placeholder="ABC123">
   <button id="connect" class="bigbtn" type="button">CONNECT</button>
   <p id="status" role="status"></p>
+  </div>
 </section>
 <div id="rotate" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>TURN THE PHONE SIDEWAYS<small>The wheel works in landscape only.</small></div>
 <section id="menupad" class="grain" aria-label="Menu pad">
@@ -431,10 +466,14 @@
 <script defer crossorigin="anonymous" src="js/net/nostr.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/net/rendezvous.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/net/sdp.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/net/ice.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/net/transport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/net/handshake.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/net/scan.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/pedal-travel.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/phone-pad-codec.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/phone-pad-page.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad.js?v=dev"></script>
 <!-- /@gen-shell:controller -->
 <script>

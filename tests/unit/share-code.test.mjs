@@ -577,3 +577,60 @@ test("UNDO of a setup code on an empty store leaves the key absent, not pinned t
   assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
   assert.equal(store.getStored("setup.mercedes"), undefined, "absent again, so the shipped default keeps following releases");
 });
+
+function qrCapacity() {
+  const ctx = vm.createContext({ Uint8Array, Array, Math, Object, String, Number, TextEncoder, Int8Array, Int32Array, Uint16Array, Uint32Array });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/qr.js"), "utf8"), ctx, { filename: absSrc("js/net/qr.js") });
+  return vm.runInContext("NetQr.capacity()", ctx);
+}
+
+test("card lap codes (APXC1) round-trip in a short link that fits the QR", () => {
+  const { ShareCode, location } = harness({ tracks: ["monza", "mont_tremblant"] });
+  location.origin = "https://brycejmurrin.github.io"; location.pathname = "/f1-game/";
+  const encoded = ShareCode.encode("lap", { track: "mont_tremblant", day: "2026-10-27", time: 81.3456, extra: "drop" });
+  assert.equal(encoded.ok, true);
+  assert.equal(encoded.code, "APXC1.l.mont_tremblant~20261027~81346");
+  assert.ok(encoded.url.length < 120, encoded.url);
+  assert.ok(encoded.url.length <= qrCapacity(), "the link fits NetQr.capacity()");
+  const decoded = ShareCode.decode(encoded.url);
+  assert.deepEqual(j(decoded), { ok: true, v: 1, kind: "lap", track: "mont_tremblant", day: "2026-10-27", time: 81.346 });
+  assert.deepEqual(j(ShareCode.decode(encoded.code)), j(decoded));
+  assert.match(ShareCode.messageFor(decoded), /^Lap challenge — MONT_TREMBLANT · BEAT 1:21\.346\.$/);
+  const bare = ShareCode.encode("lap", { track: "monza" });
+  assert.equal(bare.code, "APXC1.l.monza~-~-");
+  assert.deepEqual(j(ShareCode.decode(bare.code)), { ok: true, v: 1, kind: "lap", track: "monza" });
+  assert.equal(ShareCode.decode("APXC1.l.atlantis~-~-").reason, "unknown-track");
+  for (const bad of ["APXC1.l.monza~2026~1", "APXC1.l.monza", "APXC1.l.MONZA~-~-", "APXD1.l.monza~-~-"]) {
+    assert.equal(ShareCode.decode(bad).ok, false, bad);
+  }
+  assert.equal(ShareCode.encode("lap", { track: "atlantis" }).ok, false);
+});
+
+test("consuming a lap link stages only: never startRace or gridUp, and a past day never selects the Daily", async () => {
+  for (const [day, expectDaily] of [["2026-10-20", false], ["2026-10-27", true]]) {
+    const { ShareCode, store, location } = harness();
+    const encoded = ShareCode.encode("lap", { track: "spa", day, time: 101.5 });
+    location.hash = "#share=" + encoded.code;
+    location.href = "https://example.test/f1-game/" + location.hash;
+    const calls = [];
+    const result = await ShareCode.consumeHash({
+      apply: (decoded) => ShareCode.apply(decoded, {
+        store, today: "2026-10-27",
+        startRace: () => calls.push("startRace"), gridUp: () => calls.push("gridUp"),
+        openDaily: () => calls.push("daily.select"), openTrack: (d) => calls.push("track:" + d.track),
+      }),
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(calls, [expectDaily ? "daily.select" : "track:spa"], day);
+    assert.equal(location.hash, "", "the fragment is consumed");
+  }
+});
+
+test("title-flow's lap staging hook never starts a race or re-selects a past Daily", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
+  const hook = src.slice(src.indexOf("openTrack: (decoded) =>"), src.indexOf("}),", src.indexOf("openTrack: (decoded) =>")));
+  assert.ok(hook.length > 40, "openTrack hook present");
+  assert.doesNotMatch(hook, /startRace|gridUp|daily\.select/);
+  assert.match(hook, /G\.daily\.stop\(\)/);
+  assert.match(src, /today:\s*DailyChallenge\.dayKey\(\)/);
+});

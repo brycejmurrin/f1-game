@@ -63,7 +63,10 @@ const TrackBuildClient = (function () {
   // js/ui/setting-row.js, while readyState already reads "interactive".
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => {
+      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
   }
   // ScriptLoader.url: the deploy's content-hash key for a lazy file (the same
   // URL the page and the SW precache use), else `?v=<build>` (R3-PHONE-8).
@@ -162,7 +165,13 @@ const TrackBuildClient = (function () {
     worker.onmessageerror = () => failed("unreadable worker response");
     // `base`: the PAGE's URL. The worker resolves relative fetches (assets.js's
     // "assets/pack/…") against it, not against js/track/build-worker.js.
-    try { worker.postMessage({ type: "init", files: pageUrls(files), base: location.href }); }
+    // Start the worker's script fetches on this thread while worker.js itself
+    // is still downloading. The worker awaits the same URLs, so the two fetches
+    // join and importScripts reads the cache instead of one round trip per file.
+    const hrefs = pageUrls(files);
+    try { if (typeof ScriptLoader !== "undefined" && ScriptLoader.warm) ScriptLoader.warm(hrefs); }
+    catch (_) { /* the worker still warms its own list */ }
+    try { worker.postMessage({ type: "init", files: hrefs, base: location.href }); }
     catch (e) { failed("init " + e.message); }
     return ready;
   }
@@ -354,7 +363,7 @@ const TrackBuildClient = (function () {
           fallback.push(m[base]);
           // The empty chunk handle is replaced, so the adopted track cannot
           // free it later. Remove it from our ledger before releasing it.
-          if (gfx.freeChunkedMesh) { real[tok.__rec] = null; gfx.freeChunkedMesh(h); }
+          if (gfx.freeChunkedMesh) { real[tok.__rec] = null; gfx.freeChunkedMesh(h); if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership(); }
         }
         m[k] = null;
       }
@@ -391,7 +400,7 @@ const TrackBuildClient = (function () {
         if (!h) continue;
         try {
           if (r.op === "batch" || (r.op !== "mesh" && r.op !== "chunked")) { if (gfx.freeInstancedBatch) gfx.freeInstancedBatch(h); }
-          else if (r.op === "chunked" && gfx.freeChunkedMesh) gfx.freeChunkedMesh(h);
+          else if (r.op === "chunked" && gfx.freeChunkedMesh) { gfx.freeChunkedMesh(h); if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership(); }
           else gfx.freeMesh(h);
         } catch (_) { /* the replay's error is the one to surface */ }
       }
@@ -448,6 +457,8 @@ const TrackBuildClient = (function () {
     return !!Tracks.adoptPreviewCenterline(def, msg.track);
   }
 
-  return { enabled, set, spawn, idleWarm, build, previewMap, replay, busy, KEY, defaultOn };
+  // KEY / defaultOn stay local (enabled() reads storage + cores); tests pin
+  // enabled/set/spawn/idleWarm and hardcode the localStorage string.
+  return { enabled, set, spawn, idleWarm, build, previewMap, replay, busy };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;

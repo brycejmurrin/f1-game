@@ -112,10 +112,10 @@ const HudLayout = (function () {
   const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
   // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
   // where the wheel's screen is (the chase row's own centre, one step down),
-  // SPEED moves right of it (the owner asked for the chip on the visor,
-  // 2026-10-05; the LCD's digits are a few pixels tall on a phone).
+  // SPEED sits right of it and one step up, clear of ENERGY and AERO (the owner asked for the chip on the visor,
+  // 2026-10-05; the opaque pill covers the LCD's speed digits, so SPEED stays).
   const HELMET_TOUCH = { energy: { x: 0, y: -6, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
-    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: 0, s: 100 } };
+    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: -5, s: 100 } };
   const SHIPPED = Object.freeze({
     standard: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
     minimal: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
@@ -220,7 +220,14 @@ const HudLayout = (function () {
     return out;
   }
   /** The STORED differences per style and camera set. */
-  function stored() { return migrate(store ? store.get(KEY, null) : null); }
+  // ARRANGE's in-gesture layout (#5031): painted by apply(), saved once by commit() when the finger lifts.
+  // A write by anyone else (a settings import) since the draft began wins over it.
+  let draft = null, draftBase = null;
+  function stored() {
+    const raw = store ? store.get(KEY, null) : null;
+    if (draft && raw !== draftBase) draft = null;
+    return migrate(draft || raw);
+  }
   /** The layout a style + set paints: stored, else shipped, for every element. Pure. */
   function effective(st, sn, pn) {
     const out = {};
@@ -232,16 +239,25 @@ const HudLayout = (function () {
     const p = isProf(pn) ? pn : shownProf(), st = stored();
     return Object.fromEntries(SETS.map((sn) => [sn, effective(st, sn, p)]));
   }
-  function save(st) {
-    if (!store) return;
+  function save(st, live) {
     const out = { v: 4 };
     let any = false;
     for (const pn of PROFILES) {
       const p = normProf(st[pn], pn);
       if (!emptyProf(p)) { out[pn] = p; any = true; }
     }
-    store.set(KEY, any ? out : null);
+    draft = live ? out : null;
+    if (live) draftBase = store ? store.get(KEY, null) : null;
+    if (store && !live) store.set(KEY, any ? out : null);
   }
+  /** Save the live edits set(…, live) painted; false when there were none. */
+  function commit() {
+    if (!draft) return false;
+    save(stored());
+    return true;
+  }
+  // Leaving or backgrounding the page mid-gesture keeps what is on screen.
+  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", commit);
   const camSet = (modeId) => LAYOUT_SET(modeId);
   const has = (c) => !!(doc && doc.body && doc.body.classList && doc.body.classList.contains(c));
   /** Is the race HUD up? (#hud carries `hidden` outside a race — js/game.js.) */
@@ -789,7 +805,7 @@ const HudLayout = (function () {
         && mapBox.top < r.bottom - 0.5 && mapBox.bottom > r.top + 0.5;
     });
     const blocks = [];
-    for (const el of doc.querySelectorAll(".touchbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
+    for (const el of doc.querySelectorAll(".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
       if (autoMap && el === mapEl) continue;
       const r = box(el); if (r) blocks.push(r);
     }
@@ -844,9 +860,10 @@ const HudLayout = (function () {
       // fixed obstacles, retaining their saved offset and dimensions.
       if (id === "map" && !autoMap) continue;
       if (id === "announce" && placedRadio) { blocks.push(r); continue; }
-      // SPEED moves only for the desktop visor, where its shipped vertical
-      // offset can meet the enlarged gearbox. Everywhere else it has priority.
-      if (id === "speed" && !(has("desktop") && shown() === "helmet")) { blocks.push(r); continue; }
+      // SPEED moves only on the visor (HELMET), where its shipped offset can meet the
+      // enlarged gearbox (desktop) or, on touch, OT / AERO once TEXT LARGER or a big
+      // BUTTON SIZE widens the row (UI-HUNT-2-HUD). Everywhere else it has priority.
+      if (id === "speed" && shown() !== "helmet") { blocks.push(r); continue; }
       let best = findSlot(r);
       // A narrow dock lane can wrap a long call beyond the available height.
       // Let placement try the card's normal width before accepting a collision.
@@ -854,6 +871,22 @@ const HudLayout = (function () {
         el.style.setProperty("--announce-lane-w", Math.max(0, bounds.right - bounds.left) + "px");
         r = box(el);
         best = r && findSlot(r);
+        if (!best && r) {
+          // Wrapping can fit a call between enlarged controls when its normal
+          // width cannot. Derive a few real gaps, not repeated global shrink steps.
+          const intervals = blocks.filter(b => b.top - EDGE < r.bottom && b.bottom + EDGE > r.top)
+            .map(b => [Math.max(bounds.left, b.left - EDGE), Math.min(bounds.right, b.right + EDGE)])
+            .filter(([left, right]) => right > left).sort((a, b) => a[0] - b[0]);
+          const widths = []; let cursor = bounds.left;
+          for (const [left, right] of intervals) { if (left - cursor >= 96) widths.push(left - cursor); cursor = Math.max(cursor, right); }
+          if (bounds.right - cursor >= 96) widths.push(bounds.right - cursor);
+          for (const width of [...new Set(widths)].sort((a, b) => b - a)) {
+            el.style.setProperty("--announce-lane-w", width + "px");
+            const wrapped = box(el), slot = wrapped && findSlot(wrapped);
+            if (slot) { r = wrapped; best = slot; break; }
+          }
+        }
+        if (!best) { el.setAttribute("data-lane-collapsed", ""); continue; }
       }
       if (!best && id === "inputs") { el.setAttribute("data-col-drop", ""); continue; }
       if (!best && id === "damage") {
@@ -936,8 +969,9 @@ const HudLayout = (function () {
     return v === "off" || v === "on" ? v : "auto";
   }
 
-  /** Write one element's values into set `setName` of style `pn`; returns the stored {x, y, s}. */
-  function set(id, v, setName, pn) {
+  /** Write one element's values into set `setName` of style `pn`; returns the stored {x, y, s}.
+   *  `live`: paint now, keep it out of storage until commit() (a drag frame). */
+  function set(id, v, setName, pn, live) {
     if (IDS.indexOf(id) < 0) return null;
     const sn = setArg(setName), p = profArg(pn);
     const st = stored();
@@ -946,7 +980,7 @@ const HudLayout = (function () {
         || !["x", "y", "s"].some(k => Number.isFinite(num(v[k], k, NaN)))) return previous;
     const e = normEl(Object.assign({}, previous, v || {}), previous);
     st[p][sn][id] = e;
-    save(st);
+    save(st, live);
     apply();
     // A place on MIRROR (data-hl-user) cures the soft hide — same contract as
     // the touch-cockpit chips / SPEED wheel-LCD rule.
@@ -1035,7 +1069,7 @@ const HudLayout = (function () {
   const BOTTOM = ["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb"];
   const CHIPS = ["energy", "ot", "aero"];
   const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
-  /** body[data-*] presence (mode-switch sets data-helmet-cam / data-wheel-lcd). */
+  /** body[data-*] presence (mode-switch sets data-helmet-cam). */
   const bodyAttr = (n) => !!(doc && doc.body && doc.body.hasAttribute && doc.body.hasAttribute(n));
   // Data Hub WATCH / HIGHLIGHTS (css/hud.css). Hard: a placed chip does not
   // bring the driving HUD back. "tower" here is the POS/LAP band (.hud-top),
@@ -1074,9 +1108,6 @@ const HudLayout = (function () {
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
     [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
     [["ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the OT / AERO buttons carry it — move it to show it", true],
-    // css/track-detail.css: body[data-helmet-cam][data-wheel-lcd] soft-hides SPEED until placed.
-    [["speed"], (h, a) => !h("desktop") && !a && bodyAttr("data-helmet-cam") && bodyAttr("data-wheel-lcd"),
-      "touch helmet: the wheel LCD shows it — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],
@@ -1158,7 +1189,6 @@ const HudLayout = (function () {
     return live ? { reason: "hidden right now", soft: true } : null;
   }
 
-  // ---- the DISPLAY › HUD fold ------------------------------------------------
   function peek(on, holdMs) {
     if (typeof ScreenLooks === "undefined") return;
     if (on) ScreenLooks.peek("hud", holdMs || 0);
@@ -1343,11 +1373,14 @@ const HudLayout = (function () {
     else init();
   }
 
+  // Public surface: PACK_AIR + packPhoneRects for the unit packer; KEY / LIM /
+  // PACK_SCALE_MIN / PACK_FIXED / PACK_MOVE stay module-local (no js/ or test
+  // callers). Survey lockstep still parses the LIM const from source.
   return {
-    KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
-    PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
+    ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
+    PACK_AIR,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
-    get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
+    get, set, commit, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,
   };

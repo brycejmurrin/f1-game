@@ -11,6 +11,7 @@
  *
  *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR] [--junit-in DIR] [--started-in DIR]
  *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT from env
+ *     (DRAFT=true: a dropped spec warns instead of redding — the draft plan is the 5-min budget, 2026-11-03)
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -27,9 +28,20 @@ export function shardEvidence(junitIn, startedIn) {
   const names = (root, prefix) => {
     try { return fs.readdirSync(root).filter((d) => d.startsWith(prefix)).map((d) => d.slice(prefix.length)); } catch { return []; }
   };
+  // ONE matched artifact is extracted FLAT into the root (no `<artifact-name>/` folder): a single-shard draft leaves
+  // started-in/marker.txt (its content is the shard name) and junit-in/test-results-*/junit.xml. Read that layout as
+  // the one shard, or every single-shard plan reads "no shard left a run-step marker" (#5282, run 42767850104).
+  let started = names(startedIn, STARTED_PREFIX);
+  let flatShard = "";
+  if (started.length === 0) {
+    try { flatShard = fs.readFileSync(path.join(startedIn, "marker.txt"), "utf8").trim(); } catch { /* no flat marker */ }
+    if (flatShard) started = [flatShard];
+  }
+  const junitDirs = names(junitIn, JUNIT_PREFIX).map((shard) => [shard, path.join(junitIn, JUNIT_PREFIX + shard)]);
+  if (junitDirs.length === 0 && flatShard) junitDirs.push([flatShard, junitIn]);
   const junit = [];
-  for (const shard of names(junitIn, JUNIT_PREFIX)) {
-    const stack = [path.join(junitIn, JUNIT_PREFIX + shard)];
+  for (const [shard, dir] of junitDirs) {
+    const stack = [dir];
     let cases = 0;
     while (stack.length) {
       const d = stack.pop();
@@ -43,7 +55,7 @@ export function shardEvidence(junitIn, startedIn) {
     }
     if (cases > 0) junit.push(shard);
   }
-  return { started: names(startedIn, STARTED_PREFIX), junit };
+  return { started, junit };
 }
 
 /**
@@ -76,6 +88,8 @@ function judgeSpecs(input) {
   const select = String(input.select || "");
   const selected = String(input.selected || "");
   const dropped = String(input.dropped ?? "0");
+  // "" / "?" / "abc" is an unreadable count (the select job's output went missing), not "dropped N": still fail closed, but say so.
+  const droppedKnown = /^\d+$/.test(dropped);
   const called = String(input.called ?? "false");
   const draft = String(input.draft ?? "false");
   const failedSpecs = Array.isArray(input.failedSpecs) ? [...input.failedSpecs] : [];
@@ -93,19 +107,28 @@ function judgeSpecs(input) {
   let reason = "";
 
   if (selected === "success") {
+    // A GREEN MATRIX IS A CLAIM, THE JUNIT IS THE EVIDENCE (#5241 G5). `success` was taken at its word, so a shard
+    // that reached its run step and executed nothing read as "selected specs passed". When this job was handed the
+    // shard evidence (main() always is; pure callers may omit it), every started shard must have left a junit with
+    // at least one testcase. Checked on green run 42740553927: 29 markers, 29 junits. A lost upload (the junit step
+    // is continue-on-error telemetry) reds here too: missing execution evidence needs a re-run (docs/VERIFICATION.md §5).
+    const ev = input.evidence;
+    if (ev) {
+      if (ev.downloadFailed) {
+        return { ok: false, reason: "selected specs success, but the shard junit could not be read (artifact download failed) — a green without execution evidence is not a pass; re-run this job", infraRetry: false, failedSpecs };
+      }
+      const empty = ev.started.filter((n) => !ev.junit.includes(n));
+      if (empty.length > 0) {
+        return { ok: false, reason: `selected specs success, but shard(s) ${empty.join(", ")} reached the run step and left no junit with a testcase — they ran zero tests (or lost the upload); re-run the failed evidence, never read it as a pass`, infraRetry: false, failedSpecs };
+      }
+      if (ev.started.length === 0) {
+        return { ok: false, reason: "selected specs success, but no shard left a run-step marker — nothing shows a selected spec ran", infraRetry: false, failedSpecs };
+      }
+    }
     reason = "selected specs passed";
   } else if (selected === "skipped") {
-    // Draft CI deliberately defers every browser leg, including budget spills.
-    // Report that deferral, rather than judging an unexecuted ready-tier plan.
-    if (draft === "true") {
-      return {
-        ok: true,
-        reason: "draft PR: selected legs skipped (ready_for_review runs them)",
-        ...(dropped !== "0" ? { warn: `draft plan dropped ${dropped} routed spec(s); resolve the budget before ready-tier validation` } : {}),
-        infraRetry,
-        failedSpecs,
-      };
-    }
+    // A draft runs the selected legs too since 2026-11-03 (one 5-min shard), so
+    // a skipped matrix means the same thing on every PR: the plan had no jobs.
     reason = "the plan had no jobs";
   } else if (selected === "cancelled" || selected === "failure") {
     if (failedSpecs.length > 0) {
@@ -151,18 +174,30 @@ function judgeSpecs(input) {
   }
 
   if (dropped !== "0") {
+    // A DRAFT WARNS (2026-11-03): its plan is the 5-min budget, so a routed spec
+    // it cannot afford is expected there; the ready run (10 min) or
+    // remote-group.mjs runs it, and only those verdicts red on it.
+    if (draft === "true") {
+      return {
+        ok: true,
+        reason,
+        warn: !droppedKnown ? `the draft plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}); check the select job's outputs` : `the draft plan (5-min budget) dropped ${dropped} routed spec(s); the ready run's 10-min plan or tools/ci/remote-group.mjs runs them, and those verdicts red on it`,
+        infraRetry,
+        failedSpecs,
+      };
+    }
     if (called === "true") {
       return {
         ok: true,
         reason,
-        warn: `the train's plan dropped ${dropped} routed spec(s) as unaffordable; the fixed gates and the PRs that carried them are the answer here`,
+        warn: !droppedKnown ? `the train's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}); the fixed gates and the PRs that carried them are the answer here` : `the train's plan dropped ${dropped} routed spec(s) as unaffordable; the fixed gates and the PRs that carried them are the answer here`,
         infraRetry,
         failedSpecs,
       };
     }
     return {
       ok: false,
-      reason: `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log) — they ran nowhere. Run their groups with tools/ci/remote-group.mjs, or split the change.`,
+      reason: !droppedKnown ? `the plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}, not a number) — failing closed; check the select job's 'dropped' output` : `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log) — they ran nowhere. Run their groups with tools/ci/remote-group.mjs, or split the change.`,
       infraRetry: false,
       failedSpecs,
     };

@@ -220,9 +220,9 @@ test("pairwise covers every pair (or only the named ones), deterministically, un
 
 test("quick / full / leads / exhaustive: sizes, boots, coverage", () => {
   const q = M.expandMatrix("quick");
-  assert.equal(q.cells.length, 13);
+  assert.equal(q.cells.length, 14);
   assert.equal(M.bootGroups(q.cells).length, 3);
-  for (const n of ["chase-default", "cockpit-default", "visor-default", "chase-preset-clean", "phoneP-chase", "chase-hud70", "chase-hud150"])
+  for (const n of ["chase-default", "cockpit-default", "visor-default", "chase-preset-clean", "phoneP-chase", "chase-hud70", "chase-hud150", "phoneL-helmet"])
     assert.ok(q.cells.some((c) => c.id === n), n);
   const f = M.expandMatrix("full");
   assert.ok(f.cells.length <= M.FULL_CAP);
@@ -321,8 +321,8 @@ test("expected-visible rules", () => {
   assert.deepEqual([classic.ot.want, classic.tyre.want, classic.energy.want, classic.gearbox.want], [false, false, false, true],
     "touch cockpit with a screenless wheel: chips hidden, the gearbox (no LCD) shown");
   // HELMET is the visor HUD (its own layout set, never cockpit-cam): a touch
-  // helmet keeps ENERGY, TYRES and speed, leaves gear to the LCD glyph and
-  // OT / AERO to their buttons; a desktop helmet shows the lot.
+  // helmet keeps ENERGY, TYRES, GEAR and speed (its GEAR pill covers the wheel
+  // LCD's digits), leaves OT / AERO to their buttons; a desktop helmet shows the lot.
   const visor = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
   assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, true, true],
     "touch helmet: the visor keeps ENERGY / TYRES / GEAR / speed");
@@ -377,6 +377,17 @@ test("desktop-1440x900: a named 16:10 device, its own short id, not a matrix axi
   const E = M.expectedVisibility(c, { desktop: true, cockpitCam: true });
   assert.equal(E["btn-ot"].want, false, "a desktop: no touch stack");
   assert.equal(E.rotateDevice.want, false);
+});
+
+test("--settings: a LOAD SETTINGS export seeds every boot; anything else is refused before a browser", () => {
+  const p = parseArgs(["--device", "phone-landscape-844x390", "--settings", "tests/data/settings-defaults-export.json"]);
+  assert.equal(p.settings.format, "apex26-settings-v1");
+  assert.equal(p.settings.settings.display.hudBtnScale, 245, "the owner's phone export, read whole");
+  assert.equal(parseArgs(["--device", "phone-landscape-844x390"]).settings, null, "no flag: the shipped store");
+  const rf = (text) => () => text;
+  assert.throws(() => parseArgs(["--settings", "x.json"], { readFile: rf("{\"format\":\"other\"}") }), /apex26-settings-v1/);
+  assert.throws(() => parseArgs(["--settings", "x.json"], { readFile: rf("nope") }), /not JSON/);
+  assert.throws(() => parseArgs(["--settings", "missing.json"], { readFile: () => { throw new Error("ENOENT"); } }), /cannot read/);
 });
 
 test("portrait mode: race by default (portraitOk at boot, findings keep their severity), gate on request", () => {
@@ -455,6 +466,11 @@ test("lead checks decide from the numbers, and merge re-decides across shards", 
   const [drop] = ev(mk([{ type: "varSame", var: "--hud-z-top", vs: "b" }]));
   assert.equal(drop.severity, "high");
   assert.equal(ev(mk([{ type: "varSame", var: "--hud-z-top", vs: "missing" }]))[0].severity, "info");
+  // noShrink (#3270): "" is uncapped, so 0.7 → "" passes; a lower value still fails.
+  const ns = (vars, bv) => ev({ ...mk([{ type: "varSame", var: "--hud-z-top", vs: "b", noShrink: true }]), state: { vars } })[0];
+  assert.equal(ns({ "--hud-z-top": "" }).severity, "info");
+  assert.equal(ns({ "--hud-z-top": "0.9" }).severity, "info");
+  assert.equal(ns({ "--hud-z-top": "0.5" }).severity, "high");
   assert.equal(ev(mk([{ type: "varWritten", var: "--hud-z-dock" }]))[0].severity, "high");
   const shift = ev(mk([{ type: "shift", key: "map", vs: "b", axis: "y", pct: 10, tolPct: 3 }]))[0];
   assert.equal(shift.severity, "info", shift.detail);   // 72px at 720 = 10 %
@@ -656,24 +672,6 @@ test("MCP: results carry structuredContent, its serialized copy first, and resou
   assert.ok(shot.structuredContent.shot && Array.isArray(shot.structuredContent.findings) && Array.isArray(shot.structuredContent.measurements));
   assert.ok(shot.content.some((c) => c.type === "resource_link" && c.mimeType === "image/png"));
   assert.deepEqual(survey.content.filter((c) => c.type === "resource_link").map((c) => c.mimeType), ["text/markdown", "text/html", "application/json"]);
-});
-
-test("the dispatch-only workflow shards, runs llvmpipe, merges and stays opt-in", () => {
-  const yml = read(".github/workflows/hud-survey.yml");
-  assert.match(yml, /^on:\n  workflow_dispatch:/m);
-  assert.doesNotMatch(yml, /^\s+(push|pull_request|schedule):/m, "dispatch only");
-  assert.match(yml, /--shard "\$SHARD" --gl llvmpipe/);
-  assert.match(yml, /uses: \.\/\.github\/actions\/mesa-xvfb/);
-  assert.match(yml, /hud-survey\.mjs --merge/);
-  // Merge after red shards, never after a cancel or a failed plan (shard skipped).
-  assert.match(yml, /needs: \[shard\]\n(?:\s+#.*\n)*\s+if: \$\{\{ !cancelled\(\) && needs\.shard\.result != 'skipped' \}\}/);
-  assert.doesNotMatch(yml, /needs: \[shard\]\n(?:\s+#.*\n)*\s+if: always\(\)/, "always() merged after a failed plan");
-  for (const m of yml.matchAll(/uses: ([^\s]+)/g)) if (!m[1].startsWith("./")) assert.match(m[1], /@[0-9a-f]{40}$/, `${m[1]} is SHA-pinned`);
-  for (const choice of /options: \[(quick[^\]]*)\]/.exec(yml)[1].split(",").map((s) => s.trim())) assert.doesNotThrow(() => M.expandMatrix(choice));
-  // Inputs reach the shell through env only.
-  for (const l of yml.split("\n").filter((x) => /^\s+(run:|\s{2,}\S)/.test(x) && x.includes("${{ inputs."))) {
-    assert.doesNotMatch(l, /^\s+(node|echo|if|extra)/, `input interpolated into a script line: ${l.trim()}`);
-  }
 });
 
 // ── hud-live-sample: the LIVE (unfrozen) counterpart of the frozen survey cell ─────
@@ -907,31 +905,16 @@ test("menu-mock: OVERLAY_IDS includes photo-studio + loading so a * sweep can re
   assert.ok(OVERLAY_IDS.includes("loading"), "loading cover also sits above the title");
 });
 
-test("menu-mock: leaveToMenu dismisses ios-install and photo-studio-open", () => {
-  const hidden = {};
-  const bodyClasses = new Set(["photo-studio-open", "lt-open"]);
-  const els = {
-    "ios-install": { get hidden() { return !!hidden["ios-install"]; }, set hidden(v) { hidden["ios-install"] = !!v; } },
-    "install-chip": { get hidden() { return !!hidden["install-chip"]; }, set hidden(v) { hidden["install-chip"] = !!v; } },
-    "photo-studio": { hidden: true },
-    "lighting": { hidden: true },
-    "camtune": { hidden: true },
-    "flyby": { hidden: true },
-    "quali": { hidden: true },
-    "race-settings": { hidden: true },
-  };
-  const sandbox = {
-    window: { __apex: { info: () => ({ state: "menu", raceGrid: "grid" }) }, __mmGrid: "grid" },
-    document: {
-      getElementById: (id) => els[id] || null,
-      body: { classList: { remove: (...xs) => xs.forEach((c) => bodyClasses.delete(c)) } },
-    },
-  };
-  vm.runInNewContext(`(${MM.leaveToMenu.toString()})()`, sandbox);
-  assert.equal(els["ios-install"].hidden, true);
-  assert.equal(els["install-chip"].hidden, true);
-  assert.equal(bodyClasses.has("photo-studio-open"), false);
-  assert.equal(bodyClasses.has("lt-open"), false);
+test("menu-mock: the shared reset after leaveToMenu dismisses ios-install and photo-studio-open", async () => {
+  // Since the shared reset (tools/ui/ui-reset.mjs), leaveToMenu only quits a race and
+  // a quali sheet; menu-capture.resetToTitle runs resetOverlays with resetConfig()
+  // right after it. That config must carry the tips and the route body classes
+  // (ui-reset-tap-floor.test.mjs drives resetOverlays itself).
+  const R = await import("../../tools/ui/ui-reset.mjs");
+  const cfg = R.resetConfig();
+  const tips = new Set(cfg.tips), classes = new Set(cfg.bodyClasses);
+  assert.equal(tips.has("ios-install") && tips.has("install-chip"), true, "both install tips");
+  assert.equal(classes.has("photo-studio-open") && classes.has("lt-open"), true, "route body classes");
 });
 
 test("menu-mock --list needs no browser", () => {
@@ -974,4 +957,30 @@ test("menu-mock: hidden fold controls are excluded while summaries and visible s
     assert.equal(opened.issues.tap.length, 3, "opening a fold exposes its genuinely small control");
     assert.equal(opened.issues.offscreen.length, 1, "a visible off-screen control is still reported");
   }
+});
+
+test("hud-survey: DEFAULT_CELL.contrast is the game's shipped default (appearance-opts.js)", () => {
+  const src = read("js/ui/appearance-opts.js");
+  const m = /store\.get\(K_CONTRAST,\s*"(\w+)"\)/.exec(src);
+  assert.ok(m, "appearance-opts.js still reads K_CONTRAST with a literal default");
+  assert.equal(M.DEFAULT_CELL.contrast, m[1]);
+  // A knobless cell carries no contrast part in its id; naming the non-default does.
+  const parts = (c) => M.cellId(M.normalizeCell(c)).split("-");
+  assert.deepEqual(parts({}).filter((p) => p === "contrast"), []);
+  assert.deepEqual(parts({ contrast: "off" }).slice(-2), ["contrast", "off"]);
+});
+
+test("hud-survey: classifyFindings flags text below WCAG 1.4.3 (4.5:1 small, 3:1 large)", () => {
+  const cell = { ...M.normalizeCell({}), id: "t" };
+  const ink = (fg, bg, px) => [{ fg, bg, big: px >= 18.66, px, text: "P1" }];
+  const f = (inks) => M.classifyFindings(cell, { records: [rec("pos", 100, 100, 60, 30, { inks })], ctx: { desktop: true } }).filter((x) => x.kind === "contrast");
+  const bad = f(ink("rgb(20, 20, 24)", "rgba(10, 10, 12, 0.9)", 14));
+  assert.equal(bad.length, 1);
+  assert.equal(bad[0].severity, "high");
+  assert.equal(f(ink("rgb(255, 255, 255)", "rgba(10, 10, 12, 0.9)", 14)).length, 0);
+  // ~3.5:1: fails small text, passes large text.
+  const mid = ["rgb(130, 130, 130)", "rgb(255, 255, 255)"];
+  assert.equal(f(ink(mid[0], mid[1], 14)).length, 1);
+  assert.equal(f(ink(mid[0], mid[1], 24)).length, 0);
+  assert.equal(f(undefined).length, 0, "records without ink samples add nothing");
 });

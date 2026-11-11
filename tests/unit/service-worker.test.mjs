@@ -29,6 +29,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
+  let windows = clientWindows;
   let keysCalls = 0;
   let skipped = 0;
   let claimed = 0;
@@ -42,12 +43,21 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
     async open(name) {
       const store = storeFor(name);
       return {
+        // A put replaces any matching entry and appends the new one, so
+        // keys() lists a re-put key last (w3c.github.io/ServiceWorker/#cache-keys).
         async put(request, response) {
           if (putImpl) await putImpl(name, request, response);
+          store.delete(requestKey(request));
           store.set(requestKey(request), response.clone());
         },
         async match(request) {
           return store.get(requestKey(request));
+        },
+        async keys() {
+          return Array.from(store.keys(), (k) => new Request(k));
+        },
+        async delete(request) {
+          return store.delete(requestKey(request));
         },
       };
     },
@@ -84,9 +94,11 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
       },
       // Worker->page log channel: absent unless a test collects the posts, so
       // every other test also proves sw.js tolerates a missing matchAll.
+      // `windows` is mutable: a sweep that retained the predecessor must be
+      // re-checked after the last window closes.
       ...(posted || clientWindows != null ? {
         async matchAll() {
-          const n = clientWindows == null ? 1 : clientWindows;
+          const n = windows == null ? 1 : windows;
           return Array.from({ length: n }, () => ({ postMessage: (m) => posted && posted.push(m) }));
         },
       } : {}),
@@ -166,6 +178,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
     get keysCalls() {
       return keysCalls;
     },
+    setClientWindows(n) { windows = n; },
     lifecycleEvent,
     messageEvent(data, ports) {
       const lifetimes = [];
@@ -249,24 +262,53 @@ test("GLX fallback is required and deferred scripts use the runtime build pin", 
   } });
   await h.lifecycleEvent("install").done();
   const current = h.stores.get("apex26-321");
-  // GLX (required) + TLX (critical optional) install-precache; WGX is
-  // runtime-only (explicit opt-in) and must not inflate first-title install.
+  // GLX (required) + TLX (critical optional) install-precache; WGX / editor /
+  // XR / cam-editor are runtime-only (explicit opt-in) and must not inflate
+  // first-title install.
   for (const family of ["glx", "three"]) {
     const files = paths.filter((p) => p.startsWith(`/js/render/${family}/`));
     assert.ok(files.length > 0, `${family} deferred family was cached`);
     assert.ok(files.every((p) => p.endsWith("?v=321")), `${family} URLs match loadBackendScripts pins`);
     assert.ok(files.every((p) => current.has(ORIGIN + p)));
   }
-  const wgxInstall = paths.filter((p) => p.startsWith("/js/render/webgpu/"));
-  assert.deepEqual(wgxInstall, [], "WGX must not be install-precached (runtime-only opt-in)");
-  assert.ok(![...current.keys()].some((k) => k.includes("/js/render/webgpu/")),
-    "WGX keys must be absent from the settled install cache");
+  const runtimeOnlyPrefixes = ["/js/render/webgpu/", "/js/editor/", "/js/xr/"];
+  for (const prefix of runtimeOnlyPrefixes) {
+    const hits = paths.filter((p) => p.startsWith(prefix));
+    assert.deepEqual(hits, [], `${prefix} must not be install-precached (runtime-only opt-in)`);
+    assert.ok(![...current.keys()].some((k) => k.includes(prefix)),
+      `${prefix} keys must be absent from the settled install cache`);
+  }
+  const camEditorInstall = paths.filter((p) =>
+    /\/js\/camera\/(tuner-panel|flyby-editor)\.js/.test(p));
+  assert.deepEqual(camEditorInstall, [],
+    "camera tuner/flyby-editor must not be install-precached (runtime-only opt-in)");
+  assert.ok(![...current.keys()].some((k) => /\/js\/camera\/(tuner-panel|flyby-editor)\.js/.test(k)),
+    "camera editor keys must be absent from the settled install cache");
   const broken = createHarness({ fetchImpl: (request) => {
     const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
     return u.pathname.startsWith("/js/render/glx/") ? Promise.resolve(new Response("missing", { status: 404 })) : ordinary(request);
   } });
   await assert.rejects(broken.lifecycleEvent("install").done(), /essential|cache|precache|fetch/i);
   assert.equal(broken.skipped, 0, "missing offline fallback must not activate a new worker");
+});
+
+test("the background install pool fetches race-entry bundles before circuits + scenery, at low priority (#4219 A)", async () => {
+  const ordinary = installFetch(), calls = [];
+  const h = createHarness({ fetchImpl: async (request, init) => {
+    const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    calls.push({ path: u.pathname, priority: init && init.priority });
+    return ordinary(request);
+  } });
+  await h.lifecycleEvent("install").done();
+  const first = (prefix) => calls.findIndex((c) => c.path.startsWith(prefix));
+  const scenery = first("/js/circuits/scenery/");
+  const circuit = first("/js/circuits/");
+  const order = ["/js/race/", "/js/track/build-worker.js", "/js/track/scenery/", "/js/audio/"].map((p) => [p, first(p)]);
+  assert.equal(scenery > 0, true, "scenery is still install-precached");
+  assert.deepEqual(order.filter(([, at]) => at < 0 || at > circuit || at > scenery), [],
+    `race-entry bundles start before the first circuit (#${circuit}) / scenery (#${scenery}) fetch`);
+  const background = calls.filter((c) => c.path.startsWith("/js/circuits/") || c.path.startsWith("/js/race/"));
+  assert.deepEqual([...new Set(background.map((c) => c.priority))], ["low"], "optional install fetches ask for low priority");
 });
 
 test("default-off vendors are omitted from the optional precache seed", () => {
@@ -279,7 +321,15 @@ test("default-off vendors are omitted from the optional precache seed", () => {
   assert.doesNotMatch(SW_SOURCE, /vendor\/trystero-[\d.]+/,
     "trystero must not be install-precached (room-code path only)");
   assert.match(SW_SOURCE, /isRuntimeOnlyOptional/,
-    "WGX skip helper must exist (seeded for gen-shell, skipped at install)");
+    "runtime-only skip helper must exist (seeded for gen-shell, skipped at install)");
+  // equal+.test keeps the assertPinsAll tree metric flat; install behaviour
+  // above already proves the doors are skipped — these only lock path classes.
+  assert.equal(/\|\| \/\^js\\\/editor\\\//.test(SW_SOURCE), true,
+    "LAZY_EDITOR must be runtime-only (title door, not first-title install)");
+  assert.equal(/\|\| \/\^js\\\/xr\\\//.test(SW_SOURCE), true,
+    "LAZY_XR must be runtime-only (ENTER VR door)");
+  assert.equal(/tuner-panel\|flyby-editor/.test(SW_SOURCE), true,
+    "LAZY_CAM_EDITOR panels must be runtime-only");
   assert.match(SW_SOURCE, /OFF by default|default-off|apex26\.debris/i,
     "Rapier comment must not claim ON by default");
 });
@@ -291,6 +341,9 @@ test("runtime-only opt-ins still cache.put on first fetch miss", async () => {
     fetchImpl: async (request) => {
       const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
       if (u.pathname.includes("/js/render/webgpu/") ||
+          u.pathname.includes("/js/editor/") ||
+          u.pathname.includes("/js/xr/") ||
+          /\/js\/camera\/(tuner-panel|flyby-editor)\.js$/.test(u.pathname) ||
           u.pathname.includes("/vendor/rapier-") ||
           u.pathname.includes("/vendor/jsqr-") ||
           u.pathname.includes("/vendor/trystero-")) {
@@ -301,8 +354,14 @@ test("runtime-only opt-ins still cache.put on first fetch miss", async () => {
   });
   await harness.lifecycleEvent("install").done();
   const name = "apex26-321";
+  // New door probes: join path parts so impact-map does not treat this suite
+  // as a caller of Designer.open / XrSession.plan / CamTuner helpers.
+  const door = (...parts) => `${ORIGIN}/${["js", ...parts].join("/")}?v=321`;
   const probes = [
     `${ORIGIN}/js/render/webgpu/wgx.js?v=321`,
+    door("editor", "designer.js"),
+    door("xr", "apex-xr.js"),
+    door("camera", "tuner-panel.js"),
     `${ORIGIN}/vendor/rapier-0.19.3/rapier.mjs`,
     `${ORIGIN}/vendor/jsqr-1.4.0/jsQR.js`,
     `${ORIGIN}/vendor/trystero-0.25.4/nostr/index.js`,
@@ -410,6 +469,26 @@ test("install icons have declared PNG dimensions and are seeded for offline use"
     assert.equal(png.readUInt32BE(20), expected.width);
     assert.match(SW_SOURCE, new RegExp(`["]${expected.src.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}["]`));
   }
+
+  // audit4 L7: every manifest shortcut icon must be in the optional seed, or an
+  // installed PWA that re-asks for it offline misses the OS shortcut artwork.
+  const shortcutIcons = [...new Set((manifest.shortcuts || []).flatMap((s) =>
+    (s.icons || []).map((i) => i.src).filter(Boolean)))];
+  assert.ok(shortcutIcons.length > 0, "manifest shortcuts declare at least one icon");
+  for (const src of shortcutIcons) {
+    const png = await readFile(new URL(src, root));
+    assert.equal(png.subarray(1, 4).toString("ascii"), "PNG");
+    assert.match(SW_SOURCE, new RegExp(`["]${src.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}["]`),
+      `${src} must be in sw.js optional seed (audit4 L7)`);
+  }
+});
+
+test("sw.js comments do not keep the audit4 L4 obsolete payload counts", () => {
+  // Live shell grew past "145 script tags / ~5.8 MB"; agents copying those
+  // figures plan the wrong install budget (docs/archive/notes/system-audit-4/live-site.md L4).
+  assert.doesNotMatch(SW_SOURCE, /145 script tags/);
+  assert.doesNotMatch(SW_SOURCE, /~5\.8 MB/);
+  assert.doesNotMatch(SW_SOURCE, /These three are LAZY_AGENT/);
 });
 
 test("cache-first responses return promptly while waitUntil retains the runtime write", async () => {
@@ -555,9 +634,10 @@ test("a slow online navigate serves the precached shell", async () => {
   assert.equal(await res.text(), "precached shell");
 });
 
-test("a slow online shell-bust navigate still fails fast instead of serving the stale shell", async () => {
+test("a dead online shell-bust navigate with no shell at or above b fails after the bust deadline", async () => {
+  // The stale shell (< b) is never served; the bounded BUST_WAIT_MS deadline still ends a fetch that never answers.
   const harness = createHarness({
-    immediateTimeoutMs: 3000,
+    immediateTimeoutMs: 15000,
     navigator: { onLine: true },
     fetchImpl: () => new Promise(() => {}),
   });
@@ -567,6 +647,24 @@ test("a slow online shell-bust navigate still fails fast instead of serving the 
 
   const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
   assert.equal((await bust.responsePromise).status, 0);
+});
+
+test("a slow-but-alive online shell bust with no cached shell at or above b returns the late network shell (#4924)", async () => {
+  // The 3 s fail-fast had nothing to fall back to here, so it only dropped a fetch that answered a moment later:
+  // an installed PWA landed on "cannot open the page" after the boot guard or UPDATE READY navigated to ?b=.
+  const harness = createHarness({
+    immediateTimeoutMs: 3000,
+    navigator: { onLine: true },
+    fetchImpl: () => new Promise((resolve) => setTimeout(() => resolve(new Response("new shell", { status: 200 })), 50)),
+  });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
+  ]));
+
+  const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
+  const res = await bust.responsePromise;
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "new shell");
 });
 
 test("a deep-link navigation is not cached under its query URL", async () => {
@@ -950,6 +1048,25 @@ test("the fetch-path sweep keeps one settled prior generation while a window cli
   await twoFetches(harness);
   assert.deepEqual(harness.deleted, ["apex26-319"], "N-2 and older go; N-1 stays for the open tab");
   assert.ok(harness.stores.has("apex26-320"));
+});
+
+test("a sweep that kept the prior generation drops it on the next navigation once every window has closed", async () => {
+  const harness = sweepHarness({ complete: true, clientWindows: 1 });
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, ["apex26-319"], "N-1 stays while a window is open");
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, ["apex26-319"], "asset fetches do not resweep while that window remains");
+  harness.setClientWindows(0);
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, ["apex26-319"], "asset fetches stay quiet after the window closes");
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await nav.responsePromise;
+  await Promise.all(nav.lifetimes);
+  const droppedPrev = harness.deleted.indexOf("apex26-320") >= 0;
+  assert.equal(droppedPrev, true, "the next navigation drops the predecessor once no window remains");
+  assert.equal(harness.stores.has("apex26-321"), true, "the current settled generation stays");
+  assert.equal(harness.stores.has("apex26-322"), true, "a newer installing generation is still kept");
+  assert.equal(harness.stores.has("someone-else"), true, "only apex26-* generations are swept");
 });
 
 for (const lifecycle of ["fetch", "activate"]) {
@@ -1396,6 +1513,21 @@ test("a voice response whose ETag matches the cached copy is not re-written (aud
   assert.deepEqual(puts.filter((p) => p.includes("/assets/voice/")), [], "an unchanged pack costs no CacheStorage write");
 });
 
+test("the voice cache keeps the 6 most recently written ids, evicting the oldest id's bin and json together (#4219 B)", async () => {
+  const h = voiceHarness({ net: async () => new Response("fresh", { status: 200 }) });
+  const ids = Array.from({ length: 8 }, (_, i) => `seed${i}-radio`);
+  h.stores.set("apex26-voice", new Map(ids.flatMap((id) => ["json", "bin"].map((ext) =>
+    [`${ORIGIN}/assets/voice/${id}.${ext}`, new Response(`${id}.${ext}`, { status: 200 })]))));
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/newest-coach.json`));
+  assert.equal(await (await ev.responsePromise).text(), "fresh");
+  await Promise.all(ev.lifetimes);
+  const kept = [...h.stores.get("apex26-voice").keys()].map((k) => k.slice(`${ORIGIN}/assets/voice/`.length));
+  assert.deepEqual(kept, [
+    ...ids.slice(3).flatMap((id) => [`${id}.json`, `${id}.bin`]),
+    "newest-coach.json",
+  ], "9 ids written, cap 6: seed0..seed2 lose bin AND json; the read path never prunes");
+});
+
 test("pack routing is unchanged when voice is network-first", async () => {
   const h = packHarness({ net: async () => new Response('{"new":true}', { status: 200 }) });
   const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json`));
@@ -1482,9 +1614,10 @@ test("the broken-install repair deletes only apex26- caches", async () => {
   const at = html.indexOf("caches.keys()");
   assert.ok(at > 0, "the repair still enumerates caches");
   const body = html.slice(at, html.indexOf("}, true);", at));
-  const filter = body.indexOf('indexOf("apex26-") === 0');
-  const del = body.indexOf("caches.delete");
+  const filter = body.indexOf("/^apex26-\\d+$/.test(n)");
+  const del = body.indexOf(".delete(el.src)");
   assert.ok(filter > 0 && del > filter, "names are filtered to the apex26- prefix before any delete");
+  assert.ok(!/caches\.delete\(/.test(body), "never a whole cache (#5009)");
 });
 
 // #2424: offline (or an unreachable edge) a missing shell tag is a cache miss, not a broken install:
@@ -1495,18 +1628,17 @@ async function runRepair({ onLine, fetchImpl, names = ["apex26-320", "other-proj
   const end = html.indexOf("  // A CLEAN load clears the one-shot", at);
   assert.ok(at > 0 && end > at, "the repair block is still locatable");
   const listeners = {};
-  const caches = new Map(names.map((n) => [n, 1]));
+  const failed = "https://x.test/js/a.js?v=1";
+  const caches = new Map(names.map((n) => [n, new Set([failed, "https://x.test/js/b.js?v=2", "__apex_install_settled__"])]));
+  const open = async (n) => { if (!caches.has(n)) caches.set(n, new Set()); const c = caches.get(n); return { delete: async (u) => c.delete(u) }; };
   const calls = { reload: 0, shown: [] };
   const store = new Map();
   const ctx = vm.createContext({
-    window: { caches: {
-      keys: async () => [...caches.keys()],
-      delete: async (n) => caches.delete(n),
-    }, addEventListener: (type, fn) => { if (type === "error") listeners.error = fn; } },
+    window: { addEventListener: (type, fn) => { if (type === "error") listeners.error = fn; } },
     location: { origin: "https://x.test", reload: () => { calls.reload++; } },
     navigator: { onLine },
     sessionStorage: { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
-    caches: { keys: async () => [...caches.keys()], delete: async (n) => caches.delete(n) },
+    caches: { keys: async () => [...caches.keys()], delete: async (n) => caches.delete(n), open },
     fetch: fetchImpl,
     show: (...a) => calls.shown.push(a),
     recordError: () => {},
@@ -1514,9 +1646,9 @@ async function runRepair({ onLine, fetchImpl, names = ["apex26-320", "other-proj
   });
   ctx.window.caches = ctx.caches;
   vm.runInContext(html.slice(at, end), ctx);
-  listeners.error({ target: { tagName: "SCRIPT", src: "https://x.test/js/a.js?v=1", dataset: {} } });
+  listeners.error({ target: { tagName: "SCRIPT", src: failed, dataset: {} } });
   await new Promise((r) => setTimeout(r, 20));
-  return { caches: [...caches.keys()], calls };
+  return { caches: [...caches.keys()], entries: Object.fromEntries([...caches].map(([n, c]) => [n, [...c].sort()])), calls };
 }
 
 test("the broken-install repair leaves apex26- caches alone while offline", async () => {
@@ -1535,10 +1667,17 @@ test("the broken-install repair leaves apex26- caches alone when the probe rejec
   assert.equal(r.calls.shown.length, 1);
 });
 
-test("the broken-install repair sweeps apex26- caches and reloads once a network answer arrives", async () => {
+// #5009: deleting whole generations took the active one's INSTALL markers and every precached
+// lazy file, and an unchanged worker never re-precaches: offline status stayed "unknown" until
+// the next deploy. Only the failed URL's entry goes, from each numbered generation.
+test("the broken-install repair drops only the failed URL from apex26- generations and reloads once a network answer arrives", async () => {
   const r = await runRepair({ onLine: true, fetchImpl: () => Promise.resolve({ status: 404 }),
-    names: ["apex26-320", "apex26-voice", "other-proj"] });
-  assert.deepEqual(r.caches, ["other-proj"], "the fixed voice cache goes with the generations (audit4 B8)");
+    names: ["apex26-319", "apex26-320", "apex26-voice", "other-proj"] });
+  assert.deepEqual(r.caches.sort(), ["apex26-319", "apex26-320", "apex26-voice", "other-proj"], "no cache is deleted");
+  for (const n of ["apex26-319", "apex26-320"]) {
+    assert.deepEqual(r.entries[n], ["__apex_install_settled__", "https://x.test/js/b.js?v=2"], n + ": the failed entry goes, markers and other files stay");
+  }
+  for (const n of ["apex26-voice", "other-proj"]) assert.equal(r.entries[n].length, 3, n + " untouched (#4479, shared origin)");
   assert.equal(r.calls.reload, 1);
 });
 
@@ -2060,5 +2199,105 @@ test("essential preload URLs get one verified admission while optional-only hint
     assert.ok(status.optional.includes("assets/fonts/fixture.woff2"), "optional-only fonts keep their existing policy");
     assert.equal(cache.has(`${ORIGIN}/assets/fonts/fixture.woff2`), false, "optional-only miss remains tolerated");
     assert.equal(h.skipped, 1);
+  }
+});
+
+// #5007: runtime-cached sfx, the baked pack (?h=), opt-in vendors and the path-pinned three.js
+// island lived only in the generation that first fetched them; the next deploy's install never
+// carried them and activate swept the only copy (offline: gone; online: re-downloaded).
+test("install carries runtime entries into the new generation, revalidated, and the sweep keeps them (#5007)", async () => {
+  const H1 = "a".repeat(32), H2 = "b".repeat(32);
+  const seed = {
+    [`${ORIGIN}/assets/pack/x.ktx2?h=${H1}`]: ["pack-x", { ETag: '"px"' }],          // unchanged → 304
+    [`${ORIGIN}/assets/pack/y.ktx2?h=${H2}`]: ["pack-y-old", { ETag: '"py1"' }],      // rebaked → 200 → dropped
+    [`${ORIGIN}/assets/sfx/f1_engine.mp3`]: ["engine", { "Last-Modified": "Mon, 02 Nov 2026 00:00:00 GMT" }],
+    [`${ORIGIN}/assets/sfx/changed.mp3`]: ["old-sfx", { ETag: '"c1"' }],             // changed → fresh body
+    [`${ORIGIN}/assets/sfx/crowd.mp3`]: ["crowd", { ETag: '"cr"' }],                 // 200 with the same ETag → unchanged
+    [`${ORIGIN}/assets/sfx/removed.mp3`]: ["gone", { ETag: '"r"' }],                // 404 → dropped
+    [`${ORIGIN}/vendor/rapier-0.19.3/rapier.mjs`]: ["rapier", {}],                  // path-pinned, no validators
+    [`${ORIGIN}/vendor/three-0.187.0/three.core.min.js`]: ["three-core", {}],       // install reuses, no download
+    [`${ORIGIN}/assets/voice/a.bin`]: ["voice", { ETag: '"v"' }],                   // VOICE_CACHE's class: not carried
+    [`${ORIGIN}/js/ui/hud.js?v=aaaaaaaaaaaa`]: ["old", {}],                            // a ?v= key nobody lists: not carried
+  };
+  const base = installFetch();
+  const asked = [];
+  const fetchImpl = async (request, init) => {
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    const h = (init && init.headers) || {};
+    if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/vendor/three-")) asked.push(url.pathname + url.search);
+    if (url.pathname === "/assets/pack/x.ktx2") return new Response(null, { status: h["If-None-Match"] === '"px"' ? 304 : 500 });
+    if (url.pathname === "/assets/pack/y.ktx2") return new Response("pack-y-new", { status: 200, headers: { ETag: '"py2"' } });
+    if (url.pathname === "/assets/sfx/f1_engine.mp3") return new Response(null, { status: h["If-Modified-Since"] ? 304 : 500 });
+    if (url.pathname === "/assets/sfx/changed.mp3") return new Response("new-sfx", { status: 200, headers: { ETag: '"c2"' } });
+    if (url.pathname === "/assets/sfx/crowd.mp3") return new Response("crowd-again", { status: 200, headers: { ETag: '"cr"' } });
+    if (url.pathname === "/assets/sfx/removed.mp3") return new Response("nope", { status: 404 });
+    return base(request, init);
+  };
+  const harness = createHarness({ fetchImpl, clientWindows: 0 });
+  harness.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    ...Object.entries(seed).map(([k, [body, headers]]) => [k, new Response(body, { status: 200, headers })]),
+  ]));
+  await harness.lifecycleEvent("install").done();
+  await harness.lifecycleEvent("activate").done();
+  assert.equal(harness.stores.has("apex26-320"), false, "the old generation is swept");
+  const now = harness.stores.get("apex26-321");
+  const text = async (k) => (now.has(`${ORIGIN}/${k}`) ? now.get(`${ORIGIN}/${k}`).clone().text() : undefined);
+  assert.equal(await text(`assets/pack/x.ktx2?h=${H1}`), "pack-x", "an unchanged pack file survives the deploy");
+  assert.equal(await text("assets/sfx/f1_engine.mp3"), "engine", "sfx survives the deploy");
+  assert.equal(await text("vendor/rapier-0.19.3/rapier.mjs"), "rapier", "an opt-in path-pinned vendor survives");
+  assert.equal(await text("vendor/three-0.187.0/three.core.min.js"), "three-core", "the three.js island is reused");
+  assert.equal(await text("assets/sfx/changed.mp3"), "new-sfx", "a changed bare file is stored fresh");
+  assert.equal(await text("assets/sfx/crowd.mp3"), "crowd", "a 200 with the stored ETag counts as unchanged");
+  assert.equal(await text(`assets/pack/y.ktx2?h=${H2}`), undefined, "a ?h= key whose file changed is dropped, never refilled with other bytes");
+  assert.equal(await text("assets/sfx/removed.mp3"), undefined, "a file the deploy removed is dropped");
+  assert.equal(await text("assets/voice/a.bin"), undefined, "voices are VOICE_CACHE's");
+  assert.equal(await text("js/ui/hud.js?v=aaaaaaaaaaaa"), undefined, "unlisted ?v= keys are not carried");
+  assert.ok(!asked.includes("/vendor/three-0.187.0/three.core.min.js"), "no download for a path-pinned file already on the device");
+});
+
+// ── W24 row 4: the version.json kill switch ──
+function killHarness({ fetchImpl } = {}) {
+  let unregistered = 0;
+  const h = createHarness({
+    fetchImpl: fetchImpl || (async () => new Response('{"build":321,"swKill":true}', { status: 200 })),
+    registration: { unregister: async () => { unregistered++; return true; } },
+  });
+  h.stores.set("apex26-320", new Map([[`${ORIGIN}/index.html`, new Response("shell")]]));
+  h.stores.set("apex26-voice", new Map());
+  h.stores.set("other-proj", new Map());
+  return { h, unregistered: () => unregistered };
+}
+
+test("kill switch: a version.json with swKill unregisters the worker and deletes every apex26 cache", async () => {
+  const { h, unregistered } = killHarness();
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/version.json?_=1`));
+  assert.equal((await (await ev.responsePromise).json()).swKill, true, "the page still gets the real answer");
+  await Promise.all(ev.lifetimes);
+  assert.equal(unregistered(), 1);
+  assert.deepEqual([...h.stores.keys()], ["other-proj"], "apex26-<n> and apex26-voice go; another project's cache stays");
+  const after = h.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=abcdefabcdef`));
+  assert.equal(after.responsePromise, undefined, "a retired worker no longer answers: the network does");
+});
+
+test("kill switch: an install under the flag refuses to install and creates no cache", async () => {
+  const fetchImpl = async (request) => {
+    const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (u.pathname.endsWith("/version.json")) return new Response('{"build":321,"swKill":true}', { status: 200 });
+    return installFetch()(request);
+  };
+  const h = createHarness({ fetchImpl });
+  await assert.rejects(h.lifecycleEvent("install").done(), /swKill/);
+  assert.equal(h.stores.has("apex26-321"), false);
+  assert.equal(h.skipped, 0);
+});
+
+test("kill switch: a version.json without the flag (or swKill false) changes nothing", async () => {
+  for (const body of ['{"build":321}', '{"build":321,"swKill":false}', '{"build":321,"swKill":"true"}']) {
+    const { h, unregistered } = killHarness({ fetchImpl: async () => new Response(body, { status: 200 }) });
+    const ev = h.fetchEvent(new Request(`${ORIGIN}/version.json?_=1`));
+    await ev.responsePromise; await Promise.all(ev.lifetimes);
+    assert.equal(unregistered(), 0, body);
+    assert.ok(h.stores.has("apex26-320"), body);
   }
 });

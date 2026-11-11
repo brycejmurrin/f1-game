@@ -1,6 +1,6 @@
 ---
 name: agent-view
-description: "Use when seeing or driving Apex 26 without screenshots: world()/field()/rollout(), headless laps, deterministic runs, telemetry and slip/grip readouts, field order and gaps, sector timing; TRACK GEOMETRY hooks — corners(), trackProfile() grade/curvature, trackShape(), map/bounds, groundY/scan/wallStats, terrain-over-road. Read-only; geometry fixes → new-track / survey-track; handling → tune-physics."
+description: "Use when reading or driving the game without screenshots: __apex hooks (world, field, rollout), headless laps, telemetry, grip, gaps, sector times, or track geometry (corners, grade, curvature, map/bounds, wallStats, groundY, scan, terrain-over-road). Read-only. Not fixing geometry → new-track; AI → ai-racecraft."
 ---
 
 # Agent view — perceive and drive the game as text
@@ -9,24 +9,34 @@ Use `node tools/shot/agent.mjs help <hook>` for static hook help, or
 `node tools/shot/agent.mjs <track> help --vm` for the VM manifest without Chromium.
 Numeric one-offs can use `node tools/shot/agent.mjs monza world --vm --detail brief`;
 the VM has no last-drawn frame, so raster/camera evidence still needs a browser.
+**Geometry, no browser (one command):** the corner list is `trackInfo({what:'corners'})`
+(curated FIA apexes, `source` says so; overlapping same-direction turns merge into one row
+labelled like `T1-T2`); `corners()` is curvature PEAKS, more than the official count, never "the corner list". Grade is `trackProfile(n).slope` (formula:
+track-geometry.md §Whole-lap recipe); `trackInfo({what:'profile'})` / CLI `track --what profile`
+is sampled `y`/`widthM`/`radiusM` with NO slope.
+`node tools/shot/apex-eval.mjs spa "({c:a.trackInfo({what:'corners'}), p:a.trackProfile(200)})" --raw --vm`
+(`--vm`: one Node VM boot, no Chromium, `race()` staged; `--raw` for full arrays. Main session only, see below.)
 MCP wrap: `./tools/mcp/apex-tools-mcp.sh call apex_agent
 '{"track":"monza","command":"world"}'`. Full surface catalog, staging, and
 driving policy → [references/surface.md](references/surface.md). Design notes:
 `docs/DEBUG-HOOKS.md`.
 
-**TL;DR** — Drive Apex 26 as text, not screenshots. Shell:
-`node tools/shot/agent.mjs <track> <tool> [flags]` (stages for you). In-page:
-`window.__apex.<tool>(...)`. Start with `agentHelp()` + `objective()` once,
-then `world({detail:"drive"})` → decide → `act`/`rollout` → `terminal()`. Pin
-`seed(n)` in-page before any A/B (the VM CLI ignores `--seed`; seed a VM batch with
-`createGame({search:"?seed=42"})`, surface.md §Three ways in). Failures are `{ok:false, error, message, fix}` (two
-quiet exceptions: empty `scene()` while props build; stale `render({what:"view"})`
-under headless — stage first).
+## First loop
+
+1. Choose the staged shell `node tools/shot/agent.mjs <track> <tool> [flags]` or
+   in-page `window.__apex.<tool>(...)`; read `agentHelp()` + `objective()` once.
+2. Read `world({detail:"drive"})`, decide, then `act`/`rollout` and check `terminal()`.
+3. Pin `seed(n)` before an in-page A/B. The VM CLI ignores `--seed`; seed a VM batch
+   with `createGame({search:"?seed=42"})` (surface.md §Three ways in).
+4. Handle `{ok:false, error, message, fix}`. Empty `scene()` while props build and
+   stale `render({what:"view"})` under headless are quiet exceptions: stage first.
 
 **Entry routes** (cost differs — details in surface.md): CLI VM or browser boot,
 `apex-eval.mjs` multi-call one boot, or live `page.evaluate` after staging
 (`race` → `go` → `jump` + frames). Browser boots are serialized by AGENTS.md rules 5 and 10; use the Node VM for numeric batches.
-A subagent may run the Node VM route (`game-vm.cjs` / `createGame`); `agent.mjs` boots Chromium, so bash-guard refuses it there.
+In a subagent bash-guard refuses `agent.mjs`/`apex-eval.mjs` (`--vm` included) and mcp-browser-guard refuses
+`apex_agent`/`apex_eval` (`vm:true` included):
+use a `scratch/` `createGame` script (track-geometry.md §Whole-lap recipe) or report the probe unverified.
 
 **Vocab:** `frac` = lap 0→1; `s` = metres along centreline; `lateralM` = +right.
 
@@ -36,9 +46,9 @@ A subagent may run the Node VM route (`game-vm.cjs` / `createGame`); `agent.mjs`
   field, every option, the typed errors).
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
-- Tests, one spec at a time (`npm test -- tests/specs/<file>`, session only):
-  `agent-view.spec.js` and `agent-drive-bench.spec.js` (group `test:hooks`),
-  `agent-determinism.spec.js` (group `test:ui`); `select-specs.mjs` names them per diff.
+- Tests (browser specs run on CI, never locally — AGENTS.md rule 5): `agent-view.spec.js`,
+  `agent-drive-bench.spec.js` (group `hooks`), `agent-determinism.spec.js` (group `ui`); `pick-tests.mjs` names
+  the groups per diff, `node tools/ci/remote-group.mjs <group>` runs one on the pushed branch.
 - Seeded replay field diff (VM): `node tools/check/episode-diff.mjs`
 
 ## Load on demand

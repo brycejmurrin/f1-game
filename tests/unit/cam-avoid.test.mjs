@@ -54,6 +54,31 @@ test("open circuit: steps eye toward the road until clear, then clearEye lifts",
   assert.equal(FlybySeq.insideProp(track, eye, 2), null, "eye is clear of the box");
 });
 
+test("open circuit: the last step stops at hw + 1.5 m instead of landing on the road edge", () => {
+  // Grandstand AABB reaches the white line. Eye is just outside the keep-out
+  // (hw 7 + 1.5 = 8.5), inside the one-step band where abs - hw < STEP.
+  let clears = 0;
+  const box = { x: 15, y: 5, z: 0, w: 40, d: 20, h: 12 };
+  const FlybySeq = {
+    insideProp(track, eye, m) {
+      const M = m || 0;
+      if (Math.abs(eye[0] - box.x) < box.w / 2 + M &&
+          Math.abs(eye[2] - box.z) < box.d / 2 + M &&
+          eye[1] > box.y - box.h / 2 - M && eye[1] < box.y + box.h / 2 + M) return box;
+      return null;
+    },
+    clearEye(track, eye) { clears++; return eye; },
+  };
+  const CamAvoid = load(FlybySeq);
+  const frame = { p: [0, 0, 0], r: [1, 0, 0], hw: 7 };
+  const eye = [8.6, 4, 0];
+  CamAvoid.freeEye({ def: { street: false } }, eye, frame);
+  assert.ok(eye[0] < 8.6, "stepped toward the centreline");
+  assert.ok(eye[0] >= frame.hw + 1.5 - 1e-9, "stayed at the keep-out (hw + 1.5), not on the white line");
+  assert.equal(eye[2], 0);
+  assert.equal(clears, 1, "the roof net still runs once the lateral step stops");
+});
+
 test("street circuit: skips lateral step-in (corr already owns width), keeps the lift net", () => {
   let clears = 0;
   const box = { x: 25, y: 5, z: 0, w: 10, d: 10, h: 12 };
@@ -120,4 +145,15 @@ test("vantage.js calls CamAvoid for broadcast modes after look-back", () => {
   assert.match(v, /CamAvoid\.applies\(mode\)/);
   assert.match(v, /CamAvoid\.freeEye\(track, eye, cvA\)/);
   assert.match(v, /mode === "trackside"/);
+});
+
+test("freeEye: an eye in open air costs ONE insideProp query (hunt 2026-11-02)", () => {
+  let calls = 0;
+  const FlybySeq = { insideProp: () => { calls++; return null; }, clearEye: (t, e) => e };
+  const Tracks = { project: () => ({ s: 0, lat: 0 }), sample: (t, s, o) => { o.hw = 7; return o; } };
+  const CamAvoid = load(FlybySeq, Tracks);
+  const eye = [50, 10, 0];
+  CamAvoid.freeEye({ def: {} }, eye, { p: [0, 0, 0], r: [1, 0, 0], hw: 7 });
+  assert.equal(calls, 1);
+  assert.deepEqual(Array.from(eye), [50, 10, 0]);
 });

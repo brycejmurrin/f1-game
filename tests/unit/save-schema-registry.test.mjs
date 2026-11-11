@@ -22,6 +22,7 @@ const PREFIX_WRITES = [
   { prefix: "livery.", re: /["']livery\.["']\s*\+/ },
   { prefix: "livery.custom.", re: /["']livery\.custom\.["']\s*\+/ },
   { prefix: "setup.", re: /["']setup\.["']\s*\+/ },
+  { prefix: "setupPresets.", re: /\bkey\s*\(\s*team\s*\)/ },
   { prefix: "ttlb.", re: /["']ttlb\.["']\s*\+/ },
   { prefix: "pitPlan.", re: /["']pitPlan\.["']\s*\+/ },
   { prefix: "setup.", re: /\bKEY\s*\+\s*teamId/ },
@@ -208,6 +209,16 @@ test("SaveMigrate.validateCareerSave matches registry career slots", () => {
   const SM = vm.runInContext("SaveMigrate", ctx);
   assert.equal(SM.validateCareerSave({ flavour: "driver", team: "haas", money: 10 }), true);
   assert.equal(SM.validateCareerSave("nope"), false);
+});
+
+test("setupPresets.<team> resolves (garage named sheets; review F1)", () => {
+  const R = loadRegistry();
+  const e = R.resolve("setupPresets.mercedes");
+  assert.ok(e, "setupPresets.mercedes must resolve");
+  assert.equal(e.owner, "js/garage/setup-presets.js");
+  assert.equal(e.lane, "json");
+  R.strict = true;
+  assert.doesNotThrow(() => R.noteWrite("setupPresets.haas", "json"));
 });
 
 test("the automatic UI flags (designerCoached, camComfortPref) are registered, typed, and device-local (#2320)", () => {

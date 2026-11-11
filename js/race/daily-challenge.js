@@ -1,4 +1,4 @@
-/* Apex 26 — DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a shareable result line. No server: every player who opens the game on the same day gets the same plan. */
+/* Apex 26 — DAILY CHALLENGE: one time-trial plan per local calendar day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a shareable result line. No server: every player who opens the game on the same calendar date gets the same plan. */
 const DailyChallenge = (function () {
   "use strict";
 
@@ -15,8 +15,14 @@ const DailyChallenge = (function () {
   // Hash32 primitives only — never Career.hash: a career seed must not move the daily plan.
   function pick(day, field, n) { return Hash32.mix(Hash32.fnv1a("daily:" + day + ":" + field)) % n; }
 
-  // UTC day, YYYY-MM-DD — the one calendar every player shares.
-  function dayKey(d) { return (d || new Date()).toISOString().slice(0, 10); }
+  // The player's LOCAL calendar day, YYYY-MM-DD (#5010). A UTC key rolled at 4 pm in Los Angeles,
+  // so a 3 pm and a 6 pm lap on consecutive local days were two UTC days apart and reset the streak.
+  // The plan is still a pure function of the date string, so one date is one shared plan; prevDay
+  // and the history window do date-only arithmetic on the key and stay calendar-correct.
+  function dayKey(d) {
+    const t = d || new Date(), p2 = (n) => String(n).padStart(2, "0");
+    return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate());
+  }
   function prevDay(day) {
     const d = new Date(day + "T00:00:00Z");
     d.setUTCDate(d.getUTCDate() - 1);
@@ -34,6 +40,40 @@ const DailyChallenge = (function () {
       tod: TOD[pick(day, "tod", TOD.length)],
       seed: Hash32.mix(Hash32.fnv1a("daily:" + day)) || 1,
     };
+  }
+
+  // Apply one valid lap to the supplied save data. Persistence, badges and
+  // the active session belong to record(); these rules mutate only d.
+  function recordDay(d, day, lapTime, context) {
+    // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
+    const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
+    const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    e.laps = (num(e.laps) || 0) + 1;
+    if (context != null) {
+      if (!isObj(e.classes)) e.classes = {};
+      const cls = isObj(e.classes[context]) ? e.classes[context] : { best: null, laps: 0 };
+      cls.laps = (num(cls.laps) || 0) + 1;
+      if (num(cls.best) == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
+      e.classes[context] = cls;
+    }
+    if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
+    // Streak: consecutive local days with at least one lap. Only a NEWER day
+    // moves it (ISO dates compare as strings): a tab left on yesterday's plan
+    // past midnight, today already played elsewhere, reset it to 1.
+    if (!d.streak.last || day > d.streak.last) {
+      d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
+      d.streak.last = day;
+    }
+    // The per-day history is write-only (every reader asks for today; the
+    // streak lives in d.streak), so it keeps a window rather than growing
+    // ~680 chars a day for ever.
+    const floor = new Date(day + "T00:00:00Z");
+    if (Number.isFinite(floor.getTime())) {
+      floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
+      const cut = floor.toISOString().slice(0, 10);
+      for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
+    }
+    return e;
   }
 
   function create(G) {
@@ -91,34 +131,7 @@ const DailyChallenge = (function () {
       if (!active || !(lapTime > 0) || !Number.isFinite(lapTime)) return null;
       const d = data();
       const day = active.day;
-      // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
-      const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
-      const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-      e.laps = (num(e.laps) || 0) + 1;
-      if (context != null) {
-        if (!isObj(e.classes)) e.classes = {};
-        const cls = isObj(e.classes[context]) ? e.classes[context] : { best: null, laps: 0 };
-        cls.laps = (num(cls.laps) || 0) + 1;
-        if (num(cls.best) == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
-        e.classes[context] = cls;
-      }
-      if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-      // Streak: consecutive UTC days with at least one lap. Only a NEWER day
-      // moves it (ISO dates compare as strings): a tab left on yesterday's plan
-      // past midnight, today already played elsewhere, reset it to 1.
-      if (!d.streak.last || day > d.streak.last) {
-        d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
-        d.streak.last = day;
-      }
-      // The per-day history is write-only (every reader asks for today; the
-      // streak lives in d.streak), so it keeps a window rather than growing
-      // ~680 chars a day for ever.
-      const floor = new Date(day + "T00:00:00Z");
-      if (Number.isFinite(floor.getTime())) {
-        floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
-        const cut = floor.toISOString().slice(0, 10);
-        for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
-      }
+      const e = recordDay(d, day, lapTime, context);
       store.set(KEY, d);
       if (typeof Badges !== "undefined") Badges.onStreak(d.streak.count);   // js/career/badges.js
       return e;
@@ -154,10 +167,10 @@ const DailyChallenge = (function () {
       return parts.join(" · ");
     }
 
-    async function shareCard(medal) {
-      if (typeof ShareCardData === "undefined" || typeof ShareCard === "undefined") {
-        throw new Error("Share cards are unavailable");
-      }
+    // The card model for today's result, its file name and share text (the preview
+    // sheet draws it at tap time); shareCard() renders and delivers it directly.
+    function card(medal) {
+      if (typeof ShareCardData === "undefined") throw new Error("Share cards are unavailable");
       const p = active || plan(), day = data().days[p.day];
       const context = G.records && G.records.key();
       const entry = context ? day && day.classes && day.classes[context] : day;
@@ -168,10 +181,12 @@ const DailyChallenge = (function () {
         const encoded = ShareCode.encode("daily", { ...result, medal });
         if (encoded.ok) link = encoded.url;
       }
-      const model = ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link });
-      const blob = await ShareCard.render(model, "portrait");
-      return ShareCard.deliver(blob, "apex26-daily-" + p.day + ".png",
-        { title: "APEX 26 DAILY", text: shareText(medal), url: link });
+      return { model: ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link }), name: "daily-" + p.day, text: shareText(medal) };
+    }
+    async function shareCard(medal) {
+      if (typeof ShareCard === "undefined") throw new Error("Share cards are unavailable");
+      const c = card(medal), blob = await ShareCard.render(c.model, "portrait");
+      return ShareCard.deliver(blob, "apex26-" + c.name + ".png", { title: "APEX 26 DAILY", text: c.text, url: c.model.link });
     }
 
     function stop() {
@@ -191,7 +206,7 @@ const DailyChallenge = (function () {
       return st.count > 0 && (st.last === day || st.last === prevDay(day)) ? st.count : 0;
     }
 
-    return { plan, dayKey, select, open, record, shareResult, shareText, shareCard, stop, isActive, current, data, today, liveStreak };
+    return { plan, dayKey, select, open, record, shareResult, shareText, card, shareCard, stop, isActive, current, data, today, liveStreak };
   }
 
   return { create, plan, dayKey, prevDay };

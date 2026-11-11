@@ -245,7 +245,7 @@ export function summarizeHeapSample(profile, { top = 20 } = {}) {
 }
 
 /** Page-side rAF hitch sampler: install, wait, read. Used by debugger_profile action=hitch. */
-export function hitchSamplerExpression({ durationMs = 2000, thresholdMs = 50, maxWindows = 20 } = {}) {
+function hitchSamplerExpression({ durationMs = 2000, thresholdMs = 50, maxWindows = 20 } = {}) {
   const ms = Math.max(100, Math.min(30000, durationMs | 0));
   const thr = Math.max(8, Math.min(2000, thresholdMs | 0));
   const cap = Math.max(1, Math.min(50, maxWindows | 0));
@@ -263,7 +263,7 @@ export function hitchSamplerExpression({ durationMs = 2000, thresholdMs = 50, ma
 }
 
 /** Persist a raw profile under scratch/debug-profiles for DevTools reopen. */
-export function saveProfileArtifact(kind, body, root = fileURLToPath(new URL("../..", import.meta.url))) {
+function saveProfileArtifact(kind, body, root = fileURLToPath(new URL("../..", import.meta.url))) {
   const dir = path.join(root, "scratch", "debug-profiles");
   mkdirSync(dir, { recursive: true });
   const id = randomUUID();
@@ -273,8 +273,8 @@ export function saveProfileArtifact(kind, body, root = fileURLToPath(new URL("..
   return file;
 }
 
-export const PROFILE_ACTIONS = ["start", "stop", "status", "hitch"];
-export const PROFILE_KINDS = ["cpu", "heap"];
+const PROFILE_ACTIONS = ["start", "stop", "status", "hitch"];
+const PROFILE_KINDS = ["cpu", "heap"];
 
 /**
  * Mixin for DebugSession: realtime CDP Profiler / HeapProfiler / rAF hitch windows.

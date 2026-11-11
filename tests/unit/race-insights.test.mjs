@@ -692,3 +692,38 @@ test('cooling goal refuses scored/tyres-off starts and ignores the partial lap b
   assert.equal(last.recovery.grainStart, .4, 'arming partial lap is excluded');
   f.api.reset(); assert.equal(f.api.summary().drill, null); assert.equal(f.api.summary().lastDrill, null);
 });
+
+test('last-lap energy requires three clean sectors from one lap and returns detached measurements', () => {
+  const { api, G, tick } = fixture(); let prog = 0, charge = 1;
+  const cross = (sector, lap, used = .05) => { G.sectorIdx = sector; prog += 60; charge -= used; tick({ prog, lap, energy: charge }, 3); };
+  cross(1, 1); cross(2, 1); cross(0, 2); assert.equal(api.forecast().lastLapEnergy, null);
+  cross(1, 2); cross(2, 2, -.02); cross(0, 3);
+  const receipt = api.forecast().lastLapEnergy; assert.equal(receipt.lap, 2); assert.equal(receipt.sectors.length, 3);
+  assert.ok(Math.abs(receipt.netUsed - .08) < 1e-10); assert.ok(receipt.sectors[1] < 0);
+  receipt.sectors[0] = 999; assert.notEqual(api.forecast().lastLapEnergy.sectors[0], 999);
+  tick({ prog: prog + 10, contactT: 1 }); assert.equal(api.forecast().lastLapEnergy, null);
+});
+for (const changed of ['weather', 'pit', 'stint', 'rewind', 'caution']) {
+  test(`energy review clears after ${changed}`, () => {
+    const { api, G, tick } = fixture(); let prog = 0, charge = 1;
+    for (const [sector, lap] of [[1, 1], [2, 1], [0, 2], [1, 2], [2, 2], [0, 3]]) {
+      G.sectorIdx = sector; prog += 60; charge -= .03; tick({ prog, lap, energy: charge }, 3);
+    }
+    assert.ok(api.forecast().lastLapEnergy);
+    if (changed === 'weather') G.trackWetness = () => .2;
+    if (changed === 'caution') G.cautionLevel = () => 1;
+    tick(changed === 'pit' ? { pitState: 'lane' } : changed === 'stint' ? { tyreStints: 1 } : changed === 'rewind' ? { prog: 0 } : {});
+    assert.equal(api.forecast().lastLapEnergy, null);
+  });
+}
+
+test('a caution at the lap boundary cannot seed a clean first sector after it clears', () => {
+  const { api, G, tick } = fixture(); let prog = 0, charge = 1;
+  const cross = (sector, lap) => { G.sectorIdx = sector; prog += 60; charge -= .03; tick({ prog, lap, energy: charge }, 3); };
+  cross(1, 1); cross(2, 1);
+  G.cautionLevel = () => 1; cross(0, 2);
+  G.cautionLevel = () => 0; tick({ prog: prog + 1 }, 1); prog++;
+  cross(1, 2); cross(2, 2); cross(0, 3);
+  assert.equal(api.forecast().lastLapEnergy, null, 'a lap whose first sector began under caution is excluded');
+  cross(1, 3); cross(2, 3); cross(0, 4); assert.equal(api.forecast().lastLapEnergy.lap, 3);
+});

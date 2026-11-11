@@ -45,7 +45,7 @@
         tree, bush, hedge, forestEdge,
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
-        billboard, sponsorHoarding, gantry, motorhome, groundPatch,
+        billboard, sponsorHoarding, gantry, groundPatch,
         place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, addFrustum, seat, MAT, lapBounds, pyMin } = api;
 
       // 1. PALETTE + LOCAL HELPERS

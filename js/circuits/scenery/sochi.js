@@ -6,10 +6,10 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["sochi"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+        tree, bush, hedge, ridge, building, grandstandEx,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard, cypress, terrainYAt,
         addBox, addCyl, addCone, addFrustum } = api;
 
@@ -205,8 +205,9 @@
         let i = 0;
         along(s0, s1, 16, (k, spacing) => {
           if (i++ % 2) return;
-          const a = anchor(k, side, 30);
-          addBox(out, vadd(a.c, a.u, 0.24), [46, 0.10, 2.2], PLAZA_D, [a.r, a.u, a.t]);
+          // Draped, not a road-frame box: 46 m wide, the box's centre was
+          // flush with the terrain and its ends 0.7-1.1 m under it (#5088).
+          groundPatch(k, side, 7, [46, 0.10, 2.2], PLAZA_D, { id: `sochi-plaza-strip-${k}-${side}`, samples: 6 });
         });
       }
 

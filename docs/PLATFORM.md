@@ -19,7 +19,7 @@ GitHub Pages serves it verbatim. The only hard requirement is **HTTPS**, which
 Pages provides — `DeviceOrientationEvent.requestPermission()` (tilt) and the
 Web Audio context both need a secure context. Cache-busting is the deploy's job:
 the committed shell reads `?v=dev` on every `<script>`/`<link>`, and `pages.yml`
-rewrites each to a content hash while staging, so Safari's aggressive disk cache
+rewrites each to a content hash while staging (`tools/desktop/stage.mjs`), so Safari's aggressive disk cache
 never serves a stale module and there is no bump to remember (AGENTS.md).
 
 ## Input on iOS
@@ -58,7 +58,7 @@ Key implementation points (`js/input/input.js`):
 - **Edge-triggered buttons reuse the keyboard latches** (boost, overtake,
   shift, camera, pause) via rising-edge detection against the previous frame's
   snapshot — one press fires exactly once.
-- **Rumble is best-effort.** `Input.rumble(intensity, ms, channel)` drives
+- **Rumble is best-effort.** `Input.rumble(intensity, ms, channel)` (`js/input/haptics.js`) drives
   `vibrationActuator` ("dual-rumble" grips, or "trigger-rumble" on L2/R2 when
   the pad advertises it and TRIGGER HAPTICS is on) on contact, kerbs, lock-up
   and slides alongside `navigator.vibrate`. Safari/iOS has no pad rumble; Firefox
@@ -79,14 +79,30 @@ btn 8 View/Back  camera              btn 9 Menu/Start  pause
 
 ## Rendering & power
 
-- WebGL2 with procedural geometry and few texture uploads (the one baked PBR
-  material array from assets/pack, ≤8 MB, blended by the matTexMix knob) keeps
-  memory bandwidth low — comfortable inside the A15/A16 budget at 60 fps landscape.
+- The default renderer is three.js on WebGPU (TLX), which drops to three's own WebGL2
+  backend where WebGPU is absent; a hand-written WebGL2 renderer (GLX) is the explicit
+  pick and the fallback (`js/render/gfx.js`). Procedural geometry and few texture uploads
+  (the one baked PBR material array from assets/pack, ≤8 MB, blended by the matTexMix
+  knob) keep memory bandwidth low — comfortable inside the A15/A16 budget at 60 fps landscape.
 - Physics runs as a **fixed 1/60 s step** with a substep cap (`js/game.js`
   `tick()`), so handling is identical whether Safari renders at 30, 60, or
   120 fps and a janky frame can never enlarge the integration step.
 - Web Audio (synthesized SFX plus the baked `assets/music`, `assets/sfx` and
   `assets/voice` mp3s) is resumed from the first user gesture, as iOS requires.
+
+## Share cards on Safari
+
+`navigator.share()` needs transient activation and rejects with `NotAllowedError` without it
+([MDN Navigator.share](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share)).
+Drawing a card is async (fonts, the QR encoder, PNG encoding), so a tap that drew and then shared
+could lose its activation on iOS Safari before `share()` ran. The SHARE CARD chip therefore opens a
+preview sheet (`js/share/share-card-chips.js`) that draws first and shares on a second, fresh tap;
+a `NotAllowedError` there keeps the sheet open and asks for one more tap, and SAVE IMAGE is always
+offered. Every card stays at scale 1 (at most 1080×1350, about 1.5 Mpx: far under Safari's canvas area
+cap) and its canvas is zeroed after export; an export over 1.5 MB is re-encoded once as JPEG and
+otherwise refused with a message (`ShareCard.MAX_BYTES`). `canShare({ files })` is tested before
+every share, since PNG is only "usually" shareable; where it is false (desktop Firefox) SHARE is
+hidden and SAVE IMAGE downloads the file.
 
 ## On-device checklist
 
@@ -96,4 +112,5 @@ btn 8 View/Back  camera              btn 9 Menu/Start  pause
 [ ] 60 fps holds in landscape; device doesn't get hot over a ~15 min race
 [ ] Rotation-lock (Control Center) is respected
 [ ] Hard-refresh after deploy picks up the new ?v= assets
+[ ] SHARE CARD → SHARE opens the share sheet with the PNG (iOS Safari, Android Chrome)
 ```

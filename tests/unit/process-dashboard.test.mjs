@@ -147,7 +147,7 @@ test("a draft-skip run and a sweeps rollup do not move the tier or the family", 
         run_started_at: "2026-10-04T00:00:00Z",
         updated_at: "2026-10-04T00:00:04Z",
         jobs: [{
-          name: "Draft push (CI skipped — add run-ci label)",
+          name: "Draft push (CI skipped — add run-ci label)",   // a pre-2026-11-03 run name; the dashboard reads history
           conclusion: "success",
           started_at: "2026-10-04T00:00:00Z",
           completed_at: "2026-10-04T00:00:03Z",

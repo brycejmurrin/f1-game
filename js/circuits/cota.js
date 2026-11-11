@@ -44,21 +44,23 @@
     // left ~70% of the lap dead-flat — stair-step Hill Country. T1 climb and
     // rolling Esses come from the continuous SRTM profile now.
     bankZones: [
-      { frac: 0.41596, angleDeg: 5.0, widthM: 100 },  // T10; all re-keyed +0.41596 (was 0.0000)
+      { frac: 0.41596, angleDeg: 5.0, widthM: 100 },  // T11 hairpin; all re-keyed +0.41596 (was 0.0000)
       { frac: 0.78296, angleDeg: 4.0, widthM: 160 },
       { frac: 0.80116, angleDeg: 4.0, widthM: 170 },
       { frac: 0.91816, angleDeg: 3.0, widthM: 80 },
       { frac: 0.11946, angleDeg: 3.5, widthM: 160 },
-      { frac: 0.23206, angleDeg: 4.5, widthM: 200 },   // the T3-T6 esses
-      { frac: 0.25896, angleDeg: 4.0, widthM: 120 },
+      { frac: 0.23206, angleDeg: 4.5, widthM: 200 },   // the esses (T6)
+      { frac: 0.25896, angleDeg: 4.0, widthM: 120 },   // T7
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // sectors: timing splits. turns: one apex per corner in the FIA 2026 event-map
+    // numbering (T1-T20; "2026 United States Grand Prix - Competition Notes - Circuit
+    // Map, Pit Lane Drawing and Emergency Exits Map"), each at the built curvature peak,
+    // as RACING-LAP fractions (post startFrac/reverse), never fmap'd —
+    // tools/track/rotate-markings.cjs re-seats turns when the start line moves.
     sectors: [0.314, 0.62],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
-    turns: [0.0655, 0.1765, 0.1935, 0.2325, 0.2590, 0.2890, 0.2950, 0.3050, 0.3435, 0.4155, 0.6335, 0.6740, 0.6915, 0.7155, 0.7260, 0.7655, 0.7825, 0.8005, 0.8630, 0.9175],
+    turns: [0.0661, 0.1112, 0.1577, 0.1766, 0.1933, 0.2326, 0.2587, 0.2892, 0.3052, 0.3438, 0.4157, 0.6330, 0.6737, 0.6911, 0.7260, 0.7653, 0.7827, 0.8009, 0.8634, 0.9179],
     furniture: { tree: "acacia", fol: [0.32, 0.39, 0.18], lamp: "none" },  // dry Texas live oak
     kit: { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "tecpro",  board: "monopole",  gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["darkSteel", "sandstone", "alu"],  // T1 bleachers are real bleacher() now

@@ -34,6 +34,13 @@
     return Math.max(n | 0, cap);
   }
 
+  // Sun map edge: phone 1024, software GL 512, desktop 2048. ctx.sunSize > 0 overrides it
+  // (TLX's B8 lab tier, ?lab=tlxLite on three's WebGL2 leg of a phone, passes 512).
+  function sunMapSize(ctx) {
+    if (ctx.sunSize > 0) return ctx.sunSize | 0;
+    return ctx.isMobile ? 1024 : (ctx.softwareGL ? 512 : 2048);   // the pre-B8 rule, exactly
+  }
+
   function shadowSys(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
     // Keyed on the DEVICE, not the memory tier — js/render/glx/shadow.js's rule,
@@ -62,7 +69,7 @@
     // color path. SUN_SIZE/BLOCKER_SIZE staying 1:1 here is fine.
     const softwareGL = !!ctx.softwareGL;
 
-    const SUN_SIZE = isMobile ? 1024 : (softwareGL ? 512 : 2048);   // 1024² saves 12 MB on every phone (GLX parity)
+    const SUN_SIZE = sunMapSize(ctx);   // 1024² saves 12 MB on every phone (GLX parity)
     const CAR_SIZE = softwareGL ? 256 : 1024;                      // dynamic car-only map (true desktop only)
     const LAMP_SIZE = softwareGL ? 256 : 512;                      // nearest-floodlight spot map (true desktop only)
 
@@ -90,13 +97,14 @@
       lampCarOnly: 0,            // L1: car-only rebuilds served from the copy
     };
 
-    /** Depth target: a compare-mode DepthTexture the lit pass samples, plus the
-     * colour attachment three's RenderTarget cannot omit (r186 sizes a target
-     * from textures[0]). Only the desktop-WebGL2 sun's R32F PCSS copy
-     * (hdrColor) is ever read, so every other map carries R8 — the smallest
-     * format both backends render to (r8unorm / R8), 1/4 of RGBA8's clear,
-     * store and VRAM. LinearFilter + LessEqualCompare = guaranteed hardware 2x2 PCF
-     * per tap on ES 3.0, exactly GLX's setup (js/render/glx/shadow.js). */
+    /** Depth target: a compare-mode DepthTexture the lit pass samples.
+     * three r187 (#34782, both backends) builds a depth-only target with
+     * `count: 0`, so a non-PCSS map carries no colour attachment; on r186 it
+     * was an R8 one (1 B/px) whose store discardColor / apexDiscardColor
+     * dropped (docs/notes/TLX-SHADOW-DEPTHONLY-R187-2026-10-28.md, #2649). Only the
+     * desktop-WebGL2 sun's R32F PCSS copy (hdrColor) is ever read as colour.
+     * LinearFilter + LessEqualCompare = hardware 2x2 PCF per tap on ES 3.0,
+     * exactly GLX's setup (js/render/glx/shadow.js). */
     function makeDepthTarget(size, name, hdrColor, floatDepth) {
       const depthTexture = new THREE.DepthTexture(size, size);
       // depth32float: the one depth format WebGPU can copyTextureToTexture
@@ -107,6 +115,11 @@
       depthTexture.minFilter = THREE.LinearFilter;
       depthTexture.magFilter = THREE.LinearFilter;
       // wrap defaults to ClampToEdge — matches GLX
+      // r187 (#34782): depth-only. The REVISION gate keeps an older three (count:0
+      // undefined there) on the R8 attachment. PCSS still needs colour.
+      if (!hdrColor && +(THREE.REVISION || 0) >= 187) {
+        return new THREE.RenderTarget(size, size, { depthTexture, count: 0 });
+      }
       const opts = { depthTexture };
       if (hdrColor) {
         // R32F: the blocker reads this copy of the depth, and a half float
@@ -176,6 +189,10 @@
     S.enabled = !!sunRT;
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
+    // #2649 counted oracle: colour attachment bytes of the phone sun map.
+    // r187 depth-only: 0 (r186 carried R8 at SUN_SIZE², 1 B/px). PCSS (desktop) keeps R32F.
+    S.depthOnly = !!(sunRT && +(THREE.REVISION || 0) >= 187 && !colorPcss);
+    S.sunColorBytes = !sunRT ? 0 : S.depthOnly ? 0 : SUN_SIZE * SUN_SIZE * (colorPcss ? 4 : 1);
 
     // PCSS blocker map (header note): 512² R32F, the MIN over each dest
     // texel's whole k x k source footprint (k = SUN_SIZE / 512: 16 texels at
@@ -492,12 +509,26 @@
     //
     // NOT WHILE A WARM IS IN FLIGHT (tlx.js dropWrapper has the measurement): compileAsync collects (object, material)
     // pairs up front and awaits them one at a time, so a slot parked here is re-fetched by the warm with its render
-    // object gone and its geometry attribute-less. Queue the geometry; flushDropped() runs the park on the first
-    // present after the warm settles. Slots re-used for another geometry by then no longer match and are left alone.
-    const dropQ = [];   // geometries owed a park
+    // object gone and its geometry attribute-less. Queue the geometry AND the slots that hold it;
+    // flushDropped() disposes those slots on the first present after the warm settles, including a
+    // slot the next pass has already retargeted (its render object can still name the freed geometry).
+    const dropQ = [];   // { geo, meshes } owed a park. meshes is who held geo when it was queued:
+    // a warm can outlive the free, and the next pass retargets the slot before flush, so a
+    // later match on m.geometry / __lastGeo misses the render object that still names geo.
     function releaseGeometry(geo) {
       if (!geo) return;
-      if (ctx.isWarming && ctx.isWarming()) { if (dropQ.indexOf(geo) < 0) dropQ.push(geo); return; }
+      if (ctx.isWarming && ctx.isWarming()) {
+        if (dropQ.some((e) => e.geo === geo)) return;
+        const meshes = [];
+        for (const pl of pools.values()) {
+          for (let i = 0; i < pl.pool.length; i++) {
+            const m = pl.pool[i];
+            if (m.geometry === geo || (m.geometry === parkedGeo && m.__lastGeo === geo)) meshes.push(m);
+          }
+        }
+        dropQ.push({ geo, meshes });
+        return;
+      }
       for (const pl of pools.values()) {
         for (let i = 0; i < pl.pool.length; i++) {
           const m = pl.pool[i];
@@ -510,7 +541,87 @@
     function flushDropped() {
       if (!dropQ.length || (ctx.isWarming && ctx.isWarming())) return;
       const q = dropQ.splice(0);
-      for (let i = 0; i < q.length; i++) releaseGeometry(q[i]);
+      for (let i = 0; i < q.length; i++) {
+        const e = q[i], meshes = e.meshes;
+        // The slot may already be drawing another circuit. Dispose drops the render
+        // object that still names the freed geometry; leave a live replacement in place
+        // so the next cast rebuilds only that slot's render object.
+        if (meshes) for (let k = 0; k < meshes.length; k++) {
+          const m = meshes[k];
+          if (!m) continue;
+          const live = m.geometry !== e.geo && m.geometry !== parkedGeo;
+          if (!live) { m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null; }
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        }
+        releaseGeometry(e.geo);
+      }
+    }
+    function parkCasterForGeo(m, geo) {
+      if (!m || !geo) return;
+      const live = m.geometry !== geo && m.geometry !== parkedGeo && m.__lastGeo !== geo;
+      if (live) {
+        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object only */ }
+        return;
+      }
+      m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
+      try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+    }
+    function purgeCastersForGeos(freedGeos) {
+      if (!freedGeos || !freedGeos.size) return;
+      for (const pl of pools.values()) {
+        for (let j = 0; j < pl.pool.length; j++) {
+          const m = pl.pool[j];
+          if (!m) continue;
+          const g = m.geometry, lg = m.__lastGeo;
+          if (freedGeos.has(g)) parkCasterForGeo(m, g);
+          else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+        }
+      }
+      for (let i = 0; i < iCast.length; i++) {
+        const m = iCast[i];
+        if (!m) continue;
+        const g = m.geometry, lg = m.__lastGeo;
+        if (freedGeos.has(g)) parkCasterForGeo(m, g);
+        else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+      }
+      for (let i = 0; i < castScene.children.length; i++) {
+        const m = castScene.children[i];
+        if (!m || !m.isMesh) continue;
+        const g = m.geometry, lg = m.__lastGeo;
+        if (g && freedGeos.has(g)) parkCasterForGeo(m, g);
+        else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+      }
+      if (_probePrev) {
+        for (const m of _probePrev.meshes) {
+          if (!m || !m.isMesh) continue;
+          const g = m.geometry;
+          if (g && freedGeos.has(g)) disposeCaster(m);
+        }
+      }
+    }
+    function flushOwnershipDropped(freedGeos) {
+      if (!dropQ.length || !freedGeos || !freedGeos.size) return;
+      for (let qi = dropQ.length - 1; qi >= 0; qi--) {
+        const e = dropQ[qi];
+        if (!freedGeos.has(e.geo)) continue;
+        dropQ.splice(qi, 1);
+        const meshes = e.meshes;
+        if (meshes) for (let k = 0; k < meshes.length; k++) {
+          const m = meshes[k];
+          if (!m) continue;
+          const live = m.geometry !== e.geo && m.geometry !== parkedGeo;
+          if (!live) { m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null; }
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        }
+        for (const pl of pools.values()) {
+          for (let j = 0; j < pl.pool.length; j++) {
+            const m = pl.pool[j];
+            if (m.geometry !== e.geo && !(m.geometry === parkedGeo && m.__lastGeo === e.geo)) continue;
+            m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
+            try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+          }
+        }
+      }
     }
 
     // The batch is gone (track switch): its caster goes with it, so a hidden
@@ -575,6 +686,7 @@
     let _invColor0 = null;
     function discardColor(rt) {
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (rt.textures && rt.textures.length === 0) return false;   // depth-only (r187): no colour to drop
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
       const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
       if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
@@ -914,7 +1026,7 @@
         try {
           for (const rt of [sunRT, carRT, lampRT, lampStaticRT]) {
             if (!rt) continue;
-            const hdr = rt.texture.type === THREE.FloatType, fd = !!(rt.depthTexture && rt.depthTexture.type === THREE.FloatType);
+            const hdr = !!(rt.texture && rt.texture.type === THREE.FloatType), fd = !!(rt.depthTexture && rt.depthTexture.type === THREE.FloatType);
             const key = hdr + "|" + fd;
             if (seen.has(key)) continue;
             seen.add(key);
@@ -954,6 +1066,8 @@
       freeInstanced,
       releaseGeometry,
       flushDropped,
+      flushOwnershipDropped,
+      purgeCastersForGeos,
       castShadowChunked: cast,
       shadowEnd: () => endPass(sunRT),
       carShadowEnd,
@@ -966,5 +1080,5 @@
     };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { shadowSys, uboInstCap });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { shadowSys, uboInstCap, sunMapSize });
 })();

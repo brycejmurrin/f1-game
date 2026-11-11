@@ -30,7 +30,7 @@ function load() {
   vm.createContext(ctx);
   vm.runInContext(read("js/render/shared/light-budget.js") + "\n;globalThis.LightBudget = LightBudget;", ctx, { filename: absSrc("js/render/shared/light-budget.js") });
   vm.runInContext(read("js/lighting/frame-lights.js") + "\n;globalThis.FrameLights = FrameLights;", ctx, { filename: absSrc("js/lighting/frame-lights.js") });
-  return { FL: ctx.FrameLights, clock };
+  return { FL: ctx.FrameLights, clock, LT: ctx.LightKnobs.LT };
 }
 
 function street(spacing) {
@@ -168,4 +168,27 @@ test("a track switch releases the previous track's lamp array (#2180)", async ()
   await new Promise((r) => setImmediate(r));   // WeakRef targets stay alive for the job that made them
   gc();
   assert.equal(ref.deref(), undefined, "FrameLights still pins the old track._lights");
+});
+
+// R2-4 (#3104): a weather blend walks LAMP CULL FADE every frame for 25 s
+// (*|dawn|dry 0.35 -> *|dawn|wet 0.855). Membership never reads it, so it is no
+// rank key: the 60 m/s reuse rate holds through the fade, and each frame's tint
+// still carries the CURRENT fade (it sets the cull band only).
+test("a fading LAMP CULL FADE keeps the rank reuse and still applies each frame", () => {
+  const run = (fadeAt) => {
+    const { FL, clock, LT } = load();
+    FL.resetRankStats();
+    const track = { _lights: street(12) }, cars = new Array(10).fill({}), frame = {};
+    for (let f = 0; f < 600; f++) {
+      clock.now = f * 1000 / 60;
+      LT.lampCullFade = fadeAt(f);
+      FL.setFrameLights(frame, track, cars, [0, 1.2, 500 + f], 1, [0, 0, 1], 0);
+    }
+    return { s: FL.rankStats(), lights: frame.lights.slice() };
+  };
+  const fading = run((f) => 0.35 + (0.855 - 0.35) * f / 600), still = run(() => 0.35);
+  assert.equal(fading.s.mainRebuilds, still.s.mainRebuilds, "the fade costs no extra rebuild");
+  assert.ok(fading.s.mainRebuilds <= 150, `expected <<600 rebuilds, got ${fading.s.mainRebuilds}`);
+  // The fade is not frozen with the rank: same rebuild schedule, different tint.
+  assert.notDeepEqual(fading.lights, still.lights, "the reused rank still tints with the current fade");
 });

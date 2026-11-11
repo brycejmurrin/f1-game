@@ -5,6 +5,55 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { sustainedGrowthMB } from "../../tools/lib/mem-census.mjs";
+import { postWarmSlope, robustHeapSlope, cycleCensusIssues, HEAP_SLOPE_HARD_MB } from "../helpers/race-cycle-memory.mjs";
+
+test("race-cycle census rejects fallback or absent telemetry before interpreting retention", () => {
+  const sample = () => ({ backend: { renderer: "three", api: "webgl2" }, instrumentation: { tracksReady: true },
+    heapMB: 50, audioMB: 0, three: { geometries: 1, textures: 2 } });
+  assert.deepEqual(cycleCensusIssues(sample()), []);
+  const gpu = sample(); gpu.backend.api = "webgpu";
+  assert.deepEqual(cycleCensusIssues(gpu), []);
+  for (const mutate of [
+    (s) => { s.backend.renderer = "webgl2"; },
+    (s) => { s.backend.api = null; },
+    (s) => { s.instrumentation.tracksReady = false; },
+    (s) => { s.heapMB = null; },
+    (s) => { s.audioMB = NaN; },
+    (s) => { s.three = null; },
+    (s) => { s.three.textures = Infinity; },
+  ]) {
+    const s = sample(); mutate(s);
+    assert.ok(cycleCensusIssues(s).length > 0, JSON.stringify(s));
+  }
+  assert.ok(cycleCensusIssues(null).length > 0);
+});
+
+test("race-cycle slope requires finite post-warm heap and audio observations", () => {
+  for (const field of ["heapMB", "audioMB"]) for (const cycle of [5, 6]) {
+    for (const value of [null, undefined, NaN, Infinity, -Infinity, -1, "50"]) {
+      const rows = { 5: { heapMB: 50, audioMB: 2 }, 6: { heapMB: 51, audioMB: 3 } };
+      rows[cycle][field] = value;
+      const result = postWarmSlope(rows);
+      assert.equal(result.ok, false, `${cycle}:${field}=${String(value)} is unavailable, not a pass`);
+      assert.equal(result.reason, "finite nonnegative post-warm heap and audio observations required");
+    }
+  }
+});
+
+test("race-cycle slope retains signed deltas and the existing leak boundaries", () => {
+  const rows = new Map([[5, { heapMB: 50, audioMB: 2 }], [6, { heapMB: 61, audioMB: 8 }]]);
+  const leak = postWarmSlope(rows);
+  assert.equal(leak.ok, true);
+  assert.equal(leak.heapDelta, 11);
+  assert.equal(leak.heapHardFail, true);
+  assert.equal(leak.audioSoftFail, true);
+  rows.set(6, { heapMB: 60, audioMB: 7 });
+  assert.equal(postWarmSlope(rows).heapHardFail, false);
+  assert.equal(postWarmSlope(rows).audioSoftFail, false);
+  rows.set(6, { heapMB: 49, audioMB: 0 });
+  assert.equal(postWarmSlope(rows).heapDelta, -1);
+  assert.equal(postWarmSlope(rows).audioDelta, -2);
+});
 
 const GROWTH_MB = +/const GROWTH_MB = (\d+);/.exec(readFileSync(new URL("../specs/track-switch-memory.spec.js", import.meta.url), "utf8"))[1];
 const leaks = (heaps) => sustainedGrowthMB(heaps).median > GROWTH_MB;
@@ -355,3 +404,68 @@ test('repeated same-track builds cannot reuse an earlier build submission receip
   assert.equal(pickerReceiptStatus('monza').ok, false);
   assert.match(pickerReceiptStatus('monza').error, /no proven submission/);
 }));
+
+test("robust post-warm slope outvotes one odd reading but still catches the H12 leak", () => {
+  const ser = (heaps) => heaps.map((heapMB, i) => ({ cycle: i + 1, heapMB }));
+  // Pages #4577: cycle 5 dipped, cycle 6 back on the plateau (pair = +14.3), two confirming cycles flat.
+  assert.ok(robustHeapSlope(ser([148.2, 145.7, 148.1, 148.1, 134.9, 149.2, 149.0, 149.1])).slope <= HEAP_SLOPE_HARD_MB);
+  // PR #4316: flat, then a one-time step at cycle 6 (+15.5), plateau after.
+  assert.ok(robustHeapSlope(ser([143.8, 145, 146, 146.5, 146.9, 162.4, 162.3, 162.5])).slope <= HEAP_SLOPE_HARD_MB);
+  // H12: ~12 MiB every cycle must stay over the bound with the same readings count.
+  const leak = robustHeapSlope(ser([100, 112, 124, 136, 148, 160, 172, 184]));
+  assert.ok(leak.slope > HEAP_SLOPE_HARD_MB, `leak slope ${leak.slope}`);
+  // ...also with noise on each reading.
+  assert.ok(robustHeapSlope(ser([100, 112, 124, 136, 141, 163, 170, 186])).slope > HEAP_SLOPE_HARD_MB);
+  assert.equal(robustHeapSlope(ser([100, 101, 102, 103])).slope, null);
+});
+
+// #4778: wrapper-object growth between the last two cycles.
+test("wrapperGrowth flags a GPU class that grew and ignores a flat pair", async () => {
+  const { wrapperGrowth } = await import("../helpers/race-cycle-memory.mjs");
+  const row = (cycle, bundles, nodes) => ({ cycle, wrappers: { GPURenderBundle: bundles, GPUBuffer: 10 }, dom: { nodes } });
+  assert.equal(wrapperGrowth([row(5, 100, 1000), row(6, 100, 1010)], 6).ok, true);
+  const bad = wrapperGrowth([row(5, 100, 1000), row(6, 181, 1000)], 6);
+  assert.equal(bad.ok, false);
+  assert.match(bad.issues[0], /GPURenderBundle 100 → 181 \(\+81\)/);
+  assert.equal(wrapperGrowth([row(6, 1, 1)], 6).ok, false);
+});
+
+// #4778: `system / Context` closure scopes are gated at +5 % between post-warm cycles.
+test("wrapperGrowth gates system / Context scopes at +5 % and countSnapshotClass counts by name", async () => {
+  const { wrapperGrowth, countSnapshotClass } = await import("../helpers/race-cycle-memory.mjs");
+  const row = (cycle, contexts) => ({ cycle, wrappers: {}, dom: null, contexts });
+  assert.equal(wrapperGrowth([row(5, 10000), row(6, 10400)], 6).ok, true);
+  assert.equal(wrapperGrowth([row(5, 10000), row(6, 9000)], 6).ok, true);
+  const bad = wrapperGrowth([row(5, 10000), row(6, 10700)], 6);
+  assert.equal(bad.ok, false);
+  assert.deepEqual(bad.issues.map((i) => i.startsWith("system / Context 10000 → 10700")), [true]);
+  assert.equal(wrapperGrowth([row(5, null), row(6, 10700)], 6).ok, true, "an unavailable count is not a gate");
+  const snap = { snapshot: { meta: { node_fields: ["type", "name", "id"] } }, strings: ["", "system / Context", "x"],
+    nodes: [3, 1, 1, 3, 2, 2, 3, 1, 3] };
+  assert.equal(countSnapshotClass(snap, "system / Context"), 2);
+});
+
+// #4778: a census that cannot see a channel says so; a zero context count is blind, not a reading.
+test("contextCensus reads 0 as blind and names the context-like classes it did see", async () => {
+  const { contextCensus } = await import("../helpers/race-cycle-memory.mjs");
+  const snap = (names) => ({ snapshot: { meta: { node_fields: ["type", "name"] } }, strings: ["", ...names], nodes: names.flatMap((_, i) => [3, i + 1]) });
+  assert.deepEqual(contextCensus(snap(["system / Context", "x", "system / Context"])), { count: 2, blind: null });
+  // Chrome's V8 names each context by its scope site (PR #5189 CI): those count; a different class does not.
+  assert.deepEqual(contextCensus(snap(["system / Context / scope @126171", "system / Context / scope @9", "system / Contextual"])), { count: 2, blind: null });
+  const z = contextCensus(snap(["system / NativeContext", "x", "system / NativeContext"]));
+  assert.equal(z.count, null);
+  assert.match(z.blind, /^0 "system \/ Context" nodes in 3/);
+  assert.deepEqual(z.names, { "system / NativeContext": 2 });
+});
+
+test("censusBlindness lists every channel the wrapper census could not see", async () => {
+  const { censusBlindness } = await import("../helpers/race-cycle-memory.mjs");
+  const seen = { cycle: 1, wrappers: { GPUBuffer: 3 }, contexts: 900, dom: { nodes: 1 } };
+  assert.deepEqual(censusBlindness([seen], "webgpu"), []);
+  assert.deepEqual(censusBlindness([], "webgpu"), ["no wrapper readings"]);
+  const b = censusBlindness([{ cycle: 2, wrappers: { GPUBuffer: null }, contexts: null, contextsBlind: "snap failed", dom: null }], "webgpu");
+  assert.equal(b.length, 3);
+  assert.match(b[0], /WebGPU api observed but wrapper counts are null/);
+  assert.match(b[2], /system \/ Context blind at cycle 2: snap failed/);
+  assert.match(censusBlindness([{ ...seen, wrappers: { GPUBuffer: null } }], "webgl2")[0], /api webgl2/);
+});

@@ -6,15 +6,15 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monza"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, ds, pyMin, place, prop, backdrop, groundYAt, every,
-        onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
+      const { K, lapBounds, out, MAT, n, ds, pyMin, prop, every,
+        onTrack, hash, pine, tree, bush, hedge, ridge, building, motorhome, tower,
         cypress, stonePine, tieredBowl,
         grandstandEx, spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall,
         addBox, addCyl, addPrism, anchor, along, vadd,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, groundedSegments,
         terrainYAt,
-        bakedModel, px, pz } = api;
+        bakedModel } = api;
 
       {
         const BRICK = [0.56, 0.40, 0.32];
@@ -172,8 +172,8 @@
       // West park lake was one continuous hedge(0.19–0.28)@18 — abutting
       // segments shared side planes (coplanar-audit: 5.0 + 4.1 m² stacks).
       // Split into two short runs so neighbours no longer touch.
-      hedge(0.19, 0.225, -1, 18, 4.5, [0.13, 0.35, 0.17]);
-      hedge(0.245, 0.28, -1, 18, 4.5, [0.13, 0.35, 0.17]);
+      hedge(0.19, 0.215, -1, 18, 4.5, [0.13, 0.35, 0.17]);
+      hedge(0.245, 0.27, -1, 18, 4.5, [0.13, 0.35, 0.17]);
       hedge(0.36, 0.42,  1, 22, 4.5, [0.13, 0.35, 0.17]);   // Villa lake
       hedge(0.58, 0.66,  1, 24, 4.5, [0.13, 0.35, 0.17]);   // Villa Reale approach
       every(14, (k) => {
@@ -743,7 +743,9 @@
         });
       };
       tifosiBowl(0.824, -1, 44, 96, 4, "crimson");   // Parabolica outer — largest crowd
-                  tifosiBowl(0.11, 1, 24, 64, 3, "crimson");    // Curva Grande sweep
+      // gap 25, not 24: with #4967 the riser runs its full outside chord and met the
+      // gap-21 hedge (clip-audit 1.44 m severe @ frac 0.105).
+      tifosiBowl(0.11, 1, 25, 64, 3, "crimson");    // Curva Grande sweep
       // 0.02 R / 0.955 L / 0.633 L bowls removed: each doubled a grandstandEx on the same anchor.
       
       (function museum() {
@@ -848,10 +850,13 @@
         const h = hash(k * 19 + 11);
         // Gap 22 (was 28): just past hedge@20/21 so wide2 keeps lap cover without
         // punching the hedge boxes (clip at gap 10). Spread trimmed for clearance.
-        stonePine(k, -1, 22 + h * 3, 12 + h * 5, h < 0.4 ? PINE_D : PINE, { spread: 0.62 });
-        stonePine(k,  1, 23 + h * 3, 11 + h * 5, h < 0.5 ? PINE : PINE_D, { spread: 0.60 });
-        if (h > 0.40) pine(k, -1, 32 + h * 5, 16 + h * 8, PINE_D);
-        if (h > 0.50) pine(k,  1, 33 + h * 5, 15 + h * 8, PINE);
+        // Left side: skip the crimson stand's span (0.109 ±0.0066 + tiers) —
+        // cones at 0.109 punched its truss/tiers (clip-audit 3.5 m).
+        const standL = s > 0.098 && s < 0.12;
+        if (!standL) stonePine(k, -1, 24 + h * 3, 12 + h * 5, h < 0.4 ? PINE_D : PINE, { spread: 0.58 });
+        if (!standL) stonePine(k,  1, 25 + h * 3, 11 + h * 5, h < 0.5 ? PINE : PINE_D, { spread: 0.56 });
+        if (h > 0.40 && !standL) pine(k, -1, 32 + h * 5, 16 + h * 8, PINE_D);
+        if (h > 0.50 && !standL) pine(k,  1, 33 + h * 5, 15 + h * 8, PINE);
       });
 
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
@@ -866,7 +871,7 @@
         if (h < 0.5) return;
         const gap = 28 + h * 6;
         const a = anchor(k, -1, gap);
-        if (!a || onTrack(a.c[0], a.c[2], 8)) return;
+        if (!a || onTrack(a.c[0], a.c[2], 8) || (s > 0.098 && s < 0.12)) return;
         pine(k, -1, gap, 14 + h * 6, PINE_D);
       });
 
@@ -876,7 +881,7 @@
         const lesmo = s >= 0.445 && s <= 0.525;
         if (!grande && !lesmo) return;
         const h = hash(k * 23 + 41);
-        pine(k, -1, 30 + h * 6, 16 + h * 8, h < 0.5 ? PINE_D : PINE);
+        if (!(s > 0.098 && s < 0.12)) pine(k, -1, 30 + h * 6, 16 + h * 8, h < 0.5 ? PINE_D : PINE);
         tree(k, 1, 32 + h * 6, 13 + h * 7, h < 0.45 ? LEAF_D : LEAF);
         if (lesmo && h > 0.58)
           pine(k, h > 0.78 ? -1 : 1, 38 + h * 5, 18 + h * 7, PINE_D);

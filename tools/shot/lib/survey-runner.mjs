@@ -36,7 +36,7 @@ function draftNames(args) {
 }
 
 /** Give colliding cells distinct file names before the planner rejects or overwrites them (#1983). */
-export function disambiguateSurveyArgs(args = {}) {
+function disambiguateSurveyArgs(args = {}) {
   if (Array.isArray(args.shots) && args.shots.length) {
     const seen = new Map();
     let clash = false;

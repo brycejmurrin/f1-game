@@ -198,12 +198,13 @@ For the task workflow and measured traps, load the project skill
 Start a real race first, in one `debugger_run`, then break in the tick:
 
 ```js
-debugger_run {expression:"(async()=>{ __apex.headless(true); const r = __apex.race('bahrain','day','dry'); await __apex.go(); return r; })()", awaitPromise:true}
+debugger_run {expression:"(async()=>{ __apex.headless(true); const r = await __apex.race('bahrain','day','dry'); __apex.go(); return r; })()", awaitPromise:true}
 debugger_breakpoint {url:"<game.js URL from debugger_scripts>", line:<a line in the tick>}
 ```
 
-Read `debugger_state` until `paused:true`. `race()` returns `false` when the
-circuit id is unknown; check `__apex.info().track` before trusting a pause.
+Read `debugger_state` until `paused:true`. `race(id)` is awaitable (the circuit
+hydrates lazily) and `go()` returns `false` with no grid, so await the race first.
+`race()` returns `false` when the circuit id is unknown; check `__apex.info().track` before trusting a pause.
 
 ### Slow commands under software rendering
 

@@ -1,27 +1,47 @@
 #!/usr/bin/env bash
-# .githooks/pre-commit — the commit gate for EVERY agent host, not just Claude.
-# Activated by `core.hooksPath=.githooks` (package.json "prepare", run by every
-# host's `npm install`). AGENTS.md §Verification 3: a commit runs test:guards;
-# a docs-only commit runs docs-integrity alone; ratchet growth <= 40 lines is
-# auto-raised into the commit. Until 2026-10-14 this lived only in Claude
-# Code's PreToolUse hook (.claude/hooks/bash-guard.sh), so Cursor, Codex and
-# Grok Build committed unguarded (docs/notes/AGENT-GUARDS-2026-10-14.md).
+# .githooks/pre-commit — THE commit gate, the one owner of `test:guards` for
+# every agent host (Claude Code, Cursor, Codex, Grok Build) and for a person at
+# a terminal. Bryce, 2026-10-28 ("Yes, split it";
+# docs/plans/2026-10-27-landing-and-agent-ops.md §4): until then Claude Code ran
+# the same suite inside its PreToolUse Bash hook (.claude/hooks/bash-guard.sh,
+# 50–110 s under a 360 s hook timeout) and this file stood aside for it
+# (CLAUDECODE=1). bash-guard.sh now keeps only fast refusals, among them the two
+# ways around this file: `git commit --no-verify`/`-n` and a core.hooksPath change.
 #
-# Claude Code sessions (CLAUDECODE=1) already ran the same gate in bash-guard.sh
-# before git started, so it is not run twice. APEX_SKIP_GUARDS=1 bypasses, as
-# there.
+# Activated by `core.hooksPath=.githooks`, RELATIVE, so each linked worktree runs
+# its own tree's copy (git runs a hook from the worktree root and resolves a
+# relative hooksPath there: https://git-scm.com/docs/githooks#_description,
+# https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath).
+# Set by package.json "prepare" (every `npm install`/`npm ci`) and re-asserted by
+# .claude/hooks/session-start.sh at every session start.
 #
-# #2889 slice 1: reuse a green test:guards verdict for the same staged tree
-# (artifacts/pre-commit-guards.ok, 10 min — same file/format as bash-guard.sh)
-# via tools/ci/guards-verdict.mjs; optional apex.guardTimeout / APEX_GUARD_TIMEOUT
-# wraps the suite in `timeout -k 5` (no new default when unset).
+# AGENTS.md rule 12: a commit runs test:guards; a prose-only commit (every staged
+# path a .md, or a survey image/report) runs docs-integrity alone; ratchet growth
+# <= 40 lines is auto-raised into the commit. There is no skip: a red guard is
+# fixed, including when the guards are the change. Inside an agent's Bash tool the suite runs under THAT call's timeout
+# (Claude Code: 2 min by default), so give the commit call a longer one, or run
+# `npm run test:guards` first: a green run for the same staged tree, < 10 min
+# old, is reused here (#2889, tools/ci/guards-verdict.mjs,
+# artifacts/pre-commit-guards.ok). Optional apex.guardTimeout /
+# APEX_GUARD_TIMEOUT wraps the suite in `timeout -k 5` (no default when unset).
 set -u
-[ "${APEX_SKIP_GUARDS:-}" = 1 ] && exit 0
-[ -n "${CLAUDECODE:-}" ] && exit 0
 ROOT=$(git rev-parse --show-toplevel) || exit 1
 cd "$ROOT" || exit 1
 mkdir -p artifacts
 LOG=artifacts/pre-commit-guards.log
+T0=$(date +%s)
+# A LINKED WORKTREE BORROWS THE MAIN CHECKOUT'S node_modules (moved here from
+# bash-guard.sh; 2026-10-15 census session_01CgCjzTvy729SeWsHzuv8eh): EnterWorktree,
+# `isolation: worktree` subagents and `git worktree add` make a tree with none.
+# Same package.json; the link is git-ignored (`node_modules` in .gitignore).
+if [ ! -e node_modules ]; then
+  WT_COMMON=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+  WT_MAIN=""
+  [ -n "$WT_COMMON" ] && WT_MAIN=$(dirname "$WT_COMMON")
+  if [ -n "$WT_MAIN" ] && [ "$WT_MAIN" != "$ROOT" ] && [ -d "$WT_MAIN/node_modules" ]; then
+    ln -s "$WT_MAIN/node_modules" node_modules 2>/dev/null || true
+  fi
+fi
 # Tests create their own Git repositories. Keep the hook's staged-index context
 # for ratchets/git add, but do not let fixture subprocesses inherit its selectors.
 without_local_git_context() (
@@ -29,18 +49,29 @@ without_local_git_context() (
   while IFS= read -r git_name; do unset "$git_name"; done < <(git rev-parse --local-env-vars)
   "$@"
 )
+STAGED=$(git diff --cached --name-only --no-renames)
+[ -z "$STAGED" ] && exit 0
+# A TREE WITH NO tools/ (a track-survey-assets image branch) cannot run the
+# guards (#2428, moved from bash-guard.sh): skip with a note when nothing staged
+# is code or a generated shell file.
+if [ ! -d tools/ci ] && [ ! -d tools/check ] \
+   && ! printf '%s\n' "$STAGED" | grep -Eq '^(js/|css/|tools/|tests/)|^(index\.html|sw\.js|version\.json|package\.json|CHANGELOG\.md)$'; then
+  echo "pre-commit: guards skipped — no tools/ in this tree." >&2
+  exit 0
+fi
 if [ ! -d node_modules ]; then
   echo "pre-commit: BLOCKED — node_modules is missing, so test:guards cannot run. Install first (npm install, or bash tools/env/cloud-agent-install.sh)." >&2
   exit 1
 fi
-STAGED=$(git diff --cached --name-only --no-renames)
-[ -z "$STAGED" ] && exit 0
 GENERATED=" $(node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ') "
 DOCS_ONLY=1
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$GENERATED" in *" $f "*) DOCS_ONLY=0; break ;; esac
-  printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
+  # Prose is classed by EXTENSION, not directory: a .md anywhere, an image under docs/, and the survey images
+  # and reports under artifacts/{shots/tracks,shots/gallery,track-survey} (docs/notes/SURVEY-ASSETS-BRANCH.md).
+  # A script under docs/ or .claude/skills/ is code and runs the guards. Never a generated doc (above).
+  printf '%s' "$f" | grep -Eq '\.md$|^docs/.+\.(png|jpe?g|webp|svg|gif)$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
 done <<LIST
 $STAGED
 LIST
@@ -58,6 +89,7 @@ require_index_worktree_match() {
 # A matching earlier verdict already certifies this index even if the worktree
 # subsequently changed. Never scrub GIT_INDEX_FILE for a commit cache lookup.
 if [ "$DOCS_ONLY" != 1 ] && node tools/ci/guards-verdict.mjs check; then
+  echo "pre-commit: code commit — reused the green test:guards verdict for this staged tree (no suite run)." >&2
   exit 0
 fi
 require_index_worktree_match || exit 1
@@ -70,6 +102,7 @@ if [ "$DOCS_ONLY" = 1 ]; then
   fi
   require_index_worktree_match || exit 1
   [ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while docs-integrity ran." >&2; exit 1; }
+  echo "pre-commit: docs-only commit — docs-integrity green ($(( $(date +%s) - T0 )) s); no ratchet raise, no test:guards." >&2
   exit 0
 fi
 # Capture the generator's actual outputs, including new topic fragments and
@@ -122,16 +155,26 @@ NODE
 then
   grep '^RAISED\|^LOWERED' artifacts/pre-commit-ratchets.log >&2 || true
 else
-  echo "pre-commit: BLOCKED — ratchet check or auto-staging failed (artifacts/pre-commit-ratchets.log):" >&2
+  # Do NOT stop here: run the guard suite too, so every red surfaces in ONE pass
+  # (efficiency review 2026-10-30, finding 4). The verdict cache is skipped below.
+  RATCHET_RED=1
+  echo "pre-commit: ratchet check or auto-staging failed (artifacts/pre-commit-ratchets.log); running the guards too so every failure shows at once:" >&2
   tail -15 artifacts/pre-commit-ratchets.log >&2
-  exit 1
+  echo "pre-commit: ratchet fix: shrink the growing count, or \`node tools/check/ratchets.mjs --update --fragment --reason=\"<why>\"\` (a count that fell, or generated drift: \`npm run precommit:fix\`)." >&2
 fi
 # Verdict cache (#2889): a fresh green write-tree match skips the suite.
 # Printed on stdout so agents see the hit line; the suite log stays for misses.
-if node tools/ci/guards-verdict.mjs check; then
+if [ "${RATCHET_RED:-}" != 1 ] && node tools/ci/guards-verdict.mjs check; then
+  echo "pre-commit: code commit — ratchets --auto-raise, then reused the green test:guards verdict for this staged tree." >&2
   exit 0
 fi
 require_index_worktree_match || exit 1
+# Every failing guard with its fix command, not the last 20 grep lines (finding 4).
+guards_red() {
+  echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Log: $LOG" >&2
+  node tools/ci/guards-report.mjs "$LOG"
+  [ $? = 1 ] || grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2   # rc 1 = it listed them
+}
 GUARD_TREE=$(git write-tree) || exit 1
 # Budget: git config apex.guardTimeout, then APEX_GUARD_TIMEOUT. When neither
 # is set, keep today's behaviour (no new default timeout in this githook).
@@ -150,20 +193,21 @@ if [ -n "${BUDGET:-}" ]; then
   RC=$?
   if [ "$RC" != 0 ]; then
     if [ "$RC" = 124 ] || [ "$RC" = 137 ]; then
-      echo "pre-commit: BLOCKED — npm run test:guards did not finish within ${BUDGET}s (apex.guardTimeout / APEX_GUARD_TIMEOUT). Retry on an idle box, raise the budget with \`git config apex.guardTimeout <sec>\`, or APEX_SKIP_GUARDS=1 only when the guards themselves are the change. Log: $LOG" >&2
+      echo "pre-commit: BLOCKED — npm run test:guards did not finish within ${BUDGET}s (apex.guardTimeout / APEX_GUARD_TIMEOUT). Retry on an idle box or raise the budget with \`git config apex.guardTimeout <sec>\`. Log: $LOG" >&2
       exit 1
     fi
-    echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
-    grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
-    exit 1
+    guards_red; exit 1
   fi
 else
   if ! ( unset $(git rev-parse --local-env-vars); npm run --silent test:guards ) >"$LOG" 2>&1; then
-    echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
-    grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
-    exit 1
+    guards_red; exit 1
   fi
+fi
+if [ "${RATCHET_RED:-}" = 1 ]; then
+  echo "pre-commit: BLOCKED — the ratchet check failed (above); the guard suite itself was green." >&2
+  exit 1
 fi
 require_index_worktree_match || exit 1
 [ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while guards ran." >&2; exit 1; }
+echo "pre-commit: code commit — ratchets --auto-raise, then npm run test:guards green ($(( $(date +%s) - T0 )) s; log $LOG)." >&2
 exit 0

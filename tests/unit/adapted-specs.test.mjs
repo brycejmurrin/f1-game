@@ -33,17 +33,23 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const group = process.env.APEX_VM_PAGE_GROUP || "";
 const groupSpecs = group && ADAPTED_PAGE_GROUPS[group];
 if (group && !groupSpecs) throw new Error(`unknown APEX_VM_PAGE_GROUP=${group}`);
-const specs = (groupSpecs || Object.keys(ADAPTED)).slice().sort();
+// APEX_VM_PAGE_ONLY (tools/ci/node-plan.mjs, #5241): the adapted specs this diff needs, space-separated. A partition
+// spun only because the browser plan dropped one of its specs runs that spec, not the roster. A name that is not an
+// ADAPTED spec throws, and a filter that leaves this partition nothing fails the "not empty" test below: the plan ran
+// this script for a reason, so an empty run is a broken plan, never a pass.
+const only = (process.env.APEX_VM_PAGE_ONLY || "").split(/\s+/).filter(Boolean);
+for (const f of only) if (!Object.hasOwn(ADAPTED, f)) throw new Error(`APEX_VM_PAGE_ONLY names ${f}, which is not an ADAPTED spec`);
+const specs = (groupSpecs || Object.keys(ADAPTED)).filter((f) => !only.length || only.includes(f)).sort();
 // Two at a time: a VM boot is CPU-bound and the box has four cores; CI's
 // runners have two. APEX_VM_PAGE_JOBS overrides.
 const JOBS = Math.max(1, Number.parseInt(process.env.APEX_VM_PAGE_JOBS || "2", 10) || 2);
 
 describe(`browser specs under the vm-page adapter${group ? ` (${group})` : ""}`, { concurrency: JOBS }, () => {
   test("the ADAPTED map is not empty (an empty gate is not a gate)", () => {
-    assert.ok(specs.length > 0, "tools/ci/twinned-specs.mjs ADAPTED names no spec — drop test:vm-page or fill it");
+    assert.ok(specs.length > 0, only.length ? `APEX_VM_PAGE_ONLY (${only.join(" ")}) leaves partition "${group || "all"}" nothing to run — the node plan asked for this script, so that is a broken plan` : "tools/ci/twinned-specs.mjs ADAPTED names no spec — drop test:vm-page or fill it");
   });
   for (const spec of specs) {
-    test(spec, { timeout: 900_000 }, () => {
+    test(`${spec}`, { timeout: 900_000 }, () => {
       const env = { ...process.env, APEX_VM_PAGE: "1" };
       // NODE_TEST_CONTEXT would switch the child to the v8-serialized reporter
       // and the `# pass` summary would be absent (tools/ci/run-playwright.mjs

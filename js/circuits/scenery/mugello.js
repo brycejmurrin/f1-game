@@ -6,16 +6,14 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mugello"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz, hw,
-        indexSolid, seat,
-        pine, tree, bush, hedge, ridge, mountain, building, grandstandEx,
-        spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
+      const { K, lapBounds, out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack,
+        indexSolid, seat, tree, bush, mountain, building, grandstandEx,
+        spectatorHill, broadcastCompound, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge,
-        terrainYAt, groundYAt,
-        groundUnder,
-      } = api;
+        terrainYAt,
+        groundUnder } = api;
 
       // World-up horizontal basis — banked a.u digs hillside props into grade.
       const flatBasis = (a) => {
@@ -184,7 +182,7 @@
       // Also clear Poggio Secco / Materassi outside (0.200-0.260).
       const openArea = (s) => (s >= 0.92 || s <= 0.18) || (s >= 0.36 && s <= 0.46)
         || (s >= 0.200 && s <= 0.260)
-        || (s >= 0.286 && s <= 0.342) || (s >= 0.852 && s <= 0.906);   // Casanova / Bucine terrazze
+        || (s >= 0.286 && s <= 0.342) || (s >= 0.852 && s <= 0.906);   // Materassi-Borgo S. Lorenzo / Bucine terrazze
       // Mid-lap day orbit (survey scenery preset: frac 0.50, az 45, el 22,
       // dist 45) sits ~30 m lateral of the Arrabbiata apex — near trees and
       // forestEdge crowns put the eye inside foliage (#3375). Keep ordered
@@ -477,12 +475,12 @@
       marshalPost(K(0.155), -1, 10);
 
       groundPatch(K(0.312), 1, 5, [26, 0.18, 34], GRAVEL,
-        { id: "mugello-casanova-gravel", samples: 6 });
+        { id: "mugello-casanova-gravel", samples: 6 });   // id kept; sits at T4-T5 Materassi-Borgo San Lorenzo
       tyreWall(0.298, 0.328, 1, 4, [0.20, 0.40, 0.85]);
-      // Casanova is R~35 m and this is the INSIDE of it: tiers pitched 18 m out converge and
+      // Materassi (T4, left) is R~35 m and this is the INSIDE of it: tiers pitched 18 m out converge and
       // overlap 1.1 m at the apex (clip 0.297-0.301), so the bowl stops short of the apex.
       terrazza(0.292, 0.2935, -1, 18, { rows: 5 });
-      terrazza(0.3095, 0.334, -1, 18, { rows: 5 });         // Casanova-Savelli
+      terrazza(0.3095, 0.334, -1, 18, { rows: 5 });         // Borgo San Lorenzo (T5)
       marshalPost(K(0.306), -1, 9);
 
       groundPatch(K(0.495), -1, 6, [30, 0.18, 40], GRAVEL,
@@ -506,7 +504,7 @@
 
       // Poggio Secco + Materassi — uncovered stands on the outside near turn 3
       // (motogpmugello.com / koobit: Materassi "outer edge… near Poggio Secco";
-      // mugellocircuit FAQ: enter both from Luco). Turn apex ~0.219 (turns[3]).
+      // mugellocircuit FAQ: enter both from Luco). Turn apex ~0.219 (turns[2], T3).
       function emitOpenHillStand(stage, a, side, tiers, spineH, len0) {
         const b = [a.r, a.u, a.t];
         const IN = -side;
@@ -652,7 +650,7 @@
           const a = anchor(k, side, gap);
           const bases = [];
           for (let r = 0; r < rows; r++) {
-            // TRAP B (docs/SCENERY-GROUNDING.md §2): anchor() samples the ground
+            // TRAP B (docs/SCENERY-API.md §2): anchor() samples the ground
             // at the ROAD EDGE, and these rows march up to 37 m back from it —
             // across a Tuscan hillside. Reusing a.c's height that far put the
             // back rows metres into the air. Re-seat each row on the ground
@@ -702,8 +700,8 @@
 
       // Turn signage and broadcast towers.
       signBoard(K(0.150), -1, 8, "corner", 1);
-      signBoard(K(0.312), -1, 8, "corner", 6);
-      signBoard(K(0.521), 1, 8, "corner", 9);   // Arrabbiata 2 = turns[8]
+      signBoard(K(0.312), -1, 8, "corner", 5);   // Borgo San Lorenzo = turns[4] (apex 0.3187; was "6", Casanova is 0.386)
+      signBoard(K(0.521), 1, 8, "corner", 9);   // Arrabbiata 2 = T9 = turns[8] (FIA 2020 map)
       signBoard(K(0.880), 1, 8, "corner", 15);
       sponsorHoarding(0.930, 0.060, -1, 3.6, { h: 1.2, step: 10,
         palette: [ROSSO, [0.94, 0.92, 0.88], [0.10, 0.34, 0.20], [0.96, 0.76, 0.06]] });
@@ -711,7 +709,7 @@
       cameraTower(K(0.152), -1, 30, { h: 18 });
       cameraTower(K(0.500), 1, 30, { h: 18 });
       cameraTower(K(0.880), 1, 28, { h: 16 });
-      // Forest edge stops short of the Casanova (-1, 0.292-0.334) and Bucine (+1, 0.858-0.902)
+      // Forest edge stops short of the Materassi-Borgo San Lorenzo (-1, 0.292-0.334) and Bucine (+1, 0.858-0.902)
       // terrazze: their foliage cones cut the tier boxes (clip-audit 0.294-0.334, 0.888).
       // Arrabbiata mid-lap (0.475–0.545) is also open: the gap-14 / gap-30 belts
       // put FOLIAGE AABBs on the survey orbit eye (#3375). Resume past 0.55 with

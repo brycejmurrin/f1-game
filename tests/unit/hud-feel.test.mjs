@@ -112,6 +112,7 @@ function boot(opts = {}) {
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-skin.js"), sb, { filename: absSrc("js/ui/hud-skin.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   // The OVERTAKE chip converts the allowance to MJ through the real module.
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
@@ -144,6 +145,16 @@ function boot(opts = {}) {
   const hud = sb.GameHud.create(G);
   return { dom, els, player, G, sb, hud, bgLog, mapLog, timers, tick: () => hud.updateHud(true) };
 }
+
+// UI hunt 2026-10-29 H1: #captions sits outside #hud, so a new race must drop
+// the last spotter call itself (its 2.5 s hold is the backstop).
+test("resetRace clears the spotter caption strip", () => {
+  const { sb, hud } = boot();
+  let cleared = 0;
+  sb.Captions = { clear: () => { cleared++; } };
+  hud.resetRace();
+  assert.equal(cleared, 1);
+});
 
 test("the tach redline latches with hysteresis instead of flickering on the 92 % line", () => {
   const { els, player, tick } = boot();
@@ -380,7 +391,7 @@ test("the speed digits, energy bar and sector red are set up to be read at a gla
   // (css/tokens.css measures it at ~2.6:1 on the page). No HUD text may use it.
   const hud = read("js/ui/hud.js").replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(hud, /#e10600/i, "hud.js writes no text in the brand red");
-  assert.match(hud, /var\(--slower\)/, "the ghost delta reads the shared --slower token");
+  assert.match(hud, /var\(--slower-ink\)/, "the ghost delta reads the shared red TEXT ink, --slower-ink (#4258)");
   assert.match(hud, /var\(--faster\)/, "and --faster");
 });
 
@@ -1045,8 +1056,8 @@ test("a dropped gap strip carries the radio card's caution step down with the fl
   // The flag chip steps down under :root[data-gap-drop]; the card's caution step reads the same slot through
   // --flag-slot-top, which the root flag raises (#1345) — ONE formula, no body mirror (the #1366 twins were
   // dropped at the ship sync: HUD PR review 2026-10-10).
-  assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\)/);
-  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\), calc\(var\(--hud-gaps-b, 0px\) \+ 8px\)\); \}/,
+  assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, var\(--hud-top-h-0\)\) \+ 44px\)/);
+  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, var\(--hud-top-h-0\)\) \+ 44px\), calc\(var\(--hud-gaps-b, 0px\) \+ 8px\)\); \}/,
     "the dropped strip raises the card's flag slot to the chip's edge");
   assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(> :where\(#hud\) > #hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
     "the card sits 38px under the flag slot, wherever the chip is");
@@ -1067,6 +1078,93 @@ test("an empty timing tower still fits the bottom band and writes the dock cap",
   for (const el of none.U.keys()) el._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   none.root.style.removeProperty("--hud-z-dock");
   assert.equal(none.refit()["--hud-z-dock"], "", "an empty layout is a retry, not a fit");
+});
+
+/* BUTTON SIZE past the pedal column's cap (owner report: 245 % "does nothing"). 844x390 landscape,
+ * insets 47/47/0/21, buttons-mode intrinsics at zoom 1: the right dock is the 3-high taps column
+ * (236 px) beside BRAKE/GAS, the left one row of steer arrows (72 px). The right cap is the
+ * joint height solve, 329 / (236 + 44) = 1.175 — measured live as 85 px pedals from 150 % up. */
+function dockHarness(btn, opts = {}) {
+  const W = opts.width || (opts.portrait ? 390 : 844), H = opts.height || (opts.portrait ? 844 : 390);
+  const b = boot({ innerWidth: W });
+  b.sb.innerHeight = H;
+  const { dom } = b, root = dom.documentElement;
+  if (opts.mirror) dom.body.classList.add("mirror-controls");
+  root.style.setProperty("--hud-scale", "1");
+  root.style.setProperty("--hud-btn-scale", String(btn));
+  const mk = (cls, parent) => { const e = dom.document.createElement("div"); e.className = cls; (parent || dom.body).appendChild(e); return e; };
+  const top = mk("hud-top"), bottom = mk("hud-bottom"), bar = dom.document.createElement("div");
+  bar.id = "hud-dock"; dom.body.appendChild(bar);
+  const elL = dom.byId("dock-left"), elR = dom.byId("dock-right");
+  for (const d of [elL, elR]) { dom.body.removeChild(d); bar.appendChild(d); }
+  // Painted sides: MIRROR puts #dock-left (steer) on the right and #dock-right on the left.
+  const steer = elL, pedals = elR, sL = opts.mirror ? pedals : steer, sR = opts.mirror ? steer : pedals;
+  const R = (left, top_, w, h) => ({ left, top: top_, right: left + w, bottom: top_ + h, width: w, height: h });
+  const gear = mk("g", bottom), energy = mk("e", bottom), grpSteer = mk("st", steer), taps = mk("tp", pedals), ped = mk("pd", pedals);
+  const by = H - 21 - 236, rows = new Map([
+    [top, R(W / 2 - 150, 8, 300, 54)], [b.els.minimap, R(57, 8, 110, 110)], [b.els.hudSectors, R(W - 147, 70, 90, 72)],
+    [gear, R(W / 2 - 120, H - 81, 120, 60)], [energy, R(W / 2, H - 81, 120, 60)],
+    [bar, R(47, by, W - 94, 236)], [sL, R(47, by, opts.mirror ? 134 : 152, 236)], [sR, R(W - 47 - (opts.mirror ? 152 : 134), by, opts.mirror ? 152 : 134, 236)],
+    [grpSteer, R(opts.mirror ? W - 199 : 47, H - 93, 152, 72)],
+    [taps, R(opts.mirror ? 47 : W - 181, by, 54, 236)], [ped, R(opts.mirror ? 109 : W - 119, by + 84, 72, 152)],
+  ]);
+  for (const [el, r] of rows) el._rect = r;
+  const ins = { "--sal": "47px", "--sar": "47px", "--sat": "0px", "--sab": "21px", "--hud-btn-floor": "0.82" };
+  b.sb.getComputedStyle = () => ({ getPropertyValue: (k) => ins[k] || ALL_TOKENS[k] || "", columnGap: "8px", rowGap: "8px", position: "static", transform: "none" });
+  if (opts.portrait) b.sb.matchMedia = (q) => ({ matches: /portrait/.test(q) });
+  for (let i = 0; i < 4; i++) { b.sb.GameHud.invalidateFit(); b.tick(); }
+  const pv = (k) => root.style.getPropertyValue(k);
+  const want = Math.max(0.82, btn);
+  const zR = +pv("--hud-z-dock") || want, zL = +pv("--hud-z-dock-l") || zR, zBot = +pv("--hud-z-bot") || 1;
+  return { pv, zR, zL, zBot, W, H, want };
+}
+
+test("BUTTON SIZE: the steer dock follows the slider past the pedal column's cap; the pedals keep theirs", () => {
+  let prevL = 0, prevR = 0;
+  for (const btn of [0.6, 1, 1.25, 1.5, 2, 2.45, 3]) {
+    const h = dockHarness(btn), tag = `BUTTON ${btn * 100}%`;
+    if (h.want <= 1.175) {
+      assert.equal(h.pv("--hud-z-dock"), "", `${tag}: fits, no cap written`);
+      assert.equal(h.pv("--hud-z-dock-l"), "", `${tag}: and no steer cap either`);
+    } else {
+      assert.equal(h.pv("--hud-z-dock"), "1.175", `${tag}: the right dock's cap is today's joint height solve`);
+      assert.ok(h.pv("--hud-z-dock-l") !== "", `${tag}: the steer value is explicit whenever the pedal cap is`);
+    }
+    assert.ok(h.zL >= h.zR - 1e-9, `${tag}: steer ${h.zL} >= pedals ${h.zR}`);
+    assert.ok(h.zL >= prevL - 1e-9 && h.zR >= prevR - 1e-9, `${tag}: a bigger slider never paints a smaller button`);
+    prevL = h.zL; prevR = h.zR;
+    // Nothing offscreen: each column fits under the safe area with its top button, and the bar's row
+    // (steer + cluster + pedals + air) fits its width.
+    const room = h.H - 21 - 40;
+    assert.ok(72 * h.zL + 44 * Math.min(1.5, Math.max(1, h.zR)) <= room + 1e-6, `${tag}: steer + CAM fit the height`);
+    assert.ok(236 * h.zR + 44 * Math.min(2, Math.max(1, h.zR)) <= room + 1e-6, `${tag}: taps + PAUSE fit the height`);
+    assert.ok(152 * h.zL + 134 * h.zR + 240 * h.zBot + 2 * 8 + 20 <= h.W - 94 + 1, `${tag}: steer, cluster and pedals share the bar (1 px: --hud-z-bot ceils onto 0.01 at 245 %)`);
+    // UI hunt #3: budgeted at the 10 px floor, BUTTON 245 painted SPEED at 10.1 px over the owner's HUD 155.
+    assert.ok(h.zBot >= 1 - 1e-9, `${tag}: BUTTON SIZE never shrinks the gear/speed cluster below its shipped size (${h.zBot})`);
+  }
+  const owner = dockHarness(2.45), max = dockHarness(3);
+  assert.ok(owner.zL > 1.5 && owner.zL <= 2.45, `the owner's 245 % still paints steer arrows well past the pedals (${owner.zL})`);
+  assert.equal(max.zL, owner.zL, `300 % stops at the same bar-width budget (${max.zL})`);
+});
+
+test("BUTTON SIZE: MIRROR CONTROLS grows #dock-left on the right side; portrait keeps the shared cap", () => {
+  const m = dockHarness(2.45, { mirror: true });
+  assert.equal(m.pv("--hud-z-dock"), "1.175");
+  assert.ok(m.zL > 1.175, `mirrored steer dock still follows the slider (${m.zL})`);
+  const p = dockHarness(2.45, { portrait: true });
+  assert.equal(p.pv("--hud-z-dock-l"), p.pv("--hud-z-dock"), "portrait: the steer dock rides the shared cap");
+});
+
+function scaleSb() {
+  const sb = { window: {}, document: {} };
+  vm.runInNewContext(src("js/ui/scale.js") + "\nthis.UiScale = UiScale;", sb, { filename: absSrc("js/ui/scale.js") });
+  return sb;
+}
+test("the steer dock's zoom is min()ed with BUTTON SIZE, and its labels divide by the same zoom", () => {
+  const css = cssRules(readCssSource("css/touch-controls.css"));
+  const zoom = decl(css, /^body:not\(\.desktop\) #dock-left,/, "zoom");
+  assert.equal(zoom, "min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))", "the steer dock has its own zoom rule, min()ed with the slider like the pedal dock");
+  assert.equal(decl(css, /^body:not\(\.desktop\) #dock-left,/, "--touch-label-z"), zoom, "labels divide their floor by the same zoom");
 });
 
 test("GameHud.invalidateFit forces the next tick to re-fit; HudElements.apply calls it", () => {
@@ -1443,4 +1541,114 @@ test("broadcast height fitting reserves control space without changing button zo
   assert.ok(+got["--hud-z-top"] <= 1, "the tall broadcast column is capped into the viewport");
   assert.ok(+got["--hud-z-top"] >= 1 / 1.4 - .001, "14px text retains an approximately 10px painted floor");
   assert.equal(h.refit()["--hud-z-dock"], base["--hud-z-dock"], "repeated fits keep the controls independent");
+});
+
+
+test("emergency dock fit keeps small targets usable when a short viewport exhausts the height budget", () => {
+  // These heights force the joint solver below its emergency floor. Exercise
+  // the real GameHud through the existing VM, including mirrored controls.
+  for (const height of [120, 160, 180]) for (const mirror of [false, true]) {
+    const h = dockHarness(2.45, { height, mirror });
+    assert.ok(h.zR >= 0.5, `pedal dock at height ${height} cannot shrink below the target floor`);
+    assert.ok(h.zL >= 0.5, `steering dock at height ${height} uses the same minimum`);
+    assert.ok(48 * Math.min(h.zL, h.zR) >= 24, "even the narrow tier's smallest 48px tap stays at least 24px");
+    assert.ok(h.zBot >= 0.4, "readouts retain their separate fit floor");
+  }
+  assert.equal(dockHarness(2.45).zR, 1.175, "normal 844×390 pedal sizing is unchanged");
+});
+
+test("#4483: BUTTON SIZE fit suffix follows the dock cap, syncLayout is rAF-coalesced, results sheet drops its car array on close", () => {
+  const scale = src("js/ui/scale.js"), res = src("js/ui/results-sheet.js");
+  const missing = [
+    [scale, "function refreshFit()", true], [scale, 'attributeFilter: ["style"]', true],
+    [scale, 'addEventListener("resize", syncLayoutSoon', true], [scale, 'visualViewport.addEventListener("resize", syncLayoutSoon', true],
+    [scale, 'addEventListener("resize", syncLayout,', false], [res, "if (sheet.hidden) saidFor = null", true],
+  ].filter(([text, bit, want]) => text.includes(bit) !== want).map((r) => r[1]);
+  assert.deepEqual(missing, []);
+});
+
+/* #5206 — EVERY SIZE SLIDER DOES WHAT IT SAYS. Bryce, on his iPhone: the sliders are "wonky and backwards". Measured
+ * (docs/notes/CONTROL-AUDIT-5206-2026-11-10.md): HUD SIZE painted nothing above 100 % behind an unlabelled fit cap,
+ * BUTTON SIZE was dead under 82 % and above the cap, UI SIZE said 200 % while its own sheet stopped at 125 %.
+ * The rule: a slider's range on this window is the range that paints, its number is the painted size, and the row names
+ * the cap. Table-driven over tests/data/control-registry.json: the pure half is here (UiScale's sizeRow over the caps
+ * the race fit measured at his two phone cells); tests/specs/ui-scale.spec.js drives the same rows in a live page. */
+const REG = JSON.parse(src("tests/data/control-registry.json"));
+const html = src("index.html");
+const { sizeRow, parseCaps } = scaleSb().UiScale;
+
+test("every range input in the shell is in the control registry, and the registry names no ghost", () => {
+  const ids = [...html.matchAll(/<input\b[^>]*type="range"[^>]*>/g)].map((m) => (m[0].match(/\bid="([^"]+)"/) || [])[1]);
+  const known = new Set([...REG.size.map((r) => r.id), ...REG.opacity, ...Object.keys(REG.other)]);
+  assert.deepEqual(ids.filter((id) => !known.has(id)), [], "a new slider: add it to tests/data/control-registry.json (a size control gets a `size` row)");
+  assert.deepEqual([...known].filter((id) => !ids.includes(id)), [], "registry rows with no input in index.html");
+});
+
+test("a size row's shipped min / max / step in the shell is the registry's full range", () => {
+  for (const r of REG.size) {
+    const tag = (html.match(new RegExp(`<input\\b[^>]*id="${r.id}"[^>]*>`)) || [""])[0];
+    const attr = (n) => +(tag.match(new RegExp(`\\b${n}="([^"]+)"`)) || [])[1];
+    assert.deepEqual({ min: attr("min"), max: attr("max"), step: attr("step") }, r.lim, r.id);
+  }
+});
+
+for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
+  test(`${r.id} at cell ${cell}: the range is what paints, the value is monotonic, the label is the painted size`, () => {
+    const caps = parseCaps(c.caps);
+    assert.ok(caps, "the cell's measured --hud-cap parses");
+    let prev = -Infinity;
+    for (let wish = r.lim.min; wish <= r.lim.max; wish += 5) {
+      const row = sizeRow(r.key, wish, r.lim, caps, 0);
+      assert.ok(row.min <= row.value && row.value <= row.max, `${wish}: value inside its own range`);
+      assert.ok(row.value >= prev, `${wish}: a bigger wish never paints smaller`);
+      prev = row.value;
+      const lead = `${Math.round(row.value * 10) / 10}`.replace(/\.0$/, "");
+      assert.equal(row.label.slice(0, lead.length), lead, `${wish}: "${row.label}" leads with the painted ${row.value}`);
+      assert.equal(/ · max$/.test(row.label), row.max < r.lim.max && row.value >= row.max, `${wish}: "· max" exactly when the window's cap is reached ("${row.label}")`);
+      if (r.key === "uiScale") {
+        assert.deepEqual([row.min, row.max, row.value], [r.lim.min, r.lim.max, wish], `${wish}: UI SIZE is not clamped off a phone, and never from above (the title paints the whole range)`);
+        const z = Math.round(r.sheetZoom * 100);
+        assert.equal(sizeRow(r.key, wish, r.lim, caps, r.sheetZoom).label, wish > z + 0.5 ? `${wish}% · this menu ${z}%` : `${wish}%`, `${wish}: the row names the zoom the settings sheet paints at`);
+      }
+    }
+    const top = sizeRow(r.key, r.lim.max, r.lim, caps, 0);
+    if (r.key === "hudScale") {
+      assert.equal(top.max, Math.max(Math.ceil(caps.top * 100 - 1e-6), Math.ceil(caps.bot * 100 - 1e-6)), "HUD SIZE stops at the larger band cap");
+      assert.ok(top.max < r.lim.max, "his phone caps HUD SIZE: the dead 100-200 % travel is gone");
+    }
+    if (r.key === "hudBtnScale") {
+      assert.equal(top.min, Math.ceil(caps.floor * 100), "the dock's painted floor (82 %; 92 % at 852x368) is the slider's minimum: no dead travel under it");
+      assert.ok(Math.abs(top.max - caps.steer * 100) < 0.26, "BUTTON SIZE stops where the steer pad stops");
+      assert.equal(top.label.split(" · ")[1], `pedals ${Math.round(caps.dock * 100)}%`, "and the row names the pedal column's smaller cap");
+    }
+    if (r.key === "uiScale") {
+      assert.equal(sizeRow(r.key, 200, r.lim, null, 2).label, "200%", "a sheet painting at the wish adds no note");
+      // #5235 (Bryce 2026-11-10): a phone's UI SIZE stops at 70 %, and the tokens hold text at 12 painted px there.
+      const ph = sizeRow(r.key, 61, r.lim, null, 0, true);
+      assert.deepEqual([ph.min, ph.max, ph.value, ph.label], [r.phoneMin, r.lim.max, r.phoneMin, `${r.phoneMin}%`], "his stored 61 % paints 70 % on a phone");
+      assert.equal(sizeRow(r.key, 61, r.lim, null, 0, false).value, 61, "a desktop keeps 40 %");
+      const tok = src("css/tokens.css");
+      // The tokens' own arithmetic at the phone minimum: max(rung, floor / scale) * scale painted px, per declaration.
+      const z = r.phoneMin / 100, painted = (name) => [...tok.matchAll(new RegExp(`${name}: max\\((\\d+)px, calc\\((\\d+)px / var\\(--ui-scale`, "g"))]
+        .map((m) => Math.round(Math.max(+m[1], +m[2] / z) * z * 100) / 100);
+      assert.deepEqual(painted("--fs-micro"), [12, 12], "menu text (default and LARGE) paints 12 px at the phone minimum, never under");
+      assert.equal(painted("--tap").pop(), 44, "a touch row (the later, body:not(.desktop) rule) paints 44 px at the phone minimum");
+    }
+  });
+}
+
+test("outside a race (no --hud-cap) the race sliders keep their full range and plain label", () => {
+  for (const r of REG.size.filter((x) => x.key !== "uiScale")) {
+    const row = sizeRow(r.key, r.lim.max, r.lim, null, 0);
+    assert.deepEqual([row.min, row.max, row.label], [r.lim.min, r.lim.max, `${r.lim.max}%`]);
+  }
+  assert.equal(parseCaps(""), null);
+  assert.equal(parseCaps("1 1 9 9"), null);
+});
+
+test("BUTTON SIZE never promises room that would shrink a HUD SIZE above 100 %", () => {
+  const lim = REG.size[1].lim;
+  // cell A, HUD SIZE 151, BUTTON SIZE 100: the pad could reach 194 % only by taking the gear cluster back to 100 %.
+  const row = sizeRow("hudBtnScale", 100, lim, parseCaps("0.859 1.516 1.186 1.942 1.224 0.82"), true);
+  assert.equal(row.max, 122.25, "the slider stops at the keep cap, not the steer cap");
 });

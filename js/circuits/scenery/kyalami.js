@@ -6,8 +6,8 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["kyalami"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
-        tree, bush, ridge, building, spectatorHill, sponsorHoarding,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, seat,
+        tree, ridge, building, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge,
@@ -272,28 +272,45 @@
         }
       }
 
-      groundPatch(K(0.078), 1, 6, [40, 0.18, 54], EARTH,
-        { id: "kyalami-crowthorne-gravel", samples: 8 });
-      tyreWall(0.060, 0.098, 1, 5, [0.86, 0.20, 0.18]);
+      // Corner run-off kits, anchored on def.turns (racing frame) rather than
+      // frac literals: the old literals sat 78-130 m off their apexes and on the
+      // INSIDE (corner-frames 2026-11-10). This lap runs clockwise on a
+      // `reverse: true` source, so the two emitter families take opposite side
+      // conventions here: groundPatch is NOT side-flipped by the api wrapper
+      // (engine side: -1 = left), the (s0, s1, side) / (k, side) helpers ARE
+      // (authored +1 = engine -1 = left). A right-hander's outside is the left.
+      const TURN = (i) => (((api.def.turns[i - 1] - (api.def._sceneryShift || 0)) % 1) + 1) % 1;
+
+      // T1 Crowthorne (right): gravel + red tyre wall on the outside (left).
       // No spectatorHill on the Crowthorne drop — ironTerrace covers seating;
       // a bank here clipped bushes and hung unsupported over the grade.
-      marshalPost(K(0.072), -1, 10);
+      groundPatch(K(TURN(1)), -1, 6, [28, 0.18, 54], EARTH,
+        { id: "kyalami-crowthorne-gravel", samples: 8 });
+      tyreWall(TURN(1) - 0.008, TURN(1) + 0.008, 1, 35, [0.86, 0.20, 0.18]);
+      marshalPost(K(TURN(1) + 0.006), -1, 10);
 
-      groundPatch(K(0.255), -1, 5, [26, 0.18, 34], EARTH,
+      // T3 Barbecue (left): gravel + blue tyre wall on the outside (right).
+      groundPatch(K(TURN(3)), 1, 5, [12, 0.18, 34], EARTH,
         { id: "kyalami-barbecue-gravel", samples: 6 });
-      tyreWall(0.240, 0.272, -1, 4, [0.20, 0.40, 0.85]);
-      marshalPost(K(0.250), 1, 9);
+      tyreWall(TURN(3) - 0.007, TURN(3) + 0.007, -1, 18, [0.20, 0.40, 0.85]);
+      marshalPost(K(TURN(3) + 0.004), 1, 9);
+
+      // Spectator bank on the downhill run after the second left (not a run-off kit).
       spectatorHill(0.235, 0.285, 1, 30, { rows: 2, rise: 0.95, depth: 1.6, density: 0.28, step: 11 });
 
-      groundPatch(K(0.565), 1, 5, [26, 0.18, 34], EARTH,
+      // T9 Leeukop (right, after the T6-T8 Esses): gravel on the outside (left).
+      groundPatch(K(TURN(9)), -1, 5, [26, 0.18, 34], EARTH,
         { id: "kyalami-leeukop-gravel", samples: 6 });
-      marshalPost(K(0.558), -1, 9);
+      marshalPost(K(TURN(9) - 0.004), -1, 9);
 
-      groundPatch(K(0.885), -1, 5, [28, 0.18, 36], EARTH,
+      // T13 final corner (right): gravel + yellow tyre wall on the outside (left).
+      groundPatch(K(TURN(13)), -1, 5, [28, 0.18, 36], EARTH,
         { id: "kyalami-final-gravel", samples: 6 });
-      tyreWall(0.868, 0.902, -1, 4, [0.85, 0.78, 0.20]);
+      tyreWall(TURN(13) - 0.007, TURN(13) + 0.007, 1, 34, [0.85, 0.78, 0.20]);
+      marshalPost(K(TURN(13) + 0.004), -1, 9);
+
+      // Final-corner approach terrace (outside of the braking zone, ~56 m early).
       ironTerrace("kyalami-terrace-final", K(0.885), 1, 18, 9, { rows: 5 });
-      marshalPost(K(0.880), 1, 9);
 
       spectatorHill(0.43, 0.51, 1, 32, { rows: 2, rise: 0.95, depth: 1.6, density: 0.30, step: 11 });
       ironTerrace("kyalami-terrace-climb", K(0.470), 1, 30, 10, { rows: 6 });

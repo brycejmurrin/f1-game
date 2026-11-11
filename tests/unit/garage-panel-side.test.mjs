@@ -22,7 +22,7 @@ test('garage held camera controls release only their owning pointer, or window b
   for (const end of ['pointerup', 'pointercancel', 'lostpointercapture', 'blur']) {
     const handlers = {}, win = {}, rates = { az: 1 }; let steps = 0;
     const el = { addEventListener(t, f) { (handlers[t] ||= []).push(f); }, setPointerCapture() {} };
-    const sb = { $: () => el, G: { setupPreviewOn: true }, preview: false, arrival: {}, spHeld: null, setupGestureResets: [],
+    const sb = { $: () => el, G: { setupPreviewOn: true }, driveOut: null, preview: false, arrival: {}, spHeld: null, setupGestureResets: [],
       window: { addEventListener(t, f) { (win[t] ||= []).push(f); } } };
     vm.runInNewContext(fn + ';holdSetupCtl("left", rates, step);', Object.assign(sb, { rates, step: () => steps++ }));
     const fire = (list, type, id) => { for (const f of list[type] || []) f({ type, pointerId: id, preventDefault() {} }); };
@@ -50,7 +50,7 @@ test('garage gesture lifecycle drops old fingers and held owners without breakin
     const observers = new Map(), zooms = [], rates = { az: 1 }; let steps = 0;
     const c = vm.createContext({ window: win, document: doc, G: { setupPreviewOn: true, soundOn: false }, home: { active: false },
       $: id => ({ game: canvas, left: control, carsetup: garage, 'photo-studio': photo })[id] || null,
-      preview: false, arrival: { cancel() {} }, spHeld: null, setupPreviewAz: 0, setupPreviewEl: 0,
+      driveOut: null, preview: false, arrival: { cancel() {} }, spHeld: null, setupPreviewAz: 0, setupPreviewEl: 0,
       SP_EL_MIN: 0, SP_EL_MAX: 1.5, SP_EL_DEF: .5, SP_DIST_DEF: 8, SP_ORBIT_DEF: [0, 0, 0], SP_TGT_DEF: [0, 0, 0], setupPreviewPan: [0, 0, 0],
       setSetupSpin() {}, endHome() {}, setupZoom: value => zooms.push(value), clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
       GarageExperience: { canOrbit: (on, _home, _photo, blocked) => on && !blocked },
@@ -132,7 +132,7 @@ test("the fit takes the magnitude; the lens shift and recentre keep the sign", (
 test("a Home photo uses manual distance and aim while the background retains automatic framing", () => {
   const src = read("js/garage/setup-camera.js");
   const start = src.indexOf('  const canvasEl = $("game"), panelEl =');
-  const end = src.indexOf('  const context = garageCtx(), sceneTime', start);
+  const end = src.indexOf('  const outside = context.realExterior', start);
   assert.ok(start > 0 && end > start, 'the real camera framing segment must be available');
   const frame = src.slice(start, end);
   for (const aspect of [1440 / 900, 900 / 1440]) {
@@ -165,7 +165,7 @@ test("the GARAGE look rules keep the car's floor and stay out of portrait", () =
   const css = read("css/carsetup.css");
   // PANEL WIDTH scales the cap only — both variants keep the 410 floor and the car reserve.
   for (const reserve of ["320px", "420px"]) {
-    assert.ok(css.includes(`clamp(410px, calc(100 * var(--vwz) - ${reserve} / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1)))`),
+    assert.ok(css.includes(`clamp(410px, calc((var(--safe-w) - ${reserve}) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1)))`),
       `PANEL WIDTH (${reserve} reserve) must keep the floor and the car's reserve`);
   }
   assert.match(css, /:root\[data-look-garage-side="left"\] #carsetup \{ place-items: stretch start; \}/);
@@ -177,6 +177,23 @@ test("the GARAGE look rules keep the car's floor and stay out of portrait", () =
   assert.match(css, /:root\[data-look-garage-glass="solid"\] #carsetup #cs-inner \{ background: var\(--carbon\); \}/);
   assert.match(css, /:root\[data-look-garage-glass="glass"\]:not\(\[data-ui-contrast="high"\]\) #carsetup #cs-inner \{/);
   assert.match(css, /:root\[data-look-garage-stats="hide"\] #carsetup #cs-stats-inner \{ display: none; \}/);
+});
+
+// Gap 17 of the UI scaling contract note (2026-11-06, PR #5154): the car reserve is taken from the SAFE
+// box, so a notch cannot eat it. The formula row: 852 wide, UI SIZE 1.09, 59 px insets
+// (the larger of inset and --gut since #5201), PANEL WIDTH 135 %.
+test("the garage car reserve is measured from the safe box, not the viewport (852/1.09, 59 insets)", () => {
+  const css = read("css/carsetup.css");
+  assert.doesNotMatch(css, /calc\(100 \* var\(--vwz\) - (320|420)px \/ var\(--ui-scale\)\)/,
+    "no reserve may be subtracted from the raw viewport");
+  const vw = 852, ui = 1.09, sal = 59, sar = 59, gut = 8, pw = 1.35, reserve = 320;
+  const safeW = vw - Math.max(sal, gut) - Math.max(sar, gut);
+  const panel = (own) => Math.min(Math.max(410, own), 420 * pw);
+  const old = panel((vw - reserve) / ui), now = panel((safeW - reserve) / ui);
+  const clear = (own) => (vw - Math.max(sar, gut) - own * ui) - sal;   // car's room left of the panel, past the notch
+  assert.equal(now, 410, "the floor binds once the insets are counted");
+  assert.ok(clear(old) < 210 && clear(now) > 280,   // 202 and 287 with max(inset, gut) (#5201; 186 and 271 when the gutter was added)
+    `car clear of the notch: was ${clear(old).toFixed(0)}, now ${clear(now).toFixed(0)}`);
 });
 
 test("narrow landscape garage keeps camera and aero controls reachable", () => {
@@ -323,4 +340,16 @@ test("garage frames memoise the career sponsor + achievements on (store.rev, res
   h.garageCtx();
   assert.equal(h.calls.meta, 3);
   assert.equal(h.garageCtx().wins, 2, "and the tally follows the pushed win");
+});
+
+test('#4923: PANEL WIDTH above 100 % never narrows the ≥1800px sheet below its shipped 560px cap', () => {
+  const css = read('css/carsetup.css');
+  const at = css.indexOf('@media (min-width: 1800px)');
+  assert.ok(at > 0, 'the ultrawide block moved — re-point this test');
+  const block = css.slice(at, css.indexOf('\n}\n', at));
+  const rule = block.match(/:root\[data-look-garage-pw\] #carsetup \{\s*--cs-sheet-w:[^;]*calc\((\d+)px \* var\(--look-garage-pw, 1\)\)/);
+  assert.ok(rule, 'the ultrawide block needs its own pw-aware cap, or the 420px look-pw rule wins there');
+  const shipped = Number(block.match(/#carsetup \{\s*--cs-sheet-w:[^;]*, (\d+)px\)\);/)[1]);
+  for (const pw of [1.05, 1.1, 1.3]) assert.ok(Number(rule[1]) * pw > shipped, `pw ${pw} must widen past ${shipped}px`);
+  assert.ok(css.lastIndexOf(':root[data-look-garage-pw] #carsetup {') > at, 'the ultrawide pw rule must come after the generic one');
 });

@@ -15,7 +15,7 @@ import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
-const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/workspace.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/zones.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/workspace.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -37,13 +37,17 @@ function bootScreen(stored = {}) {
   ctx.queueMicrotask = (fn) => Promise.resolve().then(fn);
   ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
   ctx.devicePixelRatio = 1;
+  // The window listeners the screen registers (the foot's `resize` re-seat); fired by `fire(type)`.
+  const listeners = new Map();
+  ctx.addEventListener = (type, fn) => { (listeners.get(type) || listeners.set(type, []).get(type)).push(fn); };
+  const fire = (type, ev = { type }) => { for (const fn of listeners.get(type) || []) fn(ev); };
   for (const f of SCREEN_FILES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const G = { soundOn: false, trackIdx: 0 };
   const clicks = [];
   for (const id of ["mb-race", "mb-tt"]) dom.byId(id).addEventListener("click", () => clicks.push(id));
   dom.byId("mb-race").click = () => clicks.push("mb-race");
   dom.byId("mb-tt").click = () => clicks.push("mb-tt");
-  return Object.assign(vmx, { dom, G, clicks, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
+  return Object.assign(vmx, { dom, G, clicks, fire, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
 }
 
 // The normal editor store keeps object references; SAVE mutating a cached draft
@@ -147,6 +151,27 @@ test("init() builds the rail before any design exists; open() randomises a green
   assert.equal(b.D.isOpen(), false);
   assert.equal(b.root.hidden, true);
   assert.ok(b.C.draft(), "a draft is autosaved on close");
+});
+
+test("a fresh open leaves no UNDO entry of the blank design", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  assert.equal(b.D.state().undo, 0, "nothing to undo on a fresh open");
+  assert.equal(b.D.undo(), false);
+});
+
+test("UNDO keeps a country change (it is not an undoable edit, like the name)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open(); b.D.randomise(7);
+  b.D.setTool("corner"); assert.equal(b.D.applyStamp(3, 3), true);
+  const sel = walk(b.root).find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Country");
+  sel.value = "Japan"; sel.dispatchEvent({ type: "change" });
+  const country = b.D.state().design.country;
+  assert.ok(country, "the country was set");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.country, country, "UNDO leaves the country alone");
 });
 
 test("the rail's edits: stamp, undo/redo, reverse, start, delete floor, theme, width, name", () => {
@@ -437,6 +462,72 @@ test("an insert / delete / stamp keeps zones before the edit at their distance f
   assert.equal(d3.pts.length, d2.pts.length + 1, "the tap inserted a point");
   samePlace(pointAt(d3.pts, d3.bankZones[0].frac), pointAt(d2.pts, d2.bankZones[0].frac), 1e-6, "an insert upstream leaves a downstream zone in place");
   samePlace(pointAt(d3.pts, d3.elevations[0].s), pointAt(d2.pts, d2.elevations[0].s), 1e-6, "…and an upstream one");
+});
+
+test("a stamp over a span that wraps the start line, and deleting point 0, keep every zone on its road (WP-G1)", () => {
+  const b = bootScreen();
+  const d0 = openGreen(b);
+  const N = d0.pts.length;
+  const cum = (p) => { const c = [0]; for (let i = 0; i < p.length; i++) { const a = p[i], q = p[(i + 1) % p.length]; c.push(c[i] + Math.hypot(q[0] - a[0], q[1] - a[1])); } return c; };
+  const c0 = cum(d0.pts), L0 = c0[N], f = (k) => c0[k] / L0;
+  const a = Math.floor(N / 3), m = Math.floor(N / 2), z = Math.floor((2 * N) / 3);
+  const zones = { bankZones: [{ frac: f(m), angleDeg: 8, widthM: 100 }], bridges: [{ s: f(z), halfM: 60, rise: 6 }], elevations: [{ s: f(a), halfM: 60, rise: 2 }],
+    props: [{ kind: "trees", s: f(m + 2), side: 1 }] };
+  const loaded = Object.assign({}, d0, zones);
+  b.D.load(loaded);
+  const z0 = plain(b.D.state().design);
+  const keep = (dn, what, tol) => {
+    assert.notDeepEqual(dn.pts[0], z0.pts[0], `${what}: the start moved (the case under test)`);
+    samePlace(pointAt(dn.pts, dn.bankZones[0].frac), pointAt(z0.pts, z0.bankZones[0].frac), tol, `${what}: bank`);
+    samePlace(pointAt(dn.pts, dn.bridges[0].s), pointAt(z0.pts, z0.bridges[0].s), tol, `${what}: bridge`);
+    samePlace(pointAt(dn.pts, dn.elevations[0].s), pointAt(z0.pts, z0.elevations[0].s), tol, `${what}: elevation`);
+    if (z0.props && z0.props.length) samePlace(pointAt(dn.pts, dn.props[0].s), pointAt(z0.pts, z0.props[0].s), tol, `${what}: prop`);
+  };
+  // Shift-click span from N-3 round to 2: the splice keeps the road from its rejoin up to N-3, makes
+  // that rejoin point the new index 0 and (past 200 points) RDP-thins the survivors at 1 m — hence 1.5 m.
+  b.D.setTool("corner");
+  assert.equal(b.D.applyStamp(N - 3, 2), true);
+  keep(plain(b.D.state().design), "wrapped stamp", 1.5);
+  // DELETE on the start point: old pts[1] becomes the start.
+  b.D.load(loaded);
+  assert.equal(b.D.deletePoint(0), true);
+  keep(plain(b.D.state().design), "delete point 0", 1e-6);
+});
+
+test("a full-lap width zone overlaps every span: SPAN WIDTH reads it, the base width clears it, a narrower span replaces it (W10 #2)", () => {
+  const b = bootHooked();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const item = b.C.sanitize(design({ baseHW: 8, hwZones: [{ s0: 0, s1: 1, hw: 5, ease: 0.025 }] }));
+  b.D.open({ design: item, shared: true });
+  const row = rowOf(b.root, "SPAN WIDTH m"), val = row.children[2];
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9]);
+  assert.equal(val.textContent, "5.0", "the road under the span is the full-lap zone's, not the 8.0 base");
+  assert.equal(b.D.setSpanWidth(8), true, "the base width clears the zone it overlaps");
+  assert.deepEqual(plain(b.D.state().design.hwZones), []);
+  b.D.undo();
+  assert.equal(b.D.state().design.hwZones.length, 1);
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.equal(b.D.setSpanWidth(6), true);
+  const z = plain(b.D.state().design.hwZones);
+  assert.equal(z.length, 1, "one zone: the span's, not the span's plus the full lap");
+  assert.equal(z[0].hw, 6); assert.notEqual(z[0].s1 - z[0].s0, 1);
+  b.D.close();
+});
+
+test("the map canvas leaves Tab to the browser; [ ] still walk the points (W10 #5)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const canvas = b.root.querySelector("canvas");
+  const key = (k, shiftKey = false) => { const e = { type: "keydown", key: k, shiftKey }; b.dom.dispatch(canvas, e); return e; };
+  assert.notEqual(key("Tab").defaultPrevented, true);
+  assert.equal(b.D.state().sel, -1, "Tab selects nothing");
+  key("]");
+  assert.equal(b.D.state().sel, 0);
+  assert.notEqual(key("Tab").defaultPrevented, true, "a selected point does not trap Tab either");
+  assert.notEqual(key("Tab", true).defaultPrevented, true);
+  assert.equal(b.D.state().sel, 0, "…and does not cycle");
+  b.D.close();
 });
 
 test("full-lap width survives REVERSE and START HERE through storage and engine rebuild", () => {
@@ -1314,6 +1405,87 @@ test("START FROM…: a card per shipped circuit; a pick traces it into a new des
   assert.equal(b.D.undo(), true);
   assert.deepEqual(plain(b.D.state().design.pts), d0.pts, "UNDO brings the design back");
   assert.equal(b.D.startFrom("custom-nope"), false);
+});
+
+test("START FROM hydrates a metadata-only pick and revokes stale replacements", async () => {
+  const b = bootScreen(); openGreen(b);
+  const idx = b.Tracks.LIST.findIndex((d) => d.id === "monza"), full = b.Tracks.LIST[idx];
+  const stub = () => ({ id: full.id, name: full.name, _metaOnly: true });
+  const reset = () => { b.Tracks.LIST[idx] = stub(); };
+  reset();
+  assert.throws(() => b.ctx.TrackInsight.fromCircuit(b.Tracks.LIST[idx]), "metadata cannot be traced before hydration");
+  let release, calls = 0;
+  b.G.ensureCircuit = (i) => { assert.equal(i, idx); calls++; return new Promise((resolve) => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; }); };
+  const before = plain(b.D.state().design), order = b.Tracks.LIST.map((d) => d.id);
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  assert.deepEqual(plain(b.D.state().design), before, "waiting does not replace the working circuit");
+  release(); assert.equal(await pending, true);
+  assert.equal(b.D.state().design.name, "MONZA REMIX");
+  assert.deepEqual(b.Tracks.LIST.map((d) => d.id), order, "hydration preserves saved order");
+  assert.equal(b.D.undo(), true); assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  for (const change of [() => b.D.setName("EDIT WHILE LOADING"), () => b.D.close(), () => b.D.startFrom("spa")]) {
+    b.D.open(); reset(); const next = b.D.startFrom("monza"); await Promise.resolve();
+    change(); const retained = plain(b.D.state().design); release();
+    assert.equal(await next, false); assert.deepEqual(plain(b.D.state().design), retained);
+  }
+  b.D.open(); reset(); const retained = plain(b.D.state().design);
+  b.G.ensureCircuit = () => Promise.reject(new Error("offline"));
+  assert.equal(await b.D.startFrom("monza"), false);
+  assert.deepEqual(plain(b.D.state().design), retained, "load failure preserves unsaved edits");
+  assert.equal(calls, 4);
+  b.D.close();
+});
+
+// Hydration may finish between pointermove and pointerup. Exercise the real
+// gesture handlers rather than calling the final commit hooks directly.
+for (const gesture of ["map", "profile", "draw"]) for (const move of [true, false]) test(`pending START FROM ${move ? "yields to an in-progress " : "survives a selection-only "}${gesture} gesture`, async () => {
+  const b = bootScreen(), captured = {}, arcs = [];
+  for (const [global, key] of [["DesignerCanvas", "map"], ["DesignerProfile", "profile"]]) {
+    const real = b.ctx[global];
+    b.ctx[global] = Object.assign({}, real, { create(c, hooks) {
+      captured[key] = { canvas: c };
+      if (key === "profile") {
+        c._rect = { left: 0, top: 0, width: 640, height: 72 };
+        const get = c.getContext;
+        c.getContext = (...args) => { const g = get(...args); return new Proxy(g, { get(target, k) {
+          if (k === "arc") return (x, y, r) => arcs.push({ x, y, r });
+          if (k === "clearRect") return () => { arcs.length = 0; };
+          return target[k];
+        } }); };
+      }
+      const api = real.create(c, hooks); captured[key].api = api; return api;
+    } });
+  }
+  openGreen(b); b.D.setMode(gesture === "profile" ? "elevation" : gesture === "draw" ? "draw" : "edit");
+  b.D.preview();
+  const before = plain(b.D.state().design), undo = b.D.state().undo;
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured[gesture === "profile" ? "profile" : "map"];
+  h.api.resize();
+  const fire = (type, x, y) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: x, clientY: y });
+  let x, y;
+  if (gesture === "profile") { const grip = arcs.slice(-before.pts.length)[4]; x = grip.x; y = 36; }
+  else { h.api.fit(); const v = h.api.view(), p = before.pts[4]; x = (p[0] - v.cx) * v.scale + v.w / 2; y = (p[1] - v.cz) * v.scale + v.h / 2; }
+  fire("pointerdown", x, y);
+  if (move) {
+    fire("pointermove", x + 30, y - 15);
+    if (gesture === "draw") fire("pointermove", x + 60, y + 30);
+  }
+  assert.deepEqual(plain(b.D.state().design), before, "live gesture has not committed");
+  release(); assert.equal(await pending, !move, "only a deliberate mutation revokes the pending replacement before pointerup");
+  if (move) assert.deepEqual(plain(b.D.state().design), before);
+  fire("pointerup", x + 60, y + 30);
+  const after = b.D.state();
+  assert.equal(after.design.name, move ? before.name : "MONZA REMIX");
+  assert.equal(after.undo, undo + 1, "one gesture or replacement remains one undo transaction");
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  assert.deepEqual(plain(b.D.state().design.heights), before.heights);
+  b.D.close();
 });
 
 // START FROM pinned every shipped circuit's whole centreline (~4 MB) for the page
@@ -2985,4 +3157,44 @@ test("terrain library search filters without editing; landscapes place, undo and
   b.D.undo(); assert.equal(b.D.state().design.props, undefined);
   for (const theme of ["fjord", "badlands", "redwood"]) { by("theme", theme).click(); assert.equal(b.D.state().design.theme, theme); }
   b.D.close();
+});
+
+// Deploy red b852807e (Pages run 42337166562): at 844x390 the foot re-seats under the rail
+// on the resize that follows the open; moving the foot moved the SHARE & FILES summary
+// Playwright had just focused, the platform dropped focus on <body>, and the Enter then
+// seeded MenuNav's landing (the pressed EDIT chip) instead of opening the menu.
+test("re-seating the foot on a short-landscape resize keeps focus on the control that had it", () => {
+  const b = bootScreen();
+  const { document } = b.dom;
+  b.ctx.getComputedStyle = () => ({ getPropertyValue: () => "" });
+  b.ctx.innerWidth = 1280; b.ctx.innerHeight = 720;
+  b.D.open();
+  // What the mini DOM does not do and the platform does: a focused node that moves
+  // between parents loses focus to <body>. (Element identity is asserted with ===:
+  // assert.equal's diff of two mini-DOM trees is what OOM-killed the runner.)
+  for (const host of [b.root, b.root.querySelector(".td-body")]) {
+    const append = host.appendChild;
+    host.appendChild = (c) => { const had = document.activeElement; const r = append(c); if (had && c.contains(had)) document.activeElement = document.body; return r; };
+  }
+  const foot = b.root.querySelector(".td-foot"), menu = walk(b.root).find((e) => e.dataset.role === "file-menu"), summary = menu && menu.children[0];
+  assert.ok(foot && summary, "the foot and its SHARE & FILES summary exist");
+  assert.equal(b.root.dataset.foot, "out", "a landscape desktop keeps the foot under the body");
+  summary.focus();
+  b.ctx.innerWidth = 844; b.ctx.innerHeight = 390;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "in", "844x390 seats the foot inside the body");
+  assert.ok(foot.parentNode === b.root.querySelector(".td-body"), "the foot moved under the rail");
+  assert.ok(document.activeElement === summary, "the summary keeps focus across the move");
+  // ...and back out again on the way to portrait, still without dropping it.
+  b.ctx.innerWidth = 390; b.ctx.innerHeight = 844;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "out");
+  assert.ok(document.activeElement === summary, "the summary keeps focus when the foot returns to the dialog");
+  // Nothing focused inside the foot: the re-seat touches focus nowhere else.
+  const draw = walk(b.root).find((e) => e.dataset.role === "mode-bar").querySelector("button");
+  draw.focus();
+  b.ctx.innerWidth = 844; b.ctx.innerHeight = 390;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "in");
+  assert.ok(document.activeElement === draw, "focus outside the foot is left alone");
 });

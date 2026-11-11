@@ -47,9 +47,8 @@
 (window.TrackScenery = window.TrackScenery || {})["mont_tremblant"] =
   function (api) {
       const { n, hash, every, anchor, onTrack, out, MAT, vadd, modelGroup, seat,
-        pine, tree, bush, forestEdge, building, grandstandEx, spectatorHill,
-        guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
-        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox,
+        pine, tree, bush, building, grandstandEx, spectatorHill,
+        guardrail, fence, tyreWall, marshalPost, cameraTower, billboard, groundPatch, ridge, mountain, terrainYAt, addBox,
         indexSolid, waterBand, overheadSpan } = api;
 
       // ---------------------------------------------------------------- 1.
@@ -81,7 +80,6 @@
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       const RAIL = 3.2;                   // armco gap: hard against the tarmac
       const CAM_NEAR = 22;                // first rank past chase + canopy
-      const inOrbitRing = (dist) => dist >= 30 && dist <= 60; // scenery-orbit ~45 m
       const camHot = (k) => {
         const f = k / n;
         return (f >= 0.38 && f <= 0.56) || (f >= 0.66 && f <= 0.82);
@@ -856,21 +854,48 @@
           r: a0.r, u: a0.u, t: a0.t,
         };
         const b = [a.r, a.u, a.t];
+        // The ground falls ~0.7 m across this bank and the basis follows
+        // the road grade, so nothing here may assume the anchor's height:
+        // grounded() is a box whose TOP is `top` above the anchor plane
+        // and whose bottom is 0.3 m under the lowest terrain in its OWN
+        // footprint (the risers and the board hung 1.5-3.0 m clear, #5085).
+        const grounded = (stage, dx, top, w, len, col) => {
+          let d = 0;
+          for (const sx of [-0.5, 0, 0.5]) for (const sz of [-0.5, 0, 0.5]) {
+            const p = vadd(vadd(a.c, a.r, dx + sx * w), a.t, sz * len);
+            const y = terrainYAt(p[0], p[2]);
+            if (y != null && p[1] - y > d) d = p[1] - y;
+          }
+          const h = top + d + 0.3;
+          addBox(stage, vadd(vadd(a.c, a.r, dx), a.u, top - h / 2),
+                 [w, h, len], col, b);
+        };
         if (!onTrack(a.c[0], a.c[2], 5)) {
           modelGroup("tremblant-namerow-bank", {
             center: vadd(a.c, a.u, 2.8), size: [10, 8, 22], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
-            seat.box(stage, a.c, [4.5, 0.4, 16], ROCK, b);
-            // Three risers climbing away from the ribbon (−1 outfield).
+            grounded(stage, 0, 0.4, 4.5, 16, ROCK);
+            // Three risers climbing away from the ribbon (−1 outfield), each a
+            // solid step down to grade. Lengths differ by 8 cm so the 0.1 m
+            // overlap strips do not share an end face.
             for (let i = 0; i < 3; i++) {
-              addBox(stage,
-                vadd(vadd(a.c, a.r, -1 * (0.8 + i * 1.4)), a.u, 0.55 + i * 0.85),
-                [1.5, 0.55, 14], i ? ROCK2 : CONC, b);
+              grounded(stage, -1 * (0.8 + i * 1.4), 0.825 + i * 0.85, 1.5, 14 - i * 0.08,
+                       i ? ROCK2 : CONC);
             }
             stage._mat = MAT.METAL;
             addBox(stage, vadd(vadd(a.c, a.r, -1 * 5.2), a.u, 3.4),
                    [0.35, 2.4, 12], [0.78, 0.16, 0.14], b); // hairpin marker board
+            // Four posts carry it: tops 0.2 m inside the board, feet in the ground.
+            for (const dz of [-5.4, -1.8, 1.8, 5.4]) {
+              let d = 0;
+              const p = vadd(vadd(a.c, a.r, -1 * 5.2), a.t, dz);
+              const y = terrainYAt(p[0], p[2]);
+              if (y != null && p[1] - y > d) d = p[1] - y;
+              const h = 2.4 + d + 0.4;
+              addBox(stage, vadd(p, a.u, 2.4 - h / 2), [0.2, h, 0.2],
+                     [0.30, 0.30, 0.34], b);
+            }
             stage._mat = 0;
           }, { required: true });
         }

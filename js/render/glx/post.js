@@ -52,6 +52,7 @@ const GLXPost = (function () {
     let compProg = null, compU = null;
     let sceneFBO = null, sceneTex = null, sceneDepth = null;
     let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
+    let r11Ok = false;           // R11F_G11F_B10F renderable: EXT_color_buffer_float only (half_float does not cover it)
     // Mip-chain bloom: progressive downsample levels (half res, /4, /8, …), then
     // additive tent upsample back to level 0 — wide multi-octave glow.
     const BLOOM_DIV = 2;         // level 0 at half resolution
@@ -147,6 +148,11 @@ const GLXPost = (function () {
       const ext = gl.getExtension("EXT_color_buffer_float")
         || gl.getExtension("EXT_color_buffer_half_float");
       colorType = ext ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+      // A device exposing only EXT_color_buffer_half_float (some WebKit/ANGLE builds)
+      // renders RGBA16F but NOT R11F_G11F_B10F: bloom level 0 came back incomplete,
+      // post switched itself off and the frame went untonemapped. TLX gates the same
+      // way (tlx-post.js); the slim format now waits for the float extension.
+      r11Ok = !!gl.getExtension("EXT_color_buffer_float");
 
       // One parallel batch, like the core programs (glx.js beginLinks): read
       // straight after each link, these eight compiled in strict series.
@@ -320,14 +326,14 @@ const GLXPost = (function () {
       // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
       // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
       // are alpha-less positive HDR colour -> R11F_G11F_B10F (half the bytes;
-      // renderable under the same EXT_color_buffer_float the HDR path requires).
+      // renderable under EXT_color_buffer_float only; half-float-only keeps RGBA16F).
       // LDR fallback keeps RGBA8 everywhere.
       const hdrOk = colorType === gl.HALF_FLOAT;
       const mk = (w, h, fmt) => {
         const tex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, tex);
         if (fmt === "r8") gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, null);
-        else if (fmt === "hdr3" && hdrOk) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R11F_G11F_B10F, w, h, 0, gl.RGB, colorType, null);
+        else if (fmt === "hdr3" && hdrOk && r11Ok) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R11F_G11F_B10F, w, h, 0, gl.RGB, colorType, null);
         else gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, colorType, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -397,7 +403,8 @@ const GLXPost = (function () {
       }
       // bloom mip chain (half res, /4, /8, … — stop once a level gets tiny).
       // Physical levels follow the cover (aw/ah); lv.w/h stay LOGICAL for
-      // viewports + texels; uUVScale maps sampling into the cover rect.
+      // viewports, lv.pw/ph are the PHYSICAL size the tap texels use: vUV is
+      // physical UV, so one source texel is 1/pw (== 1/w off the cover path).
       for (const lv of bloomLv) { if (lv.tex) gl.deleteTexture(lv.tex); if (lv.fbo) gl.deleteFramebuffer(lv.fbo); }
       bloomLv = [];
       let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
@@ -417,7 +424,7 @@ const GLXPost = (function () {
           postEnabled = false;
           return;
         }
-        bloomLv.push({ fbo, tex, w: bw, h: bh });
+        bloomLv.push({ fbo, tex, w: bw, h: bh, pw: abw, ph: abh });
         bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
         abw = Math.max(1, abw >> 1); abh = Math.max(1, abh >> 1);
       }
@@ -539,11 +546,35 @@ const GLXPost = (function () {
     // framebuffer takes gl.COLOR, an FBO gl.COLOR_ATTACHMENT0 (WebGL2 §5.14).
     const _INV_COLOR = [gl.COLOR_ATTACHMENT0], _INV_DEFAULT = [gl.COLOR], _INV_DEPTH = [gl.DEPTH_ATTACHMENT];
     const _canInvalidate = typeof gl.invalidateFramebuffer === "function";
+    // DEFAULT-FRAMEBUFFER INVALIDATION IS OFF ON WEBKIT. Safari's WebGL maps the default
+    // framebuffer onto an internal FBO, and invalidating it is the one GLX path TLX never
+    // takes. WebKit 280799 (Safari 18: first frame, then a black canvas; fixed 18.2) is
+    // the shape of the iPhone "GLX shows black" report. The cost is a DEPTH store hint
+    // (alpha:false already turns the COLOR invalidate into an ANGLE no-op). FBO targets
+    // keep theirs. Device A/B: patch WebGL2RenderingContext.prototype.invalidateFramebuffer
+    // from Web Inspector (docs/notes/PERF-HUNT-8-2026-10-30.md).
+    const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+    const _webkit = /CriOS|FxiOS|EdgiOS/.test(_ua) || (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
+    const _invFbo = _canInvalidate;
+    const _invDefault = _invFbo && !_webkit;
+    // COVER MODE CLEARS INSTEAD (iPhone GLX black canvas, perf hunt 9): a phone's
+    // square cover target is drawn only inside its w×h viewport, but the taps of
+    // the next pass cross that edge. The whole-attachment DontCare left the
+    // outside undefined each frame on ANGLE-Metal (RGBA16F may read NaN, and the
+    // Karis/bright pass carries it down the bloom chain). A full clear is a
+    // loadAction Clear: as cheap as DontCare on a tiler, and defined (AO = 1).
+    let _coverClr = -1;
+    const halfPx = (a) => Math.max(1, Math.floor(a / 2));   // half-res PHYSICAL size
     function bindOverwrite(fbo) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      if (coverMode && fbo && fbo !== core.outputFBO()) {
+        const v = (fbo === ssaoFBO || fbo === ssaoBlurFBO) ? 1 : 0;
+        if (_coverClr !== v) { gl.clearColor(v, v, v, v); _coverClr = v; }
+        gl.clear(gl.COLOR_BUFFER_BIT); return;
+      }
       // A clipped output viewport is a SUBSET of a shared target (XR layer).
       // DontCare on the whole attachment would wipe the sibling eye.
-      if (_canInvalidate && !(core.outputClipped && core.outputClipped())) {
+      if ((fbo ? _invFbo : _invDefault) && !(core.outputClipped && core.outputClipped())) {
         gl.invalidateFramebuffer(gl.FRAMEBUFFER, fbo ? _INV_COLOR : _INV_DEFAULT);
       }
     }
@@ -578,6 +609,7 @@ const GLXPost = (function () {
       if (!postEnabled) { _lastPath = { on: false }; mirrorComposite(opts); core.gpuTimerEnd(); return; }
       const { width, height } = core.getSize();
       setCoverScale(width, height);   // #3311: POST_VS uUVScale for cover sampling
+      _coverClr = -1;                 // begin() re-set the clear colour for the scene
       let threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       let bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
       // Software GL often lacks real HDR headroom (8-bit scene, or float that still
@@ -628,9 +660,9 @@ const GLXPost = (function () {
         // The multisampled surfaces are consumed — discard them so a tiled (mobile)
         // GPU never writes them back to memory (MDN WebGL best-practice; big
         // bandwidth/tile-store win, esp. for the multisampled DEPTH).
-        if (gl.invalidateFramebuffer) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
+        if (_invFbo) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
-      } else if (!needDepth && _canInvalidate && sceneFBO) {
+      } else if (!needDepth && _invFbo && sceneFBO) {
         // Direct path (no MSAA — every phone): nothing below samples sceneDepth
         // this frame (auto-tier 4 night sheds AO, contact, godray, SSR and
         // flare together), and the scene pass is still open on sceneFBO, so
@@ -676,11 +708,11 @@ const GLXPost = (function () {
         gl.uniform1i(blurU.uTex, 0);
         bindOverwrite(ssaoBlurFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoTex);
-        gl.uniform2f(blurU.uDir, 1 / ssaoW, 0);
+        gl.uniform2f(blurU.uDir, 1 / halfPx(allocW), 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         bindOverwrite(ssaoFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoBlurTex);
-        gl.uniform2f(blurU.uDir, 0, 1 / ssaoH);
+        gl.uniform2f(blurU.uDir, 0, 1 / halfPx(allocH));
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
@@ -781,11 +813,11 @@ const GLXPost = (function () {
         for (let bp = 0; bp < grPairs; bp++) {
           bindOverwrite(godrayBlurFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayTex);
-          gl.uniform2f(blurU.uDir, (1 + bp) / godrayW, 0);
+          gl.uniform2f(blurU.uDir, (1 + bp) / halfPx(allocW), 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
           bindOverwrite(godrayFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayBlurTex);
-          gl.uniform2f(blurU.uDir, 0, (1 + bp) / godrayH);
+          gl.uniform2f(blurU.uDir, 0, (1 + bp) / halfPx(allocH));
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
       }
@@ -826,7 +858,7 @@ const GLXPost = (function () {
           bindOverwrite(bloomLv[i].fbo);
           gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
-          gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
+          gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].pw, 1 / bloomLv[i - 1].ph);
           // Karis partial luma weighting on the FIRST downsample only — that's
           // where sub-pixel HDR spikes (the bloom "fireflies") get averaged in;
           // later mips are already low-pass and keep the plain 13-tap kernel.
@@ -849,7 +881,7 @@ const GLXPost = (function () {
           if (last) bindOverwrite(bloomLv[i - 1].fbo); else gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i - 1].fbo);
           gl.viewport(0, 0, bloomLv[i - 1].w, bloomLv[i - 1].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i].tex);
-          gl.uniform2f(upU.uTexel, 1 / bloomLv[i].w, 1 / bloomLv[i].h);
+          gl.uniform2f(upU.uTexel, 1 / bloomLv[i].pw, 1 / bloomLv[i].ph);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -894,7 +926,7 @@ const GLXPost = (function () {
       gl.uniform1i(compU.uSSAO, 2);
       // Half-res AO grid texel for the composite's depth-aware bilateral upsample;
       // zeroed when AO is off so the shader takes the plain (1×1 white) fetch.
-      gl.uniform2f(compU.uAOTexel, haveAO ? 1 / ssaoW : 0, haveAO ? 1 / ssaoH : 0);
+      gl.uniform2f(compU.uAOTexel, haveAO ? 1 / halfPx(allocW) : 0, haveAO ? 1 / halfPx(allocH) : 0);
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
       gl.uniform1i(compU.uGodray, 3);
@@ -1055,7 +1087,7 @@ const GLXPost = (function () {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ldrTex);
         gl.uniform1i(fxaaU.uTex, 0);
-        gl.uniform2f(fxaaU.uTexel, 1 / width, 1 / height);
+        gl.uniform2f(fxaaU.uTexel, 1 / allocW, 1 / allocH);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
@@ -1108,11 +1140,11 @@ const GLXPost = (function () {
       // storing depth back to memory each frame — pure bandwidth/tile-memory saving
       // with no visual effect. sceneDepth was already consumed by SSAO/SSR/god-ray
       // above; the default framebuffer's depth is unused (post is a fullscreen blit).
-      if (gl.invalidateFramebuffer) {
+      if (_invFbo) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
         gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH_ATTACHMENT]);
         gl.bindFramebuffer(gl.FRAMEBUFFER, core.outputFBO());
-        if (core.outputFBO() === null) gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
+        if (_invDefault && core.outputFBO() === null) gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
       }
 
       core.gpuTimerEnd();
@@ -1148,7 +1180,7 @@ const GLXPost = (function () {
     let mirFBO = null, mirTex = null, mirDepthRB = null, mirW = 0, mirH = 0, mirHdr = false;
     let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null, mirFlip = true;
     const _mirRectScratch = [0, 0, 0, 0];   // mirRect points here (or is null); doubles, like TLX: no float32 rounding
-    let mirRenders = 0, mirComposites = 0, mirGlass = 0;
+    let mirRenders = 0, mirComposites = 0, mirGlass = 0, mirAllocs = 0;   // allocs: lifetime; mirRenders restarts on each (GPU hunt 3)
     // MIPMAPPED: the target is supersampled (js/render/shared/mirror-pass.js SS)
     // and minified into the HUD rect, so a plain LINEAR read skipped texels and
     // the image still shimmered. The chain is rebuilt in end(), right after the
@@ -1203,7 +1235,7 @@ const GLXPost = (function () {
         mirrorFree(); mirDead = true;
         return false;
       }
-      mirW = w; mirH = h; mirHdr = hdr;
+      mirW = w; mirH = h; mirHdr = hdr; mirAllocs++;
       return true;
     }
     // The FBO binding begin() makes while a mirror pass is open (it binds the
@@ -1305,6 +1337,8 @@ const GLXPost = (function () {
       begin(w, h) { if (!mirrorTarget(w, h)) return false; mirActive = true; return true; },
       end() { if (!mirActive) return; mirActive = false; mirRenders++; mirrorMips(); },
       abort() { mirActive = false; },   // a pass whose begin() threw: nothing rendered, so no mip chain and no render count
+      // Quit-to-menu (#4219): free the target; the next begin() re-allocates it through mirrorTarget. Never mid-pass.
+      release() { if (mirActive) return false; mirrorFree(); return true; },
       active: () => mirActive,
       bindTarget: bindMirrorTarget,
       // Called every frame: fill the scratch, never mint an array (TLX mirrorRect does the same).
@@ -1312,7 +1346,7 @@ const GLXPost = (function () {
       composite: mirrorComposite,
       glass: mirrorGlass,
       state: () => ({ ready: !!mirTex && mirRenders > 0, dead: mirDead, w: mirW, h: mirH, hdr: mirHdr,
-        renders: mirRenders, composites: mirComposites, glass: mirGlass, rect: mirRect ? mirRect.slice() : null, flip: mirFlip }),
+        renders: mirRenders, allocs: mirAllocs, composites: mirComposites, glass: mirGlass, rect: mirRect ? mirRect.slice() : null, flip: mirFlip }),
     };
 
     function invalidateUniformCache() {

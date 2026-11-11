@@ -2,13 +2,13 @@ name: Capture gallery
 run-name: Native capture gallery on ${{ github.ref_name }}
 
 # Bounded, opt-in native capture when a local browser/GPU is unavailable.
-# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push
+# Dispatch only (2026-10-27, review WP-W1): agent tokens dispatch fine, so the old
+# push-request relay is gone. Commit .github/capture-gallery-request.json on your
+# branch, then `gh workflow run capture-gallery.yml --ref <branch>`.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 # https://docs.github.com/en/actions/tutorials/store-and-share-data
 on:
   workflow_dispatch:
-  push:
-    branches: ["cursor/**"]
-    paths: [".github/capture-gallery-request.json"]
 
 permissions:
   contents: read

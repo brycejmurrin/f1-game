@@ -44,14 +44,11 @@ generated readers and executable changes follow the code gates below.
    ```sh
    node tools/ci/tooling-fast.mjs --changed --jobs=3
    ```
-   Run it in the background with `--jobs=3` (AGENTS.md rule 4; the default is 1). It is the
-   edit-loop check: the full `tooling-fast` still runs before a code push
-   (AGENTS.md rule 3), and CI and `deploy.mjs --gate-only` run the full ladder.
+   Run it in the background with `--jobs=3` (AGENTS.md rule 4). It is the
+   local floor (AGENTS.md rule 3); the PR's CI tiers run the full ladder.
    Docs/skills/tools edits: `--changed` selects the docs-integrity family.
-   Smoke + load order when you touched `index.html` or `tools/manifest.cjs`:
-   ```sh
-   node tools/ci/tooling-fast.mjs --changed && node tools/ci/test-bg.mjs smoke
-   ```
+   Smoke + load order when you touched `index.html` or `tools/manifest.cjs`: the `smoke` group runs on the
+   pushed PR (`node tools/ci/remote-group.mjs smoke` for the whole group).
    `test:tooling` also runs the slow full-fleet sweeps — reserve that for
    geometry pushes.
 
@@ -70,15 +67,15 @@ the intended design. Magnitude-threshold specs and the legacy
 drift; geometry/behaviour hooks are ground truth. Do not "fix" code to
 satisfy a threshold that itself went stale.
 
-A timeout on a busy box measures the machine, not the code — re-run that
-spec **alone** (`node tools/ci/test-solo.mjs <spec>`) before believing it.
-Check `/proc/loadavg` (< 3) and for a live `playwright test` process first.
+A timeout on a busy box measures the machine, not the code — re-run the
+group on the pushed branch (`node tools/ci/remote-group.mjs <group>`) before
+believing it: [`triage.md`](triage.md).
 
 ## Push
 
-Push your `cursor/<topic>-<hash>` branch; the deploy branch is
-`claude/f1-game-project-26h3ng` — never push there without review. Run
-`deploy.mjs --gate-only` first, then commit + `git push -u origin <branch>`.
+Push your `cursor/<topic>-<hash>` branch, never the deploy branch
+`claude/f1-game-project-26h3ng` (refused). Clear the local floor
+(AGENTS.md rule 3) first, then commit + `git push -u origin <branch>`.
 
 ## Coverage and structured results
 

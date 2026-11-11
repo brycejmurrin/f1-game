@@ -164,10 +164,9 @@ test("DebrisWorld.reset() re-arms the latch a trapped step lowered", () => {
     "rapier has not landed yet — prime() would build nothing");
 });
 
-// The fifth reader: `steerMode` went straight from storage to Input.setSteerMode,
-// where anything unknown means "tilt" with no enableTilt() call (game.js's own
-// setSteerMode maps unknown to "buttons"), so a foreign value left a phone unable to steer.
-// Executed through the booted game, not grepped.
+// The fifth reader: a foreign stored steerMode used to reach Input.setSteerMode as
+// "tilt" (no enableTilt), while game.js mapped unknown to "buttons". Both layers
+// now agree on BUTTONS; this boots the full game so the store→game→Input path stays pinned.
 test("an unknown stored steerMode boots as BUTTONS, a valid one is kept", async () => {
   const { createRequire } = await import("node:module");
   const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");

@@ -89,16 +89,16 @@ const Car3D = (function () {
     // Barge (reads): short fat blunt hull, wide low pods, heavy waist, low flat cover.
     barge:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.10, noseDroop: -0.006, airbox: 1.55, fin: 1, mirror: 2, inlet:  0.100, inletH: -0.060, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep: -0.120, coverCrown: -0.080, coverLift: -0.100, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
     // Hammerhead: thin shovel tip on a narrow neck; broad low cooling shoulders.
-    hammerhead: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.34, noseSlim: 4.10, noseDroop: 0.015, noseTipH: 0.55, noseMidSlim: 0.70, noseMidH: 0.65, airbox: 0.42, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.180, undercutD: 0.050, waist: 0.080, floorStep: -0.060, coverCrown: -0.040, coverLift: -0.120, wingStyle: W({ flaps: 2, arch: 0.24, twist: 0.08, foot: 0.78, canard: 0 }) }),
+    hammerhead: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: -0.34, noseSlim: 4.10, noseDroop: 0.015, noseTipH: 0.55, noseMidSlim: 0.70, noseMidH: 0.65, airbox: 0.42, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.180, undercutD: 0.050, waist: 0.080, floorStep: -0.060, coverCrown: -0.040, coverLift: -0.120, wingStyle: W({ flaps: 2, arch: 0.24, twist: 0.08, foot: 0.78, canard: 0 }) }),
     // Swan: raised slim nose bridge over low pods and a sunken cover.
-    swan: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.18, noseSlim: 0.84, noseLow: true, noseDroop: 0.200, noseTipH: 1.20, noseMidSlim: 0.86, noseMidH: 0.75, airbox: 0.38, fin: 0, mirror: 0, inlet: -0.030, inletH: -0.110, inletW: -0.100, undercutD: 0.060, waist: -0.080, floorStep: 0.030, coverCrown: 0.060, coverLift: -0.150, wingStyle: W({ arch: 1.08, twist: 0.32, foot: 1.40, tipRise: 0.050 }) }),
+    swan: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: 0.18, noseSlim: 0.84, noseLow: true, noseDroop: 0.200, noseTipH: 1.20, noseMidSlim: 0.86, noseMidH: 0.75, airbox: 0.38, fin: 0, mirror: 0, inlet: -0.030, inletH: -0.110, inletW: -0.100, undercutD: 0.060, waist: -0.080, floorStep: 0.030, coverCrown: 0.060, coverLift: -0.150, wingStyle: W({ arch: 1.08, twist: 0.32, foot: 1.40, tipRise: 0.050 }) }),
     // Manta: flat broad shoulders sweeping into a sharply pinched rear waist.
-    manta: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.12, noseSlim: 1.80, noseDroop: 0.035, noseTipH: 0.70, noseMidSlim: 1.20, noseMidH: 0.80, airbox: 0.28, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.240, undercutD: 0.060, waist: -0.220, floorStep: -0.080, coverCrown: -0.060, coverLift: -0.140, wingStyle: W({ flaps: 2, arch: 0.32, twist: 0.10, chordTaper: 0.18, foot: 0.85 }) }),
-    wasp: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.28, noseSlim: 0.86, noseTipH: 0.55, noseMidH: 0.62, noseLow: true, noseDroop: 0.040, airbox: 1.00, fin: 1, mirror: 1, inlet: -0.020, inletH: -0.080, inletW: -0.200, undercutD: 0.080, waist: 0.220, waistH: 0.230, floorStep: 0.070, coverCrown: 0.180, coverLift: 0.000, wingStyle: W({ arch: 0.80, twist: 0.26, chordTaper: 0.42, canard: 2 }) }),
+    manta: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: -0.12, noseSlim: 1.80, noseDroop: 0.035, noseTipH: 0.70, noseMidSlim: 1.20, noseMidH: 0.80, airbox: 0.28, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.240, undercutD: 0.060, waist: -0.220, floorStep: -0.080, coverCrown: -0.060, coverLift: -0.140, wingStyle: W({ flaps: 2, arch: 0.32, twist: 0.10, chordTaper: 0.18, foot: 0.85 }) }),
+    wasp: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: 0.28, noseSlim: 0.86, noseTipH: 0.55, noseMidH: 0.62, noseLow: true, noseDroop: 0.040, airbox: 1.00, fin: 1, mirror: 1, inlet: -0.020, inletH: -0.080, inletW: -0.200, undercutD: 0.080, waist: 0.220, waistH: 0.230, floorStep: 0.070, coverCrown: 0.180, coverLift: 0.000, wingStyle: W({ arch: 0.80, twist: 0.26, chordTaper: 0.42, canard: 2 }) }),
     // Scorpion: low snout and front cover with a conspicuously rising tail crown.
-    scorpion: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.40, noseSlim: 0.95, noseDroop: -0.020, noseTipH: 0.65, noseMidH: 0.75, airbox: 0.55, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.040, inletW: -0.040, undercutD: 0.040, waist: -0.060, floorStep: 0.040, coverCrown: 0.140, coverLift: -0.150, coverTailLift: 0.390, wingStyle: W({ flaps: 2, arch: 0.95, twist: 0.34, foot: 1.40, tipRise: 0.045 }) }),
+    scorpion: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: 0.40, noseSlim: 0.95, noseDroop: -0.020, noseTipH: 0.65, noseMidH: 0.75, airbox: 0.55, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.040, inletW: -0.040, undercutD: 0.040, waist: -0.060, floorStep: 0.040, coverCrown: 0.140, coverLift: -0.150, coverTailLift: 0.390, wingStyle: W({ flaps: 2, arch: 0.95, twist: 0.34, foot: 1.40, tipRise: 0.045 }) }),
     // Blade: tall knife nose and upright radiator towers above a low flat cover.
-    blade: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.10, noseSlim: 0.70, noseLow: true, noseDroop: 0.100, noseTipH: 2.60, noseMidSlim: 0.62, noseMidH: 1.70, airbox: 0.35, fin: 0, mirror: 0, inlet: 0.020, inletH: 0.260, inletW: -0.210, undercutD: 0.180, waist: -0.160, floorStep: 0.110, coverCrown: -0.080, coverLift: -0.130, wingStyle: W({ arch: 0.38, twist: 0.12, foot: 0.90, canard: 0 }) }),
+    blade: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: -0.10, noseSlim: 0.70, noseLow: true, noseDroop: 0.100, noseTipH: 2.60, noseMidSlim: 0.62, noseMidH: 1.70, airbox: 0.35, fin: 0, mirror: 0, inlet: 0.020, inletH: 0.260, inletW: -0.210, undercutD: 0.180, waist: -0.160, floorStep: 0.110, coverCrown: -0.080, coverLift: -0.130, wingStyle: W({ arch: 0.38, twist: 0.12, foot: 0.90, canard: 0 }) }),
     // B·D1 period bodies (Bryce's resized pick, 2026-10-20). fitSeat seats nose details
     // on the measured skin; sizes are cut to the shipped bodies' envelope (fin under
     // the roll hoop, noses within ~4 % of the tallest shipped one).
@@ -188,6 +188,12 @@ const Car3D = (function () {
 
   // shadeFlags.round / coverHi: mutated for one build(), then reset (was _round / _coverHi).
   const shadeFlags = { round: false, coverHi: true };
+  // The driver's lid, in build() and alone for a teammate (CarMaterials.reseat). Paint-edge splits (~+2k tris on
+  // busy lids) matter only large on screen: field AI bodies (tens of px) and depth silhouettes drop them to 0.
+  function emitHelmet(out, opts, c1, liv, sil) {
+    const des = Helmets.styled(Helmets.designFor(opts && opts.num, c1, helmetKey(opts)), liv.helmetStyle, liv.helmetBase, liv.helmetAccent), flat = sil || !!(opts && opts.field);
+    Helmets.build(out, 0, 0.715, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.visor, maxSplit: flat ? 0 : undefined, simplePaint: flat });
+  }
 
   const { addWheel, buildWheel, buildWheelLayers } = CarWheels.create({
     geometry, SURFACES, TYRE, INTAKE,
@@ -234,7 +240,7 @@ const Car3D = (function () {
     return out;
   }
 
-  function build(color, color2, opts) {
+  function buildOne(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
     const teamId = opts && opts.teamId;
     // Field body / silhouette = mid & far track LODs: keep the cheap cover.
@@ -246,7 +252,7 @@ const Car3D = (function () {
     const part = (name) => {
       const at = out.pos.length / 3;
       if (sections.length) sections[sections.length - 1].to = at;
-      sections.push({ name, from: at, to: at });
+      sections.push({ name, from: at, to: at, ifrom: out.idx.length });   // ifrom: reseat finds the lid triangles
     };
     const zoneRanges = [], zone = (name, draw) => { const from = out.pos.length / 3; draw(); zoneRanges.push({ name, from, to: out.pos.length / 3 }); };   // #2796: livery-section paint that takes a zone's finish
     const c1 = color  || [0.8, 0.05, 0.05];
@@ -423,10 +429,14 @@ const Car3D = (function () {
       }
       addBox(out, 0, 0.432, 0.176, 0.088, 0.078, 0.034, [0.32, 0.32, 0.36], SURFACES.metal);
     } else {
+      // Concept bodies (not the narrow-waisted needle, whose pods wrap the old block) seat the block between
+      // the tub and the pod's inner wall: 0.24/0.40 ran 30-40 mm into both (#3156 row 2).
+      const fit = BODY_STYLES[styleKey] === teamStyle && !(teamStyle.waist < -0.2), iF = fit ? 0.27 : 0.24;
+      const bF = fit ? Math.min(0.40, anchors.podAt(0.12).inner + 0.004) : 0.40, bR = fit ? Math.min(0.40, anchors.podAt(-0.43).inner + 0.004) : 0.40;
       for (const s of [-1, 1]) {
         (shadeFlags.round ? CarShade.blockFn(addTri, { r: [0, 0.03, 0.07, 0.02] }) : addBlock)(out, [   // rounded: outer shoulder r 70 mm
-          [s*0.24, 0.42, 0.14], [s*0.40, 0.42, 0.14], [s*0.40, 0.60, 0.10], [s*0.24, 0.58, 0.10],
-          [s*0.24, 0.44, -0.42], [s*0.40, 0.44, -0.42], [s*0.40, 0.62, -0.44], [s*0.24, 0.60, -0.44],
+          [s*iF, 0.42, 0.14], [s*bF, 0.42, 0.14], [s*bF, 0.60, 0.10], [s*iF, 0.58, 0.10],
+          [s*0.24, 0.44, -0.42], [s*bR, 0.44, -0.42], [s*bR, 0.62, -0.44], [s*0.24, 0.60, -0.44],
         ], c1);
       }
     }
@@ -1606,24 +1616,11 @@ const Car3D = (function () {
     }
 
     part("helmet");
-    if (!(opts && opts.noDriver)) {
-      // The driver's head: helmets.js owns the lid. cy is the TEMPLE line. At
-      // 0.630 the crown sat at 0.749 under a cockpit surround topping out at
-      // 0.765 — the head was BELOW the tub, and a design nobody can see is the
-      // defect this module exists to fix. 0.715 clears it by 82 mm, and still
-      // passes 43 mm under the halo at 0.890.
-      const des = Helmets.styled(Helmets.designFor(opts && opts.num, c1, helmetKey(opts)), liv.helmetStyle, liv.helmetBase, liv.helmetAccent);
-      // Paint-edge splits (~+2k tris on busy lids) matter when the helmet is
-      // large on screen (player body, garage, cockpit). Field AI bodies are
-      // tens of pixels; depth silhouettes never see paint. Both drop to 0.
-      const field = !!(opts && opts.field);
-      Helmets.build(out, 0, 0.715, -0.075, des, {
-        paint: SURFACES.paint, glass: SURFACES.visor,
-        maxSplit: (sil || field) ? 0 : undefined, simplePaint: sil || field,
-      });
-      // No boxes bolted on here: the rear gurney, top intake and visor strip are
-      // lofts on the shell itself (helmets.js buildAero), built with the lid.
-    }
+    // The driver's head: helmets.js owns the lid (emitHelmet). cy 0.715 is the TEMPLE line: at 0.630 the crown sat
+    // at 0.749 under a cockpit surround topping out at 0.765 — the head was BELOW the tub. 0.715 clears it by 82 mm
+    // and passes 43 mm under the halo at 0.890. No boxes bolted on: the rear gurney, top intake and visor strip
+    // are lofts on the shell itself (helmets.js buildAero), built with the lid.
+    if (!(opts && opts.noDriver)) emitHelmet(out, opts, c1, liv, sil);
 
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..
     // 0.805, so against a driver's eye at (0.72, -0.20) its front face is 2.5 cm
@@ -2860,10 +2857,22 @@ const Car3D = (function () {
                boundsZ: [r2(z0), r2(z1)] };
     });
     // Half the vertices are exact repeats; measure/refinish read vertex ranges (CarGeometry.weld).
-    else if (!(opts && (opts.refinish || opts.noWeld))) CarGeometry.weld(out);
+    else if (!(opts && (opts.refinish || opts.noWeld))) {
+      CarGeometry.weld(out);
+      // The instanced far-field body only. Near rivals (field, no silhouette)
+      // and shadow casters (silhouette, no field) stay on the full mesh.
+      if (opts && opts.field && opts.silhouette && opts.noDriver && !opts.noSharedLod)
+        CarGeometry.presentShared(out);
+    }
     return out;
   }
 
+  // opts.seats (#4219): teammates' bodies from this one build (CarMaterials.reseat; `lid` emits a seat's lid alone).
+  function build(color, color2, opts) {
+    if (!(opts && opts.seats && opts.seats.size && CarMaterials.seatable(opts))) return buildOne(color, color2, opts);
+    const lid = (num) => { const h = { pos: [], nrm: [], col: [], mat: [], idx: [] }; emitHelmet(h, Object.assign({}, opts, { num }), color || [0.8, 0.05, 0.05], opts.livery || {}, false); return h; };
+    return CarMaterials.reseat(buildOne(color, color2, Object.assign({}, opts, { refinish: true })), opts, lid);
+  }
   function buildComplete(color, color2, opts) {
     const out = build(color, color2, opts);
     const info = out.flapInfo;

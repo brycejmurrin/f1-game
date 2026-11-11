@@ -13,7 +13,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.3,
-    tyreSeverity: 0.92,  // Compact layout, moderate measured-era deg; below Japan 0.85 severity scale anchor
+    tyreSeverity: 0.92,  // Compact layout, moderate measured-era deg; above Japan 0.85 severity scale anchor
     baseHW: 7,
     terrainOuter: 120,
     dressingExclusions: [
@@ -48,11 +48,23 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // sectors: sector splits as RACING-LAP fractions (post startFrac/reverse).
+    // turns: one apex per corner in the FIA 2026 event-map numbering ("2026 São Paulo
+    // Grand Prix - Competition Notes - Circuit Map, Pit Lane Drawing, Emergency Exits
+    // Map and Red Zone", T1..T15), turns[0] = FIA T1, each at the built curvature
+    // peak: T1/T2 Senna S, T3 Curva do Sol, T4/T5 Descida do Lago, T6/T7 Ferradura,
+    // T8 Laranjinha, T9 Pinheirinho, T10 Bico de Pato, T11 Mergulho (one FIA number
+    // for the double-apex dip), T12 Junção, T13/T14 Subida dos Boxes, T15 the left
+    // kink on the main straight. The mild right kink at 0.5985 between T9 and T10 is
+    // unnumbered. Never fmap'd — tools/track/rotate-markings.cjs re-seats turns when
+    // the start line moves.
     sectors: [0.3, 0.65],
-    turns: [0.0654, 0.0896, 0.3137, 0.3557, 0.4547, 0.4865, 0.5285, 0.5528, 0.5985, 0.6275, 0.6629, 0.6825, 0.7414, 0.7722, 0.8375],
+    turns: [0.0654, 0.0896, 0.1167, 0.3137, 0.3557, 0.4547, 0.4865, 0.5285, 0.5528, 0.6275, 0.6639, 0.7414, 0.7722, 0.8375, 0.9113],
+    // FIA 2026 pit-lane drawing + circuit map: the pit lane and garages sit on
+    // the INSIDE of the anticlockwise lap, the driver's LEFT on the main straight
+    // (the engine default is +1 = right). scenery/interlagos.js keys its paddock
+    // and main stands off the same side (PIT / STAND).
+    pit: { side: -1 },
     furniture: { tree: "palm",  fol: [0.26, 0.48, 0.20], lamp: "post", lc: [1.0, 0.86, 0.58], sparse: true },  // warm subtropical; sodium-warm posts so night/dusk lights the straights
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["concrete", "sandstone", "terracotta"],  // sun-bleached tropical concrete, not three greys

@@ -4,12 +4,19 @@ const LazyBundles = (function () {
 "use strict";
 function create(deps) {
 const { els, loadBackendScripts: loadScripts } = deps;
+const ctxOrNull = () => {
+  try { return typeof deps.getContext === "function" ? deps.getContext() : null; }
+  catch (_) { return null; }
+};
 // LAZY_AGENT. Not SW-optional (V8 full-compiles install puts). Players on
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
 const AGENT_EDGES = ApexRoster.LAZY_EDGES;
-// LAZY_RACE — lighting presets, fetched at idle and again at a race start if that failed.
-const RACE_FILES = ApexRoster.LAZY_RACE;
+// LAZY_RACE — lighting presets, fetched at idle and again at a race start if that failed,
+// and the garage's Blender tables (js/garage/garage-data.js), each loaded by its own ensure.
+const isGarageData = (f) => /^js\/garage\/|^js\/data\/garage-/.test(f);   // incl. the optional authored entrance motion
+const RACE_FILES = ApexRoster.LAZY_RACE.filter((f) => !isGarageData(f));
+const GARAGE_FILES = ApexRoster.LAZY_RACE.filter(isGarageData);
 // LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
 // the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
 // does not pay the whole fetch on the critical path.
@@ -21,10 +28,14 @@ let raceSessionLoad = null;
 // (PitLane) called a group whose later file failed complete: the retry saw the
 // real PitLane, loaded nothing, and the race ran on stub engineer / radio.
 const RACE_SESSION_READY = {
+  "js/data/garage-departure-motion.js": () => typeof GarageDepartureMotion !== "undefined",
+  "js/garage/departure-wheels.js": () => typeof GarageDepartureWheels !== "undefined",
   "js/race/reliability.js": () => typeof Reliability !== "undefined" && !!Reliability && !Reliability._stub,
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
+  "js/race/damage-handling.js": () => typeof DamageHandling !== "undefined" && !!DamageHandling && !DamageHandling._stub,
   "js/race/duel.js": () => typeof Duel !== "undefined" && !!Duel && !Duel._stub,
   "js/race/session-records.js": () => typeof SessionRecords !== "undefined" && !!SessionRecords && !SessionRecords._stub,
+  "js/race/pit-geom.js": () => typeof PitGeom !== "undefined" && !!PitGeom,
   "js/race/pit-lane.js": () => typeof PitLane !== "undefined" && !!PitLane && !PitLane._stub,
   "js/race/engineer.js": () => typeof RaceEngineer !== "undefined" && !!RaceEngineer && !RaceEngineer._stub,
   "js/race/radio-lines.js": () => typeof RadioLines !== "undefined" && !!RadioLines && !RadioLines._stub,
@@ -48,7 +59,7 @@ function ensureRaceSession() {
   if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
   // Real before THIS loader ran anything (an eager shell / a spec that evaluated
   // the group itself): nothing to fetch and nobody to notify.
-  if (!raceSessionLoaded.size && RACE_SESSION_READY["js/race/pit-lane.js"]()) {
+  if (!raceSessionLoaded.size && RACE_SESSION_FILES.every((f) => !RACE_SESSION_READY[f] || RACE_SESSION_READY[f]())) {
     raceSessionLoad = Promise.resolve(true);
     return raceSessionLoad;
   }
@@ -78,6 +89,15 @@ function ensureRaceSession() {
     return true;
   });
   return raceSessionLoad;
+}
+// Optional garage exterior; its absence never blocks race-session preparation.
+let garageExteriorLoad = null;
+function ensureGarageExterior() {
+  if (typeof GarageExterior !== "undefined" && typeof GarageExteriorGeometry !== "undefined") return Promise.resolve(true);
+  if (!garageExteriorLoad) garageExteriorLoad = loadBackendScripts(ApexRoster.LAZY_GARAGE_EXTERIOR || [], [], { strict: true,
+    ready: (src) => src.endsWith("exterior-geometry.js") ? typeof GarageExteriorGeometry !== "undefined" : typeof GarageExterior !== "undefined" })
+    .then((ok) => { ok = !!ok && typeof GarageExterior !== "undefined" && typeof GarageExteriorGeometry !== "undefined"; if (!ok) garageExteriorLoad = null; return ok; }).catch(() => { garageExteriorLoad = null; return false; });
+  return garageExteriorLoad;
 }
 // LAZY_CIRCUIT (tools/manifest.cjs): full js/circuits/<id>.js payload. Title
 // boots with GENERATED meta.js (~picker fields only); path/pal/sectors/kit
@@ -240,11 +260,16 @@ async function ensureScenery(idx) {
       return false;
     }
   }
+  // Model bytes need the closure's source and nothing from the toolkit. Ask
+  // now so their fetch overlaps the rest of the toolkit's download and eval
+  // instead of starting after both have finished.
+  const modelsP = sceneryModels(def);
   if (!(await buildP)) {
+    await modelsP;
     Log.warn("track", "track-build toolkit missing — Tracks.build cannot dress the world");
     return false;
   }
-  await sceneryModels(def);
+  await modelsP;
   return true;
 }
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
@@ -269,9 +294,12 @@ const DATA_READY = {
   "js/data/telemetry.js": () => typeof DataTelemetry !== "undefined",
   "js/data/export.js": () => typeof DataExport !== "undefined",
   "js/data/schedule.js": () => typeof DataSchedule !== "undefined",
+  "js/data/ics.js": () => typeof DataIcs !== "undefined",
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/real-race-script.js": () => typeof DataRealRaceScript !== "undefined",
+  "js/data/real-race-fetch.js": () => typeof DataRealRaceFetch !== "undefined",
   "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };
@@ -336,13 +364,19 @@ const NET_READY = {
   "js/net/sdp.js": () => typeof NetSdp !== "undefined",
   "js/net/qr.js": () => typeof NetQr !== "undefined",
   "js/net/scan.js": () => typeof NetScan !== "undefined",
+  "js/net/ice.js": () => typeof NetIce !== "undefined",
+  "js/net/interp.js": () => typeof NetInterp !== "undefined",
   "js/net/transport.js": () => typeof NetTransport !== "undefined",
   "js/net/handshake.js": () => typeof NetHandshake !== "undefined",
   "js/net/lobby-codes.js": () => typeof LobbyCodes !== "undefined",
   "js/net/snapshot.js": () => typeof NetSnapshot !== "undefined",
   "js/net/session.js": () => typeof NetSession !== "undefined",
+  "js/net/quali-wire.js": () => typeof QualiWire !== "undefined",
+  "js/net/strategy-wire.js": () => typeof StrategyWire !== "undefined",
   "js/net/netplay.js": () => typeof NetPlay !== "undefined",
   "js/net/lobby.js": () => typeof NetLobby !== "undefined",
+  "js/input/phone-pad-codec.js": () => typeof PhonePadCodec !== "undefined",
+  "js/input/phone-pad-page.js": () => typeof PhonePadPage !== "undefined",
   "js/input/phone-pad.js": () => typeof PhonePad !== "undefined",
 };
 function ensureNet() {
@@ -512,31 +546,37 @@ async function loadBackendScripts(files, edges, opts) {
   }
   return loadScripts(files, edges, opts);
 }
+// One warm per file per session (a second raceAssets() must not re-download).
+const audioPrefetched = new Set();
 function prefetchAudio() {
   // HTTP-cache only — do not evaluate. Evaluating at idle would create no
   // AudioContext (restoreOnEngine still gates on userActivation) but would
   // still compete with title paint; #1135 forbids putting these 449 KB on
   // the title networkidle wall, so this runs on a late idle timeout.
-  if (audioIsGameVm() || audioLoad) return;
-  if (typeof document === "undefined" || !document.createElement) return;
+  // A low-priority fetch(), not <link rel=prefetch>: iOS Safari ships prefetch
+  // disabled (https://caniuse.com/link-rel-prefetch), so the hint was a no-op on
+  // iPhone. mode cors + credentials same-origin is the request a
+  // <script crossorigin=anonymous> makes, so inject() hits this HTTP-cache (or SW)
+  // entry; its SRI check runs on the bytes, not the cache key. The body is read:
+  // an unobserved, unread fetch may be terminated (https://fetch.spec.whatwg.org/#garbage-collection).
+  if (audioIsGameVm() || audioLoad || typeof fetch !== "function") return;
   for (let i = 0; i < AUDIO_FILES.length; i++) {
     const src = AUDIO_FILES[i];
+    if (audioPrefetched.has(src)) continue;
+    audioPrefetched.add(src);
     // The key inject() will ask for (content hash when deployed), so the prefetch is the hit.
     const href = typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(src) : src + "?v=" + (window.__APEX_BUILD || 0);
-    if (document.querySelector && document.querySelector('link[rel="prefetch"][href="' + href + '"]')) continue;
-    const el = document.createElement("link");
-    el.rel = "prefetch";
-    el.as = "script";
-    el.href = href;
-    el.crossOrigin = "anonymous";
-    document.head.appendChild(el);
+    try {
+      fetch(href, { priority: "low", credentials: "same-origin", mode: "cors" })
+        .then((r) => r.arrayBuffer()).catch(() => {});
+    } catch (_) { /* a throwing fetch shim: the gesture load still works */ }
   }
 }
 function restoreOnEngine() {
   if (audioRestored || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return true;
-  audioRestored = true;
-  const G = deps.getContext(), store = G && G.store;
+  const G = ctxOrNull(), store = G && G.store;
   if (!store) return true;
+  audioRestored = true;
   try {
     GameAudio.setEnabled(!!G.soundOn);
     GameAudio.setMusicVolume(store.get("volMusic"));
@@ -577,7 +617,7 @@ function audioGestureUnlock(e) {
   if (e && (e.isTrusted === false || (e.type === "keydown" && e.key === "Escape"))) return;
   if (!audioHooked) ensureAudio();   // memoised; after a failed load or ready hook this is the retry
   if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return;
-  const G = deps.getContext();
+  const G = ctxOrNull();
   if (!G || !G.soundOn) return;
   const ctx = GameAudio.context ? GameAudio.context() : null;
   try { if (!ctx || ctx.state !== "running") GameAudio.init(); } catch (err) { Log.warn("audio", "gesture unlock failed: " + (err && err.message)); }
@@ -639,9 +679,20 @@ function ensureAudio() {
     // onAudioReady is counted as fired only once it returns: a throw clears the
     // memo so the next call retries it, and audioReadyOnce latches each part that
     // already returned so the retry re-runs only the part that threw.
+    // Each part runs in its own task (a yield between parts): one task for all of
+    // them was the 787 ms LoAF on the macOS census (#4219). The hook only QUEUES
+    // parts here; the latch and order are unchanged.
     await audioYieldToMain("task");
     if (typeof deps.onAudioReady === "function") try {
-      deps.onAudioReady(audioReadyOnce);
+      const parts = [];
+      deps.onAudioReady((key, fn) => { parts.push([key, fn]); });
+      let ran = false;
+      for (const [key, fn] of parts) {
+        if (audioReadyDone.has(key)) continue;
+        if (ran) await audioYieldToMain("task");
+        ran = true;
+        audioReadyOnce(key, fn);
+      }
     } catch (e) {
       Log.error("audio", "the audio ready hook threw: " + (e && e.message));
       audioLoad = null;
@@ -650,7 +701,7 @@ function ensureAudio() {
     // Crowd ambience (Radio r9): bind the live G façade without touching game.js.
     try {
       if (typeof CrowdAudio !== "undefined" && CrowdAudio && CrowdAudio.bind) {
-        CrowdAudio.bind(typeof deps.getContext === "function" ? deps.getContext() : null);
+        CrowdAudio.bind(ctxOrNull());
       }
     } catch (e) { Log.warn("audio", "CrowdAudio.bind failed: " + (e && e.message)); }
     audioHooked = true;
@@ -686,19 +737,71 @@ function loadAgentSurface() {
     // ApexApi.create(G) sees the real objects through the G getters.
     const netOk = await ensureNet();
     const agentOk = await loadBackendScripts(AGENT_FILES, AGENT_EDGES, { loaded: agentScriptsLoaded });
-    deps.bindAgent();
+    // FAIL SOFT. A refused file (SRI: a stale shell's ?v= key answered with a newer
+    // deploy's bytes, 2026-11-02) still lets later files evaluate, so ApexApi.create
+    // throws "AgentRaster is not defined". Unguarded, that rejected this memo for the
+    // session, aborted game.js's boot tail after `await bootAgentSurface()` and
+    // painted the red overlay. __apex stays null; the next ask retries.
+    let bound = true;
+    try { deps.bindAgent(); }
+    catch (e) { bound = false; Log.warn("game", "agent surface bind failed: " + (e && e.message)); }
     // Memoised on the promise, but a FAILED load must not latch for the session:
     // METRICS / the flyby panel ask again on their next open.
-    if (netOk === false || !agentOk) {
+    if (netOk === false || !agentOk || !bound) {
       Log.warn("game", "the agent surface did not fully load — a later ask retries");
       _agentLoad = null;
     }
   })();
   return _agentLoad;
 }
+// SETTINGS > CLAUDE LINK (#5259): the door loads js/agent/bridge-link.js ALONE (a LAZY_AGENT file; the shared
+// `loaded` set keeps loadAgentSurface from injecting it twice) and opens its panel. The rest of the agent surface
+// is fetched only when the player taps LINK there. Resolves false when the file could not load.
+let _bridgeLinkLoad = null;
+function openBridgeLink() {
+  if (!_bridgeLinkLoad) {
+    _bridgeLinkLoad = Promise.resolve(loadBackendScripts(AGENT_FILES.filter((f) => /\/bridge-link\.js$/.test(f)), [], { loaded: agentScriptsLoaded }))
+      .then(() => typeof BridgeLink !== "undefined", () => false)
+      .then((ok) => { if (!ok) _bridgeLinkLoad = null; return ok; });
+  }
+  return _bridgeLinkLoad.then((ok) => ok && BridgeLink.open({ loadAgentSurface }));
+}
+// The door is built here, not in index.html: the shell's node count is a shrink-only ratchet (BENCHMARK's door,
+// js/perf/bench-run.js mount, does the same). css/settings-controls.css makes it fixed-size chrome.
+function mountBridgeLinkDoor() {
+  const hub = typeof document !== "undefined" && document.getElementById ? document.getElementById("pm-settings-index") : null;
+  if (!hub || !document.createElement || document.getElementById("pm-claude-link")) return;
+  const door = document.createElement("button"), small = document.createElement("small");
+  door.id = "pm-claude-link"; door.type = "button"; door.textContent = "CLAUDE LINK\u2026";
+  small.textContent = "Let a Claude session read this app through a GitHub issue";
+  door.appendChild(small);
+  door.addEventListener("click", () => {
+    openBridgeLink().then((ok) => { if (!ok) small.textContent = "Could not load. Check the connection, then tap again."; });
+  });
+  hub.appendChild(door);
+}
 async function bootAgentSurface() {
   if (!wantAgentSurface()) return;
-  await loadAgentSurface();
+  try { await loadAgentSurface(); }
+  catch (e) { Log.warn("game", "bootAgentSurface failed: " + (e && e.message)); }
+}
+
+// LAZY_DEV (#4978): flag-gated diagnostics (GfxDebug) out of the boot wall.
+// Injected only when a flag asks; the module self-installs once it evaluates.
+let _devLoad = null;
+function wantDevPanels() {
+  try { return typeof DevFlags !== "undefined" && !!DevFlags.get("gfxdebug"); }
+  catch (_) { return false; }
+}
+function bootDevPanels() {
+  const files = ApexRoster.LAZY_DEV || [];
+  if (_devLoad || !files.length || !wantDevPanels()) return _devLoad;
+  _devLoad = loadBackendScripts(files, [], { strict: true }).catch((e) => {
+    Log.warn("game", "dev panels failed to load: " + (e && e.message));
+    _devLoad = null;
+    return false;
+  });
+  return _devLoad;
 }
 
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited at boot, on
@@ -740,6 +843,30 @@ function ensureLightPresets() {
     return true;
   });
   return lightLoad;
+}
+// THE GARAGE'S BLENDER TABLES (GarageData): asked for at idle, on garage entry,
+// SETTINGS and RACE!; strict, so a second ask never re-evaluates the const. A
+// failed load is forgotten and the next ask fetches again; until it lands the
+// rigs play the "cut" cameras and the crews the shipped crew.
+let garageLoad = null;
+const garageReady = () => typeof GarageData !== "undefined" && !!GarageData;
+function ensureGarageData() {
+  if (garageReady() || !GARAGE_FILES.length) return Promise.resolve(garageReady());
+  if (garageLoad) return garageLoad;
+  garageLoad = loadBackendScripts(GARAGE_FILES, [], { strict: true, transientRetry: false }).catch(() => false).then(() => {
+    garageLoad = null;
+    if (!garageReady()) Log.warn("game", "the garage's Blender tables did not load — the next garage visit asks again");
+    return garageReady();
+  });
+  return garageLoad;
+}
+// LAZY_RESULTS_SHEET (~54 KB): results / TT / standings / champion DOM. The
+// boot stub (results-boot.js) owns ScriptLoader memoisation; this gate is what
+// startRace awaits so buildResults at the flag stays synchronous.
+function ensureResultsSheet() {
+  if (typeof GameResultsSheet !== "undefined") return Promise.resolve(true);
+  if (typeof GameResults !== "undefined" && GameResults.ensureLoaded) return GameResults.ensureLoaded().then((ok) => !!ok && typeof GameResultsSheet !== "undefined");
+  return Promise.resolve(false);
 }
 /** Save-Data on, or a 2G link: the title skips its idle lighting, race-session and
  *  audio prefetches (#3110); RACE! still loads them on demand. No Network Information API (Safari,
@@ -787,7 +914,8 @@ function raceAssets() {
     // Best-effort: ensureCircuit REJECTS when the payload cannot load (offline,
     // a CDN 404, a stale tab), and an unguarded rejection here paints the red
     // overlay on the title. startRace / openQuali re-ask and handle their own.
-    ensureScenery(deps.getContext().trackIdx).catch((e) => {
+    const bootCtx = ctxOrNull();
+    if (bootCtx) ensureScenery(bootCtx.trackIdx).catch((e) => {
       Log.warn("track", "scenery prefetch failed: " + (e && e.message));
     });
     // Build worker: warmed at the title for the AGENT SURFACE only (its
@@ -811,7 +939,9 @@ function raceAssets() {
   if (!lowDataLink()) {
     scheduleIdle(() => { ensureLightPresets(); }, 8000);
     scheduleIdle(() => { ensureRaceSession(); }, 9000);
+    scheduleIdle(() => { ensureResultsSheet(); }, 9500);
     scheduleIdle(() => { prefetchAudio(); }, 12000);
+    if (GARAGE_FILES.length) scheduleIdle(() => { ensureGarageData(); }, 6000);   // WORK ON CAR can be the first tap
   }
   bootDesktopAudio();
 }
@@ -821,7 +951,7 @@ function bootDesktopAudio() {
   const bind = () => {
     ensureAudio().then((ok) => {
       if (!ok) return;
-      const G = deps.getContext();
+      const G = ctxOrNull();
       if (!G || !G.soundOn) return;
       try {
         GameAudio.init();
@@ -835,7 +965,10 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+// After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
+bootDevPanels();
+mountBridgeLinkDoor();
+return { openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

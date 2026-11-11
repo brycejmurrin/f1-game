@@ -124,16 +124,16 @@ test("--log-matches: holds once a log line matches; names the missing verdict; b
   assert.throws(() => parseArgs(["--log-matches", "x.log", "("]), UsageError);
 });
 
-test("capForeground: a foreground --timeout over 590 s is clamped and names run_in_background", () => {
+test("capForeground: a foreground --timeout over 590 s is REFUSED (exit 2), never clamped, and names run_in_background", () => {
   assert.equal(FOREGROUND_CAP_SEC, 590);
   assert.deepEqual(capForeground(5, false), { timeoutMin: 5, note: "" });
   const c = capForeground(30, false);
-  assert.equal(c.timeoutMin * 60, 590);
-  assert.ok(/run_in_background/.test(c.note));
-  assert.ok(/--background/.test(c.note));
+  assert.ok(["run_in_background", "--background", "refused"].every((t) => c.error.includes(t)));
   assert.deepEqual(capForeground(45, true), { timeoutMin: 45, note: "" }, "--background lifts the cap");
   assert.equal(parseArgs(["--pid-gone", "1", "--background"]).background, true);
   assert.equal(parseArgs(["--pid-gone", "1"]).background, false);
+  const r = spawnSync(process.execPath, ["tools/ci/wait-for.mjs", "--file-nonempty", "package.json", "--timeout", "30"], { encoding: "utf8", env: { ...process.env, APEX_WAIT_BACKGROUND: "" } });
+  assert.deepEqual([r.status, r.stderr.includes("use --background / run_in_background")], [2, true], "a satisfied condition still exits non-zero: the flag, not the wait, is wrong");
 });
 
 test("--merged <sha>: parsed, polled no faster than 30 s, judged through the deps.merged probe (the sanctioned merge watch)", () => {

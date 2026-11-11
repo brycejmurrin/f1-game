@@ -27,12 +27,15 @@ test("success and skipped plans pass", () => {
   const empty = selectedGateVerdict({ ...base, selected: "skipped" });
   assert.equal(empty.ok, true);
   assert.match(empty.reason, /empty plan is a pass/);
+  // A draft runs the selected legs on a 5-min budget (2026-11-03): an empty plan is the same pass there,
+  // and a dropped spec is a warning, not a red (the ready run or remote-group.mjs runs it).
   for (const dropped of ["0", "2"]) {
     const draft = selectedGateVerdict({ ...base, selected: "skipped", draft: "true", dropped });
     assert.equal(draft.ok, true);
-    assert.equal(draft.reason, "draft PR: selected legs skipped (ready_for_review runs them)");
+    assert.match(draft.reason, dropped === "0" ? /empty plan is a pass/ : /the plan had no jobs/);
     assert.equal(draft.infraRetry, false);
     assert.equal(Boolean(draft.warn), dropped !== "0");
+    if (dropped !== "0") assert.match(draft.warn, /draft plan \(5-min budget\) dropped 2 routed spec/);
   }
 });
 
@@ -66,7 +69,9 @@ test("dropped routed specs still red off the train, even when selected succeeded
   const v = selectedGateVerdict({ ...base, dropped: "3" });
   assert.equal(v.ok, false);
   assert.match(v.reason, /dropped 3/);
-  assert.equal(selectedGateVerdict({ ...base, dropped: "2", draft: "true" }).ok, false);
+  const draft = selectedGateVerdict({ ...base, dropped: "2", draft: "true" });
+  assert.equal(draft.ok, true, "a draft's 5-min plan warns on a dropped spec; the ready run reds on it");
+  assert.match(draft.warn, /dropped 2 routed spec/);
   assert.equal(selectedGateVerdict({ ...base, selected: "skipped", dropped: "2" }).ok, false);
 });
 
@@ -192,6 +197,26 @@ test("15-F2: shardEvidence counts only junit with testcases, per shard folder", 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("one matched artifact is extracted flat: started-in/marker.txt names the shard, a flat junit tree is its junit (#5282)", () => {
+  const dir = mkTmpDir("sel-flat-");
+  const j = path.join(dir, "junit-in"), st = path.join(dir, "started-in");
+  fs.mkdirSync(path.join(j, "test-results-36127"), { recursive: true });
+  fs.mkdirSync(st, { recursive: true });
+  fs.writeFileSync(path.join(st, "marker.txt"), "oversize-bryce-phone-paint\n");
+  fs.writeFileSync(path.join(j, "test-results-36127", "junit.xml"),
+    `<testsuites><testsuite><testcase classname="specs/bryce-phone-paint.spec.js" name="t"/></testsuite></testsuites>`);
+  const ev = shardEvidence(j, st);
+  assert.deepEqual(ev, { started: ["oversize-bryce-phone-paint"], junit: ["oversize-bryce-phone-paint"] });
+  const green = selectedGateVerdict({ select: "success", selected: "success", guards: "success", evidence: ev });
+  assert.equal(green.ok, true, green.reason);
+  // The same flat shard with no testcase is still a dead shard, not a pass.
+  fs.writeFileSync(path.join(j, "test-results-36127", "junit.xml"), `<testsuites></testsuites>`);
+  const dead = selectedGateVerdict({ select: "success", selected: "success", guards: "success", evidence: shardEvidence(j, st) });
+  assert.equal(dead.ok, false);
+  assert.match(dead.reason, /oversize-bryce-phone-paint reached the run step and left no junit/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("15-F2 CLI: cancelled + a started shard with an empty junit exits 1; a classname-less failure exits 1", () => {
   const dir = mkTmpDir("sel-gate-");
   fs.mkdirSync(path.join(dir, "started-in", "selected-started-a-1"), { recursive: true });
@@ -230,4 +255,26 @@ test("CI selection reporter annotates unreadable specs and counts them as droppe
     assert.match(fs.readFileSync(output, "utf8"), /dropped=1/);
     assert.equal(selectedGateVerdict({ ...base, dropped: "1" }).ok, false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an unreadable DROPPED count fails closed with an honest message (#4481)", () => {
+  const seen = [];
+  for (const dropped of ["", "?", "2"]) {
+    const v = selectedGateVerdict({ ...base, selected: "success", dropped });
+    seen.push([v.ok, v.reason.indexOf("unreadable") > 0, v.reason.indexOf("dropped 2 routed spec") > 0]);
+  }
+  const draft = selectedGateVerdict({ ...base, selected: "skipped", draft: "true", dropped: "" });
+  seen.push([draft.ok, draft.warn.indexOf("unreadable") > 0]);
+  assert.deepEqual(seen, [[false, true, false], [false, true, false], [false, false, true], [true, true]]);
+});
+
+// ---- #5241 G5: a green matrix that ran nothing ----
+test("#5241 G5: selected=success with a started shard that left no testcase, or no evidence, is red", () => {
+  assert.equal(selectedGateVerdict({ ...base }).ok, true);
+  const zero = selectedGateVerdict({ ...base, evidence: { started: ["a-1", "b-2"], junit: ["a-1"] } });
+  assert.equal(zero.ok, false);
+  assert.match(zero.reason, /b-2.*zero tests/);
+  assert.equal(selectedGateVerdict({ ...base, evidence: { started: [], junit: [] } }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, evidence: { started: ["a-1"], junit: ["a-1"], downloadFailed: true } }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, selected: "skipped", evidence: { started: [], junit: [] } }).ok, true, "an empty plan has no shard to prove");
 });

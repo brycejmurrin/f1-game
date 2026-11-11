@@ -8,13 +8,14 @@ import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const apiSource = (await Promise.all(["api-transport", "api"].map((name) =>
   readFile(new URL(`../../js/data/${name}.js`, import.meta.url), "utf8")))).join("\n");
 
 // Own the clock so stalled bodies test the actual 15 s attempt deadline,
 // not a shortened timeout or a second timer started after headers.
-function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, controller = true, headersDelay = 0 } = {}) {
+function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, controller = true, controllerType = AbortController, headersDelay = 0 } = {}) {
   let now = 1_000_000, nextId = 0;
   const timers = new Map(), calls = [], writes = [], lateBodies = [];
   const url = "https://api.openf1.org/v1/weather?session_key=7";
@@ -22,7 +23,7 @@ function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, 
   const stale = JSON.stringify({ t: now - 1000, data: [{ rainfall: 99 }] });
   class Clock extends Date { static now() { return now; } }
   const context = vm.createContext({
-    Date: Clock, AbortController: controller ? AbortController : undefined,
+    Date: Clock, AbortController: controller ? controllerType : undefined,
     setTimeout(fn, ms) { const id = ++nextId; timers.set(id, { fn, at: now + ms }); return id; },
     clearTimeout(id) { timers.delete(id); },
     localStorage: { getItem: (k) => k === key ? stale : null,
@@ -59,7 +60,7 @@ function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, 
     }
     now = target; await flush();
   }
-  return { api: context.api, calls, writes, timers, lateBodies, flush, advance };
+  return { api: context.api, context, calls, writes, timers, lateBodies, flush, advance };
 }
 
 for (const status of [401, 403]) {
@@ -81,7 +82,7 @@ for (const status of [401, 403]) {
       assert.equal(out.value, undefined, "the cached rainfall must not hide a lockout");
       assert.equal(out.error.status, status);
       assert.equal(out.error.retryAfterMs, 0);
-      if (body === "stall" || body === "abort") assert.match(out.error.message, /timed out/);
+      if (body === "stall" || body === "abort") assert.equal(out.error.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=7");
       assert.equal(out.error.cancelled, undefined, "a deadline is not user cancellation");
       assert.equal(h.calls.length, 1, "authentication failures never retry");
       assert.equal(h.timers.size, 0, "the deadline is reclaimed");
@@ -115,10 +116,10 @@ test("headers arriving late do not restart or extend the attempt deadline", asyn
   await h.advance(1);
   const error = await pending;
   assert.equal(error.status, 401);
-  assert.match(error.message, /timed out/);
+  assert.equal(error.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=7");
   h.lateBodies[0].resolve('{"detail":"late detail"}');
   await h.flush();
-  assert.match(error.message, /timed out/, "late body completion cannot mutate the delivered timeout");
+  assert.equal(error.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=7", "late body completion cannot mutate the delivered timeout");
   assert.equal(h.calls.length, 1);
   assert.equal(h.writes.length, 0);
   assert.equal(h.timers.size, 0);
@@ -254,7 +255,7 @@ test('a "null" error body cannot dodge the 403 stale-cache refusal', async () =>
     // The generic HTTP path must fire — with its status attached — instead of
     // a statusless TypeError from reading .detail off null.
     assert.equal(err.status, 403);
-    assert.match(err.message, /HTTP 403/);
+    assert.equal(err.message, "HTTP 403 for https://api.openf1.org/v1/weather?session_key=7");
     return true;
   });
 });
@@ -263,7 +264,7 @@ test('a "null" error body cannot dodge the 401 stale-cache refusal', async () =>
   const api = lockoutHarness(401, "null");
   await assert.rejects(api.weather(7, 0), (err) => {
     assert.equal(err.status, 401);
-    assert.match(err.message, /HTTP 401/);
+    assert.equal(err.message, "HTTP 401 for https://api.openf1.org/v1/weather?session_key=7");
     return true;
   });
 });
@@ -272,7 +273,7 @@ test("a structured detail body still surfaces its own message and status", async
   const api = lockoutHarness(403, JSON.stringify({ detail: "Not authenticated" }));
   await assert.rejects(api.weather(7, 0), (err) => {
     assert.equal(err.status, 403);
-    assert.match(err.message, /Not authenticated/);
+    assert.equal(err.message, "Not authenticated");
     return true;
   });
 });
@@ -539,13 +540,13 @@ test("overlapping attempts retain separate original deadlines and release capaci
   await h.flush(); await h.advance(14999);
   assert.equal(h.calls.length, 2);
   await h.advance(1);
-  assert.match((await first).message, /timed out/);
+  assert.equal((await first).message, "Request timed out for https://api.openf1.org/v1/location?session_key=1");
   assert.equal(h.calls[0].signal.aborted, true);
   assert.equal(h.calls[1].signal.aborted, false);
   assert.equal(h.calls[2].at, 1_015_000, "first deadline releases a slot without waiting for the second body");
   await third;
   await h.advance(400);
-  assert.match((await second).message, /timed out/);
+  assert.equal((await second).message, "Request timed out for https://api.openf1.org/v1/location?session_key=2");
   assert.equal(h.calls[1].signal.aborted, true);
   assert.equal(h.timers.size, 0);
   assert.equal(h.peak.openf1, 2);
@@ -701,7 +702,7 @@ test("a response body that ignores abort is still bounded by the full-attempt ti
   await new Promise((r) => setImmediate(r));
   deadline();
   const err = await first;
-  assert.match(err.message, /timed out/);
+  assert.equal(err.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=1");
   assert.equal(err.cancelled, undefined, "deadline remains a fetch failure, eligible for stale fallback");
   const recovered = await context.__api.weather(2, 0);
   assert.equal(recovered.rainfall, 7);
@@ -763,7 +764,7 @@ test("Retry-After is honoured as sent up to 90 s; longer than that fails fast on
   assert.equal(twoMin.calls(), 1, "no retry against a 120 s ask");
   assert.equal(twoMin.timers.length, 0, "no backoff timer either");
   assert.equal(err.status, 429);
-  assert.match(err.message, /HTTP 429/);
+  assert.equal(err.message, "HTTP 429 for https://api.openf1.org/v1/weather?session_key=8");
   assert.equal(err.retryAfterMs, 120000, "the server's ask is reported uncapped");
 });
 
@@ -1268,8 +1269,7 @@ test("RACE IT caches bulk positions without serializing them and fresh bypasses 
     if (value && Array.isArray(value.data) && value.data.length === big.length) serialized.push(value);
     return JSON.stringify(value);
   } };
-  vm.runInContext(await readFile(new URL("../../js/data/real-race-tab.js", import.meta.url), "utf8") +
-    ";globalThis.realRace=DataRealRace", h.context, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(h.context, ";globalThis.realRace=DataRealRace");
   const first = await h.context.realRace.fetchRaw(123, false);
   assert.equal(first.positions.length, big.length);
   assert.equal(serialized.length, 0, "the bulk history never reaches JSON.stringify");
@@ -1367,4 +1367,256 @@ test("a finite Retry-After seconds value that overflows milliseconds cannot inst
   const reopened = rawRequest(h, 3); await h.flush(); await h.advance(400); await reopened;
   assert.equal(h.calls.length, 3, "invalid header cannot leave a permanent provider pause");
   assert.equal(h.timers.size, 0);
+});
+
+test("driverStandings refuses a body whose StandingsLists season disagrees with the asked year", async () => {
+  const body = {
+    MRData: {
+      StandingsTable: {
+        StandingsLists: [{
+          season: "2025",
+          round: "24",
+          DriverStandings: [{
+            position: "1", points: "99", wins: "3",
+            Driver: { givenName: "Max", familyName: "Verstappen", code: "VER", permanentNumber: "1" },
+            Constructors: [{ name: "Red Bull Racing" }]
+          }]
+        }]
+      }
+    }
+  };
+  const warns = [];
+  const context = vm.createContext({
+    fetch: async () => ({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => body, text: async () => JSON.stringify(body)
+    }),
+    AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} }
+  });
+  seedLog(context);
+  context.Log.warn = function (ch, msg) { warns.push([ch, msg]); };
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  const mismatched = await context.api.driverStandings(2026);
+  // Length pin (not deepEqual []): VM-realm arrays fail host deepStrictEqual.
+  assert.equal(mismatched.length, 0, "wrong-season body must not paint as this year's table");
+  assert.ok(warns.some((w) => /standings season mismatch/.test(String(w[1]))));
+  body.MRData.StandingsTable.StandingsLists[0].season = "2026";
+  // Same URL was cached with the mismatched body — drop it so the OK season is fetched.
+  const driverUrl = "https://api.jolpi.ca/ergast/f1/2026/driverstandings.json?limit=100";
+  context.api.forget(driverUrl);
+  const ok = await context.api.driverStandings(2026);
+  assert.equal(ok.length, 1);
+  assert.equal(ok[0].code, "VER");
+  // A list with no season field stays accepted (legacy / truncated bodies).
+  delete body.MRData.StandingsTable.StandingsLists[0].season;
+  context.api.forget(driverUrl);
+  const legacy = await context.api.driverStandings(2026);
+  assert.equal(legacy.length, 1);
+});
+
+test("driverStandings names a mid-season mover's CURRENT team (the last Constructors entry)", async () => {
+  // Jolpica 2025: Lawson ["Red Bull", "RB F1 Team"], Tsunoda the reverse — move order.
+  const body = { MRData: { StandingsTable: { StandingsLists: [{ season: "2025", DriverStandings: [
+    { position: "10", points: "38", wins: "0", Driver: { givenName: "Liam", familyName: "Lawson", code: "LAW" },
+      Constructors: [{ name: "Red Bull" }, { name: "RB F1 Team" }] },
+    { position: "17", points: "30", wins: "0", Driver: { givenName: "Yuki", familyName: "Tsunoda", code: "TSU" },
+      Constructors: [{ name: "RB F1 Team" }, { name: "Red Bull" }] },
+    { position: "20", points: "0", wins: "0", Driver: { givenName: "No", familyName: "Team", code: "NOT" } },
+  ] }] } } };
+  const context = vm.createContext({
+    fetch: async () => ({ ok: true, status: 200, headers: { get: () => null },
+      json: async () => body, text: async () => JSON.stringify(body) }),
+    AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} }
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  const rows = await context.api.driverStandings(2025);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].team, "RB F1 Team", "Lawson drives for RB now, not the team he left");
+  assert.equal(rows[1].team, "Red Bull", "Tsunoda moved up to Red Bull");
+  assert.equal(rows[2].team, null, "no Constructors still yields no team");
+});
+
+test("constructorStandings also refuses a mismatched StandingsLists season", async () => {
+  const body = {
+    MRData: {
+      StandingsTable: {
+        StandingsLists: [{
+          season: "2024",
+          ConstructorStandings: [{ position: "1", points: "860", wins: "9", Constructor: { name: "McLaren" } }]
+        }]
+      }
+    }
+  };
+  const context = vm.createContext({
+    fetch: async () => ({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => body, text: async () => JSON.stringify(body)
+    }),
+    AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} }
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  assert.equal((await context.api.constructorStandings(2026)).length, 0);
+  body.MRData.StandingsTable.StandingsLists[0].season = "2026";
+  context.api.forget("https://api.jolpi.ca/ergast/f1/2026/constructorstandings.json?limit=100");
+  const ok = await context.api.constructorStandings(2026);
+  assert.equal(ok[0].name, "McLaren");
+});
+
+
+function trackedControllers() {
+  const records = [];
+  class Controller extends AbortController {
+    constructor() {
+      super();
+      const record = { controller: this, listeners: new Set() };
+      records.push(record);
+      const add = this.signal.addEventListener.bind(this.signal);
+      const remove = this.signal.removeEventListener.bind(this.signal);
+      this.signal.addEventListener = (type, listener, options) => {
+        if (type === "abort") record.listeners.add(listener);
+        return add(type, listener, options);
+      };
+      this.signal.removeEventListener = (type, listener, options) => {
+        if (type === "abort") record.listeners.delete(listener);
+        return remove(type, listener, options);
+      };
+    }
+  }
+  return { Controller, records };
+}
+
+test("transport owns attempt resources through body settlement and releases listeners on success", async () => {
+  const { Controller, records } = trackedControllers();
+  const h = bodyFailureHarness({ status: 200, body: "stall", controllerType: Controller });
+  const request = h.api.request("https://api.openf1.org/v1/weather?session_key=71", 60000);
+  await h.flush();
+  assert.equal(records.length, 1);
+  assert.equal(records[0].listeners.size, 1);
+  assert.equal(h.timers.size, 1, "headers do not release the body deadline");
+  h.lateBodies[0].resolve([{ rainfall: 2 }]);
+  assert.equal((await request)[0].rainfall, 2);
+  assert.equal(records[0].listeners.size, 0);
+  assert.equal(records[0].controller.signal.aborted, false);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.api.cancelAll(), 0, "settled attempts cannot be aborted later");
+  assert.equal(h.writes.length, 1);
+});
+
+test("transport reclaims resources after a synchronous host fetch failure and accepts a replacement host", async () => {
+  const { Controller, records } = trackedControllers();
+  const h = bodyFailureHarness({ status: 200, controllerType: Controller });
+  h.context.fetch = function () { throw new TypeError("host fetch unavailable"); };
+  await assert.rejects(h.api.request("https://example.test/first", 0, { cache: false }), /host fetch unavailable/);
+  assert.equal(records[0].listeners.size, 0);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.api.cancelAll(), 0);
+  let calls = 0;
+  h.context.fetch = function () {
+    calls++;
+    return Promise.resolve({ ok: true, json: async () => ["replacement"] });
+  };
+  const answer = await h.api.request("https://api.openf1.org/v1/second", 0, { cache: false });
+  assert.equal(answer[0], "replacement");
+  assert.equal(calls, 1, "effects preserve live lookup of host methods");
+  assert.equal(records[1].listeners.size, 0);
+  assert.equal(h.timers.size, 0);
+});
+
+test("transport instances own independent cancellation scopes and late bodies cannot write cancelled cache", async () => {
+  const { Controller, records } = trackedControllers();
+  const h = bodyFailureHarness({ status: 200, body: "stall", controllerType: Controller });
+  const sibling = vm.runInContext('F1Transport.create("https://api.openf1.org/v1", 604800000)', h.context);
+  const first = h.api.request("https://api.openf1.org/v1/first", 60000).catch(error => error);
+  const other = sibling.request("https://api.openf1.org/v1/other", 60000);
+  await h.flush();
+  assert.equal(h.lateBodies.length, 2);
+  assert.equal(h.api.cancelAll(), 1);
+  assert.equal((await first).cancelled, true);
+  assert.equal(records[0].listeners.size, 0);
+  assert.equal(records[1].controller.signal.aborted, false, "one instance cannot abort its sibling");
+  assert.equal(h.timers.size, 1, "only the sibling still owns a deadline");
+  h.lateBodies[0].resolve([{ rainfall: 1 }]);
+  h.lateBodies[1].resolve([{ rainfall: 3 }]);
+  assert.equal((await other)[0].rainfall, 3);
+  await h.flush();
+  assert.equal(h.writes.length, 1, "late cancelled completion never enters cache policy");
+  assert.ok(h.writes[0].k.endsWith("/other"));
+  assert.equal(records[1].listeners.size, 0);
+  assert.equal(h.timers.size, 0);
+  assert.equal(sibling.cancelAll(), 0);
+});
+
+// W23 #3: no Jolpica URL carried `limit`, and MRData.total was never read, so a
+// list past Jolpica's default page of 30 rows was cut off without a word. The
+// fixture server pages like Jolpica (limit/offset/total) with a page cap, so a
+// 31-row table needs a second page even when the cap ignores ?limit=100.
+function jolpicaServer(rowsFor, cap) {
+  const calls = [];
+  const fetch = async (url) => {
+    const u = new URL(String(url));
+    calls.push(u.pathname + u.search);
+    const all = rowsFor(u.pathname);
+    const limit = Math.min(Number(u.searchParams.get("limit") || 30), cap);
+    const offset = Number(u.searchParams.get("offset") || 0);
+    const page = all.rows.slice(offset, offset + limit);
+    const body = { MRData: { limit: String(limit), offset: String(offset), total: String(all.rows.length), ...all.wrap(page) } };
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) };
+  };
+  const store = new Map();
+  const context = vm.createContext({ fetch, AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i] ?? null,
+      getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) } });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  return { api: context.api, calls, store };
+}
+
+const DRIVERS31 = Array.from({ length: 31 }, (_, i) => ({ position: String(i + 1), points: String(100 - i), wins: "0",
+  Driver: { givenName: "D", familyName: "N" + (i + 1), code: "D" + (i + 1) }, Constructors: [{ name: "T" }] }));
+const standingsTable = (rows) => ({ StandingsTable: { StandingsLists: [{ season: "2026", DriverStandings: rows }] } });
+
+test("driverStandings asks for limit=100 and pages a 31-row table by MRData.total", async () => {
+  const s = jolpicaServer(() => ({ rows: DRIVERS31, wrap: standingsTable }), 30);
+  const rows = await s.api.driverStandings(2026);
+  assert.equal(rows.length, 31, "the 31st driver is not cut off");
+  assert.equal(rows[30].code, "D31");
+  assert.equal(s.calls[0], "/ergast/f1/2026/driverstandings.json?limit=100");
+  assert.equal(s.calls[1], "/ergast/f1/2026/driverstandings.json?limit=100&offset=30");
+  assert.equal(s.calls.length, 2);
+  const again = await s.api.driverStandings(2026);
+  assert.equal(again.length, 31, "a cached first page is never mutated into a 62-row table");
+});
+
+test("a table that fits one page is one request", async () => {
+  const s = jolpicaServer(() => ({ rows: DRIVERS31.slice(0, 2), wrap: standingsTable }), 100);
+  assert.equal((await s.api.driverStandings(2026)).length, 2);
+  assert.deepEqual(s.calls, ["/ergast/f1/2026/driverstandings.json?limit=100"]);
+});
+
+const raceRow = (i) => ({ season: "2026", round: String(i + 1), raceName: "GP " + (i + 1), date: "2026-03-01", time: "12:00:00Z",
+  Circuit: { circuitId: "c" + (i + 1), circuitName: "C" + (i + 1), Location: { locality: "L", country: "X" } } });
+
+test("schedule pages past 30 races and carries season + circuitId", async () => {
+  const races = Array.from({ length: 31 }, (_, i) => raceRow(i));
+  const s = jolpicaServer(() => ({ rows: races, wrap: (page) => ({ RaceTable: { season: "2026", Races: page } }) }), 30);
+  const items = await s.api.schedule(2026);
+  assert.equal(items.length, 31);
+  assert.equal(items[30].circuitId, "c31");
+  assert.equal(items[0].season, 2026);
+  assert.equal(s.calls[0], "/ergast/f1/2026.json?limit=100");
+});
+
+// W23 #2: an EMPTY calendar (next year not published yet) used to be cached for
+// 24 h, so the day it was published the tab still read "No calendar data".
+test("an empty calendar answer is not kept in the cache", async () => {
+  const s = jolpicaServer(() => ({ rows: [], wrap: (page) => ({ RaceTable: { season: "2027", Races: page } }) }), 100);
+  assert.equal((await s.api.schedule(2027)).length, 0);
+  assert.equal([...s.store.keys()].filter((k) => k.includes("2027.json")).length, 0, "no stored empty calendar");
+  await s.api.schedule(2027);
+  assert.equal(s.calls.length, 2, "the next load asks again");
 });

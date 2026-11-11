@@ -7,12 +7,19 @@
 (window.TrackScenery = window.TrackScenery || {})["suzuka"] =
   function (api) {
       const { K, lapBounds, out, track, n, px, py, pz, hw, pyMin, place, every,
-              hash, mountain, pine, tree, bush, grandstandEx, spectatorHill, terrace,
+              hash, mountain, tree, bush, grandstandEx, spectatorHill, terrace,
               bleacher, cypress, broadleafFall,
               building, tower, billboard,
-              marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
-              addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, groundYAt, terrainYAt, onTrack, forestEdge, backdrop,
-              MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound } = api;
+              marshalPost, fence, guardrail, tyreWall, anchor, vadd,
+              addBox, addCyl, addCone, addPrism, addPyramid, terrainYAt, onTrack, forestEdge, backdrop,
+              MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound, bakedModel } = api;
+
+      // Pit side (def `pit.side`): the pits are on the driver's RIGHT of the main
+      // straight, on the Esses side (FIA 2026 Japanese GP Circuit Map + Pit Lane
+      // drawing). Race control, paddock and hospitality stand behind the garages
+      // on PIT; the main grandstand V1/V2 faces them across the straight on STAND.
+      // Precedent: scenery/mexico.js. Motopia/hotel stay on -1 (not pit-keyed).
+      const PIT = 1, STAND = -PIT;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
       const navy      = [0.18, 0.26, 0.46];
@@ -324,7 +331,7 @@
 
       const RC_GAP = 38, BC_GAP = 46, HOSP_GAP = 58;
       if (circuitKit) {
-        // The pits are on -1 (def `pit.side`); the engine's pit complex builds
+        // The pits are on PIT (def `pit.side`); the engine's pit complex builds
         // the garages there, so the file's own kit pit building (always a no-op
         // under the complex) is dropped. Race control and the paddock stand
         // BEHIND the garages on the pit side, opposite the main grandstand.
@@ -336,31 +343,33 @@
         // 35 % setback) whose ground floor fronts the anchor plane, so it
         // reads as the paddock-side race-control block, not a lone pillar.
         circuitKit.raceControl({
-          id: "kit:suzuka:race-control", frac: 0.995, side: -1, gap: RC_GAP,
+          id: "kit:suzuka:race-control", frac: 0.995, side: PIT, gap: RC_GAP,
           size: [14, 22, 26], levels: 4, required: true,
         });
       }
       {
         const rk = Math.round(n * 0.995) % n;
-        const rc = anchor(rk, -1, RC_GAP), rb = [rc.r, rc.u, rc.t];
+        const rc = anchor(rk, PIT, RC_GAP), rb = [rc.r, rc.u, rc.t];
         // Top level (i = 3 of 4): 16.5–22 m, scale 1 - 3/4·0.35 → its
         // track-facing wall is set back 14·(1-0.7375)/2 = 1.84 m from the
         // ground-floor face at the anchor plane. Clock hangs on that wall.
-        const faceC = vadd(vadd(rc.c, rc.u, 19.2), rc.r, -1.84);
+        // rc.r is the track's right vector on either side: the setback runs
+        // AWAY from the road (+PIT), the clock parts stand TOWARD it (-PIT).
+        const faceC = vadd(vadd(rc.c, rc.u, 19.2), rc.r, PIT * 1.84);
         modelGroup("kit:suzuka:race-control-clock", {
           center: faceC, size: [1.2, 5.4, 5.4], basis: rb,
         }, (stage) => {
-          addBox(stage, vadd(faceC, rc.r, 0.05), [0.3, 5.0, 5.0], navy, rb);            // housing surround
-          addCyl(stage, vadd(faceC, rc.r, 0.22), 2.3, 0.22, [0.96, 0.96, 0.94], 16, [rc.u, rc.r, rc.t]);  // white face
-          addCyl(stage, vadd(faceC, rc.r, 0.45), 2.45, 0.14, navy, 16, [rc.u, rc.r, rc.t]);               // rim
-          addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 0.32, 1.5], navy, rb);          // hour hand
-          addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 1.85, 0.14], navy, rb);         // minute hand
+          addBox(stage, vadd(faceC, rc.r, -PIT * 0.05), [0.3, 5.0, 5.0], navy, rb);            // housing surround
+          addCyl(stage, vadd(faceC, rc.r, -PIT * 0.22), 2.3, 0.22, [0.96, 0.96, 0.94], 16, [rc.u, rc.r, rc.t]);  // white face
+          addCyl(stage, vadd(faceC, rc.r, -PIT * 0.45), 2.45, 0.14, navy, 16, [rc.u, rc.r, rc.t]);               // rim
+          addBox(stage, vadd(faceC, rc.r, -PIT * 0.32), [0.14, 0.32, 1.5], navy, rb);          // hour hand
+          addBox(stage, vadd(faceC, rc.r, -PIT * 0.32), [0.14, 1.85, 0.14], navy, rb);         // minute hand
         }, { required: true });
       }
-      broadcastCompound(Math.round(n * 0.992) % n, -1, BC_GAP, { vans: 3, dishes: 2, mastH: 9 });
+      broadcastCompound(Math.round(n * 0.992) % n, PIT, BC_GAP, { vans: 3, dishes: 2, mastH: 9 });
       if (circuitKit) {
         circuitKit.hospitality({
-          id: "kit:suzuka:paddock-hospitality", frac: 0.975, side: -1, gap: HOSP_GAP,
+          id: "kit:suzuka:paddock-hospitality", frac: 0.975, side: PIT, gap: HOSP_GAP,
           size: [18, 9, 34], modules: 5, required: true,
         });
         circuitKit.marshalShelter({
@@ -368,7 +377,7 @@
           size: [6, 3.2, 5], required: true,
         });
       }
-      guardrail(0.965, 0.04, 1, 2.5, [0.88, 0.88, 0.90]);
+      guardrail(0.965, 0.04, STAND, 2.5, [0.88, 0.88, 0.90]);
       // Start gantry — teal/green "SUZUKA" identity bar (photo: dark teal span).
       overheadSpan({ id: "suzuka-start-gantry", frac: 0.0, clearance: 7.2, startLights: true,
         thickness: 0.9, depth: 1.8, supportGap: 2.8, supportWidth: 1.0,
@@ -393,10 +402,13 @@
       }
 
       // ── Tall pit/paddock long grey box — wave-3 hero opposite main stand ──
-      // Research: long low grey box + slab roof on the pit side (-1). Sit BEHIND
+      // Research: long low grey box + slab roof on the pit side (PIT). Sit BEHIND
       // the engine pit complex so we do not fight the garage footprint.
       {
-        const a = anchor(K(0.0), -1, 42);
+        // Gap 68 (was 42 on -1, where the pit complex superseded it): on PIT it
+        // ships, and at 42 it stood inside race control (clip-audit 5.04 m at
+        // frac 0.995), so it sits one race-control depth further back.
+        const a = anchor(K(0.0), PIT, 68);
         if (!onTrack(a.c[0], a.c[2], 28)) {
           const b = [a.r, a.u, a.t];
           const GREY = [0.62, 0.64, 0.68], GREY_D = [0.48, 0.50, 0.54], WHITE = [0.90, 0.91, 0.93];
@@ -422,17 +434,17 @@
         }
       }
 
-      // Pit-straight lamp posts (right side)
+      // Pit-straight lamp posts (grandstand side, clear of the pit lane)
       for (let i = 0; i < 8; i++) {
         const lk3 = Math.round(n * (0.97 + i * 0.007)) % n;
-        const lp3 = anchor(lk3, 1, 8), lb3 = [lp3.r, lp3.u, lp3.t];
+        const lp3 = anchor(lk3, STAND, 8), lb3 = [lp3.r, lp3.u, lp3.t];
         addCyl(out, lp3.c, 0.12, 9, steel, 5, lb3);
         addBox(out, vadd(lp3.c, lp3.u, 9.18), [1.4, 0.4, 0.9], lampWarm, lb3);
       }
 
-      // Pit-straight sponsor billboards (left side)
+      // Pit-straight sponsor billboards (grandstand side)
       for (let i = 0; i < 5; i++) {
-        billboard(Math.round(n * (0.0 + i * 0.012)) % n, 1, 6, 8, 4, parkCol[i % parkCol.length]);
+        billboard(Math.round(n * (0.0 + i * 0.012)) % n, STAND, 6, 8, 4, parkCol[i % parkCol.length]);
       }
 
       const footbridge = (id, s, deckH) => {
@@ -768,10 +780,10 @@
         }, { required: true });
       }
 
-      // ── Honda orange accent on main grandstand (start/finish right side, opposite the pits) ───────
+      // ── Honda orange accent on main grandstand (start/finish STAND side, opposite the pits) ───────
       {
         const hk = Math.round(n * 0.00) % n;
-        const ah = anchor(hk, 1, 22.4);
+        const ah = anchor(hk, STAND, 22.4);
         const bh = [ah.r, ah.u, ah.t];
         modelGroup("suzuka-main-stand-crown", {
           center: vadd(ah.c, ah.u, 17.5), size: [3.2, 5.0, 44], basis: bh,
@@ -796,11 +808,11 @@
         addBox(out, vadd(lp4.c, lp4.u, 9.18), [1.6, 0.4, 1.0], lampWarm, lb4);
       });
 
-      stand(0.00,  1, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
-        suites: true, endWalls: true, pylons: true }); // Main grandstand V1/V2 — right, opposite the pits (-1); navy base under the Honda crown accent
+      stand(0.00,  STAND, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
+        suites: true, endWalls: true, pylons: true }); // Main grandstand V1/V2 — STAND, opposite the pits (PIT); navy base under the Honda crown accent
       // Stepped dark-blue seating rows — wave-3 identity under the main canopy.
       {
-        const a = anchor(K(0.0), 1, 18);
+        const a = anchor(K(0.0), STAND, 18);
         if (!onTrack(a.c[0], a.c[2], 16)) {
           const b = [a.r, a.u, a.t];
           const NAVY_A = [0.16, 0.24, 0.42], NAVY_B = [0.20, 0.28, 0.48];
@@ -811,7 +823,7 @@
             for (let tier = 0; tier < 4; tier++) {
               const y0 = 1.2 + tier * 2.2;
               const w = 10 - tier * 0.8;
-              addBox(stage, vadd(vadd(a.c, a.r, tier * 0.9), a.u, y0),
+              addBox(stage, vadd(vadd(a.c, a.r, STAND * tier * 0.9), a.u, y0),
                 [w, 1.8, 44 - tier * 2], (tier % 2) ? NAVY_A : NAVY_B, b);
             }
             // Flat white canopy over the top tier.
@@ -844,7 +856,7 @@
           out._mat = 0;
         };
         screen(0.94, 1, 22, 11, 6.5);
-        screen(0.02, 1, 36, 12, 7.0);
+        screen(0.012, STAND, 26, 12, 7.0);   // was (0.02, +1, 36): on -1 there it met a forest tree (clip 0.85 m)
       }
       // Gap was 8 m — day orbit @ 0.50 sat inside this orange mass (#3366).
       stand(0.50,  1, 22, 24, { livery: "orange" });                   // Mid-circuit flex stand
@@ -990,4 +1002,11 @@
           });
         }
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.96, 0.985, 0.01]) bakedModel("k_tentlong", K(s), PIT, 95, { scale: 2.4 });
+      for (const [s, side] of [[0.1198, 1], [0.3404, 1], [0.4213, 1], [0.8549, 1], [0.9275, 1]])
+        bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
     };

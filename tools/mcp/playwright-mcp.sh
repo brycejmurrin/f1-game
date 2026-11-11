@@ -48,7 +48,7 @@ tools/ui/css-play.mjs — localhost host, catalog --screen, stylesheet hot-swap
 (--css css/menus.css), structured DOM dump (boxes + computed + tokens).
 See: node tools/ui/css-play.mjs --help
 
-Loopback only for the game (http://127.0.0.1). github.io stays TinyFish.
+Loopback only for the game (http://127.0.0.1). github.io is the deploy-research subagent's.
 Park about:blank before any Playwright test group.
 EOF
 }
@@ -82,13 +82,15 @@ cmd_run() {
   [[ -z "$exe" ]] && echo "playwright-mcp: no repo-discovered Chromium; the package's pinned build may be absent" >&2
   # Opt-ins, read once at server start (measured 2026-10-19,
   # docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md):
-  #   APEX_PW_CDP=http://127.0.0.1:9222  attach to tools/mcp/debug-chrome.sh's
+  #   APEX_PW_CDP=http://127.0.0.1:9222  attach to tools/mcp/debug-chrome.mjs's
   #     browser instead of launching one, so js-debugger / browser-use share it.
   #   APEX_PW_DEVICE="iPhone 15"  a Playwright device descriptor: hasTouch, UA
   #     and DPR on the context. Without it browser_resize is viewport-only,
   #     page.touchscreen throws ("hasTouch must be enabled") and GLX.isMobile
   #     stays false (the mobile tier is UA-driven).
-  local extra=()
+  # --codegen none: drop the "Ran Playwright code" block every result carries (a TypeScript echo of the
+  # call just made; nothing reads it). README of the pinned 0.0.79, "--codegen <lang>"; MCP-REFINE-2026-10-30.
+  local extra=(--codegen "${APEX_PW_CODEGEN:-none}")
   [[ -n "${APEX_PW_DEVICE:-}" ]] && extra+=(--device "$APEX_PW_DEVICE")
   if [[ -n "${APEX_PW_CDP:-}" ]]; then
     exec npx --yes --prefer-offline "$MCP_NPM_PACKAGE" \

@@ -1,16 +1,18 @@
-/* Apex 26 — WebXR immersive-vr session owner (Phase 0 spike).
+/* Apex 26 — WebXR immersive-vr session owner.
  *
  * Owns capability detection, session start/end/visibility, the XR frame
  * loop (window.rAF is unreliable inside an immersive session), seated
  * reference-space recenter, and the per-eye view list the render path
- * consumes. Renderer binding (TLX three.xr / GLX XRWebGLLayer) is injected
- * so this module stays free of a THREE import — the canvas page is still
- * IIFE / no bundler.
+ * consumes. Renderer binding is injected (`XrBoot` → gfx.attachXrSession →
+ * XRWebGLLayer on TLX+forceGL); this module stays free of a THREE import.
  *
- * Default VR path is WebGL2 (forceWebGL / tlxForceGL). Experimental WebGPU
- * XR is opt-in via localStorage apex26.xrBackend=webgpu. Quest Browser can
- * expose `XRGPUBinding` even when WebGPU-in-XR is unsupported (three.js
- * #33497) — decide by requesting the `webgpu` session feature and reading
+ * The VR path is WebGL2 (forceWebGL / tlxForceGL). apex26.xrBackend=webgpu
+ * records a preference only: the renderer attach builds an XRWebGLLayer and
+ * nothing creates an XRGPUBinding, so the `webgpu` session feature is NOT
+ * requested (ATTACH_WEBGPU). A session granted it would hand that WebGL layer
+ * a WebGPU session and every ENTER VR would fail. When an XRGPUBinding attach
+ * lands, flip ATTACH_WEBGPU: Quest Browser can expose `XRGPUBinding` where
+ * WebGPU-in-XR is unsupported (three.js #33497), so decide by the request plus
  * `session.enabledFeatures`, then fall back to WebGL2 when absent.
  */
 "use strict";
@@ -18,6 +20,8 @@
 const XrSession = (function () {
   const MODE = "immersive-vr";
   const LS_XR_BACKEND = "apex26.xrBackend";   // "webgpu" | unset/webgl2
+  // gfx.attachXrSession is WebGL-only (XRWebGLLayer): never ask for "webgpu".
+  const ATTACH_WEBGPU = false;
 
   let _supported = false;
   let _probed = false;
@@ -30,14 +34,13 @@ const XrSession = (function () {
   let _refSpace = null;
   let _baseRefSpace = null;
   let _xrFrame = null;
-  let _xrTime = 0;
   let _xrFrameCount = 0;
   let _running = false;
   let _visible = true;
   let _backend = "webgl2";          // active session backend after feature negotiation
   let _wantWebgpu = false;
   let _enabledFeatures = [];
-  let _bindings = null;             // { getRenderer, onFrame, onStart, onEnd, setCamCockpit, motionLock }
+  let _bindings = null;             // { attachSession, detachSession, onFrame, onStart, onEnd }
   let _inputLatch = { primary: false, secondary: false };
   let _anchor = { eye: [0, 1.2, 0], fwd: [0, 0, 1], up: [0, 1, 0] };
   const _eyeFrames = [];          // borrowed until the next eyeFrames call
@@ -117,7 +120,6 @@ const XrSession = (function () {
   function enabledFeatures() { return _enabledFeatures.slice(); }
   function frameCount() { return _xrFrameCount; }
   function getFrame() { return _xrFrame; }
-  function getTime() { return _xrTime; }
   function getSession() { return _session; }
   function getRefSpace() { return _refSpace; }
 
@@ -137,12 +139,20 @@ const XrSession = (function () {
     const optional = ["local-floor", "bounded-floor", "layers"];
     const overlay = typeof document !== "undefined" && document.body;
     if (overlay) optional.push("dom-overlay");
-    if (preferWebgpu) optional.push("webgpu");
+    if (preferWebgpu && ATTACH_WEBGPU) optional.push("webgpu");
     return {
       ...(overlay ? { domOverlay: { root: overlay } } : {}),
       requiredFeatures: [],
       optionalFeatures: optional,
     };
+  }
+
+  function latchWebgl2(reason) {
+    if (typeof ApexXR !== "undefined" && ApexXR.noteFallback) {
+      try { ApexXR.noteFallback("webgpu", "webgl2", reason); } catch (_) { /* */ }
+    } else {
+      try { sessionStorage.setItem("apex26.xrFallback", "webgl2"); } catch (_) { /* */ }
+    }
   }
 
   function start() {
@@ -172,14 +182,19 @@ const XrSession = (function () {
       emit("error", { error: _lastError, phase: "bind" });
       return null;
     }
-  // Opt-in preference only — do NOT gate on typeof XRGPUBinding (Quest Browser
+    // Opt-in preference only — do NOT gate on typeof XRGPUBinding (Quest Browser
     // exposes the interface where WebGPU-in-XR is still unsupported; three.js PR
     // #33497). Request the feature, then trust session.enabledFeatures.
     // If WebGPU XR is ever granted: projection matrices use clip depth [0,1]
     // (WebXR/WebGPU binding), not the WebGL [-1,1] range TLX applies via Z01
     // only on the WebGPU *backend* today.
     _wantWebgpu = xrBackendPref() === "webgpu";
-    let preferGpu = _wantWebgpu;
+    let preferGpu = _wantWebgpu && ATTACH_WEBGPU;
+    // A prior WebGPU requestSession rejection latches webgl2 for the NEXT gesture
+    // (chaining a second requestSession in the same tap lacks user activation).
+    try {
+      if (preferGpu && sessionStorage.getItem("apex26.xrFallback") === "webgl2") preferGpu = false;
+    } catch (_) { /* storage blocked */ }
     let session = null;
     try {
       session = await navigator.xr.requestSession(MODE, sessionInit(preferGpu));
@@ -187,22 +202,16 @@ const XrSession = (function () {
       if (generation !== _generation) return null;
       if (preferGpu) {
         try {
-          Log.info("xr", "WebGPU XR session request failed; falling back to WebGL2", e && e.message);
+          Log.info("xr", "WebGPU XR session request failed; latch WebGL2 for next enter", e && e.message);
         } catch (_) { /* Log optional in harness */ }
-        try {
-          session = await navigator.xr.requestSession(MODE, sessionInit(false));
-          preferGpu = false;
-        } catch (e2) {
-          if (generation !== _generation) return null;
-          _lastError = e2;
-          emit("error", { error: e2, phase: "requestSession-fallback" });
-          return null;
-        }
-      } else {
+        latchWebgl2("requestSession rejected");
         _lastError = e;
-        emit("error", { error: e, phase: "requestSession" });
+        emit("error", { error: e, phase: "requestSession-webgpu", retry: "next-gesture-webgl2" });
         return null;
       }
+      _lastError = e;
+      emit("error", { error: e, phase: "requestSession" });
+      return null;
     }
 
     if (generation !== _generation) {
@@ -253,7 +262,7 @@ const XrSession = (function () {
     _resetPending = false;
     if (_baseRefSpace.addEventListener) _baseRefSpace.addEventListener("reset", onReferenceReset);
 
-    // Hand the session to the renderer (TLX three.xr.setSession, or GLX layer).
+    // Hand the session to the renderer (gfx.attachXrSession → XRWebGLLayer).
     const b = _bindings;
     if (b && typeof b.attachSession === "function") {
       try {
@@ -266,6 +275,9 @@ const XrSession = (function () {
       } catch (e) {
         if (_session !== session || generation !== _generation) return null;
         _lastError = e;
+        // A WebGPU preference that could not attach latches WebGL2 for the next
+        // tap, as a rejected request does (one requestSession per gesture).
+        if (_wantWebgpu) latchWebgl2("attachSession failed");
         await end();
         emit("error", { error: e, phase: "attachSession" });
         return null;
@@ -281,7 +293,6 @@ const XrSession = (function () {
     const onXRFrame = (time, frame) => {
       if (_session !== session || generation !== _generation || !_running) return;
       _xrRequest = null;
-      _xrTime = time;
       _xrFrame = frame;
       _xrFrameCount++;
       if ((!_centered && !_resetPending) || _recenterPending) recenter(frame);
@@ -342,8 +353,15 @@ const XrSession = (function () {
       return true;
     }
     let pose = null;
-    try { pose = xrFrame.getViewerPose(_baseRefSpace); } catch (_) { return false; }
-    if (!pose || !pose.transform || !pose.transform.matrix) return false;
+    try { pose = xrFrame.getViewerPose(_baseRefSpace); } catch (_) {
+      // In-frame tracking dropout (A/X already latched): keep pending for next pose.
+      _recenterPending = true;
+      return true;
+    }
+    if (!pose || !pose.transform || !pose.transform.matrix) {
+      _recenterPending = true;
+      return true;
+    }
     const off = XrRig.recenterOffsetFromPose(pose.transform.matrix);
     try {
       const t = new XRRigidTransform(off.position, off.orientation);
@@ -355,7 +373,8 @@ const XrSession = (function () {
       return true;
     } catch (e) {
       _lastError = e;
-      return false;
+      _recenterPending = true;
+      return true;
     }
   }
 
@@ -443,6 +462,7 @@ const XrSession = (function () {
     _recenterPending = false;
     _enabledFeatures = [];
     _running = false;
+    _visible = true;   // no session: nothing hides the page (a hidden end left it false)
     if (typeof Input !== "undefined" && Input.remoteLost) {
       try { Input.remoteLost("xr"); } catch (_) { /* */ }
     }
@@ -474,12 +494,10 @@ const XrSession = (function () {
   }
 
   return {
-    MODE, LS_XR_BACKEND,
     probe, isSupported, isProbed, isPresenting, isVisible,
     start, end, bind, on, recenter, setAnchor, getAnchor, eyeFrames,
-    getFrame, getTime, getSession, getRefSpace, backend, lastError,
-    frameCount, enabledFeatures, featureGranted, listEnabledFeatures,
-    webgpuXrAvailable, xrBackendPref, sessionInit,
+    getFrame, getSession, getRefSpace, backend, lastError,
+    frameCount, enabledFeatures, featureGranted, sessionInit,
   };
 })();
 Object.freeze(XrSession);

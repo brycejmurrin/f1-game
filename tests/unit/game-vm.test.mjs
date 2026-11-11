@@ -11,14 +11,21 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
+import { calibrate, scaledCap, describeBudget } from "../helpers/load-scaled-budget.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const finite = (o, keys) => { for (const k of keys) assert.ok(Number.isFinite(o[k]), `${k} not finite: ${o[k]}`); };
 
-let g;
-before(async () => { g = await createGame({ track: "monza" }); });
+let g, bootCal;
+// Calibrate this process's speed immediately before and after the boot it judges (load-scaled-budget.mjs).
+before(async () => {
+  const cal0 = calibrate();
+  g = await createGame({ track: "monza" });
+  bootCal = Math.max(cal0, calibrate());
+});
 after(() => { if (g) g.close(); });
 
 test("boots to __apex with no script errors", () => {
@@ -111,8 +118,17 @@ test("reset clears caution holds and queued debris without changing same-seed ro
 // still catches what this smoke test is for — a boot that hangs or turns
 // pathological — without flipping on how busy the machine is. A real
 // per-build budget needs a quiet, known box, which is what CI is for.
-test("boot and track build do not hang", () => {
-  assert.ok(g.bootMs + g.trackMs < 12000, `boot ${g.bootMs | 0} ms + track ${g.trackMs | 0} ms`);
+//
+// LOAD-SCALED (W29). 12 s still failed at machine load ~11 on 4 CPUs and passed
+// alone. The 12 s base now scales by a same-process calibration taken around
+// the boot (tests/helpers/load-scaled-budget.mjs), never below 12 s, and is
+// clamped at an absolute 60 s that only a real hang reaches.
+const BOOT_BASE_MS = 12000, BOOT_HARD_MS = 60000;
+test("boot and track build do not hang", (t) => {
+  const b = scaledCap({ baseCap: BOOT_BASE_MS, hardCap: BOOT_HARD_MS, calMs: bootCal });
+  const ms = g.bootMs + g.trackMs;
+  t.diagnostic(`boot+track ${ms | 0} ms; ${describeBudget(b)}`);
+  assert.ok(ms < b.cap, `boot ${g.bootMs | 0} ms + track ${g.trackMs | 0} ms; ${describeBudget(b)}`);
 });
 
 test("race(monza) + go() + 60 throttle steps: finite physState, speed > 0", () => {
@@ -320,7 +336,7 @@ test("stepUntil rejects invalid inputs before advancing simulation", async () =>
 test("stepUntil arms a real WATCH countdown and advances its replay clock", async () => {
   const fs = require("node:fs"), vm = require("node:vm");
   const { ROOT } = require("../../tools/lib/game-vm.cjs");
-  vm.runInContext(fs.readFileSync(`${ROOT}/js/data/real-race-tab.js`, "utf8"), g.ctx);
+  evalRealRace(g.ctx);
   const { D, Teams, Tracks, RR } = vm.runInContext("({ D: DataRealRace, Teams, Tracks, RR: RealRace })", g.ctx);
   const fixture = JSON.parse(fs.readFileSync(`${ROOT}/tests/fixtures/openf1-baku-2026-race.json`, "utf8"));
   const script = D.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
@@ -342,4 +358,34 @@ test("stepUntil arms a real WATCH countdown and advances its replay clock", asyn
     assert.ok(progress.steps > 0);
     assert.equal(replay.owns(g.G.player), true);
   } finally { g.G.quitToMenu(); }
+});
+
+// AUDIT W6 (2026-11-10): a lazily injected script that throws at load was only
+// RECORDED, so createGame resolved on a half-built game (a throwing
+// js/circuits/scenery/monza.js raced a bare Monza). It rejects by default now;
+// allowScriptErrors is the per-test opt-out for a test asserting on the failure.
+test("a lazily injected script that throws at load rejects createGame unless allowScriptErrors", async (t) => {
+  const fs = require("node:fs"), path = require("node:path");
+  const { ROOT, scriptLoadErrors } = require("../../tools/lib/game-vm.cjs");
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "game-vm-throw-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const rel = path.relative(ROOT, path.join(dir, "throws-at-load.js")).replace(/\\/g, "/");
+  fs.writeFileSync(path.join(ROOT, rel), "throw new Error('W6 fixture: broken at load');\n");
+  const inject = (sandbox) => {
+    const s = sandbox.document.createElement("script");
+    s.src = rel;
+    sandbox.document.head.appendChild(s);
+  };
+  const before = process.listenerCount("unhandledRejection");
+  await assert.rejects(createGame({ onSandbox: inject, carMeshes: false }), (error) => {
+    assert.match(error.message, /threw at load during boot: .*throws-at-load\.js \(W6 fixture: broken at load\)/);
+    assert.equal(error.scriptErrors.length, 1);
+    assert.equal(error.resources.closed, true, "a rejected boot releases its harness resources");
+    return true;
+  });
+  assert.equal(process.listenerCount("unhandledRejection"), before);
+  const lenient = await createGame({ onSandbox: inject, carMeshes: false, allowScriptErrors: true });
+  try {
+    assert.deepEqual(scriptLoadErrors(lenient.record).map((s) => s.file), [rel], "the opt-out keeps the error on the record");
+  } finally { lenient.close(); }
 });

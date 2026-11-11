@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 import { makeDom } from '../helpers/mini-dom.mjs';
 const code = fs.readFileSync(new URL('../../js/ui/experience.js', import.meta.url), 'utf8');
 const ctx = vm.createContext({}); vm.runInContext(code + ';globalThis.api=UiExperience;', ctx);
@@ -40,6 +41,9 @@ test('pause context reads live classification and distinguishes online practice'
   assert.equal(b.title, 'Monza'); assert.match(b.detail,/P2/); assert.match(b.detail,/LAP 2 \/ 12/); assert.match(b.detail,/PRACTICE/); assert.match(b.detail,/RACE CONTINUES/);
   G.timeTrial = true; G.session = 'tt'; G.netPlay.active=()=>false;
   assert.doesNotMatch(ctx.api.raceBrief(G).detail,/P2|\/ 12|ONLINE/);
+  // No race: the line under (or, on a short landscape phone, in place of) the PAUSED heading must not repeat it.
+  const idle = ctx.api.raceBrief({ player: null, track: null });
+  assert.equal(idle.title, 'NO RACE'); assert.doesNotMatch(idle.title + ' ' + idle.detail, /PAUSED/i);
 });
 test('pause context carries the career brief line from CareerExperience', () => {
   const local = vm.createContext({ CareerExperience: { objectiveStatus: (G) => G.session === 'race' ? 'OBJECTIVE · TARGET P6 · NOW P8' : '' } });
@@ -51,7 +55,8 @@ test('pause context carries the career brief line from CareerExperience', () => 
 test('task doors retain canonical close and settings destinations', () => {
   const html=fs.readFileSync(new URL('../../index.html',import.meta.url),'utf8');
   for(const id of ['mb-watch','mb-practice','mb-photo','menu-explore','pm-strategy','pm-review','pm-photo','pm-checkpoint-save']) assert.match(html,new RegExp('id="'+id+'"'));
-  assert.match(html,/id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="mb-practice"[\s\S]*id="mb-photo"[\s\S]*id="mb-garage"/);
+  // The shell ships TitleMenu.organize()'s groups (design pass 2c, #4240).
+  assert.match(html,/id="menu-primary"[\s\S]*id="mb-practice"[\s\S]*id="menu-garage"[\s\S]*id="mb-garage"[\s\S]*id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="menu-create"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-garage"/);
   assert.match(html,/id="mb-photo"[\s\S]*CAPTURE/);
@@ -546,4 +551,33 @@ test('WATCH pause omits driving strategy copy and restores the strategy door for
   assert.equal(dom.byId('pm-strategy').hidden, false);
   assert.equal(dom.byId('pm-strategy').disabled, false);
   assert.match(Array.from(dom.byId('pm-race-context').children, el => el.textContent).join(' '), /AUTO will fit/);
+});
+test('pause LINE tile cycles the DRIVING LINE in-race, saves it like the RACE SETTINGS row and sits in the tray', () => {
+  const dom = makeDom({ tagFor: id => id === 'practice-goal' ? 'select' : id === 'pm-checkpoint' ? 'details' : 'div' });
+  let mode = 'full'; const saved = [];
+  const DrivingLine = { mode: () => mode, setMode(m) { mode = ['off', 'corner', 'full'].includes(m) ? m : 'off'; return mode; } };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, DrivingLine,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, state: () => ({}) }) },
+    GameStore: { store: { get: (_key, value) => value, set(k, v) { saved.push([k, v]); } } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'auto', onSceneChange() {} },
+    addEventListener() {} };
+  sandbox.window = sandbox;
+  sandbox.RaceInsights = { DRILLS: {}, needsRivals: () => false };   // a stub: the practice goal list is not under test here
+  const local = vm.createContext(sandbox);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: fileURLToPath(new URL('../../js/ui/experience.js', import.meta.url)) });
+  const tray = dom.byId('pm-quick-doors'), rewind = dom.byId('pm-checkpoint');
+  tray.appendChild(rewind);
+  local.api.create({ $: dom.byId, state: 'race', setupPreviewOn: false }, { coach: { paint() {}, practiceGoal: () => 'free', setPracticeGoal() {} }, trackReady: () => true });
+  const tile = dom.byId('pm-drivingline');
+  assert.equal(tile.parentNode, tray, 'a RACE TOOLS tile');
+  assert.equal(tray.children.indexOf ? tray.children.indexOf(tile) : Array.from(tray.children).indexOf(tile), Array.from(tray.children).indexOf(rewind) - 1, 'just before REWIND & RETRY');
+  assert.equal(tile.textContent, 'LINE: FULL');
+  tile.onclick(); assert.equal(mode, 'off'); assert.equal(tile.textContent, 'LINE: OFF');
+  tile.onclick(); assert.equal(tile.textContent, 'LINE: CORNERS');
+  tile.onclick(); assert.equal(tile.textContent, 'LINE: FULL');
+  assert.deepEqual(saved, [['drivingLine', 'off'], ['drivingLine', 'corner'], ['drivingLine', 'full']], 'the RACE SETTINGS row\'s store key');
+  assert.match(tile.getAttribute('aria-label'), /Driving line FULL/);
+  // #pm-line is ADVANCED's STEER ASSIST slider: a duplicate id there cut CAR HANDLING out of the arrow-key walk
+  const shell = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(shell, /id="pm-drivingline"/, 'the runtime tile id must not collide with a shell id');
 });

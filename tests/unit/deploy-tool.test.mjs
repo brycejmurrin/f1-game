@@ -4,7 +4,7 @@
 // real diff, preflight refuses what the protocol refuses, and --help exits 0
 // without touching git. plan()/main() need the network and are not run here.
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
-import { GENERATED_PATHS } from "../../tools/lib/generated-paths.mjs";
+import { GENERATED_PATHS, BUILT_PATHS, RETIRED_PATHS } from "../../tools/lib/generated-paths.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
@@ -266,9 +266,10 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.equal(cure(["docs/agent-output/catalog.json", "docs/agent-output/policies.json"]), false, "policies.json is hand-written");
 
   // System audit 2026-10-26: the merge-conflict hot spots that are generated —
-  // gen-agent-index's three outputs, the coverage table, and the scenery survey
-  // cache (75 conflicts in 7 days) — cure; their sources still do not.
-  const derived = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md", "docs/TESTING-COVERAGE.md"];
+  // gen-agent-index's three outputs and the scenery survey cache (75 conflicts
+  // in 7 days) — cure; their sources still do not. (The coverage table left git
+  // on 2026-11-10: RETIRED_PATHS, cured as a deletion below.)
+  const derived = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md"];
   assert.equal(cure(derived), true);
   assert.deepEqual(cureableConflicts(derived).derivedF, derived);
   assert.equal(cure(["tools/shot/scenery-locations.json"]), true, "the scenery cache regenerates");
@@ -285,7 +286,7 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
   // cured when every hunk differed in digits alone (the "N of M unit files"
   // figures). Those figures left the tree (gen-ladder-figures.mjs only reports),
   // so a conflict in any of these docs is prose someone wrote, and stops.
-  for (const doc of ["AGENTS.md", "docs/TESTING.md", "docs/notes/PREPUSH-GATE-LADDER.md", ".claude/agents/verify-agent.md", "README.md"])
+  for (const doc of ["AGENTS.md", "docs/TESTING.md", "docs/VERIFICATION.md", ".claude/agents/verify-agent.md", "README.md"])
     assert.equal(cureableConflicts([doc]).cureable, false, `${doc} is a real conflict`);
   assert.equal(cureableConflicts(["AGENTS.md", "package.json"]).cureable, false, "one prose doc stops the merge");
 });
@@ -294,8 +295,9 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
  * clean-but-stale merge: both sides rewrote the committed ladder figures to the
  * same "N of M+1", git merged the identical hunks, and the union was a file
  * short until mergeDeployTip() re-ran the generators. The ladder figures are
- * not committed any more. The coverage page is: it lists every unit file, so
- * the union's only follow-up is docs/TESTING-COVERAGE.md. Built in a throwaway
+ * not committed any more, and since 2026-11-10 neither is the coverage page
+ * (artifacts/TESTING-COVERAGE.md, built on demand), so the union needs NO
+ * follow-up commit at all. Built in a throwaway
  * copy of the tree (text files only) and merged with the REAL mergeDeployTip()
  * from the copy's own deploy.mjs.
  *
@@ -303,7 +305,7 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
  * already carried a stale ARCHITECTURE.md count (#697+#740, 2026-10-02) made
  * regenerateDerived write a follow-up commit for a reason that has nothing to
  * do with the unit-file merge under test, and this assertion went red. */
-test("two sides that each add a unit file merge clean and refresh only the coverage page", () => {
+test("two sides that each add a unit file merge clean with no derived follow-up", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-regen-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   const genCheck = () => spawnSync("npm", ["run", "-s", "gen:check"], { cwd: dir, encoding: "utf8" });
@@ -339,10 +341,10 @@ test("two sides that each add a unit file merge clean and refresh only the cover
       `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); console.log(await m.mergeDeployTip());`],
       { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     assert.doesNotMatch(out, /AGENTS\.md|TESTING\.md|PREPUSH-GATE-LADDER/, "no ladder doc needed re-deriving: " + out);
-    assert.match(out, /TESTING-COVERAGE\.md/, "a new unit file is a coverage row: " + out);
-    assert.equal(g("log", "-1", "--format=%s"), REGEN_MESSAGE, "the coverage page is the derived follow-up");
-    assert.deepEqual(g("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").split("\n").filter(Boolean), ["docs/TESTING-COVERAGE.md"]);
-    assert.equal(g("log", "-1", "--skip=1", "--format=%P").split(" ").length, 2, "the commit under the follow-up is the merge");
+    // The verdict is the last line (npm run gen's own output precedes it): "merged", no "regenerated …" clause.
+    assert.equal(out.trim().split("\n").pop(), "merged", "a unit file on each side needs no regenerated follow-up: " + out);
+    assert.notEqual(g("log", "-1", "--format=%s"), REGEN_MESSAGE);
+    assert.equal(g("log", "-1", "--format=%P").split(" ").length, 2, "HEAD is the merge itself");
     const check = genCheck();
     assert.equal(check.status, 0, "every generated file is fresh on the bare merge:\n" + check.stdout + check.stderr);
     assert.equal(g("status", "--porcelain"), "");
@@ -991,6 +993,122 @@ console.log(JSON.stringify({error:r.error?.code,survivors:r.survivors}));`;
   assert.deepEqual(JSON.parse(r.stdout), { error: "SIGTERM", survivors: [] });
 });
 
-test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (fleet-owner relies on it)", () => {
+test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (sync-pr conflict cure relies on it)", () => {
   for (const p of GENERATED_PATHS) assert.equal(cureableConflicts([p]).cureable, true, `${p} is listed as generated but deploy.mjs cannot cure a conflict in it`);
 });
+
+// BUILT, NOT COMMITTED (2026-10-28): the tip deleted js/track/circuit-meta.js; a branch from before that regenerated
+// it for a circuit edit. The merge is a modify/delete conflict, and the cure is to take the deletion.
+// RETIRED (2026-11-10): docs/TESTING-COVERAGE.md left git for artifacts/ the same way; same conflict, same cure.
+test("RETIRED_PATHS are gitignored, untracked, not generated, and not site files", () => {
+  assert.ok(RETIRED_PATHS.length > 0);
+  for (const p of RETIRED_PATHS) {
+    assert.equal(spawnSync("git", ["check-ignore", "-q", "--no-index", "--", p], { cwd: ROOT }).status, 0, `${p} must be in .gitignore`);
+    assert.equal(execFileSync("git", ["ls-files", "--", p], { cwd: ROOT, encoding: "utf8" }).trim(), "", `${p} must not be tracked`);
+    assert.equal(GENERATED_PATHS.includes(p) || BUILT_PATHS.includes(p), false, `${p} is retired: it is in no other list`);
+  }
+});
+
+for (const rel of [BUILT_PATHS[0], ...RETIRED_PATHS]) test(`${rel}: a modify/delete conflict is cureable, and \`git rm --cached\` resolves it as a deletion`, () => {
+  for (const p of [...BUILT_PATHS, ...RETIRED_PATHS]) {
+    const c = cureableConflicts([p]);
+    assert.equal(c.cureable, true, `${p}: a built or retired path must be cureable`);
+    assert.deepEqual(c.builtF, [p]);
+  }
+  assert.equal(cureableConflicts([rel, "tools/manifest.cjs"]).cureable, false, "a real conflict beside it still stops");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-built-cure-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
+  try {
+    g("init", "-q", "-b", "tip");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), "old roster\n"); g("add", "-A"); g("commit", "-qm", "base");
+    g("checkout", "-q", "-b", "old-pr");
+    fs.writeFileSync(path.join(dir, rel), "old roster + a circuit\n"); g("commit", "-qam", "circuit edit regenerated the copy");
+    g("checkout", "-q", "tip");
+    fs.writeFileSync(path.join(dir, ".gitignore"), `/${rel}\n`); g("rm", "-q", "--cached", "--", rel); g("add", ".gitignore");
+    g("commit", "-qm", "stage 1: build at deploy");
+    g("checkout", "-q", "old-pr");
+    assert.notEqual(spawnSync("git", ["merge", "--no-edit", "tip"], { cwd: dir, encoding: "utf8" }).status, 0, "modify/delete conflicts");
+    const conflicted = g("diff", "--name-only", "--diff-filter=U").split("\n").filter(Boolean);
+    assert.deepEqual(conflicted, [rel]);
+    assert.equal(cureableConflicts(conflicted).cureable, true);
+    g("rm", "-q", "--cached", "--", ...cureableConflicts(conflicted).builtF);   // the cure mergeDeployTip runs
+    assert.equal(g("diff", "--name-only", "--diff-filter=U").trim(), "", "no conflict left");
+    g("commit", "--no-edit", "-q");
+    assert.equal(g("ls-files", "--", rel).trim(), "", "the merge keeps the built file out of git");
+    assert.ok(fs.existsSync(path.join(dir, rel)), "the working copy stays for ensure-built to refresh");
+  } finally {
+    rmTemp(dir);
+  }
+});
+
+// Exercise the REAL conflict cure in a throwaway checkout. A post-merge gen
+// cannot rescue a premature commit: inspect the merge commit itself and require
+// failed generators to leave HEAD untouched with the merge still in progress.
+function generatorCureFixture(output, generator, failure) {
+  const scratch = path.join(ROOT, "scratch");
+  fs.mkdirSync(scratch, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(scratch, "generator-cure-"));
+  const g = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  const write = (file, text) => {
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    fs.writeFileSync(path.join(dir, file), text);
+  };
+  try {
+    const files = execFileSync("git", ["ls-files", "--cached"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+    for (const file of files) {
+      if (/^(assets|vendor|spike|artifacts|scratch)\//.test(file)) continue;
+      if (/\.(png|jpe?g|webp|gif|avif|glb|gltf|bin|ktx2|basis|hdr|exr|wasm|mp3|ogg|wav|m4a|mp4|webm|gz|zip|pdf|ttf|woff2?)$/i.test(file)) continue;
+      const source = path.join(ROOT, file);
+      if (!fs.existsSync(source) || !fs.lstatSync(source).isFile()) continue;
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.copyFileSync(source, path.join(dir, file));
+    }
+    fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"));
+    // Only this fixture's conflicting-output generator matters; forbid the
+    // unrelated post-merge gen from silently repairing the merge under test.
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+    pkg.scripts.gen = 'node -e ""';
+    write("package.json", JSON.stringify(pkg, null, 2) + "\n");
+    const script = `const fs = require('node:fs');\nsetTimeout(() => { ${failure ? "process.exit(7);" : `fs.writeFileSync(${JSON.stringify(output)}, 'generator-complete\\n');`} }, 250);\n`;
+    write(generator, generator.endsWith(".mjs") ? script.replace("const fs = require('node:fs');", "import fs from 'node:fs';") : script);
+    write(output, "base\n");
+    g("init", "-q", "-b", "base");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    g("add", "-A"); g("commit", "-qm", "base");
+    g("checkout", "-q", "-b", "tip"); write(output, "theirs\n"); g("commit", "-qam", "tip output");
+    g("update-ref", `refs/remotes/origin/${DEPLOY_BRANCH}`, "tip");
+    g("checkout", "-q", "-b", "ours", "base"); write(output, "ours\n"); g("commit", "-qam", "our output");
+    const before = g("rev-parse", "HEAD");
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e",
+      `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); await m.mergeDeployTip();`],
+      { cwd: dir, encoding: "utf8" });
+    return { dir, g, before, result };
+  } catch (error) { rmTemp(dir); throw error; }
+}
+
+for (const [output, generator] of [
+  ["docs/agent-index.json", "tools/docs/gen-agent-index.mjs"],
+  ["tools/shot/scenery-locations.json", "tools/shot/gen-scenery-locations.cjs"],
+]) {
+  test(`conflict cure waits for ${generator} before the merge commit`, () => {
+    const r = generatorCureFixture(output, generator, false);
+    try {
+      assert.equal(r.result.status, 0, r.result.stdout + r.result.stderr);
+      const merge = r.g("rev-list", "--merges", `${r.before}..HEAD`).split("\n").filter(Boolean);
+      assert.equal(merge.length, 1, "exactly one merge, not a generated follow-up masking the race");
+      assert.equal(r.g("show", `${merge[0]}:${output}`), "generator-complete", "the merge itself contains completed generator output");
+      assert.equal(r.g("status", "--porcelain"), "", "no generator writes after the final commit");
+    } finally { rmTemp(r.dir); }
+  });
+  test(`conflict cure propagates ${generator} failure without committing`, () => {
+    const r = generatorCureFixture(output, generator, true);
+    try {
+      assert.notEqual(r.result.status, 0, "generator exit 7 must reject the real merge operation");
+      assert.equal(r.result.stderr.includes("(exit 7)"), true, "the intended generator failure reached the caller");
+      assert.equal(r.g("rev-parse", "HEAD"), r.before, "no merge or generated follow-up commit after generator failure");
+      assert.equal(r.g("rev-parse", "--verify", "MERGE_HEAD").length, 40, "failed cure remains inspectable for supported abort/resume");
+    } finally { rmTemp(r.dir); }
+  });
+}

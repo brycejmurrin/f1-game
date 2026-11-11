@@ -1,0 +1,11 @@
+{
+  "//": "TODAY's collectDomInfo() shape: root.box + direct kids only, no taps/content/tapFloor.",
+  "ok": true, "viewport": "852x393", "dpr": 3, "tokens": { "tap": "52px" },
+  "root": { "tag": "div", "id": "pmsettings", "box": { "x": 100, "y": 0, "w": 652, "h": 393 }, "childCount": 4,
+    "kids": [
+      { "tag": "h2", "id": "", "className": "title", "text": "SETTINGS", "box": { "x": 100, "y": 0, "w": 652, "h": 60 }, "hidden": false },
+      { "tag": "div", "id": "pm-list", "className": "pane", "text": "", "box": { "x": 100, "y": 60, "w": 652, "h": 200 }, "hidden": false },
+      { "tag": "button", "id": "pm-done", "className": "bigbtn", "text": "DONE", "box": { "x": 600, "y": 330, "w": 140, "h": 52 }, "hidden": false },
+      { "tag": "button", "id": "pm-ghost", "className": "bigbtn", "text": "X", "box": { "x": 0, "y": 0, "w": 10, "h": 10 }, "hidden": true }
+    ] }
+}

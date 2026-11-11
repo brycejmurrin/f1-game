@@ -18,7 +18,9 @@ const RELAUNCH_NAME = "Game check — three.js / WebGPU, first and second launch
 const RELAUNCH_STEP = /\n      - name: Game check — three\.js \/ WebGPU, first and second launch \(one profile\)[\s\S]*?\n          done\n/;
 // The opt-in mem-cycles step (A·H12) is a measurement, not a control leg: cut out like the relaunch step.
 const MEMCYCLES_STEP = /\n      - name: Memory cycles — three\.js race to quit[\s\S]*?\n          done\n/;
-const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_STEP, "\n");
+// Opt-in paired photography is likewise separate from the four renderer controls.
+const GARAGE_CAPTURE_STEP = /\n      - name: Capture paired desktop garage departure[\s\S]*?\n            --json game-garage-desktop.json --shot game-garage-desktop.png\n/;
+const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_STEP, "\n").replace(GARAGE_CAPTURE_STEP, "\n");
 
 test("gpu-census runs nightly staggered from the boot group, with the full check and its dispatch defaults", () => {
   // 2026-09-29: both were `17 3 * * *` and stacked on the same ~20 slots with
@@ -51,13 +53,13 @@ test("gpu-census runs nightly staggered from the boot group, with the full check
 });
 
 test("gpu-census: agents may still request by push; dispatches queue, push requests never cancel each other", () => {
-  // The push-request path (2026-09-09) is how sessions WITHOUT dispatch rights
-  // reach the real GPU (a GH App token gets 403 on workflow_dispatch), and it
-  // is in daily use (2026-10-14: runs 38603534048, 38610120171, 38611116514).
+  // Dispatch is the default route (agent tokens dispatch; review 2026-10-27). The
+  // push-request path stays for the request-only legs (`leg`, `lf_*`, `lrm_*`):
+  // the dispatch form is at GitHub's 25-input cap.
   const wf = parseYAML(gpuWorkflow);
   assert.deepEqual(Object.keys(wf.on).sort(), ["push", "schedule", "workflow_dispatch"]);
   assert.match(gpuWorkflow, /paths: \["\.github\/gpu-census-request\.json"\]/,
-    "agents without workflow_dispatch may push a request file on cursor/*");
+    "a request-only leg is pushed as a request file on cursor/*");
   assert.deepEqual(wf.on.push.branches, ["cursor/**", "claude/**"]);
   const req = JSON.parse(fs.readFileSync(new URL("../../.github/gpu-census-request.json", import.meta.url), "utf8"));
   assert.ok(req && typeof req === "object", "the request file must stay valid JSON — the plan job json.load()s it");
@@ -102,7 +104,7 @@ test("gpu-census: the nightly skips an unchanged renderer, fail-safe; legs time 
     assert.equal(s["continue-on-error"], true, `${s.name}: a red leg must still reach the Verdict`);
   }
   assert.ok(legs.length * 6 < wf.jobs.census["timeout-minutes"], "four capped legs must fit inside the job cap");
-  const up = wf.jobs.census.steps.find((s) => String(s.uses || "").startsWith("actions/upload-artifact@"));
+  const up = wf.jobs.census.steps.find((s) => String(s.uses || "").startsWith("actions/upload-artifact@") && s.with?.name === "gpu-census-${{ matrix.image }}");
   assert.equal(up.with["retention-days"], 7);
 });
 

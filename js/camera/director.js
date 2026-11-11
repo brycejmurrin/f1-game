@@ -90,6 +90,10 @@ const Director = (function () {
     let spectating = false;
     const scratchEye = [0, 0, 0], scratchTgt = [0, 0, 0];
     const bankScratch = { dy: 0, roll: 0 };
+    // applyShot's per-frame scratch: one solve closure over module state, one extras bag, one dbgCam (G.dbgCam identity is compared, never retained across shots)
+    const _shotExtra = {}, _shotCarPos = [0, 0];
+    let _solveShot = null, _solveS = 0, _solveX = 0, _solveSpeed = 0, _dbgCam = null;
+    const solve = () => G.camVantage(_solveShot, _solveS, _solveX, _solveSpeed, 0, _shotExtra);
 
     function camIdx(id) {
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
@@ -140,25 +144,28 @@ const Director = (function () {
        would otherwise be damped toward two different cars on alternate calls. */
     function applyShot(car, shot, dt, cut) {
       if (!car || !G.track || !G.camVantage) return false;
-      const extra = { att: car, noLook: true, frameSubject: true, dt: cut ? 0 : (dt > 0 ? dt : 0), snap: !!cut };   // noLook: the PLAYER's look-back / glance never steers a TV shot
+      const extra = _shotExtra;   // pooled: vantage reads it synchronously and keeps no reference
+      extra.att = car; extra.noLook = true; extra.frameSubject = true; extra.dt = cut ? 0 : (dt > 0 ? dt : 0); extra.snap = !!cut;   // noLook: the PLAYER's look-back / glance never steers a TV shot
+      extra.carPos = null; extra.carHead = undefined;
       const pose = G.camPoseOf ? G.camPoseOf(car) : null;
       let s = car.s || 0, x = car.x || 0;
       if (pose) {
         s = pose.s; x = pose.x;
-        if (pose.carPos) { extra.carPos = [pose.carPos[0], pose.carPos[1]]; extra.carHead = pose.carHead; }
+        if (pose.carPos) { _shotCarPos[0] = pose.carPos[0]; _shotCarPos[1] = pose.carPos[1]; extra.carPos = _shotCarPos; extra.carHead = pose.carHead; }
       } else if (car.px != null && car.pz != null) {
-        extra.carPos = [car.px, car.pz];
+        _shotCarPos[0] = car.px; _shotCarPos[1] = car.pz; extra.carPos = _shotCarPos;
         extra.carHead = car.head || 0;
       }
-      // Match the normal camera's smooth bank lift at the final rendered pose.
       const bank = typeof Tracks !== "undefined" && Tracks.banking ? Tracks.banking(G.track, s, x, bankScratch, true) : null;
       extra.bankDy = bank ? bank.dy : 0;
-      const solve = () => G.camVantage(shot, s, x, car.speed || 0, 0, extra);
+      _solveShot = shot; _solveS = s; _solveX = x; _solveSpeed = car.speed || 0;
       const v = typeof CamFeel !== "undefined" && CamFeel.scoped ? CamFeel.scoped("tv:", solve) : solve();
       if (!v || !v.eye || !v.tgt) return false;
       scratchEye[0] = v.eye[0]; scratchEye[1] = v.eye[1]; scratchEye[2] = v.eye[2];
       scratchTgt[0] = v.tgt[0]; scratchTgt[1] = v.tgt[1]; scratchTgt[2] = v.tgt[2];
-      ownCamera = G.dbgCam = { eye: scratchEye, target: scratchTgt, fov: v.fov || 55, far: 6000 };
+      if (!_dbgCam) _dbgCam = { eye: scratchEye, target: scratchTgt, fov: 55, far: 6000 };
+      _dbgCam.fov = v.fov || 55;
+      ownCamera = G.dbgCam = _dbgCam;
       onAirShot = shot;
       subject = car;
       return true;
@@ -214,12 +221,13 @@ const Director = (function () {
       if (subject && (subject.retired || subject.finished) && running.length) {
         subject = null; onAirShot = null; lastCut = -1e9;
       }
-      // After the player is done, include them as a spectate subject via follow
-      // of the field only — still no force path.
+      // Empty field (solo retire / everyone flagged): fall back to the player so
+      // auto-spectate still has a subject. Finished players were already included
+      // (!retired); retired players were not — TV mode forced with no dbgCam (M38).
       const decision = decideCut({
         wall, lastCut, cuts, onAirShot, subject,
         vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,   // sim speeds (never WATCH, above)
-        running: running.length ? running : (player && !player.retired ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
+        running: running.length ? running : (player ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
       });
       if (decision) {
         if (spectating) decision.shot = FINISH_SHOTS[cuts % FINISH_SHOTS.length];

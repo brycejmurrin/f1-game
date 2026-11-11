@@ -51,7 +51,7 @@ test("mcp-probe references keep the measured traps and recipes", () => {
     "references/traps.md": [/never render in the MCP browser while Playwright/, /snapCam/, /traps-chrome\.md/, /traps-camera\.md/, /traps-scene\.md/],
     "references/traps-chrome.md": [/never render in the MCP browser while Playwright/],
     "references/traps-camera.md": [/snapCam/],
-    "references/recipes.md": [/tinyfish|deploy-check/, /Probing a specific renderer|secure context|navigator\.gpu/i],
+    "references/recipes.md": [/deploy-research/, /Probing a specific renderer|secure context|navigator\.gpu/i],
   };
   for (const [file, res] of Object.entries(keeps)) {
     const text = fs.readFileSync(path.join(MCP, file), "utf8");
@@ -120,9 +120,11 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["css-play", "references/loop.md"],
     ["slim-bloat", "references/do-not.md"],
     ["slim-bloat", "references/carves.md"],
-    // 2026-09-03 folds (Phase 5). The absorbed skill's body AND its own
+    // 2026-09-03 folds (Phase 5). The absorbed skill body AND its own
     // references/ land in the hub, prefixed with the old skill name so the
-    // provenance survives the move.
+    // provenance survives the move. (No apostrophe in this comment: the
+    // assertPinsAll walker pairs quotes inside an array literal, and an odd
+    // one made it count regex literals up to the end of the file.)
     ["playwright-probe", "references/car-studio.md"],
     ["playwright-probe", "references/car-viewer-presets.md"],
     ["playwright-probe", "references/cameras.md"],
@@ -169,13 +171,10 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
   ]) {
     assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
   }
-  const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/check/skill-smoke-recipes.json"), "utf8"));
-  assert.deepEqual(dirs.map(d => d.name).sort(), catalog.recipes.map(r => r.skill).sort(),
-    "every canonical skill needs one bounded smoke recipe");
+  // 2026-11-03: skill-smoke (recipes + runner + test) deleted; routing is the skill-descriptions unit test.
   // cross-backend-parity was a 15-line pointer at the renderers doc; that doc
   // was absorbed into docs/ARCHITECTURE.md in Phase 5 and the section moved
-  // with it (docs/RENDERERS.md is a redirect stub now).
+  // with it (docs/ARCHITECTURE.md is a redirect stub now).
   const renderers = fs.readFileSync(path.join(ROOT, "docs/ARCHITECTURE.md"), "utf8");
   assert.match(renderers, /^### Cross-backend parity/m, "docs/ARCHITECTURE.md lost the Cross-backend parity section");
   assert.match(renderers, /backend-surface-parity\.test\.mjs/);
@@ -227,7 +226,7 @@ test("a folded skill's trigger words live in the hub description", () => {
     "css-play": [/restructur/i, /BEM|CUBE|ITCSS/],
     "agent-view": [/geometry/i, /curvature/i, /groundY/i],
     "f1-animation-cameras": [/replay/i, /anchor/i, /seek/i],
-    "steward": [/own, pick up or are handed a PR/i, /push once per green cycle/i],
+    "steward": [/own a PR at any stage/i, /CONTINUE PR/, /land/i],   // 2026-11-03: worker + ship folded in
     "survey-track": [/multi-circuit/i, /campaign/i],
   };
   for (const [hub, res] of Object.entries(need)) {
@@ -270,7 +269,8 @@ test("skills only name real test-bg groups", () => {
       if (e.isDirectory()) walk(p);
       else if (e.name.endsWith(".md")) {
         const text = fs.readFileSync(p, "utf8");
-        for (const m of text.matchAll(/test-bg\.mjs((?:[ \t]+(?:--[a-z]+|[a-z][a-z0-9-]*))+)/g)) {
+        // `--spec <path>` takes a spec file, not a group: drop the pair before reading group names.
+        for (const m of text.replace(/test-bg\.mjs[ \t]+--spec\b(?:[ \t]+[^\s`]+)?/g, "test-bg.mjs").matchAll(/test-bg\.mjs((?:[ \t]+(?:--[a-z]+|[a-z][a-z0-9-]*))+)/g)) {
           for (const tok of m[1].trim().split(/[ \t]+/)) {
             if (flags.has(tok) || groups.has(tok)) continue;
             bad.push(`${path.relative(ROOT, p)}: ${tok}`);
@@ -312,25 +312,28 @@ test("every custom subagent declares name, description, and model", () => {
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
-    "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
-    "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md", "worker.md",
-  ], "eleven agents since 2026-10-26 (ci-watcher and merge-desk deleted with the retired Merge Desk; release-auditor → deploy-research; worker 2026-10-15; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
-  // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
+    "Explore.md",
+    "ci-red-triage.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
+    "physics-contract-auditor.md", "prior-art-scout.md", "surface-reviewer.md", "track-surveyor.md", "verify-agent.md", "worker.md",
+  ], "eleven agents since 2026-11-03 (plan §4.6: bloat-auditor folded into code-hunter, agent-surface-reviewer re-specced as the cross-file surface-reviewer; Explore overrides the built-in; ci-watcher and merge-desk deleted 2026-10-26; release-auditor → deploy-research; worker 2026-10-15; code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+  // Model tiering (2026-09-22; table in plan §4.6, 2026-11-03): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
-    "bloat-auditor.md": "sonnet", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
+    "deploy-research.md": "haiku", "verify-agent.md": "haiku",
     "ci-red-triage.md": "sonnet", "physics-contract-auditor.md": "sonnet", "track-surveyor.md": "inherit",
-    // 2026-10-14: hunt agents. code-hunter is the ONE opus pin (depth is the
-    // product, 4 of 11 hunt campaigns asked for opus); verify on sonnet, recall on haiku.
-    "code-hunter.md": "opus", "finding-verifier.md": "sonnet", "prior-art-scout.md": "haiku",
-    // Writes only its scratch/**.md report (protect-files.py rule 5), so it is
-    // not in the readonly list below — like track-surveyor.
-    "agent-surface-reviewer.md": "sonnet",
+    // 2026-10-14: hunt agents; 2026-11-03: code-hunter is tiered at spawn time (sonnet card), verify on sonnet, recall on haiku.
+    "code-hunter.md": "sonnet", "finding-verifier.md": "sonnet", "prior-art-scout.md": "haiku",
+    // Writes only its scratch/**.md report, so it is not in the readonly list below — like track-surveyor.
+    "surface-reviewer.md": "sonnet",
     // 2026-10-15: the all-tools implementation worker runs on the session's
     // model, like track-surveyor — it writes code, so no cheaper tier.
     "worker.md": "inherit",
+    // 2026-10-28: a project agent named Explore overrides Claude Code's built-in,
+    // which runs on the session's model (Opus in an Opus session); this one is
+    // pinned to the cheap tier (https://code.claude.com/docs/en/sub-agents).
+    "Explore.md": "haiku",
   };
-  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
+  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.";
   for (const f of files) {
     const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
     const fm = frontmatter(text);
@@ -339,8 +342,8 @@ test("every custom subagent declares name, description, and model", () => {
     assert.ok(fm.description, `${f}: description is required`);
     assert.equal(fm.model, TIER[f], `${f}: model must be the documented tier (${TIER[f]})`);
     assert.match(String(fm.maxturns || fm.maxTurns || ""), /^[0-9]+$/, `${f}: maxTurns bounds a runaway agent`);
-    // Cursor reads is_background, Claude Code reads background — both or neither.
-    assert.equal(fm.background, fm.is_background, `${f}: background and is_background must agree`);
+    // 2026-11-03: the Cursor-only keys (readonly, is_background) are gone from every card (plan §4.6).
+    assert.equal(fm.is_background, undefined, `${f}: is_background is Cursor's key; Claude Code reads background:`);
     // One prohibition line replaces the five verbatim blocks (2026-09).
     assert.ok(text.includes(ONE_LINE), `${f}: must carry the single flat-prohibitions line verbatim`);
     assert.doesNotMatch(text, /^## Flat prohibitions/m, `${f}: the verbatim prohibition block is gone`);
@@ -405,46 +408,43 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
     assert.match(fm.description, /Use (when|it when|proactively)/);
     assert.ok(text.split("\n").length <= 180, `${name} SKILL.md must stay a thin index`);
   }
+  // 2026-11-03: a whole group runs on the pushed branch (`remote-group.mjs <group>`), never `test-bg.mjs <group>` locally.
   const input = fs.readFileSync(path.join(SKILLS, "input-controls/SKILL.md"), "utf8");
-  assert.match(input, /test-bg\.mjs input/);
+  assert.match(input, /remote-group\.mjs input/);
   assert.match(input, /tune-physics/);
   const season = fs.readFileSync(path.join(SKILLS, "season-mode/SKILL.md"), "utf8");
   assert.match(season, /Tracks\.SEASON/);
-  assert.match(season, /test-bg\.mjs modes/);
+  assert.match(season, /remote-group\.mjs modes/);
   const data = fs.readFileSync(path.join(SKILLS, "data-hub/SKILL.md"), "utf8");
   assert.match(data, /innerHTML/);
-  assert.match(data, /test-bg\.mjs hooks/);
+  assert.match(data, /remote-group\.mjs hooks/);
   const ai = fs.readFileSync(path.join(SKILLS, "ai-racecraft/SKILL.md"), "utf8");
   assert.match(ai, /ai-drive\.js/);
   assert.match(ai, /tune-physics/);
 });
 
 test("readonly review agents stay --fast and never start Playwright", () => {
-  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage",
-    "code-hunter", "finding-verifier", "prior-art-scout"]) {
+  for (const id of ["physics-contract-auditor", "verify-agent", "deploy-research", "ci-red-triage",
+    "code-hunter", "finding-verifier", "prior-art-scout", "Explore"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");
     const fm = frontmatter(text);
     assert.equal(fm.name, id);
-    assert.equal(fm.readonly, true, `${id} must be readonly`);
     assert.doesNotMatch(fm.tools || "", /\b(Write|Edit|MultiEdit|NotebookEdit)\b/,
-      `${id}: readonly is Cursor's field; Claude Code enforces it through tools:`);
-    // opus only where the TIER map pins it (code-hunter); every other readonly agent stays cheaper.
-    assert.match(fm.model, id === "code-hunter" ? /^opus$/ : /^(inherit|haiku|sonnet)$/);
+      `${id}: Claude Code enforces read-only through tools: (readonly: was Cursor's field, dropped 2026-11-03)`);
+    assert.match(fm.model, /^(inherit|haiku|sonnet)$/, `${id}: a read-only agent runs on a cheaper tier`);
     assert.doesNotMatch(text, /verify-change\.mjs --wait/);
     assert.doesNotMatch(text, /test-solo\.mjs/);
     assert.doesNotMatch(text, /npx playwright test/);
   }
+  // Explore keeps the built-in's start (no CLAUDE.md) and pins medium effort on haiku.
+  const explore = frontmatter(fs.readFileSync(path.join(AGENTS, "Explore.md"), "utf8"));
+  assert.equal(explore.effort, "medium", "Explore: effort: medium");
+  assert.equal(explore.omitClaudeMd, true, "Explore: the built-in starts without CLAUDE.md, so the override does too");
   const phys = fs.readFileSync(path.join(AGENTS, "physics-contract-auditor.md"), "utf8");
   assert.match(phys, /vstd-lint/);
   assert.match(phys, /AI-only/);
-  const bloat = fs.readFileSync(path.join(AGENTS, "bloat-auditor.md"), "utf8");
-  assert.match(bloat, /BLOAT/);
-  assert.match(bloat, /bloat-scan\.mjs/);
-  assert.match(bloat, /NEVER start[\s\S]*apex-eval\.mjs/, "a Chromium boot stays an explicit bloat-auditor don't");
-  assert.doesNotMatch(bloat, /python3 tools\/probe-mcp\.py chrome-start/);
-  assert.doesNotMatch(bloat, /node tools\/apex-eval/);
   // deploy-research: host fetch, never the egress-blocked in-repo wrapper.
   const deploy = fs.readFileSync(path.join(AGENTS, "deploy-research.md"), "utf8");
   assert.match(deploy, /WebFetch/);
@@ -513,8 +513,8 @@ test("apex-shared.mdc stays a pointer, not a second AGENTS.md", () => {
 });
 
 test("file-family skills keep their file anchors in the body", () => {
-  // `paths:` is forbidden outright by agent-surface.test.mjs (2026-09-30 routing eval), so only
-  // the body anchors are checked here.
+  // Skills carry no `paths:` gate (skill-descriptions.test.mjs); the body anchors are what a chat-only ask
+  // reads, so they stay.
   for (const [name, re] of Object.entries({
     "renderer-debug": /js\/render\/glx/,
     "new-track": /js\/circuits/,
@@ -576,7 +576,8 @@ test("slim-bloat is the Claude-simplify analog and stays a thin index", () => {
   assert.match(fm.description, /Use when/i);
   assert.match(fm.description, /bloat|dead|extract|split/i);
   assert.ok(skill.split("\n").length <= 180, "slim-bloat SKILL.md must stay a thin index");
-  assert.match(skill, /bloat-auditor/);
+  assert.match(skill, /code-hunter/);
+  assert.doesNotMatch(skill, /bloat-auditor/);
   assert.match(skill, /bloat-scan\.mjs/);
   assert.match(skill, /extract-module\.mjs/);
   assert.match(skill, /mcp-probe|Context7|context7/i);
@@ -616,3 +617,98 @@ test("bloat-scan reports ratchet slack and skill sizes as JSON", () => {
   assert.ok(skill, "scan missed slim-bloat SKILL.md");
   assert.equal(skill.kind, "skill");
 });
+
+test("long skill files open with a table of contents", () => {
+  // Claude may preview a long file with `head` and miss what is below the fold, so the skill best practices ask
+  // reference files over 100 lines to start with a table of contents
+  // (https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices, read 2026-10-28).
+  // Bryce (2026-10-28): SKILL.md and each reference start with one when longer than ~200 lines.
+  const missing = [];
+  for (const d of fs.readdirSync(SKILLS, { withFileTypes: true }).filter((e) => e.isDirectory())) {
+    const files = [["SKILL.md", 200]];
+    const refs = path.join(SKILLS, d.name, "references");
+    if (fs.existsSync(refs)) for (const f of fs.readdirSync(refs)) if (f.endsWith(".md")) files.push([`references/${f}`, 100]);
+    for (const [rel, max] of files) {
+      const p = path.join(SKILLS, d.name, rel);
+      if (!fs.existsSync(p)) continue;
+      const lines = fs.readFileSync(p, "utf8").split("\n");
+      if (lines.length > max && !lines.slice(0, 20).some((l) => /^##\s+(Contents|Table of contents)\b/i.test(l)))
+        missing.push(`${d.name}/${rel} (${lines.length} lines)`);
+    }
+  }
+  assert.deepEqual(missing, [], "add a `## Contents` list of the file's `##` headings in its first 20 lines");
+});
+
+// ── lighting-tuner scripts/merge-proposals.mjs (the one skill script with behaviour) ──
+// A per-track edit back to the slider default must survive when the shared "*|tod|wx" stamp sets that knob
+// (dropping it would resolve to the stamp, not the default). --check only: js/lighting/presets.js is never written.
+{
+const LT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const { execFileSync } = await import("node:child_process");
+const { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } = fs;
+const { join } = path;
+const vm = (await import("node:vm")).default;
+const ROOT = LT_ROOT;
+const SCRIPT = join(ROOT, ".claude/skills/lighting-tuner/scripts/merge-proposals.mjs");
+
+function load(file, expr) {
+  const ctx = vm.createContext({ window: {} });
+  return vm.runInContext(readFileSync(join(ROOT, file), "utf8") + ";\n" + expr, ctx, { filename: join(ROOT, file) });
+}
+const presets = load("js/lighting/presets.js", "window.LightPresets");
+const defs = new Map(load("js/lighting/knobs.js", "LightKnobs.TUNE_DEFS").map((d) => [d.id, d]));
+const circuits = readdirSync(join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+
+// A shared-stamp knob that differs from its slider default (no "*|tod" cond pin), and a circuit whose row for
+// that condition does (pinned) or does not (unpinned) set it.
+function pick(pinned) {
+  for (const [key, vals] of Object.entries(presets)) {
+    const parts = key.split("|");
+    if (parts[0] !== "*" || parts.length !== 3) continue;
+    const cond = presets["*|" + parts[1]];
+    for (const [id, v] of Object.entries(vals)) {
+      const d = defs.get(id);
+      if (!d || id === "wetness" || v === d.def || (cond && id in cond)) continue;
+      for (const track of circuits) {
+        const row = presets[`${track}|${parts[1]}|${parts[2]}`];
+        const pins = !!row && id in row && row[id] !== v;
+        if (pins === pinned) return { key: `${track}|${parts[1]}|${parts[2]}`, existed: !!row, id, d, stamp: v };
+      }
+    }
+  }
+  throw new Error(`no circuit/stamp knob pair with pinned=${pinned}`);
+}
+
+function runCheck(edits) {
+  const dir = join(ROOT, "artifacts/tmp");
+  mkdirSync(dir, { recursive: true });
+  const tmp = mkdtempSync(join(dir, "merge-proposals-"));
+  try {
+    const file = join(tmp, "edits.js");
+    writeFileSync(file, "window.LightEdits = " + JSON.stringify(edits) + ";\n");
+    return JSON.parse(execFileSync(process.execPath, [SCRIPT, file, "--check"], { cwd: ROOT, encoding: "utf8" }));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+test("a per-track knob reset to default is kept when the *|tod|wx stamp sets it", () => {
+  const { key, existed, id, d, stamp } = pick(false);
+  const out = runCheck({ [key]: { [id]: d.def } });
+  assert.equal(out.ok, true);
+  assert.deepEqual(existed ? out.changes.changed : out.changes.added, [key],
+    `${key}.${id}=${d.def} must be written (the stamp sets ${stamp})`);
+});
+
+test("a per-track knob equal to the stamp value is dropped as redundant", () => {
+  const { key, id, stamp } = pick(false);
+  const out = runCheck({ [key]: { [id]: stamp } });
+  assert.deepEqual(out.changes, { added: [], deleted: [], changed: [] });
+});
+
+test("a delta setting a pinned knob back to the stamp value unpins it", () => {
+  const { key, id, stamp } = pick(true);
+  const out = runCheck({ [key]: { [id]: stamp } });
+  assert.equal(out.changes.changed.length + out.changes.deleted.length, 1, `${key}.${id} pin must be removed`);
+});
+}

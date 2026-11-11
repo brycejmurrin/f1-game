@@ -7,14 +7,13 @@
 (window.TrackScenery = window.TrackScenery || {})["madrid"] =
   function (api) {
       const {
-        K, lapBounds, out, MAT, seat, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
+      lapBounds, out, MAT, seat, n, pyMin, night, hash, anchor, vadd,
         onTrack, modelGroup, overheadSpan, groundPatch, groundedSegments,
         addBox, addCyl, addPrism, addFrustum,
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
         grandstandEx, cameraTower, broadcastCompound, sponsorHoarding,
-        runoffApron, recordBarrier, groundUnder, indexSolid,
-      } = api;
+        runoffApron, recordBarrier, groundUnder, indexSolid } = api;
 
       const WHITE = [0.92, 0.93, 0.94];
       const OFFWHITE = [0.86, 0.86, 0.83];

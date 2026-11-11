@@ -10,6 +10,7 @@
 // narrow landscape column. This spec drives the rotation sequences that would
 // have caught those — phone sizes, tablet, and a settings open/close round-trip.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { exportStore, measureInPage, settleInPage, judge } from "../helpers/title-fit.mjs";
 
 const PHONES = [
   { name: "iphone14", port: { width: 390, height: 844 }, land: { width: 844, height: 390 } },
@@ -229,7 +230,59 @@ for (const sz of [...PHONES, TABLET]) {
 test.describe("title rotation late-iOS size settle", () => {
   test.use({ viewport: { width: 430, height: 932 }, hasTouch: true, isMobile: true });
 
-  test("a mismatched mid-rotation --kb clears when sizes land after the events", async ({ page }) => {
+  /* BRYCE'S PHONE, TURNED (#5167 part G). The Home Screen app launches in the
+   orientation the phone is held in, and his "broken" title photo of 2026-11-06
+   is the PORTRAIT layout (centred brand, full-width stacked doors, scrolling)
+   painted into the 852×393 landscape box. title-fit.spec.js boots straight into
+   each landscape geometry; this cell boots PORTRAIT at his geometry with the
+   real insets (CDP), seeds his export, turns the phone, and holds the landscape
+   title to the same five requirements as a landscape launch — then turns it
+   back. Chromium fires resize with the viewport change; the media-query path
+   the Home Screen launch depends on is pinned by tests/unit/sheetshape-orientation.test.mjs. */
+test.describe("title rotation bryce-852x393 (insets, export)", () => {
+  const PORT = { width: 393, height: 852, insets: { top: 59, left: 0, bottom: 34, right: 0 } };
+  const LAND = { width: 852, height: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 } };
+  test.use({ viewport: { width: PORT.width, height: PORT.height }, hasTouch: true, isMobile: true });
+
+  test("a portrait launch turned landscape fits like a landscape launch, and back", async ({ page }) => {
+    test.setTimeout(180_000);
+    const store = exportStore();
+    await page.addInitScript(({ json, raw }) => {
+      try {
+        for (const [k, v] of Object.entries(json)) localStorage.setItem("apex26." + k, JSON.stringify(v));
+        for (const [k, v] of Object.entries(raw)) localStorage.setItem("apex26." + k, v);
+      } catch (_) { /* storage off */ }
+    }, store);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: PORT.insets });
+    await page.goto("/");
+    await waitTitle(page);
+    let s = await titleState(page);
+    expectOriented(s, false);
+    expectDoorsReachable(s, "bryce-port-fresh");
+
+    await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: LAND.insets });
+    await rotate(page, { width: LAND.width, height: LAND.height });
+    await page.evaluate(settleInPage, 12);
+    const m = await page.evaluate(measureInPage);
+    // His export moves the cluster on purpose (X -2 / Y -2): containment and
+    // no-scroll hold, the overlap/hit requirements are his choice there.
+    expect(judge(m, { offsets: true }), "turned landscape: the title fits like a landscape launch").toEqual([]);
+    expect(m.density, "852×393 is the compact title").toBe("compact");
+    s = await titleState(page);
+    expectNoStuckKb(s, "bryce-land");
+    expectDoorsReachable(s, "bryce-land");
+
+    await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: PORT.insets });
+    await rotate(page, { width: PORT.width, height: PORT.height });
+    s = await titleState(page);
+    expectOriented(s, false);
+    expectNoStuckKb(s, "bryce-port-2");
+    expectDoorsReachable(s, "bryce-port-2");
+  });
+});
+
+test("a mismatched mid-rotation --kb clears when sizes land after the events", async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto("/");
     await waitTitle(page);
@@ -255,6 +308,20 @@ test.describe("title rotation late-iOS size settle", () => {
       Object.defineProperty(window, "innerHeight", {
         configurable: true,
         get() { return window.__fakeIH != null ? window.__fakeIH : 932; },
+      });
+      // The LAYOUT viewport too (UI contract 2026-11-06 rule 1): body shape and density
+      // classify from documentElement.clientWidth/Height, never from inner*, which iOS
+      // can leave on the old pair. The keyboard band's minuend is the ICB too (#5167 part E).
+      const de = document.documentElement, ep = Element.prototype;
+      const gcw = Object.getOwnPropertyDescriptor(ep, "clientWidth").get;
+      const gch = Object.getOwnPropertyDescriptor(ep, "clientHeight").get;
+      Object.defineProperty(de, "clientWidth", {
+        configurable: true,
+        get() { return window.__fakeCW != null ? window.__fakeCW : gcw.call(this); },
+      });
+      Object.defineProperty(de, "clientHeight", {
+        configurable: true,
+        get() { return window.__fakeCH != null ? window.__fakeCH : gch.call(this); },
       });
     });
 
@@ -295,6 +362,7 @@ test.describe("title rotation late-iOS size settle", () => {
     // just no longer the box's speed.
     await page.evaluate(() => {
       window.__fakeIW = 932; window.__fakeIH = 430;
+      window.__fakeCW = 932; window.__fakeCH = 430;   // the layout viewport lands with it
       window.__fakeVvH = 430;
     });
     await page.waitForFunction(() =>

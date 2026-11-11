@@ -1,1 +1,0 @@
-Fixed: Fleet role cards document `.claude/**` grant lines, `run_id` with `failed_only`, serve-by-PID, and orchestrator-only `--force-clean-behind`; session-transcript `--summary` reports subagent `by_type` counts; comms.md adds an Incident broadcast protocol.

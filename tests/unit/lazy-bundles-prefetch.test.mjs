@@ -34,8 +34,8 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 
 /* A page whose <script> tags are fed by `body(rel)` (the source to evaluate) and
    `failOnce` (srcs whose first request errors). Counts every injection per src. */
-function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
-  const injected = new Map(), evalErrors = [], logged = [], fail = new Set(failOnce);
+function world({ roster = {}, failOnce = [], failTimes = {}, body, globals = {}, deps = {} }) {
+  const injected = new Map(), evalErrors = [], logged = [], fail = new Set(failOnce), failLeft = new Map(Object.entries(failTimes));
   const ctx = vm.createContext({
     console, Promise, setTimeout, clearTimeout, queueMicrotask, URLSearchParams, TextEncoder, TextDecoder,
     ApexRoster: {
@@ -63,6 +63,7 @@ function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
       injected.set(rel, (injected.get(rel) || 0) + 1);
       setTimeout(() => {
         if (fail.delete(rel)) { el.onerror(); return; }
+        if (failLeft.get(rel) > 0) { failLeft.set(rel, failLeft.get(rel) - 1); el.onerror(); return; }
         try { vm.runInContext(body(rel), ctx, { filename: absSrc(rel) }); }
         catch (e) { evalErrors.push(rel + ": " + e.message); }
         el.onload();
@@ -102,6 +103,7 @@ test("ensureRaceSession: a partial failure is repaired by the next call, and the
     deps: { onRaceSessionReady() { hooks++; } },
   });
   vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/race/session-phys.js"), w.ctx, { filename: absSrc("js/race/session-phys.js") });
   vm.runInContext(read("js/race/session-stub.js"), w.ctx, { filename: absSrc("js/race/session-stub.js") });
   const stub = (g) => vm.runInContext(`${g}._stub`, w.ctx);
   assert.equal(await w.lb.ensureRaceSession(), false, "engineer.js failed once");
@@ -180,6 +182,46 @@ test("loadAgentSurface: a failed load does not latch; a complete one is memoised
   assert.equal(w.injected.get("fixture-agent-b.js"), 2, "now complete: memoised");
 });
 
+// A STALE SHELL'S SRI REFUSAL (2026-11-02, live build 24284 during the 24286 roll):
+// Pages ignores ?v=, so an older shell's key answered with the newer deploy's bytes,
+// Chrome refused agentview-raster.js on integrity, the non-strict graph still evaluated
+// agentview.js / apex.js, and bindAgent's ApexApi.create threw "AgentRaster is not
+// defined". That rejection escaped loadAgentSurface, latched _agentLoad for the session,
+// aborted game.js's boot tail after `await bootAgentSurface()` and painted the red
+// overlay. The surface must fail soft, stay null, and be asked again later.
+test("loadAgentSurface: a refused file that makes bindAgent throw fails soft and does not latch", async () => {
+  let binds = 0, refuse = true;
+  const files = ["fixture-agent-raster.js", "fixture-agent-api.js"];
+  const w = world({
+    roster: { LAZY_AGENT: files, LAZY_EDGES: [] },
+    // An SRI refusal is an onerror on EVERY attempt of the first ask (the in-place
+    // retries re-key the URL, and Pages answers each key with the same newer bytes).
+    failTimes: { "fixture-agent-raster.js": 3 },
+    body: () => "",
+    globals: { NetPlay: {}, NetLobby: {} },
+    deps: {
+      bindAgent() { binds++; if (refuse) throw new ReferenceError("AgentRaster is not defined"); },
+      createNetwork: () => ({ wire() {} }),
+    },
+  });
+  const rejections = [];
+  const onRej = (e) => rejections.push(String((e && e.message) || e));
+  process.on("unhandledRejection", onRej);
+  try {
+    await assert.doesNotReject(w.lb.loadAgentSurface(),
+      "a bind that throws must not reject the loader (game.js awaits it at boot)");
+    refuse = false;
+    await w.lb.loadAgentSurface();   // METRICS / a later ask: not latched on the failure
+    assert.equal(w.injected.get("fixture-agent-raster.js"), 4, "three refused attempts, then a later ask fetches it again");
+    assert.equal(w.injected.get("fixture-agent-api.js"), 1, "a landed file is not re-injected");
+    assert.equal(binds, 2);
+    await w.lb.loadAgentSurface();
+    assert.equal(binds, 2, "now complete: memoised");
+    await tick(); await tick();
+    assert.deepEqual(rejections, []);
+  } finally { process.off("unhandledRejection", onRej); }
+});
+
 // A hook that throws must not latch a rejected promise: the call resolves false, the memo
 // is cleared, and the next call (hook fixed) runs it again and reports true.
 test("ensureAudio: a throwing onAudioReady resolves false, clears the memo, and is retried", async () => {
@@ -252,6 +294,17 @@ test("ensureNet: a throwing createNetwork / wire resolves false and a later call
 // ask (a failed script is a completed request with fallback scenery, and
 // session-entry-vm holds that request to prove a start survives it), no
 // negative cache, so the next ask fetches again.
+test("ensureScenery: a custom circuit's inline scenery closure fetches nothing", async () => {
+  let fetches = 0;
+  const w = world({
+    globals: { Tracks: { LIST: [{ id: "custom-abc", custom: true, scenery() {} }], circuitPayloadResident: () => true } },
+    body: () => "",
+    deps: { loadBackendScripts: async () => { fetches++; return true; } },
+  });
+  await w.lb.ensureScenery(0);
+  assert.equal(fetches, 0, "no scenery file request: the def carries its closure");
+});
+
 test("ensureScenery: a failed fetch resolves false after one attempt; the next call fetches again; a landed one is true", async () => {
   let fetches = 0, land = false;
   const w = world({
@@ -306,16 +359,57 @@ test("ensureScenery: the scenery closure is requested beside the circuit payload
   assert.equal(asked.length, 2, "one fetch each");
 });
 
+// The closure's model ids are known as soon as it is resident. Waiting for the
+// track-build toolkit to finish evaluating first left the model fetch idle
+// through that download and eval.
+test("ensureScenery asks for baked models while the track-build toolkit is still loading", async () => {
+  let releaseBuild;
+  const buildHeld = new Promise((res) => { releaseBuild = res; });
+  const calls = [];
+  const w = world({
+    roster: { LAZY_TRACK_BUILD: ["js/track/scenery/build-props.js"], LAZY_TRACK_BUILD_EDGES: [] },
+    globals: {
+      TrackBuildProps: undefined, TrackModels: undefined, TrackHiddenFaces: undefined,
+      Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => true, hydrate: () => true },
+      TrackScenery: { monza() {} },
+      Assets: { modelsReady: () => { calls.push("models"); return Promise.resolve(1); } },
+    },
+    deps: {
+      loadBackendScripts: (files) => {
+        const name = [...files][0];
+        calls.push("load:" + name);
+        if (name.indexOf("build-props") >= 0) return buildHeld.then(() => {
+          w.ctx.TrackBuildProps = { build() {} };
+          w.ctx.TrackModels = {};
+          w.ctx.TrackHiddenFaces = {};
+          return true;
+        });
+        return Promise.resolve(true);
+      },
+    },
+  });
+  const p = w.lb.ensureScenery(0);
+  await tick();
+  // findIndex/some (not includes/indexOf): assertPinsAll counts ok/equal+includes|indexOf.
+  assert.ok(calls.some((c) => c === "models"), "models start before the toolkit resolves: " + calls.join(","));
+  assert.ok(
+    calls.findIndex((c) => c === "models") >
+      calls.findIndex((c) => c === "load:js/track/scenery/build-props.js"),
+  );
+  releaseBuild();
+  assert.equal(await p, true);
+});
+
 // ---- R3-ASYNC-2 / R3-PHONE-8 (hunt3 train) --------------------------------
 
 const ROOT_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readPath = (rel) => fs.readFileSync(path.join(ROOT_PATH, rel), "utf8");
-function boot({ agent = false, lazyV = null } = {}) {
-  const idles = [], workers = [], links = [];
+function boot({ agent = false, lazyV = null, audio = ["js/audio/engine.js"] } = {}) {
+  const idles = [], workers = [], links = [], fetches = [];
   const ctx = vm.createContext({
     ApexRoster: {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
-      LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: ["js/audio/engine.js"], LAZY_AUDIO_EDGES: [],
+      LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: audio, LAZY_AUDIO_EDGES: [],
       LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
       LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
       SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
@@ -332,6 +426,7 @@ function boot({ agent = false, lazyV = null } = {}) {
     queueMicrotask: (fn) => queueMicrotask(fn),
     requestIdleCallback(fn, opts) { idles.push({ fn, opts }); return idles.length; },
     setTimeout, clearTimeout,
+    fetch(url, init) { fetches.push({ url, init }); return Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }); },
     localStorage: { getItem: () => null, setItem() {} },
     location: { href: "https://apex.example/index.html", hostname: "apex.example", search: "" },
     navigator: { hardwareConcurrency: 8, userAgent: "phone" },
@@ -350,7 +445,7 @@ function boot({ agent = false, lazyV = null } = {}) {
       bindAgent() {}, createNetwork() { return { wire() {} }; }, onAudioReady() {},
     });
   `, ctx);
-  return { ctx, idles, workers, links };
+  return { ctx, idles, workers, links, fetches };
 }
 async function drain(idles) {
   await new Promise((r) => setTimeout(r, 0));   // the scenery microtask
@@ -376,13 +471,29 @@ test("the idle audio prefetch asks for the content-hash key the loader will inje
   const hashed = boot({ lazyV: { "js/audio/engine.js": "abcdef012345" } });
   hashed.ctx.__lb.raceAssets();
   await drain(hashed.idles);
-  assert.deepEqual(hashed.links.filter((l) => l.rel === "prefetch").map((l) => l.href), ["js/audio/engine.js?v=abcdef012345"]);
+  assert.deepEqual(hashed.fetches.map((f) => f.url), ["js/audio/engine.js?v=abcdef012345"]);
   assert.equal(vm.runInContext('ScriptLoader.url("js/audio/engine.js")', hashed.ctx), "js/audio/engine.js?v=abcdef012345");
   assert.equal(vm.runInContext('ScriptLoader.url("js/audio/panel.js")', hashed.ctx), "js/audio/panel.js?v=4100", "a file the map does not name keeps the build");
   const dev = boot();
   dev.ctx.__lb.raceAssets();
   await drain(dev.idles);
-  assert.deepEqual(dev.links.filter((l) => l.rel === "prefetch").map((l) => l.href), ["js/audio/engine.js?v=4100"], "no map (dev shell): the build, as before");
+  assert.deepEqual(dev.fetches.map((f) => f.url), ["js/audio/engine.js?v=4100"], "no map (dev shell): the build, as before");
+});
+
+// iOS Safari ships <link rel=prefetch> disabled (caniuse link-rel-prefetch), so the idle
+// warm is a low-priority CORS fetch: the request a <script crossorigin=anonymous> makes.
+test("the idle audio prefetch is one low-priority fetch per LAZY_AUDIO file, no rel=prefetch link (#4219)", async () => {
+  const files = ["js/audio/engine.js", "js/audio/panel.js", "js/audio/announcer.js"];
+  const w = boot({ audio: files });
+  w.ctx.__lb.raceAssets();
+  await drain(w.idles);
+  w.ctx.__lb.raceAssets();   // a second title idle: no second download
+  await drain(w.idles);
+  assert.deepEqual(w.fetches.map((f) => f.url), files.map((f) => f + "?v=4100"));
+  for (const f of w.fetches) {
+    assert.deepEqual({ ...f.init }, { priority: "low", credentials: "same-origin", mode: "cors" }, f.url);
+  }
+  assert.deepEqual(w.links.filter((l) => l.rel === "prefetch"), [], "iOS ignores rel=prefetch");
 });
 
 test("a malformed or hostile map falls back to the build key", () => {

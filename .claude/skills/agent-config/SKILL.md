@@ -1,34 +1,35 @@
 ---
 name: agent-config
-description: "Use when adding or editing a skill (new skill, SKILL.md, a fat skill body, its description), AGENTS.md/CLAUDE.md, subagents, hooks, skill-routing queries or eval, or a description budget fails. Code or docs bloat → slim-bloat."
+description: "Use when adding or editing a skill (SKILL.md, fat body, description, paths), AGENTS.md/CLAUDE.md, .claude/hooks, rules, subagents, the phone.json routing prompts, or a description budget fails. Not for: bloat → slim-bloat."
 ---
 
 # Edit the agent surface — instructions, skills, subagents, hooks
 
 | Surface | Where | Rule |
 |---|---|---|
-| Instructions | `AGENTS.md` (canonical); `CLAUDE.md` only imports it | add a rule as a hook or test when it must hold every time; evidence goes in `docs/notes/` |
+| Instructions | `AGENTS.md` (canonical); `CLAUDE.md` only imports it | add a rule as a hook or test when it must hold every time; a one-clause pointer at the hook replaces its prose; a decision goes to `docs/DECISIONS.md` |
 | Nested instructions | `js/track/`, `js/circuits/` `AGENTS.md` | a symlink to the sibling `CLAUDE.md`, never a copy |
-| Skills | `.claude/skills/<name>/SKILL.md` + `references/` | frontmatter `name` + `description` ("Use when …", one "Not X → skill" clause); no `paths:` |
+| Skills | `.claude/skills/<name>/SKILL.md` + `references/` | frontmatter `name` + `description` ("Use when …", one "Not for: X → skill" clause); never `paths:` — a path-gated skill is not offered until a matching file is touched (code.claude.com/docs/en/skills), so every route to it breaks in a fresh session (`skill-descriptions.test.mjs`); file-scoped text goes in `.claude/rules/` |
 | Codex mirror | `.agents/skills/<name>` → `../../.claude/skills/<name>` | `bash tools/env/mirror-skills.sh` after an add/rename; no Cursor fork (`.claude/rules/claude-config.md`) |
-| Subagents | `.claude/agents/<name>.md` | a `tools:` list must hold every `mcp__` tool the body names; `readonly` and `is_background` are Cursor-only keys Claude Code ignores, so enforce read-only with `disallowedTools: Write, Edit, NotebookEdit` |
-| Hooks | `.claude/hooks/*.sh`/`*.py`, wired in `.claude/settings.json` | a must-hold rule lives here; tests: `bash-guard-hardening.test.mjs`, `memory-sync.test.mjs`, `agent-config.test.mjs` (`live-run.py --help`) |
+| Subagents | `.claude/agents/<name>.md` | a `tools:` list must hold every `mcp__<server>__*` the body names; enforce read-only with `disallowedTools: Write, Edit, NotebookEdit`; `.claude/agents/README.md` §Parent and child is the parent/child protocol |
+| Area rules | `.claude/rules/*.md` (`paths:` frontmatter) | loads with the matching paths; `npm run gen` regenerates `.cursor/rules` (`gen-cursor-rules.mjs`) |
+| Hooks | `.claude/hooks/*.sh`/`*.py`, wired in `.claude/settings.json` | a must-hold rule lives here, listed in `.claude/rules/claude-config.md`; a hook or settings PR needs Bryce's own `config-ok` label (merge-gate `config` row); retest as in §Workflow step 3 |
 
-## Budgets the tests enforce (`tests/unit/agent-config.test.mjs`)
+## Budgets the tests enforce
 
-Read the live figures in the test, not here; each failure message prints the
-current total, so trim one to add one.
+The figures live in `tests/data/agent-config-budgets.json` (the test reads them as
+`BUDGET.*`), not here; each failure message prints the current total, so trim one to add one.
 
-- `AGENTS.md` and every root-to-nested AGENTS.md chain under byte caps (Codex's
-  32 KiB project-doc cap), plus a rule-bearing line cap (`AGENTS_MAX`,
-  `CHAIN_MAX` and the line budget in the test).
-- All skill descriptions together under the word and char budgets; one
-  description ≤ 1,024 chars (the Agent Skills spec cap; Claude Code cuts its listing
-  at 1,536 for description + `when_to_use` combined, so 1,024 is deliberately
-  stricter — never raise it); every `→ name` must be a skill or agent.
-- Every skill needs a routing query file and a smoke recipe (§New skill steps 3–4;
-  `tests/unit/skill-progressive.test.mjs`).
-- SKILL.md body under 500 lines; frontmatter keys only from the allowlist in
+- `AGENTS.md` ≤ `agentsMdBytes` (the root-to-nested chain ≤ `agentsChainBytes`, under Codex's project-doc cap) and
+  ≤ `agentsMdRuleLines` rule-bearing lines.
+- All skill descriptions together under `skillDescriptionWords` / `skillDescriptionChars`; one
+  description ≤ `skillDescriptionCharsEach` (the Agent Skills spec cap, stricter than Claude Code's listing cut
+  — never raise it); every `→ name` must be a skill or agent.
+- `tests/unit/skill-descriptions.test.mjs` (deterministic, no model calls): every model-visible description starts
+  "Use when", has a "Not for … → x" clause whose targets exist, shares stemmed content words with its own
+  `tests/data/skill-routing/phone.json` prompts and no OTHER description shares more; no skill carries a
+  `paths:` gate; every `node|python3|bash tools/…` path a SKILL.md names exists.
+- SKILL.md body under the Agent Skills line cap (`skill-progressive.test.mjs`); frontmatter keys only from `SKILL_KEYS` in
   `tests/unit/agent-surface.test.mjs`.
 
 ## New skill — in order
@@ -36,46 +37,39 @@ current total, so trim one to add one.
 1. Check `.claude/skills/README.md` and `ls .claude/skills` for a sibling that
    already covers it; extend that one instead when the trigger words overlap.
 2. `.claude/skills/<name>/SKILL.md`: `name`, `description` ("Use when …", one
-   "Not X → skill" clause), keys only from `SKILL_KEYS` in `agent-surface.test.mjs`;
-   trim another description by what this one adds.
-3. `tests/data/skill-routing/queries/<name>.json`: an array of
-   `{"query": "…", "expect": "<skill or agent>"}` rows, 5+ expecting `<name>`
-   and 3 near-misses expecting the neighbour.
-4. A recipe in `tools/check/skill-smoke-recipes.json` `recipes[]` (copy a
-   sibling's `skill` / `task` / `fixture` / `pattern` / `expected` row).
-5. `bash tools/env/mirror-skills.sh`, a row in `.claude/skills/README.md`, then
-   `npm run gen`; retest as below.
+   "Not for: X → skill" clause), keys only from `SKILL_KEYS`; trim another description by what this one adds.
+3. `tests/data/skill-routing/phone.json`: add `"<name>": {"fire": [three prompts ≤ 8 words in Bryce's register],
+   "near": [{"q": "…", "expect": "<neighbour>"}]}`.
+4. `bash tools/env/mirror-skills.sh`, a row in `.claude/skills/README.md`
+   (`docs-integrity.test.mjs` checks it), then `npm run gen`; retest as below.
 
 ## Workflow: survey → fix → retest → A/B
 
-1. Survey: spawn agent `agent-surface-reviewer` on ONE unit (read-only, writes
-   a report to `scratch/`); grep every file, function and test the skill names.
+1. Survey: spawn agent `surface-reviewer` on the SET of files the change touches (read-only, writes a report to
+   `scratch/`): it tests every claim file A makes about file B against B.
 2. Fix the description first (it is what routes), then the body.
-3. Retest:
-   ```sh
-   node --test tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/skill-progressive.test.mjs
-   bash tools/env/mirror-skills.sh --check
-   npm run gen:check          # tools/README.md is generated from @doc / @skill headers
-   npm run test:docs-guards   # the whole agent-surface group
-   ```
-4. A/B the routing. It needs the `claude` CLI on PATH, logged in, and spends
-   real model calls: one `claude -p` per query per run per side, so
-   `--only <skill>,<neighbour> --runs 3` on 8-row files is 2 × 8 × 3 × 2 = 96
-   calls, and each call boots every `.mcp.json` server and hook (the eval passes
-   no `--strict-mcp-config` yet), so run it as one background task, never beside
-   a Playwright run. Run it after a fold, a rename or a description rewrite that
-   moves trigger words; skip it for body-only edits:
+3. Retest with the local floor (AGENTS.md rule 3), the one list: `node tools/ci/tooling-fast.mjs --changed --jobs=3
+   --quiet` selects every unit file that pins an edited path (skills, hooks, `phone.json`); then
+   `bash tools/env/mirror-skills.sh --check` and `npm run gen:check` (`tools/README.md` is generated from `@doc` /
+   `@skill` headers). The PR's tiers run the rest.
+4. A/B the routing (optional, model calls). It needs the `claude` CLI on PATH, logged in, and spends one `claude -p`
+   per prompt per run per side, each booting every `.mcp.json` server and hook: the whole `phone.json` at `--runs 3`
+   on both sides is hundreds of sessions. Score only the moved skills: copy their rows (and their `near`
+   neighbours') into `scratch/route-prompts.json` (same `{"skills": …}` shape), pass `--prompts`, start at `--runs 1`,
+   and run it as one background task. Run it after a fold, a rename or a description rewrite; skip it for body-only edits:
    ```sh
    git worktree add ../wt-base origin/claude/f1-game-project-26h3ng
-   python3 tools/check/skill-routing-eval.py --queries tests/data/skill-routing/queries --root ../wt-base --out artifacts/route-base.json --only <skill>,<neighbour> --runs 3 --grace 2
-   python3 tools/check/skill-routing-eval.py --queries tests/data/skill-routing/queries --out artifacts/route-head.json --only <skill>,<neighbour> --runs 3 --grace 2
+   P=scratch/route-prompts.json
+   python3 tools/check/skill-routing-eval.py --prompts $P --root ../wt-base --out artifacts/route-base.json --grace 2
+   python3 tools/check/skill-routing-eval.py --prompts $P --out artifacts/route-head.json --grace 2
    python3 tools/check/skill-routing-eval.py --compare artifacts/route-base.json artifacts/route-head.json
    ```
-   `--alias old=new` scores a renamed or folded skill on the base side.
+   `--alias old=new` scores a renamed or folded skill on the base side; flags: `--help`. Clean up with
+   `git worktree remove ../wt-base`.
 
 ## Pitfalls
 
 - A fold is only correct when the hub description absorbs the folded trigger
   words (`skill-progressive.test.mjs` pins some); otherwise the workflow is unreachable.
 - Never claim a hook, test or function a body names without grepping it.
-- A prose-only commit runs `docs-integrity` alone (AGENTS.md docs-only fast path); run the retest block anyway.
+- A prose-only commit takes the AGENTS.md docs-only fast path; an agent-surface edit still runs step 3.

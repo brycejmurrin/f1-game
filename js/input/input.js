@@ -428,17 +428,23 @@ const Input = (function () {
     // yet seeds focus, exactly as the pad's first press does.
     navUp: () => padMenu.remoteNav("up"), navDown: () => padMenu.remoteNav("down"),
     navLeft: () => padMenu.remoteNav("left"), navRight: () => padMenu.remoteNav("right"),
-    navSelect: () => { padMenu.activate(); },
+    // A PHONE may not press RESET / DELETE / IMPORT (InputPadMenu.isDestructive):
+    // those take a tap on this screen. The XR controllers are the local player.
+    navSelect: () => padMenu.activate(remoteOwner === "xr" ? null : remoteGuard),
     navBack: () => { padMenu.escape(); },
   };
+  function remoteGuard(el) {
+    if (!InputPadMenu.isDestructive(el)) return false;
+    if (typeof Log !== "undefined") Log.info("input", "phone SELECT refused on a destructive control: tap it on this screen");
+    return true;
+  }
   function remoteEvent(kind) {
     const fn = REMOTE_EDGES[kind];
     if (!fn) return false;
     const menuEdge = kind === "pause" || kind.startsWith("nav");
     if (!menuEdge && remoteDrivingBlocked()) return false;
     if (!menuEdge) noteInputSource(remStick ? "controller" : "phone");
-    fn();
-    return true;
+    return fn() !== false;
   }
   // Forget the current remote command without tearing down the paired transport.
   // reset() uses this on blur/visibility loss; the next fresh sample can take
@@ -818,13 +824,8 @@ const Input = (function () {
     const p = activePad();
     return p ? restFor(p) : (padRestLegacy !== null ? padRestLegacy : padRestOffset);
   }
-  // Forget the driving pad's offset only (the wheel wizard moved its steering axis).
-  function clearPadRest() {
-    const p = activePad();
-    if (p) padRestMap.delete(padIdOf(p));
-    padRestLegacy = null; padRestOffset = 0;
-  }
   // What KeyBinds persists as apex26.padRest: {[padId]: offset}, 0 when none.
+  // Axis-map / profile resets clear rest via invalidateAxisRest (no clearPadRest export).
   function padRestStore() {
     if (padRestLegacy !== null) return padRestLegacy;
     return padRestMap.size ? Object.fromEntries(padRestMap) : 0;
@@ -1210,8 +1211,9 @@ const Input = (function () {
      exactly one finger is down, because a Touch identifier and a pointerId are
      not the same namespace and correlating them under multi-touch would be
      guesswork. Two fingers on the glass simply falls back to the touch path,
-     which has always worked. Chromium-only; `in` is the feature test MDN
-     recommends and Safari takes the else branch. */
+     which has always worked. Chromium since 58 and Safari since 18.2 (MDN
+     compat), so an iPhone on iOS 18.2+ takes this path too; a browser without
+     it fails the typeof test below and keeps the touch path alone. */
   function onCanvasPointerMove(e) {
     if (steerMode !== "touch" || touches.size !== 1) return;
     // A mouse or pen moving on a touch laptop is not the finger: its coalesced
@@ -1371,6 +1373,8 @@ const Input = (function () {
   }
 
   function buttonSteering() {
+    // Resting arrows at centre: the keyboardSteer short-circuit. This runs per physics substep on the phone path.
+    if (!btnSteerLeft && !btnSteerRight && btnSteerVal === 0) { btnSteerT = nowMs(); return 0; }
     const t = nowMs();
     const dt = rampDtSince(btnSteerT, t);
     btnSteerT = t;
@@ -1641,8 +1645,8 @@ const Input = (function () {
     // throttle/brake/steer axis is a control, not a stick (pad-menu's
     // padNavDirOf skips the mapped pedals for the same reason).
     {
-      const lookAxis = (i) => pad.mapping === "standard" ? readLookAxis(axes, i) : 0;
-      const rx = lookAxis(2), ry = lookAxis(3);
+      const std = pad.mapping === "standard";
+      const rx = std ? readLookAxis(axes, 2) : 0, ry = std ? readLookAxis(axes, 3) : 0;
       const mag = Math.hypot(rx, ry);
       if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
       else {
@@ -1838,6 +1842,9 @@ const Input = (function () {
   }
 
   const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
+  // The pad's rule (padPedalLevel): the dead zone is RESCALED, not a gate, so travel
+  // ramps from 0 at the threshold to 1 at full press instead of jumping 0 -> 11 %.
+  function remotePedalLevel(v) { return v > REMOTE_PEDAL_ON ? clamp((v - REMOTE_PEDAL_ON) / (1 - REMOTE_PEDAL_ON), 0, 1) : 0; }
   // remoteActive() FIRST: it is a clock compare, and with no phone paired (the common case) it ends the
   // test before remoteDrivingBlocked() walks the UI layers — that walk ran every physics step (B·H11).
   function remoteThrottle() { return remoteActive() && !remoteDrivingBlocked() && remThr > REMOTE_PEDAL_ON; }
@@ -1880,13 +1887,13 @@ const Input = (function () {
   function throttleLevel() {
     if (keyThrottle) return 1;
     if (btnThrottle && !navBlocksTouch()) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
-    if (remoteThrottle()) return remThr;
+    if (remoteThrottle()) return remotePedalLevel(remThr);
     return padThrottleVal;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
     if (btnBrake && !navBlocksTouch()) return btnBrakeVal;
-    if (remoteBrake()) return remBrk;
+    if (remoteBrake()) return remotePedalLevel(remBrk);
     return padBrakeVal;
   }
 
@@ -2019,7 +2026,10 @@ const Input = (function () {
   }
 
   function setSteerMode(m) {
-    steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
+    // Unknown / foreign values → BUTTONS (not tilt): matches game.js STEER_MODES
+    // and WCAG 2.2 SC 2.5.4. M40: Input used to default unknown to "tilt" with no
+    // motion permission, so a bad store/API call left a phone unable to steer.
+    steerMode = (m === "tilt" || m === "touch") ? m : "buttons";
     try { Log.info("input", `steerMode ${steerMode}`); } catch (_) { /* Log absent in isolated VM */ }
     if (steerMode !== "buttons") {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
@@ -2162,7 +2172,13 @@ const Input = (function () {
   function onScreenRotate() {
     oeInit = false; tiltSteerVal = 0;
     // A drag's anchor is in the old screen space; the next move would read W - 2x as a steer.
-    touches.clear(); touchSteer = 0; touchActive = false; dragFilterClear(); hideDragAnchor();
+    // Zero the ramp state too (setSteerMode / reset already do): leaving touchSteerVal
+    // at full lock made steer() unwind via KEY_RAMP_OUT after the fingers were cleared.
+    touches.clear(); touchSteer = 0; touchActive = false;
+    touchSteerVal = 0; touchSteerT = 0;
+    dragFilterClear(); hideDragAnchor();
+    // viewLong() caches the long edge "on resize / rotation" — resize clears it; so must we.
+    _viewLong = 0;
   }
 
   // Specs must wait for ready() — NOT for Input.steer / Input.simTilt existing.
@@ -2600,7 +2616,7 @@ const Input = (function () {
     getControllerProfiles: () => ensureDeviceProfiles() ? deviceProfiles.data() : { v: 1, devices: [] },
     setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
     resetControllerProfile,
-    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, clearPadRest, padRestStore,
+    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,
     onPointerKindChange,

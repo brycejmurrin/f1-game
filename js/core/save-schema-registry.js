@@ -39,10 +39,13 @@ const SaveSchemaRegistry = (function () {
     { re: /^parts\./, owner: "js/garage/setup-sheet.js", lane: "json", v: 1, validate: validators.json },
     { re: /^livery\./, owner: "js/car/custom-liveries.js", lane: "json", v: 1, validate: validators.json },
     { re: /^setup\./, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
+    // Named garage sheets (js/garage/setup-presets.js). Must precede any looser
+    // setup.* consumer; the write-site scan used to skip *presets.js entirely.
+    { re: /^setupPresets\./, owner: "js/garage/setup-presets.js", lane: "json", v: 1, validate: validators.json },
     { re: /^ttlb\./, owner: "js/core/store.js", lane: "json", v: 2, validate: validators.ttlb },
     { re: /^career\.(driver|myteam)\.[0-2]$/, owner: "js/career/career.js", lane: "json", v: 1, validate: validators.career },
     { re: /^api\./, owner: "js/data/api-transport.js", lane: "json", v: 1, validate: validators.disposable },
-    { re: /^realrace\./, owner: "js/data/real-race-tab.js", lane: "json", v: 1, validate: validators.disposable },
+    { re: /^realrace\./, owner: "js/data/real-race-fetch.js", lane: "json", v: 1, validate: validators.disposable },
     { re: /^ghost\./, owner: "js/car/ghost.js", lane: "json", v: 1, validate: validators.json },
     { re: /^pitPlan\./, owner: "js/race/pit-lane.js", lane: "json", v: 1, validate: validators.json },
     { re: /^spotify\./, owner: "js/audio/spotify.js", lane: "raw", v: 1, validate: validators.rawScalar },
@@ -82,6 +85,7 @@ const SaveSchemaRegistry = (function () {
     "gfxBackendProbe": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxDebug": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "inspector": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "bridgeToken": entry("js/agent/apex-bridge.js (device-only GitHub token for the phone bridge; never exported)", "raw", 1, "rawScalar"),
     "gpuCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag, #2964 Spector/webgl-lint)", "raw", 1, "rawScalar"),
     "gfxTlxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxWgxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -100,6 +104,7 @@ const SaveSchemaRegistry = (function () {
     "instCellCache": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "installChipSeen": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "iosInstallSeen": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "iosWakeNoteSeen": entry("js/ui/platform-session.js (iOS 16.4-18.3 Home Screen wake-lock note, once)", "raw", 1, "rawScalar"),
     "liveryAsync": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "marbleGrip": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "mirrorInstEvery": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -120,6 +125,7 @@ const SaveSchemaRegistry = (function () {
     "spatialUpscaleGather": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "ssrDayGate": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "stallWatch": entry("js/perf/loop-health.js (?stallwatch=1 forces the stall watchdog under automation)", "raw", 1, "rawScalar"),
+    "swRaceShed": entry("js/render/three/tlx.js (hand-set: \"1\" forces the software-GL race scale/tier cut, \"0\" keeps full res)", "raw", 1, "rawScalar"),
     "team": entry("js/garage/setup-sheet.js", "json", 1, "json"),
     "titleWarm": entry("js/perf/title-warm.js (the build whose title warm completed; a phone skips it on that build)", "raw", 1, "rawScalar"),
     "tlxAoFold": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -191,7 +197,11 @@ const SaveSchemaRegistry = (function () {
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),
     gfxBootBound: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
+    // Last pack's content-addressed model files. A return visit starts those fetches before the manifest returns; RESET RENDERER drops the hint.
+    packIndex: entry("js/render/shared/assets.js", "raw", 1, "string"),
     gfxProbeStrikes: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
+    // "<backend>:<build>" the boot canary leaves when its second strike rewrites the pick to webgl2 (#4995); SETTINGS reads it.
+    gfxRetired: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
     "inputGhost.v1": entry("js/car/input-ghost.js", "json", 1, "json"),
     lastSession: entry("js/ui/share-code.js", "json", 1, "json"),
     logLevel: entry("js/core/log.js", "raw", 1, "rawScalar"),
@@ -242,8 +252,10 @@ const SaveSchemaRegistry = (function () {
     return null;
   }
 
+  // PREFIX / EXACT / validators stay module-private: resolve/validateKey/
+  // ingestSettingsSpec are the only external seams (save-schema-registry tests).
   return {
-    PREFIX, EXACT, validators, resolve, validateKey, noteWrite, ingestSettingsSpec,
+    resolve, validateKey, noteWrite, ingestSettingsSpec,
     get strict() { return strict; },
     set strict(v) { strict = !!v; },
     get settingsSpec() { return _settings; },

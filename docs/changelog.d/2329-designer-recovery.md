@@ -1,1 +1,0 @@
-Fixed: Track Designer restores displaced drafts from MY CIRCUITS after reload, preserves name-only edits during recovery, dismisses point actions when switching workspaces, and keeps relative hills at elevation limits.

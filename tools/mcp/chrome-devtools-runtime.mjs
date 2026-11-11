@@ -11,8 +11,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-export const PATCH_ID = 'apex-dialog-close-v1';
-export const EXPECTED_VERSION = '1.7.0';
+const PATCH_ID = 'apex-dialog-close-v1';
+const EXPECTED_VERSION = '1.7.0';
 // Versions audited to carry BOTH patched fixes upstream, served unpatched —
 // any other version fails closed in prepareSource below. 1.11.0 evidence
 // (re-audit 2026-10-21): dialog-blocked input actions are handled upstream
@@ -25,8 +25,8 @@ export const EXPECTED_VERSION = '1.7.0';
 // against the unpatched 1.11.0 package: a click that opens alert()
 // completes and reports the dialog, and closing the selected page answers
 // with the surviving page selected.
-export const UNPATCHED_VERSIONS = Object.freeze(['1.11.0']);
-export const DEFAULT_GUARDS = Object.freeze({
+const UNPATCHED_VERSIONS = Object.freeze(['1.11.0']);
+const DEFAULT_GUARDS = Object.freeze({
   'build/src/tools/input.js': 'a6fbc87b0f1d3dde17cd7f721610a1a06df980de0409d873422bebbed0fcdb4a',
   'build/src/McpContext.js': '61b457a04cf654f7370d453b68a23a3ce5969951714efbd9ff1aa884afe10c5c',
 });

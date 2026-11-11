@@ -82,6 +82,33 @@ function assetLoader(overrides = {}) {
   return sandbox.Assets;
 }
 
+test("a remembered pack index starts the named model fetch before the manifest returns", async () => {
+  const urls = [];
+  let releaseManifest;
+  const manifestGate = new Promise((resolve) => { releaseManifest = resolve; });
+  const md5 = "a".repeat(32);
+  const store = { "apex26.packIndex": JSON.stringify({ models: { box: { file: "models/box.bin", md5 } } }) };
+  const assets = assetLoader({
+    localStorage: {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+    },
+    fetch(url) {
+      urls.push(String(url));
+      if (String(url).endsWith("manifest.json")) {
+        return manifestGate.then(() => ({ ok: true, json: async () => ({ models: { box: { file: "models/box.bin", md5 } } }) }));
+      }
+      return Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    },
+  });
+  const pending = assets.loadModelsFor('bakedModel("box")');
+  await new Promise((r) => setImmediate(r));
+  assert.ok(urls.some((u) => u.includes("models/box.bin?h=" + md5)), "model bytes are requested while the manifest is still in flight: " + urls.join(" "));
+  releaseManifest();
+  assert.equal(await pending, 0, "a body that is not an AX26 model resolves as a miss, not a throw");
+  assert.equal(urls.filter((u) => u.includes("models/box.bin")).length, 1, "a matching md5 reuses the early body");
+});
+
 test("asset loader shares an in-flight manifest across boot consumers", async () => {
   let requests = 0, resolveFetch;
   const assets = assetLoader({ fetch() {
@@ -872,7 +899,7 @@ test("WGX and TLX take pack bytes from Assets.readLayerBytes, not a 2D-canvas ge
 // scheduled until every layer has landed), the bind held back while pending, byte parity with the sync path, and the
 // fallback to readbackTextureLayers when the async call returns null (or apex26.tlxPackAsync=0).
 async function tlxPackRig(mock, { nullAsync = false, ls = {} } = {}) {
-  const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.core.min.js")).href);
+  const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
   const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   const a = TLX.indexOf("      function readbackTextureLayers(size, images, n, data) {");
   const b = TLX.indexOf("      // CSS-box observation is shared", a);
@@ -1162,6 +1189,17 @@ test("the shader's layer count matches the MAT table size", () => {
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
   assert.match(wgx, new RegExp(`MAT_TEX_LAYERS = ${MAT_N}\\b`), "WGX material resources must cover all MAT ids");
   assert.match(wgx, /size: \[1, 1, MAT_TEX_LAYERS\]/, "WGX fallback arrays must have the full material depth");
+  // The literals the skill's workflow.md used to call "NOT pinned": the top MAT id (MAT_N - 1) and the vec4 count.
+  const top = MAT_N - 1;
+  const wgsl = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
+  const pins = [
+    [tlx, `clamp\\(mid, float\\(0\\.0\\), float\\(${top}\\.0\\)\\)`, "tsl-lit.js matTexLayer clamp must end at the top MAT id"],
+    [wgsl, `mid > ${top}\\b`, "wgsl-chunks.js mid bound must be the top MAT id"],
+    [wgsl, `struct MatScaleU \\{ s : array<vec4<f32>, ${Math.ceil(MAT_N / 4)}> \\};`, "MatScaleU must hold all MAT scales"],
+    [lit, `mid > ${top}\\b`, "glsl-lit.js mid bound must be the top MAT id"],
+  ];
+  const unpinned = pins.filter(([src, re]) => !new RegExp(re).test(src)).map(([, , why]) => why);
+  assert.deepEqual(unpinned, []);
 });
 
 test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
@@ -1225,7 +1263,7 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
     assert.ok(m.materials.layers.length >= 10, "expected the SCALES table layers");
     for (const L of m.materials.layers) {
       assert.equal(L.licence, "Apex26-Procedural", `${L.id} must be procedural`);
-      assert.match(L.source, /^procedural:/);
+      assert.equal(L.source, "procedural:tools/gen/assets.mjs");
     }
     assert.ok(m.models.keep, "bake-synthetic must preserve models");
     assert.ok(m.env["*|day"], "bake-synthetic must preserve env");
@@ -1511,9 +1549,9 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.match(brick.source, /generated:.*#1,0/);
 
     const { encodePNG, decodePNG } = await import("../../tools/gen/assets.mjs");
-    const readMobile = async () => {
+    const readMobile = async (extra = {}) => {
       const uploads = [], requests = [];
-      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer,
+      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer, ...extra,
         async fetch(url) {
           // The base content-addresses pack URLs (`?h=<md5>`); key the file by its path.
           const bare = url.split("?")[0];
@@ -1534,6 +1572,17 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.deepEqual(lowControl.uploads[0].brick,
       [...decodePNG(fs.readFileSync(path.join(dir, man.materials.low.albedo))).rgba.subarray(2 * 4 * 4 * 4, 3 * 4 * 4 * 4)]);
     const oldLow = fs.readFileSync(path.join(dir, man.materials.low.albedo));
+    // #5225: on a phone only GRAPHICS: LOW keeps the low tier; MEDIUM (the phone
+    // default) and HIGH take the high tier (#4702 lifted HIGH alone).
+    const onHigh = await readMobile({ GfxQuality: { current: () => "high" } });
+    assert.equal(onHigh.state.tier, "high");
+    assert.equal(onHigh.uploads[0].size, 8);
+    const onMedium = await readMobile({ GfxQuality: { current: () => "medium" } });
+    assert.equal(onMedium.state.tier, "high", "a phone on GRAPHICS: MEDIUM takes the 256 px tier (#5225)");
+    assert.equal(onMedium.uploads[0].size, 8);
+    const onLow = await readMobile({ GfxQuality: { current: () => "low" } });
+    assert.equal(onLow.state.tier, "low", "GRAPHICS: LOW on a phone keeps the 128 px tier");
+    assert.equal(onLow.uploads[0].size, 4);
 
     // Retain another layer's provenance plus unrelated records during a patch.
     const other = { mat: 1, id: "concrete", scale: 1.25, source: "procedural:keep", licence: "CC0", author: "Fixture" };
@@ -1566,7 +1615,7 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     const verified = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "verify"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8", timeout: 10000 });
     assert.equal(verified.status, 0, verified.stderr || verified.stdout);
-    assert.match(verified.stdout, /verify: OK/);
+    assert.equal(verified.stdout, "pack: 0 KB / 8 MB budget\nverify: OK\n");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -2081,7 +2130,7 @@ test("unknown bake flag is refused before rewriting the pack", () => {
   const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
     { encoding: "utf8" });
   assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
-  assert.match(r.stderr, /unknown flag --dry-run/, `expected unknown-flag error, got:\n${r.stderr}`);
+  assert.equal(r.stderr, "error: unknown flag --dry-run (accepted: --size --models)\n", `expected unknown-flag error, got:\n${r.stderr}`);
 });
 
 test("assets.mjs --help prints usage and exits 0", () => {
@@ -2162,10 +2211,10 @@ test("glTF supplied normals match transformed triangle normals for rotations, no
     const c20 = (b * f - c * e) * id, c21 = (c * d - a * f) * id, c22 = (a * e - b * d) * id;
     return [c00 * n[0] + c10 * n[1] + c20 * n[2], c01 * n[0] + c11 * n[1] + c21 * n[2], c02 * n[0] + c12 * n[1] + c22 * n[2]];
   }
-  const oracleSource = source.replace(/const nx = normals\[i \* 3\][\s\S]*?nrmOut\.push\(x \/ l, y \/ l, z \/ l\);/, `
+  const oracleSource = source.replace(/const nx = normals\[i \* 3\], ny = normals\[i \* 3 \+ 1\], nz = normals\[i \* 3 \+ 2\];[\s\S]*?nrm\[o\] = x \/ l; nrm\[o \+ 1\] = y \/ l; nrm\[o \+ 2\] = z \/ l;/, `
     const n = normalOracle(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
     const l = (Math.hypot(n[0], n[1], n[2]) || 1) * nSign;
-    nrmOut.push(n[0] / l, n[1] / l, n[2] / l);`);
+    nrm[o] = n[0] / l; nrm[o + 1] = n[1] / l; nrm[o + 2] = n[2] / l;`);
   assert.notEqual(oracleSource, source, "oracle substitution must reach the supplied-normal emission");
   const oracle = vm.runInNewContext(oracleSource + ";GLTF", { ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, normalOracle, Log: { enabled: () => false } }, { filename: absSrc("js/render/shared/gltf.js") });
   const glb = (nodes, supplied) => {
@@ -2416,4 +2465,115 @@ test("GLX material ownership preserves reused textures and releases aliases once
   }
   assert.equal(deleted.length, 6);
   assert.deepEqual(forgotten, deleted, "census forget matches actual retirement once per texture");
+});
+
+// ---------------------------------------------------------------------------
+// Pack hygiene (front half, adjacent to #4028 — does not touch the GPU load
+// path). data/packs/model-index.json classifies every committed model key;
+// js/assets/pack-index.mjs prunes a remembered apex26.packIndex-shaped object
+// against a live manifest so dead keys / stale md5s cannot linger.
+// ---------------------------------------------------------------------------
+const ROLE_INDEX_PATH = path.join(ROOT, "data", "packs", "model-index.json");
+const { pruneRememberedIndex, rememberPayload, diffRoleIndex } =
+  await import(pathToFileURL(path.join(ROOT, "js/assets/pack-index.mjs")).href);
+
+function sceneryPlacedModelIds() {
+  const ids = new Set();
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".js")) {
+        for (const line of fs.readFileSync(p, "utf8").split("\n")) {
+          if (/^\s*\/\//.test(line) || /^\s*\*/.test(line)) continue;
+          for (const m of line.matchAll(/bakedModel\(\s*["']([^"']+)["']/g)) ids.add(m[1]);
+        }
+      }
+    }
+  };
+  walk(path.join(ROOT, "js", "circuits"));
+  return ids;
+}
+
+test("pruneRememberedIndex drops dead keys, md5 mismatches, and junk fields", () => {
+  const live = {
+    models: {
+      keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+      renamed: { file: "models/renamed.bin", md5: "b".repeat(32) },
+    },
+  };
+  const remembered = {
+    version: 99,
+    extra: true,
+    models: {
+      keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+      gone: { file: "models/gone.bin", md5: "c".repeat(32) },
+      renamed: { file: "models/old.bin", md5: "b".repeat(32) },
+      staleHash: { file: "models/keep.bin", md5: "d".repeat(32) },
+      bad: { file: "models/keep.bin", md5: "not-an-md5" },
+    },
+  };
+  assert.deepEqual(pruneRememberedIndex(remembered, live), {
+    models: { keep: { file: "models/keep.bin", md5: "a".repeat(32) } },
+  });
+  assert.deepEqual(pruneRememberedIndex(null, live), { models: {} });
+  assert.deepEqual(pruneRememberedIndex(remembered, null), { models: {} });
+});
+
+test("rememberPayload keeps only content-addressed model rows", () => {
+  const live = {
+    models: {
+      ok: { file: "models/ok.bin", md5: "e".repeat(32), verts: 3 },
+      noMd5: { file: "models/x.bin" },
+      badMd5: { file: "models/y.bin", md5: "zz" },
+    },
+  };
+  assert.deepEqual(rememberPayload(live), {
+    models: { ok: { file: "models/ok.bin", md5: "e".repeat(32) } },
+  });
+  assert.deepEqual(
+    pruneRememberedIndex(rememberPayload(live), live).models.ok,
+    live.models.ok && { file: live.models.ok.file, md5: live.models.ok.md5 },
+  );
+});
+
+test("data/packs/model-index.json covers every committed model key once",
+  { skip: !hasPack && "no pack installed" }, () => {
+  assert.ok(fs.existsSync(ROLE_INDEX_PATH), "data/packs/model-index.json missing");
+  const roleIndex = JSON.parse(fs.readFileSync(ROLE_INDEX_PATH, "utf8"));
+  assert.equal(roleIndex.version, 1);
+  assert.deepEqual(roleIndex.roles, ["placed", "kit_catalog", "nature_bake"]);
+  const diff = diffRoleIndex(roleIndex, manifest, roleIndex.roles);
+  assert.deepEqual(diff.indexOnly, [], "index lists keys the manifest dropped");
+  assert.deepEqual(diff.liveOnly, [], "manifest grew keys the role index misses");
+  assert.deepEqual(diff.badRole, [], "every index row needs a known role");
+});
+
+test("placed role keys are the scenery bakedModel literals; catalog keys are not placed",
+  { skip: !hasPack && "no pack installed" }, () => {
+  const roleIndex = JSON.parse(fs.readFileSync(ROLE_INDEX_PATH, "utf8"));
+  const placed = sceneryPlacedModelIds();
+  const indexedPlaced = Object.entries(roleIndex.models)
+    .filter(([, rec]) => rec.role === "placed")
+    .map(([id]) => id)
+    .sort();
+  assert.deepEqual(indexedPlaced, [...placed].filter((id) => manifest.models[id]).sort(),
+    "placed role must match non-comment bakedModel(\"…\") ids that exist in the pack");
+  for (const id of placed) {
+    assert.ok(manifest.models[id], `scenery places unknown pack key "${id}"`);
+    assert.equal(roleIndex.models[id].role, "placed", `${id} is placed in scenery`);
+  }
+  for (const [id, rec] of Object.entries(roleIndex.models)) {
+    if (rec.role === "placed") continue;
+    assert.equal(placed.has(id), false,
+      `${id} is role ${rec.role} but scenery still calls bakedModel("${id}")`);
+  }
+});
+
+test("pack models/ has no orphan bins outside the manifest index",
+  { skip: !hasPack && "no pack installed" }, () => {
+  const dir = path.join(PACK, "models");
+  const keyed = new Set(Object.values(manifest.models || {}).map((rec) => path.basename(rec.file)));
+  const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".bin") && !keyed.has(f));
+  assert.deepEqual(orphans, [], "orphan bins are dead pack weight — drop or register them");
 });

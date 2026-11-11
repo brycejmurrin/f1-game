@@ -16,3 +16,8 @@ runs:
     # binaries — those cost ~200 MB and only the browser jobs need them.
     - run: npm ci
       shell: bash
+    # The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28;
+    # docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): build them before any job serves,
+    # tests or stages the checkout. Skipped on a commit older than the tool.
+    - run: if [ -f tools/gen/ensure-built.mjs ]; then node tools/gen/ensure-built.mjs; fi
+      shell: bash

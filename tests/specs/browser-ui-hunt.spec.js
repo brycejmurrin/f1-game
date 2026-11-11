@@ -93,7 +93,7 @@ async function dataReady(page) {
     </body>`);
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
   for (const url of [
-    "/js/core/log.js", "/js/ui/modal.js", "/js/core/mat4.js", "/js/ui/dom.js",
+    "/js/core/log.js", "/js/ui/modal.js", "/js/core/mat4.js", "/js/ui/dom.js", "/js/core/i18n.js",
     ...LAZY_DATA.map((file) => "/" + file),
   ]) await page.addScriptTag({ url });
   await page.evaluate(() => {
@@ -125,6 +125,10 @@ async function dataReady(page) {
       cursor: "2026-09-13T06:10:00Z",
     });
     F1API.liveIntervals = () => Promise.resolve({ values: {}, cursor: "2026-09-13T06:10:00Z" });
+    // A finished session (this meta has no dateEnd, so it is COMPLETED) seeds its
+    // first Live build from the whole-session snapshots (live.js liveFeedRequests).
+    F1API.sessionPositions = F1API.livePositions;
+    F1API.sessionIntervals = F1API.liveIntervals;
     F1API.fastestLap = () => Promise.resolve(null);
     DataHub.init(document.getElementById("datahub"));
     DataHub.open();

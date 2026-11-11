@@ -1,1 +1,0 @@
-Fixed: The Data Hub telemetry compare view now fits a landscape phone: header no longer clipped at the top, gauge labels no longer overlap, the chart uses the full width and the whole view scrolls as one.

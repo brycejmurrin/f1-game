@@ -45,11 +45,24 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 // exist by the time create() runs. Loading the real ones (rather than stubbing)
 // keeps the interp buffer honest and costs nothing.
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");   // shared math island — snapshot.js binds M4 at eval
+globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
+
+test("quali-wire and strategy-wire evaluate before netplay", () => {
+  const { LAZY_NET, LAZY_NET_EDGES } = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
+  const play = LAZY_NET.indexOf("js/net/netplay.js");
+  for (const file of ["js/net/quali-wire.js", "js/net/strategy-wire.js"]) {
+    const i = LAZY_NET.indexOf(file);
+    assert.ok(i >= 0 && i < play, file + " loads before netplay.js");
+    assert.ok(LAZY_NET_EDGES.some(([a, b]) => a === file && b === "js/net/netplay.js"), file + " is an eval-time edge");
+  }
+});
 
 test("a host RESULT must be a bijection before its timing mutates any guest car", () => {
   const netOrderSource = symbolSource("function netOrder(order)");
@@ -330,13 +343,24 @@ test("a HOST drops a QUALI naming no driver at all", () => {
   assert.deepEqual(G.caughtQuali, []);
 });
 
-test("a GUEST accepts the host's QUALI for any driver", () => {
-  // Guest side there is nothing to narrow to: the only connection is the
-  // host's, and the host legitimately speaks for the whole field — in a room
-  // of three or more, another guest's time can only arrive via the host.
+test("a GUEST accepts the host's QUALI for any SEATED driver, never an unseated id (#5012)", () => {
+  // Guest side the only connection is the host's, and the host legitimately
+  // speaks for the whole field — in a room of three or more, another guest's
+  // time can only arrive via the host. But only for a driver IN the field: an
+  // unknown id grew qualiPeers / qualiLive for the whole session.
   const { G, s } = started("guest");
+  s.deliver("quali", { driverId: "drv1", t: 60.5 });
   s.deliver("quali", { driverId: "anyone-at-all", t: 60.5 });
-  assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
+  for (let i = 0; i < 100; i++) s.deliver("qlive", { driverId: "x" + i, t: 1, frac: 0 });
+  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: 60.5 }]);
+  assert.deepEqual(G.caughtQLive, [], "no phantom driver reaches the live clock");
+});
+
+test("a GUEST rate-limits the host's QUALI/QLIVE at the room's window (#5012)", () => {
+  const { G, s } = started("guest");
+  for (let i = 0; i < 500; i++) s.deliver("qlive", { driverId: "drv1", t: 1, frac: 0 });
+  assert.ok(G.caughtQLive.length > 12, "a guest allows more than one driver's window (the host relays the room)");
+  assert.ok(G.caughtQLive.length <= NetPlay.QUALI_GUEST_RATE, "a flood is capped (got " + G.caughtQLive.length + ")");
 });
 
 test("lobby relay hook sees only sender-bound, normalized qualifying events", () => {
@@ -362,21 +386,22 @@ test("lobby relay hook sees only sender-bound, normalized qualifying events", ()
 // on as a number — by NetPlay.bindQuali, which BOTH phases register.
 test("a QUALI whose t is a numeric string arrives as a NUMBER; junk and implausible laps never arrive", () => {
   const { G, s } = started("guest");                 // guest: no sender binding to get in the way
-  s.deliver("quali", { driverId: "x", t: "70.125" });
-  assert.deepEqual(G.caughtQuali, [{ driverId: "x", t: 70.125 }]);
+  s.deliver("quali", { driverId: "drv1", t: "70.125" });
+  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: 70.125 }]);
   assert.equal(typeof G.caughtQuali[0].t, "number");
   for (const t of [true, "abc", NaN, Infinity, -5, 0, 5, 20, 3600, 1e9, null, undefined, {}, []]) {
-    s.deliver("quali", { driverId: "x", t });
+    s.deliver("quali", { driverId: "drv1", t });
   }
   assert.equal(G.caughtQuali.length, 1, "nothing outside (20 s, 1 h) or non-numeric reaches the game");
   assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: "61" }), { driverId: "d", t: 61 });
   assert.equal(NetPlay.validQuali({ t: 61 }), null, "no driverId, no claim");
+  assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: 61, junk: "x".repeat(99) }), { driverId: "d", t: 61 }, "extra peer fields are dropped, not relayed");
   assert.equal(NetPlay.validQuali("61"), null);
   // QLIVE is bounded rather than refused — it is a clock, not a grid input.
-  s.deliver("qlive", { driverId: "x", t: "12.5", frac: "2" });
-  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "x", t: 12.5, frac: 1 });
-  s.deliver("qlive", { driverId: "x", t: NaN, frac: -1 });
-  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "x", t: 0, frac: 0 });
+  s.deliver("qlive", { driverId: "drv1", t: "12.5", frac: "2" });
+  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "drv1", t: 12.5, frac: 1 });
+  s.deliver("qlive", { driverId: "drv1", t: NaN, frac: -1 });
+  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "drv1", t: 0, frac: 0 });
 });
 
 test("QLIVE is bound to the sender on the host the same way", () => {
@@ -472,6 +497,7 @@ test("on a two-guest host, each guest's QUALI is accepted for its own seat only"
 
 globalThis.NetPlay = NetPlay;
 globalThis.NetBytes = eval(src("js/net/bytes.js") + ";NetBytes");   // transport/handshake bind it at call time
+const NetIce = eval(src("js/net/ice.js") + ";NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetTransport = NetTransport;
 const NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");
@@ -593,11 +619,13 @@ test("LOBBY phase: no HELLO filed means no claim at all", async () => {
 test("LOBBY phase: the same coercion applies before the hand-off", async () => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
   try {
-    peerSays("quali", { driverId: "anyone", t: "70" });
-    peerSays("quali", { driverId: "anyone", t: true });
-    peerSays("quali", { driverId: "anyone", t: 4000 });
+    peerSays("hello", { team: "bravo", driver: 1 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [{ driverId: "anyone", t: 70 }], "one validation site for both phases");
+    peerSays("quali", { driverId: "bravo:1", t: "70" });
+    peerSays("quali", { driverId: "bravo:1", t: true });
+    peerSays("quali", { driverId: "bravo:1", t: 4000 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 70 }], "one validation site for both phases");
   } finally { lobby.cancel(); }
 });
 
@@ -608,16 +636,16 @@ test("LOBBY phase: more than five HELLOs (or READYs) in a second are dropped, pe
   // ignored — and a second later the window is open again.
   const { lobby, peerSays, settle } = await lobbyUp("host");
   try {
-    for (let i = 0; i < 9; i++) peerSays("hello", { team: "bravo", driver: i % 2, tag: i });
+    for (let i = 0; i < 9; i++) peerSays("hello", { team: "bravo", driver: i % 2, parts: { tag: i } });
     await settle();
-    assert.equal(lobby.roomState().peer.tag, 4, "the fifth HELLO is the last one accepted");
+    assert.equal(lobby.roomState().peer.parts.tag, 4, "the fifth HELLO is the last one accepted");
     for (let i = 0; i < 9; i++) peerSays("ready", { ready: i % 2 === 0 });
     await settle();
     assert.equal(lobby.roomState().peerReady, true, "READY #5 (index 4, true) stands; #6..9 are dropped");
     await sleep(1100);
-    peerSays("hello", { team: "bravo", driver: 1, tag: 99 });
+    peerSays("hello", { team: "bravo", driver: 1, parts: { tag: 99 } });
     await settle();
-    assert.equal(lobby.roomState().peer.tag, 99, "the window rolls: a later HELLO is accepted again");
+    assert.equal(lobby.roomState().peer.parts.tag, 99, "the window rolls: a later HELLO is accepted again");
   } finally { lobby.cancel(); }
 });
 
@@ -633,15 +661,33 @@ test("LOBBY phase: QLIVE is bound to the sender the same way", async () => {
   } finally { lobby.cancel(); }
 });
 
-test("LOBBY phase: a guest accepts the host's QUALI for any driver", async () => {
-  // Guest side there is nothing to narrow to: its one connection is the
-  // host's, which legitimately speaks for the whole field — another guest's
-  // time can only ever arrive through it.
+test("LOBBY phase: a guest accepts the host's QUALI for any driver a HELLO seated, and nobody else (#5012)", async () => {
+  // Guest side its one connection is the host's, which legitimately speaks
+  // for the whole field — another guest's time can only ever arrive through
+  // it. But a driverId no HELLO seated is a phantom: it grew qualiLive /
+  // qualiPeers without bound and filled the quali sheet.
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
   try {
-    peerSays("quali", { driverId: "anyone-at-all", t: 60.5 });
+    peerSays("hello", { team: "bravo", driver: 1 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
+    peerSays("quali", { driverId: "bravo:1", t: 60.5 });
+    peerSays("quali", { driverId: "anyone-at-all", t: 60.5 });
+    for (let i = 0; i < 20; i++) peerSays("qlive", { driverId: "x" + i, t: 1, frac: 0 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 60.5 }]);
+    assert.deepEqual(G.caughtQLive, [], "no phantom driver reaches the live clock");
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: a guest rate-limits the host's QUALI/QLIVE at the room's window (#5012)", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  try {
+    peerSays("hello", { team: "bravo", driver: 1 });
+    await settle();
+    for (let i = 0; i < 300; i++) peerSays("qlive", { driverId: "bravo:1", t: 1, frac: 0 });
+    await settle();
+    assert.ok(G.caughtQLive.length > NetPlay.QUALI_RATE, "a guest allows the room's window, not one driver's");
+    assert.ok(G.caughtQLive.length <= NetPlay.QUALI_GUEST_RATE, "a flood is capped (got " + G.caughtQLive.length + ")");
   } finally { lobby.cancel(); }
 });
 
@@ -711,6 +757,8 @@ test("LOBBY phase: a guest whose HELLO claims the HOST's seat cannot post the ho
 test("LOBBY phase: a guest drops a relayed QUALI naming its OWN seat", async () => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");   // local seat alpha:0
   try {
+    peerSays("hello", { team: "bravo", driver: 1 });   // the host's own seat
+    await settle();
     peerSays("quali", { driverId: "alpha:0", t: 61.0 });
     peerSays("quali", { driverId: "bravo:1", t: 62.0 });
     await settle();
@@ -1022,6 +1070,8 @@ test("AI strategy publishes on phase changes, bounded cadence, and every new rec
   net.tick(11975);
   assert.equal(updates().length, 3);
   assert.equal(updates().at(-1).d.fields.tyreWear, 0.5);
+  assert.equal(updates().at(-1).d.tyreLog, undefined, "the 1 Hz refresh carries scalars only, never the stint history");
+  assert.equal(updates().at(-1).d.tyre, undefined, "…nor the fitted set, which only a phase changes");
   s.deliver(NetPlay.EV.MODEL, { ...model, epoch: "late-receiver" });
   net.tick(12000);
   const late = updates().at(-1).d;
@@ -1040,7 +1090,7 @@ test("AI strategy publishes on phase changes, bounded cadence, and every new rec
   assert.equal(updates().length, 6, "a new pending compound publishes before the one-second deadline");
   ai.compoundShortAtFinish = true; net.tick(12075);
   assert.equal(updates().length, 7, "the flag-time compliance snapshot is an immediate phase change");
-  assert.equal(logReads, 7, "history is copied exactly once per publication");
+  assert.equal(logReads, 6, "history is copied once per FULL publication (phase or epoch), never on the 1 Hz refresh");
   net.stop(); gn.stop();
 });
 
@@ -1172,8 +1222,9 @@ test("a real PitLane stop handed back before or after fitting matches uninterrup
       assert.equal(ai.tyre.code, "M"); assert.equal(ai.tyreStints, 2); assert.equal(ai.pitStops, 1);
       assert.equal(ai.tyreWear, phase === "before-fit" ? 0 : 0.2);
       ai.finished = true;
-      const verdict = regs.compoundVerdict(ai, { applies: true });
-      assert.equal(verdict && verdict.dsq, phase === "post-flag-fit" ? "one dry compound" : null,
+      // compoundVerdict stays module-local; applyCompoundRule owns the public surface.
+      regs.applyCompoundRule([ai], { applies: true });
+      assert.equal(ai.dsq || null, phase === "post-flag-fit" ? "one dry compound" : null,
         "the frozen flag verdict survives independently of later service history");
       net.stop();
     }
@@ -1446,9 +1497,10 @@ test("the host relays every other guest's car in ONE aged datagram per guest, ea
     const got = ss[name].states;
     const relays = got.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
     assert.equal(relays.length, 1, `guest ${name}: one relay datagram per publish, not one per car`);
-    assert.deepEqual(relays[0].cars.map((c) => c.id).sort(), [1, 2, 3].filter((i) => i !== own),
-      `guest ${name}: every OTHER guest, never its own car`);
-    assert.equal(got.length, 2, `guest ${name}: the host's own car + ONE relay (was 1 + 2)`);
+    assert.deepEqual(relays[0].cars.map((c) => c.id).sort(), [0, 1, 2, 3].filter((i) => i !== own),
+      `guest ${name}: the host and every OTHER guest, never its own car`);
+    assert.equal(got.length, 1, `guest ${name}: ONE datagram, the host's own car inside the relay (was own + relay, before that 1 + 2)`);
+    assert.equal(relays[0].cars.find((c) => c.id === 0).age, 0, `guest ${name}: the host's car is the newest pose (age 0)`);
   }
   net.stop();
 });
@@ -1460,7 +1512,8 @@ test("the host stops relaying a rival that has gone quiet instead of stamping it
   assert.equal(net.start({ role: "host", session: ss.a,
     sessions: Object.entries(ss).map(([id, session]) => ({ id, session })),
     peers: [{ id: "a" }, { id: "b" }, { id: "c" }] }).ok, true);
-  const relayedIds = (s) => s.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED).flatMap((p) => p.cars.map((c) => c.id));
+  // Relayed RIVALS: the host's own car (id 0) rides the same packet since perf hunt 9.
+  const relayedIds = (s) => s.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED).flatMap((p) => p.cars.map((c) => c.id)).filter((id) => id !== 0);
   let t = 10_000;
   for (let k = 0; k < 12; k++, t += 50) {
     ss.a.feed(t - 30, 1, lapPose(100 + k), t - 10);
@@ -1483,6 +1536,30 @@ test("the host stops relaying a rival that has gone quiet instead of stamping it
     }
   }
   net.stop();
+});
+
+test("poseRemote samples the spline once per pose: the world position's sample feeds the yaw (perf hunt 9)", () => {
+  const G = poseG(3);
+  const orig = globalThis.Tracks.sample;
+  let samples = 0;
+  globalThis.Tracks.sample = (t, sv, out) => { samples++; return orig(t, sv, out); };
+  // The real façade (game.js worldFromTrack) fills `out` with the sample at s when the caller hands one in.
+  G.worldFromTrack = (sv, x, out) => { samples++; if (out) orig(null, sv, out); return { x, z: sv }; };
+  try {
+    const net = NetPlay.create(G);
+    const s = stateSession();
+    assert.equal(net.start({ role: "guest", session: s }).ok, true);
+    let poses = 0;
+    for (let k = 0; k < 20; k++) {
+      const tick = 10_000 + k * 50;
+      s.feed(tick, 1, lapPose(100 + k), tick + 30);
+      G.netNow = tick + 130; samples = 0; net.tick(tick + 130);
+      if (G.cars[1].s > 0) { poses++; assert.equal(samples, 1, "one sample per posed remote per tick (was 2)"); }
+    }
+    assert.ok(poses > 10, "the remote was posed: " + poses);
+    assert.ok(Math.abs(G.cars[1].yawVis) < 1e-9, "yaw from the shared sample (tangent +z, head 0)");
+    net.stop();
+  } finally { globalThis.Tracks.sample = orig; }
 });
 
 test("a guest poses each entry of an aged relay at ITS OWN stamp (tick − age)", () => {
@@ -1547,8 +1624,10 @@ test("the host publishes its AI field at 10 Hz in each guest's aged packet, neve
   for (let k = 0; k < 20; k++, t += 50) { G.netNow = t; net.tick(t); }   // 20 publishes = 1 s
   const aged = a.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
   assert.equal(aged.length, 10, "AI rides every other publish: 10 Hz");
-  for (const p of aged) assert.deepEqual(p.cars.map((c) => c.id).sort(), [2, 3, 4], "the AI only — not the host (own packet), not guest a's own car");
-  assert.equal(a.states.filter((p) => p && p.type === NetSnapshot.TYPE_SNAPSHOT).length, 20, "the host's own car still at 20 Hz");
+  for (const p of aged) assert.deepEqual(p.cars.map((c) => c.id).sort(), [0, 2, 3, 4], "the AI and the host's own car — never guest a's own car");
+  assert.equal(a.states.filter((p) => p && p.type === NetSnapshot.TYPE_SNAPSHOT).length, 10, "the plain own snapshot only on the publishes without the AI field");
+  assert.equal(a.states.filter((p) => p && p.cars.some((c) => c.id === 0)).length, 20, "the host's own car still at 20 Hz");
+  assert.equal(a.states.length, 20, "perf hunt 9: 20 datagrams a second to the guest (was 30: 20 own + 10 aged)");
   net.stop();
 });
 
@@ -1818,4 +1897,68 @@ test("QUALI and QLIVE reject a rival driverId even with the sender's code", () =
   assert.deepEqual(G.caughtQLive, []);
   s.deliver("quali", { driverId: "drv1", code, t: 63 });
   assert.equal(G.caughtQuali.length, 1);
+});
+
+test("a 20-car field's strategy wire: scalars on the 1 Hz refresh, one JSON.stringify per broadcast (perf hunt 6)", (t) => {
+  const G = poseG(20); G.track.def = { id: "monza" };
+  const tyre = { id: "medium", code: "M", tread: 0, life: 0.9, colour: [0.9, 0.8, 0] };
+  const log = [{ code: "S", id: "soft", colour: [1, 0, 0], lap0: 0, lap1: 12 }, { code: "M", id: "medium", colour: [0.9, 0.8, 0], lap0: 12, lap1: null }];
+  for (const c of G.cars) Object.assign(c, { tyre, tyreLog: log, tyreStints: 1, tyreWear: 0.3, pitState: "none" });
+  const net = NetPlay.create(G);
+  const peers = [stateSession(), stateSession(), stateSession()];
+  const sendEvent0 = peers[0].sendEvent;
+  peers[0].sentJson = [];
+  peers[0].sendEvent = function (t, d, json) { if (t === NetPlay.EV.STRATEGY) this.sentJson.push(json); return sendEvent0.call(this, t, d, json); };
+  net.start({ role: "host", session: peers[0], sessions: peers.map((session, i) => ({ id: "p" + i, session })) });
+  const model = peers[0].sent.find((e) => e.t === NetPlay.EV.MODEL).d;
+  peers.forEach((p, i) => p.deliver(NetPlay.EV.MODEL, { ...model, epoch: "r" + i }));
+  const realStringify = JSON.stringify;
+  let stringifies = 0, broadcasts = 0;
+  JSON.stringify = function (...a) { stringifies++; return realStringify.apply(this, a); };
+  const before = peers[0].sent.length;
+  try {
+    for (let now = 20000; now < 80000; now += 50) {    // a fake 60 s of racing, wear moving
+      for (const c of G.cars) c.tyreWear += 1e-4;
+      net.tick(now);
+    }
+  } finally { JSON.stringify = realStringify; }
+  const strat = peers[0].sent.slice(before).filter((e) => e.t === NetPlay.EV.STRATEGY);
+  broadcasts = strat.length;
+  const perWire = new Map();
+  for (const e of strat) perWire.set(e.d.wire, (perWire.get(e.d.wire) || 0) + 1);
+  assert.ok(perWire.size >= 15, `the field publishes (${perWire.size} cars)`);
+  for (const [wire, n] of perWire) assert.ok(n >= 58 && n <= 62, `car ${wire} still refreshes once a second (${n} in 60 s)`);
+  const bytes = strat.reduce((n, e) => n + realStringify({ t: e.t, d: e.d }).length, 0);
+  const full = strat.reduce((n, e) => n + realStringify({ t: e.t, d: { ...NetPlay.strategyState(G.cars[e.d.wire] || G.cars[0], e.d.wire, "monza"), epoch: e.d.epoch } }).length, 0);
+  t.diagnostic(`strategy B/s per receiver: ${Math.round(bytes / 60)} (full every refresh: ${Math.round(full / 60)}); ${broadcasts} broadcasts, ${stringifies} stringify calls, ${peers.length} receivers`);
+  assert.ok(bytes < full * 0.6, `scalar refresh: ${Math.round(bytes / 60)} B/s vs ${Math.round(full / 60)} B/s full, per receiver`);
+  // Per broadcast: one for the payload and one per receiver's epoch string — never one whole payload per receiver.
+  assert.ok(stringifies <= broadcasts * (1 + peers.length) + 200, `JSON.stringify calls ${stringifies} for ${broadcasts} broadcasts to ${peers.length} receivers`);
+  const sample = strat.at(-1);
+  const wireJson = peers[0].sentJson.at(-1);
+  assert.equal(typeof wireJson, "string", "the broadcast hands each session the pre-serialised payload");
+  assert.deepEqual(JSON.parse(wireJson), JSON.parse(realStringify(sample.d)), "the spliced payload parses to the same event");
+  net.stop();
+});
+
+test("a receiver that arrives late still gets a relayed human's full tyre state, not only its scalar echo (perf hunt 6 review)", () => {
+  const G = poseG(4); G.track.def = { id: "monza" };
+  const net = NetPlay.create(G), a = stateSession(), b = stateSession();
+  net.start({ role: "host", session: a, sessions: [{ id: "a", session: a }, { id: "b", session: b }] });
+  const model = a.sent.find((e) => e.t === NetPlay.EV.MODEL).d;
+  a.deliver(NetPlay.EV.MODEL, { ...model, epoch: "peer-a" });
+  net.tick(10000);
+  const tyre = { id: "soft", code: "S", tread: 0, life: 0.8, colour: [1, 0, 0] };
+  const log = [{ code: "M", id: "medium", colour: [0.9, 0.8, 0], lap0: 0, lap1: 9 }, { code: "S", id: "soft", colour: [1, 0, 0], lap0: 9, lap1: null }];
+  const full = { ...NetPlay.strategyState({ tyre, tyreLog: log, tyreStints: 2, tyreWear: 0.2 }, 1, "monza"), epoch: model.epoch };
+  a.deliver(NetPlay.EV.STRATEGY, full);                                             // guest A's phase publish (B not here yet)
+  a.deliver(NetPlay.EV.STRATEGY, { ...NetPlay.strategyState({ tyre, tyreLog: log, tyreStints: 2, tyreWear: 0.3 }, 1, "monza", true), epoch: model.epoch });
+  assert.equal(G.cars[1].tyreLog.length, 2, "the host applied A's history");
+  b.deliver(NetPlay.EV.MODEL, { ...model, epoch: "peer-b" });                       // B's epoch lands mid-stint
+  net.tick(10050);
+  const toB = b.sent.filter((e) => e.t === NetPlay.EV.STRATEGY && e.d.wire === 1 && e.d.epoch === "peer-b");
+  assert.ok(toB.some((e) => Array.isArray(e.d.tyreLog) && e.d.tyreLog.length === 2 && e.d.tyre && e.d.tyre.id === "soft"),
+    "B receives A's fitted set and stint history with its own epoch");
+  assert.equal(toB.at(-1).d.fields.tyreWear, 0.3, "…at A's latest wear");
+  net.stop();
 });

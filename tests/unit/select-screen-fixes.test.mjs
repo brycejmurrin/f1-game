@@ -156,6 +156,23 @@ test("M3: unstarring a circuit that is NOT active still filters as before", () =
   assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["1"]);
 });
 
+test("circuit search resets on a menu-door reopen but survives returns and in-place rebuilds", () => {
+  const h = boot({}, { trackIdx: 1 });
+  const search = () => h.dom.byId("sel-track-search");
+  search().value = "spa";
+  search().oninput();
+  assert.deepEqual(h.tiles().filter((r) => !r.hidden).map((r) => r.dataset.trackIdx), ["1"]);
+  h.menus.buildSelect();                            // a return (race setup / garage back): title not up
+  assert.equal(search().value, "spa", "a return keeps the player's search");
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "all")
+    .onclick({ stopPropagation() {} });            // in-place chip rebuild
+  assert.equal(search().value, "spa", "an in-place rebuild keeps the search");
+  h.G.els.overlay = { hidden: false };              // entered from the title screen
+  h.menus.buildSelect();
+  assert.equal(search().value, "", "a menu door opens an unfiltered picker");
+  assert.deepEqual(h.tiles().filter((r) => !r.hidden).map((r) => r.dataset.trackIdx), ["0", "1", "2"]);
+});
+
 test("CLASSICS filter refreshes the hero preview when the active circuit is hidden", () => {
   const h = boot({}, { trackIdx: 1 });
   assert.equal(h.G.els.selPreviewName.textContent, "Spa");

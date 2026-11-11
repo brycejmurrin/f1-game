@@ -1,16 +1,13 @@
-# Survey-track loop, Montreal example, gotchas
-
-Load this when reading a probe table, editing terrain `def` flags, or deciding
-whether a visual baseline should move.
-
-Combined parent/worker loop. Steps marked PARENT use a browser: the track-surveyor
-skips them (it reads the artifacts they produce). Surveyor steps: 1, 3, 4.
+# Survey-track loop and gotchas
 
 ## Contents
 - Layout check (no browser)
 - The loop
-- Worked example — Montreal floating trees
 - Gotchas
+
+Steps marked PARENT use a browser and run in the parent session. The track-surveyor
+follows its own steps in `.claude/agents/track-surveyor.md`, not this numbering; it
+reads the artifacts the PARENT steps produce.
 
 ## Layout check (no browser)
 
@@ -35,8 +32,8 @@ table and palette.
 node tools/track/survey-track.mjs <id> before
 ```
 
-Self-boots (no server). Writes `scratch/captures/survey-track/<id>/`:
-whole-track aerial plus **orbit** and **driver's-eye** at 0/25/50/75 %. EYE
+Self-boots (no server; fixed 1280×720, day/dry). Writes `scratch/captures/survey-track/<id>/`:
+whole-track aerial plus **orbit** and **driver's-eye** at its default fractions (script header). EYE
 shots expose floating props and gaps. Also emits the lateral ground-profile
 probe, auto-flagged:
 
@@ -53,7 +50,7 @@ probe, auto-flagged:
 lat 0, where the raycast falls through the ribbon (starts ~10 m out) to
 `floorY`, so a flat circuit flags a cliff at every frac (estoril: all false).
 A blank first capture is the pre-present frame. Real = a `--` sandwiched at
-lat 4-24 or a >1 m step in a lateral `apex-eval.mjs <id> "a.groundY(frac,lat)"`
+lat 4-24 or a >1 m step in a lateral `node tools/shot/apex-eval.mjs <id> "a.groundY(frac,lat)"`
 sweep. Record artefact-vs-real per flag in the hand-back.
 
 Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
@@ -62,7 +59,7 @@ Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 Parent numbers-only probe (still boots Chromium):
 `node .claude/skills/survey-track/ground-profile.mjs <id>`.
 One bespoke frame: **playwright-probe** `tools/shot/shot.mjs`. Deeper hooks:
-**agent-view** (`references/track-geometry.md`). `tests/specs/terrain-over-road.spec.js` catches the
+**agent-view** (its track-geometry reference, linked from SKILL.md). `tests/specs/terrain-over-road.spec.js` catches the
 terrain-over-road class.
 
 ### 3 · Edit
@@ -97,29 +94,15 @@ confirmed defect, intended slope or probe artifact rather than forcing zero flag
 
 ### 6 · PARENT test & ship
 
-- Geometry: `node tools/track/verify-track.cjs <id>` (default). Optional fleet: `node tools/ci/test-bg.mjs circuits`.
-- Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
-  baselines). Do not treat it as a gate. Intentional goldens:
-  `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.
-- `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) after any `js/*`/`css/*` edit.
+- Geometry: `node tools/track/verify-track.cjs <id>` is the local floor; no browser spec runs locally
+  (AGENTS.md rule 5). The `circuits` group proves a circuit edit on CI: the PR's selected shard picks
+  the touched circuit's foundation spec when one exists (`node tools/ci/select-specs.mjs --files
+  js/circuits/<id>.js` shows it; not every circuit has one: `ls tests/specs/*-foundation.spec.js`,
+  ids hyphenated). The whole group on the pushed branch: `node tools/ci/remote-group.mjs circuits`
+  (`docs/VERIFICATION.md` §By change).
+- No pixel-golden suite: `tests/manual/tracks-visual.spec.js` is retired. Compare before/after captures.
+- `node tools/gen/gen-shell.mjs --check` (shell/cache: `?v=dev`, no bump; check-changes bump reference, linked from SKILL.md) after any `js/*`/`css/*` edit.
 - Pick remaining groups with **check-changes**.
-
-## Worked example — Montreal floating trees
-
-Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
-`js/circuits/montreal.js`. Do not re-apply that fix blindly — survey first.
-
-1. Brief (`docs/tracks/montreal.md`): flat island; Olympic Basin flanks the
-   back straight; trees on park land.
-2. Survey showed roadside trees floating over a grey void; the probe sagged
-   underwater then went `--`. The ribbon only covered ~12–15 m then sagged
-   (−2.15 at 110 m); beyond it `terrainY` was `--`, so trees fell back to the
-   sunk `groundYAt`. Root cause: a flat island modelled with a *sloping*
-   terrain ribbon.
-3. Historical edit: `flatTerrain` def flag (wide, dead-level shelf out to
-   `terrainOuter`), mirrored in `groundYAt`, key added to the `LIST`
-   whitelist, slab aligned just under the ribbon.
-4. `verify-track montreal` clean; after-survey flag-free; `gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 ## Gotchas
 
@@ -127,7 +110,9 @@ Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
   driving boundary (**scenery-dress**).
 - Probe both sides — `ground-profile.mjs` reports whichever side has rendered
   terrain; a one-sided lake means one side reads `--` legitimately.
-- Intentional visual change ≠ regression — regenerate parked goldens; don't
-  chase the diff.
+- Intentional visual change ≠ regression — don't chase the diff.
 - One circuit per worker, picture-driven; parent campaigns may delegate
-  disjoint pairs in parallel through [campaign.md](campaign.md).
+  disjoint pairs in parallel (campaign.md).
+- Survey before re-applying a known terrain fix: a flat island modelled with a
+  *sloping* ribbon floats or sinks props; the cure is a level-shelf `def` flag
+  (e.g. `flatTerrain` + `terrainOuter`), which `js/circuits/montreal.js` already ships.

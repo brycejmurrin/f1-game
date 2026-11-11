@@ -66,6 +66,7 @@ function driveOutHarness({ soundOn = true } = {}) {
     G: { soundOn, teamIdx: 0, store: { get: () => ({ enabled: true, speed: 1 }) } },
     reducedMotion: () => false, endHome() {} };
   vm.createContext(c);
+  vm.runInContext(read("js/garage/crew-draw.js"), c, { filename: absSrc("js/garage/crew-draw.js") });
   vm.runInContext(read("js/garage/arrival.js"), c, { filename: absSrc("js/garage/arrival.js") });
   const cam = read("js/garage/setup-camera.js");
   const a = cam.indexOf("let driveOut = null;"), b = cam.indexOf("// THE ARRIVAL PREVIEW", a);
@@ -103,8 +104,8 @@ test("sound off: no engine at all", () => {
 test("rain light on rolling in or out at night or in the wet; the ctx carries the door to the scene", () => {
   const cam = read("js/garage/setup-camera.js");
   assert.match(cam, /context\.door = arriving && arriving\.active \? arriving\.door : 1;/);
-  assert.match(cam, /if \(arriving && arriving\.active && \(context\.night \|\| \/rain\|wet\|storm\/\.test\(String\(context\.weather \|\| ""\)\)\) && CarMesh\.drawRearLights\)\s*CarMesh\.drawRearLights\(arrivalCar, 1\);/);
-  assert.match(cam, /stopDriveOut\(\) \{ driveOut = null; driveOutEngine\(false\); \}/);
+  assert.match(cam, /if \(arriving && arriving\.active && GarageArrival\.rearLightOn\(arriving, context\.night \|\| \/rain\|wet\|storm\/\.test\(String\(context\.weather \|\| ""\)\)\) && CarMesh\.drawRearLights\)\s*CarMesh\.drawRearLights\(arrivalCar, 1\);/);
+  assert.match(cam, /stopDriveOut\(\) \{ driveOut = null; driveOutEngine\(false\);[^}]*sequenceLook\(null\); \}/);
 });
 
 /** A permissive stub element for the loading screen's paint(). */
@@ -125,6 +126,7 @@ function loadingHarness({ chat = "normal", speaking = false } = {}) {
     navigator: { getGamepads: () => [] }, matchMedia: () => ({ matches: false }), Log: { info() {}, warn() {} },
     GameAudio: { radioLeadS: () => 0.2, radioSting: (k, s) => stings.push([k, s]) } };
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
   const radio = { sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return 1.4; } };
   const screen = sb.LoadingScreen.create({ $, store: { get: (k, d) => (k === "radioChat" ? chat : d), set() {} },

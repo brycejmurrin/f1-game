@@ -1,0 +1,1 @@
+Fixed: the podium ceremony no longer reads "0 points" for every podium finisher; engineer radio cards queued during a long pause still play when you resume; the DAILY streak counts your own local days (a 3 pm lap and a 6 pm lap the next day in Los Angeles is a streak of 2), and the DAILY door shows today's circuit when the app comes back after midnight

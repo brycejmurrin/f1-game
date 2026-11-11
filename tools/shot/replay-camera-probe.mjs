@@ -11,7 +11,7 @@ import { withCapturePage, recordCapture, waitNextGameRender } from './capture-ru
 export function preflightReplayFixture(data, track) {
   if (!CIRCUITS.includes(track)) throw new Error('fixture requires a catalog track');
   const context = vm.createContext({ window: {}, console: { info() {}, warn() {}, error() {} } });
-  for (const path of ['js/core/log.js', 'js/core/mat4.js', 'js/data/teams.js', ...CIRCUITS.map((id) => `js/circuits/${id}.js`), 'js/data/real-race-tab.js', 'js/race/real-race.js']) {
+  for (const path of ['js/core/log.js', 'js/core/mat4.js', 'js/data/teams.js', ...CIRCUITS.map((id) => `js/circuits/${id}.js`), 'js/data/real-race-script.js', 'js/data/real-race-fetch.js', 'js/data/real-race-tab.js', 'js/race/real-race-pace.js', 'js/race/real-race.js']) {
     vm.runInContext(readFileSync(resolve(ROOT, path), 'utf8'), context, { filename: path, timeout: 1000 });
   }
   const Data = vm.runInContext('DataRealRace', context), Teams = vm.runInContext('Teams.LIST', context);
@@ -116,6 +116,8 @@ export async function exitReplayThroughUi(page) {
     await page.evaluate(() => window.__apex.hud(true));
     interactions.push(await verifiedControlClick(page, '#pausebtn'));
     interactions.push(await verifiedControlClick(page, '#pm-quit'));
+    // A real press younger than PauseOpts.ARM_MIN_MS is a swallowed double tap.
+    await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 }).catch(() => {});
     if (await page.locator('#pm-quit').isVisible()) interactions.push(await verifiedControlClick(page, '#pm-quit'));
     await page.waitForFunction(() => window.__apex.info().state === 'menu', null, { polling: 100, timeout: 15000 });
     exit = await page.evaluate(() => ({ info: window.__apex.info(), replay: RealRace.status(), camera: window.__apex.camera(), savedCamera: localStorage.getItem('apex26.camMode') }));
@@ -126,7 +128,7 @@ export async function exitReplayThroughUi(page) {
   }
   return { ...exit, interactions, hud: { before: hudBefore, restored: await page.evaluate(() => window.__apex.hud()) } };
 }
-export async function replayCameraProbe(opts, fixture) {
+async function replayCameraProbe(opts, fixture) {
   mkdirSync(opts.out, { recursive: true });
   let result;
   const samples = [];
@@ -134,6 +136,8 @@ export async function replayCameraProbe(opts, fixture) {
     result = await withCapturePage({ ...opts, compositorRecording: true }, async (page, context) => {
       context.phase = "fixture-module-load";
       // Builder is a local lazy module; no OpenF1 or Jolpica request is made.
+      await page.addScriptTag({ url: new URL('/js/data/real-race-script.js', page.url()).href });
+      await page.addScriptTag({ url: new URL('/js/data/real-race-fetch.js', page.url()).href });
       await page.addScriptTag({ url: new URL('/js/data/real-race-tab.js', page.url()).href });
       context.phase = "fixture-build";
       await page.evaluate(({ data, track }) => {

@@ -36,7 +36,7 @@ function load() {
   ctx.Particles = { rainShow() {} };
   ctx.GameAudio = { startRain() {}, stopRain() {} };
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js",
-                   "js/physics/tyre-model.js", "js/race/weather-arc.js", "js/race/forecast.js", "js/race/engineer.js"])
+                   "js/physics/tyre-model.js", "js/race/rain-cells.js", "js/race/weather-arc.js", "js/race/forecast.js", "js/race/engineer.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   return ctx;
 }

@@ -25,7 +25,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import vm from "node:vm";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
 import { stageSite } from "../../tools/desktop/stage.mjs";
 import { fileURLToPath } from "node:url";
 import { STAGE_DIRS, STAGE_EXCLUDE, STAGE_ROOT_FILES, stageExcluded, stagedNames } from "../../tools/desktop/stage-files.mjs";
@@ -179,6 +181,47 @@ test("the stamp maps every staged lazy file to its content hash; one changed fil
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// #4992: on a STAMPED shell ScriptLoader.integrity() refuses any lazy file with no `apex-lazy-integrity` key
+// (js/core/script-loader.js: a present map without the key returns false and the file is never fetched). bump-cache
+// hand-listed the rosters and missed LAZY_GARAGE_EXTERIOR and LAZY_DEV, so the garage's pit exterior never loaded
+// on the deployed site and nothing failed locally. The oracle is the RUNTIME, not the stamper: every file roster
+// shipped code reads off `ApexRoster.<NAME>` must be keyed in both maps of a stamped tree.
+test("a stamped tree keys every lazy file the runtime can request (apex-lazy-v and apex-lazy-integrity)", () => {
+  const M = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const names = new Set();
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = dir + "/" + e.name;
+      if (e.isDirectory()) walk(rel);
+      else if (rel.endsWith(".js")) for (const m of read(rel).matchAll(/\bApexRoster\.([A-Z][A-Z0-9_]*)/g)) names.add(m[1]);
+    }
+  };
+  walk("js");
+  const strings = (v) => (Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v).flat() : []).filter((f) => typeof f === "string" && f.endsWith(".js"));
+  // TRACK_VM / TRACK_WORKER_EXTRA name files a worker importScripts by its own key, never through ScriptLoader.
+  const rosters = [...names].filter((n) => /^(DEFERRED|LAZY_)/.test(n) && !/_EDGES$/.test(n)).sort();
+  for (const pin of ["DEFERRED", "LAZY_RACE", "LAZY_GARAGE_EXTERIOR", "LAZY_DEV"]) assert.ok(rosters.includes(pin), `shipped code reads ApexRoster.${pin}`);
+  const want = [...new Set(rosters.flatMap((n) => strings(M[n])))].sort();
+  assert.ok(want.includes("js/garage/exterior.js") && want.length > 100, "the rosters resolved to real file lists");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lazy-sri-"));
+  const put = (rel, body) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); };
+  try {
+    for (const rel of want) put(rel, fs.readFileSync(path.join(ROOT, rel)));
+    const entry = "js/" + "game" + ".js";
+    put(entry, "// shell tag\n");
+    put("index.html", `<head>\n<meta name="apex-build" content="7">\n<script src="${entry}?v=dev"></script>\n</head>\n`);
+    put("version.json", `{ "build": 7 }\n`);
+    const r = spawnSync("node", ["tools/ci/bump-cache.mjs", "--apply", "--at", "4100", "--json", "--root", dir], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+    const staged = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    const mapOf = (id) => JSON.parse(staged.match(new RegExp(`<script type="application/json" id="${id}">([\\s\\S]*?)</script>`))[1]);
+    const v = mapOf("apex-lazy-v"), sri = mapOf("apex-lazy-integrity");
+    const unkeyed = want.filter((rel) => !/^[0-9a-f]{12}$/.test(v[rel] || "") || !/^sha256-[A-Za-z0-9+/]{43}=$/.test(sri[rel] || ""));
+    assert.deepEqual(unkeyed, [], "ScriptLoader refuses these on the deployed site: no version or integrity key");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("the repo shell carries no lazy map (it is stamped at deploy only)", () => {
   assert.doesNotMatch(html, /id="apex-lazy-v"/);
 });
@@ -201,7 +244,7 @@ test("real stageSite preserves manifest-declared locale catalogs and SW locale b
     for (const locale of Object.keys(manifest)) {
       put(`locales/${locale}.json`, locale === "zz" ? '{"hello":"Fixture é"}\n' : fs.readFileSync(path.join(ROOT, `locales/${locale}.json`)));
     }
-    stageSite(dest, { root });
+    stageSite(dest, { root, build: false });
     const targets = new Set([...SW_LOCALES, "locales/manifest.json", ...Object.keys(manifest).map((locale) => `locales/${locale}.json`)]);
     for (const rel of targets) {
       assert.deepEqual(fs.readFileSync(path.join(dest, rel)), fs.readFileSync(path.join(root, rel)), rel);
@@ -230,6 +273,42 @@ test("no shipped file references a STAGE_EXCLUDE path", () => {
   assert.deepEqual(offenders, [], "a shipped file names an excluded path: stage it again or drop the reference");
 });
 
+// BUILT, NOT COMMITTED (2026-10-28; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): a served generator output that
+// git ignores reaches the live site only because stageSite renders it from source. Pin both halves.
+test("every BUILT_PATHS file is gitignored, untracked, and rendered into the staged site from source", async () => {
+  const { BUILT_PATHS } = await import("../../tools/lib/generated-paths.mjs");
+  const git = (...a) => spawnSync("git", a, { cwd: ROOT, encoding: "utf8" });
+  for (const p of BUILT_PATHS) {
+    assert.equal(git("check-ignore", "-q", "--no-index", "--", p).status, 0, `${p} must be in .gitignore`);
+    assert.equal(git("ls-files", "--", p).stdout.trim(), "", `${p} must not be tracked`);
+    assert.ok(STAGE_DIRS.includes(p.split("/")[0]), `${p} must sit under a staged directory`);
+  }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "built-stage-"));
+  const root = path.join(tmp, "source");
+  try {
+    for (const name of STAGE_ROOT_FILES) { fs.mkdirSync(root, { recursive: true }); fs.writeFileSync(path.join(root, name), "fixture\n"); }
+    for (const name of STAGE_DIRS) fs.mkdirSync(path.join(root, name), { recursive: true });
+    stageSite(path.join(tmp, "fixture-site"), { root, build: false });
+    for (const p of BUILT_PATHS) assert.equal(fs.existsSync(path.join(tmp, "fixture-site", p)), false, `an explicit copy-only fixture builds nothing: ${p}`);
+    // A second source root must supply its own manifest and circuits, even if a
+    // stale local build product is present. The module checkout's roster differs.
+    fs.mkdirSync(path.join(root, "tools"), { recursive: true });
+    fs.mkdirSync(path.join(root, "js/circuits"), { recursive: true });
+    fs.mkdirSync(path.join(root, "js/track"), { recursive: true });
+    fs.writeFileSync(path.join(root, "tools/manifest.cjs"), 'module.exports = { CIRCUITS: ["chosen"], circuitPath: id => "js/circuits/" + id + ".js" };\n');
+    fs.writeFileSync(path.join(root, "js/circuits", "chosen.js"), 'window.TrackDefs.push({ id: "chosen", name: "Selected source", country: "ZZ", path: [[0, 0], [1, 1]] });\n');
+    fs.writeFileSync(path.join(root, "js/track/circuit-meta.js"), "stale output from selected root\n");
+    stageSite(path.join(tmp, "site"), { root });
+    const sandbox = { window: { TrackDefs: [] } };
+    vm.runInNewContext(fs.readFileSync(path.join(tmp, "site/js/track/circuit-meta.js"), "utf8"), sandbox, { filename: path.join(tmp, "site/js/track/circuit-meta.js") });
+    assert.equal(sandbox.window.TrackDefs.length, 1);
+    assert.equal(sandbox.window.TrackDefs[0].id, "chosen");
+    assert.equal(sandbox.window.TrackDefs[0].name, "Selected source");
+    assert.equal(sandbox.window.TrackDefs[0].path, undefined, "staging renders metadata, not the full circuit payload");
+
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
   assert.equal(stageExcluded("assets/atlases"), true);
   assert.equal(stageExcluded("assets/atlases/atlas-arch-albedo.png"), true);
@@ -247,7 +326,7 @@ test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
     put("assets/atlases/atlas-arch-albedo.png");
     put("assets/atlases/README.md");
     put("assets/pack/mat-albedo-128.png");
-    stageSite(dest, { root });
+    stageSite(dest, { root, build: false });
     assert.equal(fs.existsSync(path.join(dest, "assets/atlases")), false);
     assert.equal(fs.existsSync(path.join(dest, "assets/pack/mat-albedo-128.png")), true);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

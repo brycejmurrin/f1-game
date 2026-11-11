@@ -134,9 +134,10 @@ const GripSteer = (function () {
     return _out.delta;
   }
 
+  // CR / TAU / V_LO / V_HI / frontPeakX stay file-local (apply + forPlayer only).
   return Object.freeze({
     assistK, setLevel, labelOf, apply, forPlayer,
     level: () => level, k: () => k,
-    TARGET, CR, TAU, V_LO, V_HI, VX_FLOOR,
+    TARGET, VX_FLOOR,
   });
 })();

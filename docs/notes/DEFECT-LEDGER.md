@@ -1,9 +1,18 @@
 # Apex 26 — defect ledger
 
+Summary: The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8).
+
+> **Historical record — nothing updates this file.** It has no owner and its newest
+> entry is dated 2026-10-14; rows below may be stale or fixed. Open defects live in
+> GitHub issues with the `bug` label. Corrected 2026-11-10: the "No CSP" row (index.html
+> carries one) and the `Career.isOwned` mention (the function is `Career.owned(teamId)`).
+
 > Carved out of `ARCHITECTURE-REVIEW.md` §7-8 on 2026-09-03 (tree
 > restructure Phase 5). The standing assessment — the founding bet, the physics
 > authority, the `G` façade, the renderer seam, the lessons — stays there; this
-> file is the register of what is still open and what is queued behind it.
+> file is the historical record of fixed and closed findings. Open defects are
+> GitHub issues labelled `bug` ([BUGS.md](../BUGS.md)); an "OPEN" below is as of
+> its dated entry, not a claim about the current tree.
 > Everything already fixed is in [`../archive/2026-08-architecture-review-journal.md`](../archive/2026-08-architecture-review-journal.md).
 
 ## 7. Open defects
@@ -15,7 +24,8 @@ journal; this is what remains.
 Each reproduced in the VM or a unit harness first (probes in `scratch/hunt-*`).
 - Classification put every FLAGGED car above every RUNNING one, so a lapped
   car that crossed in the ~2 s before results beat lead-lap cars still on their
-  final lap (`RaceControl.classifyOrder`, `race-control.test.mjs`), and the sheet
+  final lap (`RaceControl.classifyOrder`, since renamed `RaceControl.classify`
+  in `js/race/race-control.js`; `race-control.test.mjs`), and the sheet
   said "+1 LAP" on every lead-lap car still running (`results-sheet.js`).
 - THROTTLE = LATCH dropped on the window `touchend` net after the very tap that
   set it — LATCH was HOLD on every phone (`throttle-latch.test.mjs`). A BOUND
@@ -44,8 +54,10 @@ Each reproduced in the VM or a unit harness first (probes in `scratch/hunt-*`).
   (player |dx| 8.1 m -> < 1.5 m per step).
 - OPEN: The AI brakes by `excess / pace`, so at OVERALL SPEED 1.34 it
   overshoots corners (pinned the other way by ai-drive.test's pace-invariance
-  case — needs a decision). An AI wedged behind a PARKED player is never
-  rescued (`!unstuckActive` gates the rescue timer).
+  case — needs a decision). CLOSED (later): an AI wedged behind a PARKED player
+  was never rescued (`!unstuckActive` gated the rescue timer); the rescue now
+  arms once dig-out has run past its budget (`AiDrive.digOutEscalated`, latched
+  by `AiDrive.digOutHeld`, `js/physics/ai-drive.js`).
 
 **2026-09-22 (bug hunt) — UI, audio, lighting: seven defects. FIXED.**
 - An armed KEY-REBIND slot survived leaving settings (BACK/CLOSE/RESUME): the
@@ -548,7 +560,9 @@ that same "GUARANTEED not to clip barriers" contract being found "~0.9 m
 optimistic" once before, for broadleaf — and that is its own change with its own
 sweep. Parked in `tests/unit/circuit-vocab.test.mjs`'s `KNOWN_UNHANDLED` with
 these numbers attached, so the guard still fails on a NEW typo and this one
-cannot be quietly forgotten.
+cannot be quietly forgotten. CLOSED (2026-09-24, S2): the defs moved pine→fir
+with `canopyR("fir")` aligned to the mesh; `KNOWN_UNHANDLED` in
+`circuit-vocab.test.mjs` is empty and no def carries `tree: "pine"`.
 
 **The process lesson is the durable half.** `deploy.mjs --gate-only` passed this
 batch 21 suites green, and the regression was caught only by CI's per-circuit
@@ -908,8 +922,10 @@ now transformed). Qatar's verges were two-thirds footprint-rejected, Baku's
 kit fired the swapped-dimensions warning 13× per boot, Imola's ground read was
 half a lap away, four circuits emitted-then-culled up to 295 backdrops per
 build. `api.K` and `api.lapBounds()` replace 37 local `K` helpers and 30
-centroid loops; `bakedModels` left the contract (112 members). Madrid, Estoril
-and Indianapolis carried wrong `lengthKm` (Madrid raced 56 laps instead of 57).
+centroid loops; `bakedModels` left the contract (112 members). Estoril and
+Indianapolis carried wrong `lengthKm`. Madrid's was NOT fixed then (5.47 still
+derived 56 laps, not the 57 it races); fixed 2026-11-10: an authored `gpLaps: 57`
+(`lengthKm` stays 5.47 until a voice re-bake: the announcer reads it aloud).
 
 *UI / PWA / data / storage.* The service worker returned a browser error page
 for any navigation that lost a 3 s race while online; a primitive ghost blob
@@ -1536,7 +1552,7 @@ on the 08-18 perf-hunt board, not this register.
   `sheetshape` thresholds via `localBox` (clientWidth, engine-safe). **Data hub
   now scales:** `.dh-card { zoom: var(--ui-scale) }` with `--svhz`-based heights;
   telemetry scrubber uses `CssZoom.viewportRect`.
-- **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
+- ~~**No CSP.**~~ FIXED: `index.html` carries a `Content-Security-Policy` `<meta>` (written by `tools/gen/gen-shell.mjs`, `CSP_DIRECTIVES`; corrected 2026-11-10).
 
 ### 2026-09-16 — a guard suite that EDITED the thing it guards (ratchets)
 
@@ -1778,7 +1794,9 @@ Recorded, not fixed (PLAUSIBLE or a design call):
 - **`sw.js` activate deletes every other cache generation** while the old
   shell is still running: its lazy fetches (scenery, data, net, deferred
   backends) miss the cache; offline after the swap a circuit builds bare.
-  Needs a two-generation repro before changing the sweep.
+  Needs a two-generation repro before changing the sweep. CLOSED (#2194):
+  `activate` and the opportunistic sweep in `sw.js` keep exactly one prior
+  SETTLED generation (`INSTALL_SETTLED_URL` marker) while a window client remains.
 - **Storage quota is shared** by ghost (uncapped, ~40 KB/track), six career
   slots and the API cache; only the API cache evicts, and only its own keys.
 - **Ten direct `localStorage.setItem` sites** bypass `store.write`
@@ -2662,8 +2680,8 @@ Deferred with reasoning, none lost:
   **never existed in this branch's history** (they live only on a non-ancestor
   commit — the catalogue was written against a different lineage), and its claim
   that `assets.js` consumes `gltf.js` is false today. Most entries resolved to
-  ALREADY-REMOVED, LIVE, or contract-pinned: `Career.isOwned` is live through
-  three skill docs' console use, `TrackSpline.centerline()` and the authored-
+  ALREADY-REMOVED, LIVE, or contract-pinned: `Career.isOwned` was cited by three
+  skill docs' console use but does not exist (it is `Career.owned(teamId)`; corrected 2026-11-10), `TrackSpline.centerline()` and the authored-
   `segs` path are dormant **by design** (eval-time destructure, 25 circuits
   carry `segs:`, the new-track skill documents it), and the SRTM elevation
   branch is a guarded feature slot with a shipping bake tool. What was genuinely
@@ -3899,6 +3917,10 @@ moved. Any later frame fix on monza re-blesses the same way.
 - **Start line / grid boxes / pit paint — FIXED.** `_startBias` [-1, -2] was
   weaker than the road's [-8, -16], so the paint sat behind the asphalt beyond
   ~5 m on every circuit. Now [-12, -24]; grid-boxes.test.mjs pins it.
+  (Superseded 2026-09-24: -12 buried the cars on the grid boxes, so the road
+  lost its depthBias and `_startBias` in `js/game.js` is now [-2, -4]; pinned by
+  `gfx-backend-canary.test.mjs` "the startline mesh beats the unbiased road
+  without burying the cars".)
 - **suzuka crossover pillar in the lower road — FIXED.** A RAW (unguarded)
   pillar stood 4 m inside the lower carriageway; pillars whose footprint is
   onTrack are skipped. OPEN: an audit for solids spanning the whole
@@ -3922,6 +3944,11 @@ moved. Any later frame fix on monza re-blesses the same way.
   behind the garages on +1; suzuka's pits are on -1 (grandstand guides), so its
   main stand moved to +1 and race control/hospitality behind the -1 garages —
   which also un-reds suzuka-foundation.spec (its crown was superseded).
+  **SUZUKA REOPENED AND RE-FIXED 2026-11-10 (W12):** the -1 call was wrong. The
+  FIA 2026 Japanese GP event document (circuit map v8 + pit-lane drawing,
+  fia.com 2026_japanese_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_battery_containment_area_and_red_zone.pdf)
+  puts the pit lane and garages on the driver's RIGHT (+1, the Esses side);
+  `pit.side` is now 1 and the scenery mirrored (`PIT = 1, STAND = -PIT`).
 - Baselines: clip lowered on 24 circuits, coplanar on 3; nothing went up.
 - OPEN, next campaign (plan workstream B): props flush on terrain, the coplanar
   FIGHT_MAX 150 -> 300 m window (~520 spots), the road ribbon folding on corner

@@ -123,3 +123,25 @@ test("a non-perspective eye falls back to eye 0 rather than culling with a broke
   ctx.XrBoot.applyEyes(frame, [0, 0, 0], [0, 0, 1], [0, 1, 0]);
   assert.equal(frame.viewProj, ctx.eyes[0].viewProj);
 });
+
+test("infinite-far perspective still builds a finite union cull (xr-rig clamps far)", () => {
+  const ctx = load();
+  // OpenGL infinite-far: P[10] = -1, P[14] = -2n → fr = P[14]/(P[10]+1) is non-finite.
+  function infProj(lDeg, rDeg, uDeg, dDeg, n = 0.1) {
+    const t = (d) => Math.tan(d * Math.PI / 180) * n;
+    const l = -t(lDeg), r = t(rDeg), top = t(uDeg), b = -t(dDeg);
+    const m = new Float32Array(16);
+    m[0] = 2 * n / (r - l); m[5] = 2 * n / (top - b);
+    m[8] = (r + l) / (r - l); m[9] = (top + b) / (top - b);
+    m[10] = -1; m[11] = -1; m[14] = -2 * n;
+    return m;
+  }
+  const eyes = eyesFor(ctx, [
+    { pose: pose(-0.0315), proj: infProj(52, 42, 42, 50) },
+    { pose: pose(0.0315), proj: infProj(42, 52, 42, 50) },
+  ]);
+  const out = new Float32Array(16);
+  assert.equal(ctx.XrRig.unionViewProjTo(out, eyes), true, "infinite far must not refuse the union");
+  assert.ok(Array.from(out).every(Number.isFinite), "union viewProj stays finite");
+  assert.ok(out.some((v) => v !== 0), "union wrote a non-zero matrix");
+});

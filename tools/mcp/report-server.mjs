@@ -128,7 +128,7 @@ function shell(req, res, url, root, token) {
   return true;
 }
 
-export function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_BYTES }) {
+function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_BYTES }) {
   let acceptedBytes = 0;
   // Bytes held by requests that have started but have not yet committed. Without
   // this reservation, concurrent uploads all compare against the same old

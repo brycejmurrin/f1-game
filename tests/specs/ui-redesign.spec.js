@@ -101,6 +101,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       heroH: hero.height,
       mapInsideHero: r.top >= hero.top - 1 && r.bottom <= hero.bottom + 1 && r.left >= hero.left - 1 && r.right <= hero.right + 1,
       skew: Math.abs(bufferAspect - boxAspect) / Math.max(bufferAspect, boxAspect, 0.001),
+      sectionScroll: (() => { const s = document.getElementById("sel-track-section"); return s.scrollHeight - s.clientHeight; })(),
+      filterInTitleRow: (() => { const f = document.getElementById("sel-track-filter"), h = document.querySelector("#sel-inner > .sheet-head"); return !!f && Math.abs(f.getBoundingClientRect().top - h.getBoundingClientRect().top) < 12; })(),
     };
   });
   // 852×393 is under #sel-inner's --compact-at 480; there is no pane to pair.
@@ -112,6 +114,9 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(initialSelect.heroH, "the hero keeps a real still slot").toBeGreaterThan(80);
   expect(initialSelect.mapInsideHero, "the outline is drawn inside the hero").toBe(true);
   expect(initialSelect.skew, "the outline canvas is not CSS-squashed").toBeLessThan(0.05);
+  // #5153 gap 13 (UI contract 2026-11-06 §4.5): the phone card's hero never scrolls; the filter chips share the title row.
+  expect(initialSelect.sectionScroll, "the hero section is not a scroller").toBeLessThanOrEqual(1);
+  expect(initialSelect.filterInTitleRow, "the filter row shares the title row").toBe(true);
   // Match a landscape iPhone's notched safe area at a larger user-selected UI
   // size. The toolbar must stay one pannable row and the strip must keep at
   // least one whole tile in view before the player scrolls anything.
@@ -202,9 +207,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(searched.hidden).toBeGreaterThan(20);
   expect(searched.emptyHidden, "empty hidden").toBe(true);
 
-  // Short landscape select: the body is not a scroller; the strip stays a
-  // sideways strip; the hero section is the ONLY vertical scroll region and the
-  // foot spans the sheet.
+  // Short landscape select (the phone card, #5153 gap 13): the body is not a
+  // scroller; the strip stays a sideways strip; the hero section is clipped and
+  // NEVER scrolls (the numbers ride on the still), so nothing in the sheet
+  // scrolls vertically; the foot spans the sheet.
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -247,10 +253,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(["auto", "scroll"]).not.toContain(stackedSel.bodyOY);
   expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOX);
   expect(stackedSel.listOY).toBe("hidden");
-  expect(["auto", "scroll", "overlay"]).toContain(stackedSel.sectionOY);
-  // Whatever scrolls vertically here is the hero section (or its numbers
-  // column) — never the body, never the strip.
-  expect(stackedSel.vertical.every((id) => id === "sel-track-section" || id === "sel-preview-info"), JSON.stringify(stackedSel.vertical)).toBe(true);
+  expect(stackedSel.sectionOY, "the hero section is clipped, not a scroller (UI contract 2026-11-06 rule 3)").toBe("hidden");
+  // Nothing scrolls vertically on the phone card — not the body, not the strip,
+  // not the hero.
+  expect(stackedSel.vertical, "no vertical scroller anywhere in the picker").toEqual([]);
   expect(stackedSel.stripTop).toBeLessThan(stackedSel.heroTop);
   expect(stackedSel.footW / stackedSel.innerW).toBeGreaterThan(0.95);
   expect(stackedSel.active).toBe(true);
@@ -424,6 +430,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
     "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress",
+    "pm-claude-link", // #5259: the phone-bridge door, built at boot as the LAST hub tile (not a settings page)
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
@@ -757,8 +764,11 @@ test("garage categories separate performance from finishing and setup", async ({
   await expect(page.locator("#carsetup")).toBeVisible();
   const rows = page.locator("#cs-tabs .cs-tab-row");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toHaveAttribute("aria-label", "Performance categories");
-  await expect(rows.nth(1)).toHaveAttribute("aria-label", "Finishing and setup categories");
+  await expect(rows.nth(0)).toHaveAttribute("data-tier", "Performance categories");
+  await expect(rows.nth(1)).toHaveAttribute("data-tier", "Finishing and setup categories");
+  // A tablist owns only tabs: the tier rows are layout, so every tab keeps its tablist parent.
+  await expect(rows.nth(0)).toHaveAttribute("role", "none");
+  await expect(page.getByRole("tablist", { name: "Garage categories" }).getByRole("tab")).toHaveCount(15);
   await expect(rows.nth(0)).toContainText("ENGINE");
   for (const label of ["FLOOR", "COCKPIT", "WHEELS", "SETUP", "LIVERY"])
     await expect(rows.nth(1)).toContainText(label);
@@ -1116,9 +1126,10 @@ test("data hub constructor names stay readable in phone landscape", async ({ pag
   const drivers = teams.flatMap(([team, g1, f1, c1, g2, f2, c2], i) => [
     { position: String(i * 2 + 1), points: String(300 - i * 40), wins: "1", Driver: { givenName: g1, familyName: f1, code: c1 }, Constructors: [{ name: team }] },
     { position: String(i * 2 + 2), points: String(280 - i * 40), wins: "0", Driver: { givenName: g2, familyName: f2, code: c2 }, Constructors: [{ name: team }] }]);
+  // `*`: api.js asks every Jolpica list for `?limit=100` (and pages by offset).
   const cons = teams.map(([team], i) => ({ position: String(i + 1), points: String(580 - i * 80), wins: String(4 - i), Constructor: { name: team } }));
-  await page.route("**/driverstandings.json", (r) => r.fulfill({ contentType: "application/json", body: standings("DriverStandings", drivers) }));
-  await page.route("**/constructorstandings.json", (r) => r.fulfill({ contentType: "application/json", body: standings("ConstructorStandings", cons) }));
+  await page.route("**/driverstandings.json*", (r) => r.fulfill({ contentType: "application/json", body: standings("DriverStandings", drivers) }));
+  await page.route("**/constructorstandings.json*", (r) => r.fulfill({ contentType: "application/json", body: standings("ConstructorStandings", cons) }));
   await page.setViewportSize({ width: 844, height: 390 });
   await waitReady(page);
   await page.click("#mb-data");

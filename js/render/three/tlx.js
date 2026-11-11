@@ -18,6 +18,8 @@ const TLX = (function () {
     anim.stop(); anim.setContext(pump); anim.start();   // start() ticks once now and parks the next tick in the pump
     return pump;
   }
+  // drawDrivingLine's `opts.cols` fallback (F1 GREEN: onPace, lift, brake; DrivingLine.PALETTES).
+  const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
   let _lastFailure = null, _presentWarned = false;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
@@ -64,6 +66,7 @@ const TLX = (function () {
   function releaseTexSource(t) {
     if (!t) return false;
     t.onUpdate = null;
+    t.__tlxUp = true;   // has a GPU copy: refillTexture() need not upload early
     const img = t.image;
     if (!img || (typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap)) return false;
     const stand = texStandIn();
@@ -170,10 +173,41 @@ const TLX = (function () {
     attr.needsUpdate = true;
   }
 
+  // B8 LAB TIER (Bryce 2026-10-30, "B8 opt-in"; docs/notes/TLX-WEBGPU-PERF-2026-10-30.md): a lighter
+  // tier for three's WebGL2 leg on a phone (the WebGPU fallback an iPhone 14 ran at 42 vs 60 fps).
+  // OFF unless the URL carries ?lab=tlxLite (comma list, read once; no storage key), and a no-op on
+  // WebGPU or a desktop. Every lever is a value the GRAPHICS: LOW / autoShed path already produces.
+  const LITE = Object.freeze({ dprCap: 1.25, sunSize: 512, bloomLevels: 2, ssrQuality: 2 });
+  let _labs = null;
+  function labOn(name) {
+    if (_labs === null) {
+      _labs = [];
+      try {
+        const v = new URLSearchParams(location.search).get("lab");
+        if (v) _labs = v.split(",").map((s) => s.trim()).filter(Boolean);
+      } catch (_) { /* no location (node harness) or a bad query: no labs */ }
+    }
+    return _labs.indexOf(name) >= 0;
+  }
+  function liteTier(webgl2, phone) { return labOn("tlxLite") && !!webgl2 && !!phone ? LITE : null; }
+  // LAB DPR cap (phone perf hunt 2026-11-10): ?lab=dpr2 or ?lab=dpr3 replaces the tier's cap; no lab returns it unchanged.
+  function labDprCap(base) { return labOn("dpr3") ? 3 : (labOn("dpr2") ? 2 : base); }
+  // Per present, on the caller's opts (pinSoftwareRaceShed's precedent): idempotent, so a reused opts is safe.
+  function liteOpts(o) {
+    if (!o) return o;
+    o.ssao = 0; o.contact = 0; o.godray = 0; o.lampVol = 0; o.flareMul = 0;   // lookPostShed's zeros, bloom kept
+    o.bloomLevels = o.bloomLevels > 0 ? Math.min(o.bloomLevels | 0, LITE.bloomLevels) : LITE.bloomLevels;
+    o.grLite = true;
+    o.carReflect = 0;                                                            // tier >= 2
+    o.ssrQuality = Math.max(o.ssrQuality | 0, LITE.ssrQuality);                  // tier >= 3 march
+    return o;
+  }
+
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
-    // three renderer before same-page GLX fallback claims #game.
+    // three renderer before the GLX fallback: same page when #game was never
+    // claimed, else one claim-fail reload (renderer-boot.js reloadOnceIntoGlx, #4594/#4851).
     let _abortDisplay = null, _abortRenderer = null;
     // Undo for the observers/listeners create() attaches, run by the catch: a create that throws after init
     // (an initOwner superseded mid-boot) would otherwise leave them on a dead backend.
@@ -205,10 +239,12 @@ const TLX = (function () {
 
       THREE.ColorManagement.enabled = false;
 
-      // The vendored bundle carries TWO local patches (swizzle omission for
-      // Chromium 141, the #33952 bind-group-leak backport) — recipe and
-      // rationale in vendor/three-0.186.1/PATCHES.md, guarded by
-      // gfx-backend-canary. Re-apply both on any vendor bump.
+      // The vendored bundle carries local patches (TEN on r187: ids 1, 4, 5,
+      // 11, 12, 13, 14, 17, 18, 19 — vendor/three-0.187.0/MANIFEST.json is the
+      // list), applied by tools/gen/vendor-three.mjs from
+      // vendor/three-patches/patches.mjs; rationale in
+      // vendor/three-0.187.0/PATCHES.md, shapes pinned by gfx-backend-canary.
+      // A bump re-runs the tool; a needle that moved stops it.
 
       // WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
       // pin WebGPU, UNSET = AUTO. AUTO may land on three's WebGL2 — that
@@ -244,12 +280,20 @@ const TLX = (function () {
       // to three WebGL2 once any detected WebGPU failure (init throw, device
       // lost x3, early GPU errors, a refused tab) has happened here. The value
       // is the reason; RESET RENDERER (renderer-picker.js) removes it.
+      // The latch EXPIRES: stamped "<ms>|<Safari version>|<reason>", it holds 7 days and only
+      // on the WebKit build that failed. A Safari update is what usually fixes WebGPU, and an
+      // unstamped (older) latch re-probes once, so a phone is never parked on the slower
+      // WebGL2 leg for good by one bad boot (Bryce: "WebGL as a backup is slow").
+      const _webkitKey = (ua.match(/Version\/[\d.]+|OS \d+[_\d]*/g) || []).join(",");
       const _webkitStayGL = isWebKit && (function () {
-        try { return !!localStorage.getItem("apex26.tlxWebKitGL"); } catch (_) { return false; }
+        try {
+          const m = /^(\d+)\|([^|]*)\|/.exec(localStorage.getItem("apex26.tlxWebKitGL") || "");
+          return !!m && Date.now() - +m[1] < 7 * 864e5 && m[2] === _webkitKey;
+        } catch (_) { return false; }
       })();
       const _latchWebKitGL = (why) => {
         if (!isWebKit || _glPin === "0" || _glPin === "1") return;
-        try { localStorage.setItem("apex26.tlxWebKitGL", String(why).slice(0, 200)); } catch (_) { /* the tab latch still holds */ }
+        try { localStorage.setItem("apex26.tlxWebKitGL", (Date.now() + "|" + _webkitKey + "|" + String(why)).slice(0, 200)); } catch (_) { /* the tab latch still holds */ }
       };
       // Software WebGPU never composites a visible swapchain — AUTO keeps
       // three's WebGPU backend and 2D-blits the LDR target (same as WGX)
@@ -360,7 +404,8 @@ const TLX = (function () {
             // read (measured in-container: byte-identical captures across a
             // camera move, awaitSoftPresent never resolving again). Content
             // gates key off this flag too. Never on a mobile UA.
-            _softAdapter = !_phoneHw && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
+            // GPUAdapterInfo.isFallbackAdapter (Chrome 136+) first: Chrome 140 removed the GPUAdapter attribute.
+            _softAdapter = !_phoneHw && !!((info && info.isFallbackAdapter) || ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
@@ -551,9 +596,16 @@ const TLX = (function () {
           // Phase 0 XR uses XRWebGLLayer + manual per-eye present — not three's
           // multiview ArrayCamera path. Keep multiview off: three #32538
           // (right-eye projection) and #32151 (Quest flicker) are still open,
-          // and perCameraCulling is absent from vendored 0.186.0.
+          // and perCameraCulling is absent from the vendored r187 bundle.
           multiview: false,
         });
+        // r187's WebGPURenderer arms its OWN WebGL2 fallback (`getFallback`): Renderer.init() catches a failed
+        // WebGPUBackend.init() — no adapter, requestDevice refused, no navigator.gpu — and swaps in a WebGLBackend that
+        // binds #game itself with `alpha: true`, so the AUTO retry below never ran and forceWebGL stayed false. AUTO
+        // disarms it: the failure throws into that retry, which binds #game with the opaque context (#game is still
+        // untouched — WebGPUBackend.init() never calls getContext). A WebGPU pin keeps three's swap; the post-init
+        // check below catches it (and any other swap) and corrects the flags.
+        if (!forceWebGL && _glPin !== "0" && "_getFallback" in renderer) renderer._getFallback = null;
         renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
@@ -692,9 +744,6 @@ const TLX = (function () {
               _dev.__apexShaderHook = true;
             } catch (_) { /* optional hook */ }
           }
-          if (_liteGpu) {
-            try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
-          }
         }
         return { renderer: renderer, ownGL: glCtx };
       }
@@ -717,6 +766,16 @@ const TLX = (function () {
         } else {
           throw e;
         }
+      }
+      // A WebGL backend under forceWebGL=false is three's own swap (see bootRenderer): under a WebGPU pin, or a
+      // build whose fallback the disarm missed. The canvas is bound by then and cannot be re-bound opaque, but every
+      // leg decision keyed on forceWebGL (_softBlit, sceneSamplesFor, the refusal's toGlx) must take the WebGL2 leg.
+      let _initSwapGL = false;
+      if (!forceWebGL && renderer.backend && renderer.backend.isWebGLBackend) {
+        _initSwapGL = true;
+        forceWebGL = true;
+        try { Log.warn("gfx", "[TLX] three swapped in its WebGL2 backend during init (WebGPU failed); pin", _glPin); } catch (_) { /* Log optional */ }
+        _latchWebKitGL("WebGPU init fell back inside three");
       }
       _abortRenderer = renderer;
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
@@ -987,10 +1046,36 @@ const TLX = (function () {
       // WebGL renderer string — never from softPresent/headless UA (#3601).
       const softwareGL = !!_softAdapter
         || (!!(renderer.backend && renderer.backend.isWebGLBackend) && detectSoftwareGL());
+      // Half-res race presents on a software rasterizer. Measured 2026-10-29 on
+      // three's WebGL2 leg (apex26.tlxForceGL=1, SwiftShader, Bahrain, 844×390):
+      // a full-res frame left the next rAF ~12 s out (worst ~29 s). Half
+      // resolution plus the lowest graphics rung (no bloom, shafts, or SSR)
+      // brought the render span down to ~6.2 s on the same view. Webdriver and the
+      // game VM stay full-res (pixel specs). apex26.swRaceShed=1 forces the
+      // cut, =0 refuses it. Re-applied on every world present: race-entry
+      // soften restores the saved full scale when the cover lifts. Auto-res
+      // turns off once so the governor cannot climb back into that 12 s frame.
+      // Hand-set. "1" forces the software-GL race cut under automation; "0" keeps
+      // full resolution. Nothing in the game writes it — the probe and a player do.
+      function setSwRaceShed(on) {
+        try {
+          if (on) localStorage.setItem("apex26.swRaceShed", "1");
+          else localStorage.removeItem("apex26.swRaceShed");
+        } catch (_) { /* blocked storage */ }
+      }
+      function softwareRaceShedOn() {
+        let knob = null;
+        try { knob = localStorage.getItem("apex26.swRaceShed"); } catch (_) { /* blocked storage: the auto gate still applies */ }
+        const nav = typeof navigator !== "undefined" ? navigator : null;
+        return typeof PostCommon !== "undefined" && PostCommon.softwareRaceShed
+          ? !!PostCommon.softwareRaceShed(!!softwareGL, nav, knob) : false;
+      }
+      const _swRaceShed = softwareRaceShedOn();
+      let _swRaceShedPinned = false;
       try {
         if (canvas && typeof canvas.setAttribute === "function") {
           const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
-          canvas.setAttribute("data-engine", "three.js r185 " + api);
+          canvas.setAttribute("data-engine", engineLabel(THREE, api));
         }
       } catch (_) { /* three already stamped a label; ours is best-effort */ }
       try {
@@ -1191,7 +1276,13 @@ const TLX = (function () {
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
-      let DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
+      // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
+      const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
+      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // a phone is ALWAYS mobileTier (glx-facade.js): no setting lifts this 1.5 cap, only the URL lab below (docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F1)
+      // LAB ?lab=dpr2 / ?lab=dpr3 (labOn above: URL only, one boot, no storage key) replaces the cap, so what a sharper
+      // phone picture costs per frame can be measured on the phone itself and by tools/gfx/live-frame-census.mjs --sweep
+      // (docs/notes/PHONE-PERF-MEASURE-2026-11-10.md). No lab: the tier's cap, unchanged.
+      if (!_lite) DPR_CAP = labDprCap(DPR_CAP);
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present: the
@@ -1321,8 +1412,8 @@ const TLX = (function () {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
-            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"),
-            isWarming: () => !!_warmPending,   // releaseGeometry queues its park while a compile holds the casters
+            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : 0,
+            isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
           });
         }
       } catch (e) {
@@ -1478,6 +1569,7 @@ const TLX = (function () {
       function prepareMirrorTarget(w, h, forWarm) {
         if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
         const lv = _mirLevels(w, h);
+        if (!mirRT || mirRT.width !== w || mirRT.height !== h || lv > _mirLevelsNow(w, h)) prepareMirrorTarget.allocs = (prepareMirrorTarget.allocs | 0) + 1;   // census: WGX/GLX's renders restart on one
         if (!mirRT) {
           mirRT = _mirTarget(post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType, w, h, _mirMrtWant());
           _mirSetLevels(lv, w, h);
@@ -1500,15 +1592,22 @@ const TLX = (function () {
       const _mirMrt = () => !!(mirRT && mirRT.textures && mirRT.textures.length > 1);
       const _mirMrtWant = () => _mirMrtKnob && !!(post && post.tagOn && post.tagOn() && TSL.mrt && renderer.setMRT);
       function _mirTarget(type, w, h, mrt) {
+        // apex26.tlxMir11 / tlxTag8 (tlx-post.js PHONE FORMAT TRIMS): the scene's attachment formats, so the
+        // two passes keep one pipeline key. The tag is built half-float first (a clone of attachment 0).
+        const tf = post && post.targetFormats ? post.targetFormats() : null;
+        const c11 = !!(tf && tf.mir11) && type !== THREE.UnsignedByteType;
+        if (type === THREE.UnsignedInt101111Type) type = THREE.HalfFloatType;
         const rt = new THREE.RenderTarget(w, h, {
           type, format: THREE.RGBAFormat, depthBuffer: true, count: mrt ? 2 : 1,
           generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
         });
         rt.texture.colorSpace = THREE.NoColorSpace;
+        if (c11) { rt.texture.type = THREE.UnsignedInt101111Type; rt.texture.format = THREE.RGBFormat; }
         if (mrt && rt.textures && rt.textures[1]) {
           const bk = renderer.backend || {};
           rt.texture.name = "output";
           if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) rt.textures[1].format = THREE.RedFormat;
+          if (tf && tf.tag8) rt.textures[1].type = THREE.UnsignedByteType;
           rt.textures[1].name = "ssrTag";
           rt.textures[1].generateMipmaps = false;
           rt.textures[1].minFilter = THREE.NearestFilter; rt.textures[1].magFilter = THREE.NearestFilter;
@@ -1549,7 +1648,12 @@ const TLX = (function () {
       // that latches it still reads the capped chain once (a camera cut into a
       // cockpit view). An explicit apex26.tlxMirMips=N caps under the glass too
       // (the A/B lever for that look); "0" = the full chain always (the old way).
-      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false;
+      // Perf hunt 5 F1: the glass no longer latches the FULL chain (helmet is the
+      // default camera, so the cap never applied: 9 levels, 8 passes a frame).
+      // drawMirrorGlass bounds its true LOD each frame (PostCommon.mipFootprintLod)
+      // and _mirGlassLod keeps the session max; unbounded (a triangle straddling the
+      // eye plane, no CPU arrays) latches the full chain as before; tlxMirMips=0 is the A/B.
+      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;
       try {
         const v = localStorage.getItem("apex26.tlxMirMips");
         if (v !== null && v !== "" && +v >= 0) { _mirMipCap = Math.floor(+v); _mirMipPinned = true; }
@@ -1557,8 +1661,9 @@ const TLX = (function () {
       const _mirFull = (w, h) => Math.floor(Math.log2(Math.max(w, h, 1))) + 1;
       function _mirLevels(w, h) {
         const full = _mirFull(w, h);
-        if (_mirMipCap <= 0 || (_mirGlassSeen && !_mirMipPinned)) return full;
+        if (_mirMipCap <= 0 || (_mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity))) return full;
         let need = _mirMipCap;
+        if (_mirGlassSeen && !_mirMipPinned) need = Math.max(need, Math.ceil(_mirGlassLod + 0.25) + 1);
         if (_mirRect) {
           const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
           const r = Math.max(w / Math.max(1, Math.round(_mirRect[2] * cw)), h / Math.max(1, Math.round(_mirRect[3] * ch)));
@@ -1705,7 +1810,7 @@ const TLX = (function () {
           // maxLights: see tsl-lit.js — 48 lamp array rows overrun the WebGL2
           // fragment-uniform floor (224) once three/TSL adds its own block, so
           // the lit shader fails to LINK on iOS Safari and every lit surface
-          // draws nothing. Same _liteGpu gate as samples/outputType above.
+          // draws nothing. Same _liteGpu gate as antialias/outputType above.
           // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
           lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
@@ -1860,9 +1965,13 @@ const TLX = (function () {
         if (window.TLXShaders && TLXShaders.chunked) {
           // isWebGPU feeds the pack's vertex-format rule (tlx-chunked.js
           // packAttr `fmt24`): WebGPU has no 1- or 3-wide 8/16-bit formats.
+          // LP-01 repair ledger (_mirrorLedger is declared further down; this runs only at a release, after create).
+          const noteNulled = (a) => _mirrorLedger.note(a);
           chunkedSys = TLXShaders.chunked(THREE, {
             isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
             releaseGeometry,
+            releaseAttribute,
+            noteNulled,
           });
         }
       } catch (e) {
@@ -1915,7 +2024,7 @@ const TLX = (function () {
       // miss RATE is the number that predicts churn. Counting it costs two
       // increments.
       let _matHit = 0, _matMiss = 0, _matEvict = 0;
-      const _matMissLog = [];   // the first 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them
+      const _matMissLog = [];   // the LAST 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them; a first-64 log filled at boot hid every race miss (#3673)
       function fallbackMat(instanced) {
         // An attribute-instanced mesh (R1 run, A2 batch) needs a NODE material to carry its instance step:
         // the raw classic rung has none, so it draws nothing there (drawInstanced skips a null).
@@ -1983,17 +2092,19 @@ const TLX = (function () {
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
+      const _fxKeys = new Map();
       function materialFor(opts, chunked, instanced, fx) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
         if (!opts) return chunked ? defaultMatChunked : instanced === 2
           ? (_aiDefault || (_aiDefault = _attrInst(lit.makeMaterial({ instanced: true })))) : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
-        const key = fx ? matKeyFor(o, chunked, instanced) + "|fx" : matKeyFor(o, chunked, instanced);
+        let key = matKeyFor(o, chunked, instanced);
+        if (fx) { let fk = _fxKeys.get(key); if (fk === undefined) _fxKeys.set(key, fk = key + "|fx"); key = fk; }   // one string per key, not one per draw
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
-          if (_matMissLog.length < 64) _matMissLog.push(key);
+          if (_matMissLog.push(key) > 64) _matMissLog.shift();
           if (matCache.size >= MAT_CACHE_CAP) {
             // Evict the oldest entry NOT used this frame. If every entry is in
             // use the cache simply runs over cap for the rest of the frame:
@@ -2056,6 +2167,28 @@ const TLX = (function () {
       const SPLIT_TRIS = 1024, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
       // apex26.tlxRoadSplit=0 pins the whole-lap draw; __tlx.roadSplit(on) flips it live and writes the pin.
       let _roadSplitOn = (function () { try { return localStorage.getItem("apex26.tlxRoadSplit") !== "0"; } catch (_) { return true; } })();
+      // Visible chunks of one record share attributes and one material. One
+      // concatenated index draws the same triangles (opaque depth test). The
+      // mirror keeps its own slot so the two passes do not rebuild each other.
+      // apex26.tlxChunkMerge=0 restores a draw per chunk. Values 1–4 stay the
+      // build-time merge in tlx-chunked.js and leave this draw path on.
+      let _chunkMerge = true;
+      try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
+      const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
+      function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
+        if (!chunkedSys) return 0;
+        const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
+        const mat = rec.mat;
+        if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
+            && !(mat && (mat.transparent || mat.depthWrite === false))
+            && !(rec.al < 1)) {
+          const g = chunkedSys.mergeVisible(rec.chunked, n, slot);
+          if (g) { acquireMesh(g, rec.m, rec.mat, rec).renderOrder = order; return n; }
+        }
+        const vis = chunkedSys.visList;
+        for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = order;
+        return n;
+      }
       function _drawSplit(rec, i, vp, eye, cd, fog) {
         const sp = rec.split;
         if (!chunkedSys || !TLXShaders.mergeRuns || sp.batch === _poolBatch) return false;
@@ -2873,7 +3006,7 @@ const TLX = (function () {
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
         geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
-        slot.geo = geo; slot.ib = ib; slot.cap = cap;
+        slot.geo = geo; slot.ib = ib; slot.cap = cap; slot.builds = (slot.builds | 0) + 1;   // memState().churn
         return true;
       }
       // Glow uses a six-vertex quad plus one seven-float record per light.
@@ -2900,7 +3033,7 @@ const TLX = (function () {
         geo.setDrawRange(0, 6);
         geo.instanceCount = 0;
         geo.__tlxPin = true;   // retain idle glow wrappers, as ensureStream does for other FX
-        slot.geo = geo; slot.ib = ib; slot.cap = cap;
+        slot.geo = geo; slot.ib = ib; slot.cap = cap; slot.builds = (slot.builds | 0) + 1;   // memState().churn
         return true;
       }
       // R9 (perf hunt 3): a stream whose producer keeps ONE long-lived Float32Array
@@ -2917,7 +3050,7 @@ const TLX = (function () {
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
         geo.__tlxPin = true;   // as ensureStream
-        slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
+        slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0; slot.builds = (slot.builds | 0) + 1;
         return true;
       }
       function uploadStream(slot, floats) {
@@ -3154,7 +3287,10 @@ const TLX = (function () {
               geo.removeEventListener("dispose", p.release); mat.removeEventListener("dispose", p.release);
             }
             if (p.pending) return;
-            for (const m of p.meshes.values()) { m.dispose(); m.geometry = null; m.material = null; }
+            for (const m of p.meshes.values()) {
+              try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+              m.geometry = null; m.material = null;
+            }
             p.meshes.clear();
           };
           mats.set(mat, p);
@@ -3291,11 +3427,15 @@ const TLX = (function () {
           // matrixWorld.determinantAffine() < 0, and the car draws one side's
           // parts (the brake ring among them) through a mirrored matrix — the
           // one field the lap's pipeline key differed in (probe, field 27).
-          // The double-sided variant is the cockpit dash ERS bar / OT lamp
-          // (_rigFxA), never drawn mirrored: its cw twin was a whole lit
-          // pipeline (~1.2 s cold on an iPhone 14) no race used —
-          // ers-deploy-census tlx-gpu helmet, first deploy: lazy=0 without it.
-          for (const g of geos.values()) for (const sx of (o.doubleSided ? [1] : [1, -1])) {
+          // The double-sided variant (the cockpit dash ERS bar / OT lamp,
+          // _rigFxA) needs both too: the rig draws it through the wheel's
+          // MIRRORED matrix, and three draws a transparent double-sided
+          // material as a BackSide pass then a FrontSide one, so the first
+          // deploy's back pass keyed a cw pipeline the warm never built — the
+          // one live lit pipeline of a WebGPU race, at the first BOOST
+          // (perf-boost-press-pipelines.spec.js, #4514). A census that skipped
+          // it read lazy=0 on three's WebGL2 path, where winding is no key.
+          for (const g of geos.values()) for (const sx of [1, -1]) {
             await compileWarmProbe(g, mat, sx);
           }
         }
@@ -3359,7 +3499,7 @@ const TLX = (function () {
       // into a 1x1 scratch depth target (tlx-shadow drawWarm; the sun map is
       // snap-cached, so never the live one). Then it waits for the GPU to
       // settle, so warm.total absorbs the stall. Identical pixels. Every
-      // state it touches (autoClear, scissor test, the target's scissor,
+      // state it touches (autoClear, each target's scissorTest and scissor,
       // target, MRT, the mirror swap) is restored. apex26.tlxDrawWarm: unset =
       // on except on software adapters (SwiftShader CI pays nothing), "1" on,
       // "0" off.
@@ -3380,14 +3520,15 @@ const TLX = (function () {
         return out;
       }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
-        const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
+        const drawn = { mirror: 0, scene: 0, post: 0, casts: 0, sky: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
-        const autoClear0 = renderer.autoClear, sc0 = renderer.getScissorTest();
-        const sRT = post.sceneTarget(), sSc = sRT.scissor.clone();
+        // r187 reads a bound target's OWN scissorTest (Renderer._renderScene: `scissorTest = renderTarget.scissorTest`);
+        // renderer.setScissorTest() only gates the canvas, so the 1x1 rect needs the target's flag set beside it.
+        const autoClear0 = renderer.autoClear;
+        const sRT = post.sceneTarget(), sSc = sRT.scissor.clone(), sST = sRT.scissorTest;
         let tmp = null;
         try {
           renderer.autoClear = false;   // a clear ignores the scissor (WebGPU loadOp)
-          renderer.setScissorTest(true);
           if (mirrorWarmed && mirRT) {
             // The mirror stage left the mirror's own instanced meshes shown. The scratch target takes mirRT's
             // attachment list, and the draw its MRT (on only for a mirror-shaped mirRT), as mirrorEnd draws.
@@ -3402,19 +3543,19 @@ const TLX = (function () {
           if (lit && lit.setSsrMrt) lit.setSsrMrt(useTag);
           if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
           renderer.setMRT(useTag ? _ssrMrtNode() : null);   // exactly as present() sets it
-          sRT.scissor.set(0, 0, 1, 1);
+          sRT.scissor.set(0, 0, 1, 1); sRT.scissorTest = true;
           renderer.setRenderTarget(sRT);
           renderer.render(scene, camera); drawn.scene++;
-          sRT.scissor.copy(sSc);
+          sRT.scissor.copy(sSc); sRT.scissorTest = sST;
           if (post.drawWarm) drawn.post = post.drawWarm(opts, _postF);   // under the MRT, as present() runs the chain
           renderer.setMRT(null);
           if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
           if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
           if (shadowSys && shadowSys.drawWarm) drawn.casts = shadowSys.drawWarm();
+          if (typeof sky !== "undefined" && sky && sky.cacheDrawWarm) drawn.sky = sky.cacheDrawWarm(renderer);   // cacheWarm's compile keys depth on; the bake has none
         } finally {
           _mirWarmUnswap();
-          sRT.scissor.copy(sSc);
-          renderer.setScissorTest(sc0);
+          sRT.scissor.copy(sSc); sRT.scissorTest = sST;
           renderer.autoClear = autoClear0;
           if (tmp) try { tmp.dispose(); } catch (_) { /* device dying */ }
         }
@@ -3572,6 +3713,7 @@ const TLX = (function () {
           try {
             _gpuLastOperation = "warm-draw";
             _warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);
+            if (post && post.warmSettled) await post.warmSettled();   // the queued canvas compiles, before the live present can race them
             await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
           } catch (e) {
             _warmStages.drawn = { error: String((e && e.message) || e) };
@@ -3580,9 +3722,45 @@ const TLX = (function () {
           _warmStages.draw = Math.round(performance.now() - _tStage);
         }
       }
+      // Half-res + lowest look rung on a software-GL race. present() reapplies
+      // it whenever a world frame may resize: entry soften restores the saved
+      // full scale when the cover lifts, and resize() no-ops while a warm is
+      // pending. Measured on SwiftShader, three WebGL2, Bahrain, 844×390:
+      // full-res rAF ~12.7 s (worst 28.7 s); this cut, internal 422×195,
+      // render span max ~6.2 s. Tier 4 alone did not move the full-res gap.
+      function pinSoftwareRaceShed(opts) {
+        if (!_swRaceShed) return;
+        if (!_swRaceShedPinned) {
+          _swRaceShedPinned = true;
+          // Same rung the stall watchdog reaches after four >1 s frames.
+          try {
+            if (typeof PerfGov !== "undefined") {
+              if (PerfGov.setAutoRes) PerfGov.setAutoRes(false);
+              if (PerfGov.setUserTier) PerfGov.setUserTier(4);
+            }
+          } catch (_) { /* harness has no governor */ }
+        }
+        if (renderScale > 0.52) { renderScale = 0.5; resizeNow(); }
+        // This frame's opts were built before the tier change. Zeroing them
+        // also keeps post.warm from compiling the bloom / SSAO / god-ray chain.
+        if (opts) {
+          opts.bloom = 0; opts.ssao = 0; opts.godray = 0; opts.contact = 0; opts.lampVol = 0; opts.flareMul = 0;
+          opts.reflect = 0; opts.carReflect = 0;
+        }
+      }
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
+        // Race Settings sits on "Programs" while this compile runs. A menu
+        // warm (where "menu") stays full-res — garage first draw is not this
+        // cut. A loading/race warm, including one started from a noEnv garage
+        // frame that present() does not shed, pins BEFORE _warmPending:
+        // resize() refuses once the warm owns the targets, and that compile
+        // is what lost the WebGL context on software GL (Pages 15b66c9,
+        // three forced to WebGL2, Bahrain, 2 of 2). The Spa pine merge in
+        // that tip does not run on Bahrain.
+        // typeof: the warm rigs eval this body without the outer shed bindings.
+        if (typeof _swRaceShed !== "undefined" && _swRaceShed && typeof _warmWhere !== "undefined" && _warmWhere !== "menu") pinSoftwareRaceShed(opts);
         _warmAt = performance.now(); _warmAttempts++;
         _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
         _warmStages.garageScene = null;
@@ -3808,6 +3986,9 @@ const TLX = (function () {
       }
 
       function pinSkyMaterial() {
+        // three's Background builds a mesh only for a background NODE; TLX keeps backgroundNode null (begin,
+        // drawSky, mirrorBegin) and a plain Color background, so every per-present call found nothing.
+        if (!scene.backgroundNode) return;
         try {
           const store = renderer._background;
           if (!store) return;
@@ -3889,7 +4070,7 @@ const TLX = (function () {
           // the caller (tracks.js, the chunk system, matCache) and are still
           // live. Only the wrapper is ours to drop (dropWrapper: and its
           // render object with it, or three keeps the geometry anyway).
-          dropWrapper(m);
+          dropWrapper(m); prunePool.n = (prunePool.n | 0) + 1;   // memState().churn (held on the function, as cullInstances._shPack)
         }
         meshPool.length = w;
       }
@@ -3914,6 +4095,8 @@ const TLX = (function () {
       // race→race switch). Queue the drop; flushDropped() finishes it on the
       // first present after the warm settles, when no compile holds the mesh.
       const _dropQueue = [];
+      let _ownershipFreeDepth = 0;
+      let _ownershipFreeBatch = null;
       // A FREED GEOMETRY'S RENDER OBJECTS OUTLIVE IT BY ONE SCENE RENDER. three
       // releases a pipeline when its last render object goes (Pipelines.delete:
       // usedTimes 0 -> _releasePipeline). The garage car is the only holder of
@@ -3943,13 +4126,15 @@ const TLX = (function () {
       function dropWrapper(m, ownedGeometry, afterRender) {
         try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         m.visible = false;
-        if (_warmPending) {
-          if (!_dropQueue.some((entry) => entry.mesh === m)) _dropQueue.push({ mesh: m, ownedGeometry });
+        if (_warmPending && !_ownershipFreeDepth) {
+          if (!_dropQueue.some((entry) => entry.mesh === m)) {
+            _dropQueue.push({ mesh: m, ownedGeometry, freedGeo: ownedGeometry || m.geometry });
+          }
           return;
         }
         if (m.__tlxDropped) return;
-        if (afterRender && !ownedGeometry) {
-          if (_dropLater.length < DROP_LATER_MAX) { _dropLater.push({ mesh: m, at: _sceneRenders }); _dropStat.held++; return; }
+        if (afterRender && !ownedGeometry && !_ownershipFreeDepth) {
+          if (_dropLater.length < DROP_LATER_MAX) { _dropLater.push({ mesh: m, at: _sceneRenders, freedGeo: m.geometry }); _dropStat.held++; return; }
           _dropStat.overflow++;
           flushDropLater(true);
         }
@@ -3959,10 +4144,77 @@ const TLX = (function () {
         m.geometry = null; m.material = null;
         if (ownedGeometry) try { ownedGeometry.dispose(); } catch (_) { /* already lost */ }
       }
-      function flushDropped() {
-        if (_warmPending || !_dropQueue.length) return;
+      function flushDropped(force) {
+        if ((!force && _warmPending) || !_dropQueue.length) return;
         for (const entry of _dropQueue) dropWrapper(entry.mesh, entry.ownedGeometry);
         _dropQueue.length = 0;
+      }
+      // Track switch while a program/mirror warm is in flight: dropWrapper queues
+      // on _warmPending and flushDropped() is a no-op until warm settles. A menu→race
+      // switch on llvmpipe can free the old circuit before that present (CI
+      // session-quit-memory).
+      function ownershipDropQueued(m, owned, freedGeo) {
+        try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+        const live = freedGeo && m.geometry && m.geometry !== freedGeo;
+        if (live) {
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object only */ }
+          return;
+        }
+        m.visible = false;
+        if (m.__tlxDropped) return;
+        m.__tlxDropped = true;
+        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        if (m._ownGeo && m.geometry) m.geometry.dispose();
+        m.geometry = null; m.material = null;
+        if (owned) try { owned.dispose(); } catch (_) { /* already lost */ }
+      }
+      function purgeOwnershipRenderObjects(freedGeos) {
+        const ros = renderer._objects && renderer._objects._renderObjects;
+        if (!ros || !freedGeos || !freedGeos.size) return;
+        const list = typeof ros.values === "function" ? Array.from(ros.values()) : Array.from(ros);
+        for (let i = 0; i < list.length; i++) {
+          const ro = list[i];
+          const g = ro && ro.geometry;
+          if (!g || !freedGeos.has(g)) continue;
+          const o = ro.object;
+          if (o && typeof o.dispatchEvent === "function") {
+            try { if (o.parent) o.parent.remove(o); } catch (_) { /* already detached */ }
+            o.visible = false;
+            if (!o.__tlxDropped) ownershipDropQueued(o, o._ownGeo ? o.geometry : null, g);
+            else try { o.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object */ }
+          }
+          if (typeof g.dispatchEvent === "function") {
+            try { g.dispatchEvent({ type: "dispose" }); } catch (_) { /* already torn down */ }
+          }
+          if (typeof ros.delete === "function") ros.delete(ro);
+        }
+      }
+      function flushOwnershipRelease(freedGeos) {
+        if (!freedGeos || !freedGeos.size) return;
+        for (let i = 0; i < meshPool.length; i++) {
+          const m = meshPool[i];
+          const g = m.geometry;
+          if (g && freedGeos.has(g)) ownershipDropQueued(m, m._ownGeo ? m.geometry : null, g);
+        }
+        flushDropped(true);
+        for (let i = _dropQueue.length - 1; i >= 0; i--) {
+          const e = _dropQueue[i];
+          const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
+          if (!fg || !freedGeos.has(fg)) continue;
+          _dropQueue.splice(i, 1);
+          ownershipDropQueued(e.mesh, e.ownedGeometry, fg);
+        }
+        let w = 0;
+        for (let i = 0; i < _dropLater.length; i++) {
+          const e = _dropLater[i];
+          const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
+          if (!fg || !freedGeos.has(fg)) { _dropLater[w++] = e; continue; }
+          ownershipDropQueued(e.mesh, null, fg);
+        }
+        _dropLater.length = w;
+        if (shadowSys && shadowSys.flushOwnershipDropped) shadowSys.flushOwnershipDropped(freedGeos);
+        if (shadowSys && shadowSys.purgeCastersForGeos) shadowSys.purgeCastersForGeos(freedGeos);
+        purgeOwnershipRenderObjects(freedGeos);
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
@@ -3980,8 +4232,13 @@ const TLX = (function () {
         meshPool.length = w;
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
-        _coDrop(geo, true);   // R1: its coalesced runs (often the instanced lit program's last holder)
+        _coDrop(geo, !_ownershipFreeDepth);   // R1: its coalesced runs (often the instanced lit program's last holder)
         _decalDrop(geo);   // F3: its batched decal run (immediate: no measured pipeline loss, and tlx-probes pins it)
+      }
+
+      // A merge slot's outgrown index (tlx-chunked mergeVisible): three's Attributes.delete destroys its GPU buffer.
+      function releaseAttribute(attr) {
+        try { if (renderer._attributes) renderer._attributes.delete(attr); } catch (_) { /* the GC frees it */ }
       }
 
       function disposeGeometry(geo) {
@@ -4016,7 +4273,7 @@ const TLX = (function () {
           m.matrixWorldAutoUpdate = false;
           m.frustumCulled = false;
           list[k] = m;
-          meshPool.push(m);
+          meshPool.push(m); acquireMesh.n = (acquireMesh.n | 0) + 1;   // memState().churn: a new three RenderObject
         }
         // Assigned anyway: the pair is what the mesh was KEYED on, so these are
         // no-ops in steady state — and a no-op assignment is what keeps three's
@@ -4121,6 +4378,10 @@ const TLX = (function () {
       //    zero-length array — a silent no-op instead of the new data.
       function releaseGeoMirrors(g) {
         if (!g || g.__tlxFreed) return 0;
+        // Not on the WebGPU backend: r187 rebuilds a pipeline's vertex-layout key from attribute.array
+        // (BYTES_PER_ELEMENT, constructor) for every new RenderObject — an acquireMesh wrapper, a shadow-pool
+        // mesh taking this geometry — so a nulled array throws there (tlx-chunked.js releaseMirrors). Kept.
+        if (renderer && renderer.backend && renderer.backend.isWebGPUBackend) { g.__tlxFreed = true; g.__tlxKept = true; return 0; }
         // THE BOUNDS ARE READ FROM THE POSITIONS THIS IS ABOUT TO EMPTY.
         // frustumCulled=false covers the cull, but it is not the only reader:
         // three's render walk does `sortObjects && (geometry.boundingSphere ===
@@ -4163,6 +4424,7 @@ const TLX = (function () {
           // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
           // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
           // mechanism I asserted and could NOT substantiate.
+          _mirrorLedger.note(a);   // LP-01: the class is kept so a null-mirror throw can be repaired
           a.array = null;
         };
         const atts = g.attributes;
@@ -4183,7 +4445,8 @@ const TLX = (function () {
         try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
       })();
       let _mirrorSweepAt = 0, _carMirrorAt = 0;
-      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0, gate: "?", gateBits: -1 };
+      const _mirrorLedger = mirrorLedger();   // every attribute a mirror release nulled (LP-01 repair)
+      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0, gate: "?", gateBits: -1, repaired: 0 };
       // Throttled on performance.now(), never a frame counter: a frame counter
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
@@ -4652,6 +4915,12 @@ const TLX = (function () {
       function _softReadStaleMs() { return Math.max(SOFT_READ_STALE_MS, 3 * _softReadLastMs); }
       function _queueSoftBlit(rt) {
         if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
+        try {
+          if (typeof PerfGov !== "undefined" && PerfGov.softwareGlSoftPresentDefer && PerfGov.softwareGlSoftPresentDefer()) {
+            if (_softPresentWaiters.length) _softBlitNotify();
+            return;
+          }
+        } catch (_) { /* harness */ }
         const req = {
           rt,
           w: (rt && rt.width) || W,
@@ -4696,6 +4965,16 @@ const TLX = (function () {
       // written to webgl2 (session skip + reload if even classic dies).
       // postOnly: the failure may be the post chain alone and the canvas repaint
       // below still paints on TLX — then the session stays bound to three.
+      // LP-01: true when `e` is a freed-mirror read and at least one nulled mirror was repaired (logged once).
+      let _nullMirrorLogged = false;
+      const nullMirrorSkip = (e) => {
+        if (_deviceLost || !isNullMirrorError(e)) return false;
+        const n = _mirrorLedger.repair();
+        if (!n) return false;
+        _mirrorStat.repaired += n;
+        try { if (!_nullMirrorLogged) { _nullMirrorLogged = true; Log.warn("gfx", "TLX: freed vertex mirror read by three; repaired", n, "attribute(s), frame skipped —", e); } } catch (_) { /* Log optional */ }
+        return true;
+      };
       const refuseTab = () => {
         const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
         try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
@@ -5025,15 +5304,31 @@ const TLX = (function () {
           t.image = src;
           t.onUpdate = releaseTexSource;
           t.needsUpdate = true;
-          if (mobileTier || isMobile) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
+          // A spare re-filled before its first draw (draft spares park and refill unseen) would otherwise mint its GPU
+          // texture on whatever later edit first draws it: garage-livery-churn's one late 1024x1280 (v 11, r187).
+          if (mobileTier || isMobile || !t.__tlxUp) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
           return true;
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
         // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
         pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
-          if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
+          if (m && m.chunks && chunkedSys) {
+            if (!_ownershipFreeBatch) { _ownershipFreeBatch = new Set(); _ownershipFreeDepth = 1; }
+            chunkedSys.free(m, _ownershipFreeBatch);
+            return;
+          }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
+        },
+        flushChunkedOwnership() {
+          if (_ownershipFreeBatch && _ownershipFreeBatch.size) {
+            flushOwnershipRelease(_ownershipFreeBatch);
+            // Each shared vertex attribute disposed once, THEN stripped and the geometry disposed: r187's geometry
+            // dispose walks only the attributes it still holds (tlx-chunked.js disposeShared).
+            if (chunkedSys && chunkedSys.disposeShared) chunkedSys.disposeShared(_ownershipFreeBatch);
+          }
+          _ownershipFreeBatch = null;
+          _ownershipFreeDepth = 0;
         },
         freeTexture(t) {
           if (t && t.tex) {
@@ -5209,6 +5504,10 @@ const TLX = (function () {
           const S = shadowSys.S;
           if (mesh && mesh.chunks && chunkedSys && S.depthPassOn) {
             const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, reach || null, reach ? reach[3] : 0);
+            // The main pass's merged draw (slot 0/1) for the depth passes: ONE caster for the visible chunks, not
+            // a pool slot, RenderObject and bind group each. One slot for sun and lamps: an unchanged set reuses it.
+            const g = _chunkMerge && n > 1 ? chunkedSys.mergeVisible(mesh, n, 2) : null;
+            if (g) { _shMergeWrap.geo = g; shadowSys.castShadow(_shMergeWrap, model); _shMergeWrap.geo = null; return; }
             const vis = chunkedSys.visList;
             for (let i = 0; i < n; i++) shadowSys.castShadow(vis[i].wrap, model);
             return;
@@ -5515,19 +5814,13 @@ const TLX = (function () {
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
-              if (rec.chunked) {
-                if (!chunkedSys) continue;
-                const n = chunkedSys.cull(rec.chunked, _mirVP, _mirEye, _mirCull, _mirFog);
-                const vis = chunkedSys.visList;
-                for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
-                continue;
-              }
+              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1); continue; }
               if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
             _poolShow();
             _hideUndrawnInstanced();
-            if (scene.backgroundNode) pinSkyMaterial();
+            pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
@@ -5553,9 +5846,22 @@ const TLX = (function () {
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
-            hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
+            hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders, allocs: prepareMirrorTarget.allocs | 0,
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
-            mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
+            mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity), glassLod: _mirGlassLod };   // A-H5
+        },
+        // Quit-to-menu (#4219): the largest race-only target (colour + ssrTag + depth + mips) leaves the menu and
+        // garage. The post / FXAA texture nodes and the glass material drop it first (WebKit keeps a freed GPU
+        // texture while a bind group names it); prepareMirrorTarget re-allocates on the next mirrorBegin.
+        releaseMirror() {
+          if (_mirActive || _warmPending) return false;
+          if (!mirRT) return true;
+          const t = mirRT.texture;
+          try { if (post && post.releaseMirror) post.releaseMirror(); } catch (_) { /* node values only */ }
+          try { if (fx && fx.releaseTexture) fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ }
+          try { mirRT.dispose(); } catch (_) { /* already gone */ }
+          mirRT = null; mirCam = null; _mirRenders = 0;
+          return true;
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
         // rendered in mirrorEnd before this pass records, on the glass mesh as
@@ -5568,7 +5874,17 @@ const TLX = (function () {
               || !mesh || !mesh.geo || !model) return false;
           pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
           _mirGlass++;
-          _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the target to the full chain
+          _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the chain to what the glass can sample
+          if (_mirGlassLod < Infinity && (_frameVP[11] !== 0 || _frameVP[15] !== 0)) {   // no frame camera yet: no bound
+            const g = mesh.geo, pa = g.attributes && g.attributes.position, ua = g.attributes && g.attributes.uv, st = post && post.sceneTarget ? post.sceneTarget() : null;
+            const l = !pa || !pa.array || !ua || !ua.array || typeof PostCommon === "undefined" ? Infinity
+              : PostCommon.mipFootprintLod(pa.array, ua.array, g.index && g.index.array, model, _frameVP,
+                Math.min(W, st ? st.width : W), Math.min(H, st ? st.height : H), mirRT.width, mirRT.height);
+            // One unbounded frame is the camera and car out of step (measured: the frame after a jump()
+            // teleport); it does not latch. Two in a row, or no arrays at all, latch the full chain.
+            if (l < Infinity) { _mirGlassInf = 0; _mirGlassLod = Math.max(_mirGlassLod, l); }
+            else if (++_mirGlassInf >= 2 || !(l === l) || !pa || !ua) _mirGlassLod = Infinity;
+          }
           return true;
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
@@ -5703,6 +6019,12 @@ const TLX = (function () {
           if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
+        // The in-flight program/rig/mirror compile. A track free during it only
+        // queues the depth caster (isWarming), and present() never runs while
+        // warming() is true, so the caster's render object outlives the circuit.
+        // Callers await this, then cancelWarmRetry(), then free.
+        warmSettled() { return _warmPending || Promise.resolve(); },
+        cancelWarmRetry() { _warmRequested = false; },
         warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
@@ -5990,7 +6312,11 @@ const TLX = (function () {
           fx.lineSpeed.value = (opts && opts.speed) || 0;
           fx.lineCorners.value = opts && opts.cornersOnly ? 1 : 0;
           fx.lineStr.value = 1.6;           // emissive strength: a constant, no producer sends one
-          fx.linePalette.value = opts && opts.palette ? 1 : 0;
+          // LINE COLOUR (DrivingLine.PALETTES): onPace / lift / brake; F1 GREEN when absent.
+          const lc = (opts && opts.cols) || LINE_COLS_F1;
+          fx.lineOnPace.value.set(lc[0], lc[1], lc[2]);
+          fx.lineLift.value.set(lc[3], lc[4], lc[5]);
+          fx.lineBrake.value.set(lc[6], lc[7], lc[8]);
           fx.lineOpacity.value = (opts && opts.opacity) || 1;
           pushRec(lineStream.geo, null, fx.lineMat, undefined, undefined, 0, null, null);
           _fxFrame.lineVerts = vertCount;
@@ -6188,12 +6514,11 @@ const TLX = (function () {
               // what made the feature inert: the grid is a SINGLE shared
               // uniform set, so each chunked record overwrote the previous
               // one's grid and only the last survived.
-              const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist, frameCullFog);
-              const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
+              const n = _drawChunked(rec, i, _frameVP, frameEye, frameCullDist, frameCullFog, 0);
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
-              // Hold the release until the env probe has LATCHED.
+              // Hold the release until the env probe has LATCHED. (On the WebGPU backend releaseMirrors keeps
+              // the mirrors outright: r187's vertex-layout key reads every attribute's array.)
               // THIS GATE IS LOAD-BEARING. releaseMirrors() (tlx-chunked.js)
               // sets every shared chunk attribute's .array = null — it does NOT
               // swap in a zero-length array (an earlier version of this comment
@@ -6233,6 +6558,14 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
+          // Before the warm return. A pending warm makes resize() a no-op, and
+          // race-entry soften restores the saved full scale when the cover
+          // lifts, so the cut has to land on every world present that is
+          // allowed to resize — including the one that starts the warm.
+          // Kept above the rig-warm seen/dispatch pair: that pair is one
+          // source line in tlx-rig-warm.test.mjs.
+          if (_lite) liteOpts(opts);   // B8 lab: before the warm, so it compiles the lite pass set
+          if (_swRaceShed && _postF.proj && !_postF.noEnv && !_warmPending) pinSoftwareRaceShed(opts);
           if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
@@ -6276,7 +6609,7 @@ const TLX = (function () {
               if (post.setMirror) {
                 // Pixels of the present target (the SGSR output size when upscaling).
                 const up = wantSpatialUpscale(), ok = !!(_mirRect && mirRT && _mirRenders > 0 && !_mirDead);
-                post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type === THREE.HalfFloatType, _mirFlip);
+                post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type !== THREE.UnsignedByteType, _mirFlip);
               }
               try {
                 renderer.setRenderTarget(post.sceneTarget());
@@ -6301,7 +6634,14 @@ const TLX = (function () {
               paintCanvas(this);
             }
             painted = true;
-          } catch (e) { persistFail(e, !!post); }
+          } catch (e) {
+            // LP-01 (#4900): a freed CPU mirror read by three's vertex-layout key is ONE geometry's defect, not the
+            // device's. Repair every nulled mirror (zero-length view of its own class; the GPU buffer is intact)
+            // and skip only this frame: the ladder below would strip post/lit/sky for good and, at its last rung,
+            // reload the tab out of the results screen ("Graphics reset").
+            if (!nullMirrorSkip(e)) persistFail(e, !!post);
+            else painted = true;
+          }
           // Post-only death: same materials, canvas (the 1269 intent). The chain is
           // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
@@ -6323,7 +6663,7 @@ const TLX = (function () {
           if (!painted) {
             dropTo(2, rawUnlitMat);
             try { paintCanvas(this); painted = true; }
-            catch (e) { persistFail(e); refuseTab(); }
+            catch (e) { if (nullMirrorSkip(e)) painted = true; else { persistFail(e); refuseTab(); } }   // refuseTab: a real refusal only
           }
           _presentN++;
           _presentMs += (_presentAcc - _presentMs) * 0.1; _presentAcc = 0;
@@ -6617,10 +6957,11 @@ const TLX = (function () {
           // "TLX looks wrong on my phone" report has to answer first, since the
           // WebGPU/WebGL2 choice is now device-dependent (see the pin above).
           ctxLost() { return !!_deviceLost; },
+          swRaceShed(on) { setSwRaceShed(on); },
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, webkitStayGL: _webkitStayGL, hasGpu: _hasGpu,
+              forceWebGL, initSwapGL: _initSwapGL, pin: _glPin, autoStayGL: _autoStayGL, webkitStayGL: _webkitStayGL, hasGpu: _hasGpu,
               gpuAdapterOk: _gpuAdapterOk, gpuCanvasOk: _gpuCanvasOk,
               // Read back off the LIVE context, not inferred from what we
               // passed: `true` IS the see-through-car defect, and the paths
@@ -6632,8 +6973,8 @@ const TLX = (function () {
                 } catch (_) { /* WebGPU backend has no gl; null is the honest answer */ }
                 return null;
               })(),
-              isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
-              softwareGL, softAdapter: _softAdapter, headless: _headless,
+              isMobile, mobileTier, isWebKit, liteGpu: _liteGpu, liteLab: !!_lite,
+              softwareGL, softwareRaceShed: _swRaceShed, softAdapter: _softAdapter, headless: _headless,
               forceHw: _forceHw.on, forceBatches: _forceBatches,
               // The live verdict, not just the inputs: which way skipBatches()
               // actually went. And gpuErrFrames — DISTINCT presents an error
@@ -6671,6 +7012,8 @@ const TLX = (function () {
             };
           },
           materialCacheSize() { return matCache.size; },
+          // #3673 first-race census: the matCache key a built pipeline's material was minted under (null: not a cached lit variant).
+          matKeyOf(m) { for (const [k, v] of matCache) if (v === m) return k; return null; },
           // What is growing when the GEOMETRY is not? A 4-minute race soak
           // measured the heap climbing 88-138 MB while geoCensus's registry
           // and attribute bytes both stayed flat (docs/PERF-FINDINGS.md 2o),
@@ -6681,12 +7024,17 @@ const TLX = (function () {
             const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.n,
                         geoKeys: meshByGeo.size, batch: _poolBatch,
                         dropLater: { now: _dropLater.length, held: _dropStat.held, overflow: _dropStat.overflow },
+                        // Hunt 6, lifetime: wrappers minted / pruned (each mint is a three RenderObject: object UBO + bind
+                        // group), FX streams (re)built (a vertex buffer each), and headless readbacks (one MAP_READ createBuffer each).
+                        churn: { poolNew: acquireMesh.n | 0, poolPruned: prunePool.n | 0, softReads: _softBlitGen,
+                                 streamNew: [skidStream, lineStream, glowStream, ...partStreams].reduce((n, s) => n + (s.builds | 0), 0) },
                         // The mirror sweep reports what it FREED, not that it ran:
                         // the first version of this lever never executed and read
                         // as "the fix does nothing" (PERF-FINDINGS 2m).
                         mirror: { sweeps: _mirrorStat.sweeps, geos: _mirrorStat.geos,
                                   freedMB: _mirrorStat.freedMB, drains: _mirrorStat.drains,
-                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate } };
+                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate,
+                                  carSh: _mirrorStat.carSh, repaired: _mirrorStat.repaired } };   // LP-01: null-mirror repairs
             try {
               const inf = renderer && renderer.info;
               if (inf) {
@@ -6789,16 +7137,16 @@ const TLX = (function () {
       } catch (_) { /* already detached */ }
       try { disposeKeepingContext(_abortRenderer); } catch (_) { /* three dispose best-effort */ }
       if (initOwner && !initOwner.active) return null;
-      return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
+      return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract; a claimed canvas reloads once)
     }
   }
 
   // Dispose a three renderer WITHOUT losing the WebGL2 context it rendered to.
   // r186 WebGLBackend.dispose() ends with WEBGL_lose_context.loseContext(), and
   // on the forceWebGL path that context is #game's own (bootRenderer hands it
-  // to three): the GLX fallback that _fail() boots next calls
-  // getContext("webgl2") on the same canvas and gets the SAME object back,
-  // dead or about to die. Lost before GLX.init → link fails → claim-fail
+  // to three): a same-load GLX fallback would call
+  // getContext("webgl2") on the same canvas and get the SAME object back,
+  // dead or about to die (today a claimed refusal reloads into GLX instead, #4817). Lost before GLX.init → link fails → claim-fail
   // reload; lost after → GLX's webglcontextlost handler latches
   // apex26.envProbeOff / perChunkOff for good and counts a reload strike.
   // Neutering the extension lookup keeps the rest of the dispose (three frees
@@ -6824,6 +7172,51 @@ const TLX = (function () {
   // (getInternalformatParameter — many GPUs render RGBA16F but not
   // multisampled RGBA16F). Native WebGPU stays single-sample: core WebGPU
   // cannot resolve a depth attachment.
+  // LP-01 / #4900. three r187 rebuilds a pipeline's vertex-layout key from EVERY attribute's array
+  // (WebGPUAttributeUtils.getVertexBufferLayout: array.BYTES_PER_ELEMENT; _getVertexFormat: array.constructor) and
+  // its node builder types an attribute from array.constructor, so a mirror freed to null throws on the next
+  // render-state change of any draw that holds it. The ledger records each nulled attribute with its array class;
+  // repair() gives every one still null a zero-length view of that class. Only UPLOADED attributes are nulled
+  // (releaseGeoMirrors' uploaded(), the chunked release's lit-draw gate), so the view never reaches createAttribute
+  // (gpu-census 26's zero-byte buffer was an index / never-uploaded chunk), and the GPU buffer draws unchanged.
+  function mirrorLedger() {
+    let refs = [];
+    return {
+      note(a) {
+        if (!a || !a.array) return;
+        a.__tlxArrayCtor = a.array.constructor;
+        refs.push(typeof WeakRef === "function" ? new WeakRef(a) : { deref: () => a });
+      },
+      repair() {
+        let n = 0;
+        const keep = [];
+        for (const r of refs) {
+          const a = r.deref();
+          if (!a) continue;
+          if (a.array == null) { a.array = new (a.__tlxArrayCtor || Float32Array)(0); n++; }
+          else keep.push(r);
+        }
+        refs = keep;
+        return n;
+      },
+      size: () => refs.length,
+    };
+  }
+  // A TypeError from reading a property of a null array (V8: "Cannot read properties of null (reading 'X')";
+  // WebKit: "null is not an object (evaluating '….X')"), X one of the array reads above.
+  function isNullMirrorError(e) {
+    if (!e || e.name !== "TypeError") return false;
+    const m = String(e.message || "");
+    return /null/.test(m) && /BYTES_PER_ELEMENT|constructor|byteLength/.test(m);
+  }
+
+  // #game's data-engine label: the revision the vendored bundle reports, never a hand-kept number (it said r185
+  // under r187).
+  function engineLabel(THREE, api) {
+    const rev = THREE && THREE.REVISION ? String(THREE.REVISION) : "?";
+    return "three.js r" + rev + " " + api;
+  }
+
   function sceneSamplesFor(renderer, forceWebGL, isMobile) {
     if (!forceWebGL || isMobile) return 0;
     let s = 4;
@@ -6848,7 +7241,7 @@ const TLX = (function () {
     return s < 2 ? 0 : s;
   }
 
-  return { create, lastFailure: () => _lastFailure };
+  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts, labDprCap };
 })();
 
 if (typeof window !== "undefined") window.TLX = TLX;

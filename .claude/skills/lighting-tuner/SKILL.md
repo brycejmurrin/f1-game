@@ -1,112 +1,88 @@
 ---
 name: lighting-tuner
-description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing, the day scene is flat, ambient/exposure/fog/lightTune issues, validating via lightState, or baking a pasted LightPresets blob into js/lighting/presets.js. Shader bloom → renderer-debug; floodlight masts → scenery-dress; real-place accuracy → survey-track."
+description: "Use when lighting looks wrong: night washed out or like day, dawn sun too high, floodlights dark, flat day scene, exposure or fog off, or baking pasted LightPresets into presets.js. Not for: bloom → renderer-debug; floodlight masts → scenery-dress; textures → asset-pack."
 
 ---
 
 # Tune and validate scene lighting via __apex probes
 
-The `__apex` probes, `apex-eval`, `slider-effect --live` and capture commands boot
-Chromium: parent session only, never a subagent (AGENTS.md rule 10).
+## Gotchas
 
-**Reach for the tuner knobs FIRST.** Nearly every hand-tuned value is a live
-`TUNE_DEFS` knob (`js/lighting/knobs.js`) read via `LT.<id>` each frame.
+- `apex-eval`, `slider-effect --live`, the `__apex` probes and every capture boot Chromium:
+  parent session only, never a subagent (AGENTS.md rule 10).
+- A value a `"<track>|<tod>|<wx>"` row does not pin is INHERITED from the shared `"*|<tod>|<wx>"`
+  stamp in `js/lighting/presets.js`, not the knob default. Read the resolved value with
+  `__apex.lightTune()` and the stamp's value in presets.js; never quote a remembered number.
+- Editing a `"*|tod|wx"` stamp or running `lightCopy()` changes EVERY circuit: only for a fleet
+  complaint, and say so in the PR. A one-track complaint edits that track's row.
+- localStorage (`apex26.lightTune`) outranks shipped presets until RESET in the LIGHTING TUNER
+  (`reset()` in `js/lighting/profiles.js`: drops this condition and the player `"*"` layer).
+- `numLights` counts only `G.frame.lights`: read the other lamp fields (references/symptoms.md
+  §lightState) before calling floodlights off.
+- COPY VALUES exports a `window.LightEdits` DELTA; `bake.mjs` is a FULL REPLACE: never feed it a
+  delta or a one-key object (references/bake.md).
 
-```js
-__apex.lightTune()
-__apex.lightTune({ lampLevel: 0.4 })
-```
+## Workflow
 
-Precedence, lowest → highest (a later layer wins):
+1. **Pin the condition**: track, time of day, weather (wet/rain is a different row) and backend
+   (the owner plays TLX WebGPU on an iPhone; whether precedence layer 5, `"*|tod"`, applies is `condLayer` in
+   `js/lighting/profiles.js` — read it, do not assume a backend gate). The key is `<track>|<tod>|<weather>` (`key()` in `js/lighting/profiles.js`:
+   tod `default` → `def.night`, storm → rain).
+2. **Measure before any knob** (parent only):
+   ```sh
+   node tools/shot/apex-eval.mjs singapore "(a.setTimeOfDay('night'), a.lightState())" --raw
+   ```
+3. **Read both rows** in `js/lighting/presets.js`: the track's key and the `"*|<tod>|<wx>"` stamp.
+4. **Map symptom → field → knob** with [references/symptoms.md](references/symptoms.md). Night
+   washed out: resolved `nightAmbLift` first, then `mistDensity`/`fogDensityMul`,
+   `bloomMul`/`bloomKnee`, `cityGlowMul`, `exposureMul`.
+5. **Try the knob live**: `__apex.lightTune({ nightAmbLift: 1.1 })` (knobs are `TUNE_DEFS` in
+   `js/lighting/knobs.js`, read via `LT.<id>`; `slider-effect --class` says per-frame vs
+   apply/build-only). It PERSISTS to localStorage: RESET in the LIGHTING TUNER before you measure
+   shipped presets again. Confirm wiring with `slider-effect` (classify → `--live <one id>`).
+6. **Compare** `lightState()` before/after (it is the resolved snapshot after `applyRaceSettings`);
+   don't guess from docs.
+7. **Ship**: merge the `LightEdits` delta (`merge-proposals.mjs`), or hand-merge one key; edit
+   `applyRaceSettings` only for STRUCTURAL changes.
+8. **Verify** a `js/lighting/` or `presets.js` edit:
+   ```sh
+   mkdir -p artifacts/tmp
+   git diff --name-only origin/claude/f1-game-project-26h3ng > artifacts/tmp/changed.txt
+   node tools/ci/geometry-paths.mjs --targeted artifacts/tmp/changed.txt   # run each named node suite
+   node tools/ci/pick-tests.mjs                                            # names the CI groups
+   ```
+   `tests/specs/lighting-ab.spec.js` runs in the `gfx` group on CI, never locally (AGENTS.md rule
+   5); to run the whole group on the pushed branch: `node tools/ci/remote-group.mjs gfx`.
 
-1. `TUNE_DEFS.def`
-2. shipped `js/lighting/presets.js` `"*"`
-3. shipped `"*|tod|wx"` (shared stamp, e.g. `"*|night|dry"`)
-4. shipped `"track|tod|weather"`
-5. shipped `"*|tod"` — only when `gfx.hasPerChunkLights` (all presets/device classes)
-6. localStorage `"*"`
-7. localStorage **`track|tod|weather`**
+## References
 
-Live slider edits write the **current condition** key (`LightStore.set` →
-`profiles[key()]`), not global `"*"`. Ship a look by merging the COPY VALUES
-`LightEdits` delta into `js/lighting/presets.js`; no blob, just one number to
-change → edit that key by hand per
-[references/bake.md §One-key hand-merge](references/bake.md#one-key-hand-merge-no-bakemjs).
-Edit `applyRaceSettings` only for STRUCTURAL changes.
+- [references/symptoms.md](references/symptoms.md): read when a complaint names a look (night like
+  day, dim lamps, warm cast) and you need the `lightState()` field, the knob, before/after or
+  same-corner A/B commands, or which contract spec covers it.
+- [references/precedence.md](references/precedence.md): read when a value does not change, a slider
+  edit "doesn't stick", or you must choose which presets layer to edit or fan out with `lightCopy()`.
+- [references/slider-effect.md](references/slider-effect.md): read before running
+  `tools/lighting/slider-effect.mjs` (classify or `--live` A/B), or when tempted to run a sweep.
+- [references/bake.md](references/bake.md): read when the user pastes a `window.LightEdits` or
+  `window.LightPresets` blob, or you are about to write `js/lighting/presets.js`.
+- [references/graphics-atmosphere-playbook.md](references/graphics-atmosphere-playbook.md): read
+  when translating Three.js atmosphere/grading/shadow advice into Apex knobs.
 
-localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
-LIGHTING TUNER drops the current track/tod/weather back to shipped. Legacy
-`"*"` profiles may still win; clear that key if a global override sticks.
+Not this skill: isolated car paint in CAR STUDIO →
+[../playwright-probe/references/car-studio.md](../playwright-probe/references/car-studio.md)
+(`--refl` is not a scene knob); camera framing for captures →
+[../playwright-probe/references/cameras.md](../playwright-probe/references/cameras.md); compile or
+GL errors → **renderer-debug**.
 
-**One condition, every circuit** (`Tracks.LIST`). `__apex.lightCopy()` spreads knobs tuned
-here (merged); `lightCopy("look")` sends every live value. Both persist and
-return `undo` — `lightCopy({undo})` reverts the fan-out.
+## Scripts (run, don't read)
 
-`lightState()` is the resolved snapshot *after* `applyRaceSettings`. Compare
-before/after; don't guess from AGENTS.md.
+- `scripts/merge-proposals.mjs`: run for a `window.LightEdits` paste or agent proposals in
+  `artifacts/lighting/proposals/`. Writes a DELTA merge into `js/lighting/presets.js` (only the
+  given keys and knobs; validates against `TUNE_DEFS`).
+  `node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs [artifacts/tmp/edits.js] [--check]`
+- `scripts/bake.mjs`: run ONLY for a complete `window.LightPresets` snapshot. FULL REPLACE of the
+  `window.LightPresets` literal in `js/lighting/presets.js`; refuses `LightEdits`.
+  `node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt [--check]`
 
-## When NOT to Use
-
-- Isolated car paint in the studio → **playwright-probe** `references/car-studio.md` (`--refl` is not a scene
-  knob). Renderer compile / GL errors → **renderer-debug**.
-
-Verify a `js/lighting/` or `presets.js` edit in this order (AGENTS.md §Verification):
-
-```sh
-git diff --name-only origin/claude/f1-game-project-26h3ng > artifacts/tmp/changed.txt
-node tools/ci/geometry-paths.mjs --targeted artifacts/tmp/changed.txt   # names the TARGETED node suites; run each with node --test
-npm test -- tests/specs/lighting-ab.spec.js   # the single spec; session only (a subagent reports it unverified)
-```
-
-The whole `gfx` browser group (lighting-ab + tuner-grade + probes + tlx) only when
-`applyRaceSettings`' structure changed: `node tools/ci/remote-group.mjs gfx` on the pushed branch.
-
-Related: **renderer-debug**, **playwright-probe** (`references/cameras.md`).
-
-## Visual A/B with slider-effect
-
-`slider-effect` classifies the live knob registry (no browser) and runs live Playwright
-A/B captures with pixel-diff outputs. Use it to confirm a knob is wired and to
-see *what region* of the frame it changes.
-
-```sh
-# Classify — no browser, instant
-node tools/lighting/slider-effect.mjs --group LAMPS
-node tools/lighting/slider-effect.mjs --risk inert --json
-
-# A/B a single knob — Playwright, ~20 s
-node tools/lighting/slider-effect.mjs --live saturation
-node tools/lighting/slider-effect.mjs --live lampLevel --from 0 --to 0.55
-
-# Full range ramp (5 shots)
-node tools/lighting/slider-effect.mjs --live contrast --shots 5
-
-# Batch (one park per shared condition bucket)
-node tools/lighting/slider-effect.mjs --live --ids bloomMul,glareStr,neonBoost
-node tools/lighting/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
-
-# Dry-run: print recipes without launching browser
-node tools/lighting/slider-effect.mjs --live glareStr --dry-run
-```
-
-Outputs per knob: `a.png`, `b.png`, `filter.png` (changed pixels only),
-`diff.png` (red = B brighter, blue = B darker), `heat.png`, `sheet.png`,
-`result.json`. Batch runs also write `summary.png` — one row per knob.
-
-Do NOT run `--live` while `tools/mcp/cdmcp-cli.py look-survey` holds the box.
-Do NOT launch from an agent session without an explicit ask:
-`tools/lighting/lighting-tuner-sweep.mjs` or `tools/lighting/ab-lighting.mjs run all` — those are human/CI lattices. Agent default
-is classify → `--live <one id>` → bake.
-Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
-
-## Load on demand
-
-- `lightState` fields, symptom → knob table, A/B capture, contract tests →
-  [references/symptoms.md](references/symptoms.md).
-- A pasted `window.LightPresets` / `window.LightEdits` blob (LIGHTING TUNER
-  COPY VALUES) → [references/bake.md](references/bake.md) — `scripts/bake.mjs`
-  is a FULL REPLACE, `scripts/merge-proposals.mjs` merges a delta.
-
-COPY VALUES exports `LightEdits` deltas; merged `lightState()` is observation, not a full export.
-
-Upstream graphics playbook (atmosphere, grading, shadows): [references/graphics-atmosphere-playbook.md](references/graphics-atmosphere-playbook.md).
+Both take `--check` (dry run) and `--json`; neither commits or bumps cache. Read
+[references/bake.md](references/bake.md) first.

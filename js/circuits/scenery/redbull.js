@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["redbull"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
+      const { K, lapBounds, out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, addBox, vadd, mountain, hedge, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, onTrack, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (295 per build here
@@ -95,7 +95,7 @@
       fence(0.0, 1.0, -1, 4.2, 4.5, [0.74, 0.76, 0.80]);
       fence(0.0, 1.0, 1, 4.2, 4.5, [0.74, 0.76, 0.80]);
 
-      // Big braking-zone tyre walls on the outside of the heavy stops (T1, T3, T4).
+      // Big braking-zone tyre walls on the outside of the corners (FIA 2026 numbering).
       const rbRed = [0.82, 0.10, 0.16], rbNavy = [0.10, 0.14, 0.40], rbYel = [0.95, 0.80, 0.10];
       const RB_HILL_CROWD = [
         [1.00, 0.58, 0.05], [0.98, 0.62, 0.10], [0.94, 0.66, 0.22],
@@ -107,7 +107,7 @@
       tyreWall(0.08, 0.13, 1, 6.5, rbRed);    // outside Turn 1 (Niki Lauda)
       tyreWall(0.2785, 0.3285, -1, 6.5, rbYel); // outside Turn 3 (Remus) hairpin
       tyreWall(0.467, 0.517, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
-      tyreWall(0.72, 0.77, -1, 6.0, rbNavy);
+      tyreWall(0.72, 0.77, -1, 6.0, rbNavy);    // outside Turn 8 (right-hander, apex 0.7323)
 
       // Green runoff aprons at the heavy stops — alpine meadow pans, not grey gravel.
       const GRN_APRON = (pal && pal.runoff) || [0.32, 0.52, 0.24];
@@ -415,7 +415,7 @@
         ]) {
           backdrop(K(sfrac), side, 52 + distOff, [szW, szH, 68], col);
         }
-        // T4 outside (L): amphitheatre bank on the descent
+        // T3 Remus outside (L): amphitheatre bank on the descent to Schlossgold
         backdrop(K(0.33), -1, 34, [85, 20, 55], GN);
         backdrop(K(0.35), -1, 50, [105, 28, 68], GM);
         backdrop(K(0.37), -1, 68, [120, 34, 78], GF);

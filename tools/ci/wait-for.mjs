@@ -11,7 +11,7 @@
 //   node tools/ci/wait-for.mjs --log-matches artifacts/logs/x.log '^= (run|bg exit)' --timeout 45
 //   node tools/ci/wait-for.mjs --merged <sha> --timeout 240 --background   # the sanctioned merge watch (steward §7)
 //
-// Exit 0 every condition held · 124 timeout (nothing is killed) · 2 usage error (an unknown flag included).
+// Exit 0 every condition held · 124 timeout (nothing is killed) · 2 usage error (an unknown flag, or a foreground --timeout over the cap).
 import fs from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -34,16 +34,17 @@ export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeou
   --merged <sha>          <sha> is an ancestor of origin/claude/f1-game-project-26h3ng (fetched each poll, ≥ 30 s apart):
                           the one sanctioned merge watch — never a hand-rolled 'while … sleep' loop (AGENTS.md rules 4, 13)
   --background            this waiter IS the run_in_background task: no cap on --timeout
-  a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (Bash's own limit is 600 s); longer ones belong in run_in_background.
+  a foreground --timeout over ${FOREGROUND_CAP_SEC} s exits 2 (Bash's own limit is 600 s); longer ones belong in run_in_background with --background.
   conditions combine with AND; exit 0 held / 124 timeout / 2 usage. Run it as one background task.`;
 
-/** Clamp a foreground --timeout (minutes) to the cap; `background` lifts it. Pure. */
+/** A foreground --timeout over the cap is REFUSED, never silently shortened (the clamp let a caller wait ~8 times
+ *  as long as it asked for, believing one wait held). `background` lifts the cap. Pure. */
 export function capForeground(timeoutMin, background) {
   if (background || timeoutMin * 60 <= FOREGROUND_CAP_SEC) return { timeoutMin, note: "" };
   return {
-    timeoutMin: FOREGROUND_CAP_SEC / 60,
-    note: `= wait-for: --timeout ${timeoutMin} min (${Math.round(timeoutMin * 60)} s) exceeds the ${FOREGROUND_CAP_SEC} s foreground cap — capped; ` +
-      "for a longer wait start this command with Bash run_in_background and add --background",
+    timeoutMin,
+    error: `wait-for: --timeout ${timeoutMin} min (${Math.round(timeoutMin * 60)} s) exceeds the ${FOREGROUND_CAP_SEC} s foreground cap — refused, nothing waited; ` +
+      "use --background / run_in_background: start this command with Bash run_in_background and add --background",
   };
 }
 
@@ -137,8 +138,8 @@ async function main() {
   catch (e) { if (!(e instanceof UsageError)) throw e; console.error(`wait-for: ${e.message}\n${USAGE}`); return 2; }
   if (a.help) { console.log(USAGE); return 0; }
   const cap = capForeground(a.timeoutMin, a.background || process.env.APEX_WAIT_BACKGROUND === "1");
-  if (cap.note) console.error(cap.note);
-  const r = await waitFor(a.conds, { ...a, timeoutMin: cap.timeoutMin });
+  if (cap.error) { console.error(cap.error); return 2; }
+  const r = await waitFor(a.conds, a);
   console.log(r.text);
   return r.code;
 }

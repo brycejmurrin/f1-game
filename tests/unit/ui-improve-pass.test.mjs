@@ -96,9 +96,11 @@ test("CssZoom exports its API surface", () => {
   vm.runInNewContext(src("js/ui/css-zoom.js"), sb, { filename: absSrc("js/ui/css-zoom.js") });
   const Z = sb.CssZoom;
   assert.ok(Z, "window.CssZoom is assigned");
-  for (const name of ["of", "viewportRect", "localRect", "localBox", "toLocalDelta", "rectsAreVisual"]) {
+  for (const name of ["of", "viewportRect", "localBox", "toLocalDelta"]) {
     assert.equal(typeof Z[name], "function", `CssZoom.${name}`);
   }
+  assert.equal(Z.localRect, undefined, "localRect was unused and removed");
+  assert.equal(Z.rectsAreVisual, undefined, "rectsAreVisual is module-local");
 });
 
 test("data hub card carries UI SIZE zoom (fit-capped like a sheet)", () => {
@@ -272,6 +274,19 @@ test("Practice Goal native select follows Apex dark chrome", () => {
   assert.equal(decl(rules, "#practice-brief select", "background"), "var(--plate)");
   assert.equal(decl(rules, "#practice-brief select", "color"), "var(--text)");
   assert.equal(decl(rules, "#practice-brief option", "background"), "var(--plate)");
+});
+
+// The phone card's hero section never scrolls, so the practice brief above the
+// still is one row there (title + GOAL) and its description is clipped to
+// assistive tech; the layout itself is held by time-trial.spec.js at 844x390.
+test("Practice brief is one row on the compact phone card", () => {
+  const rules = css("css/select.css");
+  const card = '#sel-inner[data-density="compact"]:not([data-shape="tall"])';
+  assert.equal(decl(rules, `${card} #practice-brief`, "flex-direction"), "row");
+  assert.equal(decl(rules, `${card} #practice-brief`, "flex-wrap"), "nowrap");
+  assert.equal(decl(rules, `${card} #practice-brief[hidden]`, "display"), "none", "the row rule must not un-hide the brief");
+  assert.equal(decl(rules, `${card} #practice-brief > p`, "clip-path"), "inset(50%)");
+  assert.equal(decl(rules, `${card} #practice-brief .set-row`, "flex-wrap"), "nowrap");
 });
 
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
@@ -729,6 +744,28 @@ test("title keyboard navigation has an explicit default before stateful controls
   assert.equal(g.focused(), "s-sound", "no data-menu-default → the aria-pressed control is the landing spot");
 });
 
+// uihunt4-flows-1030 #3: the title boots with focus on <body> (no autofocus: a
+// touch player would get a ring, a reader a jump). Enter/Space there seeds the same
+// anchor the first arrow does; once something is focused they stay native.
+test("Enter or Space with nothing focused seeds the title's default, and only then", () => {
+  const h = bootMenuNav();
+  h.dom.document.activeElement = h.dom.document.body;
+  h.button("mb-sound", 10, { "aria-pressed": "true" });
+  h.button("mb-career", 50, { "data-menu-default": "" });
+  let prevented = false;
+  h.MenuNav.onKeyDown({ key: "Enter", preventDefault() { prevented = true; }, altKey: false, ctrlKey: false, metaKey: false });
+  assert.equal(h.focused(), "mb-career");
+  assert.equal(prevented, true, "the seeding press is spent, not a click");
+  prevented = false;
+  h.MenuNav.onKeyDown({ key: "Enter", preventDefault() { prevented = true; }, altKey: false, ctrlKey: false, metaKey: false });
+  assert.equal(prevented, false, "Enter on a focused button keeps its native click");
+  const g = bootMenuNav("overlay2");
+  g.dom.document.activeElement = g.dom.document.body;
+  g.button("s-career", 50, { "data-menu-default": "" });
+  g.key(" ");
+  assert.equal(g.focused(), "s-career", "Space seeds too");
+});
+
 test("tuner tabs scroll the selected chip into view", () => {
   for (const file of ["js/lighting/tuner-panel.js", "js/camera/tuner-panel.js"]) {
     const s = code(file);
@@ -849,8 +886,10 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
     r.context.includes("@container sheet (max-width: 520px)") && r.decls.get("display") === "none"),
     "~500 width hides the vertical CLASSICS divider even when density is still normal");
   const lowerThirdDd = rulesFor(sel, /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-preview-meta dd/)[0];
-  assert.ok(lowerThirdDd, "lower-third stats keep a wrap rule");
-  assert.equal(lowerThirdDd.decls.get("white-space"), "normal");
+  assert.ok(lowerThirdDd, "the phone card's stats carry their own white-space rule");
+  // #5153 gap 13: the two numbers ride on the still as ONE band, so they stay on one line (the values are
+  // "5.793 km" / "11"; a wrapped value would grow the band over the outline). Was `normal` in the scrolling lower third.
+  assert.equal(lowerThirdDd.decls.get("white-space"), "nowrap");
   assert.ok(rulesFor(sel, /#sel-inner > \.sheet-foot/).some((r) =>
     r.context.includes("@container sheet (max-width: 520px)")),
     "foot wraps team names from ~500, not only a tall 480 phone");
@@ -957,6 +996,7 @@ test("an active career locks team and seat selection in the garage", () => {
 function bootCamModes(camMode = 2, extra = {}) {
   const dom = makeDom();
   const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} }, ...extra });
+  vm.runInNewContext(src("js/camera/cam-picker.js"), sb, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInNewContext(src("js/camera/mode-switch.js"), sb, { filename: absSrc("js/camera/mode-switch.js") });
   const store = {};
   const G = { $: (id) => dom.byId(id), state: "race", paused: false, camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
@@ -1186,7 +1226,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   assert.match(html, /id="pm-feel" class="set-row" role="group"/);
   assert.match(html, /id="pm-helplevel" class="set-row" role="group"/);
   assert.match(html, /id="pm-linemode" class="set-row" role="group"/);
-  assert.ok(rulesFor(components, /#pmsettings-inner\[data-shape="wide"\] #advanced-inner \.adv-sec/).some((r) =>
+  assert.ok(rulesFor(components, /#pmsettings-inner:not\(\[data-density="compact"\]\) #advanced-inner \.adv-sec/).some((r) =>
     r.decls.get("grid-column") === "1 / -1"),
     "advanced section headings still span the wide body grid");
   const all = [html, readCssSource("css/components.css"), readCssSource("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
@@ -1232,7 +1272,7 @@ function bootInput() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   const pad = (ax, buttons = [], ax2 = 0) => ({
     connected: true, axes: [ax, 0, ax2, 0],
@@ -1551,6 +1591,26 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   const nofit = h.sheet("plain", { w: 800, h: 400, hostHeight: 100, vars: {} });
   h.SS.observe(nofit.el);
   assert.equal(nofit.el.dataset.fit, undefined, "a sheet without --fit-at is never fit-managed");
+  // UI contract 2026-11-06 gap 14: ±0.03 band — a toolbar or keyboard twitch of a few px keeps the painted cap.
+  s.host._client = 400; h.SS.reclassify();
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "1.333");
+  s.host._client = 406; h.SS.reclassify();
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "1.333", "406/300 = 1.353 is inside the band: no re-zoom");
+  s.host._client = 430; h.SS.reclassify();
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "1.433", "430/300 = 1.433 leaves the band");
+  s.host._client = 700; h.SS.reclassify();
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "", "a release is never held back by the band");
+  // Gap 14: never below 100 % — a sheet that cannot fit at 1.0 scrolls its list instead (circuit detail painted 0.954
+  // in an 852x283 Safari tab); a UI SIZE under 100 % is the player's own floor.
+  const h2 = bootSheetShape({ uiScale: 1.09 });
+  const low = h2.sheet("td-inner", { w: 700, h: 230, hostHeight: 230, vars: { "--fit-at": "280px" } });
+  h2.SS.observe(low.el);
+  assert.equal(low.el.dataset.fit, "on");
+  assert.equal(low.el.style.getPropertyValue("--sheet-scale"), "1", "230/280 = 0.82 is floored at 1.0, not 0.4");
+  const h3 = bootSheetShape({ uiScale: 0.8 });
+  const pref = h3.sheet("td-inner", { w: 700, h: 230, hostHeight: 230, vars: { "--fit-at": "280px" } });
+  h3.SS.observe(pref.el);
+  assert.equal(pref.el.style.getPropertyValue("--sheet-scale"), "", "UI SIZE 80 % is the player's floor: 0.82 ≥ 0.8 fits, no cap");
 
   const components = css("css/components.css");
   const garage = css("css/carsetup.css");
@@ -1600,12 +1660,21 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   // whole task to a single scroller rather than pinning chrome around it.
   assert.equal(decl(menus, /#rs-body$/, "display"), "grid");
   assert.equal(decl(menus, /#rs-body$/, "overflow-y"), "auto", "roomy race settings scroll within the body");
-  assert.ok(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 640px\)/ }).some((r) =>
+  // #5153 gap 16 (UI contract 2026-11-06 rule 6): two columns from 500 own px, away from the 640-760 phone band.
+  assert.ok(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 500px\)/ }).some((r) =>
     /1fr\) minmax\(0, 1fr\)$/.test(r.decls.get("grid-template-columns") || "")), "two columns once the sheet is wide");
+  assert.equal(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 640px\)/ }).length, 0, "no column flip inside the phone band");
   assert.equal(rulesFor(menus, /#rs-/).filter((r) => r.decls.has("grid-row")).length, 0, "no per-section grid-row placement");
-  assert.equal(decl(menus, '#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"])', "overflow-y"), "auto");
-  assert.equal(decl(menus, '#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) > #rs-body', "overflow"), "visible");
-  assert.equal(decl(menus, "#race-settings > .sheet", "--compact-at"), "260px");
+  // A TALL sheet, or one too SHORT for fixed chrome (SheetShape data-page from --page-at), is one page-scroller;
+  // any other compact wide sheet keeps head and START RACE fixed and scrolls #rs-body.
+  const onePage = '#race-settings > .sheet:is([data-shape="tall"], [data-page="on"])';
+  assert.equal(decl(menus, onePage, "overflow-y"), "auto");
+  assert.equal(decl(menus, onePage + " > #rs-body", "overflow"), "visible");
+  assert.equal(decl(menus, "#race-settings > .sheet", "--page-at"), "220px", "one page under 220 own px of room");
+  assert.equal(decl(menus, "#race-settings > .sheet", "--fit-at"), "0px", "the requested UI SIZE reaches the race sheet");
+  assert.equal(rulesFor(menus, /#race-settings > \.sheet.*data-density="compact"/).filter((r) => r.decls.get("display") === "block").length, 0,
+    "compact race settings keep the sheet grid (gap 16)");
+  assert.equal(decl(menus, "#race-settings > .sheet", "--compact-at"), "480px", "compact at 480 like its siblings");
   assert.match(spotify, /settings\.hidden\s*=\s*true\b/);
   assert.match(spotify, /settings\.hidden\s*=\s*false\b/);
 });
@@ -1767,14 +1836,24 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   const wideSel = css("css/menus.css").find((r) => r.selector === '#sel-inner:not([data-shape="tall"]) #sel-track-preview' && r.context.includes("@container sheet (min-width: 620px)"));
   assert.ok(wideSel, "wide SELECT arranges the hero grid in a container query");
   assert.equal(wideSel.decls.get("grid-template-columns"), "minmax(0, 3fr) minmax(0, 2fr)");
+  // #5153 gap 13 (UI contract 2026-11-06 rule 4): BESIDE is gated off a phone-sized window; the phone card is
+  // one four-row sheet grid with the body and shelf dissolved, the hero never a scroller, the numbers on the still.
+  assert.ok(wideSel.context.some((c) => /@media \(pointer: fine\), \(\(min-width: 900px\) and \(min-height: 600px\)\)/.test(c)),
+    "BESIDE needs a fine pointer or a tablet-sized window");
+  const phoneSel = '#sel-inner[data-density="compact"]:not([data-shape="tall"])';
+  assert.equal(decl(css("css/menus.css"), phoneSel, "grid-template-rows"), "auto auto minmax(0, 1fr) auto");
+  assert.equal(decl(css("css/menus.css"), `${phoneSel} :is(#sel-body, #sel-shelf)`, "display"), "contents");
+  assert.equal(decl(css("css/menus.css"), `${phoneSel} #sel-track-section`, "overflow"), "hidden", "the hero section never scrolls");
+  assert.equal(decl(css("css/menus.css"), `${phoneSel} #sel-track-filter`, "grid-row"), "1", "the filter chips share the title row");
+  assert.equal(decl(css("css/menus.css"), `${phoneSel} #sel-preview-info`, "position"), "absolute", "the numbers ride on the still");
   assert.equal(decl(css("css/menus.css"), "#sel-track-preview", "grid-template-columns"), "minmax(0, 1fr)",
     "narrow SELECT stacks the still over the numbers");
   assert.equal(decl(css("css/menus.css"), "#sel-still", "object-fit"), "cover");
-  const dispAreas = decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas");
+  const dispAreas = decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display', "grid-template-areas");
   assert.match(dispAreas, /^"hudopts hudopts"[\s\S]*"metrics metrics"/,
     "DISPLAY opens on HUD, then METRICS and RENDERER (UI SIZE moved to APPEARANCE › READABILITY)");
   assert.doesNotMatch(dispAreas, /uih|uis/, "no hole left for UI SIZE");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.doesNotMatch(dispAreas, /renopts|visual/, "Graphics and Visual Studio no longer reserve empty HUD grid rows");
   assert.match(read("index.html"), /id="pm-visual-tuners" class="pm-renderer-sub"/,
@@ -1792,7 +1871,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
   assert.match(read("index.html"), /id="pm-display-adv-body"[\s\S]*id="pm-res"/);
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
     "METRICS sits on its own DISPLAY row, not beside HUD");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /SIZE PREVIEW/,
@@ -1830,9 +1909,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
   assert.match(read("index.html"), /id="pm-display-adv"/,
     "the RENDERER fold is the shell host; RESET / shots still inject into its body");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display > details', "grid-column"), "1 / -1",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display > details', "grid-column"), "1 / -1",
     "every present and future Display disclosure spans the wide grid");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
   // ONE RULE NOW, not three (2026-09-18). DISPLAY's summary chrome and
   // STEERING/DRIVING's were byte-identical blocks, so race settings' folds
@@ -1937,10 +2016,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(presetGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
   assert.equal(presetGrid.decls.get("grid-auto-rows"), "1fr");
   assert.equal(presetGrid.decls.get("align-items"), "stretch");
-  const fullRow = rulesFor(css("css/settings-controls.css"), /#pmsettings-inner\[data-shape="wide"\] \.pm-group > button/).find((r) =>
-    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c)));
-  assert.equal(fullRow && fullRow.decls.get("grid-column"), "1 / -1",
-    "narrow wide-shape action buttons take the full row");
+  // UI contract 2026-11-06 gap 3: a sheet under 52rem is never a column grid, so the
+  // old "narrow wide-shape action buttons take the full row" carve has nothing to span.
+  assert.equal(rulesFor(css("css/settings-controls.css"), /\.pm-group > button$/).filter((r) =>
+    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c))).length, 0,
+    "no aspect-keyed full-row carve inside the ≤ 620 container block");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
     "NEW CAREER columns keep the themed .sf-scroll thumb only");
   assert.equal(decl(css("css/career.css"), "#cr-career-file", "flex-direction"), "column",
@@ -1992,7 +2072,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "UI SIZE heading is a section break under READABILITY");
   assert.match(code("js/camera/cockpit-opts.js"), /fold\.id = "pm-cockpit"[\s\S]*?getElementById\("pm-visual-tuners"\)[\s\S]*?insertBefore\(fold, tools\)/,
     "COCKPIT is its own fold, just above ADVANCED VISUALS — never inside the RENDERER backend list");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit', "grid-area"), "cockpit",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-cockpit', "grid-area"), "cockpit",
     "and on a wide sheet it has its own named row above the tools");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
     "METRICS submenu no longer keys packing on viewport height");
@@ -2164,11 +2244,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact TODAY drops its weather/tod/best span so the filters stay on screen");
   // Each top is max(own slot, the mirror's bottom edge + 8px): --mir-bot is
   // unset (0px) with no mirror, so the own slot is what shows.
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px))",
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 6px), calc(var(--mir-bot, 0px) + 8px))",
     "compact radio cards sit right under the timing row, like every other density");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(> :where(#hud) > #hud-flag:not([hidden])) #announce', "top"), "calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
     "…and step below the flag chip while a caution shows, never on top of it");
-  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px))",
+  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 44px), calc(var(--hud-gaps-b, 0px) + 8px))",
     "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge (and clears --hud-gaps-b)");
   // ONE formula for the phone INPUTS top (HUD PR review 2026-10-10): --hud-sec-h is published in the chrome's
   // zoom (--hud-z-top) and converted into this band's (--hud-z); the step below the #hud-limits chip is
@@ -2202,6 +2282,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(resultsJs, /lbHead\.className\s*=\s*"sel-label"/);
   assert.doesNotMatch(resultsJs, /#e10600/, "results/standings heads use .sel-label, not leftover red ink");
   assert.doesNotMatch(resultsJs, /font-size:11px/, "TT share/clear chips use .sel-chip, not inline type");
+  // UI scaling contract gap 23 (PR #5156): inline px type does not follow TEXT SIZE.
+  assert.doesNotMatch(resultsJs, /fontSize\s*=\s*"\d+px"|font-size:\s*\d+px/,
+    "results-sheet inline type reads a --fs-* token, never a px");
   const shell = read("index.html");
   assert.doesNotMatch(shell, /id="sel-inner"[^>]*pane-pair/,
     "SELECT is one column (strip over hero); its foot spans the sheet by default");

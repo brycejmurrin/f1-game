@@ -9,8 +9,8 @@ const QualiNet = (function () {
   // hidden tab keeps the connection (and the 6 s silence timeout) alive but
   // never posts a time. After GATE_TIMEOUT_MS everyone's gate opens and the
   // missing seat is gridded from the model; the HOST may skip the wait earlier,
-  // after OVERRIDE_AFTER_MS ("START ANYWAY"). WAIT_MS is the same bound under
-  // the Flow B name (MENU leave / unit harness).
+  // after OVERRIDE_AFTER_MS ("START ANYWAY"). create() exposes WAIT_MS as the
+  // same bound under the Flow B name (MENU leave / unit harness).
   const OVERRIDE_AFTER_MS = 15000;
   const GATE_TIMEOUT_MS = 60000;
   const WAIT_MS = GATE_TIMEOUT_MS;
@@ -34,10 +34,9 @@ const QualiNet = (function () {
     let gateSince = null;     // when the gate first held after arm (rival outstanding)
     let gateTimedOut = false;
     let gateTimer = null;
-    let iDone = false;        // Flow B: player's own session is on the sheet (MENU path)
 
     function gateReset() {
-      gateSince = null; gateTimedOut = false; iDone = false;
+      gateSince = null; gateTimedOut = false;
       if (gateTimer != null) { clearTimer(gateTimer); gateTimer = null; }
     }
 
@@ -199,7 +198,9 @@ const QualiNet = (function () {
     }
 
     /** The player's own session is run (q-done): MENU is the second door off the sheet. */
-    function markDone() { iDone = true; }
+    // The player's own session is on the sheet (Flow B, MENU path). Kept as a
+    // no-op seam for game.js: canLeave() reads the gate and its timeout only.
+    function markDone() {}
     const timedOut = () => gateTimedOut;
     /** BACK/Escape may leave once the gate gave up on a silent rival. */
     const canLeave = () => gateTimedOut;
@@ -254,6 +255,8 @@ const QualiNet = (function () {
     };
   }
 
-  return { create, WAIT_MS, GATE_TIMEOUT_MS, OVERRIDE_AFTER_MS };
+  // Module surface is create only — WAIT_MS lives on the instance; the other
+  // two timeouts are internal (no QualiNet.X reader outside this file).
+  return { create };
 })();
 Object.freeze(QualiNet);

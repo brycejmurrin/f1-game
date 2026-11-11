@@ -7,7 +7,7 @@
    only through this surface. Depends on nothing in game.js by name: state
    comes through the G façade (gfx / store / cars / raceT / camEye / camMode /
    dbgCam / state / raceTimeOfDay / track / teamIdx / driverIdx / headlessMode /
-   frame), the four helpers that could not leave game.js through deps (resolveLivery,
+   frame), the six helpers that could not leave game.js through deps (resolveLivery,
    partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali). */
 "use strict";
 
@@ -167,6 +167,7 @@ const CarDraw = (function () {
         noWheels: !!(extra && extra.noWheels),
         field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
         silhouette: !!(extra && extra.silhouette),
+        seats: extra && extra.seats,   // body-only: teammates' bodies from this build (#4219)
       });
     }
 
@@ -207,11 +208,38 @@ const CarDraw = (function () {
     // was a fresh closure per drawn car per pass (~66 a frame) on the hit path.
     let _pbMirror = false;
     let _pbTeam = null, _pbNum = null, _pbKind = 0, _pbSetup = null;   // 0 painted, 1 silhouette, 2 body-only
+    let _pbCar = null, _pbKey = "", _pbMates = null;
+    // TEAMMATES SHARE ONE BODY BUILD (#4219). Seats differ only in the lid (and an
+    // "auto" T-cam), so a body-only miss also derives every field teammate on the
+    // same build — Car3D.build opts.seats, byte-identical to their own builds — and
+    // parks that data under the key the teammate's own miss will look up. Each
+    // seat still gets its own mesh; the menu prep or race warm reaches the
+    // teammate within the same pass (22 builds -> 11, ~58 ms a seat in Node).
+    const _seatData = new Map(), SEAT_DATA_MAX = 12;
+    function seatMates(team, car, num) {
+      let want = null;
+      for (const c of _pbMates || G.cars || []) {
+        if (!c || c === car || c.isPlayer || c.team !== team || !c.visualSetup !== !_pbSetup) continue;
+        const n = carDecalNum(team, c);
+        if (n === num || (_pbSetup && c.visStamp !== car.visStamp)) continue;
+        const key = teamMeshKeyFor(team, lidKey(team, (c.visualSetup && c.visPaint) || n));
+        if (!teamBodies[key] && !_seatData.has(key)) (want || (want = new Map())).set(n, key);
+      }
+      return want;
+    }
     function buildPendingTeamMesh() {
       const team = _pbTeam, num = _pbNum, setup = _pbSetup;
       const extra = _pbKind === 1 ? { num, silhouette: true, setup }
         : _pbKind === 2 ? { noWheels: true, num, setup } : { num, setup };
-      const data = buildCarData(team, extra);
+      let data = _pbKind === 2 ? _seatData.get(_pbKey) : null;
+      if (data) _seatData.delete(_pbKey);
+      else {
+        const mates = _pbKind === 2 && !carModelBuf ? seatMates(team, _pbCar, num) : null;
+        if (mates) extra.seats = new Map(Array.from(mates.keys(), (n) => [n, null]));
+        data = buildCarData(team, extra);
+        if (mates) for (const [n, key] of mates) if (extra.seats.get(n)) _seatData.set(key, extra.seats.get(n));
+        for (const k of _seatData.keys()) if (_seatData.size > SEAT_DATA_MAX) _seatData.delete(k);
+      }
       const mesh = G.gfx.createMesh(data);
       // Only the existing covered warm may prepare the partner. Failed/unavailable
       // partners simply retain the detailed body; no CPU geometry is retained.
@@ -264,14 +292,18 @@ const CarDraw = (function () {
       const state = mp.state();
       return !state.collapsed && !(state.pip && state.pip.shown) && !(state.backend && state.backend.dead);
     }
-    function teamBodyMesh(team, car, mirrorWarm) {
+    // `mates`: the field a menu prep is warming (default G.cars), for seatMates.
+    function teamBodyMesh(team, car, mirrorWarm, mates) {
       _pbMirror = !!mirrorWarm && _mirrorWarmAllowed && FieldLod.on;
       if (_pbMirror && !_mirrorBodies) { _mirrorBodies = new WeakMap(); _mirrorBodyLow = new WeakMap(); }
       const num = carDecalNum(team, car);
       _pbTeam = team; _pbNum = num; _pbKind = 2;   // body-only: noWheels, num
       _pbSetup = (car && car.visualSetup) || null;
       const suffix = lidKey(team, (_pbSetup && car.visPaint) || _pbNum);
-      return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKeyFor(team, suffix), buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
+      _pbCar = car; _pbMates = mates || null; _pbKey = teamMeshKeyFor(team, suffix);
+      const mesh = putBoundedMesh(teamBodies, teamBodyOrder, _pbKey, buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
+      _pbMates = null;
+      return mesh;
     }
     // Fixed 6 cm clusters partitioned by exact paint+material, never averaged.
     // One pass (not the 14-search far-body decimator). Each vertex moves at
@@ -859,17 +891,24 @@ const CarDraw = (function () {
       }
       const cache = _aeroLevelCache[usePlayerSetup ? 1 : 0];
       // Factory: the ruleset (Parts.setLegality) is the only thing that moves it.
+      // Player: also the captured recipe key — STANDARD Daily forces factory parts
+      // while getTeamParts still returns the garage save (M27), so rev alone is not enough.
       const rev = usePlayerSetup ? G.store.rev : -1, leg = Parts.legalityKey();
+      const vk = usePlayerSetup ? playerVisualKey : "";
       const c = cache.get(team.id);
-      if (c && c.rev === rev && c.leg === leg && samePartStyles(c, liv)) return c;
-      const resolved = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
-      const parts = Car3D.appearanceParts(Parts.getVisualTiers(resolved, team), liv);
+      if (c && c.rev === rev && c.leg === leg && c.vk === vk && samePartStyles(c, liv)) return c;
+      // Prefer the recipe setPlayerParts captured (factory under STANDARD Daily);
+      // fall back to the garage save only before recomputePlayerMods has run.
+      const parts = usePlayerSetup && playerParts && playerPartsTeam === team.id
+        ? Car3D.appearanceParts(playerParts, liv)
+        : Car3D.appearanceParts(Parts.getVisualTiers(
+            usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team), team), liv);
       // aero: the resolved RECIPE, resolved once here for every flap consumer.
       // parts.aero is the tier NUMBER — passing that to Car3D.aeroFlaps() NaN'd
       // every flap vertex and made the moveable wings invisible (see aeroStyleOf).
       const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                       aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                      parts, rev, leg, styles: rememberPartStyles(liv), fwKey: null, fwKeyWt: null, fwKeyFull: "" };
+                      parts, rev, leg, vk, styles: rememberPartStyles(liv), fwKey: null, fwKeyWt: null, fwKeyFull: "" };
       cache.set(team.id, state);
       return state;
     }
@@ -904,6 +943,10 @@ const CarDraw = (function () {
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
       if (lodWarm) warmLazyRaceMeshes();
+      // The player's pit crew rig (js/garage/pit-crew.js) was built on the frame the car reached its box; queue it
+      // LAST, so it builds under the lights after the grid's own pieces (#5051). Once per race: a restart re-queues
+      // a rig that already exists, which is a cache hit.
+      if (lodWarm) { const p = G.cars.find((c) => c && c.isPlayer); if (p) _deferredCarWarm.push({ c: p, crew: true }); }
       Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, lodWarm, cpuMs: Math.round(performance.now() - at) });
     }
     // ONE CAR'S WARM, IN FOUR PHASES — each one heavy piece, so the stepped
@@ -931,6 +974,7 @@ const CarDraw = (function () {
           // finds the atlas LRU may have dropped its texture since, and the cache rebuilds or hits as it should.
           if (it.atlas) { const tex = getCarDecalTexture(it.c.team, carDecalNum(it.c.team, it.c), !!it.c.isPlayer); if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex); }
           else if (it.caster) teamMesh(it.c.team, it.c, true);
+          else if (it.crew && typeof PitCrewAnim !== "undefined") PitCrewAnim.warm(G, it.c);   // #5051: the stop's rig, not on the box frame
         } catch (e) { Log.warn("gfx", "deferred car warm failed for " + (it.c && it.c.team && it.c.team.id), e); }
         if (performance.now() - t0 >= budget) break;
       }
@@ -1114,6 +1158,7 @@ const CarDraw = (function () {
           const ms = performance.now() - t; cpuMs += ms; if (ms > maxStepMs) maxStepMs = ms;
         }
       }
+      if (lodWarm) { const p = G.cars.find((c) => c && c.isPlayer); if (p) _deferredCarWarm.push({ c: p, crew: true }); }   // #5051, as warmCarAssets does
       Log.info("gfx", "race car assets ready", { cars: cars.length, casters, lodWarm, cpuMs: Math.round(cpuMs),
         maxStepMs: Math.round(maxStepMs), yields, wallMs: Math.round(performance.now() - at), deferred: _deferredCarWarm.length });
       // The census reads RaceEntryProfile marks, not Log.info: one mark carries the step stats.
@@ -1208,7 +1253,7 @@ const CarDraw = (function () {
               if (c.isPlayer) {
                 playerBodyMesh(c.team, c, visualKey);
                 if (["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c, visualKey);
-              } else teamBodyMesh(c.team, c, true);
+              } else teamBodyMesh(c.team, c, true, field);
               const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
               if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
             }
@@ -1762,14 +1807,17 @@ const CarDraw = (function () {
     function advanceWheelPhases(dt) {
       // game.js calls this exactly once before MirrorPass.render, including
       // frozen/zero-dt draws. No default state/DOM reads or context allocation.
+      // Math lives on CarWheels.phaseStep (angle += v/R·dt) so the unit pin and
+      // the garage distance path cannot drift from this frame step.
       if (_mirrorBodies) { _mirrorViewRead = false; _mirrorViewContext = null; }
+      const R = PhysicsConsts.WHEEL_R || CarWheels.WHEEL_R;
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         let phase = _wheelPhases.get(c);
         if (!phase) { phase = { rear: 0, front: 0 }; _wheelPhases.set(c, phase); }
-        const spin = (c.speed / PhysicsConsts.WHEEL_R) * dt;
-        phase.rear = ((phase.rear || 0) + spin) % (Math.PI * 2);
-        phase.front = ((phase.front || 0) + spin * (1 - (c.wheelLock || 0))) % (Math.PI * 2);
+        const d = CarWheels.phaseStep(c.speed, dt, R, c.wheelLock || 0);
+        phase.rear = CarWheels.wrapPhase((phase.rear || 0) + d.rear);
+        phase.front = CarWheels.wrapPhase((phase.front || 0) + d.front);
       }
     }
     // `bare` (drawMirrorCar): the 4 rotating wheels at the steer they show and
@@ -2069,6 +2117,7 @@ const CarDraw = (function () {
         carModelBuf = buf;
         for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
         for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
+        _seatData.clear();
         for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
         freeSharedRivalBodies();
         playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = 0;
@@ -2119,6 +2168,20 @@ const CarDraw = (function () {
       playerWheelId = vt._ids ? vt._ids.wheels : "standard";
       playerWheelVisual = vt._visual && vt._visual.wheels || null;
       playerVisualKey = visualKey;
+      // Restamp the live player through the ONE carVisual helper. makeCars stamps
+      // visualSetup once from getTeamParts (own:true); STANDARD Daily's body key is
+      // factory, so the TT ghost (teamMesh(player)) and stamp-keyed casters would
+      // keep the SAVED build until the next makeCars. Align with the recipe just
+      // applied (M27).
+      if (G.player && team && playerParts && playerParts._ids) {
+        const recipe = {};
+        for (const cat of Parts.CATALOG) recipe[cat.id] = playerParts._ids[cat.id] || "";
+        const stamped = carVisual(team, carDecalNum(team, G.player), true, () => recipe);
+        G.player.visualSetup = stamped.visualSetup;
+        G.player.visStamp = stamped.visStamp;
+        G.player.visPaint = stamped.visPaint;
+        G.player.visSh = stamped.visSh;
+      }
     }
     // MY TEAM re-customise: drop every "custom:" entry of the four body caches.
     // With a team id, that team's entries (the livery editor's CANCEL / SAVE:
@@ -2127,7 +2190,7 @@ const CarDraw = (function () {
     function invalidateCustomMeshCaches(teamId) {
       const prefix = (teamId || "custom") + ":";
       invalidateCustomMeshCache(teamMeshes, teamMeshOrder, prefix);
-      invalidateCustomMeshCache(teamBodies, teamBodyOrder, prefix);
+      invalidateCustomMeshCache(teamBodies, teamBodyOrder, prefix); _seatData.clear();
       invalidateCustomMeshCache(playerBodies, playerBodyOrder, prefix);
       invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder, prefix);
     }
@@ -2138,6 +2201,7 @@ const CarDraw = (function () {
     function invalidateFactoryMeshCaches() {
       for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }
       for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
+      _seatData.clear();
       for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
       for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
       playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = cockpitBodyOrder.length = 0;

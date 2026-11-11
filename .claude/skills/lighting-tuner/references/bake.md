@@ -7,44 +7,30 @@
 - CRITICAL — `bake.mjs` is a FULL REPLACE
 - Capture, review, ship
 - Read-only preflight receipts
+
 | paste starts with | what it is | tool |
 |---|---|---|
 | `window.LightEdits = {…}` | a DELTA — only the player's own overrides, what COPY VALUES emits | `merge-proposals.mjs` (merge) |
 | `window.LightPresets = {…}` | a full SNAPSHOT of every profile | `bake.mjs` (full replace) |
 
-The **LIGHTING TUNER** COPY VALUES button used to export the file+local merge —
-805 conditions, 182,569 characters, which no one could select out of a phone
-textarea or paste into a message. It now exports only the local overrides, as
-`window.LightEdits`, current condition first. That is a DELTA: feeding it to
-`bake.mjs` would write those few keys and delete ~1,000 others, so `bake.mjs`
-refuses it by name and points here. Either way this skill writes shipped
-`js/lighting/presets.js` and commits (no cache bump). localStorage still
-outranks the file until RESET.
+COPY VALUES exports `window.LightEdits`, a DELTA that `bake.mjs` refuses by name. Either tool
+writes shipped `js/lighting/presets.js` (no cache bump; localStorage outranks it until RESET).
 
 Live knob work without a paste → the lighting-tuner index (`SKILL.md`).
 
-Per-track agent proposals → `artifacts/lighting/proposals/<id>.json`, then
-`node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs` (validates + merges;
-does not bump cache). Never let a subagent write `js/lighting/presets.js`.
+Per-track agent proposals: see the merge path below. Never let a subagent write
+`js/lighting/presets.js`.
 
 ## CRITICAL — `bake.mjs` is a FULL REPLACE
 
 **Never hand `bake.mjs` a partial object.** It replaces the entire
 `window.LightPresets = {…};` literal, so a one-profile paste silently wipes
-~1,000 other keys. Its only safe input is a complete snapshot. A key-count
-WARNING (incoming < half of shipped) is a stop sign, not a block; a
+every other key. Its only safe input is a complete snapshot. Its key-count
+shrink WARNING is a stop sign, not a block; a
 `window.LightEdits` paste is refused outright, because that shape is now an
 expected input and guessing wrong destroys the file.
 
-```sh
-node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt   # SNAPSHOT only
-```
-
-A player's paste is the other shape, and merges:
-
-```sh
-node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/tmp/edits.js
-```
+Commands: Steps (snapshot, `bake.mjs`) and The merge path (`merge-proposals.mjs`) below.
 
 ## Capture, review, ship
 
@@ -70,7 +56,8 @@ node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/tmp/edi
 - **Player paste** — `window.LightEdits = {…}` from COPY VALUES, keyed by the
   full `"track|tod|wx"` plus the `"*"` / `"*|tod"` layers a proposal cannot
   express. Within a condition a delta **MERGES**: two sliders moved is two knobs
-  added, not the other eight deleted. A delta may never delete a condition.
+  added, not the other eight deleted; a knob set back to what the layers below
+  resolve to is unpinned. A delta never deletes a condition it does not unpin.
 
 Save the paste to a file and pass the path — it is read with `vm`, so the `//`
 comments the export writes between blocks are fine.
@@ -80,8 +67,8 @@ comments the export writes between blocks are fine.
 If you only need to update ONE `track|tod|weather` (or `"*"`) key and do not
 have a complete shipped snapshot, do **not** feed `bake.mjs` a one-key object:
 
-1. Read `js/lighting/presets.js` and parse the existing
-   `window.LightPresets` object (plain JSON after the assignment).
+1. Read `js/lighting/presets.js` and evaluate the existing
+   `window.LightPresets` object (it carries `//` comments, so not `JSON.parse`).
 2. `Object.assign` just that key's new value — leave every other key.
 3. Write the whole object back as `window.LightPresets = {…};` and
    `node tools/gen/gen-shell.mjs --check` (no bump: [shell/cache](../../check-changes/references/bump.md)).
@@ -90,8 +77,8 @@ Prefer the explicit `merge-proposals.mjs` path for partial player deltas.
 
 ### Input shape
 
-Keys are `"trackId|timeOfDay|weather"`, `"*"`, or `"*|timeOfDay"`;
-`timeOfDay` ∈ dawn|day|dusk|night, `weather` values must be registered in the current game settings.
+Keys are `"trackId|timeOfDay|weather"`, `"*"`, `"*|timeOfDay"` or `"*|timeOfDay|weather"`; the
+accepted values are `badProfileKey` in `tools/lighting/preset-validation.mjs`.
 Values are partial `{knobId: number}` maps (only non-default knobs).
 
 ### Steps
@@ -118,20 +105,15 @@ Values are partial `{knobId: number}` maps (only non-default knobs).
    ```
    Every key and knob must pass the script validator.
 
-4. **Smoke (optional):** `node tools/ci/test-bg.mjs smoke`
+4. **Smoke (optional):** `node tools/ci/remote-group.mjs smoke` on the pushed branch
 
-5. **Commit + push** to the active feature branch (never `main`):
-   ```sh
-   git add js/lighting/presets.js
-   git commit -m "Bake lighting presets: <which tracks/conditions>"
-   git push -u origin <dev-branch>
-   ```
+5. **Commit** `js/lighting/presets.js` on the active feature branch (two calls, AGENTS.md rule 12),
+   message `Bake lighting presets: <which tracks/conditions>`.
 
 ### Dry run (no write into js/)
 
-Add `--check` (alias `--dry-run`) to either script: validates and prints a receipt, writes nothing.
-
-Verdict: `Merged N incoming profile(s): W written, K knob(s).` rc 0; any error lists
+`--check` (see Read-only preflight receipts) prints a JSON receipt (`changes`) and writes nothing,
+rc 0; any error lists
 `file: key.id …` and rc 1 with nothing written. `bake.mjs` reads bare JSON or a JS
 literal only: a leading `//` comment line fails to parse, so strip comments from a
 `window.LightPresets` paste first (`window.LightEdits` goes through `merge-proposals`, which tolerates them).
@@ -139,8 +121,6 @@ literal only: a leading `//` comment line fails to parse, so strip comments from
 ### Notes
 
 - Helper takes a file arg OR stdin (`bake.mjs - < blob`).
-- Only `js/lighting/presets.js` changes the shipped look; a player's
-  localStorage still overrides until RESET.
 - Parse failure writes nothing — usually a stray trailing comma.
 - Regex failure (`Could not find the window.LightPresets assignment`): the
   file must contain a line-anchored `window.LightPresets = {` … `};` on its
@@ -149,7 +129,7 @@ literal only: a leading `//` comment line fails to parse, so strip comments from
 ## Read-only preflight receipts
 
 Both scripts accept `[file] --check` (alias `--dry-run`) and `--json`.
-Before writes, validate registered track/time/weather keys, `*` and `*|tod`,
+Before writes, validate registered track/time/weather keys, `*`, `*|tod` and `*|tod|wx`,
 registered knob ids, finite range and slider-grid values through the shared
 `tools/lighting/preset-validation.mjs`. Receipts list added/deleted/changed
 profiles deterministically. `--check` creates no output or shipped-file edits.

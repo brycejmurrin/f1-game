@@ -38,9 +38,28 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
   const vv = window.visualViewport;
   if (vv && typeof vv.addEventListener === "function") vv.addEventListener("resize", stale, { passive: true });
 }
-function vpSync() { if (_vp.stale) { _vp.w = window.innerWidth; _vp.h = window.innerHeight; _vp.stale = _vp.live || _vpNow() < _vp.until; } }
+// THE SOURCE IS THE ICB (documentElement.clientWidth/Height: what CSS lays out in and every rect here is measured in).
+// inner* is the visual viewport on iOS and can hold the portrait pair at a landscape launch (#5201). No layout: inner*.
+function vpSync() {
+  if (!_vp.stale) return;
+  const r = typeof document !== "undefined" && document.documentElement, w = r ? r.clientWidth : 0, h = r ? r.clientHeight : 0, icb = w > 0 && h > 0;
+  if (icb) { _vp.w = w; _vp.h = h; } else { _vp.w = window.innerWidth; _vp.h = window.innerHeight; }
+  _vp.stale = _vp.live || _vpNow() < _vp.until;
+}
 const vpW = () => { vpSync(); return _vp.w; };
 const vpH = () => { vpSync(); return _vp.h; };
+
+// ONE BLINK CLOCK. Each HUD `pulse` (css/hud.css: OT armed, ERS, VSC, pit cue,
+// limits, the 0.4 s redline) began its own phase when its class landed, so two
+// warnings on screen together blinked out of step (DEFECT-LEDGER item H). Pinning
+// every pulse's startTime to the document timeline's zero puts them on one
+// clock: the 0.8 s pulses share a phase and the redline is their harmonic.
+function syncPulse(e) {
+  const el = e.target;
+  if (e.animationName !== "pulse" || !el || typeof el.getAnimations !== "function") return;
+  for (const a of el.getAnimations()) if (a.animationName === "pulse" && a.startTime !== 0) a.startTime = 0;
+}
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("animationstart", syncPulse, true);
 
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
 let _invalidateFit = null, _syncPhoneFit = null;
@@ -71,6 +90,11 @@ function hUnstyle(el, prop) { if (!el) return; const m = _hudSty.get(el); if (m)
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
+/** Aria/prose through I18n when present; without it, fill {name} holes in the English default. */
+function hT(key, vars, def) {
+  if (typeof I18n !== "undefined") return I18n.t(key, vars, def);
+  return String(def).replace(/\{(\w+)\}/g, (m, n) => (vars && vars[n] != null ? String(vars[n]) : m));
+}
 // Compare the actual DOM so an external edit is repaired on the next tick.
 // Avoid repeated attribute mutations; hidden writes feed the visibility observer.
 function hHidden(el, on) { if (el && el.hidden !== !!on) el.hidden = !!on; }
@@ -478,7 +502,22 @@ const FIT_CLASH_TRIES = 5;
 // stayed there until the 3 s same-key re-measure (hud-survey 1280x720 cockpit:
 // aero right edge 1297 of 1280). textContent costs no layout; a length that
 // changes re-fits once, and the countdown only does so when a digit rolls over.
-function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const el = _hlEls[i]; k += el.hidden ? "h" : "v" + (el.textContent || "").length + ","; } return k; }
+// A chip css/track-detail.css hides (touch cockpit strip: body[data-hl-set=cockpit]:not(.desktop),
+// not player-placed) counts as hidden too: its ERS glyph / AERO countdown re-ran the full fit
+// ~0.5/s for a box nobody sees (perf hunt 8). Mirrors that selector without a layout read.
+const _HL_CSS_HID = new Set(["hud-energy", "hud-tyre", "hud-ot", "hud-aero", "hud-bb"]);
+let _blueHeld = null;
+function hlKey() {
+  const b = typeof document !== "undefined" ? document.body : null;
+  const strip = !!b && !!b.dataset && b.dataset.hlSet === "cockpit" && !(b.classList && b.classList.contains("desktop"));
+  let k = "";
+  for (let i = 0; i < _hlEls.length; i++) {
+    const el = _hlEls[i];
+    const cssHid = strip && _HL_CSS_HID.has(el.id) && !(el.hasAttribute && el.hasAttribute("data-hl-user"));
+    k += el.hidden || cssHid ? "h" : "v" + (el.textContent || "").length + ",";
+  }
+  return k;
+}
 // THE TWO READS THE FIT MEMO NEVER COVERED. Both getComputedStyle(root) calls
 // in fitHud sat ABOVE its `_fitWait` early return, so the 3 s same-key backoff
 // paced the getBoundingClientRect pass and nothing else: these ran at the full
@@ -501,7 +540,10 @@ function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const e
 // cost depends on a tree this box does not reproduce.
 let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
 function syncComputedRootVars() {
-  const k = vpW() + "x" + vpH() + "|" + document.body.className;
+  // The computed value includes an INLINE --hud-scale / --hud-btn-scale: a camera switch at HUD 150 %
+  // cached 1.5 as the "stylesheet default", so reverting HUD SIZE kept the 150 % caps (UI-HUNT-2-HUD 10c).
+  const rs = document.documentElement.style;
+  const k = vpW() + "x" + vpH() + "|" + document.body.className + "|" + rs.getPropertyValue("--hud-scale") + "|" + rs.getPropertyValue("--hud-btn-scale");
   if (k === _cssRootKey) return;
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
@@ -521,6 +563,23 @@ let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the fo
 // reasons in screen sides, so pick each handle by the side it is painted on (re-picked at every fit).
 let _dockMir = null, _deltaShown = false;   // _deltaShown: DELTA has painted a number since it last went pending
 function pickDocks() { const m = document.body.classList.contains("mirror-controls"); if (_dockL && m === _dockMir) return; _dockMir = m; const a = document.getElementById("dock-left"), b = document.getElementById("dock-right"); _dockL = m ? b : a; _dockR = m ? a : b; }
+// fitHud's dock buttons, queried once per dock layout, not per 10 Hz tick: layoutDocks (game.js) re-parents GROUPS and
+// pickDocks swaps the handles, so the cache keys on [dockL, its children…, dockR, …]; invalidateFit drops it too.
+let _dockBtns = null, _dockKids = [];
+function dockKidsSame() {
+  let i = 0;
+  for (const d of [_dockL, _dockR]) {
+    if (_dockKids[i++] !== d) return false;
+    if (d) for (let j = 0; j < d.children.length; j++) if (_dockKids[i++] !== d.children[j]) return false;
+  }
+  return i === _dockKids.length;
+}
+function dockButtons() {
+  if (_dockBtns && dockKidsSame()) return _dockBtns;
+  _dockBtns = []; _dockKids = [];
+  for (const d of [_dockL, _dockR]) if (_dockKids.push(d) && d) { _dockKids.push(...d.children); _dockBtns.push(...d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")); }
+  return _dockBtns;
+}
 // THE BUDGET IS THE UN-MOVED LAYOUT. MOVE & SIZE (js/ui/hud-layout.js) paints a
 // player offset on top of each element with `translate` / `scale` (data-hl,
 // --hl-x/-y in screen %, --hl-s, origin --hl-o), and getBoundingClientRect
@@ -544,8 +603,8 @@ function layoutRect(el) {
     ? { ...r, left: r.left - clearX, right: r.right - clearX, top: r.top - clearY, bottom: r.bottom - clearY, width: r.width, height: r.height } : r;
   const st = el.style, s = +st.getPropertyValue("--hl-s") || 1;
   const w = r.width / s, h = r.height / s;
-  let left = r.left - clearX - (+st.getPropertyValue("--hl-x") || 0) * window.innerWidth / 100;
-  let top = r.top - clearY - (+st.getPropertyValue("--hl-y") || 0) * window.innerHeight / 100;
+  let left = r.left - clearX - (+st.getPropertyValue("--hl-x") || 0) * vpW() / 100;
+  let top = r.top - clearY - (+st.getPropertyValue("--hl-y") || 0) * vpH() / 100;
   if (s !== 1) {
     let fx = 0.5, fy = 0.5, dx = 0, dy = 0;
     for (const k of String(st.getPropertyValue("--hl-o") || "").trim().split(/\s+/)) {
@@ -561,311 +620,12 @@ function layoutRect(el) {
   }
   return { left, top, right: left + w, bottom: top + h, width: w, height: h };
 }
-// THE RADIO CARD'S TOP-ROW SLOT: right of the timing tower, left of the cam /
-// pause buttons, in the tower's own row — off the road and clear of the mirror
-// under the tower (a phone report: the card beside the mirror still sat on the
-// view). The strip ends at whichever button shares the tower's rows. Published
-// in SCREEN px with body.hud-radio-top — css/hud.css divides by the card's own
-// zoom — and only where a shrunk card fits; otherwise the card keeps its slot
-// under the tower (beside the mirror, js/render/shared/mirror-pass.js, or
-// below it). Never in BROADCAST, whose tower is top-left and whose mirror
-// owns the top-centre.
-// THE TOUCH DOCKS BOUND IT TOO. A dock column reaches the tower's rows on a
-// landscape phone (the cockpit's right dock put BOOST at y 72 on 844x390), and
-// the card was published straight across it (survey 2026-10-04: #announce
-// [500,66 223x65] over #btn-boost [603,72]). Every dock group that shares the
-// card's rows and reaches past the slot's start ends the strip at its left
-// edge; one that already covers the start leaves no slot at all. Run after the
-// dock cap is written, so the groups are measured at the zoom they paint at.
-// Narrow top slots wrap radio calls over too many lines; use the wider lane.
-const RADIO_TOP_MIN = 160, RADIO_TOP_GAP = 8;
-// THE DOCK LANE: where the top-row slot does not fit, the card hangs under the
-// tower. A long message at a centred max-width reached whichever dock sat
-// closer to the middle (tilt auto, 852×393: pedals on the left, BOOST on the
-// right — a symmetric half from the pedals still covered BOOST). --announce-lane-x
-// (screen px) / -shift / -w are that gap; css/hud.css divides x by this
-// element's --hud-z (a calc embedding var(--hud-z) on :root is invalid there
-// and left fell back to 50% with transform none — card left-edge at centre,
-// hud-layout CI: #announce+btn-boost at x426 on 852). #hud-sectors sits in
-// that same hanging band on touch (small-landscape: #hud-sectors+#announce)
-// so it ends the strip too; the map and the gaps chip start it when a dropped
-// or low strip shares the hanging card's rows (hud-layout: .hud-gaps+#announce).
-// They do not count as a dock, so empty docks (desktop) still unpublish the
-// lane. Run again after this tick's gap strings (updateHud): fitHud
-// saw the previous spelling, and hud-layout probes on that same tick.
-// ONLY CHROME IN THE CARD'S OWN ROWS CLIPS IT. The hanging card starts under
-// the mirror (its chip, or the tower when neither shows) and is a few lines
-// tall (LANE_ROWS). Clipping the lane to every dock group wherever it sat —
-// the steer buttons and TILT's pedals on the bottom edge — and to the map and
-// gaps even when they ended above the card pinned the card at the steer
-// column's right edge, mid-view over the cars ahead (phone report 2026-10-10,
-// cockpit 932x430: #announce at x≈227 under the halo, 160px above the buttons
-// it was clearing). A dock group still PUBLISHES the lane from anywhere in the
-// viewport (desktop's empty docks never do); it bounds the lane only from the
-// card's rows, as the map, the gaps chip and the opt-in readouts do.
-const LANE_ROWS = 96;
-// PERF (#1723 / ledger PERF-GAMEPLAY-HITCHES-2026-10-14): announceLane's
-// getBoundingClientRect reads were ~21% of spike CPU at 4× throttle. Cache the
-// clipper rects; invalidate only on a real layout change (resize / orientation,
-// HUD scale / style / camera set, HudLayout / MOVE&SIZE → invalidateFit, fitHud
-// full pass, announce show/hide or content, clipper hide flags, gaps empty↔on).
-// Gap DIGIT rolloff must not re-key the memo — that was the periodic hitch.
-let _laneKey = "", _laneWait = 0, _laneRects = null, _laneSafe = null, _laneRectMisses = 0;
-function invalidateLaneRects() {
-  _laneRects = null;
-  _laneSafe = null;
-  _laneKey = "";
-  _laneWait = 0;
-}
-function laneRect(el) {
-  if (!el || typeof el.getBoundingClientRect !== "function") return null;
-  if (!_laneRects) _laneRects = new Map();
-  else if (_laneRects.has(el)) return _laneRects.get(el);
-  _laneRectMisses++;   // cache miss → real getBoundingClientRect (test/probe surface)
-  const r = el.getBoundingClientRect();
-  _laneRects.set(el, r);
-  return r;
-}
-function laneSafeInsets(root) {
-  if (_laneSafe) return _laneSafe;
-  let sal = 0, sar = 0;
-  if (typeof getComputedStyle === "function" && root) {
-    try {
-      const cs = getComputedStyle(root);
-      sal = parseFloat(cs.getPropertyValue("--sal")) || 0;
-      sar = parseFloat(cs.getPropertyValue("--sar")) || 0;
-    } catch (_) { /* mini-dom / detached root */ }
-  }
-  return (_laneSafe = { sal, sar });
-}
-// A card the player MOVED (MOVE & SIZE / ARRANGE HUD x or y) is out of the slots and the lane:
-// css/hud.css anchors it at a fixed point so the offset is where it sits (body[data-radio-placed]).
-const radioPlaced = () => { const b = document.body; return !!(b && b.hasAttribute && b.hasAttribute("data-radio-placed")); };
-function announceLane(root) {
-  if (radioPlaced()) { const a = document.getElementById("announce"); if (a && a.toggleAttribute) a.toggleAttribute("data-lane-collapsed", false); return; }
-  const t = _hudTop ? laneRect(_hudTop) : null;
-  const W = vpW(), H = vpH() || 0;
-  const y0 = t ? t.bottom : 0, mid = W / 2;
-  const under = (el) => { if (!el || el.hidden) return 0; const r = laneRect(el); return r && r.width && r.height ? r.bottom : 0; };
-  // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
-  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
-  const { sal, sar } = laneSafeInsets(root);
-  let left = sal, right = W - sar, any = false;
-  const clip = (r, counts) => {
-    if (!r || !r.width || !r.height) return;
-    if (counts && r.top < H && r.bottom > y0) any = true;   // a lit dock publishes the lane from anywhere below the tower
-    if (r.top >= bandBot || r.bottom <= bandTop) return;    // but only the card's rows bound it
-    if ((r.left + r.right) / 2 >= mid) right = Math.min(right, r.left);
-    else left = Math.max(left, r.right);
-  };
-  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) clip(laneRect(g), true);
-  // SECTORS always end the RIGHT of the lane. After #1191 the plate takes
-  // --dock-r-w on buttons (and #1212 on every phone steer); a wide wrap-reverse
-  // dock can push its centre left of mid, so the mid-based clip() above would
-  // treat it as LEFT chrome and leave --announce-lane-w spanning into S1–S3
-  // (Pages gate: #hud-sectors+#announce on notched-landscape buttons).
-  const sec = els.hudSectors;
-  const secR = sec && !sec.hidden ? laneRect(sec) : null;
-  // Clip the RIGHT to sectors without setting `any` — desktop empty docks must
-  // still clear the lane vars (CSS falls back to centred). Phone docks set
-  // `any` via the group loop above.
-  if (secR && secR.width && secR.height) right = Math.min(right, secR.left);
-  clip(els.minimap && !els.minimap.hidden ? laneRect(els.minimap) : null, false);
-  const gaps = document.querySelector(".hud-gaps");
-  clip(gaps && !gaps.hidden ? laneRect(gaps) : null, false);
-  // Primary tyre state bounds this lane. Optional panels are placed after the
-  // radio card; letting them clip it first can hide an urgent pit call.
-  if (els.tyre && !els.tyre.hidden && els.tyre.getBoundingClientRect) clip(laneRect(els.tyre), false);
-  const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
-  const on = any && w > 0;
-  const collapsed = !on && any && secR && secR.width;
-  if (on) {
-    hStyle(root, "--announce-lane-x", x.toFixed(1) + "px");
-    hStyle(root, "--announce-lane-shift", "0%");
-    hStyle(root, "--announce-lane-w", w.toFixed(1) + "px");
-  } else if (collapsed) {
-    // Phone docks lit but S3 ate the gap (large --dock-r-w): keep the left pin
-    // + zero width so max-width:0 collapses the card. Clearing the vars
-    // restores left:50% and drops the radio onto the sector plate (oversize
-    // CI: #hud-sectors+#announce). data-lane-collapsed hard-collapses the flex
-    // plate (min-content from #announce-num otherwise keeps a box).
-    hStyle(root, "--announce-lane-x", x.toFixed(1) + "px");
-    hStyle(root, "--announce-lane-shift", "0%");
-    hStyle(root, "--announce-lane-w", "0px");
-  } else for (const k of ["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"]) hUnstyle(root, k);
-  const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
-}
-// Layout-free key for the lane memo. Gaps are empty/non-empty only — digit
-// rolloff used to re-key every tick and force a full rect pass (#1723).
-function announceLaneLayoutKey() {
-  const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  const gapBit = (el) => (el && (el.textContent || "").length ? "1" : "0");
-  const hid = (el) => (el && !el.hidden ? "1" : "0");
-  // Announce: show/hide only. Content length does not move the clippers the
-  // lane reads (radioPaintedCollapse owns painted size); putting length in the
-  // key re-measured every radio line and defeated the cache.
-  let k = vpW() + "x" + vpH() + "|" + _fitKey + "|" + document.body.className + "|"
-    + (els.hudSectors && els.hudSectors.hidden ? "s" : "S")
-    + (els.minimap && els.minimap.hidden ? "m" : "M")
-    + gapBit(els.gapA) + gapBit(els.gapB)
-    + (ann && !ann.hidden ? "A" : "a")
-    + hid(els.flag) + hid(els.hudLimits) + hid(els.tyre);
-  // Delayed primary packing moves TYRES without a setting or visibility change.
-  if (els.tyre && els.tyre.style) k += "|" + els.tyre.style.getPropertyValue("margin-left") + "," + els.tyre.style.getPropertyValue("margin-top");
-  for (const id of ["hud-rel", "hud-strat", "hud-inputs", "hud-damage", "hud-mirror", "hud-mirror-chip"]) {
-    const el = typeof document !== "undefined" ? document.getElementById(id) : null;
-    k += hid(el);
-  }
-  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) k += g.hidden ? "h" : "v";
-  return k;
-}
-function announceLaneTick(root, force) {
-  // Use the cached viewport (vpW/vpH), not window.innerWidth — a per-tick live
-  // read defeats 5-perf F2 and forces layout on Android (#1395).
-  const k = announceLaneLayoutKey();
-  // A forced refresh (jump / camera / probes) re-clips: it measures on the same tick.
-  if (!force && k === _laneKey && --_laneWait > 0) return;
-  // Key change or force → drop the rect cache. Same-key 3 s backstop keeps it
-  // (re-apply CSS vars from cached rects; 0 getBoundingClientRect).
-  if (force || k !== _laneKey) { _laneRects = null; _laneSafe = null; }
-  _laneKey = k; _laneWait = 30;
-  announceLane(root);
-}
-function radioTopSlot(root, bcast) {
-  // Clearance belongs to the previous lane. Measure this lane before applying
-  // its new correction, or a stale translated card can falsely collapse it.
-  const ann = document.getElementById("announce");
-  hUnstyle(ann, "--hud-clear-x"); hUnstyle(ann, "--hud-clear-y");
-  hUnstyle(ann, "--announce-lane-w");
-  // Every profile, including BROADCAST, can use the tower's free radio slots.
-  const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
-  void bcast;
-  announceLane(root);
-  if (radioPlaced()) { hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner"); return; }
-  let right = window.innerWidth - 10;
-  const x = t ? t.right + RADIO_TOP_GAP : 0;
-  // Pause / cam share the tower's rows. Dock groups bound a wrapping card
-  // (min-height is the tower; a long line grows about that far). Remaining
-  // viewport height would also catch TILT's bottom taps and kill the slot,
-  // parking the card in the lane over the map (hud-layout: .hud-gaps+#announce).
-  // Sectors share the wrapping band — they sit in the tower's rows on a phone.
-  const bound = (r, needPast, bot) => {
-    if (!r || !r.width || !r.height || !(r.top < bot && r.bottom > t.top)) return;
-    if (needPast ? r.left > t.right : r.right > x) right = Math.min(right, r.left);
-  };
-  for (const el of [els.btnCam, els.pausebtn]) bound(t && el && !el.hidden ? el.getBoundingClientRect() : null, true, t ? t.bottom : 0);
-  if (t) {
-    const wrapBot = t.bottom + t.height;
-    for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false, wrapBot);
-    const sec = els.hudSectors;
-    bound(sec && !sec.hidden ? sec.getBoundingClientRect() : null, true, wrapBot);
-  }
-  const lit = !!(t && t.width && t.height);
-  let slot = lit && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN
-    ? { x, y: t.top, w: right - RADIO_TOP_GAP - x, h: t.height } : null;
-  if (!slot && lit) slot = radioUnderRight(t);
-  // The corner is an ATTRIBUTE, not hud-radio-top: body.className keys the fit/lane/root-var
-  // memos, and a class flipping between passes broke hud-fit-idempotent (--dock-r-w).
-  const corner = !!(slot && slot.corner), b = document.body;
-  hToggle(b, "hud-radio-top", !!slot && !corner);
-  if (b.toggleAttribute && b.hasAttribute("data-radio-corner") !== corner) b.toggleAttribute("data-radio-corner", corner);
-  if (!slot) return;
-  if (slot.corner) hStyle(root, "--radio-top-r", (vpW() - slot.x - slot.w).toFixed(1) + "px");
-  // MOVE & SIZE then scales the card itself (#announce, origin top left), so
-  // the slot is published at 1/SIZE: the PAINTED card fills it, not s times it.
-  const a = els.announce, as = a && a.style && a.hasAttribute && a.hasAttribute("data-hl") ? +a.style.getPropertyValue("--hl-s") || 1 : 1;
-  hStyle(root, "--radio-top-x", slot.x.toFixed(1) + "px");
-  hStyle(root, "--radio-top-y", slot.y.toFixed(1) + "px");
-  hStyle(root, "--radio-top-w", (slot.w / as).toFixed(1) + "px");
-  hStyle(root, "--radio-top-h", (slot.h / as).toFixed(1) + "px");
-}
-// THE TOP-RIGHT CORNER, SECOND CHOICE ("top right by the camera selector", 2026-10-14): on 844x390 the
-// strip right of the tower is ~70px. Hangs from the tower's bottom, right of centre (clears the centred
-// flag chip), right-aligned against CAM / PAUSE / the sector plate; anything lit in those rows (HUD mirror
-// or chip, gaps chip, dock groups, the flag) bounds it from its side. Anchored by its RIGHT edge
-// (--radio-top-r) so a short message sits beside CAM; null under RADIO_TOP_MIN.
-const RADIO_UNDER_H = 36, RADIO_UNDER_MAXW = 260, RADIO_UNDER_GAP = 4, RADIO_UNDER_MIN = 96;
-function radioUnderRight(t) {
-  let R = vpW() - 10, L = Math.max(t.left, vpW() / 2 + RADIO_TOP_GAP);
-  for (const el of [els.btnCam, els.pausebtn, els.hudSectors]) { if (!el || el.hidden) continue;
-    const r = el.getBoundingClientRect(); if (r.width && r.left > t.left + t.width / 2) R = Math.min(R, r.left); }
-  R -= RADIO_TOP_GAP;
-  const y = t.bottom + RADIO_UNDER_GAP, bot = y + RADIO_UNDER_H;
-  const obst = [document.getElementById("hud-mirror"), document.getElementById("hud-mirror-chip"),
-    els.gapA ? els.gapA.parentNode : null, els.flag];
-  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) obst.push(g);
-  for (const el of obst) {
-    if (!el || el.hidden || !el.getBoundingClientRect) continue;
-    const r = el.getBoundingClientRect();
-    if (!r.width || !r.height || r.top >= bot || r.bottom <= y) continue;
-    if ((r.left + r.right) / 2 >= R) R = Math.min(R, r.left - RADIO_TOP_GAP);
-    else L = Math.max(L, r.right + RADIO_TOP_GAP);
-  }
-  const w = Math.min(R - L, RADIO_UNDER_MAXW);
-  return w >= RADIO_UNDER_MIN ? { x: R - w, y, w, h: RADIO_UNDER_H, corner: true } : null;
-}
-// THE PAINTED GUARANTEE, one function for every caller: fitHud runs it last, invalidateFit right
-// after its own radioTopSlot (which alone could relight hud-radio-top over the tower until the next
-// fit tick repaired it).
-function radioPaintedCollapse(root) {
-  if (radioPlaced()) return;   // the player put it there
-  // Painted guarantee: if the card still rects onto S3 or the tower, collapse
-  // the hanging lane and drop the top slot. Do NOT call radioTopSlot again —
-  // that re-ran announceLane, cleared data-lane-collapsed when a gap reopened,
-  // and re-lit hud-radio-top, so the same-key clash path forced a full fit
-  // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
-  // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
-  // Also collapse when the card still paints over SPEED/GEAR: the CSS 1.8em
-  // floor wins over a ~7px cluster budget at phoneL broadcast @150%, and
-  // announceLaneTick after fitHud can re-open a collapsed lane.
-  const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  // Already collapsed: the writes below would repeat verbatim, so skip the
-  // rect reads (each forced a reflow after announceLane's style writes).
-  if (annPaint && annPaint.hasAttribute("data-lane-collapsed") && !document.body.classList.contains("hud-radio-top")
-    && root.style.getPropertyValue("--announce-lane-w") === "0px" && root.style.getPropertyValue("--announce-lane-shift") === "0%") return;
-  if (annPaint && !annPaint.hidden) {
-    const a = annPaint.getBoundingClientRect();
-    const hit = (el) => {
-      if (!el || el.hidden) return false;
-      const r = el.getBoundingClientRect();
-      return !!(a.width > 0 && r.width > 0
-        && r.left < a.right - 0.5 && a.left < r.right - 0.5
-        && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
-    };
-    const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
-    const gear = typeof document !== "undefined" ? document.getElementById("hud-gearbox") : null;
-    const speed = typeof document !== "undefined" ? document.getElementById("hud-speed") : null;
-    if (hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed)) {
-      hToggle(document.body, "hud-radio-top", false);
-      if (document.body.removeAttribute) document.body.removeAttribute("data-radio-corner");
-      const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
-      hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
-      hStyle(root, "--announce-lane-shift", "0%");
-      hStyle(root, "--announce-lane-w", "0px");
-      if (annPaint.toggleAttribute) annPaint.toggleAttribute("data-lane-collapsed", true);
-      void annPaint.offsetHeight;
-    }
-  }
-}
-// PERF #2151: the 10 Hz call runs AFTER the tick's text writes, so its rect
-// reads forced a layout every tick a card was up. Re-measure only when what
-// places the card changes (fit key, lane key and vars, card text/class) or on
-// the 3 s backstop; a forced update always measures.
-let _rpcKey = "", _rpcWait = 0;
-function radioPaintedKey(root) {
-  const a = document.getElementById("announce");
-  if (!a || a.hidden) return "";
-  const v = (n) => root.style.getPropertyValue(n);
-  return _fitKey + "|" + _laneKey + "|" + v("--announce-lane-w") + v("--announce-lane-x") + v("--announce-lane-shift")
-    + "|" + a.className + (a.hasAttribute("data-lane-collapsed") ? "c" : "") + "|" + a.textContent + "|" + document.body.className;
-}
-function radioPaintedCollapseTick(root, force) {
-  const k = radioPaintedKey(root);
-  if (!force && k && k === _rpcKey && --_rpcWait > 0) return;
-  radioPaintedCollapse(root);
-  _rpcKey = radioPaintedKey(root); _rpcWait = 30;
-}
+// THE RADIO CARD'S SLOTS AND THE DOCK LANE live in js/ui/hud-radio-lane.js (#3261).
+// top / docks / fitKey are getters: pickDocks and the fit move what they return.
+const { invalidateLaneRects, dropLaneRects, announceLane, announceLaneTick, radioTopSlot, radioPaintedCollapse, radioPaintedKey,
+  radioPaintedCollapseTick, laneRectMisses, resetLaneRectMisses } = HudRadioLane.create(G, {
+  vpW, vpH, hStyle, hUnstyle, hToggle, fitKey: () => _fitKey, top: () => _hudTop, docks: () => [_dockL, _dockR],
+});
 // THE MIRROR AS PAINTED, for the centre column under it. The flag and the
 // radio card clear the mirror through --mir-bot (css/hud.css), which is built
 // from the mirror's SHIPPED box — so a mirror MOVE & SIZE grew (s150) or moved
@@ -877,11 +637,13 @@ function radioPaintedCollapseTick(root, force) {
 // box depends on reads it, so it cannot feed back. Run inside the fit: a move
 // re-fits through HudLayout.apply, and hud-mirror-on is in the fit key.
 const MIR_COL = 230;   // half-width of the centre column, px: the widest card at 440 plus its air
+/** F-04: the one writer of --dock-r-w (screen-independent px, clamped at 0). */
+function setDockRW(root, v) { hStyle(root, "--dock-r-w", (v > 0 ? v : 0).toFixed(1) + "px"); }
 let _mirEl;
 function mirrorClear(root) {
   if (_mirEl === undefined) _mirEl = document.getElementById("hud-mirror");
   const on = _mirEl && !_mirEl.hidden && document.body.classList.contains("hud-mirror-on");
-  const r = on ? _mirEl.getBoundingClientRect() : null, cx = window.innerWidth / 2;
+  const r = on ? _mirEl.getBoundingClientRect() : null, cx = vpW() / 2;
   const b = r && r.width && r.left < cx + MIR_COL && r.right > cx - MIR_COL ? r.bottom : 0;
   hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
 }
@@ -897,7 +659,7 @@ function _boostOnRightHalf() {
   if (!boost || boost.hidden) return null;
   const br = boost.getBoundingClientRect();
   if (!(br.width && br.height)) return null;
-  if ((br.left + br.right) / 2 < window.innerWidth / 2) return null;
+  if ((br.left + br.right) / 2 < vpW() / 2) return null;
   return boost;
 }
 let _hudGaps = null;
@@ -929,10 +691,41 @@ function gapPaintedDrop() {
   if (gaps) void gaps.offsetHeight;
   return true;
 }
+/** Gap strip painted over the rear-view mirror frame (#3271: portrait cockpit, the dropped strip sits in the mirror's row). */
+function gapsMirrorPaintedClash() {
+  if (document.body.classList.contains("desktop") || !_mirEl || _mirEl.hidden || !document.body.classList.contains("hud-mirror-on")) return false;
+  const gaps = document.querySelector(".hud-gaps");
+  if (!gaps || gaps.hidden || manualHud(gaps) || manualHud(_mirEl) || document.body.classList.contains("hud-hide-gaps")) return false;
+  return _hudRectsHit(gaps.getBoundingClientRect(), _mirEl.getBoundingClientRect());
+}
+/** Park the strip under the mirror frame; css/hud.css reads --mir-paint-b through [data-gap-mir]. */
+function gapMirrorDrop() {
+  if (document.documentElement.dataset.gapMir || !gapsMirrorPaintedClash()) return false;
+  document.documentElement.dataset.gapMir = "1";
+  void document.documentElement.offsetHeight;
+  return true;
+}
+const _PEDAL_STEER = () => [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
+const _hitPedalSteer = (rr) => _PEDAL_STEER().some((el) => el && !el.hidden && _hudRectsHit(rr, el.getBoundingClientRect()));
+/** Slide #hud-aero right past a steer/pedal button it paints over (#3272), never into the right dock. */
+function nudgeAero(z) {
+  const aero = els.aero, ar = aero && !manualHud(aero) && !aero.hidden ? aero.getBoundingClientRect() : null;
+  if (!ar || !ar.width) return;
+  let need = 0, limit = Infinity;
+  for (const el of _PEDAL_STEER()) {
+    const b = el && !el.hidden ? el.getBoundingClientRect() : null;
+    if (!b || !_hudRectsHit(ar, b)) continue;
+    if (b.left + b.right < ar.left + ar.right) need = Math.max(need, b.right + 8 - ar.left);
+    else limit = Math.min(limit, b.left - 8 - ar.right);
+  }
+  if (need <= 0.5 || need > limit) return;
+  aero.style.position = "relative";
+  aero.style.left = ((parseFloat(aero.style.left) || 0) + need / z).toFixed(1) + "px";
+}
 /** Painted phone readout-on-control clashes the spec measures (not budget math). */
 function phonePaintedClash(boostIn) {
   if (document.body.classList.contains("desktop")) return false;
-  if (towerGapsPaintedClash()) return true;
+  if (towerGapsPaintedClash() || gapsMirrorPaintedClash()) return true;
   const sectors = els.hudSectors;
   const boost = boostIn !== undefined ? boostIn : _boostOnRightHalf();   // a caller that already measured it this tick passes it
   if (sectors && !manualHud(sectors) && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
@@ -947,14 +740,9 @@ function phonePaintedClash(boostIn) {
         if (box.width && box.height && _hudRectsHit(rr, box)) return true;
       }
     }
-    const pedalSteer = [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
-    for (let i = 0; i < pedalSteer.length; i++) {
-      const el = pedalSteer[i];
-      if (!el || el.hidden) continue;
-      const box = el.getBoundingClientRect();
-      if (box.width && box.height && _hudRectsHit(rr, box)) return true;
-    }
+    if (_hitPedalSteer(rr)) return true;
   }
+  if (els.aero && !manualHud(els.aero) && !els.aero.hidden && _hitPedalSteer(els.aero.getBoundingClientRect())) return true;
   return false;
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
@@ -978,12 +766,12 @@ function phoneFitStampSync(scale, force) {
     const z = Math.min(zTop, live) || 1;
     let sarPx = 0;
     try { sarPx = parseFloat(getComputedStyle(root).getPropertyValue("--sar")) || 0; } catch (_) { /* */ }
-    const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
+    const midCap = Math.max(0, (vpW() / 2) / z - 10 - sarPx / z);
     const need = Math.min(
-      Math.max(0, (window.innerWidth - br.left) / z - 10 - sarPx / z + DOCK_AIR / z),
+      Math.max(0, (vpW() - br.left) / z - 10 - sarPx / z + DOCK_AIR / z),
       midCap
     );
-    hStyle(root, "--dock-r-w", (need > 0 ? need : 0).toFixed(1) + "px");
+    setDockRW(root, need);
     if (els.hudSectors) void els.hudSectors.offsetHeight;
     if (_dockR) void _dockR.offsetHeight;
     return true;
@@ -1014,13 +802,16 @@ function phoneFitStampSync(scale, force) {
   const sk = radioPaintedKey(root) + "|" + _fitKey + "|" + (typeof HudRelative !== "undefined" && HudRelative.fitKey ? HudRelative.fitKey() : "")
     + "|" + (els.hudSectors ? (els.hudSectors.hidden ? "h" : "v") : "-");
   if (!force && _fitStamped && !_fitPending && sk === _stampKey && --_stampWait > 0) return;
+  if (els.aero && els.aero.style.left) { els.aero.style.left = ""; els.aero.style.position = ""; }   // a stale #3272 nudge: the probe re-applies it
   // One probe per pass: the verdict after the last pass feeds the stamp below.
+  if (root.dataset && "gapMir" in root.dataset) delete root.dataset.gapMir;   // re-derived by the probe below
   let clash = phonePaintedClash();
   for (let pass = 0; pass < 8 && clash; pass++, clash = phonePaintedClash()) {
-    if (gapPaintedDrop()) continue;
+    if (gapPaintedDrop() || gapMirrorDrop()) continue;
     if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
     bumpDock();
     shrinkSectors();
+    nudgeAero((els.aero && els.aero.currentCSSZoom) || scale || 1);
   }
   // A custom property written on <html> invalidates style for the whole tree and
   // wakes sheet-shape's watchScale observer, so the 10 Hz tick must not rewrite
@@ -1091,7 +882,7 @@ function fitHud() {
   // Which dock buttons are showing is part of the key: showTouchControls hides/unhides BOOST, OT, AERO
   // and the shifts after the first fit, and a taller column under a stale cap overflowed the top.
   let dockSig = "";
-  for (const d of [_dockL, _dockR]) if (d) for (const b of d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")) dockSig += b.hidden ? "0" : "1";
+  for (const b of dockButtons()) dockSig += b.hidden ? "0" : "1";   // the list is cached; per tick only `.hidden`
   const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "." + dockSig + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
   const sameKey = head + hlKey() + tail === _fitKey;
@@ -1170,7 +961,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
   const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
-  let zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
+  // The CSS paints min(cap, max(floor, slider)) (css/touch-controls.css): a cap a fit wrote at a larger
+  // BUTTON SIZE never paints a smaller one bigger, so measure with the same min (UI-HUNT-2-HUD).
+  let zDockPub = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));
+  let zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));   // #dock-left (steer) paints at its own cap
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
     if (!el || manualHud(el)) return 0;
@@ -1216,8 +1010,9 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
   // harness without rects takes every tick, so the bail stays free of computed-style passes.
   try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--hud-btn-floor")); if (Number.isFinite(v) && v > 0 && v <= 1) btnFloor = v; } catch (_) { /* mini-dom */ }
-  zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
-  const half = window.innerWidth / 2;
+  zDockPub = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));   // the CSS min()
+  zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));
+  const half = vpW() / 2;
   const map = wide(els.minimap, zTopPub), gaps = wide(els.gapA && els.gapA.parentNode, zTopPub);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
   // pushed right by `--sal` (and `#hud-sectors` left by `--sar`) in UNSCALED
@@ -1257,7 +1052,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // not readable (a bare engine, the unit fixtures: "env(...)") the plate's own edge is still measured.
   let sarTok = null;
   try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--sar")); if (Number.isFinite(v) && v >= 0) sarTok = v; } catch (_) { /* mini-dom / detached root */ }
-  const sarM = sarTok != null ? sarTok : (scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null);
+  const sarM = sarTok != null ? sarTok : (scR && scR.width ? Math.max(0, vpW() - scR.right - 10 * sz) : null);
   const sal = salM != null ? salM : (sarM != null ? sarM : 0);
   const sar = sarM != null ? sarM : (salM != null ? salM : 0);
   // WITH the gap strip and WITHOUT it. When the band fits at the player's own
@@ -1291,10 +1086,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     && typeof window !== "undefined" && window.matchMedia
     && window.matchMedia("(orientation: portrait) and (max-width: 500px)").matches;
   const capFor = (l) => (bcast
-    ? (window.innerWidth - sal - sar) / Math.max(Math.max(top, l) + right, 1)
+    ? (vpW() - sal - sar) / Math.max(Math.max(top, l) + right, 1)
     : portraitPhone
-      ? Math.min((window.innerWidth - sal - sar - 2 * FIT_AIR) / Math.max(top, 1),
-                 (window.innerWidth - sar - FIT_AIR) / Math.max(right, 1))
+      ? Math.min((vpW() - sal - sar - 2 * FIT_AIR) / Math.max(top, 1),
+                 (vpW() - sar - FIT_AIR) / Math.max(right, 1))
       : Math.min((half - sal) / Math.max(l + top / 2, 1),
                  (half - sar) / Math.max(right + top / 2, 1)));
   // EACH RUNG IS JUDGED AGAINST THE SPELLING IT DECIDES, NOT THE ONE ON SCREEN.
@@ -1325,10 +1120,15 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   let capChrome = Infinity;
   if (!bcast && top) {
     const tR = layoutRect(_hudTop), botInt = (tR.bottom - satPx) / zoomDiv(_hudTop, zTopPub);
+    // #5179 shrank the pair to a fixed 44 px; the band keeps the footprint the old --tap-hud pair (44 x BUTTON
+    // SIZE <= 150 %) reserved, so freeing it never grows the rest of the HUD into the lifted sector plate.
+    const bz = Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
+    const pR = els.pausebtn && !els.pausebtn.hidden ? els.pausebtn.getBoundingClientRect() : null, pauseL = pR && pR.width ? pR.right - 44 * bz : Infinity;
     for (const el of [els.btnCam, els.pausebtn]) {
       const r = el && !el.hidden ? layoutRect(el) : null;
       if (!(r && r.width && r.left > half)) continue;
-      const zSide = (r.left - FIT_AIR - half) / (top / 2);
+      const left = Math.min(r.left, el === els.pausebtn ? pauseL : pauseL - 4 - Math.max(76, r.width) * bz);
+      const zSide = (left - FIT_AIR - half) / (top / 2);
       const zAbove = botInt > 0 ? (r.top - FIT_AIR - satPx) / botInt : -Infinity;
       capChrome = Math.min(capChrome, Math.max(zSide, zAbove));
     }
@@ -1358,7 +1158,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // #hud-aero off-screen at 1280x800 @175% — with the cap in place and no overlap
   // reported anywhere, which is how a wrong measurement hides.
   const bottom = span(_hudBottom, zBotPub);
-  let capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
+  let capBot = bottom ? (vpW() - 2 * FIT_AIR) / bottom : Infinity;
   // THE DOCKS GET THE SAME TREATMENT — they were the one cluster outside the
   // fit budget (this comment block's own "bottom: one centred row" never
   // counted them), and the dock zooms by the RAW slider, so at HUD SIZE 150%
@@ -1503,7 +1303,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       // measures from whichever is lower — the map/strip edge or the panel's bottom.
       const leftFilled = Math.max(leftBot, gmBot);
       const leftRoom = !(dockL && dockL.width && leftFilled + (8 + CHIP_H) * chromeZ > dockL.top);
-      limLeft = hitsRight && leftRoom;
+      limLeft = hitsRight && leftRoom && (typeof HudElements === "undefined" || HudElements.isOn("limits"));   // F-09: no re-stack for a chip the LIMITS toggle hides
       // LIMITS on the left lands under --hud-left-h; a dock-top TYRES still sits
       // in that slot at HUD ≤125% (phoneL survey: limits×tyre): stack it and re-publish so the chip hangs below.
       if (limLeft && tyreFree && !tyreStack && stackTyre(true)) {
@@ -1527,9 +1327,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // into #announce.
   // Fixed control groups are measured independently of readout content.
   const hudDockEl = _dockL ? _dockL.parentNode : null;
+  const steerDock = _dockMir ? _dockR : _dockL;   // #dock-left wherever MIRROR paints it
   const groups = (d) => {
     if (!d) return { h: 0, w: 0, stack: 0 };
-    const z = zoomDiv(d, zDockPub);
+    const z = zoomDiv(d, d === steerDock ? zDockPubS : zDockPub);
     let h = 0, w = 0, stack = 0, n = 0;
     for (const g of d.children) {
       const r = g.getBoundingClientRect();
@@ -1542,13 +1343,15 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   };
   const gL = groups(_dockL), gR = groups(_dockR);
   const dockH = Math.max(gL.h, gR.h);
-  let capDock = Infinity;
+  let capDock = Infinity, capDockS = Infinity, capKeepS = Infinity;
+  const DOCK_MIN_Z = 24 / 48;   // emergency fit floor: narrow-tier taps must still paint 24 CSS px
+  const READABLE_Z = 10 / 14;   // 10 CSS px over --fs-micro 14: the gap-chip clamp's and PR #1734's label floor
   if (dockH) {
     // Controls own their space: race text, panels and HUD zoom never change this budget.
     const barR = hudDockEl ? hudDockEl.getBoundingClientRect() : null;
     let sat = 0, sab = 0;
     try { const cs = getComputedStyle(root); sat = parseFloat(cs.getPropertyValue("--sat")) || 0; sab = parseFloat(cs.getPropertyValue("--sab")) || 0; } catch (_) { /* mini-dom */ }
-    const controlsRoom = window.innerHeight - sat - sab - 4 * FIT_AIR;
+    const controlsRoom = vpH() - sat - sab - 4 * FIT_AIR;
     // Dock and CAM/PAUSE share one effective size. Solve their joint height
     // budget so increasing BUTTON SIZE can plateau, never shrink the pedals.
     // CAM tops out at 150%; PAUSE above the right dock can reach 200%.
@@ -1594,8 +1397,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       // Read discs via the dock trees (no dynamic getElementById — ratchet).
       if (typeof window !== "undefined" && window.matchMedia
           && window.matchMedia("(orientation: portrait)").matches && bottom > 0) {
-        let leftEdge = 0, rightEdge = window.innerWidth;
-        const mid = window.innerWidth / 2;
+        let leftEdge = 0, rightEdge = vpW();
+        const mid = vpW() / 2;
         for (const dock of [_dockL, _dockR]) {
           if (!dock) continue;
           const nodes = dock.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn");
@@ -1614,26 +1417,42 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         if (room > 0) capBot = Math.min(capBot, room / bottom);
       }
     }
-    const barW = barR && barR.width ? barR.width : window.innerWidth;
+    const barW = barR && barR.width ? barR.width : vpW();
     const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
     const controlsW = gL.w + gR.w;
     capDock = Math.min(heightCap(gL.h), heightCap(gR.h, 2),
       controlsW ? (barW - 2 * barGap - 2 * FIT_AIR) / controlsW : Infinity);
-    const dockZ = Math.min(Math.max(btnFloor, btnScale), Math.max(0.4, capDock));
+    const want = Math.max(btnFloor, btnScale), dockZ = Math.min(want, Math.max(DOCK_MIN_Z, capDock));
+    // THE STEER DOCK (#dock-left) FOLLOWS BUTTON SIZE PAST THE PEDAL COLUMN'S CAP: budgeted against the other
+    // dock and its top button at their CAPS (never the slider: monotonic), >= capDock, and the gear/speed
+    // cluster keeps its SHIPPED size (or a smaller HUD SIZE): budgeting it at the 10 px floor let BUTTON 245
+    // paint SPEED at 10.1 px whatever HUD SIZE said (UI hunt #3, owner's export). Portrait: the shared cap.
+    if (vpW() > vpH()) {
+      const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
+      const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
+      // The cluster is budgeted at its SHIPPED size: a smaller HUD SIZE used to GROW the steer pad (#5206).
+      // capKeepS also leaves a HUD SIZE above 100 % its cluster: BUTTON SIZE's slider stops there.
+      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom, hS = gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity;
+      capDockS = Math.max(capDock, Math.min(hS, gS.w ? roomS / gS.w : Infinity));
+      capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot)) - 1)) / gS.w : Infinity));
+    } else capDockS = capKeepS = capDock;
+    const zS = Math.min(want, Math.max(DOCK_MIN_Z, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
     // Readouts adapt to the stable controls, never the reverse.
-    const roomW = barW - controlsW * dockZ - 2 * barGap - 2 * FIT_AIR;
+    const roomW = barW - gL.w * zDL - gR.w * zDR - 2 * barGap - 2 * FIT_AIR;
     if (bottom && roomW > 0) capBot = Math.min(capBot, roomW / bottom);
     // Broadcast stacks its tower/map/messages above the left controls. Fit
     // that readout column to the remaining height without resizing controls.
-    if (bcast && phone && window.innerWidth > window.innerHeight) {
+    if (bcast && phone && vpW() > vpH()) {
       const stack = [_hudTop, els.minimap, gapsEl, els.flag, els.announce, els.tyre];
       const height = stack.reduce((sum, el) => {
         if (!el || manualHud(el) || el.hidden) return sum;
         const r = layoutRect(el);
         return sum + r.height / zoomDiv(el, el === els.tyre ? zBotPub : zTopPub);
       }, 6 * FIT_AIR);
-      const cap = Math.max(1 / 1.4, (roomL - gL.h * dockZ) / Math.max(1, height));
+      // Floor at 11 painted px over --fs-micro 14 (Apple HIG's 11 pt minimum; the
+      // 10 px READABLE_Z floor painted POS / LAP / TIME at 10.1 px, UI-HUNT-2-HUD).
+      const cap = Math.max(11 / 14, (roomL - gL.h * zDL) / Math.max(1, height));
       capTop = Math.min(capTop, cap); capBot = Math.min(capBot, cap);
     }
 
@@ -1666,7 +1485,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       }
       let sabPx = 0;
       try { sabPx = parseFloat(getComputedStyle(root).getPropertyValue("--sab")) || 0; } catch (_) { /* */ }
-      const avail = window.innerHeight - sabPx - ceilY;
+      const avail = vpH() - sabPx - ceilY;
       const denom = 112 + stackR.height / zNowP + 48;
       if (avail > 0 && denom > 0) capPortrait = avail / denom;
     }
@@ -1677,14 +1496,12 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // own slider — css/overlays.css), which defaults to --hud-scale and is only
   // inline once the player has moved it. Comparing the dock's cap against the
   // wrong slider would either pin a cap that fits or drop one that does not.
-  // 10 CSS px over --fs-micro 14: same painted floor as the gap-chip clamp
-  // and PR #1734's touch labels. Portrait only — landscape keeps the 0.4
+  // READABLE_Z (above) floors --hud-z-top in portrait only — landscape keeps the 0.4
   // band floor (short phones still drop the gap strip instead).
-  const READABLE_Z = 10 / 14;
   const set = (prop, cap, base) => {
     if (cap >= base) root.style.removeProperty(prop);   // fits: the player's number, untouched
     else {
-      const floor = (portraitPhone && prop === "--hud-z-top") ? READABLE_Z : 0.4;
+      const floor = prop === "--hud-z-dock" ? DOCK_MIN_Z : (portraitPhone && prop === "--hud-z-top") ? READABLE_Z : 0.4;
       // Readout bands: ceil onto a 0.01 grid (the cap pass's zoom-1 widths
       // already make the cap independent of HUD SIZE, #2882). The dock keeps
       // milli-rounding — heightCap already keeps BUTTON SIZE monotonic
@@ -1702,6 +1519,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
+  // What this window can paint: "top bot pedals steer steerKeep btnFloor" zooms, 9 = no limit (UiScale, #5206).
+  hStyle(root, "--hud-cap", [capTop, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
   // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
   // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
   // The paint pass measured it under the zoom the cap pass published, so it is
@@ -1710,12 +1529,18 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (_hudTop) void _hudTop.offsetHeight;
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
+  // The steer cap rides WITH the shared one (set()'s test): absent together, else explicit (never a fall-back
+  // to --hud-z-dock). A changed steer zoom refits once so TYRES / LIMITS read the new dock top.
+  const wantDock = Math.max(btnFloor, btnScale), zSteer = Math.round(Math.min(wantDock, Math.max(DOCK_MIN_Z, capDockS)) * 1000) / 1000;
+  if (capDock < wantDock) root.style.setProperty("--hud-z-dock-l", String(zSteer));
+  else root.style.removeProperty("--hud-z-dock-l");
+  if (Math.abs(zSteer - zDockPubS) > 1e-6 && capDock < wantDock) { _fitKey = ""; _fitWait = 0; _fitPending = true; }
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
   // so a cap between BUTTON SIZE and that floor still has to be written.
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
   // Earlier tower/sector budgets saw the old CAM/PAUSE footprint. Refit on
   // the next HUD tick only when their clamped, published zoom changed.
-  const dockAfter = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
+  const dockAfter = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));
   if (Math.abs(Math.min(2, Math.max(1, zDockPub)) - Math.min(2, Math.max(1, dockAfter))) > 1e-6) {
     _fitKey = ""; _fitWait = 0; _fitPending = true;
   }
@@ -1747,7 +1572,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (!boost || boost.hidden) return NaN;
     const br = boost.getBoundingClientRect();
     if (!(br.width && br.height)) return NaN;
-    if ((br.left + br.right) / 2 < window.innerWidth / 2) return NaN;
+    if ((br.left + br.right) / 2 < vpW() / 2) return NaN;
     return br.left;
   };
   const dockLeftOf = () => {
@@ -1780,8 +1605,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   const DOCK_AIR = 12;
   const insetFor = (left, z) => {
     if (!Number.isFinite(left) || !(z > 0)) return 0;
-    const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
-    const need = Math.max(0, (window.innerWidth - left) / z - 10 - sarPx / z + DOCK_AIR / z);
+    const midCap = Math.max(0, (vpW() / 2) / z - 10 - sarPx / z);
+    const need = Math.max(0, (vpW() - left) / z - 10 - sarPx / z + DOCK_AIR / z);
     // Cap so S3 cannot walk past mid into #minimap / #announce.
     return Math.min(need, midCap);
   };
@@ -1789,7 +1614,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // one painted correction against a RIGHT-side BOOST only.
   let zTop = zPaint();
   let dockRW = insetFor(dockLeftOf(), zTop);
-  hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+  setDockRW(root, dockRW);
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   if (_dockR) void _dockR.offsetHeight;
   if (!placedSectors && !document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
@@ -1802,14 +1627,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         // Absolute clear from the right-dock edge — never stack += grow on a
         // stale plate, and never aim at a left-column BOOST (tilt).
         dockRW = insetFor(left, zTop);
-        hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+        setDockRW(root, dockRW);
         void els.hudSectors.offsetHeight;
         if (_dockR) void _dockR.offsetHeight;
       }
     }
   }
-  mirrorClear(root);
-  // Refresh automatic pieces; manually owned geometry remains untouched.
+  // Refresh automatic pieces; manually owned geometry remains untouched. (mirrorClear runs once, at the end of the fit — F-15.)
   if (typeof HudLayout !== "undefined") HudLayout.fit();
   // fit() can undo the dock inset; shrink the sector plate before any extra
   // inset widen (widening slides the plate left into #minimap).
@@ -1850,7 +1674,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         zTop = zPaint();
         if (zTop > 0) {
           dockRW = insetFor(left, zTop);
-          hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+          setDockRW(root, dockRW);
         }
       }
     }
@@ -1882,7 +1706,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   }
   // Fit just rewrote bands/docks — clipper boxes may have moved. Drop the lane
   // rect cache so radioTopSlot / announceLane re-measure once, then warm it.
-  _laneRects = null; _laneSafe = null;
+  dropLaneRects();
   radioTopSlot(root, bcast);
   announceLane(root);
   // Bottom cluster top (SPEED / GEAR / ERS). CSS caps #announce with
@@ -1979,8 +1803,8 @@ function speakHud(player, cars, timeTrial) {
   if (caution) {
     if (txt !== _flagSaid) { _flagSaid = txt; if (txt) sayFlag(cn); }
   } else _flagSaid = "";
-  const blueCar = !caution && !timeTrial && _ro && G.track && G.state === "race"
-    ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26) : null;
+  const blueCar = _blueHeld = !caution && !timeTrial && _ro && G.track && G.state === "race"
+    ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26, _blueHeld) : null;
   if (blueCar) {
     const lapsUp = Math.round(((blueCar.prog || 0) - (player.prog || 0)) / G.track.total);
     if (blueCar !== _blueSaid || lapsUp !== _blueLaps) {
@@ -2095,7 +1919,7 @@ function updateHud(force, dtMs) {
     if (_rx.bb) {
       const bb = _ro.bbText(player.brakeBias, typeof SetupTune !== "undefined" ? SetupTune.BB_REF : 0.56);
       hText(_rx.bb, bb);
-      hAttr(_rx.bb, "aria-label", "Brake bias " + bb.slice(3) + " front");
+      hAttr(_rx.bb, "aria-label", hT("hud.brakeBias", { pct: bb.slice(3) }, "Brake bias {pct} front"));
     }
   }
   const spokenFlag = speakHud(player, cars, timeTrial);
@@ -2121,7 +1945,7 @@ function updateHud(force, dtMs) {
     if (typeof HudStrategy !== "undefined" && (typeof HudElements === "undefined" || HudElements.isOn("strat"))) pitReadouts = { player, spent, left };
     const bar = els.tyreFill && els.tyreFill.parentNode;
     if (bar && bar.dataset) {
-      const txt = left == null || spent >= 1 ? "" : left < 0.5 ? "<1L" : "~" + Math.min(99, Math.round(left)) + "L";
+      const txt = left == null || spent >= 1 ? "" : left < 0.5 ? "<1L" : Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
@@ -2229,15 +2053,15 @@ function updateHud(force, dtMs) {
                 : otReady ? "OT READY " + mjTxt
                 : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
   hText(els.ot, otText);
-  hAttr(els.ot, "aria-label", player.otT > 0 ? "Overtake active, " + mjTxt + " left"
-    : otOff ? (otReason === "caution" ? "Overtake unavailable under caution"
-      : otReason === "low-grip" ? "Overtake off in low grip conditions"
-      : otReason === "opening-lap" ? "Overtake unavailable on lap 1"
-      : otReason === "waiting-for-leader" ? "Overtake waiting for the leader"
-      : "Overtake unavailable")
-    : otReady ? "Overtake ready, " + mjTxt + " — press to deploy"
-    : player.otEarned ? "Overtake earned — available from the start line"
-    : "Overtake unavailable — be within one second at the detection line");
+  hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
+    : otOff ? (otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
+      : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
+      : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
+      : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")
+      : hT("hud.overtake.unavailable", null, "Overtake unavailable"))
+    : otReady ? hT("hud.overtake.ready", { time: mjTxt }, "Overtake ready, {time} — press to deploy")
+    : player.otEarned ? hT("hud.overtake.earned", null, "Overtake earned — available from the start line")
+    : hT("hud.overtake.pending", null, "Overtake unavailable — be within one second at the detection line"));
   hAttr(els.btnOT, "aria-disabled", otUnavailable ? "true" : "false");
   hAttr(els.btnOT, "data-state", otOff ? otReason : player.otT > 0 ? "active"
     : otReady ? "ready" : player.otEarned ? "earned" : "pending");
@@ -2266,8 +2090,8 @@ function updateHud(force, dtMs) {
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "CORNER MODE";
   hText(els.aero, aeroText);
-  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? "Automatic Straight Mode active" : "Active aero automatic")
-    : noZones ? "No aero zone" : xOpen ? "Straight Mode active" : "Active aero manual");
+  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? hT("hud.aero.autoStraight", null, "Automatic Straight Mode active") : hT("hud.aero.auto", null, "Active aero automatic"))
+    : noZones ? hT("hud.aero.none", null, "No aero zone") : xOpen ? hT("hud.aero.straight", null, "Straight Mode active") : hT("hud.aero.manual", null, "Active aero manual"));
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
     // on <html> and outlives the session, so a race on a narrow phone left the
@@ -2282,7 +2106,7 @@ function updateHud(force, dtMs) {
       if (ghostT !== null) {
         const delta = player.lapTime - ghostT;
         hText(els.gapA, (GhostShare.hasGuest() ? "RIVAL GHOST " : "GHOST ") + signedFixed(delta) + "s");
-        hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower)");
+        hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower-ink)");
       } else {
         hText(els.gapA, player.lastLap ? "LAST " + G.fmtTime(player.lastLap) : "");
         hStyle(els.gapA, "color", "");
@@ -2465,6 +2289,7 @@ let _pitSideTrack = null, _pitSide = 1;
 function resetRace() {
   _pitSideTrack = null; _pitSide = 1;   // per race: left set, it pinned the last pit-cue circuit across races
   if (typeof HudInputs !== "undefined" && HudInputs.reset) HudInputs.reset();
+  if (typeof Captions !== "undefined") Captions.clear();   // the last spotter call: #captions sits outside #hud
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
   _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
@@ -2493,7 +2318,7 @@ function resetRace() {
 // reads per apply, only once the fit has found the tower; the caps still wait
 // for the tick.
 function invalidateFit() {
-  _fitKey = ""; _fitRetry = 0;
+  _fitKey = ""; _fitRetry = 0; _dockBtns = null;
   _fitPending = true;
   invalidateLaneRects();   // MOVE & SIZE / HUD ELEMENTS / scale — clippers moved
   if (!_hudTop || hudPaintHidden()) return;
@@ -2525,9 +2350,7 @@ function syncPhoneFit() {
 _syncPhoneFit = syncPhoneFit;
 return {
   updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit,
-  // PERF probe: announceLane cache-miss count (tests/unit/hud-announce-lane-cache.test.mjs).
-  laneRectMisses: () => _laneRectMisses,
-  resetLaneRectMisses: () => { _laneRectMisses = 0; },
+  laneRectMisses, resetLaneRectMisses,   // PERF probe (js/ui/hud-radio-lane.js)
 };
 }
 
@@ -2535,6 +2358,7 @@ return {
   create,
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
+  vp: () => [vpW(), vpH()],   // the layout viewport (ICB) every HUD rect is measured in; never inner* (#5201)
   vpKey: () => vpW() + "x" + vpH(),   // the cached viewport, for 10 Hz keys that must not force a layout (#2151)
 };
 })();

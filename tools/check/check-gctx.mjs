@@ -86,22 +86,46 @@ const parseFile = (rel) => {
 // keeps this inside its budget: parsing is the whole cost, and without it every
 // circuit and shader file would go through espree for nothing.
 // (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2 — tools rewritten before the move.)
-const CREATE_DEF = /\bfunction\s+create\s*\(\s*[A-Za-z_$]/;
+// Both spellings of the factory: `function create(G) {` and the method shorthand
+// `create(G) {` (or `create: function (G)`) inside the module's returned object —
+// js/perf/soak-run.js and bench-run.js use the latter and were silently unchecked
+// while only the first was recognised.
+const CREATE_DEF = /\bfunction\s+create\s*\(\s*[A-Za-z_$]|^\s*create\s*(?::\s*function\s*)?\(\s*[A-Za-z_$][\w$]*\s*\)\s*\{/m;
 let moduleCache = null;
-const moduleFiles = () => {
-  if (moduleCache) return moduleCache;
+let rosterCache = null;
+/** Every rostered js/ file that is code (not circuit data), before the create() prefilter. */
+const rosteredFiles = () => {
+  if (rosterCache) return rosterCache;
   const data = new Set([...MANIFEST.CIRCUITS.map(MANIFEST.circuitPath), ...MANIFEST.LAZY_SCENERY]);
   const rostered = [
     ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
-    ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []),
+    ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...(MANIFEST.LAZY_AUDIO || []), ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
     ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []),
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []),
   ];
-  moduleCache = rostered.filter((rel) => rel !== GAME && !data.has(rel) && CREATE_DEF.test(read(rel)));
+  rosterCache = rostered.filter((rel) => rel !== GAME && !data.has(rel));
+  return rosterCache;
+};
+const moduleFiles = () => {
+  if (moduleCache) return moduleCache;
+  moduleCache = rosteredFiles().filter((rel) => CREATE_DEF.test(read(rel)));
   return moduleCache;
 };
+
+/**
+ * The function node is a module factory `create(<ident>)`: a declaration or named
+ * expression `function create(G)`, OR the value of a `create` property — method
+ * shorthand `create(G) {…}`, `create: function (G) {…}` or `create: (G) => …`.
+ */
+function isCreateFn(n, parent) {
+  if (n.type !== "FunctionDeclaration" && n.type !== "FunctionExpression" && n.type !== "ArrowFunctionExpression") return false;
+  if (!n.params.length || n.params[0].type !== "Identifier") return false;
+  if (n.id && n.id.name === "create") return true;
+  return Boolean(parent && parent.type === "Property" && parent.value === n && !parent.computed
+    && ((parent.key.type === "Identifier" && parent.key.name === "create") || parent.key.value === "create"));
+}
 
 function walk(node, visit, parent = null) {
   if (!node || typeof node !== "object") return;
@@ -277,13 +301,12 @@ export function scanRealFactories() {
     walk(ast, (n, p) => { if (p) parents.set(n, p); });
     const sm = escope.analyze(ast, { ecmaVersion: 2022, sourceType: "script" });
     const ctxVars = [];
-    walk(ast, (n) => {
+    walk(ast, (n, parent) => {
       if (rel === GAME && n.type === "VariableDeclarator" && n.id.type === "Identifier"
           && n.id.name === "G" && n.init && n.init.type === "ObjectExpression") {
         for (const s of sm.scopes) { const v = s.variables.find((x) => x.name === "G" && x.defs.some((d) => d.node === n)); if (v) ctxVars.push(v); }
       }
-      if ((n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression")
-          && n.id && n.id.name === "create" && n.params.length && n.params[0].type === "Identifier") {
+      if (isCreateFn(n, parent)) {
         const scope = sm.acquire(n);
         const v = scope && scope.variables.find((x) => x.name === n.params[0].name);
         if (v) ctxVars.push(v);
@@ -333,9 +356,8 @@ export function collectUsage(rel, source = null) {
   const addEls = (v) => { if (v && !elsSeen.has(v)) { elsSeen.add(v); elsVars.push(v); } };
   const variableForDef = (id) => sm.scopes.flatMap((s) => s.variables)
     .find((x) => x.defs.some((d) => d.name === id));
-  walk(ast, (n) => {
-    if ((n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression")
-        && n.id && n.id.name === "create" && n.params.length && n.params[0].type === "Identifier") {
+  walk(ast, (n, parent) => {
+    if (isCreateFn(n, parent)) {
       const scope = sm.acquire(n);
       if (!scope) return;
       add(scope.variables.find((x) => x.name === n.params[0].name));
@@ -443,6 +465,33 @@ export function ctxModuleFiles() {
     const g = moduleGlobal(rel);
     return Boolean(g && factories.has(g));
   });
+}
+
+/**
+ * Coverage: every global really handed the ctx (scanRealFactories) must resolve to
+ * a rostered file that ctxModuleFiles() keeps AND whose create() parameter
+ * collectUsage() binds. A factory spelled in a shape the scanners do not
+ * recognise would otherwise be counted in the roster while its G use went
+ * unchecked. Returns problem strings ([] when every factory is covered).
+ */
+export function factoryCoverage() {
+  const checked = new Set(ctxModuleFiles());
+  const fileOf = new Map();
+  for (const rel of rosteredFiles()) { const g = moduleGlobal(rel); if (g && !fileOf.has(g)) fileOf.set(g, rel); }
+  const problems = [];
+  for (const [g, at] of scanRealFactories()) {
+    const rel = fileOf.get(g);
+    if (!rel) { problems.push(`${at}: \`${g}.create(ctx)\` is called but no rostered file defines \`${g}\` — its G use is unchecked`); continue; }
+    if (!checked.has(rel)) { problems.push(`${rel}: \`${g}\` receives the ctx (${at}) but its create() is not in a shape the usage leg scans`); continue; }
+    if (!hasCreateBinding(rel)) problems.push(`${rel}: \`${g}\` receives the ctx (${at}) but no create(<param>) binding was resolved`);
+  }
+  return problems;
+}
+
+function hasCreateBinding(rel) {
+  let found = false;
+  walk(parseFile(rel), (n, parent) => { if (!found && isCreateFn(n, parent)) found = true; });
+  return found;
 }
 
 /** Generated shadow: the usage above, typed against GameCtx. */
@@ -578,6 +627,7 @@ export function checkParity() {
   const realFac = scanRealFactories();
   for (const [g, at] of realFac) if (!declared.has(g)) problems.push(`${at}: \`${g}.create(ctx)\` is called but ${DTS} has no \`declare const ${g}: GameModuleFactory;\``);
   for (const g of declared) if (!realFac.has(g)) problems.push(`${DTS}: \`declare const ${g}: GameModuleFactory\` matches no \`${g}.create(ctx)\` call site`);
+  problems.push(...factoryCoverage());
   return { problems, memberCount: real.members.size, factoryCount: realFac.size };
 }
 

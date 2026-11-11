@@ -76,6 +76,7 @@ const SPEC = [
   { k: "radioFocusDb", lane: "json", group: "audio", def: 0, src: "js/audio/panel.js", oneOf: [0, 4, 8, 12] },
   { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
   { k: "radioPreset", lane: "json", group: "audio", def: "modern", oneOf: ["modern", "clean", "vintage"], src: "js/audio/panel.js" },
+  { k: "spokenLang", lane: "json", group: "audio", def: "auto", src: "js/audio/radio-voice.js", oneOf: ["auto", "en", "es", "pt", "it", "de", "fr", "ja", "nl"] },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
@@ -94,6 +95,7 @@ const SPEC = [
   { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
+  { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
   { k: "hudPanelOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js PANEL OPACITY (null = 100%; HIGH CONTRAST keeps plates solid)" },
   { k: "motion", lane: "json", group: "a11y", def: null, src: "js/ui/title-fx.js REDUCE MOTION (null/auto = follow OS; reduce=ON; off; legacy on → auto)", oneOf: ["auto", "reduce", "off", "on"] },
   { k: "focusRing", lane: "json", group: "a11y", def: "high", src: "js/ui/a11y-opts.js KEYBOARD FOCUS", oneOf: ["standard", "high"] },
@@ -115,12 +117,14 @@ const SPEC = [
   { k: "lookGarage", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js GARAGE (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookPopups", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js POPUPS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookDesigner", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js TRACK DESIGNER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
-  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : (G.gfx.isMobile ? "low" : "auto")), src: "js/ui/scale.js (LOW on a touch device)", perDevice: true },
+  { k: "layoutPreset", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js LAYOUT PRESET (null = none recorded; the last preset applied — it reads CUSTOM once the knobs above no longer match it)", oneOf: ["shipped", "thumb", "compact", "big"] },
+  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : "auto"), src: "js/ui/scale.js (MED on a touch device)", perDevice: true },
+  { k: "resSchema", lane: "json", group: "display", def: 1, info: true, src: "js/ui/scale.js RES_SCHEMA (migration version — boot writes the current one, so never a change)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
-  { k: "buildWorker", lane: "raw", group: "display", def: "1", src: "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)", oneOf: ["0", "1"] },
+  { k: "buildWorker", lane: "raw", group: "display", def: "1", src: "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)", oneOf: ["0", "1"], perDevice: true },
   { k: "portraitOk", lane: "raw", group: "display", def: "0", src: "js/game.js RACE IN PORTRAIT (\"1\" = race upright, else the rotate blocker)", oneOf: ["0", "1"] },
-  { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/debris-opts.js + js/physics/debris-world.js create() (only \"1\" is on)" },
+  { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/post-fx-opts.js (PostFxOpts.debris) + js/physics/debris-world.js create() (only \"1\" is on)" },
   { k: "gfxSsao", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js AMBIENT OCCLUSION (only \"0\" is off; game.js zeroes po.ssao + po.contact)", oneOf: ["0", "1"] },
   { k: "gfxGodrays", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js GOD-RAYS (only \"0\" is off; game.js zeroes po.godray + po.lampVol)", oneOf: ["0", "1"] },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
@@ -152,6 +156,7 @@ const SPEC = [
   { k: "helmetVisorReflections", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorReflections", oneOf: ["light", "off", "medium", "strong"] },
   { k: "helmetVisorBeams", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js BEAMS_DEFAULT (percent, 0–200)" },
   { k: "helmetVisorRain", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRain", oneOf: ["normal", "off", "light", "heavy"] },
+  { k: "helmetVisorDropSize", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js visorDropSize (percent,50–200)" },
   { k: "helmetVisorRunoff", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRunoff", oneOf: ["normal", "slow", "fast"] },
   { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
@@ -211,7 +216,7 @@ const SPEC = [
       const clean = ControllerProfiles.clean(raw);
       return clean.devices.length === raw.devices.length ? clean : undefined;
     } },
-  { k: "conditionCues", lane: "json", group: "driving", def: false, src: "js/ui/condition-cue-controls.js" },
+  { k: "conditionCues", lane: "json", group: "driving", def: true, src: "js/ui/condition-cue-controls.js" },
   { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)",
     // A legacy scalar OR the per-pad map (Input.setPadRest's rule); typeOk(map, 0) skipped every calibrated
     // pad on LOAD SETTINGS, so the stick drifted on the new device (B·H11 hunt). `freeShape`: normalize owns it.
@@ -266,6 +271,10 @@ const SPEC = [
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
   { k: "dirtyAir", lane: "json", group: "driving", def: "classic", oneOf: ["off", "classic", "cfd"], src: "js/game.js PhysicsConsts.DirtyAir" },
   { k: "wind", lane: "json", group: "driving", def: "real", oneOf: ["off", "real"], src: "js/race/race-settings.js WIND row → Wind.setLevel" },
+  { k: "ersPlan", lane: "json", group: "driving", def: ["manual", "manual", "manual"], src: "js/race/race-settings.js ERS SECTOR rows → EnergyPlan (#1580)",
+    // Self-contained (EnergyPlan.POLICIES' three names): settings-export loads without the race modules.
+    normalize: (v) => (Array.isArray(v) && v.length === 3 && v.every((p) => p === "manual" || p === "deploy" || p === "save") ? v.slice() : undefined) },
+  { k: "damageHandling", lane: "json", group: "driving", def: false, src: "js/race/race-settings.js DAMAGE row → DamageHandling.setEnabled (#1578)" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
@@ -584,7 +593,9 @@ function applySettings(file, G) {
         if (v === null) stored = GameStore.store.rawDel(`apex26.${row.k}`) !== false;
         else stored = GameStore.store.rawSet(`apex26.${row.k}`, String(v)) !== false;
       } else {
-        stored = GameStore.store.set(row.k, v) !== false;
+        // An unset row exports as null; storing it wrote the literal "null",
+        // so readers got null instead of their own default. undefined removes.
+        stored = GameStore.store.set(row.k, v === null ? undefined : v) !== false;
       }
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
@@ -898,7 +909,7 @@ function careerRevisions() {
   const s = typeof GameStore !== "undefined" ? GameStore.store : null;
   return { expectedRevisions, expectedSelectionRevision: s && s.keyRevision ? s.keyRevision("careerSlot") : null };
 }
-function applyCareer(file, revisions) {
+async function applyCareer(file, revisions) {
   const refused = (reason) => ({ ok: false, reason, applied: 0, skipped: 0, failed: 0 });
   if (!file || file.format !== CAREER_FORMAT) return refused(`not an ${CAREER_FORMAT} file`);
   const bag = file.careers;
@@ -924,7 +935,8 @@ function applyCareer(file, revisions) {
   if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
   // Both file formats share the same live-conflict gate and preflight of ALL
   // destination revisions. No slot is written if any destination changed.
-  const r = CareerBackup.apply({ format: CareerBackup.FORMAT, slots },
+  // applyWithUndo keeps each replaced slot as a restore point first, or refuses.
+  const r = await CareerBackup.applyWithUndo({ format: CareerBackup.FORMAT, slots },
     Object.assign({}, revisions || careerRevisions(), { liveSlot, includeExtras: false }));
   if (!r.ok) return refused(r.reason);
   const failed = r.failed || 0;
@@ -1050,11 +1062,7 @@ function create(G) {
       }
       const revisions = armed.snapshot;
       disarm();
-      pick((obj) => {
-        if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
-        let r;
-        // A throw here would surface as an unhandled rejection over the game (#2191).
-        try { r = apply(obj, revisions); } catch (e) { Log.warn("ui", "file load threw", e && e.message); r = null; }
+      const loaded = (r) => {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
@@ -1064,9 +1072,19 @@ function create(G) {
         // once at boot (the backend pick, the grid, every tuner's first
         // paint), so re-reading them without one would leave the page showing
         // a mix of old and new.
-        b.textContent = `${label} — ${r.applied} APPLIED${r.droppedLiveries ? `, ${r.droppedLiveries} LIVERIES SKIPPED` : ""}, RELOADING…`;
+        b.textContent = `${label} — ${r.applied} APPLIED${r.skipped ? `, ${r.skipped} SKIPPED` : ""}${r.droppedLiveries ? `, ${r.droppedLiveries} LIVERIES SKIPPED` : ""}, RELOADING…`;
         reloading = true; b.disabled = true;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
+      };
+      pick((obj) => {
+        if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
+        let r;
+        // A throw here would surface as an unhandled rejection over the game (#2191).
+        const threw = (e) => { Log.warn("ui", "file load threw", e && e.message); return null; };
+        try { r = apply(obj, revisions); } catch (e) { r = threw(e); }
+        // The career loader is async: it awaits its restore points before writing.
+        if (r && typeof r.then === "function") r.then(loaded, (e) => loaded(threw(e)));
+        else loaded(r);
       }, maxBytes);
       tick();
     };
@@ -1094,7 +1112,6 @@ function create(G) {
     otherFiles.className = "adv-help";
     otherFiles.setAttribute("data-help", "keep");
     otherFiles.textContent = "Separate backups: GARAGE → TEAM → SAVE GARAGE FILE saves parts, setups, liveries and your team. CAREER → CAREER MODES → SAVE CAREER FILE saves all six career slots. The same separate file controls are on the Save and Restore pages here. LOAD asks twice and replaces only the corresponding data, then reloads. Settings, garage and career remain separate files. Photos, personal backgrounds, ghosts, replays and accounts are not included in these backups. STORAGE HEALTH & RESTORE POINTS below reports browser storage and local career history; local history is not an exported backup.";
-
 
     const shareNote = document.createElement("p");
     shareNote.id = "pm-share-code-help";

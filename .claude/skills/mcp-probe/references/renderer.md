@@ -1,6 +1,6 @@
 # Renderer probe recipes
 
-**Use when:** this recipe family is the narrowest match for the question.
+**Read when:** choosing renderer probe flags or confirming WebGPU/Three boot and presentation evidence.
 
 **Verification:** record the exact command, the local target, and returned evidence (the deployed site → agent `deploy-research`).
 
@@ -77,6 +77,6 @@ node tools/gfx/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
 ```
 
 Missing `/usr/share/vulkan/icd.d/lvp_icd.json` → install `mesa-vulkan-drivers`
-(and persist the Cloud env snapshot — see `AGENTS.md` §Cursor Cloud).
+(and persist it in the Cloud env — see `docs/notes/CI-RENDERING-PERFORMANCE.md`).
 
 ---

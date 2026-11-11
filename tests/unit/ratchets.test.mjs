@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES } from "../../tools/check/ratchets.mjs";
+import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch, mergeFragment } from "../../tools/check/ratchets.mjs";
 
 // ONE TREE WALK PER METRIC PER PROCESS (pass-3 T1 / audit4 E1, 2026-10-26). This
 // file called measure() three times in full, the TREE_METRICS loop once more, and
@@ -395,4 +395,71 @@ test("assertPinsAll counts every source-pin SHAPE, loop arrays element by elemen
   assert.ok(load().tree.assertPinsAll, "tests/data/ratchets.json must carry tree.assertPinsAll (node tools/check/ratchets.mjs --seed=assertPinsAll)");
   await assert.rejects(seedTreeMetric("assertPinsAll", { dryRun: true }), /already has a ceiling/);
   await assert.rejects(seedTreeMetric("noSuchMetric", { dryRun: true }), /unknown tree metric/);
+});
+
+test("scopeToBranch: a topic fragment never lowers a loose tree-wide ceiling, but keeps a deliberate tree raise", () => {
+  const rows = [
+    { tree: true, metric: "assertPins", value: 8119, ceiling: 8173 },        // loose: the deploy branch lowers it, not a topic
+    { tree: true, metric: "shellNodes", value: 2236, ceiling: 2229 },        // over: a deliberate --update --fragment raise
+    { file: "js/race/pit-lane.js", metric: "lines", value: 101, ceiling: 100 },       // over
+    { file: "js/agent/apex.js", metric: "lines", value: 90, ceiling: 100 },  // loose, touched by the branch
+    { file: "js/race/wind.js", metric: "lines", value: 90, ceiling: 100 },   // loose, untouched (#2583)
+  ];
+  const keys = (rs) => rs.map((r) => r.file || r.metric);
+  assert.deepEqual(keys(scopeToBranch(rows, new Set(["js/agent/apex.js"]))), ["shellNodes", "js/race/pit-lane.js", "js/agent/apex.js"]);
+  assert.deepEqual(keys(scopeToBranch(rows, null)), ["shellNodes", "js/race/pit-lane.js", "js/agent/apex.js", "js/race/wind.js"],
+    "no merge-base: every file row as before, still no loose tree row");
+});
+
+
+test("mergeFragment: a re-snap drops a stale negative tree delta instead of pinning it at zero slack", () => {
+  const frag = { files: { "js/agent/apex.js": { lines: 5 } }, tree: { assertPins: -50, assertPinsAll: -52, shellNodes: 3 } };
+  const out = mergeFragment(frag, [
+    { tree: true, metric: "assertPins", value: 8178, ceiling: 8174 },       // over by 4 on the merge result
+    { tree: true, metric: "assertPinsAll", value: 10288, ceiling: 10283 },
+    { tree: true, metric: "shellNodes", value: 2236, ceiling: 2229 },        // a real raise stays
+    { tree: false, file: "js/agent/apex.js", metric: "lines", value: 90, ceiling: 93 },   // a file lowering stays
+  ]);
+  assert.deepEqual(out, { files: { "js/agent/apex.js": { lines: 2 } }, tree: { shellNodes: 10 } });
+});
+
+test("#4257: a topic branch lowers a tree ceiling by its OWN reduction (merge-base delta), never further", async () => {
+  const { attributeTree, autoRaiseBlockReason } = await import("../../tools/check/ratchets.mjs");
+  const at = { rawColor: () => 334, rawColorDistinct: () => 180 };
+  const rows = [
+    { tree: true, metric: "rawColor", value: 321, ceiling: 334, slack: 13, slackMax: 0 },             // the branch removed 13
+    { tree: true, metric: "rawColorDistinct", value: 178, ceiling: 182, slack: 4, slackMax: 0 },      // base already loose by 2
+    { tree: true, metric: "shellNodes", value: 2100, ceiling: 2189, slack: 89, slackMax: 25 },        // no AT_REF form: old rule
+  ];
+  const got = await attributeTree(rows, { name: "no-such-branch.json", base: "BASE", at });
+  assert.deepEqual(got.map((r) => r.ownMin), [-13, -2, undefined]);
+  assert.deepEqual(await attributeTree(rows, { name: "no-such-branch.json", base: null, at }), rows, "no merge-base: rows unchanged");
+  assert.deepEqual(await attributeTree(rows, { name: null, base: "BASE", at }), rows, "the deploy branch: rows unchanged");
+  assert.deepEqual(scopeToBranch(got, new Set()).map((r) => r.metric), ["rawColor", "rawColorDistinct"]);
+  // The fragment carries the branch's own share: −13, and −2 (not −4: the base's own looseness is not this branch's).
+  assert.deepEqual(mergeFragment({}, scopeToBranch(got, new Set())), { tree: { rawColor: -13, rawColorDistinct: -2 } });
+  // A re-snap after re-adding one colour gives back 1 of the branch's −13 (a raise inside its own lowering).
+  const back = { tree: true, metric: "rawColor", value: 322, ceiling: 321, over: 1, slack: -1, slackMax: 0, ownMin: -12, ownFrag: -13 };
+  assert.equal(autoRaiseBlockReason(back), null, "giving back the branch's own lowering is not a raise");
+  assert.equal(autoRaiseBlockReason({ ...back, value: 335, over: 14 }), "a tree-wide metric is shrink-only — never auto-raised", "past the branch's own lowering it is a raise again");
+  assert.deepEqual(mergeFragment({ tree: { rawColor: -13 } }, [back]), { tree: { rawColor: -12 } });
+  // Every colour re-added: the delta nets to zero and goes; a stale negative with no ownMin still drops (#3996).
+  assert.deepEqual(mergeFragment({ tree: { rawColor: -13 } }, [{ ...back, value: 334, over: 13, ownMin: 0 }]), { tree: {} });
+  assert.deepEqual(mergeFragment({}, [{ tree: true, metric: "rawColor", value: 321, ceiling: 334 }]), { tree: {} });
+});
+
+test("#4257: own tree lowerings add under a merge, so siblings stay at ceiling == value (no #3996 sibling-OVER)", () => {
+  const base = { files: {}, tree: { rawColor: { ceiling: 334, slack: 0 } } };
+  const lowering = (value, ownMin) => mergeFragment({}, [{ tree: true, metric: "rawColor", value, ceiling: 334, ownMin }]);
+  const a = lowering(321, -13), b = lowering(332, -2), c = {};   // c touches no CSS
+  const merged = applyFragments(base, [{ name: "a", data: a }, { name: "b", data: b }, { name: "c", data: c }]);
+  assert.equal(merged.tree.rawColor.ceiling, 334 - 13 - 2, "the merged tip measures 319 and its ceiling is 319");
+});
+
+test("#4257: AT_REF counts css/ at a git ref the same way the live scan counts the working tree", async (t) => {
+  const cp = await import("node:child_process");
+  const dirty = cp.execFileSync("git", ["status", "--porcelain", "--", "css/"], { encoding: "utf8" }).trim();
+  if (dirty) { t.skip("css/ differs from HEAD in this checkout"); return; }
+  const { AT_REF } = await import("../../tools/check/tree-counts.mjs");
+  for (const [metric, fn] of Object.entries(AT_REF)) assert.equal(fn("HEAD"), await TREE_METRICS[metric](), metric);
 });

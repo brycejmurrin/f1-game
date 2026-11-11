@@ -153,6 +153,26 @@ test("validate: the rules read the engine's centreline (length, radius, start st
   const bridged = V.check(design({ pts: eight, bridges: [{ s: cross.s / x.stats.lengthM, halfM: 160, rise: 8 }] }));
   assert.ok(!bridged.issues.some((i) => i.code === "crossing"), "bridged: " + JSON.stringify(bridged.issues.map((i) => i.code + ":" + i.level)));
   assert.ok(bridged.issues.some((i) => i.code === "bridge" && i.level === "info"));
+  // "Both roads rise" uses def._sceneryShift like buildCenterline: a forged dress
+  // moves the authored window, so the RED's reported `s` lands on the dressed metre.
+  {
+    const built = V.build(design({ pts: eight }));
+    const tr = built.tr, L = tr.total, shift = 0.22;
+    built.def._sceneryShift = shift;
+    // Place a wide bridge so both crossing nodes sit inside its window after dress.
+    const xs = S.crossings(tr.px, tr.pz, tr.n, 3);
+    assert.ok(xs.length, "figure-eight still crosses");
+    const c0 = xs[0], mid = ((c0.i + c0.j) / 2 / tr.n);
+    const span = Math.min(Math.abs(c0.i - c0.j), tr.n - Math.abs(c0.i - c0.j)) * (L / tr.n);
+    const halfM = Math.max(200, span / 2 + 40);
+    const authored = ((mid - shift) % 1 + 1) % 1;
+    const reds = V.judge(tr, { bridges: [{ s: authored, halfM, rise: 8 }] }, built.def)
+      .issues.filter((i) => i.code === "bridge" && i.level === "red");
+    assert.ok(reds.length >= 1, "dressed window covers both roads: " + JSON.stringify(reds.map((i) => i.msg)));
+    const expect = (((authored + shift) % 1 + 1) % 1) * L;
+    assert.ok(Math.abs(reds[0].s - expect) < 1 || Math.abs(Math.abs(reds[0].s - expect) - L) < 1,
+      "issue.s is the dressed centre (" + reds[0].s + " vs " + expect + ")");
+  }
   // A steep bump reds the grade; the sanitiser's cap keeps a stored one legal.
   const steep = V.check(design({ elevations: [{ s: 0.5, halfM: 60, rise: 8 }] }));
   assert.ok(steep.issues.some((i) => i.code === "grade" && i.level === "red") || C.sanitize(design({ elevations: [{ s: 0.5, halfM: 60, rise: 8 }] })).elevations[0].rise < 8,
@@ -281,6 +301,48 @@ test("clearance: a return straight inside the pit opening is not a green save", 
   const d = { pts: [[0, 0], [1, 0]], pit: { mode: "full", side: 1 } };
   const j = V.judge(tr, d, d);
   assert.ok(j.issues.some((i) => i.level === "red" && i.code === "clearance"));
+});
+
+/** A synthetic built road along a closed polyline at 4 m nodes, flat, half-width hwAt(x, z). */
+function polyTrack(corners, hwAt) {
+  const xs = [], zs = [], hs = [];
+  for (let c = 0; c < corners.length; c++) {
+    const a = corners[c], b = corners[(c + 1) % corners.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.round(len / 4));
+    for (let k = 0; k < m; k++) { const t = k / m, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t; xs.push(x); zs.push(z); hs.push(hwAt(x, z)); }
+  }
+  const n = xs.length;
+  let total = 0; for (let k = 0; k < n; k++) total += Math.hypot(xs[(k + 1) % n] - xs[k], zs[(k + 1) % n] - zs[k]);
+  return { n, total, px: Float64Array.from(xs), pz: Float64Array.from(zs), py: new Float64Array(n), curv: new Float64Array(n), hw: Float64Array.from(hs) };
+}
+
+test("clearance: the pit-opening red applies only inside the pit window round the start, not to a hairpin's straights mid-lap (WP-G1)", () => {
+  const { V } = bootEditor();
+  // A 700 m pocket mid-lap: C→D at z = 400 and E→F at z = 422, 22 m apart
+  // (hw 7: amber, inside the pit opening's reach), ~1400 m from the line.
+  const pocket = [[0, 0], [1000, 0], [1000, 400], [300, 400], [300, 422], [1000, 422], [1000, 800], [-200, 800], [-200, 0]];
+  const tr = polyTrack(pocket, () => 7);
+  const d = { pts: [[0, 0], [1, 0]], pit: { mode: "full", side: 1 } };
+  const j = V.judge(tr, d, d);
+  const cl = j.issues.filter((i) => i.code === "clearance");
+  assert.equal(cl.length, 1, JSON.stringify(cl));
+  assert.equal(cl[0].level, "amber", "a close pair far from the pit window is advice, not a pit RED: " + cl[0].msg);
+  assert.ok(cl[0].s > 1000 && cl[0].s < tr.total - 1000, `the flagged pair is the mid-lap pocket (s ${cl[0].s})`);
+});
+
+test("clearance: the most severe pair is reported — a closer narrow amber pair does not mask a farther wide red one (WP-G1)", () => {
+  const { V } = bootEditor();
+  // Two mid-lap pockets: A (hw 5, centres 15 m apart: edge gap 5 m → amber) and
+  // B (hw 8, centres 17 m apart: edge gap 1 m → overlap RED). A is the closer by centreline.
+  const shape = [[0, 0], [3000, 0], [3000, 300], [2400, 300], [2400, 317], [3000, 317], [3000, 1200],
+    [1700, 1200], [1700, 300], [1000, 300], [1000, 315], [1600, 315], [1600, 1400], [-300, 1400], [-300, 0]];
+  const hwAt = (x, z) => (z > 250 && z < 350 && x >= 2300 ? 8 : 5);
+  const tr = polyTrack(shape, hwAt);
+  const j = V.judge(tr, {}, {});
+  const cl = j.issues.filter((i) => i.code === "clearance");
+  assert.equal(cl.length, 1, JSON.stringify(cl));
+  assert.equal(cl[0].level, "red", "the overlap RED wins over the closer amber pair: " + cl[0].msg);
+  const k = Math.round(cl[0].s / (tr.total / tr.n)) % tr.n;
+  assert.ok(tr.px[k] >= 2300 && hwAt(tr.px[k], tr.pz[k]) === 8, `the flagged pair is the wide pocket B (node ${k} at ${tr.px[k]}, ${tr.pz[k]})`);
 });
 
 // ── SPIRAL: clothoid entry / exit on the curved stamps (TrackStamps.spiralSweep) ──

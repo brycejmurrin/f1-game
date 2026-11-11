@@ -53,6 +53,11 @@ const FACADES = { G: { iface: "GameCtx", file: "types/game-ctx.d.ts" } };   // q
 const answered = r => Array.isArray(r) ? r.length > 0
   : !!r && !(r.contents && /^\s*(```\w*\s*)?(\(\w+\) )?[\w.$]*:?\s*any\s*(```)?\s*$/.test(typeof r.contents === "string" ? r.contents : r.contents.value || ""));
 
+const sourceStamp = stat => `${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}:${stat.ino}`;
+const sourceLanguage = file => /\.(?:[cm]?js|[cm]?ts)$/.test(file);
+const objectName = n => n?.type === "Identifier" ? n.name : n?.type === "MemberExpression" && !n.computed ? `${objectName(n.object)}.${objectName(n.property)}` : "";
+const iife = n => n?.type === "CallExpression" && ["FunctionExpression", "ArrowFunctionExpression"].includes(n.callee?.type) ? n.callee : null;
+
 function scopePath(value) {
   if (value === undefined) return null;
   if (path.isAbsolute(value) || /^[\\/]/.test(value) || /^[A-Za-z]:/.test(value)) throw Error("path must be repo-relative");
@@ -310,7 +315,7 @@ export class Lsp {
     for (const f of [...walk(this.root, this.src), ...(fs.existsSync(path.join(this.root, "types")) ? walk(this.root, "types") : [])]) {
       seen.add(f);
       let m;
-      try { m = fs.statSync(path.join(this.root, f)).mtimeMs; } catch { continue; }   // deleted mid-walk
+      try { m = sourceStamp(fs.statSync(path.join(this.root, f))); } catch { continue; }   // deleted mid-walk
       const was = this.mtimes.get(f);
       if (was === m) continue;
       this.mtimes.set(f, m); this.lines.delete(f);
@@ -383,6 +388,20 @@ export class Lsp {
     return { line0: lo, col0: off - starts[lo] };
   }
   tag(file, line0, col0) {
+    const t = this.textOf(file);
+    if (!t.memberTags) {
+      t.memberTags = new Map();
+      visitParents(this.astOf(file), (node, parents) => {
+        if (node.type !== "MemberExpression") return;
+        const parent = parents.at(-1);
+        if (parent?.type === "AssignmentExpression" && parent.left === node) return;
+        const tag = parent?.type === "VariableDeclarator" && parent.init === node ? "alias"
+          : "use";
+        t.memberTags.set(node.property.range[0], tag);
+      });
+    }
+    const memberTag = t.memberTags.get(t.starts[line0] + col0);
+    if (memberTag) return memberTag;
     const lines = this.textLines(file);
     return classify(lines[line0] || "", col0, lines.slice(line0 + 1, line0 + 9).join("\n"));
   }
@@ -412,7 +431,7 @@ export class Lsp {
 
   // ── Structure: documentSymbol trees, cached until the file changes on disk ──
   async outlineOf(file) {
-    const m = this.mtimes.get(file) ?? fs.statSync(path.join(this.root, file)).mtimeMs, generation = this.generation, hit = this.syms.get(file);
+    const m = this.mtimes.get(file) ?? sourceStamp(fs.statSync(path.join(this.root, file))), generation = this.generation, hit = this.syms.get(file);
     if (hit && hit.m === m && hit.generation === generation) return hit.promise;
     this.ensureOpen(file);
     const entry = { m, generation };
@@ -528,32 +547,69 @@ export class Lsp {
     return lines.slice(start.line, start.line + shown).map((t, i) => `${String(start.line + i + 1).padStart(6)}  ${t}`).join("\n")
       + (n > shown ? `\n        … ${n - shown} more lines (maxLines)` : "");
   }
-  // Names a module exports: the keys of the `return { … }` at the IIFE body's own depth
-  // (never one nested in a method), read with the code mask so strings/comments can't fool it.
-  exportsIn(file, range) {
-    const t = this.textOf(file);
-    t.mask ??= codeMask(t.text);
-    const from = t.starts[range.start.line] + range.start.character, to = t.starts[range.end.line] + range.end.character;
-    const code = k => !t.mask[k], names = new Set();
-    let depth = 0, k = t.text.indexOf("{", from);   // the function body's own brace
-    for (; k >= 0 && k < to; k++) {
-      if (!code(k)) continue;
-      const ch = t.text[k];
-      if (ch === "{" || ch === "(" || ch === "[") { depth++; continue; }
-      if (ch === "}" || ch === ")" || ch === "]") { depth--; continue; }
-      if (depth !== 1 || !/^return\b/.test(t.text.slice(k, k + 7)) || /[\w$]/.test(t.text[k - 1] || "")) continue;
-      const open = t.text.slice(k + 6).search(/\S/) + k + 6;
-      if (t.text[open] !== "{") continue;   // `return api;` — nothing literal to read
-      let d = 0, tok = "";
-      const flush = () => { const m = /^\s*(?:\.\.\.)?(?:async\s+|get\s+|set\s+|\*\s*)?([\w$]+)/.exec(tok); if (m) names.add(m[1]); tok = ""; };
-      for (let j = open; j < to; j++) {
-        if (!code(j)) { if (d === 1) tok += " "; continue; }
-        const c = t.text[j];
-        if (c === "{" || c === "(" || c === "[") { if (++d === 1) tok = ""; else if (d === 2 && c === "{") flush(); continue; }
-        if (c === "}" || c === ")" || c === "]") { if (d === 1) { flush(); break; } d--; continue; }
-        if (d === 1) { if (c === ",") flush(); else tok += c; }
-      }
+  // Resolve public object properties by their actual lexical bindings. Keep all
+  // overwrite candidates for definitions; an outline uses the union of keys.
+  objectMembers(file, node, seen = new Set()) {
+    if (!node || seen.has(node)) return { nodes: [], uncertain: true };
+    seen = new Set(seen).add(node);
+    if (node.type === "Identifier") {
+      const variable = this.lexicalRefs(file).get(node.range[0]);
+      const declarations = variable?.defs?.filter(d => d.type === "Variable" && d.node?.init && d.node.range[0] < node.range[0]) || [];
+      if (declarations.length !== 1) return { nodes: [], uncertain: true };
+      const result = this.objectMembers(file, declarations[0].node.init, seen);
+      return { nodes: result.nodes, uncertain: result.uncertain || !!variable.references?.some(r => r.isWrite?.() && !r.init) };
     }
+    if (node.type === "ObjectExpression") {
+      const nodes = []; let uncertain = false;
+      for (const prop of node.properties) {
+        if (prop.type === "Property" && !prop.computed) nodes.push(prop);
+        else if (prop.type === "SpreadElement") {
+          const result = this.objectMembers(file, prop.argument, seen);
+          nodes.push(...result.nodes); uncertain = true;
+        } else uncertain = true;
+      }
+      return { nodes, uncertain };
+    }
+    const fn = iife(node);
+    if (fn) {
+      const values = fn.body.type === "BlockStatement" ? fn.body.body.filter(n => n.type === "ReturnStatement").map(n => n.argument) : [fn.body];
+      const results = values.map(value => this.objectMembers(file, value, seen));
+      return { nodes: results.flatMap(r => r.nodes), uncertain: !values.length || results.some(r => r.uncertain) };
+    }
+    if (node.type === "CallExpression" && objectName(node.callee) === "Object.freeze" && node.arguments.length === 1)
+      return this.objectMembers(file, node.arguments[0], seen);
+    if (node.type === "CallExpression" && objectName(node.callee) === "Object.assign") {
+      const results = node.arguments.map(arg => this.objectMembers(file, arg, seen));
+      return { nodes: results.flatMap(r => r.nodes), uncertain: results.some(r => r.uncertain) };
+    }
+    return { nodes: [], uncertain: true };
+  }
+  moduleDeclarations(file, name) {
+    return (this.astOf(file)?.body || []).filter(n => n.type === "VariableDeclaration")
+      .flatMap(n => n.declarations).filter(n => n.id.type === "Identifier" && n.id.name === name);
+  }
+  propertyTarget(file, property) {
+    if (property.value.type === "Identifier") {
+      const variable = this.lexicalRefs(file).get(property.value.range[0]);
+      const definitions = variable?.defs?.filter(d => d.node?.id?.type === "Identifier") || [];
+      if (definitions.length === 1) return definitions[0].node.id;
+    }
+    return property.key;
+  }
+  exportsIn(file, range) {
+    let initializer = null;
+    for (const declaration of (this.astOf(file)?.body || []).filter(n => n.type === "VariableDeclaration").flatMap(n => n.declarations)) {
+      const fn = iife(declaration.init);
+      if (fn && fn.loc.start.line - 1 === range.start.line && fn.loc.start.column === range.start.character) initializer = declaration.init;
+    }
+    if (!initializer) visit(this.astOf(file), n => {
+      const fn = iife(n);
+      if (fn && fn.loc.start.line - 1 === range.start.line && fn.loc.start.column === range.start.character) initializer = n;
+    });
+    const result = this.objectMembers(file, initializer);
+    const names = new Set(result.nodes.map(p => String(p.key.name ?? p.key.value)));
+    names.uncertain = result.uncertain;
+    names.properties = result.nodes;
     return names;
   }
   // A module's members (an IIFE's inner declarations, or an object literal's keys), exported first.
@@ -561,10 +617,21 @@ export class Lsp {
     await this.prepare();
     let f = file && path.relative(this.root, path.resolve(this.root, file)), roots, only = null;
     if (symbol) {
+      if (!file) {
+        const declarations = this.repeatedIifeDecl(symbol, true);
+        const files = [...new Set(declarations.map(d => d.file))];
+        if (declarations.length > 1) {
+          const pages = [];
+          for (const declaredFile of files) pages.push(await this.outline({ file: declaredFile, symbol, all, offset: 0, limit: 2000, concise }));
+          const rows = pages.join("\n").split("\n"), page = rows.slice(offset, offset + limit);
+          return `multiple declarations of ${symbol}; runtime load order may determine the implementation\n${page.join("\n")}${rows.length > offset + page.length ? `\n… ${rows.length - offset - page.length} more rows (offset: ${offset + page.length})` : ""}`;
+        }
+      }
       const g = this.windowDecl(symbol);
-      if (g?.kind === "window") { f = g.file; only = symbol; roots = await this.outlineOf(f); }
+      if (file) { f = this.inRoot(file); roots = (await this.outlineOf(f)).filter(r => r.name === symbol); }
+      else if (g?.kind === "window") { f = g.file; only = symbol; roots = await this.outlineOf(f); }
       else {
-        const hit = (await this.symbols(symbol)).find(x => x.name === symbol && !x.containerName);
+        const hit = (await this.symbols(symbol)).find(x => x.name === symbol && !x.containerName && (!file || this.rel(x.location.uri) === f));
         if (!hit) throw Error(`symbol not found: ${symbol} (lsp_symbols for a prefix)`);
         f = this.rel(hit.location.uri);
         roots = this.chain(await this.outlineOf(f), hit.location.range.start.line).slice(0, 1);
@@ -587,8 +654,24 @@ export class Lsp {
       return [...byLine.values()].map(({ m, names }) => row({ ...m, name: names.join(", "), kind: isFn(m) && !FN_KINDS.has(m.kind) ? 12 : m.kind }, tag));
     };
     const out = [], group = (title, members, exported, showRest) => {
-      const ex = members.filter(m => exported.has(m.name)), rest = members.filter(m => !exported.has(m.name));
-      out.push(`${title}: ${ex.length} exported, ${rest.length} internal`);
+      const descendants = [];
+      const collect = nodes => { for (const node of nodes) { descendants.push(node); collect(node.children || []); } };
+      collect(members);
+      const positionKey = n => `${n.selectionRange.start.line}:${n.selectionRange.start.character}`;
+      const ex = exported.properties ? [...new Map(exported.properties.map(property => {
+        const target = this.propertyTarget(f, property), name = String(property.key.name ?? property.key.value);
+        const start = { line: target.loc.start.line - 1, character: target.loc.start.column };
+        const original = descendants.find(n => n.selectionRange.start.line === start.line && n.selectionRange.start.character === start.character);
+        const binding = property.value.type === "Identifier" ? this.lexicalRefs(f).get(property.value.range[0])?.defs?.[0]?.node : null;
+        const value = binding?.type === "VariableDeclarator" ? binding.init : binding || property.value;
+        const functionValue = ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(value?.type);
+        const range = { start, end: { line: target.loc.end.line - 1, character: target.loc.end.column } };
+        return [name, { ...(original || { range, selectionRange: range }), name,
+          kind: functionValue ? 12 : original?.kind || (property.value.type === "Identifier" ? 13 : 7) }];
+      })).values()] : members.filter(m => exported.has(m.name));
+      const publicPositions = new Set(ex.map(positionKey));
+      const rest = members.filter(m => !publicPositions.has(positionKey(m)));
+      out.push(`${title}: ${ex.length} exported, ${rest.length} internal${exported.uncertain ? " (export shape includes unresolved or spread sources)" : ""}`);
       out.push(...rowsOf(ex, "[export]"));
       const listed = showRest ? rest : all ? rest : [];
       out.push(...rowsOf(listed, ""));
@@ -704,7 +787,13 @@ export class Lsp {
   // then a member symbol in Head's file; file+line → that position alone.
   async candidates({ symbol, file, line, column }) {
     if (file) {
-      const f = this.inRoot(file);
+      const f = this.inRoot(file), { text, lines } = this.textOf(f);
+      // An out-of-range position must fail, never answer for another name
+      // (an overlong column used to overflow into a later line).
+      const count = lines.length - (lines.length > 1 && text.endsWith("\n") ? 1 : 0);
+      if (line > count) throw Error(`${f} has ${count} line${count === 1 ? "" : "s"}; line ${line} is out of range`);
+      const len = lines[line - 1].replace(/\r$/, "").length;
+      if ((column || 1) > len + 1) throw Error(`line ${line} of ${f} has ${len} character${len === 1 ? "" : "s"}; column ${column} is past its end`);
       return { cands: [{ file: f, line0: line - 1, col0: (column || 1) - 1 }], parts: [] };
     }
     if (!symbol) throw Error("pass symbol (Name or Head.member) or file+line[+column]");
@@ -736,7 +825,20 @@ export class Lsp {
     }
     const head = (await this.symbols(parts[0])).find(s => s.name === parts[0] && !s.containerName);
     const uses = cands.length;
-    if (head) for (const s of (await this.symbols(name)).filter(s => s.name === name && s.location.uri === head.location.uri)) cands.push({ ...at(s), note: `no direct ${symbol} use in ${this.src}/; module-file fallback for ${name}; export and caller coverage unverified` });
+    if (head && parts.length === 2) for (const declaration of this.moduleDeclarations(this.rel(head.location.uri), parts[0])) {
+      const file = this.rel(head.location.uri), properties = this.objectMembers(file, declaration.init).nodes;
+      let targets = properties.filter(p => String(p.key.name ?? p.key.value) === name).map(p => this.propertyTarget(file, p));
+      // Preserve the explicitly qualified internal-helper fallback, but never
+      // borrow a same-named declaration from another IIFE in this file.
+      if (!targets.length) for (const statement of iife(declaration.init)?.body?.body || []) {
+        if (statement.type === "FunctionDeclaration" && statement.id?.name === name) targets.push(statement.id);
+        if (statement.type === "VariableDeclaration") for (const v of statement.declarations) if (v.id.name === name) targets.push(v.id);
+      }
+      for (const target of targets) {
+        cands.push({ file: this.rel(head.location.uri), line0: target.loc.start.line - 1, col0: target.loc.start.column,
+          note: `no direct ${symbol} use in ${this.src}/; module-file fallback for ${name}; export and caller coverage unverified` });
+      }
+    }
     return { cands, parts, uses, head: head && at(head) };
   }
   async at(args, method, extra = {}) {
@@ -809,8 +911,8 @@ export class Lsp {
   }
   // Lazy bundles replace a title stub with a real implementation by evaluating
   // another top-level `var H = (function () { return { ... }; })()` script.
-  // Only treat repeated declarations of that exact shape as one reinjected
-  // browser global; an ordinary local/object with the same name is unrelated.
+  // A top-level object stub may precede the IIFE. Require at least one IIFE;
+  // locally scoped variables and unrelated object-only declarations stay separate.
   repeatedIifeDecl(h, all = false) {
     const declarations = [];
     for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
@@ -824,10 +926,9 @@ export class Lsp {
           for (const statement of this.astOf(f)?.body || []) {
             if (statement.type !== "VariableDeclaration" || statement.kind !== "var") continue;
             for (const n of statement.declarations) {
-              const callee = n.init?.type === "CallExpression" ? n.init.callee : null;
-              if (n.id.type !== "Identifier" || n.id.name !== h || !["FunctionExpression", "ArrowFunctionExpression"].includes(callee?.type)) continue;
+              if (n.id.type !== "Identifier" || n.id.name !== h || !iife(n.init) && n.init?.type !== "ObjectExpression") continue;
               found.push({ file: f, line0: statement.loc.start.line - 1, col0: statement.loc.start.column,
-                idLine0: n.id.loc.start.line - 1, idCol0: n.id.loc.start.column, kind: "script" });
+                idLine0: n.id.loc.start.line - 1, idCol0: n.id.loc.start.column, iife: !!iife(n.init), kind: "script" });
             }
           }
         }
@@ -835,7 +936,7 @@ export class Lsp {
       }
       declarations.push(...t.repeatedIifes.get(h));
     }
-    if (declarations.length < 2) return all ? [] : null;
+    if (declarations.length < 2 || !declarations.some(d => d.iife)) return all ? [] : null;
     return all ? declarations : declarations[0];
   }
   async textFallback(parts, method, head, extra = {}) {
@@ -845,36 +946,6 @@ export class Lsp {
     if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares`);
     // Read the actual assignment/initializer and its exported object. A later
     // object or an internal helper is never evidence of a member on this owner.
-    const ownerName = n => n?.type === "Identifier" ? n.name : n?.type === "MemberExpression" && !n.computed ? `${ownerName(n.object)}.${ownerName(n.property)}` : "";
-    const memberNodes = (file, ast, n, seen = new Set()) => {
-      if (!n || seen.has(n)) return { nodes: [], uncertain: !!n };
-      seen.add(n);
-      if (n.type === "Identifier") {
-        const variable = this.lexicalRefs(file).get(n.range[0]);
-        if (!variable) return { nodes: [], uncertain: true };
-        const declarations = variable.defs?.filter(x => x.type === "Variable" && x.node?.type === "VariableDeclarator" && x.node.init && x.node.range[0] < n.range[0]) || [];
-        if (declarations.length !== 1) return { nodes: [], uncertain: true };
-        const result = memberNodes(file, ast, declarations[0].node.init, seen);
-        const unknownWrite = variable.references?.some(ref => ref.isWrite?.() && !ref.init);
-        return { nodes: result.nodes, uncertain: result.uncertain || !!unknownWrite };
-      }
-      if (n.type === "ObjectExpression") {
-        const nodes = []; let uncertain = false;
-        for (const p of n.properties) {
-          if (p.type === "Property" && !p.computed && (p.key.name || p.key.value) === member) nodes.push(p);
-          else if (p.type === "SpreadElement") { const r = memberNodes(file, ast, p.argument, seen); nodes.push(...r.nodes); uncertain = true; }
-        }
-        return { nodes, uncertain };
-      }
-      if (n.type !== "CallExpression") return { nodes: [], uncertain: true };
-      if (ownerName(n.callee) === "Object.freeze" && n.arguments.length === 1) return memberNodes(file, ast, n.arguments[0], seen);
-      if (ownerName(n.callee) === "Object.assign") {
-        const nodes = []; let uncertain = false;
-        for (const arg of n.arguments) { const r = memberNodes(file, ast, arg, seen); nodes.push(...r.nodes); uncertain ||= r.uncertain || !r.nodes.length; }
-        return { nodes, uncertain };
-      }
-      return { nodes: [], uncertain: true };
-    };
     const defs = []; let uncertain = false;
     const owners = d.kind === "window" ? this.windowDecl(h, true).filter(x => x.kind === "window")
       : d.kind === "script" ? this.repeatedIifeDecl(h, true) : [d];
@@ -882,28 +953,23 @@ export class Lsp {
       const candidates = [];
       visit(this.astOf(owner.file), n => {
         if (n.loc.start.line - 1 !== owner.line0 || n.loc.start.column !== owner.col0) return;
-        if (owner.kind === "window" && n.type === "AssignmentExpression" && ownerName(n.left) === `window.${h}`) candidates.push(n.right);
+        if (owner.kind === "window" && n.type === "AssignmentExpression" && objectName(n.left) === `window.${h}`) candidates.push(n.right);
         if (["cjs", "script"].includes(owner.kind) && n.type === "VariableDeclaration") for (const v of n.declarations) {
-          if (ownerName(v.id) !== h) continue;
+          if (objectName(v.id) !== h) continue;
           if (owner.kind === "script" && (v.id.loc.start.line - 1 !== owner.idLine0 || v.id.loc.start.column !== owner.idCol0)) continue;
           candidates.push(v.init);
         }
       });
-      const ast = this.astOf(owner.file);
       for (const init of candidates) {
         const fn = init?.type === "CallExpression" && ["FunctionExpression", "ArrowFunctionExpression"].includes(init.callee.type) ? init.callee : null;
         const returns = fn ? fn.body.type === "BlockStatement"
           ? fn.body.body.filter(n => n.type === "ReturnStatement").map(n => n.argument) : [fn.body] : [init];
         for (const value of returns) {
-          const found = memberNodes(owner.file, ast, value); uncertain ||= found.uncertain;
+          const resolved = this.objectMembers(owner.file, value);
+          const found = { ...resolved, nodes: resolved.nodes.filter(p => String(p.key.name ?? p.key.value) === member) };
+          uncertain ||= found.uncertain;
           for (const prop of found.nodes) {
-            let at = prop.key;
-            if (fn && prop?.value?.type === "Identifier") {
-              for (const n of fn.body.body || []) {
-                if (n.type === "FunctionDeclaration" && n.id?.name === prop.value.name) at = n.id;
-                if (n.type === "VariableDeclaration") for (const v of n.declarations) if (v.id.name === prop.value.name) at = v.id;
-              }
-            }
+            const at = this.propertyTarget(owner.file, prop);
             defs.push({ uri: this.uriOf(owner.file), range: { start: { line: at.loc.start.line - 1, character: at.loc.start.column } } });
           }
         }
@@ -933,7 +999,7 @@ export class Lsp {
       const m = row.exec(lines[i]);
       if (m) { p = { file, line0: i, col0: m.index + m[0].indexOf(member) }; break; }
     }
-    if (!p) throw Error(`${iface} (the ${h} façade, ${file}) has no member ${member}`);
+    if (!p) throw Error(`${iface} (the ${h} façade, ${file}) has no member ${member}; a local (e.g. a js/game.js IIFE function) answers to the bare name: try lsp_symbols ${member} or lsp_definition ${member}`);
     const def = { uri: this.uriOf(file), range: { start: { line: p.line0, character: p.col0 } } }, note = `${h} is the ${iface} façade; contract row in ${file}`;
     if (method === "textDocument/references") return { p, result: await this.textRefs([h, member], def, extra.context?.includeDeclaration !== false), note: `${note}; uses are text matches of ${h}.${member}` };
     if (method === "textDocument/definition") return { p, result: [def], note };
@@ -1041,14 +1107,21 @@ export class Lsp {
     const seen = new Set(locs.map(key));
     // Pipeline definition hops: each export/alias row is independent, and under
     // a contended CI runner serial round-trips dominate the MCP client case.
-    const hops = await Promise.all([...locs].map(async l => {
-      const uri = l.uri || l.targetUri, start = (l.range || l.targetSelectionRange).start, file = this.rel(uri);
-      if (!["export", "alias"].includes(this.tag(file, start.line, start.character))) return [];
-      this.ensureOpen(file);
-      return (await this.request("textDocument/definition", { textDocument: { uri }, position: start })) || [];
-    }));
-    for (const n of hops.flat()) {
-      if (!seen.has(key(n))) { seen.add(key(n)); locs.push(n); }
+    // A chain needs more than one hop: `Tracks.curvature` exports a local that
+    // destructures `TrackSpline.curvature` (export → alias → spline.js [def]).
+    // Follow only the rows each round added, a bounded number of rounds.
+    let frontier = [...locs];
+    for (let round = 0; round < 4 && frontier.length; round++) {
+      const hops = await Promise.all(frontier.map(async l => {
+        const uri = l.uri || l.targetUri, start = (l.range || l.targetSelectionRange).start, file = this.rel(uri);
+        if (!["export", "alias"].includes(this.tag(file, start.line, start.character))) return [];
+        this.ensureOpen(file);
+        return (await this.request("textDocument/definition", { textDocument: { uri }, position: start })) || [];
+      }));
+      frontier = [];
+      for (const n of hops.flat()) {
+        if (!seen.has(key(n))) { seen.add(key(n)); locs.push(n); frontier.push(n); }
+      }
     }
   }
   rank(l) { return TAG_RANK[this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)]; }
@@ -1119,6 +1192,8 @@ export async function callTool(lsp, name, a = {}) {
       if (schema.type === "boolean" && typeof value !== "boolean") throw Error(`${k} must be a boolean`);
       if (schema.enum && !schema.enum.includes(value)) throw Error(`${k} must be one of: ${schema.enum.join(", ")}`);
     }
+    if (a.file && name !== "lsp_diagnostics" && !sourceLanguage(a.file))
+      throw Error(`unsupported language: ${a.file}; navigation supports JavaScript (.js/.mjs/.cjs) and TypeScript (.ts/.mts/.cts)`);
     if (a.symbol !== undefined && !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(a.symbol)) throw Error("symbol must be Name or Head.member");
     if (a.symbol && a.file) throw Error(`pass symbol or file+line, not both${["lsp_references", "lsp_callers"].includes(name) ? "; use path to filter result files" : ""}`);
     if ((a.line !== undefined || a.column !== undefined) && !a.file) throw Error("line and column need file");
@@ -1174,7 +1249,9 @@ export async function callTool(lsp, name, a = {}) {
           const f = lsp.rel(loc.uri), s = loc.range.start;
           return lsp.tag(f, s.line, s.character) === "export" ? lsp.exportedMemberAt(f, s.line, s.character) : null;
         }).find(Boolean);
-        if (exported) result = (await lsp.at({ symbol: exported }, method, extra)).result;
+        // MERGE, never replace: the declaration's own same-file uses (wrapS in
+        // game.js) are not uses of the exported member. Rows dedupe below.
+        if (exported) result = [...result, ...((await lsp.at({ symbol: exported }, method, extra)).result || [])];
       }
       if (Array.isArray(result) && (isDef || (!callers && a.includeDeclaration !== false)) && !at.note) await lsp.followExports(result);
       const notes = [at.note,
@@ -1256,7 +1333,12 @@ export async function callTool(lsp, name, a = {}) {
         if (viaAlias) notes.push(`${viaAlias} of them through a destructure or alias (\`const { x } = Head\`, \`const K = Head\`) — grep would not count those`);
         const extraRows = isDef ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;
         const count = isDef && extraRows && defs ? `${defs} definition${defs === 1 ? "" : "s"} (+${extraRows} export/alias row${extraRows === 1 ? "" : "s"})` : `${r.total} ${isDef ? "definition" : "reference"}${r.total === 1 ? "" : "s"}`;
-        text = `${count}${!isDef ? ` in ${r.files} file${r.files === 1 ? "" : "s"}` : ""} ${head.replace("%SELF%", self ? "at the declaration" : `query at ${p ? pos(p) : "—"}`)}${summary}${a.files ? "" : `\n${r.rows.join("\n")}${more(r.total, r.rows.length)}`}`;
+        // A symbol query anchors at a USE; never let that position read as the answer.
+        const defAt = r.tags.indexOf("def"), defLoc = defAt >= 0 && r.list[defAt], anchorTag = p && lsp.tag(p.file, p.line0, p.col0);
+        const anchor = self || (a.symbol && anchorTag === "def") ? "at the declaration"
+          : !a.symbol || !p ? `query at ${p ? pos(p) : "—"}`
+          : `${a.symbol} resolved from a use at ${pos(p)}${defLoc ? `; declared at ${lsp.rel(defLoc.uri)}:${defLoc.range.start.line + 1}:${defLoc.range.start.character + 1}` : ""}`;
+        text = `${count}${!isDef ? ` in ${r.files} file${r.files === 1 ? "" : "s"}` : ""} ${head.replace("%SELF%", anchor)}${summary}${a.files ? "" : `\n${r.rows.join("\n")}${more(r.total, r.rows.length)}`}`;
         if (isDef && a.body) {
           const d = r.list.find(l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character) === "def") || r.list[0];
           const src = d && await lsp.bodyAt(lsp.rel(d.uri), d.range.start.line, a.maxLines || BODY_LINES);

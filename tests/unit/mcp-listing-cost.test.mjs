@@ -66,7 +66,8 @@ test("a server with no instructions of its own gets its preface, then the gatewa
   for (const server of Object.keys(SERVER_PREFACES)) {
     const { instructions } = await as(server);
     assert.equal(instructions, `${SERVER_PREFACES[server]}\n\n${GATEWAY_INSTRUCTIONS}`, server);
-    assert.ok(SERVER_PREFACES[server].length <= 240, `${server}: preface stays one short sentence pair`);
+    // 240 -> 300 (2026-10-30): the preface now names the URL and serve command a cold agent spent two calls finding.
+    assert.ok(SERVER_PREFACES[server].length <= 300, `${server}: preface stays one short sentence pair`);
   }
   assert.equal((await as("unlisted")).instructions, GATEWAY_INSTRUCTIONS, "no preface invented for an unlisted server");
 });

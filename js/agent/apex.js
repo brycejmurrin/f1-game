@@ -52,7 +52,9 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
-  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
+  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking", "stallT",
+  // #1628 wheel state: rim speeds and slip ratios re-seed from c.speed (WheelState.ensure) on the next step.
+  "vwF", "vwR", "kappaF", "kappaR", "_wsV",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
   // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
   // simply without it (CarFields predeclares it undefined).
@@ -122,7 +124,7 @@ const { TUNE_DEFS, LT } = LightTune;
 
 // The agent-facing view (js/agent/agentview.js). Composed here rather than
 // bolted onto this file: __apex stays a flat dev console, world()/trackInfo()
-// are the layer an LLM agent reads. See docs/AGENT-WORLD-API.md.
+// are the layer an LLM agent reads. See docs/DEBUG-HOOKS.md.
 const agentView = AgentView.create(G);
 
 
@@ -141,7 +143,7 @@ function simCareerRound() {
   for (let i = 0; i < rows.length; i++) {
     const car = byId.get(rows[i].driverId);
     if (!car) continue;
-    car.gridPos = i + 1;
+    car.gridPos = i + 1; delete car.classified; delete car.dsq;   // this simulated round owns its result
     if (car.dnfAt != null) { car.retired = true; car.dnf = car.dnfWhy; car.dnfAt = null; }
     const rt = DriverRatings.get(car.code, car.tier, Career.devFor(car.team && car.team.id, car.seat));
     // Race day is not qualifying. Pace order is a strong prior; craft is how much
@@ -253,8 +255,8 @@ const api = {
     // teleport under updateCarAdvance's 20 m threshold (pole → jump(0) is 14 m)
     // was banked into prog a second time and crossed the line: lap 0 → 1.
     G.player.s = sNew; G.player._prevS = sNew;
-    if (lateral !== undefined) G.player.x = lateral;
-    if (speed !== undefined) G.player.speed = speed;
+    if (lateral != null) G.player.x = lateral;
+    if (speed != null) G.player.speed = speed;
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
     G.player.vLat = 0; G.player.yawRateCur = 0;
@@ -390,8 +392,13 @@ const api = {
     lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
+    // tickBody's holds: while `warming`, real frames charge neither the countdown nor
+    // physics; go() skips the lights, so wait for liveTicks past go() and !warming
+    // before driving a rendered race (#4253). step() is not held.
+    ...(({ warming, liveTicks }) => ({ warming, liveTicks }))(G.cameraDampingState()),
   }),
   garageCam: () => ({
+    exterior: typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state().exterior : null,
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
     az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
     // dist is the ZOOM's stored distance; effDist is what the camera actually
@@ -526,7 +533,7 @@ const api = {
   // "+ = right" comment was backwards), half-width hw (m), speed (m/s), arc s.
   probe() {
     if (!G.player || !G.track) return null;
-    const lineAt = (s) => { const ln = TrackLine.at(G.track, wrapS(s)); return ln.x * ln.w; };
+    const lineAt = (s) => TrackLine.at(G.track, wrapS(s)).x;
     Tracks.sample(G.track, G.player.s, smp);
     let angle = 0;
     if (G.player.head != null) {
@@ -543,7 +550,8 @@ const api = {
       hw: smp.hw,
       speed: G.player.speed, s: G.player.s,
       // The racing-line assist's pursuit target (game.js updateCar): the AI
-      // line x*w at the same speed-scaled look-ahead. Where the line IS — the
+      // line x at the same speed-scaled look-ahead (lineW scales the pull, not
+      // the target). Where the line IS — the
       // corner's sign alone says nothing (past an apex the line is outside).
       lineAhead: G.track.line ? lineAt(G.player.s + Math.min(90, Math.max(25, Math.abs(G.player.speed) * 0.9))) : null,
     };
@@ -578,11 +586,14 @@ const api = {
       maxTilt: Input.maxTilt,          // TILT SENSITIVITY (deg for full lock)
       deadzone: Input.deadzone,        // fixed dead zone (deg) — no longer a slider
       tiltCutoff: Input.minCutoff,     // STEER SMOOTHING (One-Euro min-cutoff, Hz)
+      wheelState: typeof WheelState !== "undefined" && WheelState.enabled(),   // #1628 opt-in torque-balanced wheels
     };
   },
-  physState() {
+  // physState({lite:true}) — the METRICS overlay's 4 Hz read: no coach.status() (driving: undefined).
+  physState(o) {
     if (!G.player || G.player.px == null) return null;
     if (!G.track) return { error: "no track" };   // a stepped rebuild / menu flyby drop nulls the track while px survives
+    const dAx = typeof DamageHandling !== "undefined" ? DamageHandling.axles() : null;
     const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
     Tracks.sample(G.track, G.player.s, smp);
     const { axFrac, slipFactor } = AgentView.slipBudget(G.player, LONG_GRIP, gripMult());
@@ -595,7 +606,7 @@ const api = {
       wrongWay: !!G.player.wrongWay, rescueT: G.player.rescueT || 0, lap: G.player.lap,
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
-      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
+      slipFactor: +slipFactor.toFixed(3), driving: o && o.lite ? undefined : G.coach.status(),
       // The DRIVEN axle's circle after the brake-bias re-split (player-forces
       // c.slipFactor) — not the whole-car budget above. null before a tick.
       drivenSlip: G.player.slipFactor != null ? +G.player.slipFactor.toFixed(3) : null,
@@ -606,6 +617,10 @@ const api = {
       towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
       wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
+      // DAMAGE → HANDLING (#1578): per-axle grip ratio from damage (1 = none; always 1 with the opt-in OFF).
+      damageAxF: dAx ? +dAx.f.toFixed(4) : 1,
+      damageAxR: dAx ? +dAx.r.toFixed(4) : 1,
+      damageHandling: typeof DamageHandling !== "undefined" && DamageHandling.isEnabled(),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
       xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),
@@ -692,6 +707,13 @@ const api = {
     else if (hit && typeof hit === "object") Damage.apply(Damage.get(c), +hit.long || 0, +hit.lat || 0, +hit.sev || 0);
     return Damage.state(c);
   },
+  // The manual sector ERS plan (#1580, js/race/energy-plan.js): ["manual"|"deploy"|"save"] × 3.
+  // ersPlan() reads it; ersPlan([...]) sets it for this session (not persisted) and returns
+  // {plan, ok} — ok false keeps the old plan. MANUAL ×3 is the neutral, shipped plan.
+  ersPlan(p) {
+    const ok = p === undefined ? true : EnergyPlan.setPlan(p);
+    return { plan: EnergyPlan.plan(), ok, neutral: EnergyPlan.isNeutral() };
+  },
   setPhysics(o) {
     o = o || {};
     // Reject a poisoned patch atomically; existing finite floors remain compatible.
@@ -720,6 +742,8 @@ const api = {
     if (o.maxTilt != null) Input.setTiltSensitivity(o.maxTilt);
     if (o.deadzone != null) Input.setTiltDeadzone(o.deadzone);
     if (o.tiltCutoff != null) Input.setTiltSmoothing(o.tiltCutoff);
+    // #1628: the wheel-state gate for this session only (the player's stored choice is untouched).
+    if (o.wheelState != null && typeof WheelState !== "undefined") WheelState.setEnabled(o.wheelState === true, false);
     return this.tuning();
   },
 
@@ -854,7 +878,7 @@ const api = {
   rival(dProg, dx) {
     if (!G.player || !G.track) return false;
     const ai = G.cars.find((c) => !c.isPlayer);
-    if (!ai) return false;
+    if (!ai || !finiteOrNil(dProg) || !finiteOrNil(dx)) return false;
     ai.prog = G.player.prog + (dProg || 0);
     ai.s = wrapS(G.player.s + (dProg || 0));
     ai.x = G.player.x + (dx || 0);
@@ -866,8 +890,8 @@ const api = {
   rivals(list) {
     if (!G.player || !G.track) return false;
     const ai = G.cars.filter((c) => !c.isPlayer);
-    const used = [];
-    (Array.isArray(list) ? list : []).forEach((spec, i) => {
+    const used = []; list = Array.isArray(list) ? list : []; if (!list.every((q) => q && finiteOrNil(q.dProg) && finiteOrNil(q.dx) && finiteOrNil(q.speed))) return false;   // refuse before moving anyone
+    list.forEach((spec, i) => {
       const c = ai[i];
       if (!c) return;
       c.prog = G.player.prog + (spec.dProg || 0);
@@ -1265,22 +1289,15 @@ const api = {
     const ok = !!(G.redFlagRestart && G.redFlagRestart());
     return ok ? { state: G.state } : false;
   },
-  // Trigger the race-results screen cleanly, as if all cars crossed the line.
-  finishRace() {
+  // Trigger results as if all cars finished. Default = today's instant sheet;
+  // {ceremony:true} arms RaceCeremony when eligible (js/race/ceremony.js).
+  // A retirement never crosses the line (finishThrough); finishT only when raceT > 0.5.
+  finishRace(opts) {
     if (!G.track || G.state === "results" || G.state === "menu") return false;
-    // A retirement never crosses the line: it stays unfinished and classifies
-    // behind everyone who did, which is the order endRace() builds for a real
-    // flag. Waving one home here would hand a parked car a finish and points.
-    // go() floors raceT at 0.5 s; stamping that as finishT prints
-    // OFFICIAL WINNER ELAPSED 0:00.500 on every harness open. Only attach a
-    // finish clock when the race has actually run past that floor — finishT
-    // 0 omits the official elapsed line (results-sheet correctedFinish).
-    const ran = Number.isFinite(G.raceT) ? G.raceT : 0;
-    const clock = ran > 0.5 ? ran : 0;
-    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = clock; } });
-    endRace(raceOrder(G.cars));
-    return { state: G.state };
+    return RaceCeremony.finishThrough(G, endRace, raceOrder, opts);
   },
+  // RaceCeremony status / seek / skip (Esc = SKIP once the host UI wires it).
+  ceremony(arg) { return RaceCeremony.apexCall(arg); },
 
   freeze(v) {
     if (v === undefined) return G.frozen;
@@ -1628,8 +1645,10 @@ const api = {
   // js/perf/governor.js) rather than a hardcoded 16.7 ms; it rises to match an
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
+  // renderScale({lite:true}) skips frameTimes (PerfGov.frameStats copies and sorts its 2048-frame ring). `effective`: ApexLifecycle.effectiveRes (#5166).
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
+    const lite = !!(v && v.lite === true);
+    if (v === undefined || lite) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: lite ? undefined : PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold(), effective: typeof ApexLifecycle === "undefined" ? null : ApexLifecycle.effectiveRes(gfx, canvas) };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     // A FRACTION, 0.5..1 (the opposite unit to uiScale). Unchecked, "auto"
     // reached GLX/WGX as NaN (Math.max(0.5, NaN) is NaN: a NaN-sized buffer)
@@ -1684,6 +1703,7 @@ const api = {
       if (o && o.measure !== undefined) PerfSpans.measure(o.measure);
       if (o && o.on !== undefined) PerfSpans.on(o.on);
     }
+    if (o && o.lite) return this.renderScale(o);   // perf({lite:true}): the overlay's read, no frameTimes / span report
     const base = this.renderScale();
     if (typeof PerfSpans === "undefined" || !(PerfSpans.isOn() || o)) return base;
     return Object.assign(base, PerfSpans.report(), { gpu: this.gpuTimer() });
@@ -1692,6 +1712,22 @@ const api = {
   uiScale(v) { return badPct("uiScale", v) || G.setScale("uiScale", "--ui-scale", v); },
   hudScale(v) { return badPct("hudScale", v) || G.setScale("hudScale", "--hud-scale", v); },
   btnScale(v) { return badPct("btnScale", v) || G.setScale("hudBtnScale", "--hud-btn-scale", v); },
+
+  // SHEET FIT (UI contract 2026-11-06 rule 8; the alias PR B deferred until PR C owned this file), read-only: one sheet's
+  // measured layout as numbers, SheetShape.layoutProbe verbatim. `sel` = a selector or an element; none = the first
+  // painted .sheet / .fit-managed. null when nothing matches or nothing is painted.
+  sheetFit(sel) {
+    if (typeof SheetShape === "undefined" || !SheetShape.layoutProbe) return null;
+    let el = sel && typeof sel === "object" ? sel : null;
+    if (typeof sel === "string") el = document.querySelector(sel);
+    else if (sel == null) {
+      for (const c of document.querySelectorAll(".sheet, .fit-managed")) {
+        const r = c.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) { el = c; break; }
+      }
+    }
+    return el ? SheetShape.layoutProbe(el) : null;
+  },
 
   safeMode(v) {
     if (v === undefined) return { strikes: PerfGov.strikes(), tierFloor: PerfGov.tierFloor(), tier: PerfGov.tier() };
@@ -1917,11 +1953,12 @@ const api = {
     if (!G.track || !G.cars[idx]) return false;
     const c = G.cars[idx];
     if (c.isPlayer) return false;
+    if (!finiteOrNil(frac) || !finiteOrNil(speed) || !finiteOrNil(x)) return false;   // same NaN refusal as jump()
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     c.s = c._prevS = wrapS(f01 * G.track.total);
     c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (see NetPlay's prog rebuild)
-    if (x     !== undefined) { c.x = x; c.xVis = x; }
-    if (speed !== undefined) c.speed = speed;
+    if (x     != null) { c.x = x; c.xVis = x; }
+    if (speed != null) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
     placeFromTrack(c, smp2);
@@ -2335,7 +2372,7 @@ const api = {
       document.body.appendChild(el);
       el._t = setInterval(() => {
         try {
-          const r = this.renderScale();
+          const r = this.renderScale({ lite: true });
           const g = this.gpuTimer();
           const a = (typeof Assets !== "undefined") ? Assets.state() : null;
           el.textContent =
@@ -2467,7 +2504,7 @@ const api = {
       physState: safe(() => this.physState()),
       timing: safe(() => this.timing()),
       gpuTimer: safe(() => this.gpuTimer()),
-      // Console errors are not captured retroactively — see docs/CONSOLE-RECIPES.md
+      // Console errors are not captured retroactively — see docs/DEBUG-HOOKS.md
       // for the one-liner that installs a collector BEFORE reproducing a bug.
       errors: safe(() => (window.__apexErrors || []).slice(-40), []),
       // Counted rather than swallowed by index.html's handler. A non-zero count

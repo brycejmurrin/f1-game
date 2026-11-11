@@ -4,9 +4,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { spawnAgentProcess } from '../../tools/agent/process.mjs';
+import { createInterface } from 'node:readline';
+import { createProcFdPool } from '../../tools/lib/proc-stat-reader.mjs';
+import { parseProcStat, spawnAgentProcess } from '../../tools/agent/process.mjs';
 import { fileURLToPath } from 'node:url';
-import { OUTPUT_LEVELS, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection } from '../../tools/agent/output.mjs';
+import { OUTPUT_LEVELS, ARTIFACT_TTL_MS, NATIVE_MAX, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection } from '../../tools/agent/output.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = path.join(ROOT, 'tools/agent-run.mjs');
 function fixture(t) {
@@ -83,13 +85,13 @@ test('artifact directory symlinks are rejected and presentation failure preserve
   const output = presentMcpResult(result, { root });
   assert.equal(output.isError, true);
   assert.equal(output.content[0].text, 'original failure');
-  assert.match(output.presentationError, /real directory/);
+  assert.equal(output.presentationError, "artifact directory must be a real directory");
   const originalWrite = process.stderr.write;
   let warning = '';
   process.stderr.write = (chunk) => { warning += chunk; return true; };
   try { assert.equal(presentMcpResult(result, { root, level: 'full' }), result); }
   finally { process.stderr.write = originalWrite; }
-  assert.match(warning, /presentation error/);
+  assert.equal(warning, "Agent output presentation error: could not retain original output: artifact directory must be a real directory. Returning full original result.\n");
 });
 test('CLI defaults compact, preserves failing exit and exact separately retained streams', (t) => {
   const root = fixture(t);
@@ -144,7 +146,7 @@ test('diagnostic finds middle failure lines in long logs', (t) => {
   const log = 'routine\n'.repeat(4000) + 'Error: central failure\n    at broken.js:10\n' + 'routine\n'.repeat(4000);
   const run = cli(root, ['--output-level', 'diagnostic', '--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)})`]);
   assert.equal(run.status, 0);
-  assert.match(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), /central failure/);
+  assert.equal(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), "[[\"routine\",\"routine\",\"Error: central failure\",\"    at broken.js:10\",\"routine\",\"routine\",\"routine\"]]");
 });
 
 test('compact retains actionable middle failures and reported test counts', t => {
@@ -153,7 +155,7 @@ test('compact retains actionable middle failures and reported test counts', t =>
   const result = cli(root, ['--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)});process.exitCode=7`]);
   assert.equal(result.status, 7);
   const data = JSON.parse(result.stdout);
-  assert.match(JSON.stringify(data.stdout.diagnostics), /missing fixture alpha/);
+  assert.equal(JSON.stringify(data.stdout.diagnostics), "[[\"Error: missing fixture alpha\",\"    at load.js:22\",\"routine\"]]");
   assert.equal(data.stdout.testCounts.fail, 1);
   assert.equal(data.stdout.testCounts.pass, 14);
   assert.equal(fs.readFileSync(path.join(root, data.stdout.artifact.path), 'utf8'), log);
@@ -214,7 +216,7 @@ test('spec failure markers are actionable even when their names contain no error
   const source = path.join(root, 'spec.log'); fs.writeFileSync(source, log);
   const run = cli(root, ['--', process.execPath, '-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1]));process.exitCode=1', source]);
   assert.equal(run.status, 1);
-  assert.match(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), /✖ wrong pose/);
+  assert.equal(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), "[[\"✖ wrong pose at tools/agent-run.mjs:3\"]]");
 });
 
 test('capture and performance phase logs retain semantic final reports and validity evidence', t => {
@@ -223,7 +225,7 @@ test('capture and performance phase logs retain semantic final reports and valid
   const log = '[capture] measuring phase\n' + JSON.stringify(report, null, 2) + '\n';
   const run = cli(root, ['--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)})`]);
   const summary = JSON.parse(run.stdout).stdout;
-  assert.match(summary.reportScope, /final JSON/);
+  assert.equal(summary.reportScope, "final JSON report; complete phase log retained in artifact");
   assert.equal(summary.data.valid, false);
   assert.equal(summary.data.units, 'ms');
   assert.equal(summary.data.baseline, 16.7);
@@ -265,6 +267,50 @@ test('a mid-size answer the summary cannot shrink stays native; one it can shrin
   const summarized = presentMcpResult(big, { root });
   assert.equal(summarized.structuredContent.outputLevel, 'compact');
   assert.ok(JSON.stringify(summarized).length < JSON.stringify(big).length / 4);
+});
+
+test('fenced JSON after a prose lead-in (chrome-devtools evaluate_script) is summarized and paged structurally', t => {
+  const root = fixture(t);
+  const value = { apiVersion: 1, hooks: Array.from({ length: 160 }, (_, i) => ({ name: `hook${i}`, doc: 'd'.repeat(80) })), notes: ['stale under headless(true)'] };
+  const original = { content: [{ type: 'text', text: 'Script ran on page and returned:\n```json\n' + JSON.stringify(value) + '\n```' }] };
+  const result = presentMcpResult(original, { root });
+  const block = result.structuredContent.summary.content[0];
+  assert.equal(block.lead, 'Script ran on page and returned:');
+  assert.equal(block.data.apiVersion, 1);
+  assert.equal(block.data.hooks.at(-1).totalItems, 160);
+  assert.equal(block.data.hooks.at(-1).sourcePointer, '/content/0/text/hooks');
+  const page = readOutputCollection({ root, artifact: result.structuredContent.artifact, pointer: '/content/0/text/hooks', offset: 158, limit: 5 });
+  assert.deepEqual(page.items.map(row => row.name), ['hook158', 'hook159']);
+  // Prose that merely mentions a fence stays text, and a broken fence is never half-parsed.
+  for (const text of ['see ```json\n{"a":1}\n``` then more', 'returned:\n```json\n{"a":\n```']) {
+    assert.equal(summarizeOutput({ content: [{ type: 'text', text }] }).content[0].text, text);
+  }
+});
+
+test('row text is cut on whole lines and keeps its paging footer; mid-size answers stay native', t => {
+  const root = fixture(t);
+  const rows = Array.from({ length: 300 }, (_, i) => `js/track/file${i}.js:${i + 1}:5 [use] (Mod › fn${i})`);
+  const text = `${rows.length} references\n${rows.join('\n')}\n… 41 more (offset:300)`;
+  const shown = summarizeOutput({ content: [{ type: 'text', text }] }).content[0].text.split('\n');
+  assert.ok(shown.every(line => line === `${rows.length} references` || rows.includes(line) || /^\[omitted \d+ lines\]$/.test(line) || line === '… 41 more (offset:300)'));
+  assert.equal(shown.at(-1), '… 41 more (offset:300)');
+  // ~6 KB: summarizing would force a follow-up read that costs more than sending it whole.
+  const mid = { content: [{ type: 'text', text: rows.slice(0, 120).join('\n') }] };
+  assert.ok(JSON.stringify(mid).length > 4000 && JSON.stringify(mid).length <= NATIVE_MAX);
+  assert.equal(presentMcpResult(mid, { root }).content[0].text, mid.content[0].text);
+});
+
+test('the first save in a process reaps artifacts older than the TTL and keeps fresh ones', t => {
+  const root = fixture(t);
+  const dir = path.join(root, 'artifacts/agent-output');
+  fs.mkdirSync(dir, { recursive: true });
+  const stale = path.join(dir, 'stale.json'), fresh = path.join(dir, 'fresh.json');
+  fs.writeFileSync(stale, '{}'); fs.writeFileSync(fresh, '{}');
+  const old = (Date.now() - ARTIFACT_TTL_MS - 60000) / 1000;
+  fs.utimesSync(stale, old, old);
+  saveOutputArtifact({ a: 1 }, { root });
+  assert.equal(fs.existsSync(stale), false);
+  assert.equal(fs.existsSync(fresh), true);
 });
 
 test('exact collection pages recover all omitted rows without advancing upstream cursors', t => {
@@ -415,16 +461,45 @@ function pidAlive(pid) {
   catch { try { process.kill(pid, 0); return true; } catch { return false; } }
 }
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// #4022: writeFileSync creates the file EMPTY and then writes it, so "exists" is not "ready" — a poll that
+// landed in between parsed '' ("Unexpected end of JSON input", Pages 4261). Ready means it parses.
 async function waitFile(file) {
   const until = Date.now() + 3000;
-  while (!fs.existsSync(file) && Date.now() < until) await wait(20);
-  assert.ok(fs.existsSync(file), 'child tree reported readiness');
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  let last;
+  while (Date.now() < until) {
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (error) { last = error; }
+    await wait(20);
+  }
+  assert.fail(`child tree never reported readiness: ${last && last.message}`);
 }
 function treeCode(file, { ignore = true, naturalExit = false } = {}) {
   const grandchild = `${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}setInterval(()=>{},1000)`;
-  return `const fs=require('node:fs');const {spawn}=require('node:child_process');${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}const c=spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{detached:true,stdio:'ignore'});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(file)},JSON.stringify([process.pid,c.pid]));${naturalExit ? 'process.exit(7)' : ''}},160);setInterval(()=>{},1000);`;
+  return `const fs=require('node:fs');const {spawn}=require('node:child_process');${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}const c=spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{detached:true,stdio:'ignore'});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(file + '.tmp')},JSON.stringify([process.pid,c.pid]));fs.renameSync(${JSON.stringify(file + '.tmp')},${JSON.stringify(file)});${naturalExit ? 'process.exit(7)' : ''}},160);setInterval(()=>{},1000);`;
 }
+test('Linux proc stat parser preserves process identity with spaces and parentheses in comm', () => {
+  const fields = ['S', '123', '456', ...Array(16).fill('ignored'), '18446744073709551615', ...Array(32).fill('tail')];
+  for (const comm of ['node', 'worker name', '(nested) work)', 'line\nbreak']) {
+    assert.deepEqual(parseProcStat(`789 (${comm}) ${fields.join(' ')}\n`), {
+      state: 'S', parent: 123, group: 456, start: '18446744073709551615'
+    });
+  }
+  assert.deepEqual(parseProcStat(`789 (zombie) ${['Z', '1', '789', ...Array(16).fill('0'), '999'].join(' ')}`), {
+    state: 'Z', parent: 1, group: 789, start: '999'
+  });
+});
+test('Linux proc stat parser preserves missing fields and literal space delimiters', () => {
+  assert.deepEqual(parseProcStat('1 (short) S 2 3'), { state: 'S', parent: 2, group: 3, start: undefined });
+  assert.deepEqual(parseProcStat('1 (empty parent) R  3'), { state: 'R', parent: 0, group: 3, start: undefined });
+  assert.deepEqual(parseProcStat(''), { state: '', parent: NaN, group: NaN, start: undefined });
+  for (const bad of [null, undefined, 42]) assert.throws(() => parseProcStat(bad), TypeError);
+});
+test('readiness waits for a parseable file, not for the file to exist (#4022)', async (t) => {
+  const root = fixture(t), ready = path.join(root, 'pids.json');
+  fs.writeFileSync(ready, '');   // the instant writeFileSync has created the file but not yet written it
+  const late = wait(60).then(() => fs.writeFileSync(ready, JSON.stringify([1, 2])));
+  assert.deepEqual(await waitFile(ready), [1, 2]);
+  await late;
+});
 test('explicit timeout escalates ignored signals and removes detached descendants', async (t) => {
   const root = fixture(t), ready = path.join(root, 'pids.json');
   const run = spawnAgentProcess(process.execPath, ['-e', treeCode(ready)], { cwd: root, stdio: 'ignore', timeoutMs: 400, killGraceMs: 100 });
@@ -451,7 +526,14 @@ test('CLI cancellation forwards original signal and finishes descendant cleanup 
   child.stdout.on('data', (chunk) => { stdout += chunk; });
   child.stderr.on('data', (chunk) => { stderr += chunk; });
   const finished = new Promise((resolve) => child.on('close', (exitCode, signal) => resolve({ exitCode, signal })));
-  const pids = await waitFile(ready);
+  // A failure before child.kill() below left the CLI and its signal-ignoring tree running, and the CLI's
+  // stdout pipe kept this file alive to the 540 s timeout (#4022). Reap them whatever happens first.
+  let pids = [];
+  t.after(() => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    for (const pid of pids) if (pidAlive(pid)) { try { process.kill(pid, 'SIGKILL'); } catch { /* Owned test process exited. */ } }
+  });
+  pids = await waitFile(ready);
   child.kill('SIGINT');
   const outcome = await finished;
   assert.equal(outcome.signal, 'SIGINT', stderr);
@@ -470,4 +552,146 @@ test('normal CLI exit preserves intentional detached background handoff', async 
   assert.equal(run.status, 7);
   assert.equal(pidAlive(pids[1]), true);
   assert.equal(JSON.parse(run.stdout).exitCode, 7);
+});
+
+// Fresh descriptor reads retain process identity; cached descriptors have bounded ownership.
+function procFdFixture(options = {}) {
+  const paths = new Map(), handles = new Map(), closed = [], calls = [];
+  let next = 10;
+  const config = {soft: 1024, baseOpen: 10, partial: Infinity, missingLimits:false, ...options};
+  const proc = (pid, text = `${pid} (node) S 1 1 0\n`) => {const task={alive:true,text};paths.set(pid,task);return task};
+  const error = code => Object.assign(new Error(code),{code});
+  const io = {
+    readFileSync(path) {
+      calls.push(['readFile',path]);
+      if(path.endsWith('/limits')){if(config.missingLimits)throw error('ENOENT');return `Max open files            ${config.soft}                 ${config.soft}                 files\n`;}
+      const task=paths.get(Number(path.split('/').at(-2)));if(!task?.alive)throw error('ENOENT');return task.text;
+    },
+    readdirSync:()=>Array(config.baseOpen+handles.size).fill('fd'),
+    openSync(path){calls.push(['open',path]);if(config.openError){const code=config.openError;config.openError=null;throw error(code);}const task=paths.get(Number(path.split('/').at(-2)));if(!task?.alive)throw error('ENOENT');const fd=next++;handles.set(fd,task);return fd},
+    closeSync(fd){assert.ok(handles.has(fd),'descriptor closed exactly once');closed.push(fd);handles.delete(fd)},
+    readSync(fd,buffer,offset,length,position){
+      calls.push(['read',fd,position]);const task=handles.get(fd);if(!task?.alive)throw error('ESRCH');
+      if(task.readError){const code=task.readError;task.readError=null;throw error(code)}
+      if(task.empty){task.empty=false;return 0}
+      const bytes=Buffer.from(task.text),count=Math.min(length,config.partial,Math.max(0,bytes.length-position));bytes.copy(buffer,offset,position,position+count);return count;
+    }
+  };
+  return {pool:createProcFdPool(io,{maximum:options.maximum??2048,initialBytes:options.initialBytes??8192}),proc,paths,handles,closed,calls,config};
+}
+test('cached FD reads fresh parent metadata at offset zero on every sample',()=>{
+  const f=procFdFixture(),task=f.proc(1);const release=f.pool.acquire();assert.equal(f.pool.read(1),task.text);
+  task.text='1 (node) S 99 1 0\n';assert.equal(f.pool.read(1),task.text);
+  assert.equal(f.calls.filter(c=>c[0]==='open').length,1);assert.equal(f.calls.filter(c=>c[0]==='read'&&c[2]===0).length,2);
+  release();assert.equal(f.handles.size,0);
+});
+test('old FD rejects reused PID and reader reopens the replacement path',()=>{
+  const f=procFdFixture(),old=f.proc(1,'old process\n'),release=f.pool.acquire();assert.equal(f.pool.read(1),old.text);
+  old.alive=false;const replacement=f.proc(1,'replacement start time\n');assert.equal(f.pool.read(1),replacement.text);
+  assert.equal(f.closed.length,1);assert.equal(f.handles.size,1);release();assert.equal(f.handles.size,0);
+});
+test('empty cached descriptor is invalidated and reopened',()=>{
+  const f=procFdFixture(),task=f.proc(1),release=f.pool.acquire();f.pool.read(1);task.empty=true;assert.equal(f.pool.read(1),task.text);
+  assert.equal(f.closed.length,1);release();
+});
+test('partial reads, buffer growth and split UTF-8 preserve exact text',()=>{
+  const f=procFdFixture({partial:1,initialBytes:4}),task=f.proc(1,'1 (é🏎) S 1 1 0\n'),release=f.pool.acquire();
+  assert.equal(f.pool.read(1),task.text);assert.equal(f.pool.read(1),task.text);release();assert.equal(f.handles.size,0);
+});
+test('read errors invalidate descriptor and reopen without stale bytes',()=>{
+  const f=procFdFixture(),task=f.proc(1),release=f.pool.acquire();f.pool.read(1);task.readError='EIO';assert.equal(f.pool.read(1),task.text);
+  assert.equal(f.closed.length,1);release();
+});
+test('one process-global LRU cap is shared by multiple process owners',()=>{
+  const f=procFdFixture({maximum:2});for(const pid of [1,2,3])f.proc(pid);
+  const a=f.pool.acquire(),b=f.pool.acquire();f.pool.read(1);f.pool.read(2);f.pool.read(1);f.pool.read(3);
+  assert.equal(f.handles.size,2);assert.equal(f.pool.stats().limit,2);assert.equal(f.closed[0],11);
+  a();a();assert.equal(f.handles.size,2);b();assert.equal(f.handles.size,0);assert.equal(f.pool.stats().users,0);
+});
+test('absent PID eviction closes descriptor',()=>{
+  const f=procFdFixture(),release=f.pool.acquire();f.proc(1);f.proc(2);f.pool.read(1);f.pool.read(2);f.pool.sweep([2]);
+  assert.equal(f.handles.size,1);assert.equal(f.closed.length,1);release();assert.equal(f.handles.size,0);
+});
+for(const openError of ['EMFILE','ENFILE'])test(`${openError} releases retained FDs before uncached retry`,()=>{
+  const f=procFdFixture(),release=f.pool.acquire();f.proc(1);const second=f.proc(2);f.pool.read(1);f.config.openError=openError;
+  assert.equal(f.pool.read(2),second.text);assert.equal(f.handles.size,0);assert.equal(f.pool.stats().limit,0);
+  f.pool.read(2);assert.equal(f.handles.size,0);release();
+});
+test('limit budget reserves descriptor headroom and respects soft RLIMIT fraction',()=>{
+  for(const [soft,baseOpen,expected]of[[1024,10,64],[1024,950,10],[32,10,0]]){
+    const f=procFdFixture({soft,baseOpen}),release=f.pool.acquire();assert.equal(f.pool.stats().limit,expected);release();
+  }
+});
+test('missing limits preserves uncached reads and owns no descriptors',()=>{
+  const f=procFdFixture({missingLimits:true}),task=f.proc(1),release=f.pool.acquire();assert.equal(f.pool.read(1),task.text);
+  assert.equal(f.pool.stats().limit,0);assert.equal(f.handles.size,0);release();
+});
+test('natural last-owner release closes pool, next owner recomputes budget',()=>{
+  const f=procFdFixture(),release=f.pool.acquire();f.proc(1);f.pool.read(1);release();assert.equal(f.handles.size,0);
+  f.config.soft=256;const again=f.pool.acquire();assert.equal(f.pool.stats().limit,16);again();
+});
+test('oversized scans keep a working set and use original reader for excess PIDs',()=>{
+  const f=procFdFixture({maximum:2}),release=f.pool.acquire();for(const pid of [1,2,3])f.proc(pid);
+  for(let i=0;i<3;i++){f.pool.sweep([1,2,3]);for(const pid of [1,2,3])f.pool.read(pid);}
+  assert.equal(f.calls.filter(c=>c[0]==='open').length,2);assert.equal(f.calls.filter(c=>c[0]==='readFile'&&c[1].endsWith('/3/stat')).length,3);
+  release();assert.equal(f.handles.size,0);
+});
+
+const countProcFd=()=>fs.readdirSync('/proc/self/fd').length;
+// Python's join() returns before the kernel finishes reaping the thread; wait for the task dir to vanish (loaded runners lag).
+const taskGone=async(pid,tid)=>{const end=Date.now()+10000;while(fs.existsSync(`/proc/${pid}/task/${tid}`)){if(Date.now()>end)assert.fail(`task ${tid} still listed`);await new Promise(r=>setTimeout(r,10))}};
+test('actual proc FD after target exit returns ESRCH and never silently returns old metadata',{skip:process.platform !== 'linux'},async()=>{
+  const child=spawn(process.execPath,['-e','setTimeout(()=>{},150)'],{stdio:'ignore'});
+  const done=new Promise(resolve=>child.once('exit',resolve)),fd=fs.openSync(`/proc/${child.pid}/stat`,'r'),bytes=Buffer.alloc(8192);
+  try{assert.ok(fs.readSync(fd,bytes,0,bytes.length,0)>0);await done;
+    assert.throws(()=>fs.readSync(fd,bytes,0,bytes.length,0),{code:'ESRCH'});
+  }finally{fs.closeSync(fd)}
+});
+test('actual retained proc FD observes subreaper adoption and surviving TGID after creator thread exit',{skip:process.platform !== 'linux'},async()=>{
+  const code=String.raw`
+import ctypes,os,sys,threading,warnings
+warnings.filterwarnings('ignore',category=DeprecationWarning)
+assert ctypes.CDLL(None).prctl(36,1,0,0,0)==0
+r,w=os.pipe();rp,wp=os.pipe();rg,wg=os.pipe();p=os.fork()
+if p==0:
+ os.close(r);os.close(wp);os.close(wg);c=os.fork()
+ if c==0:os.close(w);os.close(rp);os.setsid();os.read(rg,1);os.close(rg);os._exit(0)
+ os.close(rg);os.write(w,str(c).encode());os.close(w);os.read(rp,1);os.close(rp);os._exit(0)
+os.close(w);os.close(rp);os.close(rg);c=int(os.read(r,50));os.close(r)
+print('before',p,c,flush=True);sys.stdin.readline();os.write(wp,b'x');os.close(wp);os.waitpid(p,0)
+print('after',p,c,flush=True);sys.stdin.readline();os.write(wg,b'x');os.close(wg);os.waitpid(c,0)
+rt,wt=os.pipe();gate=threading.Event()
+def worker():
+ c=os.fork()
+ if c==0:os.close(wt);os.read(rt,1);os.close(rt);os._exit(0)
+ os.close(rt);print('thread-before',threading.get_native_id(),c,flush=True);gate.wait()
+t=threading.Thread(target=worker);t.start();sys.stdin.readline();gate.set();t.join()
+print('thread-after',flush=True);sys.stdin.readline();os.write(wt,b'x');os.close(wt);os.waitpid(-1,0)
+`;
+  const opens=[],io={...fs,openSync(path,...a){opens.push(path);return fs.openSync(path,...a)}};
+  const beforeCount=countProcFd(),pool=createProcFdPool(io),release=pool.acquire();
+  const child=spawn('python3',['-c',code],{stdio:['pipe','pipe','inherit']});
+  const done=new Promise(resolve=>child.once('close',resolve));let pid,before,tid,threadPid,threadBefore;
+  try{
+    for await(const line of createInterface({input:child.stdout})){
+      const[phase,a,b]=line.split(' ');
+      if(phase==='before'){pid=Number(b);before=parseProcStat(pool.read(pid));assert.equal(before.parent,Number(a));child.stdin.write('\n');}
+      if(phase==='after'){const after=parseProcStat(pool.read(pid));assert.equal(after.start,before.start);assert.equal(after.parent,child.pid);assert.notEqual(after.parent,before.parent);assert.equal(opens.filter(p=>p===`/proc/${pid}/stat`).length,1);child.stdin.write('\n');}
+      if(phase==='thread-before'){tid=Number(a);threadPid=Number(b);threadBefore=parseProcStat(pool.read(threadPid));child.stdin.write('\n');}
+      if(phase==='thread-after'){const after=parseProcStat(pool.read(threadPid));assert.equal(after.parent,threadBefore.parent);assert.equal(after.parent,child.pid);await taskGone(child.pid,tid);assert.equal(opens.filter(p=>p===`/proc/${threadPid}/stat`).length,1);child.stdin.write('\n');}
+    }
+    assert.equal(await done,0);
+  }finally{child.stdin.end();release()}
+  assert.equal(countProcFd(),beforeCount);
+});
+test('actual pool FDs are not inherited by a spawned child and last-owner release balances descriptors',{skip:process.platform !== 'linux'},async()=>{
+  const before=countProcFd(),pool=createProcFdPool(),a=pool.acquire(),b=pool.acquire();pool.read(process.pid);
+  assert.equal(countProcFd(),before+1);
+  const child=spawn(process.execPath,['-e',`const fs=require('node:fs');let n=0;for(const fd of fs.readdirSync('/proc/self/fd'))try{if(/^\\/proc\\/\\d+\\/stat$/.test(fs.readlinkSync('/proc/self/fd/'+fd)))n++}catch{};console.log(n)`],{stdio:['ignore','pipe','inherit']});
+  let output='';child.stdout.on('data',data=>output+=data);const done=new Promise(resolve=>child.once('close',resolve));
+  assert.equal(await done,0);assert.equal(Number(output.trim()),0);a();assert.equal(countProcFd(),before+1);b();assert.equal(countProcFd(),before);
+});
+test('actual lifecycle natural completion releases every retained descriptor',{skip:process.platform !== 'linux'},async()=>{
+  const before=countProcFd(),run=spawnAgentProcess(process.execPath,['-e','setTimeout(()=>{},150)'],{stdio:'ignore',cleanupOnExit:true});
+  const result=await run.done;assert.equal(result.exitCode,0);assert.equal(result.cleanupError,undefined);assert.equal(countProcFd(),before);
 });

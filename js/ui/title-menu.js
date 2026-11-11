@@ -14,9 +14,16 @@ const TitleMenu = (function () {
 
   // Move the existing nodes: their handlers, saved-state labels and visibility
   // remain owned by their original modules. The outer title-layout pieces stay put.
+  // The shell ships the organized end state (index.html, data-destinations):
+  // then this only wires the two settings shortcuts. The build path below stays
+  // for repairDestinations() and for a shell that predates it.
   function organize(doc) {
     const menu = doc && doc.getElementById("menu-buttons");
-    if (!menu || menu.dataset.destinations) return;
+    if (!menu) return;
+    if (menu.dataset.destinations) {
+      wireShortcuts(doc, doc.getElementById("menu-create"), doc.getElementById("menu-secondary"));
+      return;
+    }
     menu.dataset.destinations = "true";
     const group = (id, label, buttons) => {
       let row = doc.getElementById(id);
@@ -40,16 +47,23 @@ const TitleMenu = (function () {
     group(...DESTINATION_GROUPS[2]);
     const create = group(...DESTINATION_GROUPS[3]);
     const utilities = group(...DESTINATION_GROUPS[4]);
+    wireShortcuts(doc, create, utilities);
+  }
+
+  function wireShortcuts(doc, create, utilities) {
     const shortcut = (row, id, label, page) => {
-      if (doc.getElementById(id)) return;
-      const button = doc.createElement("button"); button.id = id; button.type = "button";
-      button.className = "bigbtn alt minibtn"; button.textContent = label;
+      let button = doc.getElementById(id);
+      if (!button) {
+        if (!row) return;
+        button = doc.createElement("button"); button.id = id; button.type = "button";
+        button.className = "bigbtn alt minibtn"; button.textContent = label;
+        row.appendChild(button);
+      }
       button.onclick = () => {
         const settings = doc.getElementById("mb-settings");
         if (settings) settings.click();
         if (typeof SettingsNav !== "undefined") (SettingsNav.showDirect || SettingsNav.show)(page, true);
       };
-      row.appendChild(button);
     };
     shortcut(create, "mb-visual", "VISUAL STUDIO", "visual");
     shortcut(utilities, "mb-saves", "SAVES & DATA", "files");
@@ -132,12 +146,45 @@ const TitleMenu = (function () {
     return n;
   }
 
+  // Historical medals are not stored; keep each record class separate instead.
+  function dailyHistory(daily) {
+    const data = daily && daily.data ? daily.data() : null, days = data && data.days;
+    if (!days || typeof days !== "object" || Array.isArray(days)) return [];
+    const positive = n => typeof n === "number" && Number.isFinite(n) && n > 0;
+    return Object.keys(days).filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day))
+      && new Date(day).toISOString().slice(0, 10) === day).sort().reverse().slice(0, 7).flatMap(day => {
+      const entry = days[day];
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+      const classes = entry.classes && typeof entry.classes === "object" && !Array.isArray(entry.classes)
+        ? Object.entries(entry.classes).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).filter(([, value]) => value && positive(value.best)) : [];
+      const results = classes.length ? classes.slice(0, 4).map(([, value], i) => "Saved class " + (i + 1) + ": " + value.best.toFixed(3) + "s")
+        : positive(entry.best) ? ["Day best (legacy / mixed classes): " + entry.best.toFixed(3) + "s"] : [];
+      return results.length ? [{ day, text: results.join(" · ") }] : [];
+    });
+  }
+
   function create(G) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
     organize(typeof document !== "undefined" ? document : null);
+    // The doors paint from the shell seconds before game.js wires them (Slow 4G:
+    // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now
+    // does something; game.js wires the handlers in this same task.
+    if (typeof document !== "undefined") document.documentElement.dataset.booted = "";
+
+    const history = $("daily-history"), historyList = $("daily-history-list");
+    const doc = typeof document !== "undefined" ? document : null;
+    if (history && history.addEventListener) history.addEventListener("toggle", () => { if (history.open) paintHistory(); });
+    function paintHistory() {
+      if (!historyList || !doc) return;
+      while (historyList.firstChild) historyList.removeChild(historyList.firstChild);
+      const rows = dailyHistory(G.daily);
+      for (const row of rows) { const li = doc.createElement("li"); li.textContent = row.day + " · " + row.text; historyList.appendChild(li); }
+      if (!rows.length) { const li = doc.createElement("li"); li.textContent = "No saved Daily laps yet. Complete a valid Daily lap to start your history."; historyList.appendChild(li); }
+    }
 
     function refresh() {
+      if (history && history.open) paintHistory();
       const btn = $("mb-career");
       // Paint must not Career.load(): that migrates and may write the slot
       // pointer. Boot and the career store subscriber already load first.
@@ -241,6 +288,14 @@ const TitleMenu = (function () {
     };
     const dailyBtn = $("mb-daily");
     if (dailyBtn) dailyBtn.onclick = () => G.openDailyPicker();
+    // #5010: an installed app resumed on the title after midnight kept yesterday's DAILY door
+    // while a tap opened today's plan. Repaint when the page comes back and the day has moved.
+    let paintedDay = G.daily && G.daily.dayKey ? G.daily.dayKey() : null;
+    if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible" || !G.daily || !G.daily.dayKey) return;
+      const day = G.daily.dayKey();
+      if (day !== paintedDay) { paintedDay = day; refresh(); }
+    });
 
     return { refresh };
   }

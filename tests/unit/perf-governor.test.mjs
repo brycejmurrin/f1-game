@@ -70,6 +70,112 @@ test("software GL UI readback deferral preserves the Document receiver", async (
   });
 });
 
+test("software GL readback defer covers MenuTeardown quit (not garage mask leak)", () => {
+  function defer(softwareGL, quitHold) {
+    const document = {
+      getElementById() {
+        assert.equal(this, document, "native Document methods require their receiver");
+        return { hidden: true };
+      },
+    };
+    const context = vm.createContext({
+      document,
+      Log: { info() {} },
+      GameStore: { store: { raw: () => null } },
+      MenuTeardown: { quitReadbackDefer: () => quitHold },
+    });
+    const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
+    governor.init({ backendState: () => ({ softwareGL }) });
+    return governor.softwareGlUiReadbackDefer();
+  }
+  assert.equal(defer(true, true), true, "quit readback defer on software GL");
+  assert.equal(defer(true, false), false, "quit off with hidden sheets does not defer");
+  assert.equal(defer(false, true), false, "hardware keeps the readback");
+});
+
+test("software GL readback defer covers countdown and race-entry handoff", () => {
+  function defer(softwareGL, cover) {
+    const document = {
+      getElementById(id) {
+        assert.equal(this, document, "native Document methods require their receiver");
+        return { hidden: true };
+      },
+    };
+    const context = vm.createContext({
+      document,
+      Log: { info() {} },
+      GameStore: { store: { raw: () => null } },
+      RaceEntryProfile: { stallHandoffCover: () => cover },
+    });
+    const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
+    governor.init({ backendState: () => ({ softwareGL }) });
+    return governor.softwareGlUiReadbackDefer();
+  }
+  assert.equal(defer(true, true), true, "stallHandoffCover defers pack readback on software GL");
+  assert.equal(defer(true, false), false, "a closed handoff with hidden sheets does not defer");
+  assert.equal(defer(false, true), false, "hardware keeps the readback");
+});
+
+function raceScaleGov({ softwareGL = true, shed = false, webdriver = false, scale0 = 1 } = {}) {
+  const sets = [];
+  let scale = scale0;
+  const gfx = {
+    backendState: () => ({ softwareGL, softAdapter: false }),
+    getRenderScale: () => scale,
+    setRenderScale: (s) => { sets.push(s); scale = s; return true; },
+  };
+  const context = vm.createContext({
+    Log: { info() {} },
+    GameStore: { store: { raw: () => null } },
+    localStorage: { getItem: (k) => (k === "apex26.swRaceShed" ? (shed ? "1" : null) : null) },
+    navigator: { webdriver, userAgent: webdriver ? "" : "player" },
+    PostCommon: {
+      softwareRaceShed: (gl, nav, knob) => {
+        if (!gl) return false;
+        if (knob === "1") return true;
+        if (knob === "0") return false;
+        if (nav && nav.webdriver) return false;
+        return true;
+      },
+    },
+  });
+  const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
+  return { governor, gfx, sets, scale: () => scale };
+}
+
+test("software race scale is chosen once and webdriver does not resize", () => {
+  const { governor, gfx, sets } = raceScaleGov({ webdriver: true, shed: false });
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), 1);
+  assert.deepEqual(sets, []);
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), 1);
+  assert.deepEqual(sets, [], "the second choice keeps the scale");
+  assert.equal(governor.softwareRaceScaleChosen(), 1);
+  governor.init(gfx);
+  governor.softwareGaragePreviewBegin(gfx);
+  governor.softwareGaragePreviewEnd(gfx);
+  assert.deepEqual(sets, [], "garage preview must not resize after the race scale is chosen");
+});
+
+test("a live software race picks 0.5 once before the canvas is resized again", () => {
+  const { governor, gfx, sets, scale } = raceScaleGov({ shed: true, webdriver: true });
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), 0.5);
+  assert.deepEqual(sets, [0.5]);
+  assert.equal(scale(), 0.5);
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), 0.5);
+  assert.deepEqual(sets, [0.5], "one setRenderScale for the race");
+  governor.init(gfx);
+  governor.softwareGaragePreviewBegin(gfx);
+  governor.softwareGaragePreviewEnd(gfx);
+  assert.deepEqual(sets, [0.5]);
+});
+
+test("hardware does not choose a software race scale", () => {
+  const { governor, gfx, sets } = raceScaleGov({ softwareGL: false, shed: true });
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), null);
+  assert.deepEqual(sets, []);
+  assert.equal(governor.softwareRaceScaleChosen(), null);
+});
+
 // A fake renderer mirroring GLX.setRenderScale (js/render/glx/glx.js) EXACTLY,
 // dead zone and all.
 // It used to test `s === scale`, which is NOT the shipped contract: the real
@@ -98,7 +204,7 @@ function makeGov() {
     },
   };
   PerfGov.init(gfx);
-  return { PerfGov, scale: () => scale };
+  return { PerfGov, scale: () => scale, setScale: (v) => { scale = v; } };
 }
 
 function feed(PerfGov, dtFn, n) {
@@ -118,6 +224,14 @@ test("a device capped at 30 fps (Low Power Mode) settles at full quality, not th
   // The derived budget converged on the cap, which is the mechanism, not
   // just the outcome — worth pinning directly.
   assert.ok(Math.abs(PerfGov.floorMs() - 33.3) < 0.5, `floorMs should converge near 33.3, got ${PerfGov.floorMs()}`);
+});
+
+test("ticks() counts every tick() — __apex.info().liveTicks, the live race frames", () => {
+  const { PerfGov } = makeGov();
+  assert.equal(PerfGov.ticks(), 0);
+  feed(PerfGov, () => 16, 5);
+  PerfGov.tick(0);   // a zero-length interval still was a live frame
+  assert.equal(PerfGov.ticks(), 6);
 });
 
 test("a healthy 60 Hz device never enters the degrade branches", () => {
@@ -365,6 +479,29 @@ test("a device that degraded RECOVERS once the frames come good again", () => {
   assert.equal(scale(), 1, "sustained perfect frames should restore all the way to full resolution");
 });
 
+// #5227: a phone's RESOLUTION AUTO is capped at MED (js/ui/scale.js sets the ceiling and starts the scale
+// on it). The resolution stage must work BELOW the ceiling exactly as it does below 1, and never above it.
+test("a configured ceiling (phone AUTO = 0.75) lets the governor cut pixels and bounds the climb back", () => {
+  const g = makeGov();
+  assert.equal(g.PerfGov.resCeil(), 1, "no ceiling unless one is set");
+  assert.equal(g.PerfGov.setResCeil(0.75), 0.75);
+  g.setScale(0.75);                                               // scale.js lowers the scale onto the ceiling itself
+  let peak = 0;
+  const run = (dtFn, n) => { for (let i = 0; i < n; i++) { g.PerfGov.tick(dtFn(i)); peak = Math.max(peak, g.scale()); } };
+  run((i) => (i % 20 === 0 ? 10 : 34 * g.scale()), 1500);        // GPU-bound at 0.75: 25.5 ms, over a 60 Hz refresh
+  const degraded = g.scale();
+  assert.ok(degraded < 0.75 - 1e-9, `the pixel lever must exist under the ceiling, scale stayed ${degraded}`);
+  run(() => 16.7, 9000);                                          // the load lifts
+  assert.equal(g.scale(), 0.75, "clean frames climb back to the ceiling, and stop there");
+  assert.ok(peak <= 0.75 + 1e-9, `the scale never exceeded the ceiling (peak ${peak})`);
+});
+
+test("setResCeil refuses a value outside the resolution stage's range", () => {
+  const { PerfGov } = makeGov();
+  for (const bad of [0.2, 1.5, NaN, undefined, "x"]) assert.equal(PerfGov.setResCeil(bad), 1, String(bad));
+  assert.equal(PerfGov.setResCeil(0.5), 0.5);
+});
+
 test("restore does NOT fire while frames are still missing", () => {
   // The other side of the same coin: a restore that triggers under load would
   // reintroduce the ~1 Hz oscillation the governor's header describes, from the
@@ -507,7 +644,7 @@ test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desk
 
 test("TLX capDpr only ever lowers the cap and re-sizes (#1641)", () => {
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
-  assert.match(tlx, /let DPR_CAP = mobileTier \? 1\.5 : 2;/, "the cap is mutable");
+  assert.match(tlx, /let DPR_CAP = _lite \? _lite\.dprCap : \(mobileTier \? 1\.5 : 2\);/, "the cap is mutable (B8: the ?lab=tlxLite tier seeds it lower)");
   assert.match(tlx, /capDpr\(n\) \{\s*if \(!\(n >= 1\) \|\| n >= DPR_CAP\) return false;\s*DPR_CAP = n; resizeNow\(\); return true;/);
 });
 
@@ -948,14 +1085,26 @@ test("clearStrikes / safeMode(false) releases a latched _perfTier", () => {
   // REGRESSION. clearStrikes used to zero the strike floor and leave `_perfTier`
   // where degrade had parked it — so __apex.safeMode(false) reported a lower
   // floor while tier() stayed high until reload. Mirror cleanRace()'s release.
-  const { PerfGov } = makeGov();
-  feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 43 - PerfGov.tier() * 7), 1200);
-  assert.ok(PerfGov.tier() > 0, "precondition: governor shed at least one feature rung");
-  const before = PerfGov.tier();
+  // Boot a phone with two crash strikes: init() seeds _perfTier AT the strike
+  // floor (4), which is the latch. Clearing the strikes must drop tier() to 0
+  // at once, not only report floor 0 while _perfTier holds 4 until reload.
+  globalThis.localStorage = {
+    _s: { "apex26.crashStrikes": "2", "apex26.crashStrikesBuild": "1" },
+    getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+    removeItem(k) { delete this._s[k]; },
+  };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale, setRenderScale: (s) => { scale = s; return true; } });
+  assert.equal(PerfGov.tierFloor(), 4, "precondition: two strikes floor the ladder at 4");
+  assert.equal(PerfGov.tier(), 4, "precondition: and tier() is latched there");
   PerfGov.clearStrikes();
-  assert.ok(PerfGov.tier() <= before,
-    `clearStrikes must not leave tier() above the new floor (was ${before}, now ${PerfGov.tier()})`);
+  assert.equal(PerfGov.strikes(), 0, "strikes cleared");
   assert.equal(PerfGov.tierFloor(), 0, "strikes cleared → floor 0");
+  assert.equal(PerfGov.autoTier(), 0, "the latched _perfTier is released to the new floor");
+  assert.equal(PerfGov.tier(), 0, "tier() follows immediately, no reload");
+  assert.equal(globalThis.localStorage._s["apex26.crashStrikes"], "0", "the cleared count is persisted");
 });
 
 test("a refused climb backs off: restore→verify-fail→revert must not cycle every cooldown", () => {
@@ -1593,7 +1742,97 @@ test("without RenderRate the drift response is the governor rung, unchanged", ()
 });
 
 test("software garage preview sheds render scale on SwiftShader and restores", () => {
-  assert.match(SRC, /softwareGaragePreviewBegin\(gfx\)/);
-  assert.match(SRC, /softwareGaragePreviewEnd\(gfx\)/);
-  assert.match(SRC, /if \(cur > 0\.55\) \{ _swGarageScaleSaved = cur; gfx\.setRenderScale\(0\.55\); \}/);
+  // Drive the real begin/end pair (no race scale chosen yet, so the garage
+  // intro bay is the one place that sheds) and watch the renderer's scale.
+  const { governor, gfx, sets, scale } = raceScaleGov({ softwareGL: true, scale0: 1 });
+  gfx.envProbeOptOut = false;
+  governor.init(gfx);
+  governor.softwareGaragePreviewBegin(gfx);
+  assert.equal(scale(), 0.55, "SwiftShader garage preview sheds fill rate to 0.55");
+  assert.equal(gfx.envProbeOptOut, true, "and opts the env probe out while the bay is up");
+  governor.softwareGaragePreviewBegin(gfx);
+  assert.deepEqual(sets, [0.55], "a second begin does not overwrite the saved scale");
+  governor.softwareGaragePreviewEnd(gfx);
+  assert.equal(scale(), 1, "end restores the scale the player had before the preview");
+  assert.equal(gfx.envProbeOptOut, false, "and gives the env probe back");
+  assert.deepEqual(sets, [0.55, 1]);
+  for (const s of sets) assert.ok(s >= 0.55 && s <= 1, `every scale written stays in [0.55, 1], got ${s}`);
+  governor.softwareGaragePreviewEnd(gfx);
+  assert.deepEqual(sets, [0.55, 1], "a second end is a no-op");
+
+  // A scale already at or below 0.55 is left alone, and so is hardware.
+  const low = raceScaleGov({ softwareGL: true, scale0: 0.5 });
+  low.governor.init(low.gfx);
+  low.governor.softwareGaragePreviewBegin(low.gfx);
+  low.governor.softwareGaragePreviewEnd(low.gfx);
+  assert.deepEqual(low.sets, [], "never raises a scale that is already below the preview shed");
+  const hw = raceScaleGov({ softwareGL: false });
+  hw.governor.init(hw.gfx);
+  hw.governor.softwareGaragePreviewBegin(hw.gfx);
+  hw.governor.softwareGaragePreviewEnd(hw.gfx);
+  assert.deepEqual(hw.sets, [], "hardware GL keeps its scale through the preview");
 });
+
+// ---- A MODELLED VSYNC-LOCKED PHONE (docs/notes/PHONE-PERF-HUNT-2026-11-09.md §3) -------------------------------
+// The shipped tick() against a device model: a frame costs (base + fill x scale^2) x (1 - tierSave x tier) ms and is
+// shown on the next refresh, so 17 ms of work reads as 33.3 ms, as on a 60 Hz phone. The ms are the model's; the
+// decisions (where the scale and tier end, what the governor gives up on) are the governor's. These pin the note's
+// table: a governor change that moves a row must update the note with it.
+const PHONE_MODES = { low: { scale: 0.5, auto: false }, med: { scale: 0.75, auto: false }, high: { scale: 1, auto: false }, auto: { scale: 1, auto: true } };
+
+// One race on the modelled device. Returns where the governor ended and every step it took.
+function phoneReplay({ base, fill, mode = "med", seconds = 120, hz = 60, tierSave = 0.06, heavy = null }) {
+  const m = PHONE_MODES[mode]; if (!m) throw new Error("mode wants low|med|high|auto, got " + mode);
+  const kv = new Map(), quiet = { info() {}, warn() {}, debug() {}, error() {} };
+  const ctx = vm.createContext({ document: { getElementById: () => null, hidden: false }, Log: quiet, performance, setTimeout, clearTimeout,
+    GameStore: { store: { raw: (k) => (kv.has(k) ? kv.get(k) : null), rawSet: (k, v) => kv.set(k, v), rawDel: (k) => kv.delete(k), get: (k, d) => d, set() {} } } });
+  const G = vm.runInContext(SRC + ";PerfGov", ctx, { filename: absSrc("js/perf/governor.js") });
+  let scale = m.scale;
+  // The backend contract (js/render/gfx.js): clamp 0.5..1, refuse a move inside the 0.02 dead zone.
+  const gfx = { isMobile: true, backendState: () => ({ softwareGL: false }), getRenderScale: () => scale,
+    setRenderScale(s) { s = Math.max(0.5, Math.min(1, s)); if (Math.abs(s - scale) < 0.02) return false; scale = s; return true; } };
+  G.init(gfx); G.setAutoRes(m.auto); G.sentinelArm(true);
+  const q = 1000 / hz, steps = [], iv = [];
+  let t = 0, lastTier = G.tier(), lastScale = scale, seed = 1;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // fixed seed: the replay is deterministic
+  while (t < seconds * 1000) {
+    const load = heavy && (t % heavy.period) < heavy.len ? heavy.mult : 1;
+    const cost = (base + fill * scale * scale * load) * Math.max(0.5, 1 - tierSave * G.tier()) + (rand() - 0.5) * 1.2;
+    const dt = Math.max(1, Math.ceil(cost / q)) * q;
+    G.tick(dt, true); t += dt; iv.push(dt);
+    if (G.tier() !== lastTier || scale !== lastScale) { steps.push({ s: +(t / 1000).toFixed(1), scale: [+lastScale.toFixed(2), +scale.toFixed(2)], tier: [lastTier, G.tier()] }); lastTier = G.tier(); lastScale = scale; }
+  }
+  const tail = iv.slice(-600);
+  return { mode, base, fill, endScale: +scale.toFixed(2), endTier: G.tier(), endFps: +(1000 * tail.length / tail.reduce((a, b) => a + b, 0)).toFixed(1),
+    scaleMoves: steps.filter((x) => x.scale[0] !== x.scale[1]).length, tierMoves: steps.filter((x) => x.tier[0] !== x.tier[1]).length, steps };
+}
+
+test("a pinned RESOLUTION never moves the scale, whatever the device", () => {
+  for (const mode of ["low", "med", "high"]) for (const [base, fill] of [[9, 12], [9, 16], [14, 16]]) {
+    const r = phoneReplay({ base, fill, mode });
+    assert.equal(r.scaleMoves, 0, `${mode} on ${base}+${fill}: scale moved`);
+    assert.equal(r.endScale, PHONE_MODES[mode].scale);
+  }
+});
+
+test("a device with headroom at MED is left alone: 60 fps, no tier shed", () => {
+  const r = phoneReplay({ base: 9, fill: 12, mode: "med" });
+  assert.equal(r.endFps, 60); assert.equal(r.endTier, 0); assert.equal(r.tierMoves, 0);
+});
+
+test("a marginal device at MED pays in features, not pixels", () => {
+  const r = phoneReplay({ base: 9, fill: 16, mode: "med" });
+  assert.equal(r.endFps, 60); assert.ok(r.endTier >= 1, "tiers shed: " + r.endTier);
+});
+
+test("AUTO finds 60 fps on the device a HIGH pin strands at 30", () => {
+  assert.equal(phoneReplay({ base: 9, fill: 16, mode: "high" }).endFps, 30);
+  const a = phoneReplay({ base: 9, fill: 16, mode: "auto" });
+  assert.equal(a.endFps, 60); assert.ok(a.endScale < 1 && a.endScale >= 0.5); assert.equal(a.endTier, 0);
+});
+
+test("the replay is deterministic", () => {
+  assert.deepEqual(phoneReplay({ base: 9, fill: 16, mode: "auto" }), phoneReplay({ base: 9, fill: 16, mode: "auto" }));
+});
+
+test("an unknown mode is refused", () => { assert.throws(() => phoneReplay({ base: 9, fill: 9, mode: "ultra" }), /mode wants/); });

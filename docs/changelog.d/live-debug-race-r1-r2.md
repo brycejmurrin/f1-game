@@ -1,1 +1,0 @@
-Fixed: a local rain shower's end no longer steps the air and track temperature 13 -> 30 °C / 14 -> 48 °C in one tick, and a practice rewind no longer keeps the storm safety car out for the rewound span again.

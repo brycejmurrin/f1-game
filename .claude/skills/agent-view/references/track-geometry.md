@@ -8,7 +8,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 | Hook | Returns (verified shape) |
 |---|---|
 | `tracks()` | `Array` of `{id, name, i}` per `Tracks.LIST` entry |
-| `info()` | `{state, track, n, total, timeTrial, seasonMode}` — `n` nodes, `total` metres |
+| `info()` | `{state, track, n, total, …, sectors, turns}` — `n` nodes, `total` metres, `turns` the curated count |
 | `trackShape(n)` | `Array(n)` normalised centreline pts + curvature `k` |
 | `trackProfile(n)` | `Array(n)` of `{frac, y, k, hw, slope}` — elevation/curvature/width |
 | `trackBounds()` | `{minX,maxX,minZ,maxZ,spanX,spanZ,centerFrac}` |
@@ -20,7 +20,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 
 | Hook | Returns |
 |---|---|
-| `groundY(frac, lat)` | `{x,z, roadY, roadSurfaceY, bankDy, terrainY, gap, overRoad}` — read **`overRoad`**: `>0` = terrain poking above the BANKED racing surface (a defect). `gap` is the trap it replaces — it measures against the raw centreline plane, so inside a bankZone (Lesmo 1 lifts the outer edge 0.66 m) terrain correctly tucked under the road reads as proud of it |
+| `groundY(frac, lat)` | `{x,z, roadY, roadSurfaceY, bankDy, terrainY, gap, overRoad}` — read **`overRoad`**: `>0` = terrain poking above the BANKED racing surface (a defect). `gap` is the trap it replaces — it measures against the raw centreline plane, so inside a bankZone (it lifts the outer edge) terrain correctly tucked under the road reads as proud of it |
 | `scan([d1,d2,...])` | look-ahead `Array` of `{s,k,hw,slope}` at each distance ahead |
 | `wallStats()` | `{minB, maxB, minOverHw, anyNaN, street, n}` — **barrier envelope vs road edge** (`barR`/`barL` lateral limits minus `hw[k]`); NOT road half-width. `anyNaN:true` or tiny `minOverHw` = bad geometry |
 
@@ -28,7 +28,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 
 `corners()` finds **every local curvature maximum** along the centreline. A long
 sweeper or a double-apex often registers as multiple peaks, so the count is
-**higher** than the FIA turn list (e.g. Spa ~42 peaks vs ~19–20 official turns).
+**higher** than the FIA turn list (measure, never quote).
 
 | Question | Hook |
 |---|---|
@@ -40,9 +40,11 @@ When someone asks "how many corners does Spa have?", answer with `info().turns` 
 `trackInfo`, not `corners().length`.
 
 **The API does not know corner names.** `turns` (`js/circuits/<id>.js`) is a raw array of apex fractions; `trackInfo({what:"corners"})`
-computes `dir`, `radiusM`, `apexSpeedKph` in `buildCorners()` (`js/agent/agentview-corners.js`) and labels corners only `T1`, `T2`, ... in driving order.
+computes `dir`, `radiusM`, `apexSpeedKph` in `buildCorners()` (`js/agent/agentview-corners.js`) and labels corners only `T1`, `T2`, ... in driving order — but `mergeOverlaps()` folds overlapping same-direction
+turns into one row whose `turn` is a range (`T1-T2`, `T3-T5`), so join and `describe("corner:<turn>")` by the label
+as returned (`corner:T4` is NotFound when T4 sits inside `T3-T5`).
 For a named corner (Eau Rouge, Raidillon), take the frac from the circuit file's comments, e.g.
-`grep -n "Eau Rouge\|Raidillon" js/circuits/spa.js` (floor ~0.14, Raidillon peak ~0.165, racing frac), say that is the source, then probe
+`grep -n "Eau Rouge\|Raidillon" js/circuits/spa.js` (racing frac), say that is the source, then probe
 `groundY(f, lat)` / `trackProfile` around it (sweep recipe: debug-tracks-sweeps.md). Authoring-frame tables (`elevations`, `bankZones`) are
 keyed by `def._sceneryShift`-shifted fracs: read the comment for which frame a number is in, and never feed a raw table `frac` to the hooks.
 
@@ -58,7 +60,7 @@ elevation range = max−min of `trackProfile(n).y`, tightest radius = `1/max|k|`
 Measure, never quote a number from this file: circuits are re-surveyed and every figure drifts.
 `1/max|k|` is the instantaneous peak; `trackInfo` corners' `radiusM` is averaged over the corner window, so the two
 disagree on the same corner — name which one "sharpest" means.
-`trackInfo().cornerCount` can be lower than `info().turns` (curated apexes): quote which hook you used.
+`trackInfo().cornerCount` can be lower than `info().turns` (curated apexes, merged rows): quote which hook you used.
 `tools/track/verify-track.cjs <id>` (VM) checks the build only; it prints no geometry stats.
 
 ### Whole-lap recipe: steepest grade and worst terrain-over-road (any id)

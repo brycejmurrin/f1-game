@@ -1,10 +1,12 @@
 # Localisation (i18n) — plan (2026-10-04)
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the I18n layer exists (js/core/i18n.js, i18n-pseudo.js, locales/en.json, tools/gen/gen-locales.mjs, pseudo-locale audit #3310); only English ships and no language picker was found.
 
 Date: 2026-10-04
 Status when written: **PLAN** — docs-only; implement as ten draft PRs against `claude/f1-game-project-26h3ng`, one slice each, in the
-order below. Do not merge; the merge worker takes green ready PRs one at a time (AGENTS.md §Concurrent PRs).
+order below. Do not merge; the merge worker takes green ready PRs one at a time (AGENTS.md §Coordination).
 Scope: a no-build-step translation layer (`I18n` global, lazily fetched locale JSON, English fallback), the language picker,
 pseudo-locale layout testing, a contribution lint, and an incremental screen-by-screen migration. NOT a translation of the
 whole game in one PR, and NOT voice re-recording beyond an optional late slice.
@@ -17,7 +19,7 @@ is a new top-level data directory. Every other backticked path exists on disk (v
 
 | Doc | Role vs this plan |
 |---|---|
-| [`2026-09-30-player-a11y.md`](2026-09-30-player-a11y.md) | Accessibility slices (grip steer, comfort). Same house rules; a language picker lives next to its comfort/settings rows, not inside it. |
+| `2026-09-30-player-a11y.md` (archived) | Accessibility slices (grip steer, comfort). Same house rules; a language picker lives next to its comfort/settings rows, not inside it. |
 | [RACE-RADIO-REDESIGN-2026-09.md](../research/RACE-RADIO-REDESIGN-2026-09.md) | Why radio lines are `{slot}` templates and how the voice pack splices clips. The translation unit for radio is already there. |
 | [VOICE-LAG-IPHONE-2026-10-01.md](../notes/VOICE-LAG-IPHONE-2026-10-01.md) | Speech-synthesis latency evidence; constrains the SpeechSynthesis fallback below. |
 | [UI-MAP.md](../UI-MAP.md) | Screen inventory used to order the migration. |

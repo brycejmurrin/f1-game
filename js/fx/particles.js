@@ -56,8 +56,6 @@ const Particles = (function () {
   const RAIN_CELL_M = 2;
   let _statUpload = 0, _statExpand = 0, _statSkip = 0, _statAlphaExpand = 0, _statAddExpand = 0;
 
-  function markDirty() { _dirty = true; }
-
   function init(gfx) {
     Log.info("game", "Particles.init");
     _gfx = gfx;
@@ -75,8 +73,8 @@ const Particles = (function () {
     _a0 = new Float32Array(MAX);
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
     _add = new Uint8Array(MAX);
-    // The alpha batch also carries the rain shower (rainFill): size for both.
-    _vertA = new Float32Array((MAX + _rainN) * FLOATS_PER);
+    // Pool only at init — rainSeed grows _vertA to MAX + wetCap once a shower arms.
+    _vertA = new Float32Array(MAX * FLOATS_PER);
     _vertB = new Float32Array((MAX + FLARE_MAX) * FLOATS_PER);
     _n = 0;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
@@ -170,9 +168,10 @@ const Particles = (function () {
 
   function sparks(x, y, z, dirx, dirz, speed, count) {
     const m = mul(); if (m <= 0) return;
-    let n = Math.round(count * Math.min(m, 2) / shedDiv());
+    // nOf (not Math.round): same hitch ceiling as scrape/smoke — at particleMul 2 a
+    // hard collision's count≈20 used to dump 40 embers in one call and starve the pool.
     const baseA = Math.atan2(dirx, dirz);
-    for (; n > 0; n--) {
+    for (let n = nOf(count * Math.min(m, 2) / shedDiv()); n > 0; n--) {
       const a = baseA + rnd(1.15);
       const v = speed * (0.25 + Math.random() * 0.6);
       spawn(x + rnd(0.3), y + rnd(0.12), z + rnd(0.3),
@@ -245,9 +244,7 @@ const Particles = (function () {
 
   // RAIN SPRAY: a lingering plume, not a puff — and THE wet-race visibility
   // problem: most of an F1 car's spray comes off the floor and diffuser, not
-  // the tyres (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/),
-  // and F1 24's was reviewed as "particularly average"
-  // (https://traxion.gg/time-to-box-box-box-f1-24-review/). Three layers per call:
+  // the tyres. Three layers per call:
   //  · PLUME — drop-clouds living 1.1-1.9 s, buoyant, growing to ~3.5 m;
   //  · ROOSTER TAIL — a tight jet thrown UP and BACK off the diffuser, its
   //    height and life scaling with strength (speed × wetness × Storm.sprayK);
@@ -688,6 +685,6 @@ const Particles = (function () {
   }
 
   return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
-           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats, markDirty };
+           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats };
 })();
 Object.freeze(Particles);

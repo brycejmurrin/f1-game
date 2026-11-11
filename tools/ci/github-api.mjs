@@ -7,7 +7,7 @@
  * Extracted from the retired ready-full-cap.mjs (#3013). Since 2026-10-26
  * (docs/notes/TOOLING-CONSOLIDATION-2026-10-26.md) it is the ONLY client:
  * ci-watch's ETag client, ready-gate's no-retry client, deploy.mjs's ghApi and
- * advisoryGet, remote-group's dispatch and pr-body's PATCH all call it.
+ * advisoryGet and remote-group's dispatch all call it.
  *
  *   api(pathQs, opts)      → { json } | { error }   (2xx; `cached: true` on a 304 reuse)
  *   request(pathQs, opts)  → { status, json, text, etag, cached?, error? }  (any status; error only when curl failed)
@@ -28,7 +28,6 @@ import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 
 export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY = "claude/f1-game-project-26h3ng";
-export const CI_PATH = ".github/workflows/ci.yml";
 
 /** Backoff before each retry of a 5xx/429 (1 s, 2 s, 4 s), then the error stands. */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000];

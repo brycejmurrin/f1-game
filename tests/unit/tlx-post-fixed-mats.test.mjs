@@ -115,7 +115,7 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
     const aaRT = { texture: {} }, ldrRT = { texture: {} };
     const context = vm.createContext({ P, presentW, presentH, phonePost: true,
       fixed: true, fixedActive: () => true, spatialUpscale: false,
-      dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0,
+      dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0, _warmFlipUp: false,
       presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false,
       vset(p, w, h) { p.V.set(w, h); },
       runPass(mat, target) { draws.push({ mat, target, view: P[mat].V.values.slice() }); },

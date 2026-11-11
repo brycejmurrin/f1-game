@@ -408,7 +408,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z < 1.0) {
         lit = textureSampleCompareLevel(shadowTex, shadowSamp, suv, sc.z - 0.002);
       }
-      lit = lit * (1.0 - grCloud(p) * 0.62);
+      if (lit > 0.0) { lit = lit * (1.0 - grCloud(p) * 0.62); }   // shadowed: skip the cloud FBM (GLX/TLX parity, perf hunt 7)
       accum = accum + lit * hSun * trans;
     }
     if (uLampStr > 0.0 && td < 200.0) {
@@ -779,8 +779,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // (bloomSample), so it only appears where the frame carries bright energy (sun,
   // floodlights, neon) — a dark scene stays clean. The dirt value is reused by the
   // flare modulation below (declared here so it stays in scope).
+  // Exact gate (uniform): dirt feeds only bloomSample (vec3(0) with bloom off) and the on-screen flare.
   var dirt = 0.0;
-  if (lensDirt > 0.001) {
+  if (lensDirt > 0.001 && (bloomAmt > 0.001 || (flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0
+      && sunUV.y >= 0.0 && sunUV.y <= 1.0))) {
     dirt = textureSampleLevel(dirtTex, samp, in.uv, 0.0).r;
     c = c + bloomSample * exposure * dirt * lensDirt * 2.2;
   }
@@ -1448,19 +1450,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(reflCol, amt);
 }`;
 
-  // Human-readable pass order for the wgx.js render-target allocator.
-  const PASS_ORDER = [
-    "SSAO",        // half-res  <- sceneDepth
-    "BLUR",        // half-res  SSAO denoise + god-ray soften (separable 5-tap)
-    "GODRAY",      // half-res  <- depth + sun/lamp shadows
-    "BLOOM_DOWN",  // mip chain (mip0 bright-pass, mip1 Karis, mips 2..N plain) <- sceneHDR
-    "BLOOM_UP",    // mip chain upsample, additive blend -> bloom mip0
-    "SSR",         // HALF-res  <- sceneHDR + sceneDepth (full-res)  -> ssrTex (rgba, .a=mix)
-    "COMPOSITE",   // full-res LDR <- sceneHDR, bloom, ssao, godray (+ image FX; ssrTex optional)
-    "FXAA",        // full-res -> swapchain (or aaTex when SGSR follows) <- LDR composite
-    "SGSR",        // present-size <- FXAA/LDR at render size (opt-in spatial upscale)
-  ];
-
+  // PASS_ORDER was a documentation-only export; wgx.js never read it.
   return {
     // shaders
     BLOOM_DOWN,
@@ -1485,8 +1475,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
     SGSR_UNIFORM_BYTES: 16,         // SgsrU (viewport vec4)
     SSR_UNIFORM_BYTES: 208,         // SsrU  (2×mat4 128 + 5×vec4 80)
-    // chain description
-    PASS_ORDER,
   };
 })();
 

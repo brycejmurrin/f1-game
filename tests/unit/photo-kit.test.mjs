@@ -15,6 +15,7 @@ function load() {
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
   };
   vm.runInNewContext(
+    fs.readFileSync(path.join(ROOT, "js/camera/photo-looks.js"), "utf8") + "\n" +
     fs.readFileSync(path.join(ROOT, "js/camera/photo-kit.js"), "utf8") + "\nthis.exported = PhotoKit;",
     ctx, { filename: absSrc("js/camera/photo-kit.js") });
   return ctx.exported;

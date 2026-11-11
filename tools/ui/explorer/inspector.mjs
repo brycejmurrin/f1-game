@@ -222,9 +222,55 @@ export function inspectUI(options = {}) {
     devicePixelRatio: window.devicePixelRatio || null, media: Object.fromEntries(media.map(q => [q, matchMedia(q).matches])),
     rootTokens: css(rootStyle, "--ui-scale --hud-scale --hud-btn-scale --safe-t --safe-r --safe-b --safe-l --safe-w --safe-h --tap-min --tap-paint"),
     preferences: Object.fromEntries(["uiTheme", "menuAccent", "hudAccent", "textSize", "uiContrast", "cvd", "menuHelp", "motion"].filter(k => document.documentElement.dataset[k] !== undefined).map(k => [k, document.documentElement.dataset[k]])) };
+  // Keep non-controls, including CSS-hidden status text. These are observations,
+  // not defects: an inactive pane or screen-reader-only message can be intentional.
+  const feedbackSelector = '[role="status"],[role="alert"],[aria-live]';
+  const feedbackNodes = [...(scope.matches?.(feedbackSelector) ? [scope] : []), ...scope.querySelectorAll(feedbackSelector)]
+    .filter(e => ["status", "alert"].includes(e.getAttribute("role")) || ["polite", "assertive"].includes(e.getAttribute("aria-live")))
+    .filter(e => text(e.textContent))
+    .filter(e => options.root || !e.closest('.screen,dialog,[role="dialog"]') || paintedRoot(e.closest('.screen,dialog,[role="dialog"]')));
+  const visualBounds = vv && [vv.width, vv.height, vv.offsetLeft, vv.offsetTop].every(Number.isFinite) && vv.width > 0 && vv.height > 0;
+  const feedbackViewport = visualBounds ? { x: vv.offsetLeft, y: vv.offsetTop, width: vv.width, height: vv.height, source: "visual-viewport" }
+    : { x: 0, y: 0, width: innerWidth, height: innerHeight, source: "layout-viewport-fallback" };
+  const feedback = feedbackNodes.slice(0, 100).map(e => {
+    const r = e.getBoundingClientRect(), reasons = [], clippedBy = [];
+    let left = Math.max(feedbackViewport.x, r.x), right = Math.min(feedbackViewport.x + feedbackViewport.width, r.right), top = Math.max(feedbackViewport.y, r.y), bottom = Math.min(feedbackViewport.y + feedbackViewport.height, r.bottom);
+    let unsupportedClip = false, unsupportedTransform = false, ownTextOverflow = false;
+    for (let p = e; p; p = p.parentElement) {
+      const style = getComputedStyle(p), b = p.getBoundingClientRect();
+      if (style.display === "none") reasons.push({ kind: "display-none", selector: selector(p) });
+      if (style.visibility === "hidden" || style.visibility === "collapse") reasons.push({ kind: "visibility-hidden", selector: selector(p) });
+      if (Number(style.opacity) === 0) reasons.push({ kind: "opacity-zero", selector: selector(p) });
+      if (style.clipPath && style.clipPath !== "none" || style.clip && style.clip !== "auto") unsupportedClip = true;
+      if (style.maskImage && style.maskImage !== "none" || style.webkitMaskImage && style.webkitMaskImage !== "none") unsupportedClip = true;
+      if (p === e && (e.scrollWidth > e.clientWidth || e.scrollHeight > e.clientHeight)) ownTextOverflow = true;
+      if (style.transform && style.transform !== "none" && !/^matrix\([^,]+, 0, 0, [^,]+, [^,]+, [^,]+\)$/.test(style.transform)) unsupportedTransform = true;
+      if (p === e || style.display === "contents") continue;
+      // Overflow clips at the scrollport, inside borders. Rects already include
+      // CSS zoom; offset/client sizes let us convert border widths to that space.
+      const sx = p.offsetWidth ? b.width / p.offsetWidth : 1, sy = p.offsetHeight ? b.height / p.offsetHeight : 1;
+      const clipLeft = b.x + (p.clientLeft || 0) * sx, clipTop = b.y + (p.clientTop || 0) * sy;
+      const clipRight = Number.isFinite(p.clientWidth) ? clipLeft + p.clientWidth * sx : b.right;
+      const clipBottom = Number.isFinite(p.clientHeight) ? clipTop + p.clientHeight * sy : b.bottom;
+      if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) { left = Math.max(left, clipLeft); right = Math.min(right, clipRight); clippedBy.push(selector(p)); }
+      if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) { top = Math.max(top, clipTop); bottom = Math.min(bottom, clipBottom); clippedBy.push(selector(p)); }
+    }
+    const painted = visible(e), area = Math.max(0, right - left) * Math.max(0, bottom - top);
+    const fullyInside = r.width > 0 && r.height > 0 && left <= r.x && right >= r.right && top <= r.y && bottom >= r.bottom;
+    const visibility = !painted ? "hidden" : ownTextOverflow ? "unmeasured-text-overflow" : unsupportedTransform ? "unmeasured-transform" : unsupportedClip ? "unmeasured-clip" : fullyInside ? "fully-inside" : area > 0 ? "partly-inside" : "outside";
+    const content = String(e.textContent || "").replace(/\s+/g, " ").trim();
+    const rendered = painted && typeof e.innerText === "string" ? e.innerText.replace(/\s+/g, " ").trim() : "";
+    return { selector: selector(e), isRoot: e === scope, role: e.getAttribute("role"), live: e.getAttribute("aria-live"), text: content.slice(0, 2048), textTruncated: content.length > 2048,
+      renderedText: rendered.slice(0, 2048), renderedTextTruncated: rendered.length > 2048,
+      box: box(e), painted, visibility, intersection: { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) },
+      clippedBy: [...new Set(clippedBy)].slice(0, 12), reasons: reasons.slice(0, 12), evidenceTruncated: new Set(clippedBy).size > 12 || reasons.length > 12,
+      ariaHidden: !!e.closest('[aria-hidden="true"]'), inert: !!e.closest('[inert]'),
+      limitation: "Geometric observation; occlusion, contrast and assistive-technology announcement are not tested" };
+  });
   const bindings = { matches: 0, mismatch: 0, unavailable: 0, unmapped: 0, "not-applicable": 0 };
   for (const c of controls) bindings[c.binding.status]++;
   const coverage = { controls: { total: candidates.length, inspected: controls.length, omitted: Math.max(0, candidates.length - controls.length) },
+    feedback: { total: feedbackNodes.length, inspected: feedback.length, omitted: Math.max(0, feedbackNodes.length - feedback.length) },
     bindings, behavior: "not-tested", persistence: "not-tested",
     limitation: "Binding matches are observations of current state, not proof that an action works or survives reload" };
   return { version: 1, readOnly: true, title: document.title, url: location.href, root: options.root || null,
@@ -232,7 +278,7 @@ export function inspectUI(options = {}) {
     dialogs: [...document.querySelectorAll('dialog[open],[role="dialog"]')].filter(visible).map(e => e.id || name(e)),
     viewport: { width: innerWidth, height: innerHeight, textScale: Number(document.documentElement.dataset.explorerTextScale || 100) },
     adaptive, layoutContexts: [...layoutContexts.values()], layoutContextsTruncated,
-    controls, issues, coverage, totalControls: candidates.length, truncated: candidates.length > limit,
+    controls, feedback, feedbackViewport, issues, coverage, totalControls: candidates.length, truncated: candidates.length > limit,
     focus: document.activeElement ? { selector: selector(document.activeElement), name: name(document.activeElement), tag: document.activeElement.tagName } : null,
     errorOverlay: [...document.querySelectorAll('#__err_overlay,#vite-error-overlay')].filter(visible).map(e => e.textContent.slice(0, 1000)),
     game: { devAPI: !!window.__apex }, limitations: ["DOM names are screening; accessibility snapshot is authoritative", "Only explicit scale/appearance/camera/lighting bindings are mapped", "No game dev hooks invoked: some getters lazily build tracks", "CSS tokens retain browser serialization, including unresolved calc expressions; visual viewport metadata does not prove virtual keyboard behavior", "Layout ancestry is bounded to 12 ancestors per control and 256 unique contexts; clipping still checks every ancestor"] };
@@ -280,6 +326,7 @@ export function diffInspections(before, after) {
   layoutContexts.push(...[...contexts.keys()].filter(k => !(after.layoutContexts || []).some(c => c.selector === k)));
   return { added: [...b.keys()].filter(k => !a.has(k)), removed: [...a.keys()].filter(k => !b.has(k)), changed: changed.slice(0, 100), changedTotal: changed.length, truncated: changed.length > 100, layout,
     layoutContexts,
+    feedbackChanged: JSON.stringify(before.feedback || []) !== JSON.stringify(after.feedback || []),
     viewportChanged: JSON.stringify(before.viewport) !== JSON.stringify(after.viewport), environmentChanged: JSON.stringify(before.adaptive) !== JSON.stringify(after.adaptive),
     focusChanged: JSON.stringify(before.focus) !== JSON.stringify(after.focus), rootsChanged: JSON.stringify(before.roots) !== JSON.stringify(after.roots),
     viewsChanged: JSON.stringify(before.views) !== JSON.stringify(after.views), issues: after.issues };

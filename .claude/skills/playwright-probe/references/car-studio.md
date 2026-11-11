@@ -36,11 +36,6 @@ See **garage-parts-livery** `references/garage-angles.md`. Batch audits: `tools/
 (`finish:"chrome"` on a livery). Related: **garage-parts-livery**,
 **lighting-tuner**.
 
-## Load on demand
-
-- Preset views / shot sets, CLI options, `CARVIEW` API, decal handedness →
-  [references/car-viewer-presets.md](car-viewer-presets.md).
-
 ## Capture speed and freshness
 
 `garage-angles` accepts `--backend=three` (TLX) or `--backend=webgl2` (the

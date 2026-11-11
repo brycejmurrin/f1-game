@@ -1,4 +1,4 @@
-/* GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the context-bound noise cache. */
+/* GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, oneShotOk?, now }) uses live service functions; resetContext discards only the context-bound noise cache. */
 "use strict";
 
 var GameAudioSignal = (function () {
@@ -75,6 +75,11 @@ var GameAudioSignal = (function () {
   // it can share context/bus/sfxOk without a game.js or engine.js hookup.
   let lastHostRef = null;
 
+  // noiseBurst shapes (q 1 is a fresh BiquadFilter's default), hoisted so a pop allocates none.
+  const NOISE_LOWPASS = Object.freeze({ type: "lowpass", q: 1, attack: 0.005 });
+  const NOISE_HISS = Object.freeze({ type: "bandpass", q: 1.4, attack: 0.008 });
+  const NOISE_SCRAPE = Object.freeze({ type: "bandpass", q: 1.2, attack: 0.02 });
+
   function create(host) {
     lastHostRef = host || null;
     if (typeof CrowdAudio !== "undefined" && CrowdAudio && CrowdAudio.bindHost) {
@@ -120,8 +125,12 @@ var GameAudioSignal = (function () {
       return v;
     }
 
+    // One-shots also need the context's clock to be moving (engine.js oneShotOk:
+    // a suspended context freezes currentTime, so shots queued then all fire at
+    // once on resume). A host without it (crowd / unit hosts) falls back to sfxOk.
+    const shotOk = () => (host.oneShotOk ? host.oneShotOk() : host.sfxOk());
     function blip(freq, type, peak, attack, decay, slideTo, when) {
-      if (!host.sfxOk()) return;
+      if (!shotOk()) return;
       const t0 = host.now() + (when || 0);
       const dur = attack + decay;
       const v = acquireBlipVoice(t0);
@@ -186,37 +195,65 @@ var GameAudioSignal = (function () {
       return Math.random() * (NOISE_POOL_S - needS);
     }
 
-    // White-noise one-shots share the graph, offset selection, envelope and teardown.
-    function noiseBurst(peak, decay, filter) {
-      const t0 = host.now() + (filter.when || 0);
+    /* White-noise one-shots on a fixed filter→gain voice pool, like blip()'s.
+       Overrun crackle fires 5–18 pops a second on a lift and each used to build
+       source + biquad + gain + an onended closure. Only the BufferSource is new
+       per burst now (one-shot after stop()); the previous one is disconnected
+       when its voice is reused. Filter type/Q/frequency, envelope and stop time
+       are exactly the per-call graph's. A voice is reused only once its last
+       burst has finished by the CURRENT clock (a delayed burst must not cut a
+       still-sounding one); with all voices busy (pit guns: 16 rattles at once)
+       the burst gets the old transient graph, so nothing is ever stolen. Q is
+       set every call (a fresh filter's default is 1). */
+    const NOISE_VOICES = 8;
+    const noiseVoices = []; // { f, g, src, freeAt }
+    function acquireNoiseVoice(now) {
+      for (let i = 0; i < noiseVoices.length; i++) {
+        const v = noiseVoices[i];
+        if (v.freeAt <= now) {
+          if (v.src) { try { v.src.disconnect(); } catch (e) { /* closed ctx */ } v.src = null; }
+          return v;
+        }
+      }
+      const f = host.context().createBiquadFilter();
+      const g = host.context().createGain();
+      g.gain.value = 0.0001;
+      f.connect(g).connect(host.bus());
+      const v = { f, g, src: null, freeAt: 0, pooled: noiseVoices.length < NOISE_VOICES };
+      if (v.pooled) noiseVoices.push(v);
+      return v;
+    }
+    function noiseBurst(peak, decay, shape, freq, slideTo, when) {
+      const now = host.now(), t0 = now + (when || 0);
+      const v = acquireNoiseVoice(now);
+      v.freeAt = t0 + decay + 0.15;
       const src = host.context().createBufferSource();
       const off = bindNoise(src, decay + 0.15);
-      const f = host.context().createBiquadFilter();
-      f.type = filter.type;
-      if (filter.q != null) f.Q.value = filter.q;
-      if (filter.slideTo != null) {
-        f.frequency.setValueAtTime(filter.frequency, t0);
-        f.frequency.exponentialRampToValueAtTime(filter.slideTo, t0 + decay);
-      } else f.frequency.value = filter.frequency;
-      const g = host.context().createGain();
-      env(g, t0, peak, filter.attack, decay);
-      src.connect(f).connect(g).connect(host.bus());
+      const f = v.f;
+      if (!v.pooled) src.onended = () => { src.disconnect(); f.disconnect(); v.g.disconnect(); };
+      f.type = shape.type;
+      f.Q.value = shape.q;
+      f.frequency.cancelScheduledValues(t0);
+      f.frequency.setValueAtTime(freq, t0);
+      if (slideTo != null) f.frequency.exponentialRampToValueAtTime(slideTo, t0 + decay);
+      env(v.g, t0, peak, shape.attack, decay);
+      src.connect(f);
+      v.src = src;
       src.start(t0, off);
       src.stop(t0 + decay + 0.1);
-      src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
     }
     function noise(peak, decay, filterFreq, when) {
-      if (!host.sfxOk()) return;
-      noiseBurst(peak, decay, { type: "lowpass", frequency: filterFreq, attack: 0.005, when });
+      if (!shotOk()) return;
+      noiseBurst(peak, decay, NOISE_LOWPASS, filterFreq, null, when);
     }
     // A falling band-passed hiss: a wastegate rounds off as its pressure goes.
     function hiss(peak, decay, f0, f1) {
-      if (!host.sfxOk() || !(peak > 0)) return;
-      noiseBurst(peak, decay, { type: "bandpass", frequency: f0, slideTo: f1, q: 1.4, attack: 0.008 });
+      if (!shotOk() || !(peak > 0)) return;
+      noiseBurst(peak, decay, NOISE_HISS, f0, f1, 0);
     }
     function scrapeNoise(peak, decay) {
-      if (!host.sfxOk()) return;
-      noiseBurst(peak, decay, { type: "bandpass", frequency: 2600, q: 1.2, attack: 0.02 });
+      if (!shotOk()) return;
+      noiseBurst(peak, decay, NOISE_SCRAPE, 2600, null, 0);
     }
 
     return { env, blip, blipStats, noiseBuf, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise,
@@ -230,6 +267,11 @@ var GameAudioSignal = (function () {
           try { v.g.disconnect(); } catch (e) { /* closed ctx */ }
         }
         blipVoices.length = 0;
+        for (let i = 0; i < noiseVoices.length; i++) {
+          const v = noiseVoices[i];
+          for (const n of [v.src, v.f, v.g]) { try { if (n) n.disconnect(); } catch (e) { /* closed ctx */ } }
+        }
+        noiseVoices.length = 0;
       },
     };
   }

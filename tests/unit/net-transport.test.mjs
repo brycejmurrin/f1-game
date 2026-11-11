@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { deflateRawSync } from "node:zlib";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { NetworkAdversary } from "../helpers/network-adversary.mjs";
@@ -28,8 +29,22 @@ const load = (rel, name) =>
   eval(fs.readFileSync(path.join(ROOT, rel), "utf8") + ";" + name);
 
 globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");   // both bind it at call time
+const NetIce = load("js/net/ice.js", "NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = load("js/net/transport.js", "NetTransport");
 const NetHandshake = load("js/net/handshake.js", "NetHandshake");
+
+test("ice.js is on the net roster ahead of transport.js", () => {
+  const { LAZY_NET, LAZY_NET_EDGES, CONTROLLER } = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
+  for (const list of [LAZY_NET, CONTROLLER]) {
+    const ice = list.indexOf("js/net/ice.js");
+    const transport = list.indexOf("js/net/transport.js");
+    assert.ok(ice >= 0 && transport > ice, "NetIce.create() runs while transport.js evaluates");
+  }
+  assert.ok(
+    LAZY_NET_EDGES.some(([a, b]) => a === "js/net/ice.js" && b === "js/net/transport.js"),
+    "transport.js calls NetIce.create() at eval time, so the pair is a declared edge"
+  );
+});
 
 test("network adversary can reorder headers and stall each response body", async () => {
   const net = new NetworkAdversary();
@@ -800,6 +815,42 @@ function pcHarness() {
   return { ep, state, event, pcClosed: () => closed, done };
 }
 
+// NetPlay.stop() sends BYE and closes in one breath. shutdown("local") emptied
+// the backpressure queue and called pc.close() at once, which aborts SCTP with
+// the BYE still buffered: the peer kept a ghost rival until its own timeout.
+test("a local close under backpressure sends the queued BYE before pc.close(), within a cap", async () => {
+  const h = pcHarness();
+  try {
+    const sent = [];
+    h.event.bufferedAmount = 1e6;                 // the SCTP buffer is backed up
+    h.event.send = (d) => { sent.push(JSON.parse(d).t); };
+    const reasons = [];
+    h.ep.onClose((r) => reasons.push(r));
+    assert.equal(h.ep.send("event", JSON.stringify({ t: "bye", d: {} })), true, "a critical BYE queues under backpressure");
+    assert.deepEqual(sent, [], "fixture: nothing reached the channel yet");
+    h.ep.close();
+    assert.deepEqual(reasons, ["local"], "the close is reported at once, as before");
+    assert.equal(h.ep.status, "closed");
+    assert.equal(h.ep.send("event", JSON.stringify({ t: "lap", d: {} })), false, "nothing new is accepted");
+    assert.deepEqual(sent, ["bye"], "the queued BYE is handed to the channel");
+    assert.equal(h.pcClosed(), 0, "pc.close() waits while the buffer drains");
+    h.event.bufferedAmount = 0;                   // it drained
+    await new Promise((r) => setTimeout(r, 60));
+    assert.equal(h.pcClosed(), 1, "…then the pc is released");
+    // A buffer that never drains is capped.
+    const g = pcHarness();
+    try {
+      g.event.bufferedAmount = 1e6; g.event.send = () => {};
+      g.ep.send("event", JSON.stringify({ t: "bye", d: {} }));
+      g.ep.close();
+      await new Promise((r) => setTimeout(r, 200));
+      assert.equal(g.pcClosed(), 0);
+      await new Promise((r) => setTimeout(r, 450));
+      assert.equal(g.pcClosed(), 1, "released by the ~500 ms cap");
+    } finally { g.done(); }
+  } finally { h.done(); }
+});
+
 test("a peer channel close releases the RTCPeerConnection, exactly once", () => {
   const h = pcHarness();
   try {
@@ -1021,8 +1072,8 @@ function boardCourier({ delayAnswerAck = false } = {}) {
       s.onAnswer = (out) => resolve({ ok: true, payload: out });
       if (s.wake) s.wake();
     }),
-    answer: (code, reply, token) => new Promise((resolve) => {
-      const request = { code, reply, token, active: true }; listens.push(request);
+    answer: (code, reply, token, listen) => new Promise((resolve) => {
+      const request = { code, reply, token, listen: !!listen, active: true }; listens.push(request);
       const s = slot(code);
       const go = async () => {
         const out = token.cancelled ? null : await reply(s.offer);
@@ -1069,6 +1120,39 @@ test("ICE failed after connecting rides the grace and restarts ICE through the c
     assert.equal(h.a.status, "open", "a recovered connection outlives the grace");
     assert.equal(h.b.status, "open");
     assert.ok(!h.a.pc.calls.includes("close"));
+  } finally { h.done(); }
+});
+
+test("a courier offer that fails (no_relay mid network switch) does not end ICE restarts for the outage (#4998)", async () => {
+  const board = boardCourier();
+  let failNext = true;
+  const courier = {
+    ...board,
+    offer: (code, sdp, token) => {
+      if (failNext) { failNext = false; board.offers.push({ code, sdp, token, failed: true }); return Promise.resolve({ ok: false, error: "no_relay" }); }
+      return board.offer(code, sdp, token);
+    },
+  };
+  const h = restartPair(courier);
+  try {
+    await h.connect();
+    h.a.setDisconnectGrace(25000);
+    h.b.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.set(h.b, "failed");
+    h.advance(0);
+    assert.equal(await h.until(() => board.offers.length === 1), true, "the first restart offer went out");
+    await h.flush();
+    assert.equal(h.a.stats().iceRestarts, 1);
+    // The network is back a few seconds later; nothing else changes state.
+    for (let i = 0; i < 4 && h.a.stats().iceRestarts < 2; i++) { h.advance(1000); await h.flush(); }
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 2 && h.a.pc.signalingState === "stable" &&
+      !!h.a.pc.currentRemoteDescription && h.a.pc.currentRemoteDescription.sdp === h.b.pc.currentLocalDescription.sdp), true,
+      "the offerer tries again inside the grace and the answer lands (restarts: " + h.a.stats().iceRestarts + ")");
+    assert.equal(board.offers[1].code, board.offers[0].code, "the retry stays on the attempt the answerer is listening for");
+    h.set(h.a, "connected"); h.set(h.b, "connected");
+    h.advance(30000);
+    await h.flush();
+    assert.equal(h.a.status, "open", "the recovered wire outlives the grace");
   } finally { h.done(); }
 });
 
@@ -1176,6 +1260,23 @@ test("actual connected recovery cancels an unanswered offer and refuses its late
     await h.flush(); h.advance(30000);
     assert.equal(h.a.pc.currentRemoteDescription, original);
     assert.equal(h.a.status, "open");
+  } finally { h.done(); }
+});
+
+test("the healthy listener holds a long window; the answerer's own outage re-dials a fresh short one (perf hunt 6)", async () => {
+  const courier = boardCourier(), h = restartPair(courier);
+  try {
+    await h.connect(); h.a.setDisconnectGrace(25000); h.b.setDisconnectGrace(25000);
+    assert.equal(await h.until(() => courier.listens.length === 1), true);
+    const healthy = courier.listens[0];
+    assert.equal(healthy.listen, true, "a healthy race holds one long listen (no 12 s relay re-dial)");
+    h.set(h.b, "failed"); h.advance(0);
+    assert.equal(await h.until(() => courier.listens.length === 2), true, "the answerer's own outage listens again");
+    const outage = courier.listens[1];
+    assert.equal(healthy.token.cancelled, true, "the minutes-old socket set is dropped, not trusted");
+    assert.equal(outage.listen, false, "an outage episode re-dials on the short window");
+    assert.equal(outage.code, healthy.code, "…on the same credentials and attempt");
+    h.a.close(); h.b.close(); await h.flush();
   } finally { h.done(); }
 });
 
@@ -1669,4 +1770,68 @@ test("BYE handling during remote-close drain can locally discard trailing mail",
     h.event.onclose(); h.ep.pump();
     assert.deepEqual(got, ["result", "bye", "close"]);
   } finally { h.done(); }
+});
+
+// ── rtc pump double-buffers its inbox ───────────────────────────────────────
+// pump() used to detach the inbox with slice(0) on every frame that had mail.
+// It now swaps two arrays; the detach guarantees above must survive the swap.
+test("rtc pump: a BYE that shuts down mid-batch neither throws nor delivers the rest", () => {
+  const h = pcHarness();
+  try {
+    const got = [];
+    h.ep.onMessage((_, data) => { got.push(data); if (data === "bye") h.ep.close(); });
+    for (const data of ["result", "bye", "model", "lap"]) h.event.onmessage({ data });
+    assert.doesNotThrow(() => h.ep.pump());
+    assert.deepEqual(got, ["result", "bye"]);
+    assert.equal(h.ep.status, "closed");
+    assert.equal(h.ep.pump(), 0, "nothing is left queued after the shutdown");
+  } finally { h.done(); }
+});
+
+test("rtc pump: a message queued by a handler arrives on the NEXT pump, not this one", () => {
+  const h = pcHarness();
+  try {
+    const got = [];
+    let frame = 0;
+    h.ep.onMessage((_, data) => {
+      got.push(frame + ":" + data);
+      if (data === "a") h.state.onmessage({ data: "queued-by-a" });
+    });
+    h.event.onmessage({ data: "a" });
+    h.event.onmessage({ data: "b" });
+    frame = 1; assert.equal(h.ep.pump(), 2);
+    frame = 2; assert.equal(h.ep.pump(), 1);
+    frame = 3; assert.equal(h.ep.pump(), 0);
+    assert.deepEqual(got, ["1:a", "1:b", "2:queued-by-a"]);
+  } finally { h.done(); }
+});
+
+test("rtc pump allocates no batch copy: the inbox alternates between two arrays", () => {
+  const h = pcHarness();
+  const push = Array.prototype.push, slice = Array.prototype.slice;
+  const inboxes = [];
+  let slices = 0, pumping = false;
+  try {
+    let got = 0;
+    h.ep.onMessage(() => got++);
+    Array.prototype.push = function (m) {
+      // The transport's inbox record is the only pushed object with this shape.
+      if (m && typeof m === "object" && "bytes" in m && "channel" in m && "at" in m) inboxes.push(this);
+      return push.apply(this, arguments);
+    };
+    Array.prototype.slice = function () { if (pumping) slices++; return slice.apply(this, arguments); };
+    for (let f = 0; f < 6; f++) {
+      h.state.onmessage({ data: "s" + f });
+      pumping = true; h.ep.pump(); pumping = false;
+    }
+    Array.prototype.push = push; Array.prototype.slice = slice;
+    assert.equal(got, 6);
+    assert.equal(inboxes.length, 6);
+    assert.equal(slices, 0, "pump must not copy the inbox per frame");
+    assert.notEqual(inboxes[0], inboxes[1], "the next frame's mail lands in the other buffer");
+    for (let f = 2; f < 6; f++) assert.equal(inboxes[f], inboxes[f % 2], `frame ${f} reuses buffer ${f % 2}`);
+  } finally {
+    Array.prototype.push = push; Array.prototype.slice = slice;
+    h.done();
+  }
 });

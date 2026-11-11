@@ -56,10 +56,13 @@ const BenchRun = (function () {
   function log(msg) { try { Log.info("game", "BenchRun " + msg); } catch (_) { /* Log not loaded */ } }
   function store() { return typeof GameStore !== "undefined" && GameStore.store ? GameStore.store : null; }
   function load() { try { const s = store(); const t = s ? s.raw(KEY) : localStorage.getItem(KEY); return t ? JSON.parse(t) : null; } catch (_) { return null; } }
-  function save(p) { try { const t = JSON.stringify(p); const s = store(); if (s) s.rawSet(KEY, t); else localStorage.setItem(KEY, t); } catch (_) { /* blocked storage: the run cannot cross a reload */ } }
+  /** false: the plan is not on disk, so the run cannot cross a reload (#5006). */
+  function save(p) {
+    try { const t = JSON.stringify(p); const s = store(); if (s) return s.rawSet(KEY, t) !== false; localStorage.setItem(KEY, t); return true; }
+    catch (_) { return false; }   // blocked or full storage
+  }
   function clear() { try { const s = store(); if (s) s.rawDel(KEY); else localStorage.removeItem(KEY); } catch (_) { /* blocked storage */ } }
 
-  // ---- pure: tests/unit/bench-run.test.mjs --------------------------------------------------------------------
   function median(a) {
     const v = a.filter((x) => x != null && Number.isFinite(+x)).map(Number).sort((x, y) => x - y);
     if (!v.length) return null;
@@ -132,7 +135,6 @@ const BenchRun = (function () {
       prefs, show: false, facts: null, legs: t.legs.map((l) => Object.assign({}, l, { state: "pending" })) };
   }
 
-  // ---- renderer path ------------------------------------------------------------------------------------------
   const RP = () => (typeof RendererPicker !== "undefined" ? RendererPicker : null);
   function readPrefs() {
     const s = store();
@@ -147,7 +149,6 @@ const BenchRun = (function () {
   function pathPrefs(path, base) { return path ? { backend: "three", threePath: path === "webgl2" ? "1" : "0" } : base; }
   function liveApi() { try { return (RP() && RP().liveThreeApi()) || (RP() && RP().liveBackend()) || null; } catch (_) { return null; } }
 
-  // ---- the run --------------------------------------------------------------------------------------------------
   function stillRunning() { const p = load(); return !!(p && p.state === "running"); }
   // Screen Wake Lock: a hands-free run must not let the phone sleep. The browser drops the lock whenever the page hides,
   // so it is asked for again on visible and on every post-reload resume. Unsupported = silent; refused = one hint.
@@ -165,10 +166,23 @@ const BenchRun = (function () {
   }
   function onVisible() { try { if (document.visibilityState === "visible" && stillRunning()) wakeAcquire(); } catch (_) { /* no document */ } }
   function reload() { log("reload"); try { location.reload(); } catch (_) { /* no location */ } }
+  // The plan goes to disk BEFORE the leg's renderer pins: a refused write reloads nothing and pins nothing (#5006).
   function startLeg(plan) {
     const leg = plan.legs[plan.i];
+    leg.state = "booting";
+    if (!save(plan)) { refuse(plan); return false; }
     writePrefs(pathPrefs(leg.path, plan.prefs));
-    leg.state = "booting"; save(plan); reload();
+    reload();
+    return true;
+  }
+  /** Storage refused the plan: end here, the player's renderer and keys as they were, and say why. */
+  function refuse(plan) {
+    log("refused: the plan could not be saved");
+    _busy = false; wakeRelease();
+    clear();
+    writePrefs(plan.prefs);   // an earlier leg's pins come off
+    if (plan.restore) restore(plan.restore).catch(() => {});
+    say("BENCHMARK needs free storage: nothing was run");
   }
   async function waitReady() {
     const t0 = now();
@@ -278,10 +292,13 @@ const BenchRun = (function () {
     leg.state = "done";
     return true;
   }
-  // Every apex26.* key but the plan (run() takes it, finishPlan puts it back).
+  // Every apex26.* key but the plan (run() takes it, finishPlan puts it back) and the data hub's disposable caches
+  // (store.js DISPOSABLE_PREFIXES): copying those could double the origin's use, and restore leaves them alone (#5006).
+  const DISPOSABLE = ["apex26.api.", "apex26.realrace."];
+  const kept = (k) => !!k && k.indexOf("apex26.") === 0 && k !== KEY && !DISPOSABLE.some((p) => k.indexOf(p) === 0);
   function snapshot() {
     const o = {};
-    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf("apex26.") === 0 && k !== KEY) o[k] = localStorage.getItem(k); } } catch (_) { /* blocked storage */ }
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (kept(k)) o[k] = localStorage.getItem(k); } } catch (_) { /* blocked storage */ }
     return o;
   }
   // Through GameStore.write, not localStorage: livery / parts / setup keys are mirrored to IndexedDB (store.js
@@ -292,7 +309,7 @@ const BenchRun = (function () {
     try {
       const keys = []; for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
       for (const k of keys) {
-        if (!k || k.indexOf("apex26.") !== 0 || k === KEY || k in snap) continue;
+        if (!kept(k) || k in snap) continue;
         if (S) S.write(short(k), undefined); else localStorage.removeItem(k);
       }
       for (const k of Object.keys(snap)) {
@@ -465,10 +482,9 @@ const BenchRun = (function () {
     // Every apex26.* key as it was, put back by finishPlan: a race starts the PHONE TEST recorder (apex26.phoneRec)
     // and counts toward onboarding, a garage leg saves livery picks. A benchmark leaves no trace.
     plan.restore = snapshot();
-    save(plan); log("start " + plan.test + " " + plan.legs.length + " legs");
+    log("start " + plan.test + " " + plan.legs.length + " legs");
     wakeAcquire();
-    startLeg(plan);
-    return true;
+    return startLeg(plan);
   }
   function stop() {
     const plan = load(); if (!plan || plan.state !== "running") return false;
@@ -478,11 +494,9 @@ const BenchRun = (function () {
     return true;
   }
 
-  // ---- results file ----------------------------------------------------------------------------------------------
   function resultText() { const p = load(); return p && p.state !== "running" ? JSON.stringify(p) : ""; }
   function fileName(p) { return "apex26-bench-" + (p.test || "run") + "-" + String(p.finishedAt || p.startedAt || "").replace(/[:.]/g, "-").slice(0, 19) + ".json"; }
 
-  // ---- the page (#bench, index.html) -----------------------------------------------------------------------------
   const doc = () => (typeof document !== "undefined" ? document : null);
   function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
   function btn(label, cls, fn) { const b = el("button", cls, label); b.type = "button"; b.addEventListener("click", (e) => { e.stopPropagation(); fn(); }); return b; }
@@ -576,6 +590,8 @@ const BenchRun = (function () {
     return true;
   }
 
+  // open / close / stillRunning / resultText stay module-local (mount, resume, paint);
+  // KEY stays — tools/perf/devicefarm-*.mjs reads BenchRun.KEY across reloads.
   return {
     KEY, SCHEMA, SCHEMAS, SEED, TESTS, median, overs, growth, summarize, scenes, newPlan, pathPrefs,
     create(G) {
@@ -585,7 +601,7 @@ const BenchRun = (function () {
       if (typeof setTimeout === "function") setTimeout(() => { resume().catch((e) => log("resume failed " + (e && e.message))); }, 0);
       return this;
     },
-    run, stop, open, close, active: stillRunning, result: resultText, wake: { acquire: wakeAcquire, release: wakeRelease, onVisible },
+    run, stop, wake: { acquire: wakeAcquire, release: wakeRelease, onVisible },
   };
 })();
 

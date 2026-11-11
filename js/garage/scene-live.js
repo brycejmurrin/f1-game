@@ -210,6 +210,8 @@ function dquadR(out, c, n, region) {
   out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
 }
 
-  return { LIVE, L_MAP, L_TRACE, L_SHADOW, L_POOL, L_BANNER, L_FLAG, L_RACE, FLAGS, paintLive, z2z, paintTrace, dquadR, build: buildLive };
+  // Atlas rects / FLAGS / z2z / dquadR stay module-local (paint + build use them).
+  // LIVE stays public — GarageScene.uploadLive sizes the canvas from it.
+  return { LIVE, paintLive, paintTrace, build: buildLive };
 })();
 if (typeof window !== "undefined") window.GarageLive = GarageLive;

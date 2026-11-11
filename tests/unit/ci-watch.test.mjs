@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { inheritedNotes, baseRunFor, latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, hollowDraft, cancelledExternal, supersededByPr, fileState, waitingJobs } from "../../tools/ci/ci-watch.mjs";
+import { inheritedNotes, baseRunFor, latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, cancelledExternal, supersededByPr, fileState, waitingJobs } from "../../tools/ci/ci-watch.mjs";
 import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
@@ -380,26 +380,6 @@ test("resolveSha: an unresolvable or ambiguous short sha is a clear error, not a
   assert.match(resolveSha("--evil", { revParse: () => "", request: () => ({}) }).error ?? "", /invalid --sha/);
 });
 
-test("#2184: a label-noise run (all jobs skipped, success) never hides the real verdict on the head", async () => {
-  const { labelNoiseRun } = await import("../../tools/ci/ci-watch.mjs");
-  const noise = { ...run(2, "CI", "completed", "success", "2026-10-01T00:05:00Z"), display_title: "CI ignored: label bug" };
-  const real = { ...run(1, "CI", "completed", "failure", "2026-10-01T00:00:00Z"), display_title: "Fix the thing" };
-  assert.ok(labelNoiseRun(noise) && !labelNoiseRun(real) && !labelNoiseRun({}));
-  // A PR-body edit that did not newly add the `CI: run` marker is the same kind of noise (ci.yml run-name).
-  assert.ok(labelNoiseRun({ display_title: "CI ignored: edit" }), "an ignored body edit never hides the verdict");
-  assert.ok(!labelNoiseRun({ display_title: "CI: run the thing" }), "only the `CI ignored: ` prefix is noise");
-  const result = await afterThreeMinutes((endpoint) => {
-    if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [noise, real] } };
-    if (endpoint === "actions/runs/1/jobs?per_page=100") return { json: { jobs: [{ id: 9, name: "CI", status: "completed", conclusion: "failure", steps: [] }] } };
-    if (endpoint.startsWith("check-runs/")) return { json: [] };
-    throw new Error(endpoint);
-  }, { once: true });
-  assert.equal(result.code, 1, result.lines.join("\n"));
-  assert.ok(result.lines.some((line) => line.startsWith("= ci failed")));
-  assert.ok(result.lines.some((line) => /^= ci failed.* sha=[0-9a-f]{40}\b/.test(line)), "#2430: the verdict line carries the full 40-char sha");
-  assert.ok(!result.lines.some((line) => line.includes("#2 ")), "the noise run is not even announced");
-});
-
 test("#2184: `= ci none-yet` names the PR's mergeable_state", async () => {
   const lines = []; let calls = 0;
   const code = await watchSha(SHA, { interval: 1, deadline: Infinity, once: true,
@@ -415,11 +395,11 @@ test("#2184: `= ci none-yet` names the PR's mergeable_state", async () => {
   assert.ok(lines.some((l) => /= ci none-yet — PR #738 .*mergeable_state unknown/.test(l)), lines.join("\n"));
 });
 
-// #2259: started right after a run-ci label, ci-watch printed `= ci passed`
-// from the PREVIOUS (skipped draft) run on the same head, before the run the
-// label started was listed (PR #2224, 2026-10-15). A floor time (the trigger
-// event) makes older runs not count; no newer run within the grace is `none`.
-test("#2259: an older completed run plus a label at T and no run after T is never `= ci passed`", async () => {
+// #2259: started right after a trigger event (then a run-ci label; a ready flip
+// or reopen today), ci-watch printed `= ci passed` from the PREVIOUS run on the
+// same head, before the run the event started was listed (PR #2224, 2026-10-15).
+// A floor time (the trigger event) makes older runs not count; no newer run within the grace is `none`.
+test("#2259: an older completed run plus a trigger at T and no run after T is never `= ci passed`", async () => {
   const { triggerFloor } = await import("../../tools/ci/ci-watch.mjs");
   const T = Date.parse("2026-10-15T17:08:05Z");
   const old = { ...run(1, "CI", "completed", "success", "2026-10-15T15:38:36Z"), display_title: "x" };
@@ -450,16 +430,17 @@ test("#2259: an older completed run plus a label at T and no run after T is neve
   // No floor: today's behaviour (the old run's verdict) is unchanged.
   assert.equal((await watch([old], { since: null })).code, 0);
 
-  // The floor: the newest run-ci label while DRAFT, ready_for_review or reopened.
+  // The floor: ready_for_review or reopened. A label starts no run (2026-11-03: the run-ci opt-in is gone).
   const ev = (event, at, extra = {}) => ({ event, created_at: at, ...extra });
   const pages = (list) => (e) => { assert.match(e, /^issues\/738\/events\?per_page=100&page=\d$/); return { json: e.endsWith("page=1") ? list : [] }; };
   const draft = { number: 738, draft: true };
   assert.equal(triggerFloor(draft, pages([ev("labeled", "2026-10-15T17:00:00Z", { label: { name: "area:tooling" } }),
-    ev("labeled", "2026-10-15T17:08:05Z", { label: { name: "run-ci" } }), ev("labeled", "2026-10-15T17:09:00Z", { label: { name: "claimed" } })])).floor, T,
-    "another label is noise (its run is titled `CI ignored`)");
-  assert.equal(triggerFloor({ number: 738, draft: false }, pages([ev("labeled", "2026-10-15T17:00:00Z", { label: { name: "run-ci" } }),
-    ev("ready_for_review", "2026-10-15T17:08:05Z"), ev("labeled", "2026-10-15T17:20:00Z", { label: { name: "run-ci" } })])).floor, T,
-    "run-ci on a READY PR starts no real run");
+    ev("labeled", "2026-10-15T17:08:05Z", { label: { name: "priority" } }), ev("labeled", "2026-10-15T17:09:00Z", { label: { name: "claimed" } })])).floor, null,
+    "a label is no trigger: no floor");
+  assert.equal(triggerFloor({ number: 738, draft: false }, pages([ev("labeled", "2026-10-15T17:00:00Z", { label: { name: "claimed" } }),
+    ev("ready_for_review", "2026-10-15T17:08:05Z"), ev("labeled", "2026-10-15T17:20:00Z", { label: { name: "land" } })])).floor, T,
+    "the ready flip is the floor; a later label is not");
+  assert.equal(triggerFloor(draft, pages([ev("reopened", "2026-10-15T17:08:05Z")])).floor, T, "a reopen re-runs CI on the same head");
   assert.equal(triggerFloor(draft, pages([])).floor, null);
   assert.match(triggerFloor(draft, () => ({ error: "HTTP 502" })).error, /HTTP 502/);
 });
@@ -516,19 +497,6 @@ test("a persisted state never replays a job event after a re-arm, and the final 
   const fsm = { readFileSync: (f) => { if (!files.has(f)) throw new Error("ENOENT"); return files.get(f); }, mkdirSync() {}, writeFileSync: (f, c) => files.set(f, c) };
   const a = fileState("/s.json", fsm); a.add("1:2");
   assert.ok(fileState("/s.json", fsm).has("1:2"), "file-backed state survives a new process");
-});
-
-test("hollow: a draft whose only real job is the skeleton is `= ci hollow`, never passed", async () => {
-  const skel = job(1, "Draft push (CI skipped — add run-ci label)", "completed", "success");
-  const skipped = (id) => job(id, `leg ${id}`, "completed", "skipped");
-  assert.deepEqual(hollowDraft([skel, skipped(2), skipped(3)]), { skipped: 2, total: 3 });
-  assert.equal(hollowDraft([skel, job(2, "guards", "completed", "success")]), null, "a real job ran: not hollow");
-  assert.equal(hollowDraft([job(2, "guards", "completed", "success")]), null);
-  const r = await watch(fixture([PR_RUN], { 60: [skel, skipped(2), skipped(3)] }));
-  assert.equal(r.code, 5);
-  assert.match(r.lines.at(-1), /^= ci hollow \(draft, 2\/3 jobs skipped — add run-ci or a CI: run body line\)/);
-  const real = await watch(fixture([PR_RUN], { 60: [job(2, "guards", "completed", "success")] }));
-  assert.equal(real.code, 0); assert.ok(real.lines.at(-1).startsWith("= ci passed"));
 });
 
 test("cancelled-external: the only run, every job cancelled within 60 s, no newer run", async () => {

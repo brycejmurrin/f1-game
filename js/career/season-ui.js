@@ -217,6 +217,10 @@ function create(G) {
     delete ab.dataset.armed;
     ab.classList.remove("armed");
     ab.textContent = live ? "APPLY — RESTART SEASON" : "APPLY";
+    const bb = $("ss-back");   // static too: an armed DISCARD EDITS? dies with the next edit or visit
+    delete bb.dataset.armed;
+    bb.classList.remove("armed");
+    bb.textContent = "BACK";
     if (window.ScrollFade) ScrollFade.refresh();
   }
 
@@ -258,7 +262,13 @@ function create(G) {
       + (tag ? " — " + tag.charAt(0) + tag.slice(1).toLowerCase() : ""));
   }
 
-  $("ss-back").onclick = () => { close(); if (G.soundOn) GameAudio.uiSelect(); };
+  $("ss-back").onclick = () => {
+    const leave = () => { close(); if (G.soundOn) GameAudio.uiSelect(); };
+    // Unapplied calendar or rule edits: BACK (and Esc, its data-esc-close)
+    // arms first — the garage's DISCARD EDITS? idiom. build() disarms it.
+    if (draft && !SeasonCal.matchesConfig({ config: SeasonCal.config() }, draft)) G.armConfirm($("ss-back"), "DISCARD EDITS?", leave);
+    else leave();
+  };
   $("ss-apply").onclick = () => {
     const apply = () => {
       Log.info("ui", "SeasonUI.apply");

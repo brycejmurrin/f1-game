@@ -1,7 +1,7 @@
 /* Apex 26 — Captions: on-screen text for radio, spotter, and pre-race announcer.
    Presentation only — no physics, no circuit arc reads. Radio lines keep using #announce;
    non-radio sources use #captions. Speaker labels live here (moved from announce-banner).
-   Plan slice 4: docs/plans/2026-10-04-colourblind-captions.md */
+   Plan slice 4: docs/archive/plans/2026-10-04-colourblind-captions.md */
 const Captions = (function () {
   "use strict";
 
@@ -91,7 +91,13 @@ const Captions = (function () {
     return "";
   }
 
+  // The strip sits outside #hud, so nothing else hides it: each paint re-arms
+  // a hold timer, and clear() drops it on race reset / quit to menu.
+  const STRIP_HOLD_MS = 2500;
+  let stripTimer = 0;
+
   function paintStrip(who, text, side) {
+    if (stripTimer) { clearTimeout(stripTimer); stripTimer = 0; }
     const el = byId("captions");
     if (!el || !stripVisible()) {
       if (el) el.hidden = true;
@@ -108,6 +114,15 @@ const Captions = (function () {
     }
     el.hidden = !(text && String(text).trim());
     el.setAttribute("aria-hidden", el.hidden ? "true" : "false");
+    if (!el.hidden && typeof setTimeout === "function") {
+      stripTimer = setTimeout(() => { stripTimer = 0; paintStrip("", ""); }, STRIP_HOLD_MS);
+    }
+  }
+
+  /** Hide the spotter strip and announcer caption (race reset, quit to menu). */
+  function clear() {
+    paintStrip("", "");
+    clearLoading();
   }
 
   function paintLoading(who, text) {
@@ -122,11 +137,18 @@ const Captions = (function () {
     if (w) w.textContent = who || WHO.announcer;
     if (t) t.textContent = text;
     el.hidden = false;
+    refitCard();
   }
 
   function clearLoading() {
     const el = byId("ld-caption");
     if (el) el.hidden = true;
+    refitCard();
+  }
+  /** The caption is the loading card's tallest late arrival: the card re-fits
+   *  the window around it (LoadingScreen.fitCard, UI scaling contract gap 22). */
+  function refitCard() {
+    if (typeof LoadingScreen !== "undefined" && LoadingScreen && typeof LoadingScreen.fitCard === "function") LoadingScreen.fitCard(byId);
   }
 
   function applyDom() {
@@ -139,10 +161,7 @@ const Captions = (function () {
     r.style.setProperty("--caption-bg-a", String(bg / 100));
     r.dataset.captionSpeakerInk = speakerInk === "off" ? "off" : "on";
     r.style.setProperty("--caption-ch", String(TEXT_CH_MAX));
-    if (!stripVisible()) {
-      paintStrip("", "");
-      clearLoading();
-    }
+    if (!stripVisible()) clear();
   }
 
   function onRadio(meta) {
@@ -255,13 +274,13 @@ const Captions = (function () {
     } else initAppearanceRows();
   }
 
+  // Store keys, option tables, WHO, restore/applyDom, and mode getters stay
+  // module-local — only the live/test surface is public.
   return {
-    K_MODE, K_SIZE, K_POS, K_BG, K_SPEAKER_INK,
-    MODES, SIZES, POSITIONS, SPEAKER_INK, WHO, RING_MAX, TEXT_CH_MAX,
+    RING_MAX, TEXT_CH_MAX,
     radioWho, push, ring: () => ring.slice(),
-    onRadio, onSpotter, onAnnouncerLine, announcerDone,
-    setMode, setSize, setPos, setBg, setSpeakerInk, restore, applyDom,
-    mode: () => mode, size: () => size, pos: () => pos, bg: () => bg,
+    onRadio, onSpotter, onAnnouncerLine, announcerDone, clear,
+    setMode, setSize, setPos, setBg, setSpeakerInk,
     initAppearanceRows,
   };
 })();

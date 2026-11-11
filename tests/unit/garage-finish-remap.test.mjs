@@ -98,7 +98,7 @@ test("SPINE TOP WRAP rebuilds smoothing prep for moved flank trim with equal mes
   // and smoothing code. The garage cache seam records the data it would upload.
   let liv = base, pick = 0;
   const camera = new Function("Car3D", "CarShade", "Parts", "Teams", "G", "resolveLivery", "previewKey", "partsVisualKey", "garageSeat", "seatTag", "hullKeyOf", "GarageScene", "getTeamParts",
-    "let _spMeshKey = '', _spBase = null, _spMesh, _spHull;\n" + fnSource(source, "function getSetupPreviewMesh()") + "\nreturn getSetupPreviewMesh;")(
+    "let driveOut = null, departureWheels = null, _spMeshKey = '', _spBase = null, _spMesh, _spHull;\n" + fnSource(source, "function getSetupPreviewMesh()") + "\nreturn getSetupPreviewMesh;")(
     C, M.CarShade, M.Parts, M.Teams, { teamIdx: 0 }, () => liv, () => String(pick), () => "factory|L:default",
     () => ({ num: 7 }), () => "7", key, { previewMesh: (k, hk, create) => ({ mesh: create(), hull: [] }) }, () => M.Parts.getFactorySetup(team));
   const before = camera(), keep = before._refinish.keep;

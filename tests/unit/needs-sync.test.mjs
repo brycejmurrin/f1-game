@@ -27,6 +27,10 @@ test("decideSync: clean-behind green / running / unknown / none = no", () => {
     assert.equal(decideSync({ behind: true, conflict: false, ci, runStartedAt: T0, tipNewestAt: T1 }).verdict, "no", ci);
   }
 });
+test("decideSync: a stray `distance` fact changes nothing (the verdict went with merge-gate's distance row, 2026-11-03)", () => {
+  assert.equal(decideSync({ behind: true, conflict: false, ci: "success", runStartedAt: T0, tipNewestAt: T1, distance: true }).verdict, "no");
+  assert.equal(decideSync({ behind: true, conflict: true, ci: "success", distance: true }).verdict, "conflict");
+});
 test("exit codes and verdict line", () => {
   assert.deepEqual(VERDICTS, ["conflict", "stale-red", "no"]);
   assert.equal(exitCode({ ok: true, verdict: "conflict" }), 0);
@@ -65,6 +69,14 @@ test("needsSync: an unresolvable ref is an error, not a verdict", () => {
 test("needsSync: API failure degrades to a note, never a stale-red", () => {
   const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: () => ({ error: "HTTP 403" }) });
   assert.equal(v.verdict, "no"); assert.match(v.note, /unreadable/);
+});
+test("needsSync: a green clean-behind head reads only the ci.yml runs (no `gate` status read since 2026-11-03) = no", () => {
+  const calls = [];
+  const request = (p) => { calls.push(p); return { json: { workflow_runs: [] } }; };
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request });
+  assert.equal(v.verdict, "no");
+  assert.equal(v.distance, undefined, "no distance fact is reported");
+  assert.ok(calls.length >= 1 && calls.every((p) => p.startsWith("actions/workflows/ci.yml/runs")), calls.join(" "));
 });
 test("needsSync: red head + newer tip commit = stale-red via the injected API", () => {
   const request = () => ({ json: { workflow_runs: [{ id: 7, path: ".github/workflows/ci.yml", status: "completed", conclusion: "failure", run_started_at: "2000-01-01T00:00:00Z" }] } });

@@ -39,15 +39,20 @@
 // Dead local DISPLAY (:N with no /tmp/.X11-unix/XN) makes headless WebGL return
 // null — launchChromium clears it via clearDeadDisplay() unless headed or
 // APEX_KEEP_DISPLAY=1.
-import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
 
+import { fileURLToPath } from "node:url";
+
 import { chromiumPath, normalizeBrowserFlavor, resolveChromium } from "./chromium-path.mjs";
+import { ensureBuilt } from "../gen/ensure-built.mjs";
 
 const require = createRequire(import.meta.url);
+const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const _wgpuArgs = require("./webgpu-chrome-args.cjs");
 export const WEBGPU_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_CHROMIUM_ARGS;
 export const WEBGPU_LAVAPE_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_LAVAPE_CHROMIUM_ARGS;
@@ -228,6 +233,17 @@ export async function startStaticServer(root, {
   immutableAssets = null,
 } = {}) {
   const base = resolve(root);
+  // A source checkout (including report-server --root) needs its own sources
+  // built before serving. Staged/copy-only roots carry their own bytes: never
+  // execute a manifest copied into one. Verify a root-local git checkout first;
+  // inherited hook GIT_* variables must not identify the caller's repo instead.
+  let sourceCheckout = base === REPO_ROOT;
+  if (!sourceCheckout && existsSync(join(base, ".git")) && existsSync(join(base, "tools/manifest.cjs"))) {
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+    const git = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: base, env, encoding: "utf8" });
+    sourceCheckout = git.status === 0 && realpathSync(git.stdout.trim()) === realpathSync(base);
+  }
+  if (sourceCheckout) ensureBuilt({ root: base });
   const prefix = base + sep;
   let snapshotPrefix = null, snapshot = null;
   const cache = new Map();
@@ -383,8 +399,16 @@ export function trackBrowserOwner(browser, owner, entry) {
  * https://playwright.dev/docs/api/class-browserserver#browser-server-process
  * https://playwright.dev/docs/api/class-browsertype#browser-type-launch-server */
 export async function launchChromium(opts = {}, {
-  chromium = require("playwright").chromium, closeTimeoutMs = 5000, kill = process.kill.bind(process),
+  chromium, closeTimeoutMs = 5000, kill = process.kill.bind(process),
 } = {}) {
+  // A subagent never starts a browser (AGENTS.md rule 10). .claude/hooks/bash-guard.py exports APEX_SUBAGENT=1 into
+  // a subagent's commands, so every launcher that comes through here refuses without the hook naming it. An injected
+  // `chromium` (a unit test's fake) launches nothing and is exempt.
+  if (!chromium && process.env.APEX_SUBAGENT) {
+    throw new Error("a subagent never starts a browser (AGENTS.md rule 10; APEX_SUBAGENT is set): run the node-only route "
+      + "(--vm, --plan, --help, node --test) and report what needs a browser as NOT RUN.");
+  }
+  chromium ||= require("playwright").chromium;
   const startedEpoch = shutdownEpoch;
   const { browserFlavor = "auto", ...launchOptions } = opts;
   const flavor = normalizeBrowserFlavor(browserFlavor);

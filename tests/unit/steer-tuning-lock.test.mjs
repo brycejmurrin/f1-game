@@ -9,19 +9,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/input/steer-tuning.js"), "utf8");
 
-/** Same linear map as lockFromSlider in steer-tuning.js. */
-function lockFromSlider(v) {
-  return 0.18 + (0.435 - 0.18) * (v - 1) / 9;
-}
-
-test("lockFromSlider source: notch 7 is 0.35 rad (NORMAL / STANDARD steerLock)", () => {
-  assert.match(SRC, /function lockFromSlider\(v\)\s*\{\s*return 0\.18 \+ \(0\.435 - 0\.18\) \* \(v - 1\) \/ 9; \}/);
-  assert.ok(Math.abs(lockFromSlider(7) - 0.35) < 1e-9, `notch 7 = ${lockFromSlider(7)} rad`);
-  assert.ok(Math.abs(lockFromSlider(5) - 0.293333) < 0.001, "notch 5 ~0.293");
-  assert.ok(Math.abs(lockFromSlider(10) - 0.435) < 1e-9, "notch 10 = 0.435");
-});
-
-/** The REAL touchRangeFromSlider, cut out of the source (brace-balanced) and evaluated. */
+/** The REAL slider maps, cut out of the source (brace-balanced) and evaluated. */
 function extractFn(name) {
   const at = SRC.indexOf(`function ${name}(`);
   assert.ok(at >= 0, `${name} not found in steer-tuning.js`);
@@ -32,6 +20,14 @@ function extractFn(name) {
   }
   return new Function(`${SRC.slice(at, i + 1)}; return ${name};`)();
 }
+
+test("lockFromSlider (the real one): notch 7 is 0.35 rad (NORMAL / STANDARD steerLock)", () => {
+  const lockFromSlider = extractFn("lockFromSlider");
+  assert.ok(Math.abs(lockFromSlider(7) - 0.35) < 1e-9, `notch 7 = ${lockFromSlider(7)} rad`);
+  assert.ok(Math.abs(lockFromSlider(5) - 0.293333) < 0.001, "notch 5 ~0.293");
+  assert.ok(Math.abs(lockFromSlider(1) - 0.18) < 1e-9, "notch 1 = 0.18");
+  assert.ok(Math.abs(lockFromSlider(10) - 0.435) < 1e-9, "notch 10 = 0.435");
+});
 
 test("touchRangeFromSlider: notch 5 is input.js TOUCH_RANGE_FRAC 0.12, ends 0.24 / 0.06, monotonic", () => {
   const f = extractFn("touchRangeFromSlider");

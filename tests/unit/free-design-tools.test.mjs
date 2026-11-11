@@ -146,3 +146,39 @@ test('gateway advertises host input, preserves ordinary doctor, and dispatches s
     assert.equal(response.structuredContent.out.checks.find(c => c.id === 'session.catalog').status, 'pass');
   } finally {await gateway.close();}
 });
+
+test('VM eval and rejected preflight do not create browser ownership; runtime errors keep it',async()=>{
+  let response={content:[]};
+  const gateway=await createGateway({connect:async name=>({
+    listTools:async()=>({tools:[{name:name==='apex-tools'?'apex_eval':'probe',description:'Browser probe',inputSchema:{type:'object'}}]}),
+    callTool:async()=>{if(response instanceof Error)throw response;return response;},close:async()=>{}
+  })});
+  const evalCall=arguments_=>gateway.call({name:'apex_tools__apex_eval',arguments:arguments_});
+  const chrome=()=>gateway.call({name:'chrome_devtools__probe'});
+  const release=()=>gateway.call({name:RELEASE});
+  try {
+    await evalCall({vm:true});assert(!(await chrome()).isError,'VM must not claim ownership');
+    assert(!(await evalCall({vm:true})).isError,'VM must also work under an existing Chrome owner');
+    assert((await evalCall({})).isError,'real browser eval remains blocked by Chrome');
+    await release();
+    for(const error of ['bad_args','local_only']) {
+      response={isError:true,content:[{type:'text',text:JSON.stringify({error})}]};
+      await evalCall({});response={content:[]};
+      assert(!(await chrome()).isError,error+' must not claim ownership');await release();
+    }
+    await evalCall({});
+    response={isError:true,structuredContent:{error:'bad_args'},content:[]};await evalCall({});
+    response={content:[]};assert((await chrome()).isError,'a rejected call must preserve its pre-existing owner');await release();
+    response={isError:true,structuredContent:{error:'bad_args'},content:[]};await evalCall({});
+    response={content:[]};assert(!(await chrome()).isError,'structured preflight refusal must not claim ownership');await release();
+    response=new Error('transport lost after possible launch');await assert.rejects(evalCall({}),/transport lost/);
+    assert((await chrome()).isError,'transport failures must retain ownership');await release();
+    response={isError:true,content:[{type:'text',text:'runtime failure after launch'}]};await evalCall({});
+    response={content:[]};assert((await chrome()).isError,'runtime failure must retain ownership');await release();
+  } finally {await gateway.close();}
+});
+
+test('VM eval supports the advertised __apex expression and existing a/g bindings',()=>{
+  const r=spawnSync(process.execPath,['tools/shot/apex-eval.mjs','bahrain','({same:a===__apex,track:__apex.info().track,handle:typeof g.close})','--vm','--raw'],{cwd:root,encoding:'utf8',timeout:20000});
+  assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),{same:true,track:'bahrain',handle:'function'});
+});

@@ -10,7 +10,7 @@
 //   node tools/ci/sync-pr.mjs <branch> --force-clean-behind     # sync although needs-sync.mjs says `no`
 //   node tools/ci/sync-pr.mjs <branch> --resume --from=<stage>   # re-verify the kept sync-pr-<branch>
 //   node tools/ci/sync-pr.mjs <branch> --stop                    # stop that branch's running sync (whole process tree; no pkill -f)
-//   --wait-load=<min>  wait up to N min (default 10) for loadavg < 2.8 instead of refusing at once (0 = refuse at once)
+//   --wait-load=<min>  wait up to N min (default 9, max 590 s) for loadavg < 2.8 (0 = refuse at once)
 //
 // STAGED, TIMED, DIFF-AWARE VERIFY (#2186, 2026-10-15). It ran tooling-fast at
 // --jobs=1 and EVERY ci.yml node suite (game-vm-a/b1/b2, vm-page, node-slow …)
@@ -57,9 +57,11 @@ import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, plan, preflight, mergeDeployTip, gateNodeSuites, touchedCircuits, changedPaths } from "./deploy.mjs";
 import { plan as nodePlan } from "./node-plan.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
+import { syncMergeScope } from "./tooling-fast.mjs";
 import { strictFlags } from "../lib/cli-args.mjs";
 import { gitRun, gitMust } from "../lib/git-run.mjs";
 import { register, release, stop as stopRun } from "../lib/run-pid.mjs";
+import { capForeground, FOREGROUND_CAP_SEC } from "./wait-for.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -68,6 +70,27 @@ const opt = (n) => { const a = argv.find((x) => x.startsWith(`${n}=`)); return a
 const branch = argv.find((a) => !a.startsWith("--"));
 const REMOTE = "origin";
 const log = (m) => process.stderr.write(`[sync-pr] ${m}\n`);
+
+/** Keep the synchronous wait inside wait-for's foreground safety cap. Never clamp an explicit duration. */
+export function loadWaitMinutes(value = null) {
+  const minutes = value === null ? Math.floor(FOREGROUND_CAP_SEC / 60) : Number(value);
+  if (value === "" || !Number.isFinite(minutes) || minutes < 0)
+    throw new Error("--wait-load needs a finite non-negative number of minutes (0 refuses at once)");
+  const cap = capForeground(minutes, false);
+  if (cap.error) throw new Error(`--wait-load exceeds the ${FOREGROUND_CAP_SEC} s foreground cap; choose a shorter duration (nothing waited)`);
+  return minutes;
+}
+
+/** No fetch or verification may follow a waiter that failed, was refused, or timed out. */
+export function waitForLoad(waitMin, { load = () => os.loadavg()[0], run = spawnSync, report = log } = {}) {
+  const current = load();
+  if (waitMin === 0 || current < 2.8) return { ok: true };
+  report(`loadavg ${current.toFixed(2)} >= 2.8 — waiting up to ${waitMin} min for it to drop`);
+  const r = run(process.execPath, ["tools/ci/wait-for.mjs", "--load-below", "2.8", "--timeout", String(waitMin)], { cwd: ROOT, stdio: "inherit" });
+  if (r.status === 0 && !r.error && !r.signal) return { ok: true };
+  return { ok: false, error: r.status === 124 ? `load did not drop below 2.8 within ${waitMin} min` :
+    `load waiter failed (${r.error?.message || r.signal || `exit ${r.status ?? "unknown"}`}); nothing synced` };
+}
 
 // The {code,out,err} git helper is tools/lib/git-run.mjs (audit3 T11).
 function git(args, opts = {}) { return gitRun(args, { cwd: ROOT, ...opts }); }
@@ -91,13 +114,22 @@ const STAGE_TIMEOUT_MS = { "tooling-fast": 20 * 60e3, node: 15 * 60e3, "verify-t
 
 /**
  * The verify stages, in order. Pure.
- * @param {{ verify: string, changed: string[]|null, circuits: string[], suites: string[], planFor?: typeof nodePlan }} o
+ * @param {{ verify: string, changed: string[]|null, circuits: string[], suites: string[], mergeOnly?: string[]|null, planFor?: typeof nodePlan }} o
  *   `changed` is the branch's own diff against the tip (null = unknown → every suite).
+ *   `mergeOnly` (fast only; tooling-fast.mjs syncMergeScope().impure) is the paths the MERGE decided: when given, the
+ *   node suites and circuits are chosen for those paths alone, none when it is empty. The branch's own diff was
+ *   verified by the push before the sync and CI re-gates the pushed head; `tooling-fast --changed` scopes itself the same way.
  */
-export function verifyStages({ verify, changed, circuits, suites, planFor = nodePlan }) {
+export function verifyStages({ verify, changed, circuits, suites, mergeOnly = null, planFor = nodePlan }) {
   if (verify === "none") return [];
   const skip = new Set();
-  if (verify === "fast" && changed) { const p = planFor(changed); if (!p.all) for (const s of p.skip) skip.add(s); }
+  const scoped = verify === "fast" && Array.isArray(mergeOnly);
+  if (scoped) {
+    const p = mergeOnly.length ? planFor(mergeOnly) : { all: false, skip: suites };
+    if (!p.all) for (const s of p.skip) skip.add(s);
+    const hit = new Set(mergeOnly.map((f) => /^js\/circuits\/(?:scenery\/)?([a-z_]+)\.js$/.exec(f)).filter(Boolean).map((m) => m[1]));
+    circuits = circuits.filter((id) => hit.has(id));
+  } else if (verify === "fast" && changed) { const p = planFor(changed); if (!p.all) for (const s of p.skip) skip.add(s); }
   return [
     // fast: only the unit files the merged branch's OWN diff reaches (`--changed` diffs HEAD against its merge-base with the
     // deploy tip, which after the merge is the tip: the PR's paths plus whatever `npm run gen` rewrote); a diff that
@@ -127,11 +159,12 @@ export const USAGE = [
     "  --plan    print head/tip/conflicts for that branch against the deploy tip, run nothing",
     "  --push    on a clean verify, push the result to origin/<branch> (default: leaves it on a local sync-pr-<branch> branch for review);",
     "            checks that origin/<branch> has not moved before pushing; no queue-depth push hold",
-    "  --verify  fast (default): tooling-fast --changed --jobs=3 (the branch's own diff; ~2 min vs ~12 min whole) + the node suites node-plan.mjs needs for it;",
+    "  --verify  fast (default): tooling-fast --changed --jobs=3 + the node suites node-plan.mjs needs, both scoped to the paths the MERGE decided",
+    "            (changed on both sides, regenerated or hand-resolved); the branch's whole diff when HEAD is not a sync merge;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
-    "  --stop    stop a live sync of <branch> (its registered run); --wait-load=<min> waits up to <min> (default 10) for loadavg < 2.8, 0 refuses at once",
+    "  --stop    stop a live sync of <branch> (its registered run); --wait-load=<min> waits up to <min> (default 9, max 590 s) for loadavg < 2.8, 0 refuses at once",
     "  An unknown --flag prints this usage and exits 2, before any fetch.",
   ].join("\n");
 
@@ -153,6 +186,19 @@ export function staleSyncBranch(localBranch, prBranch, readGit = git) {
   return +n.out === 0 ? { stale: true, why: "no commits of its own" } : { stale: false, why: `${n.out} commit(s) of its own — an interrupted sync; --resume it or rename it` };
 }
 
+/** What to do with a leftover local sync-pr-<branch> on a non-resume run: delete a dead one, REUSE one whose merge already
+ *  holds the deploy tip (an interrupted verify: carry on as --resume), refuse one that may carry hand work. */
+export function leftoverAction(localBranch, prBranch, readGit = git) {
+  const st = staleSyncBranch(localBranch, prBranch, readGit);
+  if (st.stale) return { action: "delete", why: st.why };
+  if (readGit(["merge-base", "--is-ancestor", `${REMOTE}/${DEPLOY_BRANCH}`, localBranch]).code === 0)
+    return { action: "resume", why: "its merge already holds the deploy tip — reusing it (as --resume)" };
+  return { action: "refuse", why: st.why };
+}
+
+/** True when origin/<branch> moved from `startSha` (a warning during the run, not a refusal). */
+export const headMoved = (startSha, nowSha) => !!startSha && !!nowSha && startSha !== nowSha;
+
 /** True when origin/<branch> holds a commit our merge result does not contain: someone pushed meanwhile. */
 export function remoteMoved(localBranch, prBranch, readGit = git) {
   return readGit(["merge-base", "--is-ancestor", `${REMOTE}/${prBranch}`, localBranch]).code !== 0;
@@ -164,7 +210,8 @@ export function remoteMoved(localBranch, prBranch, readGit = git) {
  *  wrong, and when it failed (a merge stopped mid-way by a throwing gen step)
  *  nothing said so. A merge in progress is aborted first; the result is
  *  checked; the returned line is the truth. `readGit` is injectable for tests. */
-export function returnTo(startedOn, keptBranch, readGit = git) {
+export function returnTo(startedOn, keptBranch, readGit = git, { keepMerge = false } = {}) {
+  if (keepMerge) return { ok: false, line: `merge LEFT IN PROGRESS on ${keptBranch} (MERGE_HEAD kept) — finish it there; the working tree was not moved` };
   if (readGit(["rev-parse", "-q", "--verify", "MERGE_HEAD"]).code === 0) readGit(["merge", "--abort"]);
   const r = readGit(["checkout", startedOn]);
   const where = readGit(["branch", "--show-current"]).out || readGit(["rev-parse", "--short", "HEAD"]).out;
@@ -190,17 +237,15 @@ export async function main() {
   if (flag("--stop")) {
     return stopRun(lockName).then((r) => { log(r.state === "stopped" ? `stopped pid ${r.pid} (${r.killed} processes)` : r.state === "stale" ? `the registered sync (pid ${r.pid}) is already gone` : `no registered sync for ${branch}`); return 0; });
   }
+  const waitMin = loadWaitMinutes(opt("--wait-load"));
   const lock = register(lockName);
   if (!lock.ok) { log(`REFUSED: another sync of ${branch} is running here (pid ${lock.pid}); wait, or stop it with: node tools/ci/sync-pr.mjs ${branch} --stop`); return 3; }
   process.on("exit", () => release(lockName));
   // A busy box is a reason to wait, not to refuse (#2663: refused at 4.14 on a box that was idle seconds later).
-  const waitMin = opt("--wait-load") === null ? 10 : Math.max(0, +opt("--wait-load") || 0);
-  if (waitMin > 0 && os.loadavg()[0] >= 2.8) {
-    log(`loadavg ${os.loadavg()[0].toFixed(2)} >= 2.8 — waiting up to ${waitMin} min for it to drop`);
-    spawnSync("node", ["tools/ci/wait-for.mjs", "--load-below", "2.8", "--timeout", String(waitMin)], { cwd: ROOT, stdio: "inherit" });
-  }
+  const loadWait = waitForLoad(waitMin);
+  if (!loadWait.ok) { log(`REFUSED: ${loadWait.error}`); return 3; }
 
-  const resume = flag("--resume");
+  let resume = flag("--resume");
   if (!resume) must(git(["fetch", "--no-tags", REMOTE, branch, DEPLOY_BRANCH]), "fetch");
   if (!resume && !flag("--force-clean-behind")) {
     // AGENTS.md "sync only when you must": ask the predicate before any merge or push.
@@ -216,6 +261,11 @@ export async function main() {
   const startedOn = git(["branch", "--show-current"]).out || git(["rev-parse", "HEAD"]).out;
   const localBranch = `sync-pr-${branch.replace(/[^\w.-]/g, "-")}`;
   const exists = git(["show-ref", "--verify", "--quiet", `refs/heads/${localBranch}`]).code === 0;
+  if (!resume && exists) {
+    const lo = leftoverAction(localBranch, branch);
+    if (lo.action === "resume") { log(`${localBranch}: ${lo.why}`); resume = true; }
+  }
+  const headAtStart = git(["rev-parse", "--verify", `${REMOTE}/${branch}`]).out;
   if (resume) {
     if (!exists) throw new Error(`--resume: no local ${localBranch} to resume (run without --resume)`);
     if (startedOn !== localBranch) must(git(["checkout", localBranch]), `checkout ${localBranch}`);
@@ -245,7 +295,10 @@ export async function main() {
         verify = "fast";
       }
     } else if (verify === "none") throw new Error("--resume --verify=none verifies nothing; drop --resume and push by hand");
-    const stages = verifyStages({ verify, changed: changedPaths(tip), circuits: touchedCircuits(tip), suites: verify === "none" ? [] : gateNodeSuites() });
+    // A sync merge is verified for what the MERGE decided, not for the branch's whole diff again (2026-11-10).
+    const scope = verify === "fast" ? syncMergeScope() : null;
+    if (scope) log(`verify=fast scoped to the merge: ${scope.paths.length} path(s) came from the tip, ${scope.impure.length} decided by the merge${scope.impure.length ? ` (${scope.impure.slice(0, 6).join(", ")}${scope.impure.length > 6 ? ", …" : ""})` : ""}; --verify=full runs the whole ladder`);
+    const stages = verifyStages({ verify, changed: changedPaths(tip), circuits: touchedCircuits(tip), suites: verify === "none" ? [] : gateNodeSuites(), mergeOnly: scope ? scope.impure : null });
     log(`verify=${verify}: ${stages.map((st) => st.name).join(" → ") || "nothing"}; if it stops, resume with: ${resumeCmd(stages[0]?.name || null)}`);
     if (stages[0]?.skipped.length) log(`verify=${verify}: node-plan skips ${stages[0].skipped.join(", ")} for this diff (CI re-gates the pushed head)`);
     if (!stages.length) log("verify=none: clean merge, nothing regenerated — CI gates the pushed head");
@@ -257,11 +310,14 @@ export async function main() {
     }
   } catch (e) {
     log(`STOPPED: ${e.message}`);
-    log(returnTo(startedOn, localBranch).line + " — fix, then either re-run or push it yourself.");
+    log(returnTo(startedOn, localBranch, git, { keepMerge: !!e.keepMerge }).line + (e.keepMerge ? "" : " — fix, then either re-run or push it yourself."));
     if (e.resume) log(`resume from the stopped stage: ${e.resume}`);
     return 1;
   }
 
+  git(["fetch", "--no-tags", REMOTE, branch]);
+  if (headMoved(headAtStart, git(["rev-parse", "--verify", `${REMOTE}/${branch}`]).out))
+    log(`WARNING: origin/${branch} moved during this run (${headAtStart.slice(0, 9)} → now); re-run sync-pr to merge the new commits${flag("--push") ? "" : " before publishing"}`);
   const pushCmd = `git push ${REMOTE} ${localBranch}:${branch}`;
   if (flag("--push")) {
     // No queue hold (retired 2026-10-16, CI/CD review #2333 finding 7): a

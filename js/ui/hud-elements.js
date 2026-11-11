@@ -110,7 +110,9 @@ const HudElements = (function () {
     return list;
   }
 
+  let applies = 0;
   function apply() {
+    applies++;
     state = readState();
     if (typeof document === "undefined" || !document.body) return;
     const list = hiddenList();
@@ -135,7 +137,13 @@ const HudElements = (function () {
     for (const id of ids) {
       if (id in state) { state[id] = value; valid = true; }
     }
-    if (valid) { persist(); apply(); }
+    if (valid) {
+      // The store subscriber below applies synchronously on a write; only
+      // apply here when it did not (no subscribe, or an unchanged value).
+      const before = applies;
+      persist();
+      if (applies === before) apply();
+    }
     return valid;
   }
 
@@ -264,8 +272,9 @@ const HudElements = (function () {
     else initUI();
   }
 
+  // Store key `K` stays module-local (settings-export / store use the string).
   return {
-    K, ELEMENTS, isOn, set, setMany, apply, hiddenList, initUI, shippedOf, profileOf,
+    ELEMENTS, isOn, set, setMany, apply, hiddenList, initUI, shippedOf, profileOf,
     effective, configure, refreshVisibility: syncChecks,
     state: () => Object.assign({}, state),
   };

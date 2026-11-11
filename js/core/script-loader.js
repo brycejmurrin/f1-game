@@ -79,11 +79,26 @@ function preload(files, opts) {
   }
   return n;
 }
-// A hung lazy file (a stalled phone connection) never fires load OR error, so
-// the caller's loading card waited forever (#2582). After SLOW_MS `opts.onSlow`
-// fires (the UI may say "still loading"); after DEADLINE_MS of main-thread-responsive time the file counts as
-// failed, exactly like onerror, so every caller's existing fallback and its
-// memo-clear-on-failure retry path run. Overridable per load: opts.slowMs / deadlineMs.
+// Fill the HTTP cache for hrefs the build worker is about to importScripts.
+// importScripts does not join an in-flight <link rel=preload> (that hint is
+// CORS-anonymous; classic worker imports are no-cors), but it does reuse a
+// completed fetch() of the same URL. Fire-and-forget: the worker awaits its
+// own fetch of these exact strings and then imports. Returns how many bodies
+// were read. hrefs are final URLs (pageUrls), not bare paths — do not re-key them.
+function warm(hrefs) {
+  if (typeof fetch !== "function" || !hrefs || !hrefs.length) return Promise.resolve(0);
+  return Promise.all(hrefs.map(async (href) => {
+    try {
+      const res = await fetch(href, { credentials: "same-origin" });
+      if (!res || !res.ok) return 0;
+      if (typeof res.arrayBuffer === "function") await res.arrayBuffer();
+      return 1;
+    } catch (_) { return 0; }
+  })).then((xs) => xs.reduce((a, b) => a + b, 0));
+}
+// A hung lazy file fires neither load nor error (#2582): after SLOW_MS
+// opts.onSlow fires; after DEADLINE_MS of responsive time it fails like onerror,
+// so callers' fallbacks and retries run. Per load: opts.slowMs / deadlineMs.
 const SLOW_MS = 10000, DEADLINE_MS = 25000;
 // Transient github.io 5xx on a lazy <script>: retry the SAME file with a fresh
 // query key before the bundle gives up (Data Hub, grip-steer, results-sheet, …).
@@ -99,6 +114,94 @@ const evaluated = new Set();
 // bundle. Both are strict loads of the same top-level const, so they must
 // share the pending insertion as well as the completed evaluation.
 const evaluating = new Map();
+// src -> Promise<ready>: timed out, may still evaluate
+const stranded = new Map();
+// One admitted browser attempt owns only its element and responsive-time timers.
+// It knows nothing about bundles, strict sharing, evaluated scripts or retries.
+// onLoad runs IN the load event (not a later promise turn): readiness must be
+// checked before dependent scripts can become eligible in the graph.
+function browserAttempt(src, href, sri, opts, onLoad) {
+  return new Promise((resolve) => {
+    const el = document.createElement("script");
+    if (sri) el.integrity = sri;
+    el.src = href;
+    el.crossOrigin = "anonymous";
+    // MARKED so index.html's broken-install repair (sweep + reload) skips it:
+    // a lazy load error already resolves to its fallback, and a reload would loop.
+    if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
+    const slowMs = (opts && opts.slowMs) || SLOW_MS, deadlineMs = (opts && opts.deadlineMs) || DEADLINE_MS;
+    let slowT = null, deadT = null;
+    const W = typeof window !== "undefined" ? window : null, timed = !!(W && typeof W.setTimeout === "function");
+    const settle = (ok, retry, late) => { if (timed) { W.clearTimeout(slowT); W.clearTimeout(deadT); } resolve({ ok, retry: !!retry, late }); };
+    if (timed) {
+    slowT = W.setTimeout(() => {
+      try { if (opts && opts.onSlow) opts.onSlow(src); } catch (_) { /* UI hook only */ }
+    }, slowMs);
+    // THE DEADLINE COUNTS RESPONSIVE TIME (#3157): a starved main thread must
+    // not fail a file whose load event is queued. Each beat adds at most two ticks.
+    const tickMs = Math.max(10, Math.min(1000, Math.floor(deadlineMs / 10)));
+    let budget = 0, last = Date.now();
+    const beat = () => {
+      const t = Date.now();
+      budget += Math.max(0, Math.min(t - last, 2 * tickMs));
+      last = t;
+      if (budget < deadlineMs) { deadT = W.setTimeout(beat, tickMs); return; }
+      if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
+      // A removed tag still runs when its fetch lands: report it (no 2nd const).
+      let done;
+      const late = new Promise((r) => { done = r; });
+      el.onload = () => { let ok = false; try { ok = !!onLoad(); } catch (_) { /* readiness hook */ } done(ok); };
+      el.onerror = () => done(false);
+      if (el.remove) el.remove();
+      settle(false, false, late);
+    };
+    deadT = W.setTimeout(beat, tickMs);
+    }
+    el.onload = () => {
+      const ready = onLoad();
+      settle(ready, false);
+    };
+    el.onerror = () => { if (el.remove) el.remove(); settle(false, true); };
+    document.head.appendChild(el);
+  });
+}
+
+// Group lifecycle: drain started siblings before resolving a strict failure,
+// admit successors only after success (or graceful non-strict failure), and
+// preserve the caller's partial-success set. No browser/timer effects here.
+function runLoadGraph(files, preds, pending, done, inflight, strict, loaded, opts, inject) {
+  return new Promise((finish) => {
+    let failed = false;
+    const pump = () => {
+      if (failed && strict) { if (!inflight.size) finish(false); return; }
+      if (!pending.size && !inflight.size) { finish(!failed); return; }
+      for (const src of files) {
+        if (!pending.has(src)) continue;
+        if (!preds.get(src).every((p) => done.has(p))) continue;
+        pending.delete(src);
+        inflight.add(src);
+        // A throw in UpdateCheck.prepareLazyLoad (or the Promise executor) rejects
+        // inject(); unhandled, inflight never drained and pump() never finished,
+        // so the caller awaited forever. Count it as a failed file instead.
+        inject(src).catch((e) => {
+          if (typeof Log !== "undefined") Log.warn("game", "lazy load threw: " + src + " — " + (e && e.message));
+          return false;
+        }).then((ok) => {
+          inflight.delete(src);
+          if (ok) {
+            done.add(src);
+            if (loaded) loaded.add(src);
+            try { if (opts && opts.onSettled) opts.onSettled(src); } catch (_) { /* boot progress hook */ }
+          }
+          else { failed = true; if (!strict) done.add(src); }
+          pump();
+        });
+      }
+    };
+    pump();
+  });
+}
+
 function create() {
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges, opts) {
@@ -117,59 +220,28 @@ function loadBackendScripts(files, edges, opts) {
       return Promise.resolve({ ok: false, retry: false });
     }
     const sri = integrity(src);
-    if (sri === false) return Promise.resolve({ ok: false, retry: false });
-    return new Promise((resolve) => {
-    const el = document.createElement("script");
-    if (sri) el.integrity = sri;
+    if (sri === false) {   // a stamped shell with no key for this file (#4992): refused, and now said out loud
+      if (typeof Log !== "undefined") Log.warn("game", "lazy load refused, no integrity key in the stamped shell: " + src);
+      return Promise.resolve({ ok: false, retry: false });
+    }
     let href = url(src);
     if (cacheBust) href += (href.indexOf("?") >= 0 ? "&" : "?") + "retry=" + cacheBust;
-    el.src = href;
-    el.crossOrigin = "anonymous";
-    // MARKED so index.html's broken-install repair (sweeps every SW cache and
-    // reloads) leaves it alone: that repair is right for a shell tag the CDN
-    // has not published yet, but a load error here already RESOLVES (a missing
-    // global IS the fallback), so a reload would throw away a working
-    // degradation path — and loop, since the one-shot guard already cleared.
-    if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
-    const slowMs = (opts && opts.slowMs) || SLOW_MS, deadlineMs = (opts && opts.deadlineMs) || DEADLINE_MS;
-    let slowT = null, deadT = null;
-    const W = typeof window !== "undefined" ? window : null, timed = !!(W && typeof W.setTimeout === "function");
-    const settle = (ok, retry) => { if (timed) { W.clearTimeout(slowT); W.clearTimeout(deadT); } resolve({ ok, retry: !!retry }); };
-    if (timed) {
-    slowT = W.setTimeout(() => {
-      try { if (opts && opts.onSlow) opts.onSlow(src); } catch (_) { /* UI hook only */ }
-    }, slowMs);
-    // THE DEADLINE COUNTS RESPONSIVE TIME, NOT WALL CLOCK (#3157). One 25 s
-    // timer fires on a starved main thread (TLX right after a race on a slow
-    // GPU, minutes of long tasks) in the same stall in which the fetched
-    // script's load event is still queued, so a file that ARRIVED was counted
-    // failed. A heartbeat adds at most two ticks per beat: a stall that
-    // swallowed many beats buys the file its load task, a real hang still
-    // reaches deadlineMs of live beats.
-    const tickMs = Math.max(10, Math.min(1000, Math.floor(deadlineMs / 10)));
-    let budget = 0, last = Date.now();
-    const beat = () => {
-      const t = Date.now();
-      budget += Math.max(0, Math.min(t - last, 2 * tickMs));
-      last = t;
-      if (budget < deadlineMs) { deadT = W.setTimeout(beat, tickMs); return; }
-      if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
-      el.onload = el.onerror = null;
-      if (el.remove) el.remove();
-      settle(false, false);
-    };
-    deadT = W.setTimeout(beat, tickMs);
-    }
-    el.onload = () => {
+    return browserAttempt(src, href, sri, opts, () => {
       let ready = true;
       try { if (opts && opts.ready) ready = !!opts.ready(src); }
-      catch (e) { ready = false; }
+      catch (_) { ready = false; }
       if (ready) evaluated.add(src);
-      settle(ready, false);
-    };
-    el.onerror = () => { if (el.remove) el.remove(); settle(false, true); };
-    document.head.appendChild(el);
-  });
+      return ready;
+    }).then((r) => { if (r.late) stranded.set(src, r.late); return r; });
+  };
+  // A strict retry waits one more deadline for it.
+  const awaitStranded = async (src) => {
+    const late = stranded.get(src), W = typeof window !== "undefined" ? window : null;
+    if (!late || !W || typeof W.setTimeout !== "function") return;
+    let t;
+    await Promise.race([late, new Promise((r) => { t = W.setTimeout(r, (opts && opts.deadlineMs) || DEADLINE_MS); })]);
+    W.clearTimeout(t);
+    stranded.delete(src);
   };
   // Strict bundles with a `loaded` set (ensureDataHub / ensureNet / …) keep one inject
   // per file per load attempt so a miss leaves siblings resident and the next ensure*
@@ -180,6 +252,7 @@ function loadBackendScripts(files, edges, opts) {
   const injectFile = async (src) => {
     if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
     // Strict retry: already evaluated in this tab — no second <script>.
+    if (strict && !evaluated.has(src)) await awaitStranded(src);
     if (strict && evaluated.has(src)) return true;
     const optBust = opts && opts.cacheBust;
     if (deferInjectRetry) {
@@ -215,40 +288,11 @@ function loadBackendScripts(files, edges, opts) {
   // Only files that WAIT for a predecessor: the first wave is injected below at once.
   const blocked = typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad && UpdateCheck.blocksLazyLoad();
   if (!blocked) preload([...pending].filter((f) => preds.get(f).some((p) => !done.has(p))));
-  return new Promise((finish) => {
-    let failed = false;
-    const pump = () => {
-      if (failed && strict) { if (!inflight.size) finish(false); return; }
-      if (!pending.size && !inflight.size) { finish(!failed); return; }
-      for (const src of files) {
-        if (!pending.has(src)) continue;
-        if (!preds.get(src).every((p) => done.has(p))) continue;
-        pending.delete(src);
-        inflight.add(src);
-        // A throw in UpdateCheck.prepareLazyLoad (or the Promise executor) rejects
-        // inject(); unhandled, inflight never drained and pump() never finished,
-        // so the caller awaited forever. Count it as a failed file instead.
-        inject(src).catch((e) => {
-          if (typeof Log !== "undefined") Log.warn("game", "lazy load threw: " + src + " — " + (e && e.message));
-          return false;
-        }).then((ok) => {
-          inflight.delete(src);
-          if (ok) {
-            done.add(src);
-            if (loaded) loaded.add(src);
-            try { if (opts && opts.onSettled) opts.onSettled(src); } catch (_) { /* boot progress hook */ }
-          }
-          else { failed = true; if (!strict) done.add(src); }
-          pump();
-        });
-      }
-    };
-    pump();
-  });
+  return runLoadGraph(files, preds, pending, done, inflight, strict, loaded, opts, inject);
 }
 
 return { load: loadBackendScripts };
 }
-  return { create, url, preload };
+  return { create, url, preload, warm };
 })();
 Object.freeze(ScriptLoader);

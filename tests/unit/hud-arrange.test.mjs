@@ -105,7 +105,8 @@ test("create: inert without a document or HudLayout; the pure API is frozen", ()
 // Exercise the real editor listeners with a tiny DOM and a controllable frame queue.
 function editor(pieceId = "piece", options = {}) {
   const ids = new Map(), listeners = {}, frames = new Map(), writes = [], observers = [];
-  let frame = 0, set = 'chase', profile = 'standard';
+  let frame = 0, set = 'chase', profile = 'standard', dirty = false;
+  const stats = { saves: 0, rects: 0 };   // storage writes; layout reads of the piece (each one a forced layout on a phone)
   class El {
     constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.attrs = {}; this.listeners = {}; this.hidden = false; this.style = { removeProperty(k) { delete this[k]; }, setProperty(k,v) { this[k]=v; }, getPropertyValue(k) { return this[k] || ""; } }; this.isConnected = true; }
     set textContent(v) { this._text = v; this.children = []; } get textContent() { return this._text || this.children.map(c => c.textContent).join(''); }
@@ -121,6 +122,7 @@ function editor(pieceId = "piece", options = {}) {
     contains(e) { return this === e || this.children.some(c => c.contains(e)); }
     closest(sel) { return sel === "#" + pieceId && this.id === pieceId ? this : null; }
     getBoundingClientRect() {
+      if (this.id === pieceId) stats.rects++;
       if (this.id === 'hud-arrange-bar') {
         const left = parseFloat(this.style.left) || 0, top = parseFloat(this.style.top) || 0;
         return { left, top, right: left + this.offsetWidth, bottom: top + this.offsetHeight, width: this.offsetWidth, height: this.offsetHeight };
@@ -160,15 +162,17 @@ function editor(pieceId = "piece", options = {}) {
   const key = (sn = set, pn = profile) => sn + ':' + pn;
   const get = (id, sn, pn) => ({ x: 0, y: 0, s: 100, ...values.get(key(sn, pn)) });
   const layout = { ELEMENTS: [[pieceId, 'Piece', '#' + pieceId]], shown: () => set, profile: () => profile, get,
-    set(id, v, sn, pn) {
-      writes.push({ id, v: { ...v }, sn, pn });
+    set(id, v, sn, pn, live) {
+      writes.push({ id, v: { ...v }, sn, pn, live: !!live });
+      if (live) dirty = true; else { stats.saves++; dirty = false; }
       const stored = options.snap ? Object.fromEntries(Object.entries(v).map(([k,n]) => [k, Math.round(n)])) : v;
       values.set(key(sn, pn), { ...get(id, sn, pn), ...stored });
       const el = ids.get(pieceId);
       el.setAttribute('data-hl-user', '');
       el.setAttribute('data-hl-v4', '');
       if (id === 'map') { el.style.removeProperty('--hud-clear-x'); el.style.removeProperty('--hud-clear-y'); }
-    }, resetEl() {} };
+      return get(id, sn, pn);
+    }, commit() { if (!dirty) return false; dirty = false; stats.saves++; return true; }, resetEl() {} };
   const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
   const elements = { isOn: id => on.has(id), setMany(ids, enabled) {
     for (const id of ids) { visibilityWrites.push({ id, enabled }); if (enabled) on.add(id); else on.delete(id); }
@@ -194,7 +198,7 @@ function editor(pieceId = "piece", options = {}) {
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
   const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
   const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };
-  return { api, fire, tick, writes, ids, frames, doc, get, observers, on, visibilityWrites, preferences, viewport,
+  return { api, fire, tick, writes, stats, ids, frames, doc, get, observers, on, visibilityWrites, preferences, viewport,
     chooseVisibility(value) { const select = ids.get('hud-arrange-vis'); select.value = value; select.dispatchEvent({ type: 'change' }); },
     context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
 }
@@ -209,6 +213,26 @@ test('editor: exit flushes the final drag once into its original camera/style an
   assert.equal(e.writes.at(-1).sn, 'chase'); assert.equal(e.writes.at(-1).pn, 'standard');
   assert.equal(e.writes.at(-1).v.x, 10); assert.equal(e.frames.size, 0);
   e.tick(); assert.equal(e.writes.length, 4, 'no gesture is flushed twice');
+});
+
+test('editor: a drag paints every frame but saves once, and reads layout only at its ends (#5031)', () => {
+  for (const gesture of ['drag', 'pinch']) {
+    const e = editor(); e.api.setEditing(true);
+    e.fire('pointerdown');
+    if (gesture === 'pinch') e.fire('pointerdown', { pointerId: 2, clientX: 200 });
+    const painted = e.writes.length, rects = e.stats.rects;
+    assert.equal(e.stats.saves, 0, gesture + ': the press adopts its painted origin without saving it');
+    for (let i = 1; i <= 10; i++) { e.fire('pointermove', { pointerId: gesture === 'pinch' ? 2 : 1, clientX: 200 + i * 10 }); e.tick(); }
+    assert.equal(e.writes.length - painted, 10, gesture + ': one paint per frame');
+    assert.equal(e.writes.slice(painted).every((w) => w.live), true, gesture + ': every frame is a live paint');
+    assert.equal(e.stats.saves, 0, gesture + ': no storage write while the finger is down');
+    assert.equal(e.stats.rects, rects, gesture + ': no forced layout read while the finger is down');
+    if (gesture === 'pinch') { e.fire('pointerup', { pointerId: 2 }); assert.equal(e.stats.saves, 0, 'one finger still holds the piece'); }
+    e.fire('pointerup');
+    assert.equal(e.stats.saves, 1, gesture + ': exactly one write at the end of the gesture');
+    e.api.setEditing(false);
+    assert.equal(e.stats.saves, 1, gesture + ': exit has nothing left to save');
+  }
 });
 
 test('editor: lifting either pinch finger rebases the remaining drag without a position jump', () => {
@@ -394,18 +418,68 @@ test('editor: initial toolbar avoids the HUD using its visible content-sized box
   assert.ok(top > piece.bottom);
 });
 
-test('editor: toolbar uses the clear middle when every edge covers HUD content', () => {
+// #5198: the strip docks to an EDGE away from the selected widget. It used to take the middle when both edges
+// covered some HUD, which on a phone put it over the car and the readouts being arranged.
+test('editor: toolbar docks to the far edge, over a dimmed control rather than the selected widget or the middle', () => {
   const top = { left: 100, top: 8, right: 900, bottom: 108, width: 800, height: 100 };
   const bottom = { left: 100, top: 392, right: 900, bottom: 492, width: 800, height: 100 };
-  const e = editor('speed', { on: true, rect: top, toolbarSize: () => ({ width: 800, height: 100 }) });
+  const e = editor('speed', { on: true, rect: top, toolbarSize: () => ({ width: 800, height: 52 }) });
   const control = e.doc.createElement('button'); control.getBoundingClientRect = () => bottom;
   e.doc.querySelectorAll = () => [control];
   e.api.setEditing(true);
   const bar = e.ids.get('hud-arrange-bar');
-  assert.equal(bar.style.top, '200px'); assert.equal(bar.style.left, '100px');
+  assert.equal(bar.style.top, 500 - 8 - 52 + 'px', 'bottom edge of the 8 px safe box');
+  assert.equal(bar.style.left, '8px', 'the bottom-left slot covers the least of the control');
   assert.equal(bar.style.transform, 'none');
-  const painted = { top: (500 - bar.offsetHeight) / 2, bottom: (500 + bar.offsetHeight) / 2 };
-  assert.ok(painted.top > top.bottom && painted.bottom < bottom.top, 'neither edge readout is obscured');
+  assert.ok(parseFloat(bar.style.top) > top.bottom, 'the selected readout stays uncovered');
+});
+
+test('barSlot: never the selected widget, always an edge, then the far side', () => {
+  const A = load(), b = { left: 8, top: 8, right: 844, bottom: 385 };   // 852x393 minus 8 px
+  const r = (id, l, t, w, h) => ({ id, l, t, r: l + w, b: t + h });
+  // Selected at the top (the tower): the strip docks at the bottom even though dock buttons live there.
+  let s = A.barSlot(b, 596, 52, [r('tower', 231, 8, 391, 54), r('#btn-throttle', 696, 266, 85, 85)], 'tower');
+  assert.equal(s.t, 385 - 52);
+  // Selected at the bottom (the gearbox): the strip docks at the top.
+  s = A.barSlot(b, 596, 52, [r('gearbox', 379, 269, 59, 83), r('map', 69, 8, 109, 109)], 'gearbox');
+  assert.equal(s.t, 8);
+  // Both edges cover OTHER readouts: still an edge (the middle is over the car), the side farther from the selection.
+  s = A.barSlot(b, 800, 52, [r('sel', 400, 300, 40, 20), r('a', 8, 8, 836, 60), r('c', 8, 325, 836, 60)], 'sel');
+  assert.ok(s.t === 8 || s.t === 385 - 52, 'an edge'); assert.equal(s.t, 8, 'away from the selected widget near the bottom');
+  s = A.barSlot(b, 836, 52, [r('sel', 8, 8, 836, 60), r('other', 8, 330, 836, 55)], 'sel');
+  assert.equal(s.t, 385 - 52, 'a full-width selected strip at the top: the bottom edge, over the other readout');
+  // No rects at all: the first slot (top centre).
+  assert.deepEqual(plain(A.barSlot(b, 200, 52, [], null)), { l: 326, t: 8 });
+});
+
+// #5198: the bar is FIXED-SIZE CHROME like CAM / PAUSE (#5179): constant px, one row, 44 px targets, <= 56 px tall.
+// At Bryce's TEXT SIZE large / HUD 155 % / BUTTON 245 % it painted 715x217 on the phone, selects ~100 px tall.
+test('toolbar: one fixed-size strip, never scaled by HUD SIZE, BUTTON SIZE or TEXT SIZE', () => {
+  const A = load();
+  assert.ok(A.BAR_H <= 56, 'the strip is at most 56 CSS px tall: ' + A.BAR_H);
+  const e = editor('map', { on: true }); e.api.setEditing(true);
+  const bar = e.ids.get('hud-arrange-bar');
+  const css = [bar, ...bar.children, ...bar.children.flatMap((c) => c.children)].map((el) => el.style.cssText || '').join('\n');
+  assert.doesNotMatch(css, /var\(--(fs-|hud-|tap|ui-scale|text-scale|look-)/, 'no scaled token sizes the toolbar');
+  assert.doesNotMatch(css, /font:\s*inherit[^;]*;[^\n]*font-size:\s*var/, 'no inherited scaled font size');
+  // Parsed declarations, not source-text pins (assertPins ratchet, #1682).
+  const decl = (el) => Object.fromEntries(String(el.style.cssText || '').split(';').map((d) => d.split(':')).filter((kv) => kv.length > 1)
+    .map(([k, ...v]) => [k.trim(), v.join(':').trim()]));
+  const b = decl(bar);
+  assert.equal(b['font-size'], '13px'); assert.equal(b['flex-wrap'], 'nowrap', 'one row by default');
+  for (const id of ['hud-arrange-element', 'hud-arrange-vis']) {
+    const d = decl(e.ids.get(id));
+    assert.deepEqual([d.height, d['max-height'], d.appearance], ['44px', '44px', 'none'],
+      id + ': an explicit 44 px self-drawn box (beats the coarse select floor; WebKit painted it ~100 px tall)');
+    assert.ok(/^\d+px$/.test(d.width), id + ' has a fixed width');
+  }
+  for (const id of ['hud-arrange-move', 'hud-arrange-smaller', 'hud-arrange-larger', 'hud-arrange-recover', 'hud-arrange-reset', 'hud-arrange-done']) {
+    const d = decl(e.ids.get(id));
+    assert.deepEqual([d['min-height'], d['max-height']], ['44px', '44px'], id + ': a 44 px touch target that never grows the strip');
+  }
+  assert.ok(!e.ids.get('hud-arrange-vis').parentNode._text, 'no visible VISIBILITY caption widens the strip');
+  assert.equal(decl(e.ids.get('hud-arrange-hint'))['max-height'], '2.4em', 'the hint is clamped to two lines');
+  assert.doesNotMatch(e.ids.get('hud-arrange-hint').style.cssText, /display:/, '[hidden] must still hide the hint');
 });
 
 test('editor: toolbar stays inside asymmetric safe areas on a narrow, short screen', () => {

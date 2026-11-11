@@ -24,9 +24,11 @@
  * js/ or css/ edit to the whole tooling-fast group (see its RULES).
  *
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
- *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
+ *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy> (else local <deploy>; neither: exit 4), untracked files included: affected files only
+ *   node tools/ci/tooling-fast.mjs --changed --no-sync-shortcut  # a HEAD that is a pure deploy-tip merge selects gen:check + docs only; this selects the branch diff (preflip-probe)
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
+ *   node tools/ci/tooling-fast.mjs --print-scope    # CI guards shards: mode=full|changed (see guardsScope)
  *   node tools/ci/tooling-fast.mjs --bail           # stop STARTING files after the first failure (CI guard shards)
  *   node tools/ci/tooling-fast.mjs --changed --quiet  # console: FAIL lines, their detail and the verdict only (the log keeps START/PASS)
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
@@ -55,12 +57,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, changedWithUntracked, noDeployBaseMessage, resolveDeployBase } from "../lib/changed-files.mjs";
 import { loadGroups, filesOnly } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
+import { verificationIdentity, beginVerification, finishVerification, verificationMarker } from "./verification-receipt.mjs";
 import { DEPLOY_BRANCH, selectionReceipt } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, isDocsOnly } from "./select-specs.mjs";
 // Cycle-safe: node-plan reads TOOLING_FAST_FILES only inside functions, and this
@@ -225,15 +229,42 @@ export function tapFailureDetail(text) {
   return out;
 }
 
+/** Workflow commands use different escaping for data and properties.
+ * https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message */
+const workflowEscape = (value, property = false) => {
+  const escaped = String(value).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  return property ? escaped.replace(/:/g, "%3A").replace(/,/g, "%2C") : escaped;
+};
+
+/** Only structured terminal failures become commands; TAP remains ordinary log data.
+ * Nine file errors leave one of Actions' ten per-step errors for the omission count. */
+export function workflowFailureAnnotations(results, env = process.env) {
+  if (env.GITHUB_ACTIONS !== "true") return [];
+  const failed = results.filter((r) => r.ok === false);
+  const annotation = (file, message) => `::error file=${workflowEscape(file, true)},title=Tooling-fast failure::${workflowEscape(message.slice(0, 1024))}`;
+  const commands = failed.slice(0, 9).map((r) => {
+    const safe = typeof r.file === "string" && r.file.length <= 256
+      && /^(?:[A-Za-z0-9_.%, -]+\/)*[A-Za-z0-9_.%, -]+$/.test(r.file)
+      && r.file.split("/").every((part) => part !== "." && part !== "..");
+    const file = safe ? r.file : "tools/ci/tooling-fast.mjs";
+    const exit = Number.isInteger(r.exit) ? r.exit : "unknown";
+    const signal = typeof r.signal === "string" && /^[A-Z0-9]{1,24}$/.test(r.signal) ? r.signal : "none";
+    const duration = Number.isFinite(r.durationMs) && r.durationMs >= 0 ? Math.round(r.durationMs) : "unknown";
+    const reason = r.missing ? "missing-file" : r.timedOut ? "timeout" : r.empty ? "empty-run" : "exit";
+    return annotation(file, `${safe ? r.file : "Unavailable or unsafe test path"}: ${reason}; exit=${exit}; signal=${signal}; durationMs=${duration}`);
+  });
+  if (failed.length > 9) commands.push(annotation("tools/ci/tooling-fast.mjs", `${failed.length - 9} additional failed files omitted from annotations; see the tooling-fast log.`));
+  return commands;
+}
+
 /* A HUNG FILE FAILS BY NAME. Without a bound a file that never exits (an open
  * handle, a never-settled await) runs until the CI job's timeout-minutes, and
  * the job reports `cancelled` with every START line but no verdict — the shape
  * AGENTS.md rule 8 teaches everyone to read as a busy runner. Two layers:
  *   --test-timeout   node's own bound (ms, default Infinity:
- *                    https://nodejs.org/api/cli.html#--test-timeout). MEASURED:
- *                    under `node --test <file>` the FILE is itself a test of
- *                    the runner and inherits it, so this bounds each test AND
- *                    the file's tests as a whole — a stuck one fails as
+ *                    https://nodejs.org/api/cli.html#--test-timeout). It bounds
+ *                    each test (isolation "none", below: the file is no longer
+ *                    a test of its own) — a stuck one fails as
  *                    `not ok … test timed out after Nms` with its name;
  *   the file timer   a hard wall per FILE, a minute later, because the
  *                    timeout cannot see work outside a test (a handle that
@@ -244,13 +275,35 @@ export function tapFailureDetail(text) {
  * 540 s; the 600 s wall still lands inside ci.yml's 15-minute guards job for a
  * file that starts first, which longest-first makes the slow ones do.
  * APEX_TOOLING_TEST_TIMEOUT_S / APEX_TOOLING_FILE_TIMEOUT_S override both. */
+/* NO SECOND PROCESS PER FILE (#3885). This runner already gives each file its
+ * own process, so node's default `--test-isolation=process` only adds a
+ * grandchild whose results reach `node --test` as a v8-serialized stream on
+ * stdout. Node 22's parser of that stream (lib/internal/test_runner/runner.js,
+ * FileTest.parseMessage) defers a chunk's trailing 0xFF as a possible header
+ * byte, then re-appends it AFTER the next chunk whenever the buffer head is
+ * shorter than a frame header — a pipe read that ends 5 bytes into a frame
+ * whose next byte is 0xFF scrambles the frame, and #drainRawBuffer then loops
+ * forever on a message that can never complete: 100 % of one core, SIGTERM
+ * unhandled (the handler is JS), no --test-timeout (the tests already ended).
+ * Read sizes follow load, so it struck at random: perf-governor.test.mjs,
+ * loadavg 7, ok 64 then silence until the 600 s wall (run 40411198783).
+ * Repro: a test whose last stdout bytes are FF 0F 00 hangs `node --test`;
+ * tooling-fast-runner.test.mjs pins it. Fixed upstream on main
+ * (#pendingPartialV8Header), in no release as of v26.0.0. Isolation "none"
+ * runs the file inside the runner, so no stream exists to misparse; the
+ * per-test timeout still names a stuck test. Spelled --experimental-test-isolation
+ * before v23.6 (https://nodejs.org/api/cli.html#--test-isolationmode). */
+const [NODE_MAJOR, NODE_MINOR] = process.versions.node.split(".").map(Number);
+export const TEST_ISOLATION_FLAG = NODE_MAJOR > 23 || (NODE_MAJOR === 23 && NODE_MINOR >= 6)
+  ? "--test-isolation=none" : "--experimental-test-isolation=none";
+
 const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
 const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
 
 /**
  * Run the structural suites one file at a time.
  * @param {string[]} [files]
- * @param {{ logPath?: string, isolatedFiles?: string[] }} [opts]
+ * @param {{ logPath?: string, isolatedFiles?: string[], workflowAnnotations?: boolean }} [opts]
  * @returns {{ ok: boolean, passed: number, failed: number, results: object[], notStarted: number }}
  */
 export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
@@ -272,7 +325,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // The ready stamp names the tree this run MEASURED (tools/lib/work-tree-id.mjs),
   // not HEAD read afterwards: the edit loop runs the suite on a dirty tree, and
   // a stamp of HEAD blessed a committed tip the suite never saw (ledger M36).
-  // Only a full suite stamps, so only a full suite pays for the tree hash.
+  // CLI subset runs also retain source-bound evidence; only a full suite stamps.
   const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
   // car-shade's unchanged CPU benchmark measured 1875 ms alongside other
   // files versus 293–562 ms alone. game-vm's unchanged 12 s boot/race wall
@@ -283,8 +336,12 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   files = [...isolatedFiles, ...files.filter((file) => !isolated.has(rel(file)))];
   const ran = new Set(files.map(rel));
   const fullSuite = ran.size === TOOLING_FAST_FILES.length && TOOLING_FAST_FILES.every((f) => ran.has(f));
-  const startHead = fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "";
-  const startTree = fullSuite ? workTreeId(ROOT) : null;
+  const source = opts.verification ? verificationIdentity(ROOT) : null;
+  const evidenceLog = opts.verification ? path.join(path.dirname(logPath), `verification-${randomUUID()}.log`) : null;
+  const evidence = evidenceLog ? beginVerification({ logPath: evidenceLog, files: files.map(rel), source }) : null;
+  if (evidence) emit(verificationMarker(evidence).replace(/^\[tooling-fast\] /, ""));
+  const startHead = source?.head || (fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "");
+  const startTree = source?.tree || (fullSuite ? workTreeId(ROOT) : null);
 
   const suiteStart = Date.now();
   const startedAt = new Date(suiteStart).toISOString();
@@ -335,12 +392,12 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     }
 
     // detached: the child leads its own process group, so the file timer can
-    // kill `node --test` AND the per-file subprocess it spawns in one signal.
+    // kill `node --test` and anything the file spawned in one signal.
     // The failure parser below consumes TAP. Node 23+ defaults to spec even
     // when stdout is piped, so the wire format must be explicit.
     // https://nodejs.org/api/test.html#test-reporters
     const child = spawn(process.execPath,
-                        ["--test", "--test-reporter=tap", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
+                        ["--test", TEST_ISOLATION_FLAG, "--test-reporter=tap", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
                         { cwd: ROOT, env: childEnv, detached: true });
     live.add(child);
     let out = "", err = "", timedOut = false;
@@ -382,7 +439,8 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
         for (const L of tail) emit(`  | ${L}`);
       }
     }
-    results.push({ file: rel, ok, durationMs: dur, exit: r.status });
+    results.push({ file: rel, ok, durationMs: dur, exit: r.status,
+      ...(signal ? { signal } : {}), ...(timedOut ? { timedOut: true } : {}), ...(empty ? { empty: true } : {}) });
       resolve();
     });
   });
@@ -427,13 +485,29 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // The tree must be the same before and after the run: an edit made while
   // the suite ran (the edit hook blocks only a live BROWSER run) means the
   // verdict is about neither tree.
-  const endTree = fullSuite && startTree ? workTreeId(ROOT) : null;
+  const endSource = opts.verification ? verificationIdentity(ROOT) : null;
+  const endTree = endSource?.tree || (fullSuite && startTree ? workTreeId(ROOT) : null);
   const stampTree = ok && fullSuite && startTree && startTree === endTree ? startTree : null;
   if (stampTree) emit(`= tree ${stampTree} head ${startHead}`);
+  // --quiet drops PASS lines, so a red run names its files and its log here, always, before the verdict.
+  if (!ok) {
+    const bad = results.filter((r) => !r.ok).map((r) => r.file);
+    emit(`failing files: ${bad.join(" ") || "(none finished)"}`);
+    emit(`log: ${path.relative(ROOT, logPath) || logPath}`);
+    // Imported runners often exercise intentional failure fixtures inside a
+    // passing unit suite. Only the CLI opts into publishing their outcomes.
+    if (opts.workflowAnnotations === true) for (const command of workflowFailureAnnotations(results)) console.log(command);
+  }
   emit(`= run ${ok ? "passed" : "failed"} (${passed} passed, ${failed} failed)`);
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
   fs.writeFileSync(logPath, lines.join("\n") + "\n");
+  if (evidenceLog) {
+    fs.writeFileSync(evidenceLog, lines.join("\n") + "\n");
+    if (!finishVerification(evidence, { logPath: evidenceLog, source: endSource, ok, notStarted })) {
+      console.warn("[tooling-fast] source receipt unavailable; verdict remains historical evidence only");
+    } else console.log(`[tooling-fast] source receipt: ${path.relative(ROOT, evidenceLog)}.receipt.json`);
+  }
   // Full-suite green on an UNCHANGED tree → stamp it for ready-gate.mjs
   // (draft→ready must not flip without tooling-fast evidence; #1111
   // designer-canvas). The stamp is the START head plus the tree hash the suite
@@ -521,9 +595,12 @@ const PATH_PIN_RE = /["'`]((?:js|css|tools|types|desktop|docs|tests\/|index\.htm
 // on every CI run, and a docs-only change cannot touch .cursor/environment.json.
 const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|comment-citations|agent-surface)\.test\.mjs$/;
 
+// Relative import specifiers ("../../tools/ci/x.mjs"): resolved against the importing file, indexed by exact path (#3907).
+const REL_PIN_RE = /["'`](\.{1,2}\/[^"'`\s]+)["'`]/g;
+
 let _pinIndex = null;
 
-function indexPathKey(map, key, testFile) {
+function indexPathKey(map, key, testFile, exact = false) {
   const norm = key.replace(/\\/g, "/");
   let cur = norm;
   while (cur) {
@@ -532,11 +609,12 @@ function indexPathKey(map, key, testFile) {
     const slash = cur.lastIndexOf("/");
     if (slash < 0) break;
     cur = cur.slice(0, slash);
+    if (exact) break;
   }
 }
 
 /** Map repo-relative paths → tooling-fast unit files that pin them in source. */
-function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
+export function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
   const map = new Map();
   for (const f of files) {
     if (f.startsWith("//")) continue;
@@ -546,6 +624,11 @@ function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
     PATH_PIN_RE.lastIndex = 0;
     let m;
     while ((m = PATH_PIN_RE.exec(src))) indexPathKey(map, m[1], f);
+    REL_PIN_RE.lastIndex = 0;
+    while ((m = REL_PIN_RE.exec(src))) {
+      const rel = path.posix.normalize(path.posix.join(path.posix.dirname(f.replace(/\\/g, "/")), m[1]));
+      if (!rel.startsWith("../")) indexPathKey(map, rel, f, true);
+    }
   }
   return map;
 }
@@ -570,14 +653,33 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
   return out;
 }
 
-/** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
-function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
-  try {
-    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
-    return changedPaths([base], { cwd: root });
-  } catch (_) {
-    try { return changedPaths(["HEAD~1"], { cwd: root }); } catch (_) { return []; }
+/** Changed paths vs the deploy branch: the merge-base with origin/DEPLOY_BRANCH (else the local DEPLOY_BRANCH),
+ *  working tree included, untracked files too (a new file is invisible to `git diff` before `git add`, and the
+ *  AGENTS.md loop runs `--changed` before staging). Throws `code: "NO_DEPLOY_BASE"` when neither ref resolves: the
+ *  old HEAD~1 fallback selected the LAST COMMIT's files on a shallow clone and reported green for the branch
+ *  (audit W6, 2026-11-10). @returns {{ base: { ref: string, sha: string }, paths: string[] }} */
+export function changedVsDeploy(root = ROOT, { branch = DEPLOY_BRANCH, run } = {}) {
+  const gitOpts = run ? { cwd: root, run } : { cwd: root };
+  const base = resolveDeployBase(branch, gitOpts);
+  if (!base) {
+    const err = new Error(noDeployBaseMessage(branch, "tooling-fast"));
+    err.code = "NO_DEPLOY_BASE";
+    throw err;
   }
+  return { base, paths: changedWithUntracked(base.sha, gitOpts) };
+}
+
+/** The tooling-fast files ci.yml's four Structural guards shards ran for this diff: the whole floor when
+ *  guardsScope says full, else exactly the `--changed` selection (sync-merge shortcut included). run-group.mjs
+ *  `--skip-tf` subtracts THIS, not the whole floor: subtracting every tooling-fast member while guards ran a
+ *  selection left game-vm, physics-characterization-vm, real-replay-vm (and more) in no PR job (audit W6).
+ *  @returns {{ mode: "full" | "changed", reason: string, files: string[] }} */
+export function guardsRanFiles(changed, eventName, opts = {}) {
+  const scope = guardsScope(changed, eventName);
+  const floor = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
+  if (scope.mode === "full") return { ...scope, files: floor };
+  const meta = opts.synced ? selectSyncMerge(opts.synced, opts) : selectToolingFastChanged(changed, opts);
+  return { ...scope, files: meta.files, selection: meta.reason };
 }
 
 /**
@@ -607,6 +709,177 @@ export const NARROW_INFRA_TESTS = Object.freeze({
     "tests/unit/load-order.test.mjs",
   ]),
 });
+
+/**
+ * GENERATED FILES -> their SOURCE (orchestration review 2026-10-29, Part 1 finding 2). A generated file is the
+ * output of a generator, so a diff in it proves nothing the generator's `gen:check` does not: widening to the
+ * whole floor on it measured 630-1261 s per run. These are dropped from the selection and replaced by
+ * `genCheck` (the runner executes `npm run gen:check`, which regenerates each from its source and compares) plus
+ * the tests that pin the generated file. `source` is the authored input; when it is ALSO in the diff it widens
+ * (or not) on its own merits, so the mapping never hides an authored change.
+ *   always: the whole file is generator output.   blocks: only its `@gen-shell` regions are (the rest is authored).
+ */
+export const GENERATED_FILES = Object.freeze({
+  "js/roster.js": { source: "js/circuits/*.js", always: true },
+  "tests/data/impact-map.json": { source: "tests/specs/*", always: true },
+  "tests/data/ratchets.json": { source: "tests/data/ratchets.d/*.json", always: true },
+  "docs/agent-index.json": { source: "tools/docs/gen-agent-index.mjs", always: true },
+  "docs/agent-output/catalog.json": { source: "tools/gen/gen-output-surface.mjs", always: true },
+  "docs/AGENT-HOOKS.md": { source: ".claude/hooks/*", always: true },
+  "tools/README.md": { source: "tools/**/@doc headers", always: true },
+  "CHANGELOG.md": { source: "docs/changelog.d/*", always: true },
+  "tools/shot/scenery-locations.json": { source: "js/circuits/scenery/*", always: true },
+  "version.json": { source: "tools/ci/bump-cache.mjs", always: true },
+  "index.html": { source: "tools/manifest.cjs", blocks: true },
+  "sw.js": { source: "tools/manifest.cjs", blocks: true },
+  "tools/carview.html": { source: "tools/manifest.cjs", blocks: true },
+});
+
+/** Tests every generated-only diff runs beside `gen:check`. */
+export const GENERATED_SEED_TESTS = Object.freeze([
+  "tests/unit/generated-docs.test.mjs",
+  "tests/unit/docs-integrity.test.mjs",
+]);
+
+/** `text` with every `@gen-shell:NAME` ... `/@gen-shell:NAME` region (markers included) removed. */
+export function stripGenShellBlocks(text) {
+  const out = [];
+  let open = null;
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const m = /(\/?)@gen-shell:([\w:-]+)/.exec(line);
+    if (open) {
+      if (m && m[1] === "/" && m[2] === open) open = null;
+      continue;
+    }
+    if (m && m[1] !== "/") { open = m[2]; continue; }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+/** True when two texts differ only inside `@gen-shell` regions. */
+export function isGenShellOnlyChange(before, after) {
+  return stripGenShellBlocks(before) === stripGenShellBlocks(after);
+}
+
+function readGenPair(file, opts = {}) {
+  if (opts.filePairs && opts.filePairs[file]) return opts.filePairs[file];
+  // An injected diff with no before/after pair is authoritative and unprovable here: authored (fail-safe).
+  if (opts.fileDiffs && Object.prototype.hasOwnProperty.call(opts.fileDiffs, file)) return null;
+  const root = opts.root || ROOT;
+  const ref = opts.diffBase || `origin/${DEPLOY_BRANCH}`;
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
+    const before = execFileSync("git", ["show", `${base}:${file}`], { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+    return { before, after: fs.readFileSync(path.join(root, file), "utf8") };
+  } catch (_) {
+    return null;
+  }
+}
+
+/** The changed paths that are generator output only (see GENERATED_FILES); fail-safe: unreadable -> authored. */
+export function generatedOnlyPaths(changed, opts = {}) {
+  const out = [];
+  for (const f of changed) {
+    const norm = f.replace(/\\/g, "/");
+    const g = GENERATED_FILES[norm];
+    if (!g) continue;
+    if (g.always) { out.push(norm); continue; }
+    const pair = readGenPair(norm, opts);
+    if (pair && isGenShellOnlyChange(pair.before, pair.after)) out.push(norm);
+  }
+  return out;
+}
+
+/**
+ * A deploy-tip SYNC: HEAD is a merge and every path it changed against the first parent holds the second
+ * parent's content (no hand-resolved conflict, nothing authored). The branch's own commits were verified by the
+ * push before it, so the merge needs `gen:check` and docs-integrity, not the floor.
+ * Also null: a dirty tree, a second parent that is not on the deploy branch, a HEAD already on it (`opts.tipRef` overrides the ref, null skips).
+ * @returns {string[]|null} the paths the merge brought, or null when HEAD is not a pure sync
+ */
+export function syncMergePaths(root = ROOT, opts = {}) {
+  const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    const parents = git("rev-list", "--parents", "-n", "1", "HEAD").split(/\s+/).slice(1);
+    if (parents.length !== 2) return null;
+    const [p1, p2] = parents;
+    // Uncommitted edits are authored work the merge says nothing about.
+    if (git("status", "--porcelain")) return null;
+    // The second parent must BE deploy history and HEAD must not be (the deploy tip is itself a merge commit).
+    const reach = (a, b) => { try { execFileSync("git", ["merge-base", "--is-ancestor", a, b], { cwd: root, stdio: "ignore" }); return true; } catch (_) { return false; } };
+    const tipRef = `origin/${DEPLOY_BRANCH}`;
+    if (opts.tipRef !== null && (!reach(p2, opts.tipRef || tipRef) || reach("HEAD", opts.tipRef || tipRef))) return null;
+    const paths = git("diff", "--name-only", p1, "HEAD").split("\n").filter(Boolean);
+    if (!paths.length) return null;
+    const blob = (rev, f) => { try { return git("rev-parse", "--verify", "-q", `${rev}:${f}`); } catch (_) { return ""; } };
+    for (const f of paths) if (blob("HEAD", f) !== blob(p2, f)) return null;
+    return paths;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** deploy.mjs's `REGEN_MESSAGE`: the commit `regenerateDerived` adds on top of a sync merge (prepush-floor.test.mjs pins them equal). */
+export const SYNC_REGEN_SUBJECT = "merge: regenerate derived files on the union (npm run gen)";
+
+/**
+ * A deploy-tip sync, pure or not, with the paths the MERGE itself decided (2026-11-10, docs/notes/TOOLING-HUNT-2026-11-09.md).
+ * `syncMergePaths` is all-or-nothing: one regenerated digest (tools/shot/scenery-locations.json on 8 of 14 real syncs)
+ * or one auto-merged file sent the sync back to the whole branch diff, which the push before it had already verified.
+ * Here HEAD is the sync merge, or deploy.mjs's regen commit right on top of it, and `impure` is every path whose merged
+ * content neither side verified: a path BOTH sides changed since the merge base (auto-merged, hand-resolved, or one
+ * side dropped) and a path whose content is not the tip's (regenerated or hand-edited in the merge).
+ * Same refusals as syncMergePaths: a dirty tree, a second parent off the deploy branch, a HEAD already on it.
+ * LOCAL ONLY: the CLI ignores it under GITHUB_ACTIONS, so CI's proof of the pushed head is unchanged.
+ * @returns {{ paths: string[], impure: string[] }|null}
+ */
+export function syncMergeScope(root = ROOT, opts = {}) {
+  const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    if (git("status", "--porcelain")) return null;
+    let merge = "HEAD";
+    let parents = git("rev-list", "--parents", "-n", "1", merge).split(/\s+/).slice(1);
+    if (parents.length === 1 && git("log", "-1", "--format=%s", "HEAD") === SYNC_REGEN_SUBJECT) {
+      merge = parents[0];
+      parents = git("rev-list", "--parents", "-n", "1", merge).split(/\s+/).slice(1);
+    }
+    if (parents.length !== 2) return null;
+    const [p1, p2] = parents;
+    const reach = (a, b) => { try { execFileSync("git", ["merge-base", "--is-ancestor", a, b], { cwd: root, stdio: "ignore" }); return true; } catch (_) { return false; } };
+    const tipRef = `origin/${DEPLOY_BRANCH}`;
+    if (opts.tipRef !== null && (!reach(p2, opts.tipRef || tipRef) || reach("HEAD", opts.tipRef || tipRef))) return null;
+    const names = (...a) => git("diff", "--name-only", ...a).split("\n").filter(Boolean);
+    const paths = names(p1, "HEAD");
+    if (!paths.length) return null;
+    const base = git("merge-base", p1, p2);
+    const mine = new Set(names(base, p1));
+    const both = names(base, p2).filter((f) => mine.has(f));
+    const blob = (rev, f) => { try { return git("rev-parse", "--verify", "-q", `${rev}:${f}`); } catch (_) { return ""; } };
+    const notTips = paths.filter((f) => blob("HEAD", f) !== blob(p2, f));
+    return { paths, impure: [...new Set([...both, ...notTips])].sort() };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Selection for a sync merge: `gen:check` plus the docs tests, plus — when `opts.impure` names paths the merge itself
+ * decided (syncMergeScope) — what `--changed` selects for THOSE paths alone. An impure path that forces the whole floor
+ * still forces it (the returned `widened` says which).
+ */
+export function selectSyncMerge(paths, opts = {}) {
+  const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
+  const seeds = allFiles.filter((f) => GENERATED_SEED_TESTS.includes(f));
+  const impure = opts.impure || [];
+  if (!impure.length) return { files: seeds, reason: "sync-merge", genCheck: true, shards: shardsCoveringFiles(seeds, allFiles), changed: paths.length };
+  const { impure: _drop, ...inner } = opts;
+  const sel = selectToolingFastChanged(impure, inner);
+  const pool = [...allFiles, ...sel.files.filter((f) => !allFiles.includes(f))];
+  const want = new Set([...seeds, ...sel.files]);
+  const files = pool.filter((f) => want.has(f));
+  return { ...sel, files, reason: `sync-merge+${sel.reason}`, genCheck: true, shards: shardsCoveringFiles(files.filter((f) => allFiles.includes(f)), allFiles), changed: paths.length, impure: impure.length };
+}
 
 /** Wall-time estimate above which --changed prints the background-with-log hint. */
 export const LONG_RUN_MS = 120_000;
@@ -751,6 +1024,18 @@ export function topicalPool(groups = loadGroups().groups, floor = TOOLING_FAST_F
   return [...out].sort();
 }
 
+const TESTS_DATA_RE = /^tests\/data\//;
+
+/** tests/helpers/ files whose source names `rel`, as repo-relative paths. */
+function helpersNaming(rel, root = ROOT) {
+  const dir = path.join(root, "tests/helpers");
+  let names = [];
+  try { names = fs.readdirSync(dir); } catch (_) { return []; }
+  return names.filter((n) => {
+    try { return fs.readFileSync(path.join(dir, n), "utf8").includes(rel); } catch (_) { return false; }
+  }).map((n) => `tests/helpers/${n}`);
+}
+
 /** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
 export function selectToolingFastChanged(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
@@ -777,6 +1062,27 @@ export function selectToolingFastChanged(changed, opts = {}) {
 
   if (!changed.length) return { files: [], reason: "empty", shards: [], changed: 0 };
 
+  // Generator output is checked by `gen:check`, not by widening: drop it, select from what is authored.
+  const genOnly = opts.noGeneratedSplit ? [] : generatedOnlyPaths(changed, opts);
+  if (genOnly.length) {
+    const authored = changed.filter((f) => !genOnly.includes(f.replace(/\\/g, "/")));
+    const gindex = opts.pinIndex || pinIndex();
+    const seeds = new Set(GENERATED_SEED_TESTS);
+    for (const g of genOnly) {
+      for (const t of (NARROW_INFRA_TESTS[g] || [])) seeds.add(t);
+      for (const t of (gindex.get(g) || [])) seeds.add(t);
+    }
+    const seedFiles = [...allFiles, ...pool].filter((f) => seeds.has(f));
+    if (!authored.length) {
+      return { files: seedFiles, reason: "generated-only", genCheck: true, generated: genOnly,
+        shards: shardsCoveringFiles(seedFiles, allFiles), changed: changed.length };
+    }
+    const sub = selectToolingFastChanged(authored, { ...opts, noGeneratedSplit: true });
+    const files = [...allFiles, ...pool].filter((f) => seeds.has(f) || sub.files.includes(f));
+    return { ...sub, files, genCheck: true, generated: genOnly, changed: changed.length,
+      shards: shardsCoveringFiles(files, allFiles) };
+  }
+
   if (isDocsOnly(changed)) {
     const docsTests = allFiles.filter((f) => DOCS_FAST_TESTS.test(f));
     const files = docsTests.length ? docsTests : allFiles;
@@ -795,7 +1101,22 @@ export function selectToolingFastChanged(changed, opts = {}) {
     return r;
   };
 
-  const trackedRaw = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
+  // tests/data/ is TRACKED for the CI browser selector ("no import graph sees these"), but the unit floor has the
+  // pin index: a data file widens only when NO unit file names it (fail-safe), else exactly those files run. A
+  // one-line flaky-quarantine.json edit selected all 733 files and timed the pre-flip probe out at 900 s.
+  const dataPinned = new Map();
+  for (const f of changed) {
+    const norm = f.replace(/\\/g, "/");
+    if (!TESTS_DATA_RE.test(norm) || circ.dataResolved.includes(f)) continue;
+    const idx = opts.pinIndex || pinIndex();
+    const hits = new Set(idx.get(norm) || []);
+    // A helper that names the file (tests/helpers/flaky-policy.mjs) is imported by relative path: its importers read it too.
+    for (const h of helpersNaming(norm, opts.root)) for (const t of (idx.get(h) || [])) hits.add(t);
+    if (!hits.size) return full("tests-data-unpinned", { because: norm });
+    dataPinned.set(norm, hits);
+  }
+  const trackedRaw = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f)
+    && !dataPinned.has(f.replace(/\\/g, "/")));
   const tracked = [];
   for (const f of trackedRaw) {
     const norm = f.replace(/\\/g, "/");
@@ -841,6 +1162,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
   for (const f of changed) {
     const norm = f.replace(/\\/g, "/");
     if (benignNarrow.has(norm)) continue;
+    if (dataPinned.has(norm)) { for (const t of dataPinned.get(norm)) selected.add(t); continue; }
     if (tfSet.has(norm) || poolSet.has(norm)) selected.add(norm);
     // A file edit has a precise dependency key and may also inherit its
     // nearest directory pins. Do not fall through to the bare top-level
@@ -858,7 +1180,6 @@ export function selectToolingFastChanged(changed, opts = {}) {
       cur = cur.slice(0, slash);
     }
     if (/^tools\/ci\/tooling-fast\.mjs$/.test(norm)) selected.add("tests/unit/tooling-fast-runner.test.mjs");
-    if (/^tools\/ci\/test-bg\.mjs$/.test(norm)) selected.add("tests/unit/test-bg-outcome.test.mjs");
   }
 
   if (!selected.size) return full("no-pin-match");
@@ -870,6 +1191,30 @@ export function selectToolingFastChanged(changed, opts = {}) {
     ...(narrowSeeds.size ? { narrow: [...narrowSeeds].filter((t) => tfSet.has(t)) } : {}) };
 }
 
+/* CI GUARDS SCOPE (#3951, #3117 F3). ci.yml's four Structural guards shards
+ * run the WHOLE floor only when a pull request's diff reaches what the floor
+ * mostly tests — tools/, tests/, .github/, package.json/-lock — and `--changed`
+ * (still sharded 1/4..4/4) otherwise. Every other event (a deploy-branch push,
+ * the pages.yml train via workflow_call, the nightly, a dispatch) stays full,
+ * so a file a narrowed PR left out runs on the merged tip before it ships.
+ * The JOBS always run and report: a path-filtered workflow leaves its required
+ * checks "Pending" and blocks the merge for good
+ * (https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks
+ * §Handling skipped but required checks), and a job skipped by `if:` reads
+ * `skipped`, which the `Structural guards` join rejects. Only the file list
+ * narrows. An empty diff stays full: `--changed` exits 3 on one. */
+export const GUARDS_FULL_PATHS = Object.freeze([/^tools\//, /^tests\//, /^\.github\//, /^package(-lock)?\.json$/]);
+
+/** @returns {{ mode: "full" | "changed", reason: string }} */
+export function guardsScope(changed, eventName) {
+  if (eventName !== "pull_request") return { mode: "full", reason: `event ${eventName || "local"}` };
+  const paths = changed.map((c) => String(c.path || c).replace(/\\/g, "/"));
+  if (!paths.length) return { mode: "full", reason: "empty diff" };
+  const hit = paths.find((f) => GUARDS_FULL_PATHS.some((re) => re.test(f)));
+  if (hit) return { mode: "full", reason: `${hit} is tooling` };
+  return { mode: "changed", reason: `${paths.length} path(s), none under tools/ tests/ .github/ package.json` };
+}
+
 /** First output line when --changed falls back to the full suite (#2890). */
 export function widenedLine(meta, fileCount) {
   if (!meta || !meta.widened) return null;
@@ -879,7 +1224,8 @@ export function widenedLine(meta, fileCount) {
 /** The `--changed` header line: reason, the REAL diff size, the files chosen, and the path that forced a fallback. */
 export function changedHeader(meta, fileCount) {
   return `[tooling-fast] --changed reason=${meta.reason} changed=${meta.changed ?? 0} files=${fileCount}` +
-    `${meta.because ? ` because=${meta.because}` : ""} shards=${(meta.shards || []).join(",") || "none"}`;
+    `${meta.because ? ` because=${meta.because}` : ""} shards=${(meta.shards || []).join(",") || "none"}` +
+    `${meta.base ? ` base=${meta.base.ref}@${String(meta.base.sha).slice(0, 12)}` : ""}`;
 }
 export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against origin/${DEPLOY_BRANCH} — nothing was selected, nothing verified (exit 3).\n` +
   `  Commit or stage your edit, \`git fetch origin ${DEPLOY_BRANCH}\` if the ref is stale, or run without --changed for the whole floor.`;
@@ -887,10 +1233,11 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--print-scope", "--no-sync-shortcut", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--no-sync-shortcut] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+       node tools/ci/tooling-fast.mjs --print-scope   # CI guards: mode=full|changed for this event and diff
        node tools/ci/tooling-fast.mjs --help`;
 
 /** Split a file list across CI jobs (`--shard=1/2`).
@@ -930,6 +1277,11 @@ export function ciShardFiles(files, spec) {
   return applyFileShard(files, spec, loadTimings([TIMINGS_FILE]));
 }
 
+/** The last line of every CLI run (efficiency review finding 4): a verdict a `| tail` cannot hide behind exit 0. */
+export function closingLine(ok, nFiles, nFailed) {
+  return `= tooling-fast ${ok ? "passed" : "failed"} (${nFiles} files, ${nFailed} failed)`;
+}
+
 /** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
 export function parseToolingFastArgv(argv) {
   const unknown = [];
@@ -954,7 +1306,9 @@ export function parseToolingFastArgv(argv) {
     changed: argv.includes("--changed"),
     bail: argv.includes("--bail"),
     quiet: argv.includes("--quiet"),
+    noSyncShortcut: argv.includes("--no-sync-shortcut"),
     stop: argv.includes("--stop"),
+    printScope: argv.includes("--print-scope"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     jobsExplicit: val("jobs") !== undefined,
     order: val("order"),
@@ -978,6 +1332,15 @@ if (isMain) {
     console.log(TOOLING_FAST_USAGE);
     process.exit(0);
   }
+  if (parsed.printScope) {
+    // ci.yml's guards shards: `mode=` and `reason=` lines for $GITHUB_OUTPUT (see guardsScope).
+    // No deploy base reads as FULL: the narrow answer needs a diff, and the full floor is the fail-safe one.
+    let r;
+    try { r = guardsScope(changedVsDeploy().paths, process.env.GITHUB_EVENT_NAME); }
+    catch (e) { if (e.code !== "NO_DEPLOY_BASE") throw e; r = { mode: "full", reason: "no deploy base (shallow or unfetched clone)" }; }
+    console.log(`mode=${r.mode}\nreason=${r.reason}`);
+    process.exit(0);
+  }
   if (parsed.stop) {
     // The sanctioned stop (#2663): the registered run's whole process tree, never `pkill -f` or a hand-typed PID.
     const { stop } = await import("../lib/run-pid.mjs");
@@ -993,7 +1356,23 @@ if (isMain) {
   let files0 = parsed.files;
   let changedMeta = null;
   if (parsed.changed) {
-    changedMeta = selectToolingFastChanged(changedVsDeploy());
+    // CI keeps the strict all-or-nothing shortcut; a local run (sync-pr.mjs's verify) scopes an impure sync to the merge.
+    const scoped = parsed.noSyncShortcut || process.env.GITHUB_ACTIONS ? null : syncMergeScope();
+    const synced = parsed.noSyncShortcut || scoped ? null : syncMergePaths();
+    let diff = null;
+    if (!scoped && !synced) {
+      try { diff = changedVsDeploy(); }
+      catch (e) {
+        if (e.code !== "NO_DEPLOY_BASE") throw e;
+        console.error(e.message);
+        console.log(closingLine(false, 0, 0));
+        process.exit(4);
+      }
+    }
+    changedMeta = scoped ? selectSyncMerge(scoped.paths, { impure: scoped.impure })
+      : synced ? selectSyncMerge(synced)
+      : { ...selectToolingFastChanged(diff.paths, { diffBase: diff.base.ref }), base: diff.base };
+    if (scoped?.impure.length) console.log(`[tooling-fast] sync merge: ${scoped.paths.length} path(s) from the tip, ${scoped.impure.length} decided by the merge (${scoped.impure.slice(0, 6).join(", ")}${scoped.impure.length > 6 ? ", …" : ""}); --no-sync-shortcut selects the branch diff`);
     files0 = changedMeta.files;
     const wide = widenedLine(changedMeta, files0.length);
     if (wide) console.log(wide);
@@ -1002,6 +1381,7 @@ if (isMain) {
       // An empty diff selects zero files and the runner printed `= run passed (0 passed, 0 failed)` with exit 0: a
       // vacuous green that read as proof. Nothing was verified, so say so and fail (exit 3, distinct from a test failure).
       console.error(EMPTY_DIFF_MESSAGE);
+      console.log(closingLine(false, 0, 0));
       process.exit(3);
     }
     // #2890: selections estimated over ~2 min print the background-with-log hint (edit-loop jobs=3).
@@ -1013,12 +1393,35 @@ if (isMain) {
     files0 = [...TOOLING_FAST_FILES];
   }
   const files = ciShardFiles(files0, parsed.shard);
+  if (changedMeta?.genCheck) {
+    // Generated files were not run through the floor; their generators prove them (`npm run gen:check`).
+    const t0 = Date.now();
+    const g = spawnSync("npm", ["run", "gen:check", "--silent"], { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+    const sec = ((Date.now() - t0) / 1000).toFixed(1);
+    if (g.status !== 0) {
+      console.log(`[tooling-fast] gen:check FAILED after ${sec}s - run \`npm run gen\` and commit the result`);
+      console.log(`${String(g.stdout || "").trim().split("\n").slice(-15).join("\n")}\n${String(g.stderr || "").trim().split("\n").slice(-15).join("\n")}`);
+      console.log("[tooling-fast] = run failed (gen:check)");
+      console.log(closingLine(false, files.length, 1));
+      process.exit(1);
+    }
+    console.log(`[tooling-fast] gen:check ok (${sec}s)`);
+  }
+  {
+    // The served generated files are gitignored (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): build what is missing or
+    // stale before any suite reads js/ (the game VM, load-order, global-registry read every FULL file).
+    const { ensureBuilt, builtLine } = await import("../gen/ensure-built.mjs");
+    const line = builtLine(ensureBuilt());
+    if (line) console.log(`[tooling-fast] ${line}`);
+  }
   if (!parsed.jobsExplicit) {
     const pick = await probeAutoJobs();
     parsed.jobs = pick.jobs;
     console.log(`[tooling-fast] jobs=${pick.jobs} (auto: ${pick.why}; pass --jobs=N to choose)`);
   }
-  const { ok } = await runToolingFast(files, {
+  const { ok, failed: nFailed } = await runToolingFast(files, {
+    verification: true,
+    workflowAnnotations: true,
     jobs: parsed.jobs,
     bail: parsed.bail,
     quiet: parsed.quiet,
@@ -1027,5 +1430,6 @@ if (isMain) {
     testTimeoutMs: parsed.testTimeoutMs,
     fileTimeoutMs: parsed.fileTimeoutMs,
   });
+  console.log(closingLine(ok, files.length, nFailed));
   process.exit(ok ? 0 : 1);
 }

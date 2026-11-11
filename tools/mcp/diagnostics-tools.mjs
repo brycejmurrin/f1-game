@@ -1,11 +1,11 @@
-// @doc Typed background diagnostics and bounded report queries for Apex MCP.
+// @doc Typed diagnostics job schema and plan for apex_job_start (the apex_diagnostics wrap left 2026-11-03).
 // @skill renderer-debug / mcp-probe
 import { resolve } from 'node:path';
 import { DIAGNOSTIC_JOB_KINDS, diagnosticPlan, diagnosticQuery } from '../perf/diagnostics.mjs';
 export { DIAGNOSTIC_JOB_KINDS };
 export const DIAGNOSTICS_TOOL = {
   name: 'apex_diagnostics',
-  description: 'Tree/browser — capabilities, bounded run (background apex_job_status/cancel), or query saved memory/GPU/renderer/VM lifecycle reports. Browser jobs hold the shared lock and use disposable contexts. Memory growth alone is not a leak; GPU census estimates requested WebGL2 allocations, not residency or hardware timings. CPU spans/copy costs use apex_profile and apex_profile_query; source debugging uses debugger_* on the parent-owned page. Skill: renderer-debug / mcp-probe.',
+  description: 'Retired wrap (2026-11-03): its typed properties still feed apex_job_start kinds memory_census | gpu_memory_census | renderer_probe | vm_lifecycle; capabilities and saved-report queries are `node tools/perf/diagnostics.mjs`. Memory growth alone is not a leak; GPU census estimates requested WebGL2 allocations, not residency or hardware timings. CPU spans/copy costs use apex_profile and `node tools/perf/query.mjs`; source debugging uses debugger_* on the parent-owned page. Skill: renderer-debug / mcp-probe.',
   inputSchema: { type: 'object', additionalProperties: false, properties: {
     op: { type: 'string', enum: ['capabilities', 'run', 'query'] },
     kind: { type: 'string', enum: DIAGNOSTIC_JOB_KINDS },
@@ -24,7 +24,7 @@ export function diagnosticsJobSpec(kind, args, ctx) {
   const { kind: _k, op: _o, ...options } = args;
   return { ...plan, argv: [process.execPath, resolve(ctx.ROOT, 'tools/perf/diagnostics.mjs'), kind, JSON.stringify(options)] };
 }
-export const DIAGNOSTIC_CAPABILITIES = {
+const DIAGNOSTIC_CAPABILITIES = {
   jobs: DIAGNOSTIC_JOB_KINDS,
   memory: 'Post-GC heap/retained track/three object/audio census. At least 3 cycles. Growth is a lead; retaining paths and repeated equivalent lifecycles are needed to establish a leak.',
   runtimeMemory: 'tools/perf/runtime-memory.mjs: feature-detected Runtime.getHeapUsage, Memory.getDOMCounters and Performance.getMetrics on an existing parent-owned CDP session; no forced GC or worker termination.',

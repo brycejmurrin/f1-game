@@ -1,13 +1,10 @@
 {
-  "_comment": "Size/word budgets for the always-on agent surface, read by tests/unit/agent-config.test.mjs. Raise a number WITH the reason, like tests/data/ratchets.json. Evidence: docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md, docs/notes/AGENT-GUARDS-2026-10-14.md. Lowered 2026-10-26 (system audit, PR #3785): 8 skills folded or deleted and 8 descriptions trimmed took 45 skills / 12,586 chars / 1,689 words to 37 / 10,213 / 1,383; the caps keep ~8% headroom.",
-  "agentsMdLines": 200,
-  "agentsMdRuleLines": 75,
-  "fleetCoreLines": 30,
-  "fleetCoreBytes": 2048,
+  "_comment": "Size/word budgets for the always-on agent surface, read by tests/unit/agent-config.test.mjs and tests/unit/skill-descriptions.test.mjs. Raise a number WITH the reason, like tests/data/ratchets.json. Evidence: docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md, docs/notes/AGENT-GUARDS-2026-10-14.md. Lowered 2026-10-26 (system audit, PR #3785): 8 skills folded or deleted and 8 descriptions trimmed took 45 skills / 12,586 chars / 1,689 words to 37 / 10,213 / 1,383. Ratcheted 2026-11-03 (agent surface reset, docs/plans/2026-11-03-agent-surface-reset.md §4.4): AGENTS.md rewritten at ~8.5 KB / 32 rule lines, so agentsMdBytes 28500 → 9000 and agentsMdRuleLines 75 → 36; the unread agentsMdLines, fleetCoreLines and fleetCoreBytes are gone. The skill description sums skip disable-model-invocation skills (their description is not in context: code.claude.com/docs/en/skills).",
+  "agentsMdRuleLines": 36,
   "memoryIndexLines": 200,
   "skillDescriptionWords": 1500,
   "skillDescriptionChars": 11000,
   "skillDescriptionCharsEach": 1024,
-  "agentsMdBytes": 28500,
+  "agentsMdBytes": 9000,
   "agentsChainBytes": 31000
 }

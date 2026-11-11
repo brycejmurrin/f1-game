@@ -213,6 +213,33 @@ test("the wheel wizard passes the axes it already mapped, so steering and thrott
   assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "the wizard finished");
 });
 
+test("a wheel (mapping \"\") does not page menus from vendor buttons 6/7", () => {
+  // PageUp/PageDown used to fire for every mapping; LB/RB (4/5) were already
+  // gated to standard. A wheel's paddles (shift bindings 4/5) still navigate
+  // rows via the dedicated path above — only the page keys must stay quiet.
+  const { Input, sb, fire, dispatched, navOpen } = boot();
+  const pad = { connected: true, mapping: "", id: "G29", axes: [0, -1, -1, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  navOpen.on = true;
+  Input.poll();
+  dispatched.length = 0;
+  pad.buttons[6] = { pressed: true, value: 1 }; Input.poll();
+  pad.buttons[7] = { pressed: true, value: 1 }; Input.poll();
+  assert.deepEqual(dispatched.map((e) => e.key), [], "no PageUp/PageDown from a wheel's 6/7");
+  // Control: a standard pad still pages on the triggers.
+  const xbox = { connected: true, mapping: "standard", id: "Xbox", axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [xbox];
+  fire("gamepadconnected", { gamepad: xbox });
+  Input.poll();
+  dispatched.length = 0;
+  xbox.buttons[6] = { pressed: true, value: 1 }; Input.poll();
+  xbox.buttons[7] = { pressed: true, value: 1 }; Input.poll();
+  assert.deepEqual(dispatched.map((e) => e.key), ["PageUp", "PageDown"]);
+});
+
 test("menu navigation subtracts the CALIBRATE STICK rest offset from the steer axis", () => {
   const { Input, sb, fire, dispatched, navOpen } = boot();
   let t = 0; sb.performance.now = () => t;

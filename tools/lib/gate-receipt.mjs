@@ -16,11 +16,21 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+/** Receipt kinds the READERS understand (receiptVerdict, merge_policy.py): an old merge receipt still parses. */
 export const KINDS = ["merge", "ready"];
+/** Receipt kinds a tool may WRITE. Not "merge": a session never merges (land.yml arms, the ruleset merges), so the
+ *  hooks' merge door stays shut — `node -e "…writeReceipt(…,'merge',{ok:true})"` was a live bypass of the `hold`
+ *  veto (review M2, 2026-10-27). */
+export const WRITABLE_KINDS = Object.freeze(["ready"]);
 /** A receipt older than this is stale: the tip, CI or the body may have moved. 10 min (was 30, 2026-10-21 defect hunt rows 2+3): the hook has no API, so a MERGE-HOLD added after the gate, or a push after a ready-gate, is only caught by the receipt aging out. */
 export const MAX_AGE_MIN = 10;
+/** A ready receipt the hook can tie to the PR's LIVE head AND the hash of its Plan section (`planHash`, written by
+ *  ready-gate) stays valid while both are unchanged: a push or a Plan edit invalidates it, so the clock is only a
+ *  backstop (24 h). One worker's flip was denied at 11 min on an unchanged head (efficiency review 2026-10-30 #6).
+ *  Without a live head or Plan hash the receipt cannot be tied to anything, so MAX_AGE_MIN still applies. */
+export const BOUND_MAX_AGE_MIN = 24 * 60;
 /** A receipt dated further ahead than this is refused (audit 4 redteam-gates G5/G7, redteam-hooks R3: one dated 2099
- *  never aged out). Clock skew between a gate and its hook is seconds; launch-gate.py already allows the same 60 s. */
+ *  never aged out). Clock skew between a gate and its hook is seconds. */
 export const MAX_FUTURE_S = 60;
 
 export const receiptDir = (root, kind) => path.join(root, "artifacts", `${kind}-gate`);
@@ -97,7 +107,8 @@ export function gateFileHashes(root = GATE_ROOT, files = gateClosure(root)) {
 
 /** Write `{ kind, pr, head, ok, at, ... }` under `root` (and the main checkout, from a worktree); returns the path. */
 export function writeReceipt(root, kind, data, { main = mainCheckout(root), gateRoot = GATE_ROOT } = {}) {
-  if (!KINDS.includes(kind)) throw new Error(`unknown receipt kind ${kind}`);
+  if (kind === "merge") throw new Error("no tool writes a merge receipt: sessions never merge (land.yml arms, the branch ruleset merges)");
+  if (!WRITABLE_KINDS.includes(kind)) throw new Error(`unknown receipt kind ${kind}`);
   const pr = Number(data.pr);
   if (!Number.isInteger(pr) || pr < 1) throw new Error(`receipt needs a PR number, got ${data.pr}`);
   // gateFiles/gateRoot last, so a caller's data cannot overwrite what the running gate hashed.
@@ -126,7 +137,7 @@ const hex = (s) => String(s || "").trim().toLowerCase();
  * Either kind: `at` no more than MAX_FUTURE_S ahead of `now`.
  * @returns {{ ok: boolean, why: string }}
  */
-export function receiptVerdict(receipt, { kind, pr, head = "", now = Date.now(), maxAgeMin = MAX_AGE_MIN } = {}) {
+export function receiptVerdict(receipt, { kind, pr, head = "", plan = "", now = Date.now(), maxAgeMin = MAX_AGE_MIN } = {}) {
   const tool = kind === "merge" ? "merge-gate" : "ready-gate";
   const n = Number(pr);
   if (!Number.isInteger(n) || n < 1) return { ok: false, why: "no PR number in the call" };
@@ -136,10 +147,19 @@ export function receiptVerdict(receipt, { kind, pr, head = "", now = Date.now(),
   const at = Date.parse(receipt.at || "");
   if (!at) return { ok: false, why: `the ${tool} receipt for #${n} has no timestamp; re-run the gate` };
   if (at - now > MAX_FUTURE_S * 1000) return { ok: false, why: `the ${tool} receipt for #${n} is dated ${Math.round((at - now) / 1000)} s in the future (max ${MAX_FUTURE_S}): a receipt is written by the gate, never by hand; re-run the gate` };
-  const ageMin = (now - at) / 60000;
-  if (ageMin > maxAgeMin) return { ok: false, why: `the ${tool} receipt for #${n} is ${Math.round(ageMin)} min old (max ${maxAgeMin}); re-run the gate on the current head` };
+  // A ready receipt is tied to the live head and Plan (`plan` = planHash of the PR body now): which of head / Plan /
+  // age failed is named, in that order.
   const pin = headPinProblem(head, receipt.head);
   if (kind === "ready" && hex(head) && pin) return { ok: false, why: `the PR head is ${hex(head).slice(0, 12)}, but ready-gate passed on ${hex(receipt.head).slice(0, 12)}: re-run ready-gate on the current head` };
+  const live = hex(plan);
+  const bound = kind === "ready" && hex(head) && live && receipt.planHash;
+  if (kind === "ready" && hex(head) && live) {
+    if (!receipt.planHash) return { ok: false, why: `the ready-gate receipt for #${n} records no Plan hash (written by an older gate): re-run ready-gate` };
+    if (hex(receipt.planHash) !== live) return { ok: false, why: `the PR's Plan section changed since ready-gate passed on it (Plan ${hex(receipt.planHash).slice(0, 12)} then, ${live.slice(0, 12)} now): re-run ready-gate` };
+  }
+  const limit = bound ? BOUND_MAX_AGE_MIN : maxAgeMin;
+  const ageMin = (now - at) / 60000;
+  if (ageMin > limit) return { ok: false, why: `the ${tool} receipt for #${n} is ${Math.round(ageMin)} min old (max ${limit}${bound ? ", the backstop for an unchanged head and Plan" : ""}); re-run the gate on the current head` };
   if (kind === "merge") {
     if (!hex(head)) return { ok: false, why: `pin expectedHeadSha to the gated head ${hex(receipt.head).slice(0, 12)} (a merge is pinned to the sha the gate passed)` };
     if (pin) return { ok: false, why: `expectedHeadSha ${hex(head).slice(0, 12)} is not the gated head ${hex(receipt.head).slice(0, 12)}; re-run merge-gate on the head you merge` };
@@ -182,43 +202,4 @@ export function gateFilesVerdict(root, receipt, { run = spawnSync } = {}) {
     if (clean.status !== 0) return { ok: false, why: `the gate files in ${r} differ from HEAD (an uncommitted gate edit, the 2026-10-20 O23 incident): commit or revert, then re-run the gate` };
   }
   return { ok: true, why: "" };
-}
-
-/** How long a READY message may trail its ready-gate run (a worker sends READY right after the gate). */
-export const READY_CLAIM_MAX_MIN = 60;
-
-/**
- * May a READY message for `pr` go out? (Transcript Auditor batch 9, 2026-10-24: `ready-gate.mjs | tee` printed
- * exit 0 while the Plan was open, and a READY went out on a refused gate.) The sender's checkout must hold an `ok`
- * ready receipt for the PR at most READY_CLAIM_MAX_MIN old, written by the committed gate (gateFilesVerdict, audit 4
- * verify item 2: this path skipped it), and any sha the text names must be the gated head. A text `#<n>` that is not
- * `pr` refuses (G11). `prHead(n)` -> { sha } | { error } (optional; agent-msg passes the GitHub read): the receipt must
- * be for the PR's CURRENT head (G6/G7), and a failed read refuses. `pr` falls back to the first `#<n>` in `text`.
- * Returns { ok, why, pr }.
- */
-export function readyClaimVerdict(root, { pr = null, text = "", now = Date.now(), prHead = null, files = gateFilesVerdict } = {}) {
-  const named = Number((/#(\d+)\b/.exec(String(text)) || [])[1]) || 0;
-  const n = Number(pr) || named;
-  if (!n) return { ok: false, pr: 0, why: "a READY names its PR (`--pr <n>` or `#<n>` in the text) so its ready-gate receipt can be checked" };
-  if (named && named !== n) return { ok: false, pr: n, why: `the text names #${named}, but --pr is ${n}: one READY is for one PR` };
-  const main = mainCheckout(root);
-  const receipt = readReceipt(root, "ready", n) || (main ? readReceipt(main, "ready", n) : null);
-  let head = "";
-  if (prHead) {
-    const h = prHead(n) || {};
-    if (h.error || !h.sha) return { ok: false, pr: n, why: `cannot read #${n}'s current head (${h.error || "no sha"}): a READY is checked against the live head; retry` };
-    head = h.sha;
-  }
-  const v = receiptVerdict(receipt, { kind: "ready", pr: n, head, now, maxAgeMin: READY_CLAIM_MAX_MIN });
-  if (!v.ok) return { ok: false, pr: n, why: v.why };
-  // The gate that wrote the receipt is the one to prove committed: its own checkout when it still exists.
-  const gateRoot = receipt.gateRoot && fs.existsSync(receipt.gateRoot) ? receipt.gateRoot : root;
-  const fv = files(gateRoot, receipt);
-  if (!fv.ok) return { ok: false, pr: n, why: `ready-gate receipt for #${n}: ${fv.why}` };
-  const gated = hex(receipt.head);
-  const shas = String(text).match(/\b[0-9a-f]{7,40}\b/gi) || [];
-  if (gated && shas.length && !shas.some((s) => gated.startsWith(hex(s)) || hex(s).startsWith(gated))) {
-    return { ok: false, pr: n, why: `the READY names ${shas.join(" ")}, but ready-gate passed on ${gated.slice(0, 12)}; re-run ready-gate on the head you report` };
-  }
-  return { ok: true, pr: n, why: "" };
 }

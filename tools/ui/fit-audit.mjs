@@ -30,6 +30,7 @@
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { ensureTapFloor } from "./tap-floor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { captureAuditEnvironment, captureAuditSource, captureAuditSelectors, auditFindingSelectors } from "./explorer/audit-evidence.mjs";
@@ -133,17 +134,21 @@ if (ONLY) {
 }
 
 
-// Thresholds. 44 is Apple's HIG figure and WCAG 2.5.5 (AAA); 24 is the WCAG 2.2
-// AA floor, and it only passes with clearance, hence SPACE.
-const COMFY = 44, FLOOR = 24, SPACE = 24, TYPE_MIN = 10;
+// Thresholds. The tap floors come from tools/ui/tap-floor.mjs (window.__apexTap):
+// FLOOR = WCAG 2.2 SC 2.5.8's 24 CSS px, COMFY = the game's body `--tap` (44
+// when unreadable — it was a hard 44 here before; on a coarse-pointer phone the
+// game's own ladder says 52). 24 only passes with clearance, hence SPACE.
 
 const MEASURE = function (rootSel) {
   const root = document.querySelector(rootSel);
   if (!root || root.hidden) return { error: "missing/hidden " + rootSel };
-  const COMFY = 44, FLOOR = 24, SPACE = 24, TYPE_MIN = 10;
+  const T = window.__apexTap;
+  if (!T) return { error: "tap-floor not installed (ensureTapFloor)" };
+  const floors = T.floors();
+  const COMFY = floors.comfy, FLOOR = floors.wcag, SPACE = 24, TYPE_MIN = 10;
   const idOf = (el) => ((el.id ? "#" + el.id : "") + (typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".") : "")) || el.tagName.toLowerCase();
   const out = { tap: [], spacing: [], type: [], overflow: [], marker: [] };
-  const vis = (el) => { const cs = getComputedStyle(el); return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05; };
+  const vis = (el) => { if (!T.rendered(el)) return false; const cs = getComputedStyle(el); return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05; };
 
   // What is actually PAINTED — intersected with every clipping ancestor. A row
   // scrolled out of a list is not a tiny tap target, it is a hidden one.
@@ -180,14 +185,16 @@ const MEASURE = function (rootSel) {
     const isRange = el.tagName === "INPUT" && el.type === "range";
     targets.push({ el, p, isRange, shown });
     if (!shown) continue;
-    const min = Math.min(box.width, box.height);
+    // CSS px with the <label> union (tap-floor.mjs): the unit --tap is written in.
+    const m = T.measure(el, root);
+    const min = Math.min(m.w, m.h) + T.TAP_SLACK;
     // One row per SELECTOR: fourteen identical chips in a list is one decision,
     // not fourteen findings, and counting them as fourteen buried the real ones.
     const key = idOf(el) + "|" + Math.round(box.width) + "x" + Math.round(box.height);
     if (seenTap.has(key)) continue;
     seenTap.add(key);
-    if (min < FLOOR) out.tap.push({ el: idOf(el), w: +box.width.toFixed(0), h: +box.height.toFixed(0), sev: "under-floor" });
-    else if (min < COMFY && !isRange) out.tap.push({ el: idOf(el), w: +box.width.toFixed(0), h: +box.height.toFixed(0), sev: "under-comfy" });
+    if (min < FLOOR) out.tap.push({ el: idOf(el), w: +m.w.toFixed(0), h: +m.h.toFixed(0), sev: "under-floor" });
+    else if (min < COMFY && !isRange) out.tap.push({ el: idOf(el), w: +m.w.toFixed(0), h: +m.h.toFixed(0), sev: "under-comfy" });
   }
   // Crowding: only interesting for targets that are already small.
   for (const a of targets) {
@@ -265,6 +272,23 @@ const MEASURE = function (rootSel) {
   return out;
 };
 
+const KINDS = ["tap", "spacing", "type", "overflow", "marker"];
+/** The matrix's verdict. A cell whose MEASURE threw ({ error }) was never
+ *  judged, so it cannot pass; a cell with any finding is red, as the summary's
+ *  "clean" line says. An empty matrix measured nothing (an exit 0 there used to
+ *  read as a pass). Pure: the browser loop feeds it rows, a unit test feeds it
+ *  stubs. */
+export function fitVerdict(rows) {
+  const errors = rows.filter((r) => r && r.error).map((r) => `${r.screen} ${r.viewport ? `${r.viewport.width}x${r.viewport.height}` : ""}: ${r.error}`);
+  let findings = 0;
+  for (const r of rows) if (r && !r.error) for (const k of KINDS) findings += Array.isArray(r[k]) ? r[k].length : 0;
+  const measured = rows.filter((r) => r && !r.error).length;
+  const ok = rows.length > 0 && !errors.length && !findings;
+  return { ok, code: ok ? 0 : 1, cells: rows.length, measured, errors, findings };
+}
+
+const IS_MAIN = !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (IS_MAIN) {
 const srv = await startStaticServer(ROOT);
 const totals = new Map();
 const rows = [];
@@ -293,6 +317,7 @@ try {
           if (window.ScrollFade && window.ScrollFade.refresh) window.ScrollFade.refresh();
         }).catch(() => {});
         await sleep(120);
+        await ensureTapFloor(page).catch(() => {});
         const r = await page.evaluate(MEASURE, sel).catch((e) => ({ error: e.message }));
         const environment = await page.evaluate(captureAuditEnvironment, { root: sel, source }).catch(() => null);
         const selectorIndex = await page.evaluate(captureAuditSelectors, { root: sel, selectors: auditFindingSelectors(r) }).catch(() => ({}));
@@ -328,4 +353,9 @@ try {
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(path.join(out, "audit.json"), JSON.stringify(report, null, 2));
   if (argv.includes("--json")) console.log(JSON.stringify(report));
+  const v = fitVerdict(rows);
+  if (v.errors.length) console.error(`fit-audit: ${v.errors.length} cell(s) not measured:\n  ${v.errors.join("\n  ")}`);
+  if (!v.ok) console.error(`fit-audit: FAIL — ${v.findings} finding(s), ${v.errors.length} error cell(s), ${v.measured}/${v.cells} measured`);
+  process.exitCode = v.code;
 } finally { await shutdown(); }
+}

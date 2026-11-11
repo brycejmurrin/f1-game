@@ -15,9 +15,10 @@
  *              a commit after that run started: a re-run re-tests the stale merge ref,
  *              only a new head can clear it. A heuristic (a flake looks the same): name
  *              the failing job in the PR, and never re-run twice.
- *   no         up to date, or merely behind with no conflict and no red: a green PR
- *              merges as it stands, and a clean refresh buys a full tier that repeats
- *              the old verdict.
+ *   no         up to date, or merely behind with no conflict and no stale red: a green
+ *              PR merges as it stands, and a clean refresh buys a full tier that repeats
+ *              the old verdict. (The `distance` verdict went with merge-gate's distance
+ *              row on 2026-11-03: gen and ratchets run on the real merge result.)
  * Exit: 0 sync needed (conflict | stale-red), 1 no sync needed, 2 bad args, 3 could not
  * decide (fetch / git / merge-tree failed). The API half degrades: no token or an API
  * error leaves ci "unknown", so only `conflict` can fire (the line says so).

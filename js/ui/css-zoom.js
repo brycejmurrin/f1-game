@@ -5,7 +5,7 @@
  * `.dh-card`). Inside a zoomed subtree CSS lengths are LOCAL; getBoundingClientRect
  * on Chromium / modern Safari returns VISUAL (zoomed) pixels; pre-26.4 WebKit
  * returned LOCAL. Mixing a visual rect with `clientWidth`, `--pair-at` or
- * `scrollTop` is the A13 class of bug (docs/ARCHITECTURE-REVIEW.md).
+ * `scrollTop` is the A13 class of bug (docs/notes/ARCHITECTURE-REVIEW.md).
  *
  * Prefer `clientWidth` / `clientHeight` for the element's own box in local
  * units — they never need a probe. `viewportRect` mixes with `clientX`/`clientY`
@@ -45,13 +45,6 @@ window.CssZoom = (function () {
     return new DOMRect(r.x * z, r.y * z, r.width * z, r.height * z);
   }
 
-  function localRect(el) {
-    const r = el.getBoundingClientRect();
-    const z = of(el);
-    if (!rectsAreVisual() || z === 1) return r;
-    return new DOMRect(r.x / z, r.y / z, r.width / z, r.height / z);
-  }
-
   // Always local — preferred for SheetShape thresholds vs --pair-at.
   function localBox(el) {
     return { w: el.clientWidth, h: el.clientHeight };
@@ -61,5 +54,6 @@ window.CssZoom = (function () {
     return viewportPx / of(el);
   }
 
-  return { of, rectsAreVisual, viewportRect, localRect, localBox, toLocalDelta };
+  // rectsAreVisual stays module-local (viewportRect only).
+  return { of, viewportRect, localBox, toLocalDelta };
 })();

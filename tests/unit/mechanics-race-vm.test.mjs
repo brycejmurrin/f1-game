@@ -216,14 +216,18 @@ test("rescuePlayer deletes the lap in time trial and qualifying, not in a race a
   await tt();
   const p = g.G.player;
   const flags = (c) => ({ inv: !!c.incidentInvalidLap, cut: !!c.qualiCut });
-  const run = (c, session) => { g.G.session = session; c.incidentInvalidLap = false; c.qualiCut = false; g.G.rescuePlayer(c); return flags(c); };
+  const run = (c, session, lap = 1) => { g.G.session = session; c.lap = lap; c.incidentInvalidLap = false; c.qualiCut = false; g.G.rescuePlayer(c); return flags(c); };
+  const lap0 = p.lap;
   try {
     assert.deepEqual(run(p, "tt"), { inv: true, cut: false }, "time trial: the lap is invalid (no quali sheet to cut)");
     assert.deepEqual(run(p, "quali"), { inv: true, cut: true }, "qualifying: invalid AND no time on the sheet");
+    // Audit 2026-11-09 W2 #5: lap 0 is the run to the line — no timed lap to delete, and the
+    // start-line crossing never clears qualiCut, so a session with no lap read NO TIME.
+    assert.deepEqual(run(p, "quali", 0), { inv: true, cut: false }, "qualifying, lap 0: nothing timed to delete");
     assert.deepEqual(run(p, "race"), { inv: false, cut: false }, "a race has no lap-validity concept to add");
     p.human = false;   // the AI's role (a time trial has no rivals to borrow)
     assert.deepEqual(run(p, "tt"), { inv: false, cut: false }, "an AI car's rescue never touches lap validity");
-  } finally { p.human = true; g.G.session = "race"; }
+  } finally { p.human = true; p.lap = lap0; p.qualiCut = false; g.G.session = "race"; }
 });
 
 // 01-F5 (hunt2): handing a flipped human car back called G.rescuePlayer BEFORE the car left the takeover; the real
@@ -261,4 +265,34 @@ test("a flipped human car handed back from a takeover is demoted once and is not
   assert.equal(demoted.filter((i) => i === 0).length, 1, "demoted to kinematic exactly once");
   assert.equal(sim.status().fallbacks, 0, "a clean settle is not an anomaly fallback");
   assert.equal(sim.status().handbacks, 2, "one clean handback per car in the window (the human and the AI)");
+});
+
+// #5020: RECOVER / the auto-rescue teleports the car. Damped, the chase eye swung through the car on a wrong-way rescue.
+test("#5020 rescuePlayer is a camera cut for the player: the rig lands whole at the new pose; a rival's rescue leaves it alone", async () => {
+  await g.G.startRace(); g.step(2);
+  const G = g.G, p = G.player, eye = () => Array.from(G.camEye), far = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  p.head += Math.PI; p.x = 3; G.snapGameCam();   // spun round, off line: the rig is framed on the wrong-way pose
+  const stale = eye();
+  G.rescuePlayer(p);
+  const cut = eye();
+  G.snapGameCam();
+  assert.ok(far(cut, eye()) < 1e-9, "after the rescue the eye IS the fresh vantage (no damping from the old one)");
+  assert.ok(far(cut, stale) > 0.5, "and it moved off the wrong-way framing");
+  const rival = G.cars.find((c) => c !== p);
+  if (rival) { const before = eye(); G.rescuePlayer(rival); assert.deepEqual(eye(), before, "a rival being recovered is not the camera's cut"); }
+});
+
+// #5015: the 86 deg HFOV cap returned the same lens at rest and flat out (every onboard / chase base is over it).
+test("#5015 the drawn lens (G.lens.fovY) widens with speed on a landscape screen instead of sitting on the HFOV cap", async () => {
+  await g.G.startRace(); g.step(2);
+  const G = g.G, p = G.player, DEG = 180 / Math.PI, keep = p.speed;
+  const lensAt = (speed) => { p.speed = speed; G.snapGameCam(1 / 60); return { drawn: G.lens.fovY * DEG, authored: G.camFov }; };
+  try {
+    const rest = lensAt(0), fast = lensAt(90);
+    assert.ok(fast.authored > rest.authored + 5, `the authored FOV rises with speed (${rest.authored} -> ${fast.authored})`);
+    const cap = 2 * Math.atan(Math.tan(43 / DEG) / G.gfx.aspect) * DEG;
+    if (rest.authored > cap) assert.ok(Math.abs(rest.drawn - cap) < 0.5, `rest framing stays on the cap (${rest.drawn.toFixed(2)} vs ${cap.toFixed(2)})`);
+    assert.ok(fast.drawn > rest.drawn + 5, `the widen reaches the projection (${rest.drawn.toFixed(2)} -> ${fast.drawn.toFixed(2)})`);
+    assert.ok(Math.abs((fast.drawn - rest.drawn) - (fast.authored - rest.authored)) < 0.5, "the whole dynamic share, one for one");
+  } finally { p.speed = keep; G.snapGameCam(); }
 });

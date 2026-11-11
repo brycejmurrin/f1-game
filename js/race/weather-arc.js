@@ -92,7 +92,7 @@ const WeatherArc = (function () {
     }
     function weather(w) {
       if (w === undefined) return G.raceWeather;
-      arc = null;
+      arc = null; grooveEnd = null;
       return setWeatherLive(w);
     }
 
@@ -205,7 +205,7 @@ const WeatherArc = (function () {
     function restoreBase() {
       if (base != null && G.raceWeather !== base) G.raceWeather = base;
       base = null;
-      arc = null;
+      arc = null; grooveEnd = null;
     }
     /** The flag, or a quit to the menu: an arc that outlived the race would
      *  become the next race's starting weather. Restoring the chip's pick also
@@ -213,7 +213,7 @@ const WeatherArc = (function () {
      *  the rain: the fade is ticked only in a race, so otherwise the results and
      *  the menu kept the arc's last sky until the next flyby. */
     function endSession(keepPlan) {
-      arc = null;
+      arc = null; grooveEnd = null;
       const restored = base != null && G.raceWeather !== base;
       endChangeable(keepPlan);
       if (restored && G.track) { Particles.rainShow(false); G.applyRaceSettings(); }
@@ -352,17 +352,53 @@ const WeatherArc = (function () {
     }
     /** Road wetness at arc position `s` (metres) — the SURFACE under that car.
      *  Global weather (no local arc) is the scalar wetness(). */
-    function wetnessAt(s) {
+    function wetnessAt(s, x) {
       const a = arc, len = G.track && G.track.total;
-      if (!local(a) || !hasRC() || !(len > 0) || !Number.isFinite(s)) return wetness();
-      if (typeof a.w0 !== "number") adopt(a);
-      return RainCells.sample(segs(a), s / len);
+      let w = wetness();
+      if (local(a) && hasRC() && len > 0 && Number.isFinite(s)) {
+        if (typeof a.w0 !== "number") adopt(a);
+        w = RainCells.sample(segs(a), s / len);
+      }
+      const k = a ? 1 : grooveFade();
+      return k > 0 && Number.isFinite(x) && len > 0 && Number.isFinite(s) ? w * (1 - k * DRYLINE_K * dryLine(s / len, x) * Math.sqrt(Math.max(0, 1 - w))) : w;
+    }
+    // A settling arc fades the groove over DRYLINE_FADE_S (race clock), not one tick (-8.7 % grip); other ends cut.
+    const DRYLINE_FADE_S = 5;
+    let grooveEnd = null;
+    function settle() { arc = null; grooveEnd = now(); }
+    function grooveFade() {
+      if (grooveEnd == null) return 0;
+      const e = now() - grooveEnd;
+      if (!(e >= 0) || e >= DRYLINE_FADE_S) { grooveEnd = null; return 0; }
+      return 1 - e / DRYLINE_FADE_S;
+    }
+    // ── Drying line (#1627) — a lateral field on top of the along-lap wetness ──
+    // SURFACE channel (docs/PHYSICS.md): the groove is where traffic has worn the rubber in, a fixed smooth
+    // wander about the centreline hashed from the lap fraction alone — no curvature, no racing-line read — and only a live arc has one (static weather, the characterization pins, is one even wetness) —
+    // so every car at the same (s, x) and every peer sees the same water. Only a live arc has a line: a static
+    // weather (the characterization pins) is one even wetness. It dries first (up to DRYLINE_K of
+    // the wetness) when the road is part-dry; a soaked (1) or bone-dry (0) road has no line.
+    const DRYLINE_K = 0.6, DRYLINE_W = 2.2, DRYLINE_AMP = 2.5;   // max share dried; groove half-width m; wander m
+    // The 12 knots are a pure string hash: built once instead of 4 string builds + FNV passes
+    // per car per step during an arc (perf hunt 7; same values, tests/unit/weather-arc grooveX).
+    let _grooveH = null;
+    function grooveX(frac) {
+      const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = u * u * (3 - 2 * u);
+      if (!_grooveH) { _grooveH = new Float64Array(n); for (let j = 0; j < n; j++) _grooveH[j] = RainCells.h01("groove|" + j) * 2 - 1; }
+      const a = _grooveH[((i % n) + n) % n], b = _grooveH[(((i + 1) % n) + n) % n];
+      return DRYLINE_AMP * (a + (b - a) * k);
+    }
+    /** 0..1 — how much of the groove lies under lateral offset `x` (m, + right) at lap fraction `frac`. */
+    function dryLine(frac, x) {
+      if (!hasRC()) return 0;
+      const d = (x - grooveX(frac)) / DRYLINE_W;
+      return Math.exp(-d * d);
     }
     /** What the VIEW stands on: the followed car's (camera's) position, so the
      *  rain starts and stops as you drive into and out of a shower. */
     function viewWetness() {
       const p = G.player;
-      return p && Number.isFinite(p.s) ? wetnessAt(p.s) : wetness();
+      return p && Number.isFinite(p.s) ? wetnessAt(p.s, p.x) : wetness();
     }
     /** The wettest segment: what the SKY shows (a shower anywhere darkens the
      *  circuit's one sky) and what ends a local arc once it has dried. */
@@ -433,7 +469,7 @@ const WeatherArc = (function () {
       const w0 = live ? wetness() : wetOf(from);
       const i0 = live ? intAt(arc, Math.min(1, arc.t / arc.dur)) : intOf(from);
       if (from === to && (!live || (Math.abs(w0 - wetOf(to)) < SETTLE && Math.abs(i0 - intOf(to)) < SETTLE))) {
-        if (live) { arc = null; if (G.raceWeather !== to) setWeatherLive(to, true); }
+        if (live) { settle(); if (G.raceWeather !== to) setWeatherLive(to, true); }
         return null;
       }
       const t0 = (typeof G.raceT === "number" && G.state !== "race") ? 0 : now();
@@ -487,11 +523,11 @@ const WeatherArc = (function () {
         // weather, and once the wettest is there the arc lets go of the road.
         if (arc.t >= arc.cell.life && maxDev(arc, arc.w0) < SETTLE) {
           if (G.raceWeather !== arc.from) setWeatherLive(arc.from, true);
-          arc = null;
+          settle();
         }
       } else if (f >= 1 && maxDev(arc, wetOf(arc.to)) < SETTLE) {
         if (G.raceWeather !== arc.to) setWeatherLive(arc.to, true);
-        arc = null;   // the road has settled — weather stays at `to`
+        settle();   // weather stays at `to`
       }
     }
 
@@ -508,7 +544,7 @@ const WeatherArc = (function () {
         return;
       }
       // The VIEW's road: the lap mean (trackWetness) unless a local shower makes it position-dependent.
-      const wetTarget = local(arc) && hasRC() ? viewWetness() : (G.trackWetness ? G.trackWetness() : 0);
+      const wetTarget = (local(arc) || (G.player && Number.isFinite(G.player.x))) && hasRC() ? viewWetness() : (G.trackWetness ? G.trackWetness() : 0);
       const cur = frame.wetness || 0;
       const step = (dt == null || !(dt > 0)) ? 1 : Math.min(1, dt * 0.8);
       frame.wetness = cur + (wetTarget - cur) * step;
@@ -516,8 +552,8 @@ const WeatherArc = (function () {
 
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, wetness, wetnessAt, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
-      get arc() { return arc; }, set arc(v) { arc = v; if (!arc) setWeatherLive(G.raceWeather); },
+      startArc, tick, syncWetness, wetness, wetnessAt, dryLine, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
+      get arc() { return arc; }, set arc(v) { arc = v; grooveEnd = null; if (!arc) setWeatherLive(G.raceWeather); },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },
     };

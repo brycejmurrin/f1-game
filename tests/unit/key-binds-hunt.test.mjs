@@ -289,6 +289,7 @@ test("nintendo label mode confirms on the physical A (standard index 1) and back
 
 test("I-09: a right/middle mouse button neither presses a hold button nor fires a tap; touch and left mouse do", () => {
   const ctx = vm.createContext({ Math, Set, Map, Object, Array, document: null });
+  vm.runInContext(read("js/input/pedal-travel.js"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
   vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
   const InputHoldButtons = vm.runInContext("InputHoldButtons", ctx);
   const els = {};
@@ -320,7 +321,8 @@ test("hold teardown detects hidden ancestors while visible capture steals keep t
       addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
     const ctx = vm.createContext({ document: { getElementById: () => button },
       getComputedStyle: (el) => ({ display: el.display || "block", visibility: el.visibility || "visible" }) });
-    vm.runInContext(read("js/input/hold-buttons.js"), ctx);
+    vm.runInContext(read("js/input/pedal-travel.js"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
+    vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
     const hb = vm.runInContext("InputHoldButtons", ctx).create({
       clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll() {} });
     let held = false;
@@ -335,11 +337,48 @@ test("hold teardown detects hidden ancestors while visible capture steals keep t
     button.l.lostpointercapture(event);
     assert.equal(held, false, teardown + " ancestor releases the held button");
     assert.deepEqual(Array.from(hb.pointerCounts()), [0]);
-    button.l.pointerdown(event);
-    button.l.lostpointercapture(event);
+    const dispatched = { ...event, isTrusted: false };   // only a synthetic event can press a hidden button
+    button.l.pointerdown(dispatched);
+    button.l.lostpointercapture(dispatched);
     assert.equal(held, true, "an already-hidden press is not a new teardown");
     hb.holdReleaseAll();
   }
+});
+
+test("a trusted hold press skips the computed-style walk; dead-band moves report the level once", () => {
+  let styleReads = 0;
+  const grand = { hidden: false }, parent = { hidden: false, parentElement: grand };
+  const button = { l: {}, isConnected: true, hidden: false, parentElement: parent,
+    addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
+  const ctx = vm.createContext({ document: { getElementById: () => button },
+    getComputedStyle: () => { styleReads++; return { display: "block", visibility: "visible" }; } });
+  vm.runInContext(read("js/input/pedal-travel.js"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
+  vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
+  const hb = vm.runInContext("InputHoldButtons", ctx).create({ clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll() {} });
+  const levels = [];
+  let held = false;
+  hb.wireHold("gas", (v) => { held = v; }, (v) => levels.push(v));
+  const ev = (extra) => ({ pointerId: 3, pointerType: "touch", clientX: 100, clientY: 200, preventDefault() {}, ...extra });
+  button.l.pointerdown(ev({ isTrusted: true }));
+  assert.equal(held, true);
+  assert.equal(styleReads, 0, "a trusted press read getComputedStyle");
+  for (let i = 0; i < 20; i++) button.l.pointermove(ev({ clientY: 200 - (i % 5) }));   // inside the dead band
+  assert.deepEqual(levels, [1], "20 dead-band moves re-reported an unchanged level");
+  button.l.pointermove(ev({ clientY: 100 }));
+  assert.equal(levels.length, 2, "a real ease still reports");
+  assert.ok(levels[1] < 1);
+  button.l.pointerup(ev({}));
+  assert.deepEqual([held, levels.at(-1)], [false, 0], "lift releases and reports 0");
+  hb.holdReleaseAll();
+  button.l.pointerdown(ev({ isTrusted: true }));
+  assert.equal(levels.at(-1), 1, "after a release-all the next press reports full travel again");
+  styleReads = 0;
+  hb.holdReleaseAll();
+  button.l.pointerdown(ev({ isTrusted: false }));
+  assert.ok(styleReads > 0, "a synthetic press still checks visibility");
+  // lostpointercapture looks the button up by element (Map), and a visible one keeps its hold.
+  button.l.lostpointercapture(ev({}));
+  assert.equal(held, true);
 });
 
 test("analog hold buttons preserve the strongest remaining touch across release paths", () => {
@@ -348,7 +387,8 @@ test("analog hold buttons preserve the strongest remaining touch across release 
       addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
     const ctx = vm.createContext({ document: { getElementById: () => button },
       getComputedStyle: () => ({ display: "block", visibility: "visible" }) });
-    vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
+    vm.runInContext(read("js/input/pedal-travel.js"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
+  vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
     const api = vm.runInContext("InputHoldButtons", ctx);
     const resetArgs = [], edges = [], values = [];
     const hb = api.create({ clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll: (v) => resetArgs.push(v) });
@@ -453,7 +493,7 @@ test("phone ownership, parked diagnostics and controls refresher preserve drivin
   assert.equal(Input.activeInputSource(), "keyboard", "idle phone does not steal labels");
   Input.remoteSample({ thr: 0.8, brk: 0, roll: 10 });
   assert.equal(Input.activeInputSource(), "phone");
-  assert.equal(Input.throttleLevel(), 0.8);
+  assert.ok(Math.abs(Input.throttleLevel() - (0.8 - 0.1) / 0.9) < 1e-12, "the phone pedal past its rescaled 0.1 dead zone");
   r.sb.UiLayers.navOpen = () => true;
   assert.equal(Input.throttleLevel(), 0);
   assert.equal(Input.steer(), 0);

@@ -11,6 +11,66 @@ const CamFeel = (function () {
   const DEG = Math.PI / 180;
   const store = typeof GameStore !== "undefined" ? GameStore.store : null;
 
+  // DriveLens (folded in from its own file, 2026-11-10): the lens-only FOV delta for every live camera family.
+  // The rig (vantage.js) places the eye; this adds degrees, or null when the mode is not a lens family. Chase,
+  // broadcast and onboard keep the reads they had as three files. Public surface: apply() (CamFeel.lens).
+  const DriveLens = (function () {
+
+    function abs(v) { return v < 0 ? -v : v; }
+
+    function chase(mode, eye, tgt, ctx) {
+      const sp = ctx.sp, yaw = ctx.yaw, brake = ctx.brake, slip = ctx.slip;
+      if (mode === "chase") return 4 * sp + 2 * abs(yaw) + 2 * brake;
+      if (mode === "far") return 7 * sp + 0.4 * abs(yaw);
+      if (mode === "drift") return 3 * sp + 6 * abs(yaw) + 4 * abs(slip);
+      if (mode === "low") return 5 * sp;
+      if (mode === "reverse") return 1.5 * sp;
+      return null;
+    }
+
+    function n(v) {
+      return typeof v === "number" && isFinite(v) ? v : 0;
+    }
+    function read(ctx) {
+      ctx = ctx || {};
+      return { sp: n(ctx.sp), yaw: n(ctx.yaw), brake: n(ctx.brake), slip: n(ctx.slip) };
+    }
+    function broadcast(mode, eye, tgt, ctx) {
+      const c = read(ctx);
+      if (mode === "heli") return 8 * c.sp + 3 * Math.abs(c.yaw);
+      if (mode === "side") return 5 * c.sp;
+      if (mode === "cinematic") return 4 * c.sp;
+      if (mode === "overhead") return 3 * c.sp;
+      if (mode === "drone") return 6 * c.sp + 2 * Math.abs(c.yaw);
+      if (mode === "rival") return 6 * c.sp;
+      if (mode === "pitwall") return 2 * c.sp;
+      if (mode === "trackside") return 3 * c.sp + 0.5 * Math.abs(c.yaw);
+      return null;
+    }
+
+    function spOf(ctx) { return (ctx && ctx.sp) || 0; }
+    function brakeOf(ctx) { return (ctx && ctx.brake) || 0; }
+    function onboard(mode, eye, tgt, ctx) {
+      if (mode === "cockpit" || mode === "helmet") return 1.5 * spOf(ctx) + 1 * brakeOf(ctx);   // HELMET is the cockpit from inside the lid
+      if (mode === "visor") return 1 * spOf(ctx);
+      if (mode === "hood") return 2 * spOf(ctx) + 1.5 * brakeOf(ctx);
+      if (mode === "tcam") return 2.5 * spOf(ctx);
+      if (mode === "rear") return 1 * spOf(ctx) + 4 * brakeOf(ctx);
+      return null;
+    }
+
+    // Same order CamFeel.drive used when the families were three globals: chase, then broadcast, then onboard.
+    function apply(mode, eye, tgt, ctx) {
+      let delta = chase(mode, eye, tgt, ctx);
+      if (delta == null) delta = broadcast(mode, eye, tgt, ctx);
+      if (delta == null) delta = onboard(mode, eye, tgt, ctx);
+      return delta;
+    }
+
+    return { apply };
+  })();
+  Object.freeze(DriveLens);
+
   // ── Scope tables (shake / buzz / free-look) ───────────────────────────────
   // TRAUMA SHAKE (js/game.js `shake`): every live race camera. camComfort()
   // zeroes the OFFSET only; the trauma still decays so cues stay timed.
@@ -78,40 +138,13 @@ const CamFeel = (function () {
   function isFreeLookMode(mode) { return FREELOOK_MODES.indexOf(mode) >= 0; }
   function looksAftAlready(mode) { return LOOKBACK_SKIP.indexOf(mode) >= 0; }
 
-  /* Shared speed FOV: FOV = base + widen * spN * scale + depBoost.
-     Modes that used to ignore speed (tcam / side / heli) pass scale < 1 so they
-     share the curve without jumping to chase-like widen. */
+  // The curve itself is CamFov (js/camera/fov-mode.js). These names stay on CamFeel
+  // because vantage.js and the feel tests already call them.
   function speedFov(base, widen, spN, scale, depBoost) {
-    const s = scale == null ? 1 : scale;
-    const n = clamp(spN, 0, 1);
-    return base + widen * n * s + (depBoost || 0);
+    return CamFov.speedFov(base, widen, spN, scale, depBoost);
   }
-
-  // Per-mode FOV recipe used by vantage.js — one table, one function.
-  // scale defaults to 1; mild scales restore a curve where FOV was fixed.
-  const FOV_BY_MODE = Object.freeze({
-    cockpit:    { base: 64, widen: 14, scale: 1,   dep: 3 },
-    hood:       { base: 64, widen: 14, scale: 1,   dep: 3 },
-    visor:      { base: 64, widen: 14, scale: 1,   dep: 3 },
-    helmet:     { base: 64, widen: 14, scale: 1,   dep: 3 },   // the cockpit's lens; the visor frame is CSS
-    overhead:   { base: 46, widen: 0,  scale: 1,   dep: 0 },
-    heli:       { base: 36, widen: 8,  scale: 0.5, dep: 2 },
-    reverse:    { base: 60, widen: 12, scale: 1,   dep: 0 },
-    side:       { base: 44, widen: 6,  scale: 0.5, dep: 0 },
-    cinematic:  { base: 50, widen: 10, scale: 1,   dep: 0 },
-    low:        { base: 55, widen: 13, scale: 1,   dep: 0 },
-    tcam:       { base: 46, widen: 8,  scale: 0.5, dep: 2 },
-    rear:       { base: 58, widen: 12, scale: 1,   dep: 2 },
-    drift:      { base: 55, widen: 15, scale: 1,   dep: 3 },
-    chase:      { base: 57, widen: 6,  scale: 1,   dep: 3 },
-    far:        { base: 61, widen: 6,  scale: 1,   dep: 3 },
-  });
-
-  // `sp` is the FOV speed blend (0..1). vantage.js passes CamTune-scaled
-  // `spFov` so COMFORT › SPEED FOV still lands; look-ahead keeps full spN.
   function modeFov(mode, sp, deploy) {
-    const r = FOV_BY_MODE[mode] || FOV_BY_MODE.chase;
-    return speedFov(r.base, r.widen, sp, r.scale, (deploy ? 1 : 0) * r.dep);
+    return CamFov.modeFov(mode, sp, deploy);
   }
 
   function shouldLookBack(mode, held) {
@@ -239,9 +272,7 @@ const CamFeel = (function () {
     _driveCtx.brake = follow(keys.brk, clamp((att.baPitch || 0) / 0.025, 0, 1), rate.brake, dt);
     _driveCtx.slip = follow(keys.slp, clamp((extra.slipLat || 0) / 6, -1, 1), rate.slip, dt);
     const ctx = _driveCtx;
-    if (typeof DriveChase !== "undefined") delta = DriveChase.apply(mode, eye, tgt, ctx);
-    if (delta == null && typeof DriveBroadcast !== "undefined") delta = DriveBroadcast.apply(mode, eye, tgt, ctx);
-    if (delta == null && typeof DriveOnboard !== "undefined") delta = DriveOnboard.apply(mode, eye, tgt, ctx);
+    delta = DriveLens.apply(mode, eye, tgt, ctx);
     return delta == null ? fov : fov + delta;
   }
 
@@ -356,8 +387,7 @@ const CamFeel = (function () {
   }
 
   // Last opacity written. paintVignette runs every race frame and its node sits under
-  // #overlay, which UiLayers observes for style mutations: an unchanged or sub-1 % write
-  // still queues a record that drops the nav memo (layers.js navDirty), so skip it.
+  // #hud: an unchanged or sub-1 % write still queues a style-mutation record, so skip it.
   let _vigOp = "";
   function setVigOpacity(v) {
     if (v !== _vigOp) { _vigOp = v; _vigEl.style.opacity = v; }
@@ -373,11 +403,15 @@ const CamFeel = (function () {
       _vigEl.id = "speed-vignette";
       _vigEl.setAttribute("aria-hidden", "true");
       // Radial tunnel — no new CSS class token (cssClasses ratchet is saturated).
-      _vigEl.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:4;" +
+      _vigEl.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:-1;" +
         "opacity:0;transition:opacity .12s linear;" +
         "background:radial-gradient(ellipse at center," +
         "rgba(0,0,0,0) 42%,rgba(0,0,0,.55) 100%)";
-      (document.getElementById("overlay") || document.body).appendChild(_vigEl);
+      // #overlay is hidden during races. #hud (z-index 10) is its own stacking context, so
+      // z-index -1 paints above the 3D canvas and behind every HUD element.
+      const hud = document.getElementById("hud");
+      if (hud) hud.insertBefore(_vigEl, hud.firstChild);
+      else document.body.appendChild(_vigEl);
     }
     // 1 % steps under a .12 s opacity transition: not a visible change.
     setVigOpacity(String(Math.round(clamp(amt, 0, 0.7) * 100) / 100));
@@ -439,12 +473,16 @@ const CamFeel = (function () {
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => {
+      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
     else initUI();
   }
 
   return {
-    BUZZ_MODES, FREELOOK_MODES, LOOKBACK_SKIP, FOV_BY_MODE,
+    BUZZ_MODES, FREELOOK_MODES, LOOKBACK_SKIP,
+    get FOV_BY_MODE() { return CamFov.FOV_BY_MODE; },
     K_LATCH, K_VIGNETTE,
     speedFov, modeFov,
     isBuzzMode, isFreeLookMode, looksAftAlready,
@@ -452,7 +490,7 @@ const CamFeel = (function () {
     speedVignette, setSpeedVignette,
     applyFreeLook, applyAim, tick, tickRace, freeLookState, resetFreeLook, resetLatch,
     lookingBackNow, consumeAimSnap, shake, shakeNoise, TUB_EYE_MAX,
-    follow, resetFollow, drive,
+    follow, resetFollow, drive, lens: DriveLens,
     initUI, loadSettings, scoped, scopeKey,
   };
 })();

@@ -2,6 +2,22 @@
 // delta table, the noise rule. No I/O, no browser; tests/unit/profile-lib.test.mjs.
 // @doc Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict).
 
+/** Explicit controls must describe work the selected mode actually performs. */
+const PROFILE_CONTROLS = Object.freeze({
+  spans: ["frames", "repeat", "base", "json", "capture"],
+  cpu: [],
+  hitch: ["frames", "capture"],
+  trace: ["frames", "capture"],
+  step: ["steps", "warm", "repeat", "base", "json", "capture", "cpu-throttle"],
+});
+
+/** Pure shared policy for CLI controls and the MCP builder's explicit typed fields. */
+export function profileOptionProblem(mode, explicit = []) {
+  if (!Object.hasOwn(PROFILE_CONTROLS, mode)) return "mode must be spans|cpu|hitch|trace|step";
+  const unsupported = [...new Set(explicit)].filter(name => !PROFILE_CONTROLS[mode].includes(name));
+  return unsupported.length ? `--mode ${mode} does not support ${unsupported.map(name => "--" + name).join(", ")}` : null;
+}
+
 export const median = (a) => {
   if (!a.length) return NaN;
   const s = [...a].sort((x, y) => x - y), m = s.length >> 1;

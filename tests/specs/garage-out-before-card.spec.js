@@ -147,9 +147,10 @@ async function awaitGarageThenCard(page) {
         if (tl.some((s) => s.prep) && go && !go.disabled && /START/i.test(text) && !text.startsWith("PREPARING")) return "released";
         return false;
       }
-      // Wait for the card itself — assertGarageThenCard requires it. Still in
-      // garage: the timeout allows studioDone's 3× duration cap to fire (~8 s × 3).
-      return tl.some((s) => s.cardShown) && "card";
+      // BUILD can reveal the preparation card between studioClose and raceIntro.
+      // Keep recording until the actual session card/flyby follows that cover;
+      // the ordering checks below still include every intermediate sample.
+      return tl.some((s) => s.cardShown && ["run", "card", "handoff"].includes(s.phase)) && "card";
     }, null, { polling: 100, timeout: 180_000 });
     if ((await verdict.jsonValue()) === "released") throw new Error("START released after PREPARING with no garage-out (#3591): see the apex-logs line \"intro released without a garage-out\"");
   } catch (e) {
@@ -236,7 +237,9 @@ test.describe("garage-out before race/session card", () => {
     expect(m.hadGaragePhase, "reduce must play garage phase, not skip it").toBe(true);
     expect(m.garageMs, "reduce must not speed the garage-out up (full OUT_DURATION at speed 1)").toBeGreaterThan(6000);
     // …and the flyby (card up, phase run — or card with no world) follows it, never a 700 ms flash to the race.
-    const after = tl.find((s) => s.t > m.lastGarageT && s.phase && s.phase !== "garage" && s.phase !== "build");
+    // Adjacent mutation samples can share performance.now(); event order is the contract.
+    const after = tl.slice(tl.map((s) => s.phase).lastIndexOf("garage") + 1)
+      .find((s) => s.phase && s.phase !== "garage" && s.phase !== "build");
     expect(after, "reduce: a phase follows the garage-out").toBeTruthy();
     expect(["run", "card", "handoff"], "reduce: the card + flyby follow the garage").toContain(after && after.phase);
   });

@@ -6,22 +6,166 @@
 //   * A HUNG FILE FAILS BY NAME: node's --test-timeout bounds each test, and a
 //     per-file wall kills a child that never exits — instead of the file running
 //     to the CI job's timeout-minutes and the job reporting a nameless `cancelled`.
+import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
+import { spawnSync } from "node:child_process";
+import { verificationIdentity, beginVerification, finishVerification, readVerification, verificationPath, verificationMarker } from "../../tools/ci/verification-receipt.mjs";
+import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
   isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
-  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS }
+  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope, closingLine, workflowFailureAnnotations }
   from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "apex-tf-"));
+
+test("verification receipts separate a suite verdict from current source applicability", () => {
+  const dir = tmp(), logPath = path.join(dir, "suite.log");
+  const source = { root: dir, head: "a".repeat(40), tree: "b".repeat(40) };
+  try {
+    fs.mkdirSync(path.join(dir, "tests", "unit"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "tests", "unit", "tooling-fast-runner.test.mjs"), "// selected fixture\n");
+    fs.writeFileSync(path.join(dir, "example"), "example suite\n");
+    fs.writeFileSync(path.join(dir, "another"), "another suite\n");
+    assert.equal(readVerification(logPath, source).status, "unknown");
+    fs.writeFileSync(logPath, "= run passed (1 passed, 0 failed)\n");
+    const started = beginVerification({ logPath, files: ["tests/unit/tooling-fast-runner.test.mjs"], source });
+    fs.writeFileSync(logPath, verificationMarker(started) + "\n= run passed (1 passed, 0 failed)\n");
+    assert.equal(readVerification(logPath, source).status, "unknown", "a started run is not a pass");
+    finishVerification(started, { logPath, source, ok: true });
+    const current = readVerification(logPath, { ...source, head: "c".repeat(40) });
+    assert.equal(current.status, "current", "committing the tested bytes preserves evidence");
+    assert.equal(current.verdict, "passed");
+    assert.deepEqual(current.files, ["tests/unit/tooling-fast-runner.test.mjs"]);
+    assert.equal(readVerification(logPath, { ...source, tree: "d".repeat(40) }).status, "stale");
+    assert.equal(readVerification(logPath, { ...source, root: "another-checkout" }).status, "stale");
+    assert.equal(readVerification(logPath, { ...source, tree: null }).status, "unknown");
+    fs.appendFileSync(logPath, "appended unrelated run\n");
+    assert.equal(readVerification(logPath, source).reason, "log differs from completed run");
+    const failed = beginVerification({ logPath, files: ["example"], source });
+    fs.writeFileSync(logPath, verificationMarker(failed) + "\n= run failed (0 passed, 1 failed)\n");
+    finishVerification(failed, { logPath, source, ok: false });
+    assert.equal(readVerification(logPath, source).verdict, "failed", "a matching source cannot promote a failure");
+    const changed = beginVerification({ logPath, files: ["example"], source });
+    fs.writeFileSync(logPath, verificationMarker(changed) + "\n= run passed (1 passed, 0 failed)\n");
+    finishVerification(changed, { logPath, source: { ...source, tree: "e".repeat(40) }, ok: true });
+    assert.equal(readVerification(logPath, source).reason, "source changed during verification");
+    const old = beginVerification({ logPath, files: ["example"], source });
+    const latest = beginVerification({ logPath, files: ["another"], source });
+    assert.equal(finishVerification(old, { logPath, source, ok: true }), null, "an older runner cannot replace the new receipt");
+    fs.writeFileSync(logPath, verificationMarker(old) + "\n= run failed (0 passed, 1 failed)\n");
+    assert.equal(finishVerification(latest, { logPath, source, ok: true }), null, "a newer receipt cannot adopt an older runner's log");
+    assert.equal(JSON.parse(fs.readFileSync(verificationPath(logPath), "utf8")).id, latest.id);
+    fs.rmSync(logPath);
+    finishVerification(latest, { logPath, source, ok: true });
+    assert.equal(readVerification(logPath, source).status, "unknown");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("receipt hashes detect ignored selected suites changed or deleted after a completed run", () => {
+  const dir = tmp(), logPath = path.join(dir, "artifacts", "suite.log");
+  const git = (...args) => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+  try {
+    assert.equal(git("init", "-q").status, 0);
+    fs.writeFileSync(path.join(dir, ".gitignore"), "artifacts/\n");
+    assert.equal(git("add", ".").status, 0);
+    fs.mkdirSync(path.dirname(logPath));
+    const selected = path.join(dir, "artifacts", "selected.test.mjs");
+    const link = path.join(dir, "artifacts", "linked.test.mjs");
+    fs.symlinkSync("selected.test.mjs", link);
+    for (const file of ["artifacts/selected.test.mjs", selected, "artifacts/linked.test.mjs"]) {
+      fs.writeFileSync(selected, "original\n");
+      const source = verificationIdentity(dir);
+      const started = beginVerification({ logPath, files: [file], source });
+      fs.writeFileSync(logPath, verificationMarker(started) + "\n= run passed\n");
+      finishVerification(started, { logPath, source: verificationIdentity(dir), ok: true });
+      assert.equal(readVerification(logPath, source).status, "current");
+      fs.writeFileSync(selected, "modified\n");
+      assert.equal(verificationIdentity(dir).tree, source.tree);
+      assert.equal(readVerification(logPath, verificationIdentity(dir)).status, "stale");
+      fs.unlinkSync(selected);
+      assert.equal(verificationIdentity(dir).tree, source.tree);
+      assert.equal(readVerification(logPath, verificationIdentity(dir)).status, "stale");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("receipt hashes detect ignored selected input changes during the run even after restoration", () => {
+  const dir = tmp(), logPath = path.join(dir, "artifacts", "suite.log");
+  const git = (...args) => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+  try {
+    assert.equal(git("init", "-q").status, 0);
+    fs.writeFileSync(path.join(dir, ".gitignore"), "artifacts/\n");
+    assert.equal(git("add", ".").status, 0);
+    fs.mkdirSync(path.dirname(logPath));
+    const selected = path.join(dir, "artifacts", "selected.test.mjs");
+    const source = verificationIdentity(dir);
+    for (const change of ["edit", "delete"]) {
+      fs.writeFileSync(selected, "original\n");
+      const started = beginVerification({ logPath, files: ["artifacts/selected.test.mjs"], source });
+      fs.writeFileSync(logPath, verificationMarker(started) + "\n= run passed\n");
+      if (change === "edit") fs.writeFileSync(selected, "modified\n"); else fs.unlinkSync(selected);
+      assert.equal(verificationIdentity(dir).tree, source.tree);
+      finishVerification(started, { logPath, source: verificationIdentity(dir), ok: true });
+      fs.writeFileSync(selected, "original\n");
+      const result = readVerification(logPath, source);
+      assert.equal(result.status, "stale");
+      assert.equal(result.reason, "selected input changed during verification");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("legacy or missing selected-input snapshots retain the historical verdict without proving currency", () => {
+  const dir = tmp(), logPath = path.join(dir, "suite.log");
+  const source = { root: dir, head: "a".repeat(40), tree: "b".repeat(40) };
+  try {
+    const selected = path.join(dir, "selected.test.mjs");
+    fs.writeFileSync(selected, "original\n");
+    const started = beginVerification({ logPath, files: [selected], source });
+    fs.writeFileSync(logPath, verificationMarker(started) + "\n= run passed\n");
+    const finished = finishVerification(started, { logPath, source, ok: true });
+    delete finished.inputHashes; delete finished.endInputHashes;
+    fs.writeFileSync(verificationPath(logPath), JSON.stringify(finished));
+    assert.equal(readVerification(logPath, source).status, "unknown");
+    assert.equal(readVerification(logPath, source).verdict, "passed");
+    fs.unlinkSync(selected);
+    const missing = beginVerification({ logPath, files: [selected], source });
+    fs.writeFileSync(logPath, verificationMarker(missing) + "\n= run passed\n");
+    finishVerification(missing, { logPath, source, ok: true });
+    assert.equal(readVerification(logPath, source).status, "unknown");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("verification source identity includes dirty and untracked inputs but ignores artifacts", () => {
+  const dir = tmp();
+  const git = (...args) => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+  try {
+    assert.equal(git("init", "-q").status, 0);
+    fs.writeFileSync(path.join(dir, ".gitignore"), "artifacts/\n");
+    fs.writeFileSync(path.join(dir, "input.js"), "original\n");
+    assert.equal(git("add", ".").status, 0);
+    const before = verificationIdentity(dir);
+    assert.match(before.tree, /^[0-9a-f]{40,64}$/);
+    fs.mkdirSync(path.join(dir, "artifacts"));
+    fs.writeFileSync(path.join(dir, "artifacts", "output.json"), "evidence\n");
+    assert.equal(verificationIdentity(dir).tree, before.tree);
+    fs.writeFileSync(path.join(dir, "input.js"), "modified\n");
+    const dirty = verificationIdentity(dir);
+    assert.notEqual(dirty.tree, before.tree);
+    fs.writeFileSync(path.join(dir, "untracked.js"), "new input\n");
+    assert.notEqual(verificationIdentity(dir).tree, dirty.tree);
+    fs.rmSync(path.join(dir, "input.js"));
+    assert.notEqual(verificationIdentity(dir).tree, dirty.tree);
+    assert.equal(verificationIdentity(path.join(dir, "absent")).tree, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
 test("longest recorded duration first; unmeasured files ahead of all, in list order", () => {
   const files = ["a", "b", "c", "d", "e"];
@@ -133,17 +277,40 @@ test("waits forever", (t) => new Promise(() => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// #3885: node 22's `--test` parent re-orders a deferred 0xFF byte when a pipe
+// read ends inside a result frame's header, then spins forever draining the
+// frame (100 % CPU, SIGTERM ignored). A file whose LAST stdout bytes are an
+// unfinished frame header is the deterministic form of that read; under the
+// default per-file subprocess it ran to the file wall. See TEST_ISOLATION_FLAG.
+test("stdout ending in a partial v8 frame header does not hang the runner (#3885)", async () => {
+  const dir = tmp();
+  try {
+    const f = path.join(dir, "partial-header.test.mjs");
+    fs.writeFileSync(f, `import test from "node:test";
+test("writes FF 0F 00 last", () => { process.stdout.write(Buffer.from([0xff, 0x0f, 0x00])); });
+`);
+    const logPath = path.join(dir, "suite.log");
+    const r = await runToolingFast([f], { jobs: 1, logPath, localTimingsPath: null, fileTimeoutMs: 15000 });
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.doesNotMatch(log, /reason=timeout/, "the runner must exit, not spin until the file wall");
+    assert.equal(r.ok, true, log);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // The runner parses TAP failure blocks, independently of the host Node's
 // default reporter and this suite's inherited NODE_TEST_CONTEXT.
 test("a failed child preserves named TAP subtests and assertion diagnostics", async () => {
   const dir = tmp();
+  const seen = [], log0 = console.log, actions0 = process.env.GITHUB_ACTIONS;
   try {
+    process.env.GITHUB_ACTIONS = "true";
+    console.log = (...args) => seen.push(args.join(" "));
     const file = path.join(dir, "assertion.test.mjs");
     fs.writeFileSync(file, `import test from "node:test"; import assert from "node:assert/strict";
 test("the arithmetic contract fails", () => assert.equal(1, 2));
 `);
     const logPath = path.join(dir, "suite.log");
-    const result = await runToolingFast([file], { jobs: 1, logPath, localTimingsPath: null });
+    const result = await runToolingFast([file], { jobs: 1, logPath, localTimingsPath: null, workflowAnnotations: true });
     assert.equal(result.ok, false);
     assert.equal(result.failed, 1);
     assert.equal(result.results[0].exit, 1);
@@ -154,7 +321,65 @@ test("the arithmetic contract fails", () => assert.equal(1, 2));
     assert.match(log, /actual: 1/);
     assert.match(log, /operator: 'strictEqual'/);
     assert.doesNotMatch(log, /reason=timeout/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    const commands = seen.filter((line) => line.startsWith("::error "));
+    assert.deepEqual(commands, [`::error file=tools/ci/tooling-fast.mjs,title=Tooling-fast failure::Unavailable or unsafe test path: exit; exit=1; signal=none; durationMs=${Math.round(result.results[0].durationMs)}`]);
+    assert.equal(seen.at(-2), commands[0], "the annotation precedes the unchanged final verdict");
+    assert.equal(seen.at(-1), "[tooling-fast] = run failed (0 passed, 1 failed)", "the original verdict remains red");
+    assert.equal(log, [...seen.slice(0, -2), seen.at(-1)].join("\n") + "\n", "workflow commands leave the persisted runner log unchanged");
+
+    seen.length = 0;
+    const nested = await runToolingFast([file], { jobs: 1, logPath, localTimingsPath: null });
+    assert.deepEqual({ ok: nested.ok, failed: nested.failed, exit: nested.results[0].exit }, { ok: false, failed: 1, exit: 1 });
+    assert.deepEqual(seen.filter((line) => line.startsWith("::error ")), [], "imported runners default off even in Actions");
+  } finally {
+    console.log = log0;
+    if (actions0 === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = actions0;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("workflow failure annotations escape properties and never execute child TAP or unsafe paths", () => {
+  const failure = { file: ["tests", "unit", "percent%, label.test.mjs"].join("/"), ok: false, exit: 1, durationMs: 12.4 };
+  const commands = workflowFailureAnnotations([{ ...failure, stdout: "\n::error file=other::forged\r\n", stderr: "secret TAP" }], { GITHUB_ACTIONS: "true" });
+  const escapedFile = ["tests", "unit", "percent%25%2C label.test.mjs"].join("/");
+  const escapedMessage = ["tests", "unit", "percent%25, label.test.mjs: exit; exit=1; signal=none; durationMs=12"].join("/");
+  assert.deepEqual(commands, [`::error file=${escapedFile},title=Tooling-fast failure::${escapedMessage}`]);
+  for (const file of [undefined, "", "../outside", "safe/../outside", "safe/./file", "/absolute", "C:\\outside", "bad:name", "bad\r\n::error::forged", "x".repeat(257)]) {
+    const [command] = workflowFailureAnnotations([{ ...failure, file }], { GITHUB_ACTIONS: "true" });
+    assert.equal(command, "::error file=tools/ci/tooling-fast.mjs,title=Tooling-fast failure::Unavailable or unsafe test path: exit; exit=1; signal=none; durationMs=12");
+  }
+  const longFile = "x".repeat(256);
+  assert.deepEqual(workflowFailureAnnotations([{ ...failure, file: longFile }], { GITHUB_ACTIONS: "true" }),
+    [`::error file=${longFile},title=Tooling-fast failure::${longFile}: exit; exit=1; signal=none; durationMs=12`]);
+});
+
+test("workflow annotations require Actions and explicit failures and retain structured outcome distinctions", () => {
+  const failure = { file: "tests/unit/tooling-fast-runner.test.mjs", ok: false, exit: 1, durationMs: 25 };
+  for (const env of [{}, { GITHUB_ACTIONS: "false" }, { GITHUB_ACTIONS: "TRUE" }])
+    assert.deepEqual(workflowFailureAnnotations([failure], env), [], "local output gets no workflow commands");
+  assert.deepEqual(workflowFailureAnnotations([{ ...failure, ok: true }, { ...failure, ok: undefined }], { GITHUB_ACTIONS: "true" }), []);
+  const outcomes = workflowFailureAnnotations([
+    { ...failure, exit: null, signal: "SIGKILL", timedOut: true },
+    { ...failure, exit: null, missing: true }, { ...failure, exit: 0, empty: true },
+    { ...failure, signal: "SIGTERM\n::error::forged", durationMs: Infinity },
+  ], { GITHUB_ACTIONS: "true" });
+  const prefix = "::error file=tests/unit/tooling-fast-runner.test.mjs,title=Tooling-fast failure::tests/unit/tooling-fast-runner.test.mjs: ";
+  assert.deepEqual(outcomes, [
+    prefix + "timeout; exit=unknown; signal=SIGKILL; durationMs=25",
+    prefix + "missing-file; exit=unknown; signal=none; durationMs=25",
+    prefix + "empty-run; exit=0; signal=none; durationMs=25",
+    prefix + "exit; exit=1; signal=none; durationMs=unknown",
+  ]);
+});
+
+test("workflow errors cap file annotations at nine and reserve the tenth for omitted failures", () => {
+  const failures = Array.from({ length: 12 }, (_, n) => ({ file: `failure-${n}.test.mjs`, ok: false, exit: 1, durationMs: n }));
+  const env = { GITHUB_ACTIONS: "true" };
+  const expected = Array.from({ length: 9 }, (_, n) => `::error file=failure-${n}.test.mjs,title=Tooling-fast failure::failure-${n}.test.mjs: exit; exit=1; signal=none; durationMs=${n}`);
+  assert.deepEqual(workflowFailureAnnotations(failures.slice(0, 9), env), expected);
+  assert.deepEqual(workflowFailureAnnotations([{ ...failures[0], ok: true }, ...failures], env), [
+    ...expected, "::error file=tools/ci/tooling-fast.mjs,title=Tooling-fast failure::3 additional failed files omitted from annotations; see the tooling-fast log.",
+  ]);
 });
 
 test("tapFailureDetail keeps deepEqual body rows and indexed actual members", () => {
@@ -260,7 +485,7 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   const r = selectToolingFastChanged(["tools/ci/test-bg.mjs"], { allFiles: all, pinIndex,
     scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
   assert.equal(r.reason, "matched");
-  assert.deepEqual(r.files.sort(), ["tests/unit/agent-config.test.mjs", "tests/unit/test-bg-outcome.test.mjs"].sort());
+  assert.deepEqual(r.files, ["tests/unit/agent-config.test.mjs"]);
   assert.ok(r.files.length < all.length);
   // Which CI halves run those files follows the CI split (time-balanced since 2026-10-21), not a stride.
   const covering = ["1/4", "2/4", "3/4", "4/4"].filter((sp) => ciShardFiles(all, sp).some((f) => r.files.includes(f)));
@@ -289,6 +514,17 @@ test("--changed fail-safes to the full list on infra paths", () => {
     scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
   assert.equal(r.reason, "run-all-path");
   assert.deepEqual(r.files, all);
+});
+
+test("--changed: a tests/data file selects the unit files that pin it; an unpinned one fail-safes to full", () => {
+  const a = "tests/unit/" + "a.test.mjs";
+  const all = [a, "tests/unit/" + "b.test.mjs"];
+  const pinIndex = new Map([["tests/data/flaky-quarantine.json", new Set([a])]]);
+  const pinned = selectToolingFastChanged(["tests/data/flaky-quarantine.json"], { allFiles: all, pinIndex });
+  assert.deepEqual(pinned.files, [a]);
+  const unpinned = selectToolingFastChanged(["tests/data/flaky-quarantine.json"], { allFiles: all, pinIndex: new Map() });
+  assert.equal(unpinned.reason, "tests-data-unpinned");
+  assert.deepEqual(unpinned.files, all);
 });
 
 test("--changed selector: one case per branch (empty, docs-only, tracked, unmatched, no-pin-match, matched)", () => {
@@ -363,6 +599,27 @@ test("CLI: --bail is a first-class flag and defaults off", () => {
   assert.equal(parseToolingFastArgv([]).bail, false);
   assert.equal(parseToolingFastArgv(["--bail", "--shard=1/2"]).bail, true);
   assert.match(TOOLING_FAST_USAGE, /--bail/);
+});
+
+// #3951: ci.yml's guards shards ask --print-scope whether to run the whole floor.
+test("guards scope: only a pull request that touches no tooling narrows to --changed", () => {
+  const js = ["js/perf/governor.js", "css/hud.css"];
+  assert.equal(guardsScope(js, "pull_request").mode, "changed");
+  assert.equal(guardsScope(["docs/TESTING.md", "AGENTS.md"], "pull_request").mode, "changed", "docs-only narrows too");
+  for (const f of ["tools/ci/tooling-fast.mjs", "tests/unit/tooling-fast-runner.test.mjs", ".github/workflows/ci.yml", "package.json", "package-lock.json"]) {
+    const r = guardsScope([...js, f], "pull_request");
+    assert.equal(r.mode, "full", `${f} keeps the whole floor`);
+    assert.match(r.reason, new RegExp(f.replace(/[.]/g, "\\.")));
+  }
+  for (const ev of ["push", "schedule", "workflow_dispatch", undefined]) {
+    assert.equal(guardsScope(js, ev).mode, "full", `${ev}: only a pull request narrows (the deploy push and the train stay full)`);
+  }
+  assert.equal(guardsScope([], "pull_request").mode, "full", "an empty diff stays full (--changed exits 3 on one)");
+  // Joined, not literal: these two paths do not exist, and docs-integrity checks every path a comment or string names.
+  assert.equal(guardsScope([["toolsy", "x.js"].join("/"), ["js", "tests", "x.js"].join("/")], "pull_request").mode, "changed",
+    "prefixes are anchored directories");
+  assert.equal(parseToolingFastArgv(["--print-scope"]).printScope, true);
+  assert.match(TOOLING_FAST_USAGE, /--print-scope/);
 });
 
 test("CLI: --help and unknown flags never start the suite", () => {
@@ -657,4 +914,35 @@ test("ciShardFiles: the two CI halves partition the list, balanced by the commit
   assert.deepEqual(ciShardFiles(all, "1/2"), a);
   assert.deepEqual(shardsCoveringFiles([a[0]], all, 2), ["1/2"]);
   assert.deepEqual(shardsCoveringFiles([b[0]], all, 2), ["2/2"]);
+});
+
+test("buildToolingFastPinIndex resolves relative import specifiers against the importing test (#3907)", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pin-rel-"));
+  fs.mkdirSync(path.join(root, "tests/unit"), { recursive: true });
+  fs.writeFileSync(path.join(root, "tests/unit/verify-live.test.mjs"),
+    'import { a } from "../../tools/ci/verify-live.mjs";\nimport h from "./helper.mjs";\n');
+  const index = buildToolingFastPinIndex(["tests/unit/verify-live.test.mjs"], root);
+  assert.ok(index.get("tools/ci/verify-live.mjs").has("tests/unit/verify-live.test.mjs"));
+  assert.ok(!index.has("tools/ci"), "relative pins are exact, not directory-wide");
+  assert.ok(!index.has("tests/unit"), "a sibling import must not pin the whole test directory");
+});
+
+test("--changed selects a test that imports its subject by relative path (#3907)", () => {
+  const r = selectToolingFastChanged(["tools/ci/verify-live.mjs"]);
+  assert.deepEqual(r.files.filter((f) => f === "tests/unit/verify-live.test.mjs"), ["tests/unit/verify-live.test.mjs"]);
+});
+
+test("closingLine: the verdict is the LAST output line of a CLI run, red or green (efficiency review finding 4)", async () => {
+  assert.equal(closingLine(true, 3, 0), "= tooling-fast passed (3 files, 0 failed)");
+  assert.equal(closingLine(false, 3, 1), "= tooling-fast failed (3 files, 1 failed)");
+  const { spawnSync } = await import("node:child_process");
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "tf-closing-"));
+  try {
+    const bad = path.join(dir, "bad.test.mjs");
+    fs.writeFileSync(bad, 'import t from "node:test";import a from "node:assert";t("x",()=>{a.equal(1,2)});\n');
+    const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ci/tooling-fast.mjs"), path.relative(ROOT, bad), "--jobs=1", "--quiet"],
+      { cwd: ROOT, encoding: "utf8" });
+    assert.equal(r.status, 1);
+    assert.equal(r.stdout.trimEnd().split("\n").pop(), "= tooling-fast failed (1 files, 1 failed)");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

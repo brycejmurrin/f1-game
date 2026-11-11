@@ -21,6 +21,7 @@
 //   node tools/ci/select-specs.mjs --since <ref>            # spec list, one per line
 //   node tools/ci/select-specs.mjs --since <ref> --json
 //   node tools/ci/select-specs.mjs --since <ref> --budget-min 10
+//   node tools/ci/select-specs.mjs --files js/ui/hud.js       # a hypothetical change, on any tree
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -103,7 +104,7 @@ export const FIXED_GATE_SPECS = new Set([
 // put them on a selected command.
 export const MANUAL_OPT_IN_SPECS = new Set([
   "tests/specs/material-shimmer.spec.js",
-  // WebKit iPhone-path proxy (#2705): only webkit-leg.yml / `npm run test:webkit`
+  // WebKit iPhone-path proxy (#2705): only `npm run test:webkit`
   // (APEX_WEBKIT=1 / --project=webkit). Chromium selected/oversize jobs cannot
   // launch WebKit and must not schedule this file.
   "tests/specs/webkit-boot.spec.js",
@@ -288,7 +289,10 @@ export const MAX_OVERFLOW_SHARDS = 11;
 // routes the whole suite; at 4 career-season, career-hub and props-over-road
 // ran nowhere. Measured on --since <merge-base>: 4 -> 3 skipped, 5 -> 2,
 // 6 -> 1, 7 -> 0 (58 shards, +6 jobs).
-export const MAX_SPILL_SHARDS = 7;
+// 7 -> 8 (2026-11-10, #5368, Bryce: "you fix 5368"): the same whole-suite route
+// (`--files tests/helpers/fixtures.js` on tip 7ad0ee9) ran props-over-road (52 tests)
+// nowhere at 7. Measured with MAX_OVER_BUDGET_SHARDS 9: spill 7 -> 1 dropped, 8 -> 0.
+export const MAX_SPILL_SHARDS = 8;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -301,7 +305,10 @@ export const MAX_SPILL_SHARDS = 7;
 // its own allowance of this many TARGET_SHARD_SEC jobs. Only what that pool
 // cannot afford is left in overBudgetSpecs, by name, and on a pull request a
 // name is a red verdict.
-export const MAX_OVER_BUDGET_SHARDS = 8;
+// 8 -> 9 (2026-11-10, #5368, Bryce: "you fix 5368"): a tests/helpers/fixtures.js
+// change (whole-suite route, tip 7ad0ee9) DROPPED new-hooks.spec.js (540 s/test) with
+// the pool full at 8. Measured with MAX_SPILL_SHARDS 8: over-budget 8 -> 1 dropped, 9 -> 0.
+export const MAX_OVER_BUDGET_SHARDS = 9;
 
 // THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
 // OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job
@@ -1239,6 +1246,9 @@ export const SOURCE_AFFECTED = [
   // A ui/car route never picked them, so #1290 shipped red there (Browser group
   // input 38015514694, Pages 38016755004); real-race owns the JUMP IN card.
   ...["quali", "steering", "real-race"].map((s) => [/^js\/(ui\/loading-screen|garage\/(setup-camera|arrival))\.js$/, `tests/specs/${s}.spec.js`]),
+  // UI SIZE's RANGE (#5383): a phone's minimum moved 40 -> 70 in js/ui/scale.js (#5229) and the two specs that
+  // drive the slider to its low end were not routed, so the merge went red on Pages (run #5057) and was reverted.
+  ...["time-trial", "title-fit"].map((s) => [/^js\/ui\/scale\.js$/, `tests/specs/${s}.spec.js`]),
   // SPEC-LESS DIRS (audit4 D1 / ci-7d C7, 2026-10-26): 13 game merges in 7 d
   // touched these with only boot-guard / logging / smoke routed. The off-thread
   // track build ships ON with a spare core, so a circuit build and a track
@@ -1247,6 +1257,13 @@ export const SOURCE_AFFECTED = [
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
   ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
+  // ROUTED TO SPECS THAT DO NOT EXERCISE THEM (#5241 G4). js/fx/ goes to group `ui`, whose specs run the GLX pin and
+  // assert no fx layer; the one spec that asserts one (M6: the skid batch after a driven slide, on the three.js path
+  // players get) is tlx-probes in `gfx`. #5181 changed js/fx/skidmarks.js and ran 60 specs, not that one.
+  [/^js\/fx\//, "tests/specs/tlx-probes.spec.js"],
+  // sw.js is TRACKED (reason `infra`) and its pick-tests rule names a node group only, so a sw.js-only diff had an
+  // EMPTY browser plan: the spec that boots the real worker and checks its precache did not run on #5187 / #5188.
+  [/^sw\.js$/, "tests/specs/perf-sw-cache-hit.spec.js"],
 ];
 
 /** Specs that prove nothing about a particular module: they boot the page or
@@ -1317,7 +1334,7 @@ export function specsAffectedBySource(changed, root = ROOT) {
 // and the graph covers helper/spec -> spec PRECISELY, which is exactly where
 // the RULES are weakest (^tests/ routes to `audit` and nothing else).
 export function specsImporting(changed, root = ROOT) {
-  const narrow = changed.filter((f) => /^tests\/helpers\/.+\.js$/.test(f));
+  const narrow = changed.filter((f) => /^tests\/helpers\/.+\.[cm]?js$/.test(f));
   if (!narrow.length) return [];
   const reverse = new Map(), specs = new Set();
   function scan(rel) {
@@ -1326,7 +1343,7 @@ export function specsImporting(changed, root = ROOT) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const file = `${rel}/${entry.name}`;
       if (entry.isDirectory()) { scan(file); continue; }
-      if (!entry.name.endsWith(".js")) continue;
+      if (!/\.[cm]?js$/.test(entry.name)) continue;
       if (file.endsWith(".spec.js")) specs.add(file);
       let refs = [];
       try { refs = referencesIn(fs.readFileSync(path.join(root, file), "utf8"), file).refs || []; }
@@ -1428,11 +1445,36 @@ export function cssSpecs(changed) {
     specs.add("tests/specs/season.spec.js");
     specs.add("tests/specs/ui-audit.spec.js");
   }
+  // The smoke above is ONE boot at 844x390 on the default profile: it proves a control can be tapped, never how
+  // big it paints or whether a sheet fits a phone. The specs that MEASURE a stylesheet's surface at phone shapes
+  // ran only for a JS diff, so a pure-CSS change to the HUD, the pause sheet or the title could land with none of
+  // them (docs/notes/TEST-TRUTH-HUNT-2026-11-09.md G1). Route each sheet to the layout spec that measures it.
+  for (const [re, add] of CSS_LAYOUT_SPECS) {
+    if (files.some((f) => re.test(f))) for (const spec of add) specs.add(spec);
+  }
   return [...specs];
 }
 
+/** Stylesheet -> the browser specs that measure what it lays out, at phone shapes. tokens/responsive/components
+ *  feed every surface, so they take all of them. A sheet not listed keeps the smoke only (its row says so in
+ *  tests/unit/select-specs.test.mjs, which also checks every css/ file is classified). */
+const HUD_LAYOUT = ["tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
+const SHEET_LAYOUT = ["tests/specs/ui-resize.spec.js"];
+const TITLE_LAYOUT = ["tests/specs/title-fit.spec.js"];
+const GARAGE_LAYOUT = ["tests/specs/garage-aero.spec.js"];
+export const CSS_LAYOUT_SPECS = [
+  [/^css\/(hud|touch-controls|helmet-visor|fonts-hud)\.css$/, HUD_LAYOUT],
+  [/^css\/(dialogs|dialog-platform|overlays|settings|settings-controls)\.css$/, SHEET_LAYOUT],
+  [/^css\/(title|menus|menu-destinations)\.css$/, TITLE_LAYOUT],
+  [/^css\/(garage-experience|carsetup)\.css$/, GARAGE_LAYOUT],
+  [/^css\/(tokens|responsive|components)\.css$/, [...HUD_LAYOUT, ...SHEET_LAYOUT, ...TITLE_LAYOUT, ...GARAGE_LAYOUT]],
+];
+/** Sheets whose surface no phone-shape layout spec measures yet: the smoke (and menu-baseline where listed) only. */
+export const CSS_SMOKE_ONLY = /^css\/(a11y-loading|appearance-studio|career-experience|career|cockpit-preview|data|editor|experience|loading|photo-studio|player-tools|race-setup|save-health|select|track-detail|tuner|watch-transport)\.css$/;
+
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
-  const changed = changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
+  // opts.files: a hypothetical change ("which specs would an edit to js/ui/hud.js need?") on any tree.
+  const changed = opts.files ?? changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
@@ -1498,15 +1540,22 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
   r.coverageGaps = lightDiff ? [] : jsCoverageGaps(changed);
+  // AGENTS.md rule 3's pre-push floor is ONE spec. Name it only when the diff evidences one (edited, failed before,
+  // imports or is pinned to a changed file: rank <= 2); a routed-only group member is no better than its peers.
+  const best = [...r.selected, ...r.oversize].filter((x) => x.rank <= 2).sort((a, b) => a.rank - b.rank)[0];
+  r.floor = best ? best.file : null;
+  if (!best) r.floorReason = r.selected.length ? `no spec imports or is pinned to these files; ${r.selected.length} are routed by group (${browserGroups.join(", ")}) — pick by name, or run the group on the PR` : "no browser spec is routed";
   return r;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
-  const usage = "usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
+  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
   if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
-  if (si < 0 || !argv[si + 1]) {
+  const fl = argv.indexOf("--files");
+  const files = fl >= 0 && argv[fl + 1] ? argv[fl + 1].split(",").map((f) => f.trim()).filter(Boolean) : undefined;
+  if ((si < 0 || !argv[si + 1]) && !files) {
     console.error(usage);
     process.exit(2);
   }
@@ -1521,8 +1570,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   const oi = argv.indexOf("--overflow-shards");
   const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
-  const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first") });
+  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first"), files });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
+  console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra") console.error(
     `SELECTION NARROWER THAN THE CHANGE: this diff touches ${r.tracked.length} tracked/infra path(s) ` +

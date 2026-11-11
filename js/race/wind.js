@@ -11,19 +11,15 @@
  * minutes and the mean speed breathes ±20 % over several; GUSTS are discrete
  * events hashed per GUST_SLOT window, a smooth sin² swell of a few seconds.
  * Calm in fog (fog needs still air), gustier in rain, gustiest in a storm, and
- * a per-circuit exposure scale: Bahrain's desert gusts reach ~50 km/h and
- * Silverstone's open airfield can put a car sideways
- * (https://www.formula1.com/en/latest/article/you-have-to-be-on-your-toes-ricciardo-on-the-key-factor-that-makes.13nBgmXtJ0SsldMcitFMcB);
- * street circuits between buildings are sheltered. Notes and sources:
+ * a per-circuit exposure scale (open desert and airfield circuits gusty, street
+ * circuits between buildings sheltered). Notes and sources:
  * docs/notes/WEATHER-ROADMAP-2026-10-14.md.
  *
  * WHAT IT DOES, off the car's ACTUAL heading — the player's c.head, an AI's
  * drawn heading — never the racing line or the road's curvature (AGENTS.md
  * §Physics, "the arc must not reach the driver"):
  *   1. HEAD/TAIL WIND on drag. Top speed is where power meets drag ∝ (v+w)²,
- *      which in a real car moves v_top by ~⅔ of the headwind (Monza's
- *      north–south main straight: a headwind into Della Roggia helps braking
- *      and costs top speed — https://racingnews365.com/2026-f1-italian-grand-prix-monza-weather-forecast).
+ *      which in a real car moves v_top by ~⅔ of the headwind.
  *      Kept MODEST for play: HEAD_K of the along-wind, so a 30 km/h headwind
  *      costs ~4–5 km/h of top speed and a tailwind gives it back.
  *   2. A CROSSWIND side force ∝ car speed × cross-wind (linearised ½ρ·CyA·v·w
@@ -68,13 +64,11 @@ const Wind = (function () {
   const AI_TAU = 0.3;          // s: an AI car's kinematic step takes the side force as latA·AI_TAU of drift
   const VREF = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.VMAX) || 72;   // std top-speed envelope
 
-  // 32-bit integer hash → [0, 1); its own, so the wind draws nothing from the sim stream.
+  // 32-bit integer hash → [0, 1). The input mix is the wind's own; the
+  // finaliser is Hash32.mix, so a gust draws nothing from the sim stream.
   function h01(seed, k, salt) {
-    let x = (Math.imul((seed >>> 0) ^ 0x7f4a7c15, 0x9e3779b1) ^ Math.imul(k | 0, 0x85ebca6b) ^ Math.imul(salt | 0, 0xc2b2ae35)) >>> 0;
-    x ^= x >>> 16; x = Math.imul(x, 0x7feb352d) >>> 0;
-    x ^= x >>> 15; x = Math.imul(x, 0x846ca68b) >>> 0;
-    x ^= x >>> 16;
-    return (x >>> 0) / 4294967296;
+    const x = (Math.imul((seed >>> 0) ^ 0x7f4a7c15, 0x9e3779b1) ^ Math.imul(k | 0, 0x85ebca6b) ^ Math.imul(salt | 0, 0xc2b2ae35)) >>> 0;
+    return Hash32.mix(x) / 4294967296;
   }
   function strId(s) {
     let h = 2166136261;

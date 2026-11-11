@@ -44,6 +44,31 @@ test("Hungaroring names its chicane and physical T5 exit consistently", () => {
   for (let i = 1; i < def.turns.length; i++) assert.ok(def.turns[i] > def.turns[i - 1]);
 });
 
+test("Hungaroring bankZone TN trailers name the nearest curated apex", () => {
+  // Comment-only drift: frac 0.1888 said T1 while sitting on T2; 0.8506 said T11
+  // while sitting on T13. Keep TN trailers honest against def.turns.
+  const src = readFileSync(new URL("../../js/circuits/hungaroring.js", import.meta.url), "utf8");
+  const { def } = circuit("hungaroring");
+  const wrap = (d) => { d = Math.abs(d); return d > 0.5 ? 1 - d : d; };
+  const nearest = (f) => {
+    let best = 1, idx = -1;
+    for (let i = 0; i < def.turns.length; i++) {
+      const d = wrap(f - def.turns[i]);
+      if (d < best) { best = d; idx = i; }
+    }
+    return { turn: idx + 1, d: best };
+  };
+  const bad = [];
+  for (const line of src.split("\n")) {
+    const m = line.match(/\{\s*frac:\s*([0-9.]+)[^}]*\}\s*,?\s*\/\/\s*T(\d+)\b/);
+    if (!m) continue;
+    const f = Number(m[1]), claimed = Number(m[2]);
+    const n = nearest(f);
+    if (n.turn !== claimed) bad.push(`frac ${f} trailer T${claimed} but nearest T${n.turn} (Δlap ${n.d.toFixed(4)})`);
+  }
+  assert.deepEqual(bad, []);
+});
+
 test("Monaco bank zones peak on Massenet and Mirabeau, not Ste Devote", () => {
   // As fracs 0.1286 / 0.2961 the _sceneryShift (~0.938) compensation centred
   // the "Massenet" zone on T1 Ste Devote and the "Mirabeau" zone on T4.
@@ -76,6 +101,46 @@ test("Monaco bank zones peak on Massenet and Mirabeau, not Ste Devote", () => {
   }
 });
 
+
+test("Jeddah apexes follow the start line by the scenery arc shift", () => {
+  // 2026-10-18 moved startFrac 0.9625 → 0.9160. The pre-move table matched the
+  // curvature peaks. rotate-markings adds _sceneryShift (~0.0479 of a lap) and
+  // re-sorts. The shipped table added 0.1916 instead: Turn 1 sat on the straight
+  // (k ≈ 0 at 108 m) and the mean miss to a peak was 134 m.
+  const { def, track } = circuit("jeddah");
+  assert.equal(def.turns.length, 27);
+  for (let i = 1; i < def.turns.length; i++) assert.ok(def.turns[i] > def.turns[i - 1]);
+  const n = track.n, L = track.total, sm = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let j = -2; j <= 2; j++) s += Math.abs(track.curv[(i + j + n) % n]);
+    sm[i] = s / 5;
+  }
+  const peaks = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i - 1 + n) % n, b = (i + 1) % n;
+    if (sm[i] >= sm[a] && sm[i] > sm[b] && sm[i] > 0.004) peaks.push(i / n);
+  }
+  const used = new Set();
+  const far = [];
+  for (const t of def.turns) {
+    let bi = -1, bd = 1;
+    for (let i = 0; i < peaks.length; i++) {
+      if (used.has(i)) continue;
+      let d = Math.abs(peaks[i] - t);
+      if (d > 0.5) d = 1 - d;
+      if (d < bd) { bd = d; bi = i; }
+    }
+    used.add(bi);
+    const metres = bd * L;
+    if (metres > 15) far.push(`${t.toFixed(4)} is ${metres.toFixed(0)} m from the nearest free peak`);
+  }
+  assert.deepEqual(far, []);
+  const t1 = Math.round(def.turns[0] * n) % n;
+  const t1m = def.turns[0] * L;
+  assert.ok(t1m > 240 && t1m < 340, `Turn 1 at ${t1m.toFixed(0)} m, want the left after the straight (~280 m)`);
+  assert.ok(track.curv[t1] > 0.02, `Turn 1 is a left (k ${track.curv[t1].toFixed(4)})`);
+});
 
 test("Bahrain scenery landmarks track the current arc-length origin", () => {
   const { def, track } = circuit("bahrain");

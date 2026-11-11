@@ -9,6 +9,7 @@
  * the race, with a known reason.
  */
 import { test } from "node:test";
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -20,7 +21,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 
 // The REAL Career (hash, TDEV_MAX/TDEV_TO_PACE, paceMult), Hash32, M4 and the Parts catalog — a hand-copied
 // hash and a CATALOG:[] stub left buildQuality, devNorm, the relief constants and the networked branch unrun.
-function load() {
+function load(observed = null) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math: Object.assign(Object.create(Math), { random: () => { throw new Error("Math.random called"); } }),
@@ -38,6 +39,13 @@ function load() {
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/hash32.js", "js/data/teams.js", "js/data/driver-ratings.js",
     "js/physics/consts.js", "js/car/parts.js", "js/career/save-migrate.js", "js/career/regulations.js",
     "js/career/career.js", "js/race/reliability.js"]) {
+    if (observed && f === "js/race/reliability.js") {
+      const career = ctx.Career;
+      ctx.Career = Object.assign({}, career, {
+        hash: (...args) => { observed.push(["hash", ...args]); return career.hash(...args); },
+        paceMult: (...args) => { observed.push(["pace", ...args]); return career.paceMult(...args); },
+      });
+    }
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   }
   const run = (code) => vm.runInContext(code, ctx);
@@ -156,4 +164,50 @@ test("a tier outside 0..4 clamps to the nearest tier instead of indexing past TI
   assert.deepEqual(plans(99), plans(R.TIER_RISK.length - 1), "tier 99 plans like the weakest tier");
   assert.deepEqual(plans(-3), plans(0), "tier -3 plans like the strongest tier");
   assert.ok(plans(99).length > 0);
+});
+
+// Captured from the pre-extraction implementation. Pin actual seeded plans AND
+// dependency-call order: a matching retirement count can hide shifted samples.
+test("retirement plans and hash/development call order preserve the deployed policy", () => {
+  const observed = [], R = load(observed), cases = [];
+  inCareer(R, { haas: R.Career.TDEV_MAX, ferrari: -R.Career.TDEV_MAX });
+  for (const level of ["off", "low", "real", "unknown"]) {
+    for (const networked of [false, true]) {
+      for (const build of [0, 1, 2]) {
+        const cars = Array.from({ length: 120 }, (_, i) => ({
+          driverId: i % 3 === 0 ? "driver" + i : "", code: i % 3 === 1 ? "C" + i : "",
+          tier: (i % 9) - 2, team: i % 5 ? { id: i % 2 ? "haas" : "ferrari" } : null,
+          isPlayer: i % 2 === 0, retired: true, dnf: "old", dnfAt: 0.4, dnfWhy: "old",
+        }));
+        observed.length = 0;
+        assert.equal(R.arm(cars, { level, networked, build, seed: -7.5, round: 3.8 }), cars);
+        cases.push({ level, networked, build, cars, calls: observed.slice() });
+      }
+    }
+  }
+  const digest = createHash("sha256").update(JSON.stringify(cases)).digest("hex");
+  assert.equal(digest, "de11f14025fdff1a49758705f9d3e693b6df876f7effcd2dd1a987361954114d");
+});
+
+test("explicit samples respect the risk threshold, zero development span and reason bounds", () => {
+  const R = load(), calls = [];
+  let failure = 0.12;
+  R.ctx.Career = {
+    TDEV_MAX: 0, TDEV_TO_PACE: 1,
+    paceMult() { throw new Error("zero development span must not query career pace"); },
+    hash(seed, kind, round, who) {
+      calls.push(kind);
+      return kind === "dnf" ? failure : 1;
+    },
+  };
+  const car = () => ({ tier: 4, code: "EDGE", team: { id: "haas" } });
+  assert.equal(R.plan(R.arm([car()], { level: "real" })).length, 0,
+    "a sample equal to risk survives");
+  assert.deepEqual(calls, ["dnf"], "survivors do not consume detail samples");
+  calls.length = 0;
+  failure = 0.119999;
+  const retiring = R.arm([car()], { level: "real" })[0];
+  assert.equal(retiring.dnfAt, 0.94);
+  assert.equal(retiring.dnfWhy, "accident", "a sample of 1 is capped at the last reason");
+  assert.deepEqual(calls, ["dnf", "dnfAt", "dnfWhy"]);
 });

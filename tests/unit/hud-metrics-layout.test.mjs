@@ -97,7 +97,7 @@ test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
   // The inset reads are guarded on the rect having a WIDTH, and each falls back
   // to the other side rather than to a viewport-wide number.
   assert.match(hud, /mmR && mmR\.width \? Math\.max\(0, mmR\.left - 10 \* mz\) : null/);
-  assert.match(hud, /scR && scR\.width \? Math\.max\(0, window\.innerWidth - scR\.right - 10 \* sz\) : null/);
+  assert.match(hud, /scR && scR\.width \? Math\.max\(0, vpW\(\) - scR\.right - 10 \* sz\) : null/);
   assert.match(hud, /const sal = salM != null \? salM : \(sarM != null \? sarM : 0\);/);
   assert.match(hud, /const sar = sarM != null \? sarM : \(salM != null \? salM : 0\);/);
 });
@@ -109,7 +109,7 @@ test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
 test("dropped gaps and the limits chip ride measured offsets", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  assert.match(css, /:root\[data-gap-drop\] \.hud-gaps \{\s*\n\s*top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 4px\);/);
+  assert.match(css, /:root\[data-gap-drop\] \.hud-gaps \{\s*\n\s*top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, var\(--hud-top-h-0\)\) \+ 4px\);/);
   assert.match(css, /var\(--hud-sec-h, 4\.8em\)/);
   assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-top-h"/);
   assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-sec-h"/);
@@ -136,7 +136,7 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(leftPxCall, "--hud-left-px is not published at all");
   assert.ok(!/gm/i.test(leftPxCall),
     "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
-  assert.match(hud, /\blimLeft = hitsRight && leftRoom;/);   // a let since #2797: the stored restack replays it
+  assert.match(hud, /\blimLeft = hitsRight && leftRoom && /);   // a let since #2797: the stored restack replays it
   // Dock inset is published AFTER zoom caps, from BOOST / leftmost dock
   // control, using the plate's painted zoom + screen-px air, then one
   // painted-overlap grow (CI oversize workers=2: stale dockLeft vs BOOST).
@@ -154,7 +154,8 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(paintCollapse > 0, "fitHud runs the painted announce collapse");
   assert.equal(fitBody.indexOf("radioTopSlot(", paintCollapse), -1,
     "no radioTopSlot after painted announce collapse (undoes the collapse)");
-  const helper = hud.slice(hud.indexOf("function radioPaintedCollapse"), hud.indexOf("// THE MIRROR AS PAINTED"));
+  const lane = fs.readFileSync(path.join(root, "js/ui/hud-radio-lane.js"), "utf8");   // the helper left hud.js (#3261)
+  const helper = lane.slice(lane.indexOf("function radioPaintedCollapse"), lane.indexOf("// PERF #2151"));
   assert.ok(helper.includes('toggleAttribute("data-lane-collapsed", true)'), "the helper paints data-lane-collapsed on a hit");
   // invalidateFit re-picks the slot, so it must run the same guard right after (it used to leave a relit top slot until the next tick).
   const inv = hud.slice(hud.indexOf("function invalidateFit"), hud.indexOf("_invalidateFit = invalidateFit"));

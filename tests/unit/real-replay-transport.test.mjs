@@ -49,6 +49,7 @@ test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, 
     ctx.RealRace = { replay: () => replay };
     ctx.HudLayout = { setCam: (id) => { layout = id; } };
     ctx.CamTunerPanel = { refresh() {} };
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     G.$ = (id) => id === "btn-cam" ? button : null;
     G.store = { set: (...args) => writes.push(args) };
@@ -661,7 +662,8 @@ function cameraOwnersFixture() {
   ctx.XrSession = { bind: (b) => { bindings = b; }, on() {}, isPresenting: () => presenting };
   G.$ = () => null;
   G.store = { set(k, v) { stored.set(k, v); writes.push([k, v]); } };
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   G.setCamMode = ctx.CamModes.create(G).setCamMode;
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/xr/xr-boot.js"), "utf8") + "\n;globalThis.boot = XrBoot;", ctx, { filename: absSrc("js/xr/xr-boot.js") });
   ctx.XrBoot = ctx.boot;
@@ -735,4 +737,67 @@ test("WATCH restart under XR replaces only its own token and preserves manual WA
   assert.equal(h.current(), "far");
   h.enter(); h.leave();
   assert.equal(h.current(), "far", "re-entry does not retain the previous XR token");
+});
+
+// THE PHONE BAR (UI scaling contract gap 19, PR #5156). On the `(max-height: 520px) and
+// (min-width: 600px)` band the bar is ONE row: play, prev, next, DRIVER, the seek, then a ⋯
+// MORE chip whose box holds SPEED, CAMERA, AUTO, FOLLOW LOCK, PHOTO and the chapter row. Off
+// the band every node sits where the desktop bar built it. The band is the same query the
+// stylesheet styles the row with, and the bar's painted height reaches CSS as --wt-h.
+test("WATCH bar docks its secondary controls into the ⋯ popover on the phone band and undocks off it", () => {
+  function element(tag) {
+    const listeners = {}, attrs = {};
+    const el = { tagName: tag.toUpperCase(), dataset: {}, children: [], style: {}, hidden: false, open: false, disabled: false,
+      classList: { add() {}, remove() {} },
+      appendChild(n) { if (n.parentNode) n.parentNode.children = n.parentNode.children.filter((c) => c !== n); this.children.push(n); n.parentNode = this; return n; },
+      insertBefore(n, ref) { if (n.parentNode) n.parentNode.children = n.parentNode.children.filter((c) => c !== n); const i = this.children.indexOf(ref); this.children.splice(i < 0 ? this.children.length : i, 0, n); n.parentNode = this; return n; },
+      remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((n) => n !== this); },
+      setAttribute(k, v) { attrs[k] = v; }, getAttribute(k) { return k in attrs ? attrs[k] : null; },
+      addEventListener(k, fn) { listeners[k] = fn; }, dispatch(k) { if (listeners[k]) listeners[k](); },
+      getBoundingClientRect() { return { height: 63.5 }; } };
+    return el;
+  }
+  const body = element("body"); body.style = { props: {}, setProperty(k, v) { this.props[k] = v; }, removeProperty(k) { delete this.props[k]; } };
+  let listener = null; const mq = { matches: true, addEventListener(_, fn) { listener = fn; }, removeEventListener() { listener = null; } };
+  const observed = [];
+  class RO { constructor(cb) { this.cb = cb; } observe(el) { observed.push(el); this.cb(); } disconnect() { observed.length = 0; } }
+  const ctx = vm.createContext({ document: { body, createElement: element, activeElement: null }, matchMedia: (q) => { mq.query = q; return mq; }, ResizeObserver: RO,
+    CamModes: { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "tv", label: "TV" }] }, RealReplay: { LEAD_S: 8 } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx, { filename: absSrc("js/ui/watch-transport.js") });
+  const W = vm.runInContext("WatchTransport", ctx);
+  const state = { T: 0, duration: 100, paused: false, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
+  const api = { describe: () => ({ name: "GP", drivers: [{ code: "AAA", name: "Alpha" }], events: [{ t: 20, lap: 2, kind: "pass", text: "X" }], speeds: [1, 2] }),
+    status: () => state, setPaused() {}, setSpeed() {}, follow: () => true, setLocked() {}, setAuto() {}, seek() {}, eventStep() {}, seekEvent() {} };
+  const ui = W.create({ camMode: 0, setCamMode() {}, snapGameCam() {}, openWatchPhoto() {} }, api); ui.start();
+  const css = fs.readFileSync(path.join(ROOT, "css/watch-transport.css"), "utf8");
+  assert.equal(mq.query, "(max-height: 520px) and (min-width: 600px)", "the JS band is the stylesheet's phone branch");
+  assert.ok(css.includes("@media " + mq.query + " {"), "css/watch-transport.css styles the same band");
+  const find = (key, p = body) => p.dataset.wt === key ? p : p.children.map((n) => find(key, n)).find(Boolean);
+  const root = body.children[0], top = find("controls"), more = find("more"), box = find("more-box");
+  const keys = (el) => el.children.map((c) => c.dataset.wt || c.tagName.toLowerCase());
+  // ON the band: one row, the chip visible, the secondary controls and the chapter row in its box.
+  assert.equal(more.hidden, false);
+  assert.deepEqual(keys(top), ["play", "prev", "next", "driver-field", "timeline", "more"], "the one row: transport, DRIVER, seek, ⋯");
+  assert.deepEqual(keys(box), ["speed-field", "camera-field", "auto", "lock", "photo", "chapters"], "the popover holds the rest");
+  assert.equal(find("chapters").open, true, "the chapter row shows inside the popover (its own summary is hidden by CSS)");
+  assert.equal(more.open, false, "the popover is the player's to open");
+  assert.equal(body.style.props["--wt-h"], "63.5px", "the bar's painted height reaches CSS");
+  assert.match(css, /#bc-tower\s*\{[^}]*max-height:\s*calc\(100svh - var\(--wt-h, 180px\)/, "the tower cap reads the measured bar height");
+  for (const px of ["100px", "150px", "260px"]) assert.ok(!new RegExp("#bc-tower \\{ max-height: calc\\(100svh - " + px).test(css), "no per-band tower guess of " + px);
+  assert.match(css, /\[data-wt="more-box"\]\s*\{[^}]*position:\s*absolute;[^}]*right:\s*0;[^}]*bottom:\s*calc\(100% \+ var\(--gap\)\)/, "the popover hangs above the chip, right-aligned");
+  // every control still answers: the DOM walk the toolbar test does finds each key
+  for (const k of ["play", "prev", "next", "speed", "driver", "camera", "auto", "lock", "photo", "seek", "time", "duration", "chapter", "chapter-jump", "event", "director"]) assert.ok(find(k), "key " + k);
+  // OFF the band: the desktop bar, node for node.
+  mq.matches = false; listener();
+  assert.equal(more.hidden, true);
+  assert.deepEqual(keys(top), ["play", "prev", "next", "speed-field", "driver-field", "more", "camera-field", "auto", "lock", "photo"]);
+  assert.deepEqual(keys(root), ["controls", "timeline", "chapters", "caption"], "timeline and chapters are root rows again");
+  assert.equal(find("chapters").open, false, "the chapter drawer is closed again, as it is built");
+  mq.matches = true; listener();
+  assert.deepEqual(keys(top), ["play", "prev", "next", "driver-field", "timeline", "more"], "re-docks on a rotate");
+  ui.stop();
+  assert.equal(body.children.length, 0);
+  assert.equal(listener, null, "the band listener is removed with the bar");
+  assert.equal(observed.length, 0, "the observer is disconnected with the bar");
+  assert.equal(body.style.props["--wt-h"], undefined, "--wt-h leaves with the bar");
 });

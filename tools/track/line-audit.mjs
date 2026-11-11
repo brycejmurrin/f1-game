@@ -115,8 +115,10 @@ for (const id of want) {
     if (slope > maxSlope) { maxSlope = slope; maxAt = i * ds; }
   }
   const kLine = lineCurvature(t);
-  const tRoad = cornerTime(t.curv, n, ds), tLine = cornerTime(kLine, n, ds);
-  const lRoad = lapTime(t.curv, n, ds), lLine = lapTime(kLine, n, ds);
+  // the road in the line's own frame (TrackLine roadK: the node geometry), so both sides share one model
+  const kRoad = t.lineRoadK || t.curv;
+  const tRoad = cornerTime(kRoad, n, ds), tLine = cornerTime(kLine, n, ds);
+  const lRoad = lapTime(kRoad, n, ds), lLine = lapTime(kLine, n, ds);
   // A corner whose LINE is tighter than the ROAD *at its apex* is a bake that
   // made things worse. Measured over the core, not the padded window — see the
   // header for why the window version reads a neighbour's turn-in.
@@ -125,7 +127,7 @@ for (const id of want) {
     const half = Math.max(c.len, 20) / 2;
     const i0 = Math.round((((c.sApex - half) % t.total) + t.total) % t.total / ds), span = Math.round(2 * half / ds);
     let pr = 0, pl = 0;
-    for (let q = 0; q <= span; q++) { const i = (i0 + q) % n; pr = Math.max(pr, Math.abs(t.curv[i])); pl = Math.max(pl, Math.abs(smooth(kLine, i, n))); }
+    for (let q = 0; q <= span; q++) { const i = (i0 + q) % n; pr = Math.max(pr, Math.abs(kRoad[i])); pl = Math.max(pl, Math.abs(smooth(kLine, i, n))); }
     const ratio = pl / Math.max(pr, 1e-9);
     if (ratio > 1.02) { tighter++; if (ratio > worstRatio) { worstRatio = ratio; worstAt = Math.round(c.sApex); } }
   }

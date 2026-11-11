@@ -3,17 +3,10 @@
  * intensity), js/race/race-control.js (the safety car), js/lighting/* (the
  * darker sky) and the render half of js/game.js (strikes, spray).
  *
- * WHAT A STORM IS HERE. Heavy rain is > 7.6 mm/h (AMS glossary,
- * https://glossary.ametsoc.org/wiki/Rain). On the ROAD it is no wetter than
- * rain — standing water is standing water — so grip and tread treat it as full
- * rain (asRain; TyreModel owns the grip and is not told about storms). What a
- * storm takes away is VISIBILITY: the floor and diffuser throw the water up into
- * a plume the car behind drives blind through
- * (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/),
- * which is why race control starts a storm race behind the safety car and
- * neutralises one that a storm rolls over (the FIA's 2025 Belgian GP: formation
- * lap, red flag for visibility, restart behind the SC —
- * https://www.the-race.com/formula-1/belgian-grand-prix-delayed-red-flag-rain-visibility.md).
+ * WHAT A STORM IS HERE. On the ROAD it is no wetter than rain, so grip and tread
+ * treat it as full rain (asRain; TyreModel is not told about storms). What it
+ * takes is VISIBILITY (the spray plume), which is why race control starts a
+ * storm race behind the safety car and neutralises one a storm rolls over.
  *
  * LIGHTNING IS A FUNCTION OF (seed, clock). The clock is cut into SLOT-second
  * windows; each window holds at most one strike, at an offset hashed from the
@@ -44,14 +37,11 @@ const Storm = (function () {
   const rainK = (w) => (w === "storm" ? RAIN_K : RAIN_1);
   const sprayK = (w) => (w === "storm" ? SPRAY_STORM : w === "rain" ? 1 : 0.6);
 
-  // 32-bit integer hash (Wang/murmur finaliser mix) → [0, 1). Its own, so the
-  // schedule needs no other module and draws nothing from the sim stream.
+  // 32-bit integer hash → [0, 1). The input mix is this schedule's own (so a
+  // storm and the wind do not share draws); the finaliser is Hash32.mix.
   function h01(seed, slot, salt) {
-    let x = (Math.imul((seed >>> 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(slot | 0, 0xc2b2ae35) ^ Math.imul(salt | 0, 0x27d4eb2f)) >>> 0;
-    x ^= x >>> 16; x = Math.imul(x, 0x7feb352d) >>> 0;
-    x ^= x >>> 15; x = Math.imul(x, 0x846ca68b) >>> 0;
-    x ^= x >>> 16;
-    return (x >>> 0) / 4294967296;
+    const x = (Math.imul((seed >>> 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(slot | 0, 0xc2b2ae35) ^ Math.imul(salt | 0, 0x27d4eb2f)) >>> 0;
+    return Hash32.mix(x) / 4294967296;
   }
 
   /** The strike in window `k`, or null: { t, delay, near }. `rate` is the

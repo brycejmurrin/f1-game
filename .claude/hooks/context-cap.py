@@ -8,17 +8,22 @@ input fields), but it carries `transcript_path`, and every assistant entry there
 context = input + cache read + cache write of the newest main-thread entry (the method of
 tools/ci/session-transcript.mjs --ctx and the audit's rows 1/2).
 
-Caps: APEX_CTX_SOFT / APEX_CTX_HARD (k) win; else the brief's last `STOP AT: <N>k`; hard = soft + HARD_DELTA_K.
-A session with no brief (one Bryce opened) has no cap and gets nothing. (The per-role table in the agent-fleet
-launch policy was retired 2026-10-27; a dispatcher brief states its own STOP AT, docs/WORKERS.md.)
+Caps: APEX_CTX_SOFT / APEX_CTX_HARD (k) win; else the brief's first `STOP AT: <N>k` (the launch line states it
+first; a later quote of another session's cap is not this session's); hard = soft + HARD_DELTA_K.
+A session with no brief (one Bryce opened) has no cap and gets nothing; a worker brief states its own STOP AT
+(.claude/agents/README.md §Parent and child).
 
   UserPromptSubmit, PostToolUse — advisory: one line, `context N k / cap C k`, once per level (soft, hard) per
                                    session (state in artifacts/ctx-cap/). Any error → no output.
-  PreToolUse (Agent, create_session) — over the HARD cap, deny a new spawn (permissionDecision "deny",
-                                   https://code.claude.com/docs/en/hooks §PreToolUse decision control). A
-                                   create_session whose prompt is a hand-off to a successor stays allowed: that
-                                   is the size stop's own way out. Any error → allow (exit 0, no output).
-APEX_CTX_CAP=off silences every mode.
+  PreToolUse (Agent)             — over the HARD cap, deny a new spawn (permissionDecision "deny",
+                                   https://code.claude.com/docs/en/hooks §PreToolUse decision control); the
+                                   way out is to push and hand off (skill handoff). settings.json runs this mode as
+                                   `context-cap.py --guard`, which FAILS CLOSED: an unreadable payload, an internal
+                                   error, or a session WITH a cap whose live count cannot be read (no transcript, a
+                                   zero-usage newest entry, no assistant entry in the tail) is a deny. A session with
+                                   no cap passes. Without --guard (the advisory events, where exit 2 would erase a
+                                   user's prompt) any error → no output.
+APEX_CTX_CAP=off silences every mode; so does the `.claude/allow-context-cap` hatch.
 """
 import json
 import os
@@ -27,8 +32,7 @@ import sys
 
 HARD_DELTA_K = 50
 TAIL = 4 << 20
-HANDOFF = re.compile(r"\bhand-?off\b|\bsuccessor\b", re.I)
-SPAWNS = ("Agent", "mcp__claude-code-remote__create_session")
+SPAWNS = ("Agent",)
 
 
 def _entries(lines):
@@ -40,7 +44,7 @@ def _entries(lines):
 
 
 def context_tokens(path):
-    """Live context of the newest main-thread assistant turn, or None."""
+    """Live context of the newest main-thread assistant turn with a non-zero count, or None."""
     with open(path, "rb") as fh:
         fh.seek(0, os.SEEK_END)
         fh.seek(max(0, fh.tell() - TAIL))
@@ -48,7 +52,9 @@ def context_tokens(path):
     for d in _entries(reversed(lines)):
         u = (d.get("message") or {}).get("usage") if d.get("type") == "assistant" and not d.get("isSidechain") else None
         if u:
-            return int(u.get("input_tokens") or 0) + int(u.get("cache_read_input_tokens") or 0) + int(u.get("cache_creation_input_tokens") or 0)
+            n = int(u.get("input_tokens") or 0) + int(u.get("cache_read_input_tokens") or 0) + int(u.get("cache_creation_input_tokens") or 0)
+            if n > 0:
+                return n
     return None
 
 
@@ -77,7 +83,7 @@ def caps(root, brief, env):
     if soft is None:
         stops = re.findall(r"STOP AT:?\s*(\d+)\s*k", brief, re.I)
         if stops:
-            soft, src = int(stops[-1]), "brief STOP AT"
+            soft, src = int(stops[0]), "brief STOP AT"
     if soft is None:
         return None
     hard = int(env["APEX_CTX_HARD"]) if (env.get("APEX_CTX_HARD") or "").isdigit() else soft + HARD_DELTA_K
@@ -107,32 +113,41 @@ def decide(data, root, env):
     if os.path.isfile(os.path.join(root, ".claude", "allow-context-cap")):
         return ""
     event, path = data.get("hook_event_name"), data.get("transcript_path")
-    if not path or not os.path.isfile(path):
+    guard = event == "PreToolUse"
+    if guard and data.get("tool_name") not in SPAWNS:
         return ""
-    if event == "PreToolUse" and data.get("tool_name") not in SPAWNS:
+    have = bool(path) and os.path.isfile(path)
+    # Cap first, transcript tail second: context_tokens parses up to 4 MB, so a session with no cap (most of them)
+    # returns before it. An env soft cap makes the brief irrelevant.
+    env_cap = (env.get("APEX_CTX_SOFT") or "").isdigit()
+    cap = caps(root, "" if env_cap or not have else brief_text(path), env)
+    if not cap:
         return ""
-    cap = caps(root, brief_text(path), env)
-    n = context_tokens(path)
-    if not cap or n is None:
-        return ""
+    n = context_tokens(path) if have else None
+    if n is None:
+        if not guard:
+            return ""
+        return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+            "permissionDecisionReason": ("context-cap: this session has a cap (%dk, %s) but its live context could not be "
+                "read (%s), so a new spawn is refused (fail closed). Push and hand off, or `touch .claude/allow-context-cap` "
+                "if the user told this session to continue past its cap." % (cap[0], cap[2], "no transcript" if not have
+                else "no assistant entry with a token count in the transcript tail"))}})
     soft, hard, src = cap
     k = round(n / 1000)
     line = "context %dk / cap %dk" % (k, soft)
     if event == "PreToolUse":
-        inp = data.get("tool_input") or {}
-        if k < hard or (data.get("tool_name") != "Agent" and HANDOFF.search(str(inp.get("prompt") or ""))):
+        if k < hard:
             return ""
         return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
             "permissionDecisionReason": ("context-cap: %s, over the hard cap %dk (%s). No new spawns: push, then "
-                "hand off to a successor (a create_session whose prompt says hand-off/successor is allowed; "
-                "docs/WORKERS.md §The contract)." % (line, hard, src))}})
+                "hand off (skill handoff; .claude/agents/README.md §Parent and child)." % (line, hard, src))}})
     if k < soft:
         return ""
     level = "hard" if k >= hard else "soft"
     if not once(root, data.get("session_id"), level):
         return ""
-    msg = ("context-cap: %s (%s; hard %dk). %s (docs/WORKERS.md §The contract)." % (line, src, hard,
-           "Over the hard cap: push and hand off now; new Agent/create_session spawns are refused" if level == "hard"
+    msg = ("context-cap: %s (%s; hard %dk). %s (skill handoff)." % (line, src, hard,
+           "Over the hard cap: push and hand off now; new Agent spawns are refused" if level == "hard"
            else "Over the soft cap: finish the current unit, push, hand off"))
     if event == "UserPromptSubmit":
         return msg
@@ -141,6 +156,8 @@ def decide(data, root, env):
 
 def main():
     data = json.load(sys.stdin)
+    if not isinstance(data, dict) or not isinstance(data.get("tool_input", {}), (dict, type(None))):
+        raise ValueError("payload is not an object, or tool_input is malformed")
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = decide(data, root, os.environ)
     if out:
@@ -148,8 +165,17 @@ def main():
 
 
 if __name__ == "__main__":
+    guard = "--guard" in sys.argv[1:]
     try:
         main()
-    except Exception:  # fail open: advisory modes print nothing, the spawn guard allows
-        pass
+    except Exception as e:
+        # Advisory modes print nothing. The spawn guard (--guard) refuses: a crash must not let a spawn past the cap.
+        root = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        hatch = os.path.isfile(os.path.join(root, ".claude", "allow-context-cap"))
+        if guard and os.environ.get("APEX_CTX_CAP") != "off" and not hatch:
+            sys.stderr.write("BLOCKED: context-cap could not judge this spawn (%s: %s), so it is refused (fail closed). "
+                             "Report the hook error; a session the user told to continue past its cap can `touch "
+                             ".claude/allow-context-cap` (or set APEX_CTX_CAP=off).\n" % (type(e).__name__, str(e)[:160]))
+            sys.stderr.flush()
+            os._exit(2)
     sys.exit(0)

@@ -36,15 +36,16 @@ const HudStrategy = (function () {
   const THREAT_REACH = 3;     // engineer.js THREAT_REACH — own stop must be this near
   const COVER_MIN_WEAR = 0.4; // same floor as the engineer threat gate
 
-  /** "~12 L" laps left, "GONE" past the set's life, "--" unknown. */
+  /** "12 L" laps left, "GONE" past the set's life, "--" unknown. No "~": at
+   *  --fs-micro on a 1x phone it read as a minus ("-12 L"; UI hunt 2026-10-29). */
   function fmtLaps(left, spent) {
     if (spent >= 1) return "GONE";
     if (left == null || !Number.isFinite(left)) return "--";
-    return "~" + Math.max(0, Math.min(99, Math.round(left))) + " L";
+    return Math.max(0, Math.min(99, Math.round(left))) + " L";
   }
-  /** "~21 s" — a stop's cost, whole seconds. */
+  /** "21 s" — a stop's cost, whole seconds (no "~", as fmtLaps). */
   function fmtLoss(s) {
-    return s != null && Number.isFinite(s) && s > 0 ? "~" + Math.round(s) + " s" : "--";
+    return s != null && Number.isFinite(s) && s > 0 ? Math.round(s) + " s" : "--";
   }
   /** The NEXT line from PitLane.planInfo's {next, code, stops}. */
   function fmtNext(pl) {
@@ -89,10 +90,9 @@ const HudStrategy = (function () {
     return (o.myWear || 0) - (o.behindWear || 0) >= UNDERCUT_WEAR;
   }
 
-  // ---- the DOM ------------------------------------------------------------
   const doc = typeof document !== "undefined" ? document : null;
   let root = null, nodes = null;
-  const last = { tyre: "", loss: "", next: "", uc: null, ucWho: null, cov: null, covWho: null, label: "" };
+  const last = { tyre: "", loss: "", next: "", uc: null, ucWho: null, cov: null, covWho: null };
   let short = false, shortPlayer = null, shortNext = null;
   const ctx = { hasRival: false, rivalInPit: false, rivalLapped: false, stopLeft: false, gapS: 0, lossS: 0, rivalWear: 0, myWear: 0 };
   const bctx = { hasBehind: false, behindInPit: false, stopLeft: false, gapS: 0, lossS: 0, behindWear: 0, myWear: 0, lapsToStop: null, behindWindow: "", behindLap: 0 };
@@ -159,7 +159,7 @@ const HudStrategy = (function () {
       const dist = (a.prog || 0) - (player.prog || 0);
       ctx.gapS = dist / vFloor;
       ctx.rivalLapped = total > 0 && dist >= total;   // a lap or more up the road: not a fight for this place
-      ctx.rivalInPit = !!(a.pitState && a.pitState !== "none");
+      ctx.rivalInPit = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(a);
       ctx.rivalWear = tyres.spent(a);
     }
     ctx.myWear = spent;
@@ -179,7 +179,7 @@ const HudStrategy = (function () {
     if (bctx.hasBehind) {
       const backDist = (player.prog || 0) - (behind.prog || 0);
       bctx.gapS = backDist / vFloor;
-      bctx.behindInPit = !!(behind.pitState && behind.pitState !== "none");
+      bctx.behindInPit = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(behind);
       bctx.behindWear = tyres.spent(behind);
       bctx.behindLap = behind.lap || 0;
       bctx.behindWindow = pit && pit.windowOf ? pit.windowOf(behind) : "";
@@ -191,9 +191,9 @@ const HudStrategy = (function () {
       nodes.cov.textContent = cov ? (behind.code || "") : "";
     }
     if (dirty) {
-      root.setAttribute("aria-label", "Strategy: tyres " + last.tyre + ", pit loss " + last.loss + ", next stop " + last.next
-        + (uc ? ", undercut on " + (a.code || "the car ahead") : "")
-        + (cov ? ", cover from " + (behind.code || "the car behind") : ""));
+      root.setAttribute("aria-label", I18n.t("hud.strategy.label", { tyre: last.tyre, loss: last.loss, next: last.next }, "Strategy: tyres {tyre}, pit loss {loss}, next stop {next}")
+        + (uc ? ", " + I18n.t("hud.strategy.undercut", { who: a.code || I18n.t("hud.strategy.carAhead", null, "the car ahead") }, "undercut on {who}") : "")
+        + (cov ? ", " + I18n.t("hud.strategy.cover", { who: behind.code || I18n.t("hud.strategy.carBehind", null, "the car behind") }, "cover from {who}") : ""));
     }
   }
 

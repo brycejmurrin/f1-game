@@ -46,6 +46,7 @@ const SettingsSearch = (function () {
     ["line-opacity", "Driving line opacity", "display", "pm-lineopacity-sel", "visual guide transparent"],
     ["touch-size", "Touch button size", "display", "pm-btnscale", "bigger smaller pedals arrows"],
     ["touch-opacity", "Touch button opacity", "display", "pm-btnopacity", "transparent pedals arrows"],
+    ["touch-shape", "Touch button shape", "display", "pm-btnshape-sel", "round square corners pedals arrows"],
     ["panel-opacity", "HUD panel opacity", "display", "pm-panelopacity", "transparent readouts"],
     ["resolution", "Resolution", "graphics", "pm-res-sel", "render scale performance quality pixels graphics picture sharpness"],
     ["fullscreen", "Fullscreen", "graphics", "pm-fullscreen-sel", "full screen window"],
@@ -247,9 +248,25 @@ const SettingsSearch = (function () {
         return document.activeElement === target;
       },
       cancel() { fromSearch = false; clearFeedback(); },
+      // A fresh Settings session starts unfiltered (UI hunt 2026-10-29 #5);
+      // restore() still brings a result page BACK to the query within one.
+      reset() { fromSearch = false; clearFeedback(); if (input.value) { input.value = ""; paint(); } },
       dispose() { subscribers.delete(paint); clearFeedback(); box.remove(); },
       input,
     });
   }
-  return Object.freeze({ CATALOG, register, find, reveal, create });
+  // Escape / pad B (`cancel`) in a non-empty FIND A SETTING clears it first, like the circuit search.
+  function onEscape(e) {
+    const cancel = e.type === "cancel";
+    if ((!cancel && e.key !== "Escape") || e.isComposing || e.defaultPrevented) return;
+    const t = cancel ? document.activeElement : e.target;
+    if (!t || !t.value || !t.closest || !t.closest("[data-settings-search]")) return;
+    t.value = ""; if (t.oninput) t.oninput();
+    e.preventDefault(); e.stopPropagation();
+  }
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("keydown", onEscape, true);
+    window.addEventListener("cancel", onEscape, true);
+  }
+  return Object.freeze({ CATALOG, register, find, reveal, create, onEscape });
 })();

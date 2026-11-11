@@ -217,6 +217,24 @@ function detailRows(path3, g, { tlxLeg }) {
       (_p.wideCostRatio != null ? `  cost ${_p.wideCostRatio}x normal (${_p.wideMeanMs} vs ${_p.normalMeanMs}ms) spikeEnrich ${_p.spikeEnrichmentOnWide}x` : ""));
   }
   if (_pk && _pk.verdict) rows.push(`${IND}kinds: ${_pk.verdict}`);
+  // THE STORE INVENTORY (#2649): submits and stored/discarded attachments a frame, then the passes.
+  const _po = g.passOps;
+  if (_po && _po.rows) {
+    rows.push(`${IND}store: submits=${_po.medianSubmits} stored=${_po.storedPerFrame}/f discarded=${_po.discardedPerFrame}/f`);
+    for (const r of _po.rows.slice(0, 16)) rows.push(`${IND}  ${String(r.perFrame).padStart(5)}x ${r.pass}`);
+  }
+  // THE UPLOAD SITES (perf hunt 6): writes and KB a frame by class, then the top five call sites.
+  const _up = g.uploadsSummary;
+  if (_up && _up.rows) {
+    rows.push(`${IND}uploads: ${_up.callsPerFrame} calls/f ${_up.kbPerFrame} KB/f — ` +
+      _up.groups.map((c) => `${c.cls} ${Math.round(c.share * 100)}%`).join(" "));
+    for (const r of _up.rows.slice(0, 5)) rows.push(`${IND}  ${String(r.kbPerFrame).padStart(7)} KB/f ${String(r.nPerFrame).padStart(5)}x ${r.site.slice(0, 160)}`);
+  }
+  // GPU hunt 3: every writeBuffer by buffer group (unsampled), then the mirror and churn rates over the window.
+  if (Array.isArray(g.uploadGroups)) rows.push(`${IND}ugroups: ` + g.uploadGroups.slice(0, 8).map((r) => `${r.group} ${r.nPerFrame}/f ${r.kbPerFrame}KB`).join(" | "));
+  const _mw = g.mirrorWindow;
+  if (_mw && !_mw.note) rows.push(`${IND}mirror: drawn ${_mw.drawnPerFrame}/f glass ${_mw.glassPerFrame}/f renders ${_mw.rendersPerFrame}/f allocs ${_mw.allocs}` +
+    ` rung ${(_mw.quality || []).join(">")}` + (_mw.churnPerFrame ? " churn " + Object.entries(_mw.churnPerFrame).map(([k, v]) => `${k}=${v}/f`).join(" ") : ""));
   // PIPELINE COMPILES: only a compile count separates "allocate faster" from
   // "warm the programs" (run 197).
   const _w = g.gpuWork;

@@ -18,12 +18,14 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ctx = vm.createContext({});
 vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8"), ctx, { filename: absSrc("js/race/sporting-regs.js") });
 const R = vm.runInContext("SportingRegs", ctx);
+const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 const log = (...codes) => codes.map((code, i) => ({ code, lap0: i * 5, lap1: null }));
 
@@ -36,26 +38,38 @@ test("one dry compound is short; two different ones are not; a wet set lifts the
   assert.equal(R.compoundShort(log("M", "I")), false, "an intermediate set lifts the obligation");
   assert.equal(R.compoundShort(log("W")), false);
   assert.equal(R.compoundShort(null), true, "no log is no second compound");
-  assert.equal(R.compoundsRun(log("S", "M", "S")).dry, 2);
+  // compoundsRun stays module-local; compoundShort covers the dry-count rule.
+  assert.equal(R.compoundShort(log("S", "M", "S")), false, "two distinct dry compounds: not short");
 });
 
 test("the verdict: DSQ in a race the rule covers, 30 s if it ended suspended, nothing otherwise", () => {
+  // compoundVerdict stays module-local; applyCompoundRule owns the public surface.
   const car = { tyreLog: log("M"), penalty: 0 };
-  assert.equal(R.compoundVerdict(car, { applies: false }), null, "a sprint, a short race, a wet race: no rule");
-  assert.equal(R.compoundVerdict(car, { applies: true }).dsq, "one dry compound");
-  assert.equal(R.compoundVerdict(car, { applies: true, suspended: true }).penaltyS, 30);
-  assert.equal(R.compoundVerdict({ tyreLog: log("M", "H") }, { applies: true }), null, "complied");
-  assert.equal(R.compoundVerdict({ tyreLog: log("M"), retired: true }, { applies: true }), null,
+  assert.equal(R.applyCompoundRule([car], { applies: false }).length, 0, "a sprint, a short race, a wet race: no rule");
+  assert.equal(car.dsq, undefined);
+  assert.equal(R.applyCompoundRule([car], { applies: true }).length, 1);
+  assert.equal(car.dsq, "one dry compound");
+  const sus = { tyreLog: log("M"), penalty: 0 };
+  assert.equal(R.applyCompoundRule([sus], { applies: true, suspended: true }).length, 0);
+  assert.equal(sus.penalty, 30);
+  assert.equal(R.applyCompoundRule([{ tyreLog: log("M", "H"), penalty: 0 }], { applies: true }).length, 0, "complied");
+  const retired = { tyreLog: log("M"), retired: true, penalty: 0 };
+  assert.equal(R.applyCompoundRule([retired], { applies: true }).length, 0,
     "a retirement is not judged on a stop it never reached");
 });
 
 test("flag-time compound compliance survives later live-log changes without freezing unfinished cars", () => {
-  const car = { finished: true, compoundShortAtFinish: true, tyreLog: log("S") };
+  const car = { finished: true, compoundShortAtFinish: true, tyreLog: log("S"), penalty: 0 };
   car.tyreLog[0].code = "W"; car.tyreLog.push({ code: "M" });
-  assert.equal(R.compoundVerdict(car, { applies: true }).dsq, "one dry compound", "post-flag fit or mutation cannot erase the verdict");
-  assert.equal(R.compoundVerdict(car, { applies: true, suspended: true }).penaltyS, 30);
-  assert.equal(R.compoundVerdict({ ...car, compoundShortAtFinish: false, tyreLog: log("S") }, { applies: true }), null, "a compliant finish remains compliant");
-  assert.equal(R.compoundVerdict({ ...car, finished: false }, { applies: true }), null, "unfinished cars still use their live log");
+  assert.equal(R.applyCompoundRule([car], { applies: true }).length, 1, "post-flag fit or mutation cannot erase the verdict");
+  assert.equal(car.dsq, "one dry compound");
+  const sus = { finished: true, compoundShortAtFinish: true, tyreLog: log("S"), penalty: 0 };
+  assert.equal(R.applyCompoundRule([sus], { applies: true, suspended: true }).length, 0);
+  assert.equal(sus.penalty, 30);
+  const ok = { finished: true, compoundShortAtFinish: false, tyreLog: log("S"), penalty: 0 };
+  assert.equal(R.applyCompoundRule([ok], { applies: true }).length, 0, "a compliant finish remains compliant");
+  const live = { finished: false, compoundShortAtFinish: true, tyreLog: log("S", "M"), penalty: 0 };
+  assert.equal(R.applyCompoundRule([live], { applies: true }).length, 0, "unfinished cars still use their live log");
 });
 
 test("applyCompoundRule marks every offender, prices a suspended race, and clears a stale verdict", () => {
@@ -91,11 +105,20 @@ function run(w, f, level, seconds) {
 }
 
 test("the price scale: 10 s for one kept place, 20 for two, 30 for more", () => {
-  assert.equal(R.passPenaltyS(0), 0);
-  assert.equal(R.passPenaltyS(1), 10);
-  assert.equal(R.passPenaltyS(2), 20);
-  assert.equal(R.passPenaltyS(3), 30);
-  assert.equal(R.passPenaltyS(7), 30);
+  // passPenaltyS stays module-local; pin the documented seconds via createPassWatch.
+  const price = (n) => {
+    const w = R.createPassWatch(0.2), f = field(Math.max(n, 1));
+    w.tick(f.p, f.all, 3, DT);
+    f.p.prog = 110 + (n - 1) * 10 + 5;   // past n rivals under the Safety Car
+    w.tick(f.p, f.all, 3, DT);
+    const evs = run(w, f, 3, 1);
+    const pen = evs.find((e) => e.type === "penalty");
+    return pen ? pen.sec : 0;
+  };
+  assert.equal(price(1), 10);
+  assert.equal(price(2), 20);
+  assert.equal(price(3), 30);
+  assert.equal(price(7), 30);
 });
 
 test("a place gained under the SC opens the window; given back in time, nothing", () => {
@@ -215,12 +238,60 @@ test("a stricken car that came past the player may be re-passed, and it cannot o
   assert.deepEqual(run(w, f, 3, 6), [], "nothing was owed either way");
 });
 
+// THE REAL WATCH, IN THE REAL GAME. The caution is flown through the façade's
+// scripted hold (G.holdCaution — the hook js/race/real-race.js uses), because the
+// VM cannot raise one through debris. The pass is a teleport past exactly ONE
+// car (the one directly ahead), so the verdict names that car alone: game.js's
+// own scWatch.tick + stricken predicate decide, nothing here re-implements them.
+test("under the safety car, passing a healthy car warns and passing a car being rescued does not (game.js scWatch)", async () => {
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G, apex } = game;
+    apex.headless(true);
+    await game.race("monza", "day", "dry", { laps: 5 });
+    const ready = await game.stepUntil(() => G.state === "race" && G.raceT > 15, { maxSteps: 60 * 40 });
+    assert.ok(ready.ok, "the race is running");
+    G.holdCaution(3, "SAFETY CAR");
+    assert.ok((await game.stepUntil(() => apex.caution().level === 3, { maxSteps: 120 })).ok, "the held SC flies");
+    game.step(30);
+    const L = G.track.total;
+    // Put the player DELTA metres in front of the car directly ahead of it,
+    // short of the next one, on that car's lap and speed.
+    const passNext = (prep) => {
+      const p = G.player;
+      const ahead = G.cars.filter((c) => c !== p && !c.retired && !c.finished && c.prog > p.prog).sort((a, b) => a.prog - b.prog);
+      assert.ok(ahead.length >= 2, "two cars ahead of the player");
+      const [t, t2] = ahead;
+      // Moving: well above stricken()'s "all but stopped" line (vTop × 0.05).
+      assert.ok(t.speed > G.vTop() * 0.08 && !(t.pitState && t.pitState !== "none"), `the target runs on track (v ${t.speed})`);
+      const delta = Math.min(10, (t2.prog - t.prog) / 2);
+      if (prep) prep(t);
+      const owedBefore = apex.caution().owed;
+      const since = (game.sandbox.Log.records().slice(-1)[0] || { id: 0 }).id;
+      apex.jump(((t.s + delta) % L) / L, t.speed, t.x);
+      p.lap = t.lap; p.prog = t.prog + delta;
+      game.step(1);
+      assert.ok(p.prog > t.prog, "the player is ahead of the target after the step");
+      const warns = game.sandbox.Log.records({ ns: "game", since }).filter((r) => /Caution pass warn/.test(r.msg));
+      return { t, warns, owed: apex.caution().owed, owedBefore };
+    };
+    const rescued = passNext((t) => { t.rescueT = 2; });
+    assert.equal(rescued.warns.length, 0, "a car being rescued as stuck (rescueT > 0.25) may be passed under the SC");
+    assert.equal(rescued.owed, rescued.owedBefore, "…and nothing is owed for it");
+    const healthy = passNext();
+    assert.equal(healthy.t.rescueT || 0, 0, "the second target is healthy");
+    assert.equal(healthy.warns.length, 1, "passing a healthy car under the SC raises the give-back warning");
+    assert.equal(healthy.owed, healthy.owedBefore + 1, "one place is owed");
+  } finally { game.close(); }
+});
+
 test("game.js hands the pass watch its stricken-car predicate", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   assert.match(src, /const scWatch = SportingRegs\.createPassWatch\(0, stricken\);/, "the watch reads the shared predicate");
   const def = (/const stricken = \(o\) => [\s\S]*?;\n/.exec(src) || [""])[0];
   assert.match(def, /incidentSim\.owns\(o\)/, "a car mid-incident may be passed");
-  assert.match(def, /rescueT/, "a car being rescued as stuck may be passed");
+  // rescueT (a car being rescued as stuck may be passed) is proven by BEHAVIOUR
+  // in the VM test below, not by the word being present.
   assert.match(def, /offroad/, "a beached car may be passed");
   assert.match(def, /vTop\(\) \* 0\.05/, "a car all but stopped on track may be passed");
   // Blue-flag watch (same stricken predicate, same raw game.js read — do not
@@ -389,15 +460,19 @@ function blueRun(w, f, seconds) {
   return evs;
 }
 
-test("blueFlagCar: only a car a lap up, physically just behind, within the time window", () => {
-  const f = blueField(40);                          // 40 m / 60 m/s ≈ 0.67 s < 1.2 s
-  assert.equal(R.blueFlagCar(f.p, f.all, f.ctx), f.lapper);
-  assert.equal(R.blueFlagCar(f.p, f.all, { ...f.ctx, total: 0 }), null);
+test("blue flag selector: only a car a lap up, physically just behind, within the time window", () => {
+  // blueFlagCar stays module-local; createBlueFlagWatch owns the public surface.
+  const near = blueField(40);                       // 40 m / 60 m/s ≈ 0.67 s < 1.2 s
+  const wNear = R.createBlueFlagWatch();
+  assert.ok(blueRun(wNear, near, 5).some((e) => e.type === "warn"), "lapper in the window arms the watch");
+  const noTrack = blueField(40);
+  noTrack.ctx = { ...noTrack.ctx, total: 0 };
+  assert.deepEqual(blueRun(R.createBlueFlagWatch(), noTrack, 5), [], "no track length: no flag");
   const far = blueField(200);                       // 200 / 60 ≈ 3.3 s — past the window
-  assert.equal(R.blueFlagCar(far.p, far.all, far.ctx), null);
+  assert.deepEqual(blueRun(R.createBlueFlagWatch(), far, 5), [], "past the time window: no flag");
   const sameLap = blueField(40);
   sameLap.lapper.prog = sameLap.p.prog - 40;        // behind, but not a lap up
-  assert.equal(R.blueFlagCar(sameLap.p, sameLap.all, sameLap.ctx), null);
+  assert.deepEqual(blueRun(R.createBlueFlagWatch(), sameLap, 5), [], "same lap: no flag");
 });
 
 test("no blue flag → no warning and no penalty", () => {
@@ -475,4 +550,38 @@ test("exemptions: caution, pit, finished/retired, troubled player, and non-race"
   const w = R.createBlueFlagWatch((o) => stuck.has(o)), f = blueField(40);
   stuck.add(f.p);
   assert.deepEqual(blueRun(w, f, 10), [], "troubled / stuck player");
+});
+
+test("SKIP after a player DNF under red applies the suspended-race compound tariff", async () => {
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G, apex } = game;
+    apex.headless(true);
+    await game.race("monza", "day", "dry", { laps: 10 });
+    apex.tyres({ level: "real" }); game.step(1);
+    for (const car of G.cars) car.dnfAt = null;
+    const rival = G.cars.find((car) => !car.human);
+    assert.equal(G.pits.twoCompoundApplies(), true);
+    assert.equal(R.compoundShort(rival.tyreLog), true);
+    apex.retire(null);
+    G.applyCaution({ level: 4, sinceT: G.raceT });
+    G.els.pausebtn.onclick();
+    const skip = game.sandbox.document.getElementById("pm-skip-results");
+    assert.equal(skip.hidden, false, "a retired solo driver can settle the remaining field");
+    skip.onclick();
+    assert.equal(G.state, "results");
+    assert.equal(rival.penalty, 30, "a suspension without a finisher still enforces the +30 s tariff");
+    assert.equal(rival.dsq, undefined, "suspended races use a time penalty");
+    assert.equal(G.player.penalty || 0, 0, "a retirement is exempt");
+  } finally { game.close(); }
+});
+
+test("a player who retires with a place owed takes no give-back penalty (HUNT-2026-11-02)", () => {
+  const w = R.createPassWatch(5), f = field(2);
+  w.tick(f.p, f.all, 3, DT);
+  f.p.prog = 115;
+  assert.equal(w.tick(f.p, f.all, 3, DT).type, "warn");
+  f.p.retired = true;
+  assert.deepEqual(run(w, f, 3, 10), [], "no penalty event for a retired car");
+  assert.equal(w.info().owed, 0);
 });

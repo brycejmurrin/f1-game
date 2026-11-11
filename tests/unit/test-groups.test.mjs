@@ -133,21 +133,21 @@ test("docs/TESTING.md documents every test group, and no group that is gone", ()
   assert.deepEqual(stale, [], "docs/TESTING.md lists a group that no longer exists in package.json");
 });
 
-test("docs/TESTING-COVERAGE.md names every root spec and unit suite", () => {
-  const doc = read("docs/TESTING-COVERAGE.md");
+test("the built coverage page describes every root spec and unit suite", async () => {
+  // The page is built on demand into artifacts/ (never committed since 2026-11-10), so the guard is the
+  // render itself: every suite gets a row, and no row falls through to "—" (no header, note or test title).
+  const { renderCoverage } = await import("../../tools/docs/gen-coverage-table.mjs");
+  const doc = renderCoverage();
   const link = section(read("docs/TESTING.md"), "5. Coverage table");
-  assert.match(link, /TESTING-COVERAGE\.md/, "docs/TESTING.md §5 must link to the generated coverage page");
+  assert.match(link, /gen-coverage-table\.mjs/, "docs/TESTING.md §5 must say how to build the coverage page");
   assert.ok(link.length < 2500, "docs/TESTING.md §5 inlined the coverage table again");
-  // A row may name a FAMILY with a glob — the 16 per-circuit foundation specs
-  // differ only by circuit and 16 identical rows would document nothing. A new
-  // KIND of spec still has to earn its own row.
-  const globs = [...doc.matchAll(/`([a-z0-9_-]*\*[a-z0-9_*-]*\.(?:spec\.js|test\.mjs))`/g)]
-    .map((m) => new RegExp("^" + m[1].replace(/[.]/g, "\\.").replace(/\*/g, "[a-z0-9_-]*") + "$"));
   const files = ["specs", "unit"].flatMap((d) => fs.readdirSync(path.join(ROOT, "tests", d)))
     .filter((f) => /\.(spec\.js|test\.(mjs|cjs))$/.test(f));
-  const missing = files.filter((f) => !doc.includes(f) && !globs.some((re) => re.test(f)));
-  assert.deepEqual(missing, [],
-    "a test file exists but is not described in docs/TESTING-COVERAGE.md — say what it covers, then node tools/docs/gen-coverage-table.mjs");
+  const missing = files.filter((f) => !doc.includes("| `" + f + "` |"));
+  assert.deepEqual(missing, [], "a test file has no row in the coverage page");
+  const blank = [...doc.matchAll(/^\| `([^`]+)` \| — \|$/gm)].map((m) => m[1]);
+  assert.deepEqual(blank, [],
+    "a test file says nothing about what it covers — give it a header comment, or a note above its path in tests/groups.json");
 });
 
 test("docs/TESTING.md's file-count floors never exceed the files on disk", () => {
@@ -218,7 +218,7 @@ test("RENDER_SPECS / XR_SPECS partition root specs — every named project entry
   assert.match(cfg, /name:\s*"xr-emulated"/, "xr-emulated Playwright project required for IWER suite");
   assert.match(cfg, /const WEBKIT_SPECS = \[/, "WEBKIT_SPECS list required for the iPhone-path proxy project");
   assert.match(cfg, /APEX_WEBKIT === "1"/, "webkit project is opt-in via APEX_WEBKIT (default npm test must not require WebKit)");
-  assert.match(cfg, /name:\s*"webkit"/, "webkit Playwright project required for webkit-leg.yml");
+  assert.match(cfg, /name:\s*"webkit"/, "webkit Playwright project required for test:webkit");
   assert.match(cfg, /testIgnore: \[\.\.\.RENDER_SPECS, \.\.\.XR_SPECS, \.\.\.WEBKIT_SPECS, \.\.\.MANUAL_IGNORE\]/,
     "headless must ignore WEBKIT_SPECS so default Chromium runs never select them");
 });
@@ -410,7 +410,7 @@ test("Playwright collects tests/specs/*.spec.js by default — no unit file, no 
   const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`);
   // WEBKIT_SPECS are opt-in (APEX_WEBKIT=1): the webkit project is absent by
   // default so bare `npm test` never needs a WebKit binary (#2705). They stay
-  // on disk and in test:webkit / webkit-leg.yml.
+  // on disk and in test:webkit.
   const webkitOptIn = specs.filter((f) => /\/webkit-[^/]+\.spec\.js$/.test(f));
   const expectedDefault = specs.filter((f) => !webkitOptIn.includes(f));
   assert.deepEqual([...collected].sort(), expectedDefault.sort(),

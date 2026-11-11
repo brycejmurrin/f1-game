@@ -204,6 +204,7 @@ function buildProps(g, liv) {
   const stack = tyreStack;
   const toolbox = (out, x, z) => GarageEquipment.toolChest(out, x, z, c1);
   // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
+  // Blender look-dev (monitor-desk-nx / monitor-gantry-nx): desk under a hung gantry.
   toolbox(g.nx, -4.92, 3.6);
   // The charging rack sits on the actual chest top (1.16 + 0.03 m).
   GarageEquipment.radioRack(g.nx, -4.92, 3.6, c1, 1.19);
@@ -217,6 +218,8 @@ function buildProps(g, liv) {
     block(g.nx, -5.22, 1.45 + (m < 3 ? 0 : 0.90), 0.6 + ((m % 3) - 1) * 0.98, 0.03, 0.36, 0.46, scale(STEEL, 0.55));
   block(g.nx, -5.02, 0.86, 0.6, 0.30, 0.03, 1.30, scale(STEEL, 0.9));
   for (let s = -1; s <= 1; s += 2) cyl(g.nx, -5.02, 0, 0.6 + s * 1.15, 0.04, 0.86, STEEL, 6);
+  // Monitor gantry over the laptop bench (z -1.85), clear of the −X wordmark / board band.
+  GarageEquipment.monitorGantry(g.nx, -4.70, -1.85, c1);
   // +X wall: the tool trolleys.
   // Trade repeated storage for distinct service stations within the same budget.
   GarageEquipment.wheelGunDock(g.px, 4.85, -1.5, c1);
@@ -274,6 +277,8 @@ function buildProps(g, liv) {
       block(w, x - sd * 0.09, 3.71, i * 2.30, 0.11, 0.09, 0.05, scale(STEEL, 0.45));
       if (i % 2 === 0)
         block(w, x - sd * 0.06, 4.06, i * 2.30, 0.14, 0.18, 0.34, scale(STEEL, 0.55));
+      // Blender lighting-rig-*: LED puck on alternate brackets (full boom exceeds bay tri budget).
+      if (i % 2 === 0) block(w, x - sd * 0.12, 3.70, i * 2.30, 0.04, 0.02, 0.12, [1.06, 1.09, 1.16]);
     }
   }
 
@@ -299,8 +304,9 @@ function buildProps(g, liv) {
   // Shelving of parts crates and a workbench. These live on the DOOR wall, not
   // the back wall: the back wall is where the information boards go, and a
   // prop stood 0.3 m proud of a board is a prop that hides it.
-  for (let sh = 0; sh < 3; sh++) {
-    const y = 0.95 + sh * 0.62;
+  // Two shelves (was three): the third shelf's tris pay for monitor gantry + light booms.
+  for (let sh = 0; sh < 2; sh++) {
+    const y = 0.95 + sh * 0.72;
     block(g.door, -4.02, y, 6.15, 1.25, 0.025, 0.22, STEEL);
     for (let bx = 0; bx < 3; bx++)
       block(g.door, -5.07 + bx * 0.86, y + 0.17, 6.15, 0.32, 0.15, 0.17,
@@ -548,11 +554,11 @@ function live(liv, now, ctx) {
   liveNow = now;
   nightNow = !!(ctx && ctx.night);
   for (let k = 0; k < 3; k++) BACKDROP[k] = MD.bd ? MD.bd[k] : _bdBase[k] * MD.backdrop;
-  const ge = nightNow ? 6.5 * E * MD.gantry : 0;
+  const ge = nightNow && !(ctx && ctx.realExterior) ? 6.5 * E * MD.gantry : 0;
   for (let i = 0; i < 4; i++) {
     const o = (GANTRY_AT + i) * 15;
     rig[o + 3] = GANTRY_TINT[0] * ge; rig[o + 4] = GANTRY_TINT[1] * ge; rig[o + 5] = GANTRY_TINT[2] * ge;
-    rig[o + 14] = nightNow ? 1.2 : 0;
+    rig[o + 14] = ge ? 1.2 : 0;
   }
   // THE SHUTTER SWELL: the two team-colour dado uplights rise to ~3x and fall
   // back as the door lifts on an arrival or the RACE! drive-out (ctx.door, 0..1;
@@ -561,7 +567,8 @@ function live(liv, now, ctx) {
   {
     const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]), m = Math.max(c1[0], c1[1], c1[2]) || 1;
     const d = ctx && Number.isFinite(ctx.door) ? Math.max(0, Math.min(1, ctx.door)) : 1;
-    const ue = (3.0 / m) * E * MD.up * (1 + 2.2 * Math.sin(d * Math.PI));
+    const sw = ctx && Number.isFinite(ctx.swell) ? ctx.swell : 1;   // GARAGE ENTER & LEAVE's DOOR GLOW
+    const ue = (3.0 / m) * E * MD.up * (1 + 2.2 * sw * Math.sin(d * Math.PI));
     for (let k = 0; k < 2; k++) {
       const o = (FIXTURES.length + k) * 15;
       rig[o + 3] = c1[0] * ue; rig[o + 4] = c1[1] * ue; rig[o + 5] = c1[2] * ue;
@@ -593,17 +600,109 @@ function live(liv, now, ctx) {
     const on = ctx && ctx.ambient === false ? 1 : f > 0.62 ? 0.30 : f > 0.50 ? 0.72 : 1, F = FIXTURES[8], e = F[4] * E * fixGain(8) * on, o = 8 * 15, t8 = fixTint(8, F[3]);
     rig[o + 3] = t8[0] * e; rig[o + 4] = t8[1] * e; rig[o + 5] = t8[2] * e;
   }
+  // A sequence's LIGHT CUE rides on a copy (the cached rig is never scaled).
+  const lit = ctx && ctx.cue && hasCue(ctx.cue.id) ? cueRig(rig, ctx.cue) : rig;
   const u = (now - pulseAt) / 2200;
-  if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return litRig(rig);
+  if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return litRig(lit);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
   const m = Math.max(c2[0], c2[1], c2[2]) || 1, ce = (2.6 / m) * E * Math.sin(u * Math.PI);
   const z = Z_BACK + (Z_DOOR - Z_BACK) * u;
   const chase = _chase;
-  for (let i = 0; i < rig.length; i++) chase[i] = rig[i];
-  chase.length = rig.length;
+  for (let i = 0; i < lit.length; i++) chase[i] = lit[i];
+  chase.length = lit.length;
   chase.push(-4.6, 4.55, z, c2[0] * ce, c2[1] * ce, c2[2] * ce, 5, 0, -1, 0, 0.92, 0.55, 0.06, 0, 0.9);
   chase.push(4.6, 4.55, z, c2[0] * ce, c2[1] * ce, c2[2] * ce, 5, 0, -1, 0, 0.92, 0.55, 0.06, 0, 0.9);
   return litRig(chase);
+}
+// ── LIGHT CUES (Blender-authored: tools/gen/blender/garage-light-cues.py) ───
+// Keyed light curves a sequence plays ON TOP of the mood. GarageArrival's poses
+// hand ctx.cue = { id, t }: id a CUES id, t cue SECONDS since the cue started
+// (not a 0..1 fraction) — a loop cue repeats every len s, a one-shot holds its
+// last key, which is the identity. Absent, live() never reaches cueRig() and the
+// rig is the mood's, bit for bit. The block below is generated (SINE ease-in-out
+// keys, the curve Blender plays; the beacon heading and spot pan LINEAR): rerun the script.
+// @blender-cues:start
+// Blender 5.2.3 LTS; tools/gen/blender/garage-light-cues.py; SINE ease-in-out keys (angle, spotx LINEAR).
+const CUE_SHA256 = "e8b353793828f76cfa69b678b4e99fccae9fb67de48b5cf35aeeccb796f5a7a9";
+const CUE_DATA = {"lightsup":{"label":"LIGHTS UP","len":2.4,"loop":false,"lin":[],"ch":{"key":[0.0,0.02,1.45,0.02,1.51,0.75,1.57,0.35,1.67,1.0,2.4,1.0],"fill":[0.0,0.04,0.85,0.04,0.91,0.75,0.97,0.35,1.07,1.0],"wash":[0.0,0.04,0.3,0.04,0.36,0.75,0.42,0.35,0.52,1.0],"up":[0.0,0.6,1.45,0.6,2.4,1.0]}},"flashes":{"label":"PHOTO FLASHES","len":4.0,"loop":true,"lin":[],"ch":{"key":[0.0,1.1,4.0,1.1],"up":[0.0,1.6,4.0,1.6],"flash":[0.0,0.0,0.179,0.0,0.2,1.0,0.31,0.0,0.519,0.0,0.54,0.7,0.605,0.0,0.609,0.0,0.63,0.9,0.74,0.0,1.239,0.0,1.26,1.0,1.37,0.0,1.709,0.0,1.73,0.55,1.795,0.0,1.799,0.0,1.82,0.8,1.93,0.0,2.459,0.0,2.48,1.0,2.59,0.0,2.979,0.0,3.0,0.65,3.065,0.0,3.069,0.0,3.09,0.9,3.145,0.0,3.149,0.0,3.17,0.5,3.28,0.0,3.619,0.0,3.64,1.0,3.75,0.0,4.0,0.0]}},"beacon":{"label":"AMBER BEACON","len":1.2,"loop":true,"lin":["angle"],"ch":{"key":[0.0,0.55,1.2,0.55],"fill":[0.0,0.5,1.2,0.5],"wash":[0.0,0.45,1.2,0.45],"up":[0.0,0.35,1.2,0.35],"tr":[0.0,1.06,1.2,1.06],"tg":[0.0,0.94,1.2,0.94],"tb":[0.0,0.8,1.2,0.8],"beacon":[0.0,1.0,1.2,1.0],"angle":[0.0,0.0,1.2,6.2832]}},"pulse":{"label":"PULSE","len":3.2,"loop":true,"lin":[],"ch":{"key":[0.0,1.0,1.6,0.86,3.2,1.0],"fill":[0.0,1.0,1.6,0.9,3.2,1.0],"up":[0.0,1.0,1.6,2.6,3.2,1.0]}},"lightsout":{"label":"LIGHTS OUT","len":6.0,"loop":false,"lin":[],"ch":{"key":[0.0,1.0,1.0,0.9,1.9,0.8,2.8,0.7,3.7,0.6,4.6,0.5,4.95,0.5,5.05,0.03,5.25,0.03,5.33,1.25,6.0,1.0],"fill":[0.0,1.0,1.0,0.86,1.9,0.72,2.8,0.58,3.7,0.44,4.6,0.3,4.95,0.3,5.05,0.02,5.25,0.02,5.33,1.2,6.0,1.0],"wash":[0.0,1.0,1.0,0.85,1.9,0.7,2.8,0.55,3.7,0.4,4.6,0.25,4.95,0.25,5.05,0.02,5.25,0.02,5.33,1.2,6.0,1.0],"up":[0.0,1.0,4.95,1.4,5.05,0.0,5.25,0.0,5.33,2.4,6.0,1.0],"tr":[0.0,1.0,1.0,1.08,1.9,1.16,2.8,1.24,3.7,1.32,4.6,1.4,5.25,1.4,5.33,1.0],"tg":[0.0,1.0,1.0,0.87,1.9,0.74,2.8,0.61,3.7,0.48,4.6,0.35,5.25,0.35,5.33,1.0],"tb":[0.0,1.0,1.0,0.87,1.9,0.74,2.8,0.61,3.7,0.48,4.6,0.35,5.25,0.35,5.33,1.0]}},"spotsweep":{"label":"SPOTLIGHT","len":4.0,"loop":false,"lin":["angle","spotx"],"ch":{"key":[0.0,1.0,0.4,0.25,3.0,0.25,4.0,0.6],"fill":[0.0,1.0,0.4,0.25,3.0,0.25,4.0,0.6],"wash":[0.0,1.0,0.4,0.25,3.0,0.25,4.0,0.6],"up":[0.0,1.0,0.4,0.4,3.0,0.4,4.0,1.0],"angle":[0.0,0.85,1.2,0.5,2.4,0.12,3.0,0.0],"spot":[0.0,0.0,0.25,1.0,4.0,1.0],"spotx":[0.0,-3.0,1.2,2.2,2.4,-0.6,3.0,0.0]}}};
+// @blender-cues:end
+const CUES = Object.freeze(Object.keys(CUE_DATA));
+const CUE_GAINS = ["key", "fill", "wash", "up", "gantry"];
+const CUE_DEF = { key: 1, fill: 1, wash: 1, up: 1, gantry: 1, tr: 1, tg: 1, tb: 1, flash: 0, beacon: 0, angle: 0, spot: 0, spotx: 0 };
+const hasCue = (id) => typeof id === "string" && Object.prototype.hasOwnProperty.call(CUE_DATA, id);
+const cueLabel = (id) => hasCue(id) ? CUE_DATA[id].label : "";
+const cueLen = (id) => hasCue(id) ? CUE_DATA[id].len : 0;
+// One channel at t, flat [t0, v0, t1, v1, …]: SINE ease-in-out between keys (or
+// linear), held before the first key and after the last.
+function cueValue(k, t, lin) {
+  const n = k.length;
+  if (!(t > k[0])) return k[1];
+  if (t >= k[n - 2]) return k[n - 1];
+  let i = 2;
+  while (k[i] < t) i += 2;
+  const f = (t - k[i - 2]) / (k[i] - k[i - 2]), e = lin ? f : (1 - Math.cos(Math.PI * f)) / 2;
+  return k[i - 1] + (k[i + 1] - k[i - 1]) * e;
+}
+const cueGains = () => ({ key: 1, fill: 1, wash: 1, up: 1, gantry: 1, tint: null, flash: 0, beacon: null, spot: 0, spotx: 0, _tint: [1, 1, 1], _beacon: { angle: 0, gain: 0 } });
+const cueClamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+function cueChan(c, name, t) { const k = c.ch[name]; return k ? cueValue(k, t, c.lin.indexOf(name) >= 0) : CUE_DEF[name]; }
+/** Cue `id` at cue seconds t into `out` (cueGains(); reused, nothing allocated):
+ *  gains key/fill/wash/up/gantry multiply the mood's (1 = unchanged, 0..4);
+ *  tint is an rgb multiplier on the ceiling fixtures or null; flash 0..1 is the
+ *  photographers' strobe; beacon { angle rad, gain 0..1 } or null; spot 0..1 is the
+ *  ceiling follow-spot, aimed at floor (spotx, 0, SPOT_Y * tan(angle)). Unknown id → identity. */
+function cueSample(id, t, out = cueGains()) {
+  const c = hasCue(id) ? CUE_DATA[id] : null;
+  let s = Number.isFinite(t) ? t : 0;
+  if (c && c.loop && c.len > 0) s = ((s % c.len) + c.len) % c.len;
+  for (const g of CUE_GAINS) out[g] = c ? cueClamp(cueChan(c, g, s), 0, 4) : 1;
+  const tr = c ? cueClamp(cueChan(c, "tr", s), 0, 2) : 1, tg = c ? cueClamp(cueChan(c, "tg", s), 0, 2) : 1, tb = c ? cueClamp(cueChan(c, "tb", s), 0, 2) : 1;
+  out._tint[0] = tr; out._tint[1] = tg; out._tint[2] = tb;
+  out.tint = Math.abs(tr - 1) + Math.abs(tg - 1) + Math.abs(tb - 1) > 1e-6 ? out._tint : null;
+  out.flash = c ? cueClamp(cueChan(c, "flash", s), 0, 1) : 0;
+  const bg = c ? cueClamp(cueChan(c, "beacon", s), 0, 1) : 0;
+  out._beacon.gain = bg; out._beacon.angle = c ? cueChan(c, "angle", s) : 0;
+  out.beacon = bg > 0 ? out._beacon : null;
+  out.spot = c ? cueClamp(cueChan(c, "spot", s), 0, 1) : 0;
+  out.spotx = c ? cueChan(c, "spotx", s) : 0;
+  return out;
+}
+// cueRig: the cue's gains multiply the mood's per bank (key 0-1, fill 2-5, wash
+// 6-9), the dado uplights and the gantry; its tint multiplies the ceiling
+// fixtures. Two records exist only while a cue lights them: the photographers'
+// STROBE at head height in the door, aimed into the bay (a speedlight pool,
+// white, with a glare pop), and the amber recovery BEACON on the lintel, a
+// narrow beam turning at the cue's angle (the pit-lane rotating-beacon look).
+// A third, the SPOTLIGHT follow-spot, hangs on the truss over the car and aims
+// at the floor point the cue's spotx / angle pick: a hard, narrow white pool.
+const _cueRig = [];
+let _cueG = null;
+const STROBE_TINT = [1.0, 1.0, 1.04], BEACON_TINT = [1.0, 0.52, 0.06], SPOT_Y = 4.4;
+function cueRig(rig, cue) {
+  const g = cueSample(cue.id, cue.t, _cueG || (_cueG = cueGains())), out = _cueRig, t = g.tint;
+  for (let i = 0; i < rig.length; i++) out[i] = rig[i];
+  out.length = rig.length;
+  for (let i = 0; i < FIXTURES.length; i++) {
+    const o = i * 15, gn = i < 2 ? g.key : i < 6 ? g.fill : g.wash;
+    for (let k = 0; k < 3; k++) out[o + 3 + k] *= gn * (t ? t[k] : 1);
+  }
+  for (let k = 0; k < 2; k++) for (let c = 3; c < 6; c++) out[(FIXTURES.length + k) * 15 + c] *= g.up;
+  for (let i = 0; i < 4; i++) for (let c = 3; c < 6; c++) out[(GANTRY_AT + i) * 15 + c] *= g.gantry;
+  if (g.flash > 0) {
+    const fe = 34 * E * g.flash;
+    out.push(0.7, 1.85, Z_DOOR + 0.8, STROBE_TINT[0] * fe, STROBE_TINT[1] * fe, STROBE_TINT[2] * fe, 14,
+             -0.06, -0.16, -0.985, 0.55, 0.12, 0.20, 0, 1.6 * g.flash);
+  }
+  if (g.beacon) {
+    const a = g.beacon.angle, be = 9 * E * g.beacon.gain, dx = 0.86 * Math.sin(a), dz = -0.86 * Math.cos(a);
+    out.push(0, 4.55, Z_DOOR - 0.5, BEACON_TINT[0] * be, BEACON_TINT[1] * be, BEACON_TINT[2] * be, 10,
+             dx, -0.51, dz, 0.93, 0.78, 0.10, 0, g.beacon.gain * (0.35 + 0.65 * (0.5 - 0.5 * Math.cos(a))));
+  }
+  if (g.spot > 0) {
+    const se = 16 * E * g.spot, px = g.spotx, pz = SPOT_Y * Math.tan(g._beacon.angle), dl = Math.hypot(px, SPOT_Y, pz);
+    out.push(0, SPOT_Y, 0, se, se, 0.98 * se, 10, px / dl, -SPOT_Y / dl, pz / dl, 0.97, 0.90, 0.04, 0, 0.5 * g.spot);
+  }
+  return out;
 }
 // Daytime gantries and the parked lamp stay at energy 0. The lit shader still
 // loops every record, so hand present only the ones that actually emit.
@@ -669,6 +768,23 @@ const MOODS = {
   endurance: { night: true, key: 2.5, fill: 1.4, wash: 1.7, up: 1.8, gantry: 1.4, keyTint: [0.86, 0.95, 1.16],
     fillTint: [1.12, 0.97, 0.84], washTint: [0.78, 0.91, 1.17], sky: [0.35, 0.5, 0.95], amb: [0.85, 1.12, 1.6], ambG: [0.55, 0.7, 1.0],
     bd: [0.025, 0.04, 0.08], exposure: 1.1, bloom: 0.65, glare: 0.45, sheen: 1.1 },
+  // Race-win celebration back in the garage: the TV crews' warm key lights
+  // and the gold of the trophy and confetti — keys gilded ~2700 K, the team
+  // uplights high, bloom and glare up so the halos read as party lights.
+  podium: { key: 2.8, fill: 1.3, wash: 1.1, up: 2.4, keyTint: [1.30, 1.02, 0.52], fillTint: [1.18, 0.98, 0.70],
+    washTint: [1.20, 1.00, 0.66], sky: [1.6, 1.3, 0.7], amb: [1.4, 1.15, 0.7], ambG: [1.9, 1.4, 0.6],
+    exposure: 1.12, bloom: 1.8, glare: 1.6, sheen: 2.0 },
+  // A wet race day (Spa, Silverstone, Interlagos): flat overcast ~7000 K
+  // through the door, no sun, a grey lane outside and a soaked epoxy floor
+  // tracked in from the pit lane — the floor sheen, not brightness, sells it.
+  rain: { night: false, key: 0.9, fill: 1.6, wash: 1.3, up: 0.5, keyTint: [0.94, 0.99, 1.08], fillTint: [0.88, 0.96, 1.12],
+    washTint: [0.90, 0.97, 1.10], sky: [1.3, 1.45, 1.65], amb: [1.2, 1.35, 1.6], ambG: [0.75, 0.82, 0.95],
+    bd: [0.30, 0.33, 0.37], exposure: 1.0, bloom: 0.55, glare: 0.5, sheen: 2.6 },
+  // A night STREET race (Las Vegas, Marina Bay): magenta keys against cyan
+  // fills and washers, a violet sky and the casino-strip spill outside.
+  neon: { night: true, key: 1.6, fill: 0.9, wash: 1.6, up: 2.8, gantry: 1.6, keyTint: [1.25, 0.55, 1.20],
+    fillTint: [0.45, 0.95, 1.35], washTint: [0.55, 0.80, 1.40], sky: [0.25, 0.08, 0.35], amb: [0.55, 0.35, 0.95],
+    ambG: [0.75, 0.25, 0.65], bd: [0.030, 0.010, 0.050], exposure: 1.06, bloom: 2.4, glare: 2.0, sheen: 2.6 },
 };
 const SKY_BASE = SKYLIGHT.slice(), AMB_SKY_BASE = AMB_SKY.slice(), AMB_GROUND_BASE = AMB_GROUND.slice();
 const _bdBase = BACKDROP.slice();
@@ -692,7 +808,14 @@ function setMood(id) {
 }
 function moodDef() { return MD; }
 // The hour outside is part of the mood: garageCtx() hands its ctx through here.
-function moodCtx(ctx) { if (ctx && MD.night !== null) ctx.night = MD.night; return ctx; }
+// The mood's hour lights the bay (live(): rig, backdrop, atlas); the GEOMETRY keeps the garage's own hour
+// (ctx.bayNight, set by the producer before this), so a moment whose mood flips the hour does not
+// rebuild the whole bay at the shutter and again at the return (#4965). Idempotent: callable twice a frame.
+function moodCtx(ctx) {
+  if (ctx) ctx.night = MD.night !== null ? MD.night : ctx.bayNight !== undefined ? !!ctx.bayNight : ctx.night;
+  return ctx;
+}
+function hourNight(ctx) { return !!(ctx && (ctx.bayNight !== undefined ? ctx.bayNight : ctx.night)); }
 function fixGain(i) { return i < 2 ? MD.key : i < 6 ? MD.fill : MD.wash; }
 function fixTint(i, t) { return (i < 2 ? MD.keyTint : i < 6 ? MD.fillTint : MD.washTint) || t; }
 {
@@ -803,7 +926,7 @@ const BOX_HW = 2.20, BOX_ZF = 4.25, BOX_ZB = -4.00;
 // the door is the lane the car pits in (js/track/core/mesh.js builds the real
 // one from the same numbers, and the box is the same 8 m).
 const PIT_B = TrackPit.BANDS;
-const PIT_HW = 10.5, PIT_Z0 = Z_DOOR + 0.05;
+const PIT_HW = 22, PIT_Z0 = Z_DOOR + 0.05;
 const PIT_WORK1 = PIT_Z0 + PIT_B.work, PIT_CORR1 = PIT_WORK1 + PIT_B.corridor, PIT_Z1 = PIT_CORR1 + PIT_B.fast;
 const PIT_FAST_Z = (PIT_CORR1 + PIT_Z1) / 2;
 function buildPitLane(out, liv, night) {
@@ -819,7 +942,7 @@ function buildPitLane(out, liv, night) {
   const ASPHALT = [0.20, 0.205, 0.215], LINE = [0.88, 0.89, 0.91];
   const WALL = [0.30, 0.31, 0.34], WALL_TOP = [0.46, 0.47, 0.50];
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
-  // 21 x 5.45 m — 114 m2, the entire backdrop of the REAR preset, seen through
+  // Extended lane for the departure follow shot, also seen from REAR through
   // a 5.4 x 4.8 m aperture. As ONE `tile()` (two triangles, one flat colour)
   // ten spot lights have nothing to fall on and the lane reads as a painted
   // backdrop rather than a surface. Subdivided 12 x 4 with a little
@@ -847,12 +970,12 @@ function buildPitLane(out, liv, night) {
   // Bollards along the FAR edge, between the outer line and the wall — never
   // mid-lane, which is where a car drives. The vertical marks are what give the
   // lane depth from the low REAR camera.
-  for (let i = -3; i <= 3; i++)
+  for (let i = -7; i <= 7; i++)
     cyl(out, i * 2.9, APRON_Y + 0.008, PIT_Z1 - 0.08, 0.055, 0.62,
         i % 2 ? [0.80, 0.80, 0.84] : [0.72, 0.30, 0.10], 6, MAT.METAL);
   // The garages opposite: a low run of blocks with lit fascias, so the far side
   // of the lane is a row of buildings rather than the end of the mesh.
-  for (let i = -3; i <= 3; i++) {
+  for (let i = -7; i <= 7; i++) {
     block(out, i * 3.0, APRON_Y + 1.60, PIT_Z1 + 1.30, 1.42, 1.10, 0.60,
           scale(WALL, i % 2 ? 0.92 : 1.06), MAT.CONCRETE);
     // A fascia BAND on the front face, not a roof slab: 0.16 m deep, so its
@@ -861,18 +984,30 @@ function buildPitLane(out, liv, night) {
     block(out, i * 3.0, APRON_Y + 2.78, PIT_Z1 + 0.78, 1.46, 0.10, 0.08,
           scale(WALL_TOP, 1.1), MAT.METAL);
   }
+  // Outward frontage: the inward shell remains the inspection cutaway. These
+  // one-sided faces stay invisible inside; only the exterior follow sees them.
+  const AP = TrackPit.BAY.doorW / 2, DH = TrackPit.BAY.doorH, FZ = Z_DOOR + 0.025;
+  for (const side of [-1, 1]) {
+    panelGrid(out, [side < 0 ? -HALF_W : AP, 0, FZ], [HALF_W - AP, 0, 0], [0, CEIL_Y, 0], 4, 4, [0, 0, 1], () => WALL, MAT.CONCRETE);
+    for (let bay = 1; bay <= 2; bay++) {
+      const x = side * TrackPit.PITCH * bay;
+      block(out, x, 2.5, Z_DOOR - 0.35, HALF_W - 0.10, 2.5, 0.35, scale(WALL, 0.85), MAT.CONCRETE);
+      block(out, x, 4.65, Z_DOOR + 0.015, HALF_W - 0.16, 0.16, 0.04, c1, MAT.METAL);
+    }
+  }
+  panelGrid(out, [-AP, DH, FZ], [AP * 2, 0, 0], [0, CEIL_Y - DH, 0], 8, 1, [0, 0, 1], () => c1, MAT.METAL);
   // A wall to stop the eye. Without it the lane runs to the apron rim and
   // fades into the clear colour, which reads as fog rather than as somewhere.
   block(out, 0, APRON_Y + 0.50, PIT_Z1 + 0.18, PIT_HW, 0.50, 0.16, WALL, MAT.CONCRETE);
   block(out, 0, APRON_Y + 1.03, PIT_Z1 + 0.18, PIT_HW, 0.05, 0.20, WALL_TOP, MAT.METAL);
   // A team-coloured hoarding along it, so the far side of the lane is a place
   // rather than a grey slab.
-  for (let i = -2; i <= 2; i++)
+  for (let i = -5; i <= 5; i++)
     block(out, i * 3.6, APRON_Y + 0.62, PIT_Z1 + 0.02, 1.55, 0.26, 0.05,
           scale(c1, night ? 1.25 : (i % 2 ? 0.55 : 0.9)));
 }
 function buildApron(out) {
-  const RINGS = 7, SEG = 40, R = 18, Y = -0.04;
+  const RINGS = 7, SEG = 40, R = 30, Y = -0.04;
   const HOT = [0.105, 0.107, 0.115];
   const push = (x, z, t) => {
     const k = smooth(t);
@@ -990,7 +1125,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // BODY STRIPE, DETAIL or TEAM LOGO edit, while the car repaints
 // (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
 // preview mesh key). A slot that any future dressing reads MUST be added here too.
-let floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
+let exteriorFallbackMesh = null, floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
@@ -1054,7 +1189,51 @@ function buildStatic(liv, opts) {
 // The room's build identity. `geom` rebuilds meshes, `live` repaints the 512
 // screens, `dressId` repaints the crest, and `key` is the whole thing plus the
 // spec boards. rebuild() and prepared() share it.
+//
+// Every garage frame asks, and the answer almost never moves, so a raw-input
+// stamp gates the string work (perf hunt 9). The stamp holds EVERY value the
+// strings below read — roomKeys itself, ctxKey, GarageExperience.careerKey and,
+// through `info`'s identity, boardKey (boardInfo returns one frozen-by-convention
+// object per stamp and builds a fresh one on any change). Values compare with
+// ===, which is stricter than the toFixed(3) strings: a sub-rounding wobble
+// recomputes the strings and lands on the same key, never a stale one.
+const _rkNow = [], _rkWas = [];
+let _rkKeys = null;
+function rkColour(out, c) {
+  if (!c) { out.push(null, null, null, 0); return; }
+  const v = rgb(c, [0, 0, 0]);
+  out.push(v[0], v[1], v[2], 1);
+}
+function roomStamp(team, liv, info, ctx) {
+  const o = _rkNow;
+  o.length = 0;
+  const d0 = seatDriverAt(team, 0), d1 = seatDriverAt(team, 1);
+  o.push(team && team.id, (team && team.legend) || "", info, d0 && d0.num, d1 && d1.num, logoGen, GaragePrims.lookId());
+  rkColour(o, liv && liv.c1); rkColour(o, liv && (liv.accent || liv.stripe || liv.c2)); rkColour(o, liv && liv.c2);
+  rkColour(o, liv && liv.logo); rkColour(o, liv && liv.logo2); rkColour(o, liv && liv.logo3);
+  o.push((liv && liv.sponsors) || "-", !!ctx);
+  if (ctx) {
+    const last = ctx.last, a = ctx.achievements, sp = ctx.sponsor;
+    const hyd = ctx.track && typeof Tracks !== "undefined" && Tracks.circuitPayloadResident && Tracks.circuitPayloadResident(ctx.track) ? 1 : 0;
+    o.push(ctx.track ? ctx.track.id : "-", hyd, ctx.weather, ctx.tod, ctx.wins | 0, !!ctx.night, !!ctx.career, ctx.round | 0,
+      !!last, last && last.dnf, last && (last.p | 0), last && (last.pts | 0), sp && sp.label, !!ctx.studio,
+      !!(a && a.active), a && a.facility, a && a.wins, a && a.podiums, a && a.titles);
+  }
+  return o;
+}
 function roomKeys(team, liv, info, ctx) {
+  const st = roomStamp(team, liv, info, ctx);
+  if (_rkKeys && st.length === _rkWas.length) {
+    let same = true;
+    for (let i = 0; i < st.length; i++) if (st[i] !== _rkWas[i]) { same = false; break; }
+    if (same) return _rkKeys;
+  }
+  _rkWas.length = st.length;
+  for (let i = 0; i < st.length; i++) _rkWas[i] = st[i];
+  _rkKeys = roomKeyStrings(team, liv, info, ctx);
+  return _rkKeys;
+}
+function roomKeyStrings(team, liv, info, ctx) {
   const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
@@ -1066,10 +1245,11 @@ function roomKeys(team, liv, info, ctx) {
   // Shell, floor, LEDs, props and the career desks. Not the crest, the sponsor
   // banners or the pit-board numbers — those are atlas texels.
   const geom = `${team && team.id}|${(team && team.legend) || ""}|${paint}`
-               + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
+               + `|${hourNight(ctx) ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
   const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
-  return { geom, live, dressId, key: `${geom}|${live}|${dressId}|${boardKey(info)}` };
+  const board = boardKey(info);
+  return { geom, live, dressId, board, key: `${geom}|${live}|${dressId}|${board}` };
 }
 // A paint edit repaints a bay atlas of the SAME size: a backend that can (TLX refillTexture) re-fills the live
 // handle in place, so nothing is allocated. Free-then-create leaned on the TLX retire pool, and a handle retired
@@ -1106,7 +1286,7 @@ function uploadLive(team, liv, ctx, now) {
     liveFail++; liveRetryAt = now + 1000; liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
 }
 function rebuild(team, liv, info, ctx) {
-  const { geom, live, dressId, key } = roomKeys(team, liv, info, ctx);
+  const { geom, live, dressId, board, key } = roomKeys(team, liv, info, ctx);
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   const uploads = !!(_gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined");
   if (live !== liveKey) { liveFail = 0; liveRetryAt = 0; }
@@ -1122,6 +1302,7 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++)
       if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
     if (floorMesh) _gfx.freeMesh(floorMesh);
+    if (exteriorFallbackMesh) _gfx.freeMesh(exteriorFallbackMesh);
     if (mirrorFadeMesh) { _gfx.freeMesh(mirrorFadeMesh); mirrorFadeMesh = null; }
     for (let i = 0; i < SIDES.length; i++)
       if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
@@ -1145,9 +1326,11 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++)
       if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
     const flr = acc();
-    buildApron(flr); buildPitLane(flr, liv, !!(ctx && ctx.night)); buildBayFloor(flr, liv, look);
+    buildBayFloor(flr, liv, look);
+    const fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, hourNight(ctx));
+    exteriorFallbackMesh = _gfx.createMesh(fallback);
     // The clear colour beyond the apron rim follows the hour outside.
-    const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
+    const bd = hourNight(ctx) ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
     BACKDROP[0] = _bdBase[0] = bd[0]; BACKDROP[1] = _bdBase[1] = bd[1]; BACKDROP[2] = _bdBase[2] = bd[2];
     floorMesh = _gfx.createMesh(flr);
     const g = {};
@@ -1171,7 +1354,7 @@ function rebuild(team, liv, info, ctx) {
     liveKey = live;
   }
   if (dressId !== dressIdKey) { dressCanvas = null; dressIdKey = dressId; }
-  const dressFull = dressId + "|" + boardKey(info);
+  const dressFull = dressId + "|" + board;
   if (dressFull === dressFullKey && dressTex) { cacheKey = key; return; }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.
@@ -1233,6 +1416,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   ensureDynamic();
   const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+  if (!(ctx && ctx.realExterior)) _gfx.draw(exteriorFallbackMesh, MAT_I, FLOOR_OPTS);
   const studio = !!(ctx && ctx.studio);
   // Room first so its depth is in the buffer: the reflection then depth-tests
   // against props/shell (they win) and only needs bias to clear the floor.
@@ -1314,6 +1498,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
     const sheen = mirrorSheen(eye, carMat);
     if (sheen > 0.02) {
       _gfx.draw(carMesh, arrivalMirror, MIRROR_RESOLVE);
+      if (ctx && ctx.departureWheels) ctx.departureWheels(arrivalMirror, MIRROR_RESOLVE);
       ensureMirrorFade(liv);
       if (mirrorFadeMesh) {
         _mirrorFadeOpts.alpha = 1 - sheen;
@@ -1349,10 +1534,10 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
 // the car through MAT_REFLECT_X.
 //
 // Sorting all ~19k points was the cost (14 ms measured, paid on every part
-// pick). The Akl–Toussaint pass first finds the four axis-extreme points and
-// discards everything strictly inside their quadrilateral — a point inside
-// that quad is inside the hull, so the answer is unchanged and the sort runs
-// over the few hundred that remain.
+// pick). The prune first finds eight support directions (an octagon, not the
+// four axis extremes — a car's wheel corners sit outside that diamond) and
+// discards everything strictly inside it; a point inside the octagon is inside
+// the hull, so the answer is unchanged and the sort runs over what remains.
 function framingHull(data) {
   const p = data && data.pos;
   if (!p || !p.length) return null;
@@ -1509,7 +1694,7 @@ function release() {
   let n = typeof GarageCrew !== "undefined" && GarageCrew.free ? GarageCrew.free() : 0;
   const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
-  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); trussMesh = fm(trussMesh);
+  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); exteriorFallbackMesh = fm(exteriorFallbackMesh); trussMesh = fm(trussMesh);
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
   fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh); mirrorFadeMesh = fm(mirrorFadeMesh);
   dressTex = ft(dressTex); liveTex = ft(liveTex);
@@ -1526,7 +1711,8 @@ function debug() {
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
-  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, mood, setMood, moodDef, moodCtx, MOODS, hangerSpan, FIXTURES, LED_DROP, CEIL_Y, draw, framingHull, recentre,
+  // FIXTURES / LED_DROP / hangerSpan stay public — garage-personality pins the LED hangers.
+  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, CUES, cueLabel, cueLen, cueSample, CUE_SHA256, mood, setMood, moodDef, moodCtx, MOODS, hangerSpan, FIXTURES, LED_DROP, CEIL_Y, draw, framingHull, recentre,
            previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, release };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

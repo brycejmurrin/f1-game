@@ -1,4 +1,4 @@
-# Cache busting — there is no bump (folded from the bump-cache skill)
+# Cache busting — there is no bump
 
 Apex 26 has **no build step** and, since 2026-09-03, **no cache bump in
 development**. Every tagged JS/CSS URL in the committed `index.html` reads

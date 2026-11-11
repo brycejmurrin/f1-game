@@ -12,12 +12,13 @@ function setup(options = {}) {
     vm.runInContext(readFileSync(new URL(path,root),"utf8"),ctx);
   const geometry=vm.runInContext("ContactGeometry",ctx);
   const ai=vm.runInContext("AiDrive",ctx);
+  const Collide=vm.runInContext("Collide",ctx);
   const G={track:{total:1000},player:null,netPlay:{owns:c=>!!c.remote},PACE:1,raceT:0,
     wrapS:s=>(s%1000+1000)%1000,worldFromTrack:(s,x)=>({x,z:s})};
-  const collision=vm.runInContext("Collide",ctx).create(G,options.onEffect || (()=>{}));
-  return {geometry,collision,G,ai};
+  const collision=Collide.create(G,options.onEffect || (()=>{}));
+  return {geometry,collision,G,ai,Collide};
 }
-const {geometry:C,ai:AI}=setup();
+const {geometry:C,ai:AI,Collide}=setup();
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
 test("SAT rejects rotated bounding-box overlap without touching bodywork",()=>{
   assert.equal(C.overlap(3,-3,Math.PI/3,Math.PI/3),null);
@@ -239,6 +240,27 @@ test("pair extents share trig while preserving nonfinite yaw semantics",()=>{
   const nonfinite=collision.pairContact(a,b);
   assert.ok(nonfinite);assert.ok(Number.isNaN(nonfinite.penLong));assert.ok(Number.isNaN(nonfinite.penLat));
   assert.equal(nonfinite.oriented,false);
+});
+
+// parkedAhead used to keep the minimum signed arc, so the retirement furthest
+// behind inside the window always beat a nearer car ahead or beside. The AI
+// then aimed around the wrong car. Nearest is absolute arc distance.
+test("parkedAhead keeps the nearest retirement inside the window",()=>{
+  const L=5000,reach=80,pk=s=>({s});
+  const pick=(s,parked)=>Collide.parkedAhead({s},parked,L,reach);
+  const farBehind=pk(100-4.5),nearBehind=pk(100-0.4),nearAhead=pk(102),farAhead=pk(140);
+  assert.equal(pick(100,[farBehind,nearBehind]),nearBehind);
+  assert.equal(pick(100,[nearBehind,farBehind]),nearBehind);
+  assert.equal(pick(100,[farBehind,nearAhead]),nearAhead);
+  assert.equal(pick(100,[nearAhead,farAhead]),nearAhead);
+  assert.equal(pick(100,[nearBehind]),nearBehind);
+  assert.equal(pick(100,[nearBehind,farAhead]),nearBehind);
+  assert.equal(pick(100,[]),null);
+  assert.equal(pick(100,[pk(100-Collide.LCAR)]),null,"a full car length behind is already past");
+  assert.equal(pick(100,[pk(100+reach)]),null,"the reach bound is exclusive");
+  const across=pk(L-1),justAhead=pk(4);
+  assert.equal(pick(2,[across,justAhead]),justAhead,"a car across the start line must not hide a closer one ahead");
+  assert.equal(pick(2,[justAhead,across]),justAhead);
 });
 
 test("unyawed pairContact matches the trig extents Object.is for a grid of poses",()=>{

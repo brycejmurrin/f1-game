@@ -32,7 +32,9 @@ loss are reproducible rather than wall-clock. No TURN credential ships in the
 client: browser-visible provider keys are reusable by anyone who downloads the
 game. Configure a player-owned, short-lived credentials endpoint through
 `apex26.turnApi` when relay service is needed; the default is honest STUN-only
-operation. `prefetchIce()` must be AWAITED BEFORE a connection is built
+operation. The server list itself is `js/net/ice.js` (`NetIce.create()`, one
+cache per `NetTransport` evaluation); `prefetchIce`, `iceServers`, `hasRelay`
+and `STUN` stay on `NetTransport`. `prefetchIce()` must be AWAITED BEFORE a connection is built
 (lobby's `readyIce()`): `iceServers` are fixed at construction, so a fetch that
 lands 200 ms later gathers STUN-only.
 
@@ -88,7 +90,7 @@ increasingly refuse anonymous ephemeral events with a NIP-01 OK=false, and a
 refusing relay's WebSocket is still OPEN. Because we own the sockets we read
 the `["OK", id, false, why]` and `["CLOSED", subId, why]` frames first-hand
 and report `all_rejected` (advisory — the room keeps running) once every live
-relay has refused. Measured on hardware: all six shipped relays healthy,
+relay has refused. Measured on hardware when `RELAYS` (nostr.js) held six: all healthy,
 wellorder answering "blocked: spam not permitted", both players on spinners.
 Pick relays with tools/net/nostr-probe.mjs — which tests the only criterion
 that decides this, whether a relay accepts an ephemeral event from an UNKNOWN
@@ -215,7 +217,9 @@ invite"), and the room-code host keeps such a repost seen and silent
 ### `js/net/snapshot.js` — `NetSnapshot`
 
 the wire format (13 B/car: s/x/head/speed/gear/ lap, quantised to 1 cm and 1
-cm/s) + the interpolation buffer. Remote cars draw ~100 ms in the past between
+cm/s) plus the interpolation buffer, which lives in `js/net/interp.js`
+(`NetInterp`). `NetSnapshot.createInterp` forwards and passes the shared drop
+counter. Remote cars draw ~100 ms in the past between
 two packets; a late packet EXTRAPOLATES ALONG s, which follows the road by
 construction and so cannot dead-reckon a rival into a barrier. s and head both
 wrap the short way — getting that wrong sends a car backwards down the lap
@@ -251,8 +255,11 @@ ICE reaches `failed`, and MDN documents that the data channels survive it.
 The dead data channel cannot carry that exchange, so it crosses the Nostr
 bus (`NetNostr.directExchange`) sealed under a code hashed from the last
 negotiation's two `ice-pwd` values, which only the peers hold. It starts 3 s
-into `disconnected` or at once on `failed`, re-offers at most twice, and a
-heal before the answer rolls the pending offer back. `stats().iceRestarts`
+into `disconnected` or at once on `failed`, offers at most three times (attempts 0–2, `ctx.attempt < 3`), and a
+heal before the answer rolls the pending offer back. A courier try that found
+no relay (`no_relay`) or no answer (`expired`) is retried on the same attempt's
+code, and an episode that gave up clears itself so another can start while the
+link is still down inside the grace. `stats().iceRestarts`
 counts them. A pc that never connected still closes on `failed` at once.
 
 ### `js/net/netplay.js` — `NetPlay`
@@ -271,7 +278,10 @@ clamp, `NetPlay.clampWire` — s to the lap, x/speed to ±200, head wrapped, lap
 to target+1. The QUALI/QLIVE receivers and senders are NetPlay's too
 (`bindQuali` / `qualiReporters`): the lobby registers the same handlers during
 qualifying, so a peer's `t` is coerced and bounded (20 s .. 1 h) at ONE site in
-both phases and stored as a number. tick() also runs
+both phases and stored as a number. That site is `js/net/quali-wire.js`
+(`QualiWire.create(EV)` while NetPlay evaluates). The tyre/pit codec is
+`js/net/strategy-wire.js`; `strategyState`, `applyStrategy` and
+`STRATEGY_VERSION` stay on NetPlay. tick() also runs
 through the paused gate: one player opening a menu cannot stop a shared world.
 AI retirements use the existing reliable LAP event, bound to the receiving
 race's epoch. The host repeats terminal AI state with its one-second strategy
@@ -312,7 +322,16 @@ declaring {cornering: 9} would simply be faster — and a declared setup over
 `Parts.BUDGET` resolves as the team's factory setup, because every top-tier id
 at once is a legal set of ids no garage would let a player afford. HELLO and
 READY are rate-limited per connection (five a second each; the rest are
-dropped). Its transport factory is
+dropped), as are the events the host relays to the other guests: QUALI+QLIVE
+(12 a second together), QABORT (2), and in the race LAP (4) and STRATEGY (8).
+A QUALI or QABORT counts only for the seat its connection HOLDS: when two
+guests claim one seat, the earlier joiner's (the one the clash leaves in
+place). A profile carried inside an invite or answer code is cleaned like a
+HELLO before it is stored. A code join answers a NEWER offer the host posts
+(by the host's created_at) on a fresh pc while its first answer is still
+unconnected, because a relay can replay an offer the host already used. A
+relay refusing our event for its timestamp is reported as this device's clock
+being off. Its transport factory is
 injectable: an RTCPeerConnection whose ICE never completes spins forever, so a
 test that builds one HANGS rather than fails (__apex.lobbyFake)
 
@@ -323,7 +342,8 @@ GAME WITH A PHONE (`#pm-phonepad`, the feature called PHONE AS CONTROLLER in
 the code) mints a room code, paints a QR for `controller.html#pad=CODE`, and
 hosts the room exactly as VS FRIEND does (`NetTransport.rtc` → `NetHandshake.createInvite`
 → `NetRendezvous.hostRoom`). The phone page joins with `swap` + `acceptInvite`
-(2.5 s gather, like the lobby's room-code guest). The phone reaches that page
+(neither passes `gatherTimeoutMs`, so the gather is bounded by
+`GATHER_TIMEOUT_MS` in `js/net/handshake.js`, like the lobby's room-code guest). The phone reaches that page
 by QR, by typing the URL, or by its own door: on a coarse pointer the title
 screen shows USE AS CONTROLLER and CONTROLS shows USE THIS PHONE TO STEER
 ANOTHER SCREEN (`#mb-phonepad`, `#pm-phonepad-go`; renamed 2026-09-29 from USE
@@ -366,8 +386,8 @@ gears on AUTO, OT and BOOST instead), the RIGHT grip the pedals, BRAKE over GAS
 and the face buttons are the pad's remaining in-race controls,
 and `controller.html?demo` animates a sample dash with no link.
 
-Deploy notes: `controller.html` is a ROOT page (`pages.yml` stages it by name;
-`ci-coverage.test.mjs` pins that) whose tags are hashed by `bump-cache.mjs`
+Deploy notes: `controller.html` is a ROOT page (staged by name from
+`STAGE_ROOT_FILES` in `tools/desktop/stage-files.mjs`; `ship-filter-paths.test.mjs` pins that list) whose tags are hashed by `bump-cache.mjs`
 like the shell's; its script list is `CONTROLLER` in `tools/manifest.cjs`,
 written by `gen-shell.mjs`. The phone runs no service worker and no store.
 Tests: `tests/unit/phone-pad.test.mjs` (both halves over the loopback transport).

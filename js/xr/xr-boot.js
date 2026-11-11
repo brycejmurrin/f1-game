@@ -1,8 +1,8 @@
-/* Apex 26 — WebXR boot wiring (Phase 0).
+/* Apex 26 — WebXR boot wiring.
  *
  * Mounts the ENTER VR button, binds XrSession to the live gfx backend, and
  * exposes a tiny façade game.js reads (comfort lock, eye bags, loop handoff)
- * so the spike does not grow game.js past the ratchet absorb budget.
+ * so XR wiring does not grow game.js past the ratchet absorb budget.
  */
 "use strict";
 
@@ -69,6 +69,11 @@ const XrBoot = (function () {
    */
   function ensureXrBackend() {
     if (canAttach()) return { ok: true };
+    // The pin reloads the page: never mid-race (a phone's Cardboard probe can
+    // show ENTER VR over the touch dock; one stray tap lost the race).
+    if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+      return { ok: false, message: "VR AFTER THE RACE" };
+    }
     try {
       if (localStorage.getItem(LS_XR_PREV) === null) {   // a second click must not stash the pin itself
         const prev = {};
@@ -278,7 +283,7 @@ const XrBoot = (function () {
 
   async function wantXrBundle() {
     try { if (localStorage.getItem("apex26.xr") === "1") return true; } catch (_) { /* blocked */ }
-    try { if (localStorage.getItem("apex26.xrEnterPending") === "1") return true; } catch (_) { /* blocked */ }
+    try { if (localStorage.getItem(LS_XR_PENDING) === "1") return true; } catch (_) { /* blocked */ }
     if (typeof navigator === "undefined" || !navigator.xr) return false;
     // Only a definite "no headset" skips the fetch; an unknown answer keeps the old one.
     return (await probeVr()) !== false;
@@ -387,12 +392,11 @@ const XrBoot = (function () {
   }
 
   return {
-    bind, mountUi, ensureXr, wantXrBundle, comfort, camComfort, loopByXr, isBound, canAttach,
+    bind, mountUi, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
     ensureXrBackend, restorePinnedBackend, applyEyes, present, afterTick, chainWindowRaf,
-    findCockpit, diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
+    diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
     // Test / UI helpers
     setCamMode: (...a) => setCamTransient(...a),
-    LS_XR_PENDING, LS_XR_PREV,
   };
 })();
 Object.freeze(XrBoot);

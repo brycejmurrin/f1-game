@@ -217,11 +217,13 @@ export function swOptionalFiles() {
   return [
     ...Object.values(MANIFEST.DEFERRED).flat(),
     ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []),
-    ...(MANIFEST.LAZY_TRACK_BUILD || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
     ...(MANIFEST.LAZY_AUDIO || []),
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
+    ...(MANIFEST.LAZY_UI_PRESETS || []),
+    ...(MANIFEST.LAZY_RESULTS_SHEET || []),
   ];
 }
 
@@ -235,17 +237,24 @@ function swOptionalBlock() {
   const groups = [
     ["ROOT PAGES — answered offline under their own URL, never by the game shell", SW_ROOT_PAGES],
     ["DEFERRED renderer backends (no <script> tag; injected on opt-in)", Object.values(MANIFEST.DEFERRED).flat()],
-    ["LAZY_RACE + LAZY_CIRCUIT + LAZY_SCENERY — race payload; a miss builds a bare/meta circuit offline", [...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY]],
+    // ORDER IS INSTALL DOWNLOAD PRIORITY (sw.js install walks this Set in order):
+    // every race needs the race-entry bundles, a player needs ~2 of the ~100
+    // circuit + scenery files, so the race-entry groups go first (#4219 A).
+    ["LAZY_RACE — race payload every race needs", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)", MANIFEST.LAZY_RACE_SESSION || []],
     ["LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build", MANIFEST.LAZY_TRACK_BUILD || []],
+    ["LAZY_GARAGE_EXTERIOR — optional selected-circuit pit slice", MANIFEST.LAZY_GARAGE_EXTERIOR || []],
     ["LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start", MANIFEST.LAZY_AUDIO || []],
+    ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
+    ["LAZY_CIRCUIT + LAZY_SCENERY — per-circuit payload; a miss builds a bare/meta circuit offline", [...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY]],
     ["LAZY_DATA — the data hub bundle behind the DATA button", MANIFEST.LAZY_DATA],
     ["LAZY_NET — the multiplayer stack behind VS FRIEND", MANIFEST.LAZY_NET],
-    ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
     ["LAZY_EDITOR — the track designer behind the TRACK DESIGNER door", MANIFEST.LAZY_EDITOR],
     ["LAZY_XR — WebXR session behind navigator.xr / ENTER VR", MANIFEST.LAZY_XR || []],
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
+    ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
+    ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
@@ -254,6 +263,12 @@ function swOptionalBlock() {
     for (const f of files) out.push(`    "${f}",`);
   }
   return out.join("\n") + "\n";
+}
+
+/** The strict lazy group install must cache whole (CAREER screen files): derived from LAZY_CAREER_UI so a feature PR
+ *  that adds a career file no longer hand-edits a regex line in sw.js (it re-conflicted on every sync). */
+function swRequiredLazyBlock() {
+  return `const REQUIRED_LAZY = ${JSON.stringify(MANIFEST.LAZY_CAREER_UI || [])};\n`;
 }
 
 function swLazyAgentBlock() {
@@ -265,20 +280,23 @@ function rosterSource() {
   const fields = [
     ["DEFERRED", MANIFEST.DEFERRED], ["DEFERRED_EDGES", MANIFEST.DEFERRED_EDGES],
     ["LAZY_AGENT", MANIFEST.LAZY_AGENT], ["LAZY_EDGES", MANIFEST.LAZY_EDGES],
+    ["LAZY_DEV", MANIFEST.LAZY_DEV],
     ["LAZY_RACE", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION", MANIFEST.LAZY_RACE_SESSION],
     ["LAZY_RACE_SESSION_EDGES", MANIFEST.LAZY_RACE_SESSION_EDGES],
-    ["CIRCUITS_DIR", MANIFEST.CIRCUITS_DIR], ["LAZY_CIRCUIT", MANIFEST.LAZY_CIRCUIT],
+    ["CIRCUITS_DIR", MANIFEST.CIRCUITS_DIR],
     ["SCENERY_DIR", MANIFEST.SCENERY_DIR],
     ["LAZY_AUDIO", MANIFEST.LAZY_AUDIO], ["LAZY_AUDIO_EDGES", MANIFEST.LAZY_AUDIO_EDGES],
     ["LAZY_DATA", MANIFEST.LAZY_DATA], ["LAZY_DATA_EDGES", MANIFEST.LAZY_DATA_EDGES],
     ["LAZY_NET", MANIFEST.LAZY_NET], ["LAZY_NET_EDGES", MANIFEST.LAZY_NET_EDGES],
-    ["LAZY_WORKER", MANIFEST.LAZY_WORKER],
     ["LAZY_EDITOR", MANIFEST.LAZY_EDITOR], ["LAZY_EDITOR_EDGES", MANIFEST.LAZY_EDITOR_EDGES],
     ["LAZY_XR", MANIFEST.LAZY_XR], ["LAZY_XR_EDGES", MANIFEST.LAZY_XR_EDGES],
     ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
     ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
+    ["LAZY_UI_PRESETS", MANIFEST.LAZY_UI_PRESETS], ["LAZY_UI_PRESETS_EDGES", MANIFEST.LAZY_UI_PRESETS_EDGES],
+    ["LAZY_RESULTS_SHEET", MANIFEST.LAZY_RESULTS_SHEET], ["LAZY_RESULTS_SHEET_EDGES", MANIFEST.LAZY_RESULTS_SHEET_EDGES],
     ["LAZY_TRACK_BUILD", MANIFEST.LAZY_TRACK_BUILD], ["LAZY_TRACK_BUILD_EDGES", MANIFEST.LAZY_TRACK_BUILD_EDGES],
+    ["LAZY_GARAGE_EXTERIOR", MANIFEST.LAZY_GARAGE_EXTERIOR],
     // The build Worker's importScripts list, "@circuits" expanded in page order
     // so the worker's Tracks.LIST indexes exactly as the page's does.
     ["TRACK_VM", MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.CIRCUITS.map(MANIFEST.circuitPath) : [e]))],
@@ -318,6 +336,7 @@ export function generate() {
   controller = replaceMarked(controller, "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock(controller));
   let sw = read("sw.js");
   sw = replaceMarked(sw, "// @gen-shell:sw-optional", "// /@gen-shell:sw-optional", swOptionalBlock());
+  sw = replaceMarked(sw, "// @gen-shell:sw-required-lazy", "// /@gen-shell:sw-required-lazy", swRequiredLazyBlock());
   sw = replaceMarked(sw, "// @gen-shell:sw-lazy-agent", "// /@gen-shell:sw-lazy-agent", swLazyAgentBlock());
   return { "index.html": html, "tools/carview.html": carview, "cockpit-view.html": cockpitViewPage(), "controller.html": controller, "sw.js": sw, "js/roster.js": rosterSource() };
 }

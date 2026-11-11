@@ -61,6 +61,12 @@
      and a content-sized sheet would collapse it to its min-height. */
   height: 100%;
 }
+@media (min-width: 1680px) {
+  #sel-inner { --sheet-w: min(var(--menu-fit-sheet, 1180px), calc(100vw - 64px)); }
+}
+@media (min-width: 2400px) {
+  #sel-inner { --sheet-w: min(var(--menu-fit-sheet-wide, 1360px), calc(100vw - 80px)); }
+}
 #sel-car { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.15); min-width: 0; }
 #sel-car small { font-size: var(--fs-micro); font-style: normal; color: var(--dim); max-width: 100%; overflow-wrap: anywhere; white-space: normal; text-align: center; }
 #sel-track-count { letter-spacing: var(--ls-2); }
@@ -394,10 +400,12 @@
    2. BESIDE (wide-shaped AND >= 620 local px): the still fills the left 3/5
       of the section, the numbers the right 2/5 in their own scroll column.
       A desktop, a laptop, a landscape tablet.
-   3. LOWER THIRD (compact AND wide-shaped, at any width): a short landscape
+   3. THE PHONE CARD (compact AND wide-shaped, at any width): a short landscape
       phone — or any sheet at a raised UI SIZE — has no height for a stack
-      and no width for a column. The still takes the whole section and the
-      numbers run as ONE pan-x row under it, like a broadcast lower third. */
+      and no width for a column. The sheet becomes one four-row grid (title
+      row shared with the filter chips, strip, hero, foot), the still takes
+      the whole hero and the two key numbers ride on it as a lower-third
+      caption. Rules below, after the BESIDE block. */
 #sel-track-preview {
   flex: 1 1 auto; min-height: 0; min-width: 0;
   display: grid;
@@ -419,6 +427,11 @@
   height: min(52cqw, max(calc(var(--chip-h) * 3), min(calc(46 * var(--svhz)), var(--safe-h))));
   align-self: start;
 }
+/* BESIDE is a desktop / tablet arrangement: gated on a fine pointer or a
+   window with both sides >= 900 x 600 CSS px (UI contract 2026-11-06 rule 4,
+   #5153 gap 13). A phone-landscape sheet is 640-760 own px wide, so the bare
+   620 fired there (beaten only by the compact rules' specificity). */
+@media (pointer: fine), ((min-width: 900px) and (min-height: 600px)) {
 @container sheet (min-width: 620px) {
   /* 2. BESIDE — wide-shaped only; a tall 800px tablet keeps the stack. */
   #sel-inner:not([data-shape="tall"]) #sel-track-preview {
@@ -451,46 +464,168 @@
      NEXT in the foot. */
   #sel-inner:not([data-shape="tall"]) #sel-detail-chip { align-self: stretch; }
 }
-/* 3. LOWER THIRD. (1,2,1) beats the beside rules' (1,1,1) at any width. */
+}
+/* 3. THE PHONE CARD (UI contract 2026-11-06 §4.5, #5153 gap 13). MEASURED
+   before (docs/notes/UI-PR-D-MEASURE-2026-11-06.md, owner export, UI 109 %):
+   head 31 + filter row 48 + strip + numbers row + foot 69 own px of chrome
+   left the hero SECTION a 30-123 own px scroller over 170 of content in every
+   owner window (A 852x393, C 852x283, D 844x390). Chrome is what the box
+   cannot afford, so the sheet becomes ONE grid of four rows and the body and
+   shelf wrappers dissolve (display: contents): the filter chips share the
+   TITLE row (title left, chips panning right), the strip is row 2, the hero
+   is row 3 and NEVER scrolls (contract rule 3), the foot row 4. The two key
+   numbers and CIRCUIT DETAIL ride on the still as a lower-third caption, so
+   the hero is the whole remainder. (1,2,1)+ beats the beside rules' (1,1,1)
+   at any width. js/ui/sheet-shape.js measures the HOST, never .sheet-body,
+   so the dissolved body does not move the fit cap. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) {
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+/* The title band, painted by a grid-item pseudo across row 1 (the head itself
+   is only column 1 now): --grad-head under the fading hairline. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"])::before {
+  content: ""; grid-column: 1 / -1; grid-row: 1;
+  background: var(--grad-rule) bottom / 100% 1px no-repeat, var(--grad-head);
+  pointer-events: none;
+}
+/* overflow: visible with it: a dissolved box has no rect, and `#sel-body`'s base
+   `overflow: hidden` would read as a zero-sized clipping ancestor to anything
+   that walks the chain (ui-scale's clipped-controls probe, a11y tooling). */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) :is(#sel-body, #sel-shelf) { display: contents; overflow: visible; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-head {
+  grid-column: 1; grid-row: 1;
+  flex-wrap: nowrap; justify-content: flex-start; white-space: nowrap;
+  background: none;
+  padding-right: calc(var(--gap) * 0.5);
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-head::after { content: none; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter {
+  grid-column: 2; grid-row: 1;
+  align-self: center; min-width: 0;
+  margin-right: var(--pad);
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-tracks {
+  grid-column: 1 / -1; grid-row: 2;
+  margin: calc(var(--gap) * 0.5) var(--pad) 0;
+}
+/* The hero section: the remainder, clipped, never a scroller; a size container
+   so a short room (C) can trade the numbers band for the chip alone. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-section {
+  grid-column: 1 / -1; grid-row: 3;
+  overflow: hidden;
+  margin: calc(var(--gap) * 0.5) var(--pad) calc(var(--pad) * 0.25);
+  container: sel-room / size;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot { grid-column: 1 / -1; grid-row: 4; }
+/* THE PRACTICE BRIEF IS ONE LINE ON THE PHONE CARD. It sits in the hero
+   section above the still, and the section never scrolls (rule 3 above).
+   Reasoned from the rules, not measured (2026-11-10, 844x390 touch, UI 100):
+   the section is ~175 own px (sheet ~370 less head/chips ~52, strip ~62, foot
+   ~69). The full brief was ~190: padding 2x8 + border + the title line + a
+   three-to-four-line description + the 52px GOAL row + 8 margin, so the still
+   flexed to 0, the map door's padding pushed it past the viewport (y 330-405),
+   the numbers band (bottom: 0 of an empty preview) rose over GOAL and the foot
+   cut it. Here the title and GOAL share one row and the description goes to
+   assistive tech only (the clip pattern): 2 + 2x4 + 48 + 2 + 4 ≈ 64, which
+   leaves the still ~110 own, the hero floor (--chip-h x 2.1 ≈ 101).
+   css/experience.css (@layer overlays, which outranks this layer) sets the
+   brief's padding and margin from --gap and its .set-row's margin-top from
+   --gap, so they are halved through the token on the brief, not restated;
+   --sel-gap carries the section's own gap down to the GOAL row's controls. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-section { --sel-gap: var(--gap); }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #practice-brief {
+  --gap: calc(var(--sel-gap) * 0.5);
+  flex: none;
+  display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center;
+  column-gap: var(--sel-gap);
+  min-width: 0;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #practice-brief[hidden] { display: none; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #practice-brief > strong { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #practice-brief > p {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #practice-brief .set-row {
+  flex: 0 1 auto; width: auto; min-width: 0;
+  min-height: var(--chip-h);
+  flex-wrap: nowrap;
+  column-gap: calc(var(--sel-gap) * 0.6);
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #practice-brief .set-row > div { gap: calc(var(--sel-gap) * 0.35); }
+/* A stored STRIP POSITION bottom swaps rows 2 and 3 (the shelf's flex order
+   no longer exists here). */
+:root[data-look-select-strip="bottom"] #sel-inner[data-density="compact"]:not([data-shape="tall"]) { grid-template-rows: auto minmax(0, 1fr) auto auto; }
+:root[data-look-select-strip="bottom"] #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-tracks { grid-row: 3; margin-bottom: calc(var(--pad) * 0.25); }
+:root[data-look-select-strip="bottom"] #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-section { grid-row: 2; margin-bottom: 0; }
+/* Stored TILE SIZE and ROWS are requests the box clamps (contract rule 3): the
+   flag box follows TILE SIZE up to 125 % (the row rules above lose to the
+   compact row rule, so the meta width IS the tile), and the strip stays ONE
+   row — two or three rows of flags would be the hero's height. */
+:root[data-look-select-tile] #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-tracks .track-row-meta {
+  width: calc(var(--chip-h) * 1.2 * min(var(--look-select-tile, 1), 1.25));
+}
+:root[data-look-select-rows] #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-tracks {
+  display: flex; grid-template-rows: none;
+}
+:root[data-look-select-rows] #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-tracks > :is(.track-group-head, #sel-track-empty) { grid-row: auto; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-preview {
   grid-template-columns: minmax(0, 1fr);
-  /* The FLOOR IS ON THE ROW, not the hero: a min-height on the item let it
-     paint past a row the grid had already sized smaller (the still over the
-     numbers at 852x393 @150%). A floored row overflows the section instead,
-     and the section scrolls. */
-  /* The numbers row is a scroll container here (pan-x), and a scroll
-     container's minimum contribution is 0 — so `auto` alone collapsed it the
-     same way the stacked case's min-height did. A floor of one chip row plus
-     its label keeps it a lower third. */
-  grid-template-rows: minmax(calc(var(--chip-h) * 2.1), 1fr) minmax(calc(var(--chip-h) * 1.35), auto);
+  /* ONE row: the still is the whole section; the numbers are positioned over
+     it (below), so no floored second row can overflow the section. */
+  grid-template-rows: minmax(0, 1fr);
   align-content: stretch;
-  gap: calc(var(--gap) * 0.5);
+  gap: 0;
+  position: relative;
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-hero {
   aspect-ratio: auto; max-height: none; height: auto; align-self: stretch;
   min-height: 0;
 }
+/* THE NUMBERS RIDE ON THE STILL: a lower-third band over its bottom edge, the
+   caption (flag, name) top-left, the outline in the clear middle (the map
+   button pads the band out of the outline's slot; js/ui/select-screen.js
+   sizes the canvas to that content box). The band passes pointer events to
+   the map door under it; only the CIRCUIT DETAIL chip takes them. */
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info {
-  flex-direction: row; align-items: center; flex-wrap: wrap;
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  pointer-events: none;
+  flex-direction: row; align-items: center; flex-wrap: nowrap;
   gap: var(--gap);
-  padding: 0 0 calc(var(--gap) * 0.2);
+  padding: calc(var(--gap) * 0.45) var(--pad);
   overflow: visible;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  background: linear-gradient(to top in oklab, var(--plate-opaque) 60%, transparent);
 }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) .sel-map-btn { padding-bottom: calc(var(--chip-h) * 1.35); }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta {
   display: flex; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; gap: var(--gap);
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div { display: none; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(2),
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(3) {
-  display: flex; flex: 1 1 7rem; min-width: 0; align-items: baseline; gap: calc(var(--gap) * 0.4);
-  flex-wrap: wrap;
-  white-space: normal; overflow: visible;
+  display: flex; flex: 0 1 auto; min-width: 0; align-items: baseline; gap: calc(var(--gap) * 0.4);
+  flex-wrap: nowrap;
+  white-space: nowrap; overflow: hidden;
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta dd {
-  overflow: visible; text-overflow: unset; white-space: normal; overflow-wrap: anywhere;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-rec { display: none; }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-detail-chip { flex: 0 0 auto; align-self: center; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-detail-chip { flex: 0 0 auto; align-self: center; margin-left: auto; pointer-events: auto; }
+/* After the meta rules above, which it must beat at equal specificity.
+   A SHORT ROOM (C, the Safari tab: the hero is what 283 CSS px leave, ~70 own)
+   has no height for a band under the caption: the numbers go (CIRCUIT DETAIL
+   carries them) and the chip sits top-right beside the caption. */
+@container sel-room (max-height: 120px) {
+  #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info {
+    top: calc(var(--pad) * 0.6); bottom: auto; left: auto; right: var(--pad);
+    padding: 0; background: none; border-radius: 0;
+  }
+  #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta { display: none; }
+  #sel-inner[data-density="compact"]:not([data-shape="tall"]) .sel-map-btn { padding-bottom: 0; }
+}
 /* PORTRAIT PHONE: THE ACTION BAR WAS A THIRD OF THE SHEET. MEASURED
    (layout-audit, ios-iphone-portrait 393x659, 2026-10-05, tip a7d27757f):
    #sel-inner 542 px (497 own); the hero section — still, numbers, CIRCUIT
@@ -708,8 +843,8 @@
 /* Compact: the caption moves to the BOTTOM of a short still, over the
    scrim, so the outline has the clear upper half to itself. */
 #sel-inner[data-density="compact"] #sel-hero-cap { top: auto; bottom: calc(var(--pad) * 0.6); }
-/* A short landscape section scrolls over the floored hero row. Keep the
-   selected circuit at the visible start, rather than below that scrollport. */
+/* The phone card's caption stays top-left: the numbers band owns the bottom
+   edge of the still (#5153 gap 13). */
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-hero-cap {
   top: calc(var(--pad) * 0.6); bottom: auto;
 }

@@ -82,6 +82,21 @@ test("a single 10 s hitch window is not drift", () => {
   assert.equal(firstDue, -1);
 });
 
+test("the cooldown minute elapses while the post-step baseline is collected", () => {
+  const d = ThermalDrift.drift();
+  const r = run(d, (t) => 16.7 + (t < 90 ? 0 : 6), 200);
+  assert.ok(r.firstDue > 0);
+  d.stepped();
+  assert.equal(d.state().cooling, true);
+  // one discarded warm window plus the six windows that lock the new baseline
+  const frames = Math.ceil(7 * ThermalDrift.WINDOW_MS / 16.7) + 30;
+  for (let n = 0; n < frames; n++) d.feed(16.7);
+  const s = d.state();
+  assert.ok(s.baseline > 16 && s.baseline < 17.5, "re-baselined on the cheaper frames");
+  assert.equal(s.cooling, false, "cool counted down on those windows, not after them");
+  assert.equal(s.due, false);
+});
+
 test("stepped() re-baselines on the cheaper state and waits a cooldown; recovery stays quiet", () => {
   const d = ThermalDrift.drift();
   let i = 0;

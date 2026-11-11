@@ -121,6 +121,6 @@ test("joint dock height cap preserves default pedals and stays monotonic at larg
       }
     }
   }
-  assert.match(CSS, /--hud-btn-z:\s*clamp\(1, var\(--hud-z-dock, var\(--hud-btn-scale, 1\)\), 1\.5\)/,
+  assert.match(CSS, /--hud-btn-z:\s*clamp\(1, min\(var\(--hud-z-dock, 99\), var\(--hud-btn-scale, 1\)\), 1\.5\)/,
     "CAM/PAUSE consume the same effective zoom that the height solver budgets");
 });

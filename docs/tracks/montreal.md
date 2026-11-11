@@ -1,6 +1,6 @@
 # Circuit Gilles Villeneuve — Visual Design Brief
 
-**Theme:** `island_park_day` (green) · **Time:** DAY · **Render:** procedural colored boxes, no textures
+**Theme:** `green` · **Time:** DAY · **Render:** procedural colored boxes, no textures
 
 ## 1. Setting
 A semi-permanent racetrack laid across **Île Notre-Dame**, a man-made island built for Expo 67 in the St. Lawrence River, just off downtown Montreal. The circuit sits inside Parc Jean-Drapeau: leafy parkland, paved cycle paths, the long Olympic rowing basin, and Expo-era pavilions. Water is everywhere — the island is ringed by the river and laced with canals. Walls hug the track tightly with almost no run-off; trees and grass fill the gaps. The Montreal skyline rises across the water to the north.
@@ -30,10 +30,10 @@ Clockwise; s=0.0 at start/finish on the main straight.
 | 0.30 | L | far | **Biosphère** (`montreal-biosphere`) — open triangular sphere frame on Île Sainte-Hélène; nominal 76 m diameter / 62 m height, approximate |
 | 0.38 | L | far | Montreal skyline across river — distant grey tower boxes of varied height |
 | 0.45 | R | close | Casino corner (T8–9) + footbridge — grey box spanning over the track |
-| 0.52–0.58 | both | close | **L'Épingle** (`montreal-hairpin-grandstands`) — 3 outside stands + GS 34 inside |
+| 0.598–0.634 | both | close | **L'Épingle** (`montreal-hairpin-grandstands`) — 3 outside stands + GS 34 inside |
 | 0.60 | L | mid | Casino Straight flanked by Olympic Basin — long teal water plane to left |
-| 0.92 | both | close | Final chicane (T13–14) — red/white kerb boxes, tight wall funnel |
-| 0.97 | both | close | **Wall of Champions** (`montreal-wall-of-champions-stand`) — GS 16 + Bienvenue panel |
+| 0.890–0.908 | both | close | Final chicane (T13–14) — red/white kerb boxes, tight wall funnel |
+| 0.906–0.926 | R | close | **Wall of Champions** (`montreal-wall-of-champions-stand`) — GS 16 + Bienvenue panel |
 | all | both | close | Continuous concrete walls — thin pale-grey boxes lining both edges |
 
 ## 5. Track features
@@ -48,7 +48,7 @@ Clockwise; s=0.0 at start/finish on the main straight.
 - Place the long flat **teal Olympic Basin plane** (`COL.basinTeal`) along the Casino Straight and as the river surround.
 - Keep the whole island dead flat; use wall proximity and chicane kerbs, not elevation, for drama.
 - Dot green cube-canopy trees and grass strips between walls to sell the island-park setting.
-- Make the **Wall of Champions** a tall pale hero wall at s≈0.955–0.99 R with a Québec-blue painted panel (no glyphs).
+- Make the **Wall of Champions** a tall pale hero wall at s≈0.906–0.926 R with a Québec-blue painted panel (no glyphs).
 - Casino = Expo 67 French-pavilion mass, built as a stepped 4-tier stack ~44 m tall (supersedes the earlier ~25–35 m note: a 30 m mass vanishes at the 95 m gap this site needs; height is a styling choice, unverified against the real pavilion) — not a glass skyscraper. Glint prisms must sit clear of the façade (flatCoplanar).
   Placement: the footprint (plinth 72 x 58 m + 21 x 36 m annex) cannot fit the 70 m terrain ribbon, so it stands at s 0.274, gap 95 m, mostly on
   the grass floor (its inboard edge touches the ribbon); nothing may stand on the `montreal-river-*` water bands (s 5/16–11/16 on this side). Verified headless: a 3 m grid over the footprint hits 0 water-mesh samples.

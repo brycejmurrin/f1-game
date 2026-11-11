@@ -16,6 +16,9 @@ sectorState() {
       elapsed: +elapsed.toFixed(3),
       bests: G.sectorBests.map((v) => v === Infinity ? null : +v.toFixed(3)),
       last:  G.sectorLast.map((v) => v == null     ? null : +v.toFixed(3)),
+      // The field's best per sector — the timing screen's purple (hud.js), and the
+      // overlay's (OverlayPublisher): a sector is purple when it beats this too.
+      fieldBest: (G.fieldSectorBests || []).map((v) => v == null || v === Infinity ? null : +v.toFixed(3)),
     };
   },
 lapHistory() {

@@ -142,12 +142,19 @@ test("GLX setPolyOffset caches bias and draw() passes depthBias without a litera
 });
 
 
-test("iterator GC microbench: indexed cull packs with less young-gen pressure than for…of", () => {
+test("iterator GC microbench: indexed cull packs with less young-gen pressure than for…of", async () => {
   // Synthetic pack loop mirroring cullInstances' inner cell walk. Measures
   // retained heap after forced GC over N cell iterations — for…of mints an
-  // iterator per cell; indexed for does not. Skip when gc() is unavailable
-  // (plain `node --test`); CI/tooling-fast may not expose it.
-  if (typeof globalThis.gc !== "function") return;
+  // iterator per cell; indexed for does not. It measures V8 on two loops
+  // written HERE, not the game's cull: the source pins above are what tie the
+  // shape to js/. Until 2026-11-09 this body never ran anywhere: it returned
+  // (a pass, not a skip) when gc() was absent, and no runner passes
+  // --expose-gc. Take gc() the way frame-lights-shed does, and fail if it
+  // cannot be had.
+  const v8 = await import("node:v8");
+  v8.setFlagsFromString("--expose-gc");
+  const gc = vm.runInNewContext("gc");
+  assert.equal(typeof gc, "function", "gc() is available after --expose-gc (the microbench must run, not return)");
   const cells = 4000;
   const idx = new Array(32);
   for (let i = 0; i < 32; i++) idx[i] = i;
@@ -173,10 +180,10 @@ test("iterator GC microbench: indexed cull packs with less young-gen pressure th
     return n;
   };
   const measure = (fn) => {
-    globalThis.gc(); globalThis.gc();
+    gc(); gc();
     const h0 = process.memoryUsage().heapUsed;
     for (let c = 0; c < cells; c++) fn();
-    globalThis.gc(); globalThis.gc();
+    gc(); gc();
     return process.memoryUsage().heapUsed - h0;
   };
   // Warm both paths so JIT noise is shared.
@@ -199,6 +206,7 @@ test("CarMesh.aeroEdgeOn is memoised and tested AFTER the blend: no localStorage
   ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
   ctx.Car3D = { aeroFlaps: () => [] };
   vm.createContext(ctx);
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   const CarMesh = vm.runInContext("CarMesh", ctx);
   CarMesh.init({ createMesh: () => ({}), draw() {}, freeMesh() {} });
@@ -275,6 +283,7 @@ function tailGlowVm(gfxExtra) {
   const g2d = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: "" };
   ctx.document = { createElement: () => ({ width: 0, height: 0, getContext: () => g2d }) };
   vm.createContext(ctx);
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   const CarMesh = vm.runInContext("CarMesh", ctx);
   const decals = [];

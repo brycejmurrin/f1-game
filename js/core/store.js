@@ -81,6 +81,8 @@ const GameStore = (function () {
         }
         this._cache.set(key, v);
       }
+      // Stored null under an object/array default is a miss (W34: the garage threw); a null default keeps null.
+      if (v === null && d !== null && typeof d === "object") return this._def(k, d);
       return v === undefined ? this._def(k, d) : v;
     },
     // What the PLAYER stored (or set this session), with no shipped default and
@@ -321,13 +323,16 @@ const GameStore = (function () {
     const ok = (k != null && !careerKey(k)) || careerWriter.state === "owned";
     return { ok, durable: false, reason: ok ? null : "writer-" + careerWriter.state };
   }
+  const WRITER_WAIT_MS = 1500;
   function acquireCareerWriter() {
     // Non-browser consumers have no other documents. Browsers without the lock
     // API fail closed, with an explicit status, rather than persisting unlocked.
     if (typeof navigator === "undefined") return Promise.resolve(true);
     return new Promise((resolve) => {
+      let done = false;
       const finish = (state) => {
-        careerWriter.state = state;
+        if (done) return;
+        done = true; careerWriter.state = state;
         // Reads made before lock acquisition cannot arm a new writer. Reload
         // them after the asynchronous acquisition boundary, while exclusively
         // owning all participating primary/mirror writers.
@@ -343,12 +348,23 @@ const GameStore = (function () {
       };
       try {
         if (!navigator.locks || typeof navigator.locks.request !== "function") { finish("unavailable"); return; }
-        navigator.locks.request("apex26-career-writer", { mode: "exclusive", ifAvailable: true }, (lock) => {
-          if (!lock) { finish("busy"); return; }
-          // Return a pending promise to retain ownership until the document
-          // dies. pagehide must not release it while a mirror commit is live.
-          finish("owned");
-          return new Promise(() => {});
+        const locks = navigator.locks, name = "apex26-career-writer";
+        // Return a pending promise to retain ownership until the document
+        // dies. pagehide must not release it while a mirror commit is live.
+        const hold = () => { finish("owned"); return new Promise(() => {}); };
+        // An in-app reload can ask before the dying document's lock is gone
+        // (the release is asynchronous; WebKit bug 283528 kept it past unload).
+        // Queue ONCE, bounded, still "pending": a live second tab holds the
+        // lock past the deadline and this document ends busy as before.
+        const queue = () => {
+          if (typeof AbortController !== "function" || typeof setTimeout !== "function") { finish("busy"); return; }
+          const ac = new AbortController(), timer = setTimeout(() => ac.abort(), WRITER_WAIT_MS);
+          locks.request(name, { mode: "exclusive", signal: ac.signal }, () => { clearTimeout(timer); return hold(); })
+            .catch((e) => { clearTimeout(timer); finish(e && e.name === "AbortError" ? "busy" : "unavailable"); });
+        };
+        locks.request(name, { mode: "exclusive", ifAvailable: true }, (lock) => {
+          if (lock) return hold();
+          queue();
         }).catch(() => { finish("unavailable"); });
       } catch (_) { finish("unavailable"); }
     });
@@ -361,7 +377,7 @@ const GameStore = (function () {
   }
   // A FULL QUOTA MUST NOT COST A SAVE: the data hub's response cache
   // (apex26.api.*, js/data/api.js) and its real-race scripts (apex26.realrace.*,
-  // js/data/real-race-tab.js) are disposable and could fill the whole 5 MiB
+  // js/data/real-race-fetch.js) are disposable and could fill the whole 5 MiB
   // origin quota, after which every career/settings/ghost write failed.
   // On a failed write, drop those caches and try once more.
   const DISPOSABLE_PREFIXES = ["apex26.api.", "apex26.realrace."];
@@ -451,8 +467,11 @@ const GameStore = (function () {
     _mirrorDb = null;
     mirror.supported = false;
   }
+  // iOS drops the connection behind a suspended page, often with no close
+  // event: a throwing transaction() (InvalidStateError) or an UnknownError
+  // abort is the only sign. Either way this handle is dead; reopen next flush.
   function mirrorTransactionFailed(db, error) {
-    if (error && error.name === "InvalidStateError") mirrorInvalidate(db);
+    if (error && (error.name === "InvalidStateError" || error.name === "UnknownError")) mirrorInvalidate(db);
   }
 
   function mirrorOpen() {
@@ -629,7 +648,7 @@ const GameStore = (function () {
         for (const [k, v] of committed) { if (v === null) _mirrorSeen.delete(k); else _mirrorSeen.set(k, v); }
         mirror.flushed += committed.size; res(true);
       };
-      t.onerror = t.onabort = () => { res(false); };
+      t.onerror = t.onabort = (ev) => { mirrorTransactionFailed(db, t.error || (ev && ev.target && ev.target.error)); res(false); };
     })).then((ok) => {
       if (!ok && batch.size) {
         mirror.failed += batch.size;
@@ -672,7 +691,7 @@ const GameStore = (function () {
       try { r = db.transaction(MIRROR_STORE, "readonly").objectStore(MIRROR_STORE).getAll(); }
       catch (e) { mirrorTransactionFailed(db, e); res([]); return; }
       r.onsuccess = () => res(r.result || []);
-      r.onerror = () => res([]);
+      r.onerror = () => { mirrorTransactionFailed(db, r.error); res([]); };
     })).then((rows) => {
       const restored = [];
       let authoredTotal = 0, authoredCount = 0;
@@ -869,7 +888,8 @@ const GameStore = (function () {
     return SaveMigrate.migrateSeasonPoints(store, season);
   }
 
-  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttRead, ttParseBoard,
+  // ttRead stays module-private (ttBoard / ttBoardAdd* / ttParseBoard cover callers).
+  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttParseBoard,
            hexToRgb, rgbToHex, seasonDriverId,
            migrateSeasonPoints,
            migrateCareer: SaveMigrate.migrateCareer,

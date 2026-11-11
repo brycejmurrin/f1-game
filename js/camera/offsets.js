@@ -214,7 +214,8 @@ function refreshStoredContext() {
   const team = store.get("team", 2);
   _storedContext.car = Number.isInteger(team) && list && list[team] ? list[team].id : null;
 }
-function context() {
+const _ctxOut = { track: null, car: null };   // shared: scopeKey reads it a dozen times a chase frame; the public context() copies
+function contextShared() {
   const live = (_readContext ? _readContext() : _context) || {};
   let track = typeof live.track === "string" && live.track ? live.track : null;
   let car = typeof live.car === "string" && live.car ? live.car : null;
@@ -223,11 +224,13 @@ function context() {
     if (!_readContext || !track) track = _storedContext.track || track;
     if (!_readContext || !car) car = _storedContext.car || car;
   }
-  return { track, car };
+  _ctxOut.track = track; _ctxOut.car = car;
+  return _ctxOut;
 }
+function context() { return { ...contextShared() }; }
 function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
 function scopeKey(scope) {
-  const current = context();
+  const current = contextShared();
   return scope === "track" ? current.track : scope === "car" ? current.car : null;
 }
 function scopeEntry(scope, create) {
@@ -367,7 +370,6 @@ function set(mode, id, v) {
   v = clamp(v, d.min, d.max);
   const prof = _store[mode] || (_store[mode] = {});
   prof[id] = v;
-  if (!Object.keys(prof).length) delete _store[mode];
   return true;
 }
 function setGlobal(id, v) {

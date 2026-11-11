@@ -11,20 +11,24 @@ single-source shaders for WebGL2 + WebGPU; the repo currently hand-maintains
 
 ## Files
 
+**The harness page is gone (2026-11-10).** `three-spike.html` loaded 22 scripts by
+hand-copied path and 17 of them had moved, so the page no longer booted; it,
+`spike-data.js` (its GLX stub + `SpikeData.build()`) and `capture.mjs` (its headless
+capture) were deleted in the dead-weight pass (W17) — restore all three from git
+history to re-run the arm. What stays:
+
 | File | Role |
 |---|---|
-| `spike-data.js` | GLX stub (same trick as `tools/verify-track.cjs`) + `SpikeData.build()` — real `Tracks.build` geometry, `Car3D.build`, `LightTune` lamp records + per-frame 32-lamp cull |
-| `three-spike.html` | harness page — script tags mirror `tools/manifest.cjs` TRACK_VM (hand copy, may drift) + one circuit (singapore) |
-| `three-spike.js` | the three.js scene: WebGPURenderer (`?gl=1` pins WebGL2), custom TSL lit material (32-lamp loop + FLAT/METAL/GRASS procedural materials ported from `js/render/shaders/lit.js`), 2048² sun shadow, bloom+ACES, 22-car instancing A/B, `window.__spike` hooks |
-| `capture.mjs` | headless capture (playwright library, NOT @playwright/test): screenshots + stats + GLX baseline with wrapped draw-call counter |
-| *(no `vendor/`)* | three.js resolves to the game's own `vendor/three-0.186.1/`, MIT — see below |
+| `three-spike.js` | the three.js scene the page ran (TSL lit material, 32-lamp loop, FLAT/METAL/GRASS ports): kept as the reference `js/render/three/tsl-lit.js` cites ("PORT FRICTION"). Not runnable on its own; its `three/addons/tsl/display/BloomNode.js` import is no longer vendored either |
+| `capture-m8.mjs` | the M8 game capture (unit-tested by `tests/unit/f1-dev-tools.test.mjs`) |
+| `ADOPTION-PLAN.md`, `physics/`, `backends/README.md` | the plan and Rapier harnesses the shipped code cites |
 
 ## Vendored libraries (this spike carries none of its own)
 
 This directory used to hold ~11 MB of its own `vendor/` copies. Two of them —
 three.js 0.184.0 and Rapier 0.19.3 — were **byte-identical** (md5) to the copies
 the game itself ships in the repo-root `vendor/`, so `three-spike.html` and the
-`physics/` harnesses now import those directly (`../vendor/three-0.186.1/`,
+`physics/` harnesses now import those directly (`../vendor/three-0.187.0/`,
 `../../vendor/rapier-0.19.3/`) and the duplicates are gone. Nothing about how the
 spikes run changed.
 
@@ -37,18 +41,10 @@ itself (`babylon-spike.html/.js`) has since been deleted as well — the numbers
 stand on their own. Re-running the arm means restoring both files from git
 history and dropping a Babylon 9.19.0 UMD build into `spike/vendor/babylon/`.
 
-## Run
+## Run (historical)
 
-```sh
-npx serve -l 3456 .                     # from the repo root
-# http://localhost:3456/spike/three-spike.html        (auto: WebGPU if available)
-# http://localhost:3456/spike/three-spike.html?gl=1   (pin WebGL2 — the CI path)
-# drag = orbit, wheel = zoom, [i] = instancing toggle
-
-node spike/capture.mjs spike            # headless spike capture (SwiftShader WebGL2)
-node spike/capture.mjs baseline         # GLX baseline from the real game
-node spike/capture.mjs all              # both → scratch/captures/spike/results.json
-```
+The harness ran at `spike/three-spike.html` (`?gl=1` pinned WebGL2) with
+`node spike/capture.mjs spike|baseline|all`; both are in git history only (see §Files).
 
 `window.__spike` (mirrors the `__apex` convention): `ready`, `stats()`,
 `setCamera(az, el, dist, frac)`, `toggleInstancing(on?)`, `setLightCount(n)`,

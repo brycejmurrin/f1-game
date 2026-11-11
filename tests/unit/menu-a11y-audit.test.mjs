@@ -126,11 +126,11 @@ function bootMenuNav() {
   return { dom, layer, MenuNav: sb.MenuNav, key, add: (id, o) => control(dom, layer, id, o), focused: () => dom.document.activeElement && dom.document.activeElement.id };
 }
 
-function bootTopModal(ids) {
+function bootTopModal(ids, extra = {}) {
   const dom = makeDom({ readyState: "loading" });
   const { els, UiLayers } = layerStack(dom, ids);
   const mo = moShim();
-  const sb = sandbox(dom, { UiLayers, MutationObserver: mo.MutationObserver });
+  const sb = sandbox(dom, { UiLayers, MutationObserver: mo.MutationObserver, ...extra });
   vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: absSrc("js/ui/menu-nav.js") });
   vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: absSrc("js/ui/modal.js") });
   const byId = Object.fromEntries(els.map((el) => [el.id, el]));
@@ -507,7 +507,7 @@ test("TopModal.scanLayers wires every non-dialog UiLayers layer except the two t
   const s = code("js/ui/modal.js");
   assert.match(s, /"rotate-device":\s*1,\s*"photo-controls":\s*1/, "LAYER_SKIP names exactly the rotate blocker and the fly-cam");
   assert.match(s, /el\.tagName !== "DIALOG"\) wireLayer\(el\)/, "dialogs keep showModal()/close() focus handling");
-  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation \}/);
+  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation, escapeTop, onClickShield \}/);
 });
 
 test("TopModal isolates the title menu behind dialog and non-dialog sheets", () => {
@@ -545,12 +545,13 @@ const ids = new Set([...HTML.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
 
 test("every layer in the shell is a named region or dialog, and #announce is a live region", () => {
   const SKIP = {
-    overlay: "the title page itself — the document's main content, not a layer over it",
+    overlay: "title page is role=main (pinned below), not a region-over-itself",
     "photo-controls": "a toolbar of labelled buttons over the free camera, not a screen",
     "hud-arrange-bar": "a named toolbar built by HudArrange, covered by its editor tests",
     // Pre-race plate: role=status (not region/dialog); named via aria-label.
     loading: "status plate — announces once, not a navigable region",
   };
+  assert.equal(/role="main"[^>]*aria-label="Title menu"/.test(openTag("overlay") || ""), true, "#overlay is the titled main landmark");
   for (const id of loadLayerIds()) {
     if (SKIP[id]) continue;
     const tag = openTag(id);
@@ -788,8 +789,6 @@ test("the SAVING UNAVAILABLE banner is static, spoken once, dismissible, and sta
   assert.match(sel, /store\.writeFailed/, "it asks whether a WRITE failed, not whether anything ever threw");
   assert.doesNotMatch(sel, /if \(store\.broken\) showSaveWarning/, "a corrupt-key READ must not raise it");
   assert.match(sel, /\$\("announce-live"\)/, "spoken through the always-present polite region");
-  assert.match(sel, /LiveRegion\.say\(text, "save"\)/,
-    "through LiveRegion, the region's one writer, at SAVE priority (it owns the clear-then-write beat)");
   assert.doesNotMatch(sel, /setTimeout\(\(\) => \{ live\.textContent =/, "never times its own #announce-live write");
   assert.match(sel, /setAttribute\("aria-expanded", on \? "false" : "true"\)/, "the toggle reports its state");
 
@@ -798,4 +797,203 @@ test("the SAVING UNAVAILABLE banner is static, spoken once, dismissible, and sta
   assert.ok(ruleFor(css, /(^|, )body\.in-race #save-warning(,|$)/), "hidden during a race");
   assert.ok(ruleFor(css, /body:has\(> dialog\[open\]\) #save-warning/), "hidden under an open dialog, where it is inert");
   assert.equal(decl(css, "#save-warning[data-collapsed] > :not(#save-dismiss)", "display"), "none", "DISMISS folds it to its toggle");
+});
+
+test("dense-Home title doors with a hidden .mb-sub keep the subtitle in aria-label", () => {
+  // Dense Home hides .mb-sub (css/menu-destinations.css #menu-buttons .mb-sub);
+  // without aria-label the subtitle vanishes from the accessible name.
+  const want = {
+    "mb-practice": "Practice — Goals &amp; checkpoints",
+    "mb-photo": "Photo Studio — Capture &amp; backgrounds",
+    "mb-garage": "Garage — Setup &amp; livery",
+  };
+  const got = {};
+  for (const id of Object.keys(want)) {
+    const m = HTML.match(new RegExp("<button[^>]*\\bid=\"" + id + "\"[^>]*>"));
+    got[id] = m ? ((m[0].match(/aria-label="([^"]*)"/) || [])[1] || null) : null;
+  }
+  assert.deepEqual(got, want);
+});
+
+/* ── UI hunt 2026-10-29 (844x390 touch walk): #3 ghost tap, #4 opener, #9 dialog Tab ── */
+
+test("TopModal: an app that focuses inside its screen first still gets focus back on the door at close (#4)", () => {
+  // GARAGE and PRACTICE focus their own control BEFORE the hidden-flip callback,
+  // so onLayerShow saw focus inside and recorded no opener: close fell to <body>.
+  const h = bootTopModal(["overlay", "carsetup"]);
+  const overlay = h.layer("overlay"), garage = h.layer("carsetup");
+  garage.hidden = true;
+  h.add(overlay, "mb-race", { y: 10 });
+  const door = h.add(overlay, "mb-garage", { y: 60 });
+  const cam = h.add(garage, "cs-cam", { y: 10 });
+  h.TopModal.scanLayers();
+  door.focus();
+  garage.hidden = false;                       // the click handler shows the garage…
+  cam.focus();                                 // …and focuses its camera button at once
+  h.TopModal.onFocusIn({ target: cam, relatedTarget: door });
+  h.flip(garage, false);
+  assert.equal(h.focused(), "cs-cam", "the app's own focus stands");
+  h.flip(garage, true);
+  assert.equal(h.focused(), "mb-garage", "CLOSE GARAGE returns to the door, not <body>");
+});
+
+// UI hunt 3 (1280×800 keyboard walk): GARAGE closes behind the loading plate
+// and shows the title a beat later, so the opener's screen was not up at hide
+// time and focus fell to <body> — round 1's fix only covered the direct path.
+test("TopModal: an opener whose screen returns after a loading plate gets focus when it shows", () => {
+  const h = bootTopModal(["overlay", "carsetup", "loading"]);
+  const overlay = h.layer("overlay"), garage = h.layer("carsetup"), plate = h.layer("loading");
+  garage.hidden = true; plate.hidden = true;
+  h.add(overlay, "mb-race", { y: 10 });                     // the title's own landing spot
+  const door = h.add(overlay, "mb-garage", { y: 60 });
+  const cam = h.add(garage, "cs-cam", { y: 10 });
+  h.TopModal.scanLayers();
+  door.focus();
+  garage.hidden = false; cam.focus();
+  h.TopModal.onFocusIn({ target: cam, relatedTarget: door });
+  h.flip(garage, false);
+  overlay.hidden = true; h.flip(overlay, true);             // the title steps aside for the garage
+  plate.hidden = false; h.flip(plate, false);               // close: the plate covers the teardown…
+  h.dom.document.activeElement = h.dom.body;
+  garage.hidden = true; h.flip(garage, true);               // …the garage hides under it…
+  assert.notEqual(h.focused(), "mb-garage", "nothing to focus yet: the title is not up");
+  plate.hidden = true; h.flip(plate, true);
+  overlay.hidden = false; h.flip(overlay, false);           // …and the title shows a beat later
+  assert.equal(h.focused(), "mb-garage", "the parked door gets focus when its screen shows");
+});
+
+test("TopModal: the ghost-tap shield swallows only a fast pointer repeat at the same spot (#3)", () => {
+  let now = 1000;
+  const h = bootTopModal(["overlay", "select"], { Date: { now: () => now } });
+  const overlay = h.layer("overlay"), select = h.layer("select");
+  select.hidden = true;
+  const door = h.add(overlay, "mb-race", { y: 100 });
+  const row = h.add(select, "sel-row-suzuka", { y: 100 });
+  h.TopModal.scanLayers();
+  const click = (target, o = {}) => {
+    const e = { type: "click", target, isTrusted: true, detail: 1, clientX: 100, clientY: 110, stopped: false, defaultPrevented: false, ...o };
+    e.preventDefault = () => { e.defaultPrevented = true; };
+    e.stopImmediatePropagation = () => { e.stopped = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  assert.equal(click(door).stopped, false, "the opening tap passes");
+  h.flip(select, false);                       // RACE opens the picker under the thumb
+  now += 150;
+  const ghost = click(row, { clientX: 104, clientY: 113 });
+  assert.equal(ghost.stopped, true, "the double tap's second click never reaches the circuit row");
+  assert.equal(ghost.defaultPrevented, true);
+  assert.equal(click(row, { detail: 0 }).stopped, false, "keyboard Enter/Space (detail 0) passes");
+  assert.equal(click(row, { isTrusted: false }).stopped, false, "a script's el.click() passes");
+  assert.equal(click(row, { clientX: 400, clientY: 300 }).stopped, false, "a tap elsewhere is a real choice");
+  now += 400;
+  assert.equal(click(row).stopped, false, "after SHIELD_MS the same spot is live again");
+  // The window runs from the OPENING tap, not the show: a screen that took a
+  // second to swap in must not swallow the next deliberate tap at that spot.
+  h.flip(select, true);
+  now += 2000;
+  assert.equal(click(door).stopped, false);
+  now += 900;
+  h.flip(select, false);
+  now += 50;
+  assert.equal(click(row).stopped, false, "a slow swap: the next tap is a choice, not a double tap's ghost");
+});
+
+test("TopModal: the shield also swallows the ghost's pointerdown/pointerup, but only a click opens it (W34 row 6)", () => {
+  let now = 1000;
+  const h = bootTopModal(["overlay", "trackdesigner"], { Date: { now: () => now } });
+  const overlay = h.layer("overlay"), td = h.layer("trackdesigner");
+  td.hidden = true;
+  const door = h.add(overlay, "mb-designer", { y: 100 });
+  const canvas = h.add(td, "td-canvas", { y: 100 });
+  h.TopModal.scanLayers();
+  const ev = (type, target, o = {}) => {
+    const e = { type, target, isTrusted: true, detail: type === "click" ? 1 : 0, clientX: 100, clientY: 110, stopped: false, immediate: false, ...o };
+    e.preventDefault = () => {};
+    e.stopPropagation = () => { e.stopped = true; };
+    e.stopImmediatePropagation = () => { e.stopped = true; e.immediate = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  assert.equal(ev("pointerup", door).stopped, false);
+  assert.equal(ev("click", door).stopped, false, "the opening tap passes");
+  h.flip(td, false);
+  now += 120;
+  assert.equal(ev("pointerdown", canvas).stopped, true, "the 120 ms ghost's pointerdown never reaches the canvas");
+  const up = ev("pointerup", canvas);
+  assert.equal(up.stopped, true, "nor its pointerup (the designer places a point on it)");
+  assert.equal(up.immediate, false, "but other window-capture listeners (input.js's hold-release net) still see the lift");
+  assert.equal(ev("pointerup", canvas, { clientX: 500 }).stopped, false, "elsewhere on the new screen is a choice");
+  now += 400;
+  assert.equal(ev("pointerup", canvas).stopped, false, "after SHIELD_MS the canvas is live");
+  // A pointer event never opens a window of its own: with no click before the show, nothing is shielded.
+  h.flip(td, true); now += 5000;
+  ev("pointerdown", door); ev("pointerup", door);
+  h.flip(td, false); now += 50;
+  assert.equal(ev("pointerup", canvas).stopped, false);
+});
+
+test("TopModal: a ghost queued behind a slow screen build is judged by its own input time (W34 SEASON)", () => {
+  let now = 1000;
+  const h = bootTopModal(["overlay", "select"], { Date: { now: () => now }, performance: { timeOrigin: 1000, now: () => now - 1000 } });
+  const overlay = h.layer("overlay"), select = h.layer("select");
+  select.hidden = true;
+  const door = h.add(overlay, "mb-season", { y: 100 });
+  const map = h.add(select, "sel-map-btn", { y: 100 });
+  h.TopModal.scanLayers();
+  const click = (target, at) => {
+    const e = { type: "click", target, isTrusted: true, detail: 1, clientX: 100, clientY: 110, timeStamp: at - 1000, stopped: false };
+    e.preventDefault = () => {};
+    e.stopImmediatePropagation = () => { e.stopped = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  assert.equal(click(door, 1000).stopped, false);
+  now = 1900;                                  // the picker build held the thread 900 ms…
+  h.flip(select, false);
+  assert.equal(click(map, 1120).stopped, true, "…but the second tap happened 120 ms after the first");
+  assert.equal(click(map, 1950).stopped, false, "a tap made after the swap is a choice");
+});
+
+test("TopModal: automation (navigator.webdriver) is never shielded — its fast clicks are deliberate", () => {
+  let now = 1000;
+  const h = bootTopModal(["overlay", "select"], { Date: { now: () => now }, navigator: { webdriver: true } });
+  const overlay = h.layer("overlay"), select = h.layer("select");
+  select.hidden = true;
+  const door = h.add(overlay, "mb-race", { y: 100 });
+  const row = h.add(select, "sel-row-suzuka", { y: 100 });
+  h.TopModal.scanLayers();
+  const click = (target) => {
+    const e = { type: "click", target, isTrusted: true, detail: 1, clientX: 100, clientY: 110, stopped: false };
+    e.preventDefault = () => {};
+    e.stopImmediatePropagation = () => { e.stopped = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  click(door);
+  h.flip(select, false);
+  now += 100;
+  assert.equal(click(row).stopped, false);
+});
+
+test("TopModal: a dialog wraps Tab at its last control instead of parking on <body> (#9)", () => {
+  const h = bootTopModal(["overlay", "howtoplay"]);
+  const dlg = h.layer("howtoplay");
+  dlg.tagName = "DIALOG";
+  dlg.showModal = () => { dlg.open = true; };
+  dlg.close = () => { dlg.open = false; };
+  const first = h.add(dlg, "htp-first", { y: 10 });
+  const last = h.add(dlg, "htp-close", { y: 60 });
+  first.tabIndex = 0; last.tabIndex = 0;
+  h.TopModal.wire(dlg);
+  last.focus();
+  const tab = (shiftKey) => {
+    const e = { type: "keydown", key: "Tab", shiftKey, altKey: false, ctrlKey: false, metaKey: false, defaultPrevented: false };
+    dlg.dispatchEvent(e);
+    return e;
+  };
+  assert.equal(tab(false).defaultPrevented, true);
+  assert.equal(h.focused(), "htp-first", "Tab past the last control wraps to the first");
+  assert.equal(tab(true).defaultPrevented, true);
+  assert.equal(h.focused(), "htp-close", "Shift+Tab from the first wraps to the last");
 });

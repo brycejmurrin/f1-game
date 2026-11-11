@@ -5,8 +5,8 @@
 /**
  * vendor-three.mjs — the ONE way a three.js version enters vendor/.
  *
- *   node tools/gen/vendor-three.mjs 0.186.1                       # npm pack into scratch/, patch, minify, write vendor/three-0.186.1/
- *   node tools/gen/vendor-three.mjs 0.186.1 --tarball scratch/three-0.186.1.tgz
+ *   node tools/gen/vendor-three.mjs 0.186.1                       # npm pack into scratch/, patch, minify, write vendor/three-0.187.0/
+ *   node tools/gen/vendor-three.mjs 0.186.1 --tarball scratch/three-0.187.0.tgz
  *   node tools/gen/vendor-three.mjs --check                        # no network: every vendor/three-* /MANIFEST.json still matches its files
  *
  * Why this exists: three.js stopped shipping minified builds in r186 (PR #33893,
@@ -20,9 +20,8 @@
  *
  * Outputs: three.webgpu.min.js, three.core.min.js, three.tsl.min.js (the internal
  * `./three.core.js` import rewritten to `./three.core.min.js`, exactly as upstream's
- * min build did), LICENSE.txt, addons/tsl/display/BloomNode.js (from
- * examples/jsm/tsl/display/, the one addon TLX uses), addons/webxr/{XR,VR}Button.js
- * + WebGLXRFallback.js (Phase 0 immersive-vr), and MANIFEST.json — the three
+ * min build did), LICENSE.txt, the addons/inspector/ files (the opt-in dev Inspector, the
+ * only addon the game imports: js/perf/three-inspector.js), and MANIFEST.json — the three
  * version, the terser version, the tarball's sha256, the patch ids applied, and a
  * sha256 per written file. `--check` recomputes the file hashes; it needs no network
  * and is what the guard suite runs.
@@ -38,11 +37,8 @@ const VENDOR = path.join(ROOT, "vendor");
 const SCRATCH = path.join(ROOT, "scratch");
 const OUTPUTS = ["three.webgpu", "three.core", "three.tsl"];
 const ADDONS = [
-  ["examples/jsm/tsl/display/BloomNode.js", "addons/tsl/display/BloomNode.js"],
-  // WebXR Phase 0: ENTER VR UI + WebGPU→WebGL session fallback (Quest / Immersive Web).
-  ["examples/jsm/webxr/XRButton.js", "addons/webxr/XRButton.js"],
-  ["examples/jsm/webxr/VRButton.js", "addons/webxr/VRButton.js"],
-  ["examples/jsm/webxr/WebGLXRFallback.js", "addons/webxr/WebGLXRFallback.js"],
+  // BloomNode (TLX has its own bloom) and webxr/{XR,VR}Button + WebGLXRFallback (js/xr/ builds its own
+  // ENTER VR path) had no importer and left on 2026-11-10 (dead-weight audit W17); git keeps them.
   // Opt-in dev Inspector (?inspector=1, js/perf/three-inspector.js). Core only: Settings.js lazily
   // imports extensions/ on a click, which we do not vendor. Never precached (sw.js), never preloaded.
   ["examples/jsm/inspector/Inspector.js", "addons/inspector/Inspector.js"],
@@ -118,23 +114,27 @@ async function generate(version, tarballArg) {
   for (const name of OUTPUTS) sources[`build/${name}.js`] = fs.readFileSync(path.join(pkg, `build/${name}.js`), "utf8");
   const pristine = Object.fromEntries(Object.entries(sources).map(([k, v]) => [k, sha256(v)]));
   for (const patch of PATCHES) {
-    if (!(patch.file in sources)) die(`patch ${patch.id} names ${patch.file}, not one of ${Object.keys(sources).join(", ")}`);
-    let src = sources[patch.file];
+    // An edit may name its own file (r187 moved the node classes into three.tsl.js).
     for (const e of patch.edits) {
-      const n = src.split(e.find).length - 1;
-      if (n !== e.count) die(`patch ${patch.id} (${patch.title}): needle found ${n} site(s), expected ${e.count} — upstream changed the shape; read the patch before re-deriving it:\n${JSON.stringify(e.find).slice(0, 160)}`);
-      src = src.split(e.find).join(e.replace);
+      const file = e.file || patch.file;
+      if (!(file in sources)) die(`patch ${patch.id} names ${file}, not one of ${Object.keys(sources).join(", ")}`);
+      const n = sources[file].split(e.find).length - 1;
+      if (n !== e.count) die(`patch ${patch.id} (${patch.title}): needle found ${n} site(s), expected ${e.count} in ${file} — upstream changed the shape; read the patch before re-deriving it:\n${JSON.stringify(e.find).slice(0, 160)}`);
+      sources[file] = sources[file].split(e.find).join(e.replace);
     }
-    sources[patch.file] = src;
-    console.log(`[vendor-three] patch ${patch.id}: ${patch.edits.length} edit(s) applied to ${patch.file}`);
+    console.log(`[vendor-three] patch ${patch.id}: ${patch.edits.length} edit(s) applied`);
   }
-  // The internal chunk import, as upstream's own min build wrote it.
-  {
-    const k = "build/three.webgpu.js";
-    const n = sources[k].split("from './three.core.js'").length - 1;
-    if (n < 1) die("three.webgpu.js no longer imports ./three.core.js — the chunk layout changed");
-    sources[k] = sources[k].split("from './three.core.js'").join("from './three.core.min.js'");
-    console.log(`[vendor-three] rewrote ${n} core import(s) to ./three.core.min.js`);
+  // The internal chunk imports, as upstream's own min build wrote them. r187 chains
+  // webgpu -> tsl -> core (r186: webgpu -> core, and tsl re-exported 'three/webgpu').
+  if (sources["build/three.webgpu.js"].split("from './three.core.js'").length < 2) die("three.webgpu.js no longer imports ./three.core.js — the chunk layout changed");
+  for (const k of Object.keys(sources)) {
+    for (const name of OUTPUTS) {
+      const from = `from './${name}.js'`;
+      const n = sources[k].split(from).length - 1;
+      if (!n) continue;
+      sources[k] = sources[k].split(from).join(`from './${name}.min.js'`);
+      console.log(`[vendor-three] ${k}: rewrote ${n} import(s) of ./${name}.js to ./${name}.min.js`);
+    }
   }
 
   // 3. Minify: @rollup/plugin-terser's defaults for an ES output (module: true),
@@ -144,8 +144,6 @@ async function generate(version, tarballArg) {
   const patchesMd = path.join(outDir, "PATCHES.md");
   const keepPatches = fs.existsSync(patchesMd) ? fs.readFileSync(patchesMd) : null;
   fs.rmSync(outDir, { recursive: true, force: true });
-  fs.mkdirSync(path.join(outDir, "addons/tsl/display"), { recursive: true });
-  fs.mkdirSync(path.join(outDir, "addons/webxr"), { recursive: true });
   fs.mkdirSync(path.join(outDir, "addons/inspector/tabs"), { recursive: true });
   fs.mkdirSync(path.join(outDir, "addons/inspector/ui"), { recursive: true });
   const files = {};

@@ -127,13 +127,13 @@ for (const failure of ["refused", "rejected"]) {
     await opening;
     assert.equal(h.dom.byId("overlay").hidden, false, "menu returns after the title door hid it");
     assert.equal(h.dom.byId("career").hidden, true);
-    assert.match(h.messages[0], /COULD NOT LOAD.*TRY AGAIN/);
-    assert.match(h.dom.byId("mb-career-sub").textContent, /COULD NOT LOAD.*TRY AGAIN/, "the title button carries the visible notice");
-    assert.match(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load.*Try again/);
+    assert.equal(h.messages[0], "CAREER COULD NOT LOAD — PLEASE TRY AGAIN");
+    assert.equal(h.dom.byId("mb-career-sub").textContent, "COULD NOT LOAD · TRY AGAIN", "the title button carries the visible notice");
+    assert.equal(h.dom.byId("mb-career").getAttribute("aria-label"), "Career modes — could not load. Try again.");
     h.dom.byId("overlay").hidden = true;
     const retry = h.ui.openSlots("title");
     assert.equal(h.dom.byId("mb-career-sub").textContent, "DRIVER CAREER · MY TEAM", "retry restores the career summary");
-    assert.doesNotMatch(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load/);
+    assert.equal(h.dom.byId("mb-career").getAttribute("aria-label"), "Career modes — DRIVER CAREER · MY TEAM");
     assert.equal(h.pending.length, 1, "failed promise is not cached");
     h.complete();
     await retry;
@@ -189,4 +189,47 @@ test("career entry waits for writer readiness without blocking bundle loading", 
   resolveWriter(false); // busy tabs still open the readable screen and its notice
   await opening;
   assert.deepEqual(h.opened, [["slots", "title"]]);
+});
+
+test("a double-tap on #cr-go while LAZY_CAREER_UI loads fires the real handler once", async () => {
+  const dom = makeDom({
+    tagFor: (id) => (/^(cr-back|cr-go|cr-garage)$/.test(id) ? "button" : "div"),
+  });
+  const pending = [];
+  let goClicks = 0;
+  const sb = {
+    Math, console, Object, Array, String, Number, JSON, Promise,
+    Log: { info() {}, warn() {}, debug() {}, error() {} },
+    document: dom.document,
+    ApexRoster: { LAZY_CAREER_UI: ["js/career/career-ui.js"], LAZY_CAREER_UI_EDGES: [] },
+    ScriptLoader: {
+      create: () => ({
+        load: () => new Promise((resolve) => {
+          pending.push(() => {
+            sb.CareerScreen = {
+              create(G) {
+                G.$("cr-go").onclick = () => { goClicks++; };
+                return { openHub() {}, openSlots() {}, close() {}, build() {} };
+              },
+            };
+            resolve(true);
+          });
+        }),
+      }),
+    },
+  };
+  sb.window = sb;
+  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb, { filename: absSrc("js/career/career-ui-boot.js") });
+  sb.CareerUI.create({ $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") } });
+
+  // Two taps while the fetch is still in flight — both used to re-fire the
+  // real onclick after create() rebound it.
+  assert.equal(pending.length, 1, "create() already kicked the lazy fetch");
+  dom.byId("cr-go").onclick();
+  dom.byId("cr-go").onclick();
+  assert.equal(pending.length, 1, "queued taps share the in-flight fetch");
+  pending.shift()();
+  // Drain the ensure() → create() → re-fire microtask chain.
+  for (let i = 0; i < 10 && goClicks === 0; i++) await Promise.resolve();
+  assert.equal(goClicks, 1, "only the latest queued #cr-go tap reaches CareerScreen");
 });

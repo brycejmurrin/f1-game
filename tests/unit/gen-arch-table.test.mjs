@@ -64,7 +64,7 @@ test("every non-data manifest file gets exactly one row", () => {
     ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
     ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []), ...(MANIFEST.LAZY_TRACK_BUILD || []), ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET, ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []),
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []),
   ].filter((f) => !dataFiles.has(f));
   // Key by dir/file: a bare basename would let experience.js in garage/ hide a
   // missing row for experience.js in career/.
@@ -108,6 +108,22 @@ test("headerSentence handles the three header shapes js/ uses", () => {
   assert.equal(
     headerSentence('/* Apex 26 — reads e.g. this file, js/track/tracks.js, for context. Second sentence. */\nconst X = (function () {'),
     "reads e.g. this file, js/track/tracks.js, for context.");
+});
+
+test("headerSentence skips a @ts-check pragma, a shebang and a test file's own name (audit W27)", () => {
+  assert.equal(headerSentence("// @ts-check\n/* Foo — the real header. More. */\nconst Foo = 1;"), "Foo — the real header.");
+  assert.equal(headerSentence("#!/usr/bin/env node\n// @ts-check\n// does the thing.\n"), "does the thing.");
+  assert.equal(headerSentence("/* x.test.mjs — pins the X contract. */\n"), "pins the X contract.");
+});
+
+test("the coverage table never attaches a continuation note to the file below it", async () => {
+  const { describeFile, isContinuation } = await import("../../tools/docs/gen-coverage-table.mjs");
+  assert.ok(isContinuation("...and the REAL RACE"));
+  assert.ok(!isContinuation("Field-step pose snapshots"));
+  const notes = new Map([["a.test.mjs", "...and the other thing."], ["b.test.mjs", "Lead note for b."]]);
+  assert.equal(describeFile("a.test.mjs", "test('a title long enough', () => {});", notes), "a title long enough");
+  assert.equal(describeFile("b.test.mjs", "test('b title long enough', () => {});", notes), "Lead note for b.");
+  assert.equal(describeFile("b.test.mjs", "/* b — own header wins. */\n", notes), "b — own header wins.");
 });
 
 test("fileGlobal finds the real global, and treats js/game.js as the documented exception", () => {

@@ -5,6 +5,9 @@ orbit PNGs. The hook tables and corner-name rules are in track-geometry.md.
 
 ## One-off queries
 
+Session only: in a subagent bash-guard refuses these `tools/shot/*.mjs` calls even with `--vm`
+(use a `scratch/` `createGame` script, track-geometry.md).
+
 ```sh
 # official turn count vs curvature peaks:
 node tools/shot/apex-eval.mjs spa "({official:a.info().turns, peaks:a.corners().length})" --vm
@@ -39,8 +42,7 @@ are parent-owned and serialized; geometry alone needs no Chromium. Recompute ele
 Does terrain clip a section? Sweep `groundY` over a frac window and lateral offsets, print the worst `overRoad`:
 see [terrain-sweep](#terrain-over-road-sweep-vm) below.
 
-`lightState().numLights` is a quick night/floodlit tell (>0 = dark session with
-floodlights built; 0 = bright day).
+Night/floodlit tell: `lightState().trackNight` / `builtNight`, not `numLights` (per-frame, 0 in the VM; state.md).
 
 ## Validate visually
 
@@ -48,9 +50,9 @@ floodlights built; 0 = bright day).
 node tools/shot/apex-capture.mjs tracks scratch/captures/apex-capture/tracks            # one orbit PNG per circuit
 node tools/shot/apex-capture.mjs tracks scratch/captures/apex-capture/tracks spa monza  # just these two
 ```
-The manifest flags any `blank:true` render. For geometry regressions the full
-suite's `terrain-over-road.spec.js` and `tracks-walls.spec.js` are the assertions;
-these hooks are how you investigate a failure. After any `js/circuits/*` edit, run
+Main session only (it boots a browser). The manifest flags any `blank:true` render. For geometry regressions
+`terrain-over-road.spec.js` and the `tracks-walls*.spec.js` specs (CI group `circuits`, on the pushed branch:
+`node tools/ci/remote-group.mjs circuits`) are the assertions; these hooks are how you investigate a failure. After any `js/circuits/*` edit, run
 `node tools/track/verify-track.cjs <id>` first (see the **new-track** skill).
 
 ## Terrain-over-road sweep (VM)

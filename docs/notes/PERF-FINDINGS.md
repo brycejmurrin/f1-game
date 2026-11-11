@@ -1,5 +1,7 @@
 # Performance findings — what was measured, what was taken, what is left
 
+Summary: **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement.
+
 A four-way static audit of the renderer, the game loop, the track build and the
 DOM/audio layer, plus the measurements that followed. It is written down because
 the audit's value is not the list — it is **which kinds of finding survived
@@ -3316,7 +3318,7 @@ move. Do not attempt it as a quick win.
 
 Re-walked the 08-17 survey against cache **1388**, then merged deploy tip
 `11d972d2` (cache **1421**). Full board:
-[PERF-HUNT-2026-08-18.md](PERF-HUNT-2026-08-18.md).
+[PERF-HUNT-2026-08-18.md](../archive/notes/PERF-HUNT-2026-08-18.md).
 
 Boot wall **at 1655 (2026-08-29):** **156** tags, **3,633,081 B** (3.55 MB) —
 down from **157 / 5,082,769 B** the same day. **1,415 KB, 28.5%**, in one round:
@@ -4062,7 +4064,7 @@ pair is a new RenderObject, and building its pipeline calls
 _getVertexFormat(e){const{itemSize:t,normalized:r}=e,s=e.array.constructor, ...
 ```
 
-— the r185 vendored `three.webgpu.min.js` (now `vendor/three-0.186.1/`), no null guard.
+— the r185 vendored `three.webgpu.min.js` (now `vendor/three-0.187.0/`), no null guard.
 `createShaderVertexBuffers` reads `s.array.constructor` on the same object.
 So `null.constructor` throws, both rungs burn in one frame, and the ladder
 lands on `refuseTab()`.
@@ -5181,7 +5183,7 @@ Investigation only — no game code changed. Web research (utsubo "100 tips" r18
 three.js #30560, the BundleGroup docs, threejsroadmap "Profiling WebGPU") checked
 against the vendored r186 and `js/render/three/`.
 
-**Facts established from the r186 source** (`vendor/three-0.186.1/three.webgpu.min.js`):
+**Facts established from the r186 source** (`vendor/three-0.187.0/three.webgpu.min.js`):
 
 - Outside `compileAsync()` the WebGPU backend calls the blocking
   `device.createRenderPipeline`; `createRenderPipelineAsync` is reached only with a

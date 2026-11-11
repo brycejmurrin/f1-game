@@ -160,8 +160,8 @@ export const TARGETED = [
     suites: ["tests/unit/car-front-wing-width.test.mjs"],
     why: "builds the car through tools/car/parts-sweep.mjs (js/car/parts.js, car3d.js); no circuit" },
   { ere: "^js/render/shared/driving-line\\.js$",
-    suites: ["tests/unit/driving-line.test.mjs"],
-    why: "the ribbon's layout on a synthetic stadium; builds no circuit" },
+    suites: ["tests/unit/driving-line.test.mjs", "tests/unit/driving-line-opts.test.mjs"],
+    why: "the ribbon's layout on a synthetic stadium; builds no circuit. driving-line-opts reads the PALETTES table the LINE COLOUR row lists" },
   // 2026-10-09 (M36): the ratchet the suite reads. A baseline-only PR (raise or
   // lower one circuit's cap) matched no tier, so the suite that validates it ran
   // for the first time on a later unrelated geometry diff and reddened THAT one.

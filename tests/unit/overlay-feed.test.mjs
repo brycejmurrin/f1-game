@@ -32,6 +32,17 @@ test("battle uses Broadcast's strict one-second gate", () => {
   assert.equal(Feed.battle(cars(1.01)), null);
 });
 
+test("a caller's own battle (or null) wins over the progress scan", () => {
+  const Feed = load();
+  const noProg = [{ code: "LEC", pos: 1 }, { code: "VER", pos: 2 }];
+  assert.equal(Feed.frame({ state: "race", ranked: noProg, battle: null }).battle, null, "no prog: no 0.00 s fight");
+  assert.deepEqual(JSON.parse(JSON.stringify(Feed.frame({ state: "race", ranked: noProg,
+    battle: { ahead: "LEC", behind: "VER", gapS: 0.4567 } }).battle)), { ahead: "LEC", behind: "VER", gapS: 0.457 });
+  assert.equal(Feed.frame({ state: "race", ranked: noProg, battle: { ahead: "LEC" } }).battle, null, "a malformed battle is none");
+  assert.deepEqual(JSON.parse(JSON.stringify(Feed.frame({ state: "race", ranked: cars(.5) }).battle)),
+    { ahead: "LEC", behind: "NOR", gapS: .5 }, "no battle key: the scan still runs (TV graphics)");
+});
+
 test("sector colours and glyphs match the HUD predicate", () => {
   const Feed = load();
   const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -58,8 +69,8 @@ test("frame schema maps ranked cars without writing them", () => {
   });
   assert.equal(frame.v, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(frame.rows)), [
-    { pos: 1, code: "LEC", team: "#e8002d", interval: null, gap: null, tyre: "M", pit: false, you: false },
-    { pos: 2, code: "NOR", team: "#ff8700", interval: .4, gap: .4, tyre: null, pit: true, you: true },
+    { pos: 1, code: "LEC", team: "#e8002d", interval: null, gap: null, tyre: "M", pit: false, out: false, you: false },
+    { pos: 2, code: "NOR", team: "#ff8700", interval: .4, gap: .4, tyre: null, pit: true, out: false, you: true },
   ]);
   assert.deepEqual(JSON.parse(JSON.stringify(frame.battle)), { ahead: "LEC", behind: "NOR", gapS: .4 });
   assert.equal(JSON.stringify(ranked), before, "read-only mapping");
@@ -112,11 +123,30 @@ test("cleared caption id can re-arm on a later patch (dispose the latch)", () =>
 
 test("leaving race forces battle:null on the differ so overlays cannot stick", () => {
   const Feed = load();
+  // Unchanged gap on a patch — battle key was omitted, then forced null.
   const diff = Feed.createDiffer(2000);
   diff.next(Feed.frame({ seq: 1, t: 0, state: "race", ranked: cars(.4) }), 0);
   const ended = diff.next(Feed.frame({ seq: 2, t: .25, state: "results", ranked: cars(.4) }), 250);
   assert.equal(ended.state, "results");
   assert.equal(ended.battle, null, "battle must clear when the session leaves race/count");
+
+  // Gap change on the same leave-race patch — must not ship the new fight.
+  const diffGap = Feed.createDiffer(2000);
+  diffGap.next(Feed.frame({ seq: 1, t: 0, state: "race", ranked: cars(.4) }), 0);
+  const endedGap = diffGap.next(Feed.frame({ seq: 2, t: .25, state: "results", ranked: cars(.2) }), 250);
+  assert.equal(endedGap.battle, null, "leave-race wins over a changed battle on a patch");
+
+  // Full frame coinciding with the flag still carries ranked cars — must not re-arm.
+  const diffFull = Feed.createDiffer(2000);
+  diffFull.next(Feed.frame({ seq: 1, t: 0, state: "race", ranked: cars(.4) }), 0);
+  const endedFull = diffFull.next(Feed.frame({ seq: 2, t: 2, state: "results", ranked: cars(.4) }), 2000);
+  assert.equal(endedFull.full, true);
+  assert.equal(endedFull.battle, null, "full leave-race frame must force battle:null");
+
+  const diffCount = Feed.createDiffer(2000);
+  diffCount.next(Feed.frame({ seq: 1, t: 0, state: "count", ranked: cars(.4) }), 0);
+  const endedIdle = diffCount.next(Feed.frame({ seq: 2, t: 2, state: "idle", ranked: cars(.4) }), 2000);
+  assert.equal(endedIdle.battle, null, "count→idle full frame must force battle:null");
 });
 
 test("overlay source is display-only", () => {

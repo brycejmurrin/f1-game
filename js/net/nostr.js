@@ -11,6 +11,11 @@ const NetNostr = (function () {
   // (apex-sha 3faf59d9 / build 14296). Not a relay event TTL.
   const JOIN_TIMEOUT_MS = 12000;
   const HOST_TIMEOUT_MS = 120000;
+  // A `listen` exchange (transport.js ICE-restart answerer) holds ONE socket
+  // set for this long. On JOIN_TIMEOUT it re-dialled all relays every 12 s for
+  // the whole race: ~1,000 TLS handshakes and 300 PBKDF2 topics in 30 min
+  // (perf hunt 6). onclose and the foreground return still reopen a dead socket.
+  const LISTEN_TIMEOUT_MS = 300000;
   const REPLY_TIMEOUT_MS = 20000;   // guest: offer found -> answer published (build + ICE gather)
   const RELAY_CHECK_MS = 6000;
   const REPOST_MS = 5000;
@@ -25,6 +30,22 @@ const NetNostr = (function () {
   // created_at with ITS clock and the floor is this device's, so the slack must
   // cover phone-to-phone skew: at 30 s a host 45 s behind was never heard.
   const OFFER_CREATED_SLACK_S = 300;
+  // A REPLAYED OFFER IS NOT THE CURRENT ONE. Inside that slack a relay can
+  // replay an offer the host already consumed for an earlier guest (the host
+  // re-mints per joiner); answered, the host drops the answer as wrong_offer
+  // and the join died at the connect timeout. With `reanswer` the guest
+  // answers a DIFFERENT offer signed later by the host (its own clock, so
+  // skew does not matter), a few times at most, and keeps listening for
+  // one while its first answer is still unconnected.
+  const REANSWER_MAX = 3;
+  const REANSWER_WINDOW_MS = 60000;
+  // A relay refusing OUR event for its timestamp: this device's clock is off
+  // (strfry "created_at too early/late", khatru "too far off from the current
+  // time", others "too old" / "expired"). Not the room code's fault.
+  const CLOCK_REFUSAL = /created_at|too (?:old|early|late|far)|in the future|expired|timestamp|clock/i;
+  const CLOCK_MESSAGE = "This device's clock looks wrong, so the room service is refusing its messages."
+    + " Set the date and time to automatic and try again, or use the invite link or QR,"
+    + " which do not depend on the clock.";
 
   let modPromise = null;
 
@@ -184,7 +205,7 @@ const NetNostr = (function () {
       if (active >= MAX_HEARD_ACTIVE) return "busy";
       remember(content);
       active++;
-      Promise.resolve().then(() => consume(content)).catch((e) => {
+      Promise.resolve().then(() => consume(content, createdAt)).catch((e) => {
         // First failure per inbox only: a relay replaying history can repeat it per message.
         if (failed++ === 0) Log.warn("net", "nostr relay message handler failed:", e && e.message);
       }).finally(() => { active--; });
@@ -223,7 +244,7 @@ const NetNostr = (function () {
    * use SEPARATE topics, so neither side ever reads its own message back.
    */
   async function directExchange(opts) {
-    const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
+    const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail, listen, reanswer } = opts;
     Log.info("net", "nostr start");
     if (!available()) {
       return nostrLog({ ok: false, error: "unsupported",
@@ -263,6 +284,7 @@ const NetNostr = (function () {
     const pubIds = new Set();
     let subId = null;          // our REQ id, so a NIP-01 CLOSED for it is recognised
     let advisedRejected = false;
+    let clockRefused = false, advisedClock = false;   // a relay refused our event for its timestamp
 
     return new Promise((resolve) => {
       let done = false, settled = false;
@@ -316,7 +338,7 @@ const NetNostr = (function () {
         for (const w of sockets) { if (w.readyState === 1) { try { w.send(frame); } catch (e) { /* socket died between the readyState check and send */ } } }
       };
 
-      const heard = async (b64) => {
+      const heard = async (b64, createdAt) => {
         let text = null;
         try {
           text = await NetRendezvous.open(code, NetBytes.b64ToBytes(b64), theirSlot);
@@ -334,19 +356,34 @@ const NetNostr = (function () {
           return;
         }
         // An offer, and we are the replying side.
-        if (answering) return;
+        const at = typeof createdAt === "number" && Number.isFinite(createdAt) ? createdAt : -Infinity;
+        if (answering) {
+          // The same offer re-posted (each repost re-seals it), an older one, or
+          // one arriving while an answer is still being built: not a new offer.
+          if (!reanswer || replying || text === answeredText || !(at > answeredAt) || reanswers >= REANSWER_MAX) return;
+          reanswers++;
+          await answerOffer(text, at, true);
+          return;
+        }
         answering = true;
+        await answerOffer(text, at, false);
+      };
+      const answerOffer = async (text, at, redo) => {
+        answeredText = text; answeredAt = at;
+        replying = true;
         // The 12 s JOIN window is for FINDING the offer (host re-posts every
         // 5 s). Left running it also covered build-answer + ICE gather (up to
         // 8 s with STUN blocked): a late offer lost the race, finish(expired)
         // ran and this returned without publishing. Found it: reply gets its
         // own deadline.
-        clearExpire();
-        const replyTimer = later(expire, REPLY_TIMEOUT_MS);
+        let replyTimer = null;
+        if (!redo) { clearExpire(); replyTimer = later(expire, REPLY_TIMEOUT_MS); }
         let out = null;
         try { out = await reply(text); } catch (e) { out = null; }
+        replying = false;
         if (done) return;
         if (!out) {
+          if (redo) return;   // the answer already on the wire stands
           answering = false;
           finish({ ok: false, error: "reply_failed", message: "Could not answer that invite." });
           return;
@@ -356,22 +393,36 @@ const NetNostr = (function () {
         // during the 5.2 s re-post window (a late find + answer used to land
         // past 12 s and codeJoin printed "Nobody answered…" while connected).
         clearExpire();
-        clearTimeout(replyTimer);
+        if (replyTimer != null) clearTimeout(replyTimer);
         // Publish it a few more times before leaving: a relay that dropped the
         // first copy must not cost the whole handshake, and this is cheap.
         let n = 0;
-        again = setInterval(async () => {
-          if (done || ++n > 3) { clearInterval(again); return; }
+        clearInterval(again);
+        const iv = again = setInterval(async () => {
+          if (done || ++n > 3) { clearInterval(iv); return; }
           await publish(out);
         }, 1200);
-        later(() => { clearInterval(again); finish({ ok: true, payload: text }); }, 5200);
+        if (settled) return;
+        if (settleTimer != null) clearTimeout(settleTimer);
+        settleTimer = later(() => {
+          clearInterval(iv);
+          if (!reanswer) { finish({ ok: true, payload: text }); return; }
+          // Resolve now (the caller binds its connection), but keep hearing
+          // offers until the caller cancels the token or the window ends.
+          settled = true;
+          resolve(nostrLog({ ok: true, payload: text }));
+          later(() => finish({ ok: false, error: "stopped", message: "" }), REANSWER_WINDOW_MS);
+        }, 5200);
       };
-      let answering = false;
+      let answering = false, replying = false, answeredText = null, answeredAt = -Infinity;
+      let reanswers = 0, settleTimer = null;
       const expire = () => finish({ ok: false, error: "expired",
         // Also what a build on another NetRendezvous.PROTOCOL sees: its topics
         // differ, so the two never meet — say what fixes that too. Lobby
         // codeJoin already surfaces why.message; keep this actionable.
-        message: "Nobody answered that code. Check the six characters, or ask "
+        // A relay that refused us for our timestamp knows better than the code.
+        message: clockRefused ? CLOCK_MESSAGE
+          : "Nobody answered that code. Check the six characters, or ask "
                + "your friend for a fresh one — if it keeps happening, both "
                + "reload the game and try a new code." });
       // Session start (unix s). Offers with created_at before this − slack are
@@ -392,8 +443,9 @@ const NetNostr = (function () {
 
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
 
-      const startedAt = Date.now(), deadlineAt = startedAt + (hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
-      expireTimer = later(expire, hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
+      const windowMs = listen && !hosting ? LISTEN_TIMEOUT_MS : (hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
+      const startedAt = Date.now(), deadlineAt = startedAt + windowMs;
+      expireTimer = later(expire, windowMs);
 
       let opened = 0;
       // ONE SOCKET PER RELAY, REOPENED WHEN IT DIES. A phone host switches to
@@ -410,8 +462,10 @@ const NetNostr = (function () {
         try { w = new WebSocket(url); } catch (e) { return; }
         sockets.push(w);
         socketUrl.set(w, url);
+        let openAt = 0;
         w.onopen = () => {
           opened++;
+          openAt = Date.now();   // backoff resets at close, and only for a socket that stayed up (a flapping relay keeps backing off)
           if (!subId) subId = "s" + Math.floor(Date.now() % 1e6);
           try {
             // Trystero stamps the REQ with `since: now()` — THIS device's clock,
@@ -430,6 +484,7 @@ const NetNostr = (function () {
           if (i >= 0) sockets.splice(i, 1);
           socketUrl.delete(w);
           if (done) return;
+          if (openAt && Date.now() - openAt >= 5000) attempt = 0;
           const n = Math.min(attempt, RECONNECT_MS.length - 1);
           later(() => { if (!done && !sockets.some((s) => socketUrl.get(s) === url)) connect(url, attempt + 1); }, RECONNECT_MS[n]);
         };
@@ -451,7 +506,11 @@ const NetNostr = (function () {
             const refused =
               (m[0] === "OK" && pubIds.has(m[1]) && m[2] === false && !/^duplicate:/i.test(String(m[3] || ""))) ||
               (m[0] === "CLOSED" && subId && m[1] === subId);
-            if (refused) { rejectedBy.add(who); maybeAdviseRejected(); }
+            if (refused) {
+              rejectedBy.add(who);
+              if (m[0] === "OK" && CLOCK_REFUSAL.test(String(m[3] || ""))) { clockRefused = true; adviseClock(); }
+              maybeAdviseRejected();
+            }
             return;
           }
           if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string" &&
@@ -478,12 +537,20 @@ const NetNostr = (function () {
         const live = sockets.filter((w) => w.readyState === 1).length;
         if (!live || rejectedBy.size < live) return;
         advisedRejected = true;
+        if (clockRefused) { adviseClock(); return; }   // the cause is known: say that, not "this code"
         try {
           onFail({ ok: false, error: "all_rejected", advisory: true,
             message: "Every room relay is refusing this code. It may still connect —"
                    + " if it does not, use the invite link or QR, which need no"
                    + " third party." });
         } catch (e) { /* a caller bug must not re-enter this advisory path */ }
+      };
+      // One relay is enough to say so: they all read the same clock of ours.
+      const adviseClock = () => {
+        if (done || advisedClock || !onFail) return;
+        advisedClock = true;
+        try { onFail({ ok: false, error: "clock_skew", advisory: true, message: CLOCK_MESSAGE }); }
+        catch (e) { /* a caller bug must not re-enter this advisory path */ }
       };
       later(maybeAdviseRejected, RELAY_CHECK_MS);
 
@@ -523,16 +590,13 @@ const NetNostr = (function () {
     });
   }
 
-  // exchange() IS directExchange(), not a full Trystero room join (joinRoom /
-  // makeAction / onPeerJoin): that carries the answer over Trystero's OWN
-  // RTCPeerConnection, which dies exactly when ours starts (measured, see the
-  // directExchange header). Nothing in the vendored tree beyond
-  // createEvent/subscribe is reached.
-  const exchange = directExchange;
-
-  return { JOIN_TIMEOUT_MS, HOST_TIMEOUT_MS, RELAY_CHECK_MS, available, exchange, directExchange, load,
-    RELAYS, relayUrls, validRelay,
+  // directExchange is the public room API (not a full Trystero joinRoom /
+  // makeAction / onPeerJoin — that path dies when our PC starts; see the
+  // directExchange header). RELAY_CHECK_MS / load / validRelay stay module-local.
+  return { JOIN_TIMEOUT_MS, HOST_TIMEOUT_MS, LISTEN_TIMEOUT_MS, available, directExchange,
+    RELAYS, relayUrls,
     MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE, OFFER_CREATED_SLACK_S,
+    REANSWER_MAX, CLOCK_REFUSAL,
     readRelayFrame, createBoundedInbox };
 })();
 Object.freeze(NetNostr);

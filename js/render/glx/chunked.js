@@ -269,7 +269,7 @@ const GLXChunked = (function () {
       return st;
     }
     function _occVisible(mesh, i) {
-      if (!_occOn || !_occProg) return true;
+      if (!_occOn || !_occProg || core.post.mirror.active()) return true; // flags come from the MAIN camera
       const st = _occState.get(mesh);
       return !st || st.flag[i] !== 0;
     }
@@ -338,7 +338,6 @@ const GLXChunked = (function () {
         gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
         interleaved = null;   // uploaded to the VBO — drop the CPU copy
         VertexPack.bindAttribs(gl, hasTrk);
-        const IndexArray = big ? Uint32Array : Uint16Array;
         const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
         const BPI = big ? 4 : 2;                 // bytes per index
         // ONE index buffer for the whole mesh. A chunk is a (byteOffset, count)
@@ -389,11 +388,15 @@ const GLXChunked = (function () {
         const pad = needAlign ? new Uint16Array([0, 0, 0]) : null;
         buckets.forEach((bk) => {
           const start = off;
-          const arr = new IndexArray(bk.idx);
-          bk.idx = null;   // uploaded below — drop the growable JS array now so buckets
-                           // don't all stay resident while the rest are converted
-          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, arr);
-          off += arr.length;
+          const src = bk.idx;
+          bk.idx = null;   // drop the bucket before the rest convert — peak stays one bucket
+          // Uint32 meshes (street props, vCount > 65535): ChunkBins.bin returns
+          // Int32Array. `new Uint32Array(src)` converts with ToUint32, which is
+          // those same bits, so the GPU can take src and the second copy of the
+          // whole index buffer goes away (perf P1 §6). Uint16 still narrows.
+          if (big) gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, src);
+          else gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, new Uint16Array(src));
+          off += src.length;
           if (needAlign && (off % 2 !== 0)) {
             gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, pad);
             off += 3;
@@ -436,7 +439,7 @@ const GLXChunked = (function () {
     }
 
     function drawChunkedBody(mesh, modelMat, opts) {
-      if (_occOn && mesh.chunks && _occDrawn.indexOf(mesh) < 0) _occDrawn.push(mesh);
+      if (_occOn && mesh.chunks && !core.post.mirror.active() && _occDrawn.indexOf(mesh) < 0) _occDrawn.push(mesh);
       const alpha = litMaterial(modelMat, opts);
       setDepthMask(true);
       setBlend(alpha < 1);
@@ -722,6 +725,7 @@ const GLXChunked = (function () {
       const ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
       const prevProg = gl.getParameter(gl.CURRENT_PROGRAM);
       const prevCull = !!gl.getParameter(gl.CULL_FACE);
+      setPolyOffset(null);   // a shadow/mark run leaves ROAD_BIAS on (useProg lifts it; this bypasses useProg)
       gl.useProgram(_occProg);
       gl.uniformMatrix4fv(_occU.vp, false, F.viewProj);
       bindVAO(_occVao);

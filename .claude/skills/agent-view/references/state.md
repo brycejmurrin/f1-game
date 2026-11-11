@@ -1,4 +1,4 @@
-# State & telemetry debug hooks (folded from the debug-state skill)
+# State & telemetry debug hooks
 
 Verified live (`tools/shot/apex-eval.mjs`). Debug-hooks-first: assert relative
 behaviour, not brittle magnitudes.
@@ -33,7 +33,7 @@ then `a.world({detail:"brief"})` → `a.act(input,1/60,6)` → `a.terminal()`. `
 Close `g` in `finally` and catch outer rejections with a nonzero exit code;
 use the lifecycle template in [track-geometry.md](track-geometry.md). Do not
 force process exit as a substitute for releasing VM resources.
-Gotchas: **`sectorState().last`/`lapHistory().best` fill only once `lap>=1`** (game.js `c.lap >= 1 && sectorValid`), so
+Gotchas: **`sectorState().last`/`lapHistory().best` fill only once `lap>=1`** (the sector gate in `js/game.js`, `lapRec.sectorValid`), so
 `reset(0.0…)` (lap 0) records no splits — reset at ~0.97, cross the line, then drive S1→S3.
 `obs()` carries `s` (metres), not `frac`; log `o.s` for where the car left the track (`|lateralM| > halfWidthM`).
 The starter policy in surface.md (`CAP` 33 m/s = 119 kph, so "top speed" just reads the cap) was tuned on Monza:
@@ -60,8 +60,8 @@ Increasing detail on the player:
 
 | Hook | Returns |
 |---|---|
-| `cars()` | `Array(22)` telemetry, sorted by progress |
-| `fieldState()` | `Array(22)` `{pos,id,name,code,team,isPlayer,lap,frac,speed,gap,finished}` — **`gap` = metres behind leader** |
+| `cars()` | one telemetry row per car, sorted by progress |
+| `fieldState()` | one row per car `{pos,id,name,code,team,isPlayer,lap,frac,speed,gap,finished}` — **`gap` = metres behind leader** |
 | `timing()` | `{raceT,lapTime,best,lastLap,lap,pos,total,gapAhead,gapBehind,energy,gear,sector,sectorElapsed}` — interval gaps use `gapAhead` / `gapBehind` |
 | `sectorState()` | `{idx, elapsed, bests:[3], last:[3]}` (S1/S2/S3) |
 | `lapHistory()` | `{mode, laps:[], best, lastLap}` — **in race mode `laps` is empty** (only `best` + `lastLap`); multi-lap history is Time Trial |
@@ -69,8 +69,10 @@ Increasing detail on the player:
 ### Scene / lighting
 
 `lightState()` → `{ambientSky, ambientGround, sunColor, exposure, numLights,
-sunY, builtNight, trackNight, floodEmit}`. `numLights>0` = floodlit dark scene;
-`builtNight` reflects whether meshes were built for night.
+bakedLights, sunY, builtNight, trackNight, floodEmit, …}`. The night tell is `trackNight`/`builtNight` (or
+`atmosphere().timeOfDay`); `numLights` is the lamps active THIS rendered frame after the cull, so it reads 0 in
+the Node VM even on a floodlit night (`bakedLights` is the pre-cull set). The VM boots `tod` "day" unless
+`createGame({tod:"night"})`. Field meanings: `docs/DEBUG-HOOKS.md` → `lightState()`.
 
 Verified single-call from cold:
 `(a.headless(true), a.reset(0.1,30,0), a.act({steer:-0.3,throttle:true,brake:false},1/60,5))`

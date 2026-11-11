@@ -80,6 +80,8 @@ const ApexClipboard = (function () {
     return navigator.clipboard.readText();
   }
 
-  return { write, read, fallbackWrite, copySelection };
+  // fallbackWrite is internal (write()'s http/WebKit path); copySelection is
+  // public for results-sheet / preferSync callers that already selected a field.
+  return { write, read, copySelection };
 })();
 Object.freeze(ApexClipboard);

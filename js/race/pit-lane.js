@@ -55,342 +55,17 @@
  * the wall and the row of garages. This module reads that model for the
  * window, the side and each team's box, and keeps what was always its own:
  * the state machine, the commitment gesture, the cue and the stop. The
- * geometry-free arithmetic below survives as the fallback for a track built
+ * geometry-free arithmetic lives in PitGeom, the fallback for a track built
  * without a model (the VM tests build centrelines by hand).
  */
 var PitLane = (function () {
   "use strict";
 
   const clamp = M4.clamp;
+  const {
+    ENTRY_M, ENTRY_MIN, EXIT_M, PIT_K, entryRunM, LIMIT_FRAC, STRAIGHT_V, LIMIT_FRAC_STREET, BOX_SPEED_FRAC, BOX_TOL, BOX_BRAKE, PIT_SIDE, LANE_W, LANE_MIN, MIN_RACING, laneWidth, laneWidthOn, teamRow, BOX_LAT, BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M, pitch, GRID_POLE_M, COMMIT_M, CUE_M, CUE_WEAR, COMMIT_CLEAR, GRID_CLEAR, COMMIT_S, COMMIT_V, COMMIT_IN, ABORT_S, CRAWL_V, APPROACH_M, ENTRY_BRAKE, ROAD_IN, WORK_IN_M, EXIT_WALL_W, zoneOf, inWindow, inSpan, throughM,
+  } = PitGeom;
 
-  // Lane geometry, in METRES along the lap rather than as a fraction of it.
-  // A fraction would make Spa's lane (7 km lap) twice Monaco's, which is
-  // backwards — a pit lane is a building, not a share of a circuit. Measured
-  // from the start/finish line, which is where every circuit's pit straight is
-  // (racing coordinates put the line at s = 0; see TrackSpace).
-  const ENTRY_M = 260;     // the LONGEST the lane may open before the line (TrackPit.ENTRY_MAX; was 400)
-  const ENTRY_MIN = 150;   // ...and the shortest that is still a lane
-  const EXIT_M = 110;      // where it closes, after the line (TrackPit.EXIT_M)
-  const BOX_M = 40;        // the stop, this far before the line
-
-  // ── WHERE THE LANE OPENS IS A PROPERTY OF THE CIRCUIT ─────────────────────
-  // A flat distance (320 m on all 52) is circuit-blind: at Monza it lands the
-  // entry INSIDE PARABOLICA. The gesture that calls a stop is "hold the car on
-  // the pit side and keep it there", and holding a lateral line through a
-  // corner is the hard part of driving — traced, a car entering that window
-  // and steering zero drifted 6.4 m to 0.74 m and missed its box.
-  //
-  // So walk BACK from the start/finish line and open the window where the last
-  // corner lets go. Real pit entries are on the pit straight for this exact
-  // reason.
-  //
-  // CURVATURE CHANNEL: **surface**, and classified in docs/PHYSICS.md before it
-  // landed. This is the aero-zones pattern exactly — fixed zones computed ONCE
-  // per circuit from the static arc, gating a driver-INITIATED action (there
-  // the X button, here calling a stop) identically for every car, with no force
-  // path and nothing read per frame. The arc decides WHERE the pit lane is, the
-  // same way it decides where a kerb is; it never reaches a driving car.
-  //
-  // THE THRESHOLD IS LOOSER THAN A DRS ZONE'S ON PURPOSE. aero-zones uses
-  // 0.0014 (r >= ~700 m) because a zone must be a PROPER straight — at a slacker
-  // bar Monaco sprouted four of them. A pit entry needs much less: not "straight"
-  // but "not actively cornering", i.e. road where holding a line is not itself
-  // the challenge. 0.0035 is r ~= 285 m, which a car at the pit limit takes
-  // without noticing.
-  const PIT_K = 0.0035;
-  const PIT_STEP = 8;      // m between samples, as aero-zones uses
-
-  /** How far before the line the pit straight starts, clamped to a length that
-   *  is still a pit lane. Pure, static, once per circuit. */
-  function entryRunM(track) {
-    const L = track.total;
-    if (!(L > 0) || typeof Tracks === "undefined" || !Tracks.curvature) return ENTRY_M;
-    let d = 0;
-    for (; d < ENTRY_M; d += PIT_STEP) {
-      const s = ((-(d + PIT_STEP / 2)) % L + L) % L;
-      if (Math.abs(Tracks.curvature(track, s)) > PIT_K) break;   // the corner
-    }
-    return clamp(d, ENTRY_MIN, ENTRY_M);
-  }
-
-  // The speed limit, as a fraction of the speed ENVELOPE rather than a literal
-  // m/s. 80 km/h against a 259 km/h car is the real ratio (FIA 2025 Sporting
-  // Regs Art. 34.7, carried into 2026 as B1.6.3a), and expressing it this way is
-  // what makes it a vStd() threshold: at any OVERALL SPEED setting the limiter
-  // sits at the same place on the dial, so the pit loss a player measures does
-  // not move when they change the pace slider.
-  const LIMIT_FRAC = 22.2 / 72;      // 80 km/h of a 259 km/h envelope
-  // The speed a car would carry through the pit complex if it stayed out, as a
-  // fraction of the envelope. A pit straight is a STRAIGHT, so this is near the
-  // top of the range and well above the lap average (0.56 at Monaco to 0.64 at
-  // Spa, from the pole model) — see lossS().
-  const STRAIGHT_V = 0.85;
-  const LIMIT_FRAC_STREET = 16.7 / 72;   // 60 km/h — the PAINTED street lane's fallback; a built complex carries its own limitKph (TrackPit)
-
-  // How long the car is held in the box. Real stationary time is 2.0-2.5 s
-  // (record 1.80 s); this is deterministic on purpose — a random stop time
-  // would make a strategy call a coin flip and would break replay determinism,
-  // which js/race/reliability.js is equally careful about.
-  const BOX_S = 2.2;   // was 2.4: the 2025 field's median stationary time is ~2.2 s
-
-  // How slow the car has to be at the box for the stop to count. A fraction of
-  // the speed envelope, so it rides OVERALL SPEED like the limiter does.
-  const BOX_SPEED_FRAC = 0.06;
-  // A BOX IS A LENGTH OF PIT LANE, NOT A POINT. Without this the latch is a
-  // knife edge on `at >= boxAt`: a driver braking onto the mark stops a few
-  // centimetres short, the test never fires, and the car sits stationary in the
-  // pits forever with the stop un-served. Measured exactly that way before the
-  // tolerance existed. Real boxes are about this long, so it is also the right
-  // number rather than merely a safe one.
-  const BOX_TOL = 8;
-  // How hard a car brakes for its own box, m/s^2. Only the AI reads this: for a
-  // human, stopping on the mark is the skill, and a game that braked for you
-  // would be running the one part of a pit stop the driver actually does.
-  const BOX_BRAKE = 6;
-
-  // ── COMMITTING TO THE STOP, WITHOUT A BUTTON ──────────────────────────────
-  // THERE IS NO PIT CONTROL. You call a stop the way a driver does — by putting
-  // the car on the pit side at the entry and keeping it there. A button made
-  // the stop a MODE you toggle; this makes it a line you take, which is both
-  // the real gesture and one fewer thing on a phone screen.
-  //
-  // The whole difficulty is telling that apart from a car that merely ran wide
-  // at the entry, which is the exact failure the half-plane `inLane` had (see
-  // the header). Four conditions do it, and each is there for a specific way of
-  // being wrong:
-  //
-  //   COMMIT_M     only at the ENTRY, not anywhere in the window. Past this you
-  //                have gone by the entry road and are racing the straight.
-  //   COMMIT_FRAC  a long way over, not a drift. Deliberate, not a wobble.
-  //   COMMIT_S     HELD. A run-wide is transient; a pit entry is sustained, and
-  //                a dwell is what separates a gesture from a mistake.
-  //   COMMIT_V     and moving, forwards, on the road. A spun or beached car at
-  //                the entry commits to nothing — that is the beached-car case
-  //                the header's failure (1) describes, refused by construction.
-  //
-  // +x is RIGHT, and the generic pit building goes on side +1 (js/track/tracks.js
-  // buildProps places the grandstand at -1 and the pit building at +1), so that
-  // is the default side. A circuit may say otherwise via `def.pitZone.side`.
-  const PIT_SIDE = 1;
-  // The lane on every circuit is the COMPLEX
-  // (TrackPit, js/track/core/pit.js): a ribbon beside the road behind a real
-  // pit wall, bays on the row — the FULL set on permanent circuits, the
-  // STREET set between a street circuit's walls (docs/research/
-  // STREET-PIT-LANES-PLAN-2026-09.md). laneUniform() is null there; the road
-  // carries the geometry. What follows describes the PAINTED strip that a
-  // `def.pit.mode: "narrow"` opt-out keeps, and a track built without a model:
-  //
-  // THE PAINTED LANE IS THE OUTERMOST STRIP OF THE ROAD across the window,
-  // separated from the racing surface by a painted line — not a separate road
-  // behind the wall. Two earlier attempts at a driveable lane out beyond the
-  // road edge died (see the header); on-road costs no geometry, moves no
-  // boundary and leaves the car on tarmac, so neither failure can return.
-  //
-  // MUST MATCH PIT_LANE_W in the three lit shaders (glsl-lit.js, wgsl-chunks.js,
-  // tsl-lit.js) — the painted line IS the lane edge, and a driver steering at
-  // what they can see has to land inside what the model calls the lane.
-  // tests/unit/pit-lane.test.mjs asserts all four agree.
-  // A FLAT 3.2 m LANE IS WRONG ON THE NARROWEST CIRCUIT, and that was measured
-  // rather than guessed: across all 51 built circuits the pit-window half-width
-  // runs 4.93 m (Monaco) to 8.0 m (Spa/Silverstone/Shanghai). At Monaco a flat
-  // lane takes 32% of a 9.9 m road and leaves 6.7 m to race on — on the one
-  // circuit where overtaking is already impossible. Everywhere else it leaves
-  // 8.8 m or more.
-  //
-  // So the lane yields to the RACING SURFACE rather than the other way round:
-  // never leave less than MIN_RACING, which is two 2 m cars with a metre
-  // between them and a metre either side. Only Monaco is narrowed (to 2.86 m);
-  // every other circuit keeps the full 3.2 m.
-  const LANE_W = 3.2;
-  const LANE_MIN = 2.4;      // a car is 2.0 m — below this it is not a lane
-  const MIN_RACING = 7.0;    // two cars side by side, with room
-  function laneWidth(hw) {
-    return Math.min(LANE_W, Math.max(LANE_MIN, 2 * hw - MIN_RACING));
-  }
-  /** The lane's width on a track whose road was WIDENED for it. There the lane
-   *  is the added tarmac, so it is the full LANE_W and the racing surface keeps
-   *  every metre it had — which is the whole point of widening rather than
-   *  carving. A track that was not widened (a street circuit, or a centreline
-   *  built by hand in a test) falls back to yielding, as before. */
-  function laneWidthOn(track, hw) {
-    return track && track.pitW ? track.pitW.laneW : laneWidth(hw);
-  }
-  /** This car's row in the pit lane, or -1 when it has no team. Teams.LIST
-   *  order is the garage order, which is how a real lane is laid out and is
-   *  stable for a season. Defensive about Teams for the same reason pickFor is
-   *  defensive about Career: this module is loaded by tests that stub neither. */
-  function teamRow(c) {
-    const t = c && c.team;
-    if (!t || typeof Teams === "undefined" || !Teams.LIST) return -1;
-    const id = typeof t === "object" ? t.id : t;
-    return Teams.LIST.findIndex(function (x) { return x.id === id; });
-  }
-  // HOW FAR OUT OF THE LANE A CAR MAY BE AND STILL STOP. The painted line is the
-  // lane's INNER EDGE, so a 2.0 m car parked with its centre exactly on it is
-  // half in; asking for the centre would be asking for a metre of precision the
-  // camera cannot show. A metre of tolerance means "most of the car is in the
-  // lane" and nothing looser: at Monaco's narrowed 2.86 m lane it still refuses
-  // a car sitting on the racing line.
-  const BOX_LAT = 1.0;
-  // SQUARE IN THE BOX. `BOX_LAT` above is the LANE test — "most of the car is
-  // in the working lane" — and it was also, wrongly, the whole of the stop's
-  // lateral condition: a car anywhere from the corridor edge to the garage
-  // wall latched, and the AI's own diagonal halted it four fifths of the way
-  // across (`laneX`), so nobody ever parked in their bay. A stop needs the car
-  // SQUARE: centred on its own box and pointing down the lane, the way a crew
-  // can actually work on it. These two are that condition, and they bind on
-  // the player and the AI alike.
-  const BOX_SQUARE_LAT = 1.2;   // m from the box's own centre (the car is 2.0 m wide)
-  const BOX_SQUARE_RAD = 0.22;  // rad off the lane's tangent — 12.6°, a crooked car, not a parked one
-  const SQUARE_BY_M = 6;        // …and the AI's lateral move is COMPLETE this far before the box
-  // ── A ROW OF BOXES, NOT ONE POINT ────────────────────────────────────────
-  // One stop point would put two cars pitting on the same lap on the same patch
-  // of tarmac. A pit lane is a row of garages.
-  //
-  // 14 m is a real garage pitch (an F1 box is ~12-15 m of lane frontage), and
-  // with the 12 rows in Teams.LIST that is 154 m of boxes — which fits the
-  // window with room at both ends (the earliest lands well past the entry road,
-  // the latest well short of the exit).
-  //
-  // TEAMMATES SHARE A BOX, and that is correct rather than a limitation: a real
-  // team has ONE pit box, which is exactly why stacking two cars in a single
-  // window costs the second one so much time.
-  //
-  // It costs no pit loss. The box moves; the distance through the window at the
-  // limiter does not, so where a team's garage sits changes where you stop and
-  // nothing about what the stop is worth.
-  // ONE PITCH, THE BAY'S. TrackPit.PITCH is the garage frontage the setup
-  // screen's room is built to, the paint is spaced by and the doors stand at;
-  // read at call time so this file still loads in a bare VM (the unit harness
-  // loads pit.js beside it).
-  const pitch = () => (typeof TrackPit !== "undefined" ? TrackPit.PITCH : 11);
-  // Where POLE sits, in metres before the start/finish line. Mirrors
-  // TrackMesh.gridSlot's own 14 m; a second copy is the lesser evil here
-  // because js/track/ loads first and has no business knowing what a pit box is.
-  const GRID_POLE_M = 14;
-  const COMMIT_M = 120;       // the entry road, for the cue's "PIT ENTRY" phase
-  // The pit CUE's two thresholds. Module scope because they are EXPORTED and
-  // the session below is the only other reader: one definition, so tuning the
-  // cue here cannot leave PitLane.CUE_M/CUE_WEAR describing stale values.
-  const CUE_M = 550;          // start the cue counting down this far out
-  const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
-  // How much lane a car needs in front of it for a commitment to mean anything:
-  // arm the limiter closer than this to your own box and there is no room left
-  // to slow down for it.
-  const COMMIT_CLEAR = 25;
-  // The room left ahead of pole's slot for the first box. It is DERIVED from
-  // COMMIT_CLEAR rather than picked: a gap smaller than the run-up a commitment
-  // needs anchors the row somewhere pole cannot legally call a stop from, which
-  // is the whole failure this anchoring exists to fix. The extra 15 m is one
-  // car's braking slop on top of the bare minimum.
-  const GRID_CLEAR = COMMIT_CLEAR + 15;
-  const COMMIT_S = 0.55;      // held, in seconds
-  const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
-  // ON THE COMPLEX the commitment is the lane's own tarmac: the car's centre
-  // this far past the lane's inner edge (the road edge at the peel, the wall
-  // line once it has grown), so most of the car is on the pit road. The old
-  // painted line sat 3.2 m INSIDE the road, and a car holding the pit-side
-  // third of the pit straight for half a second armed the limiter on the
-  // racing line — from the grid, in traffic, on every circuit.
-  const COMMIT_IN = 0.5;
-  // A LOCAL car that committed and then held the racing surface again for this
-  // long has changed its mind: un-armed, limiter off. Without it a lane touched
-  // by mistake meant 80 km/h to the exit line with KEEP RIGHT on screen, and
-  // the limiter waiting at the line next lap too.
-  const ABORT_S = 1.0;
-  // An AI braking for its box never goes below this until it is laterally IN
-  // the box: lateral authority is zero at a standstill, so a car braked to
-  // nothing beside its box could never reach it — it sat there, rescue put it
-  // on the racing line, and Monaco's field gridlocked on the pit straight.
-  const CRAWL_V = 3;
-  // THE APPROACH (AI only — laneX and entryV, both applied to !c.human): an
-  // armed AI takes the pit side of the road for the last APPROACH_M before
-  // the entry road, and is capped to reach the limit AT the entry line on an
-  // ENTRY_BRAKE m/s² curve. Without both it turned in at the line, from the
-  // racing line at racing speed: it met the grown wall on the verge side
-  // (off-road, rescued into the lane — every stop on Bahrain, measured) and
-  // ran the first seconds of the lane over the limit. ROAD_IN is the line
-  // inside the road edge the peel starts on and the blend ends on.
-  const APPROACH_M = 200;
-  const ENTRY_BRAKE = 10;
-  const ROAD_IN = 1.6;
-  // The working lane only over the last WORK_IN_M into the box, on a DIAGONAL
-  // from the fast lane — the box before ours is one pitch (11 m) back and
-  // holds another team's car: a car that moved over 40 m out ran into it
-  // (Monaco, traced: 15 m/s to 0 in a second, welded for a minute) — and
-  // never out of it: a serviced car pulls into the fast lane at once, or it
-  // crawls behind the next box's stop at the queue floor (measured: 33 s
-  // from box to exit, by rescue pulses, with the whole field on one lap).
-  const WORK_IN_M = 20;
-  // Where the exit wall ends (TrackPit.EXIT_WALL_W, the ribbon's share of
-  // its width); the bare VM tests load this file without the model.
-  const EXIT_WALL_W = typeof TrackPit !== "undefined" && TrackPit.EXIT_WALL_W != null ? TrackPit.EXIT_WALL_W : 0.45;
-
-  // Resolve the lane for a built track: absolute arc positions, the side, the
-  // width and the limit. A circuit def may override any field through
-  // `def.pitZone`; none currently does, and the defaults above are deliberately
-  // uniform so every one of the 42 circuits has a working lane on day one.
-  // Per-circuit lengths are what make pit loss vary, and they are authored later.
-  function zoneOf(track) {
-    if (!track || !(track.total > 0)) return null;
-    const L = track.total;
-    const z = (track.def && track.def.pitZone) || {};
-    const wrap = (v) => ((v % L) + L) % L;
-    // THE ENGINE OWNS THE WINDOW NOW, because it is road geometry: tracks.js
-    // widens the tarmac across it (pitWiden), so a second copy of the arithmetic
-    // here could drift from the road it describes. entryRunM stays as the
-    // fallback for a track built without it (the VM tests build centrelines by
-    // hand) and as the place the reasoning is written down.
-    // THE MODEL FIRST. A built track carries the complex, and its window, its
-    // side and its limit ARE the zone — a def's overrides still win field by
-    // field, as they always did.
-    const model = track.pit;
-    if (model) {
-      return {
-        sIn: model.sIn, sOut: model.sOut, sBox: wrap(-(z.boxM != null ? z.boxM : BOX_M)),
-        lenM: model.lenM,
-        // km/h over the 259 km/h envelope, the same ratio LIMIT_FRAC encodes.
-        limitFrac: z.limitFrac != null ? z.limitFrac : (model.limitKph / 3.6) / 72,
-        boxS: z.boxS != null ? z.boxS : BOX_S,
-        side: model.side,
-      };
-    }
-    const eng = typeof Tracks !== "undefined" && Tracks.pitWindow ? Tracks.pitWindow(track) : null;
-    const entryM = z.entryM != null ? z.entryM : (eng ? eng.entryM : entryRunM(track));
-    const exitM = z.exitM != null ? z.exitM : EXIT_M;
-    // A very short circuit cannot carry a 450 m lane: cap the window at a third
-    // of the lap so the lane can never swallow the whole track.
-    const cap = L / 3;
-    const inM = Math.min(entryM, cap * 0.7), outM = Math.min(exitM, cap * 0.3);
-    const zone = {
-      sIn: wrap(-inM), sOut: wrap(outM), sBox: wrap(-(z.boxM != null ? z.boxM : BOX_M)),
-      lenM: inM + outM,
-      limitFrac: z.limitFrac != null ? z.limitFrac
-        : (track.def && track.def.street ? LIMIT_FRAC_STREET : LIMIT_FRAC),
-      boxS: z.boxS != null ? z.boxS : BOX_S,
-      side: z.side === -1 ? -1 : PIT_SIDE,
-    };
-    return zone;
-  }
-
-  // Is arc position `s` inside the window? The window wraps the start/finish
-  // line by construction, so this is a wrapped-interval test and not a compare.
-  function inWindow(zone, s, L) {
-    return !!zone && inSpan(zone.sIn, zone.sOut, s, L);
-  }
-  // inWindow on two bare arcs: roadOf asks it for every AI on every step (laneX), and a zone literal per ask
-  // was ~2.5k objects/s of garbage on a 22-car field (perf-debug-e5b2).
-  function inSpan(a, b, s, L) {
-    const v = ((s % L) + L) % L;
-    return a <= b ? (v >= a && v <= b) : (v >= a || v <= b);
-  }
-
-  // Distance travelled INTO the window, 0 at the entry and lenM at the exit.
-  // Used for the box test and for the lane's own progress readout.
-  function throughM(zone, s, L) {
-    const v = ((s % L) + L) % L;
-    return ((v - zone.sIn) % L + L) % L;
-  }
 
   function create(G) {
     Log.info("game", "PitLane.create");
@@ -524,7 +199,7 @@ var PitLane = (function () {
     }
     function choices(c) {
       if (!G.tyres) return [];
-      const list = ownedTyres().map(o => G.tyres.optionRecord(o));
+      const list = ownedRecords(G.tyres).slice();   // a copy: the push below must not reach the memo
       const automatic = pickFor(c);
       if (automatic && !list.some(r => r.id === automatic.id)) list.push(automatic);
       return list;
@@ -863,7 +538,9 @@ var PitLane = (function () {
       const held = zz.boxS + (c.pitWorked || 0);
       if (G.announce) G.announce("STOP " + held.toFixed(1) + "s" + (c.pitWorked > 0 ? " — WORK DONE" : "") + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
       c.pitPos0 = 0; c.pitWorked = 0;
-      if (G.store && G.store.set) G.store.set("pitTaught", 1);
+      // Only the FIRST stop writes: a store write bumps store.rev, which re-resolves every team's
+      // livery and parts memo on the pit-exit frame (perf hunt 8).
+      if (G.store && G.store.set && !taught()) G.store.set("pitTaught", 1);
     }
 
     // ── WORKING ON THE CAR MID-STOP ──────────────────────────────────────────
@@ -1340,8 +1017,9 @@ var PitLane = (function () {
     // fast car and no strategy; one who owns a hard and a soft has a choice.
 
     /** The tyre rows this car may fit: everything, or what career says it owns. */
+    let tyreCat;   // the catalog row never moves after load: one find per session
     function ownedTyres() {
-      const cat = Parts.CATALOG.find(function (x) { return x.id === "tyres"; });
+      const cat = tyreCat || (tyreCat = Parts.CATALOG.find(function (x) { return x.id === "tyres"; }));
       const opts = (cat && cat.options) || [];
       const team = G.player && G.player.team;
       // Career.owned() is null outside a career, and null for another team's
@@ -1351,12 +1029,41 @@ var PitLane = (function () {
       return own ? opts.filter(function (o) { return own.has(o.id); }) : opts;
     }
 
+    // pickFor runs on every 10 Hz HUD tick (planInfo → nextCode → nextFor),
+    // and it built a record per owned row each time. Records are pure of their
+    // catalog row, so they are rebuilt only when the owned rows change; the
+    // pick itself is memoised per car on every input it reads. Callers never
+    // mutate the returned record (fit stores it as c.tyre, read-only).
+    const recMemo = { tyres: null, rows: null, recs: null }, pickMemo = new WeakMap();
+    function ownedRecords(tyres) {
+      const rows = ownedTyres(), m = recMemo;
+      let same = m.tyres === tyres && !!m.rows && m.rows.length === rows.length;
+      for (let i = 0; same && i < rows.length; i++) same = m.rows[i] === rows[i];
+      if (!same) { m.tyres = tyres; m.rows = rows.slice(); m.recs = rows.map(function (o) { return tyres.optionRecord(o); }); }
+      return m.recs;
+    }
     /** The set a stop should fit for this car — a TyreModel record, or null. */
     function pickFor(c) {
       const tyres = G.tyres;
       if (!tyres || !c) return null;
       const want = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
-      const list = ownedTyres().map(function (o) { return tyres.optionRecord(o); });
+      const list = ownedRecords(tyres), log = c.tyreLog;
+      const rule = want === 0 && twoCompoundApplies() && typeof SportingRegs !== "undefined";
+      // pitStops already counts this box; until fitting, it is THIS stint.
+      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
+      const lapsLeft = Math.max(1, lapsToFlag(c));
+      let mask = 0;   // which sets reach the flag: the only way planLaps (level, circuit, lapsTarget) enters
+      for (let i = 0; i < list.length && i < 30; i++) if (tyres.planLaps(list[i].life, G.lapsTarget) >= lapsLeft) mask |= 1 << i;
+      const logLen = rule && log ? log.length : -1, logLast = logLen > 0 ? log[logLen - 1] && log[logLen - 1].code : null;
+      let m = pickMemo.get(c);
+      if (m && list.length <= 30 && m.recs === list && m.want === want && m.rule === rule && m.log === log && m.logLen === logLen
+        && m.logLast === logLast && m.cls === cls && m.mask === mask) return m.out;
+      const out = pickUncached(c, tyres, want, list, rule, log, cls, lapsLeft);
+      if (!m) pickMemo.set(c, m = {});
+      m.recs = list; m.want = want; m.rule = rule; m.log = log; m.logLen = logLen; m.logLast = logLast; m.cls = cls; m.mask = mask; m.out = out;
+      return out;
+    }
+    function pickUncached(c, tyres, want, list, rule, log, cls, lapsLeft) {
       // TREAD FIRST, and it is not a preference. The wrong tread costs whole
       // seconds a lap and no compound choice makes that up. A career save that
       // owns no wet tyre still gets one, from the class ladder: the alternative
@@ -1364,24 +1071,21 @@ var PitLane = (function () {
       // "no recourse" docs/PHYSICS.md warned about, reintroduced by an economy.
       let right = list.filter(function (r) { return (r.tread || 0) === want; });
       if (!right.length) {
-        const cls = TyreModel.classForTread(want);
-        return cls ? tyres.classRecord(cls) : (list[0] || null);
+        const tc = TyreModel.classForTread(want);
+        return tc ? tyres.classRecord(tc) : (list[0] || null);
       }
       // THE RULE BEFORE THE STOPWATCH. A car that still owes its second dry
       // compound must not be refitted with the letter it has run: "the fastest
       // set that reaches the flag" picked a Super Soft off a Soft — "S" twice —
       // and endRace disqualified the player for obeying AUTO. Only when a set
       // of another letter is owned; a garage of one letter cannot comply.
-      const log = c.tyreLog;
-      if (want === 0 && twoCompoundApplies() && typeof SportingRegs !== "undefined" && SportingRegs.compoundShort(log)) {
+      if (rule && SportingRegs.compoundShort(log)) {
         const ran = new Set((log || []).map(function (e) { return e && e.code; }));
         const fresh = right.filter(function (r) { return !ran.has(r.code); });
         if (fresh.length) right = fresh;
       }
-      // pitStops already counts this box; until fitting, it is THIS stint.
       // …and THE PLAN'S LETTER, when it names one: the HUD and the engineer say
       // "BOX L12 H", so the crew fits an H unless the rule above forbids it.
-      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
       const code = cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : null;
       const planned = code ? right.filter(function (r) { return r.code === code; }) : [];
       if (planned.length) right = planned;
@@ -1389,9 +1093,8 @@ var PitLane = (function () {
       // flag. Softer is faster and shorter-lived, so among the sets that go the
       // distance take the shortest-lived one; if nothing reaches, take the set
       // that gets closest and accept that there is another stop coming.
-      const lapsLeft = Math.max(1, lapsToFlag(c));
       const lasts = right.filter(function (r) {
-        return G.tyres.planLaps(r.life, G.lapsTarget) >= lapsLeft;
+        return tyres.planLaps(r.life, G.lapsTarget) >= lapsLeft;
       });
       const pool = lasts.length ? lasts : right;
       return pool.reduce(function (best, r) {
@@ -1505,7 +1208,7 @@ var PitLane = (function () {
       // got one plan whatever was fitted — "hard, BOX L11" for a hypersoft that
       // is gone by lap 4 — and its two-compound guarantee was about a tyre the
       // car was not on. A wet set or no car: the planner picks, as before.
-      const rec = player && car ? TyreModel.startRecord(car) : null;   // what gridUp is about to fit (c.tyre is last race's)
+      const rec = player && car ? (G.tyres && G.tyres.startRecord ? G.tyres.startRecord(car, TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness())) : TyreModel.startRecord(car)) : null;   // what gridUp is about to fit (c.tyre is last race's): the weather's tread on a wet grid (#5251)
       const start = rec && !(rec.tread > 0) ? classOfCode(rec.code) : null;
       // An AI's taste is its roll widened by its temper (AiDrive.tasteRoll):
       // a rookie gambles, a veteran runs the book. Kept on the plan, so the
@@ -1543,7 +1246,8 @@ var PitLane = (function () {
     /** Racing laps still owed including the lap the car is ON.
      *  `c.lap` counts S/F crossings (grid 0; winner flags at lapsTarget+1), so
      *  remaining = lapsTarget - lap + 1. pickFor / think / wetLapsToStop once
-     *  used lapsTarget - lap and were one short of the flag. */
+     *  used lapsTarget - lap and were one short of the flag. think's fits
+     *  guard adds this lap only when a stop is pulled forward of the plan. */
     function lapsToFlag(c) {
       return Math.max(0, (G.lapsTarget || 0) - ((c && c.lap) || 0) + 1);
     }
@@ -1813,12 +1517,31 @@ var PitLane = (function () {
      *  otherwise midway between the first lap a fresh wet reaches the flag and
      *  the lap this one is gone — the split that wastes least of either set. */
     function wetLapsToStop(c, tread) {
-      const lap = c.lap || 0, left = lapsToFlag(c);
+      // `left` is what the SET still has to cover. lapsToFlag counts the lap the car is on
+      // WHOLE, and the set's life is measured off continuous wear: late in a lap the two
+      // disagreed by most of a lap, so a wet that reached the flag read as short and the
+      // whole field boxed wet-for-wet (measured: all 21 AI in a 5-lap rain race, Monaco
+      // and Singapore, wear ~0.19 a lap). Take off the part of this lap already driven.
+      const lap = c.lap || 0, len = G.track && G.track.total;
+      const done = lap >= 1 && len > 0 ? Math.min(1, Math.max(0, (c.s || 0) / len)) : 0;
+      const left = lapsToFlag(c) - done;
       if (!G.tyres.lapsLeft || !G.tyres.lapsOn) return 99;
       const fresh = G.tyres.planLaps(TyreModel.AI_CLASS[TyreModel.classForTread(tread)].life, G.lapsTarget) / (c.pitPlan.loadK || 1);
       // The measured rate only after two laps on the set (replan's rule): one
       // lap after a stop read 27 % and stopped two fresh wets again, measured.
-      const onSet = G.tyres.lapsOn(c) >= 2 ? G.tyres.lapsLeft(c) : fresh * (1 - Math.min(1, G.tyres.spent(c)));
+      const n = G.tyres.lapsOn(c);
+      let onSet = n >= 2 ? G.tyres.lapsLeft(c) : fresh * (1 - Math.min(1, G.tyres.spent(c)));
+      // …and that rate was measured on the laps this set has RUN, on a heavier tank. Wear runs
+      // (1 + FUEL_WEAR·fuel) (tyre-model update), so the laps still to come wear less a lap and
+      // lapsLeft, a straight line through the laps run, reads short: 8 of 21 AI boxed wet-for-wet in
+      // a 5-lap Singapore rain race on sets the 13 that stayed out took to the flag at 0.92-0.95
+      // (#5252). The mean fuel over the laps run on the set against the mean over the laps to run,
+      // in completed-lap units (replan's midFuel, the same correction on loadK).
+      if (n >= 2 && onSet != null) {
+        const N = Math.max(1, G.lapsTarget || 1), x = Math.max(0, lap - 1) + done, fw = AiDrive.STRAT.FUEL_WEAR;
+        const fuelAt = (mid) => 1 + fw * clamp(1 - (mid - 0.5) / N, 0, 1);
+        onSet *= fuelAt(Math.max(0, x - n - done) / 2 + x / 2) / fuelAt((x + Math.max(x, N)) / 2);
+      }
       if (onSet == null || onSet * 1.1 >= left) return 99;
       return Math.max(0, Math.round(((G.lapsTarget - fresh) + (lap + onSet)) / 2) - lap);
     }
@@ -1831,13 +1554,27 @@ var PitLane = (function () {
     // stepBegin/stepEnd; nothing inside that loop finishes or retires a car
     // (finishes settle in settleLineStep after it), so every think() in it reads
     // the same answer. Outside the bracket (tests, dev hooks) it scans live.
-    let _flagStep = false, _flagMemo = null;
-    function stepBegin() { _flagStep = true; _flagMemo = null; }
-    function stepEnd() { _flagStep = false; _flagMemo = null; }
+    let _flagStep = false, _flagMemo = null, _pitReads = 0, _cautionMemo = 0, _treadMemo = 0;
+    function stepBegin() { _flagStep = true; _flagMemo = null; _pitReads = 0; }
+    function stepEnd() { _flagStep = false; _flagMemo = null; _pitReads = 0; }
     function flagNow() {
       if (_flagStep && _flagMemo !== null) return _flagMemo;
       const out = typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars);
       if (_flagStep) _flagMemo = out;
+      return out;
+    }
+    // Weather and caution tick before the car loop. Read lazily so human,
+    // finished and red-flag guards keep their short-circuits; dev calls stay live.
+    function cautionNow() {
+      if (_flagStep && (_pitReads & 1)) return _cautionMemo;
+      const out = cautionLevel();
+      if (_flagStep) { _cautionMemo = out; _pitReads |= 1; }
+      return out;
+    }
+    function treadNow() {
+      if (_flagStep && (_pitReads & 2)) return _treadMemo;
+      const out = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      if (_flagStep) { _treadMemo = out; _pitReads |= 2; }
       return out;
     }
     function think(c) {
@@ -1852,13 +1589,13 @@ var PitLane = (function () {
       // engineer has the same finalLap guard). A lapped AI still boxed for wets.
       if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || flagNow()) return "";
       // A red flag (4) is not a pit window: the field is held and the restart clears arms.
-      if (cautionLevel() >= 4) return "";
+      if (cautionNow() >= 4) return "";
       let stopsLeft = plan.stops - (c.pitStops || 0);
       const nextAt = plan.lapsAt[c.pitStops || 0];
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
       // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
       // dry->rain arc did not have.
-      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      const wantTread = treadNow();
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
       // ON THE RIGHT WET TYRE THE DRY PLAN'S LAPS MEAN NOTHING: plan.lapsAt was
       // cut for slicks, and every stop in a wet race refits the wet class
@@ -1883,14 +1620,22 @@ var PitLane = (function () {
       // CAUTION stop: pulled up to CAUTION_REACH laps forward onto a set that
       // cannot reach the flag, the "free" stop bought a second one. Bahrain,
       // 12 laps, SC on lap 2: 19 of 21 one-stop plans ran two stops, 2 ran three.
-      const caution = cautionLevel();
+      const caution = cautionNow();
       let fits = true;
       if (near || (caution >= 2 && caution < 4 && stopsLeft > 0 && lapsToStop <= AiDrive.STRAT.CAUTION_REACH)) {
         // (On a wet run the next set is the wet class, run to the flag.)
         const nextCls = wetRun ? TyreModel.classForTread(wantTread) : plan.seq[(c.pitStops || 0) + 1];
         const nextStop = wetRun ? null : plan.lapsAt[(c.pitStops || 0) + 1];
         const life = nextCls && TyreModel.AI_CLASS[nextCls] ? G.tyres.planLaps(TyreModel.AI_CLASS[nextCls].life, G.lapsTarget) / (plan.loadK || 1) : Infinity;
-        fits = (nextStop != null ? nextStop : G.lapsTarget) - (c.lap || 0) <= life * 1.1;
+        // Plan units: a later stop is a c.lap index, and the flag closes at
+        // lapsTarget (stints sum to it). Pulled FORWARD, the new set also
+        // finishes the lap the car is already on, so the flag is lapsToFlag.
+        // On the plan's own lap that lap is the stint the plan already priced
+        // (Bahrain 12, stop lap 7, soft life 5: 5 ≤ 5.5, the safety car still
+        // wins). Charging it again rejected that stop.
+        const end = nextStop != null ? nextStop : (G.lapsTarget || 0);
+        const need = end - (c.lap || 0) + (nextStop == null && lapsToStop > 0 ? 1 : 0);
+        fits = need <= life * 1.1;
       }
       // ONE context, every field rewritten per call (pitNow is pure and keeps nothing):
       // a 13-field literal per AI per tick was ~1.3k objects/s of garbage.
@@ -2056,10 +1801,13 @@ var PitLane = (function () {
 
     // Race teardown: the zone cache keys on the track object, and kept the last race's track until the next z().
     function releaseTrack() { zone = null; zoneFor = null; }
-    return { zoneOf: () => z(), releaseTrack, limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
-             arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think, stepBegin, stepEnd,
-             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
-             worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
+    // toBox / roadOf / committing / boxBusy / setNext / inWindow stay module-
+    // local (create internals + tests via PitLane.inWindow); nothing outside
+    // reads them on the instance. session-stub may still stub extras.
+    return { zoneOf: () => z(), releaseTrack, limit, approachV, entryV, exitV, stopAnim, inLane, held,
+             arm, update, reset, clearArm, info, serviceCar, planFor, think, stepBegin, stepEnd,
+             pickFor, ownedTyres, choices, selectNext, estimate, commitFrac, toEntry, cue,
+             worthStopping, canWork, addWork, workS: WORK_S,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,
              servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
@@ -2070,12 +1818,15 @@ var PitLane = (function () {
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }
 
+  // Module surface kept to what tests / always-loaded call sites actually read.
+  // BOX_BRAKE, COMMIT_V, CUE_WEAR, CUE_M, BOX_SQUARE_*, SQUARE_BY_M stay
+  // destructured for create() internals (instance fields like cueM / squareByM);
+  // they are not frozen here. BOX_M / BOX_S never had an external reader on PitLane.
   return { create, zoneOf, inWindow, throughM,
-           ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
+           ENTRY_M, EXIT_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_SPEED_FRAC,
+           BOX_TOL, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_CLEAR,
            GRID_POLE_M,
-           CUE_M, CUE_WEAR, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
-           BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M,
+           LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
            get BOX_PITCH() { return pitch(); }, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();
 Object.freeze(PitLane);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // verify-change.mjs — ONE command that runs what a change needs, serialized
-// @doc ONE diff-aware `--fast` gate plus test batches; full tooling-fast is the pre-push floor; plan JSON reports budget.
+// @doc ONE diff-aware `--fast` gate; `tooling-fast --changed` is the local floor, CI runs the tiers; plan JSON has the budget.
 // @section runner
 // correctly, and hands back one verdict.
 //
@@ -11,29 +11,26 @@
 // composition, not new test infrastructure:
 //
 //   node tools/ci/verify-change.mjs                  # fast phase + start batch 1
-//   node tools/ci/verify-change.mjs --wait           # run EVERY batch to the end
 //   node tools/ci/verify-change.mjs --plan           # print the plan, run nothing
-//   node tools/ci/verify-change.mjs --fast           # fast phase only, no browser
+//   node tools/ci/verify-change.mjs --fast           # the fast phase (the default does the same since 2026-11-03)
 //   node tools/ci/verify-change.mjs --since <ref>    # diff base for file selection
 //   node tools/ci/verify-change.mjs --staged         # staged files only
-//   ... --keep-going                              # don't stop the chain on a red batch
+//   ... --wait | --keep-going                     # accepted, no-ops: no local browser run (below)
 //   ... --json                                    # machine-readable verdict
 //
 // Phases:
 //   1 fast (inline, ~2 min at three files at a time): tooling-fast when the change warrants it;
 //     verify-track.cjs per changed circuit; graph-parity when js/track/scenery/graph.js
-//     moved (BASE = --since's ref, else the merge-base); bump-cache --check. Any red here stops before browsers spin up.
-//   2 groups (background via test-bg.mjs): pick-tests selection, ONE group per
-//     batch (browser OR node) — sequential by default; AGENTS.md one-browser-
-//     per-batch rule, enforced instead of quoted.
-//   3 verdict: batch outcomes read from the logs' terminal lines. A timeout
-//     outcome comes back labelled with the triage command (test-solo.mjs),
-//     because a timeout on a busy box measures the machine, not the code.
+//     moved (BASE = --since's ref, else the merge-base); bump-cache --check.
+//   2 groups: pick-tests' selection, ONE group per batch, REPORTED AS NOT RUN
+//     with where they do run. Agents never run a browser test locally (AGENTS.md
+//     rule 5, 2026-11-03): every PR push gets ci.yml's change-aware `selected`
+//     legs (one 5-min shard on a draft, the 10-min budget once ready) and
+//     `node tools/ci/remote-group.mjs <group>` runs a whole group on the pushed
+//     branch. Until then this phase drove test-bg.mjs's group chain here.
 //
-// The default (no --wait) starts batch 1 and exits 2 ("partial") — the agent
-// pattern is to do other work and come back; --wait is for CI or a final gate.
-// This tool runs test groups, so run IT in the background too (AGENTS.md
-// no-foreground-blocking rule applies to the driver as much as the driven).
+// With groups selected the verdict is "partial" (exit 2): the fast phase is
+// green and the browser verdict is CI's. "pass" is a diff with no group to run.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -43,7 +40,7 @@ import { pick, DEPLOY_BRANCH, validateSelectionArgs, selectionReceipt } from "./
 import { estimateToolingFast, loadTimings, selectToolingFastChanged, TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 import { liveCiRuns } from "./live-run-check.mjs";
 import { gitOut } from "../lib/git-run.mjs";
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, noDeployBaseMessage, resolveDeployBase, untrackedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -67,15 +64,13 @@ const loadavgLine = () => {
 
 const git = (args) => gitOut(args, { cwd: ROOT });   // throws on failure (tools/lib/git-run.mjs)
 
-// The ref the default selection diffs against: merge-base with the deploy
-// branch (HEAD~1 last). Also graph-parity's BASE: without one it diffs only the
-// uncommitted part, and exits 2 "nothing to compare" on a clean tree.
-function mergeBase() {
-  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "HEAD~1"]) {
-    try { return git(["merge-base", "HEAD", ref]); } catch (_) { /* next */ }
-  }
-  return "";
-}
+// The ref the default selection diffs against: merge-base with origin/<deploy>,
+// else the local deploy branch — never HEAD~1, which answered for the last
+// commit and read as green for the branch (audit W6, 2026-11-10). Also
+// graph-parity's BASE: without one it diffs only the uncommitted part, and
+// exits 2 "nothing to compare" on a clean tree.
+const deployBase = resolveDeployBase(DEPLOY_BRANCH, { cwd: ROOT });
+function mergeBase() { return deployBase ? deployBase.sha : ""; }
 
 // ── changed-file selection (same semantics as pick-tests.mjs's CLI) ─────────
 function changedFiles() {
@@ -87,10 +82,16 @@ function changedFiles() {
   // lists only a moved file's destination, so its old directory's rules never fired.
   if (flag("--staged")) return changedPaths(["--cached"], { cwd: ROOT });
   if (opt("--since")) return changedPaths([opt("--since")], { cwd: ROOT });
-  const base = mergeBase();
+  if (!deployBase) {
+    // A refusal, not a guess: exit 2 is the "not a verdict" code (usage / unmatched).
+    if (JSON_OUT) console.log(JSON.stringify({ verdict: "no-deploy-base", error: noDeployBaseMessage(DEPLOY_BRANCH, "verify-change") }));
+    else console.error(noDeployBaseMessage(DEPLOY_BRANCH, "verify-change"));
+    process.exit(2);
+  }
+  changedFiles.base = `${deployBase.ref}@${deployBase.sha}`;
   const out = new Set(changedPaths(["HEAD"], { cwd: ROOT }));
-  if (base) for (const f of changedPaths([base], { cwd: ROOT })) out.add(f);
-  for (const f of git(["ls-files", "--others", "--exclude-standard"]).split("\n")) if (f) out.add(f);
+  for (const f of changedPaths([deployBase.sha], { cwd: ROOT })) out.add(f);
+  for (const f of untrackedPaths({ cwd: ROOT })) out.add(f);
   return [...out];
 }
 
@@ -147,6 +148,8 @@ const graphParityBase = wantsGraphParity ? (opt("--since") || mergeBase() || nul
 const wantsSweepsHint = files.some((f) => /^js\/(track|circuits)\//.test(f) || /^tools\//.test(f));
 
 const plan = {
+  // The default selection's diff base (working tree and untracked files on top); null for explicit paths / --since / --staged.
+  base: changedFiles.base || null,
   files,
   // Carried into the plan too, not just the verdict: `--plan` printing
   // `"batches": []` with no reason is the same vacuous answer the run path
@@ -167,6 +170,9 @@ const plan = {
     verifyTrack: circuits,
     graphParity: wantsGraphParity,
     graphParityBase,
+    // A generated file in the diff is proven by its generator, not by the floor
+    // (tooling-fast's own --changed path runs this too; audit W6, 2026-11-10).
+    genCheck: !!toolingFastSelection.genCheck,
     cacheCheck: true,
   },
   batches,
@@ -178,7 +184,7 @@ if (flag("--plan")) {
   process.exit(0);
 }
 
-say(`plan: files=${files.length} batches=${batches.length} ` +
+say(`plan: base=${plan.base || "explicit"} files=${files.length} batches=${batches.length} ` +
   `browser=${browserGroups.length} node=${nodeGroups.length} ` +
   `toolingFast=${wantsToolingFast} verifyTrack=[${circuits.join(",")}] ` +
   `graphParity=${wantsGraphParity} ${loadavgLine()}`);
@@ -210,6 +216,9 @@ if (plan.fast.graphParity) {
   const base = plan.fast.graphParityBase;
   fastOk = run(`graph-parity BASE=${base || "HEAD"}`, "node", ["tools/track/graph-parity.cjs", "--all"],
     base ? { BASE: base } : null) && fastOk;
+}
+if (plan.fast.genCheck) {
+  fastOk = run("gen:check", "npm", ["run", "gen:check", "--silent"]) && fastOk;
 }
 if (plan.fast.toolingFast) {
   // Files at a time, by load. MEASURED 2026-09-16 on the 4-core box: 194 files
@@ -283,80 +292,14 @@ if (flag("--fast") || !batches.length) {
     { notRun: batches.flat() });
 }
 
-// ── phase 2: batches via test-bg ─────────────────────────────────────────────
-// The outcome truth is each group's log terminal line; test-bg --wait already
-// exits nonzero when any group in the batch did not pass.
-const groupOutcome = (g) => {
-  try {
-    const text = fs.readFileSync(path.join(ROOT, "artifacts/logs", `${g}.log`), "utf8");
-    const pw = [...text.matchAll(/= run (\w+)\s+\(([^)]*)\)/g)].pop();
-    if (pw) return `${pw[1]} (${pw[2]})`;
-    const tap = text.match(/^# pass (\d+)$[\s\S]*?^# fail (\d+)$/m);
-    if (tap) return tap[2] === "0" ? `passed (${tap[1]})` : `failed (${tap[2]} of ${+tap[1] + +tap[2]})`;
-    // plain-script groups: test-bg's `= bg exit N` trailer is the only line
-    const bg = [...text.matchAll(/^= bg exit (\d+)$/gm)].pop();
-    if (bg) return bg[1] === "0" ? "passed (exit 0)" : `failed (exit ${bg[1]})`;
-  } catch (_) { /* no log yet */ }
-  return "unknown";
-};
-
-say(`── phase 2: ${batches.length} sequential batch(es) via test-bg ${loadavgLine()}`);
-
-if (!flag("--wait")) {
-  // Start batch 1 only; the agent comes back for the rest. Anything more here
-  // would be this tool quietly holding a terminal, which is the failure mode
-  // the AGENTS.md background rule exists to kill.
-  say(`starting batch 1/${batches.length}: ${batches[0].join(" ")}`);
-  const r = spawnSync("node", ["tools/ci/test-bg.mjs", ...batches[0]], { cwd: ROOT, encoding: "utf8", stdio: JSON_OUT ? "pipe" : "inherit" });
-  finish(r.status === 0 ? "partial" : "fail", {
-    started: batches[0],
-    notRun: batches.slice(1).flat(),
-    next: batches.length > 1
-      ? `node tools/ci/test-bg.mjs --wait && node tools/ci/test-bg.mjs ${batches[1].join(" ")}`
-      : "node tools/ci/test-bg.mjs --wait",
-  });
+// ── phase 2: the groups run on the PR, not here (2026-11-03) ────────────────
+// `--wait` and `--keep-going` drove the local test-bg chain; an old caller
+// still gets the fast verdict and one line saying why nothing else started.
+if (flag("--wait") || flag("--keep-going")) {
+  say("--wait/--keep-going: no local browser run since 2026-11-03 (AGENTS.md rule 5) — the groups below run on the PR");
 }
-
-const results = {};
-let allOk = true;
-// The batches the chain never reached. A red batch BREAKS the loop, and the
-// final finish() reported only `groups` — so the batches behind the break were
-// neither "pass" nor "fail" nor named anywhere, and a reader of the verdict
-// could not tell an unrun group from a green one. Every other finish() in this
-// file already carries notRun; this was the one path that dropped it.
-let notRun = [];
-for (let i = 0; i < batches.length; i++) {
-  const batch = batches[i];
-  say(`batch START ${i + 1}/${batches.length}: ${batch.join(" ")} at=${new Date().toISOString()} ${loadavgLine()}`);
-  const t0 = Date.now();
-  // test-bg refuses ANY start at 1-min loadavg >= 3, and the batch that just
-  // ended leaves the average above that for a minute or two — so batch 2 was
-  // recorded "refused" on a box that was merely settling. Wait for it (cap 5
-  // min); a box still hot after that is a real refusal and is reported as one.
-  for (const until = Date.now() + 5 * 60_000; os.loadavg()[0] >= 3 && Date.now() < until;)
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10_000);
-  const started = spawnSync("node", ["tools/ci/test-bg.mjs", ...batch], { cwd: ROOT, encoding: "utf8", stdio: JSON_OUT ? "pipe" : "inherit" });
-  if (started.status !== 0) {
-    allOk = false;
-    for (const g of batch) results[g] = "refused";
-    say(`batch FAIL ${i + 1}/${batches.length}: refused to start`);
-    continue;
-  }
-  const waited = spawnSync("node", ["tools/ci/test-bg.mjs", "--wait"], { cwd: ROOT, encoding: "utf8", stdio: JSON_OUT ? "pipe" : "inherit" });
-  for (const g of batch) {
-    const o = groupOutcome(g);
-    results[g] = o;
-    if (!/^passed/.test(o)) {
-      allOk = false;
-      // A timeout outcome gets the triage command attached, not a verdict:
-      // re-run the spec ALONE before believing it (tools/ci/test-solo.mjs).
-      if (/timedout|timeout/i.test(o)) results[g] += "  → triage: node tools/ci/test-solo.mjs <spec> (a timeout on a busy box measures the machine)";
-    }
-  }
-  const dur = ((Date.now() - t0) / 1000).toFixed(1);
-  say(`batch END ${i + 1}/${batches.length}: ${batch.join(" ")} duration=${dur}s ` +
-    `${batch.map((g) => `${g}=${results[g]}`).join(" ")} ${loadavgLine()}`);
-  if (waited.status !== 0 && !flag("--keep-going")) { notRun = batches.slice(i + 1).flat(); break; }
-}
-
-finish(allOk ? "pass" : "fail", { groups: results, notRun });
+finish("partial", {
+  notRun: batches.flat(),
+  ci: "these groups run on the PR, not locally: ci.yml's selected legs on every push (a draft gets one 5-min shard, ready the 10-min budget); "
+    + "a whole group: node tools/ci/remote-group.mjs <group> on the pushed branch",
+});

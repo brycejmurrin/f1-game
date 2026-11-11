@@ -46,8 +46,11 @@ function boardInfo(team, getParts, driverIdx, ctx) {
     // ONE resolveSetup call carries everything: it already returns the stat
     // `mods`, the total `cost`, and `options` (the RESOLVED option per category,
     // which is what a supplier-locked fallback actually fitted — not the id the
-    // save asked for).
-    const r = Parts.resolveSetup(getParts(team.id), team);
+    // save asked for). Pass SetupTune.mods the same way the DOM bars do
+    // (setup-sheet.js renderStatBars → Parts.getMods(..., tune)), so a mechanical
+    // set-up change cannot leave the wall quoting different numbers.
+    const tune = typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null;
+    const r = Parts.resolveSetup(getParts(team.id), team, tune);
     const base = GarageExperience.statsOf(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
     const stats = Parts.STAT_KEYS.map((k) => {
       const b = base[k.key] || 75;
@@ -549,6 +552,12 @@ function lookFloor(out, liv, L) {
       tile(out, x, x + 0.30, Z_DOOR - 0.75, Z_DOOR - 0.30, i % 2 ? yel : blk, Y, M);
     }
   }
+  // Rain-ready: wet-look puddle bands along the car box (cool specular lanes).
+  if (L.floor && L.floor.wetBands) {
+    const wet = [0.55, 0.60, 0.66];
+    for (const z of [-2.2, 0.2, 2.4])
+      tile(out, -0.95, 0.95, z - 0.08, z + 0.08, wet, Y + 0.001, M);
+  }
 }
 // The roof structure under a look. Returns false for "stock" (the caller
 // builds the shipped truss).
@@ -606,7 +615,8 @@ function lookLed(g, liv, L) {
   } else if (L.ceilLed === "strips") {
     for (const x of [-1.4, 1.4]) {
       block(g.mid, x, CEIL_Y - 0.02, 0, 0.07, 0.02, (Z_DOOR - Z_BACK) / 2, GREY(0.03));    // channel, wall to wall
-      block(g.mid, x, CEIL_Y - 0.045, 0, 0.035, 0.005, (Z_DOOR - Z_BACK) / 2 - 0.05, [0.95, 1.05, 1.20]);
+      const lens = L.hotStrips ? [1.15, 1.20, 1.35] : [0.95, 1.05, 1.20];
+      block(g.mid, x, CEIL_Y - 0.045, 0, 0.035, 0.005, (Z_DOOR - Z_BACK) / 2 - 0.05, lens);
     }
   } else if (L.ceilLed === "pendants") {
     for (const x of [-2.2, 2.2]) for (const z of [-4.0, 0, 4.0]) {

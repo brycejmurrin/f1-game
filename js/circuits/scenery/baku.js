@@ -7,13 +7,13 @@
 (window.TrackScenery = window.TrackScenery || {})["baku"] =
   function (api) {
       const {
-        K, out, MAT, n, ds, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
+        K, out, MAT, ds, backdrop, groundPatch, waterBand, modelGroup, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, grandstandEx, sponsorHoarding, broadcastCompound,
         gantry, marshalPost, billboard,
-        palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
+        palm, anchor, along, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
         circuitKit, plane, cypress, terrace, terrainYAt,
-      } = api;
+        bakedModel } = api;
 
       const SAND        = [0.62, 0.50, 0.34];        // Old-City sandstone
       const SAND_LIT    = [0.85, 0.62, 0.30];        // uplit sandstone
@@ -163,7 +163,7 @@
         building(k, 1, 42, 52, 22, 30, { kind: "dome", wall: SAND, window: WIN_WARM, floor: 4.5, lit: true });
         // Decorative base plinth (uplit, slightly wider than body, very low)
         const aBase = anchor(k, 1, 68);
-        addBox(out, vadd(aBase.c, aBase.u, 1.5), [58, 3, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);
+        addBox(out, vadd(aBase.c, aBase.u, 1.1), [58, 3.0, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);   // sunk 0.4 m (top 2.6 m): its faces shared the palace body's planes (ground-audit flatCoplanar)
 
         for (const tOff of [-20, 20]) {
           const aTow = anchor(k, 1, 75);
@@ -609,7 +609,7 @@
         }
       }
 
-      // Icheri Sheher grandstand — castle exit (T11–12 range; guides vary).
+      // Icheri Sheher grandstand — past the castle exit at T13 (FIA 2026 numbering; guides vary).
       // Gap 18 clears the rampart pillars at 19.4; positive rake via crowdBank.
       if (grandstandEx) {
         grandstandEx(0.532, 1, 18, 58, null, null, {
@@ -867,4 +867,10 @@
                  s % 2 ? [0.90, 0.55, 0.20] : WIN_WARM, b);
         }
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.088, 0.2705, 0.434, 0.663]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

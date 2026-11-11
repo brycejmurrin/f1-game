@@ -42,7 +42,9 @@ const LoopHealth = (() => {
   //                reload once per tab session (apex26.stallReloads, the
   //                ctxLostReloads shape), which hands the player back a working
   //                menu with the "Graphics reset" notice. With the budget spent
-  //                it only records and logs.
+  //                it only records and logs. On software raster (SwiftShader /
+  //                llvmpipe via PerfGov.softwareRaster), reload lands on the
+  //                same path and cost — act "budget-sw" skips location.reload().
   // A race entry on a weak phone is a few multi-second tasks between frames, so
   // while the loading cover (#loading) is up the shed waits and the reload needs
   // LOAD_RELOAD_RUN frames: a cover stuck over a glacial build still recovers.
@@ -66,6 +68,7 @@ const LoopHealth = (() => {
   let lastFaultAt = 0;
   let lastMsg = "";
   let stopped = false;
+  let recoveries = 0;
   let slowRun = 0;
   let slowFrames = 0;
   let worstMs = 0;
@@ -88,10 +91,14 @@ const LoopHealth = (() => {
   }
   function watching() {
     if (watchOn !== null) return watchOn;
-    let forced = false, auto = true;
+    let forced = false, off = false, auto = true;
     try { forced = /[?&]stallwatch=1\b/.test(location.search) || localStorage.getItem("apex26.stallWatch") === "1"; } catch (_) { /* no location/storage */ }
+    // The OFF switch: a probe browser that is not flagged as automation (the
+    // Playwright MCP host browser) on software GL reloaded mid-race and read as
+    // a crash (UI hunt 2026-10-29 row 16). An explicit 0 beats the auto default.
+    try { off = /[?&]stallwatch=0\b/.test(location.search) || localStorage.getItem("apex26.stallWatch") === "0"; } catch (_) { /* no location/storage */ }
     try { auto = !(typeof navigator !== "undefined" && (navigator.webdriver || /apex-game-vm/.test(navigator.userAgent || ""))); } catch (_) { /* no navigator */ }
-    return (watchOn = forced || auto);
+    return (watchOn = forced || (!off && auto));
   }
   try {
     if (typeof document !== "undefined" && document.addEventListener) {
@@ -104,8 +111,26 @@ const LoopHealth = (() => {
   }
   // Race entry uses #loading; garage / race-settings sheets and MenuTeardown quit
   // cover share the relaxed reload budget (#3510 / live garage-close repro).
+  function skipReloadOnSoftwareRaster() {
+    try {
+      return typeof PerfGov !== "undefined" && !!(PerfGov.softwareRaster && PerfGov.softwareRaster());
+    } catch (_) { return false; }
+  }
+  function reloadAlreadyLatched() {
+    try {
+      return localStorage.getItem("apex26.envProbeOff") === "1" && localStorage.getItem("apex26.perChunkOff") === "1";
+    } catch (_) { return false; }
+  }
+  // Countdown, pit intro and the first race presents after the loading cover drops.
+  function raceEntryHandoffCover() {
+    try {
+      if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stallHandoffCover) return RaceEntryProfile.stallHandoffCover();
+    } catch (_) { /* harness */ }
+    return false;
+  }
   function slowPathCover() {
     if (loading()) return true;
+    if (raceEntryHandoffCover()) return true;
     try {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
     } catch (_) { /* harness */ }
@@ -130,6 +155,16 @@ const LoopHealth = (() => {
     if (spent >= RELOAD_BUDGET) {
       stallAct = "budget";
       Log.warn("game", `stall watchdog: still ${slowRun} frames over ${SLOW_MS} ms after the shed; reload budget spent`);
+      return;
+    }
+    if (skipReloadOnSoftwareRaster()) {
+      stallAct = "budget-sw";
+      Log.warn("game", `stall watchdog: still glacial after the shed (worst ${Math.round(worstMs)} ms) — reload skipped on software raster`);
+      return;
+    }
+    if (reloadAlreadyLatched()) {
+      stallAct = "budget";
+      Log.warn("game", `stall watchdog: still glacial after the shed (worst ${Math.round(worstMs)} ms); lighter renderer already latched`);
       return;
     }
     stallReloads++; stallAct = "reload";
@@ -187,6 +222,24 @@ const LoopHealth = (() => {
       return survive;
     },
 
+    // THE WAY BACK FROM THE CAP (#4994). Nothing scheduled a frame after the
+    // fatal rethrow, so a stopped loop stayed stopped for the life of the page
+    // and the next race was frozen too. The shell's error card calls this from
+    // BACK TO MENU after it has left the race: forget the tally and chain one
+    // window rAF through XrBoot, which remembers the tick it was bound with.
+    // FALSE = nothing was re-armed (not stopped, XR owns the clock, no tick
+    // bound); a fault that is still there simply reaches the cap again.
+    recover() {
+      if (!stopped) return false;
+      let armed = false;
+      try { armed = typeof XrBoot !== "undefined" && XrBoot.chainWindowRaf() === true; } catch (_) { /* no loop to re-arm */ }
+      if (!armed) return false;
+      run = 0; total = 0; stopped = false; recoveries++;
+      prevCleanAt = 0; slowRun = 0; shedRun = reloadRun = false;   // the dead stretch is not a slow frame
+      Log.warn("game", `loop re-armed after the fault cap (recovery ${recoveries})`);
+      return true;
+    },
+
     // Read by js/perf/gfx-debug-overlay.js on setInterval — the one surface that
     // still paints after the loop is gone. `frames` is the liveness signal and
     // staleMs only colour: a healthy headless page measured staleMs 6993 with
@@ -201,11 +254,12 @@ const LoopHealth = (() => {
         cap: RUN_CAP,
         totalCap: TOTAL_CAP,
         stopped,
+        recoveries,
         lastFault: lastMsg,
         // null, NOT 0: no frame has completed, so there is nothing to be stale
         staleMs: lastCleanAt ? Math.round(now() - lastCleanAt) : null,
         // The stall watchdog: slowRun is the live run of SLOW_MS frames, act
-        // the last response ("shed" | "reload" | "budget" | "")
+        // the last response ("shed" | "reload" | "budget" | "budget-sw" | "")
         stall: { watching: watching(), slowRun, slowFrames, worstMs: Math.round(worstMs), sheds, reloads: stallReloads, act: stallAct, slowMs: SLOW_MS, shedRun: SHED_RUN, reloadRun: RELOAD_RUN,
           syncWorstMs: Math.round(syncWorstMs), syncEvents, syncLastLabel },
       };

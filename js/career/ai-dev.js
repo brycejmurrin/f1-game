@@ -22,7 +22,6 @@ const CareerAiDev = (function () {
 
   /** Soft fitted-cost ceiling for an AI team this winter (credits). */
   function teamCap(team, career) {
-    const legal = typeof Parts !== "undefined" && Parts.legalityKey ? Parts.legalityKey() : "";
     let works = 0;
     try {
       works = Parts.getCost(Parts.getFactorySetup(team), team);
@@ -72,7 +71,8 @@ const CareerAiDev = (function () {
     if (bag.fitted) return bag;
     const works = worksSetup(team);
     bag.fitted = Object.assign({}, works);
-    for (const id of Object.values(works)) {
+    for (const cat of Object.keys(works)) {
+      const id = Parts.ownIdOf(cat, works[cat]);   // ownership key: brakes "sport" is not suspension "sport"
       if (bag.owned.indexOf(id) < 0) bag.owned.push(id);
     }
     return bag;
@@ -139,7 +139,8 @@ const CareerAiDev = (function () {
         if (bag.shelved[step.cat] == null) bag.shelved[step.cat] = prev;
       }
       bag.fitted = step.trial;
-      if (bag.owned.indexOf(step.id) < 0) bag.owned.push(step.id);
+      const key = Parts.ownIdOf(step.cat, step.id);
+      if (bag.owned.indexOf(key) < 0) bag.owned.push(key);
     }
   }
 
@@ -166,15 +167,16 @@ const CareerAiDev = (function () {
       const legal = (o) => !!o && Parts.isOptionAvailable(o, team);
       for (const cat of Parts.CATALOG) {
         const w = works[cat.id];
-        const scar = w != null && bag.owned.indexOf(w) < 0;
-        if (scar) bag.owned.push(w);
+        const wKey = w != null ? Parts.ownIdOf(cat.id, w) : null;
+        const scar = wKey != null && bag.owned.indexOf(wKey) < 0;
+        if (scar) bag.owned.push(wKey);
         const cur = bag.fitted[cat.id];
         const curLegal = cur == null || legal(optionOf(cat.id, cur));
         if (curLegal && shelf[cat.id] == null && !scar) continue;
         let best = null;
         let bestScore = scoreMods(Parts.getMods(bag.fitted, team)) + (curLegal ? 1e-9 : -1e-9);
         for (const opt of cat.options) {
-          if (opt.id === cur || bag.owned.indexOf(opt.id) < 0 || !legal(opt)) continue;
+          if (opt.id === cur || bag.owned.indexOf(Parts.ownId(opt)) < 0 || !legal(opt)) continue;
           const trial = Object.assign({}, bag.fitted, { [cat.id]: opt.id });
           const sc = scoreMods(Parts.getMods(trial, team));
           if (sc > bestScore) { best = trial; bestScore = sc; }
@@ -189,6 +191,7 @@ const CareerAiDev = (function () {
     }
   }
 
-  return { developWinter, fittedOf, teamCap, pickStep, scoreMods, scrubFitted, worksSetup };
+  // scoreMods stays module-local (pickStep / scrubFitted only).
+  return { developWinter, fittedOf, teamCap, pickStep, scrubFitted, worksSetup };
 })();
 Object.freeze(CareerAiDev);

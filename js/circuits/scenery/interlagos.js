@@ -6,11 +6,10 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["interlagos"] =
   function (api) {
-      const { K, out, MAT, seat, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
-              addBox, every, onTrack, hash, vadd, anchor, along, building, motorhome, tower,
-              grandstand, grandstandEx, billboard, gantry, marshalPost, fence, guardrail, wall,
-              tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
-              addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront,
+      const { K, out, MAT, seat, n, px, pz, pyMin, place, backdrop,
+              addBox, every, onTrack, hash, vadd, anchor, building, motorhome, tower, grandstandEx, billboard, gantry, marshalPost, fence, guardrail, wall,
+              tyreWall, tree, palm, bush, hedge,
+              addCyl, forestEdge, cityFront,
               modelGroup, groundPatch, broadcastCompound, cameraTower,
               sponsorHoarding, broadleafFall, lapBounds, py, terrainYAt } = api;
       // Subtropical broadleaf canopy greens + flowering jacaranda.
@@ -309,49 +308,54 @@
       // Dim lamp-head colour (warm white)
       const LAMP    = [0.96, 0.96, 0.82];
 
+      // PIT SIDE: the FIA 2026 pit-lane drawing puts the lane and garages on
+      // the INSIDE of the anticlockwise lap — the driver's LEFT on the main
+      // straight — and the def says so (`pit: { side: -1 }`). Everything keyed
+      // to the paddock reads PIT; the main stands that face it read STAND.
+      const PIT = -1, STAND = -PIT;
       const kpit = K(0.0);
       // 32 m out (its 16 m bounds reach back to 31): the engine's pit complex
       // owns the first 30 m on the pit side here — lane, garages, service road
       // — and at 14 the tower stood inside the garages and was superseded.
-      pitTower(0.0, 1, 32);
-      building(kpit, 1, 8, 14, 16, 32, { kind: "notch", wall: [0.62, 0.62, 0.64],
+      pitTower(0.0, PIT, 32);
+      building(kpit, PIT, 8, 14, 16, 32, { kind: "notch", wall: [0.62, 0.62, 0.64],
                window: [0.24, 0.32, 0.40], floor: 3.6 });
 
       for (const s of [0.97, 0.99, 0.01, 0.03]) {
-        pitGarageRow(`interlagos-pit-garages-${Math.round(s * 1000)}`, s, 1, 6, 3);
+        pitGarageRow(`interlagos-pit-garages-${Math.round(s * 1000)}`, s, PIT, 6, 3);
       }
 
       for (const s of [0.95, 0.98, 0.02, 0.05]) {
         const k = K(s);
-        motorhome(k, 1, 36 + hash(k) * 16, 11, 7, 18, { wall: [0.82, 0.84, 0.86] });
+        motorhome(k, PIT, 36 + hash(k) * 16, 11, 7, 18, { wall: [0.82, 0.84, 0.86] });
       }
       for (const [s, col] of [
         [0.965, [0.72, 0.74, 0.76]], [0.015, [0.80, 0.80, 0.78]], [0.045, [0.68, 0.72, 0.76]],
       ]) {
-        building(K(s), 1, 58, 14, 6.5, 20, { kind: "hall",
+        building(K(s), PIT, 48, 14, 6.5, 20, { kind: "hall",
           wall: col, window: [0.22, 0.28, 0.34], floor: 3.1, roof: [0.48, 0.50, 0.52],
         });
       }
 
-      // Pit wall: solid low concrete barrier on the R of the pit straight
-      wall(0.96, 0.06, 1, 2.4, 1.1, [0.82, 0.82, 0.84], 0.45);
+      // Pit wall: solid low concrete barrier on the pit (driver's left) side
+      wall(0.96, 0.06, PIT, 2.4, 1.1, [0.82, 0.82, 0.84], 0.45);
       // DETAIL: Brazilian GP hoarding on the pit-straight outer wall.
-      sponsorHoarding(0.96, 0.05, 1, 4.5, {
+      sponsorHoarding(0.96, 0.05, PIT, 4.5, {
         palette: [[0.96, 0.82, 0.16], [0.12, 0.58, 0.30], [0.90, 0.90, 0.90], [0.16, 0.38, 0.72]],
       });
       for (const s of [0.97, 0.99, 0.01, 0.03])
-        billboard(K(s), 1, 22, 14, 5.5, (Math.round(s * 100) & 1)
+        billboard(K(s), PIT, 22, 14, 5.5, (Math.round(s * 100) & 1)
           ? [0.94, 0.84, 0.20] : [0.12, 0.56, 0.30]);
 
-      grandstandEx(0.94, 1, 9, 80, null, [0.94, 0.84, 0.22],
+      grandstandEx(0.94, STAND, 9, 80, null, [0.94, 0.84, 0.22],
                    { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
 
-      broadcastCompound(K(0.015), 1, 92, { vans: 4, dishes: 2, mastH: 10 });
+      broadcastCompound(K(0.015), PIT, 92, { vans: 4, dishes: 2, mastH: 10 });
 
       gantry(0.005, 8.2, [0.20, 0.22, 0.26]);
 
       {
-        const ahp = anchor(K(0.025), 1, 40);
+        const ahp = anchor(K(0.025), PIT, 40);
         addBox(out, vadd(ahp.c, ahp.u, 0.1), [20, 0.2, 20], [0.52, 0.54, 0.54], [ahp.r, ahp.u, ahp.t]);
         addBox(out, vadd(ahp.c, ahp.u, 0.2), [18, 0.2, 2.0], [0.92, 0.88, 0.10], [ahp.r, ahp.u, ahp.t]);
         // 4 cm above its cross-bar, whose top and underside it shared.
@@ -370,7 +374,7 @@
         }
       }
 
-      grandstandEx(0.01, -1, 10, 120, null, [0.94, 0.84, 0.22],
+      grandstandEx(0.01, STAND, 10, 120, null, [0.94, 0.84, 0.22],
                    { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       // Wave-4 hero: Tribunas / Sector M facade — yellow+green Brazilian trim
       // over the generic grandstandEx (Monza Tribuna Centrale pattern).
@@ -379,7 +383,7 @@
         // 22.5 m) and the packed upper terrace at .02 (gap 30..49.2 m).
         // Its nearer upper face is 8.5 m toward the track: gap 62 keeps that
         // face behind the terrace, including the neighbouring frame's turn.
-        const a = anchor(K(0.01), -1, 62);
+        const a = anchor(K(0.01), STAND, 62), IN = -STAND;   // IN * a.r faces the track
         if (!onTrack(a.c[0], a.c[2], 8)) {   // margin is past the road EDGE and inside the facade's 62 m gap
           const b = [a.r, a.u, a.t];
           modelGroup("interlagos-main-tribuna", {
@@ -388,18 +392,18 @@
             stage._mat = MAT.CONCRETE;
             const GREY_A = [0.62, 0.62, 0.64], GREY_B = [0.56, 0.56, 0.58];
             addBox(stage, vadd(a.c, a.u, 4.0), [14, 8.0, 100], GREY_A, b);
-            addBox(stage, vadd(vadd(a.c, a.r, 2.5), a.u, 10.5), [12, 6.5, 90], GREY_B, b);
-            // Attached track-facing trim: side -1 faces the track along +r.
+            addBox(stage, vadd(vadd(a.c, a.r, IN * 2.5), a.u, 10.5), [12, 6.5, 90], GREY_B, b);
+            // Attached track-facing trim: IN * a.r faces the track.
             // Each 0.10 m panel embeds 1 cm in its own wall and stands 9 cm
             // proud, so Brazilian colours remain visible without a free rail.
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(a.c, a.r, 7.04), a.u, 6.8),
+            addBox(stage, vadd(vadd(a.c, a.r, IN * 7.04), a.u, 6.8),
               [0.10, 1.2, 96], RAIL_Y, b);
-            addBox(stage, vadd(vadd(a.c, a.r, 8.54), a.u, 12.2),
+            addBox(stage, vadd(vadd(a.c, a.r, IN * 8.54), a.u, 12.2),
               [0.10, 1.2, 86], RAIL_G, b);
             // The lip rests on the upper block's 13.75 m top and projects
             // 0.5 m beyond its track-facing wall.
-            addBox(stage, vadd(vadd(a.c, a.r, 2.5), a.u, 14.05), [13, 0.6, 92], [0.72, 0.74, 0.78], b);
+            addBox(stage, vadd(vadd(a.c, a.r, IN * 2.5), a.u, 14.05), [13, 0.6, 92], [0.72, 0.74, 0.78], b);
             stage._mat = 0;
           }, { required: true });
           // DETAIL: crowd cubes on the tribuna deck — separate group so the
@@ -413,7 +417,7 @@
               for (let c = 0; c < 36; c++) {
                 if (hash(row * 41 + c * 17) < 0.24) continue;
                 seat.box(stage,
-                  vadd(vadd(vadd(a.c, a.r, 1.2 + row * 1.6), a.t, (c - 17.5) * 2.3),
+                  vadd(vadd(vadd(a.c, a.r, IN * (1.2 + row * 1.6)), a.t, (c - 17.5) * 2.3),
                        a.u, 14.45),
                   [0.55, 0.95, 0.45], crowdCols[(row * 5 + c) % crowdCols.length], b);
               }
@@ -427,12 +431,14 @@
       grandstandEx(0.09, -1, 12,  90, null, [0.92, 0.82, 0.20],
                    { livery: "sandstone", roof: "flat", endWalls: true });
       // Steep PACKED upper terraces rising behind the Curva 1 bowl stands
-      crowdBank(0.02, -1, 30, 130, 8);
-      crowdBank(0.035, -1, 32, 90, 6);   // DETAIL: denser Curva 1 crowd read
+      crowdBank(0.02, STAND, 30, 130, 8);
+      crowdBank(0.035, STAND, 32, 90, 6);   // DETAIL: denser Curva 1 crowd read
       // Wave-4 hero: Curva do Sol / Sector H open terrace — yellow+green fascia.
       arquibancada("interlagos-arq-sol", 0.117, -1, 16, 7, { rows: 8, required: true, brFlag: true });
-      arquibancada("interlagos-arq-senna", 0.07, -1, 15, 5, { rows: 7, required: false, brFlag: true });
-      for (const s of [0.00, 0.04, 0.08]) billboard(K(s), -1, 26, 16, 7,
+      // (interlagos-arq-senna, 0.07/-1 gap 15, removed 2026-11-10: footprint-
+      // rejected on every build — it never drew.)
+      // 0.00 sits on the main straight: the stand side (the pit complex owns PIT).
+      for (const s of [0.00, 0.04, 0.08]) billboard(K(s), s < 0.02 ? STAND : -1, 26, 16, 7,
         (Math.round(s * 100) % 3 === 0) ? [0.94, 0.84, 0.20]
         : (Math.round(s * 100) % 3 === 1) ? [0.12, 0.56, 0.30]
         : [0.94, 0.92, 0.88]);
@@ -542,7 +548,7 @@
       // and denser alley skip so the hillside reads continuous from overview.
       favelaPatch(0.11, -1, 78, 6, 6);
       favelaPatch(0.13, -1, 72, 8, 7);
-      favelaPatch(0.17, -1, 68, 9, 7);
+      // (0.17/-1 gap 68 removed 2026-11-10: footprint-rejected on every build.)
       favelaPatch(0.20, -1, 70, 7, 7);
       favelaPatch(0.22, -1, 72, 8, 6);
       favelaPatch(0.265, -1, 82, 6, 6);
@@ -859,8 +865,8 @@
       // circuit's buried prims. 0.875-0.895 is level with the road to 20 m.
       arquibancada("interlagos-arq-subida", 0.885, -1, 16, 6, { rows: 7, roof: false, brFlag: true });
       crowdBank(0.830, -1, 30, 56, 6);
-      crowdBank(0.845, -1, 30, 56, 6);
-      crowdBank(0.860, -1, 28, 48, 5);   // DETAIL: Subida crowd densify
+      // (crowdBank 0.845/-1 gap 30 and 0.860/-1 gap 28 removed 2026-11-10:
+      // footprint-rejected on every build — they never drew.)
       cameraTower(K(0.8375), 1, 10, { h: 16 });
       for (const [s, col] of [[0.822, [0.96, 0.82, 0.16]], [0.853, [0.12, 0.58, 0.30]]]) {
         billboard(K(s), 1, 20, 12, 4.5, col);

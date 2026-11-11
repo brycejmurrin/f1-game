@@ -130,12 +130,13 @@ const WallClamp = (function () {
         // pad haptics stay street-only. Throttled scrape re-arm while grinding.
         const WALL_SFX_REARM = 0.35;
         const WALL_SCRAPE_SPEED = 2;   // m/s — stopped against the barrier stays quiet
-        if (c.isPlayer && c.collideT <= 0 && soundOn) {
+        // SOUND OFF mutes the SFX only, never the feel
+        if (c.isPlayer && c.collideT <= 0) {
           const firstStrike = !c.wasOnWall && noseIn && incidence > 0.12;
           const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;
           if (firstStrike || grindScrape) {
             const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);
-            GameAudio.collision(fxInc, !firstStrike || incidence < 0.45, into);
+            if (soundOn) GameAudio.collision(fxInc, !firstStrike || incidence < 0.45, into);
             c.collideT = WALL_SFX_REARM;
             if (firstStrike && track.street) {
               if (addShake) addShake(0.1 + incidence * 0.3);
@@ -165,7 +166,8 @@ const WallClamp = (function () {
             if (key == null) {
               const id = c.team && c.team.id;
               const list = typeof Teams !== "undefined" ? Teams.LIST : [];
-              const ti = list.findIndex((t) => t.id === id);
+              let ti = -1;
+              for (let i = 0; i < list.length; i++) if (list[i].id === id) { ti = i; break; }
               key = (ti < 0 ? list.length : ti) * 4 + (c.seat | 0);
             }
             key = (key | 0) + 10000;
@@ -215,7 +217,8 @@ const WallClamp = (function () {
             if (key == null) {
               const id = c.team && c.team.id;
               const list = typeof Teams !== "undefined" ? Teams.LIST : [];
-              const ti = list.findIndex((t) => t.id === id);
+              let ti = -1;
+              for (let i = 0; i < list.length; i++) if (list[i].id === id) { ti = i; break; }
               key = (ti < 0 ? list.length : ti) * 4 + (c.seat | 0);
             }
             key = (key | 0) + 10000;

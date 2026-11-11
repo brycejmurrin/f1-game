@@ -21,7 +21,7 @@ import { Lsp, callTool } from "./lsp-mcp.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 // q, the apex-lsp call, the regex a correct answer contains, the grep an agent would run first.
-export const QUESTIONS = [
+const QUESTIONS = [
   { q: "Where is Liveries.forTeam implemented?", tool: ["lsp_definition", { symbol: "Liveries.forTeam" }], answer: /js\/car\/liveries\.js:\d+:\d+ {2}\[def\] function forTeam\(/, grep: "grep -rn 'Liveries\\.forTeam' js" },
   { q: "Where is Tracks.curvature implemented (through the re-export)?", tool: ["lsp_definition", { symbol: "Tracks.curvature" }], answer: /js\/track\/core\/spline\.js:\d+:\d+ {2}\[def\] function curvature\(/, grep: "grep -rn 'Tracks\\.curvature' js" },
   { q: "Where is GameHud declared?", tool: ["lsp_definition", { symbol: "GameHud" }], answer: /js\/ui\/hud\.js:2:\d+ {2}\[def\] const GameHud/, grep: "grep -rn 'GameHud' js" },

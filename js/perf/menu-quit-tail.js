@@ -3,7 +3,10 @@ const MenuQuitTail = (function () {
   "use strict";
   let d = null;
   function wire(deps) { d = deps; }
-  function afterOverlay(forgetGp) {
+  // forgetGp (and several wire() fields from quitToMenu) are unused here:
+  // quali.clear(forgetGp) and the flyby/FX/audio/tuner closes already ran in
+  // quitToMenu before the deferred tail. Extra call args are ignored.
+  function afterOverlay() {
     if (!d) return;
     const run = (label, fn) => (typeof MenuTeardown !== "undefined" && MenuTeardown.runSync)
       ? MenuTeardown.runSync(label, fn) : fn();

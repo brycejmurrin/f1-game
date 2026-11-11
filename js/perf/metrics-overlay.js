@@ -32,6 +32,7 @@ const SIZE_KEY = "apex26.metricsSize";
 const LOG_NS_KEY = "apex26.metricsLogNs";
 const LOG_LVL_KEY = "apex26.metricsLogLvl";
 const PAINT_MS = 250;
+const LITE = Object.freeze({ lite: true });   // __apex.perf / physState without the fields this panel never reads
 const PAGES = ["gov", "car", "phys", "log"];
 const POSITIONS = ["auto", "left", "right"];
 const SIZES = ["s", "m", "l"];
@@ -202,6 +203,7 @@ function snapshot() {
     logLvl: logLvl(),
     fps: null, ms: null, budget: null, scale: null, tier: null, backend: "",
     auto: null, strikes: null, tierFloor: null, gpuMs: null, loopStopped: null, loopFrames: null,
+    stallSlow: null, stallWorst: null, stallAct: "",
     // What the BOUND backend says about the device: which API three/WGX
     // actually took, how many GPU/shader errors it has raised, and the first
     // one. A phone screenshot of this panel is the evidence a "see-through
@@ -235,6 +237,11 @@ function snapshot() {
     if (wantGov && typeof LoopHealth !== "undefined") {
       const h = LoopHealth.state();
       out.loopStopped = h.stopped; out.loopFrames = h.frames;
+      if (h.stall) {
+        out.stallSlow = h.stall.slowRun | 0;
+        out.stallWorst = h.stall.worstMs | 0;
+        out.stallAct = h.stall.act || "";
+      }
     }
   } catch (_) { /* loop health not booted */ }
   try {
@@ -247,7 +254,7 @@ function snapshot() {
   } catch (_) { /* governor not booted */ }
   try {
     if (typeof __apex !== "undefined" && __apex.perf) {
-      const p = __apex.perf();
+      const p = __apex.perf(LITE);
       if (p && p.ok !== false) {
         if (p.fps != null) out.fps = p.fps;
         if (p.floorMs != null) out.budget = p.floorMs;
@@ -360,7 +367,7 @@ function snapshot() {
   } catch (_) { /* probe needs player + track */ }
   try {
     if (wantPhys && typeof __apex !== "undefined" && __apex.physState) {
-      const p = __apex.physState();
+      const p = __apex.physState(LITE);
       if (p && p.ok !== false) {
         if (p.slipDeg != null) out.slipDeg = p.slipDeg;
         if (p.vLat != null) out.vLat = p.vLat;
@@ -495,6 +502,15 @@ function fmtTime(t) {
 // Two-column row: label (padded to L chars) then value.
 const L = 8;
 function row(label, value) { return (label + ":").padEnd(L) + " " + value; }
+// A slow WebGPU present does not throw, so the loop row stays "frames N".
+// The stall watchdog's own counters are the visible signal. Quiet when nothing
+// has been slow: a healthy phone does not spend a line on zeros.
+function stallRow(s, narrow) {
+  if (!(s.stallSlow > 0) && !(s.stallWorst > 0) && !s.stallAct) return "";
+  const slow = s.stallSlow | 0, worst = s.stallWorst | 0, act = s.stallAct || "";
+  if (narrow) return "stall " + slow + "  " + worst + (act ? " " + act : "");
+  return row("stall", "slow " + slow + "  worst " + worst + (act ? "  " + act : ""));
+}
 // CAN THE BOX ACTUALLY HOLD THE WIDE LAYOUT? A VIEWPORT proxy
 // (`metricsRatio() < 480`) disagrees with the width's vw cap in css/hud.css,
 // so it picks the wide layout for boxes that cannot hold it and the tail is
@@ -655,6 +671,7 @@ function paintOverlay() {
         hdr,
         pair("fps", s.loopStopped ? "STOPPED" : fmt(s.fps), "ms", fmt(s.ms)),
         pair("loop", s.loopStopped ? "STOPPED" : "frames", "n", fmt(s.loopFrames)),
+        stallRow(s, true),
         pair("tier", fmt(s.tier), "auto", fmt(s.auto)),
         pair("gfx", fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : ""), "err", fmt(s.gpuErr)),
         (s.track || "menu") + "  " + (s.caution || "GREEN"),
@@ -666,6 +683,7 @@ function paintOverlay() {
         row("fps",    (s.loopStopped ? "STOPPED" : fmt(s.fps)) + "   frame " + fmt(s.ms) + " ms" +
                       (s.gpuMs != null ? "   gpu " + s.gpuMs + " ms" : "")),
         row("loop", (s.loopStopped ? "STOPPED" : "frames") + " " + fmt(s.loopFrames)),
+        stallRow(s, false),
         row("budget", fmt(s.budget) + " ms   tier " + fmt(s.tier) +
                       (s.tierFloor != null ? " (fl " + s.tierFloor + ")" : "") +
                       "   auto " + fmt(s.auto)),
@@ -1187,14 +1205,15 @@ function frametimeBenchSnapshot() {
   };
 }
 
+// KEY / POS_KEY / SIZE_KEY / POSITIONS / SIZES are unit-test seams for persistence pins.
+// PAGE_KEY / LOG_* / PAGES / LOG_NS / LOG_LVLS stay module-local (overlay UI only).
 return {
-  KEY, PAGE_KEY, POS_KEY, SIZE_KEY, LOG_NS_KEY, LOG_LVL_KEY,
-  PAGES, POSITIONS, SIZES, LOG_NS, LOG_LVLS,
+  KEY, POS_KEY, SIZE_KEY, POSITIONS, SIZES,
   on, set, toggle, page, setPage, nextPage,
   pos, setPos, nextPos, resolvePos,
   size, setSize, nextSize,
   logNs, setLogNs, nextLogNs, logLvl, setLogLvl, nextLogLvl,
-  snapshot, setTelemetryLoader, ensureTelemetry,
+  snapshot, setTelemetryLoader, ensureTelemetry, agentLoader: () => _telemetryLoad,   // OverlayPublisher asks for __apex the same way
   frametimeBenchReset, frametimeBenchSnapshot,
 };
 })();

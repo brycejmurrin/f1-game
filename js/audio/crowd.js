@@ -71,6 +71,7 @@ var CrowdAudio = (function () {
   let standTrack = null;
   let wrapped = false;
   let _orig = null;
+  let idled = false;             // audio idle (#5053): bed + cheers unplugged from the bus
 
   function context() {
     if (host && typeof host.context === "function") return host.context();
@@ -114,6 +115,20 @@ var CrowdAudio = (function () {
     cheers = null;
     cheerPool = 0;
     actx = bus = null;
+    idled = false;
+  }
+
+  // Audio idle, on by default (#5053; engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // idle(true) unplugs the bed gain and every cheer gain from the bus once
+  // silence() has faded them; idle(false) plugs them back. Same nodes, same ctx.
+  function idle(on) {
+    if (!bedGain || !bus || !!on === idled) return;
+    const outs = [bedGain];
+    if (cheers) for (let i = 0; i < cheers.length; i++) outs.push(cheers[i].g);
+    for (let i = 0; i < outs.length; i++) {
+      try { if (on) outs[i].disconnect(); else outs[i].connect(bus); } catch (e) { /* torn down */ }
+    }
+    idled = !!on;
   }
 
   // rebuildCtx() / hide-show restart the engine via startEngineGraph(), which
@@ -275,11 +290,13 @@ var CrowdAudio = (function () {
     return best;
   }
 
-  function fireCheer(peak, dur) {
+  // `once`: a once-per-race event (the chequered flag) that the spacing gap must
+  // not swallow. It still needs a free voice and a live race.
+  function fireCheer(peak, dur, once) {
     if (!cheers || !cheers.length || !actx) return false;
     if (!sfxOk() || !liveOk()) return false;
     const t0 = now();
-    if (t0 - lastCheerT < CHEER_MIN_GAP * 0.35) return false;
+    if (!once && t0 - lastCheerT < CHEER_MIN_GAP * 0.35) return false;
     let v = null;
     for (let i = 0; i < cheers.length; i++) {
       if (cheers[i].freeAt <= t0) { v = cheers[i]; break; }
@@ -323,7 +340,12 @@ var CrowdAudio = (function () {
     if (player.finished && !sawFinish) {
       sawFinish = true;
       swell(0.09, 2.2);
-      fireCheer(CHEER_PEAK, 0.9);
+      // THE FLAG'S OWN CHEER, past the spacing gap (`once`). The swell's cheer
+      // just set lastCheerT, so the gap always refused this one; and when a
+      // grandstand or position cheer had fired in the 0.84 s before the line,
+      // the gap refused the swell's cheer too and the flag got no cheer at all.
+      // Now it layers on the swell's cheer, or stands alone when that was spaced out.
+      fireCheer(CHEER_PEAK, 0.9, true);
     }
     if (!player.finished) sawFinish = false;
     if (pos > 0) lastPos = pos;
@@ -442,14 +464,15 @@ var CrowdAudio = (function () {
     return t < swellUntil ? swellAmt : 0;
   }
 
+  // swell stays module-local: checkEvents / finish wrap call it; no outside
+  // CrowdAudio.swell site exists (inspect().swell exposes the live amount).
   return {
-    bindHost, bind, attach, detach, silence, update, swell, fireCheer,
-    inspect, liveOk, pitStraightBoost, grandstandBoost,
-    // test hooks
+    bindHost, bind, attach, detach, silence, update, fireCheer,
+    inspect, liveOk, idle,
+    // test hooks (inspect().bedGain already exposes the GainNode)
     _resetEvents() { lastPos = 0; sawFinish = false; swellUntil = 0; swellAmt = 0; lastCheerT = -1e9; },
     _setPos(p) { lastPos = p | 0; },
     _cheerPool() { return cheers ? cheers.length : 0; },
-    _bedGain() { return bedGain; },
   };
 })();
 Object.freeze(CrowdAudio);

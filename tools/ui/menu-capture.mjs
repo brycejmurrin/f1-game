@@ -22,6 +22,7 @@ import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
+import { resetToTitleState, titleUsable as isTitleUsable } from "./ui-reset.mjs";
 import {
   SCREENS,
   VIEWPORTS,
@@ -30,6 +31,7 @@ import {
   pickViewports,
   listScreenIds,
   getScreen,
+  seedOwnerProfile,
 } from "./menu-screens.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -117,38 +119,13 @@ export async function bootPage(page, base, { hideGame = true, scale = null, time
 
 export async function resetToTitle(page, base, hideGame, lang = null) {
   const url = urlWithLang(base, lang);
-  await page.evaluate((ids) => {
-    for (const id of ids) {
-      const el = document.getElementById(id);
-      if (el) el.hidden = true;
-    }
-    // iOS Add-to-Home tip sits over title buttons on touch UAs; dismiss for harness clicks.
-    const tip = document.getElementById("ios-install");
-    if (tip) tip.hidden = true;
-    const chip = document.getElementById("install-chip");
-    if (chip) chip.hidden = true;
-    const ov = document.getElementById("overlay");
-    if (ov) {
-      ov.hidden = false;
-      ov.style.removeProperty("display");
-    }
-    // Match layout-audit: route body classes survive `hidden=true` on panels and
-    // gate #hud / title hit-testing (photo-mode, lt-open, …).
-    document.body.classList.remove(
-      "in-race", "lt-open", "photo-mode", "photo-studio-open",
-      "pc-nopanel", "pc-uihidden", "rotate-help-open", "manual");
-  }, OVERLAY_IDS);
+  // ONE reset for every layout tool (ui-reset.mjs): each layer leaves through its
+  // own door; `hidden = true` only for what a door could not close, and logged.
+  await resetToTitleState(page, { tag: "menu-capture" });
   await page.waitForTimeout(200);
   // Sized AND hittable (layout-audit 2026-09-30): a covering layer leaves #mb-race
   // full-sized but inert — size-only checks passed and every later click timed out.
-  const titleUsable = await page.evaluate(() => {
-    const b = document.getElementById("mb-race");
-    if (!b) return false;
-    const r = b.getBoundingClientRect();
-    if (!(r.width > 1 && r.height > 1)) return false;
-    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    return !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
-  });
+  const titleUsable = await page.evaluate(isTitleUsable);
   if (!titleUsable) {
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60000 });
@@ -229,6 +206,7 @@ export async function runMenuShot(opts = {}) {
   try {
     browser = await launchChromium({ args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
     const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
+    await seedOwnerProfile(ctx, resolveViewport(vpName));   // bryce-* cells boot on his live settings export
     const page = await ctx.newPage();
     await bootPage(page, srv.url, { hideGame: opts.hideGame !== false, scale, lang: opts.lang });
     await resetToTitle(page, srv.url, opts.hideGame !== false, opts.lang);
@@ -290,9 +268,11 @@ export async function runMenuGallery(opts = {}) {
   const queue = [];
   for (const vp of viewports) for (const sc of scales) queue.push([vp, sc]);
 
-  async function sweepViewport([baseName, vpOpts, why, insets], scale) {
+  async function sweepViewport(vpEntry, scale) {
+    const [baseName, vpOpts, why, insets] = vpEntry;
     const vpName = baseName + scaleTag(scale);
     const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
+    await seedOwnerProfile(ctx, vpEntry);   // bryce-* cells boot on his live settings export
     const page = await ctx.newPage();
     let booted = false;
     try {

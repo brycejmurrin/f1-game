@@ -22,8 +22,23 @@ function artifactBase(root, create = false) {
   }
   return { base: dir, root: realRoot };
 }
+// Saved originals are evidence for a session, not an archive: a long-lived gateway reaps its predecessors' files
+// once (85 files / 448 KB after one field test, screenshots far more; MCP-REFINE-2026-10-30).
+export const ARTIFACT_TTL_MS = 2 * 24 * 3600 * 1000;
+const prunedBases = new Set();
+function pruneOnce(base, now = Date.now()) {
+  if (prunedBases.has(base)) return;
+  prunedBases.add(base);
+  for (const name of fs.readdirSync(base)) {
+    try {
+      const file = path.join(base, name), stat = fs.lstatSync(file);
+      if (stat.isFile() && now - stat.mtimeMs > ARTIFACT_TTL_MS) fs.unlinkSync(file);
+    } catch { /* a concurrent reaper or reader won; leave it */ }
+  }
+}
 export function saveOutputArtifact(value, { root = process.cwd(), tool = 'output', kind = 'json' } = {}) {
   const { base } = artifactBase(root, true);
+  pruneOnce(base);
   const token = String(tool).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60) || 'output';
   const extension = kind === 'json' || kind === 'mcp' ? 'json' : 'log';
   const name = `${token}-${Date.now()}-${randomUUID()}.${extension}`;
@@ -32,9 +47,27 @@ export function saveOutputArtifact(value, { root = process.cwd(), tool = 'output
   fs.writeFileSync(path.join(base, name), data, { flag: 'wx', mode: 0o600 });
   return { path: `artifacts/agent-output/${name}`, bytes: Buffer.byteLength(data), kind, tool };
 }
+// A text block's JSON: bare, or one fenced block after a prose lead-in (chrome-devtools evaluate_script answers
+// "Script ran on page and returned:" + a ```json fence). Unparsed, such a block is only a 650-char head/tail cut.
+const FENCED_JSON = /^([^`]*?)```(?:json)?\n([\s\S]*)\n```\s*$/;
+export function parseEmbeddedJson(text) {
+  try { return { data: JSON.parse(text) }; } catch {}
+  const m = FENCED_JSON.exec(text);
+  if (!m) return undefined;
+  try { return { data: JSON.parse(m[2]), ...(m[1].trim() ? { lead: m[1].trim() } : {}) }; } catch { return undefined; }
+}
 function excerpt(text, max) {
   if (text.length <= max) return text;
   const head = Math.floor(max * 0.65), tail = max - head;
+  // Row-shaped text (lsp rows, logs) is cut on whole lines, and the tail keeps the producer's own paging
+  // footer ("… 41 more (offset:12)"): a row cut mid-path is unusable and costs a re-read.
+  const lines = text.split('\n');
+  if (lines.length > 2 && lines.every(line => line.length <= max / 2)) {
+    let used = 0, first = 0, last = lines.length;
+    while (first < lines.length && used + lines[first].length + 1 <= head) used += lines[first++].length + 1;
+    while (last > first && used + lines[last - 1].length + 1 <= max) used += lines[--last].length + 1;
+    if (first > 0 && last > first) return [...lines.slice(0, first), `[omitted ${last - first} lines]`, ...lines.slice(last)].join('\n');
+  }
   return text.slice(0, head) + `\n[omitted ${text.length - max} characters]\n` + (tail ? text.slice(-tail) : '');
 }
 const important = /status|verdict|count|total|error|fail|warn|message|fix|cause|stack|exit|signal|timed?out|unknown|pass|skip|dirty|unpushed|retriev|artifact|omitt|stdout|stderr|valid|unit|threshold|baseline|control|sample|hardware|renderer|provenance|manifest|duration|elapsed|pending|not.?run|summary|environment|adapter|config|settings|seed|sha|image|camera|frame|metric/i;
@@ -54,8 +87,13 @@ export function summarizeOutput(value, { level = 'compact' } = {}) {
     if (typeof v !== 'object') return String(v);
     if (seen.has(v)) return '[circular reference]';
     seen.add(v);
-    if (depth > (diagnostic ? 6 : 4) || budget.remaining <= 0) return { omitted: true, ...(Array.isArray(v) ? { count: v.length } : { keys: Object.keys(v).length }) };
+    // The MCP envelope (content → block → data) spends two levels before the tool's own answer starts.
+    if (depth > (diagnostic ? 8 : 6) || budget.remaining <= 0) return { omitted: true, ...(Array.isArray(v) ? { count: v.length } : { keys: Object.keys(v).length }) };
     if (Array.isArray(v)) {
+      // A short list of scalars (argv, ids, group names) is read whole or not at all; cutting it saves bytes, not a re-read.
+      if (v.length <= 24 && v.every(item => item === null || ['string', 'number', 'boolean'].includes(typeof item)) && JSON.stringify(v).length <= 600) {
+        budget.remaining -= JSON.stringify(v).length; budget.nodes -= v.length; return v;
+      }
       const cap = diagnostic ? 8 : 3;
       const source = pointer.length <= 256 ? { sourcePointer: pointer } : { sourcePointerOmitted: true, retrieval: 'use byte pages for long collection paths' };
       const hasField = (item, keys) => item && typeof item === 'object' && keys.some(key => {
@@ -104,17 +142,17 @@ export function summarizeOutput(value, { level = 'compact' } = {}) {
   if (value && Array.isArray(value.content)) {
     const normalized = { ...value, content: value.content.map((block) => {
       if (block.type !== 'text') return block;
-      try {
-        const data = JSON.parse(block.text);
-        return value.structuredContent !== undefined && isDeepStrictEqual(data, value.structuredContent)
-          ? { type: 'text', duplicateOf: 'structuredContent', omittedDuplicate: true }
-          : { type: 'text', data };
-      } catch { return block; }
+      const parsed = parseEmbeddedJson(block.text);
+      if (!parsed) return block;
+      return value.structuredContent !== undefined && isDeepStrictEqual(parsed.data, value.structuredContent)
+        ? { type: 'text', duplicateOf: 'structuredContent', omittedDuplicate: true }
+        : { type: 'text', ...(parsed.lead ? { lead: parsed.lead } : {}), data: parsed.data };
     }) };
     return visit(normalized);
   }
   return visit(value);
 }
+export const NATIVE_MAX = 8192;
 export function presentMcpResult(result, { root = process.cwd(), tool = 'mcp', level = 'compact' } = {}) {
   level = validateOutputLevel(level);
   let artifact;
@@ -137,7 +175,12 @@ export function presentMcpResult(result, { root = process.cwd(), tool = 'mcp', l
   // Both sides as sent. A summary that saves under a third is not worth the excerpt: measured
   // 2026-10-19, lsp_definition body:true compacted 2451 -> ~2050 B but cut the requested body,
   // and recovering it cost an output_read of ~2.4 KB.
-  if (!Object.hasOwn(result._meta ?? {}, 'apex/agent-output') && !result.content?.some(block => ['image', 'audio', 'resource'].includes(block.type)) && JSON.stringify(native).length <= JSON.stringify(wrapped).length * 1.5) return native;
+  // Below NATIVE_MAX the whole answer costs about as much as a summary plus the output_read it forces:
+  // the 2026-10-30 field test needed a follow-up read on every compacted 2-8 KB lsp result.
+  // Measured on what the model reads: the text blocks. structuredContent mirrors them on the wire (apex-tools
+  // sends both), so the whole result would double-count every answer.
+  const nativeSize = (result.content || []).reduce((n, block) => n + (block.type === 'text' ? String(block.text).length : JSON.stringify(block).length), 0);
+  if (!Object.hasOwn(result._meta ?? {}, 'apex/agent-output') && !result.content?.some(block => ['image', 'audio', 'resource'].includes(block.type)) && (nativeSize <= NATIVE_MAX || nativeSize <= JSON.stringify(wrapped).length * 1.5)) return native;
   return wrapped;
 }
 function openOutputArtifact(root, artifact) {
@@ -188,6 +231,11 @@ export function readOriginalMcpArtifact({ root = process.cwd(), artifact, maxByt
   } finally { fs.closeSync(fd); }
 }
 
+function embeddedJson(text) {
+  const parsed = parseEmbeddedJson(text);
+  if (!parsed) throw new Error('collection pointer crosses text that is not JSON');
+  return parsed.data;
+}
 /** Exact rows from a retained JSON collection; never advance the upstream cursor. */
 export function readOutputCollection({ root = process.cwd(), artifact, pointer = '', offset = 0, limit = 20 }) {
   if (typeof pointer !== 'string' || (pointer !== '' && !pointer.startsWith('/')) || /~(?![01])/u.test(pointer)) throw new Error('pointer must be an RFC 6901 JSON pointer');
@@ -199,12 +247,12 @@ export function readOutputCollection({ root = process.cwd(), artifact, pointer =
     let value = JSON.parse(fs.readFileSync(fd, 'utf8'));
     for (const raw of pointer === '' ? [] : pointer.slice(1).split('/')) {
       // MCP text blocks often carry native JSON instead of structuredContent.
-      if (typeof value === 'string') value = JSON.parse(value);
+      if (typeof value === 'string') value = embeddedJson(value);
       const key = raw.replace(/~1/g, '/').replace(/~0/g, '~');
       if (!value || typeof value !== 'object' || !Object.hasOwn(value, key)) throw new Error('collection pointer does not exist');
       value = value[key];
     }
-    if (typeof value === 'string') value = JSON.parse(value);
+    if (typeof value === 'string') value = embeddedJson(value);
     if (!Array.isArray(value)) throw new Error('collection pointer must select an array');
     const items = value.slice(offset, offset + limit);
     // Bound each retrieval without clipping individual rows or skipping them.

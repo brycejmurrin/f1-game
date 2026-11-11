@@ -70,6 +70,17 @@ test("PlayerForces.create exposes step and tyreSat", () => {
   assert.equal(typeof api.tyreSat, "function");
 });
 
+test("recoverBlocked refuses RECOVER in the pit lane or box (M42, #3978)", () => {
+  const { PlayerForces } = load();
+  const api = PlayerForces.create({});
+  assert.equal(typeof PlayerForces.recoverBlocked, "function");
+  assert.equal(api.recoverBlocked({ pitState: null }, true), true, "in the lane");
+  assert.equal(api.recoverBlocked({ pitState: "box" }, false), true, "serving a stop in the box");
+  assert.equal(api.recoverBlocked({ pitState: "lane" }, true), true);
+  assert.equal(api.recoverBlocked({ pitState: null }, false), false, "on the road: allowed");
+  assert.equal(api.recoverBlocked({}, false), false);
+});
+
 test("tyreSat opposes slip (negative of mu · lateralCurve)", () => {
   const { PlayerForces } = load();
   const mu = 20, cs = 12, a = 0.1;
@@ -261,6 +272,44 @@ test("rear cue compares each axle to its own edge without changing any force int
   const weakBrakes = run(.16, false, .5);
   assert.equal(weakBrakes.car._cueBraking, .5);
   assert.deepEqual(weakBrakes.force, rear.force, "advisory braking-capacity field cannot feed forces");
+});
+
+test("frontUtil is normalised by CURVE_PEAK_X_F, not π/2 (M42)", () => {
+  // After #1266 the front peaks at CURVE_PEAK_X_F (~0.83·π/2). Normalising by
+  // CURVE_PEAK_X left frontUtil ≈ 0.83 at the true peak (BUGS M42).
+  const { PlayerForces, TyreModel, PhysicsConsts } = load();
+  const api = PlayerForces.create({
+    PLAYER_GRIP: 1.15, FRONT_GRIP: 0.94, DRIFT: 0, YAW_INERTIA: 0.58, YAW_DAMP: 1,
+  });
+  const tyres = TyreModel.create({
+    get raceTyreWear() { return "off"; },
+    store: { get: () => "off", set: () => {} },
+  });
+  const L = 3.2, FRONT_WEIGHT = PhysicsConsts.FRONT_WEIGHT;
+  const ar = FRONT_WEIGHT * L, af = L - ar;
+  const c = {
+    human: true, isPlayer: false, speed: 40, axEstSm: 0, aeroX: 0, wake: 0,
+    vLat: 0, yawRateCur: 0, head: 0, brakeStab: 1, rearUtil: 0,
+    brakeBias: null, rollBalance: 0.5, lateralAccel: 0, offroad: false,
+    tread: 0, flatSpot: 0,
+  };
+  api.step(c, {
+    dt: DT, driverDelta: 0.2, assistDelta: 0, lineDelta: 0,
+    onThrottle: false, throttleLvl: 0, gearMult: 1, deploy: 0, braking: false,
+    surfaceMu: 1, kerbGrip: 1, bankMu: 1, modsCornering: 1,
+    loadF: FRONT_WEIGHT, loadR: 1 - FRONT_WEIGHT, vertLoad: 0, af, ar, sp: 1, steer: 1,
+    weatherGrip: 1, aeroDf: 1, dirtyMul: 1, coastCut: 0, vTopNow: 72, tyres,
+  });
+  const sat = Math.abs(PhysicsConsts.CS_FRONT * c.slipFront) / Math.max(c.gripFront, 1e-3);
+  const byPeak = sat / TyreModel.CURVE_PEAK_X_F;
+  const byPi = sat / (Math.PI / 2);
+  assert.ok(sat > 0.05, `fixture must produce measurable front slip (sat=${sat})`);
+  assert.ok(Math.abs(c.frontUtil - byPeak) < 1e-9,
+    `frontUtil must be sat/CURVE_PEAK_X_F (${byPeak}), got ${c.frontUtil}`);
+  assert.ok(Math.abs(c.frontUtil - byPi) > 0.01,
+    `frontUtil must not still be sat/(π/2) (${byPi})`);
+  // Scaling: at the true front peak, util is 1.0; π/2-norm would read ~0.83.
+  assert.ok(Math.abs(byPeak / byPi - (Math.PI / 2) / TyreModel.CURVE_PEAK_X_F) < 1e-9);
 });
 
 // A releasing locked front still spends its grip on longitudinal slip. The

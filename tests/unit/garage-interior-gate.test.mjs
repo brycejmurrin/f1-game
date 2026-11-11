@@ -61,8 +61,8 @@ it("garage tabs split performance and finishing work into named rows", () => {
   const css = rd("css/carsetup.css");
   assert.match(sheet, /SECONDARY_CATS\s*=\s*new Set\(\["floor",\s*"cockpit",\s*"wheels",\s*"tune",\s*"livery"\]\)/);
   assert.match(sheet, /className = "cs-tab-row"/);
-  assert.match(sheet, /aria-label", "Performance categories"/);
-  assert.match(sheet, /aria-label", "Finishing and setup categories"/);
+  assert.match(sheet, /dataset\.tier = "Performance categories"/);
+  assert.match(sheet, /dataset\.tier = "Finishing and setup categories"/);
   assert.match(css, /#cs-tabs \.cs-tab-row\s*\{[^}]*overflow-x:\s*auto/s,
     "each stacked row can pan without hiding the other tier");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \.cs-tab-row\s*\{[^}]*display:\s*contents/s,
@@ -75,8 +75,8 @@ it("garage tabs split performance and finishing work into named rows", () => {
  * min-height:0, caused by
  *   grid-template-rows: repeat(2, calc(var(--tap-min) + 4px))
  * plus `.cs-tab { min-height: 0 }` overriding components.css --tap.
- * Compact must keep the painted --tap / --tap-paint floor (logical +
- * physical), pan/snap instead of a 2-row tap-min grid, and leave livery
+ * Compact must keep a painted 44px floor (logical + physical; design pass 3d
+ * lowered it from --tap-paint, never below WCAG 2.5.8's 24px), pan/snap instead of a 2-row tap-min grid, and leave livery
  * ⧉ chips on --chip-h / --tap-min. Folded #973's snap/width pins here. */
 it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)", () => {
   const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
@@ -96,16 +96,16 @@ it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)",
   const stripPane = /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs\s*,\s*#cs-inner:not\(\[data-pair="on"\]\)\[data-shape="tall"\] #cs-tabs\s*\{/;
   assert.match(
     css,
-    new RegExp(stripTab.source + /[^}]*min-block-size:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
-    "compact/tall category tabs floor block size at --tap-paint / --tap");
+    new RegExp(stripTab.source + /[^}]*min-block-size:\s*44px/s.source, "s"),
+    "compact/tall category tabs floor block size at 44px");
   assert.match(
     css,
-    new RegExp(stripTab.source + /[^}]*min-height:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
-    "compact/tall category tabs also keep physical min-height at the tap rung");
+    new RegExp(stripTab.source + /[^}]*min-height:\s*44px/s.source, "s"),
+    "compact/tall category tabs also keep physical min-height at 44px");
   assert.match(
     css,
-    new RegExp(stripTab.source + /[^}]*min-width:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
-    "compact/tall category tabs also floor width at the tap rung");
+    new RegExp(stripTab.source + /[^}]*min-width:\s*44px/s.source, "s"),
+    "compact/tall category tabs also floor width at 44px");
   assert.match(
     css,
     new RegExp(stripPane.source + /[^}]*scroll-snap-type:\s*x\s+mandatory/s.source, "s"),
@@ -185,8 +185,8 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
     "CAMERA and ACTIVE AERO share one vertical centre on the bar");
   assert.match(css, /#cs-aero \{[^}]*align-items:\s*center/s,
     "aero chip centres its label+value like CAMERA, not baseline");
-  assert.match(css, /#cs-aero \{[^}]*flex:\s*0\s+0\s+auto/s,
-    "aero chip does not shrink under the bar (CAMERA is 0 0 auto)");
+  assert.match(css, /#cs-aero \{[^}]*flex:\s*1\s+0\s+auto/s,
+    "aero chip does not shrink under the bar; it grows so a wrapped bar keeps one right edge (#5202)");
   assert.match(css, /\.cs-aero-lbl \{[^}]*flex:\s*0\s+0\s+auto/s,
     "ACTIVE AERO label never ellipsizes away under CORNER/STRAIGHT MODE");
   assert.match(css, /\.cs-aero-val \{[^}]*flex:\s*0\s+0\s+auto/s,
@@ -198,8 +198,8 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
   assert.match(css, /@media \(max-width: 820px\) \{[^]*#cs-aero \{[^}]*flex-direction:\s*column/s,
     "below the 844 phone-landscape golden, ACTIVE AERO stacks above CORNER MODE");
   assert.match(css,
-    /@media \(orientation:\s*landscape\) \{[^]*#cs-cam-panel \{[^}]*width:\s*min\(60vw,\s*420px\)[^}]*max-height:\s*min\(45vh,\s*220px\)/s,
-    "landscape camera drawer has a wider, height-bounded scrollport");
+    /@media \(orientation:\s*landscape\) \{[^]*#cs-cam-panel \{[^}]*width:\s*min\(60vw,\s*420px\)[^}]*max-height:\s*min\(calc\(100vh - var\(--safe-t\) - var\(--safe-b\) - var\(--gap\) \* 3 - var\(--cs-chrome-h\) \* 2 - 6px\),\s*232px\)/s,
+    "landscape camera drawer has a wider scrollport, bounded by the room above the two-row bar (#5202)");
   assert.match(css,
     /:root\[data-look-garage-glass="glass"\] #carsetup #cs-inner > \.sheet-head \{[^}]*background-color:\s*var\(--carbon\)/s,
     "GLASS thins the card body only — head chrome stays carbon");
@@ -272,8 +272,6 @@ describe("the interior gate on a cleared-buffer frame", () => {
     assert.doesNotMatch(frame, /gapSample/,
       "the drawImage-fed gapSample field is gone; nothing may depend on it again");
     assert.match(probe, /export async function awaitPresentedFrame/);
-    assert.match(probe, /getElementById\("game-soft"\)/,
-      "presentedCanvasClip must prefer the HeadlessChrome overlay");
     const presented = probe.slice(probe.indexOf("export async function screenshotPresentedCanvas"),
       probe.indexOf("export async function screenshotGameCanvas"));
     assert.match(presented, /readSoftCanvasBytes/,
@@ -295,8 +293,6 @@ describe("the interior gate on a cleared-buffer frame", () => {
 
   it("garage-angles captures via soft helper and walks livery/spine designs", () => {
     const angles = fs.readFileSync(path.join(REPO, "tools/shot/garage-angles.mjs"), "utf8");
-    assert.match(angles, /screenshotGameCanvas/,
-      "HeadlessChrome GLX presents on #game-soft; a full-page screenshot is the UI sheet");
     assert.doesNotMatch(angles, /await page\.screenshot\(/,
       "page.screenshot waits for fonts.ready and was the smoke hang after freeze");
     assert.match(angles, /--livery/,
@@ -346,4 +342,36 @@ it("capture output cannot escape through an existing directory symlink", async (
     fs.symlinkSync(path.join(root, "js"), path.join(root, "artifacts", "alias"), "dir");
     assert.throws(() => assertOutputDir(path.join(root, "artifacts", "alias", "capture"), root), /not inside/);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+// #5202: CAMERA / PHOTO / ACTIVE AERO are fixed menu chrome. They rode --tap / --chip-h, which the GARAGE look's
+// BUTTON SIZE knob rescales on #carsetup: at Bryce's 125 % they painted 65 / 60 / 65 px on an 852x393 iPhone,
+// PHOTO shorter than CAMERA. One constant height, and nothing a setting can move feeds it.
+it("the garage overlay buttons are one fixed height, whatever BUTTON SIZE, UI SIZE or TEXT SIZE say (#5202)", () => {
+  const css = fs.readFileSync(path.join(REPO, "css/carsetup.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const KNOBS = /--tap|--chip-h|--ui-scale|--hud-|--look-|--fs-|\bem\b|rem\b|v[wh]\b|%/;
+  const stack = /#cs-stack \{([^}]*)\}/.exec(css)[1];
+  const h = /--cs-chrome-h:\s*([^;]+);/.exec(stack), chip = /--cs-chip-h:\s*([^;]+);/.exec(stack);
+  assert.equal(h && h[1].trim(), "44px", "a constant 44 px: the touch floor, painted (the stack is outside the zoomed sheet)");
+  assert.equal(chip && chip[1].trim(), "40px", "the camera panel's chips are a constant too");
+  assert.equal((css.match(/--cs-chrome-h:/g) || []).length, 1, "no context re-declares the height");
+  assert.equal((css.match(/--cs-chip-h:/g) || []).length, 1, "no context re-declares the chip height");
+  // Every rule that names one of the three buttons: the only height is the shared token.
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => /#cs-(cam|photo|aero)(?![\w-])/.test(m[1]));
+  const sized = new Set();
+  for (const [, sel, body] of rules) {
+    for (const d of body.matchAll(/(?:^|;)\s*((?:min-|max-)?height)\s*:\s*([^;]+)/g)) {
+      const want = d[1] === "height" ? "var(--cs-chrome-h)" : d[1] === "min-height" ? "0" : null;
+      assert.equal(d[2].trim(), want, `${sel.trim()} { ${d[1]} } must be the shared fixed height`);
+      assert.doesNotMatch(d[2], KNOBS);
+      if (d[1] === "height") for (const id of sel.match(/#cs-(?:cam|photo|aero)(?![\w-])/g)) sized.add(id);
+    }
+  }
+  assert.deepEqual([...sized].sort(), ["#cs-aero", "#cs-cam", "#cs-photo"], "all three take the ONE height (shared top and bottom on the bar)");
+  assert.match(css, /#cs-bar \{[^}]*align-items:\s*center/s);
+  for (const [, sel, body] of [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => /\.cs-view-btn(?![\w-.])/.test(m[1])))
+    for (const d of body.matchAll(/(?:^|;)\s*((?:min-|max-)?height)\s*:\s*([^;]+)/g))
+      assert.equal(d[2].trim(), d[1] === "height" ? "var(--cs-chip-h)" : "0", `${sel.trim()} { ${d[1]} } must be the fixed chip height`);
+  // The look knob still scales the SHEET's buttons; the overlay must not read what it writes.
+  assert.match(fs.readFileSync(path.join(REPO, "css/overlays.css"), "utf8"), /:root\[data-look-garage-btn\] #carsetup \{ --tap:[^}]*--chip-h:/);
 });

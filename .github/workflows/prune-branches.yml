@@ -18,7 +18,7 @@ name: Prune branches
 # lost), or its verdict is listed in `also` (a person read the report; such a
 # branch is first pushed as the tag archive/<branch>, kept if that fails), AND no
 # open PR has it as its head AND it has been quiet for `min_age_days`.
-# claude/claims/* markers (who-is-on-it.mjs) go once quiet for a day. The
+# legacy claude/claims/* markers (the claims board, retired 2026-10-27) go once quiet for a day. The
 # deploy branch, the default branch and gh-pages are never touched.
 #
 # Settings > General > "Automatically delete head branches" stops new merged

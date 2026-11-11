@@ -1,1 +1,0 @@
-Fixed: Multiplayer: a connected rival temporarily driven by fallback AI remains part of the human finish wait. Its speculative crossings cannot raise the chequered flag or finish the owner; resumed packets restore owner lap evidence, while genuine owner finishes remain authoritative.

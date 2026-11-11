@@ -179,15 +179,42 @@ test("only governor tier 2 halves the cadence", () => {
   assert.equal(h.calls.filter((c) => c[0] === "begin").length, 3);
 });
 
+test("a rear-ranked mirror keeps eight lamps plus its tail-lights", () => {
+  const h = boot({ mode: "on", rankLights: true });
+  const lamps = [];
+  for (let i = 0; i < 60; i++) lamps.push(i % 2 ? 8 : -8, 8, 90 - i * 4, 1, 0.9, 0.7, 40, 0, -1, 0, 0.5, 0.2, 0, 0, 1);
+  h.frame.time = 0;
+  h.FL.setFrameLights(h.frame, { _lights: lamps }, [{}, {}], [0, 1.2, 100], 1, [0, 0, 1], false);
+  const full = (h.frame.lights.length / 15) | 0;
+  assert.ok(full > 8, "the forward cull filled more than the mirror cap");
+  h.frame.tailStart = full;
+  h.frame.tailCount = 1;
+  h.frame.lights.push(0, 0.5, 80, 4, 0.1, 0.1, 8, 0, 0, -1, 0.5, -0.2, 0, 0, 0.4);
+  h.render();
+  const world = h.calls.find((c) => c[0] === "world");
+  assert.equal(h.mp.state().lampCap, 8);
+  assert.equal(world[6], 9, "eight nearest rear lamps plus the tail-light");
+  assert.equal(world[7], 8);
+  assert.equal(world[8], 1);
+  assert.equal((h.frame.lights.length / 15) | 0, full + 1, "the main list is restored after the pass");
+});
+
 test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a third)", () => {
   const cases = [[{ tier: 0 }, "full", 800, 228], [{ mobile: true }, "lite", 480, 137],
-    [{ tier: 3 }, "low", 400, 114], [{ tier: 4 }, "min", 320, 91]];
+    [{ tier: 3 }, "low", 200, 57], [{ tier: 4 }, "min", 160, 46]];
   for (const [opt, q, w, ht] of cases) {
     const h = boot(Object.assign({ mode: "on" }, opt));
     h.render();
     const b = h.calls.find((c) => c[0] === "begin");
     assert.equal(h.mp.state().quality, q);
     assert.deepEqual([b[1], b[2]], [w, ht], q + " target");
+  }
+  // The target's DPR follows the main canvas's cap: an iPhone (DPR 3) on mobileTier is 1.5, a desktop 2 (then MAX_W clamps).
+  for (const [opt, w, ht] of [[{ mobile: true, dpr: 3 }, 720, 205], [{ tier: 0, dpr: 3 }, 1024, 292]]) {
+    const h = boot(Object.assign({ mode: "on" }, opt));
+    h.render();
+    const b = h.calls.find((c) => c[0] === "begin");
+    assert.deepEqual([b[1], b[2]], [w, ht], JSON.stringify(opt) + " target (a flat cap of 2 drew the phone's 960x274)");
   }
   const min = boot({ mode: "on", tier: 4 });
   for (let i = 0; i < 6; i++) min.render();
@@ -365,4 +392,41 @@ test("the side slot stops at a touch dock group in the card's rows (cockpit BOOS
   const tight = boot({ mode: "on", boxes: pause, docks: { "dock-right": [box(943, 72, 88, 88)] } });
   tight.render();
   assert.ok(!tight.classes.has("hud-mirror-side"), "87px is no room: the card stacks, never over BOOST");
+});
+
+// #4219 (perf hunt 7): the mirror target outlived the race into the menu and garage. Quit-to-menu's
+// releaseTrack(true) asks the backend to free it; a race-setup releaseTrack() keeps it.
+test("releaseTrack(true) frees the backend's mirror target when it can; plain releaseTrack and a backend without it do not", () => {
+  const rig = boot({ mode: "on" });
+  let freed = 0;
+  rig.gfx.releaseMirror = () => { freed++; return true; };
+  rig.render();
+  rig.mp.releaseTrack();
+  assert.equal(freed, 0, "race setup keeps the target");
+  rig.mp.releaseTrack(true);
+  assert.equal(freed, 1, "quit-to-menu frees it");
+  delete rig.gfx.releaseMirror;
+  assert.doesNotThrow(() => rig.mp.releaseTrack(true), "a backend without releaseMirror is tolerated");
+  rig.G.gfx = null;
+  assert.doesNotThrow(() => rig.mp.releaseTrack(true), "and no backend at all");
+});
+
+test("GLX releaseMirror deletes the mirror FBO, texture and depth, is idempotent, refuses mid-pass, and re-allocates lazily", () => {
+  const h = bootGlx();
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 256, 128), true);
+  assert.equal(h.GLX.releaseMirror(), false, "never while the mirror pass is open");
+  h.GLX.mirrorEnd();
+  assert.equal(h.GLX.mirrorState().ready, true);
+  h.reset();
+  assert.equal(h.GLX.releaseMirror(), true);
+  assert.deepEqual([h.count("deleteFramebuffer"), h.count("deleteTexture"), h.count("deleteRenderbuffer")], [1, 1, 1]);
+  const st = h.GLX.mirrorState();
+  assert.deepEqual([st.ready, st.w, st.h, st.dead], [false, 0, 0, false], "no target held, and not dead");
+  h.reset();
+  assert.equal(h.GLX.releaseMirror(), true, "a second release is safe");
+  assert.equal(h.count("deleteTexture") + h.count("deleteFramebuffer") + h.count("deleteRenderbuffer"), 0);
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 256, 128), true, "the next mirror pass re-allocates");
+  h.GLX.mirrorEnd();
+  assert.deepEqual([h.count("createTexture"), h.count("createFramebuffer"), h.count("createRenderbuffer")], [1, 1, 1]);
+  assert.equal(h.GLX.mirrorState().w, 256);
 });

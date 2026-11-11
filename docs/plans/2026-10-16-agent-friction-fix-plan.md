@@ -6,7 +6,7 @@ Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — much of it 
 issues, help agents, add new tools or skills or workflows etc". **Evidence:** pass 1
 [`docs/notes/TRANSCRIPT-MINING-2026-10-16.md`](../notes/TRANSCRIPT-MINING-2026-10-16.md) (122 sessions) plus pass 2
 (this plan: 178 more sessions, deep reads of the six most expensive, 24 Sonnet miner sessions in all). Tracking issue
-#2379. **Prior plan this extends, not replaces:** [`2026-09-30-agent-skills-and-tools.md`](2026-09-30-agent-skills-and-tools.md).
+#2379. **Prior plan this extends, not replaces:** `2026-09-30-agent-skills-and-tools.md` (archived).
 
 ## Coverage
 

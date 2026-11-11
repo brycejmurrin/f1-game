@@ -74,7 +74,7 @@ const GfxDebug = (() => {
       lines.push(`three api=${b.api} pin=${b.pin} soft=${b.softwareGL ? "GL" : "-"}` +
         (b.softAdapter ? "/adapter" : "") + (b.softBlit ? "/blit" : "") +
         (b.forceHw ? " FORCE-HW" : "") + (b.forceBatches ? " FORCE-BATCH" : ""));
-      lines.push(`mobile=${b.isMobile} tier=${b.mobileTier} lite=${b.liteGpu}`);
+      lines.push(`mobile=${b.isMobile} tier=${b.mobileTier} lite=${b.liteGpu}` + (b.liteLab ? " LAB:tlxLite" : ""));
       if (b.envFail) lines.push(`ENV FACES FAILED: ${b.envFail}  ${b.envFailMsg || ""}`);
     } catch (e) { lines.push("backendState threw: " + (e && e.message)); }
     try {
@@ -188,6 +188,13 @@ const GfxDebug = (() => {
         `  total=${h.frames} staleMs=${h.staleMs == null ? "-" : h.staleMs}` +
         `  faults=${h.faults}/${h.totalCap} run=${h.run}/${h.cap}` +
         (h.lastFault ? `\n      lastFault: ${h.lastFault}` : ""));
+      // Slow frames do not throw. The stall watchdog already counted them;
+      // a paste that only shows faults reads a 1 fps WebGPU present as healthy.
+      if (h.stall) {
+        const s = h.stall;
+        lines.push(`stall: watch=${s.watching ? "on" : "off"} slow=${num(s.slowRun)} worst=${num(s.worstMs)}ms` +
+          ` act=${s.act || "-"} sheds=${num(s.sheds)} reloads=${num(s.reloads)}`);
+      }
     } catch (_) { lines.push("loop: unreadable"); }
   }
 
@@ -222,6 +229,12 @@ const GfxDebug = (() => {
     }
 
     if (glx.__tlx) pushThreeState(lines, glx.__tlx);
+    else if (typeof glx.hdrMode === "function") {
+      // GLX/WGX had no post line: a dark frame could not say whether the HDR post chain (and its
+      // tonemap) ran. hdr=false is the direct 8-bit path: no bloom, no tonemap.
+      try { lines.push(`post hdr=${!!glx.hdrMode()} msaa=${typeof glx.msaa === "function" ? num(glx.msaa()) : "?"}`); }
+      catch (e) { lines.push("post state threw: " + (e && e.message)); }
+    }
     pushMem(lines, glx);
     pushFrameState(lines, glx);
     pushLoopState(lines);
@@ -285,7 +298,8 @@ const GfxDebug = (() => {
     else document.addEventListener("DOMContentLoaded", () => setTimeout(install, 0), { once: true });
   }
 
-  return { install, stop, text: build, wanted };
+  // install / stop / wanted stay module-local (auto-install on load); text() is the test/probe seam.
+  return { text: build };
 })();
 
 if (typeof window !== "undefined") window.GfxDebug = GfxDebug;

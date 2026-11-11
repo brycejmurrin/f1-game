@@ -154,4 +154,42 @@ test("a shorter wheelbase turns in more", async () => {
   const lazy = turnAt(4.4);    // slider 2, long wheelbase
   const snappy = turnAt(2.6);  // slider 9, short wheelbase
   gt(snappy, lazy * 1.15, `snappy=${snappy} lazy=${lazy}`);
+  // Same boot, not a seventh test(): this file's test count is the twin of
+  // world-physics.spec.js. Call ceilings for one full-grid tick
+  // (docs/notes/SIM-TICK-PROFILE-2026-10-29.md). Counts, not wall clock.
+  await startRace();
+  g.apex.headless(true);
+  g.apex.setInput({ steer: 0.02, throttle: true });
+  const bag = Object.create(null), saved = [];
+  const hook = (obj, name) => {
+    const fn = obj[name];
+    bag[name] = 0;
+    obj[name] = function () { bag[name]++; return fn.apply(this, arguments); };
+    saved.push([obj, name, fn]);
+  };
+  const S = g.sandbox;
+  hook(S.Tracks, "curvature"); hook(S.Tracks, "sample"); hook(S.Tracks, "wallAt"); hook(S.Tracks, "bankAngle");
+  hook(S.AiDrive, "beginLook"); hook(S.AiDrive, "brakeDecision");
+  hook(S.Collide, "scanTraffic"); hook(S.Collide, "fillArcBuckets");
+  try {
+    for (let i = 0; i < 60; i++) g.apex.step(1 / 60, 1);
+    for (const k of Object.keys(bag)) bag[k] = 0;
+    const N = 40;
+    for (let i = 0; i < N; i++) g.apex.step(1 / 60, 1);
+    const per = (k) => bag[k] / N;
+    const line = Object.keys(bag).map((k) => k + "=" + per(k)).join(" ");
+    assert.equal(g.apex.cars().length, 22, line);
+    assert.equal(per("beginLook"), 21, line);
+    assert.equal(per("brakeDecision"), 21, line);
+    assert.equal(per("scanTraffic"), 21, line);
+    assert.equal(per("fillArcBuckets"), 1, line);
+    assert.ok(per("curvature") >= 40 && per("curvature") <= 140, line);
+    assert.ok(per("sample") >= 40 && per("sample") <= 60, line);
+    assert.ok(per("wallAt") >= 40 && per("wallAt") <= 110, line);
+    assert.ok(per("bankAngle") <= 80, line);
+  } finally {
+    for (const [obj, name, fn] of saved) obj[name] = fn;
+    g.apex.clearInput();
+    fresh();
+  }
 });

@@ -395,7 +395,7 @@ function csLabel(text) {
 // skipped. Crew and mood tables are bare ids, so their names live here.
 const CREW_NAMES = { classic: "CLASSIC", sculpted: "SCULPTED", pitstop: "PIT STOP", workshop: "WORKSHOP", welcome: "WELCOME" };
 const MOOD_NAMES = { shipped: "STANDARD", broadcast: "BROADCAST", night: "NIGHT", showroom: "SHOWROOM", daylight: "DAYLIGHT",
-  inspection: "INSPECTION", goldenhour: "GOLDEN HOUR", endurance: "ENDURANCE" };
+  inspection: "INSPECTION", goldenhour: "GOLDEN HOUR", endurance: "ENDURANCE", podium: "PODIUM", rain: "RAIN DAY", neon: "NEON NIGHT" };
 function lookRowSpecs() {
   const out = [];
   if (typeof GaragePrims !== "undefined" && GaragePrims.LOOK_IDS)
@@ -576,6 +576,7 @@ function syncGarageExitChrome() {
 }
 
 function buildSetup() {
+  clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;   // #4928: this rebuild already reads csLivQuery
   clearSurfaceControls();
   if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
   syncGarageExitChrome();
@@ -619,8 +620,9 @@ function buildSetup() {
   const spent = Parts.getCost(parts, team);
   const remaining = cap - spent;
 
-  $("cs-team").textContent = team.name.toUpperCase();
-
+  const teamEl = $("cs-team");
+  teamEl.textContent = team.name.toUpperCase();
+  teamEl.title = team.name;
 
   const budgetEl = $("cs-budget");
   const budgetFill = $("cs-budget-fill");
@@ -671,14 +673,17 @@ function buildSetup() {
   tabs.textContent = "";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Garage categories");
+  // The two tiers are layout only: a tablist owns tabs and nothing else, so a
+  // role=group row cut every tab off from its tablist (axe aria-required-parent;
+  // Lighthouse a11y 88 on the Garage, UI hunt 3). data-tier names the row for tests.
   const primaryTabs = document.createElement("div");
   primaryTabs.className = "cs-tab-row";
-  primaryTabs.setAttribute("role", "group");
-  primaryTabs.setAttribute("aria-label", "Performance categories");
+  primaryTabs.setAttribute("role", "none");
+  primaryTabs.dataset.tier = "Performance categories";
   const secondaryTabs = document.createElement("div");
   secondaryTabs.className = "cs-tab-row";
-  secondaryTabs.setAttribute("role", "group");
-  secondaryTabs.setAttribute("aria-label", "Finishing and setup categories");
+  secondaryTabs.setAttribute("role", "none");
+  secondaryTabs.dataset.tier = "Finishing and setup categories";
   tabs.append(primaryTabs, secondaryTabs);
   const appendTab = (id, tab) => (SECONDARY_CATS.has(id) ? secondaryTabs : primaryTabs).appendChild(tab);
   {
@@ -747,7 +752,7 @@ function buildSetup() {
 
     const main = document.createElement("div"); main.className = "cs-opt-main";
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
-    nameRow.appendChild(document.createTextNode(opt.label));
+    nameRow.appendChild(document.createTextNode(Parts.optLabel(activeCat.id, opt)));
     const badges = [];
     // Leads the row: on a wet compound it is the only badge that explains why
     // all four stat chips are pointing down.
@@ -905,14 +910,39 @@ let csLivQuery = "";           // #3339: filter string sticky across rebuilds
 // End/Home can land past content-visibility; phone collapsed for scroll). Once
 // the player toggles, the boolean sticks across rebuilds.
 let csLivFactoryOpen = null;
+// #4928: sticky across rebuilds WITHIN one visit and one team only; the hide
+// observer and a team change reset it. The debounce timer is module-level so a
+// later rebuild (a row tap, CREATE, ✎, a close) cancels the stale one.
+let csLivQueryTeam = null;
+let csLivSearchTimer = 0;
+function resetLivSearch() {
+  csLivQuery = ""; csLivFactoryOpen = null; csLivQueryTeam = null;
+  clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;
+}
+// #5224: a card's bitmap = its shape's CSS box x DPR (was a fixed 112x80).
+const livBox = { big: [144, 69], small: [38, 24] };
+function livSwatchPx(boxW, boxH, dpr) {
+  const d = dpr > 0 ? dpr : 1, w = Math.max(1, boxW || 1), h = Math.max(1, boxH || 1), m = Math.max(w, h);
+  const k = Math.max(16 / m, Math.min(d, 384 / m));
+  return { w: Math.round(w * k), h: Math.round(h * k) };
+}
+function fitLivSwatches(container, team) {
+  if (typeof LiveryTex === "undefined") return;
+  const sws = [...container.querySelectorAll(".cs-liv-row .cs-liv-swatch")], livs = getLiveries(team);
+  const shape = (sw) => sw.closest(".cs-liv-factory") ? "small" : "big";
+  for (const s in livBox) {   // measure before writes; box x CssZoom
+    const e = sws.find((sw) => shape(sw) === s), z = e && window.CssZoom ? CssZoom.of(e) : 1;
+    if (e && e.clientWidth) livBox[s] = [e.clientWidth * z, e.clientHeight * z];
+  }
+  for (const sw of sws) {
+    const b = livBox[shape(sw)], px = livSwatchPx(b[0], b[1], globalThis.devicePixelRatio), id = sw.closest("[data-cs-livery]").dataset.csLivery;
+    const c = LiveryTex.swatchCanvas(team.id, livs.find((l) => l.id === id), px.w, px.h, livBuild);
+    c.ariaHidden = "true"; sw.prepend(c);
+  }
+}
 function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
-  if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
-    // The card adopts last build's painted canvas when the look is unchanged (LiveryTex.swatchCanvas).
-    const c = LiveryTex.swatchCanvas(team.id, liv, 112, 80, livBuild);
-    c.setAttribute("aria-hidden", "true");
-    sw.appendChild(c);
-  } else {
+  if (typeof LiveryTex === "undefined") {
     sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
     if (liv.stripe) {
       const st = document.createElement("span"); st.className = "cs-liv-stripe";
@@ -1034,8 +1064,10 @@ function buildLiveryOptions(container, team) {
   livBuild++;
   const cur = getLiveryId(team.id);
   const customIds = new Set(getCustomLiveries(team.id).map((l) => l.id));
+  if (csLivQueryTeam !== team.id) { resetLivSearch(); csLivQueryTeam = team.id; }
   const q = String(csLivQuery || "").trim().toLowerCase();
-  const match = (liv) => !q || String(liv.name || "").toLowerCase().includes(q) || String(liv.id || "").toLowerCase().includes(q);
+  // The FITTED row always shows, whatever the query (#4928).
+  const match = (liv) => !q || liv.id === cur || String(liv.name || "").toLowerCase().includes(q) || String(liv.id || "").toLowerCase().includes(q);
 
   // #3339: search + collapse factory finishes so phone scroll is not ~25 screens.
   {
@@ -1048,12 +1080,14 @@ function buildLiveryOptions(container, team) {
     search.value = csLivQuery;
     search.autocomplete = "off";
     search.onclick = (e) => e.stopPropagation();
-    let searchTimer = 0;
     search.oninput = () => {
       csLivQuery = search.value;
       // Debounce rebuild so each keystroke is not a full swatch pass.
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
+      clearTimeout(csLivSearchTimer);
+      csLivSearchTimer = setTimeout(() => {
+        csLivSearchTimer = 0;
+        const cs = $("carsetup");
+        if (csLivCreating || csActiveCat !== "livery" || !cs || cs.hidden) return;
         const caret = search.selectionStart;
         buildSetup();
         const again = $("cs-options")?.querySelector(".cs-liv-search");
@@ -1128,6 +1162,7 @@ function buildLiveryOptions(container, team) {
     fold.appendChild(grid);
     container.appendChild(fold);
   }
+  fitLivSwatches(container, team);
 }
 
 function buildLiveryCreator(container, team) {
@@ -1645,6 +1680,10 @@ function openSetup() {
   const cs = $("carsetup");
   const generation = ++csVisitGeneration;
   tuneExperiments.visit(Teams.LIST[G.teamIdx]);
+  // Exit chrome (hide BACK, stretch DONE) must match the label openGarage set
+  // BEFORE the sheet paints. Waiting for buildSetup() let the two-button foot
+  // show first and jump when syncGarageExitChrome ran — the CLOSE tap missed.
+  syncGarageExitChrome();
   cs.hidden = false;
   G.setupPreviewOn = true;
   cs.setAttribute("aria-busy", "true");
@@ -1679,7 +1718,7 @@ function discardLivDraft() {
 }
 if (typeof MutationObserver === "function") {
   const cs = $("carsetup");
-  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
+  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); resetLivSearch(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
 // ESCAPE IS ONE LEVEL. With the paint editor open, Escape pressed the garage's

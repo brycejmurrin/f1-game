@@ -83,7 +83,9 @@ test("arming VR does not modify apex26.gfxBackend (bootPick override only)", () 
   // Seed caps so sync bootPick sees vr.
   ctx.ApexXR.invalidate();
   const pick = ctx.ApexXR.bootPick();
-  assert.equal(pick, "webgl2", "armed + vr caps ⇒ GLX override");
+  assert.equal(pick, "three", "armed + vr caps ⇒ TLX override (GLX cannot attach XR)");
+  assert.equal(ctx.ApexXR.plan().path, "webgl2", "the shippable TLX+forceGL path");
+  assert.equal("forceGL" in ctx.ApexXR.plan(), false, "no reader: the ENTER VR pin sets tlxForceGL");
   assert.equal(ls.getItem("apex26.gfxBackend"), "three", "2D pick untouched");
 });
 
@@ -98,6 +100,33 @@ test("ApexXR.noteFallback latches sessionStorage and logs", () => {
   assert.equal(entry.to, "webgl2");
   assert.equal(ss.getItem("apex26.xrFallback"), "webgl2");
   assert.ok(ctx.ApexXR.fallbacks().some((f) => f.reason.includes("enabledFeatures")));
+});
+
+test("ApexXR.detect throw keeps a positive xrCaps latch for bootPick", async () => {
+  const { ctx, ls } = bootOpts({
+    "apex26.xr": "1",
+    "apex26.xrCaps": "1",
+    "apex26.xrBackend": "webgl2",
+  });
+  ctx.navigator.xr.isSessionSupported = async () => { throw new Error("SecurityError"); };
+  const caps = await ctx.ApexXR.detect();
+  assert.equal(ls.getItem("apex26.xrCaps"), "1", "throw must not wipe the last positive detect");
+  assert.equal(caps.vr, true);
+  assert.equal(ctx.ApexXR.bootPick(), "three");
+});
+
+test("ApexXR has no rendererMatchesPlan (no caller; it passed a state that cannot attach)", () => {
+  const { ctx } = bootOpts({ "apex26.xr": "1", "apex26.xrCaps": "1" });
+  assert.equal(ctx.ApexXR.rendererMatchesPlan, undefined);
+});
+
+test("VR MODE / VR RENDERER tooltips describe the pin + reload, not a boot pick", () => {
+  const src = read("js/xr/xr-opts.js");
+  const titles = [...src.matchAll(/row\.title = "([^"]*)"/g)].map((m) => m[1]);
+  assert.ok(titles.length >= 2);
+  for (const t of titles) assert.doesNotMatch(t, /boot picks|falls back to that path/i, t);
+  assert.match(titles[0], /reloads \(never mid-race\)/);
+  assert.match(titles[1], /WebGL2 .*either way/);
 });
 
 test("ApexXR.plan records webgpu→webgl2 when XRGPUBinding missing", () => {

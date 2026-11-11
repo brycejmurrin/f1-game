@@ -17,6 +17,7 @@ function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-strategy.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-strategy.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx,
     { filename: absSrc("js/physics/ai-drive.js") });
   return vm.runInContext("AiDrive", ctx);
@@ -1127,11 +1128,12 @@ test("startCalm: full while launching, fades out by calmUntil, never for a car t
   assert.equal(A.attackOK({ ...zone, attackQ: 1, calm: 1 }), true, "a prime one is still on");
 });
 
-test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
+test("mistakeChance: rarer with consistency, commoner under pressure", () => {
   const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
-  // Hard / default errMul=1 keeps the 0.004 base (Slice 4 lift is em>1 only).
-  assert.ok(Math.abs(A.mistakeChance(top, 0) - 0.0012) < 1e-6, "a metronome unpressured: 0.12 % a zone");
-  assert.ok(Math.abs(A.mistakeChance(rookie, 1) - 0.0096) < 1e-6, "a rookie under sustained pressure: ~1 % a zone");
+  // W26 row 2: NORMAL (errMul 1.8) keeps the rate it had before the factor
+  // was applied once — 0.004 x (1 + 7 x 0.8/1.2) x 1.8 x (1.3 - cons) x (1 + 2p).
+  assert.ok(Math.abs(A.mistakeChance(top, 0, 1.8) - 0.01224) < 1e-6, "a metronome unpressured at normal: 1.2 % a zone");
+  assert.ok(Math.abs(A.mistakeChance(rookie, 1, 1.8) - 0.09792) < 1e-6, "a rookie under sustained pressure at normal");
   assert.ok(A.mistakeChance(rookie, 0) > A.mistakeChance(top, 0));
   assert.ok(A.mistakeChance(top, 1) > A.mistakeChance(top, 0));
   assert.ok(A.mistakeChance(top, 1) === A.mistakeChance(top, 2), "pressure saturates at 1");
@@ -1143,16 +1145,14 @@ test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-
   assert.ok(A.mistakeGatherMul() < 1 && A.mistakeGatherMul() > 0.7);
 });
 
-test("mistakeChance: errMul is the difficulty-ladder rate scale, default 1", () => {
+test("mistakeChance: errMul is the difficulty-ladder rate scale, applied ONCE (W26 row 2)", () => {
   const top = { consistency: 1.0 };
   const base = A.mistakeChance(top, 0);
-  assert.equal(A.mistakeChance(top, 0, 1), base, "errMul 1 keeps the old value");
-  // Slice 4: em>1 also lifts the base, so rate grows faster than linear in em.
-  assert.ok(A.mistakeChance(top, 0, 2) > base * 2, "easy/normal visibility lift on top of DIFF.err");
-  assert.ok(A.mistakeChance(top, 0, 3.5) > A.mistakeChance(top, 0, 1.8), "easy > normal");
+  assert.equal(A.mistakeChance(top, 0, 1), base, "errMul 1 is the base");
+  // Linear in em: hard:normal:easy is DIFF.err's 1 : 1.8 : 3.5, not ~em².
+  for (const em of [1.8, 2, 3.5]) assert.ok(Math.abs(A.mistakeChance(top, 0, em) / base - em) < 1e-9, "rate x" + em);
   assert.equal(A.mistakeChance(top, 0, undefined), base, "errMul undefined falls back to 1");
   assert.equal(A.mistakeChance(top, 0, 0), base, "errMul 0 falls back to 1 (never zeroes the rate)");
-  assert.equal(A.mistakeChance(top, 0), base, "the old 2-arg call is unchanged");
 });
 
 test("mistakeChance: optimism raises rate under pressure only (Slice 4)", () => {
@@ -1710,7 +1710,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
   const clamp = (x, lo, hi) => x < lo ? lo : x > hi ? hi : x;
   const damp = (a, b, rate, dt) => a + (b - a) * (1 - Math.exp(-rate * dt));
   const control = new Function("v", "deps", `
-    const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer } = v;
+    const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer, hw } = v;
     const { AiDrive, gripMult, tyres, dirtyAirMul, aeroDfMult, clamp, damp, K, aiT } = deps;
     const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
     const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
@@ -1735,7 +1735,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const original = { ...c };
     const weatherGrip = [1, 0.72, 0.45][i % 3], tyreGrip = 0.4 + rnd() * 0.6;
     const air = (wake, velocity) => 1 - 0.2 * wake * Math.min(1, Math.abs(velocity) / (K.VMAX * Math.max(PACE, 0.05))) ** 2;
-    const v = { c, PACE, dt: [1 / 120, 1 / 60, 1 / 30][i % 3], desiredX: rnd() * 10 - 5,
+    const v = { c, PACE, hw: 6 + (i % 3), dt: [1 / 120, 1 / 60, 1 / 30][i % 3], desiredX: rnd() * 10 - 5,
       tanT: rnd() * 0.2 - 0.1, unstuckActive: mode === "unstuck", rubClamp: mode === "rub", inputSteer: 0.23 };
     const calls = { weather: 0, tyre: 0, air: 0, lateral: 0, yaw: 0 };
     const deps = { K, clamp, damp, aiT: mid,
@@ -1761,14 +1761,14 @@ test("AI heading reuses current grip without changing normal or recovery steerin
       const vl = steer * K.STEER_VMAX * latFac;
       head = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX) : 0;
     } else if (!c.human) {
-      const want = clamp(Math.atan(v.tanT) + Math.atan(K.AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX);
       const max = Math.min(K.AI_YAW_MAX, K.AI_YAW_LAT * K.LAT_MAX * A.yawScale(speed, original.aeroLoad, grip, PACE, K.VMAX) / vAbs);
+      const want = A.edgeHead(clamp(Math.atan(v.tanT) + Math.atan(K.AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX), original.x, v.hw, v.desiredX, vAbs, max);
       head = (head || 0) + clamp(want - (head || 0), -max * v.dt, max * v.dt);
       steer = sm = clamp(vAbs * Math.sin(head) / Math.max(K.STEER_VMAX * latFac * lateral, 1), -1, 1);
     }
-    assert.deepEqual(got, { steer, gripScale: lateral, latFac, aiHead: head, steerSm: sm }, mode + " case " + i);
-    assert.deepEqual(calls, { weather: 1, tyre: 1, air: 1, lateral: 1, yaw: mode === "normal" ? 1 : 0 },
-      mode + ": one current grip calculation; yaw only for the normal AI controller");
+    assert.deepEqual(got, { steer, gripScale: c.human ? 1 : lateral, latFac, aiHead: head, steerSm: sm }, mode + " case " + i);
+    assert.deepEqual(calls, { weather: 1, tyre: 1, air: c.human ? 0 : 1, lateral: c.human ? 0 : 1, yaw: mode === "normal" ? 1 : 0 },
+      mode + ": one current grip calculation (none for the human: gripScale is read only by the AI step); yaw only for the normal AI controller");
   }
 });
 
@@ -1838,6 +1838,46 @@ test("RaceControl.holdCap finds the car by its rank slot, with a scan fallback (
   assert.equal(R.holdCap(lead, ranked, null), Infinity, "the leader holds behind nobody");
 });
 
+// Independent of brakeTarget's loop: every sample solved through cornerSpeed,
+// the same envelope the planner uses. Identity modifiers only, so the return
+// is exactly sqrt(min entrySq). Pins the window path to that solve.
+function brakeTargetOracle(samples, ctx) {
+  const skill = ctx.traits.skill, diffC = ctx.diffCorner || 1, brake = ctx.brake || 22, grip = ctx.grip || 1;
+  const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
+  const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * 0.16);
+  const scrub = 2 * brake * 0.85;
+  const pace = ctx.pace === undefined ? 1 : ctx.pace, vmax = ctx.vmax === undefined ? 72 : ctx.vmax;
+  let vLimSq = Infinity;
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i], d = Math.max(s.d || 0, 1), k = Math.max(Math.abs(s.k || 0), 1e-5);
+    const Lnode = Math.max(0, latMax * (s.mu !== undefined ? s.mu : A.bankGrip(s.bank)) * grip);
+    const vC = A.cornerSpeed(k, Lnode, pace, vmax) * skill * diffC;
+    const entrySq = vC * vC + scrub * d;
+    if (entrySq >= 0 && entrySq < vLimSq) vLimSq = entrySq;
+  }
+  const vLim = Math.sqrt(vLimSq);
+  return Number.isFinite(vLim) ? vLim : 1e6;
+}
+
+test("brakeTarget matches a full per-node solve on random look windows", () => {
+  let seed = 20261029;
+  const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  for (let run = 0; run < 40; run++) {
+    const n = 1 + ((rnd() * 48) | 0), rows = [], ks = new Float64Array(n), mus = new Float64Array(n);
+    let d = rnd() * 3; const step = 2 + rnd() * 4;
+    for (let i = 0; i < n; i++, d += step) {
+      const k = (rnd() < 0.25 ? 0.004 + rnd() * 0.02 : rnd() * 0.0008) * (rnd() < 0.5 ? -1 : 1);
+      const mu = A.bankGrip(rnd() < 0.2 ? rnd() * 0.2 : 0);
+      rows.push({ d, k, mu }); ks[i] = k; mus[i] = mu;
+    }
+    const ctx = { traits: [mid, ace, rook][run % 3], latMax: 18 + rnd() * 8, brake: 12 + rnd() * 14,
+      grip: 0.55 + rnd() * 0.5, pace: 0.45 + rnd() * 0.7, vmax: 70 + rnd() * 20, diffCorner: 0.7 + rnd() * 0.3, aeroLoad: rnd() };
+    const oracle = brakeTargetOracle(rows, ctx);
+    assert.ok(Object.is(A.brakeTarget({ ...ctx, samples: rows }), oracle), "array " + run);
+    assert.ok(Object.is(A.brakeTarget({ ...ctx, samples: A.lookWindow(ks, mus, n, rows[0].d, step) }), oracle), "window " + run);
+  }
+});
+
 test("a level AI-AI side rub takes ONE k for the pair, so bucket order cannot pick the yielder (audit4 F10)", () => {
   const src = readFileSync(join(ROOT, "js/physics/collide.js"), "utf8");
   assert.equal(/kTurn \?\? \w\.kTurn/.test(src), false, "`a.kTurn ?? b.kTurn` picks whichever car the walk names a");
@@ -1846,4 +1886,85 @@ test("a level AI-AI side rub takes ONE k for the pair, so bucket order cannot pi
   assert.equal(A.cornerK(ka, kb), A.cornerK(kb, ka));
   const yA = A.sideYieldsA(0, 2, -2, A.cornerK(ka, kb)), yB = A.sideYieldsA(0, -2, 2, A.cornerK(kb, ka));
   assert.notEqual(yA, yB, "exactly one of the pair yields");
+});
+
+// ── W26 (audit 2026-11-09): edge heading cap (row 1), stopped-car hazard and parked-player stall (row 5) ──
+// Integrate the controller's lateral kinematics: heading slews toward the
+// wanted heading at yawMax, x moves at v·sin(h). The feed-forward is the
+// racing line's own slope (game.js tanT): the line crosses the road at h0
+// and flattens at 6.5 m, the Spa shape (edge to edge in ~100 m at 50 m/s).
+// Returns the widest |x|.
+function w26Run(capped, { v = 50, yawMax = 0.45, hw = 8, x0 = 2, h0 = 0.25, target = 7.5 } = {}) {
+  let x = x0, h = h0, widest = Math.abs(x);
+  const dt = 1 / 60;
+  for (let i = 0; i < 600; i++) {
+    const err = target - x;
+    const tanT = x < 6.5 ? Math.tan(h0) : 0;
+    let want = Math.max(-0.45, Math.min(0.45, Math.atan(tanT) + Math.atan(2.5 * err / v)));
+    if (capped) want = A.edgeHead(want, x, hw, target, v, yawMax);
+    h += Math.max(-yawMax * dt, Math.min(yawMax * dt, want - h));
+    x += v * Math.sin(h) * dt;
+    widest = Math.max(widest, Math.abs(x));
+  }
+  return widest;
+}
+
+test("row 1: a car carrying heading toward the edge leaves the road without the cap, stays on with it", () => {
+  // The Spa shape: 50 m/s, 0.25 rad toward the edge, target clamped at hw - 0.5.
+  assert.ok(w26Run(false) > 8.0, "uncapped: past the white line (" + w26Run(false).toFixed(2) + " m)");
+  assert.ok(w26Run(true) <= 8.0, "capped: on the road (" + w26Run(true).toFixed(2) + " m)");
+  // Every start INSIDE the stopping envelope stays on the road (a start already
+  // past it — 0.45 rad at 80 m/s, 36 m/s sideways — cannot be saved by anyone).
+  for (const v of [20, 35, 50, 65, 80]) for (const want of [0.1, 0.2, 0.3, 0.45]) {
+    const h0 = Math.min(want, A.edgeHead(want, 0, 8, 7.5, v, 0.45));
+    assert.ok(w26Run(true, { v, h0, x0: 0 }) <= 8.0, `on the road at v=${v} h0=${h0.toFixed(2)}`);
+  }
+});
+
+test("row 1: edgeHead leaves a heading AWAY from the edge alone, and does not cap a pit-lane target", () => {
+  assert.equal(A.edgeHead(-0.3, 7, 8, 7.5, 50, 0.45), -0.3, "turning back in is never capped");
+  assert.equal(A.edgeHead(0.05, 0, 8, 3, 50, 0.45), 0.05, "mid-road, small heading: untouched");
+  const cap = A.edgeHead(0.4, 7.4, 8, 7.5, 50, 0.45);
+  assert.ok(cap >= 0 && cap < 0.05, "near the keep line the outward heading is nearly zero");
+  assert.ok(A.edgeHead(0.4, 7.4, 8, 12, 50, 0.45) > 0.2, "a target beyond the road (pit lane) moves the keep line out");
+  assert.equal(A.edgeHead(0.4, 7.4, 8, 7.5, 0.5, 0.45), 0.4, "no cap at a crawl (the position controller drives there)");
+  // Symmetric on the left.
+  assert.ok(Math.abs(A.edgeHead(-0.4, -7.4, 8, -7.5, 50, 0.45) + cap) < 1e-12);
+});
+
+test("row 5: a stopped car is a hazard, a moving or retired or pitting one is not", () => {
+  const vT = 72;
+  assert.equal(A.stoppedHazard({ speed: 0 }, vT), true);
+  assert.equal(A.stoppedHazard({ speed: 3 }, vT), true, "under 6 % of the top speed");
+  assert.equal(A.stoppedHazard({ speed: 20 }, vT), false);
+  assert.equal(A.stoppedHazard({ speed: 0, retired: true }, vT), false, "a retired car is Collide.parkedAhead's");
+  assert.equal(A.stoppedHazard({ speed: 0, inPit: true }, vT), false, "the box is not the road");
+  assert.equal(A.stoppedHazard({ speed: 0, finished: true }, vT), false);
+  assert.equal(A.stoppedHazard(null, vT), false);
+  assert.ok(A.hazardReach(50) > 30 + 1.5 * 50, "reacts from further back than the parked-car reach");
+});
+
+test("row 5: stallSweep counts only a LOCAL, running car on the road under green, and retires it once at 60 s", () => {
+  const mk = (o) => Object.assign({ local: true, speed: 0, retired: false, finished: false, inPit: false, inPitLane: false }, o);
+  const cars = [mk({}), mk({ local: false }), mk({ inPit: true }), mk({ inPitLane: true }), mk({ finished: true }), mk({ retired: true })];
+  const out = [];
+  for (let i = 0; i < 61 * 60; i++) A.stallSweep(cars, 1 / 60, true, (c) => { out.push(cars.indexOf(c)); c.retired = true; });
+  assert.deepEqual(out, [0], "only the parked local car on the road is retired, once");
+  for (const c of cars.slice(1)) assert.ok(!(c.stallT > 0), "a remote, pitting, pit-lane, finished or retired car counts nothing");
+  const live = mk({});
+  for (let i = 0; i < 120 * 60; i++) A.stallSweep([live], 1 / 60, false, () => assert.fail("not green: never retired"));
+  assert.equal(live.stallT, 0, "a non-green race (pause, caution, grid, quali, time trial) counts nothing");
+  const lane = mk({ stallT: 59 });
+  A.stallSweep([lane], 1 / 60, true, () => {}); lane.inPitLane = true; A.stallSweep([lane], 1 / 60, true, () => {});
+  assert.equal(lane.stallT, 0, "entering the pit lane resets the count");
+  assert.doesNotThrow(() => A.stallSweep([mk({})], undefined, true, () => {}), "a missing dt is 0");
+});
+
+test("row 5: stallStep counts stationary live seconds and resets on motion or a non-live race", () => {
+  let t = 0;
+  for (let i = 0; i < 60 * 61; i++) t = A.stallStep(t, 0, 1 / 60, true);
+  assert.ok(t >= A.STALL_RETIRE_S, "61 s parked under green crosses the 60 s retirement");
+  assert.equal(A.STALL_RETIRE_S, 60);
+  assert.equal(A.stallStep(t, 15, 1 / 60, true), 0, "moving resets it");
+  assert.equal(A.stallStep(30, 0, 1 / 60, false), 0, "a caution, the pits or a finished race resets it");
 });

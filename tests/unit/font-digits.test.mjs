@@ -168,3 +168,20 @@ test("the tabular-nums declarations are load-bearing now — keep them", () => {
     `only ${n} tabular-nums declarations remain (was 36). Under the current HUD ` +
     `face these are not decoration — they are what makes the digits hold still`);
 });
+
+test("every Barlow number is tabular: body inherits tnum, and no --font-hud rule opts out", () => {
+  // Design pass 3E (2026-10-30): 26 rules set the HUD face without tabular-nums
+  // (pit and work timers, limits, damage, plan stints, the results winner badge).
+  // One inherited declaration in the sheet that ships Barlow covers them all,
+  // so a NEW --font-hud rule is tabular without remembering to say so.
+  const hudFonts = read("css/fonts-hud.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const optOut = /(^|\n)\s*body\s*\{[^}]*font-variant-numeric:\s*tabular-nums/.test(hudFonts) ? []
+    : ["css/fonts-hud.css: body { font-variant-numeric: tabular-nums } is missing"];
+  for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((x) => x.endsWith(".css"))) {
+    const src = read(`css/${f}`).replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const m of src.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (/var\(--font-hud\)/.test(m[2]) && /font-variant-numeric:\s*(normal|proportional-nums)/.test(m[2])) optOut.push(`${f}: ${m[1].trim()}`);
+    }
+  }
+  assert.deepStrictEqual(optOut, [], "Barlow's default digits are proportional: body must inherit tnum and no --font-hud rule may opt out");
+});

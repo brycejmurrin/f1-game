@@ -36,20 +36,47 @@ const DataLive = (function () {
     return state.intervals;
   }
 
+  // OpenF1's own live window: 30 min before date_start until 30 min after
+  // date_end (https://openf1.org/ FAQ). Without a date_end (an old cached
+  // session row) the length is guessed: a race 4 h, anything else 2 h.
+  const LIVE_PAD_MS = 30 * 60 * 1000;
   function sessionStatus(meta, now) {
     const start = Date.parse(meta && meta.dateStart);
     if (!isFinite(start)) return "LIVE";
     const at = now == null ? Date.now() : now;
+    let end = Date.parse(meta && meta.dateEnd);
+    if (isFinite(end) && end >= start) {
+      if (at < start - LIVE_PAD_MS) return "UPCOMING";
+      return at <= end + LIVE_PAD_MS ? "LIVE" : "COMPLETED";
+    }
     if (start > at) return "UPCOMING";
     const type = String((meta && meta.type) || "").toLowerCase();
-    const liveHours = type === "race" ? 4 : 2;
-    return at - start <= liveHours * 60 * 60 * 1000 ? "LIVE" : "COMPLETED";
+    end = start + (type === "race" ? 4 : 2) * 60 * 60 * 1000;
+    return at <= end ? "LIVE" : "COMPLETED";
   }
 
-  function sessionTimeLabel(meta, phase, fmtDateTime) {
+  function sessionTimeLabel(meta, phase, fmtDateTime, now) {
     if (!meta || !meta.dateStart) return "";
-    const verb = phase === "UPCOMING" ? "Starts " : "Started ";
+    // The LIVE badge opens 30 min before the start: the verb follows the clock.
+    const at = now == null ? Date.now() : now;
+    const verb = phase === "UPCOMING" || Date.parse(meta.dateStart) > at ? "Starts " : "Started ";
     return verb + fmtDateTime(meta.dateStart);
+  }
+
+  // Which requests one LIVE refresh makes. A FINISHED session's first build
+  // reads the cached whole-session snapshots (several MB on a phone, so never
+  // re-downloaded per build); their cursor then seeds liveState through
+  // mergePositionBatch / mergeIntervalBatch, and every later refresh is a delta.
+  function liveFeedRequests(api, sessionKey, state, phase) {
+    const seed = phase === "COMPLETED";
+    return {
+      position: seed && !state.positionCursor && api.sessionPositions
+        ? api.sessionPositions(sessionKey)
+        : api.livePositions(sessionKey, state.positionCursor),
+      interval: seed && !state.intervalCursor && api.sessionIntervals
+        ? api.sessionIntervals(sessionKey)
+        : api.liveIntervals(sessionKey, state.intervalCursor)
+    };
   }
 
   function create({
@@ -98,27 +125,6 @@ const DataLive = (function () {
       return s;
     }
 
-    function lastFetchedAt(sessionKey) {
-      let newest = 0;
-      try {
-        const marker = "session_key=" + encodeURIComponent(sessionKey);
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (!key || key.indexOf("apex26.api.") !== 0) continue;
-          const at = key.indexOf(marker);
-          if (at === -1) continue;
-          const after = key.charAt(at + marker.length);
-          if (after && after !== "&") continue;   // session_key=11 must not match =110
-          if (!/\/(weather|position|drivers)\?/.test(key)) continue;
-          // Prefix-read the timestamp (F1API.cacheEntryT) — position payloads
-          // run multi-MB, and this sweep repeats every refresh under AUTO.
-          const t = F1API.cacheEntryT(localStorage.getItem(key));
-          if (t != null && t > newest) newest = t;
-        }
-      } catch (e) { /* no storage: every response was a real fetch */ }
-      return newest || null;
-    }
-
     function loadLive() {
       return ensureSession(true).then(function () {
         const wrap = el("div", "dh-tabbody dh-split");
@@ -149,9 +155,7 @@ const DataLive = (function () {
       const stateBadge = el("span", "dh-live-state");
       infoTitle.appendChild(stateBadge);
       info.appendChild(infoTitle);
-      const place = (typeof F1API !== "undefined" && F1API.placeLabel)
-        ? F1API.placeLabel(meta.circuit, meta.country, " · ")
-        : [meta.circuit, meta.country].filter(Boolean).join(" · ");
+      const place = DataTabUtils.placeLabel(meta.circuit, meta.country, " · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
       const timeLabel = el("div", "dh-live-sub");
       if (meta.dateStart) info.appendChild(timeLabel);
@@ -161,6 +165,7 @@ const DataLive = (function () {
         stateBadge.textContent = phase;
         stateBadge.setAttribute("data-state", phase.toLowerCase());
         timeLabel.textContent = sessionTimeLabel(meta, phase, fmtDateTime);
+        return phase;
       }
 
       const bar = el("div", "dh-livecontrols");
@@ -182,14 +187,16 @@ const DataLive = (function () {
 
       let refreshPromise = null;
       let scheduleAuto = null;
+      let sortControls = {};
       const liveState = {
         positionCursor: null, intervalCursor: null,
         positions: new Map(), intervals: Object.create(null),
+        okAt: 0,          // when a position or interval request last settled ok
       };
 
       function refresh() {
         if (refreshPromise) return refreshPromise;
-        paintPhase();
+        const phase = paintPhase();
         if (liveOpts.auto) stopLiveAuto();
         const myGen = ++liveRefreshGen;
         const priorState = dataEl.getAttribute("data-state");
@@ -204,12 +211,9 @@ const DataLive = (function () {
         // otherwise a 30 s loop silently re-serves the same payload. ttl:0
         // bypasses the read (api.js request) while still writing on success.
         const ttl = 0;
-        const positionReq = F1API.livePositions
-          ? F1API.livePositions(meta.sessionKey, liveState.positionCursor)
-          : F1API.positions(meta.sessionKey, ttl);
-        const intervalReq = F1API.liveIntervals
-          ? F1API.liveIntervals(meta.sessionKey, liveState.intervalCursor)
-          : F1API.intervals(meta.sessionKey, ttl);
+        const feed = liveFeedRequests(F1API, meta.sessionKey, liveState, phase);
+        const positionReq = feed.position;
+        const intervalReq = feed.interval;
         refreshPromise = Promise.all([
           settle(F1API.weather(meta.sessionKey, ttl)),
           settle(positionReq),
@@ -220,13 +224,8 @@ const DataLive = (function () {
           paintPhase();
           dataEl.setAttribute("aria-busy", "false");
           const failed = batch.filter((x) => !x.ok);
-          const gate = failed.find((x) => {
-            const err = x.error || {};
-            const msg = err.message || "";
-            return err.status === 401 || err.status === 403 ||
-              msg.indexOf("Live F1 session") !== -1 ||
-              msg.indexOf("HTTP 401") !== -1 || msg.indexOf("HTTP 403") !== -1;
-          });
+          if (batch[1].ok || batch[3].ok) liveState.okAt = Date.now();
+          const gate = failed.find((x) => DataTabUtils.liveLockout(x.error));
           if (failed.length === batch.length || gate) {
             if (!hadData) clear(dataEl);
             else {
@@ -237,8 +236,14 @@ const DataLive = (function () {
             failure.setAttribute("role", "status");
             failure.setAttribute("data-refresh-error", "");
             failure.setAttribute("data-state", hadData ? "stale" : "failed");
+            if (gate) {
+              const title = el("div", "dh-error-msg", DataTabUtils.LOCKOUT_TITLE);
+              title.dataset.role = "title";
+              failure.dataset.reason = "live-auth";
+              failure.appendChild(title);
+            }
             failure.appendChild(el("div", "dh-error-msg", gate
-              ? ((gate.error && gate.error.message) || "Live data is unavailable.")
+              ? DataTabUtils.LOCKOUT_MSG
               : (hadData ? "Couldn't refresh live data. Showing the last update."
                 : "Couldn't load live data. Try again.")));
             if (hadData && dataEl.firstChild) dataEl.insertBefore(failure, dataEl.firstChild);
@@ -252,6 +257,10 @@ const DataLive = (function () {
             }
             return;
           }
+          // Ownership is checked at settlement: the player may have moved
+          // focus while this batch was loading, or closed/left the LIVE tab.
+          const focusedSort = dataEl.isConnected && armAuto === scheduleAuto
+            ? Object.keys(sortControls).find(key => sortControls[key] === document.activeElement) : null;
           clear(dataEl);
           if (failed.length) {
             const partial = el("div", "dh-error");
@@ -270,12 +279,16 @@ const DataLive = (function () {
               }
             });
           }
-          fillLive(dataEl, res[0], positions, res[2]);
+          sortControls = fillLive(dataEl, res[0], positions, res[2]) || {};
+          if (focusedSort && sortControls[focusedSort]) sortControls[focusedSort].focus({ preventScroll: true });
           dataEl.setAttribute("data-state", failed.length ? "partial"
             : (positions && positions.length ? "ready" : "empty"));
-          const fetchedAt = lastFetchedAt(meta.sessionKey);
-          stamp.textContent = "updated " + new Date(fetchedAt || Date.now())
-            .toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          // The stamp is the last position/interval answer, not this paint:
+          // a batch where only weather or drivers came back keeps the old time.
+          if (liveState.okAt) {
+            stamp.textContent = "updated " + new Date(liveState.okAt)
+              .toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          }
         }).finally(() => {
           dataEl.setAttribute("aria-busy", "false");
           refreshPromise = null;
@@ -422,6 +435,7 @@ const DataLive = (function () {
         });
       }
       renderRows();
+      return sortBtns;
     }
 
     return { loadLive, stopLiveAuto, disarmLiveAuto };
@@ -431,7 +445,8 @@ const DataLive = (function () {
     _mergePositionBatch: mergePositionBatch,
     _mergeIntervalBatch: mergeIntervalBatch,
     _sessionStatus: sessionStatus,
-    _sessionTimeLabel: sessionTimeLabel
+    _sessionTimeLabel: sessionTimeLabel,
+    _liveFeedRequests: liveFeedRequests
   };
 })();
 Object.freeze(DataLive);

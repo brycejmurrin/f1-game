@@ -8,7 +8,8 @@
  *     different dry specifications; breaking it is a disqualification, or 30 s
  *     when the race was suspended and not resumed. Whether the rule APPLIES
  *     (race length, dry, not a sprint, pits available) is PitLane's
- *     twoCompoundRule — one test, shared with the AI's planner.
+ *     twoCompoundApplies() (its private twoCompoundRule) — one test, shared
+ *     with the AI's planner.
  *  2. NO PASSING UNDER THE SAFETY CAR OR VSC (B5.12.2(c), B5.13.2(c)). A place
  *     gained under a caution must be given back; the 2026 Penalty Guidelines
  *     price one kept place at 10 s. Two and more are priced here at a
@@ -128,7 +129,7 @@ const SportingRegs = (function () {
     function reset() { ahead.clear(); now.clear(); primed = false; finished = false; owed.length = 0; lostTo.length = 0; t = 0; }
     function drop(list, o) { const i = list.indexOf(o); if (i >= 0) list.splice(i, 1); }
     function tick(p, field, level, dt) {
-      if (!p) { reset(); return null; }
+      if (!p || p.retired) { reset(); return null; }   // a retired car owes no place and can take no penalty
       now.clear();
       const finishPass = p.finished && !finished;
       for (let i = 0, f = field || []; i < f.length; i++) {   // indexed: tick runs every step
@@ -293,12 +294,13 @@ const SportingRegs = (function () {
     return { tick, reset, info };
   }
 
+  // Compound / caution / blue-flag scalars stay module-local. compoundsRun,
+  // compoundVerdict, passPenaltyS and blueFlagCar stay module-local too: the
+  // short/apply/watch APIs own them; only unit tests used to call them directly.
   return Object.freeze({
-    compoundsRun, compoundShort, compoundVerdict, applyCompoundRule,
-    passPenaltyS, exempt, createPassWatch, champOrder,
-    blueFlagCar, createBlueFlagWatch,
-    DRY, WET, SUSPENDED_PEN_S, DSQ_WHY, GIVE_BACK_S, CAUTION_MIN,
-    BLUE_GAP_S, BLUE_VFLOOR, BLUE_WARN_S, BLUE_HOLD_S, BLUE_PEN_S,
+    compoundShort, applyCompoundRule,
+    exempt, createPassWatch, champOrder,
+    createBlueFlagWatch,
     jumpStartEarlyThrottle, jumpStartFastLaunch,
     JUMP_START_THROTTLE, JUMP_START_REACT_S, JUMP_START_SPEED_VREF,
     JUMP_START_PEN_S, JUMP_START_WHY,

@@ -50,7 +50,7 @@ export function recipePairs(data){
   return {id:key,title:String(p.title||key),note:String(p.note||''),scene,a,b,selection:selectionFields({race:scene.track,timing:scene.tod,weather:scene.weather,camera:scene.camera,position:scene.frac,effect})};
  });
 }
-export async function installViewer(gallery){
+async function installViewer(gallery){
  await fs.mkdir(gallery,{recursive:true});
  for(const name of ['comparisons.html','comparisons.js','comparisons.css'])if(path.resolve(TEMPLATE)!==path.resolve(gallery))await fs.copyFile(path.join(TEMPLATE,name),path.join(gallery,name));
 }
@@ -76,13 +76,13 @@ export async function addPair({gallery,id:pairId,title,a,b,aLabel='Original',bLa
  return pair;
  }finally{await lock.close();await fs.unlink(lockPath);}
 }
-export function parseViewport(raw){
+function parseViewport(raw){
  if(raw==null||raw==='')return {width:1920,height:1080};
  const m=/^(\d{3,4})x(\d{3,4})$/.exec(String(raw));
  if(!m)throw new Error('--viewport takes WxH, e.g. 844x390');
  return {width:+m[1],height:+m[2]};
 }
-export async function capturePairs(pairs,gallery,{viewport=null,touch=false,tag=''}={}){
+async function capturePairs(pairs,gallery,{viewport=null,touch=false,tag=''}={}){
  viewport=viewport||{width:1920,height:1080};
  if(tag&&!/^[a-z0-9][a-z0-9_-]{0,19}$/.test(tag))throw new Error('--tag must be a short lowercase slug');
  if(tag)pairs=pairs.map(p=>({...p,id:p.id+'-'+tag,title:p.title+' · '+tag}));

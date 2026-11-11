@@ -1,13 +1,14 @@
 ---
 name: race-incidents-control
-description: "Use when debris (debris-world.js), Rapier side-worlds, incident takeovers, car launches/flips, airborne or frozen cars, the pile-up (c1Pileup), yellow/red flags, VSC, a safety car stuck out or never deploying, overtake gating or reliability retirements change. AI racing badly → ai-racecraft; career DNF money → career-mode."
+description: "Use when crashes or race control misbehave: debris, cars flipping or freezing, pile-ups, flags, VSC, marshals, a safety car stuck out or never deploying, or reliability retirements. Not for: AI racecraft → ai-racecraft; career DNF money → career-mode; handling → tune-physics."
 ---
 
 ## Overview
 
 Incidents are split by authority: `DebrisWorld` never moves cars,
 `IncidentSim` may move cars only inside bounded takeover windows, and
-`RaceControl` reads hazards to set flags without touching car pose or speed.
+`RaceControl` sets flags (from hazards, a storm or a scripted hold) without
+touching car pose or speed.
 
 ## When to Use
 
@@ -19,7 +20,9 @@ Use this for:
   behavior.
 - Yellow/VSC/safety-car state, host-owned race control, caution HUD/copy, or
   overtake disabling.
-- Reliability/DNF plans when they interact with incident/caution state.
+- The reliability retirement plan (`Reliability.arm`/`plan`, `__apex.retirements()`): this skill owns it;
+  career-mode owns only what a career does with a DNF (money, standings).
+- Blue flags (the call; the time penalty is `SportingRegs`, race-weekend).
 - Determinism checks around incident seeds, fixed ticks, or hazard queries.
 
 Do **not** use this for:
@@ -37,28 +40,35 @@ Do **not** use this for:
 |---|---|
 | `js/physics/debris-world.js` | Rapier side-world for render/cosmetic-plus debris; never writes car pose, `(s,x)`, speed, or heading |
 | `js/physics/incident-sim.js` | High-risk layer; may move cars only inside finite, bounded takeover windows with fallback |
-| `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()`; host-owned in multiplayer |
+| `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()`, plus the storm SC (`stormTick`) and scripted `hold()`; host-owned in multiplayer |
 | `js/race/reliability.js` | Staged DNF/retirement plan; deterministic and career-aware |
 
+**What `hazards()` counts** (`DebrisWorld.hazards`, read its body): only SLEEPING debris shards, disturbed
+cones and broken panels on the road (within the half-width and `HAZARD_Y_TOL` of road height). Stopped,
+retired or pile-up CARS never count. A shard returns to the pool `REST_DESPAWN_S` after it sleeps (or past
+`FAR_DESPAWN_M` from the player), and the pool is `CAP_DESKTOP` / `CAP_MOBILE` (the phone tier) with
+oldest-recycle — so the count is a short peak. "SC never deploys after a pile-up" is often this, not a
+threshold: sample `caution({hazards:true})` every 0.25 s through the settle window, never once afterwards
+(recipe: references/workflow.md §SC never deploys).
+
 **Marbles are not cosmetic.** AI cars drop marbles through `DebrisWorld.tyreMarble`, and
-`marbleGrip` then cuts the player's grip in the force path (`js/physics/player-forces.js`, floor
-0.93). Arc-rule class: **surface** (pass-4 audit DECISIONS #4): the drop signal must be the AI
-car's own measured lateral acceleration / tyre slip, never track curvature or the racing line — a
-curvature-derived drop is an arc-rule leak. The classification home is the marble row of
-docs/PHYSICS.md's legitimate-columns table; point there, do not copy it. Changing marbles is a
-physics change: tune-physics' arc check and agent `physics-contract-auditor`.
+`marbleGrip` then cuts the player's grip in the force path (`js/physics/player-forces.js`). Arc-rule
+class: **surface**: the drop signal must be the AI car's own measured lateral slip / lock, never
+curvature or the racing line. Classify changes against the marble row of `docs/PHYSICS.md`
+§Curvature channels (do not copy it); a
+marble change is a physics change: tune-physics' arc check and agent `physics-contract-auditor`.
 
 Flags / storage:
 
 | Key | Meaning |
 |---|---|
-| `apex26.debris` | Rapier debris side-world; default OFF, only `"1"` enables (read once at boot) |
+| `apex26.debris` | Rapier debris side-world; opt-in, `"1"` enables (read once at boot; default: `SettingsDefaults`) |
 | `apex26.breakBarriers` | Breakable barrier panels (`"0"` disables; likewise the keys below) |
 | `apex26.marbleGrip` | Marble grip scalar — reaches the PLAYER's grip (see Marbles above) |
 | `apex26.r2Airborne` | Airborne/rollover takeover |
 | `apex26.r3Contact` | Heavy car-car contact takeover |
 | `apex26.c1Pileup` | Multi-car pile-up takeover |
-| `apex26.caution` | Race-control cautions (default off) |
+| `apex26.caution` | Race-control cautions (default: `readCaution` in `race-control.js`) |
 
 Hooks:
 
@@ -75,12 +85,11 @@ Hooks:
 Commands:
 
 ```sh
-npm run test:tooling-fast                      # background, AGENTS.md rule 4
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # diff-aware; the full suite runs on the PR
 node --test tests/unit/race-control.test.mjs   # flags/caution rules, <1 s; also reliability, debris-*.test.mjs
 node --test tests/unit/incident-gate.test.mjs  # R2/R3/C1 takeovers: promote, window, handback, release
-APEX_VM_PAGE=1 node --test tests/specs/race-control.spec.js   # flags only (no IncidentSim); NO browser (VM-adapted)
-npm test -- tests/specs/debris.spec.js         # BROWSER, one spec, background (AGENTS.md rule 4); a subagent reports it not run
-node tools/ci/remote-group.mjs physics-core     # the whole group, pushed branch only
+APEX_VM_PAGE_GROUP=b node --test tests/unit/adapted-specs.test.mjs   # race-control.spec (flags only, no IncidentSim) VM-adapted, NO browser (test:vm-page-b)
+node tools/ci/remote-group.mjs physics-core     # BROWSER specs (debris/race-control.spec): CI, pushed branch only (AGENTS.md rule 5; group: pick-tests.mjs)
 ```
 
 ## Load on demand

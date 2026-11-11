@@ -1,5 +1,7 @@
 # Agent surface survey — 2026-10-05
 
+Summary: Fifth pass: every skill, subagent, hook, rule and MCP catalog graded against the October 2026 Claude Code docs, the Agent Skills spec and the MCP tools spec — what the tests already pin, the gaps (no MCP annotations or outputSchema, two skills the routing eval never measured, a two-level reference chain, a broken index table), what was withdrawn as covered, and a ranked one-PR-each list.
+
 Fifth pass over the agent surface (after `AGENT-TOOLING-RESEARCH-2026-09-22.md`,
 whose §5 gap list this re-measures). The method this time: read every
 skill, subagent, hook, rule and MCP catalog in the tree, then grade each
@@ -27,7 +29,7 @@ What the tests already pin (so this pass did not re-argue them):
 descriptions keep folded trigger words), `agent-config.test.mjs` (three MCP
 catalogs in lockstep, every hook row has a script, the Bash guard's kill /
 commit / subagent shapes, AGENTS.md ≤ 200 lines, the always-on budget),
-`agent-surface.test.mjs` (wrap map = catalog), `skill-smoke.test.mjs`.
+`agent-surface.test.mjs` (wrap map = catalog), skill-smoke.test.mjs (deleted 2026-11-03).
 
 ## 1. Skills, graded
 
@@ -45,7 +47,7 @@ commit / subagent shapes, AGENTS.md ≤ 200 lines, the always-on budget),
 ("Builds and validates…") and `replay-camera` ("Validates…") open with a
 capability sentence and put the trigger second; `track-realism` is 168 chars
 with no near-miss redirect at all. The routing eval has NO queries for
-`f1-animation-cameras` and `replay-camera` (`tests/data/skill-routing/queries/`
+`f1-animation-cameras` and `replay-camera` (`skill-routing/queries/ (deleted 2026-11-03) `
 covers 28 of 30), so their triggering has never been measured — exactly the
 case the skill-creator's description optimiser is for.
 

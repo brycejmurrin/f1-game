@@ -1,10 +1,13 @@
 # Kyalami Grand Prix Circuit — Visual Design Brief
 
-**Setting:** DAY, green theme (Gauteng highveld). ~4.522 km, 16 turns.
-**Racing direction:** anticlockwise in the live layout (`reverse: true` in the
-def flips the OSM-authored clockwise trace). Official site lists
-“Track run/direction: Anticlockwise”
-(https://www.kyalamigrandprixcircuit.com/about-kyalami/).
+**Setting:** DAY, green theme (Gauteng highveld). ~4.522 km; the real 2016
+layout has 16 numbered turns, the def's `turns` lists 13 (owned by the W5 frame
+worker; re-number it against a source).
+**Racing direction:** CLOCKWISE. The built lap's net turning is -360° (+k = left)
+and T1 Crowthorne is a right-hander (`js/circuits/kyalami.js` header;
+`reverse: true` flips the OSM source's winding). An earlier revision of this
+page quoted the official site as "Anticlockwise"; the page could not be
+re-fetched on 2026-11-10 and the quote contradicts the circuit's own T1.
 
 ## 1. Setting
 On the reef between Johannesburg and Pretoria. The altitude is the whole
@@ -46,16 +49,16 @@ nodes or flatten hills to seat props.
 | 0.950 | R (−1 racing) | near | **Main grandstand** (`kyalami-main-grandstand`, required): sandstone/face-brick bowl under a corrugated lean-to on red-oxide trusses — Highveld vernacular, not a modern cantilever. Length ~80 m approximate |
 | 0.95–0.05 | R | near | Sponsor hoarding run down the main straight (2.4 m boards) |
 | 0.965 | L | far | **Clubhouse** (`kyalami-clubhouse`, required): face brick under a low pitched tile roof with a deep shaded **stoep** on square brick piers |
-| 0.078 | outside | near | **Crowthorne**: gravel apron + red tyre wall — classic overtaking place (name retained on the modern layout) |
+| 0.1055 | outside | near | **Crowthorne** (def T1): gravel apron + red tyre wall — classic overtaking place (name retained on the modern layout) |
 | 0.10–0.18 | outside | mid | Low crowd bank further out on the drop (2 rows — grade falls away) |
 | 0.15–0.30 | both | mid | Open veld: scattered flat-crowned acacia, red laterite walkway scars, blue-gum rows on the boundary |
-| 0.255 | inside | near | Gravel apron + blue tyre wall on the descent |
+| 0.226 | outside | near | Barbecue (def T3): gravel apron + blue tyre wall on the descent |
 | 0.34 | far | mid | **Mine headgear** (`kyalami-headgear`, required): four-legged steel A-frame, sheave wheels, winder house, conveyor toward the dumps — Gauteng reef silhouette, not a surveyed shaft on the property |
 | 0.36–0.48 | both | far | Open high plateau — foliage suppressed; the emptiness is the point |
 | 0.42–0.52 | L | mid | Climb terracing |
-| 0.565 | outside | near | Gravel apron near the circuit's high point (Leeukop) |
+| 0.614 | outside | near | Gravel apron near the circuit's high point (Leeukop, def T9 — identified by curvature) |
 | 0.70 | L | mid | **Windpump and dam** (`kyalami-windpump`, required): multi-blade steel fan on a lattice tower over a circular corrugated reservoir |
-| 0.885 | inside | near | Gravel + yellow tyre wall at the bottom of the plunge |
+| 0.8975 | outside | near | Gravel + yellow tyre wall at the bottom of the plunge (def T13) |
 | — | ring | far | Low, wide highveld ridges; **flat-topped mine dumps** (pale cyanided sand) on the best arc of the skyline; Johannesburg towers as a faint smudge |
 
 ### Turn names — sourced vs uncertain

@@ -142,6 +142,47 @@ test("a car just behind a leader that has crossed is NOT a lap down after the re
   assert.equal(a.lap - lapped.lap, 5, "a car genuinely laps down keeps them (5 laps and 90 m behind at the flag)");
 });
 
+test("a finish countdown cannot classify a race a red flag is still going to restart", async () => {
+  // The results clock lives in update(), and a red flag stays state "race" for
+  // RED_STOP+RED_HOLD (14 s) before it asks for the restart. A 2.2 s countdown
+  // (or the 0.1 s post-finish / time-cap arm) expires in that window and
+  // endRace() runs first, so the standing restart never happens. takeRestart()
+  // also returns before the clock, and state "count" does not tick it, so a
+  // countdown already in hand survives the re-grid and classifies the restart
+  // a second after the lights.
+  const game = await createGame({ track: "monza" });
+  try {
+    const a = game.apex, G = game.G;
+    await game.race("monza");
+    assert.equal(G.state, "race");
+    assert.equal(G.cars.some((c) => c.finished), false, "precondition: the restart is still allowed");
+    G.applyCaution({ level: 4, cause: "test" });
+    G.resultT = 1.2;
+    game.step(90); // 1.5 s: past the countdown, still inside the 14 s hold
+    assert.equal(G.state, "race", "the hold must not publish results");
+    assert.equal(G.cautionLevel(), 4, "the flag is still flying");
+    assert.equal(G.resultT, 0, "the countdown is dropped while the restart can still happen");
+    // The cap after a retirement is the other arm, and it is not the red hold:
+    // postFinish.since keeps the moment the human was done. A restart that
+    // leaves it set classifies on the first green steps, because raceT is
+    // already past the 75 s cap.
+    G.applyCaution({ level: 0 });
+    a.retire(null, "engine");
+    game.step(1); // finishDelay stamps postFinish.since
+    G.raceT += 80;
+    game.step(1);
+    assert.equal(G.state, "race", "precondition: one step past the cap arms the clock, it does not end the race yet");
+    assert.ok(G.resultT > 0, "precondition: the cap armed a short countdown");
+    assert.equal(a.redFlag().state, "count");
+    assert.equal(G.resultT, 0, "the re-grid drops the countdown count state will not tick");
+    a.go();
+    game.step(90);
+    assert.equal(G.state, "race", "the restarted race is not classified by the countdown the flag interrupted");
+    assert.equal(G.player.finished, false);
+    assert.equal(G.player.retired, true, "a retirement is the same race: the restart does not put the driver back in");
+  } finally { game.close(); }
+});
+
 test("a queue held under the red flag is parked, not wedged: no AI accrues stuckT", async () => {
   // Level 4 caps the field near 0.02 x vTop, so a queued car is under 7 m/s with a blocker inside 6 m
   // by design. That was "boxed and going nowhere": stuckT climbed, unstuckActive cancelled the car's

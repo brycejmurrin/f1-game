@@ -58,43 +58,56 @@ const HudInputs = (function () {
   let sampledPlayer = null, sampledGear = null, sampledLap = null;
   let review = null, reviewCanvas = null, reviewNote = null;
 
-  // ---- the DOM ------------------------------------------------------------
   const doc = typeof document !== "undefined" ? document : null;
   const win = typeof window !== "undefined" ? window : null;
   let root = null, cv = null, ctx2 = null, gearEl = null, lastGear = null;
   const mKey = [0, 0, 0, 0, 0];   // innerWidth, innerHeight, dpr, --hl-s, CSS zoom (HUD SIZE / fit cap) of the last measure
-  let cssW = 128, cssH = 48, ratio = 1;
+  let cssW = 128, cssH = 48, ratio = 1, zAge = 0, zSeen = 1, vw = 0, vh = 0, vDirty = true, fontOn = false;
   const _rmq = win && win.matchMedia ? win.matchMedia("(prefers-reduced-motion: reduce)") : null;
   function reduced() { return typeof TitleFx !== "undefined" && typeof TitleFx.mode === "function" ? TitleFx.mode() === "reduce" : !!(_rmq && _rmq.matches) || !!(doc && doc.documentElement && doc.documentElement.dataset.motion === "reduce"); }
   const isOn = () => typeof HudElements === "undefined" || HudElements.isOn("inputs");
 
+  // One resize handler for the viewport cache (measure) and the open review sheet.
+  const onResize = () => { vDirty = true; if (review && review.open) paintReview(); };
   function bind() {
     root = doc && doc.getElementById("hud-inputs");
     cv = doc && doc.getElementById("hud-inputs-cv");
     gearEl = doc && doc.getElementById("hud-inputs-gear");
-    ctx2 = cv && cv.getContext ? cv.getContext("2d") : null;
+    ctx2 = cv && cv.getContext ? cv.getContext("2d") : null; fontOn = false;
+    if (win && win.addEventListener) { win.addEventListener("resize", onResize); win.addEventListener("orientationchange", onResize); }
     return !!(root && ctx2);
   }
   /** DPR-aware bitmap, like js/ui/hud.js drawMinimap: re-measured on a key change only. */
   function measure() {
     const dpr = (win && win.devicePixelRatio) || 1;
     const hl = parseFloat(root.style.getPropertyValue("--hl-s")) || 1;
-    const iw = win ? win.innerWidth : 0, ih = win ? win.innerHeight : 0;
-    const z = cv.currentCSSZoom || 1;
+    // window.innerWidth/Height and currentCSSZoom each flush layout; at the 10 Hz draw that was one forced
+    // reflow per tick (HUD F-07). Viewport: re-read on resize/orientation only. Zoom (fit cap): within ~1 s.
+    if (vDirty || ++zAge >= 10) {
+      vDirty = false; zAge = 0;
+      vw = win ? win.innerWidth : 0; vh = win ? win.innerHeight : 0; zSeen = cv.currentCSSZoom || 1;
+    }
+    const iw = vw, ih = vh, z = zSeen;
     if (iw === mKey[0] && ih === mKey[1] && dpr === mKey[2] && hl === mKey[3] && z === mKey[4]) return;
     mKey[0] = iw; mKey[1] = ih; mKey[2] = dpr; mKey[3] = hl; mKey[4] = z;
     cssW = cv.clientWidth || 128; cssH = cv.clientHeight || 48;
     ratio = Math.max(1, Math.min(4, z * dpr * hl));
     const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);
-    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; fontOn = false; }
   }
 
-  const C_THR = "#2ecc71", C_BRK = "#ff3b3b", C_STR = "#ffffff", C_MID = "rgba(255,255,255,0.28)";
+  // Throttle / brake read CvdPalette at paint time, so a COLOUR VISION change
+  // reaches the next frame (#1595); steering stays white in every mode.
+  const C_STR = "#ffffff", C_MID = "rgba(255,255,255,0.28)";
+  const ink = (key) => (typeof CvdPalette !== "undefined" ? CvdPalette.hex(key) : "") || C_STR;
   function draw(c) {
+    const C_THR = ink("thr"), C_BRK = ink("brk");
     const w = cssW, h = cssH, pad = 2, lx = w - 9;   // the legend's column at the right
     c.setTransform(ratio, 0, 0, ratio, 0, 0);
     c.clearRect(0, 0, w, h);
-    c.font = "bold 8px sans-serif"; c.textBaseline = "middle";
+    // Assigning ctx.font resolves the canvas's computed style: a forced style/layout pass per 10 Hz draw
+    // (HUD F-07). The font survives clearRect/setTransform; only a bitmap resize (measure) resets it.
+    if (!fontOn) { c.font = "bold 8px sans-serif"; c.textBaseline = "middle"; fontOn = true; }
     // centre line (steer zero)
     c.strokeStyle = C_MID; c.lineWidth = 1; c.setLineDash([3, 3]);
     c.beginPath(); c.moveTo(0, h / 2); c.lineTo(lx - 2, h / 2); c.stroke(); c.setLineDash([]);
@@ -110,10 +123,10 @@ const HudInputs = (function () {
     } else if (n > 1) {
       const dx = (lx - 2) / (trace.n - 1), x0 = (lx - 2) - (n - 1) * dx;
       // BRAKE: a translucent fill under the line, then the line.
-      c.fillStyle = "rgba(255,59,59,0.25)";
+      c.fillStyle = C_BRK; c.globalAlpha = 0.25;
       c.beginPath(); c.moveTo(x0, h - pad);
       for (let i = 0; i < n; i++) c.lineTo(x0 + i * dx, levelY(trace.get(trace.brk, i), h, pad));
-      c.lineTo(x0 + (n - 1) * dx, h - pad); c.closePath(); c.fill();
+      c.lineTo(x0 + (n - 1) * dx, h - pad); c.closePath(); c.fill(); c.globalAlpha = 1;
       line(c, trace.brk, n, x0, dx, h, pad, C_BRK, false);
       line(c, trace.thr, n, x0, dx, h, pad, C_THR, false);
       line(c, trace.str, n, x0, dx, h, pad, C_STR, true);
@@ -153,8 +166,9 @@ const HudInputs = (function () {
     const data = snapshot(), samples = data.samples, c = reviewCanvas.getContext("2d");
     reviewCanvas.hidden = !samples.length;
     reviewNote.textContent = samples.length
-      ? "Last continuous " + data.durationS.toFixed(2) + " s · lap " + data.lap + " · gear " + (data.gear > 0 ? data.gear : "N") + ". T: throttle · B: brake · S: steering (+ right). Reading does not resume or change driving."
-      : "No continuous input samples. Enable INPUTS in Settings → Display → HUD and drive in Standard view, then pause to review.";
+      ? I18n.t("hud.inputs.review", { dur: data.durationS.toFixed(2), lap: data.lap, gear: data.gear > 0 ? data.gear : "N" },
+        "Last continuous {dur} s · lap {lap} · gear {gear}. T: throttle · B: brake · S: steering (+ right). Reading does not resume or change driving.")
+      : I18n.t("hud.inputs.reviewEmpty", null, "No continuous input samples. Enable INPUTS in Settings → Display → HUD and drive in Standard view, then pause to review.");
     if (!c || !samples.length) return;
     const w = reviewCanvas.clientWidth || 640, h = 180;
     const dpr = Math.max(1, Math.min(3, win && win.devicePixelRatio || 1));
@@ -164,7 +178,7 @@ const HudInputs = (function () {
     c.clearRect(0, 0, w, h); c.fillStyle = "#10131b"; c.fillRect(0, 0, w, h);
     c.font = "16px sans-serif"; c.textBaseline = "middle";
     const y = (v, channel) => channel === "steering" ? (top + bottom) / 2 - Math.max(-1, Math.min(1,v)) * (bottom-top)/2 : bottom - clamp01(v) * (bottom-top);
-    for (const [channel,label,color,legendY] of [["throttle","T",C_THR,top],["brake","B",C_BRK,top+24],["steering","S",C_STR,top+48]]) {
+    for (const [channel,label,color,legendY] of [["throttle","T",ink("thr"),top],["brake","B",ink("brk"),top+24],["steering","S",C_STR,top+48]]) {
       c.strokeStyle = color; c.lineWidth = 2; c.beginPath();
       samples.forEach((sample,i) => { const x = right + sample.seconds / WINDOW_S * (right-left), py = y(sample[channel],channel); if(i)c.lineTo(x,py);else c.moveTo(x,py); }); c.stroke();
       c.fillStyle = color; c.fillText(label,right+12,legendY);
@@ -175,16 +189,17 @@ const HudInputs = (function () {
   }
   function mountReview() {
     if (review || !doc || !doc.querySelector) return !!review;
-    const host = doc.querySelector("#pausemenu .sheet-body");
+    // A RACE TOOLS tile beside REWIND & RETRY (css/experience.css), the sheet body when there is no tray
+    const tray = doc.querySelector("#pausemenu #pm-quick-doors"), host = tray || doc.querySelector("#pausemenu .sheet-body");
     if (!host) return false;
     review = doc.createElement("details"); review.className = "input-review";
-    const summary = doc.createElement("summary"); summary.className = "adv-more-btn"; summary.textContent = "REVIEW INPUTS";
+    const summary = doc.createElement("summary"); if (!tray) summary.className = "adv-more-btn"; summary.textContent = I18n.t("hud.inputs.reviewTitle", null, "REVIEW INPUTS");
     reviewNote = doc.createElement("p"); reviewNote.className = "adv-help";
     reviewCanvas = doc.createElement("canvas"); reviewCanvas.width = 640; reviewCanvas.height = 180; reviewCanvas.className = "input-review-canvas";
     reviewCanvas.setAttribute("role","img");
     review.append(summary,reviewNote,reviewCanvas);
     review.addEventListener("toggle", () => { if (review.open) paintReview(); });
-    if (win && win.addEventListener) win.addEventListener("resize", () => { if (review.open) paintReview(); });
+    if (win && win.addEventListener) win.addEventListener("resize", onResize);   // one shared reference: the DOM dedupes it with bind()'s
     const quit = doc.getElementById("pm-quit"); host.insertBefore(review,quit && quit.parentElement === host ? quit : null);
     paintReview(); return true;
   }
@@ -242,8 +257,12 @@ const HudInputs = (function () {
     labelT -= DRAW_MS;
     if (labelT <= 0) {
       labelT = LABEL_MS;
-      cv.setAttribute("aria-label", "Inputs: throttle " + pct(thr) + "%, brake " + pct(brk) + "%, steering "
-        + Math.round(Math.abs(str) * 100) + "% " + (str > 0.02 ? "right" : str < -0.02 ? "left" : "centre") + ", gear " + (gear > 0 ? gear : "neutral"));
+      const dirKey = str > 0.02 ? "right" : str < -0.02 ? "left" : "centre";
+      cv.setAttribute("aria-label", I18n.t("hud.inputs.label", {
+        thr: pct(thr), brk: pct(brk), steer: Math.round(Math.abs(str) * 100),
+        dir: I18n.t("hud.inputs." + dirKey, null, dirKey),
+        gear: gear > 0 ? gear : I18n.t("hud.inputs.neutral", null, "neutral"),
+      }, "Inputs: throttle {thr}%, brake {brk}%, steering {steer}% {dir}, gear {gear}"));
     }
   }
 

@@ -184,7 +184,7 @@ The rotated-monitor bug was the *viewport shape* mechanism answering the
 answering *container size* with two different sets of hand-picked thresholds.
 Nothing here needed a new technique — it needed the table.
 
-**This table belongs in `docs/LAYOUT-AUDIT.md`** (which already has a shorter
+**This table belongs in `docs/COMPONENTS.md`** (which already has a shorter
 three-row version) as the thing to consult before adding any layout rule.
 
 ## 9. `data-shape` works, but check whether CSS can now do it alone
@@ -420,7 +420,7 @@ top layer never has to arbitrate between them.
 
 ## 17. Ranked, second pass
 
-1. ~~**Write the seven-axis table into `docs/LAYOUT-AUDIT.md`**~~ — **done**.
+1. ~~**Write the seven-axis table into `docs/COMPONENTS.md`**~~ — **done**.
 2. ~~**`.pane-pair` primitive**~~ — **built**, and `#carsetup` + `#career` are on
    it (§15). **`#select` is the one left**: it needs `data-shape="tall"` to win
    over `[data-pair="on"]` (it already does on specificity — `#sel-inner[data-shape]`

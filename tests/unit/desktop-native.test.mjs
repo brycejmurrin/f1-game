@@ -51,13 +51,18 @@ test("desktop main uses privileged app:// via app-protocol (Range handler)", () 
   // Autoplay: no CLI flag needed (research B1.4); set webPreferences explicitly.
   assert.doesNotMatch(MAIN, /appendSwitch\(\s*["']autoplay-policy["']/);
   assert.match(MAIN, /autoplayPolicy:\s*["']no-user-gesture-required["']/);
-  // Soft-GL is opt-in via APEX_DESKTOP_SOFT_GL — never implied by CI= alone.
-  assert.match(MAIN, /APEX_DESKTOP_SOFT_GL/);
-  assert.match(MAIN, /enable-unsafe-webgpu/);
-  assert.doesNotMatch(MAIN, /CI\s*===\s*["']true["']/);
-  assert.doesNotMatch(MAIN, /VulkanFromANGLE|DefaultANGLEVulkan|use-vulkan/);
+  // Soft-GL / no-sandbox are opt-in env flags routed through lib/debug-flags.cjs
+  // (dev runs only) — never implied by CI= alone.
+  const FLAGS_SRC = readFileSync(join(ROOT, "desktop/lib/debug-flags.cjs"), "utf8");
+  assert.match(MAIN, /require\(["']\.\/lib\/debug-flags\.cjs["']\)/);
+  assert.match(FLAGS_SRC, /APEX_DESKTOP_SOFT_GL/);
+  assert.match(FLAGS_SRC, /enable-unsafe-webgpu/);
+  for (const src of [MAIN, FLAGS_SRC]) {
+    assert.doesNotMatch(src, /CI\s*===\s*["']true["']/);
+    assert.doesNotMatch(src, /VulkanFromANGLE|DefaultANGLEVulkan|use-vulkan/);
+  }
   // no-sandbox only when APEX_DESKTOP_NO_SANDBOX is set (never release default).
-  assert.match(MAIN, /APEX_DESKTOP_NO_SANDBOX/);
+  assert.match(FLAGS_SRC, /APEX_DESKTOP_NO_SANDBOX: \[\["no-sandbox"\]\]/);
   assert.match(MAIN, /setWindowOpenHandler/);
   assert.match(MAIN, /will-navigate/);
   assert.match(MAIN, /setPermissionRequestHandler\(permissions\.requestHandler\(ORIGIN\)\)/);
@@ -139,6 +144,27 @@ test("desktop release fuses: the test pack turns the inspect fuse on, the releas
   assert.equal(cfg.electronFuses.enableNodeCliInspectArguments, false);
   assert.equal(cfg.electronFuses.grantFileProtocolExtraPrivileges, false);
   assert.match(pkg.scripts["pack:test"], /enableNodeCliInspectArguments=true/);
+  // Certificate-free hardening (Electron 44 fuses doc): asar integrity on macOS/Windows,
+  // paired with onlyLoadAppFromAsar so the validation cannot be bypassed via app/.
+  assert.equal(cfg.electronFuses.enableEmbeddedAsarIntegrityValidation, true);
+  assert.equal(cfg.electronFuses.onlyLoadAppFromAsar, true);
+  assert.equal(cfg.electronFuses.runAsNode, false);
+  assert.equal(cfg.electronFuses.enableNodeOptionsEnvironmentVariable, false);
+});
+
+test("debug env flags weaken only an unpackaged run; a packaged build ignores them", () => {
+  const flags = require("../../desktop/lib/debug-flags.cjs");
+  const env = { APEX_DESKTOP_SOFT_GL: "1", APEX_DESKTOP_NO_SANDBOX: "true" };
+  assert.deepEqual(flags.debugSwitches(env, { isPackaged: true }), [], "packaged: no switch from env");
+  const dev = flags.debugSwitches(env, { isPackaged: false });
+  assert.deepEqual(dev.find(([k]) => k === "no-sandbox"), ["no-sandbox"]);
+  assert.deepEqual(dev.find(([k]) => k === "use-gl"), ["use-gl", "angle"]);
+  assert.deepEqual(flags.debugSwitches({ CI: "true" }, { isPackaged: false }), [], "CI= alone enables nothing");
+  assert.deepEqual(flags.debugSwitches({ APEX_DESKTOP_NO_SANDBOX: "0" }, { isPackaged: false }), []);
+  assert.ok(flags.switchArgs(env).includes("--no-sandbox"));
+  assert.ok(flags.switchArgs(env).includes("--use-gl=angle"));
+  // main.js reads no APEX_DESKTOP_* env flag of its own: all go through the gate.
+  assert.doesNotMatch(MAIN, /process\.env\[|process\.env\.APEX_DESKTOP/);
 });
 
 test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch push)", () => {
@@ -270,9 +296,10 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
     // Drive the real platform UI callback using the generic pairing builder.
     // The adapter must preserve relay configuration and null QR teardown.
     const native = vm.runInContext("Native", ctx);
-    const pad = vm.runInNewContext(readFileSync(join(ROOT, "js/input/phone-pad.js"), "utf8") + ";PhonePad", {
-      location: sandbox.location, URL,
-    }, { filename: absSrc("js/input/phone-pad.js") });
+    const padCtx = vm.createContext({ location: sandbox.location, URL });
+    for (const f of ["js/input/phone-pad-codec.js", "js/input/phone-pad-page.js"])
+      vm.runInContext(readFileSync(join(ROOT, f), "utf8"), padCtx, { filename: absSrc(f) });
+    const pad = vm.runInContext(readFileSync(join(ROOT, "js/input/phone-pad.js"), "utf8") + ";PhonePad", padCtx, { filename: absSrc("js/input/phone-pad.js") });
     const nodes = new Map(), qrs = [];
     const $ = (id) => {
       if (!nodes.has(id)) nodes.set(id, { textContent: "", hidden: true, setAttribute() {}, scrollIntoView() {}, append() {} });

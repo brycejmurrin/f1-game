@@ -24,11 +24,6 @@
    and portrait racing is blocked outright (#rotate-device), so it is rarely on
    screen during a race at all. */
 :root {
-  /* Painted floor for GAS/BRAKE/BOOST/OT/AERO/PAUSE/CAM labels. Dock `zoom`
-     (--hud-z-dock) shrinks authored --fs-micro with the buttons; 14×0.69
-     painted 9.7px on a short landscape phone at HUD 150% (hud-mock 2026-10-14).
-     Font rules divide this by --touch-label-z. Width/height stay on --tap/--hold. */
-  --touch-label-floor: 10px;
   --btn: 76px;                                        /* action button diameter */
   /* 12px (was 8): AERO / OT / BOOST translucent fills at 8px read as one
      merged column on the fixed portrait ladder and on desktop survey stubs
@@ -103,6 +98,14 @@
    rather than glanced at, and they sit over the road rather than over the
    cockpit. .steerbtn keeps its own fill. */
 :where(#btn-throttle, #btn-brake, #btn-boost, #btn-ot, #btn-aero) { opacity: var(--btn-a); }
+
+/* HELD PEDALS ARE NOT THE SAME SHAPE AS A TAP. GAS and BRAKE are what a
+   thumb rests on for a whole stint; BOOST, OT and AERO are glances. A
+   squircle against a circle is readable before the label is (Apple HIG,
+   game controls: the control should say what it does). Width and height
+   stay on --btn / --hold, so the pitch and the dock's width budget do
+   not move, and the input mapping is untouched. */
+.touchbtn.pedal { border-radius: var(--touch-pedal-radius); }
 
 /* LEFT thumb column: GAS (bottom) + BRAKE (above) — always.
    RIGHT thumb column: BOOST + OT by default; in MANUAL mode the gearbox
@@ -259,12 +262,23 @@
   margin: 0;
 }
 #ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
+/* THE DISMISS X IS A TAP TARGET: 20px glyph + 4/8 padding was a ~27px box,
+   under the --tap floor every other touch control meets. Grow the box, keep
+   the glyph; flex centring keeps the x where it was drawn. */
+#ios-install-x { min-width: var(--tap); min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; }
 /* `display: flex` above OUTRANKS the UA's `[hidden] { display: none }`, so the
    attribute stops working and the banner shows on every platform — where it
    sits bottom-centre and swallows clicks meant for #mb-race / #sel-go / #rs-go.
    The dock groups carry the same restatement a few rules up for the same
    reason. Caught by steering.spec.js, whose every click timed out. */
 #ios-install[hidden] { display: none; }
+/* IN A RACE the bottom edge is the thumb row and the instrument cluster.
+   The title park (bottom: safe area) covers GAS and the steer arrows on a
+   phone and a tablet — measured on the before shots (phone portrait,
+   phone landscape, iPhone SE, tablet portrait, 2026-10-29). The nudge
+   stays on the menus, which is where Share is. A qualified selector, so
+   the bare `#ios-install { display: flex }` / `[hidden]` pair is unchanged. */
+body.in-race #ios-install { display: none; }
 
 /* LEFT-HANDED LAYOUT. F1 Mobile ships right- and left-handed wheel configs as
    first-class, separately enumerated control schemes, and mirroring is the
@@ -347,20 +361,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */
 @media (orientation: landscape) {
-  /* HUD becomes a short horizontal strip at the very bottom so the big gear
-     no longer floats up over the car */
-  .hud-bottom { flex-direction: row; }
-  /* Positioning (left/right/bottom) now lives entirely in the INSTRUMENT
-     CLUSTER grid block below (`position: static`, `display: grid`) — this
-     rule only sets what that block does not: how the strip compacts when it
-     does not fit. Measured: the strip wants 467px. An iPhone SE landscape
-     leaves 467 here, 383 in manual and 287 in buttons mode — so it also has
-     to COMPACT, and wrap rather than collide when even that is not enough. */
-  .hud-bottom {
-    transform: none;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
   /* Landscape sizes the readouts DOWN. Portrait can afford a 58px gear because
      the screen is tall and the HUD owns the bottom third; landscape has ~390px
      of height total and the road is the thing you are actually looking at.
@@ -383,6 +383,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #hud-speed { font-size: calc(28px * var(--hud-text-boost, 1)); }
   #hud-energy { width: 132px; height: 15px; }
   .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 6); }
+  /* ONE INSTRUMENT (design pass 2a; the plate itself is in css/hud.css, which may read --accent):
+     SPEED is the hero figure (read every corner), GEAR a compact block, the inner plates go.
+     A player-placed gear or speed (data-hl-user) keeps its own plate. */
+  body:not(.desktop) #hud-gearbox:not([data-hl-user]) { background: none; border: 0; border-radius: 0; padding: 0 calc(var(--gap) * 2 / 3) 0 0;
+    box-shadow: inset -1px 0 0 var(--card-line); }
+  body:not(.desktop) #hud-speed:not([data-hl-user]) { background: none; box-shadow: none; }
+  body:not(.desktop) #hud-gear { font-size: 34px; }
+  body:not(.desktop) #hud-tach { width: 54px; }
+  body:not(.desktop) #hud-speed { font-size: calc(40px * var(--hud-text-boost, 1)); font-style: normal; }
   /* THE LAP BOXES ARE PART OF THE HUD TOO. POS/LAP/TIME/BEST sat at the 9px
      label / 19px value the stylesheet uses everywhere, with NO touch override
      at all — so the one place they are read at arm's length, on a phone, in
@@ -454,6 +463,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body.desktop .dock .dock-grp.col { flex-direction: column; align-items: center; }
   body:not(.desktop) .dock-grp.row,
   body.desktop .dock .dock-grp.row { flex-direction: row; align-items: flex-end; }
+  /* The two arrows are one steering control. The plate fills the gap
+     between them. No padding: a pad would spend the buttons-mode width
+     budget and bring the wrap back. */
+  body:not(.desktop) #grp-steer,
+  body.desktop .dock #grp-steer {
+    background: color-mix(in oklab, var(--look-hud-bg) 92%, transparent);
+    border-radius: 999px;
+  }
   /* `display:flex` above outranks the UA's [hidden] rule, so restate it — an
      empty group left visible still holds the dock's gap open. */
   body:not(.desktop) .dock-grp[hidden],
@@ -479,13 +496,24 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     /* Same expression as zoom: when fitHud writes --hud-z-dock the labels
        divide the 10px floor by it so GAS/BRAKE stay readable. Hit boxes
        stay --tap/--hold. */
-    --touch-label-z: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+    --touch-label-z: min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
     /* --hud-z-dock: fitHud's height cap for the pedal/shift columns — the
        raw slider let the 2-high pedal stack outgrow a 390px landscape
        viewport from 150% and put BRAKE off the top edge. Same mechanism as
        the --hud-z-top/bot caps on the readout clusters; absent when the
-       player's setting fits. */
-    zoom: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+       player's setting fits. min(), not a fallback: a cap a fit wrote at a
+       larger BUTTON SIZE must never paint a smaller setting bigger
+       (UI-HUNT-2-HUD: 85 px GAS at 100 % after 300 %). */
+    zoom: min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+  }
+  /* THE STEER DOCK HAS ITS OWN CAP. On a landscape phone the 3-high taps
+     column binds --hud-z-dock near 118 % while the one-row steer arrows have
+     room to 2-3x; fitHud writes --hud-z-dock-l (>= --hud-z-dock, always
+     published with it) so BUTTON SIZE keeps growing the side that fits. */
+  body:not(.desktop) #dock-left,
+  body.desktop #dock-left:has(.touchbtn:not([hidden])) {
+    --touch-label-z: min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+    zoom: min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
   }
   /* …DOWN TO THE 44px RUNG, NOT TO 1. The floor above was a flat 1, so the
      BUTTON SIZE slider (40–300%, index.html) did nothing below 100% — on a
@@ -494,6 +522,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      The floor is now the zoom at which the 54px tap paints 44px (Apple HIG /
      WCAG 2.5.5); the 72px holds paint 59. The narrow tier below restates it
      for its 48px taps. js/ui/hud.js reads the same token to size the dock cap. */
+  /* fitHud may reduce the preferred 44px rung on a crowded viewport, but
+     its independent 24/48 emergency floor keeps even narrow-tier taps at 24px. */
   :root { --hud-btn-floor: 0.82; }
   /* The label is bounded by the circle: TEXT SIZE Larger lifts --fs-micro to
      18px, and BOOST at 800 weight is ~59px wide at that size — past a 54px
@@ -600,7 +630,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     grid-template-areas:
       "gear speed  ot"
       "gear energy aero";
-    align-items: start; justify-items: center;
+    align-items: start; justify-items: center; justify-content: center;
     gap: var(--gap) calc(var(--gap) * 2 / 3);
     min-width: 0;                  /* may shrink before it pushes a dock */
     pointer-events: none;
@@ -627,9 +657,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* The AERO chip's text is a live COUNTDOWN — "AERO 240m", "NO AERO ZONE" —
      so it changes width every frame. Wrapping it to two lines made the whole
      cluster jump a row taller and back as the car approached a zone. */
+  /* font-size already on #hud-ot / #hud-aero in css/hud.css. Padding is the
+     same 5px 10px there too, but dropping it here lowers tree rawSpacing and
+     that ceiling is owned outside this lane — keep the px until a ratchet
+     carve can land with it. nowrap is the only non-restate. */
   #hud-ot,
   #hud-aero {
-    white-space: nowrap; font-size: var(--fs-micro); padding: 5px 10px;
+    white-space: nowrap; padding: 5px 10px;
   }
 
   /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----
@@ -739,7 +773,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     #hud-gear { font-size: 40px; }
     #hud-tach { width: 84px; }
     body:not(.desktop) #hud-energy { width: 108px; }
-    body:not(.desktop) #hud-speed { font-size: calc(24px * var(--hud-text-boost, 1)); }
+    body:not(.desktop) #hud-speed { font-size: calc(30px * var(--hud-text-boost, 1)); }
+    body:not(.desktop) #hud-gear { font-size: 28px; }
     body:not(.desktop) #hud-ot,
     body:not(.desktop) #hud-aero { font-size: var(--fs-micro); padding: calc(var(--gap) / 3) calc(var(--gap) * 2 / 3); }
     body:not(.desktop) .hud-label { font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.27 / var(--hud-z, 1))); }
@@ -752,16 +787,81 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body.steer-touch #btn-brake { bottom: calc(12px + var(--sab)); }
 }
 
+/* PORTRAIT TABLET + LEFT HAND. Phones in portrait are the rotate gate
+   (max-width 743px). A tablet is wide enough to race, and the 76px phone
+   ladder looks lost on an 820px slab. 96px still leaves the five-high
+   buttons column under half the 1180px height. The cluster's clearance
+   was a literal 112 (16 + 76 + 20); it has to grow with --btn or GAS
+   meets the readout. The safe-area term stays divided by --hud-z. */
+@media (orientation: portrait) and (min-width: 744px) {
+  :root {
+    --btn: var(--touch-tablet-btn);
+    --steer: var(--touch-tablet-steer);
+  }
+  body.steer-buttons .hud-bottom {
+    bottom: calc(16px + var(--btn) + 20px + var(--sab) / var(--hud-z));
+  }
+  .touchbtn { font-size: max(16px, var(--touch-label-floor)); }
+  .steerbtn { font-size: 32px; }
+}
+/* LEFT-HANDED PORTRAIT. Landscape already swaps the docks with
+   flex-direction: row-reverse (the groups keep brake-above-gas). Portrait
+   paints the ladder with position:fixed, so row-reverse does nothing there
+   and a left-handed player still got the right-hand columns. These rules
+   live in portrait only: an id beats the landscape dock's inset:auto, and
+   a fixed left/right on a static button is ignored today but would fight
+   the flex the day that changes. Vertical order stays — mirroring it would
+   put BRAKE under GAS. The steer PAIR moves to the right edge with the
+   left arrow still left of the right arrow. Position only, never a fill. */
+@media (orientation: portrait) {
+  body.mirror-controls:not(.steer-buttons) #btn-throttle,
+  body.mirror-controls:not(.steer-buttons) #btn-brake {
+    left: auto; right: calc(16px + var(--sar));
+  }
+  body.mirror-controls:not(.steer-buttons) #btn-boost,
+  body.mirror-controls:not(.steer-buttons) #btn-ot,
+  body.mirror-controls:not(.steer-buttons) #btn-aero,
+  body.mirror-controls #shift-up,
+  body.mirror-controls #shift-down {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls.steer-buttons #btn-throttle,
+  body.mirror-controls.steer-buttons #btn-brake,
+  body.mirror-controls.steer-buttons #btn-boost {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls.steer-buttons #btn-ot,
+  body.mirror-controls.steer-buttons #btn-aero {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls #btn-steer-right {
+    left: auto; right: calc(16px + var(--sar));
+  }
+  body.mirror-controls #btn-steer-left {
+    left: auto; right: calc(16px + var(--steer) + var(--btn-gap) + var(--sar));
+  }
+}
+
+/* CAM + PAUSE ARE TOP-BAND CHROME, NOT DRIVING CONTROLS (#5179). They used to ride BUTTON SIZE (--tap-hud,
+   up to 150 %; PAUSE to 200 %), so at Bryce's BUTTON 245 % / HUD 155 % on an 852x393 iPhone the pair painted
+   97x52 + 52x52 CSS px beside a 43 px timing strip (~14 % of the screen height each). Now ONE fixed 44 px
+   tap target for both, top-aligned with the strip's row at the safe edge. It is a CONSTANT on purpose:
+   HUD SIZE must not move or resize a single control (Bryce 2026-10-17, hud-layout "controls ignore HUD
+   SIZE"), and the strip's height follows HUD SIZE, so neither may feed it. 44 <= the --tap-hud band, so
+   every readout that hangs below it (sectors, limits, flag, radio card) keeps its anchor. */
+:is(#btn-cam, #pausebtn, #campicker) {
+  --hud-chrome-h: 44px;
+  --hud-chrome-t: calc(8px + var(--sat));
+  --hud-chrome-gap: calc(var(--gap) / 2);
+}
 #pausebtn {
   position: fixed;
-  top: calc(8px + var(--sat));
+  top: var(--hud-chrome-t);
   right: calc(10px + var(--sar));
   z-index: 14;
-  /* in-race chrome, but still a thumb target — on the ladder like the rest.
-     --tap-hud (css/hud.css): it follows HUD SIZE with the timing tower beside
-     it, and never shrinks below --tap. */
-  width: var(--tap-hud); height: var(--tap-btn, var(--tap-hud));
-  font-size: max(var(--touch-label-floor), calc(100% * var(--hud-btn-z)));
+  /* A fixed chrome target (see above): a square box, so the coarse-pointer radius below is a true circle. */
+  width: var(--hud-chrome-h); height: var(--hud-chrome-h);
+  font-size: max(var(--touch-label-floor), 100%);
   border-radius: var(--r-md);
   padding: 0;
   /* Race chrome, dark in every theme — same reason as .touchbtn. LIGHT's
@@ -771,35 +871,37 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   color: var(--look-hud-ink);
   border: 1px solid var(--look-hud-dim);
 }
-/* ABOVE 150 % BUTTON SIZE, PAUSE keeps growing with the docks (up to 200 %) — DOWN only, into its own column:
-   its width and CAM stay on the --tap-hud band (css/hud.css, capped at 150 %), so the top row never gets wider
-   (round 3 grew both and CAM landed on the tower's BEST box at 640x360, hud-mock 2026-10-14). The right column,
-   flag and radio card hang from the band too, so none of them moves. The min() arm stops PAUSE at the sector
-   plate, which stands off --dock-r-w (0 before the first fit: the arm goes negative and PAUSE keeps the band).
-   Broadcast keeps the band (#bc-pip hangs under PAUSE). At or under 150 % --tap-btn IS --tap-hud. */
-body:not(.desktop):not(.bc-on) {
-  --hud-btn-zt: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2);
-  --tap-btn: max(var(--tap-hud), min(calc(var(--tap-hud) / var(--hud-btn-z) * var(--hud-btn-zt)), calc((10px + var(--dock-r-w, 0px)) * var(--hud-z-top, var(--hud-scale)) - 14px)));
+/* A thumb finds a circle faster than the small rounded square. The hit
+   box is the square --hud-chrome-h (width and height are pinned), so this is a
+   true circle. A fine pointer keeps the square so PAUSE still matches the CAM pill beside it. */
+@media (pointer: coarse) {
+  #pausebtn { border-radius: 50%; }
 }
 /* CAM mode button sits just left of the pause button (top-right). */
 #btn-cam {
   position: fixed;
-  top: calc(8px + var(--sat));
-  /* DERIVED, not 58: this used to be 10 + --tap + 4 with --tap hard-coded at
-     its 44px desktop value, so on touch (--tap: 52px) CHASE overlapped the
-     pause button by 4px on every phone. */
-  right: calc(10px + var(--tap-hud) + 4px + var(--sar));
+  top: var(--hud-chrome-t);
+  /* DERIVED from PAUSE's own box + the pair's even gap, never a constant. */
+  right: calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar));
   z-index: 14;
-  height: var(--tap-hud);
-  min-width: calc(76px * var(--hud-btn-z));
-  padding: 0 calc(var(--gap) * var(--hud-btn-z));
+  height: var(--hud-chrome-h);
+  min-width: calc(var(--hud-chrome-h) * 1.6);
+  padding: 0 calc(var(--gap) * 0.75);
   border-radius: var(--r-md);
-  font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-z)));
+  font-size: max(var(--touch-label-floor), var(--fs-micro));
   font-weight: 700;
   letter-spacing: var(--ls-3);
   background: var(--look-hud-bg);
   color: var(--look-hud-ink);
   border: 1px solid var(--look-hud-dim);
+}
+/* PORTRAIT KEEPS ITS OLD BAND (#5179 is a landscape fix): CAM / PAUSE at --tap-hud, top-aligned, CAM stacked
+   under PAUSE (css/track-detail.css). A narrower CAM there let fitHud grow the tower into the radio card's
+   lane, and the card collapsed beside the sector plate (hud-layout portrait radio card, HUD 150 %). */
+@media (orientation: portrait) {
+  :is(#btn-cam, #pausebtn, #campicker) { --hud-chrome-t: calc(8px + var(--sat)); --hud-chrome-h: var(--tap-hud); }
+  #btn-cam { min-width: calc(76px * var(--hud-btn-z)); padding: 0 calc(var(--gap) * var(--hud-btn-z));
+    font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-z))); }
 }
 /* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
    cinematic view — readouts, start lights, announce, cam picker and the cam
@@ -863,11 +965,16 @@ body.hud-hidden #hud-restore::after {
   /* Same derivation as #btn-cam above — 52 was 8 + --tap at 44px, so the
      picker overlapped #pausebtn by 8px on touch. */
   top: calc(8px + var(--tap-hud) + var(--sat));
-  right: calc(10px + var(--tap-hud) + 4px + var(--sar));
+  right: calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar));
   z-index: 24;
   display: flex; flex-wrap: wrap;
   --balance-basis: 84px; --balance-min: 84px;
   width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
+  /* Every view stays reachable: on a 390 px landscape the grid ran to y 461
+     and HELMET (the default cam) was offscreen (UI hunt 2026-10-29 row 1). */
+  max-height: calc(100dvh - 8px - var(--tap-hud) - var(--sat) - var(--sab) - 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   gap: calc(var(--gap) * 0.5);
   padding: calc(var(--gap) * 2 / 3);
   background: rgba(8, 8, 14, 0.92);
@@ -890,17 +997,23 @@ body.hud-hidden #hud-restore::after {
   background: var(--plate-hover);
   border: 1px solid var(--card-line);
   color: var(--text);
+  /* A cell never narrows below its label (CINEMATIC, TRACKSIDE, OVERHEAD
+     clipped at 3 columns; UI hunt 2026-10-29 row 4); the row wraps instead. */
+  min-width: max-content;
+  white-space: nowrap;
 }
 #campicker button.active {
   background: var(--plate-on);
   border-color: var(--red);
 }
 /* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
-   max-height gate — 852×393 is already body compact (body --compact-at 600). */
+   max-height gate — 852×393 is already body compact (body --compact-at 600).
+   A short landscape has width to spare, not height: spread the grid left of
+   CAM (5–6 columns, 4 rows of 20 views) instead of the old 280 px / 7 rows. */
 body[data-density="compact"] #campicker {
   gap: calc(var(--gap) * 0.5);
   padding: calc(var(--gap) * 0.75);
-  width: min(280px, calc(100vw - var(--sal) - var(--sar) - 20px));
+  width: min(560px, calc(100vw - var(--sal) - var(--sar) - 24px - var(--tap-hud)));
 }
 /* #soundbtn WAS `position: fixed; top; right; z-index: 22` here, and game.js
    un-hid it on every NON-RACE screen — so a title-screen control floated over
@@ -911,4 +1024,21 @@ body[data-density="compact"] #campicker {
    safe-area compensation of its own. Sizing comes from .minibtn; the only rule
    it still needs is the one below, in css/menus.css, that stops it stretching
    to the full width of the brand column. */
+
+/* RETIRED (js/race/retired-card.js builds it): the driving controls go, one card
+   stays, centred in the safe area; its button is a 44 px touch target and the
+   card is ~150 px tall, so it fits 844x390 landscape. */
+body[data-retired-wait] .dock-grp, body[data-retired-wait] .touchbtn { display: none !important; }
+#retired-card {
+  position: fixed; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  box-sizing: border-box; max-width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  display: flex; flex-direction: column; align-items: center; gap: var(--gap);
+  padding: var(--gap) calc(var(--gap) * 2); border-radius: 12px; background: var(--panel); color: var(--text);
+  border: 1px solid color-mix(in oklab, var(--text) 18%, transparent); text-align: center;
+}
+#retired-card[hidden] { display: none; }
+#retired-card b { font-size: 1.35rem; letter-spacing: .12em; }
+#retired-card span { font-size: .85rem; opacity: .8; }
+#retired-card button { min-height: 44px; min-width: 44px; padding: 0 calc(var(--gap) * 1.5); font: inherit; font-weight: 700;
+  border-radius: 8px; border: 0; background: var(--red); color: var(--text); touch-action: manipulation; }
 } /* @layer overlays */

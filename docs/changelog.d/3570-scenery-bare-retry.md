@@ -1,1 +1,0 @@
-Fixed: a circuit whose scenery failed to download once (offline blip, CDN error) no longer stays bare for the whole session — the next race start retries the download and rebuilds the dressed world (#3570).

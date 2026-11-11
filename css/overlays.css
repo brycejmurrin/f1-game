@@ -32,7 +32,7 @@
 /* RACE IN PORTRAIT shares the pill so the three read as one stack. It sits
    first because it is the primary action now; a distinct fill would have cost
    a raw colour literal the token ratchet rightly refuses, and stack order is
-   enough hierarchy for three buttons. docs/PERF-FINDINGS.md 5a. */
+   enough hierarchy for three buttons. docs/notes/PERF-FINDINGS.md 5a. */
 #rotate-race, #rotate-controls, #rotate-exit {
   /* --tap, not --tap-min: this layer is gated to coarse-pointer phones (the
      media query below), and --tap-min is the 24px WCAG floor — with `padding:
@@ -75,11 +75,10 @@ body:not(.rotate-measure):has(> #pausemenu[open]) #rotate-device {
   pointer-events: none !important;
 }
 /* The iOS install tip sits above the race and used to paint through the
-   pause card's translucent foot on phone portrait. */
-body:has(> #pausemenu:not([hidden])) #ios-install,
-body:has(> #pausemenu[open]) #ios-install,
-html:has(> body > #pausemenu:not([hidden])) #ios-install,
-html:has(> body > #pausemenu[open]) #ios-install {
+   pause card's translucent foot on phone portrait, and through the results
+   card at 844x390 (layout-audit results, UI hunt #3 lead 4). */
+body:has(> :is(#pausemenu, #results):is(:not([hidden]), [open])) #ios-install,
+html:has(> body > :is(#pausemenu, #results):is(:not([hidden]), [open])) #ios-install {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -177,6 +176,25 @@ html:has(> body > #pausemenu[open]) #ios-install {
    ~110 own over 22 cars, nothing hidden. Expected ~3.4 screens. */
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-row { padding-block: calc(var(--gap) * 0.2); }
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-swatch { height: 1.1em; }
+/* THUMB REACH (reach round 2026-10-30): with a THUMB, the title-row bar put
+   NEXT / RACE AGAIN and MENU in the top-right corner (844x390: y < 25 %), out
+   of reach of a two-handed landscape grip. On the phone band (touch plus the
+   zoom-aware short wide sheet that put the bar in the title row) it goes back
+   to the sheet's own foot row, the bottom band
+   both thumbs reach — the same .sheet-foot plate every other sheet stands on
+   (revert-layer hands back css/components.css's paint and hairline). The
+   table pays one foot row (~59 px) of the ~222 the title-row move bought;
+   a mouse or a desktop keeps the title-row bar. */
+@media (pointer: coarse) {
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1; grid-row: 1; }
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-body { grid-column: 1; grid-row: 2; }
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot { grid-column: 1; grid-row: 3; background: revert-layer; }
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: revert-layer; }
+}
 
 /* ---------- SCREEN LOOKS: POPUPS fold (js/ui/screen-looks.js) ----------
    SETTINGS › APPEARANCE › POPUPS: the screen's own two knobs. The shared core
@@ -196,7 +214,7 @@ html:has(> body > #pausemenu[open]) #ios-install {
 :root[data-look-popups-vpos="top"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: start; }
 :root[data-look-popups-vpos="bottom"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: end; }
 
-/* TABLE ROWS — the shared .res-row (standings, results, qualifying, career
+/* ROW HEIGHT (POPUPS) — the shared .res-row (standings, results, qualifying, career
    history). TIGHT goes below even the compact tier's block padding
    (css/career.css), so it still reads on a sheet SheetShape has compacted;
    ROOMY floors each row at the tap height. Scoped, so the CAREER hub's own
@@ -213,7 +231,8 @@ html:has(> body > #pausemenu[open]) #ios-install {
      (same fix data.css documents twice). */
   top: max(var(--gap), var(--sat)); left: 50%;
   transform: translateX(-50%);
-  width: min(48rem, calc(100vw - 2 * var(--gap)));
+  /* --safe-w, not 100vw: centred on the viewport, a 100vw cap put 17 px of each end under the notch at 852 (#5201). */
+  width: min(48rem, calc(var(--safe-w) - 2 * var(--gap)));
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center; gap: calc(var(--gap) / 3) var(--gap);
   padding: var(--gap);
@@ -930,8 +949,8 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
   padding-bottom: calc(var(--tap) + var(--gap));
   scroll-padding-bottom: calc(var(--tap) + var(--gap));
 }
-/* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above the
-   non-dialog layers (title, #select, #career, #carsetup), bottom-right clear
+/* UPDATE READY (js/ui/update-check.js): a newer deploy is live. On the
+   title (and any other non-dialog menu layer), bottom-right clear
    of the safe area, a full tap target; never shown in a race (the module hides
    it there). The HUD chip's plate, not the team accent (nontext-contrast:
    --accent is decoration only). */
@@ -951,9 +970,16 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
    the ::backdrop, visible and unpressable. A popover would draw above it and
    still be inert ("except the dialog and its descendants": MDN, showModal()).
    It stands down like #save-warning and is back when the dialog closes,
-   scoped the same way (the telemetry popup is #datahub's child). */
-body:has(> dialog:modal) #update-chip,
-body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
+   scoped the same way (the telemetry popup is #datahub's child). INSTALL APP
+   (#install-chip, same z) had no such pair and sat inert the same way. */
+body:has(> dialog:modal) :is(#update-chip, #install-chip),
+body:has(> :where(#datahub) > dialog:modal) :is(#update-chip, #install-chip) { display: none; }
+/* NOT OVER A DIV SCREEN EITHER. #select, #career and #carsetup are plain
+   div.screen layers (no top layer), so z 9000 put the chips over their
+   bottom-right primary (#sel-go, #cs-done): a mis-tap on START reloaded the
+   game mid-setup. They stand down while one of those screens is shown and
+   come back on the title. All three are body's children (index.html). */
+body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #install-chip) { display: none; }
 
 /* ===== Boot-critical-path trim (from css/responsive.css) =====
    Same @layer overlays. These rules style title-hidden or in-race UI only,
@@ -1054,22 +1080,104 @@ body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
    peek lasts — js/ui/screen-looks.js flushes the box away when it ends. */
 #pausemenu:not([open]) { display: none; }
 #trackdesigner:not([open]) { display: none; }   /* restated for the PEEK reveal below (css-layers guard); css/editor.css owns the open look */
-/* Short phone (≤400px tall): RACE TOOLS as a 2-col grid with no empty cell.
-   experience.css's #pm-quick-doors is 3-col in this same overlays layer; the
-   #pausemenu id prefix wins on specificity. An odd leftover (REWIND & RETRY
-   alone, or RECOVER when REPLAY is absent) spans the row so the tray never
-   shows a hole. Floors stay at --tap (HUD survey bc-b3058e3a). */
+/* Short phone (≤400px tall): RACE TOOLS two tiles to a row. experience.css's
+   #pm-quick-doors is a 3-up flex row in this same overlays layer; the
+   #pausemenu id prefix wins on specificity. The tiles grow, so an odd
+   leftover fills its row and the tray never shows a hole. Floors stay at
+   --tap (HUD survey bc-b3058e3a). */
 @media (max-height: 400px) {
   #pausemenu #pm-quick-doors {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  #pausemenu #pm-quick-doors > :last-child:nth-child(odd) {
-    grid-column: 1 / -1;
+    --tray-cols: 2;
   }
   #pausemenu #pm-quick-doors button,
-  #pausemenu #pm-checkpoint summary {
+  #pausemenu #pm-quick-doors > details > summary {
     min-height: var(--tap);
   }
+}
+/* PAUSE · THE PHONE CARD (design pass #1, docs/notes/DESIGN-PASS-1-2026-10-30.md;
+   UI contract #5153 gap 10, docs/notes/UI-PR-D-MEASURE-2026-11-06.md).
+   On a short landscape phone the shipped GRID card was 420px on an 844px
+   screen, said PAUSED twice, and QUIT sat under the fold (top y 500 of 390).
+   One wide card instead: the race line and RESUME down the thumb column with
+   QUIT under them, RESTART | SETTINGS over the tool tray on the right, so
+   every door is on screen and nothing scrolls. The race card's track name is
+   the heading. The key is the BODY's own-unit density and shape (compact +
+   wide = a landscape phone at any UI SIZE, js/ui/sheet-shape.js), for EVERY
+   player layout: measured 2026-11-06 at 852x393 / 852x283 / 844x390 with the
+   owner export, each stored layout (LIST, COMPACT, WIDE, SIDEBAR) swapped in
+   the 420 card plus the thumb-reach bar and put QUIT 221-420 own px past the
+   sheet. A layout now rearranges doors inside this geometry (WIDE: doors along
+   the bottom edge; SIDE RIGHT mirrors the columns; COMPACT: chip-floor doors);
+   it never changes the box. The PAUSE look's CARD WIDTH and BUTTON HEIGHT
+   scale this card (760 px x width, the door floor x height). Here, not
+   css/dialogs.css: this layer outranks the tray's and the race card's own
+   grid-column (experience.css), the layouts' own grids, sheet widths and
+   heights, and the look's own width / height rules.
+   The tray is 5-up: in the shortest cell (Safari 852x283 at the export's
+   109 %) the tools track is ~137 own px; ten tiles at 4-up are three rows of
+   --tap-paint (147), at 5-up two rows (97); the 44-painted tile floor keeps
+   even a three-row practice tray (11 tiles, 125) inside the track. */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu {
+  /* 760 own px, and never under 620 PAINTED: at UI SIZE 51 % a 760 card is 388 px
+     of an 852 px window (#5200: use the width). 100% (the safe box) still caps it. */
+  --sheet-w: min(calc(max(760px, 620px / var(--ui-scale)) * var(--look-pause-w, 1)), 100%);
+  --pm-door: max(var(--tap), var(--tap-paint), var(--tap-paint-at), calc(var(--tap-0) * var(--look-pause-btn, 0)));
+  justify-items: center;
+}
+/* SIDEBAR's full-height strip and WIDE's bottom dock are geometry: the phone
+   card keeps its own height; a player's VERTICAL POSITION still moves it. */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu > .sheet { height: auto; }
+:root[data-pause-layout="sidebar"]:not([data-look-pause-vpos]):has(> body:is([data-density="compact"][data-shape="wide"], [data-pause-short])) #pausemenu { align-items: center; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-head { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "ctx restart settings" "resume tools tools" "quit tools tools";
+  align-items: stretch;
+}
+/* The race line shares the doors' row and never grows it: strong + detail,
+   the objective and pit lines stay in the tray's own cards. */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context {
+  grid-area: ctx; display: flex; flex-wrap: wrap; align-items: baseline; align-content: center;
+  gap: 0 var(--gap); padding-block: calc(var(--gap) / 3);
+  min-height: 0; max-height: var(--pm-door); overflow: hidden;
+}
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context > span { display: inline; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context > small { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); position: static; height: auto; margin: 0; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-restart { grid-area: restart; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-settings { grid-area: settings; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); }   /* gap/6 inline (~2px): MESSAGES is 3px wider than a 5-up tile's text box at gap/3 */
+/* The 5-up tile label steps down one notch: in the Home Screen and Safari windows the 59 px insets leave a 393 own px
+   tray, and MESSAGES at TEXT large (74 px) is 3 px wider than a 5-up tile's 71 px text box (CI on ec39facd and
+   354334ed, A and C; D's 456 px tray fits at full size). 0.92 x --fs-micro is 14.7 px at TEXT large (MESSAGES 68).
+   A flat step, not a container unit: `min(--fs-micro, 3.75cqi)` fit here but CI's Chromium kept the full size after a
+   layout switch (the SIDEBAR cell). The contract lets type scale, never a label overflow (#5153 §3 rule 3). */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details { font-size: calc(var(--fs-micro) * 0.92); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quit::before { content: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
+/* The doors outside the tray paint the touch comfort floor, not the compact
+   one; COMPACT (the layout that spends the least height) takes the chip floor. */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body > button:not(.as-tbtn) { min-height: var(--pm-door); flex: none; min-width: 0; }
+:root[data-pause-layout="compact"]:has(> body:is([data-density="compact"][data-shape="wide"], [data-pause-short])) #pausemenu {
+  --pm-door: max(var(--tap-paint), var(--chip-h), calc(var(--chip-h-0) * var(--look-pause-btn, 0)));
+}
+/* SIDE RIGHT (and SIDEBAR on its right edge): RESUME under the right thumb. */
+:root[data-pause-side="right"]:has(> body:is([data-density="compact"][data-shape="wide"], [data-pause-short])) #pausemenu .sheet-body {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-areas: "settings restart ctx" "tools tools resume" "tools tools quit";
+}
+/* WIDE: the doors along the bottom edge in one row, the tray above them, so the
+   race keeps the top of the screen (the layout's own align-items: end stands). */
+:root[data-pause-layout="wide"]:has(> body:is([data-density="compact"][data-shape="wide"], [data-pause-short])) #pausemenu .sheet-body {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "ctx ctx ctx ctx" "tools tools tools tools" "resume restart settings quit";
 }
 #race-settings:not([open]) { display: none; }
 #standings:not([open]) { display: none; }
@@ -1103,11 +1211,22 @@ body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
 /* DENSITY — SheetShape's own compact tier (js/ui/sheet-shape.js reads
    --compact-at off the sheet): ROOMY never goes compact, TIGHT always does.
    1px, not 0: a zero reads as unset and falls back to the default. */
-:root[data-look-select-density="roomy"] #sel-inner,
-:root[data-look-race-density="roomy"] #race-settings > .sheet,
-:root[data-look-career-density="roomy"] #cr-inner,
-:root[data-look-garage-density="roomy"] #cs-inner { --compact-at: 1px; }
-:root[data-look-popups-density="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 1px; }
+/* ROOMY is a request the box clamps (UI contract #5153 rule 3 / gap 11): on a
+   phone-sized window — coarse pointer and a short side under 600 CSS px — the
+   compact layout IS the layout, so the knob never lifts it there. Measured
+   2026-11-06 (docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the owner's career
+   ROOMY turned #cr-inner normal at 852x393, which switched the pair ON at
+   657 own px (a 73-115 px left pane) and at 552 left NO scroller at all,
+   2191 own px of content in a 285 sheet. LookAvail says why in the Appearance
+   page (js/ui/look-avail.js, the env's phone flag). The media gate is the contract's
+   rule 4 gate, raw viewport on purpose: the window, not the zoomed box. */
+@media (pointer: fine), ((min-width: 600px) and (min-height: 600px)) {
+  :root[data-look-select-density="roomy"] #sel-inner,
+  :root[data-look-race-density="roomy"] #race-settings > .sheet,
+  :root[data-look-career-density="roomy"] #cr-inner,
+  :root[data-look-garage-density="roomy"] #cs-inner { --compact-at: 1px; }
+  :root[data-look-popups-density="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 1px; }
+}
 :root[data-look-select-density="tight"] #sel-inner,
 :root[data-look-race-density="tight"] #race-settings > .sheet,
 :root[data-look-career-density="tight"] #cr-inner,
@@ -1176,6 +1295,17 @@ body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
 :root[data-look-garage-head="centre"] #carsetup .sheet-head { justify-content: center; text-align: center; }
 :root[data-look-popups-head="centre"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) .sheet-head { justify-content: center; text-align: center; }
 
+/* BUTTON SHAPE (js/ui/dock-layout.js writes :root[data-btn-shape]; absent =
+   AUTO, the shipped mix: round taps and arrows, squircle pedals). Only the
+   corner changes — width, height and the hit box stay on --btn / --hold, so
+   the dock's width budget and the fit (js/ui/hud.js) see the same rects.
+   Here, not touch-controls.css: that sheet sits on the eager critical-path
+   budget, and this one loads after it in the same layer, so a :root-scoped
+   rule wins without !important. */
+:root[data-btn-shape="round"] :is(#btn-throttle, #btn-brake) { border-radius: 50%; }
+:root[data-btn-shape="squircle"] .touchbtn { border-radius: 28%; }
+:root[data-btn-shape="square"] .touchbtn { border-radius: 12%; }
+:root[data-btn-shape="square"] #hud-dock #grp-steer { border-radius: var(--r-md); }
 
 } /* @layer overlays */
 
@@ -1336,7 +1466,8 @@ body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
      story podium on short phone sheets — mid-word names under a green bar on
      portrait, and empty-looking P1–P3 slots on landscape where the bar ate
      the whole name block (layout-audit 2026-10-04). Top-sticky still keeps
-     "me vs the front" while scrolling the classification list. */
+     "me vs the front" while scrolling the classification list. RESULTS
+     overrides this, scoped to its ranking lists (both edges; rule below). */
   position: sticky; top: 0; z-index: 1;
 }
 /* Reduced transparency swaps --surf-1's ground; keep the sticky row opaque over
@@ -1392,6 +1523,43 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
   #results-table .res-row { animation: row-in 0.22s cubic-bezier(0.2, 0.7, 0.3, 1) calc(min(var(--i, 0), 12) * 18ms) both; }
 }
 @keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+/* RESULTS · PINNED PODIUM (design pass #1, docs/notes/DESIGN-PASS-1-2026-10-30.md).
+   On a short landscape phone the sheet opens on your row (revealYouRow) with
+   the podium scrolled away, and every driver took two lines because TYRE
+   STINTS sat under the name: at P12 you saw P11-P13 and nothing else. Here
+   each classification row is ONE fixed-height line (the stints disclosure
+   sits beside the name), and P1, P2, P3 stick under each other at the top
+   with your row under them, so "me against the front" is on screen at every
+   scroll position without leaving rank order. An opened stints row unpins
+   and grows, so its text is never clipped under a pinned row. */
+/* Keyed on the SHEET's density and shape (UI contract #5153 gap 12, PR D): the
+   body flags said "compact wide" for a desktop window at a small UI SIZE too,
+   and the sheet is the box these rows live in. 44 PAINTED px per row (the sheet
+   is zoomed, so bare --tap painted 57). HOW MANY rows pin comes from the pane:
+   results-sheet.js writes data-pins on #results-table from its own height in
+   rows — 4 (P1 P2 P3 YOU) at >= 6.25 rows, 2 (P1 + YOU) at >= 4.25, else YOU
+   alone — so the shortest window (Safari 852x283 at the owner's knobs: 3.9 rows)
+   still scrolls >= 2 rows of the classification instead of nothing but pins. */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table { --rr-h: calc(44px / var(--sheet-scale, var(--ui-scale, 1))); }
+/* No gap between rows: a pinned row's neighbour scrolls UNDER it, and a gap let its text peek through. */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] { height: var(--rr-h); padding-block: 0; margin-block: 0; align-items: center; }
+/* One line box at the row height: the name, the gap and the stints disclosure share it, so every cell centres alike. */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] .res-name:has([data-stint-details]) { display: block; height: var(--rr-h); line-height: var(--rr-h); white-space: nowrap; text-overflow: ellipsis; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] .res-name [data-stint-details] { display: inline-block; vertical-align: top; margin-left: var(--gap); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] .res-name > .q-time { display: inline; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] [data-stint-details] > summary { color: var(--dim); min-height: var(--rr-h); line-height: var(--rr-h); align-content: normal; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"]:is(.p1, .p2, .p3) { position: sticky; z-index: 2; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].p1 { top: 0; background: color-mix(in oklab, var(--gold) 10%, var(--surf-1)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].p2 { top: var(--rr-h); background: color-mix(in oklab, var(--silver) 7%, var(--surf-1)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].p3 { top: calc(2 * var(--rr-h)); background: color-mix(in oklab, var(--bronze) 7%, var(--surf-1)); box-shadow: 0 6px 8px -6px var(--bg); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:not(.p1, .p2, .p3) { top: calc(3 * var(--rr-h)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:is(.p1, .p2, .p3) { background: color-mix(in oklab, var(--you) 8%, var(--surf-1)); }   /* you still win the row on the podium */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"]:has([data-stint-details][open]) { height: auto; position: static; }
+/* Fewer pins: an unpinned podium row keeps its metal and scrolls with the list; YOU moves up under what is left. */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"]:is(.p2, .p3):not(.you) { position: static; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"].you:not(.p1) { top: var(--rr-h); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"]:is(.p1, .p2, .p3):not(.you) { position: static; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"].you { top: 0; }
 
 /* ---------- section label ---------- */
 .sel-label {
@@ -1465,5 +1633,58 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 #results .res-name [data-stint-text] { white-space: normal; overflow-wrap: anywhere; }
 
 #results .res-name:has([data-stint-details]) { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+/* RESULTS STICKY, SCOPED. The shared .res-row.you is sticky top; on this sheet
+   that piled the TIME TRIAL headline (a .res-row.you outside any list) onto the
+   leaderboard's own you row, and an open TYRE STINTS fold under a sticky row
+   covered the rows after it. Here only a RANKING list's row sticks, to BOTH
+   edges: its containing block is the list, so it cannot leave it to cover the
+   story podium above, and it shows at open without results-sheet.js scrolling
+   the sheet away from the winner. An open stint fold drops it back into flow. */
+#results-table .res-row.you { position: relative; }
+#results-table [data-results-part="ranking"] > .res-row.you { position: sticky; top: 0; bottom: 0; }
+#results-table .res-row.you:has([data-stint-details][open]) { position: relative; }
+/* The winner at open: "P1 <CODE>" beside the title, outside the scroller. */
+#results #res-winner {
+  font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 700; color: var(--gold);
+  border: 1px solid color-mix(in oklab, var(--gold) 55%, transparent); border-radius: var(--r-pill);
+  padding: 0 calc(var(--gap) * 0.6); white-space: nowrap;
+}
+
+/* Ceremony podium overlay (#4070): full-bleed beat while #results stays hidden.
+   Host is created at runtime (keeps shellNodes flat). CONTINUE reuses .bigbtn
+   and --tap (844×390 touch). */
+#ceremony-podium {
+  position: fixed; inset: 0; z-index: 38;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  /* Unzoomed and full-bleed, so the safe insets apply raw on all FOUR sides —
+     the notch sits at the side in landscape (UI contract 2026-11-06 §7 gap 23,
+     handed to #5153 PR D); it had the bottom inset only. */
+  padding: max(calc(var(--pad) * 1.2), var(--sat)) max(calc(var(--pad) * 1.2), var(--sar)) max(calc(var(--pad) * 1.2), var(--sab)) max(calc(var(--pad) * 1.2), var(--sal));
+  pointer-events: none;
+  background: linear-gradient(to top, color-mix(in oklab, var(--surf-0) 78%, transparent) 0%, transparent 55%);
+}
+#ceremony-podium[hidden] { display: none; }
+#ceremony-podium-body {
+  pointer-events: auto; max-width: min(720px, 100%); margin: 0 auto; width: 100%;
+}
+#ceremony-podium-body [data-results-part="story"] {
+  background: color-mix(in oklab, var(--carbon) 92%, transparent);
+}
+#ceremony-podium .sheet-foot {
+  pointer-events: auto; display: flex; justify-content: center; gap: var(--gap);
+  margin: var(--pad) auto 0; max-width: min(720px, 100%); width: 100%;
+}
+#ceremony-podium .bigbtn { min-height: var(--tap); min-width: min(240px, 100%); }
+body[data-density="compact"] #ceremony-podium { padding: max(calc(var(--pad) * 0.55), var(--sat)) max(calc(var(--pad) * 0.55), var(--sar)) max(calc(var(--pad) * 0.55), var(--sab)) max(calc(var(--pad) * 0.55), var(--sal)); }
+body[data-density="compact"] #ceremony-podium .sheet-foot { margin-top: calc(var(--pad) * 0.45); }
+
+/* A FINGER GRABS THE TITLE-LAYOUT HANDLE: 22px is the dot, not the target. On
+   a coarse pointer a transparent ::before overhangs it by 11px a side (44px
+   box); #tl-handle is position:fixed (responsive.css), so it is the box. Here,
+   not in responsive.css: the editor opens after load, and the blocking-CSS
+   budget (css-critical-path.test.mjs) has no room for it. */
+@media (pointer: coarse) {
+  :root[data-tl-edit] #tl-handle::before { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
+}
 
 } /* @layer components */

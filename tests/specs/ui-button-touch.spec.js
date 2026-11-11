@@ -29,7 +29,7 @@ test.describe("Garage categories — touch scrolling", () => {
   async function swipe(context, page, axis, distance, group, edge = "inner") {
     const point = await page.locator("#cs-tabs").evaluate((rail, arg) => {
       const r = rail.getBoundingClientRect();
-      const row = [...rail.querySelectorAll('[role="group"]')].find((el) => el.getAttribute("aria-label") === arg.group);
+      const row = [...rail.querySelectorAll(".cs-tab-row")].find((el) => el.dataset.tier === arg.group);
       if (!row) throw new Error(`missing category group: ${arg.group}`);
       const visible = [...row.querySelectorAll(".cs-tab")].map((tab) => tab.getBoundingClientRect())
         .filter((b) => b.width > 0 && b.height > 0 && b.left >= r.left - 1 && b.right <= r.right + 1 && b.top >= r.top - 1 && b.bottom <= r.bottom + 1);
@@ -967,7 +967,9 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
   await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
   const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
   const bar = page.locator("#hud-arrange-bar");
-  expect(await bar.evaluate(el => parseFloat(getComputedStyle(el).fontSize)), "toolbar respects larger text").toBe(18);
+  // #5198 (Bryce): the toolbar is FIXED-SIZE chrome like CAM / PAUSE, NOT scaled by TEXT SIZE / HUD SIZE. At
+  // TEXT large + HUD 155 % it used to paint ~715x217 on his 393 px tall phone and hide the widgets being arranged.
+  expect(await bar.evaluate(el => parseFloat(getComputedStyle(el).fontSize)), "toolbar text is fixed chrome, not TEXT SIZE (#5198)").toBe(13);
   for (const viewport of sizes) {
     await page.setViewportSize(viewport);
     await expect(bar).toBeVisible();
@@ -1608,10 +1610,13 @@ test.describe("Settings Appearance — touch targets", () => {
 
 test.describe("Settings Appearance — preset names at phone landscape", () => {
   // 932x430 is the iPhone Pro Max landscape: wider than the old 900px phone guard, so five 67px tiles clipped
-  // BROADCAST to "BROADCAS" at UI SIZE 150 (menu-fit, 2026-10-17). The phone sheet lays presets out three-up.
+  // BROADCAST to "BROADCAS" at UI SIZE 150 (menu-fit, 2026-10-17). UI contract 2026-11-06 gap 4: the gallery
+  // auto-fits tiles of at least three taps across the one-column studio (four at UI 100, three at 109-150), so
+  // the property that matters is asserted directly — every tile ≥ 3 × --tap wide and no name clipped — not a
+  // column count (the old three-up pin read 4 on this cell once the tablet split went).
   test.use({ ...uiTestOptions({ touch: true, viewport: { width: 932, height: 430 }, deviceScaleFactor: 1 }) });
 
-  test("preset tiles are three-up at 932x430, UI SIZE 150", async ({ page }) => {
+  test("preset tiles stay at least three taps wide with whole names at 932x430, UI SIZE 150", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("apex26.uiScale", "150"));
     await page.goto("/");
     await waitReady(page);
@@ -1621,8 +1626,20 @@ test.describe("Settings Appearance — preset names at phone landscape", () => {
     const list = page.locator('#appearance-studio [data-as="preset-list"]');
     await list.waitFor({ state: "attached", timeout: BOOT_MS });
     await expect(page.locator("#pmsettings-inner")).toHaveAttribute("data-density", "compact");
-    const cols = await list.evaluate((e) => getComputedStyle(e).gridTemplateColumns.split(" ").length);
-    expect(cols).toBe(3);
+    await list.locator("button strong").first().waitFor({ state: "attached", timeout: BOOT_MS });
+    const m = await list.evaluate((e) => {
+      const tap = parseFloat(getComputedStyle(e).getPropertyValue("--tap")) || 0;
+      const tiles = [...e.querySelectorAll("button")];
+      return {
+        tap, cols: getComputedStyle(e).gridTemplateColumns.split(" ").length,
+        minW: Math.min(...tiles.map((b) => b.clientWidth)),
+        clipped: tiles.filter((b) => { const s = b.querySelector("strong"); return s && s.scrollWidth > s.clientWidth + 1; })
+          .map((b) => (b.textContent || "").trim()),
+      };
+    });
+    expect(m.cols, "a phone page never drops to a two-up gallery: " + JSON.stringify(m)).toBeGreaterThanOrEqual(3);
+    expect(m.minW, "every tile is at least three taps wide: " + JSON.stringify(m)).toBeGreaterThanOrEqual(m.tap * 3 - 1);
+    expect(m.clipped, "no preset name is clipped").toEqual([]);
   });
 });
 

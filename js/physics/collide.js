@@ -94,7 +94,10 @@ const Collide = (() => {
     _arcBucketIds.length = 0;
   }
   // Race teardown: drop every car reference the buckets hold (the next fill rebuilds them).
-  function releaseArcBuckets() { _arcClear(); _ot.c = _ot.ahead = _ot.skip = null; }
+  function releaseArcBuckets() {
+    _arcClear(); _ot.c = _ot.ahead = _ot.skip = null;
+    _traf.c = _traf.blocker = _traf.towCar = _traf.chaser = _traf.alongO = null; _tow.c = _tow.tc = null;
+  }
   function fillArcBuckets(ranked, L, width, progOf) {
     _arcClear();
     L = L || 1;
@@ -342,7 +345,7 @@ const Collide = (() => {
         c.yawRateCur = clamp(state.omega + dw, -4, 4);
       }
     }
-    function orientedResponse(a, b, ct, last) {
+    function orientedResponse(a, b, ct) {
       const correction = Math.max(0, ct.depth - COL_SLOP) * 0.7;
       shiftLong(a, ct.nx * correction * ct.sA); shiftLong(b, -ct.nx * correction * ct.sB);
       a.x += ct.ny * correction * ct.sA; b.x -= ct.ny * correction * ct.sB;
@@ -352,7 +355,8 @@ const Collide = (() => {
       if (correction > CORR_EPS || j.magnitude > CORR_EPS) {
         if (!netPlay.owns(a)) a.contactT = 0.22;
         if (!netPlay.owns(b)) b.contactT = 0.22;
-        if (last) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
+        // First pass per pair carries the severity (the last had none, or was skipped by the early break)
+        if (firstPairFx(a, b)) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
         // already removed closing velocity. Both worlds retain their own gates.
         if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
@@ -416,7 +420,7 @@ const Collide = (() => {
           const shares = sepShares(a, b);
           hit.dProg = x0 + (da - db) * t; hit.dX = y0 + (xa - xb) * t;
           hit.aSp = a.speed; hit.bSp = b.speed; hit.sA = shares.sA; hit.sB = shares.sB;
-          orientedResponse(a, b, hit, true);
+          orientedResponse(a, b, hit);
           pa.sweepGeneration = pb.sweepGeneration = 0;
           break; // let the ordinary solver settle a cluster before another sweep
         }
@@ -574,7 +578,7 @@ const Collide = (() => {
       const ct = pairContact(a, b);
       if (!ct) return;
       _colTouched = true;
-      if (ct.oriented) { orientedResponse(a, b, ct, last); return; }
+      if (ct.oriented) { orientedResponse(a, b, ct); return; }
       const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
       if (sideContact) {
         // side-by-side contact: separate laterally, scrub a little speed. Mark
@@ -616,7 +620,7 @@ const Collide = (() => {
           // touching with no correction left to apply — re-fired audio, shake
           // and hit-stop every frame and banked a career `hits` count of ~14 in
           // five seconds of contact that the solver had already resolved.
-          if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
+          if (firstPairFx(a, b)) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
         }
       } else {
         // rear-end: separate along the track and nudge speeds together (gentle,
@@ -871,13 +875,19 @@ const Collide = (() => {
   }
 
   // The nearest PARKED retirement (#2162) ahead of (or still beside) `c` on
-  // the road, within `reach` metres of arc, or null. `parked` is game.js's short per-step list.
+  // the road, within `reach` metres of arc, or null. `parked` is game.js's
+  // short per-step list. Nearest is absolute arc distance inside the window:
+  // a car a length behind is still beside you, but it must not hide a closer
+  // car ahead, and two cars you are passing must not resolve to the one
+  // furthest back (the old minimum signed d).
   function parkedAhead(c, parked, L, reach) {
-    let best = null, bestD = reach;
+    let best = null, bestAbs = Infinity;
     for (let i = 0; i < parked.length; i++) {
       const o = parked[i];
       const d = ((o.s - c.s + L / 2) % L + L) % L - L / 2;   // signed: still alongside until a car length past
-      if (d > -LCAR && d < bestD) { best = o; bestD = d; }
+      if (!(d > -LCAR && d < reach)) continue;
+      const ad = d < 0 ? -d : d;
+      if (ad < bestAbs) { best = o; bestAbs = ad; }
     }
     return best;
   }

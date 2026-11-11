@@ -178,6 +178,45 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   min-height: 44px;
   pointer-events: auto;
 }
+/* THE PREVIEW TRANSPORT (js/garage/setup-camera.js transport()) wraps STOP once
+   the first preview builds it: a bottom bar over the room, every control a
+   44px touch target, the scrub taking the spare width. Under EDIT it stops at
+   the docked panel's painted edge (--dock-px), so the panel and the bar share
+   the screen and the held frame stays in view to their left. */
+#ga-transport {
+  position: fixed;
+  left: calc(var(--sal) + 8px);
+  right: calc(var(--sar) + 8px);
+  bottom: calc(var(--sab) + 8px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--gap) / 2);
+  padding: calc(var(--gap) / 2);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  pointer-events: auto;
+}
+#ga-transport[hidden] { display: none; }
+#ga-transport[data-editing] { right: calc(var(--dock-px) + 16px); }
+#ga-transport > button { min-height: 44px; min-width: 44px; margin: 0; }
+#ga-transport > button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -4px; }
+/* The scrub carries the PHASE MARKS (setup-camera.js previewPhases): a tick under
+   the track at each beat, inset by half a UA thumb (~16px in Chromium, wider on
+   iOS) so a tick sits near the thumb's centre at that time. */
+#ga-scrubber { position: relative; display: flex; flex: 1 1 140px; min-width: 120px; }
+#ga-scrub { flex: 1 1 auto; min-width: 0; min-height: 44px; margin: 0; }
+#ga-marks { position: absolute; left: 8px; right: 8px; top: calc(50% + 7px); height: 8px; pointer-events: none; }
+#ga-marks > i { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: currentColor; opacity: 0.6; }
+#ga-phase { min-height: 44px; max-width: 12em; margin: 0; }
+#ga-phase[hidden] { display: none; }
+#ga-time { flex: 0 1 auto; min-width: 0; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* STOP keeps its primary paint but sits in the row at the row's height: the
+   .bigbtn block width, margins and type would push it to a row of its own. */
+#ga-transport #ga-preview-stop {
+  position: static; display: inline-block; width: auto; max-width: none; margin: 0;
+  min-height: 44px; padding: 0 var(--gap); font-size: var(--fs-3);
+}
 #lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner {
   /* Docked, not centred: .sheet gives the head/body/foot shape and the query
      container, and these override the sheet's centred sizing. */
@@ -1411,10 +1450,12 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 
 @layer components {
-@media (max-width: 900px) and (max-height: 500px) {
-  :is(#lighting-inner, #camtune-inner) > .sheet-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  :is(#lighting-inner, #camtune-inner) > .sheet-foot button { min-width: 0; white-space: normal; line-height: 1.1; }
-}
+/* Two action columns on a SHORT sheet — keyed on the sheet's measured density
+   (UI scaling contract gap 24), not the old `(max-width: 900px) and
+   (max-height: 500px)` window band, which could not see UI SIZE: the same phone
+   got the grid at 100 % and a wrapped foot at 130 %. */
+:is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot button { min-width: 0; white-space: normal; line-height: 1.1; }
 }
 
 
@@ -1466,6 +1507,11 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 /* GARAGE ANGLE's plan of the bay (js/garage/arrival.js angleMap): under the
    selector, the chosen eye lit. currentColor so it follows the panel's ink. */
+/* STYLE quick-picks (js/garage/arrival.js buildRows): three 44px buttons over the rows; the active look is pressed. */
+#ga-styles { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin: 0 0 var(--gap); }
+#ga-styles > .tune-label { flex: 0 0 100%; }
+#ga-styles > button { flex: 1 1 auto; min-height: 44px; min-width: max-content; margin: 0; }   /* wraps a row rather than clip DOCUMENTARY */
+#ga-styles > button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -4px; }
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
 }
 
@@ -1485,6 +1531,7 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 .editor-workspace .ew-note { margin: 0; color: var(--dim); font-size: var(--fs-micro); flex: 0 0 auto; }
 .editor-workspace .ew-tools { display: contents; }
+.editor-workspace [data-editor-sequences] { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; gap: calc(var(--gap) * .5); flex: 0 0 auto; }   /* one row: the angle map below keeps its height on a short phone */
 .editor-workspace .ew-tools > summary { display: none; cursor: pointer; align-content: center; }
 :is(#lighting-inner, #camtune-inner, #flyby-inner).editor-workspace[data-editor-view] :is(#lt-rail, #ct-rail, #fb-rail) {
   display: flex; flex-direction: column; max-height: none; overflow: visible;
@@ -1494,7 +1541,26 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view="preview"] > :not(.ew-toolbar):not(.sheet-foot) { display: none; }
 .editor-workspace[data-editor-view="preview"] > .sheet-foot > :not(#lt-close):not(#ct-close):not(#fb-close):not(#ga-close) { display: none; }
-@media (max-height: 620px), (max-width: 600px) {
+/* THE SHORT WORKSPACE, twice (UI scaling contract gap 24). The height half is the
+   sheet's own density: these sheets declare --compact-at: 620px, the same number
+   the old `(max-height: 620px)` band used, but SheetShape measures it in the
+   sheet's own px, so UI SIZE moves it and the media query never did. The width
+   half stays a media branch: a 600 px WINDOW is a width fact, not a density. The
+   block is written out twice because a media condition and a selector cannot
+   share one prelude; keep the two bodies identical. */
+.editor-workspace[data-density="compact"] {
+  &:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner)[data-editor-view] { overflow: hidden; }
+  .ew-tools { display: block; flex: 0 0 auto; }
+  .ew-tools > summary { display: list-item; list-style: disclosure-closed inside; }
+  .ew-tools[open] > summary { list-style-type: disclosure-open; }
+  .ew-tools[open] { max-height: 35%; overflow-y: auto; overscroll-behavior-y: contain; }
+  &:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner)[data-editor-view] :is(#lt-rows, #ct-rows, #fb-rows, #ga-rows) {
+    flex: 1 1 auto; min-height: var(--ew-tap); max-height: none; overflow-y: auto; overscroll-behavior-y: contain;
+  }
+  &:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner)[data-editor-view] :is(button, select, summary, input:not([type="hidden"])) { min-height: var(--ew-tap); }
+  & > .sheet-foot { background: var(--plate); }
+}
+@media (max-width: 600px) {
   :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] { overflow: hidden; }
   .editor-workspace .ew-tools { display: block; flex: 0 0 auto; }
   .editor-workspace .ew-tools > summary { display: list-item; list-style: disclosure-closed inside; }

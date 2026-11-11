@@ -10,7 +10,7 @@
 //   node tools/ui/menu-mock.mjs --no-cache --no-boxes --out artifacts/menu-mock/x
 //
 // Flags: --screens a,b|'*' (tools/ui/menu-screens.mjs ids; a trailing * is a prefix)  --viewports a,b (same file)
-//   --format png|jpeg  --no-boxes  --no-cache  --min-tap 44 (touch) / 24 (pointer)  --min-font 10  --out artifacts/menu-mock/<stamp>
+//   --format png|jpeg  --no-boxes  --no-cache  --min-tap N (default: body --tap on touch, WCAG 24 on pointer; tools/ui/tap-floor.mjs)  --min-font 10  --out artifacts/menu-mock/<stamp>
 //   --gl swiftshader|llvmpipe (default $APEX_GL or llvmpipe)  --list  --json  --help
 //
 // WHY IT IS FAST. layout-audit --gallery already boots once per viewport; this boots once per POINTER
@@ -31,6 +31,7 @@ import { drawBoxes, captureShot, contactSheet, inputsHash, cellCache } from "../
 import { SCREENS, VIEWPORTS, pickScreens, pickViewports } from "./menu-screens.mjs";
 import { bootPage, resetToTitle, waitScreenReady, applyInsets } from "./menu-capture.mjs";
 import { chromiumArgs } from "../shot/hud-survey.mjs";
+import { ensureTapFloor, TAP_RULE_VERSION } from "./tap-floor.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const KNOWN = ["--screens", "--viewports", "--format", "--no-boxes", "--no-cache", "--min-tap", "--min-font", "--out", "--gl", "--list", "--json", "--help"];
@@ -57,8 +58,15 @@ export function planMenuCells(screensArg, viewportsArg, { screens = SCREENS, vie
 export function groupKey(vpOpts) { return `${vpOpts.hasTouch ? "touch" : "pointer"}-${vpOpts.isMobile ? "mobile" : "desktop"}`; }
 
 /** In-page (self-contained): measure the open screen. */
-export function probeMenu({ rootSel, minTap, minFont }) {
+export function probeMenu({ rootSel, minTap, touch, minFont }) {
   const root = document.querySelector(rootSel) || document.body;
+  // Tap floor + measure: tools/ui/tap-floor.mjs (window.__apexTap, installed by
+  // ensureTapFloor). --min-tap overrides; else touch judges against the game's
+  // body `--tap` comfort floor and a mouse against WCAG 2.5.8's 24, in CSS px.
+  const T = window.__apexTap;
+  const floors = T ? T.floors() : { wcag: 24, comfy: 44 };
+  const floor = minTap != null ? minTap : (touch ? floors.comfy : floors.wcag);
+  const slack = T ? T.TAP_SLACK : 0.5;
   const W = window.innerWidth, H = window.innerHeight;
   const vis = (el) => {
     // Closed <details> descendants can retain a nonzero layout rectangle.
@@ -93,8 +101,8 @@ export function probeMenu({ rootSel, minTap, minFont }) {
     if (!vis(el)) continue;
     const r = el.getBoundingClientRect();
     const rec = { key: label(el), role: "ctrl", x: r.left, y: r.top, r: r.right, b: r.bottom };
-    const w = Math.round(r.width), h = Math.round(r.height);
-    if (Math.min(w, h) < minTap) issues.tap.push([rec.key, w, h]);
+    const m = T ? T.measure(el, root) : { w: r.width, h: r.height };
+    if (Math.min(m.w, m.h) < floor - slack) issues.tap.push([rec.key, Math.round(m.w), Math.round(m.h)]);
     if ((r.right < 0 || r.bottom < 0 || r.left > W || r.top > H || r.right > W + 1 || r.bottom > H + 1) && !scrollableAncestor(el)) issues.offscreen.push([rec.key, Math.round(r.left), Math.round(r.top)]);
     recs.push(rec);
   }
@@ -114,7 +122,7 @@ export function probeMenu({ rootSel, minTap, minFont }) {
     const fs_ = parseFloat(getComputedStyle(el).fontSize);
     if (fs_ < minFont) { const k = label(el); if (!seen.has(k)) { seen.add(k); issues.smallText.push([k, Math.round(fs_ * 10) / 10]); } }
   }
-  return { issues, recs, viewport: [W, H] };
+  return { issues, recs, viewport: [W, H], tapFloor: floor };
 }
 
 /** In-page: leave whatever the previous cell left behind (a race, a quali session, an open sheet) through the game's OWN exits,
@@ -124,19 +132,13 @@ export function leaveToMenu() {
   const a = window.__apex;
   if (a && a.info && a.info().state !== "menu") { const q = $("pm-quit"); if (q) { q.click(); if (q.classList.contains("armed")) q.click(); } }
   const quali = $("quali");
-  if (quali && !quali.hidden) { if (quali.classList.contains("q-done")) quali.hidden = true; else $("q-back")?.click(); }
-  const rs = $("race-settings");
-  if (rs && !rs.hidden) $("rs-cancel")?.click();
-  // Photo Studio / lighting / camera leave covering layers + body classes; close via their doors when present.
-  if ($("photo-studio") && !$("photo-studio").hidden) $("ps-close")?.click();
-  if ($("lighting") && !$("lighting").hidden) $("lt-close")?.click();
-  if ($("camtune") && !$("camtune").hidden) $("ct-close")?.click();
-  if ($("flyby") && !$("flyby").hidden) $("fb-close")?.click();
-  const tip = $("ios-install"); if (tip) tip.hidden = true;
-  const chip = $("install-chip"); if (chip) chip.hidden = true;
-  document.body.classList.remove(
-    "in-race", "lt-open", "photo-mode", "photo-studio-open",
-    "pc-nopanel", "pc-uihidden", "rotate-help-open", "manual");
+  // q-back is the sheet's door in both states: after the session (.q-done) it is MENU and calls quitToMenu()
+  // (js/game.js) — the old `hidden = true` there left the session claiming to run.
+  if (quali && !quali.hidden) $("q-back")?.click();
+  // Every other covering layer (race settings, Photo Studio, the tuners, the
+  // fly-by editor, the data hub, …), the install tip and the route body
+  // classes are resetToTitle's job, which runs right after this: ONE shared
+  // reset (tools/ui/ui-reset.mjs) that closes each layer through its own door.
   // The quali route sets GRID = QUALIFYING LAP, and the game keeps it: every later race() would open the quali sheet instead of the grid.
   const g = $("rs-quali-sel");
   if (g && window.__mmGrid != null && a && a.info && a.info().raceGrid !== window.__mmGrid && [...g.options].some((o) => o.value === window.__mmGrid)) { g.value = window.__mmGrid; g.dispatchEvent(new Event("change", { bubbles: true })); }
@@ -195,7 +197,7 @@ async function main() {
       };
       for (const cell of mine) {
         const t1 = Date.now();
-        const key = cache.key({ screen: cell.screen, viewport: cell.viewport, boxes, fmt, minFont, tapFlag });
+        const key = cache.key({ screen: cell.screen, viewport: cell.viewport, boxes, fmt, minFont, tapFlag, tapRule: TAP_RULE_VERSION });
         const hit = cache.get(key);
         if (hit) {
           const file = path.join(out, cell.id + ext);
@@ -220,7 +222,8 @@ async function main() {
           await waitScreenReady(page, screen);
           await applyInsets(page, insets);
           const touch = !!o.hasTouch;
-          const m = await page.evaluate(probeMenu, { rootSel: screen.root, minTap: tapFlag ?? (touch ? 44 : 24), minFont });
+          await ensureTapFloor(page);
+          const m = await page.evaluate(probeMenu, { rootSel: screen.root, minTap: tapFlag, touch, minFont });
           if (boxes) {
             const bad = new Set([...m.issues.tap, ...m.issues.offscreen].map((x) => x[0]));
             await page.evaluate(drawBoxes, { recs: m.recs, bad: [...bad] });

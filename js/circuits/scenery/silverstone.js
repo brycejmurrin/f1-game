@@ -6,16 +6,15 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["silverstone"] =
   function (api) {
-      const { lapBounds, out, MAT, n, ds, px, pz, pyMin, place, every, onTrack, hash, pal,
+      const { lapBounds, out, MAT, n, ds, pyMin, every, onTrack, hash, pal,
               indexSolid,
-              grandstandEx, building, motorhome, hedge: hedgeApi, billboard, mountain, anchor, vadd, addBox,
-              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
+              grandstandEx, building, motorhome, hedge: hedgeApi, billboard, mountain, anchor, vadd, addBox, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
               forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat, bankedKerbStrip,
               spectatorHill, cameraTower, sponsorHoarding, bakedModel, along, terrainYAt,
-              bush, drapeRun } = api;
+              bush } = api;
       // backdrop() seats green hills on groundYAt (road-extrapolated floor at
       // large dist). Silverstone's mountain rings raise real terrain well above
       // that floor, so engine backdrop tops buried up to 6.8 m (ground-audit
@@ -272,7 +271,9 @@
       const M = 1 / 5900;
       for (const [s, side, gap, len, rows] of [
         [0.105, -1, 34, 44, 8], // Maggotts approach
-        [0.145,  1, 30, 46, 7], // Becketts exit
+        // +2 m gap: #4967 lengthened outside-of-bend rows; the front tread
+        // reached 0.53 m under the Becketts bank (ground-audit buried 3 > 2).
+        [0.145,  1, 32, 46, 7], // Becketts exit
         [0.285,  1, 32, 46, 9], // Stowe entry
         [0.325, -1, 26, 46, 7], // Vale
         // +2 m gap: front tread tops were 0.29–0.37 m under the rising

@@ -101,8 +101,12 @@ const DesignerProfile = (function () {
       return best;
     }
     function choose(i, j) {
-      i = Number.isInteger(i) && i >= 0 && i < ticks.length ? i : -1;
-      j = (i >= 0 && Number.isInteger(j) && j >= 0 && j < ticks.length && j !== i) ? j : -1;
+      // The control loop's length, not the built lap's: an unbuildable edit
+      // (setBuilt(null)) empties ticks but keeps the points, and a selection
+      // checked against 0 was wiped (FIX / DELETE POINT / TEST HERE lost it).
+      const n = ticks.length || nodeH.length;
+      i = Number.isInteger(i) && i >= 0 && i < n ? i : -1;
+      j = (i >= 0 && Number.isInteger(j) && j >= 0 && j < n && j !== i) ? j : -1;
       if (i === sel && j === span) return;
       sel = i; span = j;
       tellSelect();
@@ -202,10 +206,12 @@ const DesignerProfile = (function () {
     }
     function onKey(ev) {
       const k = ev.key, n = ticks.length;
-      if (k === "[" || k === "]" || k === "Tab") {
+      // [ ] walk the points; Tab is left to the browser so focus can leave the
+      // strip (a captured Tab cycled points forever: a keyboard trap).
+      if (k === "[" || k === "]") {
         if (!n) return;
         ev.preventDefault();
-        const dir = (k === "[" || (k === "Tab" && ev.shiftKey)) ? -1 : 1;
+        const dir = k === "[" ? -1 : 1;
         const at = sel < 0 ? (dir > 0 ? -1 : 0) : sel;
         choose(((at + dir) % n + n) % n, -1);
         render();
@@ -361,8 +367,6 @@ const DesignerProfile = (function () {
         liveH = null;
         render();
       },
-      /** @deprecated cosine hills — ignored; kept so older harnesses do not throw. */
-      setBumps() { /* no-op: elevation is per-node heights */ },
       setCursor(sM) { cursor = Number.isFinite(sM) ? sM : null; render(); },
       setIssues(list) {
         issues = (Array.isArray(list) ? list : []).filter((it) => it && Number.isFinite(it.s) && /^(grade|fia-grade|fia-crest|fia-sag)$/.test(it.code));
@@ -395,8 +399,6 @@ const DesignerProfile = (function () {
     return api;
   }
 
-  // hill / ADD kept as no-op shims for older unit harnesses that import them.
-  const hill = (b) => (typeof ElevPresets !== "undefined" ? { s: 0, halfM: 160, rise: ElevPresets.clampH(b && b.rise) } : { s: 0, halfM: 160, rise: 0 });
-  return { create, hill, ADD: Object.freeze({ halfM: 160, rise: 6 }), KEY, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS };
+  return { create, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH };
 })();
 Object.freeze(DesignerProfile);

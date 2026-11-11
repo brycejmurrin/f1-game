@@ -112,15 +112,18 @@ export const TWINNED = {
  *  bahrain-foundation's scenery audit on CI (2026-09-22, run 35689898056) and
  *  was reverted; move one only when its browser copy has been re-run green
  *  under the fixtures, in the same change that adapts it. */
+// Balanced from CI run 40304684682 (2026-10-26, #3025): child durations a = 102 s,
+// b = 419 s (agent-drive 277 s, cota 243 s, physics-fixes 97 s, pit-lane 89 s) against
+// 880 s per child; cota moved b -> a so neither partition is left near the limit.
 export const ADAPTED_PAGE_GROUPS = Object.freeze({
   a: Object.freeze([
     "tests/specs/albert-park-foundation.spec.js",
     "tests/specs/autopilot.spec.js",
+    "tests/specs/cota-foundation.spec.js",
     "tests/specs/logging.spec.js",
   ]),
   b: Object.freeze([
     "tests/specs/agent-drive-bench.spec.js",
-    "tests/specs/cota-foundation.spec.js",
     "tests/specs/imola-foundation.spec.js",
     "tests/specs/parts-livery-contrast.spec.js",
     "tests/specs/physics-fixes.spec.js",

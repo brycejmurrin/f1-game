@@ -45,7 +45,9 @@
 // the general answer, since a sheet whose box does not depend on the scale would
 // still need it, but it is currently belt-and-braces and this spec does not
 // prove it. Said plainly so nobody cites this file as its justification.
+import fs from "node:fs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
@@ -566,5 +568,394 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
         `${label}: GLX.aspect ${seen.aspect.toFixed(4)} must match the live ${seen.css} box `
         + `(${seen.box.toFixed(4)}); backing store ${seen.buf}`).toBeLessThan(0.01);
     }
+  });
+});
+
+// THE UI CONTRACT'S SETTINGS AND DIALOG CELLS (UI contract 2026-11-06 §4.2, §4.4, gaps 3/4/5/14 and
+// §6; PR B of #5153). The exception to this file's "same as a fresh load" oracle, and deliberately so: the contract
+// names the ONE phone-landscape layout, so these cells assert values — the owner's three windows, A the Home
+// Screen app (852x393, insets 59/21/59), C the same phone as a Safari tab (852x283, 59/0/59), D the spec phone
+// (844x390, no insets) — × TEXT SIZE normal/large × UI SIZE 100/130, seeded from Bryce's LOAD SETTINGS export (UI
+// 109, HUD 155, HIGH CONTRAST, textSize large). `SheetShape.layoutProbe` is the assertion (the `__apex.sheetFit()`
+// alias waits on #5155, which owns js/agent/apex.js); a screenshot is sign-off only. One boot per window; the four
+// knob cells are applied live and reclassified. Measured before the assertions were written (2026-11-06, the probe
+// in the PR body): the APPEARANCE page is a block, not a 2-column grid; the studio is one column with the preview on
+// top; preset tiles are 4-up at UI 100 and 3-up at 130 with names at 14–20.8 painted px; `--kb: 180px` pads the
+// <dialog> 180 px in every cell (it was 29 / 8); C at UI 130 caps the sheet at 1.214 and holds it across 277–289.
+const OWNER_EXPORT = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+const CONTRACT_WINDOWS = [
+  { name: "A-home-screen-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
+  // C carries the fit-band cell: at UI 130 its 267 px safe box caps the 220-own settings sheet (1.214), the only
+  // A/C/D cell that is capped at all.
+  { name: "C-safari-852x283", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0, band: true },
+  { name: "D-spec-844x390", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
+];
+const twoFrames = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+// Exactly what a resize or a zoom change ends in: flush the cascade, reclassify every observed sheet.
+const reclassify = (page) => page.evaluate(() => { void document.documentElement.offsetHeight; window.SheetShape.reclassify(); });
+// The measured layout of the Settings sheet on its APPEARANCE page, read together so a cell is never seen mid-update.
+const readSettingsCell = (page) => page.evaluate(() => {
+  const sheet = document.getElementById("pmsettings-inner");
+  const probe = window.SheetShape.layoutProbe(sheet);
+  const panel = document.getElementById("pm-panel-appearance");
+  const pcs = getComputedStyle(panel);
+  const studio = document.getElementById("appearance-studio");
+  const preview = studio.querySelector('[data-as="preview-side"]');
+  const controls = [...studio.children].find((c) => c !== preview);
+  const pr = preview.getBoundingClientRect(), cr = controls.getBoundingClientRect();
+  const list = studio.querySelector('[data-as="preset-list"]');
+  const tap = parseFloat(getComputedStyle(list).getPropertyValue("--tap")) || 0;
+  const tiles = [...list.querySelectorAll("button")];
+  const strong = tiles[0] && tiles[0].querySelector("strong");
+  const fsOwn = strong ? parseFloat(getComputedStyle(strong).fontSize) : 0;
+  const dialog = document.getElementById("pmsettings");
+  // Exactly what SheetShape.watchKeyboard writes when the iOS keyboard opens; read the pad it produces and restore.
+  const padNoKb = parseFloat(getComputedStyle(dialog).paddingBottom);
+  document.documentElement.style.setProperty("--kb", "180px");
+  const padKb = parseFloat(getComputedStyle(dialog).paddingBottom);
+  document.documentElement.style.removeProperty("--kb");
+  return {
+    probe,
+    uiScale: parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1,
+    textSize: document.documentElement.dataset.textSize || "normal",
+    page: { display: pcs.display, columns: pcs.gridTemplateColumns },
+    studio: { columns: getComputedStyle(studio).gridTemplateColumns.split(" ").length,
+      previewOnTop: pr.height > 0 && cr.height > 0 && pr.bottom <= cr.top + 1 && Math.abs(pr.left - cr.left) < 2 },
+    presets: { columns: getComputedStyle(list).gridTemplateColumns.split(" ").length, tap, count: tiles.length,
+      minW: Math.min(...tiles.map((b) => b.clientWidth)), fsPainted: fsOwn * probe.zoom,
+      clipped: tiles.filter((b) => { const s = b.querySelector("strong"); return s && s.scrollWidth > s.clientWidth + 1; })
+        .map((b) => (b.textContent || "").trim()) },
+    kb: { padNoKb, padKb },
+    hOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  };
+});
+// Reclassify until two consecutive reads agree (cap 6). Not a retry: a layout that never settles is the two-state
+// loop the contract forbids, and is reported as one.
+async function settledSettingsCell(page) {
+  let m = await readSettingsCell(page), settled = false;
+  for (let pass = 0; pass < 6 && !settled; pass++) {
+    await reclassify(page); await twoFrames(page);
+    const next = await readSettingsCell(page);
+    settled = JSON.stringify(next) === JSON.stringify(m);
+    m = next;
+  }
+  return { m, settled };
+}
+async function bootOnExport(page, v) {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), OWNER_EXPORT);
+  expect(imp.ok && !imp.failed, "the export seeds the store " + JSON.stringify(imp)).toBe(true);
+  await page.reload();
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.addStyleTag({ content: `:root{--sal:${v.sal}px;--sar:${v.sar}px;--sat:${v.sat}px;--sab:${v.sab}px;}` });
+  await page.evaluate(() => window.__apex.headless(true));
+}
+for (const v of CONTRACT_WINDOWS) {
+  test.describe(`UI contract settings cells (${v.name})`, () => {
+    test.setTimeout(300_000);
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    test("text normal/large x UI 100/130 on the export: one reading column, the studio preview on top, --kb reaches the dialog, the sheet never zooms under 100%", async ({ page }) => {
+      await bootOnExport(page, v);
+      // The way a player reaches it: SETTINGS on the title, then the APPEARANCE door.
+      await page.evaluate(() => document.getElementById("mb-settings").click());
+      await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 50, timeout: BOOT_MS });
+      await page.evaluate(() => document.getElementById("pm-open-appearance").click());
+      await page.locator('#appearance-studio [data-as="preset-list"] button strong').first().waitFor({ state: "attached", timeout: BOOT_MS });
+      await page.evaluate(() => document.fonts.ready);
+      const bad = [], cells = {};
+      for (const textSize of ["normal", "large"]) for (const ui of [100, 130]) {
+        const cell = `${v.name} text=${textSize} ui=${ui}`;
+        await page.evaluate(([t, u]) => {
+          if (t === "normal") delete document.documentElement.dataset.textSize; else document.documentElement.dataset.textSize = t;
+          window.__apex.uiScale(u);
+        }, [textSize, ui]);
+        const { m, settled } = await settledSettingsCell(page);
+        cells[cell] = m;
+        if (!settled) bad.push(`${cell}: the layout never settled in six reclassify passes`);
+        // Preconditions: the knobs landed, and every tier read the layout viewport (contract rule 1).
+        if (Math.abs(m.uiScale - ui / 100) > 1e-6 || m.textSize !== textSize) bad.push(`${cell}: knobs did not land (ui ${m.uiScale}, text ${m.textSize})`);
+        if (m.probe.viewport[0] !== v.w || m.probe.viewport[1] !== v.h) bad.push(`${cell}: the ICB is not the window ${JSON.stringify(m.probe.viewport)}`);
+        if (m.probe.body.density !== "compact" || m.probe.body.shape !== "wide") bad.push(`${cell}: body tier ${JSON.stringify(m.probe.body)}, the contract's A/C/D row is compact / wide`);
+        if (m.probe.density !== "compact" || m.probe.shape !== "wide") bad.push(`${cell}: settings sheet ${m.probe.density} / ${m.probe.shape}, not compact / wide`);
+        // Gap 3: a phone page is ONE reading column — never the 2-column grid of half-width plates.
+        if (m.page.display === "grid") bad.push(`${cell}: the APPEARANCE page is a grid (${m.page.columns})`);
+        // Gap 4: one-column studio, preview first; tiles at least three taps wide with whole names at the micro floor.
+        if (m.studio.columns !== 1) bad.push(`${cell}: the studio has ${m.studio.columns} columns`);
+        if (!m.studio.previewOnTop) bad.push(`${cell}: the preview is not on top of the controls`);
+        if (m.presets.columns < 3) bad.push(`${cell}: preset gallery ${m.presets.columns}-up`);
+        if (m.presets.minW < m.presets.tap * 3 - 1) bad.push(`${cell}: a preset tile under three taps wide ${JSON.stringify(m.presets)}`);
+        if (m.presets.fsPainted < 14 - 1e-6) bad.push(`${cell}: preset names paint at ${m.presets.fsPainted} px, under the 14 px floor`);
+        if (m.presets.clipped.length) bad.push(`${cell}: clipped preset names ${m.presets.clipped.join(", ")}`);
+        // Gap 5: the keyboard inset reaches the <dialog> (its padding shorthand used to swallow it: 29 / 8 px).
+        if (m.kb.padKb !== 180) bad.push(`${cell}: --kb 180px pads the dialog ${m.kb.padKb} px`);
+        if (!(m.kb.padNoKb < 180)) bad.push(`${cell}: the no-keyboard pad is already ${m.kb.padNoKb} px`);
+        // Gap 14: the fit cap is floored at the shipped size; at UI 100 nothing is capped.
+        if (m.probe.zoom < 1 - 1e-9) bad.push(`${cell}: the sheet zooms under 100% (${m.probe.sheetScale})`);
+        if (ui === 100 && m.probe.fit === "on") bad.push(`${cell}: capped at UI 100 (${m.probe.sheetScale})`);
+        if (m.hOverflow) bad.push(`${cell}: horizontal overflow`);
+      }
+      expect(bad, JSON.stringify(cells)).toEqual([]);
+      if (!v.band) return;
+      // THE FIT BAND (gap 14), from the last cell (large / 130, the capped one). A Safari toolbar show/hide moves the
+      // host a few px: within ±0.03 the painted cap holds (283 -> 289 is +0.027), a release is never held back
+      // (310 fits 130% outright) and the way back re-caps at the same value — no ratchet.
+      const at = async (h) => {
+        await page.setViewportSize({ width: v.w, height: h });
+        await page.waitForFunction((hh) => document.getElementById("pmsettings").clientHeight === hh, h, { polling: 50, timeout: 10_000 });
+        const { m, settled } = await settledSettingsCell(page);
+        expect(settled, `the fit never settled at ${h} ` + JSON.stringify(m.probe)).toBe(true);
+        return m.probe;
+      };
+      const base = await at(v.h);
+      expect(base.fit, "C at UI 130 is the capped cell " + JSON.stringify(base)).toBe("on");
+      expect(base.zoom).toBeGreaterThanOrEqual(1);
+      expect(base.zoom).toBeLessThan(1.3);
+      const taller = await at(v.h + 6);
+      expect(taller.sheetScale, "6 px of toolbar keeps the painted cap " + JSON.stringify(taller)).toBe(base.sheetScale);
+      const released = await at(310);
+      expect(released.fit, "a release is never held back " + JSON.stringify(released)).not.toBe("on");
+      const back = await at(v.h);
+      expect(back.sheetScale, "the way back re-caps at the same value " + JSON.stringify(back)).toBe(base.sheetScale);
+    });
+  });
+}
+
+// THE STALE-PORTRAIT LAUNCH (contract §2 row Aₛ, §6): on a Home Screen landscape launch iOS can still report the
+// PORTRAIT innerWidth/innerHeight while CSS already lays out landscape. Every tier read inner*, so the body booted
+// tall + normal and every screen sat on the wrong tier until a resize that never came. The boot stamp (index.html)
+// and SheetShape.classifyBody now read documentElement.clientWidth/Height; this cell fakes exactly that launch.
+test.describe("UI contract boot cell — a stale portrait inner* at a landscape launch", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test("innerWidth/innerHeight 393x852 while the ICB is 852x393 on the export: body wide + compact, the probe shows the disagreement", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), OWNER_EXPORT);
+    expect(imp.ok && !imp.failed, "the export seeds the store " + JSON.stringify(imp)).toBe(true);
+    await page.addInitScript(() => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, get() { return 393; } });
+      Object.defineProperty(window, "innerHeight", { configurable: true, get() { return 852; } });
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    const s = await page.evaluate(() => {
+      const probe = window.SheetShape.layoutProbe(document.getElementById("pmsettings-inner"));
+      return { inner: probe.inner, viewport: probe.viewport, body: probe.body,
+        uiScale: parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1 };
+    });
+    // Preconditions: the stale pair held through boot, and the ICB is the landscape window; the export's UI 109 makes
+    // 393 / 1.09 = 360 own (compact under the body's 600) and 852 / 1.09 = 781 own (wide over 620) — the old inner*
+    // reading gave 781 tall / 360 narrow, i.e. normal + narrow.
+    expect(s.inner, "the stub held " + JSON.stringify(s)).toEqual([393, 852]);
+    expect(s.viewport, "the layout viewport is the landscape window").toEqual([852, 393]);
+    expect(s.body.shape, "body shape from the ICB " + JSON.stringify(s)).toBe("wide");
+    expect(s.body.density, "body density from the ICB " + JSON.stringify(s)).toBe("compact");
+  });
+});
+
+// UI contract cells (#5153 gap 10; PR D of #5153 — `OWNER_EXPORT` is PR B's constant above, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.3;
+// measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pause card in the owner's three
+// windows — A the iOS Home Screen app (852x393, insets 59/21/59), C the Safari tab (852x283,
+// insets 59/0/59), D the spec phone (844x390) — seeded from Bryce's own export (TEXT large,
+// UI 109 %, PAUSE look btn 115 / w 130). ONE phone card for every stored layout: nothing in the
+// card scrolls, every door is on screen, every tray label fits its tile. Before the fix each of
+// LIST / COMPACT / WIDE / SIDEBAR swapped in the 420 card and put QUIT 221-420 own px past the sheet.
+const PHONE_WINDOWS = [
+  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
+  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
+  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
+];
+for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + win.name, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
+  test("one phone card for every stored layout: no scroll, every door on screen, labels fit", async ({ page }) => {
+    await page.goto("/?inspector=0");
+    await waitReady(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await waitReady(page);
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    await page.evaluate(() => window.__apex.race("monza", null, null, { grid: "tier" }));
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } },
+      null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { window.__apex.park(0.1); document.getElementById("pausemenu").hidden = false; });
+    await page.waitForFunction(() => !document.getElementById("pausemenu").hidden && document.querySelectorAll("#pm-quick-doors > *").length > 3,
+      null, { polling: 50, timeout: 8_000 });
+    const body = await page.evaluate(() => ({ density: document.body.dataset.density, shape: document.body.dataset.shape,
+      ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize }));
+    expect(body, "the owner's window is a compact wide body at the export's knobs").toMatchObject({ density: "compact", shape: "wide", ui: "1.09", text: "large" });
+    const seen = {};
+    for (const [layout, side] of [["grid", null], ["list", null], ["compact", null], ["wide", null], ["sidebar", null], ["grid", "right"], ["sidebar", "right"]]) {
+      await page.evaluate(([l, s]) => {
+        const de = document.documentElement.dataset;
+        if (l === "grid") delete de.pauseLayout; else de.pauseLayout = l;
+        if (s) de.pauseSide = s; else delete de.pauseSide;
+        SheetShape.reclassify();
+      }, [layout, side]);
+      await page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { polling: 50, timeout: 2_000 });
+      const cell = await page.evaluate(() => {
+        const z = (el) => el.currentCSSZoom || 1;
+        const pm = document.getElementById("pausemenu"), sheet = pm.querySelector(":scope > .sheet"), sb = sheet.querySelector(":scope > .sheet-body");
+        const sr = sheet.getBoundingClientRect();
+        const doors = {};
+        for (const id of ["pm-resume", "pm-restart", "pm-settings", "pm-quit"]) {
+          const r = document.getElementById(id).getBoundingClientRect();
+          doors[id] = { pastSheet: +(r.bottom - sr.bottom).toFixed(1), onScreen: r.top >= 0 && r.bottom <= innerHeight + 0.5, paintedH: +r.height.toFixed(1) };
+        }
+        const tiles = [...document.querySelectorAll("#pm-quick-doors > *")].filter((c) => !c.hidden && getComputedStyle(c).display !== "none");
+        const overflowing = tiles.map((t) => t.tagName === "DETAILS" ? t.querySelector("summary") : t).filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent.trim());
+        return { areas: getComputedStyle(sb).gridTemplateAreas, bodyScroll: sb.scrollHeight - sb.clientHeight, sheetOwnH: +(sr.height / z(sheet)).toFixed(1),
+          sheetInScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5, doors, tiles: tiles.length, overflowing, sheetHeight: getComputedStyle(sheet).height };
+      });
+      seen[layout + (side ? "/" + side : "")] = cell;
+      const tag = `${win.name} ${layout}${side ? " side=" + side : ""}: `;
+      expect(cell.bodyScroll, tag + "the card body never scrolls").toBeLessThanOrEqual(1);
+      expect(cell.sheetInScreen, tag + "the sheet sits inside the window").toBe(true);
+      expect(cell.areas, tag + "the phone card's grid (RESUME in a thumb column or along the bottom)").toMatch(/resume/);
+      for (const [id, d] of Object.entries(cell.doors)) {
+        expect(d.pastSheet, tag + id + " ends inside the sheet").toBeLessThanOrEqual(0.5);
+        expect(d.onScreen, tag + id + " is on screen").toBe(true);
+        expect(d.paintedH, tag + id + " paints at least the WCAG 44 (COMPACT is the chip-floor layout; the rest the 52 comfort floor)").toBeGreaterThanOrEqual(layout === "compact" ? 44 : 52);
+      }
+      expect(cell.tiles, tag + "the tool tray is populated").toBeGreaterThanOrEqual(6);
+      expect(cell.overflowing, tag + "every tray label fits its tile").toEqual([]);
+    }
+    // WIDE puts the doors along the bottom edge; SIDE RIGHT mirrors the thumb column.
+    expect(seen.wide.areas).toMatch(/"resume restart settings quit"/);
+    expect(seen["grid/right"].areas).toMatch(/"tools tools resume"/);
+    // The five layouts share ONE box: the card's own height is the same within a door's worth.
+    const heights = Object.values(seen).map((c) => c.sheetOwnH);
+    expect(Math.max(...heights) - Math.min(...heights), "every layout keeps the one phone card's box (" + heights.join("/") + ")").toBeLessThanOrEqual(40);
+  });
+  // #5200 (Bryce's iPhone, build 25617: "on pause menu there's no resume"). His screenshots are the 420 card at a UI
+  // SIZE near 51 %: a landscape phone is a NORMAL body there (393 / 0.51 = 770 own px), the list scrolled 209 own px
+  // and RESUME, an absolute bar under the scroller's fade mask, was not painted at all. The cells above only ever ran
+  // the export's 109 %. Every mode x UI SIZE opens the card through the real pause button and asks the same things.
+  test("RESUME is the first, focused, painted door in every mode and UI SIZE, and the card never scrolls", async ({ page }) => {
+    await page.goto("/?inspector=0");
+    await waitReady(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await waitReady(page);
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    const rows = [];
+    for (const mode of ["race", "timeTrial"]) {
+      await page.evaluate((m) => m === "race" ? window.__apex.race("bahrain", null, null, { grid: "tier" }) : window.__apex.tt("bahrain"), mode);
+      await page.waitForFunction((m) => { try { const i = window.__apex.info(); return i.track === "bahrain" && !!i.timeTrial === (m === "timeTrial"); } catch (_) { return false; } },
+        mode, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.park(0.1));
+      for (const ui of [null, 51, 40]) {   // null = the export's own (109 % on touch)
+        await page.evaluate((u) => { window.__apex.uiScale(u == null ? 109 : u); SheetShape.reclassify(); }, ui);
+        await page.evaluate(() => document.getElementById("pausebtn").click());
+        await page.waitForFunction(() => { const pm = document.getElementById("pausemenu"); return pm.open && !pm.hidden && document.querySelectorAll("#pm-quick-doors > *").length > 3; },
+          null, { polling: 50, timeout: 8_000 });
+        await page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { polling: 50, timeout: 2_000 });
+        const cell = await page.evaluate(() => {
+          const pm = document.getElementById("pausemenu"), sheet = pm.querySelector(":scope > .sheet"), sb = sheet.querySelector(":scope > .sheet-body");
+          const sr = sheet.getBoundingClientRect();
+          const shown = (el) => !el.hidden && getComputedStyle(el).display !== "none" && el.getBoundingClientRect().width > 0;
+          const doors = [...pm.querySelectorAll("button, summary")].filter((el) => shown(el) && !el.closest("details:not([open]) > :not(summary)"));
+          const rect = (el) => { const r = el.getBoundingClientRect(); return { id: el.id || el.textContent.trim(), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), area: r.width * r.height, inSheet: r.top >= sr.top - 0.5 && r.bottom <= sr.bottom + 0.5 && r.left >= sr.left - 0.5 && r.right <= sr.right + 0.5 }; };
+          const all = doors.map(rect);
+          const resume = document.getElementById("pm-resume"), rr = resume.getBoundingClientRect();
+          const hit = document.elementFromPoint(rr.x + rr.width / 2, rr.y + rr.height / 2);
+          return { short: document.body.hasAttribute("data-pause-short"), density: document.body.dataset.density, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+            bodyScroll: sb.scrollHeight - sb.clientHeight, sheetScroll: sheet.scrollHeight - sheet.clientHeight,
+            sheet: { x: Math.round(sr.x), y: Math.round(sr.y), w: Math.round(sr.width), h: Math.round(sr.height), inScreen: sr.top >= 0 && sr.left >= 0 && sr.bottom <= document.documentElement.clientHeight + 0.5 && sr.right <= document.documentElement.clientWidth + 0.5 },
+            firstDoor: all[0].id, focus: document.activeElement && document.activeElement.id, hit: hit && hit.id, resumePosition: getComputedStyle(resume).position,
+            resume: rect(resume), maxOther: Math.max(...all.filter((d) => d.id !== "pm-resume").map((d) => d.area)), outside: all.filter((d) => !d.inSheet).map((d) => d.id), small: all.filter((d) => d.h < 43.5).map((d) => d.id + " " + d.h), doors: all.length };
+        });
+        const tag = `${win.name} ${mode} UI ${ui == null ? "export" : ui + " %"}: `;
+        rows.push(tag + JSON.stringify(cell));
+        expect(cell.short, tag + "the short landscape window is stamped").toBe(true);
+        expect(cell.bodyScroll, tag + "the card body does not scroll").toBeLessThanOrEqual(1);
+        expect(cell.sheetScroll, tag + "the sheet does not scroll").toBeLessThanOrEqual(1);
+        expect(cell.sheet.inScreen, tag + "the sheet sits inside the window").toBe(true);
+        expect(cell.firstDoor, tag + "RESUME is the first door in reading (DOM, Tab) order").toBe("pm-resume");
+        expect(cell.focus, tag + "RESUME has the default focus").toBe("pm-resume");
+        expect(cell.hit, tag + "RESUME is what a tap at its centre lands on (painted, not masked or covered)").toBe("pm-resume");
+        expect(cell.resumePosition, tag + "RESUME is in flow").toBe("static");
+        expect(cell.resume.h, tag + "RESUME paints at least 44 px").toBeGreaterThanOrEqual(44);
+        expect(cell.resume.area, tag + "no door on the card is larger than RESUME (QUIT may tie it; RESUME alone carries the primary fill)").toBeGreaterThanOrEqual(cell.maxOther * 0.99);
+        expect(cell.outside, tag + "every door ends inside the sheet").toEqual([]);
+        expect(cell.small, tag + "every door paints the 44 px floor").toEqual([]);
+        expect(cell.sheet.w, tag + "the card uses the width (the 420 card was 214 px here)").toBeGreaterThanOrEqual(600);
+        await page.evaluate(() => document.getElementById("pm-resume").click());
+        await page.waitForFunction(() => document.getElementById("pausemenu").hidden, null, { polling: 50, timeout: 8_000 });
+      }
+    }
+    test.info().annotations.push({ type: "pause-cells", description: rows.join("\n") });
+  });
+});
+
+// UI contract cells for the circuit picker and race settings (#5153 gaps 13 and 16, UI contract 2026-11-06 §4.5;
+// measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): on the owner's three windows and export, the picker is
+// ONE four-row card — the filter chips share the title row, the flag strip, the hero still (never a scroller, the
+// two key numbers riding on it), the foot — and race settings are compact like their siblings with head and START
+// RACE fixed around the one body scroller and two columns on both phones. Before: the hero section scrolled 58-155
+// own px in every window; race settings were normal-density with ONE column at the export's 109 %, and in C the whole
+// sheet scrolled with START RACE under the fold.
+for (const win of PHONE_WINDOWS) test.describe("UI contract select + race cells — " + win.name, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
+  test("the picker's hero never scrolls and race settings keep START RACE fixed", async ({ page }) => {
+    await page.goto("/?inspector=0");
+    await waitReady(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await waitReady(page);
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.evaluate(() => document.getElementById("mb-race").click());
+    await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 20, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.SheetShape?.reclassify());
+    await twoFrames(page);
+    const sel = await page.evaluate(() => {
+      const $ = (id) => document.getElementById(id), z = (el) => el.currentCSSZoom || 1;
+      const inner = $("sel-inner"), sec = $("sel-track-section"), hero = $("sel-hero"), head = inner.querySelector(":scope > .sheet-head"), filt = $("sel-track-filter"), go = $("sel-go");
+      const hr = hero.getBoundingClientRect(), gr = go.getBoundingClientRect(), ir = inner.getBoundingClientRect();
+      const scrollers = [...inner.querySelectorAll("*")].filter((el) => { const o = getComputedStyle(el).overflowY; return (o === "auto" || o === "scroll") && el.scrollHeight > el.clientHeight + 1; }).map((el) => el.id || el.className);
+      return { density: inner.dataset.density, shape: inner.dataset.shape, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+        sectionScroll: sec.scrollHeight - sec.clientHeight, heroOwnH: +(hr.height / z(hero)).toFixed(1), verticalScrollers: scrollers,
+        filterInTitleRow: !!filt && Math.abs(filt.getBoundingClientRect().top - head.getBoundingClientRect().top) < 12,
+        headOverflow: head.scrollWidth - head.clientWidth,
+        nameClipped: $("sel-preview-name").scrollWidth > $("sel-preview-name").clientWidth + 1,
+        goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - ir.bottom).toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5 };
+    });
+    const tag = win.name + " select: ";
+    expect(sel, tag + "a compact wide picker at the export's UI SIZE").toMatchObject({ density: "compact", shape: "wide", ui: "1.09" });
+    expect(sel.sectionScroll, tag + "the hero section never scrolls").toBeLessThanOrEqual(1);
+    expect(sel.verticalScrollers, tag + "no vertical scroller anywhere in the picker").toEqual([]);
+    expect(sel.heroOwnH, tag + "the still keeps a real slot (C gets what 283 px leave)").toBeGreaterThanOrEqual(60);
+    expect(sel.filterInTitleRow, tag + "the filter chips share the title row").toBe(true);
+    expect(sel.headOverflow, tag + "the title fits its column").toBeLessThanOrEqual(0);
+    expect(sel.nameClipped, tag + "the circuit name reads whole").toBe(false);
+    expect(sel.sheetInScreen, tag + "the sheet sits inside the window").toBe(true);
+    expect(sel.goPastSheet, tag + "RACE SETUP ends inside the sheet").toBeLessThanOrEqual(0.5);
+    expect(sel.goOnScreen, tag + "RACE SETUP is on screen").toBe(true);
+    // RACE SETTINGS
+    await page.evaluate(() => document.getElementById("sel-go").click());
+    await page.waitForFunction(() => !document.getElementById("race-settings").hidden, null, { polling: 50, timeout: BOOT_MS });
+    await page.evaluate(() => window.SheetShape?.reclassify());
+    await twoFrames(page);
+    const rs = await page.evaluate(() => {
+      const sheet = document.querySelector("#race-settings > .sheet"), body = document.getElementById("rs-body"), go = document.getElementById("rs-go");
+      const sr = sheet.getBoundingClientRect(), gr = go.getBoundingClientRect();
+      const scrollers = [...sheet.querySelectorAll("*")].concat([sheet]).filter((el) => { const o = getComputedStyle(el).overflowY; return (o === "auto" || o === "scroll") && el.scrollHeight > el.clientHeight + 1; }).map((el) => el.id || el.className);
+      return { density: sheet.dataset.density, shape: sheet.dataset.shape, compactAt: getComputedStyle(sheet).getPropertyValue("--compact-at").trim(), display: getComputedStyle(sheet).display,
+        sheetScroll: sheet.scrollHeight - sheet.clientHeight, scrollers, columns: getComputedStyle(body).gridTemplateColumns.split(" ").length,
+        goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - sr.bottom).toFixed(1), goPaintedH: +gr.height.toFixed(1), sheetInScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 };
+    });
+    const rtag = win.name + " race settings: ";
+    expect(rs, rtag + "compact like its siblings, the sheet grid kept").toMatchObject({ density: "compact", shape: "wide", compactAt: "480px", display: "grid" });
+    expect(rs.sheetScroll, rtag + "the sheet itself never scrolls").toBeLessThanOrEqual(1);
+    expect(rs.scrollers, rtag + "#rs-body is the ONE scroller").toEqual(["rs-body"]);
+    expect(rs.columns, rtag + "two columns on a phone").toBe(2);
+    expect(rs.sheetInScreen, rtag + "the sheet sits inside the window").toBe(true);
+    expect(rs.goPastSheet, rtag + "START RACE ends inside the sheet").toBeLessThanOrEqual(0.5);
+    expect(rs.goOnScreen, rtag + "START RACE is on screen").toBe(true);
+    expect(rs.goPaintedH, rtag + "START RACE paints the WCAG floor").toBeGreaterThanOrEqual(44);
   });
 });

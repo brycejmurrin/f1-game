@@ -15,7 +15,7 @@
 //         Overtake armed at 42 % of top speed at pace 0.5 and 16 % at pace 1.3,
 //         against active aero's constant 35 %.
 //
-// So this is the guard, in the shape docs/ARCHITECTURE-REVIEW.md records for
+// So this is the guard, in the shape docs/notes/ARCHITECTURE-REVIEW.md records for
 // A10 ("plus tests/unit/circuit-def-fields.test.mjs — the guard is the real fix").
 // tools/check/vstd-lint.mjs finds every `.speed` compared against a numeric literal
 // without vStd(); ALLOWED below is the set that is legitimately ABSOLUTE, each
@@ -37,33 +37,21 @@
 //
 import test from "node:test";
 import assert from "node:assert/strict";
-import { speedLiteralViolations, stripNonCode, readFiles, violationKey } from "../../tools/check/vstd-lint.mjs";
+import { createRequire } from "node:module";
+import { speedLiteralViolations, stripNonCode, readFiles, violationKey, rosterFiles } from "../../tools/check/vstd-lint.mjs";
 
 // ── the approved absolute sites ───────────────────────────────────────────────
 // Every row is a speed that is legitimately NOT pace-normalised, and says why.
 // `code` is the line it lives on, so moving code around does not silently widen
 // the exemption: a threshold that migrates to a new line must be re-justified.
 const ALLOWED = [
+  {"file": "js/race/stopped-cars.js", "expr": "Math.abs(c.speed || 0) < STOP_V", "code": "if (!c || c.finished || !(Math.abs(c.speed || 0) < STOP_V) || !Number.isFinite(c.s)) continue;", "why": "race control's stopped-car hazard (W34): a car standing still on the road, an absolute standstill tolerance in metres per second like the launch-grid check above, never a fraction of racing speed"},
   {"file": "js/race/setup-trial-session.js", "expr": "Math.abs(c.speed) > 1", "code": "![\"count\", \"race\"].includes(G.state) || !Number.isFinite(c.speed) || Math.abs(c.speed) > 1 ||", "why": "absolute standstill verification for a fresh launch grid, matching the launch drill; this is motion tolerance in metres per second, not a fraction of racing speed"},
   // ── relative closing speed between two cars in contact ──
   // (Was: (dProg >= 0 ? b.speed - a.speed : …) > 0.5 — now uses hoisted
   // aSp/bSp on _ct, so the .speed-literal scanner no longer sees it. The
   // 0.5 m/s noise floor remains a relative closing-direction test.)
 
-  // ── AI traffic / stuck detection ──
-  {
-    file: "js/game.js",
-    expr: "c.speed < 7",
-    code: 'if (state === "race" && c.speed < 7 && boxed && raceCtl.level < 4) c.stuckT = (c.stuckT || 0) + dt;',
-    // "Boxed in AND going nowhere". The bottom of the speed range does not move
-    // with PACE: the AI's corner speed is sqrt(LAT_MAX·bankMu·gripMult()/kMax)
-    // and LAT_MAX is one of the deliberately-absolute force constants, so even
-    // the slowest hairpin sits well above 7 m/s at every OVERALL SPEED setting.
-    // 7 m/s therefore means "crawling" at every pace, never "a fraction of top".
-    why: "crawl detector below the GRIP-limited corner floor, which carries no PACE term",
-  },
-
-  // ── divide-by-zero guards ──
   {
     file: "js/game.js",
     expr: "c.speed > 1",
@@ -192,7 +180,7 @@ const ALLOWED = [
   // i.e. they separate "crawling" from "driving" at every pace.
   {
     file: "js/game.js", expr: "c.speed > 10",
-    code: "skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);",
+    code: "skids.stamp(_groundMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);",
     // The justification did not change when the SkidMarks extraction rewrote this
     // line from an `if` into a stamp() argument — but the `code` match did, and the
     // lint correctly reported the site as unapproved until this text followed it.
@@ -276,6 +264,13 @@ const ALLOWED = [
     code: "if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= SPOKEN_RATE_MAX) {",
     why: "not a car speed at all: run.speed is the replay playback RATE (1x, 2x), above which the commentator cannot keep up",
   },
+  // Surfaced 2026-11 when the lint's roster stopped being hand-copied and picked up the six lazy lists it had
+  // dropped (LAZY_RACE_SESSION etc.). Pre-existing, not new code; shrink-only — delete the row if the site goes.
+  {
+    file: "js/race/cooldown-lap.js", expr: "(s.speed || 0) <= PARK_SPEED",
+    code: "if (s.atBox || (s.inPitLane && (s.speed || 0) <= PARK_SPEED)) {",
+    why: "crawl/standstill ceiling (PARK_SPEED 2.5 m/s, 'parked at box') in the pit lane, which is speed-limited, not pace-scaled",
+  },
 ];
 
 // ── open findings ─────────────────────────────────────────────────────────────
@@ -286,7 +281,7 @@ const ALLOWED = [
 // EMPTY, and that is the point: the one finding this list ever held — the rain
 // spray's `wet && c.speed > 15` with its `clamp((c.speed - 15) / 45, 0, 1)` ramp,
 // which capped spray strength at 0.47 at pace 0.5 — was repaired as A16 in
-// docs/ARCHITECTURE-REVIEW.md and both halves now read vStd(c.speed). A row here
+// docs/notes/ARCHITECTURE-REVIEW.md and both halves now read vStd(c.speed). A row here
 // is a debt, not a licence; deleting one is what closing it looks like.
 const SUSPECT = [];
 
@@ -429,4 +424,22 @@ test("open findings are recorded, not quietly exempted", () => {
     assert.ok(s.note && s.note.length > 200, `${s.file} ${s.expr}: needs the measured detail`);
   }
   assert.ok(SUSPECT.length <= 1, "a growing suspect list means the guard is being used as an allow-list");
+});
+
+test("the lint's roster is every manifest file list: FULL, DEFERRED and every LAZY_* (js/race/* included)", () => {
+  const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const roster = new Set(rosterFiles());
+  const all = [...manifest.FULL, ...Object.values(manifest.DEFERRED).flat()];
+  for (const [k, v] of Object.entries(manifest)) if (/^LAZY_/.test(k) && Array.isArray(v) && v.every((f) => typeof f === "string")) all.push(...v);
+  assert.deepEqual(all.filter((f) => !roster.has(f)), [], "a manifest list the lint does not read");
+  const race = all.filter((f) => /^js\/race\/[^/]+\.js$/.test(f));
+  assert.ok(race.length > 10, `js/race/* is in the manifest (${race.length})`);
+  assert.deepEqual(race.filter((f) => !roster.has(f)), []);
+  for (const k of ["LAZY_RACE_SESSION", "LAZY_AUDIO", "LAZY_TRACK_BUILD", "LAZY_WORKER", "LAZY_DEV", "LAZY_GARAGE_EXTERIOR"]) {
+    for (const f of manifest[k] || []) assert.ok(roster.has(f), `${k}: ${f}`);
+  }
+  assert.equal(roster.size, new Set(all).size, "deduplicated");
+  // a synthetic manifest: a new LAZY_ list is picked up with no edit to the lint; *_EDGES pair lists are not files
+  assert.deepEqual(rosterFiles({ FULL: ["a.js"], DEFERRED: { x: ["b.js"] }, LAZY_NEW: ["c.js", "a.js"], LAZY_NEW_EDGES: [["c.js", "a.js"]] }),
+    ["a.js", "b.js", "c.js"]);
 });

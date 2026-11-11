@@ -32,6 +32,11 @@ test("guardsVerdict: the aggregator decides; its shards are the fallback when it
   assert.equal(guardsVerdict([...shards("success").slice(0, 4), run(GUARDS_D, "queued", null, 5)]).state, "pending");
   assert.equal(guardsVerdict([run(GUARDS_A, "completed", "failure"), run(GUARDS_B, "completed", "success", 2)]).state, "failed");
   assert.equal(guardsVerdict([run("CI", "completed", "success")]).state, "none");
+  // WP-L8: A+B green with C/D missing is pending, never passed.
+  const ab = guardsVerdict([run(GUARDS_JOB, "completed", "cancelled"), run(GUARDS_A, "completed", "success", 2), run(GUARDS_B, "completed", "success", 3)]);
+  assert.deepEqual([ab.state, ab.code, ab.evidence], ["pending", 1, `${GUARDS_C}, ${GUARDS_D} missing (all four tooling shards must report)`]);
+  assert.equal(guardsVerdict([run(GUARDS_A, "completed", "success"), run(GUARDS_B, "completed", "success", 2), run(GUARDS_C, "completed", "success", 3)]).state, "pending");
+  assert.equal(guardsVerdict([run(GUARDS_C, "completed", "failure")]).state, "failed", "a red shard fails even when others are missing");
 });
 
 test("newestByName: the newest attempt per name wins; a skipped run never hides a real result (#3862)", () => {
@@ -133,6 +138,13 @@ test("planVerdict: ticked, struck, deferred and `land:` items close; unticked on
   assert.equal(planVerdict(cursor).state, "done", "Cursor's agent slice wins when it carries a Plan (#2899)");
 });
 
+test("planVerdict on edited bodies (moved from pr-body.test.mjs): a struck or deferred item closes, `**now:**` stays open", () => {
+  const plan = "<!-- example:\n       - [x] done — sample\n       - [ ] todo -->\n- [ ] **now:** first step\n- [ ] second step\n- [x] third — sha";
+  assert.deepEqual(planVerdict(body(plan)).open, ["**now:** first step", "second step"], "commented example items do not count");
+  assert.deepEqual(planVerdict(body(plan.replace("- [ ] second step", "- [ ] ~~second step~~ — covered by #5"))).open.length, 1, "struck closes");
+  assert.deepEqual(planVerdict(body(plan.replace("- [ ] second step", "- [~] second step"))).open.length, 1, "deferred closes");
+});
+
 test("withPlan: an open Plan turns a green tip into plan-open (exit 1); no Plan warns; red and no-PR pass through", () => {
   const v = withPlan(GREEN, body("- [ ] one\n- [ ] two\n- [ ] three\n- [ ] four"));
   assert.deepEqual([v.state, v.code], ["plan-open", 1]);
@@ -169,8 +181,8 @@ function github({ files = [{ filename: "js/core/log.js" }], pull = {}, checks = 
 
 test("resolveSha --pr: head, body, labels, draft/state and the full file list (both rename paths); a short or failed list is filesError", () => {
   const many = Array.from({ length: 150 }, (_, i) => ({ filename: `f${i}` }));
-  const r = resolveSha({ pr: 7, request: github({ files: many, pull: { labels: [{ name: "run-ci" }], draft: false, state: "closed" } }) });
-  assert.deepEqual([r.sha, r.pr, r.branch, r.labels, r.draft, r.state, r.files.length, r.filesError], [SHA, 7, "cursor/x", ["run-ci"], false, "closed", 150, null]);
+  const r = resolveSha({ pr: 7, request: github({ files: many, pull: { labels: [{ name: "priority" }], draft: false, state: "closed" } }) });
+  assert.deepEqual([r.sha, r.pr, r.branch, r.labels, r.draft, r.state, r.files.length, r.filesError], [SHA, 7, "cursor/x", ["priority"], false, "closed", 150, null]);
   const ren = resolveSha({ pr: 7, request: github({ files: [{ filename: "docs/x.md", previous_filename: ".claude/memory/x.md" }] }) });
   assert.deepEqual(ren.files, ["docs/x.md", ".claude/memory/x.md"]);
   assert.ok(/incomplete files list: received 1 of 3/.test(resolveSha({ pr: 7, request: github({ files: [{ filename: "a" }], pull: { changed_files: 3 } }) }).filesError));
@@ -196,7 +208,7 @@ test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; eac
   const deps = (request) => ({ request, judge: (a) => evaluate({ ...a, localOpts: s.opts }), receipt: (d) => receipts.push(d), sleep: (x) => slept.push(x), log: (...a) => logs.push(a.join(" ")) });
   try {
     assert.equal(main(["--pr", "7"], deps(github())), 0);
-    assert.deepEqual(receipts.at(-1), { pr: 7, head: SHA, ok: true, evidence: "" });
+    assert.deepEqual({ ...receipts.at(-1), planHash: /^[0-9a-f]{64}$/.test(receipts.at(-1).planHash) }, { pr: 7, head: SHA, ok: true, evidence: "", planHash: true });
     assert.ok(logs.at(-1).startsWith(`[ready-gate] = ready-gate passed — Structural guards success sha=${SHA}`), logs.at(-1));
     assert.equal(main(["--pr", "7"], deps(github({ pull: { body: body("- [ ] open") } }))), 1);
     assert.ok(receipts.at(-1).ok === false && receipts.at(-1).evidence.startsWith("plan-open:"), JSON.stringify(receipts.at(-1)));
@@ -221,4 +233,21 @@ test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; eac
     assert.equal(main(["--sha", SHA, "--local"], deps(() => { throw new Error("no API"); })), 0, "--local never calls GitHub");
     assert.equal(receipts.length, n, "no receipt without --pr");
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label call, a refusal prints neither; nothing is flipped itself", async () => {
+  const { main: ship, nextCalls } = await import("../../tools/ci/ship-pr.mjs");
+  const out = [], seen = [];
+  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l) }), out.join("\n")]; };
+  let [rc, text] = go(["--pr", "7"], 0);
+  assert.equal(rc, 0);
+  assert.deepEqual(seen.at(-1), ["--pr", "7"]);
+  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "10 min", "re-run ready-gate", "gh api -X POST repos/brycejmurrin/f1-game/issues/7/labels -f 'labels[]=land'"];
+  assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls and the receipt-age note are printed");
+  [rc, text] = go(["--pr", "7"], 1);
+  assert.equal(rc, 1);
+  assert.deepEqual(parts.filter((x) => text.includes(x)), [], "a refusal prints neither call");
+  [rc] = go(["--pr", "x; rm"], 0);
+  assert.equal(rc, 1, "a non-numeric PR is a usage error");
+  assert.equal(nextCalls(9, "o/r").length, 3);
 });

@@ -96,7 +96,7 @@ test("canFix: every remedied code the validator raises carries a fix tag; nothin
   for (const c of F.ORDER) assert.equal(F.canFix({ code: c, level: "red", fix: c }), true, c);
   for (const bad of [null, undefined, 0, "start", {}, { code: "start" }, { code: "grade", fix: "grade" }, { code: "width", fix: true }, { code: "toString", fix: 1 }]) assert.equal(F.canFix(bad), false, JSON.stringify(bad));
   const seen = new Set();
-  for (const d of [design({ pts: ellipse(24, 150, 90) }), design({ pts: eight() }), design({ pts: zig(60, 8, 2) }), design({ pts: spike(200, 4) }), design({ pts: pinch(16) }), design({ pts: ellipse(240, 800, 500) }), design({ pts: stadium() })]) {
+  for (const d of [design({ pts: ellipse(24, 150, 90) }), design({ pts: eight() }), design({ pts: zig(60, 8, 2) }), design({ pts: spike(200, 4) }), design({ pts: pinch(6) }), design({ pts: ellipse(240, 800, 500) }), design({ pts: stadium() })]) {
     for (const it of V.check(d).issues) {
       if (F.ORDER.includes(it.code) && !(it.code === "points" && /at least/.test(it.msg))) { assert.ok(it.fix, `${it.code}:${it.level} is tagged`); seen.add(it.code); }
       if (it.code === "clearance") assert.ok(Number.isFinite(it.s2), "clearance carries s2");
@@ -220,7 +220,9 @@ test("crossing: a bridge in sanitize's shape over the far road; refused when the
 });
 
 test("clearance: pushes the two close sections apart; point 0 and far zones stay put", () => {
-  const d = design({ pts: pinch(16), elevations: [{ s: 0.5, halfM: 200, rise: 4 }], hwZones: [{ s0: 0.45, s1: 0.55, hw: 6, ease: 0.025 }], bankZones: [{ frac: 0.05, angleDeg: 8, widthM: 120 }] });
+  // pinch(6) builds a 14 m overlap mid-lap; pinch(16) builds 24 m apart, RED only
+  // while the pit-opening rule ran over the whole lap (WP-G1 gates it on the pit window).
+  const d = design({ pts: pinch(6), elevations: [{ s: 0.5, halfM: 200, rise: 4 }], hwZones: [{ s0: 0.45, s1: 0.55, hw: 6, ease: 0.025 }], bankZones: [{ frac: 0.05, angleDeg: 8, widthM: 120 }] });
   const { r } = fix(d, "clearance");
   assert.match(r.msg, /apart/);
   zonesStay(d, r.design, 0.5, "clearance");

@@ -339,7 +339,7 @@ authored planting, distance is still the fix.
 | `every(metres, fn)` | call `fn(k)` every ~`metres` around the lap |
 | `onTrack(x, z, margin)` | true if `(x,z)` is on any tarmac — guard distant props |
 | `groundYAt(k, dist)` | terrain height `dist` beyond the edge (engine frame, like `px/py/pz`: not the render-frame world y) |
-| `terrainYAt(x, z)` | terrain height at a WORLD XZ point, or `null` off the rendered ribbon. Reach for this the moment a placement walks away from the centreline: `groundYAt` is a NODE query, and its absence is what makes Trap B in docs/SCENERY-GROUNDING.md so easy to write — Spa's old-road ribbon reused one anchor's height for 248 m and left its treeline 17 m in the air |
+| `terrainYAt(x, z)` | terrain height at a WORLD XZ point, or `null` off the rendered ribbon. Reach for this the moment a placement walks away from the centreline: `groundYAt` is a NODE query, and its absence is what makes Trap B in docs/SCENERY-API.md so easy to write — Spa's old-road ribbon reused one anchor's height for 248 m and left its treeline 17 m in the air |
 | `hash(i)` | deterministic 0–1 pseudo-random |
 | `ATM` / `COL` | named atmosphere & colour packs from `scenery/data.js` (see below) |
 
@@ -567,11 +567,17 @@ Places a modelled asset from `assets/pack/` — either generated offline by
 `bake-model` / `import-models.mjs` from a glTF. Geometry is the game's own
 vertex format with a `MAT` id per vertex.
 
-`opts`: `{ scale, rotY, lift, tint:[r,g,b], mat }`. Without `rotY` the model is
+`opts`: `{ scale, height, rotY, lift, tint:[r,g,b], mat }`. A positive finite `height`
+sets uniform scale from the model's measured height, overriding `scale`. Without `rotY` the model is
 yawed to face the track (a model authored facing **+Z** looks at the road from
 either side). `tint` multiplies the baked vertex colour; `mat` overrides the
 baked per-vertex material id, so one mesh can be dressed as concrete on one
 circuit and rusted metal on another.
+
+`def.furniture.bakedPines: true` routes all `pine` calls (including deferred
+`forestEdge` ranks) through the shared tree occupancy registry before placing
+`pine_lod0` at the requested height. Missing models keep the procedural fallback;
+circuits without the opt-in retain their existing geometry.
 
 **It returns `false` and emits nothing when the pack has no such model** — which
 is the state of a fresh checkout, since no models ship by default. Treat it as an

@@ -40,7 +40,7 @@
         guardrail, fence, tyreWall, marshalPost, cameraTower,
         broadcastCompound, billboard, sponsorHoarding,
         motorhome, groundPatch, ridge, mountain,
-        modelGroup, vadd, addBox, addCyl, addCone, addFrustum,
+        modelGroup, vadd, addBox, addCyl,
         MAT, indexSolid } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)

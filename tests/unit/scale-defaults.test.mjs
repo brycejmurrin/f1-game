@@ -213,15 +213,16 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
     "unset is exactly 1 (shipped alphas unchanged) and no text plate thins under 0.45 of its alpha");
   const hc = tokens.match(/:root\[data-ui-contrast="high"\] \{([^}]*)\}/);
   assert.ok(hc && /--hud-panel-a-eff:\s*1;/.test(hc[1]), "HIGH CONTRAST must pin --hud-panel-a-eff at 1");
-  // Every listed plate multiplies its shipped alpha by the effective token.
-  for (const [sel, a] of [[".hud-box {", "0.78"], ["#hud-gearbox {", "0.6"], ["#hud-tach {", "0.72"],
-    ["#minimap {", "0.55"], ["#hud-sectors {", "0.72"], ["#hud-limits {", "0.72"], ["#announce {", "0.82"]]) {
+  // Every listed plate reads the one strip token, which multiplies the effective token.
+  assert.ok(hud.includes("--hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent);"),
+    "--hud-strip-bg is the one panel token");
+  for (const sel of [".hud-box {", ".hud-gaps {", "#hud-gearbox {", "#hud-tach {", "#minimap {", "#hud-sectors {",
+    "#hud-limits {", "#announce {", "#bc-tower {"]) {
     const at = hud.indexOf("\n" + sel);
     assert.ok(at >= 0, sel);
     const block = hud.slice(at, hud.indexOf("\n}", at + 1));
-    assert.ok(block.includes(`rgb(8 8 14 / calc(${a} * var(--hud-panel-a-eff)))`), sel + " plate");
+    assert.ok(block.includes("background: var(--hud-strip-bg);") || block.includes("background: var(--hud-strip-bg)"), sel + " plate");
   }
-  assert.match(hud, /background: rgb\(8 8 14 \/ calc\(0\.55 \* var\(--hud-panel-a-eff\)\)\); padding: 3px 8px;/, ".hud-gaps plate");
   // Lights, flags and the OT/AERO fills are signals, not plates.
   const lights = hud.indexOf("\n#lights {");
   assert.ok(lights >= 0, "#lights block");
@@ -230,12 +231,120 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
   assert.match(read("js/ui/settings-export.js"), /k: "hudPanelOpacity", lane: "json", group: "display", def: null/);
 });
 
+// #5166 moved the touch default LOW -> MED; #5227 moved it MED -> AUTO capped at MED's 0.75. What the
+// boot APPLIES, not just what the helper says: an unset phone starts at 0.75 with the governor's
+// resolution stage ON under a 0.75 ceiling, a stored choice wins over the default, and a pointer device
+// is unchanged (AUTO, ceiling 1). `scale0` is the backend's scale when the boot reaches applyResMode.
+function bootRes({ coarse, stored = {}, scale0 = 1 }) {
+  const calls = { scale: [], autoRes: [], painted: [], ceil: [] };
+  let live = scale0;
+  const ctx = vm.createContext({
+    Math, Number, String, JSON, isFinite, Object, Array,
+    Log: { info() {} },
+    SettingRow: { wire() {}, paint: (el, v) => { if (el && el.id === "pm-res") calls.painted.push(v); }, labels: (v) => v.map((x) => [x, x]) },
+    PerfGov: { setAutoRes: (on) => calls.autoRes.push(on), setResCeil: (v) => calls.ceil.push(v) },
+    requestAnimationFrame: () => 0,
+    window: { matchMedia: (q) => ({ matches: q === "(pointer: coarse)" ? coarse : false }) },
+    document: { documentElement: { style: { setProperty() {}, removeProperty() {} } } },
+  });
+  vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
+  const el = (id) => ({ id, value: "", textContent: "", hidden: true, classList: { toggle() {}, contains: () => false }, closest: () => null });
+  // GameStore semantics: set(k, undefined) REMOVES the key (null would be stored as JSON null).
+  const store = { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { if (v === undefined) delete stored[k]; else stored[k] = v; }, raw: () => null, rawSet() {} };
+  vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: { setRenderScale: (v) => { live = v; calls.scale.push(v); }, getRenderScale: () => live }, updateTrackPreview() {} });
+  calls.stored = stored;
+  return calls;
+}
+
+test("RESOLUTION: a phone with nothing stored boots on AUTO at MED's 0.75, governor-driven under a 0.75 ceiling (#5227)", () => {
+  const c = bootRes({ coarse: true });
+  assert.deepEqual(c.painted, ["auto"]);
+  assert.deepEqual(c.scale, [0.75], "the boot's 1.0 comes down to the phone ceiling: never sharper than MED");
+  assert.deepEqual(c.ceil, [0.75]);
+  assert.deepEqual(c.autoRes, [true], "the resolution stage is the governor's again");
+});
+
+test("RESOLUTION: a phone's AUTO never RAISES a scale that already sits under its ceiling", () => {
+  const c = bootRes({ coarse: true, scale0: 0.6 });
+  assert.deepEqual(c.scale, [], "0.6 is the governor's to climb from, not a jump to 0.75");
+  assert.deepEqual(c.ceil, [0.75]);
+  assert.deepEqual(c.autoRes, [true]);
+});
+
+test("RESOLUTION: a stored choice wins over the touch default", () => {
+  for (const [mode, v] of [["low", 0.5], ["high", 1.0], ["med", 0.75]]) {
+    const c = bootRes({ coarse: true, stored: { resMode: mode, resSchema: 2 } });
+    assert.deepEqual(c.painted, [mode], `stored ${mode} stays ${mode}`);
+    assert.deepEqual(c.scale, [v]);
+  }
+  const auto = bootRes({ coarse: true, stored: { resMode: "auto" } });
+  assert.deepEqual(auto.painted, ["auto"]);
+  assert.deepEqual(auto.scale, [0.75], "a phone's AUTO is capped at MED, stored or not");
+  assert.deepEqual(auto.autoRes, [true], "AUTO hands the scale to the governor");
+  const high = bootRes({ coarse: true, stored: { resMode: "high", resSchema: 2 } });
+  assert.deepEqual([high.scale, high.autoRes, high.ceil], [[1.0], [false], []], "a pinned HIGH is untouched by the AUTO ceiling");
+});
+
+// Bryce's live export (2026-11-09) stores RESOLUTION HIGH: the #5227 default must not move him.
+test("RESOLUTION: Bryce's live export keeps its stored HIGH, pinned at 1.0", () => {
+  const exp = JSON.parse(read("tests/data/settings-live-export-2026-11-09.json"));
+  assert.equal(exp.settings.display.resMode, "high");
+  const c = bootRes({ coarse: true, stored: { resMode: exp.settings.display.resMode, resSchema: 2 } });
+  assert.deepEqual([c.painted, c.scale, c.autoRes, c.ceil], [["high"], [1.0], [false], []]);
+});
+
+// #5198 part 3: a phone's stored LOW from before #5166 was the old DEFAULT, not a choice (a settings
+// file saved then carried it as a value). Bryce's export: resMode "low", not in `changed`. resSchema 2
+// runs once: the implicit phone LOW follows the default again; a LOW picked after that is kept.
+test("RESOLUTION migration: a phone's pre-#5166 stored LOW boots at the default (AUTO at 0.75) and is unset, once", () => {
+  const c = bootRes({ coarse: true, stored: { resMode: "low" } });
+  assert.deepEqual(c.painted, ["auto"]);
+  assert.deepEqual(c.scale, [0.75]);
+  assert.equal("resMode" in c.stored, false, "removed (not null), so a later default change applies too");
+  assert.equal(c.stored.resSchema, 2);
+  // The player then really picks LOW: the next boot keeps it (the migration does not re-run).
+  c.stored.resMode = "low";
+  const again = bootRes({ coarse: true, stored: c.stored });
+  assert.deepEqual(again.painted, ["low"]);
+  assert.deepEqual(again.scale, [0.5]);
+});
+
+test("RESOLUTION migration: only a phone's LOW moves; HIGH/MED/AUTO and a desktop's LOW stay", () => {
+  for (const mode of ["med", "high", "auto"]) {
+    const c = bootRes({ coarse: true, stored: { resMode: mode } });
+    assert.deepEqual(c.painted, [mode], `phone ${mode} kept`);
+    assert.equal(c.stored.resSchema, 2);
+  }
+  const desk = bootRes({ coarse: false, stored: { resMode: "low" } });
+  assert.deepEqual(desk.painted, ["low"], "LOW was never a desktop default, so it was chosen");
+  assert.deepEqual(desk.scale, [0.5]);
+  const fresh = bootRes({ coarse: true });
+  assert.equal(fresh.stored.resSchema, 2, "a fresh install is stamped, so a LOW it later picks survives");
+  assert.equal("resMode" in fresh.stored, false, "the migration writes no resMode of its own");
+});
+
+test("RESOLUTION migration: Bryce's own export is the case it fixes", () => {
+  const exp = JSON.parse(read("tests/data/settings-defaults-export.json"));
+  assert.equal(exp.settings.display.resMode, "low", "stored (a perDevice unset key exports null)");
+  assert.ok(!exp.changed.includes("display.resMode"), "equal to the default it shipped with, never chosen");
+  const c = bootRes({ coarse: true, stored: { resMode: exp.settings.display.resMode } });
+  assert.deepEqual(c.scale, [0.75]);
+});
+
+test("RESOLUTION: a pointer device with nothing stored is unchanged (AUTO, governor-driven)", () => {
+  const c = bootRes({ coarse: false });
+  assert.deepEqual(c.painted, ["auto"]);
+  assert.deepEqual(c.scale, []);
+  assert.deepEqual(c.ceil, [1], "a pointer device's AUTO may climb to full resolution");
+  assert.deepEqual(c.autoRes, [true]);
+});
+
 test("UiScale.defaultResMode() answers from the primary pointer, without create(G)", () => {
   const run = (matches, throws) => {
     const ctx = vm.createContext({ window: { matchMedia: (q) => { if (throws) throw new Error("no mq"); assert.equal(q, "(pointer: coarse)"); return { matches }; } } });
     return vm.runInContext(scaleJs + "\n;UiScale.defaultResMode()", ctx);
   };
-  assert.equal(run(true), "low");
+  assert.equal(run(true), "auto", "a phone ships AUTO since #5227; its 0.75 ceiling is applied at boot, not in the mode id");
   assert.equal(run(false), "auto");
   assert.equal(run(false, true), "auto", "a throwing matchMedia is a pointer device");
   assert.match(scaleJs, /store\.get\("resMode", defaultResMode\(\)\)/, "the live row reads the same helper SPEC consumes");

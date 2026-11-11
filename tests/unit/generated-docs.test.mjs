@@ -34,7 +34,8 @@ const GENERATORS = [
   { tool: "tools/gen/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
   { tool: "tools/gen/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
   { tool: "tools/gen/gen-flags-table.mjs", target: "docs/DEBUG-HOOKS.md" },
-  { tool: "tools/docs/gen-coverage-table.mjs", target: "docs/TESTING-COVERAGE.md" },
+  // No gen-coverage-table here: since 2026-11-10 it builds artifacts/TESTING-COVERAGE.md on demand
+  // (every test-adding PR conflicted in the committed copy; tools/lib/generated-paths.mjs RETIRED_PATHS).
   { tool: "tools/docs/gen-agent-index.mjs", target: "docs/agent-index.json" },
   // No gen-ladder-figures here: since 2026-09-30 it only REPORTS (the ladder
   // sizes are not committed — they made every two test-adding PRs conflict).
@@ -270,6 +271,6 @@ test("gen-ladder-figures: the report is three real rows and the figures form a l
   const r = spawnSync(process.execPath, [path.join(ROOT, "tools/gen/gen-ladder-figures.mjs")], { encoding: "utf8", cwd: ROOT, timeout: 60000 });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^ladder: guards \d+ ⊂ tooling-fast \d+ ⊂ gate \d+ of \d+ unit files; \d+ specs\n$/);
-  assert.equal(fs.existsSync(path.join(ROOT, "docs/notes/PREPUSH-GATE-LADDER.md")) && read("docs/notes/PREPUSH-GATE-LADDER.md").includes("GENERATED: ladder"), false,
-    "the ladder note holds no generated block any more");
+  assert.equal(read("docs/VERIFICATION.md").includes("GENERATED: ladder"), false,
+    "the ladder's home (docs/VERIFICATION.md since 2026-11-03) holds no generated block");
 });

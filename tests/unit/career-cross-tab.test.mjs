@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -82,9 +83,11 @@ function load(options = {}) {
     queueMicrotask(() => { request.result = mirrorDb; if (request.onsuccess) request.onsuccess(); });
     return request;
   } } : undefined;
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Math, JSON, Object, Array, String, Number, Date, Set, Map, Promise,
-    isNaN, isFinite, parseInt, console, setTimeout, clearTimeout, queueMicrotask, indexedDB,
+    isNaN, isFinite, parseInt, console, queueMicrotask, indexedDB,
+    setTimeout: options.setTimeout || setTimeout, clearTimeout: options.clearTimeout || clearTimeout,
+    AbortController: options.AbortController,
     navigator: options.navigator,
     localStorage: {
       getItem: (k) => options.getItem ? options.getItem(k, disk) : disk.has(k) ? disk.get(k) : null,
@@ -383,9 +386,60 @@ test("quota-refused clear and deletion report session-only outcomes", () => {
   assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 100);
 });
 
+// Press the REAL hub BACK (#cr-back) and read the title's STANDINGS chip.
+// `standalone` is the standalone SEASON save on disk (null: none). The chip is
+// shown only for a standalone season that is under way and not finished; the
+// career's own progress must never reveal it.
+function pressHubBack(standalone, startHidden) {
+  const tracks = ["a", "b", "c"].map((id) => ({ id, name: "Circuit " + id }));
+  const disk = new Map([
+    ["apex26.career.driver.0", JSON.stringify(save(2, 100))],
+    ["apex26.careerSlot", JSON.stringify("driver:0")],
+  ]);
+  if (standalone) disk.set("apex26.season", JSON.stringify(standalone));
+  const { Career, ctx } = load({ disk, tracks: { LIST: tracks, SEASON: tracks, seasonIndex: () => 0 } });
+  const dom = makeDom();
+  ctx.document = dom.document;
+  ctx.Dom = { el: (tag, cls = "", text = "") => {
+    const n = dom.document.createElement(tag); n.className = cls; n.textContent = text; return n;
+  } };
+  ctx.ScrollFade = { refresh() {} };
+  vm.runInContext('Teams.LIST[0].name = "Haas";', ctx);
+  Career.load(); Career.engage(true);
+  const calls = [];
+  const G = { $: dom.byId, els: { overlay: dom.byId("overlay") }, cssCol: () => "#fff", soundOn: false,
+    season: { round: 2 },   // the career weekend's season object, which BACK must replace
+    qualiClear: () => calls.push("qualiClear"), refreshCareerButton: () => calls.push("refresh"),
+    openCareer() {}, openGarage() {} };
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning-ui.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning-ui.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8"), ctx, { filename: absSrc("js/career/career-ui.js") });
+  const screen = vm.runInContext("CareerScreen", ctx).create(G);
+  screen.openHub();
+  const chip = dom.byId("mb-standings");
+  chip.hidden = startHidden;   // callers start it opposite to what BACK must leave
+  dom.byId("cr-back").onclick();
+  return { chip, G, calls, dom };
+}
+
 test("career hub BACK hides the title STANDINGS chip from the standalone season", () => {
+  // No standalone season: the career's round-2 progress must not show the chip.
+  const bare = pressHubBack(null, false);
+  assert.equal(bare.dom.byId("career").hidden, true, "BACK closed the career screen");
+  assert.equal(bare.G.flow, "gp");
+  assert.deepEqual(bare.calls, ["qualiClear", "refresh"]);
+  assert.equal(bare.G.season.round, 0, "G.season is the standalone season again, not the career's");
+  assert.equal(bare.chip.hidden, true, "no standalone season under way: STANDINGS stays hidden");
+  // A standalone season under way (round 1 of 3): BACK shows its chip.
+  const live = pressHubBack({ round: 1, config: { trackIds: ["a", "b", "c"] },
+    pts: {}, teamPts: {}, driverCodes: {} }, true);
+  assert.equal(live.G.season.round, 1);
+  assert.equal(live.chip.hidden, false, "a standalone season under way: STANDINGS is shown");
+  // A finished standalone season (round 3 of 3): nothing left to stand in.
+  const done = pressHubBack({ round: 3, config: { trackIds: ["a", "b", "c"] },
+    pts: {}, teamPts: {}, driverCodes: {} }, false);
+  assert.equal(done.G.season.round, 3);
+  assert.equal(done.chip.hidden, true, "a finished standalone season: STANDINGS stays hidden");
   const src = readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8");
-  assert.match(src, /mb-standings.*SeasonCal\.hasProgress\(G\.season\)/);
   assert.match(src, /\$\("cr-go"\)\.disabled = !!st\.hire \|\| Career\.conflicted\(\)/);
 });
 
@@ -425,12 +479,52 @@ test("the title menu refreshes after a restored career batch selects its slot", 
   assert.match(title, /restoredBatch[\s\S]{0,300}refresh\(\)/);
 });
 
+// Boot the REAL TitleMenu.create(G), capture the store subscriber it registers,
+// and fire it with a restored IndexedDB batch that brought `season` back.
+// `open` names the session-entry screen showing (null: only the title is up).
+function fireSeasonRestore(open) {
+  const dom = makeDom();
+  for (const id of ["race-settings", "select", "loading"]) {
+    dom.document.body.appendChild(dom.byId(id));
+    dom.byId(id).hidden = id !== open;
+  }
+  if (open === "loading-phase") { dom.byId("loading").hidden = true; dom.byId("loading").dataset.phase = "boot"; }
+  const restored = { round: 4, restored: true };
+  let loads = 0, refreshed = 0;
+  const ctx = vm.createContext({
+    document: dom.document, Log: { info() {} },
+    Career: { data: () => null, inCareer: () => false },
+    SeasonCal: { load: () => { loads++; return restored; } },
+    Tracks: { SEASON: [] }, Teams: { LIST: [] },
+  });
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/title-menu.js"), "utf8"), ctx, { filename: absSrc("js/ui/title-menu.js") });
+  const subs = [];
+  const before = { round: 1, entry: true };
+  const G = { $: dom.byId, season: before, seasonMode: false,
+    store: { subscribe: (fn) => subs.push(fn), raw: () => null },
+    daily: { plan: () => ({ trackName: "Monza", weather: "dry" }) },
+    refreshCareerButton: () => { refreshed++; },
+    openCareerSlots() {}, openCareer() {}, openDailyPicker() {} };
+  vm.runInContext("TitleMenu", ctx).create(G);
+  assert.equal(subs.length, 1, "TitleMenu registers one store subscriber");
+  subs[0]({ restoredBatch: true, keys: ["season"] });
+  return { G, before, restored, loads, refreshed };
+}
+
 test("title-menu season hydrate skips when a session entry is already open", () => {
-  const title = readFileSync(join(ROOT, "js/ui/title-menu.js"), "utf8");
-  assert.match(title, /seasonBack[\s\S]{0,400}entering/,
-    "IndexedDB season restore must not mutate G.season during select/race-settings/loading");
-  assert.match(title, /getElementById\("race-settings"\)/);
-  assert.match(title, /getElementById\("loading"\)/);
+  // IndexedDB season restore must not mutate G.season during
+  // select / race-settings / loading: entrySettings() was snapshotted already.
+  for (const open of ["race-settings", "select", "loading", "loading-phase"]) {
+    const r = fireSeasonRestore(open);
+    assert.equal(r.G.season, r.before, `${open} is open: the restore leaves G.season alone`);
+    assert.equal(r.loads, 0, `${open} is open: SeasonCal.load() is not called`);
+    assert.equal(r.refreshed, 1, "the career button still repaints");
+  }
+  // Only the title is up: the restored season is hydrated.
+  const idle = fireSeasonRestore(null);
+  assert.equal(idle.loads, 1);
+  assert.equal(idle.G.season, idle.restored, "no entry open: G.season is the restored season");
+  assert.equal(idle.refreshed, 1);
 });
 
 test("missing calendar preserves exact raw JSON through reads, save, mutation and slot switch", () => {
@@ -494,6 +588,11 @@ test("calendar adoption refuses newer stored revision and compares local versus 
   const cmp = Career.planning().comparison();
   assert.equal(cmp.localSummary.money, 250); assert.equal(cmp.storedSummary.money, 777);
   assert.equal(JSON.parse(cmp.rawLocal).money, 250);
+  // A stored copy missing season/money/rep must summarise as finite numbers (no NaN/undefined card).
+  disk.set("apex26.career.driver.0", JSON.stringify({ year: 2026, team: "haas" }));
+  const sparse = Career.planning().comparison().storedSummary;
+  assert.deepEqual([sparse.round, sparse.money, sparse.rep], [0, 0, 0]);
+  disk.set("apex26.career.driver.0", JSON.stringify(newer));
   foreign("apex26.career.driver.0");
   assert.equal(Career.planning().adopt(), false);
   assert.equal(JSON.parse(disk.get("apex26.career.driver.0")).money, 777);
@@ -810,22 +909,89 @@ test("a fallback with nothing to restore persists the fallback pointer once the 
 // Each callback is scheduled separately, as with the browser lock task. The
 // owner persists until its document is destroyed (simulated by close()).
 function writerLocks() {
-  let owner = null;
+  let owner = null; const waiting = [];
+  const grant = () => { const next = waiting.shift(); if (next) { owner = next.client; next.resolve(next.callback({ name: "apex26-career-writer" })); } };
   return {
     client() {
       const client = { request(name, options, callback) {
         assert.equal(name, "apex26-career-writer");
+        assert.equal(options.mode, "exclusive");
+        // The bounded second request (#5000) queues like the real manager and
+        // rejects with AbortError when its signal fires first.
+        if (options.signal) {
+          assert.equal(options.ifAvailable, undefined, "ifAvailable and signal cannot be combined");
+          return new Promise((resolve, reject) => {
+            const entry = { client, callback, resolve };
+            waiting.push(entry);
+            options.signal.addEventListener("abort", () => {
+              const at = waiting.indexOf(entry); if (at < 0) return;
+              waiting.splice(at, 1); reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            });
+            if (!owner) grant();
+          });
+        }
         assert.equal(options.ifAvailable, true);
         return Promise.resolve().then(() => {
           if (owner) return callback(null);
           owner = client;
           return callback({ name });
         });
-      }, close() { if (owner === client) owner = null; } };
+      }, close() { if (owner === client) { owner = null; grant(); } } };
       return client;
     },
   };
 }
+// The deadline of the bounded wait, fired by hand.
+function writerClock() {
+  const clock = { deadline: null, cleared: 0,
+    setTimeout(fn, ms) { if (ms === 1500) { clock.deadline = fn; return "writer"; } return setTimeout(fn, ms); },
+    clearTimeout(id) { if (id === "writer") { clock.cleared++; clock.deadline = null; } else clearTimeout(id); } };
+  return clock;
+}
+const settle = () => new Promise((r) => setImmediate(r));
+
+test("#5000: a reload that asks before the dying document's lock is released waits, then owns the save", async () => {
+  const locks = writerLocks(), aLocks = locks.client(), clock = writerClock();
+  const a = load({ navigator: { locks: aLocks } });
+  await a.store.mirror.ready; a.Career.load(); a.Career.engage(true);
+  a.Career.data().money = 4242; a.Career.save();
+  // The reloaded document boots while the old one still holds the lock.
+  const b = load({ disk: a.disk, navigator: { locks: locks.client() }, AbortController, ...clock });
+  b.Career.load(); await settle();
+  assert.equal(b.store.careerWriter.state, "pending", "waiting is not owning");
+  assert.equal(typeof clock.deadline, "function", "the wait is bounded");
+  assert.equal(b.store.write("career.driver.0", save(1, 1)).ok, false, "no career write before the lock is held");
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 4242);
+  aLocks.close(); // the old document finally dies
+  await b.store.mirror.ready;
+  assert.equal(b.store.careerWriter.state, "owned");
+  assert.equal(clock.cleared, 1, "the deadline timer is cancelled");
+  assert.equal(b.Career.data().money, 4242, "pre-lock reads are discarded for the committed save");
+  b.Career.engage(true); b.Career.data().money++; b.Career.save();
+  assert.equal(b.Career.saveStatus().ok, true);
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 4243);
+});
+
+test("#5000: a genuine second tab still ends busy at the deadline and never takes over afterwards", async () => {
+  const locks = writerLocks(), aLocks = locks.client(), clock = writerClock();
+  const a = load({ navigator: { locks: aLocks } });
+  await a.store.mirror.ready; a.Career.load(); a.Career.engage(true);
+  const b = load({ disk: a.disk, navigator: { locks: locks.client() }, AbortController, ...clock });
+  b.Career.load(); await settle();
+  assert.equal(b.store.careerWriter.state, "pending");
+  a.Career.data().money = 7777; a.Career.save(); // the live owner keeps playing during the wait
+  clock.deadline();
+  await b.store.mirror.ready;
+  assert.equal(b.store.careerWriter.state, "busy");
+  b.Career.data().money = 1; b.Career.save();
+  assert.equal(b.Career.saveStatus().reason, "writer-busy");
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 7777);
+  aLocks.close(); await settle();
+  assert.equal(b.store.careerWriter.state, "busy", "after the deadline a losing tab must reload");
+  const next = load({ disk: a.disk, navigator: { locks: locks.client() }, AbortController, ...writerClock() });
+  await next.store.mirror.ready;
+  assert.equal(next.store.careerWriter.state, "owned", "the aborted request left nothing queued");
+});
 
 test("one lifetime writer protects saves before storage events, including a stale localStorage snapshot", async () => {
   const locks = writerLocks(), aLocks = locks.client(), bLocks = locks.client();
@@ -891,4 +1057,81 @@ test("missing or denied browser locks fail closed while leaving career reads and
     assert.equal(h.disk.get("apex26.career.driver.0"), original);
     assert.equal(h.store.write("volume", 0.5).durable, true);
   }
+});
+
+test("retrySave under quota then recovery persists the next grant (#4823)", () => {
+  let quota = false;
+  const { Career, disk, store } = load({ setItem(key, value, target) {
+    if (quota && key.startsWith("apex26.career.")) { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; }
+    target.set(key, value);
+  } });
+  Career.load();
+  Career.engage(true);
+  quota = true;
+  Career.grant(10);
+  // what retrySave() does while storage is still full
+  Career.save();
+  store.retryFailed();
+  assert.equal(Career.conflicted(), false, "a self-inflicted retry write is not a foreign change");
+  quota = false;
+  Career.grant(20);
+  const diskMoney = JSON.parse(disk.get("apex26.career.driver.0")).money;
+  assert.equal(diskMoney, Career.data().money, "disk follows RAM after storage frees");
+  assert.equal(Career.saveStatus().ok, true);
+});
+
+test("SeasonCal keeps its revision armed across a retryFailed rewrite (#4823)", () => {
+  let quota = false;
+  const { SeasonCal, store } = load({ setItem(key, value, target) {
+    if (quota && key.startsWith("apex26.season")) { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; }
+    target.set(key, value);
+  } });
+  const r = SeasonCal.applyConfig ? SeasonCal.applyConfig(SeasonCal.config()) : null;
+  assert.ok(r && r.season, "season started");
+  quota = true;
+  SeasonCal.save(r.season);
+  store.retryFailed();
+  quota = false;
+  assert.equal(SeasonCal.save(r.season).ok !== false, true);
+  assert.notEqual(SeasonCal.saveStatus && SeasonCal.saveStatus().reason, "conflict");
+});
+
+function atFinale() {
+  const rig = load({ disk: new Map([
+    ["apex26.career.driver.0", JSON.stringify({ ...save(24, 100), deal: { salary: 0, bonusPt: 0, left: 1, years: 1 } })],
+    ["apex26.careerSlot", JSON.stringify("driver:0")],
+  ]) });
+  rig.Career.load(); rig.Career.engage(true);
+  return rig;
+}
+
+test("a rollover whose save is refused leaves RAM equal to disk", () => {
+  const { Career, store, disk } = atFinale();
+  const career = Career.data();
+  const alias = career.season, before = JSON.stringify(career);
+  const diskBefore = disk.get("apex26.career.driver.0");
+  store._keyRev.set("apex26.career.driver.0", (store._keyRev.get("apex26.career.driver.0") || 0) + 1);
+  assert.equal(Career.rollover(), null);
+  assert.equal(JSON.stringify(career), before);
+  assert.equal(career.season, alias);
+  assert.equal(Career.conflicted(), true);
+  assert.equal(disk.get("apex26.career.driver.0"), diskBefore);
+  assert.equal(Career.rollover(), null, "a second rollover must not advance the year");
+});
+
+test("a rollover whose save is refused mid-way restores the career in place", () => {
+  const { Career, store } = atFinale();
+  const career = Career.data();
+  const alias = career.season, before = JSON.stringify(career);
+  const originalRev = store.keyRevision.bind(store);
+  let reads = 0;
+  // the entry guard reads once; bump from the second read (inside save())
+  store.keyRevision = (k) => {
+    if (k === "career.driver.0" && ++reads >= 2) store._keyRev.set("apex26.career.driver.0", 99);
+    return originalRev(k);
+  };
+  assert.equal(Career.rollover(), null);
+  assert.equal(JSON.stringify(career), before);
+  assert.equal(career.season, alias);
+  assert.equal(Career.conflicted(), true);
 });

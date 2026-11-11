@@ -73,7 +73,7 @@ function boot(initOpts) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
-  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el(), initOpts);
@@ -383,7 +383,7 @@ test("a driving key released after focus moves into a HUD tap button clears its 
 });
 
 for (const id of ["pausebtn", "btn-cam", "hud-restore", "pc-restore"]) {
-  test(id + " leaves native activation keys to the button and preserves movement releases", () => {
+  test(`${id} leaves native activation keys to the button and preserves movement releases`, () => {
     const { Input, sb, listeners } = boot(), button = sb.document.getElementById(id);
     let clicks = 0;
     Object.assign(button, { tagName: "BUTTON", matches: (selector) => selector.split(", ").includes("#" + id),

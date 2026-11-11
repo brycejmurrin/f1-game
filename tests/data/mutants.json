@@ -119,7 +119,7 @@
     },
     {
       "id": "m-box-lat-swallows-line",
-      "file": "js/race/pit-lane.js",
+      "file": "js/race/pit-geom.js",
       "find": "const BOX_LAT = 1.0;",
       "replace": "const BOX_LAT = 20.0;",
       "why": "Widens the lane tolerance until the racing line counts as the pit box, so a car that halts mid-road is serviced — the quiet reversal inLaneLat's floor comment warns a later circuit could cause.",

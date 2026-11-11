@@ -9,7 +9,7 @@ import worker, { Room } from "../../worker/rendezvous.js";
 
 function roomHarness() {
   const records = new Map();
-  const calls = { get: 0, put: 0, alarm: 0, deleteAll: 0 };
+  const calls = { get: 0, put: 0, alarm: 0 };
   const state = {
     storage: {
       async get(key) { calls.get++; return records.get(key); },
@@ -17,10 +17,11 @@ function roomHarness() {
       async setAlarm(at) { calls.alarm++; calls.alarmAt = at; },
       async delete(key) { records.delete(key); },
       async deleteAlarm() { calls.alarmAt = null; },
+      async deleteAll() { calls.deleteAll = (calls.deleteAll || 0) + 1; records.clear(); },
       // SQLite transactions use storage itself; the legacy txn object has no alarm methods.
       async transaction(fn) { return fn({}); },
-      async deleteAll() { calls.deleteAll++; records.clear(); },
     },
+    async blockConcurrencyWhile(fn) { return fn(); },
   };
   return { room: new Room(state), records, calls };
 }
@@ -234,10 +235,23 @@ test("Worker keeps the earliest slot expiry and preserves a later live answer", 
     assert.equal(h.records.has("offer"), false);
     assert.equal(h.records.has("answer"), true);
     assert.equal(h.calls.alarmAt, h.records.get("answer").expires);
+    assert.equal(h.calls.deleteAll || 0, 0, "a room with a live slot keeps its storage");
     now = h.calls.alarmAt;
     await h.room.alarm();
     assert.equal(h.records.size, 0);
+    assert.equal(h.calls.deleteAll, 1, "an emptied room drops its whole SQLite database");
+    assert.equal(h.calls.alarmAt, null, "and its alarm (deleteAll keeps alarms before compat 2026-02-24)");
   } finally { Date.now = realNow; }
+});
+
+test("Room alarm skips deleteAll when a write lands between emptying and deletion", async () => {
+  const h = roomHarness();
+  const live = { payload: "v2." + "A".repeat(60), owner: null, expires: Date.now() + 120000 };
+  // The transaction empties the room; a POST then lands before the delete step runs.
+  h.room.state.blockConcurrencyWhile = async (fn) => { h.records.set("offer", live); return fn(); };
+  await h.room.alarm();
+  assert.equal(h.calls.deleteAll || 0, 0);
+  assert.equal(h.records.get("offer"), live, "the racing write survives");
 });
 
 test("Worker rejects malformed v2 encoding and undersized crypto envelopes", async () => {
@@ -261,4 +275,28 @@ test("Worker accepts actual client envelopes including the minimum empty plainte
     assert.equal(res.status, 200, "valid client payload must retain compatibility");
     assert.equal(h.records.get("offer").payload, payload);
   }
+});
+
+test("Worker answers OPTIONS and non-GET/POST before naming a Durable Object", async () => {
+  let ids = 0;
+  const env = { ROOM: { idFromName() { ids++; }, get() { throw new Error("unreachable"); } } };
+  const opt = await worker.fetch(new Request(route, { method: "OPTIONS" }), env);
+  assert.equal(opt.status, 204);
+  assert.equal(opt.headers.get("access-control-allow-origin"), "*");
+  assert.equal(ids, 0);
+  for (const method of ["PUT", "DELETE", "HEAD", "PATCH"]) {
+    const res = await worker.fetch(new Request(route, { method }), env);
+    assert.equal(res.status, 405, method);
+    assert.equal(res.headers.get("allow"), "GET, POST, OPTIONS");
+    assert.equal(ids, 0, method + " must not name a Durable Object");
+  }
+});
+
+test("Room refuses an unknown slot without touching storage", async () => {
+  const h = roomHarness();
+  const res = await h.room.fetch(new Request("https://relay.test/?slot=nope"));
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).error, "bad_slot");
+  assert.equal(h.calls.get, 0);
+  assert.equal(h.calls.put, 0);
 });

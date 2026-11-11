@@ -117,6 +117,73 @@ test("the five once-dropped fields carry their authored values", () => {
     "undulate must exist on the built def for the opt-out to be takeable");
 });
 
+// Catalog hygiene: sceneryTheme is only for NON-DEFAULT themes. build-props
+// resolves `def.sceneryTheme || (street ? "street" : theme === "desert" ?
+// "desert" : "permanent")`, so authoring the fallback value is dead metadata
+// with no runtime effect. Parked rows below ship today. Dropping one edits
+// js/circuits/<id>.js; do not widen this allow-list.
+const REDUNDANT_SCENERY_THEME = {
+  bahrain: "desert matches theme→desert fallback",
+  silverstone: "permanent matches non-street/non-desert fallback",
+  singapore: "street matches street:true fallback (overrides still needed)",
+};
+
+test("sceneryTheme is authored only when it differs from the engine fallback", () => {
+  const Tracks = buildContext();
+  const redundant = [];
+  const parkedGone = [];
+  for (const d of Tracks._vmContext.TrackDefs) {
+    if (d.sceneryTheme == null) {
+      if (Object.prototype.hasOwnProperty.call(REDUNDANT_SCENERY_THEME, d.id))
+        parkedGone.push(d.id);
+      continue;
+    }
+    const fallback = d.street ? "street" : d.theme === "desert" ? "desert" : "permanent";
+    if (d.sceneryTheme !== fallback) continue;
+    if (REDUNDANT_SCENERY_THEME[d.id]) continue;
+    redundant.push(`${d.id}: sceneryTheme "${d.sceneryTheme}"`);
+  }
+  assert.deepEqual(redundant, [],
+    "omit sceneryTheme when it matches the street/desert/permanent fallback (or park it in REDUNDANT_SCENERY_THEME with a reason)");
+  assert.deepEqual(parkedGone, [],
+    "a parked redundant sceneryTheme was removed — drop it from REDUNDANT_SCENERY_THEME");
+});
+
+// Catalog hygiene: one TrackDefs id per authored file; no silent double-push.
+test("each circuit file pushes exactly one TrackDefs row and ids are unique", () => {
+  const Tracks = buildContext();
+  const raw = Tracks._vmContext.TrackDefs;
+  const byId = new Map();
+  for (const d of raw) {
+    assert.ok(d && typeof d.id === "string" && d.id, "every TrackDefs row needs an id");
+    if (byId.has(d.id)) byId.get(d.id).push(d);
+    else byId.set(d.id, [d]);
+  }
+  const dups = [...byId].filter(([, rows]) => rows.length > 1).map(([id, rows]) => `${id}×${rows.length}`);
+  assert.deepEqual(dups, [], "duplicate TrackDefs ids");
+  const shipped = require(path.join(ROOT, "tools/manifest.cjs")).CIRCUITS;
+  assert.equal(byId.size, shipped.length, "TrackDefs id count must match CIRCUITS");
+  for (const id of shipped) assert.ok(byId.has(id), `missing TrackDefs id ${id}`);
+});
+
+// Catalog hygiene: modelGroup ids must be unique inside a scenery file.
+// Comments that quote modelGroup("…") are ignored (they are not calls).
+test("no scenery file registers the same modelGroup id twice", () => {
+  const dir = path.join(ROOT, "js", "circuits", "scenery");
+  const bad = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js"))) {
+    let src = fs.readFileSync(path.join(dir, f), "utf8");
+    src = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const ids = [...src.matchAll(/modelGroup\(\s*["']([^"']+)["']/g)].map((m) => m[1]);
+    const seen = new Set();
+    for (const id of ids) {
+      if (seen.has(id)) bad.push(`${f}: modelGroup "${id}"`);
+      else seen.add(id);
+    }
+  }
+  assert.deepEqual(bad, [], "rename one of the duplicate modelGroup calls");
+});
+
 // gpLaps — a REAL grand prix distance per circuit, derived from lengthKm by the
 // actual regulation rather than the flat 57 the lap picker offered on all forty.
 // Derived, so there is no authored table to fall out of step with lengthKm; the
@@ -137,9 +204,9 @@ test("gpLaps is the circuit's real race distance, not a flat number", () => {
   near("monza", 53);
   near("silverstone", 52);
 
-  // lengthKm's one decimal puts five circuits a lap off the real race, so they
+  // lengthKm's rounding puts six circuits a lap off the real race, so they
   // carry an authored `gpLaps` (def.js fromRaw). Exact, not ±1.
-  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66]])
+  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66], ["madrid", 57]])
     assert.equal(at(id).gpLaps, laps, `${id} race distance`);
 
   // The defect this replaced: one number for every circuit. Monaco and Spa must
@@ -172,7 +239,7 @@ test("the title's meta stubs carry the menu fields their hydrated defs do (gpLap
   const stubs = vm.runInContext("Tracks", sb).LIST;
   const full = buildContext().LIST;
   const at = (id) => stubs.find((t) => t.id === id);
-  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66]]) {
+  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66], ["madrid", 57]]) {
     assert.ok(at(id) && at(id)._metaOnly, `${id} boots as a meta stub`);
     assert.equal(at(id).gpLaps, laps, `${id}: the title's FULL race distance`);
   }
@@ -427,4 +494,87 @@ test("Spa and Monaco elevation extremes sit on their named corners", () => {
   near(low, mc.T(12), "Monaco low point = the harbour chicane");
   assert.ok(crest.y > 35 && crest.y < 50, `Casino ~+40 m over the line (got ${crest.y.toFixed(1)})`);
   assert.ok(mc.grade < 0.18, `Monaco grade ${(mc.grade * 100).toFixed(1)} %`);
+});
+
+// tyreSeverity trailers that say "below Japan/Monza/…" must actually sit below
+// the named anchor (interlagos and hockenheim shipped inverted comparisons).
+test("tyreSeverity comparison comments agree with the named anchors", () => {
+  const dir = path.join(ROOT, "js", "circuits");
+  const sev = new Map();
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js"))) {
+    const src = fs.readFileSync(path.join(dir, f), "utf8");
+    const m = src.match(/tyreSeverity:\s*([0-9.]+)\s*,?\s*\/\/\s*(.*)/);
+    if (!m) continue;
+    sev.set(f.replace(/\.js$/, ""), { v: Number(m[1]), note: m[2], file: f });
+  }
+  const japan = sev.get("suzuka")?.v;
+  const monza = sev.get("monza")?.v;
+  assert.ok(Number.isFinite(japan) && Number.isFinite(monza), "Japan/Monza anchors present");
+  const bad = [];
+  for (const [id, row] of sev) {
+    const n = row.note;
+    if (/\bbelow\b.*\b(Japan|Suzuka)\b/i.test(n) && !(row.v < japan)) {
+      bad.push(`${id}: ${row.v} claimed below Japan ${japan}`);
+    }
+    if (/\babove\b.*\b(Japan|Suzuka)\b/i.test(n) && !(row.v > japan)) {
+      bad.push(`${id}: ${row.v} claimed above Japan ${japan}`);
+    }
+    if (/\bbelow\b.*\bMonza\b/i.test(n) && !(row.v < monza)) {
+      bad.push(`${id}: ${row.v} claimed below Monza ${monza}`);
+    }
+    if (/\babove\b.*\bMonza\b/i.test(n) && !(row.v > monza)) {
+      bad.push(`${id}: ${row.v} claimed above Monza ${monza}`);
+    }
+  }
+  assert.deepEqual(bad, []);
+});
+
+// Scenery hygiene: api destructure bindings that are never read are dead
+// locals (the closure already closed over `api`). Drop them — do not leave
+// "place, px, pz" sitting unused after a rewrite. singapore / brands_hatch /
+// okayama are owned by the kit-paddock PR (#4074) this session; park them
+// until that PR lands, then drop the skip.
+const SCENERY_API_HYGIENE_SKIP = {
+  "singapore.js": "owned by #4074 kit-paddock batch 3",
+  "brands_hatch.js": "owned by #4074 kit-paddock batch 3",
+  "okayama.js": "owned by #4074 kit-paddock batch 3",
+};
+
+function sceneryApiLocalNames(inner) {
+  const parts = [];
+  let cur = "", depth = 0;
+  for (const ch of inner) {
+    if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") depth--;
+    if (ch === "," && depth === 0) { parts.push(cur); cur = ""; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) parts.push(cur);
+  return parts.map((p) => {
+    p = p.trim();
+    if (!p) return null;
+    if (p.includes(":")) return p.split(":")[1].trim().split("=")[0].trim();
+    return p.split("=")[0].trim();
+  }).filter(Boolean);
+}
+
+test("scenery api destructure bindings are all used in the same file", () => {
+  const dir = path.join(ROOT, "js", "circuits", "scenery");
+  const bad = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js"))) {
+    if (SCENERY_API_HYGIENE_SKIP[f]) continue;
+    let src = fs.readFileSync(path.join(dir, f), "utf8");
+    const m = src.match(/const\s*\{([\s\S]*?)\}\s*=\s*api\s*;/);
+    if (!m) {
+      bad.push(`${f}: no api destructure`);
+      continue;
+    }
+    src = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const name of sceneryApiLocalNames(m[1])) {
+      const hits = src.match(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"));
+      if (!hits || hits.length <= 1) bad.push(`${f}: unused api.${name}`);
+    }
+  }
+  assert.deepEqual(bad, [],
+    "remove unused names from the scenery `const { … } = api` destructure (or park the file in SCENERY_API_HYGIENE_SKIP with a reason)");
 });

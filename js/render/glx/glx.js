@@ -28,14 +28,13 @@ const GLXBackend = (function () {
   //
   // The eager GLX facade owns the single device sniff, ahead of eval-time
   // consumers and deferred renderers. Read that tier rather than re-sniffing.
-  // A capable phone can opt into the desktop-quality tier (full DPR + MSAA +
-  // full-res atlases + 2048 shadows) via the pause-menu GRAPHICS: HIGH setting.
-  // Default OFF — the safe tier is what keeps memory-limited devices alive.
+  // A phone is ALWAYS the memory-safe tier: the facade sets mobileTier = isMobile and
+  // no GRAPHICS preset lifts it (the old GRAPHICS: HIGH opt-in to full DPR is gone).
   const IS_MOBILE = GLX.isMobile;
   // INSTANCE CELL-SET CULL CACHE — owned by js/render/shared/inst-cells.js
   // (apex26.instCellCache=0 escape hatch). Numbers: docs/PERF-FINDINGS.md 2c.
-  // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
-  // key off this, so HIGH restores full quality (a reload re-runs init with it).
+  // MOBILE TIER = any phone (GLX.mobileTier === GLX.isMobile). All the memory
+  // downgrades, the 1.5 DPR cap included, key off this; no setting restores them.
   const MOBILE_TIER = GLX.mobileTier;
   let _ctxLost = false, _lossCounted = false;   // lost→restore; counted loss arms ctxLostNotice (#3513)
   // Past the ctx-loss reload budget: record for __apex.diag() without painting
@@ -270,7 +269,14 @@ const GLXBackend = (function () {
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
   let _activeProg = null;
-  function useProg(p) { if (p !== _activeProg) { gl.useProgram(p); _activeProg = p; } }
+  // A switch away from the road-decal programs also lifts their ROAD_BIAS:
+  // drawShadow/drawMark leave it on, so a field of shadows and skid stamps
+  // states it once instead of enable/offset/offset/disable per draw (perf hunt 6).
+  function useProg(p) {
+    if (p === _activeProg) return;
+    if (_polyOn && p !== shadowProg && p !== markProg) setPolyOffset(null);
+    gl.useProgram(p); _activeProg = p;
+  }
 
   // Per-frame view-projection upload cache for the blob-shadow / skid-mark
   // programs. uViewProj never changes within a frame, but drawShadow/drawMark are
@@ -904,7 +910,7 @@ const GLXBackend = (function () {
       gl.bindVertexArray(null);
     }
     if (lineProg) {
-      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uPalette", "uOpacity", "uStr"]);
+      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uOnPace", "uLift", "uBrake", "uOpacity", "uStr"]);
       // Static interleaved strip: [x, y, z, across, speed, zone, along] per
       // vertex (DrivingLine.STRIDE = 7), uploaded once per circuit.
       lineVAO = gl.createVertexArray();
@@ -2487,7 +2493,6 @@ const GLXBackend = (function () {
     setPolyOffset(ROAD_BIAS);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    setPolyOffset(null);
   }
 
   function drawMark(modelMat, w, l) {
@@ -2504,7 +2509,6 @@ const GLXBackend = (function () {
     setPolyOffset(ROAD_BIAS);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    setPolyOffset(null);
   }
 
   // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per
@@ -2535,12 +2539,11 @@ const GLXBackend = (function () {
     return true;
   }
 
-  // DRIVING LINE: the ribbon js/render/shared/driving-line.js built (one
-  // triangle strip, stride-7 floats), drawn like the skid batch — depth-tested,
-  // no depth write, biased onto the road — but emissive, so bloom lifts it
-  // into the glow every racing game's line has. `opts.speed` is the player's
-  // speed for the dynamic colour; `opts.cornersOnly` fades the straights.
-  // Returns false when the pass is unavailable so the caller can say so.
+  // DRIVING LINE: the ribbon js/render/shared/driving-line.js built (one triangle strip, stride-7 floats), drawn
+  // like the skid batch — depth-tested, no depth write, biased onto the road — but emissive, so bloom lifts it into
+  // the glow every racing game's line has. `opts.speed` is the player's speed for the dynamic colour, `opts.cols` its
+  // LINE COLOUR (9 floats, F1 GREEN when absent); `opts.cornersOnly` fades the straights. false = pass unavailable.
+  const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
   function drawDrivingLine(verts, vertCount, dirty, opts) {
     if (ctxGone()) return true;
     if (!lineProg) return false;
@@ -2549,7 +2552,8 @@ const GLXBackend = (function () {
     gl.uniformMatrix4fv(lineU.uViewProj, false, frameViewProj);
     gl.uniform1f(lineU.uPlayerSpeed, (opts && opts.speed) || 0);
     gl.uniform1f(lineU.uCornersOnly, opts && opts.cornersOnly ? 1 : 0);
-    gl.uniform1f(lineU.uPalette, opts && opts.palette ? 1 : 0);
+    const lc = (opts && opts.cols) || LINE_COLS_F1;   // LINE COLOUR: onPace, lift, brake (DrivingLine.PALETTES)
+    gl.uniform3fv(lineU.uOnPace, lc, 0, 3); gl.uniform3fv(lineU.uLift, lc, 3, 3); gl.uniform3fv(lineU.uBrake, lc, 6, 3);
     gl.uniform1f(lineU.uOpacity, (opts && opts.opacity) || 1);
     gl.uniform1f(lineU.uStr, 1.6);          // emissive strength: a constant, no producer sends one
     setBlend(true);
@@ -2820,7 +2824,7 @@ const GLXBackend = (function () {
     mirrorBegin,
     mirrorEnd,
     mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
-    mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }),
+    mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }), releaseMirror: () => !!(PST && PST.mirror.release()),   // release: quit-to-menu frees the target
     drawMirrorGlass: (mesh, model, opts) => !!(PST && !ctxGone() && PST.mirror.glass(mesh, model, opts)),   // the cockpit's live glass (post.js)
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the

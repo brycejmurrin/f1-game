@@ -306,7 +306,7 @@ function bootAudio() {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  const SRC = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"]
+  const SRC = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"]
     .map(src).join("\n");
   vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const real = vm.runInContext("GameAudio", vctx);
@@ -351,7 +351,7 @@ function highlightsRig({ sound = true } = {}) {
     Math, performance: { now: () => 0 }, PerfSpans: { begin() {}, end() {} }, lastFrame: 0, paused: false, state: "results",
     gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
     netPlay: { tick: noop, active: () => false }, netStart: null, countT: 0, startLights: { countCredit: () => 0 }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },
-    director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, raceT: 3,
+    director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, RaceCeremony: { get: () => null }, raceT: 3,
     GameAudio: audio.GameAudio, soundOn: sound, player, cars, rivalAudio,
     naturalGear: (v) => (v < 30 ? 2 : 6), rpmFor: (g, v) => Math.min(15000, 5000 + v * 1000 / g), isWetRoad: () => false, vTop: () => 90,
     _poseAt: null, photoMode: false, setupPreviewOn: false, announceT: 0, hitStop: 0, frozen: false, raceRestarting: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60,
@@ -717,4 +717,19 @@ test("resuming after a forced preview judges the actual preceding draw", () => {
   ctx.Input.setTimeScale = noop; ctx.replayBuf.onTick = noop;
   frame(1);
   assert.deepEqual(judged, [true], "governor sees the preview that actually drew");
+});
+
+test("#5030 highlights re-pose on every rendered frame (the flag and the orbit keep their 30 Hz cap)", () => {
+  const R = boot(), winner = { finPos: 1, s: 10, px: 10, pz: 0 };
+  let applies = 0;
+  const G = { player: winner, cars: [winner], gfx: {}, camVantage: (_m, s) => ({ eye: [s, 5, -10], tgt: [s, 0, 0], fov: 58 }) };
+  const camera = R.create(G);
+  camera.attachReplay({ window: () => ({ t0: 0, t1: 20, frames: 600 }), tags: () => [{ kind: "contact", t: 10, car: 0 }],
+    beginScrub: () => true, apply: () => { applies++; }, endScrub() {} });
+  camera.onFlag();
+  assert.equal(camera.startHighlights(), true);
+  applies = 0;
+  for (let i = 0; i < 120; i++) camera.tick(1 / 120);
+  assert.equal(applies, 120, "one replay pose per rendered frame at 120 Hz, not 30");
+  assert.equal(camera.status().phase, "highlights", "1 s into a 4 s clip");
 });

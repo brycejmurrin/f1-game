@@ -69,6 +69,32 @@ test("a lapped rival a few metres ahead on the road is ahead, not a lap away", a
   lt(r.gapM, 15);
   assert.equal(r.lapsAhead, -1);
   assert.notEqual(r.threat, "clear");
+  // describe("car:N") must use the same road-gap wrap as rivals() — raw prog
+  // used to report "behind" by nearly a lap for this same car.
+  const d = g.apex.describe("car:" + id);
+  assert.equal(d.rel, "ahead");
+  lt(d.gapToPlayerM, 15);
+});
+
+test("objective and world() agree on overtake / X-mode (no stale cooldown or 3 s look-ahead)", async () => {
+  await load("monza", 0.1, 50);
+  const trade = g.apex.objective().tradeoffs.join("\n");
+  assert.doesNotMatch(trade, /16 s of cooldown|4 s of boost then/i);
+  assert.match(trade, /detection line/i);
+  assert.match(trade, /0\.5 MJ/);
+  const note = g.apex.world({ detail: "full" }).ego.aero.note;
+  assert.doesNotMatch(note, /3 s of straight/);
+  assert.doesNotMatch(note, /\+7\.5%/);
+  assert.match(note, /X-mode zone|activation zone/i);
+  const help = g.apex.agentHelp();
+  const notes = (help.notes || []).join("\n");
+  assert.doesNotMatch(notes, /no agent hook returns null/i);
+  assert.match(notes, /obs|physState|probe/i);
+  // Cold car: these read hooks return null (the note must not claim otherwise).
+  const px = g.G.player.px;
+  g.G.player.px = undefined;
+  assert.equal(g.apex.obs(), null);
+  g.G.player.px = px;
 });
 
 test("same-lap rivals do not invent lapsAhead from nearest-prog wrap", async () => {
@@ -371,4 +397,21 @@ test("a def without turns gets the smoothed-peak corner table, not __apex.corner
   } finally {
     def.turns = turns;
   }
+});
+
+// UI contract 2026-11-06 rule 8: __apex.sheetFit is SheetShape.layoutProbe behind a selector, so a spec cell and a
+// shell probe read one implementation. Pin the alias and its empty answers. The VM DOM's querySelector is a stub that
+// mints a fresh element (tools/lib/game-vm.cjs), so the element form carries the identity check and the selector form
+// is pinned only as "routes through querySelector" — tests/specs/ui-resize.spec.js reads the real one.
+test("sheetFit is SheetShape.layoutProbe behind an element, a selector or the first painted sheet", () => {
+  const doc = g.sandbox.document, el = doc.getElementById("pmsettings-inner");
+  truthy(el, "the settings sheet is in the shell");
+  const byEl = g.apex.sheetFit(el);
+  assert.deepEqual(byEl, g.sandbox.SheetShape.layoutProbe(el), "the alias adds nothing and drops nothing");
+  assert.equal(byEl.id, "pmsettings-inner");
+  for (const k of ["own", "painted", "host", "viewport", "inner", "body", "zoom"]) assert.ok(k in byEl, k);
+  const bySel = g.apex.sheetFit("#pmsettings-inner");
+  truthy(bySel && typeof bySel === "object", "a selector string is looked up, not probed as an element");
+  assert.equal(g.apex.sheetFit(), null, "no argument and no painted .sheet / .fit-managed answers null");
+  assert.equal(g.apex.sheetFit(0), null, "a non-element, non-string argument answers null");
 });

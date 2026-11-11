@@ -16,7 +16,7 @@ Load from the SKILL.md index when opening a non-catalog screen, reading a
 ## 1. Host + open
 
 `tools/ui/css-play.mjs` uses `harness.mjs` (`Cache-Control: no-store`, loopback).
-Default viewport is the play-shape **852×393**. `--desktop` is 1280×720.
+Default and `--desktop` viewports: `node tools/ui/css-play.mjs --help`; Bryce's is `--viewport 844x390`.
 
 Boot ritual (already in the CLI; paste into `browser_evaluate` only for a
 live MCP tab):
@@ -30,22 +30,7 @@ const g = document.querySelector("#game");
 if (g) g.style.visibility = "hidden";
 ```
 
-Catalog (`node tools/ui/css-play.mjs --list`):
-
-| id | root | clicks |
-|---|---|---|
-| title | `#overlay` | (boot) |
-| select | `#select` | `#mb-race` |
-| garage | `#carsetup` | `#mb-garage` |
-| settings | `#pmsettings` | `#mb-settings` |
-| career | `#career` | `#mb-career` |
-| datahub | `#datahub` | `#mb-data` |
-| howtoplay | `#howtoplay` | `#mb-help` |
-| vsfriend | `#vsfriend` | `#mb-vs` |
-| pause | `#pausemenu` | `__apex.race` → `#pausebtn` |
-
-Aliases: `overlay`/`menu` → title, `pmsettings` → settings, `carsetup` →
-garage, `help` → howtoplay, `vs` → vsfriend.
+Catalog: `node tools/ui/css-play.mjs --list` is the truth (ids, roots, clicks and aliases such as `menu` → title, `help` → howtoplay, `paused` → pause); `pause` boots a Monza race, `hud`/`hudpause` use `?APEX_SURVEY_HUD=1` with no race.
 
 Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`
 (`--click` replaces the catalog path, so include `#mb-settings`).
@@ -53,7 +38,7 @@ Reach through the player's door. The authoritative inventory is `SCREENS`
 in `tools/ui/menu-screens.mjs` (imported by `layout-audit.mjs`).
 
 Wait for the open transition (`opacity !== 0`, no running animations) before
-measuring. `#pmsettings` can take ~1.2 s.
+measuring. `#pmsettings` is slow to open.
 
 ## Who owns a row
 
@@ -62,13 +47,18 @@ Settings sliders (`label.tune-row` > `.tune-label` + `input[type=range]`): base
 `css/tuner.css`, sheet override `.pm-group .tune-row` in `css/settings.css`,
 DISPLAY panel `#pm-panel-display .tune-row` in `css/settings-controls.css`; sizes
 are tokens `--slider`/`--tap` (`css/tokens.css`). Enumerated rows are `.set-row`
-(`css/settings-controls.css`). The pause menu (`--screen pause`, which boots a
-Monza race first) is `#pausemenu` in `css/dialogs.css`, compact-density rules
-included; `css/menus.css` is the title chrome, not the pause sheet.
+(`css/settings-controls.css`). The pause menu (`--screen pause` or `hudpause`) is
+`#pausemenu`: its sheet and compact-density rules are in `css/dialogs.css` (`@layer
+components`), but the tray chips (`#pm-quick-doors button`, `#pm-checkpoint summary`) are
+owned by `css/experience.css` (base plus a `landscape and max-height: 500px` block) and
+`css/overlays.css` (the `max-height: 400px` 2-col grid and `--tap` floor), both `@layer
+overlays`, which beats components. At 844×390 both media blocks apply. `css/menus.css` is
+the title chrome, not the pause sheet. Always `grep -n '<element id>' css/*.css` and read
+each hit's `@layer` before editing.
 
 **Sizing tokens** (`css/tokens.css`; read live values from `dom.json`, never
 quote numbers): `--safe-t/r/b/l` and `--safe-w/h` are the notch/safe-area box;
-`--tap` is the interactive floor (a 44 px base on `:root`, raised to a 52 px touch
+`--tap` is the interactive floor (a desktop base on `:root`, raised by the touch
 ladder on `body:not(.desktop)`, so read it off `body`), with `--chip-h`, `--tap-sm`
 and `--tap-min` for secondary sizes; `--vhz`/`--svhz` are `vh`/`svh` divided by
 the UI scale.
@@ -83,7 +73,7 @@ Written every run. `--no-shot` / `playwright-mcp.sh dom` skips the PNG.
 | `tokens.tap` / `chipH` / `uiScale` | `--tap` off **body**, not `:root` |
 | `layer` | `UiLayers.top()` |
 | `root` | catalog root: box (CSS px / `currentCSSZoom`), computed layout styles, one level of kids |
-| `hits` | `--sel` matches (up to 20) |
+| `hits` | `--sel` matches (capped; `collectDomInfo`) |
 
 Computed keys are layout-facing (`display`, `overflow*`, `width`/`height`,
 `padding`/`margin`, `flex`/`grid`, `zIndex`, `zoom`, …). Text is truncated.
@@ -106,9 +96,12 @@ order as boot. The shell tag is left alone ([shell/cache](../../check-changes/re
 `--inject ".sheet{max-height:80vh}"` writes `#apex-css-play` for a snippet
 that is not a file yet. Prefer `--css` once the rule belongs in a sheet.
 
-If the swap "did nothing": the `<link>` was not found (wrong `--css` path),
-or you edited a file the screen does not load. `index.html` `<link>` order
-is `MANIFEST.CSS`.
+If the swap "did nothing": (1) the `<link>` was not found (wrong `--css` path);
+(2) you edited a file the screen does not load (`index.html` `<link>` order
+is `MANIFEST.CSS`); (3) a LATER LAYER or a MORE SPECIFIC rule wins — layer order
+is the `@layer` statement in `css/tokens.css`, so a components-layer
+edit loses to any overlays rule, and a few blocks sit outside every layer on purpose.
+Probe the computed value with `--sel <element>` (dom.json `hits`) or `--tokens`.
 
 ## 4. Screenshot
 
@@ -118,8 +111,8 @@ shot as UI evidence.
 
 ## 5. Ship
 
-When the look is right: `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) (last edit),
-then the ui / gallery group if the change is more than a token. One-screen
+When the look is right: `node tools/gen/gen-shell.mjs --check` (last edit),
+then push and request the groups `node tools/ci/pick-tests.mjs` names (`node tools/ci/remote-group.mjs <group>`; never locally) if the change is more than a token. One-screen
 play is not a matrix proof.
 
 ## Mistakes
@@ -128,7 +121,7 @@ play is not a matrix proof.
 |---|---|
 | CSS edit invisible after reload | browser cache (or a served deploy copy with a hashed `?v=`); use `--css` / `?play=` |
 | Screen "missing" | measured during the fade (`opacity: 0`) |
-| Tap floor wrong | read `--tap` off `:root` (desktop 44) instead of `body` |
+| Tap floor wrong | read `--tap` off `:root` (the desktop base) instead of `body` |
 | Boxes look huge | forgot `currentCSSZoom` on `.sheet` |
 | Dialog state poisoned | un-hid a `<dialog>` instead of clicking `#mb-*` |
 

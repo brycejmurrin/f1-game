@@ -1,1 +1,0 @@
-Fixed: after repeated WebGL context losses in a tab whose sessionStorage is blocked, the three.js renderer now reads and clears its window.name reload budget, so it stops reloading instead of looping.

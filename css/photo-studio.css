@@ -125,4 +125,14 @@ body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc((var(-
   #ps-panel { width: calc(34 * var(--vwz)); }
   body.photo-studio-open { --ps-dock-px: calc(34vw + var(--safe-r)); }
 }
+/* Phone landscape: the side dock was ~34vw and the shot/aspect row overflowed
+   its own edge. Wrap those chips; keep the dock from eating the car. */
+@media (max-height: 430px) and (orientation: landscape) {
+  #ps-panel { width: min(300px, calc(38 * var(--vwz))); }
+  #ps-panel .balanced-row { flex-wrap: wrap; }
+  /* PAINTED px, like the :101 base: the panel above is 300 OWN px (zoomed), so the
+     dock reservation the sticks are placed from must be 300 * --ui-scale, or the
+     LOOK stick sits 16-24 px under the panel on every touch device (gap 18). */
+  body.photo-studio-open { --ps-dock-px: calc(min(300px * var(--ui-scale), 38vw) + var(--safe-r)); }
+}
 }

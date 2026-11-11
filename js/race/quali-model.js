@@ -100,6 +100,7 @@ const Quali = (function () {
     // season round 1 at Monza (bug hunt 2026-09-27).
     let classMode = null;
     let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample; _kCacheTrack is a def ID, never the track (see below)
+    const _kAnon = new WeakMap();   // id-less tracks: keyed on the object, weakly, so it pins nothing (#4343)
 
     // The circuit now loaded, in the same form persistOrder() stamps.
     function hereId() { return (G.track && G.track.def && G.track.def.id) || null; }
@@ -139,15 +140,21 @@ const Quali = (function () {
       // scope the whole time. quitToMenu() clears five other caches and never
       // knew about this one. A def id is all the invalidation needs; track-lights.js's
       // _postNodeMemo (a WeakMap keyed on track) is the same lesson.
+      // A track with no def id has nothing to key on, and two of them with the
+      // same sample count shared one cache (#4343): those key on the object
+      // through a WeakMap instead, which pins nothing.
       const _kId = (track && track.def && track.def.id) || null;
-      if (_kCacheTrack !== _kId || _kCache.length !== m) {
-        _kCacheTrack = _kId;
-        _kCache = new Float64Array(m);
-        for (let i = 0; i < m; i++) _kCache[i] = Math.abs(Tracks.curvature(track, (i / m) * total));
+      const anon = _kId == null && track && typeof track === "object";
+      let kc = anon ? _kAnon.get(track) : (_kCacheTrack === _kId ? _kCache : null);
+      if (!kc || kc.length !== m) {
+        kc = new Float64Array(m);
+        for (let i = 0; i < m; i++) kc[i] = Math.abs(Tracks.curvature(track, (i / m) * total));
+        if (anon) _kAnon.set(track, kc);
+        else { _kCacheTrack = _kId; _kCache = kc; }
       }
       const v = new Float64Array(m);
       for (let i = 0; i < m; i++) {
-        const k = _kCache[i];
+        const k = kc[i];
         v[i] = k > 1e-5 ? Math.min(vCap, Math.sqrt(latMax / k) * cornerK) : vCap;
       }
 
@@ -336,7 +343,7 @@ const Quali = (function () {
                              (classMode && classMode !== mode))) {
         classification = null; classTrack = null; classMode = null;
       }
-      const raw = G.season && G.season.qualiOrder;
+      let raw = G.season && G.season.qualiOrder;
       if (classification || !Array.isArray(raw) || !raw.length) return !!classification;
       const here = hereId();
       if (G.season.qualiTrack && here && G.season.qualiTrack !== here) return false;
@@ -347,7 +354,13 @@ const Quali = (function () {
       // An imported/older save may name a driver twice or one no longer in
       // the field. Length alone lets duplicate rows through to order(), which
       // then grids the same car twice and omits another live car.
-      const ids = raw.map((e) => e && typeof e === "object" ? e.id : e);
+      let ids = raw.map((e) => e && typeof e === "object" ? e.id : e);
+      // A duel trims the field after qualifying: read the saved (full) order for the live pair.
+      const duel = byId.size === 2 && G.cars.some((c) => c && c.duelRival);
+      if (duel && new Set(ids).size === ids.length && [...byId.keys()].every((id) => ids.includes(id))) {
+        raw = raw.filter((e, i) => byId.has(ids[i]));
+        ids = ids.filter((id) => byId.has(id));
+      }
       if (ids.length !== byId.size || new Set(ids).size !== byId.size ||
           ids.some((id) => !byId.has(id))) return false;
       // The order is the PLAYER's weekend: a different seat (team or driver
@@ -455,9 +468,13 @@ const Quali = (function () {
       return classification ? classification.map(({ car, ...row }) => row) : null;
     }
 
-    return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor, carLap, referencePole };
+    // forgetOrder / lapTime / capFor stay create()-local — begin() and the
+    // pace helpers call them; no quali.forgetOrder / .lapTime / .capFor reader.
+    return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole };
   }
 
-  return { create, STEP, QUALI_TRIM, EXEC_SPREAD, MEDALS, MEDAL_RANK, medalFor };
+  // STEP / QUALI_TRIM / EXEC_SPREAD stay module-local — only create() and the
+  // medal helpers are read outside this file.
+  return { create, MEDALS, MEDAL_RANK, medalFor };
 })();
 Object.freeze(Quali);

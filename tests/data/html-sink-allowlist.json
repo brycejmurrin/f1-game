@@ -5,52 +5,87 @@
     "Key: <file>::<receiver source>.<sink> (no line numbers). `count` is how many",
     "sites share the key. `reason` says why every dynamic part is ours, never",
     "player text. A new site should use Dom.el()/textContent or escape, not a row.",
+    "`rhs` is the sorted short sha256s of each site's whitespace-collapsed HTML expression;",
+    "a changed expression fails as CHANGED: re-audit it, then `html-sink-lint.mjs --rehash`.",
     "Audited 2026-09-25."
   ],
   "sites": {
     "js/garage/arrival.js::map.innerHTML": {
       "count": 1,
-      "reason": "GARAGE ANGLE plan of the bay: angleMap(value.angle) where value is settings(), which only returns \"cut\" | \"left\" | \"right\" for angle; every other part is a number from EYE_L / EYE_R / the bay constants formatted with toFixed, or a literal."
+      "reason": "GARAGE ANGLE plan of the bay: angleMap(value.angle, value.shots) where value is settings(), which only returns an ANGLES member for angle and CAMS keys for shots; every other part is a number from CAMS / the bay constants formatted with toFixed, a shot index, or a literal.",
+      "rhs": [
+        "c3132870ca2e"
+      ]
     },
     "js/game.js::sum.innerHTML": {
       "count": 1,
-      "reason": "HUD fold summary: hudProfile / hudMetricsLayout are validated against HUD_PROFILES / HUD_MET_LAYOUTS at load and in the G setters; every other part is a literal."
+      "reason": "HUD fold summary: hudProfile / hudMetricsLayout are validated against HUD_PROFILES / HUD_MET_LAYOUTS at load and in the G setters; every other part is a literal.",
+      "rhs": [
+        "37b1e2358754"
+      ]
     },
     "js/perf/metrics-overlay.js::sum.innerHTML": {
       "count": 1,
-      "reason": "METRICS fold summary: page() is readPage(), which returns only a PAGES member (store) or a /(gov|car|phys|log)/ query match."
+      "reason": "METRICS fold summary: page() is readPage(), which returns only a PAGES member (store) or a /(gov|car|phys|log)/ query match.",
+      "rhs": [
+        "4d6e45a42fff"
+      ]
     },
     "js/perf/renderer-picker.js::sum.innerHTML": {
       "count": 1,
-      "reason": "RENDERER fold summary: backendLabel() of readBackend() (webgl2|webgpu|three, anything else reset to webgl2) and liveBackend() (constants)."
+      "reason": "RENDERER fold summary: backendLabel() of readBackend() (webgl2|webgpu|three, anything else reset to webgl2) and liveBackend() (constants).",
+      "rhs": [
+        "8b1b1c626f3a"
+      ]
     },
     "js/ui/aria-state.js::el.innerHTML": {
       "count": 1,
-      "reason": "paintOnOff re-wraps a button's textContent; wrapOnOff ESCAPES & < > \" ' before inserting its own spans (the 2026-09-24 stored-XSS fix — custom driver names reach these buttons)."
+      "reason": "paintOnOff re-wraps a button's textContent; wrapOnOff ESCAPES & < > \" ' before inserting its own spans (the 2026-09-24 stored-XSS fix — custom driver names reach these buttons).",
+      "rhs": [
+        "e5e239560bc1"
+      ]
     },
     "js/ui/dom.js::target.innerHTML": {
       "count": 1,
-      "reason": "Dom.paintFold: [kind, label] pairs are the callers' constants or validated enums (audio/panel.js, input/steer-tuning.js) — never user text. Keep it that way: a caller with free text must use Dom.el()."
+      "reason": "Dom.paintFold: [kind, label] pairs are the callers' constants or validated enums (audio/panel.js, input/steer-tuning.js) — never user text. Keep it that way: a caller with free text must use Dom.el().",
+      "rhs": [
+        "e5e239560bc1"
+      ]
     },
     "js/ui/loading-screen.js::$(\"ld-flag\").innerHTML": {
       "count": 1,
-      "reason": "Flags.svg(country): emits only a built-in RECIPES flag keyed by a known code (unknown input falls back to \"xx\"); the input never reaches the markup as text."
+      "reason": "Flags.svg(country): emits only a built-in RECIPES flag keyed by a known code (unknown input falls back to \"xx\"); the input never reaches the markup as text.",
+      "rhs": [
+        "6249d43be5e5"
+      ]
     },
     "js/ui/select-screen.js::fl.innerHTML": {
       "count": 1,
-      "reason": "Flags.svg(t.country) — see loading-screen: the markup is a built-in recipe, not the input."
+      "reason": "Flags.svg(t.country) — see loading-screen: the markup is a built-in recipe, not the input.",
+      "rhs": [
+        "6249d43be5e5"
+      ]
     },
     "js/ui/select-screen.js::flagEl.innerHTML": {
       "count": 1,
-      "reason": "Flags.svg(t.country) — see loading-screen: the markup is a built-in recipe, not the input."
+      "reason": "Flags.svg(t.country) — see loading-screen: the markup is a built-in recipe, not the input.",
+      "rhs": [
+        "6249d43be5e5"
+      ]
     },
     "js/ui/select-screen.js::drsList.innerHTML": {
       "count": 1,
-      "reason": "Circuit DRS zones from js/circuits/ data (code, not player input); every interpolation is a Math.round() number or the zone index."
+      "reason": "Circuit DRS zones from js/circuits/ data (code, not player input); every interpolation is a Math.round() number or the zone index.",
+      "rhs": [
+        "0ec73f0b15c3"
+      ]
     },
     "js/ui/select-screen.js::list.innerHTML": {
       "count": 1,
-      "reason": "Circuit corner list from TrackMaps: c.n is a number, the class comes from the TDC_CLS map, and lbl is TrackMaps' corner class (HAIRPIN/SLOW/MEDIUM/FAST) — circuit data, not player input."
+      "reason": "Circuit corner list from TrackMaps: c.n is a number, the class comes from the TDC_CLS map, and lbl is TrackMaps' corner class (HAIRPIN/SLOW/MEDIUM/FAST) — circuit data, not player input.",
+      "rhs": [
+        "5445abd5fed4"
+      ]
     }
   }
 }

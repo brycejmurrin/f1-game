@@ -136,6 +136,8 @@ const Badges = (function () {
     ? document.getElementById("pm-badges-panel") : null;
   if (fold) fold.addEventListener("toggle", () => { if (fold.open) render(); });
 
-  return { KEY, DEFS, STREAK_DAYS, read, unlock, forRace, forStreak, onRace, onPole, onStreak, summary, render, setNotifier, labelOf };
+  // KEY and STREAK_DAYS stay module-local: the store prefix is an implementation
+  // detail, and the streak threshold is only read by forStreak / the DEFS copy.
+  return { DEFS, read, unlock, forRace, forStreak, onRace, onPole, onStreak, summary, render, setNotifier, labelOf };
 })();
 Object.freeze(Badges);

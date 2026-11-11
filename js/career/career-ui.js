@@ -43,6 +43,9 @@ function create(G) {
     root.querySelectorAll(".sel-label[id]").forEach((h) => {
       const a = el("a", "", h.textContent);
       a.href = `#${h.id}`;
+      // A guide heading is a fold's summary: the jump opens what it lands on.
+      const fold = h.closest("details");
+      if (fold) a.addEventListener("click", () => { fold.open = true; });
       nav.appendChild(a);
     });
   }
@@ -62,6 +65,7 @@ function create(G) {
       amb: 1,                  // WHAT THEY ASK — the middle rung, the team's own target
       name: "Your Name", code: "YOU", num: 99,
       hire: "NKM",
+      calendar: "real2026",    // Career.start's calSet; "24" is the original list
     };
   }
 
@@ -153,10 +157,16 @@ function create(G) {
     return out;
   }
 
-  function runImport(pending, otherConfirmed) {
+  // The import awaits its "before-import" restore points; a second tap
+  // while they are saving must not start a second import.
+  let importing = false;
+  async function runImport(pending, otherConfirmed) {
+    if (importing) return null;
     ++backupReadGeneration;
     const { envelope, focusFlavour, rawText, revisions } = pending;
-    const result = CareerBackup.apply(envelope, {
+    importing = true;
+    let result;
+    try { result = await CareerBackup.applyWithUndo(envelope, {
       focusFlavour,
       otherFlavourConfirmed: !!otherConfirmed,
       expectedRevisions: revisions,
@@ -166,7 +176,7 @@ function create(G) {
       rawText,
       recovery: !!pending.recovery,
       expectedSeasonRevision: pending.seasonRevision,
-    });
+    }); } finally { importing = false; }
     if (result.ok) {
       G.refreshCareerButton();
       pending.unconfirmed = pending.unconfirmed || result.durable === false || !!result.failed;
@@ -192,6 +202,9 @@ function create(G) {
     if (partial) G.refreshCareerButton();
     announce(partial ? "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP"
       : result.reason === "conflict" ? "SAVE CONFLICT — IMPORT REFUSED"
+      : result.reason === "undo-unavailable" ? "IMPORT REFUSED — COULD NOT KEEP A RESTORE POINT OF THE SAVE IT WOULD REPLACE; NOTHING CHANGED"
+      : result.reason === "money-range" ? "IMPORT REFUSED — THE FILE'S CREDITS ARE OUTSIDE WHAT A CAREER CAN EARN; NOTHING CHANGED"
+      : result.reason === "salary-range" ? "IMPORT REFUSED — A SALARY IN THE FILE IS OUTSIDE WHAT A CAREER CAN PAY; NOTHING CHANGED"
       : ("IMPORT FAILED — " + String(result.reason || "error").toUpperCase()));
     build();
     return result;
@@ -202,7 +215,6 @@ function create(G) {
     const card = el("div", `cr-slot${s.used ? " used" : " empty"}${live ? " active" : ""}`);
     const open = el("button", "cr-slot-main");
     const modeName = s.flavour === "myteam" ? "My Team" : "Driver career";
-    open.setAttribute("aria-label", `${modeName} slot ${s.i + 1}, ${s.used ? "saved" : "empty"}${live ? ", playing" : ""}`);
     open.append(el("span", "cr-slot-n", `SLOT ${s.i + 1}${live ? " · PLAYING" : ""}`));
     if (s.used) {
       const who = s.flavour === "myteam" ? s.teamName : `${s.code} · ${s.teamName}`;
@@ -210,7 +222,7 @@ function create(G) {
         el("span", "cr-slot-who", String(who).toUpperCase()),   // a team:null slot has no name
         el("span", "cr-slot-meta",
           `${s.year} · round ${Math.min(s.round + 1, s.rounds)} of ${s.rounds}`
-          + ` · ${s.money.toLocaleString()} cr`),
+          + ` · ${I18n.n(s.money)} cr`),
         el("span", "cr-slot-meta",
           `${s.seasons}${s.seasons === 1 ? " season" : " seasons"}`
           + ` · ${s.wins}${s.wins === 1 ? " win" : " wins"}`
@@ -220,12 +232,20 @@ function create(G) {
         el("span", "cr-slot-meta", s.flavour === "myteam"
           ? "Start a team here" : "Start a career here"));
     }
+    // The name LEADS with the card's visible text, then says which mode: a
+    // speech-input user says what they see (WCAG 2.5.3; axe label-content-name-
+    // mismatch flagged "Driver career slot 1, empty" on Lighthouse, UI hunt 3).
+    const parts = [...open.children];
+    // A word break ends each block span but the last: textContent (which axe
+    // reads) ran "SLOT 1EMPTYStart…" together; a block's trailing space never renders.
+    for (const c of parts.slice(0, -1)) c.textContent += " ";
+    open.setAttribute("aria-label", `${parts.map((c) => c.textContent).join("")}, ${modeName}`);
     open.onclick = () => {
       if (writerRefused()) return;
       if (G.soundOn) GameAudio.uiSelect();
       // A newer-build slot cannot replace the live career. Keep the picker
       // intact, including when another tab updated this card after rendering.
-      if (s.used && !Career.useSlot(s.flavour, s.i)) { announce("UPDATE REQUIRED"); return; }
+      if (s.used && !Career.useSlot(s.flavour, s.i)) { announce(s.damaged ? "DAMAGED SAVE" : "UPDATE REQUIRED"); return; }
       ++backupReadGeneration;
       armedDelete = "";
       armedImport = "";
@@ -395,12 +415,12 @@ function create(G) {
   function buildSlotPanes() {
     const left = $("cr-left"), right = $("cr-right");
     left.textContent = ""; right.textContent = "";
-    $("cr-title").textContent = "CAREER MODES";
+    $("cr-title").textContent = I18n.t("career.modes.title", null, "CAREER MODES");
     const used = Career.slots().filter((x) => x.used).length;
     $("cr-sub").textContent = used
       ? used + (used === 1 ? " career saved" : " careers saved")
       : "Two ways to play a championship";
-    $("cr-sub").style.color = "";
+    delete $("cr-sub").dataset.team;
     $("cr-meters").textContent = "";
 
     modeColumn(left, "driver");
@@ -432,19 +452,24 @@ function create(G) {
   // BUDGET_MULT, OBJ_BONUS, Career.SLOTS, the free-agent asks), never typed out.
   // A guide that quotes the economy is a guide that goes stale the first time
   // the economy is tuned, and a wrong number here is worse than no number.
+  // Each section is a fold (design pass #3): its heading is the summary and the
+  // folds share a name, so one reads at a time and the guide opens as a list of
+  // its own contents — 5 screens at 844x390 where the open document was 19.
   function guideSection(title, paras) {
-    const frag = document.createDocumentFragment();
-    frag.appendChild(head(title, "cg-" + slug(title)));
+    const fold = el("details", "cr-card");
+    fold.setAttribute("name", "cg-fold");
+    const sum = el("summary", "sel-label", title);
+    sum.id = "cg-" + slug(title);
     const card = el("div", "cr-card cg-card");
     for (const p of paras) {
       if (Array.isArray(p)) card.appendChild(row(p[0], p[1]));
       else card.appendChild(el("p", "cg-p", p));
     }
-    frag.appendChild(card);
-    return frag;
+    fold.append(sum, card);
+    return fold;
   }
 
-  const cr = (n) => `${n.toLocaleString()} cr`;
+  const cr = (n) => `${I18n.n(n)} cr`;
 
   function sharedSections(my) {
     const out = [];
@@ -717,7 +742,7 @@ function create(G) {
     const body = $("cg-body");
     body.textContent = "";
     const my = flavour === "myteam";
-    $("cg-title").textContent = my ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS";
+    $("cg-title").textContent = my ? I18n.t("career.guide.myTeam", null, "HOW MY TEAM WORKS") : I18n.t("career.guide.career", null, "HOW CAREER WORKS");
     for (const part of (my ? myTeamGuide() : driverGuide())) body.appendChild(part);
     // The two shared rules, said once at the foot of both.
     body.appendChild(guideSection("GOOD TO KNOW", [
@@ -737,6 +762,7 @@ function create(G) {
       "Your career car and your free-play car are separate builds. Nothing you do "
       + "here changes a Grand Prix or a Time Trial, and nothing there changes this.",
     ]));
+    if (body.firstElementChild) body.firstElementChild.open = true;
     fillContents("cg-contents", body);
     ScrollFade.refresh();
   }
@@ -874,12 +900,14 @@ function create(G) {
       if (msg) input.setAttribute("aria-invalid", "true");
       input.oninput = () => onInput(input.value);
       wrap.appendChild(input);
-      form.appendChild(wrap);
       if (msg) {
-        const note = el("div", "cr-note", msg);
+        const note = el("div", "cr-note", msg), group = el("div");
+        note.id = `cr-error-${errKey}`;
+        input.setAttribute("aria-describedby", note.id);
         note.setAttribute("role", "alert");
-        form.appendChild(note);
-      }
+        group.append(wrap, note); // Keep the description outside the input's label.
+        form.appendChild(group);
+      } else form.appendChild(wrap);
       return input;
     };
     addField("NAME", draft.name, 22, (v) => { draft.name = v; }, "text", "name");
@@ -922,6 +950,26 @@ function create(G) {
       }
     }
 
+    // THE CALENDAR every season of this save races (Career.start stamps it as
+    // calSet): the real 2026 season by default, the original 24-round list on request.
+    right.appendChild(head("CALENDAR"));
+    const cals = el("div", "cr-seats");
+    const realN = typeof SeasonCal !== "undefined" && SeasonCal.presetIds ? SeasonCal.presetIds("real2026").length : 0;
+    for (const [id, label, who] of [
+      ["real2026", "2026 REAL", `${realN} rounds, as the 2026 season ran`],
+      ["24", "24-ROUND", `${Tracks.SEASON.length} rounds, the original Apex 26 calendar`],
+    ]) {
+      if (id === "real2026" && (!realN || realN !== SeasonCal.REAL_2026.length)) continue;   // whole, or not offered
+      const on = (draft.calendar === "24" ? "24" : "real2026") === id;
+      const b = el("button", `cr-seat${on ? " active" : ""}`);
+      b.type = "button";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.append(el("span", "cr-seat-role", label), el("span", "cr-seat-who", who));
+      b.onclick = () => { draft.calendar = id; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
+      cals.appendChild(b);
+    }
+    right.appendChild(cals);
+
     right.appendChild(head("BEFORE YOU START"));
     const learn = el("button", "cr-card cr-record");
     learn.id = "cr-learn";
@@ -934,10 +982,11 @@ function create(G) {
     right.appendChild(learn);
 
     const myTeam = draft.flavour === "myteam";
-    $("cr-title").textContent = myTeam ? "NEW MY TEAM" : "NEW CAREER";
+    $("cr-title").textContent = myTeam ? I18n.t("career.new.myTeam", null, "NEW MY TEAM") : I18n.t("career.new.career", null, "NEW CAREER");
     $("cr-sub").textContent = "";
+    delete $("cr-sub").dataset.team;
     $("cr-meters").textContent = "";
-    $("cr-go").textContent = myTeam ? "START MY TEAM" : "START CAREER";
+    $("cr-go").textContent = myTeam ? I18n.t("career.start.myTeam", null, "START MY TEAM") : I18n.t("career.start.career", null, "START CAREER");
     $("cr-go").hidden = false;
     $("cr-go").disabled = false;
     $("cr-garage").hidden = true;
@@ -959,7 +1008,9 @@ function create(G) {
     $("cr-title").textContent = `CAREER ${c.year}`;
     $("cr-sub").textContent = `${c.flavour === "myteam" ? "TEAM PRINCIPAL" : c.driver.code}`
       + ` · ${team ? team.name.toUpperCase() : String(c.team == null ? "" : c.team).toUpperCase()}`;
-    if (team) $("cr-sub").style.color = G.cssCol(team.color2 || team.color);
+    // The team colour is a stripe, not ink: brand red as text read as an alert (design pass 2b).
+    $("cr-sub").toggleAttribute("data-team", !!team);
+    if (team) $("cr-sub").style.setProperty("--cr-team", G.cssCol(team.color2 || team.color));
 
     if (Career.conflicted()) {
       const warn = el("div", "cr-card");
@@ -972,7 +1023,7 @@ function create(G) {
     const meters = $("cr-meters");
     meters.textContent = "";
     meters.append(
-      meter("BALANCE", Career.freeMoney() ? "UNLIMITED" : `${st.money.toLocaleString()} cr`),
+      meter("BALANCE", Career.freeMoney() ? "UNLIMITED" : `${I18n.n(st.money)} cr`),
       meter("REPUTATION", `${Math.round(st.rep)} / 100`),
       meter("ROUND", `${Math.min(st.round + 1, st.rounds)} / ${st.rounds}`));
 
@@ -1057,7 +1108,7 @@ function create(G) {
       card.appendChild(el("div", "cr-obj-line", sp.label));
       card.appendChild(row("Progress", `${sp.done} / ${sp.need}${sp.met ? "  ·  MET" : ""}`));
       card.appendChild(row("Rounds left", sp.roundsLeft === 0 ? "this one" : String(sp.roundsLeft)));
-      card.appendChild(row("Pays", `${sp.pay.toLocaleString()} cr`));
+      card.appendChild(row("Pays", `${I18n.n(sp.pay)} cr`));
       left.appendChild(card);
     }
 
@@ -1082,7 +1133,7 @@ function create(G) {
     const fittedCost = Parts.getCost(c.fitted, team);
     carCard.append(
       row("Parts owned", `${c.owned.length} of ${totalOptions()}`),
-      row("Fitted", `${fittedCost.toLocaleString()} / ${Career.budget().toLocaleString()} cr`),
+      row("Fitted", `${I18n.n(fittedCost)} / ${I18n.n(Career.budget())} cr`),
       row("Development", devLabel(c.tdev[c.team] || 0)),
       // The facility is the one upgrade that never runs out, so it belongs with
       // the car rather than in the economy: it is what late money buys.
@@ -1137,16 +1188,16 @@ function create(G) {
     // shows on touch — so the shortfall rides on the affordance line
     // (.cr-record-cta wraps; it carries no nowrap, so it cannot truncate).
     const shortBy = (cost) => (Career.freeMoney() ? 0 : Math.max(0, cost - st.money));
-    const shortNote = (n) => (n > 0 ? "  ·  SHORT " + n.toLocaleString() + " cr" : "");
+    const shortNote = (n) => (n > 0 ? "  ·  SHORT " + I18n.n(n) + " cr" : "");
     if (st.facilityCost != null) {
       const fac = el("button", "cr-card cr-record");
       fac.id = "cr-facility";
       planningFactory = fac;
       const fShort = shortBy(st.facilityCost);
       fac.disabled = fShort > 0;
-      if (fShort > 0) fac.title = "Needs " + fShort.toLocaleString() + " cr more than you have";
+      if (fShort > 0) fac.title = "Needs " + I18n.n(fShort) + " cr more than you have";
       fac.append(
-        el("span", "cr-record-line", "Upgrade the factory · " + st.facilityCost.toLocaleString() + " cr"),
+        el("span", "cr-record-line", "Upgrade the factory · " + I18n.n(st.facilityCost) + " cr"),
         el("span", "cr-record-cta", "LEVEL " + st.facility + " → " + (st.facility + 1)
           + "  ·  −" + Math.round((st.facilityDiscount + 0.05) * 100) + "% RESEARCH" + shortNote(fShort)));
       fac.onclick = () => {
@@ -1162,11 +1213,11 @@ function create(G) {
       cap.id = "cr-budget";
       const bShort = shortBy(st.budgetCost);
       cap.disabled = bShort > 0;
-      if (bShort > 0) cap.title = "Needs " + bShort.toLocaleString() + " cr more than you have";
+      if (bShort > 0) cap.title = "Needs " + I18n.n(bShort) + " cr more than you have";
       cap.append(
-        el("span", "cr-record-line", "Raise the fitted cap · " + st.budgetCost.toLocaleString() + " cr"),
+        el("span", "cr-record-line", "Raise the fitted cap · " + I18n.n(st.budgetCost) + " cr"),
         el("span", "cr-record-cta", "LEVEL " + st.budgetLvl + " → " + (st.budgetLvl + 1)
-          + "  ·  CAP " + st.budget.toLocaleString() + " cr" + shortNote(bShort)));
+          + "  ·  CAP " + I18n.n(st.budget) + " cr" + shortNote(bShort)));
       cap.onclick = () => {
         if (!Career.upgradeBudget()) return;
         if (G.soundOn) GameAudio.uiSelect();
@@ -1187,7 +1238,7 @@ function create(G) {
       "Off by default. Money stops being the constraint; the cap on what you may "
       + "fit at once does not move, so the car is still a choice."));
     const cheatRow = el("div", "cr-cheats");
-    const grantBtn = el("button", "sel-chip", "+" + Career.GRANT.toLocaleString() + " CR");
+    const grantBtn = el("button", "sel-chip", "+" + I18n.n(Career.GRANT) + " CR");
     grantBtn.id = "cr-grant";
     grantBtn.onclick = () => {
       Career.grant(Career.GRANT);
@@ -1223,16 +1274,16 @@ function create(G) {
       right.appendChild(el("div", "cr-note", h.kind === "left"
         ? h.name + " had a season good enough that somebody else came for them. "
           + "The seat is empty — the market is below."
-        : h.name + " will re-sign for " + h.ask.toLocaleString() + " cr a round"
-          + (h.ask > h.salary ? ", up from " + h.salary.toLocaleString()
-            : h.ask < h.salary ? ", down from " + h.salary.toLocaleString() : "")
+        : h.name + " will re-sign for " + I18n.n(h.ask) + " cr a round"
+          + (h.ask > h.salary ? ", up from " + I18n.n(h.salary)
+            : h.ask < h.salary ? ", down from " + I18n.n(h.salary) : "")
           + ". Take it, or let them go and sign somebody else."));
 
       if (h.kind === "renew") {
         const keep = el("button", "cr-card cr-record");
         keep.id = "cr-rehire";
         keep.append(
-          el("span", "cr-record-line", "Keep " + h.name + " · " + h.ask.toLocaleString() + " cr / round"),
+          el("span", "cr-record-line", "Keep " + h.name + " · " + I18n.n(h.ask) + " cr / round"),
           el("span", "cr-record-cta", "RE-SIGN"));
         if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.cashNote(keep, 0, h.ask);
         keep.onclick = () => {
@@ -1249,7 +1300,7 @@ function create(G) {
         if (a2.code === h.code) continue;   // renew through the offer; a poached driver has left
         const b2 = el("button", "cr-seat");
         b2.append(el("span", "cr-seat-role", a2.name),
-          el("span", "cr-seat-who", a2.ask.toLocaleString() + " cr / round"));
+          el("span", "cr-seat-who", I18n.n(a2.ask) + " cr / round"));
         if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.cashNote(b2, 0, a2.ask);
         b2.onclick = () => {
           Career.hireDriver(a2.code, 1);
@@ -1332,9 +1383,9 @@ function create(G) {
       right.appendChild(ladder);
     }
 
-    $("cr-go").textContent = st.hire ? "SIGN A DRIVER"
-      : st.offers ? "SIGN A CONTRACT"
-      : Career.seasonDone() ? "END OF SEASON" : "GO RACING";
+    $("cr-go").textContent = st.hire ? I18n.t("career.go.hire", null, "SIGN A DRIVER")
+      : st.offers ? I18n.t("career.go.offers", null, "SIGN A CONTRACT")
+      : Career.seasonDone() ? I18n.t("career.go.endSeason", null, "END OF SEASON") : I18n.t("career.go.race", null, "GO RACING");
     $("cr-go").hidden = false;
     // An empty second seat blocks the weekend outright — there is nothing for GO
     // RACING to do until the car has a driver in it.
@@ -1359,7 +1410,7 @@ function create(G) {
       row("Goal", Career.goalLabel(preview.deal.goal)), row("Fitted budget cap", preview.currentCap + " → " + preview.cap + " cr"),
       row("Retained credits / facility", preview.retained.money + " cr / level " + preview.retained.facility));
     card.appendChild(el("p", "cg-p", "Your personal driver development is retained. " + (preview.moving ? "The destination works build replaces your researched and fitted parts." : "Your researched and fitted parts are retained.")));
-    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id); if (opt) return opt.label; } return id; };
+    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id) || cat.options.find((o) => o.own === id); if (opt) return Parts.optLabel(cat.id, opt); } return id; };   // lostResearch holds ownership keys (Parts.ownId)
     for (const [cat, id] of Object.entries(preview.resolvedFitted)) {
       card.appendChild(row(cat, label(preview.currentFitted[cat]) + " → " + label(id)));
       if (preview.fitted[cat] !== id) card.appendChild(el("p", "cg-p", "Works research retained: " + label(preview.fitted[cat]) + "; current regulations substitute " + label(id) + " on the car."));
@@ -1368,7 +1419,7 @@ function create(G) {
     const sign = el("button", "sel-edit", "SIGN CONTRACT"); sign.type = "button";
     const cancel = el("button", "sel-edit", "CANCEL"); cancel.type = "button";
     const status = el("p", "cg-p"); status.setAttribute("role", "status");
-    sign.onclick = () => { if (!Career.acceptOffer(index, preview)) { status.textContent = "The offer changed. Cancel and compare it again."; sign.disabled = true; return; } closeOffers(); G.openCareer(); };
+    sign.onclick = () => { if (!Career.acceptOffer(index, preview)) { status.textContent = I18n.t("career.offer.changed", null, "The offer changed. Cancel and compare it again."); sign.disabled = true; return; } closeOffers(); G.openCareer(); };
     cancel.onclick = () => buildOffers();
     body.append(card, sign, cancel, status); cancel.focus();
   }
@@ -1378,7 +1429,7 @@ function create(G) {
     const body = $("co-body");
     body.textContent = "";
     const past = c.history[c.history.length - 1];
-    $("co-title").textContent = past ? "SEASON " + past.year : "END OF SEASON";
+    $("co-title").textContent = past ? I18n.t("career.season.year", {year: past.year}, "SEASON {year}") : I18n.t("career.go.endSeason", null, "END OF SEASON");
 
     // THE DECISION FIRST, the season recap under it. This screen exists to pick
     // a seat. Recap first, on a landscape phone (852x393 with the notch insets;
@@ -1451,6 +1502,9 @@ function create(G) {
         row("You finished", "P" + past.pos + " · " + past.pts + " pts"),
         row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
         row("Wins / podiums", past.wins + " / " + past.podiums));
+      const pastTeam = teamById(past.team);
+      if (typeof ShareCardChips !== "undefined") ShareCardChips.append(card, "co-year-card", () => ShareCardData.fromCareerYear(past,
+        { teamName: pastTeam && pastTeam.name, teamColor: pastTeam && G.cssCol(pastTeam.color) }), "career-" + past.year);
       body.appendChild(card);
     }
 
@@ -1620,8 +1674,10 @@ function create(G) {
     // The foot button must say where it GOES: from the hub's CAREER MODES door
     // it returns to the HUB; from the title it is MAIN MENU. Labelling MAIN MENU
     // then opening CAREER 2026 was the lying label Esc also followed (data-esc-close).
+    // The NEW CAREER wizard steps back to its slot list, so it says BACK too.
     const back = $("cr-back");
-    if (back) back.textContent = (picking && slotsOrigin === "hub" && Career.active()) ? "BACK" : "MAIN MENU";
+    const stepsBack = (picking && slotsOrigin === "hub" && Career.active()) || (!picking && !!draft && !Career.active());
+    if (back) back.textContent = stepsBack ? I18n.t("career.back", null, "BACK") : I18n.t("career.mainMenu", null, "MAIN MENU");
     ScrollFade.refresh();
   }
 
@@ -1659,6 +1715,10 @@ function create(G) {
     Log.info("ui", "CareerUI.close");
     ++backupReadGeneration;
     $("career").hidden = true;
+    // A draft abandoned on any route out (a refused START sent it to the picker,
+    // whose BACK lands here with draft already cleared) gives the borrowed EMPTY
+    // slot back: left live, the title showed no career and a reload re-homed it.
+    if (draftFrom && !Career.active()) Career.useSlot(draftFrom.flavour, draftFrom.i);
     draft = null; draftFrom = null; armedDelete = "";
     armedImport = ""; pendingImport = null;
     draftFieldErr = null;
@@ -1688,7 +1748,13 @@ function create(G) {
       picking = false; armedDelete = ""; armedImport = ""; pendingImport = null;
       G.openCareer(); return;
     }
-    if (draft && draftFrom && !Career.active()) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
+    // NEW CAREER wizard: BACK (and Esc, the same door) steps back one screen to
+    // the slot list it was opened from, restoring the borrowed live slot.
+    if (draft && !Career.active()) {
+      if (draftFrom) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
+      draft = null; draftFieldErr = null; picking = true;
+      build(); return;
+    }
     // (build() retitles this button per state — see buildSlotPanes/buildHubPanes.)
     close();
     els.overlay.hidden = false;
@@ -1716,6 +1782,12 @@ function create(G) {
       if (Object.keys(errs).length) {
         draftFieldErr = errs;
         buildSetupPanes();
+        const invalid = /** @type {HTMLInputElement|null} */ ($("cr-right").querySelector("input[aria-invalid='true']"));
+        if (invalid && typeof invalid.focus === "function") {
+          invalid.focus({ preventScroll: true });
+          const group = invalid.parentElement && invalid.parentElement.parentElement;
+          if (group && typeof group.scrollIntoView === "function") group.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+        }
         return;
       }
       draftFieldErr = null;
@@ -1723,7 +1795,12 @@ function create(G) {
       // no slot was named — it will not pick one to overwrite. Send the
       // player to the picker so the replacement is their call, and leave
       // draftFrom alone so BACK still works.
-      if (!Career.start(draft)) { openSlots(slotsOrigin); return; }   // draft.slot, when the picker set one
+      if (!Career.start(draft)) {   // draft.slot, when the picker set one
+        const full = draft.slot == null && Career.firstFree(draft.flavour) < 0;
+        openSlots(slotsOrigin);
+        if (full) announce("ALL THREE SLOTS ARE IN USE — DELETE ONE TO START A NEW CAREER");
+        return;
+      }
       draftFrom = null;             // committed: the new slot IS the live one now
       G.openCareer();          // re-enters the hub with the save in place
       return;
@@ -1741,7 +1818,7 @@ function create(G) {
     // It bites every MY TEAM season (makeOffers returns [] for myteam) and any
     // driver season entered on a multi-year deal; a driver who must accept an
     // offer is rescued by acceptOffer's openCareer().
-    if (Career.seasonDone()) { Career.rollover(); G.trackIdx = Career.trackIndex(); build(); openOffers(); return; }
+    if (Career.seasonDone()) { if (!Career.rollover()) { build(); return; } G.trackIdx = Career.trackIndex(); build(); openOffers(); return; }
     G.openRaceSettings("career");
   };
   $("co-back").onclick = () => {
@@ -1765,6 +1842,7 @@ function create(G) {
            openHistory, closeHistory, openGuide, closeGuide };
 }
 
-return { create, STARTER_TIER_MIN };
+// STARTER_TIER_MIN stays module-local (starterTeams filter only).
+return { create };
 })();
 Object.freeze(CareerScreen);

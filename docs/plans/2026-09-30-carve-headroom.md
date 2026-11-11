@@ -1,5 +1,7 @@
 # Carve headroom — size-ratchet extractions (2026-09-30)
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — slices A and B exist as js/physics/player-forces.js and wall-clamp.js; C-E were not verified.
 
 **Workstream:** open slack on saturated size ratchets so parallel feature agents
@@ -15,7 +17,7 @@ the exact head, then undraft.
 | Doc | Role vs this plan |
 |---|---|
 | [`2026-09-24-refactor-readability.md`](2026-09-24-refactor-readability.md) | Ranked readability backlog. This plan **narrows** to ratchet headroom and the blocks peers are about to touch. |
-| [`CLEANUP-ROADMAP.md`](CLEANUP-ROADMAP.md) | Earlier carve log; unfinished items stay there unless absorbed below. |
+| `CLEANUP-ROADMAP.md` (archived) | Earlier carve log; unfinished items stay there unless absorbed below. |
 | [ARCHITECTURE.md](../ARCHITECTURE.md) §Reorg | Extraction lessons: boundary crossings, no leftover symbols, no fat `G`. |
 | [slim-bloat / carves.md](../../.claude/skills/slim-bloat/references/carves.md) | Mechanical recipe (`extract-module.mjs`, `--update`, lockstep). |
 | [ARCHITECTURE-MAP.md](../ARCHITECTURE-MAP.md) §Where new code goes | Home for new modules (added with this plan). |
@@ -100,7 +102,7 @@ moves cohesive **helpers** that `updateCar` already calls conceptually into
    (ARCHITECTURE § leftovers).
 5. One carve → one PR. Announce the carve in the PR body so peers take it on
    sync. Sync to ship **only** on conflict or tip-red required check
-   (`AGENTS.md` §Concurrent PRs).
+   (`AGENTS.md` §Coordination).
 
 ### Avoid a fat `G`
 

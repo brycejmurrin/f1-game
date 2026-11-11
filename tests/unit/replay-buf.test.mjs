@@ -304,7 +304,7 @@ test("module never writes Ghost storage and stays under the RAM budget constant"
   assert.match(text, /MAX_BYTES = 720 \* 1024/);
 });
 
-test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path in game.js", () => {
+test("retirement edge auto-tags; jumpLastTag seeks", () => {
   const R = boot();
   const field = cars(2);
   const G = { cars: field, netPlay: { active: () => false } };
@@ -321,20 +321,9 @@ test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path
   const st = api.status();
   assert.ok(Math.abs(st.scrubT - tag.t) < 1e-6);
   assert.equal(api.isScrubbing(), true);
-
-  // Contract: endRace / career score must refuse while scrubbing (source pin —
-  // a settle spy would need the full game boot; the call sites are the gate).
-  const game = gameSource();
-  assert.match(game, /replayBuf\.isScrubbing\(\)/);
-  assert.match(game, /replayBuf\.onRaceStart|replayBuf\.reset/);
-  assert.match(game, /Career\.scoreRound/);
-  // scoreRound must sit AFTER the scrubbing early-return in endRace.
-  const scrubGate = game.indexOf("if (replayBuf.isScrubbing())");
-  const score = game.indexOf("Career.scoreRound");
-  assert.ok(scrubGate >= 0 && score > scrubGate, "scrub gate precedes career score");
-  // Ghost.flush still leads endRace (ghost.test pin); scrub return follows it.
-  assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
   api.endScrub();
+  // endRace refusing to settle while scrubbing is proven in the real game below
+  // ("endRace while scrubbing scores nothing").
 });
 
 test("a car crossing the start/finish line interpolates through the seam, not round the lap", () => {
@@ -484,6 +473,52 @@ test("the replay ring is not a G expando: game.js never assigns G.replayBuf (1a-
   // The façade is DECLARED, not grown by assignment (an Object.seal(G) would throw at boot); tests reach the ring above.
   const game = gameSource();
   assert.ok(!/\bG\.replayBuf\s*=(?!=)/.test(game), "G.replayBuf = … is an undeclared façade member");
+});
+
+// THE SCRUB GATE, in the real game: a championship round paused into the
+// instant replay, and the flag asked for mid-scrub (game.js endRace, via the
+// façade and via __apex.finishRace). Nothing may settle: no results, no points,
+// no round advance. After the scrub ends the same call scores the round, so the
+// refusal is the gate's and not a race that could not end.
+test("endRace while scrubbing scores nothing; after the scrub the same call settles the round", async () => {
+  let rb = null;
+  const trapCreate = (sb) => {
+    let mod;
+    Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
+      set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
+  };
+  const g = await createGame({ track: "monza", carMeshes: false, onSandbox: trapCreate });
+  try {
+    const a = g.apex, G = g.G;
+    a.headless(true);
+    const S = vm.runInContext("SeasonCal", g.ctx);
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.flow = "season"; G.session = "race";
+    const r = S.applyConfig(Object.assign(S.fresh(), { quali: false, trackIds: ["monza", "spa"] }));
+    G.season = r.season; G.trackIdx = S.trackIndex(0); G.raceLaps = 3;
+    const before = G.cars; G.startRace();
+    await vmSettle(() => G.cars !== before && (G.state === "count" || G.state === "race"), 4000);
+    a.go(); a.setInput({ throttle: true, steer: 0 });
+    const t0 = g.sandbox.performance.now();
+    for (let i = 1; i <= 240; i++) g.pumpFrame(t0 + i * 1000 / 60);
+    assert.ok(rb, "ReplayBuf.create was trapped");
+    assert.equal(G.state, "race");
+    G.els.pausebtn.onclick();
+    assert.equal(rb.beginScrub(false), true, "the pause card opens the instant replay");
+    const round0 = G.season.round, pts0 = JSON.stringify(G.season.pts || {});
+    const since = (g.sandbox.Log.records().slice(-1)[0] || { id: 0 }).id;
+    G.endRace();
+    a.finishRace();
+    assert.equal(G.state, "race", "no results sheet mid-scrub");
+    assert.equal(G.season.round, round0, "the round is not scored mid-scrub");
+    assert.equal(JSON.stringify(G.season.pts || {}), pts0, "no points paid mid-scrub");
+    assert.ok(!g.sandbox.Log.records({ ns: "game", since }).some((x) => /^Race finished/.test(x.msg)), "no classification built");
+    assert.equal(rb.isScrubbing(), true, "still scrubbing");
+    rb.endScrub();
+    a.finishRace();
+    assert.equal(G.state, "results", "the flag settles once the scrub is over");
+    assert.ok(G.season.round > round0, "…and the round scores");
+  } finally { g.close(); }
 });
 
 test("solo pause replay scrub feeds engine and rivals; rpm tracks speed; radio silent", async () => {
@@ -668,7 +703,7 @@ test("css/dialogs.css gives #pm-replay-dock safe-area, wrapping and a viewport c
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "js/camera/replay-buf.js"), "utf8"), /style\.cssText/);
 });
 
-for (const outcome of ["success", "error", "cancel"]) test("contact sheet restores scrub and camera on " + outcome, async () => {
+for (const outcome of ["success", "error", "cancel"]) test(`contact sheet restores scrub and camera on ${outcome}`, async () => {
   let api, release, active = 0, maximum = 0; const times = [], resets = [];
   const R = boot(undefined, { CamFeel: { resetFollow() { resets.push("follow"); }, resetFreeLook() {}, resetLatch() {} }, GameCams: { resetSmoothing() { resets.push("smooth"); } },
     PhotoStudio: { async contactSheet(ts, seek, cancelled) {
@@ -688,7 +723,7 @@ for (const outcome of ["success", "error", "cancel"]) test("contact sheet restor
   assert.equal(field[0].px, 3); assert.equal(resets.filter((s) => s === "smooth").length, 4);
 });
 
-for (const change of ["mode", "debug identity", "debug pose", "photo pose", "follow", "scrub time", "photo session"]) test("pending contact sheet respects newer " + change + " ownership", async () => {
+for (const change of ["mode", "debug identity", "debug pose", "photo pose", "follow", "scrub time", "photo session"]) test(`pending contact sheet respects newer ${change} ownership`, async () => {
   let resolve, check, lateSeek; const R = boot(undefined, { PhotoStudio: { contactSheet(_times, seek, cancelled) {
     seek(1); check = cancelled; lateSeek = seek; return new Promise((r) => { resolve = r; });
   } } });
@@ -785,7 +820,8 @@ test("ring byte accounting includes Float64 timestamps and separates fixed typed
   const R = boot(undefined, { Float32Array: tracked(Float32Array), Float64Array: tracked(Float64Array), Uint8Array: tracked(Uint8Array) });
   const G = { cars: cars(24), raceTime: 0 };
   const r = R.create(G); r.reset(G.cars);
-  assert.equal(R.frameBytes(24), 8 + 24 * (9 * 4 + 1) + 1);
+  assert.equal(R.frameBytes(24), 8 + 24 * (9 * 4 + 4 + 1) + 1, "timestamp + 9 floats + 4 cue bytes + status per car + break");
+  assert.ok(R.capacityFor(24) === R.MAX_FRAMES, "the cue lane must not shorten the 24-car window (#5030)");
   const info = r.window();
   const capacity = R.capacityFor(24);
   assert.equal(info.allocatedBytes, R.frameBytes(24) * capacity);
@@ -796,4 +832,86 @@ test("ring byte accounting includes Float64 timestamps and separates fixed typed
   r.sample(0, G.cars); r.sample(1 / R.HZ, G.cars);
   assert.equal(r.window().bytes, R.frameBytes(24) * r.window().frames);
   assert.equal(r.window().allocatedBytes, info.allocatedBytes);
+});
+
+test("at() on a wrapped ring picks the same bracket as a linear scan; the pooled form matches the public one", () => {
+  const R = boot();
+  const field = cars(3);
+  const G = { cars: field, netPlay: { active: () => false }, paused: true };
+  const api = R.create(G);
+  api.reset(field);
+  const cap = R.capacityFor(3);
+  for (let i = 0; i < cap + 37; i++) {
+    for (const c of field) c.s += 0.5;
+    api.sample(i / R.HZ, field);
+  }
+  const w = api.window();
+  for (const f of [0, 0.013, 0.5, 0.987, 1]) {
+    const t = w.t0 + (w.t1 - w.t0) * f;
+    const a = api.at(t), b = api.at(t);
+    assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)));
+    assert.notEqual(a.cars, b.cars, "the public at() returns fresh arrays");
+    assert.ok(Math.abs(a.cars[0].s - (field[0].s - 0.5 * (w.t1 - a.t) * R.HZ)) < 0.51, "frame near t=" + t);
+  }
+});
+
+test("#5021 playback across a re-grid break or the followed car's teleport cuts the rig exactly once; plain playback never does", () => {
+  const R = boot(), field = cars(2);
+  let cuts = 0;
+  const G = { cars: field, player: field[0], netPlay: { active: () => false }, snapGameCam() { cuts++; } };
+  const api = R.create(G), T = (k) => k / R.HZ;
+  const run = (from, to) => { for (let i = from; i <= to; i++) { for (const c of field) { c.px += 1; c.speed = 30; } api.sample(T(i), field); } };
+  // Segment A, then a red-flag re-grid that moves the player only 5 m (under any jump gate: only the break says "cut").
+  run(0, 29);
+  field[0].px -= 5; api.breakTimeline();
+  run(30, 59);
+  // A RECOVER: the player teleports 80 m sideways with no break.
+  field[0].pz += 80;
+  run(60, 89);
+  // A RIVAL teleports: not the followed car, so the camera keeps its damping.
+  field[1].pz += 80;
+  run(90, 119);
+  assert.equal(api.beginScrub(false), true);
+  api.apply(0); cuts = 0;
+  const play = (until, dt) => { for (let n = 0; api.status().scrubT < until - 1e-9; n++) { assert.ok(n < 2000 && api.status().scrubPlaying, "playback advances"); api.tickScrub(dt); } };
+  play(T(28), 1 / 60);
+  assert.equal(cuts, 0, "continuous driving keeps the rig damping");
+  play(T(31), 1 / 60);
+  assert.equal(cuts, 1, "the break is a cut, once");
+  play(T(58), 1 / 60);
+  assert.equal(cuts, 1);
+  play(T(62), 1 / 20);   // a slow frame steps over whole samples: the cut must not be skipped
+  assert.equal(cuts, 2, "the followed car's teleport is a cut, once");
+  play(T(110), 1 / 20);   // short of the window end, where playback would stop itself
+  assert.equal(cuts, 2, "a rival's teleport is not the camera's business");
+  // Owned cameras (photo / results dbgCam) are still never reseeded.
+  api.apply(0); cuts = 0; G.dbgCam = {};
+  play(T(62), 1 / 60);
+  assert.equal(cuts, 0);
+  api.endScrub();
+});
+
+test("#5030 flaps, disc glow and pedals are recorded and replayed, then the paused state comes back exactly", () => {
+  const R = boot(), field = cars(2), api = R.create({ cars: field, netPlay: { active: () => false } });
+  const cue = (c, aeroX, brakeHeat, throttleDemand, brakeDemand) => Object.assign(c, { aeroX, brakeHeat, throttleDemand, brakeDemand });
+  for (let i = 0; i < R.HZ; i++) {
+    const braking = i < R.HZ / 2;   // first half: on the brakes, flap shut; second half: flat out, flap open
+    cue(field[0], braking ? 0 : 1, braking ? 0.8 : 0, braking ? 0 : 1, braking ? 1 : 0);
+    field[0].px += 1; api.sample(i / R.HZ, field);
+  }
+  cue(field[0], 1, 0.123456, 0.654321, 0);   // the state the race is PAUSED with
+  delete field[1].aeroX;                        // a car that never had the field keeps not having it after the scrub
+  const paused = { ...field[0] }, rival = { ...field[1] };
+  assert.equal(api.beginScrub(false), true);
+  api.apply(5 / R.HZ);
+  assert.equal(field[0].aeroX, 0, "braking zone: the flap is shut, not the paused-open one");
+  assert.ok(Math.abs(field[0].brakeHeat - 0.8) < 1 / 255, `discs glow as recorded (${field[0].brakeHeat})`);
+  assert.equal(field[0].brakeDemand, 1); assert.equal(field[0].throttleDemand, 0);
+  api.apply((R.HZ - 2) / R.HZ);
+  assert.equal(field[0].aeroX, 1); assert.equal(field[0].brakeHeat, 0); assert.equal(field[0].throttleDemand, 1);
+  const mid = api.at((R.HZ / 2 - 0.5) / R.HZ).cars[0];
+  assert.ok(mid.aeroX > 0.4 && mid.aeroX < 0.6, "cues blend between samples like the pose");
+  api.endScrub();
+  assert.deepEqual(field[0], paused, "the live cue state is restored bit-exactly");
+  assert.deepEqual(field[1], rival);
 });

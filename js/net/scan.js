@@ -221,6 +221,7 @@ const NetScan = (function () {
     return { start, stop, active: () => !stopped, decoder: () => (stopped ? null : (detector ? "barcode" : "jsqr")) };
   }
 
-  return { create, supported, platformDetector, VENDOR };
+  // VENDOR stays module-local (loadDecoder only).
+  return { create, supported, platformDetector };
 })();
 Object.freeze(NetScan);

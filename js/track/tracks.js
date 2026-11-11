@@ -126,7 +126,10 @@ const Tracks = (function () {
     const dress = def._sceneryShift || 0;
     const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
-      const cs = ((b.s + dress) % 1) * total;
+      // wrap01 — same idiom as TrackSurface.profile's bridge carve; bare `% 1`
+      // is fine for the authored [0,1) range but disagrees if a float ever
+      // undershoots (JS % keeps the dividend's sign).
+      const cs = TrackSpace.wrap01(b.s + dress) * total;
       for (let k = 0; k < n; k++) {
         let d = Math.abs(k * ds - cs);
         d = Math.min(d, total - d);                 // wrap-around distance
@@ -136,7 +139,7 @@ const Tracks = (function () {
     // elevation changes — terrain follows road (unlike BRIDGES where gY stays flat)
     const elevs = def.elevations;
     if (elevs) for (const e of elevs) {
-      const cs = ((e.s + dress) % 1) * total;
+      const cs = TrackSpace.wrap01(e.s + dress) * total;
       for (let k = 0; k < n; k++) {
         let d = Math.abs(k * ds - cs);
         d = Math.min(d, total - d);
@@ -371,11 +374,11 @@ const Tracks = (function () {
       lap("terrain", "up"); yield track; _t = _now();
       const _props = TrackBuildProps.buildSteps ? yield* inner(TrackBuildProps.buildSteps(track)) : TrackBuildProps.build(track);
       lap("props", "geo"); yield track; _t = _now();
-      // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
-      // opening the driving boundary across it puts nothing in a car's path.
-      TrackPit.openBoundary(track); TrackBuildProps.featherAfterOpen(track);
-      const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
-      track.propsGeo = propsGeo;
+      // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so opening the driving boundary across it puts
+      // nothing in a car's path. Untimed yields between whole sub-phases (perf hunt 7: one 100-215 VM ms step).
+      let _ps; TrackPit.openBoundary(track); TrackBuildProps.featherAfterOpen(track); _ps = _now(); yield; _t += _now() - _ps;
+      const _sealed = TrackModels.sealGeometry(_props.out); _ps = _now(); yield; _t += _now() - _ps;
+      const propsGeo = safe("props", _sealed); track.propsGeo = propsGeo; _ps = _now(); yield; _t += _now() - _ps;
       // The tallest prop above its own ground: what the sun shadow map's depth
       // span must hold (js/render/shared/shadow-pass.js sunSpan). Measured before
       // the upload may drop the positions.
@@ -514,9 +517,14 @@ const Tracks = (function () {
     const m = t && t.meshes, ck = !!gfx.freeChunkedMesh;
     if (!m) return;
     for (const h of [m.floor, m.road, m.terrain, m.gate, m.startline]) gfx.freeMesh(h);
-    if (ck) { gfx.freeChunkedMesh(m.props); if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked); if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked); }
-    else gfx.freeMesh(m.props);
-    if (m.glass) { if (ck) gfx.freeChunkedMesh(m.glass); else gfx.freeMesh(m.glass); }
+    if (ck) {
+      gfx.freeChunkedMesh(m.props);
+      if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked);
+      if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked);
+      if (m.glass) gfx.freeChunkedMesh(m.glass);
+      if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership();
+    } else gfx.freeMesh(m.props);
+    if (m.glass && !ck) { gfx.freeMesh(m.glass); }
     if (m.water) gfx.freeMesh(m.water);
     if (m.propBatches && gfx.freeInstancedBatch) { for (const b of m.propBatches) gfx.freeInstancedBatch(b); m.propBatches = null; }
   }

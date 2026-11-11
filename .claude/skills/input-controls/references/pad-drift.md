@@ -1,4 +1,21 @@
-# Triage: gamepad stick drifts / creeps when centred
+# Gamepad stick: knobs, drift triage, full-lock maths
+
+## Player knobs
+
+All in `js/input/steer-tuning.js` (`applySteerTuning` + `wireTune`), applied through
+`Input.setPadDeadzone` / `setPadSaturation` (`js/input/input.js`, `padAxisShape`):
+
+- `padDeadzone` (slider `pm-paddz`, default `PAD_DZ_DEFAULT`); `padSaturation` (`pm-padsat`);
+  `padCurve` (`pm-padcurve`) is the separate response curve.
+- Centre: `calibratePad()` / `padRest()` (button `pm-pad-calib`; refuses a stick held off centre). `padAxisShape`
+  subtracts the rest BEFORE the dead zone; an axis-map change resets it. Stored as `padRest`, reloaded via
+  `setPadRest()` by `js/ui/key-binds.js`.
+- Pins: node `tests/unit/ui-improve-pass.test.mjs` "stick dead zone and saturation are adjustable",
+  `tests/unit/digital-steer.test.mjs` (calibrated offset reaches full lock both sides),
+  `tests/unit/key-binds-calibration.test.mjs` (the CALIBRATE flow); browser
+  `tests/specs/gamepad.spec.js` "centre dead zone", `sliders.spec.js`.
+
+## Triage: stick drifts / creeps when centred
 
 1. Read the live state: `__apex.inputState()` carries `pad.steer`, `padDeadzone`,
    `padSaturation`, `padRestOffset`, `padAxisMap`, `padSteerAnalog` (reference: `docs/DEBUG-HOOKS.md` §inputState).
@@ -8,13 +25,13 @@
    `getPadAxisMap()` defaults; `RESET CONTROLLER` (`pm-pad-reset`) restores them, `SET UP A WHEEL` (`pm-pad-wheel`) remaps.
 3. Player fix, no code: CALIBRATE STICK (`pm-pad-calib`). The rest is per pad: `padRestMap` keyed by `padIdOf(pad)`;
    a legacy scalar `padRestLegacy` is handed to the first pad that drives.
-4. Code fix: dead-zone default is `PAD_DZ_DEFAULT` (input.js). A raised default reaches fresh installs only; a stored
-   `padDeadzone` needs a STEER_SCHEMA step (steer-migration.spec).
+4. Code fix: the engine default is `PAD_DZ_DEFAULT` (input.js), the slider default is the `pm-paddz` `wireTune` /
+   `applySteerTuning` fallback (steer-tuning.js). A stored `padDeadzone` needs a STEER_SCHEMA step (assists.md).
 5. Repro in a spec: mock `navigator.getGamepads` as `tests/specs/gamepad.spec.js` does; poll once per frame.
 
-No added lag: `padAxisShape` (`input.js`) is STATELESS (rest → dead zone →
-saturation, no filter), so a drift fix belongs there or in `padRest`, never a
-smoothing/slew stage; the response curve is `analogShape` (same file). Full lock:
-each side is divided by its own travel (`1 ± rest`, `|rest| ≤ 0.5` so neither
-divisor is below 0.5) and `span = max(0.05, 1 − dz − sat)` — a worn pad that
-tops out short needs SATURATION, not a bigger rest.
+## No added lag; full lock
+
+`padAxisShape` (`input.js`) is STATELESS (rest → dead zone → saturation, no filter), so a drift fix belongs there or
+in `padRest`, never a smoothing/slew stage; the response curve is `analogShape` (same file). Full lock: each side is
+divided by its own travel and saturation folds into the same divisor (the maths is `padAxisShape`'s comment) — a
+worn pad that tops out short needs SATURATION, not a bigger rest.

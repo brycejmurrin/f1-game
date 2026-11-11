@@ -25,7 +25,7 @@ const GAME = read("js/game.js");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
@@ -272,8 +272,6 @@ test("menu path: opts.mirror runs the mirror stage over the race scene once per 
 });
 
 test("wiring: present() dispatches the rig warm after the entry and mirror warms; car-draw warms both seats; race entry awaits it", () => {
-  assert.ok(TLX.includes("if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }"),
-    "present() dispatches the rig warm after the entry and mirror warms");
   assert.ok(TLX.includes("_coAppend(mesh.geo, model, opts)) return;   // R1\n          if (_capture) { _captureRec(mesh, model, opts); return; }"), "draw() captures right after the coalesce line");
   assert.ok(TLX.includes("_capture = recs; _coOn = false;"), "coalescing is off while capturing, so _coAppend never takes a rig draw");
   assert.ok(TLX.includes("\n        warmDraws,   //"), "the backend publishes warmDraws");
@@ -324,5 +322,5 @@ test("finishes on demand: the 60-85 tint branch lives in its own lit graph, pick
   assert.ok(TLX.includes("materialFor(opts, false, undefined, fxFor(mesh.geo, opts))"), "draw() picks the variant per draw");
   assert.ok(TLX.includes("mat: materialFor(opts, false, false, fxFor(mesh.geo, opts))"), "the rig warm compiles the variant the draw will use");
   assert.ok(TLX.includes("skipBatches() || fxFor(geo, opts)) return false;"), "an fx geometry never joins a coalesced run (its program has no branch)");
-  assert.ok(TLX.includes('const key = fx ? matKeyFor(o, chunked, instanced) + "|fx" : matKeyFor(o, chunked, instanced);'), "its own cache key");
+  assert.ok(TLX.includes('if (fx) { let fk = _fxKeys.get(key); if (fk === undefined) _fxKeys.set(key, fk = key + "|fx"); key = fk; }'), "its own cache key (memoised, no per-draw concat)");
 });

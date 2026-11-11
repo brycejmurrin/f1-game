@@ -8,7 +8,7 @@
  * loopback, so tunnel that port and paste the https URL from the phone.
  *
  *   node tools/mcp/browser-http.mjs
- *   ngrok http 3001
+ *   node tools/mcp/browser-http-up.mjs   (cloudflared quick tunnel; it starts this server too)
  *   grok.com/connectors → New Connector → Custom → https://<tunnel>/mcp?token=<printed>
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -303,7 +303,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   console.log("apex browser MCP");
   console.log("  local:  " + mcp.url + "?token=" + token);
   console.log("  header: Authorization: Bearer " + token);
-  console.log("  tunnel: ngrok http " + mcp.port);
+  console.log("  tunnel: node tools/mcp/browser-http-up.mjs (cloudflared, port " + mcp.port + ")");
   console.log("  Grok:   grok.com/connectors → New Connector → Custom");
   console.log("          https://<the-tunnel-host>/mcp?token=" + token);
   const stop = async () => { await mcp.close(); process.exit(0); };

@@ -1,8 +1,8 @@
 # Changelog
 
-Player-facing changes for each shipped build, one section per exact `build` number from `version.json` (for example `1695` — not a date range or approximate build).
+Player-facing changes for each shipped build, one section per exact build: the STAMPED build Pages deploys (2000 + the deploy tip's commit count, `pagesBuild` in `tools/desktop/stage.mjs`), never `version.json`'s placeholder `1695`. The `## 1695` section further down predates stamped headings; it is history, not the pattern.
 
-Do not edit the build sections in a PR: add a fragment `docs/changelog.d/<slug>.md` (see its README). `node tools/gen/gen-changelog.mjs --fold` writes the sections at release.
+Do not edit the build sections in a PR: add a fragment `docs/changelog.d/<slug>.md` (see its README). The weekly fold (`.github/workflows/changelog-fold.yml`, `npm run fold`) writes the sections in a fold PR.
 
 Under each build, use only these categories:
 
@@ -11,7 +11,1153 @@ Under each build, use only these categories:
 - **Fixed** — bugs and regressions
 - **Removed** — features or UI removed on purpose
 
-Do not list internal refactors, agent workflows, CI, or tooling. Older history lives in git and merged PRs.
+New fragments list only player-visible changes: no internal refactors, agent workflows, CI or tooling (`docs/changelog.d/README.md`). Nothing lints that, and some entries already folded do describe CI or tooling; leave them, add no more. Older history lives in git and merged PRs.
+
+## 24324
+
+### New
+- night and wet flyby shot variants (`when:{night,wet}`) so the loading cinematic sits closer and lower under lamps (#1569).
+- Race Settings › DAMAGE: HANDLING (opt-in; DISPLAY stays the default). A broken front or rear wing, floor damage or a knocked suspension now costs your car grip, mostly in fast corners, until a pit stop repairs it (#1578).
+- Race Settings › ERS SECTOR 1–3: a manual energy plan. Set each sector to DEPLOY (BOOST switches on as you enter it), SAVE (BOOST switches off so the battery harvests) or MANUAL (your own BOOST button, the default). You can still press BOOST to override (#1580).
+- Plan docs for animated VAT crowds (measured Monza/Spa budget) and fair-play online collisions with a clean-racing score (#1621, #1588).
+- The results sheet lists your race incidents and penalties in order, with the reason a lap was invalidated, and keeps the last five sessions on this device (#1630).
+- SETTINGS › DISPLAY › METRICS has a PHONE TEST recorder: tap RECORD, race, then SHARE a JSON soak file (frame times, render scale, governor tier, memory) to measure your own phone (#1633).
+- STORM weather can now be picked in friend rooms (lobby WEATHER list and MIXED plans) and via __apex.race (#1785).
+- With MIXED conditions the race settings sheet shows a FORECAST line for when rain is expected (#1786).
+- Trackside crowd ambience: a low filtered bed that rises near the pit straight and grandstands, with short swells on a climb into the top three and at the chequered flag; silent on the countdown, pause, results and with SFX off.
+- Search the settings by name; each physical controller keeps its own button and axis map; phones can steer with an opt-in touch strip and show link health; the pause menu keeps a history of the race messages you saw (#2303).
+- Optional radio focus lowers engines and rivals while your engineer speaks, optional battle tones signal the gap, and the race mix can be auditioned from settings (#2343).
+- A settings option, off by default, adjusts the predictive braking cues for your current tyre and road grip; it only changes the timing shown and never brakes or steers the car.
+- Offline play reports which assets are missing and retries them once per update, verifying script bytes against their content hash.
+- Photo Studio has a photo picker and named camera bookmarks.
+- An XR INPUT setting chooses between the VR controllers (default) and your existing controls; a disconnect releases only the VR controls.
+- Guided setup trials compare a baseline and a candidate tune from repeated standing launches, without scoring (#2351).
+- The Track Designer can preview a one-click repair side by side with your design before applying it, and one Undo reverts it.
+- The Track Designer offers scenery recipes (a marshal and camera at a corner, a hedge along a section) that you preview, apply or cancel as one step.
+- The Track Designer has a Spa corner memory card that shows three apexes and hides or reveals their labels.
+- an opt-in experimental 45 or 30 fps draw rate (physics stays 60 Hz) and a slow-drift governor step for phones that heat up over a long session, both off by default (#2652).
+- Camera comfort now includes motion-blur and speed-line controls, plus per-track and per-car framing and comfort overrides that can be shared or restored.
+- Post-flag ceremony state machine (`RaceCeremony`) with `__apex.ceremony` and opt-in `finishRace({ ceremony: true })` (#4067 / #1584 slice 1).
+- Parc fermé ceremony beat module — park orbit / frozen phone path, caption and SKIP (#4069 slice 3). Wiring through RaceCeremony waits on #4067.
+- widen Appearance preset tiles on high-scale phone landscapes so preset names remain readable.
+- BENCHMARK results files (apex26.bench/2) now carry a profiling capture per leg and step: memory and renderer counters, warnings and errors, GPU adapter and per-pass GPU time, compile counts, long tasks, frame gaps and device facts.
+- SETTINGS › GRAPHICS › BENCHMARK has three shorter tests: ONE LAP (one timed Monza lap on your renderer, about 2 min), QUICK PATHS (one lap on WebGPU and one on WebGL2, about 5 min) and LIVERY EDIT (paints, saves and fits a livery and two parts in the garage, timing every edit and counting GPU memory, then puts your garage back; about 2 min). Results now show frames over 33 / 50 ms.
+- SETTINGS › GRAPHICS › BENCHMARK… opens a test page. Pick WEBGPU vs WEBGL2 (four alternating legs on a seeded dry Monza, reloading between them), THIS PATH, WEATHER & TRACKS (six cold-started races: Monza dry, rain and night, Singapore night, Spa rain, Monaco) or GARAGE (every tab, four liveries and a spin; your garage is put back afterwards), then tap RUN and leave the phone. It restores your renderer and reopens on a results summary with SAVE FILE and COPY.
+- Caldra, Rovik, Senzo and Talven body profiles plus Orvex and Nacrel bring six distinct garage silhouettes: tapered, shovel, chined, spoon, raised and slab noses, with independent sidepod and spine shapes. Nose paint follows the continuous skin.
+- BODY in the livery designer picks a concept chassis (Needle, Brick, Anteater, Arched, Wedge, Barge) with distinct nose, sidepod and engine-cover outlines. Team-body swaps stay behind `Car3D.ALLOW_TEAM_BODY_SWAP` (off). Looks only; performance is unchanged.
+- Captions module — spotter and pre-race announcer on-screen text, APPEARANCE caption settings, and settings-export keys (#1597).
+- The S-Duct aero package now shows its duct exit on the nose: a raised carbon ramp with a dark outlet slot between two lips (#3411).
+- Six procedural body silhouettes—Hammerhead, Swan, Manta, Wasp, Scorpion and Blade—with fitted nose supports, cover stripes and optional T-wing mounts.
+- Holographic, velvet, hammered and anodized paint finishes across the GLX, TLX and WGX renderers, including regional finish inheritance.
+- SETTINGS → HUD & CAMERA → COCKPIT now offers independent WHEEL FINISH, BODY FINISH and HALO FINISH controls. Follow the fitted livery or choose a different first-person material without repainting the exterior car. The isolated cockpit preview follows the same choices; preferences persist and export with camera settings.
+- Four new garage bodies from the concept sheet — RIFT, KEEL, DELTA and SERPENT. Each has a framed airbox scoop and recessed flank inlets. Looks only (#3162).
+- CooldownLap module — post-flag drive beat with pit/lap/time/SKIP exits and touch SKIP (≥44 CSS px); ceremony wiring lands with #4067 (#4068).
+- Six new garage crews, made in Blender. MARSHAL, INSPECTION and DEBRIEF meet the car; SEND-OFF, PUSH-OUT and FINAL CHECK see it away. The new MIX default plays a different crew on each visit.
+- The player's in-race pit stop now uses the garage's animated crew. Two jack men lift the car and a gunner and tyre man work each wheel, on the stop's existing timer.
+- Strategy HUD shows a COVER cue when a rival behind is boxing or due in on fresher rubber (#1581).
+- Five livery layouts with LINE WEIGHT, KEYLINE and 2ND BAND controls, and decal stations on the nose tip, cockpit side, sidepod top and halo top (on by default, each with its own switch).
+- 18 new paint finishes in the FINISH pickers: oil slick, frozen, fluoro, burnt titanium, bare aluminium, raw carbon, Flo-Vis, carbon fade, silver fade, metal flop, true matte, pearl white, JPS gold, ghost pearl, Xirallic, Mystichrome, midnight purple and ultra black, each rendered alike on every graphics backend.
+- Garage GARAGE, CREW and LIGHTING pickers on the TEAM tab: four new room looks, four pit-crew looks and four lighting moods (broadcast, night, showroom, daylight), each remembered between visits.
+- 26 new car style options: Y-split and blown-axle wheels, cake-tin drum brakes, framed and halo-mounted mirrors, four tyre sidewall looks, four exhaust looks, six period aero pieces (F1-75 spoon, twin beam wing, monkey seat, bridge wing, X-wings, double diffuser) and seven suspension layouts. Each copies the cost and stats of the part it is based on.
+- Four concept body shapes (highnose, sharkfin, stepnose, lowline) in the livery BODY picker.
+- Helmet styles flash, split and doodle; eight new crest emblems with CREST TONE and CREST FRAME controls; slab, rally and mono number fonts; three invented sponsor packs.
+- Version the Design Lab gallery HTML, CSS and JavaScript alongside the capture tools, with asset and local-preview instructions. No player-facing change.
+- Track Designer terrain objects (mountains, snowy peaks, grass hills, dunes and rocks), lagoons, canals, blossom groves, Ferris wheels and cottages, with object search and a Terrain filter.
+- Nordic Fjord, Red Rock Badlands and Redwood Valley scenery themes; new scenery survives drafts, saves and share codes.
+- SETTINGS › LINE COLOUR now picks the driving line's main (on-pace) colour — F1 GREEN, CYAN, BLUE, WHITE, PURPLE or PINK, each keeping amber to lift and red to brake — beside COLOUR-BLIND; saved F1 and COLOUR-BLIND choices carry over.
+- per-race event journal fed by RaceFacts (via RaceRadio onEvents) plus penalty, lock-up, contact and pile-up edges — capacity 256 (#1555).
+- Three garage paint finishes — forged carbon (chopped-carbon chips under a satin lacquer), gunmetal (dark anodised metal in the livery hue) and gold plate (a gold mirror) — on every renderer, plus the Forged Black and Gold Leaf liveries.
+- Choose Garage Crew, Guide Crew, Welcome Crew or No Crew independently for garage entry and departure in the Enter & Leave tuner, with working Preview In/Out controls. Service crews switch to guides while the car moves so tools and cockpit workers stay out of its path.
+- A padded front-nose trolley, wheel-gun service dock and four-radio charging rack in the garage. Replacing duplicated storage and spare equipment keeps the bay within its existing geometry budget, including earned trophies in dry and wet conditions; trackside garages keep their lightweight mesh.
+- Service Crew includes a mechanic connecting a power/data service cable and an engineer working at the side monitor desk. The cable follows the connector and clears before the car departs; suits and helmets use the active livery.
+- Every garage crew style wears full-face helmets, with suits and helmet shells in the active livery primary colour and contrasting panels and helmet stripes in its secondary colour. Live paint edits reliably refresh the crew.
+- Photo Studio in the garage now has the Team tab's GARAGE, CREW and LIGHTING pickers (NIGHT, DAYLIGHT and the other moods), so you can change the room and the light while framing a shot; picks save just like on the Team tab.
+- Three garage interiors — Porcelain Lab, Heritage Works and Endurance Blue — and Inspection, Golden Hour and Endurance lighting moods are available in the Team tab. Existing garage and lighting choices stay available.
+- Service Crew for garage entry and departure. A front-jack operator rolls equipment into place after parking, and four mechanics carry and fit tyre covers. Departure removes the covers and rolls the jack clear before the car moves. Articulated workers share cached livery-coloured meshes and respect the preview stop controls.
+- garage enter & leave tuner gets five cameras (left, right, high corner, floor level, door jamb), a three-camera DIRECTOR preset and CUSTOM per-shot cameras, camera height, and shot lengths (shutter shot, hold beat, car speed, end beat).
+- AFTER THE RACE — the next garage visit after a race brings the car home flavoured by the result: a winner idles in to a welcome, podium and points finishes get their own beat and caption, a retired car is pushed in by the crew. PREVIEW AFTER RACE plays any result from the tuner.
+- garage enter & leave look options — camera move (push in, pull out, drift), handheld sway strength, final-shot zoom, a lighting mood held while a sequence plays (the after-race one picks by result: showroom for a win, broadcast for a podium, inspection lights for a retirement), door glow strength, captions on/off and cinema bars.
+- garage enter & leave rear light (auto / on / off / flashing), slow-mo as the car crosses the door, and the engine heard as the car drives in (a pushed retired car stays silent).
+- Blender-keyframed garage light cues for the sequences (lights up, photo flashes, amber recovery beacon, team pulse, lights out) and three new garage lighting moods (podium, rain day, neon night); after the race the cue follows the result.
+- Blender camera rigs for the garage sequences (crane, orbit, dolly, rear track) and Blender-animated after-race crews: a celebration for a win, applause for a podium, consolation outside the points and a recovery crew pushing a retired car home.
+- SPOTLIGHT garage light cue: the bay dims, a hard white spotlight sweeps across the floor from the door and settles on your car for the reveal.
+- GARAGE ENTER & LEAVE has three STYLE quick-picks at the top: BROADCAST, CINEMA and DOCUMENTARY. Each one sets the cameras, movement, lighting and captions in one tap and keeps your crew and timing choices.
+- The AFTER THE RACE return now reflects the race. A wet race comes home under RAIN DAY lighting and a night race under NEON NIGHT. The final caption shows your place, your name and FASTEST LAP when you set it, for example "P3 · NORRIS · PODIUM FINISH · FASTEST LAP". PREVIEW RACE in the tuner shows each look.
+- Two new GARAGE ANGLE camera moves made in Blender. DRONE floats in high over the pit lane and settles into a slow reveal over the car. STEADICAM walks along the front wall at chest height and finishes on the car's nose.
+- Two more GARAGE ENTER & LEAVE styles. SHOWCASE circles the car while a spotlight sweeps onto it, like a launch reveal. NIGHT SHIFT gives a handheld high-corner view of an overnight garage.
+- The AFTER THE RACE caption now tells the story of your race. A sprint says SPRINT WINNER or SPRINT COMPLETE. A win from pole adds FROM POLE, and gaining three or more places adds the count, for example "P2 · PODIUM FINISH · +7 PLACES".
+- `tools/transcripts` CLI to search / export / digest Grok Bot ReadTranscript JSONL dumps (streaming, no SQLite).
+- Optional helmet visor under Settings → HUD & Camera → Cockpit. Choose CLEAR or TINTED, with Neutral, Amber, Ice Blue or Rose lenses at Light, Medium or Strong intensity. Settings persist and default to OFF.
+- Reusable A/B capture tool captures matching frozen game views from JSON recipes or imports arbitrary equal-size screenshot pairs. Its portable HTML viewer supports a shot selector, hide/show controls, keyboard/touch wipe and full-resolution downloads. Gallery additions preserve existing pairs and retain capture provenance.
+- BUTTON SHAPE (AUTO, ROUND, SQUIRCLE, SQUARE) for the touch pedals, arrows and race buttons — in SETTINGS under BUTTON OPACITY, and live on the race screen.
+- REPOSITION TOUCH CONTROLS now has SIZE − / + and SHAPE on its toolbar, so the buttons change on the race HUD while you watch.
+- `tools/check/i18n-lint.mjs` contribution lint (unknown keys, placeholders, CLDR plurals) and `--guard` for migrated files; PR template locale checklist.
+- I18n core (`I18n.t` / plurals / `Intl` helpers), `data-i18n` applier, and generated `locales/en.json` (English-only scaffold; more languages pending).
+- DATA → Schedule can save the next race weekend or the whole season as a calendar file (.ics), with a reminder of none, 15 min, 30 min, 1 h or 1 day before each session.
+- An iPhone performance audit note (governor ladder §2u, TLX phone costs, BrowserStack profiling limits) records the findings behind these changes.
+- 30 new paint schemes for every team in the garage LIVERY tab: matte, pearl, brushed, metal-flake, candy, tinted, chameleon and carbon finishes, plus a retro set that also reshapes the fin, engine-cover vents and spine. Batch-1 names avoid Haas Gunmetal / Audi Titanium clashes (Anvil, Brushed Alloy); near-duplicate whites and dark-gold pairs were recoloured for distinctness.
+- garage LIVERY editor — six new SPINE TOP patterns inspired by the 2026 grid: keyline split, halftone fade, chevron stack, graduated bands, slash block and line fade.
+- All 56 cosmetic part styles are selectable in the livery editor, including engine packages, suspension, brakes, tyres, ERS, gearbox, fuel details, exhaust, cockpit and wheels. FITTED restores each installed part's appearance. Choices preview live, persist with the livery and leave fitted parts, cost and performance unchanged.
+- garage LIVERY editor — CREST row: wear an original emblem (shield, roundel, wings, arrow or star) in place of the team mark on the nose, cover, fin and flanks.
+- thirteen adjustable spine designs: ribbon, broken chevrons, contour lines, honeycomb, segmented panels, gradient, two-tone sweep, checkers, diamonds, diagonal slashes, pinstripes, dots and lightning. Shape them with width, repetition, offset, taper and opacity controls, and wrap them onto either or both cover flanks.
+- independent engine-cover, wing and halo finishes while keeping carbon surfaces intact and matching moving wing flaps to their selected finish.
+- nine reusable colour palettes, design-colour swapping, undoable placement reset, bounded undo/redo and original-versus-edited comparison inside the existing paint editor. New designs extend SPINE TOP; paint-surface inspection and Customize a copy keep their existing controls. Existing custom liveries remain editable and new settings travel with garage exports.
+- garage LIVERY editor — ENDPLATES colour for the front and rear wing endplates; HALO, SIDEPOD and COVER finishes now also reach the halo titanium, the sidepod colour panel and the cover stripe (#2796).
+- `tools/perf/mesh-census.mjs` counts submitted triangles per pass (main vs mirror), distance band (<150 m / ≥150 m), and source (ribbon vs props) for GLX and TLX — the counting step of #2657 / measurement contract of #2631 (`docs/notes/MESH-CENSUS-2026-10-19.md`).
+- RACE A FRIEND works on circuits you design — the host shares the layout with every peer in the room (#1587).
+- overlay.html now shows the live race — open it in a second window of the same browser while you race and the timing tower, sector times and radio captions follow the game.
+- Eight Garage paint designs: wave bands, sunburst rays, scallop scales, herringbone weave, circuit traces, angular shards, pixel fade and speed lines.
+- Artwork rotation, length stretch and line weight, integrated with the existing colour, wrap, undo, reset and save controls. Existing paint keeps its original defaults.
+- eleven more parts of the car can be painted on their own in the garage livery editor — floor edge and bargeboards, suspension arms, brake ducts, wheel deflectors, the cockpit surround, steering-wheel grips, the rear number board and the exhaust tip's heat colour — plus separate finishes for the nose, floor, suspension and wheel rims (chrome or gold rims).
+- Independent finish choices for brake ducts, wheel deflectors, cockpit surrounds and rear-wing number boards, with existing paint finishes and sparse livery-file support.
+- 24 new STYLE parts in the garage, two in every category (Zero-Pod engine cover, Spoon Wing, Stance Kit, Aeroscreen, Starburst wheels and more), open to every team; each looks different but performs exactly like the part it is based on. Full Disc now builds a real closed cover (no floating winglets); Tall Fences / Big Airbox / Spoon Wing / Big Disc / ERS / gearbox / fuel / exhaust / floor / cockpit styles pushed so they read in a garage 3/4 shot.
+- a LINE tile in the pause menu's race tools — cycle the DRIVING LINE OFF / CORNERS / FULL mid-race (saved like the RACE SETTINGS row).
+- PHONE TEST › GPU TEST — one tap runs a 3-minute hands-free check (resolution 0.5/0.75/1.0, mirror off, GPU timer, shader builds) and leaves SHARE ready.
+- Photo Studio circuit shoots expose the full lighting-tuner knobs (temporary profile; restored on close) with tuner-sized touch tabs and sticks.
+- Home Daily history with separate saved class records, a self-guided three-step practice checklist, and a measured last-lap sector energy review in Session Review.
+- After parc fermé, a short podium beat reuses the results story tiles over the winner cam; CONTINUE opens the results sheet (career and season buttons unchanged).
+- A developer profiler (tools/perf/profile.mjs, __apex.perf spans) breaks a frame into input, physics, ai, collide, camera, render and hud milliseconds and diffs two git refs.
+- `tools/ci/release-provenance.mjs` records source, deploy, live SHA, Pages build metadata, ancestry, and working-tree state so deployed behavior is never conflated with newer source behavior.
+- experimental opt-in mirror rival-body LOD preserves team colours and keeps player/PiP bodies detailed; it remains disabled by default pending visual and device measurements.
+- results-flow acceptance cases require a real finish-line crossing, automatic ceremony progression, and actual SKIP / CONTINUE touch controls; separate harness cases cover instant results and career settlement. Integration and full browser acceptance remain unverified (#4071).
+- Auralis, Cevora, Vantrel and Orynth cosmetic body styles and matching Contour aero options, with sculpted sidepod channels, rolled shoulders, recessed intake ducts and fitted detail/decal anchors. Existing body and aero IDs remain unchanged; the Contour options inherit Medium DF cost and physics.
+- SHARE CARD on Time Trial results draws your personal-best lap against the rival ghost — speed traces, a running delta and a QR that opens the same circuit (or today's Daily) ready to race.
+- SHARE CARD chips on the race results sheet, the championship standings, the world-champion panel and the career THE YEAR recap — each draws a podium or standings PNG for the share sheet.
+- ui-explorer summarize prints an offline replay summary, and --group-unmapped groups unmapped controls by stable id.
+- Read-only developer UI inspection with live setting bindings, hit-test and CSS diagnostics, and replay state differences.
+- Adaptive CSS reports include viewport, scale, safe-area tokens and ancestor layout/scroll context, with bounded viewport sweeps that restore the original size.
+- Adaptive inspection records bounded classification histories, forward/reverse path differences, inherited/container CSS candidates and provenance-checked native audit findings.
+- UI inspection can emulate a touch phone (`--touch`, `--boot`, real safe-area insets via `--safe`) and print a one-line-per-issue `--summary`; a busy box exits 75.
+- SETTINGS › APPEARANCE › LAYOUT PRESET — one tap applies a whole-UI layout live, no reload: SHIPPED, THUMB (two-thumb phone grip: pause strip on the right edge, pop-ups and the circuit strip low, taller buttons), COMPACT (denser) and BIG (larger buttons and tiles). It reads CUSTOM once any knob moves, and UNDO puts back the layout it replaced.
+- Cockpit settings include a saved 50–200% Droplet Size slider. It updates collected visor rain immediately, including while paused, and participates in settings backup and restore.
+- Agents can measure weather×time lighting with `tools/shot/wx-grid.mjs` — a 24-cell grid (dry/wet/rain/storm/overcast/fog × dawn/day/dusk/night) plus `luminance.json` for the lighting lane baseline.
+- Survey of the next ten test gaps that would catch phone memory and frame-time regressions earlier (W24c).
+- js-debugger `debugger_profile` (CDP CPU/heap start/stop + hitch windows) and `js-debugger-mcp.sh profile` CLI smoke (D·W25a).
+- Race-cycle memory spec gates post-warm menu heap slope after 5 warm cycles (hard ≤10 MiB, soft ≤2) and logs/soft-gates decoded audioMB growth (W25c / W24c #1–2; H17 ACK).
+- Opt-in torque-balanced wheel state for real lock-up and wheelspin (default off; enable via apex26.wheelState).
+
+### Improved
+- HUD screen-reader labels and the qualifying and results sheets are now translatable, with lap times and gaps kept in one format across languages (#1604).
+- Six alternative shortcut icon sets are bundled for an upcoming in-game icon picker (#1612).
+- A drying road now dries along the worn-in groove first (a lateral drying line); grip, spray and the wet look read the same field (#1627).
+- gfx-backend-canary preference, latch-clear and recovery pins assert behaviour (VM / css-rules) instead of quoting source; a shrink-only `assert.match` ratchet tracks the remaining count under tests/unit (#1682).
+- net-lobby tests assert host-leave copy, seat-clash and MY TEAM moves through the lobby VM instead of pinning source text (Refs #1682).
+- steer-tuning-lock and low-speed-lock tests assert the real `lockFromSlider` instead of regexing its source (#1682, batch 1).
+- the BRAKE CUE and driving-line audio cue now account for weather/tyre grip and the car's downforce by default (CONDITION-AWARE BRAKING CUES, now ON), so the cue no longer calls late on slicks in the rain or pulses through corners taken flat (#2177).
+- HUD editing puts visibility beside position and size in both editors. Hidden maps, gaps and mirrors stay selectable, with AUTO available alongside SHOW and HIDE; timing-tower edits update the whole group together.
+- HUD editing stays open as the window changes size, preserving the selected element and layout. The toolbar and custom HUD placements fit the visible screen and hardware safe areas without overwriting saved positions.
+- Time-trial ghosts replay your actual controls, replays can step frame by frame, and WATCH shows event chapters in the transport (#2341).
+- Overtake mode spends its boost only while the throttle is actually deploying it, so no free push is left over after it ends.
+- Contact with the road edge, walls and barriers is now judged from the car's real footprint, the same way for the player, rivals and incidents.
+- The pit-exit call names the car closing on you.
+- Carbon-fibre flaps on the car now move with the aero state.
+- RACE IT and telemetry show where each comparison's data comes from, add a braking-zone duel, and the results sheet lists the classification and championship apart from the race stories (#2348).
+- In VR the squeeze no longer injects a look-back and the seated view never turns; keyboard and pad look-back still work outside immersive play.
+- Without a reference position from the headset, VR pauses and asks you to recentre deliberately with A or X.
+- Settings search finds options without loading their pages, hidden HUD elements explain why and link to their setting, and the pause menu shows an input review chart (#2352).
+- Sharing a track card keeps its outline, name, link and share title from the moment you press the button, even if you keep editing.
+- Imported prop gaps show their effective clearance, and the copy and move buttons name their destination point.
+- Zandvoort's hills now sit where the real ones are — the climb to Hunserug (T4) and the rise from T5 to T6 — instead of a single hump after T8 (#2863). Relief is ~4.3 m (real ~8 m) so the crest stays clear of the parallel stretch 40 m away.
+- Agent commits reuse a green `test:guards` verdict for the same staged tree (and can set `git config apex.guardTimeout`) so the commit hook no longer re-runs the full suite after a foreground guards pass; Claude Code’s bash-guard now uses the same `guards-verdict` cache and timeout budget as `.githooks/pre-commit` (#2889).
+- the frame-loop phases (physics, ai, audio, render, hud…) now appear as named DevTools Performance tracks when `__apex.perf({on:true,measure:true})` is on; zero cost off (#2965).
+- Retired the ready-full-cap CI helper; the shared GitHub API helper now lives in tools/ci/github-api.mjs and pr-board no longer measures a ready-PR cap (#3013).
+- the deploy tool's preflight check can now be pointed at any repo directory, so it can be tested against a throwaway fixture repo; default behaviour is unchanged (#3024).
+- The physics-baseline provenance test drops its shallow-clone-skipping ancestry case (the landing-commit check covers the stamp); a baseline change selecting the characterization job is tracked in #3037.
+- store-key tripwires share one js/ walk, the HTML-sink lint also flags srcdoc, createContextualFragment and document.write, and the save-schema test now checks literal key reads (Refs #3040).
+- Four new car body styles in the garage BODY picker (highnose, sharkfin, stepnose, lowline), sized within the existing bodies and seated on every team chassis (#3160).
+- the livery finish shading (finishes 60-85) now runs only on car paint, not on every lit surface (#3180).
+- Garage finish taps (FINISH and every per-part finish row) repaint the car in a few milliseconds instead of rebuilding it (#3181).
+- the cockpit steering wheel has real materials — lacquered carbon faceplate, black rubber grips, bright brushed-alloy rings on the buttons and rotaries, glass LCD — instead of one flat grey-black (#3454).
+- On the three.js WebGPU path (the iPhone's), the scene's reflection tag, an unread scene depth, the mirror's depth and tag, and the shadow maps' unused colour are no longer written back to memory on frames that never read them. This is the same bandwidth saving the WebGL2 path already had.
+- On phones that use the three.js WebGPU path (the iPhone's), the scene is now rendered into a compact 4-byte colour format instead of 8 bytes per pixel when the GPU supports it, halving that memory traffic. The WebGL2 path already did this.
+- the race HUD's POS / LAP / TIME / BEST read as one timing strip with POS as the light hero cell, and on a phone the gear, speed, energy and OT / AERO chips sit on one instrument plate with speed as the big figure (#4238).
+- the Data Hub's title, tabs and close button now share one bar, so on a landscape phone the schedule, standings and results get most of the screen (standings show nine rows, up from five); developer tools moved behind ⋯ (#4241).
+- the track detail map's colour key sits on the map instead of under it, which also fixes a 2px overrun (#4241).
+- HOW CAREER WORKS and HOW MY TEAM WORKS open as a list of folding sections, one open at a time, so a phone in landscape sees every topic at once instead of scrolling 19 screens of text.
+- on touch screens the menus fade in over 120 ms instead of cutting hard between screens.
+- Race HUD — the radio card, RELATIVE, STRATEGY and INPUTS now sit on the timing strip's plate with its hairline keyline and row rules, so the middle of the screen reads as one HUD instead of three card styles, and those panels no longer turn light under the LIGHT theme.
+- Race Setup opens presets and setting explanations on demand, uses its actual sheet width for columns and preset layout, and scrolls as one task in short views while retaining the selected UI size. Duel help stays visible beside its control.
+- Mobile landscape Home defaults emphasize the title and car artwork beside a compact menu; saved narrow menu widths use a readable scrolling layout. Desktop-sized windows keep the full UI SIZE zoom (compact 1.25 cap stays short/narrow only). Factory phone-landscape cluster stays wide enough for Practice beside Garage and 200% control text.
+- AI cars with a clear pace edge start the pass move from further back in dirty air, so long trains break up sooner on permanent circuits (#2356).
+- on permanent circuits a faster AI car stuck behind a slower one no longer sits there for minutes. After a few seconds it pushes, deploys ERS and pulls fully out of the wake. If it still has not got by, the slower car lifts and steps aside so the move completes, normally within a minute. Street circuits and cars racing the player are unchanged (#2356).
+- Settings › Appearance shows each look setting once. Theme, accents, UI and text size and high contrast live in the studio; HUD style, size and layout and reduce motion link to their own pages.
+- Pack model keys are classified in `data/packs/model-index.json` (placed / kit_catalog / nature_bake), and a remembered pack index can be pruned of dead keys and stale md5s via `js/assets/pack-index.mjs` without touching the GPU load path.
+- Spa's authored and forest pines use the baked tree pack through one planting registry, with procedural fallback when the pack is unavailable.
+- BenchCapture / BenchRun drop unused public exports (GAPS, clean; open, close, active, result). KEY and pure summary seams stay for devicefarm + unit tests.
+- Six study bodies now have clearer surface identities: Caldra roof hollows, Talven channels, Senzo downwash, Rovik shelves, slender Orvex flanks and a lower Nacrel slab. Shared wheels and chassis interfaces stay fixed.
+- a voice you picked over, or the recorded radio switched off, no longer keeps its pack in memory for the rest of the session (#3110).
+- with Save-Data on, or on a 2G link, the title no longer prefetches the race modules and audio (~330 KB) while idle; RACE! still loads them when it starts (#3110).
+- the title screen settles sooner on slow phones — the three.js core is preloaded with the renderer, the lights/race/audio prefetches wait for idle instead of a short forced timeout, and the three.js renderer reuses the boot's GPU adapter instead of asking for a new one.
+- BrowserStack joins the repo MCP catalog as a sixth lockstepped server (`browserstack` in `.mcp.json` / `.cursor/mcp.json` / `.codex/config.toml`) via the pinned `tools/mcp/browserstack-mcp.sh` wrapper for the official `@browserstack/mcp-server`; credentials come from the `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY` environment variables only — no credential is tracked.
+- Renderer changes receive real-GPU Pages coverage, and scheduled golden-menu checks now block on failure.
+- the camera rig no longer re-reads the stored track and team on every knob read each frame (once per settings change).
+- Capture matrices support mixed finish recipes, source receipts and portable searchable gallery exports with verified image hashes.
+- A bounded CI capture request can produce native garage images and a portable gallery when the local environment cannot run Chromium.
+- The Haas Kannapolis Aero Kit now looks clearly different from Low DF, with a swan-neck rear wing mount, reshaped front endplates and a canard cascade; its performance is unchanged (#3405).
+- every car now sends about half as many vertices to the GPU (a body went from 39k to 18k), with an identical picture, because corners shared by neighbouring triangles are merged when the car is built.
+- Rivals past the shared-body distance draw a smaller mesh with one paint surface, so the instanced field does less vertex work and skips carbon and metal shading.
+- chrome-devtools MCP pin bumped 1.7.0 → 1.11.0 (re-audited 2026-10-21). The apex-dialog-close-v1 runtime patch is retired for the new pin — both fixes are upstream now (dialog-blocked input actions since 1.10.0; close_page refreshes the pages snapshot/selected-page fallback at response time, plus the close_page guard order) — and the runtime gate passes 1.11.0 through unpatched while still failing closed on any unaudited version. Page-scoped tools now take a required pageId argument (upstream 1.8+).
+- CI now lints the GitHub workflows (actionlint + zizmor) and validates the WebGL2 and WebGPU shaders offline (glslang + naga), and fixes a broken archive check in the model-import workflow.
+- CI geometry sweeps run "verify-track --all" on the lightest shard (3 of 4) and a timing-telemetry artifact upload failure no longer fails a green job (#3117).
+- Auralis, Cevora, Vantrel and Orynth now have multi-section engine-cover shells, deep sidepod intake ducts and recessed shoulder exits in both garage detail levels.
+- RIFT, KEEL and DELTA bodies have sharp shoulder chines, and all four concept bodies have their own pod line in profile: SERPENT's S-curve, RIFT's shoulder hump, KEEL's level shoulder and DELTA's falling wedge. Looks only.
+- The pit crew has a new, more realistic body, used in the garage and at your pit stops. Proportions come from real body-measurement data. Crew members wear one-piece team overalls with shoulder epaulettes, side stripes and a chest patch. They have full-face helmets with a chin bar and visor, gauntlet gloves, knee pads and low pit shoes.
+- How to Play explains 2026 energy harvest / super-clipping and Overtake Mode (#1585).
+- COLOUR VISION (deuteranopia, protanopia, tritanopia) separates the player marker, a slower lap and the session-best ink so they stay distinct. The map plate keeps a ring, an armed aero zone is hatched, and a ghost delta carries a hollow ring.
+- Race entry now mints rival flap meshes (and shared wheel-extra rings) during the load/countdown warm, so the first minutes of a race no longer grow live geometry and hitch on phones.
+- The physics step skips unyawed pair trig, uses squared sweep distance checks, and walks the AI corridor with an indexed far-gap reject. Driving behaviour and replays stay the same.
+- Rounded exhaust tip, a smoother floor edge with vertical fence ends, a smaller rounded nose camera and a flush bevelled fuel hatch on every car.
+- Rounded headrest bolsters, cheek pads and camera pods; outlined race numbers get a contrasting keyline.
+- On a landscape phone the pause menu is one wide card. RESUME and QUIT TO MENU are on the left, every other door is on the right, and nothing needs scrolling.
+- Race results on a landscape phone keep P1, P2 and P3 pinned at the top with your row under them, and each driver takes one line.
+- The title menu's six play modes fill two even rows. Career and Daily share the top row, and every button is full touch size.
+- Personal-best sector times are now green instead of lime, so they no longer look like your own row's colour.
+- on a phone in landscape the career hub header is one line (team colour as a stripe, all five shortcuts fit), the settings home shows six doors instead of two, and the garage's part comparison takes one row so more parts are on screen (#4239).
+- the Device Farm `auto` run prints the iPhone WebContent footprint table from the device syslog and stores its summary in auto-report.json (#3675).
+- Device Farm harness method helpers (unit history, governor tier moved) are unit-tested and its method fixes are tracked in the analysis note (#3676).
+- Cadillac's Detroit Exhaust is a smaller megaphone, so it no longer runs into the DRS pod on its low rear wing.
+- Rainfall now builds and eases independently of road wetness, with soft local-shower edges, gradual dissipation, drizzle audio, and streaks driven by the race wind. Wet roads and spray remain after rain stops.
+- rivals more than about 250 m away draw a simplified body (about a fifth fewer triangles on a full grid at distance), and a race frees livery textures no car on the grid uses; off-switch for the simplified body is apex26.fieldLod=0.
+- on TLX the lens flare's sun check now keeps the scene depth only while the sun is actually on screen, not whenever it is merely in front of the camera, so iPhones skip a full-screen depth write on many golden-hour frames. The picture is the same.
+- The intro flyby's first shot plans without a stall: building the track's camera sight index no longer trips the browser's optimizer hundreds of times (Monaco: worst cases 111–125 ms down to ~33–62 ms). Shots are unchanged.
+- Droplets/VisorOptics/Particles drop unused `_reset`/`markDirty`/`RAIN_MIN` exports; CarFx exposes `SPARK_RATE` so ember pins track the live constant.
+- Guide Crew now steps with planted feet and articulated limbs using Blender-authored motion curves, then gives hand signals while the car enters or leaves. The marshal raises the board gradually before departure. Reduced motion holds decorative gestures, and cached meshes keep playback free of mesh rebuilds.
+- The game starts with about 48 KB less script. The garage's camera rigs and crew animations now load in the background after the title screen appears. Until they arrive, an arrival uses the standard cameras and crew.
+- Garage modules drop unused public exports (SetupTune.BASE/DEFAULTS, PitSigns paintAtlas/cellRect + dead uvRect, GaragePrebuild POLL_MS/GIVE_UP_MS, GarageLive atlas rects, GarageEquipment.HOSE, GaragePrims.mix). Garage UI unchanged.
+- Use the supplied garage export as the default cars, liveries, selected Red Bull seat, and Mercedes setup tune.
+- garage departure follows Blender-authored blocking through the doorway and into the pit lane, with rolling wheels and a finished exterior frontage. Starting a race clears held garage camera gestures and preserves driving-camera preferences.
+- Garage animation editing puts the angle controls first and moves long instructions into expandable help. Appearance exposes Menu Customization and the existing main-menu editor. Garage wheel layers use a common first-visit renderer, preserving fixed calipers and cached geometry.
+- garage pit-work entrance uses Blender-authored approach and reverse motion when its optional motion data is ready, retaining the procedural route after a cold or failed load.
+- Garage equipment now includes detailed rolling carts, tool chests, tyre trolleys, rear jack, wheel guns and hose reels, spare-wing racks, extinguishers, stool, floor fan and fluid-service rig.
+- the first tap on the title (RACE, GARAGE…) no longer lands in the garage pre-build: the car for the garage is now built only after a few seconds of no input on the title, instead of right after the buttons appear.
+- The GARAGE ENTER & LEAVE preview scrubber now marks each phase of the sequence: the shutter opening, the lane run, the pause, backing in, parked and the crew, or for the race start the hold, the roll-out and the empty lane. In EDIT, JUMP TO goes straight to the start of a phase, and the marks move when you change a timing setting such as HOLD BEAT.
+- The GARAGE ENTER & LEAVE preview now has playback controls for editing. You can pause, scrub through the whole sequence, step frame by frame, or loop it. Tap EDIT to hold the current frame and change a setting such as camera angle, field of view, crew or speed, and see it applied to that frame straight away. PREVIEW IN and PREVIEW OUT switch direction without leaving the preview.
+- Garage setup and animations now show the selected circuit’s actual surrounding scenery and terrain as well as its pit complex. Grandstands, venue buildings, vegetation, landscape, water and glass follow the same circuit builders as the race, with selected weather and time of day. Bounded spatial preparation adapts dense scenes without changing saved driving cameras or rebuilding geometry per frame.
+- on the WebGL2 fallback renderer the lens flare now keeps the scene depth only while the sun is on screen (as TLX already does), so a phone skips a full-screen depth write whenever the sun is behind or beside the camera. The picture is the same.
+- WebGL scenery on large circuits uploads its chunk index buffer straight from the build, instead of copying every index a second time while the track loads.
+- importing a large GLB no longer builds a throwaway number list for every vertex, and a return visit starts that circuit's model downloads while the pack manifest is still revalidating. A known WebGPU failure offers the WebGL2 reload card instead of only the raw error overlay, and opening its details no longer flickers the card.
+- Material PNG inflation fills a bounded scanline buffer as chunks arrive, reducing simultaneous application-buffer retention without changing decoded pixels.
+- the garage rebuilds the car about five times faster on a livery pick or colour edit that keeps the driver's helmet design; each painted helmet is reused instead of repainted.
+- Helmet shields now offer independent light refraction (Off/Light/Medium/Strong), reflections (Off/Light/Medium/Strong), rain amount (Off/Light/Normal/Heavy) and runoff (Slow/Natural/Fast). Edge refraction displaces the live world while leaving HUD text clear. Water beads gather and slide downward at low speed, form predominantly sideways streaks at racing speed, and drain after a shower ends. Pause freezes water; reduced motion keeps stationary fading beads. Refraction is an artistic screen-space approximation, not physical ray tracing.
+- Visor water now uses small, asymmetric translucent beads instead of bright circular bubbles. Gravity pulls stopped beads straight down; speed-squared airflow around the curved shield increases sideways runoff and produces narrow streaks. The animated Visor Lab restores an accessible A/B wipe with matched original and selected views; its HTML, styling, export helper and original captures are included in the source tree.
+- Visor refraction now bends a wider part of the shield and reflection levels add visible coated-lens highlights. The Visor Lab offers a larger viewer with collapsible settings; wet-weather comparisons are captured with verified surface wetness rather than during its initial ramp.
+- A/B captures now populate race/circuit, time-of-day, weather, camera, lens-effect and track-position selectors automatically. Imports accept the same metadata. Matched lens-edge magnification and controlled Clear-versus-Clear studies isolate reflections from refraction, tint, water and wet-road changes.
+- race HUD plates (timing tower, gear, map, gaps, sectors, radio) and their labels read more clearly over a bright track. Speed in chase sits on a plate. Sizes and positions are unchanged.
+- On slow phones the performance governor's degrade ladder now reaches its later rungs instead of stopping after the first step, so a sustained low frame rate sheds more load (PERF-FINDINGS §2u).
+- With thermal-drift detection opted in, a heating phone now caps its presented frame rate at 45 fps before the governor trades resolution or features — and never overrides a render rate the player chose explicitly.
+- monaco, spa, vegas, monza and silverstone place the real Kenney Racing Kit (`k_*`) where synthetic `kenney_*` boxes stood; the 36 procedural recipes and bins are gone (#1617).
+- Suzuka, COTA and Mexico City gain Racing Kit paddock tents and TV camera pods at their signature corners.
+- Fuji, Baku, Magny-Cours, Nürburgring, Hockenheim and Watkins Glen gain Racing Kit paddock tents and TV camera pods at their signature corners.
+- Singapore, Brands Hatch and Okayama gain Racing Kit paddock tents and TV camera pods at their signature corners.
+- Layout audit HTML galleries now filter by screen and viewport, show skipped cells, and report the visible cell count.
+- picking a LEGENDS driver prepares that one car for race entry instead of all twelve legends.
+- the rear-view mirror keeps the eight nearest lamps, draws the desktop view out to 280 m, and drops the extra supersample on the low and minimum rungs.
+- a floodlight's shadow map stays off until the camera is near its pool, and a car-only lamp-shadow update skips every other frame when redrawing it means redrawing the scenery.
+- livery controls are grouped by the car surface they affect, with paint beside its artwork, labelled spine design families and colour previews on palette buttons.
+- the livery editor shows one car area at a time — QUICK START, BODY, ENGINE COVER, WINGS, TAIL FIN, MARKS & NUMBERS, COCKPIT, WHEELS (and HELMET) — with UNDO and NAME up front, rarely used rows under ADVANCED, and CANCEL / SAVE always in reach.
+- picking a livery in the garage no longer repaints every livery card in the list; each card is painted once and reused, about a third less main-thread work per pick on a phone.
+- on phones the garage keeps the player's livery at the 1024 preview even at GRAPHICS: HIGH, instead of upgrading to a 2048 atlas that cost about 48 MB of memory.
+- faster boot — the WebGPU adapter request now leaves as soon as the renderer boot loads, and an explicit THREE pick reuses it instead of asking again (A·H15 load hunt).
+- Fit replay footage with an exact spatial index and reduce deployment-test process overhead.
+- Run the car-smoothing and game boot/race performance benchmarks without neighboring test workloads while retaining both performance budgets and behavior assertions.
+- Apply the shared performance-test isolation policy to generated Node groups as well as structural checks, preserving npm forwarding of --flag/--flag=value options and fail-fast exits.
+- Release completed circuit geometry in the barrier regression fixture instead of retaining the entire fleet's mesh buffers.
+- Cloud MCP bootstrap clones chrome-devtools during ensure-mcp-ready, exports a writable Playwright browser cache, extends mcp-smoke to js-debugger and apex-lsp, and allowlists the browser-use plugin MCP for CDP debugging alongside js-debugger.
+- MCP scene screenshots record the source revision, dirty-tree flag, viewport and actual camera frame in their capture sidecar.
+- The JavaScript debugger can save an incident bundle containing its latest exception log entry, current Apex state and a local page screenshot.
+- Home groups racing, viewing and creation destinations with quieter panels; Settings uses readable, wrapping destination controls and consistent interaction feedback.
+- Home groups existing activities under Play, Garage, Watch & Explore, Create and Utilities, with direct Visual Studio and Saves & Data shortcuts. Compact layouts reserve room for scaled labels and keep RACE visible at 200% desktop UI size.
+- Data Hub keeps GPS trace export under a Developer tools disclosure, separate from player-facing tabs.
+- Camera, lighting, flyby and garage-arrival editors share compact Preview/Edit controls, expandable secondary actions and caller-aware navigation. Short phone layouts retain editable space and a reachable Done action.
+- COLOURBLIND CUES adds cross-hatches and AERO labels to minimap activation zones, preserving the default display (#1593).
+- COLOURBLIND CUES adds labelled, patterned minimap sectors and a hollow G marker for ghosts without changing the default display (#1593).
+- On phones, helmet-visor optics adapt gradually to rendering pressure: fewer decorative highlights and slower repaints, then reduced refraction, with a pause under severe load. The visor frame and saved choices stay intact as the rendering budget changes.
+- Tabs, chips and secondary doors light red on press, so a tap shows around your thumb on a phone.
+- The results podium is called P3, P2, then P1, with the winner landing last; RACE AGAIN takes a tap from the first frame.
+- the menu track and two playlist songs stream at 128 kbps instead of 160–192 kbps, 3.9 MB less to download for the three tracks.
+- Night street-lamp pools are tighter and dimmer, so the road under the lamps no longer out-shines a clear day.
+- Day fog hazes the distance more: about 55 % at 150 m instead of 33 %.
+- Fog thickens close to the car as a ground-hugging mist on every renderer, so street circuits read foggy too.
+- Daytime rain and storms keep richer colour and contrast instead of washing out to a milky grey.
+- the stream overlay tints each position plate in its team colour (always readable), flashes new sector times — a still outline with reduce motion on — and docs/STREAMING.md explains the OBS setup.
+- the baked material pack no longer keeps ~17 MB of its decoded layer bytes in memory after upload on the default renderer (phone heap).
+- baked asset-pack files (models, material strips) are now requested by content hash (`?h=<md5>`) and the service worker answers them cache-first, so a returning player no longer pays a network round trip per pack file; the manifest stays network-first and a rebake changes the URL (load-hunt L3).
+- race entry on the three.js and WebGPU renderers no longer creates a throwaway WebGL2 context to read material-pack layers that are already decoded to bytes (0.16–0.79 s of main thread on software GL).
+- fewer per-frame allocations and style writes in the race camera, TV director, look input and rival engine audio.
+- The driving-cue tone and AI pit-road checks avoid per-frame and per-car temporary objects; building a circuit no longer holds two copies of the scenery index buffer.
+- the cockpit mirror glass (helmet view) no longer forces the full mirror mip chain on the default three.js renderer; the chain is sized to what the glass can sample (4 levels instead of 9, 5 fewer render passes a frame on the macOS census), pixel-identical.
+- the WebGPU (WGX) car reflection cube builds only the 4 mip levels its shaders read (18 fewer passes per refresh) and one fewer GPU submit, pixel-identical.
+- the default three.js renderer re-uploads only the changed tail of its merged track index when the visible set changes (the leading unchanged chunks keep their bytes), pixel-identical.
+- Perf modules drop unused public exports (TitleWarm blockers/buildId/POLL_MS, GfxDebug install/stop/wanted, MenuTeardown.pauseSheetUp, GfxQuality PRESETS/label, GameMetrics PAGE_KEY/LOG_*/PAGES/LOG_NS/LOG_LVLS, SoakRun.probe, RendererPicker.BACKENDS). Metric names and phone-soak schema constants unchanged.
+- On the WebGPU renderer the game no longer runs a second per-frame animation loop beside its own, each shadow pass skips casters that belong to other shadow maps, and night lamps are no longer re-ranked every frame while cornering.
+- Telemetry comparison avoids repeated lap scans and copies; real-race driving and audio checks avoid building diagnostic snapshots.
+- WATCH controls and audio-setting summaries preserve unchanged DOM during refreshes.
+- Reduced repeated AI braking, tyre grip, scratch-state and collision calculations while preserving seeded simulation results.
+- Lighting selects bounded lamp lists and reuses settled factors and unchanged shadow matrices.
+- Replay events, trace projection, network interpolation and muted audio avoid repeated work.
+- Hidden audio settings stop repainting during pause polling; settings accessibility updates follow the affected controls.
+- Half-float packing, staged geometry copies, spray selection, storm events and sleeping debris reuse avoid unnecessary allocations and uploads.
+- on a phone the rear-view mirror draws scenery to 120 m (was 180 m), and the Lighting Tuner marks CAR SUN SHADOWS and LAMP SHADOWS as desktop only.
+- Phone rendering keeps more detail through post-processing: its working resolution rises from 50% to 62.5% of the scene dimensions. Resolution settings and the automatic performance governor still apply.
+- RACE IT keeps bulk position history in its bounded memory cache without first serializing the response for disk storage.
+- Phones render the post-processing chain at the full scene resolution again (it had dropped to 50%, then 62.5%), so the image is sharp on iPhone. The performance governor still lowers resolution and sheds effects when a device runs hot or misses frames.
+- On phones using the THREE.JS renderer's WebGL2 path, the scene's HDR colour is kept in a 32-bit float format instead of 64-bit, halving the memory traffic of the frame's largest surface; the look is unchanged and `apex26.tlxScene11=0` restores the old format.
+- On the WebGL2 renderer path, the scene's reflection tag, the shadow maps' unused colour and the mirror's depth are no longer stored on frames nothing reads them, which saves memory bandwidth on phones; GRAPHICS LOW now also turns the lens flare off with the other look effects.
+- faster track builds on forested circuits (Nürburgring −30 %, Spa −19 % build time) — the pine overlap guard checks only facet pairs that can be parallel; the built world is byte-identical.
+- race entry is shorter — the track builds in 16 ms slices with a frame every third one under the cover (was 8 ms then a frame each), and the cars behind the player upload their livery atlas and build their shadow caster during the countdown instead of before it (one piece a frame, grid order; a far car's shadow can appear one frame late).
+- the in-race HUD has clearer lap grouping, visible camera/pause keyboard focus, an absolute emergency touch-target floor, and radio placement that protects flags, tyre information and the central driving view when an outer lane fits.
+- the field ranking each physics step no longer allocates (in-place stable sort, and a reused buffer when a retired car is parked on the road).
+- Auralis, Cevora, Vantrel and Orynth retain their names while gaining shorter, broader curved noses, smoother spines, cleaner front-wing contours and surface-following nose artwork.
+- Behind-camera rivals skip road projection before preparing their main-view pose; suspension and wheel drawing reuse common calculations.
+- skip hidden speed/gear formatting and share pit strategy readouts within each HUD tick.
+- bypass neutral shader work and reuse collision/traffic calculations without changing physics results.
+- ordinary paused Settings honours the selected render cadence while input, audio and animated previews remain live.
+- The race step allocates a little less every frame — the per-car loops in the race step, the race-facts timing loop, the event journal and the safety-car pass watch walk the field by index instead of building iterators. Driving behaviour is unchanged.
+- SETTINGS › APPEARANCE marks a screen option that changes nothing on your screen size (DENSITY TIGHT on a short phone, WIDTH above 100 % when a card already fills the width, CAREER LEFT COLUMN outside the split layout) and says why, instead of letting it look broken.
+- Side options read LEFT / RIGHT on every screen (CAREER CALENDAR SIDE), and POPUPS' row option is ROW HEIGHT like the DATA HUB's.
+- SHARE CARD now opens a preview of the card before sharing — pick portrait, landscape or square, then SHARE or SAVE IMAGE; on iPhone the share sheet opens reliably on that second tap.
+- A Time Trial personal best no longer stalls on the lap line. The input ghost now packs each lap once, sizes the store without building it twice, and waits for a long idle slot before it writes (#3109).
+- The optional Rapier debris world, AI braking look-ahead, traffic scan and pace reads do less work each physics step. Driving behaviour is unchanged (#3109).
+- Deployment minification uses a bounded worker pool while preserving generated code and source maps.
+- Spotify playlist and device pickers now live only in the Spotify player sheet (OPEN PLAYER), not twice.
+- The game's scripts now ship minified, so the first load downloads and parses much less code (#3110).
+- PWA install no longer precaches the track designer, WebXR, or camera-editor bundles (~510 KB). Those doors stay offline via first-use cache like WGX; title and race boots stay leaner.
+- Developers get the three.js Inspector panel by default on localhost (off on the live site and under automation; ?inspector=0 or 1 overrides) for profiling.
+- Build merged Three.js track indices directly in their final typed arrays, avoiding a temporary index array and copy for each merged chunk.
+- Reduce repeated Three.js binding checks, preserve eligible 16-bit WebGPU indices, limit mirror sampling to its inset, batch distant rival bodies, and reuse lamp-lighting calculations without lowering resolution.
+- on three.js WebGPU an idle title now prepares the race world and compiles its shaders before START, once per update on a phone (A·W50).
+- the three.js renderer's 2-second car-shadow memory sweep now checks only the car shadow meshes instead of every geometry in the scene (~4000 on a circuit), on phones too, and a healthy post-processing frame no longer allocates a status object every frame.
+- TLX's WebGL2 backend packs padded normals directly into their final buffers, avoiding a temporary 6-byte-per-vertex allocation while preserving the rendered values.
+- phones no longer build the car shadow-caster meshes that only the desktop car and lamp shadow maps use. They were built for every car at race start (about 1.5 MB of geometry each, never drawn), so a phone race now loads faster and holds less memory.
+- Three.js WebGPU track construction avoids a temporary full-size normal buffer while preserving the same packed geometry.
+- on TLX the road (one ~51k-triangle mesh on Monza) now draws only the stretches in view, and the rear mirror only those within its short reach, so a phone draws far fewer road triangles per frame. The picture is the same.
+- TLX program warm on noEnv garage frames runs the full post warm first, then compiles the scene for present()'s softOutRT path so SwiftShader WebGPU keeps ~pre-#3436 warm time without Apple GPU re-links (B·H16 follow-up).
+- Faster first garage frame on the three.js renderer: the program warm now compiles garage and menu frames for the target they really paint, so the idle title's garage prebuild no longer freezes for seconds re-linking every shader.
+- three.js updated to r187; phone shadow maps no longer allocate an unused colour buffer.
+- TrackSpline.wallAt / postLimits now have exclusive unit pins; bridge/elevation dress uses the same wrap01 idiom as the terrain carve.
+- Track Designer now has numbered modes, collapsible advanced sections, separate library and help views, remembered inspector scroll positions, an always available checks summary, a scenery summary, and grouped sharing and file actions.
+- AX26 v3 adds a per-vertex sway stream so baked trees keep FOLIAGE wind weights (format + bake tools; no pack swap yet).
+- Every circuit now declares a `tyreSeverity` value for tyre-wear strategy (wear-off races unchanged).
+- Native menus, scrollbars and form controls now follow the selected dark, light or system appearance from first paint.
+- Inspector inventories include pointer controls hidden from accessibility APIs, named keyboard canvases and select choices (64 options, names capped at 160 characters and values at 512, with truncation metadata). Closeable regions with boxless wrappers now count as visible screens when their contents are painted.
+- Controls show concise help for the selected throttle mode with an expandable comparison. Backup & Restore separates Save, Restore and Import actions and explains shared codes in plain language.
+- Shared sheets contain narrow columns and wrap long headings and exit labels; Settings and How to Play reuse the shared layout and scroll rules. Reflow coverage includes 320 CSS pixels, enlarged UI, and keyboard focus restoration.
+- MY TEAM dialog typing no longer rebuilds the 3D car per keystroke (a changed livery does, debounced 75 ms) and dragging a livery colour no longer rebuilds ~23 rows of palette chips per tick (#3108).
+- HUD numeric edits stay readable while typing and apply completed values; Bring Into View recovers an offscreen widget without resetting its size.
+- the HELMET camera's visor is a real eye-port (flat brow, rounded lower corners, cheek pads) instead of an ellipse vignette; its reflections are added light that follows the scene — the sun's glint and rim sheen slide with your heading, floodlights, street lamps and tail-lights glint where they are, and a dark scene adds nothing; VISOR REFRACTION bends the rim only and adds a chromatic fringe; a new VISOR BEAMS slider in the cockpit options (0–200 %, 100 % standard) sizes the lamp beams, the god rays of a low sun and the star flares.
+- Rain strikes the helmet visor as spreading droplets that briefly cling to the shield before airflow carries them away. Larger beads and small splash beads make the surface visible without an opaque rain film; reduced motion retains stationary, fading water.
+- Rain beads on the helmet visor are larger and clearer at phone size, so fresh impacts and water running across the shield remain visible during driving.
+- the four default radio voices (george, fable, emma, heart) now ship 20 kbps Ogg Opus twins, so browsers that decode Opus fetch roughly 40 % fewer voice bytes; every other browser keeps the MP3 packs unchanged.
+- WebGPU menu program warm now runs the post and shadow stages (warmPlus) in idle-time chunks with the cockpit rig, and records where each warm ran (menu / loading / race) so race-entry stalls of ~616 ms / ~115 ms on iPhone 14 move off the first race frames (#3279).
+- on phones and low-memory devices the title no longer keeps the garage pre-build (~11 MB) sitting idle in the menu; opening the garage or Race settings still builds it when you need it.
+- Phone TEST soak SHARE is documented as the field path for FPS, render scale and governor tier samples on real devices; logging gaps for hitch/governor export and Device Farm join keys are filed in docs/surveys/w24a-logging.md (W24a).
+- Wet-race rain compares its knobs in scratch slots instead of building a string every frame, and a heavier shower reuses the rain buffers instead of allocating a new set. Streaks, smoke and sparks are unchanged.
+- broadcast graphics no longer rebuild the overlay timing tower on every update, and the battle check reuses one car list instead of allocating a new one four times a second.
+- A weather change no longer builds a new sun-colour array on every blend frame, and the sun-direction update reuses one vector. The light itself is unchanged.
+- The multiplayer-debug skill documents the one-off `npm i --no-save ws @noble/curves` install before `nostr-probe` so a fresh checkout does not exit on missing `ws` (#3354).
+- Garage LIVERY adds search and a collapsed Factory finishes group so phone scroll is not dozens of screens (#3339).
+- Catalunya Stadium section now has T10 plus Tribuna B, G, C and H around the final complex.
+- Jeddah S/F authored grandstands, cityFront and closed street masses sit past the night_pass orbit ring (gap ≥48) so near-field fascia no longer fills frac-0 survey cells (#3315; theme-dress neonTower exclusion still needs circuit-def lend).
+- trial V8 compile caches for `game-vm` (`vm.Script` cachedData) and node suites (`NODE_COMPILE_CACHE`).
+- Cloudy dawn and dusk use phase-dependent sky, cloud and fog lighting while retaining moonlight, lightning and city glow.
+- Dawn drizzle has a restrained shared grade and fine precipitation by default, while explicit player particle overrides remain respected.
+- GPU TEST counts WebGPU pipelines compiled asynchronously, so a mid-race hitch shows up in the shared file.
+- The graphics debug overlay and the METRICS governor page name a slow-frame stall.
+- Pack glow data once per light; release stale distant-rival body meshes and prevent queued work from restoring invalidated geometry; refresh fixed-target post sampling when textures change and retire disposed post-chain viewport readers.
+- On iPhone and Safari, AUTO graphics now uses three.js's WebGPU backend when the browser offers it, which holds 60 fps on an iPhone 14 where WebGL2 drops to 42. A device whose WebGPU fails falls back to WebGL2 and stays there until RESET RENDERER.
+- road reflections skip out-of-range normal reconstruction, and WebGPU avoids unused car-tag and duplicate depth reads without reducing reflection coverage.
+- LOW reflection rays reach farther within the same eight-step march and one refinement, retaining the existing receiver distance limit.
+- WGX GPU objects carry debug labels and pass debug groups so validation errors name the resource; `__apex.gpuCapture` can inject Spector or webgl-lint for GLX/TLX (off by default).
+- The opt-in wheel-state physics (`apex26.wheelState`) now locks and spins only when the brake or throttle asks more than the tyre can give, and a locked or spinning tyre now stops longer and pulls slower (#1628).
+- XR modules drop unused caps.layers / BTN_SQUEEZE / getTime paths and stale Phase-0 task comments; ENTER-pending reads use the shared storage key.
+- XR modules drop unused exports (BTN_STICK, button/axis constants, storage-key mirrors, unused path helpers) with no headset behavior change.
+
+### Fixed
+- PWA shortcuts now use a dedicated 96px icon and the manifest declares `lang` (#1612).
+- Phones that crashed twice now boot the 3D renderer at device-pixel ratio 1, shrinking its render targets to cut memory use (#1641).
+- Photo Studio opened from Home no longer lays the white title-art car over the garage you are framing (#1895).
+- The inside of the road no longer pinches at a single kinked sample on Spa, Monza, Jerez and seven other circuits (#2209).
+- Jerez's start-line grandstands no longer sit inside each other, and a parked car no longer stands inside a paddock container.
+- Magny-Cours's farm silos and vault stands no longer have trees growing through them.
+- The Interlagos Subida stand shows its whole crowd instead of burying its uphill end in the bank.
+- Suzuka's nearest hills no longer have their bases sunk under the ground.
+- First-person cameras (cockpit, hood, T-cam, visor, helmet) now cut instantly instead of easing in over 0.35 s (#2244).
+- Friend invite and answer codes keep short final fragments when copied with line wrapping (#2261).
+- Recorded radio audio refuses mismatched cached voice files after an update instead of playing incorrect clips or silent slices.
+- Saves hold up better when browser storage fails or fills: custom setups, teams and paint jobs keep a bounded backup copy, careers keep restore points after each completed round and before an import, and the save warning shows storage health and exports a recovery file you can import again (#2300).
+- Photo Studio opened from the title screen includes your car on the circuit, with controls to place and rotate it (#2301).
+- ARRANGE HUD opened from the title screen shows the race readouts, keeps keyboard focus in its toolbar, and restores Settings when finished.
+- Offline AI cars now play wall bump and scrape sounds when they hit barriers (#2212).
+- Track Designer restores displaced drafts from MY CIRCUITS after reload, preserves name-only edits during recovery, dismisses point actions when switching workspaces, and keeps relative hills at elevation limits.
+- VS FRIEND lobby keeps each peer's latest state after a burst, acknowledges settings by revision, and carries qualifying go/abort; laps match their sender by driver id (#2342).
+- If the WebGPU renderer fails you can switch to a compatibility renderer, and a renderer that is abandoned during start-up no longer takes over the screen (#2345).
+- A hung update check gives up after 15 seconds, and a stale result can no longer overwrite a newer one.
+- The desktop app runs a single instance, recovers from crashes on its bundled origin, and hides web install guidance in native builds.
+- Bahrain start/finish and corner markers sit at the right places on the lap (#2350).
+- the racing-line bake no longer begins its corner scan inside a corner's hysteresis band, so a corner straddling the lap seam is not truncated by a node, and same-sign corners split by a short gap across the seam merge into one (#2545).
+- AI cars now start braking for a stopped car in their lane from their stopping distance instead of about 10 m (#2565).
+- AI cars armed for a weather stop no longer skip the pit lane for lap after lap — the pit entry speed cap now reaches the limit where the entry road starts, so the car can peel into the lane in time (#2601).
+- Switching circuits on iPhone and other WebGL2-only browsers no longer leaves old GPU vertex arrays, shaders and programs allocated, so long sessions use less graphics memory (#2651).
+- Editing a livery in the garage no longer gets slower the more changes you make: old wing meshes from earlier paint jobs are freed, and the car and garage paint textures are refilled in place instead of being re-created on every edit (#2812).
+- Cancelling or saving a livery edit no longer leaves the unsaved paint on cached race car bodies (#2796).
+- Settings that do nothing in the current setup are now greyed out with the reason beside them. This covers tilt and touch steering sliders under the other steering mode, engine-tone levels with their layer or SOUND off, line colour with the driving line OFF, HUD style/layout/map/gaps/mirror with the HUD OFF, UPSCALE at HIGH resolution, the title intro under REDUCE MOTION, and the braking cues each other override (#2857).
+- Zandvoort's Arie Luyendyk banking (T14) is 18°, matching the circuit's published figure (#2863).
+- Zandvoort no longer has lighting strips buried inside its two-tier grandstands, and its dune hedges no longer drop out next to the track (#2863).
+- the camera tuner THIS TRACK and THIS CAR scope buttons now expose `aria-pressed` (and the `on` style) when selected, so exactly one of the four scope chips is pressed for screen readers (#2968).
+- tyre squeal now starts at the race's 0.10 rad slip onset (no second audio gate on already-normalised skidIntensity); lock-up pitch rises from CarSfx lock without a game.js `{lat,long}` hand-off.
+- Track Designer toolbar labels (UNDO / REDO / FIT) no longer clip at 200% UI scale; the chips wrap instead of squeezing (#3041).
+- the Monaco harbour houses are back (the Racing Kit pieces sat below the quay), and the Monza and Silverstone pit blocks are rows of kit garages instead of one blown-up grey box (#3044).
+- with Save-Data on (or a 2G link) the title no longer prefetches the lighting presets and loads the 128 px material pack instead of 256 px; baked models no longer keep their whole download in memory (#3110).
+- A lazily loaded circuit or script no longer counts as failed when the main thread was busy past the load deadline, which could stop the second race from reaching the grid on slow GPUs (#3157).
+- picking a part in the garage no longer recompiles a car shader when frames run slow (a multi-second hitch on the next frame) (#3180).
+- portrait cockpit — the gap strip no longer paints over the rear-view mirror frame.
+- on a phone in portrait the AERO chip no longer paints over the right steer button at HUD 50–70% (#3272).
+- cantilever gantries (Monaco, Madrid kits) no longer grow a second pair of span legs beside their single mast (#3280).
+- RESTART from the pause menu keeps the loading plate up until the new grid is ready, and the rebuild no longer counts against the performance governor (#3283).
+- an offline or slow `?b=` update reload now gets the newer cached shell when an older, fully installed one sits ahead of it in the cache order, instead of the browser error page (#3284).
+- after a multi-second netplay pose dropout, a rival snaps to the next pose instead of sliding back along the hole (#3288).
+- after a clean race pays down a crash strike on GRAPHICS: MEDIUM, bloom, SSAO and god rays come back instead of staying shed until a reload (#3294).
+- Season setup calendar ↑ ↓ ✕ buttons no longer clip at the right edge at UI scale 200% on a portrait phone (#3303).
+- Title **USE AS CONTROLLER** no longer clips its label on tablet landscape (1024×768 and kin).
+- phone orientation no longer rebuilds the TLX/GLX post chain on an equal-pixel transpose (422×195 ↔ 195×422). Mobile targets keep a square max(w,h) cover so flips only move logical viewports — the hitch that was climbing PerfGov is gone.
+- Fuji Mount Fuji snow cap reads from the pit-straight day orbit — ROCK foot, snowline 0.38, cool bright snow (#3314).
+- garage `#cs-options` fit-audit no longer reports a phantom ~6px horizontal overflow at UI SIZE 75% — the audit mixed visual `getBoundingClientRect` with unzoomed padding under `.sheet` `zoom` (#3332).
+- Abu Dhabi Yas Hotel gridshell reads as a dense fritted-glass LED veil (steel ribs + glass panels + vertex LEDs) instead of a sparse multi-colour neon skeleton (#3346).
+- Paint edits in the garage now refill the bay dress, live telemetry and car decal atlases in place on the default renderer instead of freeing and re-creating them, so a run of edits no longer allocates new GPU textures (#3505).
+- The garage paint-edit texture check (garage-livery-churn) is back to blocking CI. The bay atlas fix from #3797 is on the deploy branch, so its flaky-quarantine row is removed.
+- VS FRIEND — a Wi-Fi→cellular switch or NAT rebinding mid-race no longer drops your rival on the spot; the connection now restarts ICE inside the 25 s grace (#3556).
+- a circuit whose scenery failed to download once (offline blip, CDN error) no longer stays bare for the whole session — the next race start retries the download and rebuilds the dressed world (#3570).
+- a race start whose track build was overtaken by a newer menu build no longer bounces to the title with a false "graphics reset" notice; it rebuilds once instead (#3571).
+- two flaky menu specs — ui-scale no longer counts paint-only scroll-fade mask transitions in its zoom settle (#3606), and a race intro that hands START back without a garage-out now logs where it stopped, with the DAILY garage-out spec failing on that in seconds instead of a 180 s timeout (#3591).
+- on WebGL2 (iPhone and other devices without WebGPU) the HELMET visor reflections no longer push the automatic graphics quality down. The light layer is drawn with ordinary blending there; WebGPU keeps the additive blend.
+- D scenery train (#3859) clears full-tier geometry reds — Red Bull Ring grandstand lamp pools reach the road, Suzuka Motopia carousel seats on grade, Baku skyline backdrops drop coplanar window fights, Portimão forest edges skip the red cut banks, and Monza Curva Grande pines restore the wide2 flyby score; stale props-tris / clip / coplanar / Dijon flatCoplanar caps are lowered.
+- on a slow connection the title doors no longer reshuffle about 12 s after they appear; until the game is ready they show dimmed, with the wordmark rule filling as it loads, and the disclaimer no longer looks like a button (#4240).
+- Next GP session times no longer wrap a lone "UTC" onto its own line on wide screens (#4241).
+- red timing text (slow delta, lost position, hot tyre, LIMITS, gaps) now reads at APCA Lc 60+ via a lighter red text ink; STANDARD-contrast secondary labels lifted to Lc 67; touch-button labels never paint under 11 px (#4258).
+- the RACE A FRIEND and CAREER MODES subtitles on the title screen no longer truncate on iPad and desktop sizes (#4263).
+- with reduced motion on (phone setting or MOTION: REDUCED), the "TAP TO RACE" loading hint waits its 3 s again instead of showing at once, and the in-game setting now skips staggered delays the same way the phone setting does (#4275).
+- on a phone, menu screens fade in over 120 ms instead of cutting hard; the garage shows its tab and option outline at once instead of an empty panel while the car loads (#4275).
+- first load on a slow connection — no stray eye icon in the title's top-left corner, the waiting doors stay solid so the line-art car no longer shows through their labels, the iPhone "Add to Home Screen" tip no longer covers the disclaimer, and the line-art car crossfades into the home scene (#4275).
+- the HUD survey now measures the shipped HIGH CONTRAST by default and flags readout text below WCAG 4.5:1 (3:1 at 18.66px+) as a `contrast` finding (#4312).
+- HUD audit cleanups — the WATCH tower honours the BROADCAST gap profile, REL and STRATEGY share one in-pit rule, and the track-limits chip no longer re-stacks TYRES when the LIMITS toggle is off (#4319).
+- under HIGH CONTRAST (the default) the HUD position cell painted dark text on a dark plate; it keeps its light plate again (#4321).
+- the flyby editor DURATION slider no longer hops to a neighbouring shot while dragging, and the camera tuner HERE → ALL button label no longer desyncs on rapid clicks (#4454).
+- the race circuit picker hides the elevation sparkline when the browser will not give that canvas a 2D context, instead of covering the screen with an error (#4469).
+- a brief harvest-whine pop when the engine audio updated twice in one audio-clock tick (#4473).
+- track designer UNDO no longer drops a country change, a fresh open starts with nothing to undo, and a failed designer load can be retried (#4475).
+- a corrupt saved custom livery no longer breaks livery resolution, and Data Hub telemetry playback no longer jumps after the tab was hidden (#4477).
+- an abandoned race start no longer shifts the next race's retirement and tyre luck.
+- TopModal.onFocusIn no longer traps Tab into LAYER_SKIP layers (`#photo-controls`, `#rotate-device`), matching the focus-memory skip so the fly-cam's Space key stays a camera action.
+- agent dev surface (METRICS / flyby / ?apex) no longer aborts game boot when a lazy agent script is refused (e.g. SRI mismatch on a stale shell during deploy); __apex stays null and a later ask retries.
+- agent-view overtake/X-mode copy matched the live detection-line and zone rules; `describe("car:N")` shared rivals' road-gap wrap; wrap-corner gradient/kerbs and nextCorner status no longer broke across the start line; view raster used vantage FOV; gpuCapture lint no longer bound WebGL2 on `#game`.
+- aggressive AI drivers sit closer while a pass is tight and give less room when the cars touch, so a faster car can finish the pass without moving the open-follow pace ladder.
+- Appearance presets preserve accessibility and unit preferences, and saved profile application respects the selected screen scope.
+- Appearance settings preview no longer clips its content at large UI scale on tall tablet windows.
+- toggling menu buttons no longer re-writes unchanged accessibility state on every pass, trimming menu work on phones.
+- Dropped 19 unused Kenney kit_catalog pack models (~238 KB) that no scenery or editor path referenced, keeping placed and nature_bake entries so load stays intact.
+- Resuming with a gamepad no longer switches on toggle throttle from the menu confirmation press.
+- Auto-throttle no longer receives a false-start penalty when a fast Free Build car accelerates after lights-out.
+- mid-race SOUND ON under the pause card now applies team voice and circuit venue (BUGS M31 residual); WATCH radio clips abort their CORS fallback fetch on stop so a late decode cannot resurrect audio.
+- After rapid headphone or speaker swaps, the last output change is no longer lost to the rebuild cap; the next tap after the cooldown moves sound to the new device.
+- Rivals sound controls now silence pass-by hiss and rival tyre/contact effects and extra wet-spray wake as well as engines, including effects already playing.
+- Softer rival air rush and lower, quieter boost/deploy tones reduce scratchy treble and ringing.
+- Streamed music now resumes from its saved position after an audio device or context restart.
+- helmet-cam visor glints no longer linger over the menu after a race.
+- Bahrain's numbered corner boards and turn descriptions now follow all fifteen Grand Prix bends, including the three esses and both final right-hand turns.
+- Cursor no longer rejects bash-guard when an escape hatch (`.claude/allow-protected`, `allow-context-cap`, or `allow-stop`) is active — the hatch notice prints on stderr instead of stdout.
+- on three.js WebGPU (THREE PATH: WEBGPU), every BOOST press after a straight without boost no longer rebuilds the cockpit ERS bar, ERS strip, active OT lamp and lift-flame pipelines mid-race; the idle mesh prune now keeps those deploy-only meshes (#3677).
+- the "Graphics reset" notice now explains an automatic graphics-loss reload on the default three.js renderer and on WebGPU, not only on WebGL2 (#3513).
+- one crash each on two different renderers no longer permanently switches a hand-picked renderer to WebGL2 — the boot canary counts crashes per renderer (#3514).
+- when the first boot can only guess the renderer, it fetches that guess's scripts at low priority, so a wrong guess no longer competes with the renderer that actually loads (#3515).
+- picking a renderer by hand in settings clears the boot-canary strike ledger so an old crash count does not follow the new pick (#3547, Merlin).
+- boot no longer prefetches the full TLX/WGX roster on a navigator.gpu hunch alone, so a SwiftShader GLX fallback after clearing site data is not starved into Graphics unavailable (#3536 follow-up).
+- picking a voice for another channel (bella on the team radio) now downloads the pack that channel speaks from, not the voice's own 6.6 MB pack, so the first line no longer falls back to synthesis (#3110).
+- boot GLX deferred load uses idle progress timeouts and onSettled heartbeats so slow SwiftShader is not cut off by one wall clock; `#nogl` RETRY and USE WEBGL2 clear probe, strike, session latches, and `window.name` ctx-loss tally (#3587).
+- a transient CDN miss on shell scripts no longer flashes the full-screen "Promise rejection" overlay while the one-shot cache repair reload runs.
+- Cloud bootstrap checks all direct development dependencies and their declared versions before reusing a snapshot or accepting a browser fallback, and reports missing packages before tests run.
+- Added a transparent/chroma broadcast overlay preview and shared battle graphics for stream and TV presentation.
+- Aborting pit entry clears the old position baseline before a later stop.
+- Wet-tyre strategy advice accounts for the fitted set's remaining life.
+- Appearance profiles, reset and undo immediately apply touch button size.
+- Relay credentials are now opt-in through a player-owned endpoint instead of shipping a browser-visible provider key.
+- Imported career part selections and reverse-speed overtake scanning now fail closed on invalid inputs.
+- Broadcast cameras (heli, side, cinematic, low) on open circuits stop 1.5 m outside the road edge when a grandstand reaches the kerb, instead of stepping onto the white line.
+- Camera and Flyby editors no longer open after leaving their Settings visit while the editor bundle loads; cancelled loads remain available for a later deliberate opening.
+- Trackside camera forgets its held camera on a restart or replay seek, and replay seeks no longer reset the follow rig twice (#4488).
+- Design review capture jobs now fail promptly on garage startup/command failure and reject stale or corrupted resume files.
+- Capture matrices now match the garage tool's Linux-only load guard instead of rejecting macOS runners based on shared host load.
+- The rain light no longer reads as a glowing orange block above the car's tail in the garage; only its slim rear lens lights up (#3412).
+- Garage planning discovers body-style IDs directly from the current car registry.
+- Reflected GLX car draws preserve outward surface normals; WGX carries car surface IDs in its existing packed vertices independently of indexed storage pulls.
+- STANDARD Daily TT ghost and player flaps follow the factory car when the garage still has a custom setup saved (M27).
+- needle, blade, anteater, swan, wasp, high-nose, shark-fin and scorpion bodies have believable F1-width noses instead of spikes (needle stays the slimmest).
+- ERS cable clamps, the roll-hoop scoop lip, the ERS cooler intake, a bargeboard vane, the front-wing cascade vanes and the fuel filler no longer float off or sink into the concept bodies.
+- Nose paint strips and the crown running-light bar now fit narrow team and concept noses instead of overhanging the bodywork.
+- Career `#cr-left` no longer overflows its sheet on portrait phones — the next-race still and long CTAs stay inside the column at 375×667, 390×844 and 430×932 (and landscape).
+- career hub `#cr-go` double-tap while the lazy UI loads no longer fires start/rollover twice; MY TEAM next-round cash high is P1+P2 (not two P1s); factory savings exclude the next regulation era's ban list; the pause-card career brief ranks retired cars by progress so a DNF team-mate is not treated as last.
+- New careers reject fractional and out-of-range driver numbers instead of silently truncating them.
+- a career save or backup whose championship points table has a key named like a built-in (toString, constructor) no longer turns its points into NaN.
+- Pit-stop wheel-gun sounds now fire again when a stop is replayed after a rewind.
+- with RACE SETTINGS › CAUTIONS off, a storm no longer brings out the safety car or its race-control calls; scripted real-race flags and WATCH replays are unchanged.
+- routine GPU census runs no longer rerun the completed garage experiment pinned to an older game revision; its four renderer checks and preserved-capture reanalysis remain available.
+- Editing a paint job in the garage no longer builds and uploads a full-size 2048 decal atlas for every edit on desktop; the sharp atlas arrives once you save or leave the editor.
+- Verification caches now require a complete guard run against an unchanged staged tree; partial, failed or interrupted attempts cannot leave an authoritative green marker. CI guard keys include the full tracked source inventory, symlink targets and executable permissions, preventing configuration or fixture changes from replaying a stale pass. Nested guard invocations also isolate Node test-runner context so skipped files cannot appear green.
+- Circuit def comments that contradicted their values — tyreSeverity “below Japan/Monza” comparisons, Hungaroring bank turn labels, and stale hwZone racing-arc citations on Hockenheim and Istanbul.
+- circuit scenery hygiene — drop unused api destructure bindings and two dead local helpers (monaco KR, mont_tremblant inOrbitRing); no geometry change.
+- Cloud Agent MCP allowlist globs admit both the output-level gateway launch (`.mcp.json`) and short Integrations dashboard wrapper lines; chrome-devtools install pins scratch clone to v1.7.0 and falls back to npm when the clone version drifts.
+- SwiftShader cockpit/grid washout from composite lens-flare streaks when bloom is shed (stall watchdog tier 4) and from lamp lens-glare billboards; hardware path unchanged.
+- Replay contact-sheet exports wait for native saving and sharing, so write failures and share cancellations reach the existing error handling instead of reporting early success.
+- drop unused I18n.rel / list / country / compare wrappers (no callers).
+- Renderer XR lifecycle changes now select the emulated VR checks, and the real three-player race probe verifies exact departed-driver cleanup plus fresh motion between the surviving players.
+- drop dead career/experience CSS restates (cascade-dead decls, incl. compact `#cr-meters` width/margin) with no visual change.
+- drop dead CSS restates (duplicate rules / overridden decls) with no visual change.
+- drop dead `#menu-secondary` grid restates in menu-destinations (menus.css already owns them) with no visual change.
+- after a graphics reset during race start, the title menu again shows Race, Time Trial, Watch and Data Hub and rebuilds the car preview instead of leaving half the doors missing.
+- after the graphics reload budget is spent during race start, the title Retry card reloads the page instead of looping a dead Start Race, and stale reload counts no longer carry across fresh visits or deploys in the same tab.
+- Cursor cloud doc drift — fleet model is composer-2.5 (routine) / Grok 7 (hard), not default/Auto; launch skill notes TLX (WebGPU path) as player default and backend `"three"` for apex MCP.
+- The default renderer no longer stalls while it loads the baked materials, and no longer leaks memory each time a car's wheels or team meshes are rebuilt (#2149, #2150).
+- docs/WORKERS.md Cursor lane subscription contract (APEX v6 drafter/steward, subscribe_github_ci/pr).
+- COLOUR VISION modes now also recolour the broadcast tower's tyre letters, the INPUTS throttle/brake trace, the circuit maps' corner-class colours and sector arcs; default colours are unchanged.
+- Daily Challenge now recovers an array-shaped saved day history so new completed laps remain saved and appear in shared results.
+- Career backups preserve valid Daily classes and merged day histories within the existing file-byte limit; oversized or hostile Daily merges are refused before any career, selection or progress writes.
+- lazy-loaded scripts (Data hub, garage, results, physics helpers, track-build worker) could fail on the first request when GitHub Pages returned a transient 503; the shared loader now retries automatically with a fresh URL before giving up.
+- Data Hub standings refuse a Jolpica body whose season disagrees with the asked year (silent wrong-championship paint); GPS TRACE EXPORT keeps one OpenF1 lap per circuit, preferring a Grand Prix over a second Sakhir Pre-Season Testing weekend.
+- Data Hub constructor standings show each team's full name again; the head-to-head bars move to their own line instead of squeezing the name to a letter.
+- Daytime rain, overcast and fog no longer turn street masts on or leave Monaco tunnel lamps at the wrong brightness — they share the clear/wet day lamp floor.
+- Dawn rain, overcast and fog inherit the wet/dry dawn lamp pools instead of falling through to the knob default on most circuits.
+- Race-select on phones no longer builds the track outline on the open's main-thread long task — captions paint first, the centreline runs on the build worker (or idle) and is cached, and sheet shape classification batches layout reads before writes.
+- Dropped two unused unit suites — a presence-only M33/M35/M42 pointer and a pure-move lighting-prep source scan (behaviour stays pinned elsewhere).
+- Three.js releases hidden batched-decal render objects and instance buffers when their source mesh is freed, including releases during shader warm-up.
+- Repeated phone performance-recorder downloads release the previous recording's Blob URL while keeping the latest download link usable.
+- Career recovery exports restore active-career seasons and reject unavailable career calendars before writing.
+- Touch pedals and steering retain the strongest remaining touch when another finger moves or releases.
+- Pending input-ghost saves preserve faster laps received from another tab and retry failed writes.
+- Spotify supports the main previous-track control and sends an outgoing remote pause before signing out.
+- Instant replay cuts the driving camera to explicit seeks and restores its live pose on exit.
+- Career saves have one writer tab, preventing another open tab from overwriting progress before storage notifications arrive. Read-only tabs explain how to resume editing. Backup storage reconnects after an unexpected database close.
+- Late penalties remain part of SKIP/QUIT settlement, caution transitions use the flag covering the movement, and hidden multiplayer hosts use the shared finish clock. Rejected time-trial laps no longer become the displayed best.
+- Restarted mixed weather uses the new race clock, and its forecast includes local rain cells. Canceled WATCH downloads stay canceled; pending GP selections, telemetry boundary coverage, speed units, replay projection and WATCH/VR camera restoration are preserved.
+- Tilt input clears stale samples and obsolete permission responses. Audio respects hidden pages and retries blocked music on a later gesture. Every garage exit protects unsaved edits; Daily exports keep time and medal together.
+- Camera projection remains current in recovery mode, shadow warm-up retires old render objects, post-processing retries restore material tags, reflection diagnostics include car-only reflections, and graphics reload limits survive denied session storage. Legacy phone settings apply the memory cap on the first boot.
+- Offline installs include required Career dependencies and retain the actual prior settled cache across skipped build numbers. GPU benchmarks preserve enclosing timer ownership, race-entry timing waits for the loading cover to close, and phone performance reports distinguish animation callbacks from render gating.
+- Browsers without secure-context Web Locks keep Career read-only instead of risking an unlocked overwrite. Writer coordination follows the Web Locks lifetime and `ifAvailable` contract: https://developer.mozilla.org/en-US/docs/Web/API/LockManager/request.
+- Collision slow motion consumes only its intended duration across display refresh rates, and engineer gust announcements respect the selected speed unit.
+- Automatic WATCH highlights carry overlapping cuts forward without repeating footage or announcements; manual replay controls retain intentional seeking.
+- GPU benchmarks distinguish fresh resolved timing results from cached readings, exclude stale capture-window timestamps, and explain when fresh timing is unavailable.
+- Regenerate the named scenery screenshot catalog after scenery inputs changed, restoring the deploy structural check.
+- Rear driveshafts now meet the gearbox and upright, garage roof trusses and light fixtures hang from the ceiling, and the pit-stop front jack seats on each car's nose.
+- HUD warnings that blink (overtake armed, redline, VSC, pit cue) now blink together instead of out of step.
+- Track Designer loads a selected START FROM circuit before tracing its road. Late circuit loads no longer replace edits made while loading.
+- Active map drags, drawing strokes and elevation edits cancel pending template replacements before they can mix two circuits; each gesture still uses one undo step.
+- COPY DIAG (and `__apex.diag()`) no longer knocks the three.js WebGPU renderer back to WebGL2 when used before the first frame.
+- GRAPHICS ULTRA is capped on phones (shown as unavailable) after real-device runs saw ~24 fps with no recovery; older phones without WebGPU now start on LOW instead of MEDIUM.
+- Opening Settings on a phone no longer freezes for seconds after the sheet paints — menu prep (`menuIdle` / warm frames / garage prebuild) yields and parks while `#pmsettings` is open, LAZY_AUDIO evaluates one file per main-thread yield, ScrollFade skips the title column under the open sheet, SettingDeps coalesces disabled refreshes, and coarse-pointer devices skip view-transition snapshots when returning to the title.
+- GRAPHICS: LOW sheds bloom/SSAO/god-rays (lookPostShed) so it no longer costs more than MEDIUM on phone WebGPU; renderScale shrinks free the larger post targets before reallocating so a mid-race scale switch cannot pin full-res cost. Phones also run the TLX look-post chain at half the scene resolution, and a verified governor feature shed latches so calm EMA cannot promote full effects back on a GPU-bound device.
+- Dialog backdrops now honor the reduced-motion setting selected in the game.
+- Texture loading can recover with a fresh background decoder after a worker stalls.
+- the 5.9 MB announcer voice pack (`assets/voice/fable.bin`) no longer downloads during race load on iPhone — it waits until lights-out (or first post-gate use), with silent commentary until ready.
+- A corrupt driver-rating delta in a saved career (a string or Infinity) no longer skews the driver's rating.
+- The DRS actuator pod and its slot rail now sit on the rear wing at every downforce level, instead of floating above lower wings.
+- Driven real race classifies a script DSQ finisher with `c.dsq` (same reason as watch mode) and keeps them out of the timed order at the flag (#3287).
+- Desktop HUD presets CLEAN, BIG and CORNERS no longer overlap or run off-screen (offsets authored for the v4 centre-home bottom chips).
+- `.hud-label` keeps a ~10px painted floor at HUD SIZE 70% (was 9.8px).
+- MY CIRCUITS now warns when a circuit deletion could not be saved and may reappear after reload.
+- TRACK DESIGNER — a save or share that carried both node heights and legacy cosine hills no longer stacks them on the built road (heights win; the strip already cleared cosine hills on edit).
+- Track Designer no longer opens over a newer menu or race when its initial bundle finishes loading; Escape and intervening navigation cancel the pending title request.
+- TRACK DESIGNER — a stamp over a span that wraps the start line, or deleting point 0, no longer slides banking, hills, bridges and props round the lap.
+- TRACK DESIGNER — the "pit opening crosses" RED applies only near the pit lane (the window round the start line, on the pit side), and CHECKS reports the most severe close pair instead of the first one found.
+- TRACK DESIGNER — Rolling and Hilly presets no longer drop the road into a wall where the lap closes. The start stays at 0 m by shifting the whole profile, so a hill that crosses the line keeps its slope.
+- the boot error overlay and the __apex error ring now serialize non-Error rejection/error reasons (name + JSON shape, or the key list for circular values, capped at 500 chars) instead of destroying them as "[object Object]", so a platform rejection's source is identifiable from a field report.
+- Rebuilding factory car meshes now releases the shared and distant rival bodies, and a pending distant-body build cannot restore an obsolete mesh.
+- the first race on three.js WebGPU no longer compiles the driving-line and blob-shadow shaders on its first frame (A·W50, #3673).
+- Cadillac's Trumpet exhaust no longer runs through the DRS pod, the Smooth Case rear plate no longer cuts into a big exhaust bell, and the Hooded Exit visor sits on a mount instead of floating over the tip.
+- Music file import and Spotify settings controls work when opened before the page finishes loading.
+- Daily challenge backups now restore complete retained histories with full car and tune contexts above 256 KiB. Import retains the 5 MiB file limit, schema bounds and junk limits; oversized day/class histories are refused before download or restore instead of being truncated.
+- Backup imports enforce the file limit in UTF-8 bytes for both parsed objects and text.
+- Legacy career files preserve opaque newer-version saves on export and refuse mixed imports containing them before writing any slot or selection pointer, while retaining migration and revision safeguards.
+- Telemetry gaps become unavailable after missing speed data instead of showing a fabricated comparison advantage.
+- Sparse telemetry laps exclude samples from the following lap.
+- Start-line exports skip partial GPS traces and try another driver before reporting unavailable data.
+- Space and Enter activate the focused pause, camera, and recovery HUD buttons without also triggering BOOST; driving keys still release correctly after focus moves.
+- Multiplayer: a connected rival temporarily driven by fallback AI remains part of the human finish wait. Its speculative crossings cannot raise the chequered flag or finish the owner; resumed packets restore owner lap evidence, while genuine owner finishes remain authoritative.
+- Data Hub Results reports the age of a late offline classification fallback and offers RETRY after a classification request fails, including after switching tabs.
+- WATCH keeps safety-car ending notices separate from the recorded TRACK CLEAR release, preserving the inclusive lap fallback when release timing is absent. Cached race scripts refresh to the new schema.
+- Recorded tyre sets now follow replay time on entry, seek and playback, including rewinds and consecutive stops onto the same compound.
+- HIGHLIGHTS excludes driver events without footage for that subject at the event time before choosing nearby cuts; generic flag cuts retain their existing camera ownership rules.
+- Deploy tip guards after pack model prune (#4113): scenery catalog digest regen and pack manifest/index/bin alignment in baked-model-road-guard.
+- keep the Flyby shot tab panel labelled by the selected shot for assistive technology.
+- In VS FRIEND qualifying, TO THE GRID after the host or every rival left goes to the menu with a notice instead of a blank screen, and an expired waiting-room code shows the host's INVITE ANOTHER message, not the guest's "six characters" error.
+- Onboard drizzle no longer opens an empty lens-rain overlay; GradeTint.hue clamps out-of-gamut channels so shadow/highlight grade knobs cannot feed negative RGB into the post.
+- collision sparks now share the BURST_MAX hitch ceiling with scrape/smoke; car-paint presets are frozen so a mutation cannot stick for every car.
+- One-off Grand Prix launch / tyre / phase hashes now share reliability's race round, and the in-race mistake hash freezes that same round after the counter bumps (M35). Mistake-zone and RECOVER pit-lane guards stay pinned (M33, M42).
+- Unresumed red-flag races apply the one-compound 30-second tariff even when nobody reached the flag; duplicate completion calls cannot score another season or career round.
+- Career simulation clears the previous driven round’s classification so an earlier DNF cannot erase a later points finish.
+- the garage AERO button no longer swings the camera to the rear wing; it only moves the flaps and your view stays put.
+- On slow GPUs the garage arrival now ends on real time, so RACE SETUP answers taps within seconds instead of minutes.
+- CLOSE GARAGE with unsaved livery design edits now arms DISCARD EDITS? before throwing them away, like CANCEL and Escape.
+- Garage tyre covers lower beside the wheels, then slide inward at wheel height; removal slides outward before lifting. Thin cloth shells keep clear of tyre rubber throughout the motion.
+- On a landscape phone the garage keeps the team name on one line and opens Photo Studio from the camera bar, and Data Hub classification tables scroll sideways so the driver column stays readable. The camera drawer hides the PHOTO chip while open and caps its height on short phones so it stays on screen.
+- The garage floor fan faces the car, and the inspection dolly clears the spare-tyre stack and wing rack while the trackside lite bay keeps its existing geometry.
+- paint the first telemetry trace before uploading its live atlas, avoiding a second full atlas upload on entry and paint changes while preserving floor reflections. Release the arrival crew meshes with the garage when a race starts.
+- Garage reflections preserve the selected room's floor colours and markings when a car enters or leaves, instead of briefly repainting the parking bay grey.
+- Garage lighting picks update their existing buttons instead of rebuilding the setup sheet, preserving focus and avoiding a UI stall on each mood change.
+- dragging a livery colour or slider in the GARAGE paint editor no longer rewrites the whole sheet on every step, so the drag stutters far less on a phone.
+- picking a new livery in the GARAGE no longer re-measures the car's outline when only its paint changed, so the first pick of each livery is quicker on a phone.
+- picking a livery that only changes the paint (not stripes or bodywork) rebuilds the GARAGE car faster, so browsing liveries on a phone hitches less.
+- Garage arrivals, Settings animation previews and the active aero demonstration no longer run at half speed at 10 FPS because of frame-time limits.
+- DAILY's START could hand back to the settings sheet with no garage-out when the race modules finished loading mid-preparation (the Daily's standard car and difficulty landed late). The sheet now waits for them first (#3591).
+- Garage livery editor no longer rebuilds the whole car when you pick a crest style, tone or frame, a cover bind, a fin handoff, fin art or grips colour — those taps now repaint only the decals (a ~250 ms stall per tap in testing, now under 30 ms).
+- Garage on phones — finish tags no longer overrun livery swatches, touch chips keep a 44px painted target below 100% UI, the sheet no longer cuts the parts list under CLOSE GARAGE on short portrait phones, and rail subtitles take two lines (#3330 #3331 #3334 #3335).
+- Garage CAMERA and ACTIVE AERO chips are now a 44px touch target (#3333).
+- the title's garage prebuild no longer waits out a 30 s hidden-frame budget after a program warm that already finished, so GARAGE from the title can draw on the next present instead of sitting pending.
+- on software GL (SwiftShader / llvmpipe), opening or closing the garage no longer triggers full-frame GLX readbacks or scratch pack readbacks during `#carsetup`, and the stall watchdog treats the garage sheet like the race-entry loading cover so a slow paint does not reload the menu at ten glacial frames (#3589).
+- the garage wall's CAR PERFORMANCE board now folds the mechanical SETUP sheet (anti-roll / ride / brake bias) into its numbers the same way the DOM bars do, so a tune change cannot leave the wall quoting a different car.
+- GaragePrims no longer exports the internal BOX_F / WALL_KEYED / sideOnly helpers (only block / cyl / tube use them).
+- Garage camera gestures reset after interrupted touches and backgrounding. Arrival previews keep a reachable touch stop control, and pattern edits reuse unchanged colour palettes to avoid rebuilding their buttons.
+- Three.js copies phone livery textures before their shared canvas is reused at HIGH graphics, preserving distinct AI paint through texture pooling.
+- Garage TYRES tab no longer blows out to white bloom from lens flare on the side-view framing (flare is now off in the garage present path, like screen sun-shafts).
+- opening the garage no longer flashes a half-painted 3D frame for tens of seconds while shader programs compile on software GL — the game canvas stays hidden until the first complete garage frame is ready.
+- when the graphics reload budget is exhausted, GLX and TLX now record the failure on the diagnostic error ring without opening the full-screen error overlay, so the Graphics unavailable panel stays usable on the first tap.
+- after a WebGL context loss, the Graphics unavailable screen’s DATA HUB and HELP buttons no longer throw when only `#nogl` is passed — boot registers default panel deps and the handlers fail closed with a clear status instead of leaving the button disabled.
+- drop unused public exports from GhostShare and InputGhost (no player-facing behavior change).
+- A NaN frame in a Time Trial lap can no longer become the stored best ghost, which showed as a ghost car at NaN and an unshareable lap.
+- A phone that holds 60 fps only at a much lower render scale now finds that scale instead of sitting at 30 fps.
+- The performance governor counts one long hitch as a single dropped frame, so it is less likely to shed effects for the rest of the race.
+- Turning off GPU capture during a vendor script load no longer starts Spector spying or lets an old load reset a newer capture mode.
+- TLX shadow warm releases the previous race's probe-caster render objects, so each race no longer leaves uniform buffers and bind groups behind on the WebGPU path (A·H12 G1).
+- Failed synchronous texture-layer uploads and readbacks no longer suppress the existing pixel fallback.
+- Failed chunked GLX mesh builds delete unpublished GPU buffers and vertex arrays before preserving the original error.
+- Mirrors refresh their instance pack on the first full pass after an interruption.
+- the garage HALO FINISH row stays available for an unset or grey halo, matching the car after #2829.
+- At dusk, the helmet visor no longer washes the whole view amber when the sun is behind you. Lamp glints now dim against the daylight, and the rim sheen only catches a sun ahead or beside you.
+- The title screen now fits on phone portrait and desktop with the same tight door grid as phone landscape, with even tiles, no clipped rows and no split words.
+- Home menu fits on phone landscape without scrolling, and tile labels no longer split mid-word.
+- Agent shell guards no longer fan out duplicate commit gates on Cursor.
+- The Data Hub telemetry compare view now fits a landscape phone: header no longer clipped at the top, gauge labels no longer overlap, the chart uses the full width and the whole view scrolls as one.
+- Keep the HUD steady after moving or shrinking sectors beside Boost in Move & Size. Saved sector placement no longer triggers automatic row fitting or width squeezing; collision checks respect panels to the right of Boost, and font rounding no longer causes tiny repeating size changes.
+- touch controls at a large BUTTON SIZE no longer sometimes sit partly off the top of the screen (BOOST cut off) until the HUD re-measured.
+- the timing tower (POS / LAP / TIME / BEST) no longer jumps sideways when the race clock starts — each tile now holds room for its widest reading from the start.
+- the HUD stops re-laying out the whole page every few seconds on phones when the tyre panel is stacked under the map (smoother frame pacing).
+- HUD SIZE no longer shrinks the timing tower when raised past what fits (phone landscape): the fit measures its caps at one canonical zoom, so a viewport gets the same cap at every HUD SIZE that binds, and `--hud-top-h` is measured under the zoom it is painted at (667×375). Fit waits and the waitForFunction lint reject async predicates that never waited. After invalidateFit under freeze, waits force a HUD re-fit so `--hud-fit-stamp` can republish. Portrait race cells settle without the landscape `--hud-top-h` match. MINIMAL (`display:none` on `#hud-sectors`) skips sector-gated clearance waits.
+- on a phone the HUD layout presets BIG, CORNERS and CLEAN are no longer offered, because they pushed the gearbox off screen, covered the steer buttons or left overlaps.
+- the in-race HUD no longer re-fits itself every 3 seconds when nothing on it changed size, and touch steering no longer forces a page layout on every finger move (B·H11).
+- the timing tower no longer shrinks a size step when the HUD fonts arrive late, so a larger HUD SIZE never paints the TIME box smaller (e6f22d6).
+- Races where every car retires retain distance-based classification and shortened-race points instead of awarding everyone zero.
+- Reject wrong-generation content-hashed assets during offline installation and runtime loading, preserving the previous offline generation after a failed update.
+- Deliver accepted reliable multiplayer messages before a remote connection closes.
+- Keep pit garage team and driver identity tied to the active race car.
+- Preserve explicit camera tuning defaults when global camera adjustments are active.
+- Include visible Data Hub action words in accessible button names and synchronize retry labels.
+- Cancel binding capture before CHECK CONTROLS and retain the selected HUD layout throughout Arrange.
+- Preserve physical tyre age across red-flag grids and retain comparable Time Trial records across inactive GP wear preferences.
+- Apply live elevation grip displacement once in Track Designer.
+- Overlapping music imports no longer duplicate saved tracks. Failed imports and initial reads can retry, and version-changed database connections reopen on the next operation.
+- Selecting a newer-build career save keeps the picker open with UPDATE REQUIRED. Circuit removal preserves scored career achievements, wins and podiums without changing another circuit's round index.
+- Controller polling gaps neutralize axes without repeating held camera, shift or boost actions when the pad returns. The first connection still accepts its wake press.
+- Garage camera holds remain active when another finger lifts, and release safely when their own pointer ends, loses capture or the window blurs.
+- the agent API's aiPlace() ranks a placed car on the engine's lap convention (it was one lap ahead), and reset() no longer drops every car to slow V8 dictionary mode.
+- reopening the Data Hub while it is open no longer sends focus into the hidden dialog on close; a stale oversize race grid is dropped from memory when an unfinished race is forgotten; a room code that expires after a failed connect is taken down with the right copy.
+- Retired rivals no longer receive an unearned line crossing ahead of finishers in race results.
+- Hold controls release when a containing ancestor disappears during capture loss.
+- Malformed camera preset imports are rejected before saved tuning is changed.
+- Disabling INPUTS while paused clears its previous telemetry history immediately.
+- A canceled friend-race start no longer closes or takes connections from a replacement room when its old track build settles.
+- Immediate VR re-entry starts a fresh request. Late reference-space and renderer setup from the canceled attempt cannot detach the new session.
+- Preserve full custom-livery share codes and time-trial backup data across all supported native and custom circuits.
+- Keep Controls and storage-health settings usable when imported bindings are malformed or browser storage access is denied.
+- Honor explicit reduced-motion preferences in race effects and HUD animations, retain first-tick race journal events, and prevent obsolete model loads from restoring an unloaded pack.
+- Preserve debugger re-pause state, keep MCP smoke evidence valid JSON, and support presentation options on referenced argument schemas.
+- Replacing or reusing material maps while they load no longer frees textures still needed by the latest request.
+- Standing restarts preserve the explanations for penalties already earned in the same race.
+- Career and season recovery records retain their failed-write baseline, so an older mirror cannot replace a newer primary save after an abrupt close. Existing recovery and cross-tab conflict protection remain active.
+- Lap-record imports report refused storage writes and stay open. Retrying after storage recovers saves the cached records without duplicating them.
+- WATCH retries position downloads that cover only part of a driver's race, including old cached downloads, while preserving genuine early retirements. Telemetry and replay positions now follow timestamp order and ignore duplicate timestamps instead of producing backwards clocks or dropping valid samples.
+- remaining HUD overtake/aero/brake-bias aria strings go through I18n; gen-locales keeps tr/hT and plural defaults so locale keys are not dropped.
+- importing a career backup over a saved slot now keeps a local restore point of that save first, and refuses the import (nothing changes) when the restore point cannot be saved, instead of replacing the save with no undo.
+- Input.setSteerMode unknown values fall back to BUTTONS (aligned with game.js; M40).
+- screen rotation snaps touch steering to centre and refreshes the touch-range cache.
+- non-standard pads (wheels) no longer page menus from vendor buttons 6/7.
+- A missing gamepad snapshot recovers on elapsed time (fast re-probe for a quarter-second, then ~1 s), not after 60 display frames.
+- The INPUTS HUD legend keeps T / B / S on separate rows when traces meet, instead of stacking on one pixel.
+- BACKMARKERS practice credits each opponent once per attempt, so re-passing the same car cannot bank three-car mastery.
+- A touch press right after a blur or steer-mode change no longer blends from the previous drag when drag smoothing is on.
+- Switching windows no longer pauses the race with "controller disconnected" while a paired phone is still sending.
+- A steering finger whose release the canvas missed no longer holds the wheel at full lock, and rotating the phone mid-drag no longer reads as a steer.
+- A re-paired phone's tilt no longer eases in from the lean the previous link held.
+- On WebGPU phones (Safari 26) the 3D renderer no longer builds the PCSS shadow-blocker target that the classic renderer withholds from every phone, saving memory on jetsam-limited devices.
+- Recheck title layout after Home Screen launch and restoration so late viewport dimensions do not require a rotation to update the menu.
+- Jeddah start/finish moved to the main straight (`startFrac` 0.9160, `sceneryStartFrac` 0.9625) so the grid and line pass `startline-probe` with Turn 1 about 256 m ahead. Tier-stand chord caps on Magny-Cours `vaultStand` and Paul Ricard scaffold bleachers; night `crowdBand` keeps a dark mass with speckle-only phone lights.
+- Jeddah corner numbers sit on the apexes again. The start-line move rotated the turn table by 0.1916 of a lap instead of the scenery arc shift, so Turn 1 was painted on the straight.
+- garage `setupPresets.<team>` saves no longer warn as unregistered keys.
+- switching language back to English restores `data-i18n` / `data-i18n-attr` originals.
+- closing Settings while the door stays focused no longer leaves menu/garage warm parked.
+- the js-debugger reports lost targets, aborted runs and unresponsive pages, and reaches worker targets; debug-chrome guarantees the phone viewport (#2534).
+- keyboard players can press Enter straight through the race-start flow — the circuit picker now opens on RACE SETUP (not the ALL filter chip) and Race Settings on START RACE (not BACK).
+- Night road lighting no longer samples the lamp-grid texture when the grid is off, the surface is not road, or the fragment is outside the baked extent (#2927).
+- Wide and ultrawide title screens keep the menu columns together instead of pinning the wordmark to the left edge, and an upright tablet centres the doors in the space under the title.
+- Shared layout tokens now back the Data Hub, garage wide sheet, Photo Studio dock, and compact-wide title utility tiles; small phones no longer clip three-across room labels.
+- a first launch on a slow connection reaches the menu sooner: the renderer and other on-demand script bundles now download all at once instead of one dependency wave at a time.
+- HELMET VISOR › OFF now removes the helmet cam's oval eye-port frame too, live mid-race and after a camera cut; CLEAR and TINTED keep it (A·W48).
+- importing a career backup with a non-text team, a non-numeric year or a bad custom team name is refused instead of crashing the import card; a settings-file career with unreadable money is skipped rather than restored as a zero-credit career; a backup with an out-of-range round no longer overwrites a newer local season; binding PageDown/Home/arrows no longer scrolls the menu.
+- a career save or backup with an unreadable number in a field such as rep, year or budget level no longer crashes the import.
+- AI cars at speed now see a stopped car far enough ahead to brake for it, instead of only inside the last 34 m (#2565).
+- debris shards thrown off the track no longer fall forever holding a debris slot; they are removed once they drop below the circuit.
+- a heavy rear-end shunt now fires the contact feedback (hit count, shake, sound), the debris impact and the incident takeover candidate — they only fired on the last collision pass, which a hard hit never reached.
+- when a guest leaves a three-or-more-player race cleanly, the other guests are now told it was a clean leave instead of a local close.
+- dropping a guest on an older game version no longer reports the drop to the other guests as a local close.
+- a local rain shower's end no longer steps the air and track temperature 13 -> 30 °C / 14 -> 48 °C in one tick, and a practice rewind no longer keeps the storm safety car out for the rewound span again.
+- A single corrupt tilt (gyro) reading from a faulty sensor can no longer leave the steering stuck until the page is reloaded.
+- After reloading with sound muted, the title SOUND button now reads SOUND OFF straight away instead of SOUND ON until the first tap.
+- the in-race HUD no longer restyles the whole page whenever a gap time ticks over, cutting phone-class style recalculation by about 40 % a frame (B·H11, #3245).
+- Every race you finished stayed in memory for the rest of the session: finished cars, and through them their whole circuit. On a phone the game grew by roughly 28 MB per two races until it stuttered or the browser closed the tab. A finished race is now released when you return to the menu or start the next one.
+- restarting a race from the pause menu no longer leaves the previous race's last spoken line in the screen-reader region. A line that starts just as a dialog opens is spoken inside that dialog, where a screen reader can hear it.
+- Settings search now finds rivals sound, rivals volume, boost level and boost pitch, opening and focusing the existing controls without changing their values. Career season-goal progress waits for a race result instead of presenting the preseason grid order as an on-target championship position; completed zero-point races still count.
+- Livery editor now offers aero and floor shape presets alongside body shapes, with live preview and saved cosmetic choices that leave fitted parts and performance unchanged.
+- opening the garage paint editor and pressing CANCEL no longer throws away and repaints the saved livery; the draft paints into its own atlas.
+- Escape or a stray CANCEL on the garage paint editor no longer throws away an edited livery — the editor asks DISCARD EDITS? first and Escape steps back one level instead of closing the garage.
+- the livery editor says why a control is greyed out, on screen (phones never showed the hover hint), and greys HALO FINISH, COVER BIND SPINE ONLY and FIN HANDOFF CONTRAST when they cannot change the car.
+- on a phone the livery editor's UNDO/REDO status and the team-logo legibility warning are shown again.
+- the livery editor no longer greys BAND under COVER BIND SADDLE WRAP (it paints the saddle there), and TAIL STYLE TEAM names the motif it paints.
+- the livery editor preview is the car you save — a new paint job or a copy of the team livery keeps the team's brand mark colours (e.g. Ferrari's yellow shield) as editable mark colours instead of changing them on SAVE.
+- Livery edits survive another tab replacing the original paint job. Editor areas open at the top, keyboard focus follows editing and saving, and inherited colours and palette selections expose their accessible state.
+- switching teams in the menu or garage no longer finishes painting and uploading the previous team's full-size livery in the background.
+- VS FRIEND lobby ignores extra HELLO fields from peers and no longer rebuilds the circuit on repeated identical host settings.
+- Removing the last player from a VS FRIEND link/QR room no longer opens a public room code or later shows the host a guest's error.
+- After removing the last guest from a code room, a quietly rotated waiting-room code’s expiry shows the host’s INVITE ANOTHER message instead of the guest’s “check the six characters” copy (ported from #3535).
+- When a weak GPU leaves a race presenting a frame every few seconds, the game now drops to its lightest settings and, if that is not enough, returns to the menu with a graphics-reset notice instead of freezing.
+- The rapier vendor licence is now the Apache-2.0 text (was three.js's MIT), a unit test checks every vendored licence, and the code-nav skill smoke selects live tests.
+- after a solo retirement with no other cars left, the TV director still frames the player instead of leaving a blank TV camera.
+- Preserve phone-controller contacts and keyboard holds across touch releases, steering reversals and focus changes.
+- Seek WATCH chapters to their exact replay events and avoid rebuilding paused replay options.
+- Repair malformed career numeric fields and preflight every backup migration before writing imports.
+- Cancel stale soundtrack loads and prevent late Data Hub responses from overwriting explicit selections.
+- Preserve physical tyre age through red-flag restarts and bound custom car visual recipes.
+- Handle material readback allocation failures and WebGL error flags without leaking buffers or losing successful layers.
+- Expose debugger exception properties, release completed-run objects, and transport large Unicode source responses within bounded limits.
+- Report interrupted browser runs accurately and parse multiline skill descriptions for routing.
+- Observe settled VM page promises before advancing unrelated timers or rendered frames, while retaining the evaluate deadline and animation-frame pumping.
+- Declare fitted tyre age state when cars spawn so resets preserve fast object properties on Node 22, and align red-flag tyre fixture coordinates before fitting.
+- Shared debug Chrome discovery now honors an absolute `XDG_CONFIG_HOME`.
+- `debugger_break` uses separate breakpoint-wait and trigger-execution deadlines so inspecting a paused frame does not consume the short wait budget.
+- Empty or malformed multiplayer invite feedback scrolls fully into view on phones.
+- Compact Home buttons honor enlarged UI text without a viewport-based font cap.
+- Lazy camera and flyby loading follows the Visual Studio page and discards requests after leaving that visit.
+- Free Camera stays on the editor toolbar when compact Tools are collapsed; toolbar actions wrap on narrow panels.
+- RACE SETTINGS and an early RACE! tap wait less for the car preparation: it now resumes on the next frame instead of sleeping 32 ms after every slice.
+- Settings now separates Graphics, Visual Studio and Progress from HUD preferences and driving coaching. Pause opens Practice, Strategy and Review directly and returns to Pause. Search includes their controls, and leaving Saves & Data clears pending overwrite confirmation. Separate Garage and Career backup actions are also available in Saves & Data, and leaving the page cancels pending file reads.
+- Advanced input sliders follow a single reading column so keyboard and controller navigation can reach every control.
+- on software GL, quit-to-menu paints the title before heavy teardown work, defers the tail off the click handler, and records sync gaps the frame stall watchdog cannot see; garage CLOSE defers buildSelect so one tap is not swallowed by a multi-thread block. Independent of #3589 garage readback gates (#3593 revert).
+- play doors on tablet, laptop and desktop name what they open, and the title column stays a readable width on 1440p and ultrawide.
+- settings notes read more clearly, and the circuit, results and pause sheets use the width of a large monitor.
+- on phones the rear-view mirror renders at the game's phone pixel density (1.5x) instead of 2x, nearly halving its pixel cost; the folded mirror inset also skips the anti-aliasing pass it used to run and discard.
+- Races load faster on the three.js renderer. The rear-view mirror now reuses the shaders the track already compiled instead of compiling the whole world a second time.
+- TLX keeps the pipelines the menu warm builds (they were destroyed after 20 s off screen and rebuilt at the lights), so the first race on three.js WebGPU no longer recompiles most of the world at race entry (A·W50).
+- Career AI catalog development now improves race and qualifying pace relative to the legal works build. Aero and ERS retain their existing dedicated effects, and MY TEAM saved-build pacing stays unchanged.
+- Pit-stop wheel guns sound promptly even after a long session, preserving the crew's staggered loosen and tighten rattles.
+- Both car-beam cross-section dimensions now scale linearly with the requested thickness. Fixed front-wheel deflectors disappearing from race cars built with separate rotating wheels; the deflectors now stay on the stationary chassis in both full and split builds.
+- Keep authored telephoto framing for square and landscape race cameras, including distant TRACKSIDE shots. Apply the horizontal FOV floor and its vertical ceiling only to portrait views; cinematic shots retain their authored field of view.
+- Correct Jerez's scenery seat check to compare terrain with the anchor before its intentional 0.3 m embed, allowing the eight road-clear main paddock candidates to reach the motorhome placement helper. Road clearance, terrain mismatch rejection, and the helper's own placement guards remain active. The first support-paddock motorhome stands further back on the open apron to clear the terrace while retaining its emitted geometry. Two pads now sit on flatter ground so the motorhomes’ lower livery stripes remain above terrain.
+- Race settings read and save pit-stop strategy pins for the selected circuit, including fresh-menu choices made before the race modules or world load.
+- TLX Ambient Fill now preserves a zero setting instead of restoring full sky and ground ambient light.
+- Instant replay restores rival engine audio before a recorded retirement without changing live race classification.
+- Restore all occupied Relative HUD rows and clear phone positioning when switching to a fine pointer; switching back reapplies touch clearance.
+- Clear expired private-relay phone pairing QR codes, close the pending transport and restore pairing controls through the shared failure handler. Unreadable private answers receive the same cleanup.
+- Every Barlow Condensed number (pit and work timers, track limits, damage, plan stints, the winner badge) now uses fixed-width digits, so counting numbers no longer wobble.
+- Sharing phone-controller QR codes, multiplayer invites, ghosts and setup links from the desktop and Android apps opens the hosted game on the receiving device.
+- Native file exports wait for saving and sharing to finish, report failures and cancellation, and keep a cancelled career backup from opening Share again.
+- a single low-RTT clock PONG can no longer steal the multiplayer offset before a confirmed clock step; VS FRIEND room summary labels Storm (and Mixed → Storm) instead of Mixed.
+- Multiplayer interpolation now unwraps uint32 snapshot timestamps across the long-session `performance.now()` rollover, keeping remote cars ordered and responsive after roughly 49.7 days.
+- Changing or clearing a VS FRIEND TURN credentials URL now discards the previous relay.
+- A friend race guest whose clock has not synced yet holds the host's start moment until it does, instead of counting down seconds off the host for the whole race.
+- Data Hub now shows the next Grand Prix, its live countdown, and every weekend session in your local time.
+- The first night race on the three.js WebGPU path no longer recompiles every lit shader. Lamp pools after a day race in the same session are now smoothly filtered, as they already were on WebGL2.
+- Night and wet races on the three.js WebGPU path stall less after the start. Shadow shaders for every kind of track mesh are prepared during loading, and rain-lit decals share one shader instead of one per brightness.
+- Overcast and foggy nights no longer out-light a clear night; every circuit shares the clear night's street-lamp pools.
+- Node debugger test summaries explicitly use TAP on newer Node versions. Stopping a registered tooling process lets parents reap terminated children before shutting down, avoiding orphaned zombies on container hosts without an init reaper.
+- a flapping Nostr relay no longer reconnects every second; the backoff resets only after a socket stayed open 5 s.
+- Stream overlays without a chroma key keep their normal shadows and text styling.
+- The stream overlay differ now clears BATTLE when a race ends on a full frame or a gap-changing patch, so results/idle ticks cannot re-arm the fight chrome.
+- a multi-second freeze when the baked track materials finished loading during a race on the WebGPU and three.js renderers; the material pack now decodes without a GPU readback.
+- Start Race no longer silently re-enables START when the picker's in-flight track build was a different PerfGov tier (chunk bit) than RACE! — the garage drive-out runs after that abort finishes instead of racing it.
+- Pages verify-live no longer false-fails on CDN 503s or a superseded newer train; the poll logs the last live build/sha (#2923).
+- an AI passing several cars parked on the road now steers around the nearest one, not the one furthest behind it.
+- Invalid regional finish IDs are removed on import, and finish controls explain when the fin or wheel deflectors are absent while retaining dormant choices.
+- pause QUIT/RESTART confirm arms expire after five seconds of wall-clock idle, ghost double-taps use wall time instead of event timeStamp, and pointerup confirms when a slow frame loop delays click delivery (#4395 follow-up).
+- Quit to Menu and Restart Race confirm when both taps are handled in one late batch after a long software-GL frame (event-time age, not wall handling time alone).
+- the pause menu's armed RESTART / QUIT confirm now reads "TAP AGAIN" on one line at phone size, instead of wrapping and hiding its second line under the next row.
+- Quit to Menu and Restart Race confirm again when the second tap is delivered late but its event time is still within the confirm window (GPU/input lag).
+- the pause card returns with focus on the control you left after rotating the phone away and back.
+- pause menu race tools are one consistent set of tiles — RACE MESSAGES and REVIEW INPUTS join the tray like REWIND & RETRY, and a short last row fills the tray instead of leaving empty cells.
+- Reduced garage livery-edit mesh churn and released floor-reflection geometry when leaving the garage or replacing its renderer.
+- Stopped preparing unavailable dynamic shadow maps and disconnected observers belonging to discarded Data Hub schedule loads.
+- Applied distance and fog budgets to instanced scenery, and skipped inactive baked-light texture reads on decals.
+- Controller menu sticks release after an outside pointer lift when capture is unavailable; secondary mouse clicks no longer actuate controller controls.
+- QR scanner restarts keep stale detector completions from releasing a newer scan's busy guard.
+- GLX context recovery preserves its reload retry limit when session storage is unavailable.
+- Opt-in wheel-slip simulation applies the same lateral grip budget to low-speed yaw substeps.
+- Frame-time benchmark resets exclude historical long tasks.
+- Quitting a wet race from an onboard camera no longer leaves raindrops on screen over the menu, and leftover smoke and sparks no longer appear in the next track preview.
+- Pausing, quitting or turning SFX off now silences a crowd cheer that is still playing.
+- On 120 Hz phones and in the 45/30 frame-rate modes, adaptive quality no longer drops resolution while the game holds a steady frame rate.
+- A phone stuck at 30 fps because a small resolution step could not cross a screen refresh now tries one larger cut, and can settle at 60 fps.
+- on a first visit the game now downloads the race code before the 50-odd circuit files you are not racing on, and background downloads yield to what you are doing.
+- the offline voice cache keeps only the six most recent voices instead of every voice pack you ever tried.
+- on iPhone the sound files are now actually fetched ahead of your first tap (Safari ignored the old hint), and switching sound on no longer freezes the screen in one long pause.
+- race preparation builds each team's car body once and reuses it for the second driver, cutting car set-up work.
+- quitting to the menu frees the rear-view mirror's screen buffer (up to ~8 MB of graphics memory) until the next race.
+- the track build breaks its pit complex, hidden-face pass and street-circuit dressing into short steps, so the loading screen stutters less.
+- race entry spends far less time warming rival cars: the front-wing flap fit is about 34× faster, with identical wings (perf hunt 7).
+- the race-session, lighting and audio bundles start loading together as soon as you pick a circuit or tap RACE, not one after another once the track is ready.
+- track builds break their treelines into separate steps, so the loading screen stutters less.
+- with the announcer off, the game no longer downloads and keeps the announcer's voice pack (about 4–6 MB of memory on a phone).
+- online races send each guest one datagram per update instead of two or three (the host's car rides inside the relay packet).
+- less per-frame work drawing cars' active-aero wings, and the AI's decision records keep one shape for the whole race.
+- the helmet-cam visor glint now paints on the live site (it only drew with the developer API loaded).
+- the garage no longer rebuilds its room keys every frame or writes your save on every tune-slider movement.
+- GLX on phones clears its post-effect buffers instead of leaving them undefined (a lead for the iPhone black screen); bloom and blur spread is back to its intended size there.
+- Race-entry profiling no longer stays armed forever after a finished UI Start Race window (continueWindow now requires a live handoff before resuming).
+- AUTO SOAK / GPU-TEST dry legs use the dry braking envelope instead of always driving as wet.
+- Changing recorded voices during loading now releases deselected packs and skips obsolete queued downloads.
+- Track changes skip superseded worker builds and release retired shared rendering bindings.
+- Hidden HUDs retain lap and input sampling while skipping visual updates; model decoding yields between models.
+- Backgrounding requests pending save flushes, graphics-preset changes discard stale resolution verdicts, and locale files ship with releases.
+- Replay memory accounting includes timestamps, and failed captures release staging resources.
+- the AMBIENT OCCLUSION and GOD-RAYS help text now says the two share one graphics pass.
+- Camera projection stays correct when changing field of view or screen orientation after the performance governor sheds effects. Opt-in fixed render targets now display the complete image at phone HIGH resolution.
+- The phone controller's menu stick stays held when WebKit transfers pointer capture to another control.
+- on phones running the WebGPU renderer every camera (HELMET, CHASE, cockpit…) was stretched about 2× vertically, with the halo filling the screen — the phone orientation cover is now off on WebGPU, where three dropped its draw viewport.
+- Photo Studio photos render at full resolution when the live view runs at a reduced render scale (a phone's title scene saved a 217 × 122 px image), then the live scale returns.
+- Photo mode — Space on the focused show-controls eye (#pc-restore) brings the hidden photo UI back again (#3562).
+- Photo Mode now offers six temporary look presets and restores the exact prior lighting when Free Camera closes.
+- Daily Challenge results can build, render, share or download a privacy-bounded APEX 26 result card.
+- Photo Studio panel no longer reports a 10px horizontal clip on iPad portrait and desktop (#3338).
+- Photo Studio setting-row steppers, selects and buttons now meet the 44px tap floor with a mouse (#3337).
+- Photo Studio no longer upscales small imported personal photos (native size; keepSource still caps large ones).
+- Custom circuits now show an EDIT button beside CIRCUIT DETAIL on the Grand Prix picker, also on a phone in landscape, where the old edit shortcut was hidden.
+- Switching between the ALL / SEASON / CLASSICS / MY CIRCUITS tabs on the Grand Prix picker no longer flashes or rebuilds the circuit; the list swaps in place and the track is only prepared when you pick it or open race setup.
+- An AI safety-car or virtual-safety-car stop no longer pulls forward onto a tyre set that is one lap short of the flag. On the plan's own stop lap the free stop still stands when that set covers the final stint.
+- AI pit strategy reuses the step's weather and caution reads across the field while preserving live reads outside the simulation step.
+- A new friend-race room no longer inherits READY from a room the host has left, so each driver must confirm again before starting.
+- live-probe entry checks Apex occupancy before browser startup, so passing prerequisites do not conceal a busy-machine wait.
+- Pod-sculpt concept bodies (Auralis, Cevora, Vantrel, Orynth) use the same sparse sidepod/cover station density as the shared concept sculpt, cutting ~9% player body triangles without changing their authored silhouette recipes.
+- GLX software rendering no longer stalls on post-chain `readPixels` while the garage sheet is open (pairs with Platform readback gating in #3589).
+- on software GL, quit-to-menu no longer keeps drawing the race world or queueing TLX soft readbacks while MenuTeardown covers teardown — the title overlay stays responsive under SwiftShader (#4395).
+- QUIT TO MENU stays on TAP AGAIN until the player confirms or leaves the pause card, so a second tap still quits after a long stall.
+- starting a race straight from Daily, the Data Hub or a season while the circuit picker was still building the same track no longer builds the track twice (and can no longer drop back to the title when the two builds finish out of order).
+- on software GL (SwiftShader / llvmpipe), the material-pack retry no longer runs at race-entry start; it is deferred until after the grid countdown so scratch readbacks cannot stall the main context mid-entry (#3584).
+- The race-entry stage table reports each span's own time (`selfMs`), so a nested stage such as the grid countdown no longer counts the car warm twice.
+- leaving a race while the phone's landscape lock is still being applied no longer leaves the menus pinned to landscape, and a SAVE SETTINGS "ALL" file now carries every field of multi-part settings such as HOLD/TOGGLE (B·H11, #3388).
+- marshal light panels no longer stay dark for a whole session when the first lookup runs before scenery fills `props.list` (same memo class as start lights); JumpStartPenalty seeds an unset `penalty` so a stub car cannot NaN the total; LightTuneEdit rising-edge latch clears are pinned for both chunk knobs and ENV REFLECTION.
+- a second finger can activate CAM or PAUSE while a driving control is held; interrupted gestures and duplicate compatibility clicks are cancelled.
+- radio messages recover a readable lane clear of enlarged steering controls in cockpit view.
+- a lapped AI that still owed its second dry compound no longer has its pit stop cancelled when the leader takes the flag (it was then disqualified for "one dry compound").
+- an AI stopped in its box when the track dries back fits its planned next compound instead of the one after it.
+- After a race weekend with qualifying, quitting to the menu brought back the qualifying grid instead of the race you just finished.
+- The previous circuit is no longer kept in memory while the next one loads, or across several races, by the crowd sound, mirror lamps, pit lane, collisions or pit-side HUD.
+- a place gained under the Safety Car or VSC from a car that then beaches or crashes is no longer charged +10 s — the place can no longer be given back.
+- in a friend race, qualifying with every lap deleted stays NO TIME when the rival's lap arrives, instead of the model driving a lap for you (which could take pole).
+- A race started right after loading no longer re-lights itself a few seconds in; it waits for the lighting presets before its first frame.
+- the racing line — the on-road DRIVING LINE now draws the line the AI actually drives (it was pulled up to 6.8 m toward the centre before and after corners), is smooth between track nodes instead of faceted, and the line itself is relaxed against the real road geometry so it no longer kinks through tight corners. The RACING LINE steering assist no longer steers toward the middle of every straight.
+- A gap just under 10 seconds is read as "10", so the engineer and commentator say it. "10.0" had no recorded clip and the line went out silent.
+- Data Hub WATCH STOP DUEL follows a duellist who has a seat in the roster, so the replay starts instead of being refused (H3-10).
+- The rear wing's active aero now moves like a 2026 car's. All the upper flaps, including the top plane that used to stay still, open together about a pivot near their trailing edge. That opens a slot at the leading edge, and Straight Mode flattens the wing instead of flipping it nose-up.
+- Recorded pre-race announcer lines now reach the existing ANNOUNCER captions when decoded audio is scheduled, respecting caption preferences and skipped or cancelled playback.
+- A red flag no longer ends the race on a finish countdown that was already running, so the standing restart still happens.
+- A WebGPU renderer pick no longer drops to WebGL2 on a slow GPU start-up without saying why; when it does fall back, the reason is logged (#2285).
+- Wheels seen only in mirrors keep rotating, and drawing no longer overwrites the physics wheelspin signal.
+- returning from a race rebuilds a released garage room before reporting preparation ready.
+- Saved private rendezvous URLs now use the same HTTPS and loopback-only policy as QR pairing.
+- Closing the optional Three.js Inspector preserves a usable renderer and restores its timestamp-query setting.
+- Performance trace recording bounds retained timing entries and releases them when stopped or reset.
+- Pit-stop sounds resume immediately after a replay rewind or a new race resets the clock.
+- Data Hub race results now show DSQ, DNS or DNF even when the provider keeps a finish time.
+- Data Hub qualifying results no longer claim the first car without a later-round time was knocked out; the cut band now says that car may have advanced.
+- On phones using the THREE.JS renderer's WebGL2 path, the scene's HDR colour is back to the 64-bit format: the 32-bit packed format measured slower on an iPhone 14 (42.5 fps against 45.7 and 47.0, and 55 against 13–19 frames over 33 ms); the WebGPU path is unchanged.
+- the first race on three.js WebGPU no longer compiles the steering-wheel display's shader at the start lights; the menu warm builds it (A·W56, #3673).
+- starting a race on the three.js renderer no longer waits up to 20 s for the cockpit warm; it now runs behind the race warm instead of being timed out (Monza race entry +20 s on software GL since #3221).
+- Schedule countdowns announce when a race starts, including with reduced motion enabled.
+- After opening the Data Hub once, the schedule countdown kept reacting to every on-screen text change for the rest of the session, including during races.
+- Closing the photo studio now releases its saved-photo list instead of keeping the thumbnails and photo data in memory.
+- DATA HUB BUTTON HEIGHT and GARAGE HEADINGS CENTRE now change the screen on a landscape phone.
+- Long Data Hub visits no longer accumulate hidden scroll-fade registrations for replaced picker rows.
+- Sepang’s T3–T4 and T9 road now retains the circuit’s published 16 m minimum instead of unsupported 13.6–13.8 m narrowing zones. T15 remains constrained by the existing centreline and still needs a separate geometry correction.
+- Quitting a race and starting another kept the previous circuit's merged chunk draws in the renderer, so the next track loaded with those objects still resident.
+- RaceWakeLock now removes its WakeLockSentinel release listener when the race ends, so repeated races do not accumulate listeners.
+- TLX track teardown now batches chunked frees, skips warm/dropLater deferral for that window, and flushes only the old circuit's geos (not global flushDropLater), so llvmpipe quit→menu→race drops prior merge draws without zeroing the next circuit's ribbons.
+- Ownership flush now purges straggler three RenderObjects for freed chunk geos (mesh dispose plus native WebGPU geometry dispose), matching macos-latest/Metal session-quit-memory.
+- Program-warm probe meshes retire through the same object dispose event as pooled draws, so quit→menu→track switch does not leave monza warm-probe RenderObjects on three/WebGL2 after the deploy-tip merge.
+- dragging a colour or slider no longer re-writes every unchanged settings reason line, which cut menu lag on phones.
+- Settings search now finds captions, colour vision and keyboard/controller hold-or-toggle controls, and names destinations consistently with the Settings menu.
+- Keep the STANDARD steering label after restoring an ALL SETTINGS file; the restore writes the effective shipped brake-cue default explicitly, so it no longer appears as a custom setup on the next reload.
+- Settings cross-links now return to their source page and button, including links opened after a settings search. Back keeps the returning button visible after rotating your phone and when returning to the Settings index.
+- LOAD SETTINGS now restores a calibrated controller stick centre instead of silently dropping it, and choosing FEEL › SIM on a fresh install no longer lights the PRO preset chip while the car runs STANDARD assists (B·H11, #3384).
+- Double-tapping SAVE CURRENT SETUP in the garage no longer replaces "Setup saved" with a false "name already used" error.
+- the share card’s QR code is now dark on a light tile, so phone camera scanners that cannot read inverted codes open the link (H3-11).
+- Daily share cards now include a scannable link in solo play.
+- Share-code imports close Settings before opening the Garage or Daily Challenge picker.
+- the broken-install script retry no longer deletes the downloaded voice packs (apex26-voice); it clears only the numbered app caches.
+- SIDEPOD colour paints the full sidepod shell, matching the finish control's coverage while preserving intake voids, carbon and separate trim.
+- On a software graphics adapter, a race draws at half resolution from the shader warm onward, so the picture stays usable instead of stalling for many seconds.
+- Garage and time-trial backup exports include session-only changes retained after storage refuses a save, and settings imports retain leaderboard histories larger than 600 laps within the supported backup limit.
+- Mid-race JUMP IN samples recorded positions at the published lap-start time when missing lap timings or restart gaps separate the recording clock from the simulated pace clock.
+- Rejected career calendar changes remain rejected during save recovery, and calendar resets clear old championship countback.
+- Asset generation retires disabled low-resolution atlases and accepts supported self-contained model buffers.
+- Diagnostic and physics commands validate requested work before launching it, and workflow checks use the configured shell checker.
+- Tyres fitted after the finish no longer change compound-rule compliance, and Daily events use the correct factory car geometry.
+- Multiplayer AI pit and tyre state reaches guests, and reconnect negotiation survives intermediate connection states and one-sided outages.
+- Ghost records remain retryable after storage recovers, and unrelated compact input recordings stay compressed until selected.
+- Track rebuilds prepare large meshes off the main thread when supported, retain cooperative fallback and report worker and replay costs separately.
+- Renderer allocation failures release unpublished buffers, and asymmetric scenery keeps its authored geometry and orientation.
+- Camera holds and voice auditions stop when their owning controls close; LIVE session labels and failed calendar selections stay current.
+- Offline updates preserve the previous installed cache across build-number gaps without repeating essential preload work.
+- Live scenery previews stop clearance work when their output budget is exhausted, without changing the generated preview.
+- Data providers allow two response bodies in flight while honoring start quotas and header-time rate-limit pauses.
+- Controller pedal readings and D-pad steering timing across device switches and physics steps.
+- Camera tuning follows the active circuit and followed car, including championship rounds and WATCH cuts.
+- XR rendering continues to present headset frames while a solo race is paused.
+- Track scenery water overlap, left-handed props, and ribbon geometry after graphics quality changes.
+- Replay caution commentary, photo studio navigation, garage reset errors, and share cancellation handling.
+- Several rendering, telemetry, editor, audio, and agent-view edge cases.
+- the title screen's SOUND button now draws its music note as a CSS-masked icon instead of the ♪ character, which no bundled font contains — the note no longer renders in a different fallback font (or as a missing-glyph box) from one machine to the next.
+- Rapid Spotify speaker changes keep each speaker’s pending volume gesture separate, including switching back before the request is sent.
+- Cancelled or superseded session starts skip preparation before it can change the newer session.
+- Returning to a tab no longer restarts rain audio that was explicitly stopped while hidden.
+- On software graphics (SwiftShader / llvmpipe), the stall watchdog no longer reloads to the title with the graphics-reset card — during race entry, after garage close, or on the menu — it records the skip instead.
+- the stall watchdog has an off-switch (`?stallwatch=0` / `apex26.stallWatch=0`) for probe browsers that are not flagged as automation, so a software-GL MCP session no longer reloads mid-race.
+- STANDINGS on the Home menu is clickable again after a season race (it no longer sits under the Garage tile on phone landscape).
+- tiered grandstands, terraces and spectator banks follow the road curve on bends instead of leaving saw-tooth gaps outside and overlapping inside (#2204).
+- Unsupported career and settings values no longer erase an existing save when storage serialization rejects them (#2361).
+- service worker cache sweeps now keep one prior offline generation while a tab is still open, so lazy assets from an older shell stay available after a deploy.
+- on software GL (SwiftShader / llvmpipe), START RACE from race settings now paints the loading prep scrim and stage labels during cold shader work instead of freezing the sheet with no visible progress, and shows the short race card in place of the loading flyby that recompiled the circuit behind the dialog (hardware unchanged).
+- software-GL race starts no longer trip the stall watchdog during RACE SETTINGS “PREPARING…” shader warm (the sheet now shares the relaxed loading-cover budget with the garage and loading scrim).
+- PWA shortcut icon (`icons/shortcut-96.png`) is seeded in the service-worker optional precache so an installed app can still resolve shortcut artwork offline.
+- an installed app that kept the previous offline cache while a tab was open now drops that cache on the next launch after every tab has closed, instead of holding it until the next update.
+- on software GL, Start Race no longer resizes the canvas down and back (each resize stalled SwiftShader for tens of seconds and could drop the context). The race scale is chosen once before the canvas is first sized, and texture-pack readback waits through the countdown and the race-entry handoff instead of readPixels during them.
+- SwiftShader/llvmpipe GLX post no longer blooms mid-tones on cockpit and garage — software raster raises the bright-pass knee and scales bloom down when the scene target lacks real HDR headroom (#3590 readback skip unchanged).
+- first-race context loss on software GL returns to the restored title menu instead of the Graphics unavailable screen; race-entry soften (render scale 0.72, env probe off) is session-only on software raster and does not write saved settings.
+- The track designer's SPAN WIDTH − and + now say "Select a RANGE of points" when they are unavailable.
+- Team picker cards on landscape phones grow to fit the team and driver names instead of spilling text over the card below.
+- The default landscape-phone title menu uses the available right-hand width and a compact three-column play grid so all destinations fit above the home indicator, including returning players' Continue button.
+- Deployed CSS preloads carry matching integrity so Chrome can reuse them.
+- TLX submits the visible chunks of one scenery record as a single mesh when that set is unchanged, instead of one draw per chunk. The triangles and the opaque depth test stay the same; a repeated view does not re-upload the index. `apex26.tlxChunkMerge=0` restores one draw per chunk; values 1–4 stay the build-time chunk merge.
+- switching to the cockpit, helmet or visor camera mid-race no longer freezes the three.js renderer for a second or more; the cockpit is prepared behind the loading screen.
+- after repeated WebGL context losses in a tab whose sessionStorage is blocked, the three.js renderer now reads and clears its window.name reload budget, so it stops reloading instead of looping.
+- forcing the mobile tier (apex26.forceMobileTier=1) on a software or paravirtual WebGPU adapter (lavapipe, the macOS CI runner) no longer presents to the native canvas and loses the GPU device; a real handset UA is unchanged.
+- TLX geometry registry no longer double-counts meshes (`buildGeometry` + `createMesh`); garage livery churn waits for settled `geoLive` before leak samples.
+- Three.js instance batches preserve unchanged cell prefixes and upload only changed matrix/tint tails, including count-only tail removal and pending-write range unions.
+- TLX track switches now release plain attribute-backed instanced mirrors through Three.js's dispose event, avoiding stale render objects and Mesh.dispose errors.
+- TLX could throw "Cannot read properties of null (reading 'constructor')" in present about 30 s into a race after freeing car shadow-caster CPU mirrors before every attribute had its GPU buffer; the release now waits for the upload.
+- on the WebGPU renderer, a garage livery edit no longer rebuilds the car's GPU pipeline on the next frame (one fewer pipeline compile per paint change).
+- TLX WebGL2 on SwiftShader/llvmpipe is classified from the live renderer string so PerfGov.softwareRaster() and software-GL readback gates apply on AUTO→WebGL2 fallback, not only when the WebGPU adapter sniff fires.
+- on WebGPU (iPhone Safari), merged terrain and road chunks no longer keep drawing the first set of visible chunks after the view moves; chunked shadow casts and unused uniform writes are cheaper.
+- THREE PATH: WEBGPU no longer builds the final post pass (FXAA or the upscaler) or the cloud-cache shader in the middle of a race; both are now ready before the lights go out.
+- on-screen GAS and BRAKE read as pedals, a left-handed portrait race swaps the thumb columns, and the Home Screen tip no longer covers the pedals or steer arrows during a race.
+- none — touch/HUD tokens moved into css/tokens.css; no painted change.
+- A bank zone sitting on a straight within 60 m of a corner no longer steals that corner's apex from a farther zone that should re-seat there — the near zone keeps its approach bank, and the far zone can still land on the intended apex.
+- Track Designer keeps its map, elevation profile, inspector and file actions reachable on short phones and at larger interface sizes.
+- Track Designer section tabs now expose their panels to assistive technology and support Arrow, Home and End keyboard navigation.
+- Circuit selection: Season, Classics and Favourites filters respond when a custom circuit is selected.
+- Full-lap road-width zones retain their coverage when a circuit's start line is rotated or its direction is reversed.
+- Circuits build faster, most on hilly tracks (the Hungaroring and the Nürburgring in about half the time), and a track uses a few MB less memory. The first flyby after a track switch no longer stalls to rebuild the terrain lookup.
+- Spa corner numbering, Montreal's open Biosphere silhouette, and Hungaroring's short paddock building and buried ground floor.
+- track shot surveys re-site the start/finish trackside camera out of the pit complex, so the survey frame no longer shows the inside of a wall (#3313).
+- Lit shaders compile the GGX distribution, Smith visibility and Schlick Fresnel once per program, instead of pasting a fresh copy at every lamp lobe, sun lobe and environment Fresnel.
+- A lit surface or track decal created while the scene is already writing the reflection tag is born on that multi-target shader, instead of compiling the single-target shader and then the multi-target one on the next frame.
+- keep Camera and Lighting tuner action labels readable in short landscape rails.
+- drop unused public exports from several UI helpers (CssZoom, Captions, SheetShape, SettingDeps, HudReadouts, ShareCode, SaveHealth) with no behaviour change.
+- menu flows (UI hunt 3) — Escape or gamepad B in FIND A SETTING clears the search before closing Settings; the back gesture lets an inner Escape win first (circuit search, garage camera panel, peek); VS FRIEND's Escape and back follow its on-screen BACK; an abandoned NEW CAREER gives your live save back; announcements made with a dialog open are spoken; the Garage category tabs belong to their tab list for screen readers; career slot names match what they show; settings backups keep device-picked BUILD IN BACKGROUND and unset rows unset, and say how many values were skipped. Back now ends REPOSITION TOUCH CONTROLS; HOW TO PLAY section links no longer cost extra back presses; the NEXT GP shortcut always opens the schedule; round earnings, new badges and the winner's time are read out by screen readers.
+- Greyed-out buttons and settings now say why they are unavailable. Examples: Spotify before you connect, LAPS/WEATHER/TIME in a Daily Challenge, Photo Studio before a capture, practice tools outside practice, voice and battle-tone previews with sound off, title-layout tools away from the title screen, and the track designer and Data hub before a selection or gather.
+- phone HELMET (the default camera) shows the floating speed again; the GEAR pill covered the wheel screen's digits, so no speed was visible.
+- STRATEGY and RELATIVE no longer swap sides after HUD SIZE 150 % and back; the same settings now give the same layout without a reload.
+- BUTTON SIZE never paints a smaller setting larger than a bigger one (a cap left from 300 % kept GAS at 85 px at 100 %).
+- RELATIVE never shrinks to your own row alone; it keeps a neighbour or steps aside.
+- the radio card is no longer squeezed into a sliver beside the gap chips; it takes a full-width free slot.
+- BROADCAST style on a landscape phone keeps the timing tower at an 11 px text floor.
+- the spotter caption ("Car left") no longer stays on screen after the call — it fades after 2.5 s and clears on restart and quit to menu.
+- CAPTION POSITION "BESIDE MIRROR" now sits beside the mirror instead of over the touch pedals.
+- dragging the touch pads in REPOSITION works with MIRROR CONTROLS on.
+- the circuit picker no longer reopens filtered by the last search.
+- the UPDATE READY and INSTALL chips no longer cover RACE SETUP, DONE or BACK on the circuit picker, career and car setup screens.
+- time-trial results — repeated COPY taps no longer stack copy boxes, and CLEAR GHOST keeps keyboard/controller focus.
+- larger touch targets for the iOS install banner close button, the title-layout resize handle and the replay seek bar; the track editor canvas shows focus in high-contrast mode; the loading letterbox fits Safari's visible viewport.
+- the phone/browser BACK gesture closes the open screen (or pauses a race) instead of leaving the game; on the bare title it still leaves.
+- a fast double tap no longer skips the QUIT / RESTART confirm, and no longer lands on the next screen's buttons after opening a menu.
+- focus returns to the opener after closing Garage or Practice, and Tab wraps inside dialogs.
+- the CAM picker fits a phone in landscape (HELMET, TV, DRONE reachable), closes at race end, no longer opens on a quick tap, and shows full labels.
+- NEW CAREER BACK returns to the save slots; the DATA button reopens your last Data Hub tab; VS FRIEND has BACK on the host/join steps; Season setup asks before discarding unapplied calendar edits.
+- strategy readouts drop the "~" that read as a minus sign.
+- Pause menu on a phone with a custom CARD WIDTH — the wide split card now scales with the width setting instead of falling back to the old tall stack with QUIT below the screen.
+- A large BUTTON SIZE no longer shrinks the speed, gear and tyre readouts below their normal size (they painted at 10 px with BUTTON SIZE 245 whatever HUD SIZE said).
+- The iPhone "Add to Home Screen" tip no longer shows through the race results card.
+- Settings — FIND A SETTING starts empty each time Settings opens, instead of keeping the last search's filter.
+- Data Hub — the close button (✕) is now reachable with the arrow keys and D-pad: Up from the section tabs.
+- Rotating the phone keeps the focused menu control on screen (Career and every other scrolling sheet).
+- Closing the Garage puts keyboard and gamepad focus back on the GARAGE button, instead of losing it behind the RETURNING screen.
+- Settings that do nothing in the current setup now grey out with a visible reason — TURN CHASING off an onboard camera, LINE COLOUR when the driving line is OFF in Race settings, and Photo Studio’s menu-background controls unless Appearance Scene is My photo. Garage team locks and HUD arrange VISIBILITY also show their reason on screen (not only as a hover title) so phones can read it.
+- UI binding assertions accept finite numeric browser serialization differences below 0.000001 while retaining exact string and boolean comparisons.
+- Atlas coverage requires observed subview markers for screens sharing a root. Garage routes wait for deferred tabs and their content; the theme persistence mission uses the current native select and verifies the saved preference after reload.
+- Replay reloads wait for game boot before clicking the title menu, preventing early clicks from being lost before handlers attach.
+- UI exploration now notices toggle changes, reports native control roles and inherited disabled state, and distinguishes scrolling axes when reporting offscreen controls.
+- Boxless display:contents ancestors no longer falsely clip usable controls in inspector reports; outer real clipping remains detectable.
+- Inspector no longer reports controls as blocked from an unsettled first layout or a bare-page hit test, and counts a native label as part of its control's tap target.
+- Inspector layout settlement waits for finite CSS animations (a fading sheet no longer reads as unclickable), and the team picker and livery editor catalog routes wait for their garage card instead of a fixed delay.
+- Track Designer shows import and save feedback on short landscape phones and keeps keyboard focus through delete confirmation.
+- Enlarged Home menus respond to gamepad paging, and menu shortcuts leave text composition alone.
+- Data Hub LIVE refresh keeps the focused sort control; Career validation reveals and describes the first invalid field.
+- Settings > Appearance: the ADVANCED customisation row is a full-size tap target on phones (it painted 28 px tall).
+- Settings > Appearance: preset names are no longer cut off on the iPhone Pro Max in landscape at larger UI sizes.
+- title menu is a named main landmark; Practice / Photo Studio / Garage keep their subtitles for screen readers when dense Home hides .mb-sub; FREE CAMERA arrows stay with the fly-cam instead of menu focus; race announcements clear from the live region when a session resets.
+- Keep Garage Camera controls clickable on portrait phones and give landscape camera controls a wider, bounded drawer. Keep circuit search visible in portrait and the selected circuit name visible on short landscape screens.
+- Short-landscape Garage reserves space for Camera controls, keeps budget sizing on the correct axis, and provides a scrolling category rail with a usable parts list. Backup actions stay aligned above their selected content at every width.
+- Replay event controls and Data Hub telemetry gauges now leave unchanged DOM values alone, avoiding repeated menu-observer work during playback while keeping seeks and changing samples responsive.
+- Appearance choices, presets and resets refresh their preview once after the final state is ready; Undo immediately clears the preset highlight. HUD readouts that already fit their slot avoid redundant zero-offset writes and repeated measurements while retaining collision and resize handling.
+- On a phone held sideways, the pause menu's RESUME button now sits at the bottom of the card, where your thumbs already are, in every pause layout. The default split card already had it in the left thumb's reach.
+- On a phone held sideways, the race result's NEXT / RACE AGAIN and MENU buttons are back in a bottom bar instead of the top-right corner.
+- On a phone held sideways, the Data Hub's section tabs are a bottom bar instead of a strip across the top.
+- Graphics and camera/lighting tuner labels reserve enough space beside their controls, and tuner headings wrap their toolbar controls instead of overlapping Preview.
+- Settings Practice goals use the native selector's intrinsic text width, while Controls and Saves disclosures show one state indicator.
+- Data Hub session times wrap inside their own columns, with tighter tab and footer spacing on compact screens.
+- UI scale / viewport settle repaints scroll-fade masks on the same turn as layout again; the 48 ms coalesce remains for mutation storms during Settings open (D·IP2).
+- CONTINUE on a career names the save's own next circuit and round count, matching the career hub (#2160).
+- CONTINUE no longer offers yesterday's Daily, which opened today's on another circuit (#2155).
+- RACE IN PORTRAIT can be turned off again: SETTINGS › DISPLAY › RACE IN PORTRAIT (#2157).
+- A controller's D-pad Left/Right leaves the circuit search and pairing-code fields instead of doing nothing (#2161).
+- Up/Down off a Data Hub tab whose panel is empty no longer focuses the next tab without selecting it (uihunt4-flows-1030).
+- screen readers now announce the MUSIC & SOUND "audio engine did not load" note when it appears.
+- on a freshly loaded title screen, Enter or Space puts keyboard focus on CAREER MODES, as the first arrow press already did.
+- rotating the phone no longer leaves the focused CAREER GUIDE contents link off the edge of its strip.
+- with HIGH CONTRAST on, your race position in the HUD timing strip was dark on dark and nearly unreadable; it is back to dark on light.
+- Manually arranged HUD widgets now keep unrestricted positions and positive sizes, including placements over controls or beyond the screen, without automatic fitting moving or shrinking them on Resume.
+- Node unit tests can opt into `file://` breakpoints on vm-loaded `js/` via `npm run debug:unit`, and a determinism red names its first divergent physics step (#2960, #2963).
+- Race a Friend's CLOSE button keeps its slanted corners on landscape phones instead of being clipped at both sides.
+- `helmet-sheet.mjs` creates parent dirs for nested `--out` paths under `scratch/renders` (#3427).
+- `quick-validate.mjs` handles `--help`/`-h` and rejects a non-numeric port before starting the server (#3324).
+- `agent.mjs help <hook>` resolves colliding hook names (`world`, `track`, …) from `docs/agent-index.json` without booting Chromium (#3327).
+- `probe-page.mjs` screenshot timeout is configurable (`--shot-timeout` / `opts.timeout`) and falls back to a 2×2 tiled CDP capture when a full-frame shot times out on SwiftShader.
+- Spine designs lightning, twoTone and keylineSplit now clear a 2.0:1 contrast floor on large crest and tail fields (lightning no longer paints the same colour on itself; Alpine/Audi two-colour layouts re-pick a readable second design colour in livery-design without changing team base paints).
+- Garage WHEELS/TYRES picker copy now matches the open-rim mesh and 2026 Pirelli role colours (no false aero-cover claims).
+- STYLE Arc Script and Raised Letters tyre sidewall lettering is proud and tall enough to read at default garage zoom (was ΔHaus 18 / 8 mm vs medium / soft).
+- Donington's East Midlands Airport airliner sits on an eastern apron pad instead of floating ~128 m above the terrain at frac 0.617.
+- Magny-Cours race-control stack and Adelaide/Estoril/Lycée `vaultStand` roofs seat on terrain — ground-audit unsupported dropped from 36 to 0 (legs used centre-style `addCyl`; glazed deck had a 0.15 m air gap).
+- Silverstone scenery no longer buries backdrop hills, thin kerb pads, or the paddock service yard under rising terrain (ground-audit buried 36 → 2).
+- Spa no longer plants front-rank pines through the paddock motorhomes or the Gold-3 spectator bank, and the Eau Rouge marshal posts clear the valley wall — clip-audit severe spots drop from 4 to 0. Paddock motorhomes sit further back on the apron; race control and the timing tower seat closer to usable ground; the Francorchamps church nave and tower no longer share a side plane.
+- Singapore city modelGroups and skyline towers sit on solid cores instead of floating 150–218 m caps, and far silhouette slabs no longer z-fight their own night window bands (#3361). Ratchet baselines lowered for Singapore coplanar (7→3) and flatCoplanar (2→0).
+- Cloud Agent install cures `npm_config_prefix=/` when Cursor's `/exec-daemon/node` shadows nvm on PATH (D·W14a).
+- Crowd bed rebuilds onto a new AudioContext after an output-device or resume rebuild (no silent stands / leaked nodes); AudioContext constructor failures warn instead of throwing; mobile rival engine slots stay with their car across a rank swap.
+- Raising a race's disconnect grace re-arms a live lobby ICE timer, so a Wi-Fi blip that started in the lobby no longer drops the rival 5 s into the race.
+- Truncated pre-sync state frames no longer replace a held snapshot (or flush garbage when the clock lands).
+- The reliable EVENT backlog under SCTP pressure is capped; a late BYE/GO can still displace the oldest queued critical.
+- Refuse non-finite camera aspect and FOV after resize/orientation so the projection never collapses to 0/NaN; HELMET lens rates match COCKPIT on a mode switch; setCamMode rejects a NaN index.
+- Phone-as-controller no longer stacks duplicate tilt (deviceorientation) listeners when SCAN arms the sensor and CONNECT (or a second arm) runs before the first reading arrives.
+- A second `Input.init` refreshes pause/pad-lost callbacks without stacking keyboard, blur, or gamepad listeners (a toggle GAS key no longer flips twice per press).
+- Track Designer full-lap width zones (0→1) no longer collapse to a zero-width notch when saved, shared or reloaded.
+- RANDOMISE that cannot find a green loop leaves the current design in place instead of committing a known-red candidate.
+- scenery PLACE / COPY store at least each kind's minimum roadside gap, matching batch placement.
+- process-dashboard pages Actions jobs at 30 (not 100) and retries 502/429; shared github-api.mjs curls get the same 5xx backoff (W18f / #2233).
+- Blended night→day/dusk/dawn no longer leaves the city skyglow dome on — the weather-fade mixer treats a null target as a fade-to-clear and writes it through, matching the cut path.
+- `waterSurface` seats on the ground under the sheet instead of the lap's lowest road height, so Spa's Eau Rouge brook and other hillside ponds are no longer buried tens of metres under the valley (#3281). Coastal `waterBand` seas stay at the lap floor.
+- Bahrain's mid-lap dune wedges and desert ridges seat on local sand instead of the Sakhir valley floor (#3342).
+- Broadcast overlay patches no longer wipe the timing tower or leave the BATTLE chrome stuck after a race ends — the painter merges differ patches, hides battles outside race/count, and exposes `clear()`. The feed differ drops a cleared caption id so the same id can re-arm, and forces `battle:null` when leaving a live race. `Particles.clear()` also drops the rain-feed dirty latch so a quit cannot resurrect the previous frame's geometry.
+- bitmap decode no longer leaves an unhandled worker rejection when an error reply cannot post, and a terminated worker is cleared so the next decode can respawn instead of posting at a corpse forever.
+- OpenF1 car_data/location window filters encode `date>=` / `date<=` like the live delta path, so proxies cannot truncate the range and the cache key matches.
+- a career (or other) ScriptLoader retry no longer re-runs a classic script that already evaluated, so a partial lazy failure can recover without a full page reload (#3295).
+- on the WebGL2 path, per-chunk lamp draws no longer leave the lamp-shadow slot stuck after a throw — `setLampShadowSlot` now updates the same uniform cache `begin()` reads, and the chunked restore runs in `finally`.
+- A calendar-protected career that survived only in the store cache after a quota-refused localStorage write-back is no longer clobbered to empty on the next `readSlot` (`null === null` on the captured raw).
+- the service worker no longer caches a query-less HTTP 200 navigation that lacks a matching `apex-build` meta, so a captive portal cannot replace the offline shell (#3293).
+- Retro (2000s) cockpit shift lights no longer go fully dark at the limiter; they flash SHIFT↔full ramp like the modern wheel, and stay on SHIFT under reduced motion.
+- Camera tuner APXC1 import now rejects pastes over 256 KiB before JSON.parse (matching sibling share codecs); chained `#share=` undo eviction remains in share-code.js.
+- Settings › Appearance theme/accent steppers stay thumb-sized at 75% UI scale (painted `--tap-paint` floor; #3307).
+- WGX props and glass stay visible when a chunked GPU upload fails — `createChunkedMesh` falls back to a single `createMesh` instead of leaving an empty handle.
+- Phone-controller private room codes and track-designer text fields no longer sit under iOS Safari’s 16px focus zoom floor.
+- agent-index / AGENT-HOOKS / impact-map gen order is stable across hosts (sort by id, no localeCompare).
+- the boot no longer guess-preloads the ~735 KB three.js vendor island before the renderer pick is known — the island waits until `start()` commits to THREE, so a wrong guess costs no boot bandwidth (#3515).
+- VS Friend sheet title (`#dlg-vsfriend`) no longer clips inside `#vs-head` at UI SIZE 200% on desktop.
+- On title landscape, INSTALL APP lifts clear of PAUSE BACKGROUND (and the iOS Add-to-Home banner when both show).
+- Pause menu primary controls stay at the ~44px tapSoft floor when UI SIZE is 75% (phone and desktop) — layered `--tap-paint` / `44/ui-scale` floors in `css/dialogs.css` (#3274).
+- Opening Settings no longer forces a synchronous layout reflow in `UiLayers.shownLayer` (open dialogs and ordinary `hidden`-toggled layers skip geometry after TopModal writes; #3248).
+- Garage SAVE & FIT no longer leaves the previous fitted livery's ~26.7 MB hi-res atlas resident when a new `custom_<ts>` id takes over (#3609).
+- MOVE & SIZE greys (and explains) sliders for chips the active MINIMAL / COMPACT HUD preset already hides — menus used to keep them live because body.hud-prof-* lagged the store (#3273).
+- Title mode tiles no longer clip at UI scale 200% on phone landscape (#3305).
+- Crowd bed and cheer pool re-attach onto a new AudioContext after an iOS/device rebuild (no silent stands aiming a closed context).
+- loading a day track after a night race no longer keeps the previous grid alive through the tail-light pool — FrameLights.release() clears those car refs.
+- agents can run `node tools/ci/js-debugger-smoke.mjs` to fail-fast when js-debugger `list-tools` or the no-browser cpuprofile-summary path is broken (no Device Farm / daemon).
+- APPEARANCE studio profile name and selects no longer sit under iOS Safari’s 16px focus zoom floor.
+- returning to the title menu no longer rewrites unchanged door labels or clones every career save just to count them, which was hitching the zoomed menu column at high UI scale.
+- Opening Settings no longer arms a ScrollFade refresh while the sheet is still hidden, so boot and the open path do not stack a second full menu measure on the sheet's own hidden-flip settle.
+- Find a Setting reuses its result buttons and caches option labels instead of rebuilding the list and re-reading every select on each keystroke.
+- a connected gamepad and a resting keyboard no longer build a Set, an Object.keys array, or a steering exponent on every frame while those controls are idle.
+- Saving a career or season no longer copies every garage livery out of the IndexedDB mirror. A livery, setup, or parts save still reads the whole mirror so the size cap stays exact.
+- A race keeps the screen awake when the browser drops the wake lock on its own (low battery or power saver) without hiding the page.
+- On a phone, a settled HUD no longer remeasures sectors, BOOST and the gap tower on every tick while the fit is waiting to recheck.
+- outwash_max (and every drs:1 rear wing) no longer shows horizontal banding on the wing-preset behind camera — the DRS slot-gap rail and actuator pod sat through the closed top flap (#3413).
+- Suzuka's Motopia Circuit Wheel is taller and farther out so the teal Ferris disc owns the Casio / start-finish skyline in day orbit surveys; the mid-lap orange flex stand is pushed clear of the survey camera (#3366).
+- Qatar day S/F orbit no longer sits inside the main grandstand bowl (#3365); Lusail Hill and pit slab keep daylight identity.
+- Red Bull Ring scenery-orbit cameras no longer clip inside the +1 climb and stadium stands at survey stations ~0.17 / 0.25 / 0.75 / 0.92 — those shells and bowl lamp posts sit past the orbit ring so the eye and sightline stay clear (#3364).
+- data-hub skill line anchors for showTab MAX_AGE reuse and loadStandings match tip (hub.js ~374-386, standings.js ~124-130) (#3352).
+- Vegas day Strip reads as cream hotel façades, a day-contrast Sphere, and Bellagio colonnade/fountains — desert hinterland and the Paris Montgolfier plaza sign no longer own the orbit (#3363).
+- Shanghai Pudong skyline cue moves to multi-km haze (~2.4 km), seats the required `shanghai-pudong` pad on `terrainYAt`, and replaces near-track glass/window-band towers with hazed `backdrop` silhouettes (#3360).
+- Albert Park Melbourne CBD skyline beyond the lake uses `cityFront` mid-rise fabric again (was voided; horizon read as abstract tower stubs).
+- Mugello Arrabbiata mid-lap day orbit no longer sits inside near-tree canopy; cypress ranks and the hillside casale read as Tuscan identity instead of a generic pine wall (#3375).
+- Monza park hedges no longer share side planes along the west-park lake, and Curva Grande / Parabolica foliage no longer punches the hedge band or the steel grandstand — coplanar spots and clip-severe both drop below their saturating baselines (#3374).
+- Nürburgring GP-Strecke horizon — Eifel mountain rings and the Burg Nürburg cone keep spruce-green rock colours (no beige sand pyramids); Burg sits on a compass NNE bearing (#3373).
+- Portimão verges read as Algarve red cut-banks and graded red runoff instead of continuous green/tan shoulders (#3372).
+- Monaco mid-lap orbit (frac ≈ 0.50) no longer buried in Fairmont-cliff plane crowns — racing line visible day and night (#3368).
+- MY TEAM sheet no longer clips 10 px sideways on phone portrait (#3336).
+- Garage LIVERY Factory finishes defaults open on desktop so End reaches the last card past content-visibility; phone stays collapsed (#3339 / #3860).
+- Dijon Prenois hillside hedges and crop drapes no longer saturate clip-severe / flatCoplanar baselines (#3348).
+- Estoril main-straight / Parabólica stand mass and denser plateau scrub (#3345).
+- Bahrain's main tribuna reads as a cream Gulf stand with a blue seat rake by day, instead of a dark grey slab (#3347).
+- Bahrain mid-lap dune wedges and limestone scree seat on local sand without burying their skirts under the desert mesh (ground-audit buried 16→2, unsupported 1→0) (#3342).
+- Catalunya pit/stand corridor no longer has severe scenery clip spots.
+- Baku night orbit at frac ≈ 0.83 no longer buried in theme-dress neonTowers on Neftchilar +1 — Caspian boulevard readable under night lighting (#3340).
+- Buenos Aires (Gálvez) mass-concrete terrace density for classic open tribunas (#3350); S/F terrace gap clears kit pit-straight shells (coplanar-faces).
+- Hungaroring day/dry start orbit no longer reads a neat fir rank opposite a dark pit slab — pit-straight planting is carved back for the dusty amphitheatre, and the 2025 paddock mass keeps a white/glazed track face (#3317).
+- Kyalami start orbit/trackside (frac 0) no longer look into/under the main grandstand lean-to — Highveld pit straight visible again (#3316).
+- Race settings laps/weather/time ‹ › steppers meet the 44px tap floor on desktop (were 40×40; #3276).
+- Pause music transport prev/play/skip meet the 44px tap floor on desktop (were 40×40 `.as-tbtn`; #3275).
+- Miami day S/F orbit/trackside cameras no longer sit inside the Hard Rock bowl — stadium gap and roof clear the dual_lite corridor (#3369).
+- WATCH can refresh a saved recording that is missing a stretch of positions, while a pit stop or a red flag still leaves its gap in the replay (#2465).
+- WATCH's AUTO and FOLLOW LOCK buttons include their visible text in accessible names while preserving keyboard activation and selected-state feedback.
+- Experimental incident simulation enforces its eight-car takeover budget across all simultaneous collision clusters and wall strikes; failed promotions leave capacity available and handbacks release it.
+- WATCH replay speed keys no longer swallow Ctrl, Cmd or Alt chords, so browser zoom works during a replay.
+- Stop-hook H1 documented for Bryce (`docs/notes/STOP-HOOK-H1-BRYCE-2026-10-18.md`) with a tested reference script; bash-guard timeout root cause recorded (#2647); 24 h PR CI lifecycle re-measure (#2213).
+- `test-observed` matches live-reporter log lines (parentheses in test titles, nested describe reporter keys).
+- Wet-road reflections respect porous grass, foliage, sand, rock and snow, with reflection metadata retained at every active graphics tier, including Medium and Low.
+- Native WebGPU preserves authored world material IDs, including fractional foliage and flags, so wet shading distinguishes terrain from pavement.
+- Explicitly concrete inner terrain stays paved, and background ground carries the circuit's material instead of turning grass or sand into puddled pavement.
+- Night skies no longer apply solar sunset bands or solar scattering to a low moon key.
+- Thermal drift's one-minute cooldown now runs while it re-learns the frame time.
+- a career race whose modules failed to load (BACK on the retry card), hit a save conflict or lost the GPU context no longer locks the round's objective brief or escrows the planning budget; the weekend now counts as started only once the race is actually built.
+- wet-road scene reflections fade during measured performance cuts and recovery instead of switching abruptly; crash safety and explicit off controls still stop them immediately. Reflection distance masks now use defined, ordered smoothstep bounds across renderers.
+- wet-road scene reflections remain available on LOW graphics, using shorter-range ray marching and simpler filtering. MEDIUM uses a reduced reflection budget; sustained overload can still fall back to sky and lamp reflections.
+- The WebGPU backup skips constructing the unused screen-space reflection shader, pipeline and uniform buffer on phone/WebKit and forced-lite tiers. Desktop reflections and the existing phone rendering policy are preserved.
+- WebGPU night chunked draws no longer spend a draw-uniform slot and a setBindGroup that no triangle samples, and a road run stays one draw when the next chunk's lamp mask matches. The SSAO and god-ray blur pipelines compile that shader once.
+- WGX sun-shadow PCF texel now tracks the real map size (no dual SHADOW_SIZE).
+- Inverted steering controls now move menus in the same direction on standard mapped pads.
+- Reverse-travel wheel lock and spin flags no longer swap (WheelState, off by default).
+- a cold track-build worker fetches its scripts together and then runs them in order, instead of waiting out one network round trip per file, and mesh channels other than the road and terrain arrive as typed arrays so the page does not copy them on the main thread. Baked model downloads start while the track-build scripts are still loading.
+- BitmapDecode keeps only the pack-strip worker port — the unused ImageBitmap decode path and dead exports are gone.
+- BitmapDecode ignores crossed strip/decode worker replies (no leaked ImageBitmap; decode falls back).
+- Career saves with digit-string versions preserve current progress, and imports leave unsupported destination saves untouched.
+- Blur and reset release remote steering and pedals until a fresh control sample arrives.
+- Deleting or replacing a custom track clears its context-specific ghosts.
+- My Team garage swatches use the active career paint. Imported custom paints repair conflicting IDs and keep paint selection consistent.
+- After switching renderers for VR, the game now asks for a fresh tap to enter VR so the headset request has user activation.
+- Armed VR now plans the TLX WebGL2 (forceGL) renderer instead of GLX, which cannot attach a headset session.
+- A failed WebGPU VR enter latches WebGL2 for the next tap instead of retrying without user activation; a dropped recenter pose stays pending; a capability-probe throw no longer wipes the VR latch; degenerate seated-rig axes and a centered stick overwrite are guarded.
+- Zero-Pod Concept engine cover in the garage — sidepod loft no longer overshoots the EVO Kit silhouette by a full arcade step (Hausdorff back near the other performance packages).
+
+### Removed
+- Unused audio public exports (RivalAudio pass-by helpers, CrowdAudio boost helpers, ErsLayer gain helpers, GameAudio radioChannels/sessionType/tiltDb, VoicePack internals, BattleEarcon pcmFor/KEYS). Heard mix unchanged.
+- Unused public car mesh/shade/materials/outline exports — `CarMesh.MIRROR_GLASS_V`, CarShade internals (`RING_N`, `EXP`, `EXP_TOP`, `LOWER`, `RAMP`, `pref`, `loftRings`, `heightZone`, `skin`, `sect`, `pipe`, `rquad`), CarMaterials finish helpers (`applyZones`, `PAINT_ZONES`, `ZONE_FINISH`), and `GarageSurfaceOutline.FIELDS` stay module-local (no behaviour change).
+- Unused public career exports — `Badges.KEY` / `STREAK_DAYS`, `SaveMigrate.tallyOf`, and `CareerBackup.slotKey` / `IDENTITY_KEYS` / `otherFlavourPending` stay module-local (no behaviour change).
+- unused render shared exports (DrivingLine MODES/PALETTES/STEP/HALF_W, MirrorPass.QUALITY, Puddles vnoise/growth, VertexPack unorm16 aliases, Frustum.FOG_CULL_FD).
+- unused public exports on HUD chip / fit helpers (`HudLayout` packer constants and unused `KEY`/`LIM`; `HudTyres` / `HudElements` module-local keys). No layout change.
+- Unused public input exports — `Input.clearPadRest`, `ControllerProfiles.idOf`, and `InputBindings.HOLD_MODE_ACTIONS` stay gone / module-local (no behaviour change).
+- unused public net exports (`NetHandshake.INVISIBLE`, `NetSdp.verify`/`VERSION`, `NetScan.VENDOR`, `NetQr.byteCapacity`/`MAX_VERSION`, LobbySettings weather/grid sets, NetPlay publish/quali internals, `NetNostr.exchange` alias + local helpers, rendezvous private-code consts). No protocol or wire change.
+- PhotoStudio unused ASPECTS and LIMIT exports (crop/library stay private).
+- Unused public race-session exports — `RaceControl.HOLD_M`/`SC_*`/`POST_FINISH_CAP`, `FlyingStart` run-up helpers, `SessionRecords.PHYS`, SportingRegs compound helpers + caution/blue-flag scalars, and `StartLights.create().countdownCamera` stay module-local (no behaviour change).
+- unused js/track public exports (TrackPit STREET/NARROW/ROAD_MIN/WALL_GROW/LIMIT_KPH/GRID_*/ROW_END, TrackDef dayPal/nightPal/realPoints/applyHwZones/materializeListPoints, TrackSpline.SCALE, TrackBuildClient KEY/defaultOn). Regenerated scenery-locations sourceDigest after TRACK_VM edit.
 
 ## 1695
 

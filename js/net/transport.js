@@ -142,276 +142,11 @@ const NetTransport = (function () {
   // pump(), matching loopback exactly. Without that, RTC delivery would
   // interleave with the fixed-step loop at arbitrary points and the two
   // transports would not be substitutable.
-  // More than one STUN server, because a single one is a single point of
-  // failure for the ONE thing that decides whether two people can connect:
-  // learning your own public address. If it is blocked, rate-limited, or slow
-  // on the day, you gather only LAN candidates and the connection fails with
-  // no explanation. Different operators, so they do not fail together.
-  const STUN = [
-    "stun:stun.l.google.com:19302",
-    "stun:stun1.l.google.com:19302",
-    "stun:stun.cloudflare.com:3478",
-  ];
+  // The server list is NetIce. create() is per evaluation so a reload of
+  // this file — the unit harness drops a memoised TURN fetch that way —
+  // does not share the previous cache. Callers still use the names below.
+  const { STUN, prefetchIce, iceServers, hasRelay, relayOnly, turnFromStore, dropFetched } = NetIce.create();
 
-  // A TURN relay is the only thing that connects two symmetric NATs, and STUN
-  // alone leaves roughly 10-25% of pairs unable to connect at all — which is
-  // exactly the "both sides found an address but the link was blocked" failure
-  // seen on real devices. Our traffic is ~2 KB/s per player and only relays
-  // when a direct path fails.
-  //
-  // NO STATIC FREE RELAY. Open Relay's embeddable credentials
-  // (openrelayproject/openrelayproject) are retired — Metered requires a
-  // per-account API key and a credentials endpoint that RETURNS the iceServers
-  // array. Measured from a real device, that static config gathers zero relay
-  // candidates while STUN works, which is worse than shipping nothing,
-  // because it looks like a relay exists and diagnosis chases the wrong thing.
-  //
-  // That is why no static CREDENTIALS ship — a credentials URL is only used
-  // when an operator explicitly configures one. iceServers() merges every source it has:
-  //   apex26.turnApi — your own credentials URL (Metered-style: returns
-  //     {iceServers|iceServers:[…]} or a bare array), fetched by prefetchIce()
-  //     when the lobby opens.
-  //   apex26.turn — a single static server you run yourself, listed first.
-  //   Two free no-account relays, appended LAST so anything
-  //   you configured still wins — but OFF unless opted into, and the
-  //   free-relays block below says why that is not timidity.
-  // No TURN credential ships in the client. A browser-visible API key is
-  // reusable by anyone who downloads the game and can exhaust the relay
-  // account's quota. Operators can still provide their own short-lived
-  // credentials endpoint through apex26.turnApi; the default is honest
-  // STUN-only operation until one is configured.
-  const TURN_API = "";
-
-  // How long a credentials endpoint gets before we race without it. Short on
-  // purpose: a relay improves the odds of connecting, and waiting for one is
-  // never worth making the player stare at a lobby that has not opened.
-  const FETCH_TIMEOUT_MS = 4000;
-  // Metered (and typical TURN REST) vends expiring credentials — often ~1 h.
-  // Refresh before that so a new RTCPeerConnection never gathers with a dead
-  // username/credential. 55 min leaves a small skew margin under a 60 min TTL.
-  const ICE_CRED_TTL_MS = 55 * 60 * 1000;
-
-  let fetchedIce = null;
-  let fetchedIceAt = 0;
-  let fetchingIce = null;
-  let activeTurnApi = null;
-  let turnApiVersion = 0;
-  function configuredTurnApi() {
-    let url = null;
-    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
-    return url || TURN_API;
-  }
-  function syncTurnApi() {
-    const url = configuredTurnApi();
-    if (url !== activeTurnApi) {
-      // Credentials belong to their endpoint. A late answer from the previous
-      // endpoint must not revive its relay after the setting changes.
-      activeTurnApi = url;
-      turnApiVersion++;
-      fetchedIce = null;
-      fetchedIceAt = 0;
-      fetchingIce = null;
-    }
-    return url;
-  }
-  function iceCredFresh() {
-    return !!(fetchedIce && (Date.now() - fetchedIceAt) < ICE_CRED_TTL_MS);
-  }
-  function prefetchIce() {
-    const jobs = [derivedRelays()];
-    const url = syncTurnApi();
-    // Re-fetch when the previous answer is past ICE_CRED_TTL_MS (or never
-    // landed). iceServers are fixed at RTCPeerConnection construction, so
-    // stale credentials only hurt the NEXT gather — refresh before that.
-    if (url && !iceCredFresh() && !fetchingIce) {
-      const version = turnApiVersion;
-      // Keep last-good fetchedIce while the refresh runs. Nulling it here made
-      // iceServers() STUN-only mid-refresh, so a PC built in that window lost a
-      // still-usable TURN. Replace only when a new list lands (or rtc() drops a
-      // malformed cache). A failed refresh keeps the prior credentials.
-      // BOUNDED. A credentials endpoint that never answers — captive portal,
-      // dead DNS, a firewall that blackholes rather than refuses — must not
-      // become an unbounded wait, because the lobby now awaits this before
-      // building a connection. Abort rather than merely ignore, or the socket
-      // lingers.
-      const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-      const bail = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) { /* already settled */ } }, FETCH_TIMEOUT_MS);
-      fetchingIce = fetch(url, ctl ? { signal: ctl.signal } : undefined).then((r) => r.json()).then((body) => {
-        const raw = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
-        // PER-ENTRY validation, not just "is an array". This list is
-        // third-party and is spread straight into `new PC(cfg)`: one entry
-        // without `urls` throws there, and the throw brick-walls every
-        // connection attempt for as long as the fetch stays cached (55 min).
-        // The two localStorage-sourced lists already validate per entry.
-        const list = Array.isArray(raw) ? raw.filter((e) => e && e.urls) : null;
-        if (version === turnApiVersion && Array.isArray(list) && list.length) {
-          fetchedIce = list;
-          fetchedIceAt = Date.now();
-        }
-        return fetchedIce;
-      }).catch((err) => {
-        // No relay is a NORMAL state and must not block the lobby (see below),
-        // but docs/MULTIPLAYER.md documents prefetchIce() as the thing that has
-        // to land before a connection is built — and when it does not, every wire dump
-        // reads relay:0 while the relay is demonstrably alive. Retained so that
-        // symptom has a cause attached to it. Last-good stays if we had one.
-        Log.warn("net", "TURN credential fetch failed, gathering STUN-only:", err && err.message);
-        return fetchedIce;
-      }).finally(() => {
-        clearTimeout(bail);
-        if (version === turnApiVersion) fetchingIce = null;
-      });
-    }
-    if (fetchingIce) jobs.push(fetchingIce);
-    // Failure-silent by design: no relay is a NORMAL state, and a lobby that
-    // refused to open because a free third party was down would be worse than
-    // one that connects for the ~80% of pairs needing no relay at all.
-    return Promise.all(jobs).then(() => null, () => null);
-  }
-
-  // THE FREE RELAYS, and the honest state of the evidence.
-  //
-  // Open Relay publishes the shared secret for its static-auth host
-  // (`openrelayprojectsecret`) as the config for Nextcloud Talk and Matrix,
-  // which is the standard coturn REST scheme: the CLIENT derives
-  //   username   = <unix expiry>
-  //   credential = base64(HMAC-SHA1(secret, username))
-  // No account, and the credential EXPIRES, which is strictly better than the
-  // hardcoded password this game shipped until 971 and which its operator had
-  // by then retired.
-  //
-  // BOTH ARE OFF BY DEFAULT, BECAUSE BOTH WERE MEASURED DEAD.
-  //
-  // This is not a guess. Trickle-ICE gathers were run from two independent
-  // internet vantage points (public IPs 18.145.255.226 and 54.151.122.159),
-  // each carrying a CONTROL — Google STUN — alongside both relays. The
-  // control produced an srflx candidate both times, so DNS and UDP demonstrably
-  // worked; both relays produced ZERO relay candidates both times, with
-  // "701 host lookup" against each. A control is what makes that a fact about
-  // the relays rather than a fact about the test box, and it is exactly what
-  // the first, controlless run lacked. Independently, streamlit-webrtc's docs
-  // describe Open Relay as "often down".
-  //
-  // Build 971 removed a dead relay because it is WORSE than none: it looks
-  // like a relay exists and diagnosis chases the wrong thing. Shipping two
-  // more measured-dead entries on by default would re-earn that exactly.
-  //
-  // So the code stays and the switch is the player's:
-  //
-  //     localStorage.setItem("apex26.freeTurn", "true")
-  //     await __apex.turnProbe()
-  //
-  // — which costs nothing while they are down, and is one line the day either
-  // operator comes back. turnProbe() is what answers the question; do not
-  // re-argue this list without running it.
-  const OPEN_RELAY_SECRET = "openrelayprojectsecret";
-  const OPEN_RELAY_HOSTS = [
-    "turn:staticauth.openrelay.metered.ca:80",
-    "turn:staticauth.openrelay.metered.ca:443",
-    "turn:staticauth.openrelay.metered.ca:443?transport=tcp",
-  ];
-  const FREE_TURN = [
-    { urls: "turn:freestun.net:3478", username: "free", credential: "free" },
-  ];
-
-  function freeTurnOn() {
-    try { return localStorage.getItem("apex26.freeTurn") === "true"; }
-    catch (e) { return false; }
-  }
-
-  // The derived username encodes its own 24h expiry (below); mirror
-  // iceCredFresh()'s pattern so a tab left open past that re-derives instead
-  // of racing with a credential coturn will by then reject.
-  const DERIVED_TTL_MS = 23 * 60 * 60 * 1000;
-  let derived = null;
-  let derivedAt = 0;
-  let deriving = null;
-  let derivedWarned = false;
-  function derivedFresh() {
-    return !!(derived && (Date.now() - derivedAt) < DERIVED_TTL_MS);
-  }
-  function derivedRelays() {
-    if (!freeTurnOn()) return Promise.resolve(null);
-    if (derivedFresh()) return Promise.resolve(derived);
-    if (deriving) return deriving;
-    const sub = (typeof crypto !== "undefined" && crypto.subtle) ? crypto.subtle : null;
-    if (!sub) return Promise.resolve(null);      // no WebCrypto: freestun only
-    const username = String(Math.floor(Date.now() / 1000) + 86400);
-    const enc = (s) => new TextEncoder().encode(s);
-    deriving = sub.importKey("raw", enc(OPEN_RELAY_SECRET), { name: "HMAC", hash: "SHA-1" }, false, ["sign"])
-      .then((key) => sub.sign("HMAC", key, enc(username)))
-      .then((sig) => {
-        const credential = NetBytes.bytesToB64(new Uint8Array(sig));
-        derived = OPEN_RELAY_HOSTS.map((urls) => ({ urls, username, credential }));
-        derivedAt = Date.now();
-        return derived;
-      })
-      .catch((e) => {
-        // Once per page: every join retries the derivation, and the cause does not change.
-        if (!derivedWarned) { derivedWarned = true; Log.warn("net", "free-TURN credential derivation failed, relay-less ICE:", e && e.message); }
-        return null;
-      })
-      .then((r) => { deriving = null; return r; });
-    return deriving;
-  }
-
-  // RELAY ONLY, for testing the path that NAT'd and mobile players actually
-  // depend on. On one machine — and on most home networks — a direct host pair
-  // forms instantly and TURN is never touched, so the relay leg is exactly the
-  // one a developer never exercises and a player on carrier-grade NAT always
-  // does. Forcing it is the only way to find out it is broken before somebody's
-  // phone does.
-  //
-  // localStorage apex26.iceRelayOnly = "true". Read HERE rather than passed
-  // down from the lobby, for the same reason turnFromStore() is: the real
-  // transport and any harness then behave identically.
-  function relayOnly() {
-    try { return localStorage.getItem("apex26.iceRelayOnly") === "true"; }
-    catch (e) { return false; }
-  }
-
-  // Your own relay still wins when you have one: localStorage apex26.turn =
-  // {"urls":"turn:host:3478","username":"u","credential":"p"}. Read here rather
-  // than in the lobby so the real transport and any harness behave identically.
-  function turnFromStore() {
-    try {
-      const raw = localStorage.getItem("apex26.turn");
-      if (!raw) return null;
-      const cfg = JSON.parse(raw);
-      return cfg && cfg.urls ? cfg : null;
-    } catch (e) { return null; }
-  }
-
-  // `stunOnly` leaves every fetched/derived relay out — the retry path in
-  // rtc() below, after a construction that a fetched entry made throw.
-  function iceServers(opts, stunOnly) {
-    syncTurnApi();
-    if (opts.iceServers) return opts.iceServers;
-    const list = [{ urls: STUN }];
-    if (stunOnly) return list;
-    const mine = turnFromStore();
-    if (mine) list.push(mine);
-    // Use last-good even while a TTL refresh is in flight (or briefly past
-    // ICE_CRED_TTL_MS). iceCredFresh() gates the FETCH, not the merge — forcing
-    // STUN-only mid-refresh dropped a still-usable TURN on the next PC.
-    if (fetchedIce) list.push(...fetchedIce);
-    // The free relays go LAST when opted in, and only ever add candidates.
-    // ICE tries every pair it can form and keeps the best, so ordering by
-    // INTENT — yours, then your operator's, then whatever is free — means a
-    // free entry can never displace one that works.
-    if (freeTurnOn()) {
-      if (derivedFresh()) list.push(...derived);
-      list.push(...FREE_TURN);
-    }
-    return list;
-  }
-
-  function hasRelay() {
-    return iceServers({}).some((e) => {
-      const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
-      return urls.some((u) => /^turns?:/i.test(u));
-    });
-  }
 
   function rtc(opts) {
     opts = opts || {};
@@ -443,8 +178,7 @@ const NetTransport = (function () {
       // fresh answer) and try once more with STUN alone — which is exactly
       // what the connection would have had before the relay existed.
       Log.warn("net", "rtc create fail (" + ((e && e.message) || e) + ") — dropping fetched ICE, retrying STUN-only");
-      fetchedIce = null;
-      fetchedIceAt = 0;
+      dropFetched();
       try {
         pc = build(true);
       } catch (e2) {
@@ -478,6 +212,9 @@ const NetTransport = (function () {
       quali: 1, qabort: 1, lap: 1, settings: 1, hello: 1, ready: 1,
     };
     let inbox = [];
+    // pump()'s other buffer: it swaps with inbox, so a frame with mail
+    // allocates no batch copy. null while a pump walks it (see ep.pump).
+    let spare = [];
     let queuedState = 0;
     let queuedEvents = 0;
     let queuedBytes = 0;
@@ -488,6 +225,7 @@ const NetTransport = (function () {
     // Cap matches the inbound EVENT inbox; terminal race-flow types may displace
     // the oldest queued critical so a late BYE/GO still leaves.
     const EVENT_OUT_CAP = 256;
+    const CLOSE_LINGER_MS = 500, CLOSE_POLL_MS = 25;   // shutdown("local"): let a BYE leave before pc.close()
     const EVENT_TERMINAL = { bye: 1, go: 1, qgo: 1, start: 1, result: 1 };
     let eventOut = [];   // critical EVENT payloads waiting for bufferedAmount to drain
 
@@ -509,11 +247,32 @@ const NetTransport = (function () {
       if (discTimer) { clearTimeout(discTimer); discTimer = null; }
       endEpisode();
       if (!drain) inbox.length = 0;
-      eventOut.length = 0;
+      const queued = eventOut;
+      eventOut = [];
       if (!drain) queuedState = queuedEvents = queuedBytes = 0;
+      // A LOCAL CLOSE LETS ITS LAST WORDS LEAVE. NetPlay.stop() sends BYE and
+      // closes in one breath, and pc.close() aborts the SCTP association with
+      // whatever is still buffered: the BYE was lost and the peer kept a ghost
+      // rival until its own timeout. So the backpressure queue is handed to the
+      // channel, and the pc closes once the send buffers drain (or after
+      // CLOSE_LINGER_MS). Nothing is accepted or delivered meanwhile: status is
+      // already "closed". A peer, failure or overflow close stays immediate.
+      const ev = chans[EVENT];
+      const buffered = () => CHANNELS.some((k) => chans[k] && chans[k].readyState === "open" && chans[k].bufferedAmount > 0);
+      if (reason === "local" && ev && ev.readyState === "open" && (queued.length || buffered())) {
+        for (const data of queued) { try { ev.send(data); } catch (e) { break; } }
+        const until = Date.now() + CLOSE_LINGER_MS;
+        const check = () => {
+          if (buffered() && Date.now() < until) { setTimeout(check, CLOSE_POLL_MS); return; }
+          closePc();
+        };
+        setTimeout(check, CLOSE_POLL_MS);
+      } else closePc();
+      if (!drain) ep._emit("close", reason);
+    }
+    function closePc() {
       for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) { /* already closing */ } }
       try { pc.close(); } catch (e) { /* already closing */ }
-      if (!drain) ep._emit("close", reason);
     }
 
     function peekEventType(data) {
@@ -676,6 +435,7 @@ const NetTransport = (function () {
     let restartTimer = null;
     let episode = null;               // { code, attempt, token } while an outage lasts
     let listener = null;              // answerer-only, last completed credentials
+    let resume = null;                // { code, attempt } of an episode that ended still down
     let iceRestarts = 0;
     function cancelRestart(ctx) {
       if (!ctx) return;
@@ -693,7 +453,7 @@ const NetTransport = (function () {
       if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
       const pending = episode;
       cancelRestart(episode); cancelRestart(listener);
-      episode = listener = null;
+      episode = listener = resume = null;
       // A blip that healed before the answer came leaves our restart offer
       // pending; roll it back so the next episode starts from stable.
       if (pending && pc.signalingState === "have-local-offer" && ep.status === "open") {
@@ -773,7 +533,8 @@ const NetTransport = (function () {
         return live(ctx) ? pc.localDescription.sdp : null;
       };
       while (live(ctx)) {
-        const r = await courier.answer(ctx.code + "R" + ctx.attempt, reply, ctx.token);
+        // Only the healthy listener holds a long window; an outage episode re-dials every JOIN window.
+        const r = await courier.answer(ctx.code + "R" + ctx.attempt, reply, ctx.token, listener === ctx);
         if (!live(ctx)) return;
         if (r && r.ok) {
           ctx.attempt++;
@@ -781,16 +542,47 @@ const NetTransport = (function () {
         else if (!r || r.error !== "expired") return;   // only a quiet relay is worth another listen
       }
     }
+    // An episode that ends while the pc is still down — a courier offer that
+    // came back no_relay mid network switch, a thrown createOffer, a listen
+    // that errored — must not hold `episode` for the rest of the outage, or no
+    // later state change ever starts another restart and the wire closes at
+    // the grace a restart would have beaten (#4998). Release it and try again
+    // after the usual delay on the same code and attempt (a failed offer never
+    // advanced the answerer either); the grace still bounds the whole outage.
+    function settleEpisode(ctx) {
+      if (episode !== ctx || ctx.token.cancelled || ep.status !== "open") return;
+      cancelRestart(ctx); episode = null;
+      const s = pc.connectionState;
+      if (!ctx.code || ctx.attempt >= 3 || !(s === "disconnected" || s === "failed")) return;
+      resume = { code: ctx.code, attempt: ctx.attempt };
+      if (restartTimer) clearTimeout(restartTimer);
+      restartTimer = setTimeout(beginRestart, RESTART_DELAY_MS);
+    }
     function beginRestart() {
       restartTimer = null;
       if (episode || !courier || ep.status !== "open") return;
-      if (listener) { episode = listener; listener = null; return; }
+      // The healthy listener's sockets may be minutes old and silently dead (a NAT
+      // rebind or network switch closes nothing on an idle reader). An outage
+      // re-dials: a fresh episode on the same code and attempt, short windows.
+      if (listener) {
+        const old = listener; listener = null;
+        cancelRestart(old);
+        if (old.code) {
+          const ctx = episode = { code: old.code, attempt: old.attempt, token: { cancelled: false } };
+          answerRestart(ctx).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); })
+            .finally(() => settleEpisode(ctx));
+          return;
+        }
+      }
       const ctx = episode = { code: null, attempt: 0, token: { cancelled: false } };
+      const was = resume; resume = null;
       restartCode().then((k) => {
         if (!k || !live(ctx)) return null;
         ctx.code = k.code;
+        if (was && was.code === k.code) ctx.attempt = was.attempt;
         return k.offerer ? offerRestart(ctx) : answerRestart(ctx);
-      }).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); });
+      }).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); })
+        .finally(() => settleEpisode(ctx));
     }
     function listenRestart(rotate = false) {
       // Only the original answerer listens while healthy. This is the same
@@ -871,9 +663,13 @@ const NetTransport = (function () {
       // and throw on `.channel` — out of pump(), out of the game loop, on the
       // one frame a peer says goodbye. Clearing BEFORE the loop also means a
       // handler that queues a fresh message keeps it for the next pump instead
-      // of having it wiped by a trailing reset.
-      const batch = inbox.slice(0);
-      inbox.length = 0;
+      // of having it wiped by a trailing reset. Detaching is a SWAP with the
+      // spare buffer (no per-frame copy); the walked batch is emptied after the
+      // loop and becomes the next spare. A re-entrant pump finds spare null
+      // and takes a fresh array rather than the batch being walked.
+      const batch = inbox;
+      inbox = spare || [];
+      spare = null;
       queuedState = queuedEvents = queuedBytes = 0;
       for (let i = 0; i < batch.length; i++) {
         const m = batch[i];
@@ -885,6 +681,8 @@ const NetTransport = (function () {
         // PONG clock math on it rather than on handler-run time.
         ep._emit("message", m.channel, m.data, m.at);
       }
+      batch.length = 0;
+      spare = batch;
       if (terminalReason && ep.status === "closing") {
         const reason = terminalReason;
         terminalReason = null;
@@ -915,7 +713,7 @@ const NetTransport = (function () {
     if (typeof NetNostr === "undefined" || !NetNostr.available()) return null;
     return {
       offer: (code, sdp, token) => NetNostr.directExchange({ code, send: sdp, token }),
-      answer: (code, reply, token) => NetNostr.directExchange({ code, reply, token }),
+      answer: (code, reply, token, listen) => NetNostr.directExchange({ code, reply, token, listen: !!listen }),
     };
   }
 

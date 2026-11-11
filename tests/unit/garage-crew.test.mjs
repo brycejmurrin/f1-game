@@ -24,7 +24,7 @@ function load() {
   const draws = [], meshes = [], freed = [];
   const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length, d }; meshes.push(mesh); return mesh; }, freeMesh: (mesh) => freed.push(mesh), draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
@@ -87,7 +87,7 @@ test("design-preview crew looks: each builds valid, distinct geometry; classic s
   const meshes = [];
   const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
@@ -121,7 +121,7 @@ test("pit-stop front jack: saddle seated on each chassis' nose underside, clear 
   const STYLES = { base: {}, droop: { noseDroop: -0.03, noseSlim: 0.84 }, long: { noseTipZ: 0.55 }, short: { noseTipZ: -0.32, noseDroop: 0.04 } };
   const Car3D = { CHASSIS: { nose: [{ z: 2.60, y: 0.245, h: 0.072 }, { z: 2.00, y: 0.315, h: 0.235 }] }, teamStyleOf: (id) => STYLES[id] || {}, bodyStyleKey: (t, b) => b || t };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Car3D, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx); Crew.setLook("pitstop");
@@ -241,14 +241,17 @@ test("service crews hand over to already-built guides while the car moves", () =
 });
 
 test('Blender motion keeps contact feet planted and returns both feet to rest', () => {
-  const { Motion } = load(), a = new Float32Array(7), b = new Float32Array(7);
+  const { Motion } = load(), a = new Float32Array(8), b = new Float32Array(8);
   assert.equal(Motion.sampleCount, 25);
   Motion.sample(0, a); Motion.sample(1, b);
   for (let i = 0; i < 4; i++) assert.ok(Math.abs(a[i] - b[i]) < 1e-6);
-  let plants = 0, lift = 0;
+  let plants = 0, lift = 0, contra = 0, leanAmp = 0, swayAmp = 0;
   const back = u => u * u * (3 - 2 * u);
   for (let k = 0; k < 24; k++) {
     const u = k / 24, v = (k + 1) / 24; Motion.sample(u, a); Motion.sample(v, b);
+    leanAmp = Math.max(leanAmp, Math.abs(a[6])); swayAmp = Math.max(swayAmp, Math.abs(a[7]));
+    // Contralateral: when R foot is ahead of L, L hand should be ahead of R (and vice versa).
+    if (Math.abs(a[1] - a[3]) > .04 && Math.sign(a[1] - a[3]) !== Math.sign(a[4] - a[5])) contra++;
     for (let f = 0; f < 4; f += 2) {
       lift = Math.max(lift, a[f] - .08);
       if (Math.abs(a[f] - .08) < 1e-5 && Math.abs(b[f] - .08) < 1e-5) {
@@ -257,6 +260,9 @@ test('Blender motion keeps contact feet planted and returns both feet to rest', 
     }
   }
   assert.ok(plants >= 5); assert.ok(lift > .06);
+  assert.ok(contra >= 3, 'arms swing opposite the leading foot');
+  assert.ok(leanAmp > .02 && leanAmp < .12, 'slight torso lean is authored');
+  assert.ok(swayAmp > .01 && swayAmp < .08, 'hip weight-shift is authored');
 });
 
 test('articulated guide playback reuses meshes, clears the car and keeps boots on the floor', () => {
@@ -299,7 +305,7 @@ test('runtime motion export matches the current Blender authoring source', () =>
 
 test('actual articulated boot transforms plant in both world axes during retreat', () => {
   const { Crew, Arrival, Motion, draws } = load();
-  const cfg = Arrival.settings({ leaveCrew: 'guides' }), a = new Float32Array(7); let prev = null, contacts = 0;
+  const cfg = Arrival.settings({ leaveCrew: 'guides' }), a = new Float32Array(8); let prev = null, contacts = 0;
   for (let k = 0; k <= 24; k++) {
     const u = k / 24; draws.length = 0;
     Crew.draw(LIV, [-3,2,-4], { ...Arrival.poseOut(u*1.8,cfg,true), door:u });
@@ -452,4 +458,35 @@ test('service cable follows both gloves and disconnects before moving; engineer 
   const station=draws[118].mesh.d.pos;assert.equal(Math.min(...station.filter((_,i)=>i%3===1)),0,'service unit has visible supports touching the floor');
   const count=meshes.length;draws.length=0;Crew.draw(LIV,[-3,2,-4],Arrival.pose(12,cfg,false));assert.equal(meshes.length,count);
   const calm=Service.layout(Arrival.pose(12,cfg,true))[6].handY;assert.equal(calm,Service.layout(Arrival.pose(13,cfg,true))[6].handY,'reduced motion holds decorative typing');
+});
+
+test('crew body export matches its Blender source; every part closed outward, sole flat, inside the triangle budget', () => {
+  const digest = createHash('sha256').update(read('tools/gen/blender/crew-body.py')).digest('hex');
+  assert.ok(read('js/garage/crew-draw.js').includes('Source SHA256: ' + digest),
+    'regenerate: blender -b --factory-startup --python tools/gen/blender/crew-body.py -- --output-dir artifacts/crew-body --write-runtime');
+  const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array });
+  for (const f of ['js/garage/crew-draw.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const B = vm.runInContext('GarageCrewDraw.body', ctx), c1 = [0.8, 0.1, 0.05], c2 = [0.95, 0.85, 0.1];
+  let tris = 0;
+  for (const name of Object.keys(B.PARTS)) {
+    const d = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, name, c1, c2), n = d.pos.length / 3;
+    const spec = B.PARTS[name], per = name === 'torso' || name === 'head' ? 1 : 2;
+    tris += per * d.idx.length / 3;
+    assert.ok(d.idx.every((i) => i >= 0 && i < n) && d.pos.every(Number.isFinite), name + ': valid mesh');
+    for (let i = 0; i < d.nrm.length; i += 3) assert.ok(Math.abs(Math.hypot(d.nrm[i], d.nrm[i + 1], d.nrm[i + 2]) - 1) < 1e-9, name + ': unit normals');
+    // Outward: every face's normal points away from its ring's axis point.
+    for (let i = 0; i < d.idx.length; i += 3) {
+      const [a, b, c] = [0, 1, 2].map((k) => d.pos.slice(d.idx[i + k] * 3, d.idx[i + k] * 3 + 3));
+      const u = b.map((v, k) => v - a[k]), v = c.map((x, k) => x - a[k]);
+      const nn = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const m = [0, 1, 2].map((k) => (a[k] + b[k] + c[k]) / 3), t = spec.axis === 'z' ? m[2] : m[1];
+      const r = spec.rings.reduce((best, q) => Math.abs(q[0] - t) < Math.abs(best[0] - t) ? q : best);
+      const o = spec.axis === 'z' ? [r[3], r[4], t] : [r[3], t, r[4]];
+      assert.ok(nn.reduce((s, x, k) => s + x * (m[k] - o[k]), 0) > 0, `${name}: face ${i / 3} winds outward`);
+    }
+  }
+  assert.ok(tris <= 2200, 'one figure stays inside 2200 triangles: ' + tris);
+  const boot = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'boot', c1, c2);
+  let minY = Infinity; for (let i = 1; i < boot.pos.length; i += 3) minY = Math.min(minY, boot.pos[i]);
+  assert.ok(Math.abs(minY + 0.08) < 1e-9, 'the sole sits 0.08 m under the foot target, as the planted-boot tests assume');
 });

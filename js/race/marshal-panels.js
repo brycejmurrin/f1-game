@@ -44,8 +44,11 @@ var MarshalPanels = (function () {
     function postsFor(track) {
       if (!track) return null;
       if (_postsBy.has(track)) return _postsBy.get(track);
-      _postsBy.set(track, null);
       const list = track.props && track.props.list;
+      // A miss is remembered only once the props list exists to have been searched:
+      // a call before the build populates it (props.list not there yet) is transient,
+      // and a memoised null would leave this track's panels dark for the whole session
+      // (same class as StartLights.lampsFor).
       if (!list || !(track.n > 2)) return null;
       // Race control's sector convention (js/physics/debris-world.js hazards()):
       // the circuit's authored splits (def.sectors, two lap fractions) or thirds.

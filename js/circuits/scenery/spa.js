@@ -6,9 +6,9 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["spa"] =
   function (api) {
-      const { K, lapBounds, out, MAT, seat, n, px, pz, pyMin, hash, every, place, backdrop, pal,
+      const { K, lapBounds, out, MAT, seat, n, pyMin, hash, every, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, addPyramid, vadd, anchor,
-              mountain, pine, tree, forestEdge, building, motorhome,
+              mountain, pine, forestEdge, building, motorhome,
               marshalPost, gantry, fence, guardrail, tyreWall, wall,
               modelGroup, overheadSpan, groundPatch, circuitKit, ATM, onTrack,
               grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,
@@ -65,6 +65,11 @@
         }
       });
 
+      // Pit side (FIA 2026 pit lane drawing): the pits, paddock and race
+      // control are on the driver's RIGHT (+1) of the main straight, matching
+      // def.pit.side; the main-straight grandstands face them from the LEFT.
+      const PIT = 1, STAND = -PIT;
+
       // Dressing OPEN windows (authored fracs [s0, s1, dMin, dMax] m beyond the
       // edge). Hoisted above the front pine ranks so trackside emitters and the
       // deep Ardennes forest mass share one exclusion map — early every() pines
@@ -73,7 +78,7 @@
       // Frame: authored = racing + 0.0423 (measured from the built centreline).
       const OPEN = {
         "1": [
-          [0.975, 1.001, 0, 200], [0.0, 0.045, 0, 200],   // pit straight / La Source stands
+          [0.975, 1.001, 0, 200], [0.0, 0.070, 0, 200],   // pit lane, garages, paddock (pit side)
           [0.060, 0.116, 0, 80],    // La Source exit stand 0.068, camp
           [0.127, 0.143, 30, 76],   // camp K(0.135)
           [0.136, 0.174, 0, 80],    // Gold-3 row, grass bank, jumbotron, catch fence
@@ -89,7 +94,7 @@
           [0.897, 0.936, 0, 50],    // Blanchimont terrace, Bus Stop stand
         ],
         "-1": [
-          [0.975, 1.001, 0, 200], [0.0, 0.118, 0, 200],   // paddock, old pits, village, brook
+          [0.975, 1.001, 0, 200], [0.0, 0.118, 0, 200],   // main-straight stands, old pits, village, brook
           [0.123, 0.147, 0, 76],    // Kemmel terrace, chalet
           [0.170, 0.196, 0, 30],    // Eau Rouge brook, bridge, base wall
           [0.186, 0.218, 0, 36],    // Raidillon terrace (inside bank)
@@ -172,22 +177,24 @@
 
       if (circuitKit) {
         circuitKit.pitBuilding({
-          id: "kit:spa:pit-building", frac: 0.006, side: -1, gap: 9,
+          id: "kit:spa:pit-building", frac: 0.006, side: PIT, gap: 9,
           size: [14, 11, 64], garages: 16, required: true,
         });
         // Was gap 45: lattice tower sat on the steep pit apron with 19–23 m
         // unsupported footprints (ground-audit landmark-kit @ racing ≈0.972).
         circuitKit.raceControl({ style: "lattice",
-          id: "kit:spa:race-control", frac: 0.014, side: -1, gap: 28,
+          id: "kit:spa:race-control", frac: 0.014, side: PIT, gap: 28,
           size: [12, 24, 14], required: true,
         });
       }
       // Paddock motorhomes: was gap 24, which planted them inside the front
       // pine rank (clip-audit 2.13 m pine×motorhome @ racing 0.957). Seat them
       // on the open apron behind the OPEN paddock window.
-      motorhome(Math.round(n * 0.001) % n, -1, 38, 16, 8, 20, { wall: [0.88, 0.89, 0.91], window: [0.30, 0.38, 0.46] });
-      motorhome(Math.round(n * 0.006) % n, -1, 38, 15, 7, 18, { wall: [0.82, 0.84, 0.88], window: [0.32, 0.40, 0.48] });
-      motorhome(Math.round(n * 0.994) % n, -1, 38, 15, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
+      // Pit side (+1) since the FIA 2026 pit-lane flip: 8 m deep across the
+      // slope (16 m buried 0.5-0.8 m into the rising right-hand bank).
+      motorhome(Math.round(n * 0.001) % n, PIT, 38, 8, 8, 20, { wall: [0.88, 0.89, 0.91], window: [0.30, 0.38, 0.46] });
+      motorhome(Math.round(n * 0.006) % n, PIT, 38, 8, 7, 18, { wall: [0.82, 0.84, 0.88], window: [0.32, 0.40, 0.48] });
+      motorhome(Math.round(n * 0.994) % n, PIT, 38, 8, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
       building(Math.round(n * 0.10) % n, -1, 40, 14, 9, 44,
         { kind: "chevron", wall: [0.78, 0.76, 0.70], window: [0.36, 0.36, 0.34], floor: 4 });
@@ -200,7 +207,7 @@
           ["k_pitsoffice", 0.748, -1, 58, 2.6],
           ["k_pitsgarage", 0.772, -1, 56, 2.6],
           ["k_tentclosedlong", 0.105, -1, 52, 2.4],
-          ["k_bannertowerred", 0.018, -1, 52, 2.0],
+          ["k_bannertowerred", 0.018, PIT, 52, 2.0],
         ];
         for (const [id, s, side, dist, sc] of pads) {
           if (!bakedModel(id, K(s), side, dist, { scale: sc }))
@@ -208,12 +215,14 @@
               { kind: "hall", wall: [0.70, 0.68, 0.64], window: [0.30, 0.32, 0.34], floor: 4 });
         }
       }
-      // Jersey barriers on La Source runoff (Racing Kit; tyreWall stays).
+      // Jersey barriers on the stand-side verge before La Source (Racing Kit;
+      // tyreWall stays). Authored 0.015-0.028 = racing 0.973-0.986: the pit
+      // lane runs on the other side there.
       along(0.015, 0.028, 4.5, (k) => {
-        bakedModel("k_barrierwhite", k, 1, 6.2, { scale: 1.5 });
+        bakedModel("k_barrierwhite", k, STAND, 6.2, { scale: 1.5 });
       });
       along(0.016, 0.027, 6.0, (k) => {
-        bakedModel("k_pylon", k, 1, 5.0, { scale: 1.3 });
+        bakedModel("k_pylon", k, STAND, 5.0, { scale: 1.3 });
       });
 
       const ARD_TIMBER = [0.46, 0.36, 0.26];   // creosote-dark plank
@@ -280,10 +289,10 @@
       }
 
       const GOLD3 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 3 mass
-      // La Source / pit grandstands ~s 0.00–0.02
-      grandstandEx(0.00, 1, 8, 52, null, null,
+      // Main-straight grandstands ~s 0.00–0.02, facing the pits across the road
+      grandstandEx(0.00, STAND, 8, 52, null, null,
         { livery: "darkSteel", tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.018, 1, 8, 30, null, null,
+      grandstandEx(0.018, STAND, 8, 30, null, null,
         { livery: "crimson", roof: "truss", endWalls: true, tiers: 2, h: 10 });
       // Gold 3 Raidillon amphitheatre: dual-bay stand row + jumbotron on the
       // OUTSIDE of the descent into the Eau Rouge compression (authored
@@ -638,7 +647,7 @@
       // Historic timing tower behind the pit straight; spectator footbridges.
       // Was gap 30: glazed timing box floated with a 21 m unsupported footprint
       // on the pit apron (ground-audit timingTower glass @ racing ≈0.942). Seat closer.
-      timingTower(K(0.985), -1, 18);
+      timingTower(K(0.985), PIT, 30);
       footbridge(0.125, [0.62, 0.34, 0.20]);   // Kemmel crossing
       footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
 
@@ -651,8 +660,8 @@
       // trackside height and hang over the valley (float-audit 11–25 m gaps at
       // frac≈0.05). Gold-3 stands + jumbotron already own that amphitheatre;
       // fir walls resume past Les Combes (0.18+) and Blanchimont below.
-      // La Source outer verge (beyond the pit grandstands).
-      forestEdge(0.00, 0.04, 1, 44, { density: 0.70, hMin: 11, hMax: 20,
+      // Behind the main-straight grandstands (the paddock owns the pit side).
+      forestEdge(0.00, 0.04, STAND, 44, { density: 0.70, hMin: 11, hMax: 20,
         col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
 
       // Banks read as mown Ardennes grass, not the engine's timber-brown riser.
@@ -778,13 +787,13 @@
         }
       }
 
-      fence(0.0, 0.03, 1, 6, 4.2, [0.74, 0.76, 0.80]);        // main straight stand
+      fence(0.0, 0.03, STAND, 6, 4.2, [0.74, 0.76, 0.80]);    // main straight stand
       fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // La Source exit stand
       fence(0.14, 0.18, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Gold-3 amphitheatre (Eau Rouge)
       fence(0.90, 0.94, 1, 6, 4.2, [0.74, 0.76, 0.80]);       // Bus Stop
       guardrail(0.42, 0.58, -1, 3.4, [0.84, 0.85, 0.88]);     // Pouhon sweep
       guardrail(0.80, 0.90,  1, 3.4, [0.84, 0.85, 0.88]);     // Blanchimont
-      tyreWall(0.015, 0.03,  1, 4.4, [0.78, 0.12, 0.12]);     // La Source
+      tyreWall(0.015, 0.03, STAND, 4.4, [0.78, 0.12, 0.12]);  // straight, stand side
       tyreWall(0.155, 0.175, 1, 4.6, [0.20, 0.36, 0.62]);     // Les Combes
       tyreWall(0.46, 0.49,  -1, 4.6, [0.55, 0.55, 0.52]);     // Pouhon
       tyreWall(0.905, 0.925, 1, 4.4, [0.78, 0.12, 0.12]);     // Bus Stop
@@ -793,7 +802,7 @@
         const a0 = anchor(K(0.170), 1, 16);
         const dir = a0.t, rgt = a0.r, up = a0.u;
         const b = [rgt, up, dir];
-        // TRAP B (docs/SCENERY-GROUNDING.md §2): everything below is placed by
+        // TRAP B (docs/SCENERY-API.md §2): everything below is placed by
         // walking `dir` from ONE anchor — up to 248 m out and 46 m lateral — and
         // this is Spa, which climbs. Reusing a0's height that far left the
         // treeline hanging up to 17 m in the air and the village huts 10-12 m.

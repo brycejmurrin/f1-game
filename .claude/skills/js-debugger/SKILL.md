@@ -1,6 +1,6 @@
 ---
 name: js-debugger
-description: "Use when debugging JavaScript via js-debugger: conditional source breakpoints, stepping into/over, call frame scopes, locals, stale pause tokens, debugger daemon, exception pauses, and heap/CPU/hitch profiling while attached (debugger_profile). Profiling a chrome-devtools page → mcp-probe."
+description: "Use when debugging JavaScript via js-debugger: conditional source breakpoints, stepping into/over, call frame scopes, locals, pause tokens, exception pauses, heap/CPU/hitch profiling. Not poking the live page → mcp-probe."
 ---
 
 # Source debugging with the separate debugger MCP
@@ -18,54 +18,14 @@ The debugger attaches; it never launches a browser. Browser setup and canvas
 inspection belong to `mcp-probe`.
 
 - Session only: `mcp-browser-guard.sh` refuses every `mcp__js-debugger__*` call
-  inside a subagent, status reads included (AGENTS.md rule 10); a subagent may use
-  only the shell `list-tools` / `status` below.
+  inside a subagent, status reads included (AGENTS.md rule 10). No hook covers the shell
+  wrapper: by that rule a subagent uses only its `list-tools` / `status` (references/setup.md).
 - One browser at a time: never beside a Playwright test run, `playwright-official`
   `browser_*` or chrome-devtools. Attached here, profile with `debugger_profile`
   (cpu / heap / hitch; references/tools.md) instead of opening chrome-devtools.
 
-Requires Node 22+ and Bash for the wrapper. The debugger itself needs no npm
-package; source navigation and the game launcher need the checkout dependencies
-(`npm ci` on a fresh checkout). See [bootstrap and host attachment](../../../docs/AGENT-SURFACE.md#bootstrap-auto-setup).
-Prefer attached `debugger_*` tools when the session lists them. Otherwise inspect
-the local schemas without a daemon or browser:
-
-```sh
-bash tools/mcp/js-debugger-mcp.sh list-tools
-bash tools/mcp/js-debugger-mcp.sh status
-```
-
-A down status is expected before setup. If no daemon exists, start
-`bash tools/mcp/js-debugger-mcp.sh serve-http` in one owned terminal and keep it
-alive between independent `call <tool> '<JSON object>'` clients. Do not start a
-second controller. `APEX_DEBUGGER_PORT` selects the bridge port on daemon and
-callers; the Chrome CDP endpoint is a separate address supplied by its owner.
-Starting a process does not attach tools to the chat; project MCP changes need
-client reload/trust. After an edit to `tools/mcp/js-debugger-*.mjs`, or when
-`apex_status` reports `server.stale`: restart the MCP (client reload or `/mcp`)
-and the owned `serve-http` daemon (Ctrl-C, start again), then re-attach; every
-old pause token dies with it. Never edit global agent instructions for this workflow.
-
-## Get a Chrome to attach to
-
-```sh
-node tools/mcp/debug-chrome.mjs start --headless-game
-node tools/mcp/debug-chrome.mjs status
-```
-
-This starts the static server on 3456 and headless Chromium on 9222 at 844×390
-with touch (`--device desktop` selects 1280×720); it refuses beside a test run.
-`--headless-game` suppresses game drawing for logic hunts on software GL; omit
-it when pixels are required. Reuse an existing authorized browser instead of
-starting another. The launcher is a CLI; the debugger never launches Chrome.
-
-Once the browser is ready, check daemon health and discover targets (attached
-MCP users make the equivalent `debugger_targets` call):
-
-```sh
-bash tools/mcp/js-debugger-mcp.sh status
-bash tools/mcp/js-debugger-mcp.sh call debugger_targets '{"endpoint":"http://127.0.0.1:9222"}'
-```
+Daemon, bootstrap, tool-schema listing and the Chrome launch line (`debug-chrome.mjs start --headless-game`):
+[references/setup.md](references/setup.md). Prefer attached `debugger_*` tools when the session lists them.
 
 ## Without pausing, long runs, workers
 
@@ -80,6 +40,11 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
   Which vm filenames bind, breakpoint cost and the hang-on-exit trap: `docs/TESTING.md` §Debug a Node test.
 - "Stop here and show me the locals" → `debugger_break {breakpoints, trigger}`: stack, cause and
   locals in one reply, paused with a token (or `resume:true`).
+- A `condition` is an expression evaluated IN the paused frame: write `c.speed`, not `speed`. A
+  condition that throws never pauses, and `debugger_break` just times out (its `timeoutMs`;
+  `list-tools` gives default and max), so dry-run it with `debugger_collect` (same expression as a logpoint) first.
+  A per-car function (`updateCar` runs for every car, every tick) needs `c.isPlayer &&` (a VS FRIEND rival is also `c.human`); worked
+  in-race example: [references/step-loop.md](references/step-loop.md) §Pause the player at a speed.
 - "How often, with what values" on a running page → `debugger_collect {logpoints, trigger}`.
 - When the next step depends on what a pause shows: the step-by-step loop (targets → attach →
   source → breakpoint → run → state/token → control → resume), the in-race pause recipe and
@@ -109,6 +74,5 @@ trigger, breakpoint/stack/locals, result, expected versus actual, and cleanup.
 Label synthetic packets/replay samples and source/VM/software-browser evidence.
 No physical-device, GPU-performance or long-session claim follows from these.
 
-Offline skill contract: `node tools/check/skill-smoke.mjs --skill js-debugger --check`.
 Native debugger transport/lifecycle check: `bash tools/mcp/js-debugger-mcp.sh smoke`
 (parent-only, serialized; it launches its own fixture browser).

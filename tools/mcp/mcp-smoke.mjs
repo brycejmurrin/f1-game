@@ -4,7 +4,7 @@
  * @skill check-changes
  * mcp-smoke — poke the repo shell wrappers (all six .mcp.json servers; host attach optional).
  *
- * No Chromium. Missing TinyFish key / chrome-devtools clone = warning, not fail.
+ * No Chromium. A missing chrome-devtools clone = warning, not fail.
  * Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json
  * unless --dry-run.
  *
@@ -31,22 +31,6 @@ const CHROME_BIN = path.join(
   ROOT,
   "scratch/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",
 );
-const TINYFISH_ENV = path.join(ROOT, "scratch/tinyfish-mcp-server/.env");
-const TINYFISH_KEY_URL = "https://agent.tinyfish.ai/home";
-
-function tinyfishKey() {
-  if ((process.env.TINYFISH_API_KEY || "").trim()) {
-    return { present: true, via: "env" };
-  }
-  if (fs.existsSync(TINYFISH_ENV)) {
-    const text = fs.readFileSync(TINYFISH_ENV, "utf8");
-    if (/^\s*TINYFISH_API_KEY=\S+/m.test(text)) {
-      return { present: true, via: "env-file" };
-    }
-  }
-  return { present: false, via: "missing", url: TINYFISH_KEY_URL };
-}
-
 function chromeClone() {
   return { present: fs.existsSync(CHROME_BIN), bin: CHROME_BIN };
 }
@@ -65,7 +49,7 @@ export function smokePlan() {
       server: "probe-catalog",
       argv: ["python3", path.join(ROOT, "tools/mcp/probe-mcp.py"), "list-tools"],
       env: { PROBE_MCP_MOCK: "1" },
-      note: "mock catalog — live list-tools starts Chromium / tinyfish ensure",
+      note: "mock catalog — live list-tools starts Chromium",
     },
     {
       server: "chrome-devtools",
@@ -91,11 +75,6 @@ export function smokePlan() {
       server: "browserstack",
       argv: ["bash", path.join(ROOT, "tools/mcp/browserstack-mcp.sh"), "status"],
       note: "status only — run needs BROWSERSTACK_USERNAME / BROWSERSTACK_ACCESS_KEY in the env (never tracked)",
-    },
-    {
-      server: "tinyfish",
-      argv: ["bash", path.join(ROOT, "tools/mcp/tinyfish-mcp.sh"), "help"],
-      note: "help only — ensure / deploy-check need a key (shell / gitignored .env; CLI only, not MCP-attached)",
     },
   ];
 }
@@ -127,14 +106,11 @@ function parseApexStatus(step) {
 }
 
 /** Minimal valid args per tree tool (the unit test's MIN_ARGS, kept cheap). */
-export const REAL_ARGS = {
+const REAL_ARGS = {
   apex_help: { tool: "apex_status" },
-  apex_locations: { track: "monza" },
   apex_select_specs: { since: "HEAD~1" },
   apex_graph_parity: { base: "HEAD", id: "monza" },
   apex_frame_report: { track: "monza" },
-  apex_car_audit: { check: "ladder" },
-  apex_track_audit: { track: "monza" },
   apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
 };
 /** Opt-in (--browser): one cheap call per browser path, run ONE AT A TIME (each takes the browser lock itself). */
@@ -199,24 +175,13 @@ function realRun(argv) {
   }
   for (const [name, args] of calls) {
     const t0 = Date.now();
-    let fixtureDir = null;
-    const actualArgs = { ...args };
-    // Query parsing needs a real artifact even in a fresh checkout. This tiny synthetic
-    // CPU profile tests the reader, not game performance; remove it even with --no-write.
-    if (name === "apex_profile_query") {
-      fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
-      fixtureDir = fs.mkdtempSync(path.join(ROOT, "scratch", "mcp-smoke-"));
-      actualArgs.file = path.relative(ROOT, path.join(fixtureDir, "synthetic.cpuprofile"));
-      fs.writeFileSync(path.join(ROOT, actualArgs.file), JSON.stringify({ nodes: [{ id: 1, callFrame: { functionName: "smokeFixture", url: "synthetic.js", lineNumber: 0 } }], samples: [1], timeDeltas: [1000] }));
-    }
-    let r;
-    try { r = spawnSync(process.execPath, [mcp, "call", name, JSON.stringify(actualArgs)], {
+    const r = spawnSync(process.execPath, [mcp, "call", name, JSON.stringify(args)], {
       encoding: "utf8", cwd: ROOT, timeout: timeoutS * 1000, maxBuffer: 32e6,
-    }); } finally { if (fixtureDir) fs.rmSync(fixtureDir, { recursive: true, force: true }); }
+    });
     let body = null;
     try { body = JSON.parse(r.stdout); } catch { /* judged below */ }
     const v = r.error && r.error.code === "ETIMEDOUT" ? { pass: false, why: `timeout ${timeoutS}s` } : judgeReal(body, r.status);
-    rows.push({ tool: name, args: actualArgs, ...(fixtureDir ? { data: "synthetic CPU profile; parser smoke only" } : {}), pass: v.pass, why: v.why, ms: Date.now() - t0,
+    rows.push({ tool: name, args, pass: v.pass, why: v.why, ms: Date.now() - t0,
       ...(!v.pass ? { stdout: (r.stdout || "").slice(-2000), stderr: (r.stderr || r.error?.message || "").slice(-2000) } : {}) });
     process.stdout.write(`${v.pass ? "PASS" : "FAIL"} ${name.padEnd(28)} ${String(Date.now() - t0).padStart(6)}ms  ${v.why}\n`);
   }
@@ -238,11 +203,10 @@ Usage:
   ./tools/mcp/apex-tools-mcp.sh smoke [--dry-run]
 
 Pokes apex-tools (apex_status), probe help + mock list-tools, chrome-devtools
-status, playwright status, tinyfish help. No Chromium. Missing TinyFish key /
-chrome clone warn. Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json.
+status, playwright status, js-debugger / apex-lsp list-tools, browserstack status.
+No Chromium. A missing chrome clone warns. Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json.
 
 --real runs each tree apex_* tool for real (minimal args); exit 1 on ok:false / out:null.
-Profile-query uses a temporary synthetic CPU profile (parser check, not a performance measurement).
 --only rejects unknown or unavailable tool names; --timeout is an integer 1..3600 seconds.
 
 Never wraps test-bg. playwright status only (never run).
@@ -258,12 +222,8 @@ function main(argv) {
   const dryRun = argv.includes("--dry-run");
   const jsonOnly = argv.includes("--json") || dryRun;
   const plan = smokePlan();
-  const key = tinyfishKey();
   const clone = chromeClone();
   const warnings = [];
-  if (!key.present) {
-    warnings.push(`TINYFISH_API_KEY is not set — get a key: ${TINYFISH_KEY_URL}`);
-  }
   if (!clone.present) {
     warnings.push("chrome-devtools clone missing — run tools/mcp/chrome-devtools-mcp.sh clone (npx pin still works)");
   }
@@ -273,7 +233,6 @@ function main(argv) {
     dryRun,
     apexTools: false,
     warnings,
-    tinyfishKey: key,
     chromeClone: clone,
     plan: plan.map((s) => ({
       server: s.server,

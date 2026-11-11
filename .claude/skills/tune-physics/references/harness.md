@@ -1,7 +1,7 @@
 # Physics A/B harness and trail-brake probe
 
 Load this when comparing two `setPhysics` configs or writing a directional
-assertion. Never assert brittle absolute magnitudes.
+assertion.
 
 ## Trail-brake probe
 
@@ -9,32 +9,14 @@ Mid-corner: `{ brake: true, steer: ±0.3..0.5 }`, then read
 `physState().slipFactor` and `axFrac` while braking. Lower `slipFactor` =
 longitudinal grip eating lateral budget; compare runs directionally.
 
-`LONG_GRIP` (value: `js/physics/consts.js`) is **not** live-tunable via `setPhysics` — A/B it with
-two builds or a source edit. It is the longitudinal axis of the traction
-circle; `slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip.
+`LONG_GRIP` is not `setPhysics`-tunable (SKILL.md): A/B it with two builds or a source edit.
+The `physState()` `slipFactor` / `axFrac` pair comes from `AgentView.slipBudget` (js/agent/agentview.js).
 
 ## Closed-loop trial
 
-```js
-__apex.race("suzuka");
-// wait for load, then:
-__apex.headless(true);
-
-function trial(phys) {
-  __apex.setPhysics(phys);
-  let o = __apex.reset(0.30, 60, 0, 42);
-  for (let i = 0; i < 180; i++)
-    o = __apex.act({ steer: -0.4, throttle: true, brake: false }, 1/60, 1);
-  return o;  // o.x, o.speed, o.slipFactor, o.k, o.clearL/R, o.offT, o.wrongWay
-}
-
-const a = trial({ frontGrip: 0.89 });
-const b = trial({ frontGrip: 1.00 });
-// higher frontGrip should hold a tighter line (smaller |x|) / keep more apex speed
-```
-
-For mid-corner understeer: **raise** `frontGrip` (or lower `yawInertia`). Do
-not copy an example that lowers `frontGrip`.
+The `frontGrip` 0.94 vs 1.00 trial (`reset(0.30,60,0,42)`, 180 `act` steps) is the VM version under
+§Seeded serialized A/B. Higher `frontGrip` holds a tighter line (smaller |x|); for mid-corner understeer
+raise `frontGrip` (or lower `yawInertia`).
 
 Open-loop:
 
@@ -44,9 +26,7 @@ __apex.setInput({ steer: 0, throttle: true }); __apex.step(1/60, 120);
 const p = __apex.physState();
 ```
 
-**Init order:** after `race()` + `go()`, `jump()` or `step(1/60,1)` **before**
-`obs()`/`physState()` — they return null until `player.px` exists. `reset()`
-does this for you.
+Init order: `docs/DEBUG-HOOKS.md` §Headless / RL control loop; `reset()` does it for you.
 
 ## Seeded serialized A/B
 
@@ -61,7 +41,7 @@ const {createGame} = require("./tools/lib/game-vm.cjs");
 const g = await createGame({track:"suzuka"});
 try {
   const a=g.apex; a.seed(42); await g.race("suzuka"); a.go(); a.headless(true);
-  for (const frontGrip of [0.89,1.0]) {
+  for (const frontGrip of [0.94,1.0]) {
     a.setPhysics({frontGrip});
     let o=a.reset(0.30,60,0,42);
     if (!o) throw new Error("player not staged");
@@ -73,7 +53,7 @@ try {
 
 For browser fallback, use `launchChromium`, finite `waitForFunction(fn,null,
 {polling:100,timeout:45000})`, and close each page/browser in `finally`.
-Never hand that browser run to a subagent or fan out unbounded pages. Green
+Parent only (AGENTS.md rules 5 and 10), never a test spec; never fan out unbounded pages. Green
 headless replay does not verify wall-clock live hitStop: that legacy cue scales
 the frame driver; do not extend it to new cosmetic feedback.
 

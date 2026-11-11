@@ -1,68 +1,19 @@
 /* Apex 26 — packed world vertex channels. The ONE definition of how a lit world mesh's normal/colour/material are quantised, shared by all three render backends; GLX's own interleaved layout lives here too. */
 "use strict";
 
-// World geometry is the same {pos,nrm,col,mat,idx} in every backend, and in
-// every backend the same three channels do not need 32 bits. What DIFFERS is
-// the layout, because each API allows different things:
-//
-//   GLX   one interleaved VBO; the material id rides in the alpha of the
-//         colour attribute. pack() / bindAttribs() below.
-//   WGX   three vertex attributes; the material id is not one of them — it
-//         lives in the group-2 storage buffer, because Dawn zeroes a fourth
-//         attribute on this adapter (js/render/webgpu/wgx.js).
-//   TLX   separate named three.js BufferAttributes, and three picks the GL /
-//         WebGPU format from the array type (js/render/three/tlx-chunked.js).
-//
-// So this module owns the QUANTISERS, which are the part that must agree, and
-// GLX's layout as well since it has nowhere better to live. A backend that
-// quantises a channel its own way is how two backends end up disagreeing about
-// what colour 2.0 means.
-//
-// Every lit world mesh — road, terrain, props, glass, water, the instanced
-// scenery batches, the garage/car meshes — uploads through pack() below and
-// binds through bindAttribs(). LIT_VS (js/render/glx/shaders/glsl-lit.js) is
-// the only reader of THAT layout; keep its COL_SCALE / MAT_SCALE in step with
-// the constants here (tests/unit/vertex-pack.test.mjs asserts they agree).
-//
-//   off  0   FLOAT32 x3   position (metres)
-//   off 12   SHORT   x4   normal, normalized; w is padding
-//   off 20   USHORT  x4   normalized: rgb = colour / COL_SCALE,
-//                                     a   = material id / MAT_SCALE
-//   off 28   FLOAT32 x3   track coords (ROAD ONLY; absent otherwise)
-//
-// 28 bytes a vertex, or 40 with track coords, where an all-float32 layout cost
-// 36-40 and 52. That is 29.5 % off every world VBO and the same off the
-// vertex-fetch bandwidth in BOTH the camera pass and the shadow pass. Counted
-// over all 40 circuits (20.2 M world vertices, 1.13 M of them carrying track
-// coords): 784.8 MB of attribute bytes becomes 553.3 MB — a mean circuit 19.6
-// to 13.8 MB, and mexico, the heaviest, 39.8 to 27.9. Position deliberately
-// stays float32: world coordinates run to ~7 km and quantising them cracks the
-// road ribbon.
-//
-// WHY THESE TWO SCALES. 4369 and 771 are EXACT divisors of 65535, the
-// normalized-unsigned-short denominator, so a whole number encodes and decodes
-// to ITSELF, bit for bit. The material id depends on that: LIT_VS keys the FLAG
-// cloth-wave on id 15 and reads the fractional part as the per-vertex wave
-// weight, so an ASPHALT 16 that decoded as 15.99998 would ripple like cloth,
-// and every car-surface branch in LIT_FS is an `== id` test on the same value.
-// A scale of 4.0 or 16.0 would NOT have this property.
-//
-// HEADROOM, measured rather than assumed — over all 40 circuits (20.2 M
-// vertices) and all 11 team cars (983 k):
-//
-//   colours reach 3.4 (the nose running lights in js/car/car3d.js; track
-//     emissive neon reaches 3.2) against a ceiling of 15.0. Colour is NOT the
-//     usual unsigned byte precisely because these run past 1.0, and even at
-//     this scale a step is 2.3e-4 — seventeen times finer than 8-bit.
-//   material ids reach 33 against a ceiling of 85.0. The id space is not
-//     contiguous: 0-16 are the procedural track materials (Assets.MAT_LAYERS
-//     is 17) and 20-33 the car surfaces LIT_FS classifies (paint, carbon,
-//     rubber, metal, glass, emissive, panel, mirror, matte, satin, iridescent,
-//     carbon-finish, visor, tyre sidewall).
-//
-// Both quantisers clamp rather than wrap, so a value past the ceiling saturates
-// — visible and debuggable — instead of aliasing a bright neon onto near-black
-// or one material onto an unrelated one.
+// The ONE quantiser for a lit world mesh's normal/colour/material, shared by all backends (what must agree);
+// GLX's interleaved layout lives here too. Layouts differ: GLX one interleaved VBO (material id in colour alpha,
+// pack()/bindAttribs()); WGX three attributes + material id in the group-2 storage buffer (Dawn zeroes a 4th
+// attribute, wgx.js); TLX named BufferAttributes (tlx-chunked.js). LIT_VS (glsl-lit.js) is the only reader of this
+// layout: keep COL_SCALE / MAT_SCALE in step (tests/unit/vertex-pack.test.mjs).
+//   off  0 FLOAT32 x3 position (m) | off 12 SHORT x4 normal (w pad) | off 20 USHORT x4 rgb = col / COL_SCALE,
+//   a = material id / MAT_SCALE | off 28 FLOAT32 x3 track coords (ROAD ONLY)
+// 28 B a vertex (40 with track coords) vs 36-40 / 52 all-float: 29.5 % off every world VBO. Position stays
+// float32: coordinates run to ~7 km and quantising cracks the road ribbon.
+// 4369 and 771 are EXACT divisors of 65535, so a whole id round-trips bit for bit (FLAG cloth-wave keys on id 15
+// and its fraction; an ASPHALT 16 decoding as 15.99998 would ripple). 4.0 or 16.0 would NOT. Headroom measured
+// over all circuits and cars: colours reach 3.4 (ceiling 15.0), material ids reach 33 (ceiling 85.0; 0-16
+// procedural track materials, 20-33 car surfaces). Both clamp rather than wrap, so overflow saturates visibly.
 const VertexPack = (function () {
   const COL_SCALE = 15.0, COL_Q = 4369;     // 65535 / 15
   const MAT_SCALE = 85.0, MAT_Q = 771;      // 65535 / 85
@@ -136,8 +87,10 @@ const VertexPack = (function () {
     return sign | ((((hi >>> 20) - 1008) << 10) + (((hi & 0xfffff) + 0x200) >>> 10));
   }
 
+  // qc / qm stay local (pack() only). unorm16col / unorm16mat had no reader;
+  // snorm16 + toHalf stay — WGX packs normals / half-float colours through them.
   return { COL_SCALE, MAT_SCALE, COL_Q, MAT_Q, STRIDE, STRIDE_TRK,
-           pack, bindAttribs, snorm16: qs, unorm16col: qc, unorm16mat: qm, toHalf };
+           pack, bindAttribs, snorm16: qs, toHalf };
 })();
 
 if (typeof window !== "undefined") window.VertexPack = VertexPack;

@@ -753,3 +753,57 @@ on re-calibrating the difficulty scales), and the browser groups
 `pick-tests` names for a `js/track/core/` edit beyond `tiny` — the node
 groups (`sweeps`, `audit`, `game-vm`'s determinism and transient gates,
 `tooling-fast`) were run.
+
+## 12. Jagged in the world, smooth on paper: the road model, the cap's corners and the ribbon (2026-10-29)
+
+Report: "the racing line can be slightly wrong and appears interpolated and
+sometimes jagged". Four causes, each measured headlessly (probes: world
+curvature of the line traced through `p + r·x`, against the bake's own model).
+
+1. **The bake relaxed against a road gentler than the real one.** `track.curv`
+   is a heading difference over ±12 m of interpolated tangents. It reads a
+   hairpin 1.5–2× gentler than the node geometry: Monza at 1764 m was 22 m in
+   `track.curv` and 14 m in the nodes. Relaxed against it, the line "opened"
+   that corner to 85 m while the path traced in the world was 17 m. TUMFTM's
+   `mincurv_iqp` keeps the same promise by iterating until model and
+   geometry agree within `iqp_curverror_allowed = 0.01` rad/m
+   ([params/racecar.ini](https://raw.githubusercontent.com/TUMFTM/global_racetrajectory_optimization/master/params/racecar.ini));
+   ours was off by ~0.05. **Fix:** `roadK` (line.js), the node polyline's own
+   curvature (heading of the chord through i ± 1, differenced over ± 1 node),
+   is what the relaxation and `lineCurvature` read; it is stored as
+   `track.lineRoadK`, and the audits compare the centreline in that same frame.
+   World radii on the line (16 m chord), before → after: Monaco 2081 m 16 →
+   20, Monza 1805 m 20 → 31, Monza 3569 m 44 → 62; model and world now agree
+   within ~10 % at most corners. The line is 8–12 % faster than the centreline
+   by the brake/accel lapTime (`tools/track/line-audit.mjs`, same frame).
+2. **The slope cap's ramps ended in corners.** `trimSlopes` was the last step,
+   so a capped crossing was a straight ramp with a kink at each end (Monza's
+   first chicane: line curvature 0.025 → 0.042 → 0.031 → 0.015 → 0.030 node to
+   node). **Fix:** `fairLine`, two [1 2 1]/4 passes after the last trim. Each
+   faired edge is a convex mix of three capped edges, so the cap still holds.
+3. **The ribbon drew `x·w`, not the line.** `lineW` is the AI's weight
+   between its lane and the line, and it eases to 0 over 45 m around each
+   corner window. The ribbon multiplied by it, so it fell to the centre
+   wherever the line held an edge down a straight — 6.8 m off at Monza,
+   Spa and Silverstone — with a slope break at both ends of every linear ease.
+   The racing-line ASSIST had the same target, so on every straight it
+   steered the player toward the centre at full strength. **Fix:** the ribbon
+   draws `x`; the assist pursues `x` with its pull scaled by `w`
+   (`__apex.probe().lineAhead` reports the same `x`). `lineW` keeps its
+   LINEAR ease: a smoothstep was tried and measured — it takes line weight
+   out of the approach (at 30–45 m before the turn-in it is 0.03–0.26
+   against 0.11–0.33), and `ai-racecraft-vm`'s Monza approach check put the
+   car at Parabolica 1.90 m toward the inside (the bar is 2 m outside).
+4. **Between nodes the ribbon was the lerped polyline.** `Tracks.sample` lerps
+   position and frame between ~4 m nodes, so the whole turn happens at each
+   node (14° a node in a 16 m hairpin) and a 2.5 m ribbon over a 4 m grid shows
+   it as facets. **Fix:** the ribbon's ground point is a uniform Catmull-Rom
+   through the nodes' line points (XZ only; heights stay the road's lerp).
+   Unit test: a 40-gon circle's ribbon sits within a quarter of the chord
+   sagitta (0.185 m) of the circle.
+
+Left as is: the remaining kinks are in the CENTRELINE itself (Monza's
+Rettifilo has a 9 m-radius node at 1760 m, above `centreline-kinks`' R < hw
+threshold); that is circuit data (`survey-track`). The ribbon's speed colours
+still come from the road's curvature, not the line's (the `pathK` follow-up
+above).

@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
+import {evalRealRace} from '../helpers/eval-real-race.mjs';
 import path from 'node:path';
 import {webcrypto} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -147,7 +149,7 @@ test('production WATCH API: batch validation is atomic and timeout restores repl
   const g=await createGame({track:'baku',carMeshes:false});
   try {
     vm.runInContext(source,g.ctx);
-    vm.runInContext(fs.readFileSync(root+'/js/data/real-race-tab.js','utf8'),g.ctx);
+    evalRealRace(g.ctx);
     const fixture=JSON.parse(fs.readFileSync(root+'/tests/fixtures/openf1-baku-2026-race.json','utf8'));
     g.ctx.fixture=fixture;
     vm.runInContext(`{
@@ -249,6 +251,19 @@ test('audit: comparison rejects scene identity drift and output aliases', () => 
     assert.throws(()=>main(['compare',input,input,'--out',path.join(dir,'alias','input.json')]),/differ/);
     assert.equal(JSON.parse(fs.readFileSync(input)).schema,'f1-dev-trace/v1');
   } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('audit: an escaping symlink parent is refused before mkdir creates anything outside the roots', () => {
+  // Ported from the retired tools/environment/plugin-sources copy (2026-11-10, W17): the check runs on the
+  // existing physical ancestor, so `mkdir -p` never follows the link and builds dirs outside artifacts/ or scratch/.
+  const outside=fs.mkdtempSync(path.join(os.tmpdir(),'comparison-outside-'));
+  const dir=fs.mkdtempSync(path.join(root,'scratch','comparison-escape-'));
+  try {
+    fs.symlinkSync(outside,path.join(dir,'out'),'dir');
+    const input=path.join(dir,'input.json');fs.writeFileSync(input,JSON.stringify(trace()));
+    assert.throws(()=>main(['compare',input,input,'--out',path.join(dir,'out','deep','nested','r.json')]),/escape through a symlink/);
+    assert.deepEqual(fs.readdirSync(outside),[],'nothing was created behind the link');
+  } finally {fs.rmSync(dir,{recursive:true,force:true});fs.rmSync(outside,{recursive:true,force:true});}
 });
 
 test('audit: asset evidence identifies redirects and the final resource', async () => {

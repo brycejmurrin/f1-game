@@ -61,8 +61,10 @@ test("a weather arc keeps look and grip on the continuous lerp", async () => {
   const w = g.G.trackWetness();
   assert.ok(w > 0.3 && w < 0.5, "lagged mid-arc wetness, got " + w);
   settleWetness();
-  assert.ok(Math.abs(g.G.frame.wetness - g.G.trackWetness()) < 1e-6,
-    "frame.wetness must follow the road's wetness, not a discrete wet/rain pin");
+  const pl = g.G.player;   // frame.wetness is the field under the view, (s, x); the drying line only shaves the lap value
+  assert.ok(Math.abs(g.G.frame.wetness - g.G.trackWetness()) < 0.2, "frame.wetness follows the road's wetness, not a discrete wet/rain pin");
+  assert.ok(Math.abs(g.G.gripMult({ tread: 0, s: pl.s, x: pl.x }) - g.ctx.TyreModel.weatherGrip(0, g.G.frame.wetness)) < 1e-6,
+    "grip and frame.wetness agree at the same (s, x)");
   const grip = g.G.gripMult({ tread: 0 });
   const want = g.ctx.TyreModel.weatherGrip(0, g.G.trackWetness());
   assert.ok(Math.abs(grip - want) < 1e-6 && grip > 0.82 && grip < 1, "grip at mid-arc wetness is the continuous slick value, got " + grip);

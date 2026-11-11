@@ -352,7 +352,10 @@ const DesignerCanvas = (function () {
       }
       if (mode === "draw" && path) {
         const lastPt = path[path.length - 1], wx = toWX(p.x), wz = toWZ(p.y);
-        if (Math.hypot(wx - lastPt[0], wz - lastPt[1]) >= Math.max(1.5, 2 / scale)) path.push([wx, wz]);
+        if (Math.hypot(wx - lastPt[0], wz - lastPt[1]) >= Math.max(1.5, 2 / scale)) {
+          if (path.length === 1 && hooks.onBegin) hooks.onBegin();
+          path.push([wx, wz]);
+        }
         render();
       }
     }
@@ -425,8 +428,8 @@ const DesignerCanvas = (function () {
     }
     // Keyboard: the canvas owns its arrows while a point is selected
     // (js/ui/menu-nav.js stands aside for a focused <canvas> unless it says
-    // data-arrows="pass"), 1 m a press, 10 m with Shift; [ ] / Tab walk the
-    // selection; Escape clears it.
+    // data-arrows="pass"), 1 m a press, 10 m with Shift; [ ] walk the
+    // selection; Escape clears it. Tab is the browser's: focus leaves the map.
     function cycleSel(dir) {
       const N = base.length; if (!N) return;
       hover = -1;
@@ -447,7 +450,6 @@ const DesignerCanvas = (function () {
         case "ArrowDown": dz = step; break;
         case "[": cycleSel(-1); ev.preventDefault(); return;
         case "]": cycleSel(1); ev.preventDefault(); return;
-        case "Tab": cycleSel(ev.shiftKey ? -1 : 1); ev.preventDefault(); return;
         case "Escape": if (sel >= 0 || span >= 0) { sel = -1; span = -1; tellSelect(); render(); ev.preventDefault(); } return;
         case "Delete": case "Backspace": if (pickOnly) return; if (sel >= 0 && hooks.onDelete) { ev.preventDefault(); hooks.onDelete(sel); } return;
         case "Enter": case " ": if (sel >= 0 && hooks.onPick) { ev.preventDefault(); hooks.onPick(sel, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey }); } return;
@@ -712,8 +714,12 @@ const DesignerCanvas = (function () {
       g.fillStyle = COL.chipBg; g.fillRect(x, y, tw + 10, 16);
       g.fillStyle = COL.chipText; g.fillText(c.text, x + 5, y + 2);
     }
+    // Setters inside batch() repaint once at the end (an edit used to redraw ~3-7 times).
+    let held = 0, dirty = false;
+    function paint() { if (held) dirty = true; else render(); }
     function render() {
       if (destroyed) return;
+      dirty = false;
       // MenuNav (js/ui/menu-nav.js) reads this: a focused canvas owns the
       // arrows only while they move something.
       const arrows = (sel >= 0 && !pickOnly) ? "own" : "pass";
@@ -729,11 +735,11 @@ const DesignerCanvas = (function () {
 
     // ── api ─────────────────────────────────────────────────────────────────
     const api = {
-      setPoints(pts) { base = Array.isArray(pts) ? pts : []; ghostKey = null; if (sel >= base.length) sel = -1; if (span >= base.length) span = -1; if (!fitted && base.length) fit(); render(); },
+      setPoints(pts) { base = Array.isArray(pts) ? pts : []; ghostKey = null; if (sel >= base.length) sel = -1; if (span >= base.length) span = -1; if (!fitted && base.length) fit(); paint(); },
       // A preview the PREVIOUS edit scheduled can land mid-drag: the road it
       // brings is still the old loop, so a moved drag stays stale.
-      setBuilt(tr) { built = tr && tr.n ? tr : null; ringsFor = null; ringsL = ringsR = null; if (!(mode === "drag" && moved)) stale = false; render(); },
-      setIssues(list) { issues = Array.isArray(list) ? list : []; render(); },
+      setBuilt(tr) { built = tr && tr.n ? tr : null; ringsFor = null; ringsL = ringsR = null; if (!(mode === "drag" && moved)) stale = false; paint(); },
+      setIssues(list) { issues = Array.isArray(list) ? list : []; paint(); },
       setScenery(design, on) {
         sceneryOn = !!on && typeof DesignerSceneryPreview !== "undefined";
         if (sceneryOn) {
@@ -743,7 +749,7 @@ const DesignerCanvas = (function () {
           }
         }
         if (canvas.dataset) canvas.dataset.mapView = sceneryOn ? "scenery" : "outline";
-        render();
+        paint();
       },
       /** SPEED: per-node speeds (m/s, the built road's n) paint the road; null clears. */
       setHeat(v, kind) {
@@ -754,9 +760,9 @@ const DesignerCanvas = (function () {
           heatLow = Math.min(heatLow, value); heatHigh = Math.max(heatHigh, value);
         }
         if (canvas.dataset) canvas.dataset.heatMap = heat ? heatKind : "off";
-        render();
+        paint();
       },
-      setSelection(i, j) { ghostKey = null; sel = Number.isInteger(i) ? i : -1; span = Number.isInteger(j) ? j : -1; render(); },
+      setSelection(i, j) { ghostKey = null; sel = Number.isInteger(i) ? i : -1; span = Number.isInteger(j) ? j : -1; paint(); },
       /** previewFn (optional): (pointIndex) → { pts: [[x, z]…] } | null, world
        *  coords — drawn as the dashed ghost of what the tool would stamp there.
        *  opts.pickOnly: select only (no insert / drag / nudge / double-tap delete). */
@@ -764,7 +770,7 @@ const DesignerCanvas = (function () {
         tool = name || "select"; canvas.style.cursor = tool === "draw" ? "crosshair" : "default";
         pickOnly = !!(opts && opts.pickOnly);
         const fn = typeof previewFn === "function" ? previewFn : null;
-        if (fn || preview) { preview = fn; ghost = null; ghostKey = null; render(); }
+        if (fn || preview) { preview = fn; ghost = null; ghostKey = null; paint(); }
       },
       selection() { return { sel, span }; },
       hover() { return hover; },
@@ -772,6 +778,7 @@ const DesignerCanvas = (function () {
       fit() { fit(); render(); },
       focusAt,
       render,
+      batch(fn) { held++; try { return fn(); } finally { if (!--held && dirty) render(); } },
       resize,
       view,
       zoom(f) { zoomAt(f, W / 2, H / 2); render(); },
@@ -817,6 +824,6 @@ const DesignerCanvas = (function () {
     return true;
   }
 
-  return { create, thumb, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS, HOLD_MS, COL };
+  return { create, thumb, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, HOLD_MS, COL };
 })();
 Object.freeze(DesignerCanvas);

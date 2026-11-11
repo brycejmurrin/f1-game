@@ -110,7 +110,8 @@ var GameAudioSoundtrack = (function () {
     }
 
     // musicResumeBuf is the resume KEY: the decoded AudioBuffer on the decode
-    // path, the url on the stream path (offset in musicResumeOff, At unused).
+    // path, the url on the stream path. musicResumeAt is context.currentTime at
+    // the last start (NaN while streaming — only musicResumeOff matters then).
     let musicResumeBuf = null, musicResumeAt = NaN, musicResumeOff = 0;
     // A TRACK THAT CANNOT LOAD MOVES THE LIST ON. Only a source's onended
     // advanced the playlist, and a failed fetch/decode (an upload in a format
@@ -610,7 +611,8 @@ var GameAudioSoundtrack = (function () {
       stopMusicIfGeneration(generation) { if (generation !== actionGeneration) return false; stopMusic(); return true; },
       startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck,
       suspendMusic, resumeMusic, resetContext, releaseEngineDuck, duckForEngine, retryStreamUnlock,
-      isPlaying: () => musicOn, streaming: () => musicStreaming, lastTrack: () => lastTrackIdx, volume: () => musicVol,
+      // streaming stays create-local (musicStreaming); no soundtrack.streaming reader.
+      isPlaying: () => musicOn, lastTrack: () => lastTrackIdx, volume: () => musicVol,
     };
   }
   return { create };

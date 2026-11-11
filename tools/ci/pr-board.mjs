@@ -12,35 +12,37 @@
  * the `ci-watch` skill turns each SUGGESTION into a GitHub MCP call. The tool
  * itself never writes: it has no way to issue anything but a GET.
  *
- * SUGGESTION, first match wins (AGENTS.md MERGE-COMMIT-ONLY, 2026-10-13):
+ * SUGGESTION, first match wins (AGENTS.md MERGE-COMMIT-ONLY, 2026-10-13; landing per skill `steward` §Land, 2026-10-27):
  *   FOREIGN-ARM  auto-merge armed with a method other than MERGE (squash, rebase)
  *   SYNC         mergeable_state dirty (merge conflict with the deploy branch)
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
- *   ARM          ready, not armed, Structural guards passed, ci.yml completed
- *                with success on the head plus full-tier job evidence, no
- *                MERGE-HOLD, Plan closed, fewer than MAX_ARMED armed
+ *   NONE         armed (MERGE), or labelled `land`: land.yml gates and arms it, the ruleset merges
+ *   LAND         ready, Structural guards passed, ci.yml completed with success on
+ *                the head plus full-tier job evidence, no `hold` label, Plan
+ *                closed, no `land` label yet → add `land`
  *   READY        draft, ci.yml completed+success, Structural guards passed,
- *                no MERGE-HOLD, Plan closed
- *   NONE         armed (MERGE) and healthy
- *   WAIT         anything else: ci queued/running/absent, gate pending/absent, a
- *                MERGE-HOLD, MAX_ARMED already armed, Plan items open
- * ARM and READY never fire on a row ready-gate.mjs --pr would refuse
- * (plan-open), nor on a MERGE-HOLD: line (#2737 / #2789, 2026-10-18).
+ *                no `hold` label, Plan closed
+ *   WAIT         anything else: ci queued/running/absent, gate pending/absent, the
+ *                `hold` label, Plan items open
+ * Sessions never arm or merge (land.yml does), so there is no ARM suggestion and no armed-PR cap (review M6,
+ * 2026-10-27). The veto is the `hold` LABEL (AGENTS.md §Coordination; merge-gate's hold row); a body line
+ * `MERGE-HOLD:` is legacy and only DISPLAYED ("(MERGE-HOLD: legacy)"): merge-gate ignores it, so it vetoes nothing.
+ * LAND and READY never fire on a row ready-gate.mjs --pr would refuse (plan-open) (#2737, 2026-10-18).
  * There is no ready-PR cap: since 2026-10-16 (CI/CD review #2333 finding 7)
  * GitHub's own `queue: max` lanes bound the browser legs; the cap tool was
- * deleted in #3013.
- * Each ARM counts toward MAX_ARMED (2 repo-wide, any method). The
+ * deleted in #3013. STATE reads `ready+land` for a PR labelled `land`. The
  * PLAN column is ready-gate.mjs's planVerdict of the PR body: done/items, or "-"
  * for a body with no ## Plan checklist (AGENTS.md rule 12).
  * FLEET reads the retired (2026-10-27) worker report on PRs opened before the
  * redesign: the body's `fleet-status: <state> | <reason> | <utc>` line,
  * or the newest PR comment starting `fleet-status:` or `@orchestrator
  * NEEDS-DECISION:` when it is newer than the body line; state, age, reason.
- * LANE is the PR's `lane:<host>` label and OWNER the `owner:` line of the body's ```handoff block (docs/WORKERS.md).
+ * LANE is the PR's `lane:<host>` label and OWNER the `owner:` line of the body's ```handoff block (skill `steward` §Open).
  * token in the block's title (ready-gate.mjs fleetIdentity; no extra API call).
  *
  *   node tools/ci/pr-board.mjs              # the table
  *   node tools/ci/pr-board.mjs --json       # rows, for the skill
+ *   node tools/ci/pr-board.mjs --brief      # one line per PR: what an orchestrator acts on
  *   node tools/ci/pr-board.mjs --pr 1234    # one PR
  *   node tools/ci/pr-board.mjs --alarm      # only the stall alarm: READY > 12 h, green, no hold, no push
  *
@@ -56,13 +58,12 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
 
 export { DEPLOY };
-/** At most this many PRs armed repo-wide (AGENTS.md §Coordination, Merge Desk's hard gate). */
-export const MAX_ARMED = 2;
 /** The one merge method allowed (AGENTS.md MERGE-COMMIT-ONLY). */
 const MERGE_METHOD = "merge";
+const labelNames = (pr) => (pr.labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
 
-/** A PR-body line that STARTS with `MERGE-HOLD:`, outside an HTML comment, is
- *  the one veto on arming or merging (AGENTS.md); a mid-sentence mention is not. */
+/** A PR-body line that STARTS with `MERGE-HOLD:`, outside an HTML comment: the LEGACY veto, displayed only (the
+ *  `hold` label is the veto now; merge-gate ignores this line). A mid-sentence mention is not one. */
 export function hasMergeHold(body) {
   return /^MERGE-HOLD:/m.test(String(body || "").replace(/<!--[\s\S]*?-->/g, ""));
 }
@@ -71,7 +72,7 @@ export function laneOf(pr) {
   const l = (pr.labels || []).map((x) => (typeof x === "string" ? x : x.name)).find((n) => /^lane:/.test(n || ""));
   return l ? l.slice(5) : "-";
 }
-/** The `owner:` line of the body's ```handoff block (docs/WORKERS.md), else "-". Pure. */
+/** The `owner:` line of the body's ```handoff block (skill `steward` §Open), else "-". Pure. */
 export function handoffOwner(body) {
   const m = /```handoff\n([\s\S]*?)```/.exec(String(body || ""));
   const line = m && /^owner:\s*(.+)$/m.exec(m[1]);
@@ -86,7 +87,7 @@ export function ageLabel(at, now = Date.now()) {
   return m < 60 ? `${m}m` : m < 48 * 60 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
 }
 
-export const SUGGESTIONS = ["ARM", "READY", "SYNC", "FIX", "FOREIGN-ARM", "WAIT", "NONE"];
+export const SUGGESTIONS = ["LAND", "READY", "SYNC", "FIX", "FOREIGN-ARM", "WAIT", "NONE"];
 const LIVE = new Set(["queued", "in_progress", "waiting", "requested", "pending"]);
 const BAD_JOB = new Set(["failure", "timed_out", "startup_failure"]);
 
@@ -97,10 +98,7 @@ const BAD_JOB = new Set(["failure", "timed_out", "startup_failure"]);
  * @returns {{ state: "none"|"queued"|"in_progress"|"success"|"failure"|"cancelled", runId: number|null }}
  */
 export function ciState(runs) {
-  // A label-noise run (#2184: ci-watch.mjs labelNoiseRun) skips every job and
-  // concludes success; as the newest run it would read a red head as green.
-  const list = (runs || []).filter((r) => r && (r.path ? r.path.endsWith("/ci.yml") : true)
-    && !/^CI ignored: /.test(String(r.display_title || "")));
+  const list = (runs || []).filter((r) => r && (r.path ? r.path.endsWith("/ci.yml") : true));
   if (!list.length) return { state: "none", runId: null };
   const byId = (a, b) => (b.id || 0) - (a.id || 0);
   const live = list.filter((r) => LIVE.has(r.status)).sort(byId);
@@ -122,12 +120,11 @@ const planOpen = (row) => !!(row.plan && row.plan.state === "open");
 
 /**
  * The decision for one row. Pure.
- * @param {{ draft:boolean, armed:boolean, mergeMethod?:string|null, mergeableState?:string|null, ci:string, gate:string }} row
- * @param {{ armed?: number }} [ctx]
- *   ctx.armed: PRs armed repo-wide so far (ARM waits at MAX_ARMED).
+ * @param {{ draft:boolean, armed:boolean, land?:boolean, hold?:boolean, mergeMethod?:string|null, mergeableState?:string|null, ci:string, gate:string }} row
+ *   hold = the `hold` LABEL (the one veto); land = the `land` label.
  * @returns {{ action: string, why: string }}
  */
-export function decide(row, ctx = {}) {
+export function decide(row) {
   const method = String(row.mergeMethod || "").toLowerCase();
   if (row.armed && method !== MERGE_METHOD) {
     return { action: "FOREIGN-ARM", why: `auto-merge armed with ${method || "an unknown method"}; only MERGE is allowed` };
@@ -137,19 +134,19 @@ export function decide(row, ctx = {}) {
   if (row.gate === "failed") return { action: "FIX", why: "Structural guards failed on the head" };
   const gateOk = row.gate === "passed";
   if (!row.draft) {
-    if (row.armed) return { action: "NONE", why: "armed (MERGE) and healthy" };
+    if (row.armed) return { action: "NONE", why: "armed (MERGE): the ruleset merges when CI and gate are green" };
+    if (row.land) return { action: "NONE", why: "labelled land: land.yml runs the gate and arms it" };
     if (row.ci !== "success") return { action: "WAIT", why: `ready, ci ${row.ci}: the full tier is not green on the head` };
     if (row.fullTier !== true) return { action: "WAIT", why: "ready, no successful full-tier job evidence on this CI run" };
-    if (row.hold) return { action: "WAIT", why: "ready and green, but the body carries MERGE-HOLD: (the one veto)" };
+    if (row.hold) return { action: "WAIT", why: "ready and green, but it carries the hold label (the one veto)" };
     if (planOpen(row)) return { action: "WAIT", why: `ready and green, but ${row.plan.open.length} Plan item(s) are open (ready-gate exits 1: plan-open)` };
-    if (gateOk && (ctx.armed ?? 0) >= MAX_ARMED) return { action: "WAIT", why: `ready and green, but ${MAX_ARMED} PRs are already armed` };
-    if (gateOk) return { action: "ARM", why: "ready, Structural guards passed, ci succeeded" };
+    if (gateOk) return { action: "LAND", why: "ready, Structural guards passed, ci succeeded: add the land label" };
     return { action: "WAIT", why: `ready, Structural guards ${row.gate}` };
   }
   if (row.ci === "queued" || row.ci === "in_progress") return { action: "WAIT", why: `draft, ci ${row.ci}` };
   if (!gateOk) return { action: "WAIT", why: `draft, Structural guards ${row.gate}` };
   if (row.ci !== "success") return { action: "WAIT", why: `draft, ci ${row.ci}: the fast tier is not green on the head` };
-  if (row.hold) return { action: "WAIT", why: "draft is green, but the body carries MERGE-HOLD: (the one veto)" };
+  if (row.hold) return { action: "WAIT", why: "draft is green, but it carries the hold label (the one veto)" };
   if (planOpen(row)) {
     return { action: "WAIT", why: `draft is green but ${row.plan.open.length} Plan item(s) are open (ready-gate refuses)` };
   }
@@ -157,7 +154,7 @@ export function decide(row, ctx = {}) {
 }
 
 /** Just the verb. */
-export const suggest = (row, ctx) => decide(row, ctx).action;
+export const suggest = (row) => decide(row).action;
 
 /** Required full-tier jobs must all have run successfully in the selected run. */
 export function fullTierPassed(jobs = []) {
@@ -170,13 +167,9 @@ export function fullTierPassed(jobs = []) {
 /**
  * Rows from collected facts. Pure: inject what the API returned.
  * @param {Array<{ pr: object, runs?: object[], jobs?: object[], jobsRunId?: number, checkRuns?: object[] }>} items
- *   pr = the pulls/{n} object (needs number, title, draft, head.sha/ref, auto_merge, mergeable_state)
- * @param {{ armed?: number }} [opts]
- *   armed = repository-wide initial count, including siblings omitted from items.
+ *   pr = the pulls/{n} object (needs number, title, draft, head.sha/ref, auto_merge, mergeable_state, labels)
  */
-export function evaluate(items, opts = {}) {
-  const ctx = {
-    armed: opts.armed ?? (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
+export function evaluate(items) {
   const rows = [];
   for (const it of [...(items || [])].sort((a, b) => a.pr.number - b.pr.number)) {
     const pr = it.pr;
@@ -201,12 +194,13 @@ export function evaluate(items, opts = {}) {
       gate: gate.state,
       gateEvidence: gate.evidence,
       plan: planVerdict(pr.body),
-      hold: hasMergeHold(pr.body) || (pr.labels || []).some((l) => (typeof l === "string" ? l : l.name) === "hold"),
+      hold: labelNames(pr).includes("hold"),
+      mergeHold: hasMergeHold(pr.body),
+      land: labelNames(pr).includes("land"),
       owner: handoffOwner(pr.body),
       url: pr.html_url || "",
     };
-    const d = decide(row, ctx);
-    if (d.action === "ARM") ctx.armed += 1;
+    const d = decide(row);
     rows.push({ ...row, suggest: d.action, why: d.why });
   }
   return { rows };
@@ -220,9 +214,10 @@ export function render(result, { now = Date.now() } = {}) {
   const head = ["PR", "LANE", "OWNER", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "SUGGEST"];
   const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
   const body = rows.map((r) => [
-    `#${r.number}`, r.lane || "-", clip(r.owner || "-", 18), clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
+    `#${r.number}`, r.lane || "-", clip(r.owner || "-", 18), clip(r.title, 40), `${r.draft ? "draft" : "ready"}${r.land ? "+land" : ""}`, r.sha || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
-    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
+    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan),
+    `${r.suggest}${r.hold ? " (HOLD)" : ""}${r.mergeHold ? " (MERGE-HOLD: legacy)" : ""}`,
   ]);
   const all = [head, ...body];
   const w = head.map((_, i) => Math.max(...all.map((row) => row[i].length)));
@@ -230,6 +225,29 @@ export function render(result, { now = Date.now() } = {}) {
   const out = rows.length ? all.map(fmt) : ["no open PRs into " + DEPLOY];
   out.push(`pr-board: ${rows.length} open PR(s)`);
   return out.join("\n");
+}
+
+/**
+ * `--brief`: one line per PR, the fields an orchestrator acts on and nothing else (2026-11-10: it piped `--json`
+ * through an ad-hoc `node -e` on every cycle). `#n STATE CI SUGGEST | sha7 | plan d/n | owner | why | now: …`.
+ * `sync` is the optional { [number]: needsSync verdict } the CLI gathers for SYNC/FIX rows.
+ */
+export function brief(result, { sync = {} } = {}) {
+  const lines = result.rows.map((r) => {
+    const plan = !r.plan || r.plan.state === "none" ? "-" : `${r.plan.items - r.plan.open.length}/${r.plan.items}`;
+    const now = (r.plan?.open || []).find((t) => /^\*\*now:\*\*/.test(t));
+    const sv = sync[r.number];
+    const flags = [r.hold && "HOLD", r.mergeHold && "MERGE-HOLD", r.armed && "armed", r.mergeableState === "dirty" && "conflict", r.failing?.length && `red: ${clip(r.failing.join(", "), 60)}`,
+      sv && (sv.ok ? `sync ${sv.verdict}` : "sync unknown")].filter(Boolean);
+    return [`#${r.number} ${r.draft ? "draft" : "ready"}${r.land ? "+land" : ""} ci=${r.ci} gate=${r.gate} → ${r.suggest}`,
+      (r.sha || "").slice(0, 7) || "-", `plan ${plan}`, clip(String(r.owner || "-").replace(/^claude:/, ""), 44), clip(String(r.title || ""), 48),
+      ...(flags.length ? [flags.join("; ")] : []), ...(r.why ? [clip(String(r.why), 80)] : []),
+      ...(now ? [clip(now.replace(/^\*\*now:\*\*\s*/, "now: "), 110)] : [])].join(" | ");
+  });
+  const count = (k) => result.rows.filter((r) => r.suggest === k).length;
+  const tally = SUGGESTIONS.filter((k) => count(k)).map((k) => `${count(k)} ${k}`).join(", ");
+  lines.push(`= pr-board: ${result.rows.length} open${tally ? ` (${tally})` : ""}`);
+  return lines.join("\n");
 }
 
 /**
@@ -249,13 +267,10 @@ export function measure(opts = {}) {
   const snap = opts.snapshot || createSnapshot({ request: opts.request, run: opts.run, env: opts.env, gh: opts.gh });
   const fail = (error) => ({ ok: false, error, rows: [] });
 
-  // --pr limits expensive detail/CI reads, not the repository-wide armed cap.
-  // The list includes auto_merge metadata; no sibling detail request is needed.
-  // https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
+  // --pr limits the detail/CI reads to one PR. https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
   const list = snap.openPrs();
   if (list.error) return fail(list.error);
-  const armedByPr = new Map(list.json.map((pr) => [pr.number, !!pr.auto_merge]));
-  const nums = opts.only != null ? [opts.only] : [...armedByPr.keys()];
+  const nums = opts.only != null ? [opts.only] : list.json.map((pr) => pr.number);
   // One page of the newest ci.yml runs answers most heads (advisory: a failed
   // or empty page only means every head is read on its own). A single --pr
   // read skips it: one per-head call is cheaper than a 100-run page.
@@ -271,7 +286,6 @@ export function measure(opts = {}) {
     }
     const sha = pr.head?.sha;
     if (!sha) return fail(`PR #${n}: no head sha`);
-    armedByPr.set(n, !!pr.auto_merge);   // refresh selected rows after discovery
     let runs = byHead.get(sha);
     if (!runs) {
       const runsR = snap.ciRuns(sha);
@@ -299,7 +313,7 @@ export function measure(opts = {}) {
     items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [], comments });
   }
   snap.save();
-  const result = evaluate(items, { armed: [...armedByPr.values()].filter(Boolean).length });
+  const result = evaluate(items);
   return { ok: true, ...result, requests: snap.stats() };
 }
 
@@ -308,7 +322,7 @@ export const ALARM_HOURS = 12;
 
 /**
  * The stall alarm: ready (not draft), ci.yml green on the head, Structural
- * guards passed, no MERGE-HOLD:, and the head's newest ci.yml run created
+ * guards passed, no `hold` label, and the head's newest ci.yml run created
  * ≥ ALARM_HOURS ago (a push or a draft→ready flip starts a run, so this is
  * "nothing has happened for 12 h"). Pure.
  */
@@ -327,30 +341,34 @@ export function alarmLines(rows, opts = {}) {
 }
 
 function parseArgs(argv) {
-  const out = { json: false, only: null, alarm: false };
+  const out = { json: false, only: null, alarm: false, brief: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") out.json = true;
     else if (a === "--alarm") out.alarm = true;
+    else if (a === "--brief") out.brief = true;
     else if (a === "--pr") {
       const n = Number(argv[++i]);
       if (!Number.isInteger(n) || n < 1) return { error: `--pr needs a positive integer (got ${argv[i]})` };
       out.only = n;
     } else return { error: `unknown arg: ${a}` };
   }
+  if (out.brief && (out.json || out.alarm)) return { error: "--brief is its own output; drop --json / --alarm" };
   return out;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
-  exitIfHelp(argv, `usage: node tools/ci/pr-board.mjs [--json] [--pr <n>] [--alarm]
+  exitIfHelp(argv, `usage: node tools/ci/pr-board.mjs [--json | --brief] [--pr <n>] [--alarm]
 
+--brief prints ONE line per PR (state, ci, gate, suggestion, sha7, plan done/total, owner session, flags, why, the Plan's now: item)
+and a \`= pr-board: <n> open (<tally>)\` line: what an orchestrator acts on, ~1 KB for 7 PRs against ~10 KB of --json.
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 the legacy fleet-status report on pre-2026-10-27 PRs, the lane:<host> label (LANE)
-and the Hand-off block's owner (OWNER), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
+and the Hand-off block's owner (OWNER), and a SUGGESTION (LAND READY SYNC FIX FOREIGN-ARM WAIT NONE); STATE shows +land, SUGGEST (HOLD) for the hold label.
 Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
---alarm prints only the stall alarm: PRs ready > ${ALARM_HOURS} h, green, no MERGE-HOLD, no push
+--alarm prints only the stall alarm: PRs ready > ${ALARM_HOURS} h, green, no hold label, no push
 (\`= alarm none|<n> stalled\`; exit 1 when any). Requests go through tools/lib/pr-snapshot.mjs (ETag cache).
 Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
   const args = parseArgs(argv);
@@ -376,7 +394,8 @@ Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
   for (const r of v.rows) if (r.suggest === "SYNC" || r.suggest === "FIX") sync[r.number] = needsSync(r.branch, { request: snapshot.get });
   snapshot.save();
   const syncLine = (n) => (sync[n].ok ? `${verdictLine(sync[n])} (${sync[n].why})` : `= sync needed: unknown (${sync[n].error})`);
-  if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)) }, null, 2));
+  if (args.brief) console.log(brief(v, { sync }));
+  else if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)) }, null, 2));
   else {
     console.log(render(v));
     for (const n of Object.keys(sync)) console.log(`#${n} ${syncLine(n)}`);

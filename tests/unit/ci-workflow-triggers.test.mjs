@@ -12,7 +12,7 @@ import vm from "node:vm";
 import { parse as parseYAML } from "yaml";
 import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectJob, shipFilter, PR_ACTIVE } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, pagesWorkflow, selectJob, shipFilter } from "../helpers/ci-workflow.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
@@ -34,12 +34,12 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // The deploy branch's push must reach the train; the heavy browser jobs still
   // opt out of a draft PR's fast tier by the one shared expression.
   assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach pages.yml");
-  // Draft synchronize is CI-free unless label run-ci (2026-10-15 fast-track); heavy
+  // Every PR push runs the fast tier (2026-11-03: no run-ci opt-in); heavy
   // jobs still wait for `ready_for_review`, which must therefore be a trigger type.
   const fastTier = "!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))";
-  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review, labeled, edited\]/,
-    "labeled run-ci, and an edit that adds the `CI: run` body line, must be able to opt draft PRs into CI");
-  assert.match(ciWorkflow, /draft-ci-skipped:/, "draft pushes without run-ci report a skip job");
+  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "a draft push runs on its own; `labeled` and `edited` (the run-ci opt-in) are gone");
+  assert.doesNotMatch(ciWorkflow, /draft-ci-skipped:/, "no opt-out notice job: a draft push runs the fast tier");
   // Only the deploy branch's push starts a train; a topic branch runs through its PR.
   assert.match(pushBlock, /branches:\n\s+- claude\/f1-game-project-26h3ng\n/, "the train's push must be scoped to the deploy branch");
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
@@ -48,12 +48,12 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.ok(shipFilter.includes(fastTier), "the ship filter step sits out the fast tier with the same expression");
   assert.ok(sweepsJob.includes(fastTier), "sweeps sit out the fast tier");
   assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
-  // node-suites left the draft fast tier on 2026-10-16 (decision D1): it keeps
-  // the shared draft/label predicate and adds its own draft skip (pinned above).
+  // node-suites left the draft fast tier on 2026-10-16 (decision D1): its own
+  // draft skip is pinned in ci-gate-selection; the fast-tier jobs carry no draft gate at all.
   for (const name of ["guards-a", "guards-b", "guards", "driving-model", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
-    assert.ok(head.includes(PR_ACTIVE), `${name} must skip draft synchronize unless run-ci`);
+    assert.ok(!/run-ci|github\.event\.pull_request\.draft/.test(head), `${name} runs on every PR push, a draft included`);
     assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out of ship/draft heavy skip`);
   }
 });
@@ -179,7 +179,7 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
   const failed = [{ name: "Per-circuit geometry sweeps", conclusion: "failure" },
     { name: "Selected specs (change-aware gate)", conclusion: "failure" },
     { name: "Structural guards", conclusion: "success" },
-    { name: "Golden menus on a runner (trial, non-blocking)", conclusion: "skipped" }];
+    { name: "Golden menus on a runner (nightly)", conclusion: "skipped" }];
 
   const green = verdict([ci(B)]);
   assert.equal(green.out, `::notice::base ${B.slice(0, 7)} was green — run 11`);
@@ -201,7 +201,7 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
   // pages.yml run on the base IS the base verdict; any other workflow still is not.
   assert.match(verdict([ci(B, { path: ".github/workflows/pages.yml" })]).out, new RegExp(`base ${B.slice(0, 7)} was green`),
     "a pages.yml train on the base is the base verdict");
-  assert.match(verdict([ci(B, { path: ".github/workflows/fleet.yml" })]).out, /no completed ci\.yml \/ pages\.yml run/,
+  assert.match(verdict([ci(B, { path: ".github/workflows/gpu-census.yml" })]).out, /no completed ci\.yml \/ pages\.yml run/,
     "another workflow's verdict is not this gate's base");
   assert.match(verdict([ci(B, { status: "in_progress", conclusion: null })]).out, /no completed ci\.yml \/ pages\.yml run/,
     "a run still going has no verdict to report");
@@ -211,7 +211,7 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
     "a red with no job list still reports something");
   // Advisory: every failure path is one line and an exit 0.
   const broken = verdict([ci(B)], [], { FAKE_GH: "fail" });
-  assert.match(broken.out, /^::notice::base verdict unavailable/);
+  assert.equal(broken.out, "::notice::base verdict unavailable: could not list ci.yml / pages.yml runs on deploy");
   for (const r of [green, red, broken]) assert.equal(r.status, 0, "base-verdict must never fail the job it reports in");
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -288,13 +288,39 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
 test("the CI guard shards stop starting files after their first failure (--bail)", () => {
   const parsed = parseYAML(ciWorkflow).jobs;
   for (const [id, shard] of [["guards-a", "1/4"], ["guards-b", "2/4"], ["guards-c", "3/4"], ["guards-d", "4/4"]]) {
-    const step = parsed[id].steps.find((st) => /tooling-fast\.mjs/.test(st.run || ""));
+    const step = parsed[id].steps.find((st) => /tooling-fast\.mjs.*--shard=/.test(st.run || ""));
     assert.ok(step, `${id} runs tooling-fast`);
     assert.match(step.run, new RegExp(`--shard=${shard.replace("/", "\\/")} --bail$`),
       `${id} must pass --bail (2026-10-16 CI jobs review: red shards ran a mean 5.9 min past the first failure)`);
   }
   // The local edit loop keeps every failure visible.
   assert.doesNotMatch(JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts["test:tooling-fast"], /--bail/);
+});
+
+/* GUARDS SCOPE (#3951): the shards narrow to `--changed` on a pull request
+ * that touches no tooling, but the JOBS must always run — a path filter would
+ * leave the required check "Pending" — and the scope must key the verdict
+ * cache, or a narrowed green replays as a full one on the deploy push. */
+test("the CI guard shards always run; only their file list narrows, and the mode keys the verdict cache", () => {
+  const wf = parseYAML(ciWorkflow);
+  const pr = wf.on.pull_request;
+  assert.ok(pr, "CI runs on pull_request");
+  assert.equal(pr.paths, undefined, "no paths filter on the required CI workflow");
+  assert.equal(pr["paths-ignore"], undefined, "no paths-ignore on the required CI workflow");
+  for (const [id, shard] of [["guards-a", "1/4"], ["guards-b", "2/4"], ["guards-c", "3/4"], ["guards-d", "4/4"]]) {
+    const steps = wf.jobs[id].steps;
+    const scope = steps.findIndex((st) => st.id === "scope");
+    assert.ok(scope >= 0, `${id} has the Guards scope step`);
+    assert.equal(steps[scope].run, "node tools/ci/tooling-fast.mjs --print-scope | tee -a \"$GITHUB_OUTPUT\"");
+    const hash = steps.find((st) => st.id === "h");
+    assert.ok(steps.indexOf(hash) > scope, `${id}: the scope is known before the cache key`);
+    // Through env, not inline: zizmor's template-injection audit fails the lints job on an inline step output.
+    assert.equal(hash.env.GUARDS_MODE, "${{ steps.scope.outputs.mode }}");
+    assert.match(hash.run, /-\$\{GUARDS_MODE\}-/, `${id}: the mode is part of the verdict-cache key`);
+    const run = steps.find((st) => /tooling-fast\.mjs.*--shard=/.test(st.run || ""));
+    assert.match(run.run, new RegExp(`\\$\\{GUARDS_CHANGED:\\+--changed\\} --jobs=4 --shard=${shard.replace("/", "\\/")} --bail$`));
+    assert.equal(run.env.GUARDS_CHANGED, "${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}");
+  }
 });
 
 test("selected-verdict: one fixed-name check that always judges the change-aware gate", () => {

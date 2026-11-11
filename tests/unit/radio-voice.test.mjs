@@ -204,9 +204,10 @@ test("a preempt is cancel-then-speak-then-RESUME, which is the bug workaround", 
   assert.match(spoken.at(-1).text, /penalty/, "the interrupting line is the one left speaking");
 });
 
-test("an empty voice list still speaks — that is the Safari path, not a refusal", async () => {
-  // Safari returns nothing from getVoices() and picks a system default itself.
-  // A design that requires a voice object before speaking is silent on Safari.
+test("an empty voice list still speaks — the platform default, not a refusal", async () => {
+  // An empty getVoices() (Chrome's first read, a synth with nothing installed)
+  // leaves the platform to pick. A design that requires a voice object before
+  // speaking would be silent there. (iOS returns a partial list: see W19 below.)
   const { RV: R, G, synth } = load({ stored: { radioVoice: true }, voices: [] });
   const v = R.create(G);
   assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
@@ -877,7 +878,7 @@ test("hunt fixes: an 'interrupted' resume() never counts as recovered; TLX stops
     "third TLX loss outside race entry stashes ctx-lost notice then reloads (#3536)");
   assert.ok(tlx.includes("GfxEscalation.onReloadBudgetExceeded(n,"), "third loss during race entry routes through GfxEscalation instead of another reload");
   const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /function endRace\(forcedOrder\) \{[\s\S]{0,200}GfxEscalation\.resetReloadBudget\(\)/);
+  assert.match(symbolSource("function endRace(forcedOrder)"), /GfxEscalation\.resetReloadBudget\(\)/);
   const cam = readFileSync(join(ROOT, "js/garage/setup-camera.js"), "utf8");
   assert.match(cam, /!document\.querySelector\("dialog\[open\], dialog\.screen:not\(\[hidden\]\)"\)/);
 });
@@ -1265,7 +1266,7 @@ test("race mix audition stops only the preview generation it started", () => {
 // hide-time suspend). Every other squelch test injects window.RadioSquelchCtx
 // and so never took that path; these load the REAL engine.js beside it.
 const ENGINE_FILES = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js",
-  "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"];
+  "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"];
 async function loadWithEngine({ mobile = false } = {}) {
   const { createRequire } = await import("node:module");
   const fakeAudio = createRequire(import.meta.url)("./fake-audio-vm.cjs");
@@ -1327,4 +1328,129 @@ test("the title stub exposes context() → null, and the squelch stays silent on
   vm.runInContext(read("js/audio/stub.js"), sc, { filename: absSrc("js/audio/stub.js") });
   assert.equal(vm.runInContext("GameAudio.context()", sc), null);
   assert.equal(vm.runInContext("GameAudio.sfxBus()", sc), null);
+});
+
+// ── 6. Spoken language (#1606): voices follow the setting, captions stay when none exists ──
+
+test("spokenLang: AUTO follows the UI language, an explicit pick wins, both reduce to the base tag", () => {
+  const { RV: R } = load();
+  assert.equal(R.spokenLang("auto", "de-DE"), "de");
+  assert.equal(R.spokenLang(undefined, "en-XA"), "en");
+  assert.equal(R.spokenLang("ja", "en"), "ja");
+  assert.equal(R.spokenLang("auto", ""), "en");
+});
+
+test("hasVoiceFor: an empty list is Safari (unknown, speak); a populated list without the language is not", () => {
+  const { RV: R } = load();
+  assert.equal(R.hasVoiceFor([], "de"), true);
+  assert.equal(R.hasVoiceFor([{ lang: "en-GB" }], "de"), false);
+  assert.equal(R.hasVoiceFor([{ lang: "en-GB" }, { lang: "de-DE" }], "de"), true);
+  assert.equal(P({ noVoice: true }).reason, "no-voice");
+});
+
+test("a spoken language with no system voice is CAPTION-ONLY: say() refuses, nothing reaches speechSynthesis.speak", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true, spokenLang: "de" }, voices: [{ name: "A", lang: "en-GB", localService: true }] });
+  const v = R.create(G);
+  assert.equal(v.say("REIFEN LASSEN NACH", 3, "info"), false);
+  await flush();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0, "the card must stay written");
+  assert.equal(v.debug().last.reason, "no-voice");
+});
+
+test("a spoken language WITH a system voice speaks through it", async () => {
+  const de = { name: "Anna", lang: "de-DE", localService: true };
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true, spokenLang: "de" }, voices: [{ name: "A", lang: "en-GB", localService: true }, de] });
+  const v = R.create(G);
+  assert.equal(v.say("REIFEN LASSEN NACH", 3, "info"), true);
+  await flush();
+  const spoke = synth.calls.filter((c) => c.m === "speak");
+  assert.equal(spoke.length, 1);
+  assert.equal(spoke[0].voice, de);
+});
+
+// THE RACE-LOAD GATE MUST NOT OUTLIVE A START THAT NEVER REACHES COUNT. prepare()
+// latches the pack's announcer fetches and polls for race/count; a start that
+// exits first (stale body, quitToMenu, ctx lost, a failed quali order) used to
+// leave the latch on and the 400 ms poll waking the menus forever.
+function gateRig() {
+  const timers = new Map(); let id = 0, clock = 0;
+  const gates = [];
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console,
+    setTimeout: (fn, ms) => { timers.set(++id, { fn, at: clock + ms }); return id; },
+    clearTimeout: (t) => { timers.delete(t); } });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  ctx.VoicePack = { create: () => ({ stop() {}, remaining: () => 0, ensure() {}, ensureStaged() {}, raceLoadGate: (on) => gates.push(on) }) };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  let phase = "build";
+  const G = { soundOn: true, state: "menu", loadingScreen: { phase: () => phase }, store: { get: (k, d) => d, set() {} } };
+  const v = vm.runInContext("RadioVoice", ctx).create(G);
+  const advance = (ms) => {
+    const end = clock + ms;
+    for (;;) {
+      let next = null;
+      for (const [k, t] of timers) if (t.at <= end && (!next || t.at < next[1].at)) next = [k, t];
+      if (!next) break;
+      timers.delete(next[0]); clock = next[1].at; next[1].fn();
+    }
+    clock = end;
+  };
+  return { v, G, gates, timers, advance, cover: (p) => { phase = p; } };
+}
+
+test("the race-load gate holds over the loading cover and releases when a start exits to the menu", () => {
+  const { v, gates, timers, advance, cover } = gateRig();
+  v.prepare();
+  assert.deepEqual(gates, [true], "prepare() latches the gate");
+  advance(5000);
+  assert.deepEqual(gates, [true], "still loading (state menu under the cover): held");
+  assert.equal(timers.size, 1, "and still polling");
+  cover("");   // the start bailed out: the cover is down, the title is back
+  advance(5000);
+  assert.deepEqual(gates, [true, false], "the gate is released");
+  assert.equal(timers.size, 0, "and no poll is left waking the menus");
+});
+
+test("the race-load gate still releases at count, and a menu with no cover releases it too", () => {
+  const a = gateRig();
+  a.v.prepare(); a.G.state = "count"; a.advance(5000);
+  assert.deepEqual(a.gates, [true, false]);
+  assert.equal(a.timers.size, 0);
+  const b = gateRig();
+  b.cover(""); b.v.prepare(); b.advance(5000);
+  assert.deepEqual(b.gates, [true, false], "a stale prepare on the bare title releases on the first poll");
+  assert.equal(b.timers.size, 0);
+});
+
+// ── audit W19 (2026-11-09): iOS returns a PARTIAL voice list, not none ────────
+// Its preinstalled voices (downloaded ones are missing: bugs.webkit.org 290497),
+// alphabetised. The old default spread took the first three English entries —
+// Aaron / Albert / Arthur on an iPhone, Albert being a novelty voice.
+const IOS_VOICES = ["Aaron", "Albert", "Arthur", "Bad News", "Bahh", "Bells", "Boing", "Bubbles", "Catherine", "Cellos",
+  "Daniel", "Fred", "Good News", "Gordon", "Jester", "Karen", "Martha", "Moira", "Nicky", "Organ", "Rishi", "Samantha",
+  "Superstar", "Tessa", "Trinoids", "Whisper", "Wobble", "Zarvox"].map((name) => ({
+  name, localService: true,
+  lang: { Arthur: "en-GB", Daniel: "en-GB", Martha: "en-GB", Catherine: "en-AU", Gordon: "en-AU", Karen: "en-AU", Moira: "en-IE", Rishi: "en-IN", Tessa: "en-ZA" }[name] || "en-US",
+}));
+const NOVEL = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|fred|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox)$/i;
+
+test("with no stored pick, each channel takes its own non-novelty voice from the iOS list", () => {
+  const pick = (sp) => RV.pickChannelVoice(sp, IOS_VOICES).name;
+  const got = { control: pick("control"), coach: pick("coach"), radio: pick("radio") };
+  assert.equal(got.control, "Daniel", "race control reads in the en-GB Daniel voice");
+  assert.equal(got.coach, "Samantha", "the coach is the clear en-US Samantha");
+  assert.equal(new Set(Object.values(got)).size, 3, "three channels, three voices: " + JSON.stringify(got));
+  for (const [sp, name] of Object.entries(got)) assert.doesNotMatch(name, NOVEL, sp + " must never default to a novelty voice");
+  assert.equal(RV.pickChannelVoice("radio", []), null, "an empty list leaves the platform to choose");
+  assert.equal(RV.pickChannelVoice("radio", [{ name: "Zarvox", lang: "en-US" }]).name, "Zarvox", "a novelty voice only when it is all there is");
+});
+
+test("say() uses the ladder voice on the iOS list (race control is not Aaron)", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true }, voices: IOS_VOICES });
+  const v = R.create(G);
+  v.say("TRACK LIMITS WARNING", 3, "warning");
+  await flush();
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.equal(spoke.voice && spoke.voice.name, "Daniel");
 });

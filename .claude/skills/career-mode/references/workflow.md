@@ -5,12 +5,10 @@ Load from the SKILL.md index when the task needs this detail.
 ## Contents
 - Workflow / Implementation
 - Common Mistakes
-- Sponsor payout / double-pay trace (node-only)
-- Research / facility / budget spend vs settle trace (node-only)
 
 ## Workflow / Implementation
 
-1. **Decide whether the save is active.**
+1. **Read `career.flavour` first** (`__apex.careerState().flavour`: `driver` or `myteam`; sponsor and research traces: [traces.md](traces.md)), then decide whether the save is active.
    - Boot may load a save so the title screen can offer career modes.
    - Gameplay changes must use `Career.inCareer()` or the `G` facade's career
      flow, not merely the presence of saved data.
@@ -33,7 +31,8 @@ Load from the SKILL.md index when the task needs this detail.
 4. **Model career weekends through existing race surfaces.**
    - Qualifying is a session layered on the time-trial path.
    - Reliability/DNFs are planned at race staging and inspected with
-     `retirements()`.
+     `retirements()` (the plan itself → skill race-incidents-control; this
+     skill owns what the DNF does to points and money).
    - Career points reuse the same season shape so results, standings, and HUD
      remain shared.
 
@@ -50,7 +49,7 @@ Load from the SKILL.md index when the task needs this detail.
      career markets, objectives, development, or reliability plans.
    - If you must add a draw, include stable varying parts in the key.
    - `tests/unit/career-determinism.test.mjs` fails on any `simRnd` or a new
-     `Math.random()` in `js/career/*.js` (two allowlisted non-draw sites).
+     `Math.random()` in `js/career/*.js` outside its allowlist of non-draw sites.
 
 7. **Verify through hooks before UI assertions.** Browser steps are session
    only (a subagent reports them unverified); reproduce hub/HUD UI at Bryce's
@@ -60,9 +59,9 @@ Load from the SKILL.md index when the task needs this detail.
    - **`careerSim()` needs the career hub plus a loaded track/grid first** — stage
      qualifying/race context before calling it.
    - Garage locked rows: `#cs-options .cs-opt.locked`, or assert owned parts vs
-     `Parts.CATALOG` via `__apex.career().owned` / `Career.isOwned()`.
-   - Then assert UI flow through `tests/specs/career.spec.js` / `tests/specs/quali.spec.js`.
-   - Run `test:modes` in the background via `tools/ci/test-bg.mjs` (covers career + quali).
+     `Parts.CATALOG` via `__apex.career().owned` / `Career.owned(teamId)` (a Set).
+   - The UI flow is pinned by `tests/specs/career.spec.js` / `tests/specs/quali.spec.js`; CI runs them
+     (group `modes`, requested on the pushed branch) — SKILL.md §Commands.
 
 8. **Check the generated shell.**
    - Career often touches `js/career/career*.js`, `js/race/quali-model.js`,
@@ -101,38 +100,5 @@ Load from the SKILL.md index when the task needs this detail.
 - Running browser career tests before staging a loaded track/grid for hooks that
   depend on qualifying or `careerSim()`.
 - Reading `careerState().owned` as part ids — it is a count; use
-  `__apex.career().owned` / `Career.isOwned()` for the list.
-- Verifying `sponsorPay` or `careerState().sponsor` as "just paid": see Sponsor payout below.
-
-## Sponsor payout / double-pay trace (node-only)
-
-`sponsorPay` is in `Career.settleRound()`'s return, stashed in `G.careerSettlement` (read by `js/ui/results-sheet.js`); no `__apex` hook exposes it, and `careerState().sponsor` is read after the round counter advanced, so it is the NEXT window.
-
-`settleRound()` -> `settleSponsor()` (`js/career/career.js`). Two guards make a second pay a bug to look for
-in THESE lines, not in the DNF path (a DNF changes only `pts`/`dnf`/`clean`, never the pay branch): (1) `settleRound`
-returns null when `career.results` already has row `r === season.round - 1`; (2) `settleSponsor` pushes the window
-`idx` onto `career.paidSponsors` BEFORE checking `met`, so a window pays once. `rollover()` resets `paidSponsors`;
-`save-migrate.js` normalises it to `[]` on old saves. Pins: `career-settle.test.mjs` "MY TEAM completing a sponsor window through settleRound cannot pay twice" (settle twice, then rewind `results` and settle again: `paidSponsors` blocks it) and "sponsor settlement records one payout even when settlement is retried", `tests/specs/career-hub.spec.js` "a window pays at most once across a whole season" (browser: no double pay, ledger cleared
-at rollover), `docs/CAREER.md` §Sponsors — MY TEAM's second income. Those units use `dnf: false` rows only: a window whose rows include a DNF is unpinned.
-"No pay after a DNF" is usually the contract, not a bug: a DNF row scores 0 pts / `double` false / `clean` unmet (`sponsorAt` counts `!r.dnf && r.clean`), so `met` can fail; pay lands only on the window's LAST round (`raced >= sp.end`). To repro: `__apex.retire()` in a driven race, or `careerSim(n)` (its draws include DNFs).
-Hand-off: record which guard the repro defeats (results row vs `paidSponsors`) and the `paidSponsors` value before/after.
-
-## Research / facility / budget spend vs settle trace (node-only)
-
-Spends and settlement never share a code path, so a "balance off after
-`settleRound`" is one of these, in `js/career/career.js`:
-1. Spends debit `career.money` at once and `save()`: `research(opt)` (cost
-   `researchCost(opt)` = `opt.cost × RESEARCH_MULT × (1 − facilityDiscount())`),
-   `upgradeFacility()` (`facilityCost()`), `upgradeBudget()`
-   (`budgetUpgradeCost()`). Each goes through `charge()` — 0 under
-   `freeMoney()` — and refuses when `blocked()` or the cost exceeds the balance.
-   The discount is applied ONCE, inside `researchCost`; a caller that discounts
-   again double-counts.
-2. `settleRound()` credits `prize + matePrize + salary + bonus + brief − wages`
-   (floor 0), then `settleSponsor()`; it never reads research/facility state and
-   returns null for an already-settled round (`career.results` row).
-3. `careerState().money` is a snapshot after `save()`; compare it with the
-   `money` field `settleRound` returns, not with a value read before the spend.
-Test home: `tests/unit/career-settle.test.mjs` (template: `the budget ladder
-raises the fitted cap, three rungs then stops`); blocked spends:
-`career-cross-tab.test.mjs`.
+  `__apex.career().owned` for the list (`Career.owned(teamId)` is the fittable Set).
+- Verifying `sponsorPay` or `careerState().sponsor` as "just paid": see Sponsor payout in [traces.md](traces.md).

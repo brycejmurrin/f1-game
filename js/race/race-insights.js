@@ -70,13 +70,14 @@ const RaceInsights = (function () {
   function create(G) {
     const kmh = (v) => kmhOf(G.dashKph, v);
     let previous = null, events = [], sequence = 0, laps = [], sector = null, energy = [[], [], []];
+    let lapEnergy = null, lastLapEnergy = null;
     let tyreStart = null, drill = null, lastDrill = null, distance = 0, lapClean = false, weather = null, attempts = {};
     let paceRef = null, paceWin = [];   // the car ahead, and the rolling pace read on it (samplePace)
     function event(kind, text) {
       boundedPush(events, { seq: ++sequence, time: G.raceT || 0, lap: G.player ? G.player.lap : 0, kind, text }, 128);
     }
     let runId = null, runs = 0;   // one id per session: settle() replaces its row rather than appending
-    function reset() { runId = null; previous = sector = tyreStart = drill = lastDrill = null; events = []; sequence = distance = 0; lapClean = false; weather = null; laps = []; energy = [[], [], []]; attempts = {}; }
+    function reset() { lapEnergy = lastLapEnergy = null; runId = null; previous = sector = tyreStart = drill = lastDrill = null; events = []; sequence = distance = 0; lapClean = false; weather = null; laps = []; energy = [[], [], []]; attempts = {}; }
     function startDrill(mode) {
       if (!Object.hasOwn(DRILLS, mode)) mode = "free";
       const c = G.player;
@@ -506,7 +507,7 @@ const RaceInsights = (function () {
         energy: c.energy, wear: c.tyreWear || 0, stint: c.tyreStints || 0, tyre: c.tyre && c.tyre.id,
         penalty: c.penalty || 0, warnings: c.cutWarn || 0, invalid: !!c.incidentInvalidLap,
         pit: !c.pitState || c.pitState === "none" ? "track" : c.pitState, contact: (c.contactT || 0) > 0, off: !!c.offroad, retired: !!c.retired };
-      if (previous && (now < previous.time || current.prog < previous.prog - 10)) { previous = null; sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false; failDrill("position jumped"); }
+      if (previous && (now < previous.time || current.prog < previous.prog - 10)) { previous = null; sector = tyreStart = null; laps = []; energy = [[], [], []]; lapEnergy = lastLapEnergy = null; lapClean = false; failDrill("position jumped"); }
       if (!previous) {
         previous = current; tyreStart = current; sector = { ...current, valid: false };
         // The first sample cannot measure a sector, but its inputs and contact
@@ -514,12 +515,12 @@ const RaceInsights = (function () {
         observeDrill(c, current); return;
       }
       const wet = G.trackWetness ? G.trackWetness() : 0;
-      if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; sector.valid = false; tyreStart = current; weather = wet; }
+      if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; lapEnergy = lastLapEnergy = null; sector.valid = false; tyreStart = current; weather = wet; }
       if (weather == null) weather = wet;
       const dt = now - previous.time, ds = current.prog - previous.prog;
       if (dt <= 0) return;
       if (ds >= 0 && ds <= Math.max(20, Math.abs(c.speed) * dt * 2)) distance += ds;
-      else { sector.valid = false; lapClean = false; tyreStart = current; failDrill("position jumped"); }
+      else { sector.valid = false; lapClean = false; lapEnergy = lastLapEnergy = null; tyreStart = current; failDrill("position jumped"); }
       if (current.penalty > previous.penalty) event("penalty", "+" + (current.penalty - previous.penalty) + "s time penalty");
       if (current.warnings > previous.warnings) event("limits", "Track-limits warning " + current.warnings);
       if (current.invalid && !previous.invalid) {
@@ -532,18 +533,26 @@ const RaceInsights = (function () {
       if (current.retired && !previous.retired) event("retirement", "Car retired");
       if (current.pit !== previous.pit) {
         event("pit", "Pit phase: " + current.pit);
-        if (current.pit !== "track") { energy = [[], [], []]; sector.valid = false; }
+        if (current.pit !== "track") { energy = [[], [], []]; lapEnergy = lastLapEnergy = null; sector.valid = false; }
       }
       if (current.tyre !== previous.tyre || current.stint !== previous.stint || current.wear < previous.wear) {
-        tyreStart = current; laps = []; energy = [[], [], []]; sector = { ...current, valid: false }; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
+        tyreStart = current; laps = []; energy = [[], [], []]; lapEnergy = lastLapEnergy = null; sector = { ...current, valid: false }; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
       }
-      if (current.contact || current.off || current.invalid || current.pit !== "track" || (G.cautionLevel ? G.cautionLevel() : 0) > 0) { sector.valid = false; lapClean = false; }
+      const underCaution = (G.cautionLevel ? G.cautionLevel() : 0) > 0;
+      if (current.contact || current.off || current.invalid || current.pit !== "track" || underCaution) { sector.valid = false; lapClean = false; lapEnergy = lastLapEnergy = null; }
       if (current.sector !== previous.sector) {
-        if (current.sector === (previous.sector + 1) % 3 && sector.valid && ds > 0 && now - sector.time > 1 && Number.isFinite(current.energy) && Number.isFinite(sector.energy))
-          boundedPush(energy[previous.sector], { seconds: now - sector.time, used: sector.energy - current.energy }, 6);
-        sector = { ...current, valid: !current.invalid && !current.off && !current.contact && current.pit === "track" };
+        if (current.sector === (previous.sector + 1) % 3 && sector.valid && ds > 0 && now - sector.time > 1 && Number.isFinite(current.energy) && Number.isFinite(sector.energy)) {
+          const used = sector.energy - current.energy;
+          boundedPush(energy[previous.sector], { seconds: now - sector.time, used }, 6);
+          if (!lapEnergy || lapEnergy.lap !== previous.lap) lapEnergy = { lap: previous.lap, sectors: [null, null, null] };
+          lapEnergy.sectors[previous.sector] = used;
+        } else lapEnergy = lastLapEnergy = null;
+        sector = { ...current, valid: !current.invalid && !current.off && !current.contact && current.pit === "track" && !underCaution };
       }
       if (current.lap > previous.lap) {
+        lastLapEnergy = current.lap === previous.lap + 1 && lapEnergy && lapEnergy.lap === previous.lap && lapEnergy.sectors.every(Number.isFinite)
+          ? { lap: previous.lap, sectors: lapEnergy.sectors.slice(), netUsed: lapEnergy.sectors.reduce((a, b) => a + b, 0) } : null;
+        lapEnergy = null;
         if (lapClean && c.lastLap > 0) boundedPush(laps, { seconds: c.lastLap, wear: current.wear, stint: current.stint }, 12);
         lapClean = !current.invalid && !current.off && current.pit === "track";
       }
@@ -576,6 +585,7 @@ const RaceInsights = (function () {
         pitLossS: estimate ? estimate.lossS : null, freshTyreGainS: saving,
         paybackLaps: saving > .05 && estimate ? estimate.lossS / saving : null,
         sectors: sectorForecast, energyPerLap: lapUse,
+        lastLapEnergy: lastLapEnergy ? { ...lastLapEnergy, sectors: lastLapEnergy.sectors.slice() } : null,
         energyLaps: lapUse > .001 ? Math.max(0, c.energy / lapUse) : null,
         confidence: same.length >= 5 && observed >= 2 ? "moderate" : "low" };
     }

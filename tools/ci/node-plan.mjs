@@ -35,6 +35,7 @@ import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { TRACKED, circuitsOf, circuitsTouched, dropBootFallback, specsOf } from "./select-specs.mjs";
 import { ADAPTED, ADAPTED_PAGE_GROUPS, ADAPTED_RUNNER, adaptedPageGroupFor } from "./twinned-specs.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
+import { droppedTwins, twinHosts } from "./pick-unit-slices.mjs";
 import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -82,13 +83,18 @@ export const ALWAYS_ON_TOPICAL = Object.freeze([
 ]);
 
 /** The planned VM slices that thin the same way (ci.yml vm-b1 / vm-b2, inside
- *  `planned`). Five game-vm-b files sit in tooling-fast too — real-replay-vm
+ *  `planned`). Some game-vm-b files sit in tooling-fast too — real-replay-vm
  *  alone is ~121 s on a runner — and Structural guards shares node-suites'
- *  `if:`, so whenever a slice runs, guards already ran them (test audit T5,
- *  2026-10-05). Same contract: only a matched plan sets NODE_PLAN_SKIP_TF. */
+ *  `if:` (test audit T5, 2026-10-05). Same contract: only a matched plan sets
+ *  NODE_PLAN_SKIP_TF. But guards runs the WHOLE floor only when guardsScope
+ *  says full; on a js/-only PR it runs a `--changed` selection, so run-group
+ *  `--skip-tf` subtracts what guards ran (tooling-fast guardsRanFiles), not
+ *  every tooling-fast member — the old subtraction left game-vm,
+ *  physics-characterization-vm and real-replay-vm in no PR job (audit W6). */
 export const THINNED_VM = Object.freeze(["test:game-vm-b1", "test:game-vm-b2"]);
 
-/** Files ALWAYS_ON_TOPICAL would re-run that tooling-fast already covers. */
+/** Files ALWAYS_ON_TOPICAL would re-run that a FULL tooling-fast run covers (informational: run-group
+ *  `--skip-tf` subtracts what the guards shards actually ran, guardsRanFiles in tooling-fast.mjs). */
 export function topicalTfOverlap(groups = groupsJson()) {
   const tf = new Set(TOOLING_FAST_FILES);
   const out = [];
@@ -180,7 +186,7 @@ export function unitFileOwnership(changed, groups = groupsJson()) {
 
 /** The plan for a changed-file list. `ref` is the diff base (for the
  *  per-circuit data files); empty keeps those files TRACKED. */
-export function plan(changed, ref = "", scripts = pkgScripts()) {
+export function plan(changed, ref = "", scripts = pkgScripts(), opts = {}) {
   const scoped = { ...SCOPED };
   const adaptedNeeds = adaptedGroupsByRunner(scripts);
   for (const [group, needs] of Object.entries(adaptedNeeds)) {
@@ -239,8 +245,34 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
     if (circuits.length && !scriptBuilds(script, circuits)) { skip.push(script); why[script] = `no file builds ${circuits.join(",")}`; continue; }
     run.push(script);
   }
+  // THE BROWSER PLAN DROPPED A SPEC AS "ITS VM TWIN RUNS ON THE NODE GATE": this is that gate, so the script hosting
+  // the twin runs (#5241 G3; pick-unit-slices twinHosts spins its runner). The group rules above disagree with the
+  // browser plan on purpose (dropBootFallback: a plain js/ edit should not pay the whole vm-page partition for
+  // logging's twin), so a vm-page script that runs ONLY for dropped twins runs only those specs (APEX_VM_PAGE_ONLY,
+  // read by tests/unit/adapted-specs.test.mjs). A circuit-scoped skip stands: a twin that builds none of the touched
+  // circuits cannot see the diff, and neither could the spec it replays.
+  const forced = {};
+  for (const h of twinHosts(opts.dropped ?? droppedTwins(changed, ref || undefined))) {
+    for (const script of h.scripts) {
+      if (!(script in scoped)) continue;   // an always-on rider or a tooling-fast file: it runs whatever the plan says
+      const i = skip.indexOf(script);
+      if (i >= 0 && /^no file builds /.test(why[script] || "")) continue;
+      if (i >= 0) { skip.splice(i, 1); delete why[script]; run.push(script); forced[script] = []; }
+      if (forced[script]) forced[script].push(h.spec);
+    }
+  }
+  // The filter names every adapted spec that must run: a forced partition's dropped specs, a routed one's whole roster.
+  const vmPageOnly = [];
+  for (const [part, members] of Object.entries(ADAPTED_PAGE_GROUPS)) {
+    const script = `test:vm-page-${part}`;
+    if (!run.includes(script)) continue;
+    const edited = editedAdapted.filter((f) => adaptedPageGroupFor(f) === part);
+    vmPageOnly.push(...(forced[script] ? [...new Set([...forced[script].filter((f) => members.includes(f)), ...edited])] : members));
+  }
+  const filtered = Object.keys(forced).some((sc) => sc.startsWith("test:vm-page-"));
   const skipTfFiles = topicalTfOverlap();
-  return { reason: "matched", all: false, groups, circuits, run, skip, why,
+  return { reason: "matched", all: false, groups, circuits, run, skip, why, forced,
+    vmPageOnly: filtered ? vmPageOnly.sort() : [],
     skipTf: true, skipTfFiles };
 }
 
@@ -261,6 +293,7 @@ export function toShell(p) {
     p.skipTf ? "export NODE_PLAN_SKIP_TF=1" : "unset NODE_PLAN_SKIP_TF",
     `planned() { case "$NODE_PLAN_RUN" in *" $1 "*) return 0 ;; esac; echo "SKIPPED $1 ($NODE_PLAN_REASON; groups: ${p.groups.join(", ") || "none"})"; return 1; }`,
     p.circuits.length ? `export APEX_CIRCUITS=${q(p.circuits.join(","))}` : "unset APEX_CIRCUITS",
+    p.vmPageOnly?.length ? `export APEX_VM_PAGE_ONLY=${q(p.vmPageOnly.join(" "))}` : "unset APEX_VM_PAGE_ONLY",
     "",
   ].join("\n");
 }
@@ -276,7 +309,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   else if (argv.includes("--sh")) process.stdout.write(toShell(p));
   else {
     console.log(`plan: ${p.reason}${p.all ? " -> every script runs" : ""}; groups: ${p.groups.join(", ") || "none"}`);
-    for (const s of p.run) console.log(`RUN  ${s}${p.circuits.length && s === "test:game-vm-a" ? ` (APEX_CIRCUITS=${p.circuits.join(",")})` : ""}`);
+    for (const s of p.run) console.log(`RUN  ${s}${p.circuits.length && s === "test:game-vm-a" ? ` (APEX_CIRCUITS=${p.circuits.join(",")})` : ""}`
+      + (p.forced?.[s] ? ` (only for the VM twin(s) the browser plan dropped: ${p.forced[s].join(", ")})` : ""));
     for (const s of p.skip) console.log(`SKIP ${s}${p.why?.[s] ? ` (${p.why[s]})` : ""}`);
   }
 }

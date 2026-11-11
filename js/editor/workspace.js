@@ -16,6 +16,7 @@ const DesignerWorkspace = (function () {
     const foot = root.querySelector(".td-foot");
     const menu = el("details"); menu.dataset.role = "file-menu";
     const trigger = el("summary", "sel-chip", "SHARE & FILES");
+    ui.filesTrigger = trigger;
     files.remove(); menu.append(trigger, files);
     const closeMenu = (e) => {
       if ((e.key === "Escape" || e.type === "cancel") && menu.open && !root.hidden) {

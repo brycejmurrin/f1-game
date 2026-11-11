@@ -137,7 +137,8 @@ var StartLights = (function () {
       }
     }
 
-    return { update, lampsFor, countCredit, countdownCamera };
+    // countdownCamera stays create-local: update() owns the grid-shot handoff.
+    return { update, lampsFor, countCredit };
   }
 
   return { create, countCredit };
