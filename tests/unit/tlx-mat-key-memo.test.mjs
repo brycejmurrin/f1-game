@@ -45,8 +45,11 @@ function liftMemo() {
   return new Function(`"use strict";${body};
     let builds = 0;
     const originalBuild = buildMatKey;
+    // matKeyFor calls buildMatKey through this binding, so the wrapper counts its
+    // builds. Return the ORIGINAL function: callers that read its source (the
+    // field list parsed from buildMatKey.toString()) must see the real builder.
     buildMatKey = (...args) => { builds++; return originalBuild(...args); };
-    return { buildMatKey, matKeyFor, builds: () => builds };`)();
+    return { buildMatKey: originalBuild, matKeyFor, builds: () => builds };`)();
 }
 
 const { buildMatKey, matKeyFor } = liftMemo();
