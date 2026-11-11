@@ -1581,3 +1581,25 @@ test("#5405 raisesCovered: a later raise is covered only by an equal or larger o
   assert.equal(raisesCovered([r("a", 5, null)], [r("a", 5, 99)]), false, "a removal is wider than any amount");
   assert.equal(raisesCovered([r("a", 5, 99)], [r("a", 5, null)]), true);
 });
+
+test("#5405 a weekly fold (fragments deleted, the table raised by the same amounts) is no raise; a fold that really rises is", () => {
+  const b64 = (o) => ({ json: { encoding: "base64", content: Buffer.from(JSON.stringify(o)).toString("base64") } });
+  const side = (table, frags) => ({ table, frags });
+  const reqFor = (s) => (p) => {
+    const m = /^contents\/(.+)\?ref=\w+$/.exec(p);
+    if (!m) return { error: `unexpected ${p}` };
+    if (m[1] === "tests/data/ratchets.json") return b64(s.table);
+    if (m[1] === "tests/data/ratchets.d") return Object.keys(s.frags).length ? { json: Object.keys(s.frags).map((f) => ({ type: "file", name: f.split("/").pop(), path: f })) } : { error: "HTTP 404 Not Found" };
+    return s.frags[m[1]] ? b64(s.frags[m[1]]) : { error: "HTTP 404" };
+  };
+  // #5518's shape: rawGameReads 299 + a +5 fragment, assertPins 8223 + a −29 fragment → folded into 304 / 8194.
+  const before = side({ tree: { rawGameReads: { ceiling: 299 }, assertPins: { ceiling: 8223 } } },
+    { [FRAG("a")]: { tree: { rawGameReads: 5 } }, [FRAG("b")]: { tree: { assertPins: -29 } } });
+  const folded = side({ tree: { rawGameReads: { ceiling: 304 }, assertPins: { ceiling: 8194 } } }, {});
+  const a = treeCeilingsAt("x", reqFor(before)), b = treeCeilingsAt("y", reqFor(folded));
+  assert.deepEqual([a.tree, b.tree], [{ rawGameReads: 304, assertPins: 8194 }, { rawGameReads: 304, assertPins: 8194 }], "effective ceilings, not the raw table");
+  assert.deepEqual(treeRaises(a.tree, b.tree), [], "the fold moves numbers, the ceilings are equal");
+  // The trap: fold-shaped, but the table rises past what the fragments carried.
+  const sneaky = side({ tree: { rawGameReads: { ceiling: 310 }, assertPins: { ceiling: 8194 } } }, {});
+  assert.deepEqual(treeRaises(a.tree, treeCeilingsAt("z", reqFor(sneaky)).tree), [{ metric: "rawGameReads", from: 304, to: 310 }]);
+});
