@@ -2,7 +2,8 @@
 
 Open defects live as GitHub issues labelled `bug` (`gh issue list --label bug`);
 a hunt files one issue per actionable finding (or one epic with a checklist)
-instead of a note. Fixed-defect classes stay in [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md);
+instead of a note. [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) is the
+historical record of fixed and closed findings, not an open list;
 scenery-grounding history is in [SCENERY-API.md](SCENERY-API.md) §Grounding.
 
 This page was the 2026-09-24 hunt's verified shortlist plus two dated backlogs
