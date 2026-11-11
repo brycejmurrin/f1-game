@@ -1103,19 +1103,24 @@ function sliceAtlasTile(png, cols, rows, col, row, inset) {
   return { w, h, rgba: out };
 }
 
-function resizeBilinear(src, sw, sh, dw, dh) {
+// Edge-clamped bilinear. Upscaling puts the first output row's sample centre
+// BEFORE source row 0 (fy = -0.25 at 2x), and `fy - y0` with y0 clamped to 0
+// was a NEGATIVE weight: an extrapolation past the edge, and the out-of-range
+// result WRAPPED in the Uint8 buffer (black-to-white edge 0,255 at 2x gave 192
+// at the dark edge). Clamping the weight to [0, 1] is clamp-to-edge sampling.
+export function resizeBilinear(src, sw, sh, dw, dh) {
   if (sw === dw && sh === dh) return Buffer.from(src);
   const out = Buffer.alloc(dw * dh * 4);
   for (let y = 0; y < dh; y++) {
     const fy = (y + 0.5) * sh / dh - 0.5;
     const y0 = Math.max(0, Math.min(sh - 1, Math.floor(fy)));
     const y1 = Math.min(sh - 1, y0 + 1);
-    const ty = fy - y0;
+    const ty = Math.max(0, Math.min(1, fy - y0));
     for (let x = 0; x < dw; x++) {
       const fx = (x + 0.5) * sw / dw - 0.5;
       const x0 = Math.max(0, Math.min(sw - 1, Math.floor(fx)));
       const x1 = Math.min(sw - 1, x0 + 1);
-      const tx = fx - x0;
+      const tx = Math.max(0, Math.min(1, fx - x0));
       const at = (xx, yy) => (yy * sw + xx) * 4;
       const d = (y * dw + x) * 4;
       for (let c = 0; c < 4; c++) {

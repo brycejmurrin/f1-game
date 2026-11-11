@@ -490,3 +490,26 @@ test('crew body export matches its Blender source; every part closed outward, so
   let minY = Infinity; for (let i = 1; i < boot.pos.length; i += 3) minY = Math.min(minY, boot.pos[i]);
   assert.ok(Math.abs(minY + 0.08) < 1e-9, 'the sole sits 0.08 m under the foot target, as the planted-boot tests assume');
 });
+
+test("a parked bay's crew draw reuses its nose and layout: no fresh objects a frame (#4974)", () => {
+  // Node VM census 2026-11-11: 969 -> 144 B a draw (the rest is V8 double boxing).
+  const { Crew, Arrival, draws } = load();
+  const cfg = Arrival.settings({ angle: "cut" }), pose = Arrival.pose(11.95, cfg, true);
+  const tip = Crew.noseTip("ferrari", LIV);
+  assert.equal(Crew.noseTip("ferrari", LIV), tip, "noseTip: the same frozen answer while the style tables stand");
+  assert.ok(Object.isFrozen(tip), "a shared answer cannot be edited by a caller");
+  const a = Crew.layout(pose, -1), b = Crew.layout(pose, -1);
+  assert.notEqual(a, b, "layout() with no target stays pure: callers hold two at once");
+  assert.deepEqual(a, b);
+  const into = Crew.layout(pose, 1, a);
+  assert.equal(into, a, "layout(pose, cam, out) writes into out");
+  assert.ok(into.lollipop.x > 0 && into.lollipop.yaw === Math.PI, "and rewrites every per-frame field");
+  // Two draws on the same inputs hand gfx.draw the same matrices.
+  draws.length = 0; Crew.draw(LIV, [-3, 2, -4], pose); const first = draws.map((d) => d.m.join());
+  draws.length = 0; Crew.draw(LIV, [-3, 2, -4], pose); assert.deepEqual(draws.map((d) => d.m.join()), first);
+  const src = read("js/garage/scene-crew.js");
+  const build = src.slice(src.indexOf("  function build("), src.indexOf("  function free("));
+  assert.ok(!/rgb\([^)]*\[/.test(build), "build() hands rgb() hoisted defaults, not array literals");
+  const draw = src.slice(src.indexOf("  function draw("), src.indexOf("  return Object.freeze("));
+  assert.match(draw, /layout\([^)]*, _layout\)/, "draw() lays out into the module's scratch");
+});
