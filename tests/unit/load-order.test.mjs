@@ -283,6 +283,30 @@ test("deferred stylesheets flip print→all from the hashed script, not an onloa
   assert.ok(html.indexOf(DEFER_CSS_SCRIPT) > html.lastIndexOf('media="print">'), "after the last deferred <link>");
 });
 
+test("#5054: the deferred sheets flip together, in one frame, once every one has loaded or failed", async () => {
+  const vm = await import("node:vm");
+  const { DEFER_CSS_SCRIPT } = await import("../../tools/gen/gen-shell.mjs");
+  const body = DEFER_CSS_SCRIPT.replace(/^<script>/, "").replace(/<\/script>$/, "");
+  const link = (loaded) => ({ media: "print", sheet: loaded ? {} : null, on: {},
+    addEventListener(t, fn) { (this.on[t] = this.on[t] || []).push(fn); } });
+  const links = [link(true), link(false), link(false), link(false)];
+  const frames = [];
+  const raf = (fn) => frames.push(fn);
+  const ctx = { document: { querySelectorAll: () => links }, requestAnimationFrame: raf, window: { requestAnimationFrame: raf } };
+  vm.runInNewContext(body, ctx, { filename: "gen-shell.mjs:DEFER_CSS_SCRIPT" });
+  const medias = () => links.map((l) => l.media).join();
+  assert.equal(medias(), "print,print,print,print", "an already-loaded sheet waits for the rest");
+  links[1].on.load[0]();
+  links[2].on.error[0]();
+  assert.equal(frames.length, 0, "no frame while one sheet is still loading");
+  assert.equal(medias(), "print,print,print,print");
+  links[3].on.load[0]();
+  assert.equal(frames.length, 1, "exactly one frame is asked for");
+  assert.equal(medias(), "print,print,print,print", "the flip waits for that frame");
+  frames[0]();
+  assert.equal(medias(), "all,all,all,all", "every sheet flips in the one frame (a failed one too)");
+});
+
 test("every gen-shell block is byte-identical to a fresh generation", () => {
   const drift = genShellStale();
   assert.deepEqual(drift.map((d) => `${d.rel}\n${d.diff}`), [],

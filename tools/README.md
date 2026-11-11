@@ -648,7 +648,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | Tool | Does | Suggested skill |
 |---|---|---|
 | **desktop/minify-worker.mjs** | Bounded persistent Terser workers; write disposable results before the stage publishes them. | — |
-| **desktop/minify.mjs** | Deploy-only minify of the staged js/ tree (terser, names kept, unlinked .map beside each file). | check-changes |
+| **desktop/minify.mjs** | Deploy-only minify of the staged js/ (terser, names kept, unlinked .map), css/*.css and index.html (#5050). | check-changes |
 | **desktop/pack-dry-run.mjs** | Desktop pack dry-run: stage + stamp to a temp dir, check every electron-builder input, build no installer. | check-changes |
 | **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
 | **desktop/stage.mjs** | Stage the deployable site folder (Pages / Electron) from the shared allow-list; optional content-hash stamp. | check-changes |
