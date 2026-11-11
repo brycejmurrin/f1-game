@@ -28,6 +28,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { announceLife } from "../helpers/announce-life.mjs";
 // VM timers are UNREF'd: they still fire while a test awaits, but a cue the
 // module schedules seconds ahead no longer holds the process open after the
 // last assertion (measured 2026-09-24: this file sat idle for most of its run).
@@ -158,11 +159,14 @@ test("no shipped radio line outlives its card", () => {
   // assertion that keeps the feature honest as the corpus grows.
   const files = ["js/game.js", "js/race/engineer.js", "js/race/pit-lane.js", "js/race/driving-coach.js",
     "js/race/race-insights.js", "js/race/session-records.js"];
+  // The card's life comes from the REAL banner (js/race/announce-banner.js
+  // showAnnounce, run): a shorter floor or pad there shortens every budget here.
+  const cardLife = announceLife(RV);
   let checked = 0, refused = [];
   for (const f of files) {
     for (const m of read(f).matchAll(/announce\(\s*"([^"]{4,})"\s*,\s*([\d.]+)\s*(?:,\s*"([a-z-]+)")?\s*\)/g)) {
       const [, msg, dur, kind] = m;
-      const life = Math.max(3, (+dur || 1.6) + 0.5);
+      const life = cardLife(msg, +dur, kind || "race");
       const p = P({ msg, life, kind: kind || "race" });
       checked++;
       if (!p.speak) refused.push(`${f}: "${msg}" (${p.reason})`);
@@ -204,9 +208,10 @@ test("a preempt is cancel-then-speak-then-RESUME, which is the bug workaround", 
   assert.match(spoken.at(-1).text, /penalty/, "the interrupting line is the one left speaking");
 });
 
-test("an empty voice list still speaks — that is the Safari path, not a refusal", async () => {
-  // Safari returns nothing from getVoices() and picks a system default itself.
-  // A design that requires a voice object before speaking is silent on Safari.
+test("an empty voice list still speaks — the platform default, not a refusal", async () => {
+  // An empty getVoices() (Chrome's first read, a synth with nothing installed)
+  // leaves the platform to pick. A design that requires a voice object before
+  // speaking would be silent there. (iOS returns a partial list: see W19 below.)
   const { RV: R, G, synth } = load({ stored: { radioVoice: true }, voices: [] });
   const v = R.create(G);
   assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
@@ -1420,4 +1425,36 @@ test("the race-load gate still releases at count, and a menu with no cover relea
   b.cover(""); b.v.prepare(); b.advance(5000);
   assert.deepEqual(b.gates, [true, false], "a stale prepare on the bare title releases on the first poll");
   assert.equal(b.timers.size, 0);
+});
+
+// ── audit W19 (2026-11-09): iOS returns a PARTIAL voice list, not none ────────
+// Its preinstalled voices (downloaded ones are missing: bugs.webkit.org 290497),
+// alphabetised. The old default spread took the first three English entries —
+// Aaron / Albert / Arthur on an iPhone, Albert being a novelty voice.
+const IOS_VOICES = ["Aaron", "Albert", "Arthur", "Bad News", "Bahh", "Bells", "Boing", "Bubbles", "Catherine", "Cellos",
+  "Daniel", "Fred", "Good News", "Gordon", "Jester", "Karen", "Martha", "Moira", "Nicky", "Organ", "Rishi", "Samantha",
+  "Superstar", "Tessa", "Trinoids", "Whisper", "Wobble", "Zarvox"].map((name) => ({
+  name, localService: true,
+  lang: { Arthur: "en-GB", Daniel: "en-GB", Martha: "en-GB", Catherine: "en-AU", Gordon: "en-AU", Karen: "en-AU", Moira: "en-IE", Rishi: "en-IN", Tessa: "en-ZA" }[name] || "en-US",
+}));
+const NOVEL = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|fred|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox)$/i;
+
+test("with no stored pick, each channel takes its own non-novelty voice from the iOS list", () => {
+  const pick = (sp) => RV.pickChannelVoice(sp, IOS_VOICES).name;
+  const got = { control: pick("control"), coach: pick("coach"), radio: pick("radio") };
+  assert.equal(got.control, "Daniel", "race control reads in the en-GB Daniel voice");
+  assert.equal(got.coach, "Samantha", "the coach is the clear en-US Samantha");
+  assert.equal(new Set(Object.values(got)).size, 3, "three channels, three voices: " + JSON.stringify(got));
+  for (const [sp, name] of Object.entries(got)) assert.doesNotMatch(name, NOVEL, sp + " must never default to a novelty voice");
+  assert.equal(RV.pickChannelVoice("radio", []), null, "an empty list leaves the platform to choose");
+  assert.equal(RV.pickChannelVoice("radio", [{ name: "Zarvox", lang: "en-US" }]).name, "Zarvox", "a novelty voice only when it is all there is");
+});
+
+test("say() uses the ladder voice on the iOS list (race control is not Aaron)", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true }, voices: IOS_VOICES });
+  const v = R.create(G);
+  v.say("TRACK LIMITS WARNING", 3, "warning");
+  await flush();
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.equal(spoke.voice && spoke.voice.name, "Daniel");
 });

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .codex/hooks/shell-guard.sh",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/shell-guard.sh\"",
             "timeout": 30
           }
         ]
@@ -16,8 +16,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .codex/hooks/mcp-guard.sh",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/mcp-guard.sh\"",
             "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/edit-guard.sh\"",
+            "timeout": 30
           }
         ]
       }

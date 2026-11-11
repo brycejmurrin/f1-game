@@ -168,3 +168,22 @@ test("settings.json runs the contract hook on PreToolUse SubagentHandback", () =
   assert.ok(new RegExp(g.matcher).test("SubagentHandback"));
   assert.ok(!new RegExp(`^(?:${g.matcher})$`).test("Bash"), "and nothing else");
 });
+
+test("zero rows, a per-row UNREAD, cited sections and line ranges, a BLOCKED worker, and the handback/stop pair", () => {
+  blocks(stop("finding-verifier", "Looked at everything; all fine.\nrefuted: 0/0 stale: 0/0"), /no CLAIM row/, "a report with no recognised row");
+  passes(stop("finding-verifier", "CLAIM none\nrefuted: 0/0 stale: 0/0"), "an explicit none line");
+  blocks(stop("finding-verifier", "CLAIM 1 | UNREAD | evidence: denied"), /refuted:/, "a per-row UNREAD keeps the tally required");
+  passes(stop("finding-verifier", "UNREAD: every route was denied"), "a report that LEADS with UNREAD");
+  passes(stop("surface-reviewer", "VERDICT OK — x | report: scratch/r.md\nCLAIM 1 | AGENTS.md §Coordination | x | holds | read rc=0\n"
+    + "CLAIM 2 | docs/PHYSICS.md:10-14 | y | holds | read rc=0\ncollisions: none\ncycles: none"), "a claim citing a section or a line range");
+  passes(stop("worker", "WORKER w: BLOCKED\nbranch: claude/x @ none\nverified: none\nnext: the coordinator decides"), "BLOCKED before any commit");
+  // a hand-back judged at PreToolUse SubagentHandback is not judged again at SubagentStop (the closing text is not the report)
+  const aid = "hb-" + process.pid;
+  const stampDir = path.join(ROOT, "artifacts", "subagent-contract");
+  try {
+    const hb = run({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", cwd: ROOT, agent_id: aid, agent_type: "worker",
+      tool_input: { message: GOOD.worker } });
+    assert.equal(hb.out, "", "a good hand-back passes");
+    passes(stop("worker", "Handed back.", { agent_id: aid }), "SubagentStop after a hand-back");
+  } finally { for (const f of [aid, aid + ".handback"]) fs.rmSync(path.join(stampDir, f), { force: true }); }
+});

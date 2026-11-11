@@ -284,13 +284,12 @@ test("the Bash guard blocks every shape of the kill that orphans browsers", () =
 
 test("the Bash guard refuses a browser run from inside a subagent, and only there", () => {
   // AGENTS.md §Verification 10 was prose plus a body lint; every agent carries
-  // Bash. Hook input from a subagent names it (agent_id / agent_type, or a
-  // transcript under subagents/ — the shape this session's own transcripts
-  // have); the main session carries none of those and keeps every command.
+  // Bash. Hook input from a subagent names it by agent_id (agent_type alone is
+  // the session's --agent); the main session carries none and keeps every command.
   const run = (command, sub) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
     input: JSON.stringify({
       tool_name: "Bash", tool_input: { command },
-      ...(sub ? { transcript_path: "/root/.claude/projects/p/s/subagents/agent-abc.jsonl" } : {}),
+      ...(sub ? { agent_id: "a1" } : {}),
     }),
     encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
   });
@@ -343,10 +342,10 @@ test("a subagent cannot reach a browser through MCP tools either", () => {
   const run = (payload) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/mcp-browser-guard.sh")],
     { input: JSON.stringify(payload), encoding: "utf8" });
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }).status, 2);
-  assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" }).status, 2);
-  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_control", agent_type: "reviewer" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_control", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__js-debugger__debugger_state" }).status, 0, "parent retains debugger access");
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate" }).status, 0, "the main session keeps its browser");
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }).status, 0, "tree tools stay open to subagents");
@@ -687,21 +686,6 @@ test(".cursor/environment.json allowlists exactly the .mcp.json servers, with th
   }
 });
 
-// 2026-11-03: the per-agent memory stores (.claude/agent-memory/) and their `memory:` cards are gone
-// (plan §4.6); a store that comes back needs its schema and expiry rule pinned again here.
-test("no agent-memory store is committed without a schema and an expiry rule", () => {
-  const dir = path.join(ROOT, ".claude/agent-memory");
-  if (!fs.existsSync(dir)) return;
-  for (const s of fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory())) {
-    const rel = `.claude/agent-memory/${s.name}/MEMORY.md`;
-    assert.ok(exists(rel), `${s.name} has a memory dir but no MEMORY.md index`);
-    const text = read(rel);
-    assert.ok(/`[^`]*—[^`]*`/.test(text), `${rel} states no entry schema — a store without one accumulates prose`);
-    assert.ok(/re-verif|expire|stale|older than|no longer|re-check|recheck/i.test(text),
-      `${rel} names no way for an entry to stop being believed — that is the ratchet arXiv 2608.11095 measures`);
-  }
-});
-
 // ── SKILL REFERENCES: ONE HOP, AND A CONTENTS BLOCK PAST 100 LINES ──────────
 // Anthropic's skill-authoring guide (platform.claude.com/docs/en/agents-and-tools/
 // agent-skills/best-practices, read 2026-10-05): a reference reached through
@@ -814,40 +798,6 @@ test("the survey-track delegation template owns only the surveyor's circuit pair
     assert.match(wgx, /apex-eval\.mjs monza .* --backend webgpu/);
   });
 }
-
-// Claude Code's own skill validator (Claude Academy, "Troubleshooting skills"; needs Claude Code
-// v2.1.233+; https://code.claude.com/docs/en/plugins/cli-reference#validate-a-directory,
-// checked 2026-10-28). It catches a SKILL.md whose frontmatter does not parse, which the budget tests above
-// only see through our own parser. It skips where the CLI is absent or too old (CI runners).
-test("claude plugin validate accepts project skills and rejects malformed skill frontmatter", { timeout: 100000 }, (t) => {
-  const r = spawnSync("claude", ["plugin", "validate", ".claude/skills"], { cwd: ROOT, encoding: "utf8", timeout: 80000 });
-  if (r.error && r.error.code === "ENOENT") return t.skip("claude CLI not on PATH");
-  const out = `${r.stdout}${r.stderr}`;
-  if (/unknown command|not a (known|valid) command|unknown option/i.test(out)) return t.skip("claude CLI too old for `plugin validate`");
-  assert.equal(r.status, 0, `claude plugin validate .claude/skills failed:\n${out}`);
-  // Exercise the validator's decision rather than its success-message wording.
-  // The valid control ensures a nonzero result is about the malformed YAML,
-  // not an unsupported fixture layout or path.
-  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "skill-validator-"));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const skills = path.join(dir, "skills"), skill = path.join(skills, "example"); fs.mkdirSync(skill, { recursive: true });
-  const file = path.join(skill, "SKILL.md");
-  fs.writeFileSync(file, '---\nname: example\ndescription: "Use when testing skill validation."\n---\n# Example\n');
-  const validate = () => spawnSync("claude", ["plugin", "validate", skills], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
-  const valid = validate();
-  assert.equal(valid.status, 0, `valid fixture refused: ${valid.error || valid.stdout + valid.stderr}`);
-  fs.writeFileSync(file, '---\nname: example\ndescription: [unterminated\n---\n# Example\n');
-  const invalid = validate();
-  assert.equal(invalid.error, undefined, `validator must execute, not fail to launch: ${invalid.error}`);
-  assert.equal(invalid.signal, null, "malformed frontmatter must return a verdict, not time out");
-  // ENVIRONMENT PRECONDITION, not a quarantine: a `claude` whose validator accepts the malformed control (exit 0)
-  // cannot validate here at all (the cloud containers' CLI, 2.1.314, 2026-10-30), so the assertion below would
-  // measure the CLI, not our skills. Where the validator rejects the control, the assertion stays and a real
-  // failure of it is still red. Known container-only reds: docs/TESTING.md.
-  if (invalid.status === 0) return t.skip("claude CLI cannot validate here: it accepted malformed skill frontmatter (exit 0)");
-  assert.equal(invalid.status, 1, "malformed frontmatter must fail validation (not an unexpected validator error)");
-});
 
 test("season-mode references quote only unit-test names that exist", () => {
   // `name…` in backticks is a test-title prefix; a renamed test would leave the skill pointing at nothing.

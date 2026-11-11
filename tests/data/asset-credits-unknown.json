@@ -1,0 +1,12 @@
+{
+  "_doc": "SHRINK-ONLY baseline (tests/unit/asset-credits.test.mjs): audio files under assets/ whose CREDITS row says 'unknown' for source, author or licence as of 2026-11-10. Remove a file once its row is filled in; never add one. The owner must supply or approve replacements: see assets/sfx/CREDITS.txt and assets/music/CREDITS.txt.",
+  "unknown": [
+    "assets/music/menu.mp3",
+    "assets/music/song2.mp3",
+    "assets/music/song3.mp3",
+    "assets/music/song4.mp3",
+    "assets/music/song5.mp3",
+    "assets/music/song6.mp3",
+    "assets/sfx/f1_engine.mp3"
+  ]
+}

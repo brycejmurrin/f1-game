@@ -77,14 +77,9 @@ if ($("pm-fullscreen")) {
   document.addEventListener("webkitfullscreenchange", syncFullscreen);
   paintFullscreenRow();
 }
-/* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS. Element fullscreen
-   has never shipped on iPhone Safari (iPad only, and there the browser draws an
-   overlay button you cannot remove), so the row above is hidden on iOS and this
-   takes its place. Standalone also gives what a race actually needs: a viewport
-   that does not move, because there are no toolbars to collapse mid-corner.
-   As of iOS 26 every site added to the Home Screen opens as a web app with no
-   manifest metadata required, so this is a one-tap suggestion rather than a
-   setup guide. Shown once, ever. */
+/* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS (element fullscreen is
+   iPad-only), so this replaces the row above on iOS: no toolbars to collapse
+   mid-corner. Since iOS 26 any Home Screen site opens as a web app. Shown once. */
 (function iosInstallNudge() {
   const el = $("ios-install");
   if (!el) return;
@@ -93,8 +88,23 @@ if ($("pm-fullscreen")) {
   const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
     (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
   const standalone = !!(nav.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
-  if (!ios || standalone || store.get("iosInstallSeen", false)) return;
-  const dismiss = () => { el.hidden = true; store.set("iosInstallSeen", true); };
+  // No wake lock in Home Screen apps on iOS 16.4-18.3 (WebKit 254545).
+  const v = /OS (\d+)_(\d+)|Version\/(\d+)\.(\d+)/.exec(nav.userAgent || "") || [];
+  const ver = (v[1] || v[3]) * 100 + +(v[2] || v[4]);
+  const wakeBroken = ver >= 1604 && ver < 1804;
+  const NOTE = "On iOS 16.4\u201318.3 the screen may dim mid-race in the Home Screen app. Update to iOS 18.4 or later to fix it.";
+  const msg = $("ios-install-msg");
+  if (!ios) return;
+  if (standalone) {
+    if (!wakeBroken || !msg || store.get("iosWakeNoteSeen", false)) return;
+    msg.textContent = NOTE;
+  } else if (store.get("iosInstallSeen", false)) return;
+  else if (wakeBroken && msg) msg.append(" " + NOTE);
+  const dismiss = () => {
+    el.hidden = true;
+    if (!standalone) store.set("iosInstallSeen", true);
+    if (wakeBroken) store.set("iosWakeNoteSeen", true);
+  };
   el.hidden = false;
   const x = $("ios-install-x");
   if (x) x.onclick = dismiss;

@@ -26,7 +26,7 @@
     sceneryTheme: "desert",
     lengthKm: 5.4,
     tyreSeverity: 1.55,  // Sakhir 'most abrasive of the championship' (Pirelli Isola) — between Miami 1.22 and Austria 1.97
-    sunAzimBias: -0.36,   // low desert-latitude sun sits east of overhead at race time (late-day GP)
+    sunAzimBias: -0.36,   // art-directed day-sun yaw offset (rad, atmosphere.js) — not a solar computation
     baseHW: 7,
     sceneryCoordinates: "racing",
     dressingExclusions: [

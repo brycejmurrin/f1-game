@@ -213,7 +213,9 @@
     "XRPlan",
     "XrRig",
     "XrSession",
-    "XrUi"
+    "XrUi",
+    "StoppedCars",
+    "RetiredCard"
   ],
   "mutable": [
     "GLX",

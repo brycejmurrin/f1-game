@@ -8,8 +8,11 @@
 # (https://cursor.com/docs/reference/third-party-hooks), but which tool names a
 # string-replace or multi-edit carries is not documented, so hooks.json registers
 # this with NO matcher (DAD's review of #3575) and the filter is here:
-#   - read-only tools (Read, Grep, Glob, LS, Task, Web*, MCP:*) and Shell
-#     (beforeShellExecution → shell-guard.sh) pass untouched;
+#   - read-only tools (Read, Grep, Glob, LS, Task, Web*) and Shell (beforeShellExecution →
+#     shell-guard.sh) pass untouched;
+#   - an MCP call (`MCP:<tool>`: in a cloud agent MCP calls reach preToolUse, not
+#     beforeMCPExecution, which cloud agents do not run) goes to the GitHub table,
+#     .claude/hooks/github-mcp-guard.sh, through mcp-guard.sh;
 #   - Delete is judged by path alone (a generated file is refused);
 #   - any other tool whose input carries a path, a body or a write shape (code_edit,
 #     diff, patch, replacement...) is a write. Its path is read from file_path / path /
@@ -31,7 +34,9 @@ if isinstance(ti, str):
     except Exception: ti = {}
 if not isinstance(ti, dict): ti = {}
 READ_ONLY = {"Read", "Grep", "Glob", "LS", "Task", "WebFetch", "WebSearch", "Shell", "TodoWrite", "ReadLints"}
-if tool in READ_ONLY or tool.startswith("MCP:"):
+if tool.startswith("MCP:"):
+    print(json.dumps({"mcp": 1, "tool_name": tool[4:], "tool_input": ti, "agent_id": d.get("agent_id") or d.get("subagent_id") or ""})); sys.exit()
+if tool in READ_ONLY:
     print(json.dumps({"skip": 1})); sys.exit()
 BODY = ("content", "contents", "file_text")
 path = next((ti.get(k) for k in ("file_path", "path", "target_file", "filePath") if isinstance(ti.get(k), str) and ti.get(k)), "")
@@ -46,7 +51,8 @@ shaped = any(k.lower() in SHAPE for k in ti)
 writes = tool in ("Write", "Edit", "MultiEdit", "StrReplace", "Delete") or path or old or new or body or shaped
 if not writes:
     print(json.dumps({"skip": 1})); sys.exit()
-out = {"tool_input": {"file_path": path}, "cwd": d.get("cwd") or "", "_tool": tool}
+out = {"tool_input": {"file_path": path}, "cwd": d.get("cwd") or "", "_tool": tool,
+       "agent_id": d.get("agent_id") or d.get("subagent_id") or ""}
 if tool == "Delete":
     out["tool_name"] = "Delete"
 elif ti.get("edits"):
@@ -64,6 +70,9 @@ if [ -z "$NORM" ]; then   # registered failClosed: an unreadable payload must no
   answer deny "edit-guard: could not read this tool payload, so the edit guard could not run."; exit 2
 fi
 case "$NORM" in '{"skip": 1}') answer allow; exit 0 ;; esac
+case "$NORM" in '{"mcp": 1,'*)
+  printf '%s' "$NORM" | bash "$DIR/.cursor/hooks/mcp-guard.sh"; exit $? ;;
+esac
 FILE=$(printf '%s' "$NORM" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tool_input"]["file_path"])')
 TOOL=$(printf '%s' "$NORM" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tool_name"])')
 if [ -z "$FILE" ]; then

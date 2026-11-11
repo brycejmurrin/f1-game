@@ -6,9 +6,7 @@
     { "file": "tests/unit/agent-output.test.mjs", "text": "actual pool FDs are not inherited by a spawned child", "reason": "linux-only /proc probe; condition with no reason string (predates the strict option scan)" },
     { "file": "tests/unit/agent-output.test.mjs", "text": "actual lifecycle natural completion releases every retained descriptor", "reason": "linux-only /proc probe; condition with no reason string (predates the strict option scan)" },
     { "file": "tests/unit/announcer.test.mjs", "text": "Baku's night line is a known gap", "reason": "{ todo: true } known gap: voice bake pending (named in the test title)" },
-    { "file": "tests/unit/announcer.test.mjs", "text": "no lore line states a duration the circuit does not have", "reason": "{ todo: true } known lore gap (Istanbul turn eight)" },
     { "file": "tests/unit/apex-tools-mcp.test.mjs", "text": "a completed zombie supervisor cannot block browser tools", "reason": "linux-only process probe; condition with no reason string (predates the strict option scan)" },
-    { "file": "tests/unit/bash-guard-hardening.test.mjs", "text": "1b. a bare kill of a Chromium pid is refused", "reason": "needs /proc/self/comm; condition with no reason string (predates the strict option scan)" },
     { "file": "tests/unit/output-level-mcp.test.mjs", "text": "EOF bounds ignored SIGTERM and cleans the owned grandchild", "reason": "POSIX signals: skipped on win32; condition with no reason string (predates the strict option scan)" },
     { "file": "tests/unit/output-level-mcp.test.mjs", "text": "unexpected root exit cleans the owned grandchild", "reason": "POSIX signals: skipped on win32; condition with no reason string (predates the strict option scan)" }
   ]

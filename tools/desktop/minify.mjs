@@ -1,7 +1,8 @@
-// @doc Deploy-only minify of the staged js/ tree (terser, names kept, unlinked .map beside each file).
+// @doc Deploy-only minify of the staged js/ (terser, names kept, unlinked .map), css/*.css and index.html (#5050).
 // @skill check-changes
 /**
- * minify.mjs — shrink the STAGED copy of js/**\/*.js, never the source.
+ * minify.mjs — shrink the STAGED copy of js/**\/*.js, css/*.css and index.html,
+ * never the source (the shell pass is at the end of this file, #5050).
  *
  * Runs inside stageSite() after the copy and before any stamp, so bump-cache's
  * ?v= content hashes and SRI digests cover the minified bytes (issue #3110
@@ -185,4 +186,189 @@ export async function minifyStaged(siteRoot, opts = {}) {
   } finally {
     fs.rmSync(resultRoot, { recursive: true, force: true });
   }
+}
+
+// ---------------------------------------------------------------------------
+// THE SHELL: css/*.css and index.html (#5050). The repo sources keep their
+// comments (the design rationale lives in them); the staged copy drops them.
+// Same barrier as js/: stageSiteMinified runs this before any stamp, so the
+// ?v= hashes, the SRI digests and sw.js's integrity check all see these bytes.
+
+const CSS_WS = /[ \t\n\r\f]/;
+// A character that can sit inside an ident or number token: removing a comment
+// between two of these must leave a space or the two would fuse into one token
+// (`1px/**/solid`, `1/**/%`, `1/**/.5`). `.a/**/.b` and `a/**/#b` need none:
+// they tokenize the same glued (a space there would make a descendant).
+const CSS_WORD = /[\w\-\\\u0080-￿]/;
+const fuses = (last, next) => (CSS_WORD.test(last) && (CSS_WORD.test(next) || next === "%"))
+  || (/[0-9]/.test(last) && next === ".");
+// Whitespace beside these never separates two tokens, so it can go. Not `,`:
+// inside var() and custom properties the value is a token stream that the
+// CSSOM serialises as written, so `a, b` stays `a, b`.
+const CSS_PUNCT = new Set(["{", "}", ";"]);
+
+/**
+ * Minify one stylesheet without parsing it: comments go (a `/*!` one stays),
+ * every whitespace run becomes one space, and the space beside `{ } ;` goes.
+ * Strings and unquoted url() bodies are copied byte for byte. Nothing else is
+ * rewritten (no `:` spacing, no colour or zero shortening), so the rule list
+ * and every declaration value parse exactly as the source's. tests/unit/
+ * stage-minify.test.mjs checks the `{` count and the comment-free result.
+ * @param {string} src
+ * @param {string} [rel] for the error message
+ */
+export function minifyCss(src, rel = "css") {
+  let out = "";
+  let space = false;   // whitespace was skipped since the last emitted char
+  let seam = false;    // a comment was removed since the last emitted char
+  const emit = (t) => {
+    const last = out[out.length - 1];
+    if (out.length && (space || seam)) {
+      const glue = space
+        ? !(CSS_PUNCT.has(last) || CSS_PUNCT.has(t[0])) || (last === ":" && t[0] === ";")
+        : fuses(last, t[0]);
+      if (glue) out += " ";
+    }
+    space = seam = false;
+    out += t;
+  };
+  const n = src.length;
+  for (let i = 0; i < n;) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "*") {
+      const end = src.indexOf("*/", i + 2);
+      if (end < 0) throw new Error(`minifyCss: ${rel}: unterminated comment at ${i}`);
+      if (src[i + 2] === "!") emit(src.slice(i, end + 2)); else seam = true;
+      i = end + 2;
+    } else if (CSS_WS.test(c)) {
+      space = true; i++;
+    } else if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < n && src[j] !== c && src[j] !== "\n") j += src[j] === "\\" ? 2 : 1;
+      emit(src.slice(i, j + 1)); i = j + 1;
+    } else if ((c === "u" || c === "U") && /^url\(/i.test(src.slice(i, i + 4)) && !CSS_WORD.test(src[i - 1] || " ")) {
+      let j = i + 4;
+      while (j < n && CSS_WS.test(src[j])) j++;
+      if (src[j] === '"' || src[j] === "'") { emit(src.slice(i, i + 4)); i += 4; continue; }
+      const close = src.indexOf(")", j);
+      if (close < 0) throw new Error(`minifyCss: ${rel}: unterminated url( at ${i}`);
+      emit(src.slice(i, close + 1)); i = close + 1;
+    } else if (c === "}" && out.endsWith(";") && !/: ?;$/.test(out)) {   // `--x: ;` keeps its `;`
+      out = out.slice(0, -1); space = seam = false; emit("}"); i++;
+    } else {
+      emit(c); i++;
+    }
+  }
+  return out + "\n";
+}
+
+/** Every staged css/*.css (POSIX paths relative to `siteRoot`), sorted. */
+export function cssTargets(siteRoot) {
+  const dir = path.join(siteRoot, "css");
+  if (!fs.existsSync(dir)) return [];
+  const out = [];
+  const walk = (abs) => {
+    for (const ent of fs.readdirSync(abs, { withFileTypes: true })) {
+      const p = path.join(abs, ent.name);
+      if (ent.isDirectory()) walk(p);
+      else if (ent.isFile() && ent.name.endsWith(".css")) out.push(path.relative(siteRoot, p).split(path.sep).join("/"));
+    }
+  };
+  walk(dir);
+  return out.sort();
+}
+
+const RAW_TEXT = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript"]);
+
+/**
+ * Minify the shell page: HTML comments outside raw text go (a comment alone on
+ * its line takes the line with it); each CLASSIC inline <script> body (no src,
+ * no type: not the importmap or a JSON block) goes through terser with the
+ * js/ options; then the CSP meta is regenerated for the new bodies with
+ * gen-shell's own cspFor, so every inline script stays allowed. Markup,
+ * attributes, whitespace and every tag sw.js / bump-cache read are untouched.
+ * `minifyScript` null (no terser here) keeps the script bodies and the CSP.
+ * @param {string} html
+ * @param {{ minifyScript?: ((body: string) => Promise<string>) | null }} [opts]
+ * @returns {Promise<string>}
+ */
+export async function minifyShellHtml(html, opts = {}) {
+  const minifyScript = opts.minifyScript || null;
+  const tokens = /<!--[\s\S]*?(?:-->|--!>|$)|<![^>]*>|<\?[^>]*>|<\/?([a-z][a-z0-9:-]*)(?=[\t\n\f\r />])((?:[^"'<>]|"[^"]*"|'[^']*')*)>/gi;
+  const parts = [];
+  let at = 0;
+  for (let m; (m = tokens.exec(html));) {
+    if (m[0].startsWith("<!--")) {
+      let a = m.index, b = tokens.lastIndex;
+      const lineStart = html.lastIndexOf("\n", a - 1) + 1;
+      const eol = html.indexOf("\n", b);
+      const lineEnd = eol < 0 ? html.length : eol + 1;
+      if (/^[ \t]*$/.test(html.slice(lineStart, a)) && /^[ \t]*\r?\n?$/.test(html.slice(b, lineEnd)) && lineStart >= at) {
+        a = lineStart; b = lineEnd; tokens.lastIndex = b;
+      }
+      parts.push(html.slice(at, a));
+      at = b;
+      continue;
+    }
+    if (!m[1] || m[0].startsWith("</")) continue;
+    const name = m[1].toLowerCase();
+    if (name === "plaintext") break;
+    if (!RAW_TEXT.has(name)) continue;
+    const start = tokens.lastIndex;
+    const end = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])[^>]*>`, "gi");
+    end.lastIndex = start;
+    const close = end.exec(html);
+    const stop = close ? close.index : html.length;
+    tokens.lastIndex = close ? end.lastIndex : html.length;
+    if (name !== "script" || !minifyScript) continue;
+    const attrs = [...m[2].matchAll(/([^\s=/>]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?/g)].map((x) => x[1].toLowerCase());
+    if (attrs.includes("src") || attrs.includes("type")) continue;
+    parts.push(html.slice(at, start), await minifyScript(html.slice(start, stop)));
+    at = stop;
+  }
+  parts.push(html.slice(at));
+  let out = parts.join("");
+  if (minifyScript) {
+    const { cspFor } = await import("../gen/gen-shell.mjs");
+    const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/;
+    if (!meta.test(out)) throw new Error("minifyShellHtml: the shell has no Content-Security-Policy meta to regenerate");
+    out = out.replace(meta, () => `<meta http-equiv="Content-Security-Policy" content="${cspFor(out)}">`);
+  }
+  return out;
+}
+
+/**
+ * Minify the staged css/*.css and index.html in place (the js/ pass is
+ * minifyStaged). CSS needs no dependency; the inline scripts need terser and
+ * follow the same unminifiedPolicy as js/ when it is missing.
+ * @param {string} siteRoot
+ * @returns {Promise<{ css: { files: number, before: number, after: number }, html: { before: number, after: number, scripts: boolean } }>}
+ */
+export async function minifyStagedShell(siteRoot) {
+  const css = { files: 0, before: 0, after: 0 };
+  const writes = [];
+  for (const rel of cssTargets(siteRoot)) {
+    const src = fs.readFileSync(path.join(siteRoot, rel), "utf8");
+    const min = minifyCss(src, rel);
+    writes.push([rel, min]);
+    css.files++; css.before += Buffer.byteLength(src); css.after += Buffer.byteLength(min);
+  }
+  const indexPath = path.join(siteRoot, "index.html");
+  let html = null;
+  if (fs.existsSync(indexPath)) {
+    const src = fs.readFileSync(indexPath, "utf8");
+    const scripts = await canMinify();
+    const minifyScript = scripts ? async (body) => {
+      const { minify } = await terser();
+      const r = await minify(body, { ...MINIFY_OPTIONS, format: { ...MINIFY_OPTIONS.format } });
+      if (typeof r.code !== "string") throw new Error("minify: terser returned no code for an inline index.html script");
+      return r.code;
+    } : null;
+    const min = await minifyShellHtml(src, { minifyScript });
+    writes.push(["index.html", min]);
+    html = { before: Buffer.byteLength(src), after: Buffer.byteLength(min), scripts };
+  }
+  // Publish only after every transform succeeded (the js/ pass's barrier).
+  for (const [rel, text] of writes) fs.writeFileSync(path.join(siteRoot, rel), text);
+  return { css, html };
 }
