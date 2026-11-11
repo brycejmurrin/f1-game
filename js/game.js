@@ -4823,6 +4823,7 @@ const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, in
 // The step's Wind.sync() answer: every car of a step synced with the same (seed, weather, track, raceT), so the
 // first car to reach it pays and the rest share its object — the same one sync's own cache returned (#3109 row 9).
 const _windStep = { st: null };
+const _bandCtx = { leadProg: 0.5, carProg: 0.5, trackTotal: 0.5, raceT: 0.5, launchT0: 0.5, bandAuth: 0.5 }, _bandOut = { vmax: 0.5, bandNow: 0.5 };   // AiBand catch-up scratch (Double fields)
 // C10 far-car AI LOD, an OPT-IN lab read once here (`?lab=aiLod`, a comma list): off, aiLod is null and the sim is untouched (AiDrive.lodLab).
 const aiLod = (() => { try { return new URLSearchParams(location.search).get("lab").split(",").includes("aiLod") ? AiDrive.lodLab() : null; } catch (_) { return null; } })();
 const _ttRec = { native: false, initialState: undefined, boost: undefined, overtake: undefined, aeroToggle: undefined, shiftUp: undefined, shiftDown: undefined, steer: undefined, throttle: undefined, brake: undefined, throttleLevel: undefined, brakeLevel: undefined, aero: undefined };
@@ -4906,11 +4907,9 @@ function updateCar(c, dt, ranked) {
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
-  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both objects
-    const applied = AiBand.applyVmax(vmax, AiBand.factor({
-      leadProg: _leadHuman.prog, carProg: c.prog,
-      trackTotal: track.total, raceT, launchT0, bandAuth: dd.band,
-    }), c.tierV * c.skill * dd.ai, BAND_CEIL);
+  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both
+    const bc = _bandCtx; bc.leadProg = _leadHuman.prog; bc.carProg = c.prog; bc.trackTotal = track.total; bc.raceT = raceT; bc.launchT0 = launchT0; bc.bandAuth = dd.band;
+    const applied = AiBand.applyVmax(vmax, AiBand.factor(bc), c.tierV * c.skill * dd.ai, BAND_CEIL, _bandOut);   // reused: no objects per AI car
     vmax = applied.vmax; c._bandNow = applied.bandNow;
   } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
