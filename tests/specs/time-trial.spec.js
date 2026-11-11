@@ -474,7 +474,7 @@ test.describe("Time Trial — sector splits", () => {
         || document.body.classList.contains("hud-hidden"),
       docHidden: document.hidden === true,
       // The seam (#5296 GameHud.secFlash + #5339 __apex.hudSecFlash): calls = flashSector
-      // calls, painted = HUD ticks that set .sec-flash. "absent" / no_seam until both land.
+      // calls, painted = HUD ticks that set .sec-flash (asserted after the unfreeze below).
       secFlash: typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
     }));
     await page.evaluate(() => window.__apex.freeze(false));
@@ -483,14 +483,16 @@ test.describe("Time Trial — sector splits", () => {
     const secFlashAfter = await page.evaluate(() =>
       typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent");
     test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState, secFlashAfter }) });
-    // NOT ASSERTED (W32 row 10, candidate game finding, listed in PR #5302).
-    // With every game.js gate met (lap 1, forward entry, no incident, S1 2.8 s;
-    // sectorLast[0] is written by the block that calls hud.flashSector(0)), a
-    // live page (frozen false, HUD shown, document visible) latched NO
-    // .sec-flash* on #hud-sectors within 5 s: CI run 42827414372, job
-    // 129870057425, bcd7d73 (and run 42802375775 before it). The seam to settle
-    // it is a read-only GameHud secFlash() surfaced as __apex.hudSecFlash();
-    // until then the latch and the page state are recorded on every run.
+    // The flash is asserted on the seam (W32 row 10): GameHud.secFlash()
+    // counts flashSector() calls and the HUD ticks that set .sec-flash, in the
+    // same branch that toggles the class. calls 0 = game.js never flashed the
+    // crossing; painted 0 = flashed but the HUD never painted it (both game
+    // bugs). The DOM latch stays an annotation only: before the seam it latched
+    // nothing on CI (run 42827414372, job 129870057425), and a miss with
+    // painted > 0 points at the observer, not the game.
+    expect(secFlashAfter, "__apex.hudSecFlash() seam missing").toEqual(expect.objectContaining({ last: 0 }));
+    expect(secFlashAfter.calls, "game.js never called hud.flashSector for the S1 crossing").toBeGreaterThanOrEqual(1);
+    expect(secFlashAfter.painted, "flashSector ran but the HUD never painted .sec-flash").toBeGreaterThanOrEqual(1);
   });
 });
 
