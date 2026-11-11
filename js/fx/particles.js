@@ -350,7 +350,7 @@ const Particles = (function () {
     }
   }
 
-  // #5387 armPrime (CarDraw.primeRace): an idle group draws one empty particle, so TLX wraps its buffer at race start.
+  // #5387 primeRace: an idle group draws one empty particle (TLX wraps its buffer).
   let _prime = false;
   function armPrime() { _prime = true; }
   function draw() {

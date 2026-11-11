@@ -975,8 +975,7 @@ function _retroDigit(n) {
   }
   return _retroDigits[n];
 }
-// CarDraw.primeRace (#5387): every retro digit at each of the 4 places it can show, once, at the caller's zero
-// matrix, so no digit's first draw (pool wrapper + render object) lands mid-lap.
+// #5387 primeRace: each retro digit x4 places, at the caller's zero matrix.
 function primeRetroDigits(m) { for (let n = 0; n <= 9; n++) for (let k = 0; k < 4; k++) _gfx.draw(_retroDigit(n), m, _AX_FX); }
 function drawRetroTelemetry(mat,c,kph,t) {
   // Same integer as #hud-speed-n / modern LCD (HudReadouts.spdDigits).
@@ -1039,8 +1038,7 @@ function drawWheelExtras(mat, c, t) {
   if (ax < 0.999) _AX_PULSE.alpha = 0.65 + 0.35 * Math.sin(t * 20);
   _gfx.draw(getAeroBar(true), _axM, ax < 0.999 ? _AX_PULSE : _AX_FX);
 }
-// CarDraw.primeRace (#5387): every wheel-extra mesh with the opts its live draw uses, once, at the caller's zero
-// matrix (no fragments): the throttle x brake status tiles, the three aero lamps, the bar and its pulsing fill.
+// #5387 primeRace: each wheel-extra mesh with its live opts, at the caller's zero matrix.
 function primeWheelExtras(m) {
   const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
   for (let th = 0; th <= 4; th++) for (let br = 0; br <= 4; br++) _gfx.draw(getWheelStatus(mph, th, br), m, _AX_FX);

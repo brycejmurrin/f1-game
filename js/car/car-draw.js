@@ -1070,7 +1070,7 @@ const CarDraw = (function () {
           getErsBar(); getOtLamp(false); getOtLamp(true);
           for (let g = 0; g <= 9; g++) getGearDigit(g);
           for (let d = 0; d <= 9; d++) getSpeedDigit(d);
-          _primeArmed = 1;   // this race's first rendered frame draws every one of them once (primeRace)
+          _primeArmed = 1;   // primeRace
           const styles = (CarMesh.LED_ROWS && Object.keys(CarMesh.LED_ROWS)) || ["std"];
           for (let s = 0; s < styles.length; s++) {
             for (let lit = 0; lit <= 9; lit++) getLedStrip(lit, styles[s]);
@@ -1278,7 +1278,7 @@ const CarDraw = (function () {
       Log.info("gfx", "selector car assets ready", done);
       return done;
     }
-    // A car's decal mesh (CarMesh caches it); the race warm builds each field car's (#5387).
+    // A car's decal mesh (CarMesh caches it).
     function decalMeshFor(team, cockpit, usePlayerSetup, setup, stamp) {
       const state = teamDecalState(team, usePlayerSetup, setup, stamp);
       // A loaded GLB is a static body and does not consume procedural part recipes;
@@ -1528,25 +1528,22 @@ const CarDraw = (function () {
     const _pinned = new WeakSet();
     const pin = (m) => { if (m && !_pinned.has(m)) { _pinned.add(m); if (typeof G.gfx.pinMesh === "function") G.gfx.pinMesh(m); } return m; };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
-    // #5387: the race's first frames draw every mesh its warm built, once, at a ZERO matrix (no fragments): TLX mints
-    // a wrapper's render object at its first RENDERED draw, so each was minted mid-lap. Main pass only; armed per race
-    // warm. Returns the draws issued.
-    let _primeArmed = 0;   // 0 off, 1 armed, 2 primed under a held present (done at the first free one)
+    // #5387: each warm-built mesh once at a zero matrix (TLX mints at first draw).
+    let _primeArmed = 0;   // 0 off, 1 armed, 2 primed (held)
     const _primeZ = new Float32Array(16);
-    // A copy of game.js's `const _wheelOpts` (cockpit-wheels pins them equal); emissive 0.12 at night.
+    // = game.js `const _wheelOpts` (cockpit-wheels pins it)
     const _primeWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
     function primeRace(paint, night) {
-      if (!_primeArmed || carModelBuf || !G.cars || !G.cars.length) return 0;   // the menu prep arms it too: wait for the race's field
+      if (!_primeArmed || carModelBuf || !G.cars || !G.cars.length) return 0;
       const gfx = G.gfx, held = !!((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
-      // Prime every present a warm holds (its compile builds them under the loading cover) and stop at the first
-      // free one; with no warm at all, prime the first free frame.
+      // Prime each warm-held present, stop at the first free one (no warm: prime it).
       if (!held && _primeArmed === 2) { _primeArmed = 0; return 0; }
       _primeArmed = held ? 2 : 0;
       const Z = _primeZ; let n = 0;
-      if (typeof gfx.primeChunkMerge === "function") gfx.primeChunkMerge();   // TLX: each chunked record's merge slot, this present
-      if (typeof Particles !== "undefined" && Particles.armPrime) Particles.armPrime();   // each particle stream, this frame
+      if (typeof gfx.primeChunkMerge === "function") gfx.primeChunkMerge();
+      if (typeof Particles !== "undefined" && Particles.armPrime) Particles.armPrime();
       const d = (mesh, opts) => { if (mesh) { gfx.draw(mesh, Z, opts); n++; } };
-      // The pool keys wrappers per occurrence: each digit once per place (gear x1, speed x3).
+      // gear x1, speed x3 places
       for (let k = 0; k <= 9; k++) { d(getGearDigit(k), _rigFx); for (let j = 0; j < 3; j++) d(getSpeedDigit(k), _rigFx); }
       const ws = CockpitOpts.wheel();
       if (CockpitOpts.wheelHasScreen(ws)) for (let lit = 0; lit <= 9; lit++) d(getLedStrip(lit, ws), _rigFx);
@@ -1554,8 +1551,7 @@ const CarDraw = (function () {
       d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
       if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
       if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
-      // Per field car, as shared meshes key a wrapper per occurrence: shadow, mark, decals, spin discs; rivals add
-      // the shared/far/team bodies, flap sets and wheel set.
+      // Per car: the pool keys wrappers per occurrence.
       if (paint) {
         const co = coOpt(paint), cars = G.cars;
         _primeWheelOpts.emissive = night ? 0.12 : 0;
@@ -1568,7 +1564,7 @@ const CarDraw = (function () {
           queueCarDecals(c.team, Z, carDecalNum(c.team, c), false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); n++;
           _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
           for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
-          if (c.isPlayer) continue;   // the player's own meshes draw from its first frame
+          if (c.isPlayer) continue;
           d(_sharedRivalBody, co); d(_farRivalBody, co);
           d(teamBodyMesh(c.team, c), paint);
           const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp);
