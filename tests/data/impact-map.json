@@ -1288,6 +1288,12 @@
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "lsDel": [
+        "tests/unit/save-schema-registry.test.mjs"
+      ],
+      "lsSet": [
+        "tests/unit/save-schema-registry.test.mjs"
+      ],
       "mode": [
         "tests/unit/spotify-refresh.test.mjs"
       ],
@@ -1339,8 +1345,7 @@
       ],
       "*": [
         "tests/unit/global-registry.test.mjs",
-        "tests/unit/load-order.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/audio/stub.js": {
@@ -5768,6 +5773,9 @@
         "tests/unit/save-durability.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
+      "mirrorForeign": [
+        "tests/unit/save-schema-registry.test.mjs"
+      ],
       "ttBoard": [
         "tests/unit/settings-ttlb-backup.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
@@ -5846,6 +5854,9 @@
       ],
       "staleSince": [
         "tests/unit/data-api-status.test.mjs"
+      ],
+      "*": [
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/data/api.js": {
@@ -5899,7 +5910,8 @@
         "tests/unit/data-api-status.test.mjs"
       ],
       "*": [
-        "tests/unit/docs-integrity.test.mjs"
+        "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/data/circuit-lore.js": {
@@ -6107,6 +6119,9 @@
     "js/data/real-race-fetch.js": {
       "remember": [
         "tests/unit/data-replay-improvements.test.mjs"
+      ],
+      "*": [
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/data/real-race-script.js": {
@@ -8827,6 +8842,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "create": [
+        "tests/specs/career.spec.js",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-followups.test.mjs",
@@ -8890,7 +8906,6 @@
         "tests/unit/garage-followups.test.mjs"
       ],
       "*": [
-        "tests/specs/career.spec.js",
         "tests/unit/car-materials.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
@@ -10927,7 +10942,8 @@
       ],
       "*": [
         "tests/unit/game-ctx-surface.test.mjs",
-        "tests/unit/pause-hud-layout.test.mjs"
+        "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/perf/gfx-debug-overlay.js": {
@@ -11450,7 +11466,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
-        "tests/specs/tlx-probes.spec.js"
+        "tests/specs/tlx-probes.spec.js",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/perf/soak-run.js": {
@@ -15641,6 +15658,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs",
@@ -19793,9 +19811,6 @@
       ],
       "plan": [
         "tests/unit/xr-opts.test.mjs"
-      ],
-      "*": [
-        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/xr/xr-boot.js": {
@@ -19849,6 +19864,9 @@
         "tests/unit/xr-cull-union.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "recheck": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "restorePinnedBackend": [
         "tests/unit/xr-backend-pin.test.mjs"
       ],
@@ -19863,7 +19881,8 @@
       ],
       "*": [
         "tests/unit/load-order.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/xr/xr-input.js": {
@@ -19897,7 +19916,6 @@
       ],
       "*": [
         "tests/unit/load-order.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/settings-tabs.test.mjs"
       ]
     },

@@ -2083,7 +2083,7 @@ const api = {
     return out;
   },
 
-  seed(n) { if (n !== undefined && Number.isFinite(n)) G.seed = n; return G.seed; },
+  seed(n, stream) { if (stream === true) return G.simSeed(undefined, true); if (n !== undefined && Number.isFinite(n)) G.seed = n; return G.seed; },   // stream true: read the sim RNG position, no draw (R3-01)
 
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
