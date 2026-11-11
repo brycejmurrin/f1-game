@@ -2400,13 +2400,14 @@ body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { displ
 }
 #hud-inputs-cv { display: block; width: 128px; height: 48px; background: color-mix(in oklab, var(--carbon) 70%, transparent); }
 #hud-inputs-gear { font-size: var(--fs-3); font-weight: 800; min-width: 1.4ch; text-align: center; }
-#hud-rel[hidden], #hud-strat[hidden], #hud-inputs[hidden], #hud-rel > div[hidden], #hud-strat > div[hidden] { display: none !important; }
+/* No `!important`: the only `display` set on these ids is the plain `#hud-inputs`
+   / `#hud-rel > div` / `#hud-strat > div` layout, always lower specificity than
+   the hides below, so they win on specificity alone (F-13 slice 4). */
+#hud-rel[hidden], #hud-strat[hidden], #hud-inputs[hidden], #hud-rel > div[hidden], #hud-strat > div[hidden] { display: none; }
 body[data-hud-hide~="rel"] #hud-rel,
 body[data-hud-hide~="strat"] #hud-strat,
-body[data-hud-hide~="inputs"] #hud-inputs { display: none !important; }
-body.hud-prof-minimal :is(#hud-rel, #hud-strat, #hud-inputs),
-body.hud-bcam :is(#hud-rel, #hud-strat, #hud-inputs),
-body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
+body[data-hud-hide~="inputs"] #hud-inputs,
+body:is(.hud-prof-minimal, .hud-bcam, .bc-on, .watch-controls-on) :is(#hud-rel, #hud-strat, #hud-inputs) { display: none; }
 body:has(> .screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: hidden; }
 /* TOUCH HOMES. RELATIVE and INPUTS used to ship where the touch columns sit
    (RELATIVE over BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04

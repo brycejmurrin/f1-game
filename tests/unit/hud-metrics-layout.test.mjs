@@ -382,3 +382,20 @@ test("F-13 slice 3: #hud-aero and #hud-bb hide in ONE plain rule for every reaso
     assert.ok(hides.some((r) => r.sel === `body[data-hud-hide~="${id.slice(4)}"] #${id}`), `the ${id.slice(4)} toggle still hides #${id}`);
   }
 });
+
+test("F-13 slice 4: RELATIVE, STRATEGY and INPUTS hide in plain rules that out-rank their layout", () => {
+  for (const id of ["hud-rel", "hud-strat", "hud-inputs"]) {
+    const { hides } = assertPlainHidesWin(id);
+    for (const h of hides.filter((r) => !/\[data-(col|fit)-drop\]/.test(r.sel)))
+      assert.doesNotMatch(h.body, /!important/, `${h.sel} (${h.file}) needs no !important`);
+    for (const why of ["hud-prof-minimal", "hud-bcam", "bc-on", "watch-controls-on"])
+      assert.ok(hides.some((r) => new RegExp("^body:is\\([^)]*\\." + why + "\\b").test(r.sel)), `${why} still hides #${id}`);
+  }
+  // The row hides beat the row layout (#hud-rel > div { display: grid }, #hud-strat > div { display: flex }).
+  const rows = cssRules().filter((r) => /^#hud-(rel|strat) > div/.test(r.sel) && displayOf(r.body));
+  for (const id of ["hud-rel", "hud-strat"]) {
+    const hide = rows.find((r) => r.sel === `#${id} > div[hidden]`), show = rows.find((r) => r.sel === `#${id} > div`);
+    assert.ok(hide && show, `#${id} rows have a layout and a [hidden] hide`);
+    assert.ok(beats(specificity(hide.sel), specificity(show.sel)) > 0 && hide.layer === show.layer);
+  }
+});
