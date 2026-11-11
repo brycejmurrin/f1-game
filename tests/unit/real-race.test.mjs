@@ -715,8 +715,8 @@ test("a driven real race: game.js endRace (the façade call) keeps the script DS
 // but game.js ends a driven race through its LOCAL endRace() (the natural flag
 // at the results countdown, skipToResults), never through the façade — so
 // status().watch reads false, SportingRegs.applyCompoundRule deletes every
-// c.dsq, and the script DSQ is classified as a runner. Remove `todo` once fixed.
-test("a driven real race: SKIP after the player retires (game.js's own endRace, not the façade) keeps the script DSQ too", { todo: "driven real race: local endRace() bypasses RealRace's G.endRace wrap, so applyCompoundRule wipes the script DSQ (RUS c.dsq undefined after SKIP)" }, async () => {
+// c.dsq, and the script DSQ is classified as a runner. Fixed in #5268 (both call G.endRace()).
+test("a driven real race: SKIP after the player retires (game.js's own endRace, not the façade) keeps the script DSQ too", async () => {
   const { g, G, car } = await drivenDsqRace();
   try {
     g.apex.retire(null);   // the only human retires: the post-finish wait opens SKIP

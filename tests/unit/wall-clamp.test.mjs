@@ -410,3 +410,16 @@ for (const side of [-1, 1]) {
     }
   });
 }
+
+// Audit 2026-11-09 W2 #8: shake, vibrate and rumble sat INSIDE the soundOn gate,
+// so with SOUND OFF a street-wall strike gave the player no feel at all. Mute
+// silences the SFX only; the re-arm still paces the feel.
+test("SOUND OFF: a street-wall strike still shakes, vibrates and rumbles, silently", () => {
+  let audioHits = 0, vib = 0, rum = 0, shake = 0;
+  const { WallClamp } = load({ onCollision: () => { audioHits++; }, onVibrate: () => { vib++; }, onRumble: () => { rum++; } });
+  const c = noseInCar();
+  WallClamp.apply(c, baseCtx({ soundOn: false, track: { ...baseCtx().track, street: true }, addShake: () => { shake++; } }));
+  assert.equal(audioHits, 0, "no SFX with sound off");
+  assert.deepEqual({ shake, vib, rum }, { shake: 1, vib: 1, rum: 1 }, "the feel fires once");
+  assert.equal(c.collideT, WALL_SFX_REARM, "the re-arm paces the feel with sound off too");
+});

@@ -20,10 +20,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const SRC = path.join(ROOT, "js/circuits/scenery/qatar.js");
 
 /** dual_lite orbit eye at racing frac 0 (matches tools/lib/track-shot-survey.mjs). */
-function dualLiteOrbitEye(Tracks, track) {
+function dualLiteOrbitEye(Tracks, track, side = 1) {
   const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
   Tracks.sample(track, 0, smp);
-  const az = 45 * Math.PI / 180, el = 20 * Math.PI / 180, dist = 42, h = 1.5;
+  const az = side * 45 * Math.PI / 180, el = 20 * Math.PI / 180, dist = 42, h = 1.5;
   const cx = smp.p[0], cy = smp.p[1] + h, cz = smp.p[2];
   const fwd = [smp.t[0], 0, smp.t[2]], rt = [smp.r[0], 0, smp.r[2]];
   const dir = [
@@ -60,8 +60,13 @@ test("qatar day S/F orbit eye is clear of main-stand mass; pit + Lusail Hill emi
     assert.ok(idSet.has(id), `${id} must emit (day hero)`);
   }
 
-  const { eye, lat, roadY, smp } = dualLiteOrbitEye(Tracks, track);
-  assert.ok(lat > 24 && lat < 32, `dual_lite eye lat ${lat.toFixed(2)} (expected ~28)`);
+  // The MAIN STAND side. Since 2026-11-10 the pits are on +1 (FIA 2025 Qatar
+  // pit-lane drawing) and the main stand on -1, so the eye this guard protects
+  // from the stand mass is the mirrored one (az -45, ~28 m on -1). The generic
+  // dual_lite cell (az +45) now looks out of the pit building and needs
+  // re-aiming in the survey — a framing follow-up, not a scenery defect.
+  const { eye, lat, roadY, smp } = dualLiteOrbitEye(Tracks, track, -1);
+  assert.ok(lat < -24 && lat > -32, `dual_lite eye lat ${lat.toFixed(2)} (expected ~-28)`);
 
   // Stand-height scenery in a 6 m XZ bubble around the eye = camera buried in
   // the bowl/roof (the #3365 day-orbit failure mode).

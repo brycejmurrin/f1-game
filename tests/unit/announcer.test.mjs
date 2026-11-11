@@ -589,21 +589,22 @@ test("every lore line is one spoken sentence the synth can read", () => {
   }
 });
 
-// Baku is exempt until its night line is baked: lore lines are pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side
-// credentials), and voice-pack.test.mjs fails on an unbaked line. Drop BAKED_GAP once the voice pack is re-baked with a Baku night line.
-const BAKED_GAP = ["baku"];
+// Baku defaults to DAY since 2026-11-10 (the Azerbaijan GP starts ~15:00 local; FIA 2026 pre-race procedure), so it is no longer
+// a `night: true` circuit; NIGHT stays selectable there, which is why its unbaked night line stays a todo below. Lore lines are
+// pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side credentials).
+const BAKED_GAP = [];
 test("every night circuit has a night line, so the announcer has something to say after dark", () => {
   const { CircuitLore } = load();
   const nights = readdirSync(join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js"))
     .filter((f) => /^ {4}night: true,/m.test(readFileSync(join(ROOT, "js/circuits", f), "utf8")))
     .map((f) => f.replace(/\.js$/, ""));
-  assert.ok(nights.includes("baku") && nights.length >= 7, `only found ${nights.join(", ")}`);
+  assert.ok(nights.includes("singapore") && !nights.includes("baku") && nights.length >= 6, `only found ${nights.join(", ")}`);
   assert.deepEqual(nights.filter((id) => !BAKED_GAP.includes(id) && !CircuitLore.LORE[id].night), [], "a night circuit has no `night` lore slot");
 });
 
-test("Baku's night line is a known gap (voice bake pending)", { todo: true }, () => {
+test("Baku's night line is a known gap (voice bake pending; NIGHT is selectable there)", { todo: true }, () => {
   const { CircuitLore } = load();
-  assert.ok(CircuitLore.LORE.baku.night, "Baku is night: true but has no night lore line");
+  assert.ok(CircuitLore.LORE.baku.night, "Baku can be raced at night but has no night lore line");
 });
 
 // Reverted until the voice pack is re-baked: the Istanbul `corner` line IS voiced (voice-pack.test.mjs fails on any reworded line),
@@ -1276,7 +1277,7 @@ const BAKU40 = {
     tyre: { compound: "medium", age: 8, used: false }, stops: [31, 36], passesMade: 3, passesLost: 6, best: { time: 107.208, lap: 29 }, penalties: [] }),
   leaderStops: 2,
 };
-const bakuTrack = { id: "baku", name: "Baku", gp: "Azerbaijan Grand Prix", country: "Azerbaijan", lengthKm: 6.003, night: true };
+const bakuTrack = { id: "baku", name: "Baku", gp: "Azerbaijan Grand Prix", country: "Azerbaijan", lengthKm: 6.003, night: false };
 const bakuJoin = (over = {}) => {
   const real = { title: "2026 Azerbaijan Grand Prix", driver: "Charles Leclerc", startLap: 40, realLaps: 51, watch: false, reel: false, story: BAKU40, ...over };
   return info({ track: bakuTrack, gp: real.title, tod: "day", real, story: { real } });

@@ -9,8 +9,11 @@
     name: "BAKU",
     gp: "Azerbaijan GP",
     country: "Azerbaijan",
-    night: true,
-    theme: "street_night",
+    // The Azerbaijan GP is a DAYTIME race (lights out 15:00 local, 2026 FIA
+    // timetable). Default to day; NIGHT stays selectable from the race TIME
+    // setting (raceTimeOfDay), which keeps the "baku|night|*" lighting rows.
+    night: false,
+    theme: "street_day",
     street: true,
     // The pit complex (TrackPit): the STREET one, on +1 where this def's pit
     // art has always stood (the real lane is on the inside — a survey-track
@@ -29,22 +32,34 @@
       // content. Hand-authored cityFront/towers in scenery/baku.js sit past
       // the orbit ring (gap 48 / 72+); keep generic city off this side.
       { kinds: ["city"], s0: 0.58, s1: 0.97, side: 1 },
+      // Day theme (2026-11-10): street_day dresses generic city boxes on the
+      // start/finish straight, where the authored neon towers already stand
+      // (clip-audit: 6 m place x neonTowerBody at frac 0.00-0.02).
+      { kinds: ["city"], s0: 0.97, s1: 1.0 },
+      { kinds: ["city"], s0: 0.0, s1: 0.07 },
     ],
-    pal: { horizon: [0.10, 0.12, 0.22], zenith: [0.04, 0.05, 0.14], sunColor: [0.72, 0.74, 0.88], ambientSky: [0.24, 0.26, 0.36], ambientGround: [0.20, 0.20, 0.28], fogColor: [0.08, 0.10, 0.18], fogDensity: 0.0016 },
+    // Day palette: a hazy Caspian afternoon (pale horizon, mid-blue zenith,
+    // sandstone-warm ground bounce). The old night palette is what the
+    // "baku|night|*" presets now light when NIGHT is picked.
+    pal: { zenith: [0.30, 0.52, 0.82], horizon: [0.74, 0.78, 0.82], sunColor: [1.0, 0.94, 0.82], sun: [1, 0.96, 0.86], ambientSky: [0.52, 0.60, 0.70], ambientGround: [0.40, 0.36, 0.30], fogColor: [0.72, 0.76, 0.82], fogDensity: 0.0012 },
     hwZones: [
       { s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 },      // Castle Section
       { s0: 0.0874, s1: 0.1194, hw: 5.3, ease: 0.012 },  // T2 tight left
-      { s0: 0.2577, s1: 0.3233, hw: 5.4, ease: 0.012 },  // T6/T7 into the Old City
-      { s0: 0.8232, s1: 0.8825, hw: 5.4, ease: 0.012 },  // T15/T16 seafront kink
+      { s0: 0.2577, s1: 0.3233, hw: 5.4, ease: 0.012 },  // T4 to T5 into the Old City
+      { s0: 0.8232, s1: 0.8825, hw: 5.4, ease: 0.012 },  // T20 seafront kink
     ],
     elevations: [{ s: 0.46, halfM: 500, rise: 14 }],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
+    // turns: FIA 2026 event-map numbering (T1-T20), one apex per FIA corner, from
+    // "2026 Azerbaijan Grand Prix - Competition Notes - Circuit Map, Pit Lane Drawing,
+    // Emergency Exits Map and Red Zone"; apexes at built curvature peaks (T9 = the
+    // short right kink between the T8 and T10 lefts; T14 = the flat left kink).
+    // sectors: approximate splits, not FIA-sourced. Both are RACING-LAP fractions
+    // (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
-    turns: [0.0315, 0.0880, 0.2340, 0.2705, 0.3260, 0.3355, 0.4005, 0.4340, 0.4430, 0.4495, 0.4605, 0.5290, 0.5570, 0.5645, 0.6030, 0.6630, 0.6900, 0.7375, 0.7600, 0.8240],
+    turns: [0.0315, 0.0880, 0.2340, 0.2705, 0.3260, 0.3355, 0.4005, 0.4340, 0.4380, 0.4430, 0.4495, 0.4605, 0.5290, 0.5645, 0.6030, 0.6630, 0.6900, 0.7375, 0.7600, 0.8240],
     barrier: { a: [0.93, 0.94, 0.96], b: [0.00, 0.62, 0.58], c: [0.95, 0.45, 0.08], night: [0.08, 0.22, 0.22], tyre: [0.00, 0.62, 0.58] },  // teal/white + flame orange
     furniture: { tree: "palm",  fol: [0.30, 0.42, 0.20], lamp: "globe", lc: [1.0, 0.82, 0.50] },  // Caspian boulevard palms
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "fascia",    gantry: "portal",     camera: "scaffold",  hoarding: "barrierTop" },

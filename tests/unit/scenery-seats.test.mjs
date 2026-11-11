@@ -94,6 +94,14 @@ test("props near the road are seated on the drawn ground, not the road frame (#5
     assert.equal(r.sunkNear, 0, `${id}: ${r.sunkNear} props buried within 40 m of the road ` +
       `(base: cota 2, shanghai 1, sochi 5): ${JSON.stringify(r.sunks)}`);
   }
+  // #5088 item 1 and the issue's ratchet: nothing floats within 40 m of the road at
+  // the five circuits it named. Base: kyalami 10 iron-terrace truss posts 0.5-0.6 m
+  // off the falling ground (road-frame foot); the nurburgring pine and kyalami trees
+  // of the report already read 0.
+  for (const id of ["nurburgring", "kyalami", "cota", "shanghai", "sochi"]) {
+    const r = seatProbe(e, id);
+    assert.equal(r.floatNear, 0, `${id}: ${r.floatNear} props float within 40 m of the road: ${JSON.stringify(r.floats.slice(0, 4))}`);
+  }
   // Jeddah's street panels (boxes): skirted to the ground. Its tree trunks are
   // a separate, pre-existing 0.5-0.8 m case (cylinders) and not this rule's.
   const j = seatProbe(e, "jeddah");
