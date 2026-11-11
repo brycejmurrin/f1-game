@@ -1,13 +1,18 @@
 /* PhotoStudio: camera borrowing, readback ordering, bounded composition,
  * cancellation and local persistence failure, without renderer hardware.
- * Also PHOTO LIGHTING: TUNE_DEFS clone/restore via ltSet (no latching setLightTune). */
+ * Also PHOTO LIGHTING: TUNE_DEFS clone/restore via the ltStore dep game.js passes (no latching setLightTune). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 const source = fs.readFileSync(new URL("../../js/ui/photo-studio.js", import.meta.url), "utf8").replace(/^const PhotoStudio/m, "var PhotoStudio");
+// The light-store deps game.js passes to PhotoStudio.create, read from its one call site.
+const GAME_JS = gameSource();
+const GAME_CALL = GAME_JS.slice(GAME_JS.indexOf("PhotoStudio.create(G, {"), GAME_JS.indexOf("function openExperiencePhoto("));
+const GAME_DEPS = new Set(["ltStore", "ltSet", "ltApply"].filter((k) => new RegExp("[{,]\\s*" + k + "\\s*[,:}]").test(GAME_CALL)));
 function boot(options = {}) {
   const dom = makeDom(), order = [], downloads = [], canvasOps = [], storage = new Map();
   const create = dom.document.createElement;
@@ -47,7 +52,7 @@ function boot(options = {}) {
   const garage = { snapshot: () => ({ az: 1, spin: true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
     looks: options.looks, looked: options.looked };
   const scene = { value: options.homeScene || "photo" };
-  const ltWrites = [];
+  const ltWrites = [], latchWrites = [];
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
@@ -70,15 +75,20 @@ function boot(options = {}) {
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
   vm.runInContext(source, ctx);
-  const ltSet = options.ltSet || ((id, v) => {
+  // LightStore.set's shape: the live LT plus whatever profiles object G._ltStore holds right now.
+  const ltStore = { set: (id, v) => {
     ltWrites.push([id, v]); LT[id] = v;
     const key = "test|day|dry", prof = ltProfiles.value[key] || (ltProfiles.value[key] = {});
     prof[id] = v; return true;
-  });
+  } };
+  // game.js's setLightTune: the same store write, plus the renderer-recovery latch clears
+  // (light-tune-edit.js). Photo Studio must never reach it (#5040).
+  G.setLightTune = (id, v) => { latchWrites.push([id, v]); storage.delete("apex26.perChunkOff"); storage.delete("apex26.envProbeOff"); return ltStore.set(id, v); };
+  // The light-store deps exactly as game.js hands them over, so this boot cannot pass while production differs.
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw"),
-    ltSet: options.skipLtSet ? undefined : ltSet,
+    ltStore: GAME_DEPS.has("ltStore") ? ltStore : undefined, ltSet: GAME_DEPS.has("ltSet") ? ltStore.set : undefined,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
-  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites,
+  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
@@ -647,7 +657,27 @@ test("#1895: the Home title art does not paint over a live Photo Studio subject"
     "once the garage/track subject has painted, #title-car must be hidden while the studio is open");
 });
 
-test("Photo Lighting clones the profile store, writes via ltSet, and restores the exact original reference on close", () => {
+test("game.js hands Photo Studio the light store, so PHOTO LIGHTING never needs setLightTune (#5040)", () => {
+  assert.ok(GAME_CALL.length > 0, "game.js still builds Photo Studio with PhotoStudio.create(G, {...})");
+  assert.ok(GAME_DEPS.has("ltStore") || GAME_DEPS.has("ltSet"), "PhotoStudio.create gets a light-store writer");
+});
+
+test("PHOTO LIGHTING sliders are this photo only: no latch clear, no saved-tune write (#5040)", () => {
+  const original = { "test|day|dry": { carEnvCube: 0 } };
+  const b = boot({ profiles: original, LT: { exposureMul: 1, contrast: 1, sunElev: 12 } });
+  b.storage.set("apex26.perChunkOff", "1"); b.storage.set("apex26.envProbeOff", "1");
+  b.api.open({ source: "race" });
+  const inp = b.dom.byId("ps-lt-in-exposureMul");
+  inp.value = "2"; inp.dispatchEvent({ type: "input" });
+  assert.deepEqual(b.ltWrites, [["exposureMul", 2]], "the slider reached the live store");
+  assert.deepEqual(b.latchWrites, [], "never through setLightTune");
+  assert.equal(b.storage.get("apex26.perChunkOff"), "1"); assert.equal(b.storage.get("apex26.envProbeOff"), "1");
+  b.api.close(false);
+  assert.equal(b.G._ltStore, original, "the saved profiles come back untouched");
+  assert.deepEqual(original, { "test|day|dry": { carEnvCube: 0 } });
+});
+
+test("Photo Lighting clones the profile store, writes via the light store, and restores the exact original reference on close", () => {
   const original = { "monza|day|dry": { exposureMul: 1.1 } };
   const b = boot({ profiles: original });
   assert.equal(b.api.open({ source: "race" }), true);

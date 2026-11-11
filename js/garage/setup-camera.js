@@ -687,6 +687,10 @@ function setSetupAero(on, opts) {
   }
 }
 function setupZoom(mul) {
+  // A zoom takes the distance off the turntable (#5034). While it spins the frame draws
+  // max(stored, fit), so a press moved a number the camera did not use: start from the
+  // DRAWN distance and stop the spin, as an orbit, a pan and a preset already do.
+  if (setupPreviewSpin && !home.active) { if (_spEffDist > 0) setupPreviewDist = _spEffDist; setSetupSpin(false); }
   setupPreviewDist = clamp(setupPreviewDist * mul, spDistMin(), SP_DIST_MAX);
 }
 // Move the rig sideways / along the car, in the SCREEN's frame rather than the
@@ -955,7 +959,8 @@ function restoreCamera(s) {
   if (!s) return;
   setupPreviewAz = s.az; setupPreviewEl = s.el; setupPreviewDist = s.dist;
   setupPreviewOrbit = s.orbit.slice(); setupPreviewTgt = s.target.slice(); setupPreviewPan = s.pan.slice();
-  setupPreviewMinDist = s.minDist; setupPreviewFree = s.free; setupPreviewXOn = s.xOn; setupPreviewAeroX = s.aeroX;
+  setupPreviewMinDist = s.minDist; setupPreviewFree = s.free; setupPreviewAeroX = s.aeroX;
+  setSetupAero(s.xOn);   // through the button: its label and aria-pressed follow the flaps (#5045)
   setupPreviewView = s.view; GarageScene.spot(s.view); setSetupSpin(s.spin);
 }
 function setHomeView(name, pose) {

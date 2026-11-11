@@ -71,6 +71,22 @@ function boot(opts = {}) {
     vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
     vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
   }
+  // LAZY_CAREER_UI (#4748): CareerBackup is absent until CareerUI.ensureBackup injects it.
+  if (opts.careerLazy) {
+    vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
+    vm.runInContext(read("js/career/save-migrate.js"), ctx, { filename: absSrc("js/career/save-migrate.js") });
+    vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
+    sb.ensureBackupCalls = 0;
+    // The inject lands a macrotask later, the way a <script> does.
+    sb.CareerUI = { ensureBackup() {
+      sb.ensureBackupCalls++;
+      return new Promise((resolve) => setImmediate(() => {
+        if (vm.runInContext("typeof CareerBackup", ctx) === "undefined")
+          vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
+        resolve(true);
+      }));
+    } };
+  }
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
@@ -80,8 +96,8 @@ function boot(opts = {}) {
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  return { SettingsExport, GameStore: sb.GameStore, G, disk,
-    careerVersion: opts.career ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
+  return { SettingsExport, GameStore: sb.GameStore, G, disk, sb,
+    careerVersion: opts.career || opts.careerLazy ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
     career: () => plain(SettingsExport.collectCareer()),
@@ -1795,4 +1811,17 @@ test("cockpit finish choices round-trip as camera preferences without exporting 
   dst.loadSettings(file);
   for (const [key, value] of Object.entries({ cockpitWheelFinish: "suede", cockpitBodyFinish: "chrome", cockpitHaloFinish: "livery" }))
     assert.equal(dst.disk.get("apex26." + key), value);
+});
+
+test("#4748: CAREER FILE load awaits the lazy CareerBackup before its future-version gate", async () => {
+  const b = bootImportUI({ careerLazy: true });
+  assert.equal(vm.runInContext("typeof CareerBackup", b.sb), "undefined", "CareerBackup is still in flight");
+  assert.ok(b.sb.ensureBackupCalls >= 1, "mounting FILES warms the career bundle");
+  const button = b.dom.byId("pm-career-load");
+  const file = JSON.stringify({ format: b.SettingsExport.CAREER_FORMAT, careers: {
+    "career.driver.2": { ...CAREER_SAVE, v: b.careerVersion + 1 } } });
+  pickerFile(b, button, { text: () => Promise.resolve(file) });
+  for (let i = 0; i < 8; i++) await new Promise(setImmediate);
+  assert.match(button.textContent, /NEWER-VERSION/, "futureCareerSlot ran with CareerBackup loaded, not 'unavailable'");
+  assert.equal(b.reloads(), 0);
 });
