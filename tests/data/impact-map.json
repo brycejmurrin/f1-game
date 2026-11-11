@@ -18988,6 +18988,7 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "*": [
+        "tests/specs/real-profile-dock.spec.js",
         "tests/specs/time-trial.spec.js",
         "tests/specs/title-fit.spec.js",
         "tests/specs/ui-resize.spec.js",

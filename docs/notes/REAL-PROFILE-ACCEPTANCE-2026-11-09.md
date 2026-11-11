@@ -10,6 +10,11 @@ garage fix only" (relayed by the orchestrator's question tool, 21:09Z); the defa
 "after" number for the dock below is what a 100 % default WOULD paint, kept as evidence for that lane; the tree still
 paints the "before" column. `tests/specs/real-profile-dock.spec.js` now holds only the garage bar.
 
+Re-measured 2026-11-11 after the tip floored a phone's stored UI SIZE at 70 (`UI_PHONE_MIN`): at 852×393 + insets the
+cap still does the work. His 2026-11-09 export (61 → 70 on boot): bar 424 → 288 (CAMERA 224 → 156, PHOTO 194 → 126).
+His 2026-11-10 export (UI SIZE 70): bar 395 → 288 (210 → 156, 179 → 126). All chips 44 tall. The spec seeds the
+2026-11-10 export for that reason; the 446 px of the original report needs UI SIZE 61, which a phone can no longer store.
+
 First test of the owner's LIVE settings export (`tests/data/settings-live-export-2026-11-09.json`: UI SIZE 61,
 HUD / BUTTON SIZE unset, TEXT large, custom v4 `hudLayout`, HELMET, BUTTONS steering). Six sessions earlier that day
 tested the October file (HUD 155, BUTTON 245), which he no longer has.
