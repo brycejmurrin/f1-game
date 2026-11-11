@@ -4308,14 +4308,20 @@ test("software GL garage path gates readback and stall reload (#3589)", async ()
   assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"') && loop.includes('"race-settings"'));
   const soft = readFile("js/render/glx/soft.js");
   assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
-  // …and the gate is APPLIED: the real soft.js, run. Under the defer a capture
-  // waiter is satisfied with a generation bump and NO framebuffer readback;
-  // without it the same waiter costs exactly one readback.
-  for (const [deferOn, wantReads] of [[true, 0], [false, 1]]) {
+  // …and the gate is APPLIED: the real soft.js, run. Under the defer the PASSIVE
+  // arm (invalidateSoftPresent on garage entry) is consumed with NO readback;
+  // without it the same arm costs one. A capture WAITER reads #game-soft next
+  // (garage PHOTO, garage-angles), so it gets its one readback either way: a
+  // generation bump with nothing drawn was #5380 (blank 300x150 captures).
+  for (const [deferOn, wantArmReads] of [[true, 0], [false, 1]]) {
+    const arm = glxSoftHarness({ defer: () => deferOn });
+    arm.soft.invalidateSoftPresent();
+    arm.soft.blitIfDue();
+    assert.equal(arm.reads(), wantArmReads, `softwareGlUiReadbackDefer() ${deferOn}: passive arm costs ${wantArmReads} readback(s)`);
     const h = glxSoftHarness({ defer: () => deferOn });
     const waiter = h.soft.awaitSoftPresent(1000);
     h.soft.blitIfDue();
-    assert.equal(h.reads(), wantReads, `softwareGlUiReadbackDefer() ${deferOn}: ${wantReads} readback(s)`);
+    assert.equal(h.reads(), 1, `softwareGlUiReadbackDefer() ${deferOn}: a capture waiter gets its readback`);
     await waiter;   // resolves either way: __apex.awaitPresent() must not hang under the defer
   }
   const assets = readFile("js/render/shared/assets.js");
