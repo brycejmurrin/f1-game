@@ -541,11 +541,8 @@ const AiDrive = (function () {
   // as it was measured to be.
   const YAW_AERO = -0.28 / AI_DF;
   function yawScale(speed, load, grip, pace, vmax) { return lateralScale(speed, load, grip, pace, vmax, YAW_AERO); }
-  // Both scales of one AI car-step from one q and one prefix (game.js asks for
-  // yawScale and lateralScale with the same inputs). Same operator order as
-  // lateralScale, so out.yaw === yawScale(...) and out.lat === lateralScale(..., aero) bit for bit.
-  // AI_DF*aero stays per scale: AI_DF*YAW_AERO is NOT folded.
-  const _lsOut = { yaw: 1, lat: 1 };   // pooled: the caller reads it before the next call
+  // yawScale + lateralScale from one q/prefix, bit-identical (same operator order; AI_DF*YAW_AERO not folded).
+  const _lsOut = { yaw: 1, lat: 1 };   // pooled
   function lateralScales(speed, load, grip, pace, vmax, aero, out = _lsOut) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
     const pre = (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip);
@@ -1118,7 +1115,7 @@ const AiDrive = (function () {
   }
   function sbsCommitT(ctx) { return sbsConcedes(ctx) ? SBS_COMMIT_MIN : 2; }
   function sbsEase(ctx) { return sbsConcedes(ctx) ? 0.94 : 0.97; }
-  // Commit time and ease from ONE sbsConcedes (game.js used sbsCommitT then sbsEase = two coverConcede runs).
+  // sbsCommitT + sbsEase from ONE sbsConcedes.
   const _slOut = { commitT: 2, ease: 0.97 };   // pooled
   function sbsLimits(ctx, out = _slOut) {
     const c = sbsConcedes(ctx);

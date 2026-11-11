@@ -143,9 +143,7 @@ const CarFx = (function () {
       plank(c, g, dt);
     }
 
-    // An AI lock-up's marks are world state that persists, so game.js calls this
-    // ABOVE the side-frustum cull and the FX distance ball: a rival that locked up
-    // off screen still leaves its mark for when the camera turns round (#4669).
+    // AI lock-up marks persist: game.js calls this ABOVE the frustum cull (#4669).
     function marks(c, g, dt, state) {
       if (!c || !g || !(dt > 0)) return;
       if (state === "race" && !c.isPlayer && skids && skids.stampFor) aiMarks(c, g, dt);
