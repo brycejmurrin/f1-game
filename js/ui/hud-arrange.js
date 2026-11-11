@@ -22,6 +22,7 @@
    arranging and put back exactly as they were on exit. */
 const HudArrange = (() => {
   const STEP = 10;     // toolbar − / + size step, %
+  const TOUCH_CARRIED = ["ot", "aero", "bb"];
   const MIN_CLASH = 3; // px of overlap on BOTH axes before a pair is a clash (touching is not)
   const T = 44;        // every toolbar control's touch target, CSS px — fixed chrome, never scaled (#5198)
   const BAR_H = T + 2 * 2 + 2 * 2;   // the one-row strip: 44 px controls + 2 px padding + 2 px border, each side = 52
@@ -52,6 +53,9 @@ const HudArrange = (() => {
     const next = dir < 0 && s <= STEP ? s / 2 : s + dir * STEP;
     return Number.isFinite(next) && next > 0 ? next : s;
   };
+  /** Pure: the painted size (%) of a widget stored at `s` under CSS zoom `z` (#5256): `--hl-s` is a `scale`, the band
+   *  zoom (fit-capped, or raw HUD SIZE once adopted) multiplies it, so the stored 63.76 at HUD 155 % reads 99 %. */
+  const paintedSize = (s, z) => Number((s * (z > 0 && Number.isFinite(z) ? z : 1)).toPrecision(3));   // 3 digits: 98.99 reads 99, a tiny size stays > 0
   /** Pure: every pair of rects [{id, l, t, r, b}] that overlap by more than `min` px on both axes.
    *  Pairs are [a.id, b.id] in input order; a pair where neither id starts with "#" is two HUD pieces. */
   function clashes(rects, min) {
@@ -229,7 +233,7 @@ const HudArrange = (() => {
       if (!bar) return;
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
-      nameEl.textContent = cur ? Number(cur.s.toPrecision(4)) + "%" : "";
+      nameEl.textContent = cur ? paintedSize(cur.s, elOf(selected)?.currentCSSZoom) + "%" : "";
       nameEl.hidden = !cur;
       const visibility = selected && HudLayout.visibility(selected);
       const off = visibility && visibility.value === "off";
@@ -315,7 +319,7 @@ const HudArrange = (() => {
       const p = pending; pending = null;
       if (!p) return;
       const e = HudLayout.set(p.id, p.v, p.set, p.profile, true);
-      if (nameEl && e && p.id === selected) nameEl.textContent = Number(e.s.toPrecision(4)) + "%";
+      if (nameEl && e && p.id === selected) nameEl.textContent = paintedSize(e.s, elOf(p.id)?.currentCSSZoom) + "%";
     }
     function flush() { paint(); HudLayout.commit(); }
     /* Bind queued edits to the layout visible when the gesture started. */
@@ -384,7 +388,7 @@ const HudArrange = (() => {
       ["announce", [[document.getElementById("announce-num"), "3"], [document.getElementById("announce-who"), "RACE CONTROL"],
         [document.getElementById("announce-text"), "\u201cTRACK LIMITS 2/4\u201d"]]],
       ["flag", [[document.getElementById("hud-flag"), "YELLOW \u00b7 SECTOR 2"]]],
-      ["limits", []],
+      ["limits", [[document.querySelector("#hud-limits .limits-dots"), "\u25cf\u25cf\u25cb\u25cb"]]],   // an empty chip paints no box (#5256)
       ["damage", []],
       ["rel", [], true],
       ["strat", [], true],
@@ -471,9 +475,12 @@ const HudArrange = (() => {
         for (const [, , sel] of ELEMENTS) { const el = document.querySelector(sel); if (el) el.setAttribute("data-hl-arr", ""); }
         document.body.setAttribute("data-hud-arrange", "1");
         ghosts();
-        selected = (ELEMENTS.find(([id]) => visible(elOf(id))) || ELEMENTS.find(([id]) => HudLayout.visibility(id)))?.[0] || null;
+        // OVERTAKE / AERO / BRAKE BIAS are carried by the touch buttons: no box to arrange on touch (#5256).
+        const touch = !!document.body.classList && !document.body.classList.contains("desktop");
+        const rows = ELEMENTS.filter(([id]) => !(touch && TOUCH_CARRIED.includes(id)));
+        selected = (rows.find(([id]) => visible(elOf(id))) || rows.find(([id]) => HudLayout.visibility(id)))?.[0] || null;
         picker.textContent = "";
-        for (const [id, label] of ELEMENTS) {
+        for (const [id, label] of rows) {
           if (!visible(elOf(id)) && !HudLayout.visibility(id)) continue;
           const option = document.createElement("option"); option.value = id; option.textContent = label;
           picker.appendChild(option);
@@ -658,6 +665,6 @@ const HudArrange = (() => {
     return Object.freeze({ setEditing, isEditing: () => editing, selected: () => selected });
   }
 
-  return Object.freeze({ STEP, MIN_CLASH, BAR_H, dragTo, placedOrig, pinchTo, stepSize, clashes, barSlot, create });
+  return Object.freeze({ STEP, MIN_CLASH, BAR_H, TOUCH_CARRIED, dragTo, placedOrig, pinchTo, stepSize, paintedSize, clashes, barSlot, create });
 })();
 Object.freeze(HudArrange);

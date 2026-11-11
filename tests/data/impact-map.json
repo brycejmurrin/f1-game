@@ -18275,6 +18275,7 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
@@ -19007,6 +19008,7 @@
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/phone-tools.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/test-groups.test.mjs"

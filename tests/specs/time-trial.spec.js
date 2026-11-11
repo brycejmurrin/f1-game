@@ -700,7 +700,7 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
       for (const pct of [uiMin,80,100,130,150,200]) {
         await press('#mb-settings'); await press('#pm-open-appearance');
         await expect(page.locator('#pm-uiscale'), `${device.name}: UI SIZE minimum`).toHaveAttribute('min', String(uiMin));
-        await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); }, pct);
+        await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); }, pct);
         await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
         await press('#pm-settings-close'); await press('#pm-open-driving');
         await expect(page.locator('#pm-panel-driving')).toBeVisible();

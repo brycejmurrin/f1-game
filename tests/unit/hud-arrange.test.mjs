@@ -672,7 +672,7 @@ test('editor: size labels are concise without rounding stored fractional or tiny
   e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointerup');
   const fractional = e.get('map').s;
   assert.ok(Math.abs(fractional - 200 / 3) < 1e-12);
-  assert.equal(e.ids.get('hud-arrange-name').textContent, '66.67%');
+  assert.equal(e.ids.get('hud-arrange-name').textContent, '66.7%');   // three significant digits of the painted size (#5256)
   e.ids.get('hud-arrange-element').onchange();
   assert.equal(e.get('map').s, fractional, 'painting the label never rounds the stored size');
   for (let i = 0; i < 40; i++) e.ids.get('hud-arrange-smaller').onclick();
@@ -683,4 +683,34 @@ test('editor: size labels are concise without rounding stored fractional or tiny
   assert.ok(label.length <= 12, 'scientific notation keeps a tiny-size label compact: ' + label);
   e.ids.get('hud-arrange-element').onchange();
   assert.equal(e.get('map').s, tiny); assert.equal(e.writes.length, count);
+});
+
+/* #5256: the size readout is the PAINTED size (stored `s` is a `scale` under the band zoom), and the pieces the touch
+   buttons carry (OVERTAKE / AERO / BRAKE BIAS) are not offered on touch, where they have no box to arrange. */
+test("paintedSize: the stored factor times the zoom it paints under, three digits; no zoom reads the factor", () => {
+  const A = load();
+  assert.equal(A.paintedSize(63.76, 1.5525), 99, "an adopted widget at HUD 155 % paints 99 %, not 63.76");
+  assert.equal(A.paintedSize(100, 0.99), 99, "an automatic widget under a 0.99 band cap paints 99 %");
+  assert.ok(A.paintedSize(1e-9, 1) > 0, "a tiny size never reads 0");
+  assert.equal(A.paintedSize(80, undefined), 80);
+  assert.equal(A.paintedSize(80, 0), 80);
+  assert.deepEqual(plain(A.TOUCH_CARRIED), ["ot", "aero", "bb"]);
+});
+
+test("editor: on touch the picker leaves out OVERTAKE / AERO / BRAKE BIAS; desktop keeps them (#5256)", () => {
+  for (const desktop of [false, true]) {
+    const e = editor("ot");
+    e.doc.body.classList = { contains: (c) => desktop && c === "desktop" };
+    e.api.setEditing(true);
+    const listed = e.ids.get("hud-arrange-element").children.map((o) => o.value);
+    assert.equal(listed.includes("ot"), desktop, desktop ? "desktop lists OVERTAKE" : "touch hides OVERTAKE");
+    if (!desktop) assert.notEqual(e.api.selected(), "ot", "and never selects it");
+    e.api.setEditing(false);
+  }
+});
+
+test("source: TRACK LIMITS gets sample dots and the race tick leaves ARRANGE's sample LIMITS / DAMAGE boxes up (#5256)", () => {
+  assert.match(SRC, /\["limits", \[\[document\.querySelector\("#hud-limits \.limits-dots"\), "[^"]+"\]\]\]/);
+  const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  assert.match(hud, /else if \(!els\.hudLimits\.hidden && !document\.body\.hasAttribute\("data-hud-arrange"\)\)/);
 });
