@@ -255,6 +255,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/track-accuracy-circuits.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
         "tests/unit/wgx-labels.test.mjs"
       ]
@@ -5123,7 +5124,7 @@
     "js/circuits/scenery/spa.js": {
       "*": [
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/validation-cli.test.mjs"
+        "tests/unit/validation-cli-sync-pr.test.mjs"
       ]
     },
     "js/circuits/scenery/suzuka.js": {
@@ -6208,7 +6209,7 @@
         "tests/unit/race-control.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
-        "tests/unit/tools-runnable.test.mjs"
+        "tests/unit/tools-runnable-instruments.test.mjs"
       ]
     },
     "js/data/standings.js": {
@@ -7842,7 +7843,6 @@
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/tyre-model.test.mjs",
-        "tests/unit/validation-cli.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "updateCar": [
@@ -7943,8 +7943,9 @@
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tolerance-diff.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
-        "tests/unit/tools-runnable.test.mjs",
+        "tests/unit/tools-runnable-cli.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
+        "tests/unit/validation-cli-sync-pr.test.mjs",
         "tests/unit/vm-filename-lint.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ]
@@ -9903,7 +9904,7 @@
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
-        "tests/unit/validation-cli.test.mjs",
+        "tests/unit/validation-cli-lighting.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ]
     },
@@ -14827,7 +14828,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sw-build-meta.test.mjs",
-        "tests/unit/tools-runnable.test.mjs",
+        "tests/unit/tools-runnable-cli.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ]
     },
@@ -16782,7 +16783,7 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/puddles.test.mjs",
-        "tests/unit/validation-cli.test.mjs",
+        "tests/unit/validation-cli-wgx.test.mjs",
         "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
