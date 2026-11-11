@@ -116,6 +116,7 @@
     "// The boot wall's budget: eager shell script count/bytes, no lazy group back on a tag, one adapter request before Gfx.create (A·H15 load hunt).",
     "tests/unit/boot-load-budget.test.mjs",
     "tests/unit/bootstrap-doctor.test.mjs",
+    "tests/unit/bot-pr-body.test.mjs",
     "// ...and the branch audit it deletes by: ancestry, the merge-tree dry merge",
     "// and line presence, pinned against real git in a throwaway repo. ~1 s.",
     "tests/unit/branch-audit.test.mjs",

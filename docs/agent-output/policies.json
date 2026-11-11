@@ -491,6 +491,11 @@
       "presentation": "native",
       "preserve": "Unknown measurement; threshold and advisory semantics"
     },
+    "tools/ci/bot-pr-body.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "The PR body verbatim: the Plan the merge gate parses, the land item last"
+    },
     "tools/ci/branch-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
