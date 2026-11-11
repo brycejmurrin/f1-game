@@ -1162,6 +1162,11 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/reuse-draft-selected.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/run-group.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -2000,6 +2005,11 @@
       ]
     },
     {
+      "path": "tools/gfx/gpu-mem-webgpu.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/gfx/knob-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2028,6 +2038,15 @@
       "path": "tools/gfx/mem-cycles-lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/gfx/pass-census-lib.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/gfx/pass-census.mjs",
@@ -4090,11 +4109,11 @@
     },
     {
       "name": "gen",
-      "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && node tools/gen/gen-cursor-rules.mjs && npm run gen:docs"
+      "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node desktop/scripts/notices.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && node tools/gen/gen-cursor-rules.mjs && npm run gen:docs"
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check && node desktop/scripts/notices.mjs --check"
     },
     {
       "name": "gen:docs",
@@ -4150,7 +4169,7 @@
     },
     {
       "name": "test:audio-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/announcer.test.mjs tests/unit/audio-mix-improvements.test.mjs tests/unit/audio-panel-boot.test.mjs tests/unit/audio-recovery.test.mjs tests/unit/audio-sample-upgrade.test.mjs tests/unit/audio-tune.test.mjs tests/unit/battle-earcon.test.mjs tests/unit/blip-voice-pool.test.mjs tests/unit/compress-audio.test.mjs tests/unit/crowd-audio.test.mjs tests/unit/crowd-ctx-rebuild.test.mjs tests/unit/end-race-music-vm.test.mjs tests/unit/engine-note-quality.test.mjs tests/unit/engine-revs-replay-vm.test.mjs tests/unit/ers-audio-layer.test.mjs tests/unit/finish-coast-rev-vm.test.mjs tests/unit/incident-rpm.test.mjs tests/unit/keyboard-first-audio-vm.test.mjs tests/unit/lazy-audio-firstbind-vm.test.mjs tests/unit/lazy-audio-yield.test.mjs tests/unit/mix-duck-radio.test.mjs tests/unit/net-audio-revs-vm.test.mjs tests/unit/pause-silence.test.mjs tests/unit/photomode-hold.test.mjs tests/unit/player-collision-side.test.mjs tests/unit/pu-harvest-audio.test.mjs tests/unit/radio-duration.test.mjs tests/unit/radio-voice.test.mjs tests/unit/real-replay-captions.test.mjs tests/unit/rival-attach-init.test.mjs tests/unit/rival-audio.test.mjs tests/unit/rival-contact-sfx.test.mjs tests/unit/rival-passby-pool.test.mjs tests/unit/spotify-refresh.test.mjs tests/unit/spotter-lifecycle.test.mjs tests/unit/tyre-squeal-race-vm.test.mjs tests/unit/tyre-squeal-slip.test.mjs tests/unit/voice-pack.test.mjs tests/unit/wind-speed.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/announcer.test.mjs tests/unit/asset-credits.test.mjs tests/unit/audio-mix-improvements.test.mjs tests/unit/audio-panel-boot.test.mjs tests/unit/audio-recovery.test.mjs tests/unit/audio-sample-upgrade.test.mjs tests/unit/audio-tune.test.mjs tests/unit/battle-earcon.test.mjs tests/unit/blip-voice-pool.test.mjs tests/unit/compress-audio.test.mjs tests/unit/crowd-audio.test.mjs tests/unit/crowd-ctx-rebuild.test.mjs tests/unit/end-race-music-vm.test.mjs tests/unit/engine-note-quality.test.mjs tests/unit/engine-revs-replay-vm.test.mjs tests/unit/ers-audio-layer.test.mjs tests/unit/finish-coast-rev-vm.test.mjs tests/unit/incident-rpm.test.mjs tests/unit/keyboard-first-audio-vm.test.mjs tests/unit/lazy-audio-firstbind-vm.test.mjs tests/unit/lazy-audio-yield.test.mjs tests/unit/mix-duck-radio.test.mjs tests/unit/net-audio-revs-vm.test.mjs tests/unit/pause-silence.test.mjs tests/unit/photomode-hold.test.mjs tests/unit/player-collision-side.test.mjs tests/unit/pu-harvest-audio.test.mjs tests/unit/radio-duration.test.mjs tests/unit/radio-voice.test.mjs tests/unit/real-replay-captions.test.mjs tests/unit/rival-attach-init.test.mjs tests/unit/rival-audio.test.mjs tests/unit/rival-contact-sfx.test.mjs tests/unit/rival-passby-pool.test.mjs tests/unit/spotify-refresh.test.mjs tests/unit/spotter-lifecycle.test.mjs tests/unit/tyre-squeal-race-vm.test.mjs tests/unit/tyre-squeal-slip.test.mjs tests/unit/voice-pack.test.mjs tests/unit/wind-speed.test.mjs"
     },
     {
       "name": "test:audit",
@@ -4178,7 +4197,7 @@
     },
     {
       "name": "test:desktop-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/desktop-app-protocol.test.mjs tests/unit/desktop-builder-config.test.mjs tests/unit/desktop-native.test.mjs tests/unit/desktop-notices.test.mjs tests/unit/desktop-pack-dry-run.test.mjs tests/unit/desktop-stage.test.mjs tests/unit/desktop-unpacked-bin.test.mjs tests/unit/desktop-version.test.mjs tests/unit/followup-platform.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/desktop-app-protocol.test.mjs tests/unit/desktop-builder-config.test.mjs tests/unit/desktop-native.test.mjs tests/unit/desktop-notices.test.mjs tests/unit/desktop-pack-dry-run.test.mjs tests/unit/desktop-stage.test.mjs tests/unit/desktop-unpacked-bin.test.mjs tests/unit/desktop-version.test.mjs tests/unit/followup-platform.test.mjs tests/unit/notices.test.mjs"
     },
     {
       "name": "test:docs-guards",
@@ -4326,7 +4345,7 @@
     },
     {
       "name": "test:steering-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/input-clock-rotate.test.mjs tests/unit/input-hud-properties.test.mjs tests/unit/key-binds-calibration.test.mjs tests/unit/key-binds-hunt.test.mjs tests/unit/key-binds-pad-menu.test.mjs tests/unit/key-binds-ui.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/setting-deps.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-one-home.test.mjs tests/unit/settings-open-perf.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/input-clock-rotate.test.mjs tests/unit/input-hud-properties.test.mjs tests/unit/key-binds-calibration.test.mjs tests/unit/key-binds-hunt.test.mjs tests/unit/key-binds-pad-menu.test.mjs tests/unit/key-binds-ui.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/setting-deps.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-import-safety.test.mjs tests/unit/settings-one-home.test.mjs tests/unit/settings-open-perf.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs"
     },
     {
       "name": "test:sweeps",

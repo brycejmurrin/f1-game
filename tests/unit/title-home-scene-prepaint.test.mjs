@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -28,21 +29,24 @@ test("pre-paint script stamps html[data-home-scene] from apex26.homeScene", () =
 });
 
 test("live Home grid geometry lives in blocking css/menus.css", () => {
-  const blocking = TITLE_CRITICAL
-    .map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
-  assert.match(
-    blocking,
-    /html\[data-home-live\] #overlay #menu-buttons[\s\S]*grid-column:\s*2/,
+  // Read as RULES across the blocking set (tests/helpers/css-rules.mjs): the old
+  // greedy `[\s\S]*` regexes were satisfied by ANY later rule, so deleting the
+  // #menu-secondary transform reset or the tall #title-car hide stayed green.
+  const blocking = cssRules(TITLE_CRITICAL
+    .map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n"));
+  assert.equal(
+    decl(blocking, 'html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-buttons', "grid-column"), "2",
     "wide live Home puts #menu-buttons in column 2 before experience.css loads",
   );
-  assert.match(
-    blocking,
-    /html\[data-home-live\] #overlay[\s\S]*transform:\s*none/,
-    "live Home clears skewed .bigbtn transforms in the blocking set",
-  );
-  assert.match(
-    blocking,
-    /html\[data-home-live\][\s\S]*#title-car \{ display: none;/,
+  for (const sel of [
+    "html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn",
+    "html[data-home-live] #overlay #menu-secondary .bigbtn",
+  ]) {
+    assert.equal(decl(blocking, sel, "transform"), "none",
+      `live Home clears skewed .bigbtn transforms in the blocking set (${sel})`);
+  }
+  assert.equal(
+    decl(blocking, 'html[data-home-live] :where(body[data-shape="tall"]) #title-car', "display"), "none",
     "tall live Home hides #title-car in blocking CSS before data-home-ready",
   );
   assert.equal(MANIFEST.CSS_DEFERRED.includes("css/experience.css"), true);
@@ -56,57 +60,51 @@ test("live Home grid geometry lives in blocking css/menus.css", () => {
 test("compact-wide live Home grid-places #menu-secondary under the door stack", () => {
   // Source pin: #menu-buttons spans the overlay with subgrid so #menu-secondary
   // can sit under #menu-brand while remaining the title scroll box (no DOM move).
-  assert.match(
-    menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*grid-template-columns:\s*subgrid/,
-    "subgrids door groups onto the overlay columns",
-  );
-  assert.match(
-    menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*overflow-y:\s*auto/,
-    "keeps #menu-buttons as the title scroll box",
-  );
-  assert.doesNotMatch(
-    menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[^}]*display:\s*contents/,
-    "display:contents drops the scroll box (ui-scale @200% / SE hit tests)",
-  );
-  assert.match(
-    menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*2;[\s\S]*grid-row:\s*5;[\s\S]*min-height:\s*var\(--tap\)/,
-    "parks #menu-secondary as the bottom row of the door column (Oct 6 look) with a --tap floor (#1537: height auto for 2-line labels)",
-  );
-  assert.match(
-    menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*min-height:\s*var\(--tap-paint\)/,
-    "under-brand rooms keep the --tap-paint floor",
-  );
-  assert.match(
-    menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*normal/,
-    "#1537: under-brand rooms wrap (TRACK DESIGNER / HOW TO PLAY) instead of nowrap-clip",
-  );
-  assert.match(
-    menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*justify-content:\s*flex-start/,
-    "under-brand room icons stay on the leading edge (not clipped by center+overflow)",
-  );
-  assert.match(
-    menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*padding-inline:\s*var\(--gap\)/,
-    "CAREER skew tip clears #menu-buttons overflow-x via inline pad",
-  );
-  const secondaryBlock = menus.match(
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[^}]+\}/,
-  );
-  assert.ok(secondaryBlock, "compact-wide #menu-secondary rule block exists");
-  assert.match(secondaryBlock[0], /display:\s*flex/, "rooms stay a visible flex row");
-  assert.doesNotMatch(secondaryBlock[0], /display:\s*none/);
+  // Each property is read from the ONE rule that owns it (no `[\s\S]*` across rules).
+  const rules = cssRules(menus);
+  const CW = String.raw`:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay`;
+  const BUTTONS = new RegExp(String.raw`(^|^html\[data-home-scene\] )` + CW + " #menu-buttons$");
+  const SECONDARY = new RegExp("^" + CW + " #menu-secondary$");
+  const ROOMS = new RegExp("^" + CW + String.raw` #menu-secondary \.bigbtn$`);
+  // The value the unconditional rules (no @media / @container refinement) leave in place.
+  const own = (sel, prop) => {
+    const r = rules.filter((x) => sel.test(x.selector) && x.decls.has(prop) && x.context.every((c) => c.startsWith("@layer ")));
+    return r.length ? r.at(-1).decls.get(prop) : null;
+  };
+  assert.equal(own(BUTTONS, "grid-template-columns"), "subgrid", "subgrids door groups onto the overlay columns");
+  assert.equal(own(BUTTONS, "overflow-y"), "auto", "keeps #menu-buttons as the title scroll box");
+  assert.ok(!rules.some((r) => BUTTONS.test(r.selector) && r.decls.get("display") === "contents"),
+    "display:contents drops the scroll box (ui-scale @200% / SE hit tests)");
+  assert.equal(own(SECONDARY, "grid-column"), "2", "parks #menu-secondary in the door column (Oct 6 look)");
+  assert.equal(own(SECONDARY, "grid-row"), "5", "…as its bottom row");
+  assert.equal(own(SECONDARY, "min-height"), "var(--tap)", "with a --tap floor (#1537: height auto for 2-line labels)");
+  assert.equal(own(ROOMS, "min-height"), "var(--tap-paint)", "under-brand rooms keep the --tap-paint floor");
+  assert.equal(own(ROOMS, "white-space"), "normal",
+    "#1537: under-brand rooms wrap (TRACK DESIGNER / HOW TO PLAY) instead of nowrap-clip");
+  assert.equal(own(ROOMS, "justify-content"), "flex-start",
+    "under-brand room icons stay on the leading edge (not clipped by center+overflow)");
+  assert.equal(own(BUTTONS, "padding-inline"), "var(--gap)", "CAREER skew tip clears #menu-buttons overflow-x via inline pad");
+  assert.equal(own(SECONDARY, "display"), "flex", "rooms stay a visible flex row");
+  assert.ok(!rules.some((r) => SECONDARY.test(r.selector) && r.decls.get("display") === "none"), "no compact-wide rule hides the rooms");
 });
 
-test("portrait live Home #menu-buttons is tall before data-home-ready", async (t) => {
-  const chrome = process.env.APEX_CHROME || "/usr/local/bin/google-chrome";
-  if (!fs.existsSync(chrome)) return t.skip(`no Chrome at ${chrome} (the real fix, a resolved browser plus an assert, is #5340)`);
+// The ONE rendering case. It used to `return` (a silent PASS) unless Chrome sat at
+// /usr/local/bin/google-chrome, which no CI runner or container has, and APEX_CHROME
+// is set nowhere — so it had never run. Now it finds Chromium the way every tool
+// does (tools/lib/chromium-path.mjs: PW_CHROMIUM / CHROME, Playwright's browsers,
+// then PATH), runs on CI (CI is set by GitHub Actions) or on an explicit opt-in, and
+// FAILS when it should run and no browser is found. Elsewhere it is a named SKIP:
+// agents do not launch a browser locally (AGENTS.md rules 5 and 10).
+//   APEX_PREPAINT_BROWSER=1 node --test tests/unit/title-home-scene-prepaint.test.mjs
+const BROWSER_RUN = !!process.env.CI || process.env.APEX_PREPAINT_BROWSER === "1";
+test("portrait live Home #menu-buttons is tall before data-home-ready", {
+  skip: !BROWSER_RUN && "browser case: runs on CI, or locally with APEX_PREPAINT_BROWSER=1",
+}, async () => {
+  const { chromiumPath } = await import("../../tools/lib/chromium-path.mjs");
+  const chrome = process.env.APEX_CHROME || chromiumPath();
+  assert.ok(chrome && fs.existsSync(chrome),
+    `no Chromium found (APEX_CHROME=${process.env.APEX_CHROME || "unset"}, resolved ${chrome || "nothing"}): ` +
+    "this rendering case must run here, so a missing browser is a failure, not a pass");
   // Ephemeral port — fixed :3456 races other tooling-fast / serve jobs.
   const { startStaticServer, launchChromium, shutdown } = await import("../../tools/lib/harness.mjs");
   const srv = await startStaticServer(ROOT);
