@@ -33,6 +33,8 @@ const SettingsNav = (function () {
       panel: () => document.getElementById("pm-panel-visual"), door: () => document.getElementById("pm-open-visual") }),
     progress: Object.freeze({ title: "PROGRESS", parent: "home", scope: "progress",
       panel: () => document.getElementById("pm-panel-progress"), door: () => document.getElementById("pm-open-progress") }),
+    credits: Object.freeze({ title: "ABOUT & CREDITS", parent: "home", scope: "info",
+      panel: () => document.getElementById("pm-panel-credits"), door: () => document.getElementById("pm-open-credits") }),
     practice: Object.freeze({ title: "PRACTICE", parent: null, scope: "session",
       panel: () => document.getElementById("pm-panel-practice"), door: null }),
     strategy: Object.freeze({ title: "PIT STRATEGY", parent: null, scope: "session",

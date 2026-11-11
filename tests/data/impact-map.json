@@ -252,6 +252,7 @@
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
@@ -585,7 +586,6 @@
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
-        "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
@@ -943,11 +943,6 @@
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
-      "playWatchMedia": [
-        "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/audio-tune.test.mjs",
-        "tests/unit/mix-duck-radio.test.mjs"
-      ],
       "radioSting": [
         "tests/unit/audio-tune.test.mjs"
       ],
@@ -970,6 +965,7 @@
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/pu-harvest-audio.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs",
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/wind-speed.test.mjs"
@@ -3841,6 +3837,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/parts-visual-distinctness.test.mjs",
         "tests/unit/pick-tests.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
@@ -5012,6 +5009,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/merge-surveyor.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/prop-clipping.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -5141,6 +5139,7 @@
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs"
@@ -5294,6 +5293,7 @@
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/quali-persist.test.mjs",
@@ -7068,7 +7068,8 @@
         "tests/unit/track-validate-fleet.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs"
       ]
     },
     "js/editor/workspace.js": {
@@ -7968,6 +7969,7 @@
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
@@ -14195,9 +14197,6 @@
       "eventStep": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
-      "finish": [
-        "tests/unit/capture-tools-regressions.test.mjs"
-      ],
       "fitFrame": [
         "tests/unit/real-replay-frame-fit.test.mjs"
       ],
@@ -14230,8 +14229,8 @@
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
-      "playRadio": [
-        "tests/unit/capture-tools-regressions.test.mjs"
+      "pose": [
+        "tests/unit/real-replay-audio-focus.test.mjs"
       ],
       "reelFor": [
         "tests/unit/real-replay-captions.test.mjs",
@@ -14242,6 +14241,7 @@
       ],
       "seek": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
@@ -14251,10 +14251,12 @@
       ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "setSpeed": [
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
@@ -14264,31 +14266,31 @@
       ],
       "start": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "status": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "stop": [
-        "tests/unit/capture-tools-regressions.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
-      "stopRadioClip": [
-        "tests/unit/capture-tools-regressions.test.mjs"
-      ],
       "tick": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
@@ -15009,6 +15011,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/notices.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -16552,6 +16555,7 @@
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/notices.test.mjs",
         "tests/unit/perf-try.test.mjs"
       ]
     },
@@ -17570,6 +17574,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
@@ -17879,6 +17884,7 @@
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/podium-beat.test.mjs",
         "tests/unit/quali-persist.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -18501,7 +18507,8 @@
         "tests/unit/store-registry.test.mjs"
       ],
       "*": [
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/layers.js": {
@@ -18749,6 +18756,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
@@ -18796,6 +18804,7 @@
         "tests/specs/menu-keyboard.spec.js",
         "tests/unit/docs-integrity.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs"
       ]
     },
@@ -18890,7 +18899,8 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "*": [
-        "tests/unit/prepush-floor.test.mjs"
+        "tests/unit/prepush-floor.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/platform-session.js": {
@@ -19727,6 +19737,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/cvd-palette.test.mjs",
         "tests/unit/free-cam.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
     },
