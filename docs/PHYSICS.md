@@ -444,10 +444,12 @@ in the catalog's stat rows on the player alone; a wet set now costs a human
 what it costs an AI (`TyreModel.applyCompound`), so both pay it here. CLOSED
 (was a KNOWN GAP): `gripMult` once mapped `tread == null` (wear-off AI) to the
 full-wet column, which is not "the right tyre" below wetness ~0.68;
-`js/game.js` `gripMult` now reads `TyreModel.treadOf(c, raceWeather,
-trackWetness())`: a tread-less car gets the tyre the conditions call for, and
-so does a wear-off car on its own garage slick (`c.wxFollow`, #5253), whose
-record the session keeps on the weather's tread.
+`js/game.js` `gripMult` now reads `TyreModel.carGrip(c, raceWeather,
+trackWetness(), surface)`: a tread-less car gets the tyre the conditions call
+for (`treadFor` on the lap mean), and a wear-off car on its own garage slick
+(`c.wxFollow`, #5253) is on ONE set, the best tread for the lap-mean road,
+which the session changes as the road wets or dries; a change blends the new
+set's grip in over 3 s (`c.wxMix`), so grip never steps.
 
 ### The three call shapes
 

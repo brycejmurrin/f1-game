@@ -615,14 +615,31 @@ const TyreModel = (function () {
     return weather === "rain" || weather === "storm" ? 2 : weather === "wet" ? 1 : 0;
   }
   function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
-  // The tread a car's grip reads (game.js gripMult, aquaInto). `null` is the
-  // competent-field sentinel: the tread the conditions call for. A car that
-  // FOLLOWS THE WEATHER (c.wxFollow, set by the session's fit) reads its
-  // record's tread, which the session's update keeps on the weather's call.
+  // The tread that grips best on a road at `w` (weatherGrip's argmax).
+  function bestTread(w) {
+    const g0 = weatherGrip(0, w), g1 = weatherGrip(1, w), g2 = weatherGrip(2, w);
+    return g2 > g1 && g2 > g0 ? 2 : g1 > g0 ? 1 : 0;
+  }
+  // The tread a car's grip reads (game.js gripMult via carGrip, aquaInto).
+  // `null` is the competent-field sentinel: the tread the conditions call for
+  // (treadFor, on the lap mean). A car that FOLLOWS THE WEATHER (c.wxFollow,
+  // set by the session's fit) is on ONE set, the best tread for the lap-mean
+  // road (the session's followWeather keeps its record there): a single set,
+  // like any car's, never the best tread per patch of road.
   function treadOf(c, weather, wetness) {
     if (!c) return 0;
     if (c.wxFollow && c.tyre) return c.tyre.tread || 0;
     return c.tread == null ? treadFor(weather, wetness) : c.tread;
+  }
+  /** game.js gripMult(c): weather grip for car `c`; `mean` is the lap-mean wetness, `surface` the road under it.
+   *  A following car's set change BLENDS over WX_CHANGE_S (c.wxMix, from c.wxPrev's
+   *  curve to the new set's), so its grip never steps: game-state-audit-vm #2b
+   *  measured 2.8 % in one step on a drier racing line with an instant change. */
+  function carGrip(c, weather, mean, surface) {
+    const g = weatherGrip(treadOf(c, weather, mean), surface);
+    if (!c || !c.wxFollow || !(c.wxMix < 1) || c.wxPrev == null) return g;
+    const g0 = weatherGrip(c.wxPrev, surface), k = clamp(c.wxMix, 0, 1);
+    return g0 + (g - g0) * k;
   }
 
   // ── AQUAPLANING ───────────────────────────────────────────────────────────
@@ -799,6 +816,7 @@ const TyreModel = (function () {
       // calls for, as the AI field does, and back when it dries (followWeather
       // in update). A treaded set the player chose in the garage stays theirs.
       c.wxFollow = !on() && c.tread !== null && !!c.tyreOpt && !c.tyreOpt.wetTread;
+      c.wxMix = 1; c.wxPrev = null;
       c.tyreWear = 0;
       c.tyreWearF = 0; c.tyreWearR = 0;
       // A FRESH SET COMES OUT OF BLANKETS, not up to temperature. This one line
@@ -911,17 +929,24 @@ const TyreModel = (function () {
     // Integrate one physics tick. Distance-based, not time-based: wear reaches
     // 1.0 after `lifeLaps` laps at load 1.0, which is what makes the constant
     // above mean what its name says regardless of pace, PACE or lap time.
-    // Keep a following car's RECORD on the weather's tread: grip (treadOf), the
-    // HUD letter and the band colour read it. c.tread and c.mods stay as fitted,
+    // Keep a following car's RECORD on the weather's tread: the HUD letter and
+    // the band colour read it (grip reads treadOf, on the surface). c.tread and c.mods stay as fitted,
     // because they are the session-record key (session-records.js). Allocates
     // only on a change of tread.
-    function followWeather(c) {
-      const want = treadFor(G.raceWeather, G.trackWetness ? G.trackWetness() : wetness(G.raceWeather, G.weatherArc));
-      if ((c.tyre ? c.tyre.tread || 0 : -1) === want) return;
+    // The changeover: the new set's grip blends in over WX_CHANGE_S of race
+    // time, and a set must beat the one on the car by WX_HYST at the lap mean
+    // before it is changed, so a mean hovering on a crossover cannot chatter.
+    const WX_CHANGE_S = 3, WX_HYST = 0.002;
+    function followWeather(c, dt) {
+      if (c.wxMix < 1) c.wxMix = Math.min(1, c.wxMix + (dt > 0 ? dt : 0) / WX_CHANGE_S);
+      const w = G.trackWetness ? G.trackWetness() : wetness(G.raceWeather, G.weatherArc);
+      const want = bestTread(w), cur = c.tyre ? c.tyre.tread || 0 : -1;
+      if (cur === want || (cur >= 0 && weatherGrip(want, w) < weatherGrip(cur, w) + WX_HYST)) return;
+      if (cur >= 0) { c.wxPrev = cur; c.wxMix = 0; }
       c.tyre = want > 0 ? classRecord(classForTread(want)) : optionRecord(c.tyreOpt);
     }
     function update(c, dt) {
-      if (c && c.wxFollow && !c.retired) followWeather(c);
+      if (c && c.wxFollow && !c.retired) followWeather(c, dt);
       if (!on() || !c || c.retired || c.finished) return;
       const track = G.track;
       if (!track || !(track.total > 0) || !(dt > 0)) return;
@@ -1129,7 +1154,7 @@ const TyreModel = (function () {
     T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
     HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, classForTread, wetness, weatherGrip,
+    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, bestTread, carGrip, classForTread, wetness, weatherGrip,
     aquaplane, aquaplaneSafeV, aquaInto, AQUA_WET, AQUA_ONSET, AQUA_RAMP, AQUA_LOSS, asRain,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,
