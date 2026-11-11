@@ -66,18 +66,34 @@ const PhonePadCodec = (function () {
     };
   }
   // EVENT channel: {t:"ev", k} phone→desktop; {t:"hap", ms} desktop→phone;
-  // {t:"hi", side, haptics, steer?, ack?} advertises additive capabilities.
+  // {t:"hi", side, haptics, steer?, ack?, id?} advertises additive capabilities.
+  // `id` is the phone page's random PEER ID (hex): it rides only inside the
+  // DTLS channel, so a host that saw it from the phone the player ALLOWed can
+  // tell that phone's re-link from a stranger's answer to the same code.
   // Accepted sample acknowledgements use STATE ["A", seq]; older peers ignore them.
+  const PEER_ID_RE = /^[0-9a-f]{16,64}$/;
   function encodeEvent(k) { return JSON.stringify({ t: "ev", k }); }
   function encodeHaptic(ms) { return JSON.stringify({ t: "hap", ms: Math.max(0, Math.min(1000, ms | 0)) }); }
-  function encodeHello(side, haptics, extended) { return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true, ...(extended ? { steer: true, ack: true } : {}) }); }
+  function encodeHello(side, haptics, extended, id) {
+    return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true, ...(extended ? { steer: true, ack: true } : {}),
+      ...(typeof id === "string" && PEER_ID_RE.test(id) ? { id } : {}) });
+  }
+  // A fresh peer id: 128 random bits as hex (crypto where the page has it).
+  function makePeerId() {
+    const b = new Uint8Array(16);
+    let filled = false;
+    try { if (typeof crypto !== "undefined" && crypto.getRandomValues) { crypto.getRandomValues(b); filled = true; } } catch (_) { /* no CSPRNG */ }
+    if (!filled) for (let i = 0; i < b.length; i++) b[i] = Math.floor(Math.random() * 256);
+    return Array.from(b, (v) => v.toString(16).padStart(2, "0")).join("");
+  }
   function decodeEvent(text) {
     let o;
     try { o = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
     if (!o || typeof o !== "object") return null;
     if (o.t === "ev") return EVENTS.includes(o.k) ? { t: "ev", k: o.k } : null;
     if (o.t === "hap") return { t: "hap", ms: Math.max(0, Math.min(1000, o.ms | 0)) };
-    if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true, ...(o.steer === true ? { steer: true } : {}), ...(o.ack === true ? { ack: true } : {}) };
+    if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true, ...(o.steer === true ? { steer: true } : {}), ...(o.ack === true ? { ack: true } : {}),
+      ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };
     return null;
   }
   // A TeamDef colour (three 0..1 floats) as the CSS hex the phone's LCD tints with.
@@ -131,7 +147,7 @@ const PhonePadCodec = (function () {
 
   return {
     PROTO, EVENTS, NAV_REPEAT, num, hudOf,
-    encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, decodeEvent,
+    encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, decodeEvent, makePeerId,
     teamHex, fmtLap, padUrl, codeFromUrl, pairingFromUrl,
   };
 })();

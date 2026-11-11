@@ -5505,6 +5505,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/crest-marks.test.mjs",
@@ -7278,6 +7279,7 @@
         "tests/unit/vstd-invariant.test.mjs"
       ],
       "applyCaution": [
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "applyLightTune": [
@@ -7349,6 +7351,7 @@
         "tests/unit/field-lod.test.mjs"
       ],
       "dropTrackWorld": [
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/ghost.test.mjs"
       ],
       "enableTilt": [
@@ -7360,6 +7363,7 @@
         "tests/specs/wake-lock.spec.js",
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ghost.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
@@ -7401,6 +7405,7 @@
       "gripMult": [
         "tests/specs/parts-physics.spec.js",
         "tests/unit/ai-drive.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs"
       ],
@@ -7532,11 +7537,15 @@
       "playerAnchor": [
         "tests/unit/field-lod.test.mjs"
       ],
+      "postFinishWait": [
+        "tests/unit/game-state-audit-vm.test.mjs"
+      ],
       "quitToMenu": [
         "tests/specs/wake-lock.spec.js",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/ghost.test.mjs",
@@ -7782,6 +7791,9 @@
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "trackFrom": [
+        "tests/unit/track-from-projection-vm.test.mjs"
+      ],
       "trackWetness": [
         "tests/unit/light-presets.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
@@ -7797,6 +7809,7 @@
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/engineer.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
@@ -9549,6 +9562,9 @@
       "fmtLap": [
         "tests/unit/phone-pad.test.mjs"
       ],
+      "makePeerId": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "padUrl": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9583,6 +9599,12 @@
       ]
     },
     "js/input/phone-pad.js": {
+      "admit": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "askOnScreen": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "cancel": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
@@ -9661,6 +9683,9 @@
     },
     "js/input/tilt-roll.js": {
       "rollDeg": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "screenAngle": [
         "tests/unit/phone-pad.test.mjs"
       ],
       "*": [
@@ -11471,6 +11496,9 @@
     "js/physics/ai-corridor.js": {
       "choose": [
         "tests/unit/ai-corridor.test.mjs"
+      ],
+      "planAllows": [
+        "tests/unit/ai-corridor.test.mjs"
       ]
     },
     "js/physics/ai-drive.js": {
@@ -11547,6 +11575,9 @@
       "digOutHeld": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "edgeHead": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "endLook": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11558,6 +11589,9 @@
         "tests/unit/ai-strategy.test.mjs"
       ],
       "followTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardReach": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "holdLineGap": [
@@ -11766,6 +11800,12 @@
       "squeezeEase": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "stallStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "stallSweep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "startCalm": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11780,6 +11820,9 @@
       ],
       "stintPlan": [
         "tests/unit/ai-strategy.test.mjs"
+      ],
+      "stoppedHazard": [
+        "tests/unit/ai-drive.test.mjs"
       ],
       "strategyTemper": [
         "tests/unit/ai-strategy.test.mjs"
@@ -11856,6 +11899,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "*": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
@@ -11977,6 +12021,7 @@
       ],
       "create": [
         "tests/specs/physics-hotpath.spec.js",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
@@ -11997,6 +12042,7 @@
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "pairContact": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
@@ -12012,6 +12058,7 @@
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "resolveCollisions": [
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
@@ -12112,6 +12159,7 @@
       ],
       "*": [
         "tests/unit/ai-drive.test.mjs",
+        "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
@@ -14414,6 +14462,9 @@
       "setWeatherLive": [
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
+      ],
+      "settle": [
+        "tests/unit/race-settings-vm.test.mjs"
       ],
       "startArc": [
         "tests/unit/forecast.test.mjs",
@@ -19271,6 +19322,7 @@
     },
     "js/ui/share-code.js": {
       "apply": [
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "consumeHash": [
