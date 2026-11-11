@@ -20,7 +20,7 @@
     country: "Portugal",
     night: false,
     theme: "green",
-    lengthKm: 4.182,  // official length of the traced (post-2000) layout; builds 4.140 km
+    lengthKm: 4.182,  // operator centreline length of the 13-corner GP layout (dados-tecnicos); the trace takes the Tanque line instead of the Gancho and builds 4.138 km
     tyreSeverity: 0.98,  // Historic Portuguese permanent; near-neutral
     baseHW: 7,
     sceneryCoordinates: "racing",
@@ -55,34 +55,48 @@
     ],
     bankZones: [
       { turn: 1, angleDeg: 3.5, widthM: 110 },  // re-seated frac 0.075 (was 158 m off any apex)
-      { turn: 7, angleDeg: 3.0, widthM: 110 },  // re-seated frac 0.42 (was 299 m off any apex)
+      // The long left hairpin at the top of the climb (turns[5] = T6;
+      // was turn: 7 when the table split it into three apexes).
+      { turn: 6, angleDeg: 3.0, widthM: 110 },
       // Parabolica Ayrton Senna — the long final right onto the pit straight.
       // ANCHORED BY TURN, not frac: authored 0.900 compensates to engine 0.7562,
-      // which is T13's entry (R 161 m), one corner early — and mesh.js's re-seat
+      // which is the entry of the left before it (R 161 m), one corner early — and mesh.js's re-seat
       // guard deliberately leaves it there because it IS on a corner, so nothing
       // caught it. `turn:` resolves straight off the curated apex table and
       // cannot drift when the start line moves again.
-      { turn: 14, angleDeg: 5.0, widthM: 200 },
+      { turn: 11, angleDeg: 5.0, widthM: 200 },  // turns[10] (was turn: 14 before the duplicates were folded)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
-    // researched real turn count. No researched sectors — consumers fall back to thirds.
-    // T14 (0.8225) is the Parabolica Ayrton Senna, the final right onto the pit
-    // straight, and it was MISSING: the peak-picker ranks by peak curvature, and a
-    // 337 m constant-radius corner (R 122 m at its middle, 69 m at its tightest
-    // kink at 0.8605) never out-peaks a tight one, so the table stopped at the
-    // Esses exit and every consumer read the last 337 m of corner as straight
-    // (`straightAfterM` 1370 m against a real ~1019 m to T1). Seated at the
+    // sectors/turns: turn apexes as RACING-LAP fractions (post startFrac/reverse),
+    // never fmap'd — tools/track/rotate-markings.cjs re-seats turns when the start
+    // line moves. No FIA document exists for Estoril's F1 era (1984-1996).
+    // LAYOUT THIS TRACE FOLLOWS (measured 2026-11-10 against the operator's own
+    // circuit outline, https://www.circuito-estoril.pt/wp-content/uploads/2023/02/cover-track.png,
+    // and its technical data, https://www.circuito-estoril.pt/dados-tecnicos/ :
+    // 4,182.72 m centreline, 13 corners): the post-2000 Curva 1 and Parabolica,
+    // but NOT the Gancho/Variante hook between the top right-hander and the
+    // Parabolica — the trace takes the straight Tanque line there (one fast
+    // right, turns[8]). That is neither the 1984-1996 F1 layout nor the 13-corner
+    // GP layout; it matches the 'Tanque' configuration (4.163 km, 11 turns —
+    // Wikipedia, last resort). Built lap 4,138 m.
+    // turns: ONE apex per physical corner of THIS centreline (11), lap order, each
+    // at its curvature peak. The operator publishes a corner count and a width
+    // table by corner number but no numbered map, so these indices are our own
+    // sequence, NOT official corner numbers (names other than Curva 1-3 and the
+    //   Parabolica unverified):
+    //   T1 Curva 1 (R)  T2 Curva 2 (R)  T3 Curva 3 hairpin (R)  T4 hairpin (L)
+    //   T5 climb kink (R)  T6 hairpin (L)  T7 hairpin at the foot of the
+    //   descent (R)  T8 top right-hander (R)  T9 Tanque line (R, ~31 deg;
+    //   operator history: the 1994 Variante replaced the curva do Tanque)  T10 left
+    //   before the Parabolica (L)  T11 Parabolica Ayrton Senna (R).
+    // T11 (0.8225) is the Parabolica, a 337 m constant-radius right (R 122 m
+    // at its middle, 69 m at its tightest kink at 0.8605). Seated at the
     // CURVATURE-WEIGHTED CENTROID rather than the kink: the kink is 28 m from the
-    // straight and would mark the exit, not the corner. Measured on this
-    // centreline; the straight it leads onto is 1019 m to T1's apex against a
-    // researched ~986 m, which is what anchors the window.
+    // straight and would mark the exit, not the corner. The straight it leads
+    // onto is 1019 m to T1's apex against the operator's 985.686 m main straight.
     sectors: [0.334, 0.665],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.1132, 0.1752, 0.2322, 0.2417, 0.2892, 0.3062, 0.4922, 0.4997, 0.5187, 0.6117, 0.6187, 0.6902, 0.7637, 0.8225],
+    turns: [0.1132, 0.1750, 0.2321, 0.2882, 0.3685, 0.4923, 0.6122, 0.6905, 0.7379, 0.7631, 0.8225],
     furniture: { tree: "broad", fol: [0.29, 0.36, 0.19], lamp: "none", sparse: true, treeCrown: "vase" },  // grey-olive cork oak between the parasol pines
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },
     standSet: ["scaffold", "terracotta", "pastel"],  // period tube stands + one masonry terrace

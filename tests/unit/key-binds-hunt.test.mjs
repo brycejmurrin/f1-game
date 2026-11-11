@@ -493,7 +493,7 @@ test("phone ownership, parked diagnostics and controls refresher preserve drivin
   assert.equal(Input.activeInputSource(), "keyboard", "idle phone does not steal labels");
   Input.remoteSample({ thr: 0.8, brk: 0, roll: 10 });
   assert.equal(Input.activeInputSource(), "phone");
-  assert.equal(Input.throttleLevel(), 0.8);
+  assert.ok(Math.abs(Input.throttleLevel() - (0.8 - 0.1) / 0.9) < 1e-12, "the phone pedal past its rescaled 0.1 dead zone");
   r.sb.UiLayers.navOpen = () => true;
   assert.equal(Input.throttleLevel(), 0);
   assert.equal(Input.steer(), 0);

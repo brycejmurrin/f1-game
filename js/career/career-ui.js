@@ -17,6 +17,8 @@ function create(G) {
   // an active save made title → CAREER MODES → Esc land on CAREER 2026 / GO RACING.
   let slotsOrigin = "title";   // "title" | "hub"
   let draftFieldErr = null;    // { name?, code?, num? } inline errors for NEW CAREER
+  let fundsOpen = false;      // the next hub build re-opens EXTRA FUNDS (its own buttons rebuilt it)
+  let previewing = -1;        // the offer index the SIGN A CONTRACT compare preview shows, else -1
 
   function head(text, id) {
     const n = el("h3", "sel-label", text);
@@ -1198,7 +1200,7 @@ function create(G) {
       if (fShort > 0) fac.title = "Needs " + I18n.n(fShort) + " cr more than you have";
       fac.append(
         el("span", "cr-record-line", "Upgrade the factory · " + I18n.n(st.facilityCost) + " cr"),
-        el("span", "cr-record-cta", "LEVEL " + st.facility + " → " + (st.facility + 1)
+        el("span", "cr-record-cta", "COST " + I18n.n(st.facilityCost) + " cr  ·  LEVEL " + st.facility + " → " + (st.facility + 1)
           + "  ·  −" + Math.round((st.facilityDiscount + 0.05) * 100) + "% RESEARCH" + shortNote(fShort)));
       fac.onclick = () => {
         if (!Career.upgradeFacility()) return;
@@ -1216,7 +1218,7 @@ function create(G) {
       if (bShort > 0) cap.title = "Needs " + I18n.n(bShort) + " cr more than you have";
       cap.append(
         el("span", "cr-record-line", "Raise the fitted cap · " + I18n.n(st.budgetCost) + " cr"),
-        el("span", "cr-record-cta", "LEVEL " + st.budgetLvl + " → " + (st.budgetLvl + 1)
+        el("span", "cr-record-cta", "COST " + I18n.n(st.budgetCost) + " cr  ·  LEVEL " + st.budgetLvl + " → " + (st.budgetLvl + 1)
           + "  ·  CAP " + I18n.n(st.budget) + " cr" + shortNote(bShort)));
       cap.onclick = () => {
         if (!Career.upgradeBudget()) return;
@@ -1232,6 +1234,8 @@ function create(G) {
     // summary reuses .sel-label so it reads as the same heading it replaced.
     const funds = el("details", "cr-card");
     funds.id = "cr-funds";
+    // +CR / UNLIMITED rebuild the pane; the fold they sit in must come back open (#5065).
+    funds.open = fundsOpen; fundsOpen = false;
     funds.appendChild(el("summary", "sel-label", "EXTRA FUNDS"));
     const unlimited = Career.freeMoney();
     funds.appendChild(el("div", "cg-p",
@@ -1243,7 +1247,7 @@ function create(G) {
     grantBtn.onclick = () => {
       Career.grant(Career.GRANT);
       if (G.soundOn) GameAudio.uiSelect();
-      build();
+      fundsOpen = true; build();
     };
     const freeBtn = el("button", "sel-chip" + (unlimited ? " active" : ""),
       unlimited ? "UNLIMITED · ON" : "UNLIMITED · OFF");
@@ -1252,7 +1256,7 @@ function create(G) {
     freeBtn.onclick = () => {
       Career.freeMoney(!Career.freeMoney());
       if (G.soundOn) GameAudio.uiTick();
-      build();
+      fundsOpen = true; build();
     };
     cheatRow.append(grantBtn, freeBtn);
     funds.appendChild(cheatRow);
@@ -1420,14 +1424,27 @@ function create(G) {
     const cancel = el("button", "sel-edit", "CANCEL"); cancel.type = "button";
     const status = el("p", "cg-p"); status.setAttribute("role", "status");
     sign.onclick = () => { if (!Career.acceptOffer(index, preview)) { status.textContent = I18n.t("career.offer.changed", null, "The offer changed. Cancel and compare it again."); sign.disabled = true; return; } closeOffers(); G.openCareer(); };
-    cancel.onclick = () => buildOffers();
-    body.append(card, sign, cancel, status); cancel.focus();
+    cancel.onclick = () => backToOffers();
+    body.append(card, sign, cancel, status);
+    previewing = index; $("co-back").textContent = I18n.t("career.back", null, "BACK");
+    body.scrollTop = 0; cancel.focus({ preventScroll: true });
+  }
+  // The preview is a step INSIDE the sheet: CANCEL, BACK and Escape (data-esc-close
+  // clicks #co-back) return to the list with focus on the offer just compared;
+  // only the list's DECIDE LATER closes the sheet (#5073).
+  function backToOffers() {
+    const i = previewing;
+    buildOffers();
+    const rows = $("co-body").querySelectorAll(".co-offer");
+    const t = rows[i] || rows[0] || $("co-back");
+    if (t) t.focus({ preventScroll: true });
   }
 
   function buildOffers() {
     const c = Career.data();
     const body = $("co-body");
     body.textContent = "";
+    previewing = -1; $("co-back").textContent = I18n.t("career.offers.later", null, "DECIDE LATER");
     const past = c.history[c.history.length - 1];
     $("co-title").textContent = past ? I18n.t("career.season.year", {year: past.year}, "SEASON {year}") : I18n.t("career.go.endSeason", null, "END OF SEASON");
 
@@ -1822,6 +1839,7 @@ function create(G) {
     G.openRaceSettings("career");
   };
   $("co-back").onclick = () => {
+    if (previewing >= 0) { if (G.soundOn) GameAudio.uiSelect(); backToOffers(); return; }
     closeOffers();
     build();
     if (G.soundOn) GameAudio.uiSelect();

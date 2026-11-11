@@ -919,14 +919,30 @@ function resetLivSearch() {
   csLivQuery = ""; csLivFactoryOpen = null; csLivQueryTeam = null;
   clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;
 }
+// #5224: a card's bitmap = its shape's CSS box x DPR (was a fixed 112x80).
+const livBox = { big: [144, 69], small: [38, 24] };
+function livSwatchPx(boxW, boxH, dpr) {
+  const d = dpr > 0 ? dpr : 1, w = Math.max(1, boxW || 1), h = Math.max(1, boxH || 1), m = Math.max(w, h);
+  const k = Math.max(16 / m, Math.min(d, 384 / m));
+  return { w: Math.round(w * k), h: Math.round(h * k) };
+}
+function fitLivSwatches(container, team) {
+  if (typeof LiveryTex === "undefined") return;
+  const sws = [...container.querySelectorAll(".cs-liv-row .cs-liv-swatch")], livs = getLiveries(team);
+  const shape = (sw) => sw.closest(".cs-liv-factory") ? "small" : "big";
+  for (const s in livBox) {   // measure before writes; box x CssZoom
+    const e = sws.find((sw) => shape(sw) === s), z = e && window.CssZoom ? CssZoom.of(e) : 1;
+    if (e && e.clientWidth) livBox[s] = [e.clientWidth * z, e.clientHeight * z];
+  }
+  for (const sw of sws) {
+    const b = livBox[shape(sw)], px = livSwatchPx(b[0], b[1], globalThis.devicePixelRatio), id = sw.closest("[data-cs-livery]").dataset.csLivery;
+    const c = LiveryTex.swatchCanvas(team.id, livs.find((l) => l.id === id), px.w, px.h, livBuild);
+    c.ariaHidden = "true"; sw.prepend(c);
+  }
+}
 function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
-  if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
-    // The card adopts last build's painted canvas when the look is unchanged (LiveryTex.swatchCanvas).
-    const c = LiveryTex.swatchCanvas(team.id, liv, 112, 80, livBuild);
-    c.setAttribute("aria-hidden", "true");
-    sw.appendChild(c);
-  } else {
+  if (typeof LiveryTex === "undefined") {
     sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
     if (liv.stripe) {
       const st = document.createElement("span"); st.className = "cs-liv-stripe";
@@ -1146,6 +1162,7 @@ function buildLiveryOptions(container, team) {
     fold.appendChild(grid);
     container.appendChild(fold);
   }
+  fitLivSwatches(container, team);
 }
 
 function buildLiveryCreator(container, team) {

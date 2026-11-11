@@ -22,9 +22,22 @@
 const SurveyHud = (function () {
   const KEY = "APEX_SURVEY_HUD";
 
-  /** True when query, hash, or localStorage says =1. Pure; hostile input is off. */
+  // A DEV ORIGIN ONLY (#5032): the fixture hides every screen, and a share link carrying
+  // `&APEX_SURVEY_HUD=1` reached players' phones. Same gate as the agent surface (test mode,
+  // localhost, ?apex=1); a bare fixture object with no hostname is a unit test, not a page.
+  function devOrigin(loc) {
+    if (typeof LazyBundles !== "undefined" && LazyBundles.wantAgentSurface) {
+      try { return !!LazyBundles.wantAgentSurface(); } catch (_) { return false; }
+    }
+    const h = loc && loc.hostname;
+    if (typeof h !== "string") return true;
+    return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
+  }
+
+  /** True on a dev origin when query, hash, or localStorage says =1. Hostile input is off. */
   function enabled(loc, storage) {
     try {
+      if (!devOrigin(loc)) return false;
       if (loc) {
         const q = typeof URLSearchParams === "function"
           ? new URLSearchParams(loc.search || "").get(KEY) : null;

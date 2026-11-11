@@ -7,7 +7,15 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zandvoort",
-    // The exit wall otherwise clips Tarzan's widened road envelope at 3.5% lap.
+    // PIT SIDE IS WRONG HERE AND KNOWN (W12, 2026-11-10): the FIA 2026 Dutch
+    // GP "Circuit Map, Pit Lane Drawing and Emergency Exits Map" puts the
+    // garages on the driver's RIGHT (pit-lane drawing p.3: entry off T14, exit
+    // into T1; map p.2: lane on the infield T2/T3 side). The flip to +1 was
+    // built and reverted: on the +1 dune the engine pit complex's apron strips
+    // sit under the terrain (ground-audit buried 2 -> 6) at every verge that
+    // keeps the coplanar baseline. Needs pit-apron terrain flattening (engine)
+    // with the mirrored scenery. verge 4: the exit wall otherwise clips
+    // Tarzan's widened road envelope at 3.5% lap.
     pit: { side: -1, bands: { verge: 4 } },
     classic: true,
     reverse: false, // real-world CW/CCW direction
@@ -52,8 +60,8 @@
       { turn: 3,  angleDeg: 18, widthM: 140 },  // Hugenholtz banked LEFT hairpin
       { turn: 14, angleDeg: 18, widthM: 140 },  // Arie Luyendyk banked final RIGHT
       { turn: 1,  angleDeg: 4.0, widthM: 200 },  // Tarzan
-      { turn: 7,  angleDeg: 3.0, widthM: 110 },  // Hunserug-side sweep
-      { turn: 11, angleDeg: 3.5, widthM: 140 },  // Hans Ernst chicane
+      { turn: 8,  angleDeg: 3.0, widthM: 110 },  // T8 right after the Scheivlak descent (was turn 7 before the FIA renumber)
+      { turn: 12, angleDeg: 3.5, widthM: 140 },  // T12 left of the T11-T12 chicane (was turn 11 before the FIA renumber)
     ],
     hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
       { s0: 0.7310, s1: 0.8081, hw: 6.0, ease: 0.012 },  // racing arc 0.726-0.756 infield esses
@@ -73,17 +81,22 @@
     // the old single hump at 0.56 put the crest between T8 and T9 (flat).
     crossover: true,   // road crosses itself: terrain-over-road scans the other deck by mesh provenance
     elevations: [
-      { s: 0.2957, halfM: 360, rise: 4.2 },  // T4 Hunserug crest (climb from T3 exit, fall to T5)
-      { s: 0.4260, halfM: 150, rise: 3.94 }, // T5 -> T6 climb, crest just past T6
-      { s: 0.4520, halfM: 140, rise: 1.05 }, // eases the fall through T7 Scheivlak
+      { s: 0.2957, halfM: 360, rise: 4.2 },  // Hunserug rise, peak at FIA T5 (0.2957), spanning T4-T6
+      { s: 0.4260, halfM: 150, rise: 3.94 }, // inside the FIA T7 Scheivlak sweep (old-numbering "T6" peak 0.4219)
+      { s: 0.4520, halfM: 140, rise: 1.05 }, // eases the fall out of T7 Scheivlak toward T8
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // turns: one apex per corner of the FIA 2026 event-map numbering (FIA
+    // "2026 Dutch Grand Prix - Circuit Map, Pit Lane Drawing and Emergency
+    // Exits Map", p.2), T1..T14 in order, each at its built curvature peak, as
+    // RACING-LAP fractions (post startFrac/reverse), never fmap'd —
+    // tools/track/rotate-markings.cjs re-seats turns when the start line moves.
+    // T1 Tarzan R, T2 Gerlach R, T3 Hugenholtz L, T4 Hunserug crest R, T5 L,
+    // T6 R, T7 Scheivlak R, T8 R, T9 R, T10 L hairpin, T11 R, T12 L,
+    // T13 R, T14 Arie Luyendyk R. sectors: approximate splits, not FIA-sourced.
     sectors: [0.32, 0.68],
-    turns: [0.0860, 0.1667, 0.2084, 0.2957, 0.3953, 0.4219, 0.4845, 0.5338, 0.5889, 0.7312, 0.7558, 0.8327, 0.8744, 0.9105],
+    turns: [0.0860, 0.1667, 0.2084, 0.2505, 0.2957, 0.3368, 0.3953, 0.4845, 0.5338, 0.5889, 0.7312, 0.7558, 0.8327, 0.9105],
     furniture: { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },  // coastal dune scrub — thin + pale
     kit: { marshal: "cabin",     rail: "armco",       fence: "palisade",  tyre: "stack",   board: "banner",    gantry: "box",        camera: "scaffold",  hoarding: "banner" },
     standSet: ["orange", "alu", "scaffold"],  // Oranje army; two-thirds of capacity is trucked in
