@@ -1343,6 +1343,15 @@
       "twinned": false
     },
     {
+      "id": "offline-precache",
+      "script": "test:offline-precache",
+      "kind": "browser",
+      "files": [
+        "tests/specs/offline-precache.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "perf-budget",
       "script": "test:perf-budget",
       "kind": "browser",
@@ -1497,6 +1506,7 @@
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/duel-row.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
@@ -1680,6 +1690,7 @@
         "tests/specs/agent-determinism.spec.js",
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
+        "tests/specs/bryce-phone-paint.spec.js",
         "tests/specs/css-player-smoke.spec.js",
         "tests/specs/dev-tools.spec.js",
         "tests/specs/engine-audio-offline.spec.js",

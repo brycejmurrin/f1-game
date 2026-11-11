@@ -84,6 +84,26 @@ function isBackgroundOptional(u) {
   return !isInstallCriticalOptional(u) && !isRuntimeOnlyOptional(u);
 }
 
+// KILL SWITCH. A deploy whose version.json carries `"swKill": true` retires
+// this worker: on the next version.json it sees (the page's boot guard and
+// UpdateCheck read it on every launch and foreground) it unregisters itself and
+// deletes every apex26-* cache, voice included; a fresh install under the flag
+// refuses to install, so the re-registration the shell makes is a no-op. Remove
+// the flag in a later deploy and the next launch installs normally. Only a
+// worker that already has this code can honour it.
+let _killed = false;
+const isKillFlag = (v) => !!(v && v.swKill === true);
+async function killWorker() {
+  if (_killed) return;
+  _killed = true;
+  swLog("warn", "kill switch: version.json asked this worker to retire; unregistering and clearing caches");
+  try { if (self.registration && typeof self.registration.unregister === "function") await self.registration.unregister(); }
+  catch (e) { swLog("warn", "kill switch: unregister failed: " + errMsg(e)); }
+  const names = (await caches.keys()).filter((n) => n.startsWith(CACHE_PREFIX));
+  await Promise.all(names.map((n) => caches.delete(n)));
+  invalidateCacheOrder();
+}
+
 let _cacheNamePromise = null;
 // The RESOLVED name, readable without awaiting: cache matching must never wait
 // on a version.json round trip (offline, that fetch can hang for as long as the
@@ -97,6 +117,7 @@ function currentCacheName() {
       return r.json();
     })
     .then((v) => {
+      if (isKillFlag(v)) throw new Error("Service worker retired by version.json swKill");
       const build = Number(v && v.build);
       if (!Number.isSafeInteger(build) || build <= 0) throw new Error("Invalid deployed build");
       _cacheNameKnown = CACHE_PREFIX + build;
@@ -1176,6 +1197,7 @@ self.addEventListener("fetch", (event) => {
   // the guard is here so that stays true if it ever does.
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
   if (url.origin !== self.location.origin) return;   // never touch cross-origin (Jolpica/OpenF1 data hub)
+  if (_killed) return;   // retired: the network answers until this page navigates away
   maybeSweep(event, req.mode === "navigate");
 
   // STREAMED MUSIC ASKS FOR BYTE RANGES (perf-memory M-4b). A phone plays
@@ -1229,6 +1251,12 @@ self.addEventListener("fetch", (event) => {
     // https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
     let cacheWrite = Promise.resolve();
     const network = fetch(req, { cache: isVersion || isShellBust ? "no-store" : "no-cache" }).then((res) => {
+      if (res && res.ok && isVersion) {
+        // The kill switch is read off the version.json the page already asks for.
+        const copy = res.clone();
+        cacheWrite = copy.json().then((v) => { if (isKillFlag(v)) return killWorker(); }, () => {})
+          .catch((e) => swLog("warn", "kill switch failed: " + errMsg(e)));
+      }
       if (res && res.ok && !isVersion && url.search === "") {
         // Clone before the page can consume the body. Maintenance belongs to
         // waitUntil, so generation lookup and slow puts cannot delay navigation.

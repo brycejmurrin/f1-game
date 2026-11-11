@@ -245,7 +245,11 @@ function apply() {
   output = writeLazyMap(output, lazy);
   output = writeLazyMap(output, lazyMap(true), LAZY_INTEGRITY_ID);
   fs.writeFileSync(INDEX, output);
-  fs.writeFileSync(VERSION, `{ "build": ${next} }\n`);
+  // The service worker's kill switch (sw.js isKillFlag) is the one other key
+  // version.json may carry; a stamp that dropped it would make it unusable.
+  let swKill = false;
+  try { swKill = JSON.parse(fs.readFileSync(VERSION, "utf8")).swKill === true; } catch (_) { /* no flag */ }
+  fs.writeFileSync(VERSION, `{ "build": ${next}${swKill ? ', "swKill": true' : ""} }\n`);
   return { applied: next, from: Math.max(...candidates), tagCount, lazyCount: Object.keys(lazy).length };
 }
 
