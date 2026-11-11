@@ -85,3 +85,18 @@ test("corner-frames kinkAt: a turn on a featureless straight still fails", () =>
   const tr = fakeTrack(N, LAP, (i) => 1e-5 * Math.sin(i * 1.7) + 5e-6 * Math.sin(i * 0.37));
   assert.equal(CF.kinkAt(tr, 300 / N, tr.curv), null);
 });
+
+// The loophole the "gentle or flick" clause shuts (fleet run 1 flipped buddh,
+// imola T7 and mugello T9 this way): a FULL-strength corner whose turn misses
+// its |k| peak by 15 m but sits on the signed-curvature extremum must still fail.
+test("corner-frames: a strong corner 15 m off its |k| peak still fails on the signed extremum", () => {
+  // signed curvature: a 2e-2 rad/m corner at node 500; |k| carries a sharper
+  // spike 15 m (≈4 nodes) later, so the |k| peak and the signed extremum differ
+  const strong = (i) => 2e-2 * Math.exp(-((((i - 500) * 4) / 30) ** 2));
+  const tr = fakeTrack(N, LAP, strong);
+  assert.equal(CF.kinkAt(tr, 500 / N, tr.curv), null, "|k| ≥ PEAK_K and no sign flick: kinkAt never vouches for it");
+  // and a true flick of the same strength (opposite sign to both sides) still counts
+  const flick = fakeTrack(N, LAP, (i) => 9e-3 - 1.8e-2 * Math.exp(-((((i - 500) * 4) / 12) ** 2)));
+  const f = CF.kinkAt(flick, 500 / N, flick.curv);
+  assert.equal(f && f.m, 0);
+});
