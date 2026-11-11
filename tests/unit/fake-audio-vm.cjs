@@ -1,4 +1,11 @@
 // Minimal recording AudioContext for the game VM (same shape as audio-tune.test.mjs boot()).
+// Born "suspended" like a context on a real phone (iOS Safari, Chrome autoplay
+// policy): only resume() makes it "running", so a test reading
+// debug().contextState === "running" proves the engine resumed it. State moves
+// one microtask after the call and fires onstatechange, as a browser does.
+// "running" alone is reachable later too (music start, setEnabled), so
+// `resumedAtBirth` records a resume() in the SAME synchronous turn as the
+// constructor: the call that lands inside the creating gesture on iOS.
 function param(v) {
   const p = { value: v, setTargetAtTime(x) { p.value = x; }, setValueAtTime(x) { p.value = x; },
     linearRampToValueAtTime(x) { p.value = x; }, exponentialRampToValueAtTime(x) { p.value = x; },
@@ -17,15 +24,27 @@ function install(sandbox, log) {
   }
   function FakeAC() {
     const ctx = {
-      currentTime: 0, state: "running", sampleRate: 44100, destination: node("dest"),
+      currentTime: 0, state: "suspended", onstatechange: null, sampleRate: 44100, destination: node("dest"),
       createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"),
       createBufferSource: () => node("src"), createAnalyser: () => node("analyser"), createWaveShaper: () => node("shaper"),
       createConvolver: () => node("convolver"), createStereoPanner: () => node("panner"), createDynamicsCompressor: () => node("comp"),
       createMediaElementSource: () => node("media"),
       createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len), copyToChannel() {} }),
       decodeAudioData: (ab, res, rej) => { const e = new Error("fake: no decode"); if (rej) rej(e); return Promise.reject(e); },
-      resume: () => Promise.resolve(), suspend: () => Promise.resolve(), close: () => Promise.resolve(),
+      resume: () => to("running"), suspend: () => to("suspended"), close: () => to("closed"),
     };
+    ctx.resumeCalls = 0;
+    ctx.resumedAtBirth = false;
+    let born = true;
+    queueMicrotask(() => { born = false; });
+    function to(state) {
+      if (state === "running") { ctx.resumeCalls++; if (born) ctx.resumedAtBirth = true; }
+      return Promise.resolve().then(() => {
+        if (ctx.state === "closed" || ctx.state === state) return;
+        ctx.state = state;
+        if (typeof ctx.onstatechange === "function") ctx.onstatechange({ type: "statechange", target: ctx });
+      });
+    }
     made.push(ctx);
     if (log) log("new AudioContext #" + made.length);
     return ctx;

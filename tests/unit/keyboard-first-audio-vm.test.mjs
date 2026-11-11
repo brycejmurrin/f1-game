@@ -28,6 +28,9 @@ test("keyboard-first Enter on the title loads real GameAudio and title music", a
     assert.equal(fa.made.length, 1, "keyboard-first must create an AudioContext");
     assert.ok(!sb.GameAudio._stub, "real GameAudio must be bound");
     assert.equal(sb.GameAudio.debug().contextState, "running");
+    // The fake is born suspended; music start and setEnabled resume it later
+    // too, so pin the resume() that runs with the constructor (the iOS one).
+    assert.equal(fa.made[0].resumedAtBirth, true, "init() must resume the new context in the creating turn");
     assert.ok(sb.GameAudio.trackName && sb.GameAudio.trackName(), "title music track must be set");
     assert.equal(g.G.state, "menu");
   } finally { g.close(); }
