@@ -100,6 +100,22 @@ it("WORK ON CAR / AFTER THE RACE: the stepped pose stream is the shipped one, bi
   assert.deepEqual(got, POSE_STREAM);
 });
 
+// THE DRIVE-OUT (every RACE!): the pure poseOut stream, 60 fps past its end into the empty-lane hold.
+const OUT_SCENARIOS = { "out-cut": {}, "out-service": { leaveCrew: "service" }, "out-director-push": { angle: "director", move: "push", zoom: 6, height: -0.3 },
+  "out-crane": { angle: "crane", fov: 50 }, "out-slowmo-drift": { angle: "low", move: "drift", slowmo: 0.25, carSpeed: 1.4, hold: 0.5 } };
+const OUT_STREAM = "1e9b44fb04c6f2cb";   // recorded on the deploy tip (79bfd4b) before #5462
+it("THE DRIVE-OUT: the pure poseOut stream is the shipped one, bit for bit (eased and calm)", () => {
+  const { Arrival } = load();
+  const parts = [];
+  for (const saved of Object.values(OUT_SCENARIOS)) {
+    const cfg = Arrival.settings(saved), end = Arrival.duration(cfg, "out") + 3;
+    for (const calm of [false, true]) for (let t = 0; t < end; t += 1 / 60) parts.push(enc(Arrival.poseOut(t, cfg, calm)));
+  }
+  assert.ok(parts.length > 3000, `${parts.length} poses`);
+  if (UPDATE) { console.log("OUT_STREAM", sha(parts)); return; }
+  assert.equal(sha(parts), OUT_STREAM);
+});
+
 it("a consumer's writes on the playing pose never reach the next frame; each frame equals pose(t) (in, home and the pooled poseOut)", () => {
   const { Arrival } = load();
   const scribble = (s) => {   // what setup-camera.js and GarageExterior write onto a playing pose
