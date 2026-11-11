@@ -20,7 +20,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { scrub } from "./vendor-doctor.mjs";
+import { codexHome, scrub } from "./vendor-doctor.mjs";
 
 export const RUNNERS = Object.freeze({
   codex: {
@@ -34,7 +34,7 @@ export const RUNNERS = Object.freeze({
   cursor: {
     bins: ["cursor-agent", "agent"],
     argv: ({ cwd, write, model, prompt }) => ["-p", "--output-format", "json", "--trust", "--workspace", cwd,
-      ...(write ? ["--force"] : ["--mode", "ask"]), ...(model ? ["--model", model] : []), prompt],
+      ...(write ? ["--sandbox", "enabled"] : ["--mode", "ask"]), ...(model ? ["--model", model] : []), prompt],
     text: ({ out }) => lastJson(out)?.result ?? "",
   },
   grok: {
@@ -72,7 +72,7 @@ export function secondAccountEnv(env, { tmpDir } = {}) {
 
 /** Codex child env: APEX_CODEX_HOME selects the sign-in directory; a saved auth.json seeds it once, mode 0600. */
 export function codexEnv(env) {
-  const home = env.APEX_CODEX_HOME || (env.APEX_CODEX_AUTH_JSON_B64 ? path.join(env.HOME || os.homedir(), ".codex-apex") : null);
+  const home = codexHome(env);
   if (!home) return env;
   const auth = path.join(home, "auth.json");
   if (env.APEX_CODEX_AUTH_JSON_B64 && !fs.existsSync(auth)) {
@@ -127,7 +127,7 @@ export async function runVendor(vendor, { cwd, prompt, write = false, model = nu
   if (!r) throw new Error(`unknown vendor: ${vendor} (one of ${Object.keys(RUNNERS).join(", ")})`);
   if (!cwd || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error("--cwd must be an existing directory");
   if (typeof prompt !== "string" || !prompt.trim()) throw new Error("a prompt is required (--prompt or --prompt-file)");
-  const dir = tmpDir || fs.mkdtempSync(path.join(cwd, ".vendor-run-"));
+  const dir = tmpDir || fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-"));
   const promptFile = path.join(dir, "prompt.txt");
   const lastFile = path.join(dir, `${vendor}-last.txt`);
   fs.writeFileSync(promptFile, prompt);

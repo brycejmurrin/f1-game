@@ -13,7 +13,14 @@
  *   node tools/ci/vendor-doctor.mjs --only cursor,grok
  */
 import { spawn } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+/** Select the runner's saved Codex sign-in directory without creating or writing files. */
+export function codexHome(env) {
+  return env.APEX_CODEX_HOME || (env.APEX_CODEX_AUTH_JSON_B64 ? path.join(env.HOME || os.homedir(), ".codex-apex") : null);
+}
 
 /** Each vendor: candidate binaries, the argv that reports sign-in, the env key and the read-only URL that proves it. */
 export const VENDORS = Object.freeze({
@@ -67,14 +74,16 @@ export function runBin(bin, argv, { timeoutMs = 20000, env = process.env } = {})
 export async function checkVendor(name, { run = runBin, fetchImpl = globalThis.fetch, env = process.env } = {}) {
   const v = VENDORS[name];
   if (!v) throw new Error(`unknown vendor: ${name} (one of ${Object.keys(VENDORS).join(", ")})`);
+  const home = name === "codex" ? codexHome(env) : null;
+  const childEnv = home !== null ? { ...env, CODEX_HOME: home } : env;
   const row = { vendor: name, cli: null, version: null, login: false, key: null, api: null, next: [] };
   for (const bin of v.bins) {
-    const r = await run(bin, v.version, { env });
-    if (r.code === 0) { row.cli = bin; row.version = (scrub(r.out).match(/\d[\w.-]*/) || [null])[0]; break; }
+    const r = await run(bin, v.version, { env: childEnv });
+    if (r.code === 0) { row.cli = bin; row.version = (scrub(r.out).match(/\d+\.\d+[\w.-]*/) || scrub(r.out).match(/\d[\w.-]*/) || [null])[0]; break; }
   }
   if (!row.cli) row.next.push(`install: ${NEXT[name].install}`);
   else {
-    const r = await run(row.cli, v.login, { env });
+    const r = await run(row.cli, v.login, { env: childEnv });
     row.login = r.code === 0 && v.loggedIn.test(r.out) && !/not logged in/i.test(r.out);
     if (!row.login) row.next.push(`sign in: ${NEXT[name].login}`);
   }

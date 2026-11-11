@@ -13,6 +13,26 @@ import { secondAccountEnv, codexEnv, runVendor } from "../../tools/ci/vendor-run
 const SECRET = "xai-ABCDEFGHIJKLMNOPQRSTUVWX";
 const fakeRun = (table) => async (bin, argv) => table[`${bin} ${argv.join(" ")}`] ?? { code: 127, out: "" };
 
+test("Codex checks version and login in the saved home without exposing the saved auth", async () => {
+  const b64 = Buffer.from('{"tokens":{"access_token":"saved-secret"}}').toString("base64");
+  const env = { APEX_CODEX_HOME: "/saved/codex", APEX_CODEX_AUTH_JSON_B64: b64, CODEX_HOME: "/other/codex" };
+  const calls = [];
+  const row = await checkVendor("codex", {
+    env, fetchImpl: null,
+    run: async (bin, argv, options) => {
+      calls.push([bin, argv, options.env.CODEX_HOME]);
+      return { code: 0, out: argv[0] === "--version" ? "codex-cli 0.167.1" : "Logged in using ChatGPT" };
+    },
+  });
+  assert.deepEqual(calls, [
+    ["codex", ["--version"], "/saved/codex"],
+    ["codex", ["login", "status"], "/saved/codex"],
+  ]);
+  assert.equal(row.login, true);
+  assert.ok(!JSON.stringify(row).includes(b64), "the row never carries the saved auth value");
+  assert.equal(env.CODEX_HOME, "/other/codex", "the caller's environment is unchanged");
+});
+
 test("a signed-in CLI with a working key reports login, the key NAME and 200, never the value", async () => {
   const calls = [];
   const row = await checkVendor("grok", {
@@ -111,7 +131,9 @@ test("codexEnv seeds auth.json once at 0600 and never passes the saved secrets o
 test("runVendor builds read-only argv per vendor, scrubs the answer and reports a missing CLI", async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-cwd-"));
   const seen = [];
-  const spawnImpl = async (bin, argv, o) => { seen.push([bin, argv, o.env]); return { code: 0, out: JSON.stringify({ result: `hi ${SECRET} someone@example.com` }) }; };
+  const spawnImpl = async (bin, argv, o) => { seen.push([bin, argv, o.env]);
+    assert.deepEqual(fs.readdirSync(cwd).filter((n) => n.startsWith(".vendor-run-")), [], "no temp entry inside the cwd during the run");
+    return { code: 0, out: JSON.stringify({ result: `hi ${SECRET} someone@example.com` }) }; };
   const row = await runVendor("claude", { cwd, prompt: "q", env: { PATH: "/bin", CLAUDE_CODE_REMOTE: "1", APEX_CLAUDE_B_OAUTH_TOKEN: SECRET }, spawnImpl });
   assert.deepEqual([row.ok, row.text], [true, "hi <key> <email>"]);
   assert.deepEqual(seen[0][1].slice(0, 6), ["-p", "q", "--output-format", "json", "--permission-mode", "plan"]);
@@ -123,6 +145,8 @@ test("runVendor builds read-only argv per vendor, scrubs the answer and reports 
   assert.equal(seen.at(-1)[2].XAI_API_KEY, SECRET, "the stored GROK_API_KEY reaches Grok Build under the name it reads");
   await runVendor("grok", { cwd, prompt: "q", write: true, env: {}, spawnImpl });
   assert.ok(seen.at(-1)[1].join(" ").includes("--permission-mode acceptEdits --allow Edit --allow Write"), "Grok write mode pre-approves edits");
+  const curWrite = await runVendor("cursor", { cwd, prompt: "q", write: true, env: {}, spawnImpl });
+  assert.ok(seen.at(-1)[1].includes("--sandbox") && seen.at(-1)[1].includes("enabled") && !seen.at(-1)[1].includes("--force"), "cursor write uses --sandbox enabled");
   const cancelled = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 0, out: '{"text":"I will","stopReason":"cancelled"}\npermission required: Edit was not run' }) });
   assert.equal(cancelled.ok, false, "a cancelled headless Grok run is not a pass");
   const gone = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 127, out: "" }) });
