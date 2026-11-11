@@ -19,7 +19,7 @@
   { "name": "lane:codex", "color": "bfd4f2", "description": "PR: a Codex thread owns it (pull-only, Bryce's tool); re-owned after 6 h of silence" },
   { "name": "dispatch:pause", "color": "6f42c1", "description": "Dispatch issue: the dispatcher launches nothing while this is set" },
   { "name": "dispatch:merge-pause", "color": "6f42c1", "description": "Dispatch issue: land.yml and the dispatcher arm nothing while this is set" },
-  { "name": "deploy:red", "color": "b60205", "description": "Board issue: pages.yml's latest run failed on the tip; one fixer is launched" },
+  { "name": "deploy:red", "color": "b60205", "description": "Board issue: pages.yml's latest run failed on the tip; one fixer is launched. PR: Bryce's own click lets the fixer land over the red tip" },
   { "name": "bug", "color": "d73a4a", "description": "Something isn't working" },
   { "name": "area:physics", "color": "c5def5", "description": "Handling, grip, pace (skill tune-physics)" },
   { "name": "area:ai", "color": "c5def5", "description": "AI racecraft and driver personality (skill ai-racecraft)" },

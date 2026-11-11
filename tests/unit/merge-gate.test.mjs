@@ -15,7 +15,10 @@ import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
   configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict,
+  baseVerdict, BASE_ESCAPE_LABELS,
 } from "../../tools/ci/merge-gate.mjs";
+import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
+import { PLATFORM_STEP as DISPATCH_PLATFORM_STEP, platformFailure } from "../../tools/ci/dispatch.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
 import { AGENT_APP_SLUG, byAgent, byOwner } from "../../tools/ci/lib/provenance.mjs";
@@ -275,8 +278,12 @@ function fakes() {
   const runs = [{ id: 500, check_suite_id: 50, path: ".github/workflows/ci.yml" }];
   const events = [], files = [{ filename: "js/game.js" }, { filename: "docs/TESTING.md" }];
   const calls = [];
+  // The deploy tip's newest completed pages.yml run (the base row, #5425): green unless a case says otherwise.
+  const pages = { runs: [{ id: 800, head_sha: TIP, status: "completed", conclusion: "success" }], jobs: [] };
   const request = (p) => {
     if (p === "pulls/7") return { json: pull };
+    if (p.startsWith("actions/workflows/pages.yml/runs?branch=deploy-x&status=completed")) return { json: { workflow_runs: pages.runs } };
+    if (p.startsWith(`actions/runs/${pages.runs[0]?.id}/jobs?filter=latest`)) return { json: { jobs: pages.jobs } };
     if (p.startsWith("issues/7/events")) return { json: events };
     if (p.startsWith("pulls/7/files")) return { json: files };
     if (p === "branches/deploy-x") return { json: { commit: { sha: TIP } } };
@@ -286,7 +293,7 @@ function fakes() {
     return { error: `unexpected ${p}` };
   };
   const localMerge = (a) => { calls.push(a); return { ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" } }; };
-  return { pull, checks, runs, prRuns, events, files, calls, deps: { request, root: "/nowhere", localMerge } };
+  return { pull, checks, runs, prRuns, events, files, calls, pages, deps: { request, root: "/nowhere", localMerge } };
 }
 
 test("evaluate: all rows in order; each failing row refuses on its own; the local rows wait for an open PR; API errors are errors, not rows", () => {
@@ -359,7 +366,7 @@ test("evaluate: a gen:check or conflict refusal refuses on its own row, never ma
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, localMerge: genFail, log: (l) => logs.push(l) }), 2, "a refusal (exit 2), not an error (exit 1)");
   assert.ok(logs.some((l) => l.startsWith("= gate gen: FAIL gen:check fails")), logs.join("\n"));
-  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=ok gen=FAIL ratchets=FAIL pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
+  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok base=ok config=ok gen=FAIL ratchets=FAIL pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
   const noTip = evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: "" }) });
   assert.equal(noTip.error, undefined, noTip.error);
   assert.deepEqual([ROWS.filter((k) => !noTip.rows[k].ok), noTip.tip], [["gen", "ratchets"], ""]);
@@ -371,13 +378,13 @@ test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a r
   const written = {};
   const deps = { ...f.deps, log: (l) => logs.push(l), write: (p, text) => { written[p] = JSON.parse(text); } };
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], deps), 0);
-  assert.deepEqual(logs.slice(0, 7).map((l) => l.split(" ").slice(0, 4).join(" ")), ROWS.map((k) => `= gate ${k}: ok`));
-  assert.ok(logs[7].startsWith("= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok gen=ok ratchets=ok pr=#7 sha=" + HEAD), logs[7]);
+  assert.deepEqual(logs.slice(0, ROWS.length).map((l) => l.split(" ").slice(0, 4).join(" ")), ROWS.map((k) => `= gate ${k}: ok`));
+  assert.ok(logs[ROWS.length].startsWith("= merge-gate passed — open=ok hold=ok plan=ok ci=ok base=ok config=ok gen=ok ratchets=ok pr=#7 sha=" + HEAD), logs[ROWS.length]);
   logs.length = 0;
   f.files.push({ filename: ".claude/hooks/bash-guard.sh" });
   assert.equal(main(["--pr", "7", "--json", "artifacts/g.json"], deps), 2);
   assert.ok(logs.some((l) => l === "= gate config: FAIL needs config-ok from brycejmurrin: the diff edits .claude/hooks/bash-guard.sh; protected path(s), his own tap only: .claude/hooks/bash-guard.sh"), logs.join("\n"));
-  assert.ok(logs.at(-1).startsWith("= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=FAIL"));
+  assert.ok(logs.at(-1).startsWith("= merge-gate refused — open=ok hold=ok plan=ok ci=ok base=ok config=FAIL"));
   const j = written["/nowhere/artifacts/g.json"];
   assert.equal(j.ok, false); assert.equal(j.rows.config.ok, false); assert.equal("maxBehind" in j, false);
   f.files.pop();
@@ -605,7 +612,7 @@ test("ciSuitesFor: the ci.yml runs on the head (path re-checked, a ref suffix to
 // ---- WP-L2: --trusted runs no PR code; post takes open/hold/plan/ci/config from it, never from the artifact -----
 
 test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-away merge, no fetch", () => {
-  assert.deepEqual([...TRUSTED_ROWS], ["open", "hold", "plan", "ci", "config"]);
+  assert.deepEqual([...TRUSTED_ROWS], ["open", "hold", "plan", "ci", "base", "config"]);
   const f = fakes();
   const v = evaluate({ pr: 7, ...f.deps, trusted: true });
   assert.equal(v.ok, true, JSON.stringify(v.rows));
@@ -620,7 +627,7 @@ test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-
   f.files.pop();
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 0);
-  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD} tip=${TIP}`);
+  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok base=ok config=ok pr=#7 sha=${HEAD} tip=${TIP}`);
   f.checks[1].status = "in_progress";
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: () => {} }), 3, "CI running is waiting");
 });
@@ -1367,4 +1374,103 @@ test("config: a package.json diff that is only the generated test file lists is 
   assert.equal(bad.rows.config.evidence, "needs config-ok from brycejmurrin: the diff edits package.json; package.json counted as a config edit: package.json carries edits the test-groups generator does not reproduce");
   const noMb = evaluate({ pr: 7, ...f.deps, request: (p) => (p.startsWith("compare/") ? { error: "HTTP 404" } : rq(headPkg)(p)) });
   assert.equal(noMb.rows.config.ok, false, "an unreadable merge base fails closed");
+});
+
+// ---- #5425: the `base` row — merges wait while the deploy tip is red on code --------------------------------------
+
+/** Run 42880431465 (2026-11-10 18:57Z, head 1421575a), as its jobs API read on 2026-11-11: every ci / … job green,
+ *  `deploy` failed in the Pages publish (PLATFORM_STEP failed), the live-shell check skipped. */
+const RUN_42880431465 = { id: 42880431465, head_sha: "1421575aec6a36eb2390e4731d87887f713ad13f", status: "completed", conclusion: "failure" };
+const JOBS_42880431465 = [
+  { name: "ci / Selected specs (change-aware gate) (selected-1, tests/specs/audit.spec.js)", conclusion: "success" },
+  { name: "ci / CI", conclusion: "success" }, { name: "publishable", conclusion: "success" }, { name: "Stage and stamp the site", conclusion: "success" },
+  { name: "deploy", conclusion: "failure", steps: [{ name: "Publish to Pages", conclusion: "failure" }, { name: "Publish to Pages (retry)", conclusion: "failure" },
+    { name: "Pages publish failed (platform)", conclusion: "failure" }, { name: "Deploy verdict", conclusion: "failure" }] },
+  { name: "Live shell matches the published commit and build", conclusion: "skipped" },
+];
+const SPEC_RED = [{ name: "ci / Selected specs (change-aware gate) (packed-2, tests/specs/lighting-ab.spec.js)", conclusion: "failure" },
+  { name: "ci / CI", conclusion: "failure" }, { name: "deploy", conclusion: "skipped", steps: [] }];
+
+test("deploy tip (#5425): a spec-leg red is code; run 42880431465 (publish only) is platform; a deploy refusal without the marker is code", () => {
+  assert.equal(TIP_PLATFORM_STEP, DISPATCH_PLATFORM_STEP, "one marker: dispatch re-exports deploy-tip's");
+  const pf = (jobs) => platformFailure(() => ({ json: { jobs } }), 1);
+  assert.equal(pf(JOBS_42880431465), true, "dispatch's own platform test agrees on the real case");
+  assert.equal(platformStepFailed(JOBS_42880431465), true);
+  const real = tipState(RUN_42880431465, JOBS_42880431465);
+  assert.equal(real.state, "platform", real.evidence);
+  assert.match(real.evidence, /pages\.yml run 42880431465 on 1421575a concluded failure, not on code: only job `deploy` failed, at step "Pages publish failed \(platform\)"/);
+  const spec = tipState({ ...RUN_42880431465, id: 9 }, SPEC_RED);
+  assert.equal(spec.state, "code-red");
+  assert.deepEqual(spec.jobs, [SPEC_RED[0].name, "ci / CI"]);
+  assert.match(spec.evidence, /pages\.yml run 9 on 1421575a concluded failure on code: failed job\(s\) `ci \/ Selected specs/);
+  const refusal = [{ name: "deploy", conclusion: "failure", steps: [{ name: TIP_PLATFORM_STEP, conclusion: "skipped" }, { name: "Confirm this commit may still be published (under the Pages lock)", conclusion: "failure" }] }];
+  assert.equal(tipState(RUN_42880431465, refusal).state, "code-red", "a refusal is a fixer's job, as dispatch treats it");
+  assert.equal(pf(refusal), false);
+  const both = [...SPEC_RED.slice(0, 1), JOBS_42880431465[4]];
+  assert.deepEqual(codeRedJobs(both).map((j) => j.name), [SPEC_RED[0].name], "the marker excuses only `deploy`, never another red job");
+  assert.equal(tipState({ ...RUN_42880431465, conclusion: "timed_out" }, [{ name: "ci / Smoke (1)", conclusion: "timed_out" }]).state, "code-red");
+  for (const conclusion of ["success", "cancelled", "skipped"]) assert.equal(tipState({ ...RUN_42880431465, conclusion }).state, "green", conclusion);
+  assert.equal(tipState(null).state, "none");
+});
+
+test("readDeployTip: the newest COMPLETED pages.yml run, its latest-attempt jobs only when it failed, every page; unreadable is an error", () => {
+  const seen = [];
+  const req = (runs, jobPages) => (p) => { seen.push(p);
+    if (p.startsWith("actions/workflows/pages.yml/runs?")) return { json: { workflow_runs: runs } };
+    const m = /^actions\/runs\/(\d+)\/jobs\?filter=latest&per_page=100&page=(\d+)$/.exec(p);
+    return m ? { json: { jobs: jobPages[Number(m[2]) - 1] || [] } } : { error: `unexpected ${p}` }; };
+  assert.equal(readDeployTip("deploy-x", req([{ id: 5, conclusion: "success" }], [])).state, "green");
+  assert.deepEqual(seen, ["actions/workflows/pages.yml/runs?branch=deploy-x&status=completed&per_page=1"], "a green run reads no jobs");
+  const many = Array.from({ length: 100 }, (_, i) => ({ name: `ci / leg ${i}`, conclusion: "success" }));
+  const t = readDeployTip("deploy-x", req([RUN_42880431465], [many, [SPEC_RED[0]]]));
+  assert.equal(t.state, "code-red", "a red on the second page of jobs is seen");
+  assert.equal(readDeployTip("deploy-x", req([], [])).state, "none");
+  assert.match(readDeployTip("deploy-x", () => ({ error: "HTTP 502" })).error, /pages\.yml runs on deploy-x: HTTP 502/);
+  assert.match(readDeployTip("deploy-x", (p) => (p.includes("/jobs") ? { error: "HTTP 403" } : { json: { workflow_runs: [RUN_42880431465] } })).error, /jobs of pages\.yml run 42880431465: HTTP 403/);
+});
+
+test("baseVerdict (#5425): a code-red tip WAITS; only Bryce's own `deploy:red` or `priority` lets a PR land over it", () => {
+  assert.deepEqual([...BASE_ESCAPE_LABELS], ["deploy:red", "priority"]);
+  const red = tipState({ ...RUN_42880431465, id: 9 }, SPEC_RED);
+  const held = baseVerdict(red, [], []);
+  assert.equal(held.ok, false); assert.equal(held.pending, true, "pending, so the next Pages train re-gates (land.yml skips a `gate` failure)");
+  assert.match(held.evidence, /run 9 .*merges wait until the tip is green; the fixer's PR lands once brycejmurrin adds `deploy:red` to it himself/);
+  assert.equal(baseVerdict(tipState(RUN_42880431465, JOBS_42880431465), [], []).ok, true, "run 42880431465: a publish-only failure does not hold");
+  for (const label of BASE_ESCAPE_LABELS) {
+    const own = baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z")]);
+    assert.equal(own.ok, true, label); assert.match(own.evidence, new RegExp(`\`${label}\` added by brycejmurrin in person at 2026-11-11T08:00:00Z`));
+    const agent = baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z", { app: APP })]);
+    assert.equal(agent.ok, false, `${label} added through the Claude app does not lift the hold`); assert.equal(agent.pending, true);
+    assert.match(agent.evidence, new RegExp(`\`${label}\` is set but not last added by brycejmurrin in person`));
+    assert.equal(baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z"), ev(label, "2026-11-11T08:05:00Z", { app: APP })]).ok, false, `${label}: an agent's re-add after his click is the newest event`);
+    assert.equal(baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z", { actor: "someone-else" })]).ok, false, `${label} by another login`);
+    assert.equal(baseVerdict(red, [{ name: label }], null).ok, false, `${label} with no events read: provenance unknown is no grant`);
+    assert.equal(baseVerdict(red, [], [ev(label, "2026-11-11T08:00:00Z")]).ok, false, `${label} removed since`);
+  }
+  for (const state of ["green", "platform", "none"]) assert.equal(baseVerdict({ state, evidence: "x" }, [], []).ok, true, state);
+});
+
+test("evaluate: the base row reads the PR's base branch; a code-red tip waits (exit 3) with every other row ok, and the fixer lands on Bryce's own `deploy:red`", () => {
+  const f = fakes();
+  assert.equal(evaluate({ pr: 7, ...f.deps }).rows.base.ok, true);
+  f.pages.runs[0] = { ...RUN_42880431465, id: 9 }; f.pages.jobs = SPEC_RED;
+  const v = evaluate({ pr: 7, ...f.deps });
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["base"]);
+  assert.equal(v.waiting, true, "waiting, not refused");
+  assert.equal(main(["--pr", "7", "--sha", HEAD], { ...f.deps, log: () => {} }), 3, "exit 3: land.yml writes `gate` pending");
+  const logs = [];
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 3, "the trusted leg holds too");
+  assert.ok(logs.some((l) => l.startsWith("= gate base: WAIT pages.yml run 9 on 1421575a concluded failure on code")), logs.join("\n"));
+  f.checks[1].conclusion = "failure";
+  assert.equal(evaluate({ pr: 7, ...f.deps }).waiting, false, "a failed row besides base is a refusal");
+  f.checks[1].conclusion = "success";
+  f.pull.labels = [{ name: "priority" }]; f.events.push(ev("priority", "2026-11-11T08:00:00Z", { app: APP }));
+  assert.equal(evaluate({ pr: 7, ...f.deps }).rows.base.ok, false, "the orchestrator's `priority` (Claude app) does not lift the hold");
+  f.pull.labels = [{ name: "deploy:red" }]; f.events.push(ev("deploy:red", "2026-11-11T08:10:00Z"));
+  const fixer = evaluate({ pr: 7, ...f.deps });
+  assert.equal(fixer.ok, true, "the fixer's PR lands on Bryce's own `deploy:red`: " + fixer.rows.base.evidence);
+  f.pages.runs[0] = RUN_42880431465; f.pages.jobs = JOBS_42880431465; f.pull.labels = []; f.events.length = 0;
+  assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true, "run 42880431465 (platform) holds nothing");
+  const noPages = (p) => (p.startsWith("actions/workflows/pages.yml") ? { error: "HTTP 502" } : f.deps.request(p));
+  assert.match(evaluate({ pr: 7, ...f.deps, request: noPages }).error, /pages\.yml runs on deploy-x: HTTP 502/, "unreadable tip: an error (will retry), never a pass");
 });

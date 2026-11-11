@@ -69,6 +69,7 @@ import { fileURLToPath } from "node:url";
 import { api as githubApi } from "./github-api.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { OWNER, byOwner, describeActor, isDecisionComment, newestLabelEvent, ownerSet } from "./lib/provenance.mjs";
+import { PLATFORM_STEP, platformStepFailed } from "./lib/deploy-tip.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const CONFIG_FILE = path.join(ROOT, "tools", "ci", "dispatch.json");
@@ -447,13 +448,13 @@ export function renderBoard(state, plan, config, now) {
 }
 
 // ---- I/O: read GitHub state ----------------------------------------------------
-/** pages.yml's REST-visible marker (job `deploy`): `failure` only when both publish attempts failed after the recheck. */
-export const PLATFORM_STEP = "Pages publish failed (platform)";
+/** PLATFORM_STEP and the platform test live in ./lib/deploy-tip.mjs (shared with merge-gate's `base` row, #5425). */
+export { PLATFORM_STEP };
 /** Did run `id` fail on the Pages side (the marker step failed)? An unreadable job list is false (a fixer launches). */
 export function platformFailure(api, id) {
   const r = api(`actions/runs/${id}/jobs?per_page=100`);
   if (r.error) return false;
-  return (r.json?.jobs || []).some((j) => j?.name === "deploy" && (j.steps || []).some((st) => st?.name === PLATFORM_STEP && st.conclusion === "failure"));
+  return platformStepFailed(r.json?.jobs);
 }
 const get = (api, p) => { const r = api(p); if (r.error) throw new Error(`${p}: ${r.error}`); return r.json; };
 /** Every row of a list endpoint: `per_page=100&page=N` until a short page (one page silently dropped the Board once the

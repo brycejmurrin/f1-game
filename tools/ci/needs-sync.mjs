@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Verdict line: does a PR branch need a deploy-tip sync? conflict | stale-red | no (sync only when you must).
+ * @doc Verdict line: does a PR branch need a deploy-tip sync? conflict | stale-red | tip-red | no (sync only when you must).
  * @section runner
  * @skill steward
  *
@@ -15,11 +15,15 @@
  *              a commit after that run started: a re-run re-tests the stale merge ref,
  *              only a new head can clear it. A heuristic (a flake looks the same): name
  *              the failing job in the PR, and never re-run twice.
+ *   tip-red    the branch is behind, but the deploy tip is red on CODE (the newest completed pages.yml run failed
+ *              in a job other than a Pages-side publish failure; tools/ci/lib/deploy-tip.mjs, #5425): syncing
+ *              would import the red. Wait for the fix to land; sync-pr refuses (only the fixer's own branch may
+ *              sync onto it, with --onto-red-tip). Wins over conflict and stale-red.
  *   no         up to date, or merely behind with no conflict and no stale red: a green
  *              PR merges as it stands, and a clean refresh buys a full tier that repeats
  *              the old verdict. (The `distance` verdict went with merge-gate's distance
  *              row on 2026-11-03: gen and ratchets run on the real merge result.)
- * Exit: 0 sync needed (conflict | stale-red), 1 no sync needed, 2 bad args, 3 could not
+ * Exit: 0 sync needed (conflict | stale-red), 1 no sync needed (no | tip-red), 2 bad args, 3 could not
  * decide (fetch / git / merge-tree failed). The API half degrades: no token or an API
  * error leaves ci "unknown", so only `conflict` can fire (the line says so).
  * Needs the merge base: a shallow clone must be deep enough for `git merge-tree`.
@@ -31,18 +35,22 @@ import { fileURLToPath } from "node:url";
 import { DEPLOY } from "./github-api.mjs";
 import { createSnapshot } from "../lib/pr-snapshot.mjs";
 import { ciState } from "./pr-board.mjs";
+import { readDeployTip } from "./lib/deploy-tip.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const VERDICTS = ["conflict", "stale-red", "no"];
+export const VERDICTS = ["conflict", "stale-red", "tip-red", "no"];
 
 /**
  * The verdict from the facts. Pure.
- * @param {{ behind: boolean, conflict: boolean, ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null }} f
- *   tipNewestAt = committer date of the newest commit on the tip that the branch lacks.
- * @returns {{ verdict: "conflict"|"stale-red"|"no", why: string }}
+ * @param {{ behind: boolean, conflict: boolean, ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null,
+ *   tip?: { state: string, evidence: string }|null }} f
+ *   tipNewestAt = committer date of the newest commit on the tip that the branch lacks; tip = tipState() of the deploy
+ *   branch's newest completed pages.yml run (null: not read).
+ * @returns {{ verdict: "conflict"|"stale-red"|"tip-red"|"no", why: string }}
  */
 export function decideSync(f) {
   if (!f.behind) return { verdict: "no", why: "the branch already contains the deploy tip" };
+  if (f.tip?.state === "code-red") return { verdict: "tip-red", why: `${f.tip.evidence}: do not sync onto a red tip; wait for the fix to land` };
   if (f.conflict) return { verdict: "conflict", why: "merging the deploy tip conflicts" };
   const ran = Date.parse(f.runStartedAt || ""), tipAt = Date.parse(f.tipNewestAt || "");
   if (f.ci === "failure" && ran && tipAt && tipAt > ran) {
@@ -79,7 +87,13 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
     if (m.code !== 0 && m.code !== 1) return { ok: false, error: `git merge-tree failed (${m.code}): ${m.err || m.out}` };
     conflict = m.code === 1;
   }
-  let ci = "unknown", runStartedAt = null, note = null;
+  let ci = "unknown", runStartedAt = null, note = null, deployTip = null;
+  if (behind && !offline) {
+    const t = readDeployTip(DEPLOY, request);
+    snap?.save();
+    if (t.error) note = `deploy tip state unreadable (${t.error}): tip-red cannot be detected`;
+    else deployTip = t;
+  }
   if (behind && !conflict && !offline) {
     const r = request(`actions/workflows/ci.yml/runs?head_sha=${head.out}&per_page=20`);
     snap?.save();
@@ -93,13 +107,13 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
     }
   } else if (offline) note = "offline: CI state not read, only a conflict can be detected";
   const tipNewestAt = behind ? readGit(["log", "-1", "--format=%cI", `${head.out}..${tip.out}`]).out || null : null;
-  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt });
-  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, ...d, note };
+  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, tip: deployTip });
+  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, deployTip, ...d, note };
 }
 
 /** The one verdict line. */
 export const verdictLine = (v) => `= sync needed: ${v.verdict}`;
-export const exitCode = (v) => (!v.ok ? 3 : v.verdict === "no" ? 1 : 0);
+export const exitCode = (v) => (!v.ok ? 3 : v.verdict === "no" || v.verdict === "tip-red" ? 1 : 0);
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
@@ -108,7 +122,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (argv.includes("--help") || !branch || bad || argv.filter((a) => !a.startsWith("--")).length !== 1) {
     console.error(`usage: node tools/ci/needs-sync.mjs <branch> [--json] [--offline]${bad ? `\nunknown arg: ${bad}` : ""}
 verdict line: ${VERDICTS.map((v) => `= sync needed: ${v}`).join(" | ")}
-exit: 0 sync needed (conflict|stale-red), 1 no, 2 bad args, 3 could not decide`);
+exit: 0 sync needed (conflict|stale-red), 1 no (no|tip-red), 2 bad args, 3 could not decide`);
     process.exit(argv.includes("--help") ? 0 : 2);
   }
   const v = needsSync(branch, { offline: argv.includes("--offline") });
