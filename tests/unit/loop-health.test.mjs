@@ -244,6 +244,17 @@ test("stall: ?stallwatch=0 turns it off for a probe browser that is not flagged 
   assert.deepEqual(forced.calls.tier, [4], "an explicit force-on still wins");
 });
 
+test("stallWatch(false) persists an explicit OFF choice through a fresh module load", () => {
+  const h = loadStall();
+  assert.equal(h.LoopHealth.stallWatch(), true);
+  assert.equal(h.LoopHealth.stallWatch(false), false);
+  assert.equal(h.ls.get("apex26.stallWatch"), "0");
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), h.ctx, { filename: absSrc("js/perf/loop-health.js") });
+  assert.equal(h.ctx.LoopHealth.stallWatch(), false, "OFF survives reconstruction on a normal browser");
+  assert.equal(h.ctx.LoopHealth.stallWatch(true), true);
+  assert.equal(h.ls.get("apex26.stallWatch"), "1");
+});
+
 test("stall: under the loading cover the shed waits and the reload needs a 30-frame run", () => {
   const h = loadStall();
   h.cover.hidden = false;
