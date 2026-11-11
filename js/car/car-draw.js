@@ -1533,7 +1533,10 @@ const CarDraw = (function () {
     // primed started a warm. Returns the draws issued.
     let _primeArmed = 0;   // 0 off, 1 armed, 2 primed last frame (re-prime if that present was held)
     const _primeZ = new Float32Array(16);
-    function primeRace(paint) {
+    // game.js's _wheelOpts (js/game.js, `const _wheelOpts`; emissive is set per frame: 0.12 at night, 0 by day). A copy, so
+    // the prime's wheel draws key the same material (cockpit-wheels pins the two literals equal).
+    const _primeWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
+    function primeRace(paint, night) {
       if (!_primeArmed || carModelBuf || !G.cars || !G.cars.length) return 0;   // the menu prep arms it too: wait for the race's field
       const gfx = G.gfx, held = () => !!((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
       if (_primeArmed === 2) { if (!held()) { _primeArmed = 0; return 0; } _primeArmed = 1; }   // that present started a warm: again
@@ -1550,14 +1553,27 @@ const CarDraw = (function () {
       if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
       if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
       // Rivals: the shared near/far bodies, each team body, and every flap draw (closed set, open set, moving elements).
+      // Per car, with the field's own size (a restart, VS FRIEND or a short practice field re-arms with its count). The
+      // pool keys a wrapper per OCCURRENCE of a (geometry, material) in a frame, so a mesh SHARED across cars is drawn
+      // once per car that can show it: the shared near/far bodies, each car's wheel set (2 front, 2 rear, rotating and
+      // fixed), the blob-shadow and skid-mark quads. Otherwise the first frame with more rivals at one LOD than ever
+      // before (the field spread out ahead) minted the extra wrappers mid-race (proof run 42959284024: ~111 bind groups).
       if (paint) {
-        const co = coOpt(paint);
-        d(_sharedRivalBody, co); d(_farRivalBody, co);
-        for (const c of G.cars || []) {
-          if (!c || c.isPlayer) continue;   // the player's own meshes draw from its first frame
+        const co = coOpt(paint), cars = G.cars;
+        _primeWheelOpts.emissive = night ? 0.12 : 0;
+        const wo = coOpt(_primeWheelOpts);
+        for (let i = 0; i < cars.length; i++) {
+          const c = cars[i];
+          if (!c) continue;
+          if (gfx.drawShadow) { gfx.drawShadow(Z, 2.4, 5.8); n++; }
+          if (gfx.drawMark) { gfx.drawMark(Z, 1, 1); n++; }
+          if (c.isPlayer) continue;   // the player's own meshes draw from its first frame
+          d(_sharedRivalBody, co); d(_farRivalBody, co);
           d(teamBodyMesh(c.team, c), paint);
           const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp);
           for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(c.team, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
+          const wm = getFieldWheelMeshes(c.team, c);
+          if (wm) for (let k = 0; k < 2; k++) { d(wm.F, wo); d(wm.R, wo); d(wm.FFixed, wo); d(wm.RFixed, wo); }
         }
       }
       return n;
