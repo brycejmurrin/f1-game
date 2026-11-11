@@ -2518,3 +2518,30 @@ test("pack models/ has no orphan bins outside the manifest index",
   const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".bin") && !keyed.has(f));
   assert.deepEqual(orphans, [], "orphan bins are dead pack weight — drop or register them");
 });
+
+// #2501: MeshBuilder's cylinder and cone were wound inside out (clockwise seen
+// from outside) while its box is counter-clockwise, the renderers' front face.
+test("synth-models MeshBuilder winds box, cylinder and cone counter-clockwise outward", async () => {
+  const { MeshBuilder } = await import(pathToFileURL(path.join(ROOT, "tools", "gen", "synth-models.mjs")).href);
+  const shapes = {
+    box: (M) => M.box(1, 2, 3, 2, 3, 4, [1, 1, 1], 0),
+    cyl: (M) => M.cyl(1, 2, 3, 0.9, 2.2, [1, 1, 1], 0, 8),
+    cone: (M) => M.cone(1, 2, 3, 1.5, 0, 3, [1, 1, 1], 0, 8),
+    frustum: (M) => M.cone(1, 2, 3, 1.5, 0.5, 3, [1, 1, 1], 0, 6),
+  };
+  for (const [name, make] of Object.entries(shapes)) {
+    const M = MeshBuilder(); make(M);
+    const { pos, nrm, idx } = M.toMesh(0);
+    const v = (i) => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]];
+    let wrong = 0;
+    for (let t = 0; t < idx.length; t += 3) {
+      const [a, b, c] = [v(idx[t]), v(idx[t + 1]), v(idx[t + 2])];
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const f = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+      const n = [0, 1, 2].map((k) => nrm[idx[t] * 3 + k] + nrm[idx[t + 1] * 3 + k] + nrm[idx[t + 2] * 3 + k]);
+      if (Math.hypot(...f) < 1e-9) continue;   // a cone's apex triangles have no area and no facing
+      if (f[0] * n[0] + f[1] * n[1] + f[2] * n[2] <= 0) wrong++;
+    }
+    assert.equal(wrong, 0, `${name}: ${wrong} of ${idx.length / 3} triangles face against their vertex normals`);
+  }
+});
