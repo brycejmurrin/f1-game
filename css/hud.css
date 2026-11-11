@@ -2194,8 +2194,8 @@ body[data-density="compact"] #bc-tower .bc-row:nth-child(n+11):not(.on) { displa
 /* THE PICTURE-IN-PICTURE (js/render/shared/mirror-pass.js paints the second
    camera into exactly this box; js/race/broadcast.js writes the label). Under
    the pause / camera column, where the sector box and limits strip stood —
-   neither means anything for a replayed car, so they stand down with it. */
-body.bc-on #hud-sectors, body.bc-on #hud-limits { display: none !important; }
+   neither means anything for a replayed car, so they stand down with it
+   (the `body.bc-on :is(…, #hud-sectors, #hud-limits)` hide rule above). */
 #bc-pip {
   --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z);
   position: absolute;

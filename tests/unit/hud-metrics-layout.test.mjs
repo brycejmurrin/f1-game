@@ -293,3 +293,67 @@ test("tower slots reserve in em, and a late font load refits (#3064)", () => {
   }
   assert.match(hud, /document\.fonts\.addEventListener\("loadingdone"/);
 });
+
+// HUD-CODE-AUDIT F-13 (#4448): a HUD hide carries `!important` only where a plain one could lose. Every rule in
+// css/*.css whose SUBJECT names the id is collected with its layer; a plain hide is safe when no rule sets that id
+// a non-`none` display in a later layer (they win whatever the specificity) or in @layer hud at a specificity the
+// hide does not beat. Rules that reach the element through a class or a tag only are the CI hud-layout shards' job.
+const LAYER_ORDER = ["reset", "base", "components", "hud", "overlays", "responsive", "layout"];
+const splitTop = (s, sep) => { const out = []; let d = 0, cur = ""; for (const ch of s) { if (ch === "(" || ch === "[") d++; else if (ch === ")" || ch === "]") d--; if (d === 0 && sep.test(ch)) { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out.map((x) => x.trim()).filter(Boolean); };
+function specificity(sel) {
+  let a = 0, b = 0, c = 0, s = sel;
+  const fn = /:(is|not|has|where)\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/;
+  for (let m; (m = s.match(fn)); s = s.replace(m[0], " ")) {
+    if (m[1] === "where") continue;
+    const best = splitTop(m[2], /,/).map(specificity).sort((x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]).pop() || [0, 0, 0];
+    a += best[0]; b += best[1]; c += best[2];
+  }
+  s = s.replace(/\[[^\]]*\]/g, () => (b++, " ")).replace(/::[\w-]+/g, () => (c++, " "));
+  s = s.replace(/#[\w-]+/g, () => (a++, " ")).replace(/\.[\w-]+|:[\w-]+/g, () => (b++, " "));
+  c += (s.match(/(?:^|[\s>+~])[a-z][\w-]*/gi) || []).length;
+  return [a, b, c];
+}
+const beats = (x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+function cssRules() {
+  const rules = [];
+  for (const f of fs.readdirSync(path.join(root, "css")).filter((f) => f.endsWith(".css"))) {
+    const s = fs.readFileSync(path.join(root, "css", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const stack = []; let start = 0;
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === "{") { stack.push(s.slice(start, i).trim()); start = i + 1; }
+      else if (s[i] === "}") {
+        const pre = stack.pop(), body = s.slice(start, i); start = i + 1;
+        if (pre && !pre.startsWith("@")) {
+          const layer = stack.map((p) => (p.match(/^@layer\s+([\w-]+)/) || [])[1]).filter(Boolean).pop() || "unlayered";
+          for (const one of splitTop(pre.replace(/\s+/g, " "), /,/)) rules.push({ file: f, layer, sel: one, body });
+        }
+      } else if (s[i] === ";" && !stack.length) start = i + 1;
+    }
+  }
+  return rules;
+}
+const subjectHas = (sel, id) => new RegExp("#" + id + "(?![\\w-])").test(splitTop(sel, /[\s>+~]/).pop());
+const displayOf = (body) => (body.match(/(?:^|[;\s])display\s*:\s*([^;}]+)/) || [])[1]?.trim();
+/** Every plain hide of #id beats every non-`none` display rule that could reach #id. */
+function assertPlainHidesWin(id) {
+  const rules = cssRules().filter((r) => subjectHas(r.sel, id) && displayOf(r.body));
+  const hides = rules.filter((r) => /^none\b/.test(displayOf(r.body)));
+  const shows = rules.filter((r) => !/^none\b/.test(displayOf(r.body)));
+  for (const s of shows) {
+    assert.doesNotMatch(displayOf(s.body), /!important/, `${s.file} ${s.sel}: an !important display on #${id}`);
+    const li = LAYER_ORDER.indexOf(s.layer);
+    assert.ok(li >= 0 && li <= LAYER_ORDER.indexOf("hud"), `${s.file} ${s.sel}: a display on #${id} in @layer ${s.layer} beats any plain hud hide`);
+    if (s.layer !== "hud") continue;
+    for (const h of hides.filter((h) => h.layer === "hud" && !/!important/.test(displayOf(h.body))))
+      assert.ok(beats(specificity(h.sel), specificity(s.sel)) > 0, `${h.sel} must out-rank ${s.sel} (${s.file})`);
+  }
+  return { hides, shows };
+}
+const hudCssRules = () => cssRules().filter((r) => r.file === "hud.css");
+
+test("F-13 slice 1: a replay hides #hud-sectors and #hud-limits in ONE rule", () => {
+  for (const id of ["hud-sectors", "hud-limits"]) {
+    const bc = hudCssRules().filter((r) => /^body\.bc-on /.test(r.sel) && subjectHas(r.sel, id) && /^none/.test(displayOf(r.body) || ""));
+    assert.equal(bc.length, 1, `#${id} has one bc-on hide: ${bc.map((r) => r.sel).join(" | ")}`);
+  }
+});

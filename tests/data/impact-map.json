@@ -18140,6 +18140,7 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "push": [
+        "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"
