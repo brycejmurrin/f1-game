@@ -130,7 +130,13 @@ function parseGLTF(file) {
   return { json, bins, dir };
 }
 
-function accessor(gltf, idx) {
+// glTF 2.0 §3.11: a `normalized` integer accessor maps to [0, 1] (unsigned) or
+// [-1, 1] (signed, max(c / MAX, -1)). TEXCOORD_0 as UNSIGNED_BYTE/SHORT is
+// legal and common in quantized exports; read raw, a UV of 255 samples the
+// palette at u = 255 (wrapped to 0) instead of 1.
+const NORM = { 5120: 127, 5121: 255, 5122: 32767, 5123: 65535 };
+
+export function accessor(gltf, idx) {
   const { json, bins } = gltf;
   const a = json.accessors[idx];
   const bv = json.bufferViews[a.bufferView];
@@ -140,9 +146,11 @@ function accessor(gltf, idx) {
   const bin = bins[bv.buffer];
   const out = new Float32Array(a.count * n);
   const stride = bv.byteStride || csz * n;
+  const max = a.normalized ? NORM[a.componentType] : 0;
+  if (a.normalized && !max) throw new Error(`accessor ${idx}: normalized needs a byte or short component type`);
   for (let i = 0; i < a.count; i++) {
     const view = new Ctor(bin.buffer, bin.byteOffset + base + i * stride, n);
-    for (let j = 0; j < n; j++) out[i * n + j] = view[j];
+    for (let j = 0; j < n; j++) out[i * n + j] = max ? Math.max(view[j] / max, -1) : view[j];
   }
   return { data: out, n, count: a.count };
 }
@@ -176,17 +184,31 @@ function xform(m, p) {
           m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13],
           m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
 }
-// Inverse-transpose direction: cofactors divided by determinant sign suffice
-// because each result is normalized. At zero determinant, cofactors still
-// transform oriented surface area (a flattened plane can remain visible).
+// A normal transforms by the inverse-transpose of the upper 3x3, not by the
+// matrix itself: under a non-uniform scale (a box squashed to a wall) the plain
+// matrix tilts a slanted face's normal toward the stretched axis. The cofactor
+// matrix is det * inverse-transpose; the caller normalises, so only det's SIGN
+// matters (a mirrored node must not flip its normals inward). For a rotation
+// with uniform scale the cofactor is parallel to the matrix: same direction.
+export function xformDir(m, p) {
+  const a = m[0], b = m[4], c = m[8], d = m[1], e = m[5], f = m[9], g = m[2], h = m[6], k = m[10];
+  const c00 = e * k - f * h, c01 = f * g - d * k, c02 = d * h - e * g;
+  const c10 = c * h - b * k, c11 = a * k - c * g, c12 = b * g - a * h;
+  const c20 = b * f - c * e, c21 = c * d - a * f, c22 = a * e - b * d;
+  const s = a * c00 + b * c01 + c * c02 < 0 ? -1 : 1;
+  return [s * (c00 * p[0] + c01 * p[1] + c02 * p[2]),
+          s * (c10 * p[0] + c11 * p[1] + c12 * p[2]),
+          s * (c20 * p[0] + c21 * p[1] + c22 * p[2])];
+}
+
+// The importer's per-node handle on xformDir: `mirrored` (negative determinant)
+// tells the caller to swap triangle winding back to front faces. At zero
+// determinant the cofactors still transform oriented surface area, so a
+// flattened plane keeps a usable normal.
 function normalTransform(m) {
-  const [a,b,c,d,e,f,g,h,i] = [m[0],m[4],m[8],m[1],m[5],m[9],m[2],m[6],m[10]];
-  const rows = [e*i-f*h, f*g-d*i, d*h-e*g, c*h-b*i, a*i-c*g, b*g-a*h, b*f-c*e, c*d-a*f, a*e-b*d];
-  const det = a*rows[0]+b*rows[1]+c*rows[2];
-  const sign = det < 0 ? -1 : 1;
-  return { mirrored: det < 0, apply(p) {
-    return [0,3,6].map(r => sign*(rows[r]*p[0]+rows[r+1]*p[1]+rows[r+2]*p[2]));
-  } };
+  const a = m[0], b = m[4], c = m[8], d = m[1], e = m[5], f = m[9], g = m[2], h = m[6], k = m[10];
+  const det = a * (e * k - f * h) + b * (f * g - d * k) + c * (d * h - e * g);
+  return { mirrored: det < 0, apply: (p) => xformDir(m, p) };
 }
 
 // Load a material's base colour, and — when it points at a texture — the decoded
