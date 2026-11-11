@@ -431,6 +431,9 @@
       "silence": [
         "tests/unit/crowd-audio.test.mjs"
       ],
+      "swell": [
+        "tests/unit/crowd-audio.test.mjs"
+      ],
       "update": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
@@ -499,6 +502,7 @@
         "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "deployBoost": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "driveBrakeTone": [
@@ -552,12 +556,14 @@
         "tests/unit/wind-speed.test.mjs"
       ],
       "lightsOut": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "onInterrupted": [
         "tests/unit/lazy-audio-yield.test.mjs"
       ],
       "pitGun": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "rebuildCtx": [
@@ -783,6 +789,7 @@
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "deployLevel": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "detach": [
@@ -793,7 +800,8 @@
       ],
       "harvestLevel": [
         "tests/unit/audio-tune.test.mjs",
-        "tests/unit/ers-audio-layer.test.mjs"
+        "tests/unit/ers-audio-layer.test.mjs",
+        "tests/unit/pu-harvest-audio.test.mjs"
       ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
@@ -1011,6 +1019,9 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
+      ],
+      "pickChannelVoice": [
+        "tests/unit/radio-voice.test.mjs"
       ],
       "plan": [
         "tests/unit/announcer.test.mjs",
@@ -4905,7 +4916,8 @@
         "tests/specs/monaco-foundation.spec.js",
         "tests/specs/season.spec.js",
         "tests/unit/boot-script-repair-overlay.test.mjs",
-        "tests/unit/camera-ride.test.mjs"
+        "tests/unit/camera-ride.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs"
       ]
     },
     "js/circuits/montreal.js": {
@@ -13188,6 +13200,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs"
@@ -16816,6 +16829,7 @@
     },
     "js/track/circuit-meta.js": {
       "*": [
+        "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/circuit-def-fields.test.mjs",
         "tests/unit/circuit-meta.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
@@ -16975,6 +16989,7 @@
         "tests/unit/scene-live.test.mjs"
       ],
       "*": [
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/home-world.test.mjs"
       ]
     },
@@ -18866,6 +18881,7 @@
         "tests/specs/ui-resize.spec.js",
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/phone-tools.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/test-groups.test.mjs"

@@ -61,7 +61,7 @@ test("no open PR: create one, never arm auto-merge, and keep the token off the a
     const r = openPrRest("claude/unit-branch", "ghp_SECRET_TOKEN");
     assert.equal(r.pr, "https://github.com/brycejmurrin/f1-game/pull/999");
     assert.equal(r.autoMerge, undefined);
-    assert.match(r.note, /do not arm auto-merge/i);
+    assert.equal(r.note, "PR opened; do not arm auto-merge — Merge Desk arms MERGE on ready tip-green");
     const c = calls(dir);
     assert.equal(c.length, 2, "list + create only — no arm, no readback");
     for (const call of c) {
@@ -69,7 +69,7 @@ test("no open PR: create one, never arm auto-merge, and keep the token off the a
       assert.match(call.stdin, /^header = "Authorization: Bearer ghp_SECRET_TOKEN"$/m);
       assert.ok(call.argv.includes("-K") && call.argv.includes("-"), "curl must read its config from stdin");
     }
-    assert.match(c[0].argv.at(-1), new RegExp(`/pulls\\?state=open&head=brycejmurrin:claude%2Funit-branch&base=${encodeURIComponent(DEPLOY_BRANCH).replace(/\//g, "\\/")}`));
+    assert.equal(c[0].argv.at(-1), "https://api.github.com/repos/brycejmurrin/f1-game/pulls?state=open&head=brycejmurrin:claude%2Funit-branch&base=claude%2Ff1-game-project-26h3ng&per_page=1");
     const body = JSON.parse(JSON.parse(/^data-binary = (".*")$/m.exec(c[1].stdin)[1]));
     assert.equal(body.head, "claude/unit-branch");
     assert.equal(body.base, DEPLOY_BRANCH);
@@ -101,9 +101,9 @@ test("an open PR for the head is reused, nothing is created, and auto-merge is n
   }, (dir) => {
     const r = openPrRest("claude/unit-branch", "t");
     assert.equal(r.pr, "https://github.com/brycejmurrin/f1-game/pull/7");
-    assert.match(r.note, /already open/);
+    assert.equal(r.note, "PR already open; the push updated it. Do not arm auto-merge — Merge Desk arms MERGE on ready tip-green");
     assert.equal(r.autoMerge, undefined);
-    assert.match(r.note, /do not arm auto-merge/i);
+    assert.equal(r.note, "PR already open; the push updated it. Do not arm auto-merge — Merge Desk arms MERGE on ready tip-green");
     const urls = calls(dir).map((c) => c.argv.at(-1));
     assert.equal(urls.length, 1, "list only");
     assert.ok(!urls.some((u) => /\/pulls$/.test(u)), "nothing may be created when a PR is already open");

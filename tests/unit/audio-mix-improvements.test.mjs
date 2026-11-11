@@ -75,3 +75,31 @@ test('audition deadline cancels its own playback and pending timers while preser
     [...timers.values()].find((t) => t.ms === 6000).fn(); assert.equal(S.currentTrackId(), takeover ? 'user:2' : null); assert.equal(timers.size, 0); S.stopMusic();
   }
 });
+// Audit W19 (2026-11-09): Safari evicts best-effort storage (7 days without interaction, webkit.org/blog/10218;
+// storage pressure, webkit.org/blog/14403), so MY TRACKS asks navigator.storage.persist() once after a track lands.
+function musicLibHarness(storage) {
+  const rows = [];
+  const req = (fill) => { const r = {}; queueMicrotask(() => { fill(r); r.onsuccess && r.onsuccess(); }); return r; };
+  const db = { close() {}, objectStoreNames: { contains: () => true }, transaction() {
+    const t = {}; const store = { getAll: () => req((r) => { r.result = rows.slice(); }), add(rec) { const r = req((x) => { rec.id = rows.length + 1; rows.push(rec); x.result = rec.id; }); queueMicrotask(() => queueMicrotask(() => t.oncomplete && t.oncomplete())); return r; } };
+    t.objectStore = () => store; return t; } };
+  const ctx = vm.createContext({ Log: { info() {}, warn() {} }, GameAudio: { addTracks() {}, tracks: () => [] }, document: { readyState: 'loading', getElementById: () => null, addEventListener() {} }, URL: { createObjectURL: () => 'blob:u', revokeObjectURL() {} }, setTimeout, clearTimeout, queueMicrotask,
+    navigator: storage === undefined ? {} : { storage }, indexedDB: { open() { const r = {}; queueMicrotask(() => { r.result = db; r.onsuccess(); }); return r; } } });
+  ctx.window = ctx; vm.runInContext(read('js/audio/music-lib.js'), ctx, { filename: absSrc("js/audio/music-lib.js") });
+  return ctx.MusicLib;
+}
+test('MY TRACKS asks for persistent storage once, after the first saved track, and survives its absence', async () => {
+  let asks = 0;
+  const L = musicLibHarness({ persist: () => { asks++; return Promise.resolve(false); } });
+  await L.init();
+  assert.equal(asks, 0, 'opening the library asks nothing');
+  const song = (n) => ({ name: n + '.mp3', type: 'audio/mpeg', size: 1000 + n.length });
+  const r = await L.add([song('one')]);
+  assert.equal(r.added, 1);
+  assert.equal(asks, 1, 'the first saved track asks for persistence');
+  await L.add([song('two'), song('three')]);
+  assert.equal(asks, 1, 'once per page, refusal or not');
+  const N = musicLibHarness(undefined); await N.init();
+  assert.equal((await N.add([song('four')])).added, 1, 'no StorageManager: the upload still lands');
+  assert.doesNotMatch(read('js/audio/music-lib.js').slice(0, 600), /forever/, 'the header no longer promises forever');
+});

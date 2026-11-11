@@ -320,7 +320,7 @@ test("native ZIP download waits for sharing and never reports a cancelled or fai
     assert.equal(saved.name, "apex-startlines-2026.zip");
     assert.equal(saved.blob.type, "application/zip");
     assert.equal(download.disabled, true);
-    assert.doesNotMatch(status.textContent, /Downloaded/);
+    assert.equal(status.textContent, "Gathering 2026 — this can take ~10 min…\nmeetings: 0 — gathering (~10 min, paced to avoid rate limits)…\ndone — 0 circuits captured\nReady to download.\nrendering 0 circuit map image(s)…");
     assert.equal(h.downloadName(), null, "native ZIP must not fall back to an intercepted anchor");
     if (outcome === "success") resolve(); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
     await h.pump(() => !download.disabled);
@@ -370,9 +370,7 @@ test("an empty meetings body still downloads a valid zip with no circuits", asyn
   const out = await runExport(openF1Fetch((url) => (
     url.includes("/meetings") ? { body: [] } : undefined
   )));
-  assert.match(out.status, /meetings: 0/);
-  assert.match(out.status, /0 circuits captured/);
-  assert.doesNotMatch(out.status, /ERROR/);
+  assert.equal(out.status, "Gathering 2026 — this can take ~10 min…\nmeetings: 0 — gathering (~10 min, paced to avoid rate limits)…\ndone — 0 circuits captured\nReady to download.\nrendering 0 circuit map image(s)…\nDownloaded apex-startlines-2026.zip — 1 file(s), 0 KB");
   assert.equal(out.download.disabled, false);
   const entries = unzip(await out.blob.arrayBuffer());
   assert.deepEqual(entries.map((entry) => entry.name), ["startlines-2026.json"]);
@@ -399,7 +397,7 @@ test("a failed OpenF1 response leaves Download disabled and records the error", 
   assert.equal(out.blob, null);
   assert.equal(out.download.disabled, true);
   assert.equal(out.download.textContent, "Download");
-  assert.match(out.status, /ERROR: not found/);
+  assert.equal(out.status, "Gathering 2026 — this can take ~10 min…\nERROR: not found");
 });
 
 for (const defect of ["start", "end", "middle"]) {

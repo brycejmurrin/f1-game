@@ -41,7 +41,7 @@ test("doctor checks the inspected package Node engine rather than a stale minimu
   assert.equal(check("20.19.0").status, "fail");
   assert.equal(check("21.7.3").status, "fail");
   assert.equal(check("22.0.0").status, "pass");
-  assert.match(check("22.0.0").message, />=22/);
+  assert.equal(check("22.0.0").message, "Node 22.0.0; package requires >=22");
   put(dir, "package.json", JSON.stringify({ engines: { node: ">=22.3.1" } }));
   assert.equal(check("22.3.0").status, "fail");
   assert.equal(check("22.3.1").status, "pass");
@@ -119,7 +119,7 @@ test("doctor keeps remote skill locators unverified and resolves local resources
   const checks = result.checks.filter((c) => /^session\.skill\.\d+\.resources$/.test(c.id));
   assert.equal(checks[0].details.state, "unverified");
   assert.equal(checks[0].details.remoteResources, 2);
-  assert.doesNotMatch(checks[0].message, /missing|unavailable/i);
+  assert.equal(checks[0].message, "Remote skill resource locators remain unverified; no filesystem lookup or remote request was made");
   assert.equal(checks[1].details.state, "local-present");
   assert.equal(checks[1].status, "pass");
   assert.equal(checks[2].details.state, "local-present");
@@ -212,7 +212,7 @@ test("daemon health requires service/root identity, missing tmux is actionable, 
   const code = `import importlib.util, json, os, subprocess\nfrom pathlib import Path\nfrom argparse import Namespace\nspec=importlib.util.spec_from_file_location("probe", ${JSON.stringify(path.join(ROOT, "tools/mcp/probe-mcp.py"))})\np=importlib.util.module_from_spec(spec); spec.loader.exec_module(p)\np.CHROME_DAEMON_STATE=Path(os.environ["APEX_TEST_ROOT"])/"state"\np.CHROME_DAEMON_STATE.write_text("1234")\nclass Response:\n status=200\n def __enter__(self): return self\n def __exit__(self,*a): pass\n def read(self,*a): return json.dumps(health).encode()\nhealth={"ok":True}\np.urllib.request.urlopen=lambda *a,**kw: Response()\nassert p.daemon_port() is None\nhealth={"ok":True,"service":"apex-probe-chrome","rootId":"other-root"}\nassert p.daemon_port() is None\nhealth["rootId"]=p.CHROME_DAEMON_ID\nassert p.daemon_port()==1234\np.daemon_port=lambda:None\np.shutil.which=lambda name:None\nassert p.cmd_chrome_start(Namespace(port=1234))==1\nassert p.cmd_chrome_stop(Namespace())==1\nassert p.CHROME_DAEMON_STATE.exists()\np.daemon_port=lambda:1234\np._tmux=lambda *a:subprocess.CompletedProcess(a,1,"","denied")\nimport time\ntime.sleep=lambda n:None\nassert p.cmd_chrome_stop(Namespace())==1\nassert p.CHROME_DAEMON_STATE.exists()\np.daemon_port=lambda:None\nassert p.cmd_chrome_stop(Namespace())==1\nassert p.CHROME_DAEMON_STATE.exists()\np._tmux=lambda *a:subprocess.CompletedProcess(a,1,"","can\'t find session: absent")\nassert p.cmd_chrome_stop(Namespace())==0\nassert not p.CHROME_DAEMON_STATE.exists()\nprint("daemon safety passed")\n`;
   const result = run("python3", ["-c", code], { env: { ...process.env, APEX_TEST_ROOT: dir, PYTHONDONTWRITEBYTECODE: "1" } });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /daemon safety passed/);
+  assert.equal(result.stdout, "stopped (if it was running)\ndaemon safety passed\n");
   assert.match(result.stderr, /tmux is required/);
 });
 

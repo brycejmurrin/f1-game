@@ -1036,7 +1036,7 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         screen: { type: "string", description: "layout-audit screen id (title, select, garage, settings, …)." },
-        viewport: { type: "string", description: "Default ios-iphone-landscape. Ids: `node tools/ui/layout-audit.mjs --list` (a phone at 844x390 is ios-iphone-landscape-844)." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape. Ids: `node tools/ui/layout-audit.mjs --list` (a phone at 844x390 is ios-iphone-landscape-844). `bryce-standalone` / `bryce-safari` = the owner's iPhone with his live settings (UI SIZE 61 %) and a `paint` block of PAINTED sizes." },
         scale: { type: "number", minimum: 40, maximum: 200, description: "Interface size %, default 100." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -1055,7 +1055,7 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         screen: { type: "string", description: "A screen id from `node tools/ui/layout-audit.mjs --list` (title, select, garage, settings, …)." },
-        viewport: { type: "string", description: "Default ios-iphone-landscape; ids from the same --list (a phone at 844x390 is ios-iphone-landscape-844)." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape; ids from the same --list (a phone at 844x390 is ios-iphone-landscape-844; the owner's iPhone with his live settings is bryce-standalone / bryce-safari)." },
         image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -1320,6 +1320,8 @@ const HUD_DEVICE_ALIASES = Object.freeze({
   "ios-iphone-landscape-844": "phone-landscape-844x390",
   "ios-iphone-landscape": "phone-landscape-844x390",
   "ios-iphone-landscape-safari": "phone-short-734x343",
+  "bryce-standalone": "bryce-852x393",
+  "bryce-safari": "bryce-852x368",
   "ios-iphone-portrait": "phone-portrait-390x844",
   "desktop-1280x800": "desktop-1280",
   "desktop-1440x900": "desktop-1280",
