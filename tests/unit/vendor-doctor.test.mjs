@@ -104,6 +104,8 @@ test("codexEnv seeds auth.json once at 0600 and never passes the saved secrets o
   codexEnv({ APEX_CODEX_HOME: home, APEX_CODEX_AUTH_JSON_B64: b64 });
   assert.equal(fs.readFileSync(path.join(home, "auth.json"), "utf8"), "refreshed", "a refreshed sign-in is never overwritten");
   assert.deepEqual(codexEnv({ PATH: "/bin" }), { PATH: "/bin" });
+  const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-home-"));
+  assert.equal(codexEnv({ HOME: fakeHome, APEX_CODEX_AUTH_JSON_B64: b64 }).CODEX_HOME, path.join(fakeHome, ".codex-apex"), "the saved sign-in alone is enough");
 });
 
 test("runVendor builds read-only argv per vendor, scrubs the answer and reports a missing CLI", async () => {

@@ -12,10 +12,11 @@
  *   APEX_CLAUDE_B_OAUTH_TOKEN  a `claude setup-token` token of that account, saved by Bryce in the cloud environment
  *   APEX_CLAUDE_CONFIG_DIR     that account's config directory (`CLAUDE_CONFIG_DIR=<dir> claude auth login` once)
  * Every variable of the hosting session (CLAUDE_*, ANTHROPIC_*, CCR_*) is dropped from the child. Codex reads its
- * sign-in from APEX_CODEX_HOME when set; APEX_CODEX_AUTH_JSON_B64 (base64 of auth.json, saved the same way) seeds
- * that directory once when it holds no auth.json. No value of any of these is ever printed.
+ * sign-in from APEX_CODEX_HOME (default ~/.codex-apex once a saved sign-in exists); APEX_CODEX_AUTH_JSON_B64 (base64
+ * of auth.json, saved the same way) seeds that directory once when it holds no auth.json. No value of any of these is ever printed.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -67,7 +68,7 @@ export function secondAccountEnv(env, { tmpDir } = {}) {
 
 /** Codex child env: APEX_CODEX_HOME selects the sign-in directory; a saved auth.json seeds it once, mode 0600. */
 export function codexEnv(env) {
-  const home = env.APEX_CODEX_HOME;
+  const home = env.APEX_CODEX_HOME || (env.APEX_CODEX_AUTH_JSON_B64 ? path.join(env.HOME || os.homedir(), ".codex-apex") : null);
   if (!home) return env;
   const auth = path.join(home, "auth.json");
   if (env.APEX_CODEX_AUTH_JSON_B64 && !fs.existsSync(auth)) {
