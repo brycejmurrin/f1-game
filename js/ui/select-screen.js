@@ -1058,9 +1058,16 @@ function drawElevProfile(cv, t, showEl) {
   // 2.5x horizontally and 1.0x vertically, smearing the 8px labels wide. Size
   // the buffer to the measured box times the effective zoom x dpr (the house
   // minimap pattern, capped at 3), and keep drawing in CSS px via the
-  // transform. Falls back to the attributes when hidden (zero box).
-  const boxW = cv.clientWidth || cv.width, boxH = cv.clientHeight || cv.height;
-  const ratio = Math.min(3, Math.max(1, (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  // transform. A hidden box (display:none: the compact picker, the modal before
+  // its reveal) is NOT drawn: falling back to the buffer multiplied it by dpr on
+  // every pick (280x36 -> 22680x2916, #5062). The next visible pass draws it.
+  let boxW = cv.clientWidth, boxH = cv.clientHeight;
+  if (!(boxW > 0 && boxH > 0)) {
+    target.hidden = false;   // a self-hidden canvas must be able to measure again
+    boxW = cv.clientWidth; boxH = cv.clientHeight;
+    if (!(boxW > 0 && boxH > 0)) return false;
+  }
+  const ratio = Math.min(3, 4096 / boxW, 4096 / boxH, Math.max(1, (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
   const bw = Math.max(1, Math.round(boxW * ratio)), bh = Math.max(1, Math.round(boxH * ratio));
   if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
   const ew = boxW, eh = boxH;
@@ -1582,6 +1589,8 @@ function openTrackDetail() {
     // A queued rAF/ResizeObserver delivery may arrive after CLOSE. Never
     // measure and redraw a hidden modal, and never retain its circuit closure.
     if (modal.hidden) return;
+    // The strip was drawn while the modal was display:none (a zero box, so deferred).
+    drawElevProfile(document.getElementById("track-detail-elev"), t, document.getElementById("track-detail-elev-wrap"));
     // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
     // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
     // pixels and re-introduce stretch at UI SIZE ≠ 100%.

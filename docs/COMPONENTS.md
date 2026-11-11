@@ -190,7 +190,7 @@ not tabled: they move with every edit and nothing reads them.
 | `trb-` | `race-setup.css` | — |  |
 | `tune-` | `settings.css` | `components.css`, `garage-experience.css`, `photo-studio.css`, `race-setup.css`, `settings-controls.css`, `tuner.css` |  |
 | `vs-` | `overlays.css` | — |  |
-| `watch-` | `watch-transport.css` | `helmet-visor.css` | WATCH replay transport and its race layout context |
+| `watch-` | `watch-transport.css` | `helmet-visor.css`, `hud.css` | WATCH replay transport and its race layout context |
 | *(unprefixed)* | `overlays.css` | most files | state classes (below) |
 
 `.pad-ring` (`responsive.css`) is the PHONE CONTROLLER's focus ring: `PhonePad`
@@ -265,7 +265,7 @@ missing class, a file that left, or a file that joined.
 - `.mirror-controls` — `hud` + `touch-controls`. LEFT-HANDED body class (`js/game.js`): `touch-controls` reverses `#hud-dock`, so `#dock-right` paints on the left; `hud` re-points TYRES's `--apex-dock-left` anchor to it, and `js/ui/hud.js` `pickDocks()` hands the fit the docks by painted side.
 - `.bc-on` — `helmet-visor` + `hud`. Body class for the broadcast HUD (a REAL RACE WATCH / HIGHLIGHTS run): `hud` hides the driving chrome, the touch buttons and CAM; `helmet-visor` skips refraction while broadcast is up.
 - `.bc-head` — `hud` + `watch-transport`. Timing header button semantics.
-- `.watch-controls-on` — `helmet-visor` + `watch-transport`. Body class for the WATCH transport strip: `watch-transport` hides the driving HUD chrome and the helmet `::before` shield; `helmet-visor` also drops the world refraction filter so the replay view is not bent.
+- `.watch-controls-on` — `helmet-visor` + `hud` + `watch-transport`. Body class for the WATCH transport strip: `watch-transport` hides the driving HUD chrome and the helmet `::before` shield; `hud` folds it into the AERO / BRAKE BIAS and RELATIVE / STRATEGY / INPUTS hide rules; `helmet-visor` also drops the world refraction filter so the replay view is not bent.
 - `.pc-stickwrap` / `.pc-move-wrap` / `.pc-look-wrap` / `.pc-altcol` / `.pc-btn` — `hud` + `photo-studio`. Photo Studio borrows the camera controls, then fits their zoom and anchors around its side or bottom dock while it is open.
 - `.pc-uihidden` — `helmet-visor` + `hud`. Photo-mode HIDE HUD: `hud` clears the driving chrome for an unobstructed frame; `helmet-visor` drops the refraction filter with it.
 - `.pc-nopanel` — `hud` + `tuner`

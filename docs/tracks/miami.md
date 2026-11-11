@@ -71,3 +71,9 @@ Local scenery only (`js/circuits/scenery/miami.js` + `tests/data/landmarks/miami
 - Marina bollard edge + denser berth/yacht ranks; bridge abutment pads outside span supports.
 - Hard Rock neon rim + required `miami-hard-rock-neon` LED tower for night read.
 - Palm colour variety + pastel Deco extras; landmarks: hard-rock neon, MSC Yacht Club, beach-club cabana, MIA sign.
+
+## Turn numbers (2026-11-11, #5316 leftovers)
+
+Source: F1 live-timing circuit corner markers (`https://api.multiviewer.app/api/v1/circuits/151/2026`, the data FastF1 `get_circuit_info()` reads), fitted onto the built centreline by `tools/track/official-corners.cjs` (rms 6.5 m), checked against the FIA 2026 event circuit map (19 turns). Each `turns[k-1]` is the built curvature apex nearest official marker k (corner-frames: 0 turn offenders).
+
+Old list bunched T5-T11 into 0.18-0.28 and missed T9 and T10 (gentle lefts, 0.3770 / 0.4374), T15 (0.6170) and T19 (0.9508). Turnpike chicane = T14/T15: its tyre walls and aprons moved onto those apexes. Aero zones now FIA: after T8 (through T9-T10), T16, T19. Open: the built T1 reads as a right (k<0); unchecked against a rendered lap.
