@@ -22,8 +22,8 @@
 // --vm boots the REAL js/game.js in a Node VM (tools/lib/game-vm.cjs: renderer
 // and DOM stubbed) and runs the same command there: every JSON surface that
 // needs no pixels (help, world, track, field, atmosphere, objective, describe,
-// query, scene, rollout, survey, model) answers in seconds instead of after a
-// 30-45 s SwiftShader boot. The rasters (render / frame / plan / car / visible)
+// query, scene, rollout, survey, model, car) answers in seconds instead of after a
+// 30-45 s SwiftShader boot. The rasters (render / frame / plan / visible)
 // read the last DRAWN frame and are refused with --vm.
 //
 // WHY a CLI on top of __apex.world() and friends: an agent driving this game
@@ -205,7 +205,8 @@ if (!Number.isInteger(opts.seed) || opts.seed < 0 || opts.seed > 0xffffffff) { c
 // Budgets sized off measurements, shared with apex-eval.mjs.
 const BOOT_MS = 45000, TRACK_MS = 45000;
 
-const RASTERS = new Set(["render", "frame", "plan", "car", "visible"]);
+// `car` is carView() JSON (measured geometry, no frame), so it runs in the VM too.
+const RASTERS = new Set(["render", "frame", "plan", "visible"]);
 // No top-level await here: tests/unit/capture-tools-regressions.test.mjs
 // compiles this file as a classic script in a VM.
 async function runVm() {
@@ -217,7 +218,9 @@ async function runVm() {
   console.error(`agent: vm route track=${track} cmd=${cmd}`);
   let g = null;
   try {
-    g = await createGame(cmd === "help" ? {} : { track, tod: opts.tod || undefined, wx: opts.weather || undefined });
+    // --seed reaches the VM the way the browser route puts it in the URL (?seed=N; game-vm defaults to 1).
+    const search = "?seed=" + opts.seed;
+    g = await createGame(cmd === "help" ? { search } : { track, tod: opts.tod || undefined, wx: opts.weather || undefined, search });
     if (cmd === "help") { console.log(JSON.stringify(g.apex.agentHelp(), null, 2)); }
     else {
       g.apex.go();

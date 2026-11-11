@@ -78,6 +78,21 @@ test("HTTP token, client args-file, quiet envelope, semantic exit, transcript an
   await running.stop(); assert.equal(fs.existsSync(path.join(f.run,"source")),false); assert.equal(fs.existsSync(path.join(f.run,"stopped.json")),true);
 });
 
+test("probe context holds no host-realm objects: constructor chains stay in the VM's own Function", async t => {
+  const f=fixture(), h=new WorkflowHarness({repo:f.repo,runDir:f.run,plan:plan(30)}); t.after(()=>h.close());
+  const probe=async test=>{ const r=await h.call({id:"rg_worker",tool:"probe",args:{files:[VALUE_FILE],test}}); assert.equal(r.error,false,r.output); return JSON.parse(r.output).result; };
+  for (const route of ["this.constructor.constructor", "globalThis.constructor.constructor", "console.log.constructor", "console.constructor.constructor",
+    "performance.now.constructor", "Object.getPrototypeOf(globalThis).constructor.constructor", "(function(){return this})().constructor.constructor"]) {
+    assert.equal(await probe(`typeof ${route}("return typeof process")()`), "string", route);
+    assert.equal(await probe(`${route}("return typeof process")()`), "undefined", route);
+    assert.equal(await probe(`${route}("return typeof require")()`), "undefined", route);
+  }
+  assert.equal(await probe("typeof process + typeof require"), "undefinedundefined");
+  // The ordinary probe surface still works: console capture, performance stub, completion value.
+  const r=await h.call({id:"rg_worker",tool:"probe",args:{files:[VALUE_FILE],test:'console.log("n", Value.number, performance.now()); ({ n: Value.number })'}});
+  assert.deepEqual(JSON.parse(r.output), { logs: ["n 7 0"], result: { n: 7 } });
+});
+
 test("probe help documents the script and IIFE contract",()=>{ assert.match(PROBE_HELP,/script completion/); assert.match(PROBE_HELP,/IIFE/); });
 
 test("HTTP probes bound serialization and microtasks, reject Promise completions, and recover", { timeout: 8000 }, t => {

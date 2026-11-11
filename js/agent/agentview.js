@@ -1703,6 +1703,7 @@ const AgentView = (function () {
         }
         syncRenderAnchors(G.cars);
         update(dt);
+        if (typeof ApexLobby !== "undefined") ApexLobby.afterStep(G);   // the lap log fieldLaps() reads
         ran++;
 
         const sp = p.speed || 0;
@@ -1947,16 +1948,15 @@ const AgentView = (function () {
         },
         read: {
           telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
-          timing: "timing() sectorState() lapHistory() fieldState()",
+          timing: "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()",
           rendering: "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)",
           geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()",
           catalog: "tracks() teams() info()",
         },
         control: {
-          stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)',
-          reproduce: "seed(n) sets the sim seed; same seed + same inputs => same "
-                   + "result. Pin it before any A/B or the comparison is noise",
-          drive: "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()",
+          stage: "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)",
+          reproduce: "seed(n): same seed + inputs => same result; pin it before any A/B",
+          drive: "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()",
           world: "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)",
           field: "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)",
         },
@@ -1966,9 +1966,7 @@ const AgentView = (function () {
           "decide vs show": "read world()/scene()/trackInfo()/the read hooks to "
             + "DECIDE; call render() only to SEE — its glyphs are approximate",
           "lean default, pull detail": "the world is stored in FULL but never "
-            + "dumped — a flat serialisation is huge and reads worse. Keep the "
-            + "default lean and pull with describe(id)/query() where a decision "
-            + "needs it",
+            + "dumped; pull with describe(id)/query() where a decision needs it",
           "per tick": 'world({detail:"brief", since:<seq>}) — ~355 bytes/step, '
             + "34x cheaper than full. detail is the big lever",
         },

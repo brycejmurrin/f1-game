@@ -1,7 +1,9 @@
 // @doc Atomic cross-owner admission and complete manifests for durable Apex jobs.
+// Also: process birth identity (processBirth / compareBirth) and the one-browser lock file (readLock / reapStaleLock).
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { alive } from "../lib/process-tree.mjs";
 
 export function publishJobManifest(file, meta) {
@@ -57,4 +59,78 @@ export function takeJobAdmission(dir, owner, processBirth) {
     return release;
   }
   return null;
+}
+
+// ── Process birth: /proc starttime + boot id (or a UTC ps lstart), so a recorded PID can be told from a reused one.
+/** A string naming the process's start, or null when it cannot be read (gone, or no procfs and no ps). */
+export function processBirth(pid) {
+  if (!Number.isInteger(Number(pid)) || Number(pid) <= 0) return null;
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    const start = stat.slice(stat.lastIndexOf(")") + 2).split(/\s+/)[19];
+    const boot = fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
+    if (start && boot) return `proc:${boot}:${start}`;
+  } catch { /* portable fallback below */ }
+  try {
+    const start = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
+      encoding: "utf8", timeout: 5000, env: { ...process.env, TZ: "UTC0", LC_ALL: "C", LANG: "C" },
+    }).trim();
+    // Version the canonical format: old ps records inherited TZ/locale, so a
+    // mismatch with them cannot prove that the original process has exited.
+    return start ? `ps-utc-v1:${start}` : null;
+  } catch { return null; }
+}
+
+const scheme = (birth) => String(birth).split(":", 1)[0];
+
+/** "same": recorded identity is this live process; "different": same scheme, other start (PID reused);
+ *  "unknown": either side missing or the schemes differ, so nothing is proven. */
+export function compareBirth(recorded, current) {
+  if (!recorded || !current || scheme(recorded) !== scheme(current)) return "unknown";
+  return recorded === current ? "same" : "different";
+}
+
+// ── The one-browser lock (scratch/apex-browser.lock): owner stamp with start time, staleness, race-safe reaping.
+const isObject = (v) => v != null && typeof v === "object" && !Array.isArray(v);
+const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
+
+/** The payload acquire writes: pid + its birth, so a reused PID never reads as the holder. */
+export const lockPayload = (tool, pid = process.pid) => ({ pid, birth: processBirth(pid), since: Date.now(), tool, token: randomUUID() });
+
+/** {held:false} | {held:false, stale:true, pid, text} | {held:true, pid, since, tool, birth} | {held:true, error}.
+ *  Stale only when the owner is dead, or alive with a different start time than the one stamped. A legacy lock
+ *  with no birth falls back to liveness alone. */
+export function readLock(lockPath, { alive = pidAlive, birthOf = processBirth } = {}) {
+  let text;
+  try { text = fs.readFileSync(lockPath, "utf8"); }
+  catch (e) { return e.code === "ENOENT" ? { held: false } : { held: true, stale: false, error: "unreadable" }; }
+  let raw;
+  try { raw = JSON.parse(text); } catch { return { held: true, stale: false, error: "unreadable" }; }
+  if (!isObject(raw) || !Number.isInteger(Number(raw.pid)) || Number(raw.pid) <= 0) return { held: true, stale: false, error: "invalid owner" };
+  const pid = Number(raw.pid);
+  if (!alive(pid)) return { held: false, stale: true, pid, text };
+  if (raw.birth && compareBirth(raw.birth, birthOf(pid)) === "different") return { held: false, stale: true, pid, text, reused: true };
+  return { held: true, pid, since: raw.since || null, tool: raw.tool || null, birth: raw.birth || null };
+}
+
+/** Remove a stale lock without ever removing a fresh one: move it aside atomically, then confirm the moved bytes are
+ *  the stale ones judged; if a new owner's lock was moved instead, put it back (link fails if yet another exists). */
+export function reapStaleLock(lockPath, opts = {}) {
+  const info = readLock(lockPath, opts);
+  if (!info.stale) return { reaped: false, info };
+  const aside = `${lockPath}.${randomUUID()}.reap`;
+  try { fs.renameSync(lockPath, aside); }
+  catch (e) { return { reaped: false, info, error: e.code }; }   // gone already: another reaper won
+  try {
+    const moved = fs.readFileSync(aside, "utf8");
+    if (moved === info.text) return { reaped: true, info };
+    try { fs.linkSync(aside, lockPath); } catch { /* a newer owner already holds it */ }
+    return { reaped: false, info, restored: true };
+  } finally { fs.rmSync(aside, { force: true }); }
+}
+
+/** Write a fresh lock exclusively; null on success, "held" when another owner has it. */
+export function writeLock(lockPath, payload) {
+  try { fs.writeFileSync(lockPath, JSON.stringify(payload), { flag: "wx" }); return null; }
+  catch (e) { if (e.code === "EEXIST") return "held"; throw e; }
 }

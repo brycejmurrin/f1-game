@@ -103,6 +103,14 @@ for (const rel of PARSED) {
   });
 }
 
+// W25 row 13 (2026-11): the three-peer sibling had no --help at all and ran the whole handshake.
+test("rtc-e2e-3p.mjs --help prints its usage line and exits 0 without booting Chromium", () => {
+  const r = runFast("tools/net/rtc-e2e-3p.mjs", "--help");
+  assert.equal(r.error, undefined, `--help did not return within ${FAST_MS} ms`);
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  assert.equal(r.stdout.split("\n")[0], "usage: node tools/net/rtc-e2e-3p.mjs");
+});
+
 test("gen-shell.mjs refuses an unknown flag instead of writing", () => {
   const r = spawnSync(process.execPath, ["tools/gen/gen-shell.mjs", "--bogus"], { cwd: ROOT, encoding: "utf8", timeout: 20000 });
   assert.equal(r.status, 2, r.stdout + r.stderr);

@@ -240,22 +240,35 @@ export class WorkflowHarness {
       // Node's default microtask queue can run Promise callbacks after the VM
       // timeout scope. Keep context-created callbacks inside that scope.
       // https://nodejs.org/docs/latest-v24.x/api/vm.html#timeout-interactions-with-asynchronous-tasks-and-promises
-      const logs = [], context = vm.createContext({ console: { log: (...v) => logs.push(v.map(String).join(" ")), warn: (...v) => logs.push(v.map(String).join(" ")), error: (...v) => logs.push(v.map(String).join(" ")) }, performance: { now: () => 0 } }, { microtaskMode: "afterEvaluate" });
+      // Nothing from the host realm enters the context: an in-realm global (or a null-prototype
+      // one on Node without DONT_CONTEXTIFY) plus console/performance/finish built by source run
+      // inside it, so `this.constructor.constructor` or `console.log.constructor` stay in the VM's
+      // own Function. Only primitives (source text, a boolean, the JSON output string) cross.
+      const context = vm.createContext(vm.constants?.DONT_CONTEXTIFY ?? Object.create(null), { microtaskMode: "afterEvaluate" });
       // Capture intrinsics before setup/source can replace them. Serialization
       // can execute getters/toJSON, so invoke it inside a timed VM evaluation.
-      const finish = vm.runInContext(`((stringify, then, apply) => (value, logs, promise) => {
-        if (promise) { apply(then, value, [undefined, () => {}]); return null; }
-        return stringify({ logs, result: value ?? null });
-      })(JSON.stringify, Promise.prototype.then, Reflect.apply)`, context, { timeout: this.probeTimeoutMs });
+      const slot = "__workflowProbe_" + crypto.randomBytes(8).toString("hex");
+      vm.runInContext(`(() => {
+        const logs = [], stringify = JSON.stringify, then = Promise.prototype.then, apply = Reflect.apply;
+        const push = Array.prototype.push, map = Array.prototype.map, join = Array.prototype.join, toStr = String;
+        const line = (...v) => { apply(push, logs, [apply(join, apply(map, v, [x => toStr(x)]), [" "])]); };
+        globalThis.console = { log: line, warn: line, error: line };
+        globalThis.performance = { now: () => 0 };
+        Object.defineProperty(globalThis, ${JSON.stringify(slot)}, { value: { finish(promise) {
+          const value = globalThis[${JSON.stringify(slot + "_result")}];
+          if (promise) { apply(then, value, [undefined, () => {}]); return null; }
+          return stringify({ logs, result: value ?? null });
+        } }, configurable: true });
+      })()`, context, { timeout: this.probeTimeoutMs, filename: "probe-prelude.js" });
       vm.runInContext("globalThis.window=globalThis", context, { timeout: this.probeTimeoutMs });
       if (args.setup) vm.runInContext(args.setup, context, { timeout: this.probeTimeoutMs, filename: "probe-setup.js" });
       for (const f of files) vm.runInContext(fs.readFileSync(f.real, "utf8"), context, { timeout: this.probeTimeoutMs, filename: f.rel });
       let result; try { result = vm.runInContext(args.test, context, { timeout: this.probeTimeoutMs, filename: "probe-test.js" }); }
       catch (e) { if (e instanceof SyntaxError || e?.name === "SyntaxError") throw fail(`${e.message}. ${PROBE_HELP}`); throw e; }
-      const promise = types.isPromise(result), slot = "__workflowProbe_" + crypto.randomBytes(8).toString("hex");
-      Object.defineProperty(context, slot, { value: { finish, result, logs, promise }, configurable: true });
-      const bridge = `globalThis[${JSON.stringify(slot)}]`;
-      const output = vm.runInContext(`${bridge}.finish(${bridge}.result, ${bridge}.logs, ${bridge}.promise)`, context, { timeout: this.probeTimeoutMs, filename: "probe-result.js" });
+      const promise = types.isPromise(result);
+      // `result` is a value of the context's own realm; the flag crosses as a literal.
+      Object.defineProperty(context, slot + "_result", { value: result, configurable: true });
+      const output = vm.runInContext(`globalThis[${JSON.stringify(slot)}].finish(${promise ? "true" : "false"})`, context, { timeout: this.probeTimeoutMs, filename: "probe-result.js" });
       if (promise) throw fail(PROBE_HELP);
       return output;
     }

@@ -13,7 +13,7 @@
  *   node tools/shot/loading-probe.mjs --settle 20000  # let the menu build first
  *   node tools/shot/loading-probe.mjs --invalidate    # change WEATHER, then RACE!: the build-under-card path
  *
- * Needs a server on :3456 (npx serve -l 3456 .). Timings are SwiftShader's:
+ * Needs a server on :3456 (node tools/serve.mjs). Timings are SwiftShader's:
  * read the PHASE ORDER, not the milliseconds (AGENTS.md §Seeing the game).
  */
 import { chromium } from "playwright";
