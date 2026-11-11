@@ -345,11 +345,20 @@
       arabicSign(K(0.735), -1, 34, 20, 4.2, [0.97, 0.95, 0.90], [0.44, 0.06, 0.18]);
       arabicSign(K(0.935), 1, 26, 18, 4.0, [0.98, 0.90, 0.40], [0.12, 0.13, 0.17]);
 
-      qatarStand("qatar-t1-stand-a", sl(0.053), 1, 20, 95,
+      // T1 ensemble (2026-11 corner-frames fix): built T1 is a RIGHT-hander
+      // running racing ~0.09-0.13, apex turns[0] 0.1157. The kits were keyed
+      // ~0.045 lap early (on the pit straight, ~120 m before turn-in) with the
+      // hill, stands and tyre wall on +1, the INSIDE of a right-hander. They
+      // now sit on T1OUT = -1, the outside of the braking zone and run-off
+      // (docs/tracks/qatar.md: Lusail Hill outside T1). The main stands (-1)
+      // end ~racing 0.025, so the braking-zone stands start clear of them.
+      // The VVIP villa + canopy follow on the T1 exit, outside, past the hill.
+      const T1OUT = -1;
+      qatarStand("qatar-t1-stand-a", sl(0.084), T1OUT, 20, 95,
         SHELL_SANDSTONE, [0.18, 0.18, 0.21], true);
-      qatarStand("qatar-t1-stand-b", sl(0.070), 1, 20, 65,
+      qatarStand("qatar-t1-stand-b", sl(0.100), T1OUT, 20, 65,
         SHELL_SANDSTONE, [0.18, 0.18, 0.21]);
-      tyreWall(sl(0.04), sl(0.085), 1, 5, [0.90, 0.86, 0.20]);
+      tyreWall(sl(0.088), sl(0.128), T1OUT, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(sl(0.05)), -1, 6);
       billboard(K(sl(0.065)), 1, 6, 12, 3.8, AD[0]);
 
@@ -364,7 +373,8 @@
       // keeps a silhouette against desert sand in daylight (night flood pools
       // previously carried the identity).
       (function lusailHill() {
-        const a = anchor(K(sl(0.068)), 1, 56), b = [a.r, a.u, a.t];
+        const HS = -T1OUT; // terraces step toward the track (authored for +1)
+        const a = anchor(K(sl(0.114)), T1OUT, 62), b = [a.r, a.u, a.t];
         modelGroup("qatar-lusail-hill", {
           center: vadd(a.c, a.u, 7.2), size: [48, 17, 92], basis: b,
         }, (stage) => {
@@ -376,23 +386,23 @@
             const y = 1.4 + row * 1.55;
             const inset = 7 + row * 3.2;
             const outR = 7 + row * 2.5;
-            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -outR),
+            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -HS * outR),
               [17 - row * 1.4, 0.5, 74 - inset * 1.3], GRASS, b);
-            addBox(stage, vadd(vadd(a.c, a.u, y - 0.4), a.r, -outR + 0.55),
+            addBox(stage, vadd(vadd(a.c, a.u, y - 0.4), a.r, HS * (-outR + 0.55)),
               [1.1, 0.95, 72 - inset * 1.3], [0.30, 0.26, 0.20], b);
           }
           // Viewing rail + crest path (raised with the mound).
-          addBox(stage, vadd(vadd(a.c, a.u, 11.2), a.r, -14),
+          addBox(stage, vadd(vadd(a.c, a.u, 11.2), a.r, -HS * 14),
             [0.22, 1.15, 58], STEEL, b);
           addBox(stage, vadd(a.c, a.u, 10.4), [8, 0.32, 64], [0.50, 0.50, 0.47], b);
           // Day-facing crest wall — darker band so the hill rim reads against sand.
-          addBox(stage, vadd(vadd(a.c, a.u, 9.6), a.r, -18),
+          addBox(stage, vadd(vadd(a.c, a.u, 9.6), a.r, -HS * 18),
             [0.35, 2.4, 50], [0.22, 0.20, 0.18], b);
         }, { required: true });
         // Soft GA bank further out than the required mound so ladders do not
         // share planes with qatar-lusail-hill terraces.
         if (typeof spectatorHill === "function") {
-          spectatorHill(sl(0.060), sl(0.082), 1, 78, {
+          spectatorHill(sl(0.104), sl(0.126), T1OUT, 88, {
             rows: 3, rise: 1.15, depth: 2.1, density: 0.42, step: 12,
             grass: GRASS, riser: [0.36, 0.32, 0.24],
           });
@@ -420,11 +430,11 @@
 
       // T1 VVIP — white villa + ~60 m branch-style sail canopy (replaces mosque)
       (function t1Vvip() {
-        building(K(sl(0.048)), -1, 36, 18, 9, 32,
+        building(K(sl(0.125)), T1OUT, 36, 18, 9, 32,
           { kind: "dome", wall: WHITE, window: WIN_COOL, floor: 3.4 });
-        building(K(sl(0.058)), -1, 40, 14, 7, 24,
+        building(K(sl(0.134)), T1OUT, 40, 14, 7, 24,
           { kind: "arch", wall: [0.91, 0.91, 0.89], window: WIN_WARM, floor: 3.2 });
-        const a = anchor(K(sl(0.052)), -1, 48), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.129)), T1OUT, 48), b = [a.r, a.u, a.t];
         modelGroup("qatar-t1-vvip-canopy", {
           center: vadd(a.c, a.u, 8.3), size: [62, 17, 38], basis: b,
         }, (stage) => {
