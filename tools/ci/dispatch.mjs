@@ -49,7 +49,8 @@
 // ONE `CONTINUE PR <n>` worker, unless a live worker's claim, foreign activity (a commit by another author in
 // foreignHours, or a lane:cursor push) or an unmerged prerequisite PR named in the body says wait; (3) deploy red (the
 // newest COMPLETED pages.yml run on the deploy branch failed) and no open PR labelled `deploy:red` → label the Board,
-// launch one fixer addressed `DEPLOY-RED <run id>`; (5) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
+// launch one fixer addressed `DEPLOY-RED <run id>` (none when the run's PLATFORM_STEP failed: a Pages-side publish
+// failure is a skip line on the Board, not a code fix); (5) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
 // acts on gets ONE comment per nudgeEveryMinutes (`dispatch: nudge …`) naming what to do next — a subscribed worker is
 // woken by the comment; (6) the Board markdown, ONE comment this tool edits on the issue titled `Board`
 // (marker `<!-- dispatch-board -->`). Idempotent: every launch is recorded as a comment on the issue/PR (deploy:red
@@ -305,7 +306,7 @@ export const addressOf = (l) => l.kind === "issue" ? `ISSUE ${l.number}` : l.kin
 export const claimComment = (l, now, session) => `dispatch: launched claude:${l.title} for ${l.number ? `#${l.number}` : "deploy:red"} at ${new Date(now).toISOString()}${session ? ` as ${session}` : ""}`;
 
 /**
- * @param {{ issues?: object[], prs?: object[], deployRed?: boolean, deployRunId?: number|string|null }} state
+ * @param {{ issues?: object[], prs?: object[], deployRed?: boolean, deployRunId?: number|string|null, deployPlatform?: boolean }} state
  * @returns {{ launches, labels, digests, nudges, skipped, board, flags, live, launchedToday, landQueue, boardIssue, dispatchIssue }}
  */
 export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
@@ -353,7 +354,8 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     const claimed = prs.find((p) => has(p, "deploy:red"));
     const l = board ? liveLaunch(board.comments, now, claimH) : null;
     if (board && !has(board, "deploy:red")) label(board.number, ["deploy:red"]);
-    if (claimed) skip("deploy:red fixer", `PR #${claimed.number} carries deploy:red`);
+    if (state.deployPlatform) skip("deploy:red fixer", `pages.yml run ${state.deployRunId || "?"} failed on the Pages side (step "${PLATFORM_STEP}" failed: both publish attempts): no fixer, re-run the train`);
+    else if (claimed) skip("deploy:red fixer", `PR #${claimed.number} carries deploy:red`);
     else if (!board) skip("deploy:red fixer", `no open Board issue (#${config.boardIssue || "?"}) to record the launch on`);
     else if (l && l.target === "deploy:red") skip("deploy:red fixer", `launched ${ageLabel(l.at, now)} ago (live claim)`);
     else launch("deploy-red", 0, "[Worker] deploy:red fixer", board.number, { runId: state.deployRunId || null });
@@ -445,6 +447,14 @@ export function renderBoard(state, plan, config, now) {
 }
 
 // ---- I/O: read GitHub state ----------------------------------------------------
+/** pages.yml's REST-visible marker (job `deploy`): `failure` only when both publish attempts failed after the recheck. */
+export const PLATFORM_STEP = "Pages publish failed (platform)";
+/** Did run `id` fail on the Pages side (the marker step failed)? An unreadable job list is false (a fixer launches). */
+export function platformFailure(api, id) {
+  const r = api(`actions/runs/${id}/jobs?per_page=100`);
+  if (r.error) return false;
+  return (r.json?.jobs || []).some((j) => j?.name === "deploy" && (j.steps || []).some((st) => st?.name === PLATFORM_STEP && st.conclusion === "failure"));
+}
 const get = (api, p) => { const r = api(p); if (r.error) throw new Error(`${p}: ${r.error}`); return r.json; };
 /** Every row of a list endpoint: `per_page=100&page=N` until a short page (one page silently dropped the Board once the
  *  repo passed 100 open issues). `pick` maps a page body to its rows (check-runs wrap theirs).
@@ -507,7 +517,7 @@ export function readState({ api = githubApi, config, now = Date.now() } = {}) {
   // The newest COMPLETED train: an in-progress run has no conclusion, which flapped deploy:red mid-incident.
   const run = get(api, `actions/workflows/pages.yml/runs?branch=${encodeURIComponent(config.deployBranch)}&status=completed&per_page=1`)?.workflow_runs?.[0];
   const deployRed = !!run && ["failure", "timed_out"].includes(run.conclusion);
-  return { issues, prs, deployRed, deployRunId: deployRed ? run.id : null };
+  return { issues, prs, deployRed, deployRunId: deployRed ? run.id : null, deployPlatform: deployRed ? platformFailure(api, run.id) : false };
 }
 
 // ---- I/O: the worker fire and the GitHub writes ---------------------------------------------------------------

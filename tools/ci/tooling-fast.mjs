@@ -726,7 +726,6 @@ export const GENERATED_FILES = Object.freeze({
   "docs/agent-index.json": { source: "tools/docs/gen-agent-index.mjs", always: true },
   "docs/agent-output/catalog.json": { source: "tools/gen/gen-output-surface.mjs", always: true },
   "docs/AGENT-HOOKS.md": { source: ".claude/hooks/*", always: true },
-  "docs/TESTING-COVERAGE.md": { source: "tests/groups.json", always: true },
   "tools/README.md": { source: "tools/**/@doc headers", always: true },
   "CHANGELOG.md": { source: "docs/changelog.d/*", always: true },
   "tools/shot/scenery-locations.json": { source: "js/circuits/scenery/*", always: true },

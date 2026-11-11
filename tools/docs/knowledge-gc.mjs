@@ -24,10 +24,19 @@
  *
  * DATED by the filename's YYYY-MM-DD, else by the note's last commit (`git
  * log -1 --format=%cs`; the clone is shallow, so first-commit dates are not
- * available). Only top-level `docs/notes/*.md` files are subject to retention;
- * a note's evidence directory (docs/notes/<name>/) travels with nothing and
- * is left where it is. A note carrying a `Supersedes:` / `Superseded by:` line
- * is pinned: that pair is the one-live-answer mechanism docs-integrity holds.
+ * available). A top-level `docs/notes/*.md` file is one note; a SUBDIRECTORY
+ * (docs/notes/<batch>/, a dated research or review batch) is one note too: one
+ * index row, dated by its name, cited when a live file names the directory,
+ * archived whole. Until 2026-11-09 only top-level files were scanned, so 110
+ * files in three batch directories were never indexed and never expired (audit
+ * W27). A note carrying a `Supersedes:` / `Superseded by:` line is pinned: that
+ * pair is the one-live-answer mechanism docs-integrity holds.
+ *
+ * A SHIPPED PLAN IS NOT A CITER. A plan under docs/plans/ whose header says it
+ * shipped, was superseded or is done (`Status: SHIPPED`, `> **Superseded`, …)
+ * is a record, not a reader: counting it kept every note a finished plan named
+ * alive forever. Such plans belong in docs/archive/plans/ (which never counts);
+ * the header test covers one still waiting for its move.
  *
  * --apply moves each stale note with `git mv` and repoints every relative
  * Markdown link and bare `docs/notes/<name>.md` mention in tracked text files
@@ -134,10 +143,23 @@ export function header(text) {
   return { kind, remeasure, summary, h1, pinned, superseded };
 }
 
+/** True when a plan's first lines declare it finished (shipped, superseded, done, retired). */
+export const isFinishedPlan = (text) => /^(?:>\s*)?(?:\*\*)?(?:Status|State)(?:\*\*)?:?(?:\*\*)?\s*(?:\*\*)?(?:SHIPPED|SUPERSEDED|DONE|RETIRED|LANDED|COMPLETE)\b|^>\s*\*\*(?:Shipped|Superseded|Retired|Historical)\b/im
+  .test(text.split("\n").slice(0, 15).join("\n"));
+
 /** Every tracked text file whose mention of a note keeps it live, with its contents. */
 export function citerCorpus(files = tracked()) {
   return files.filter((f) => TEXT_EXT.test(f) && !NOT_A_CITER.test(f))
-    .map((f) => { try { return read(f); } catch { return ""; } }).join("\n");
+    .map((f) => { try { const t = read(f); return /^docs\/plans\//.test(f) && isFinishedPlan(t) ? "" : t; } catch { return ""; } }).join("\n");
+}
+
+/** Inferred kind from a note's name when it has no `Kind:` line (shown as `<kind>?` in the index). */
+export function kindByName(base) {
+  const rules = [[/HUNT/, "hunt"], [/AUDIT/, "audit"], [/SURVEY/, "survey"], [/RESEARCH|SCOUT/, "research"],
+    [/REVIEW|RETRO/, "review"], [/DECISION/, "decision"], [/LEDGER|INBOX/, "ledger"], [/PLAN|PROPOSAL|REDESIGN|DESIGN/, "design"],
+    [/MEASURE|BENCH|PERF|PROFILE|CAPTURE/, "measurement"], [/RUNBOOK|HOWTO|HOW-TO|PLAYBOOK|CHECKLIST|GUIDE|RECIPE/, "how-to"]];
+  const up = base.toUpperCase();
+  return rules.find(([re]) => re.test(up))?.[1] || null;
 }
 
 /**
@@ -156,6 +178,21 @@ export function scan({ today = isoToday(), days = DAYS, files = tracked(), corpu
     return { file, base, date, dated: datedByName(file), age: Math.floor((t0 - Date.parse(date)) / DAY),
       bytes: Buffer.byteLength(text, "utf8"), cited: corpus.includes(base), ...h };
   });
+  // Batch directories: one entry each (see the header). The head file is the README, else the first .md.
+  const batches = new Map();
+  for (const f of files) {
+    const m = /^docs\/notes\/([^/]+)\/.+\.md$/.exec(f);
+    if (m) (batches.get(m[1]) || batches.set(m[1], []).get(m[1])).push(f);
+  }
+  for (const [dir, members] of [...batches].sort()) {
+    const file = `docs/notes/${dir}`;
+    const head = members.find((f) => f === `${file}/README.md`) || members.sort()[0];
+    const h = header(read(head));
+    const date = /(\d{4}-\d{2}-\d{2})/.exec(dir)?.[1] || dateOf(head);
+    notes.push({ file, base: dir, dir: true, head, members: members.length, date, dated: datedByName(file),
+      age: Math.floor((t0 - Date.parse(date)) / DAY), bytes: 0, cited: corpus.includes(dir), ...h,
+      pinned: h.pinned });
+  }
   const uncited = notes.filter((n) => !n.cited && !n.pinned);
   const stale = uncited.filter((n) => n.age > days && !uncitedOk.has(n.file));
   const refused = uncited.filter((n) => REFUSED_PREFIX.test(n.base) && !uncitedOk.has(n.file));
@@ -298,19 +335,52 @@ export function renderIndexBlock(notes) {
   const rows = [...notes].sort((a, b) => key(b).localeCompare(key(a)) || a.base.localeCompare(b.base)).map((n) => {
     const summary = n.summary ? cell(n.summary) : cell(n.h1 || n.base).slice(0, 200);
     const flags = [n.cited ? "" : "uncited", n.pinned ? "pinned" : "", n.superseded ? "superseded" : ""].filter(Boolean).join(", ");
-    return `| [${n.base}](../docs/notes/${n.base}) | ${n.kind || "unknown"} | ${n.remeasure || "—"} | ${n.dated ? n.date : "—"}${flags ? ` (${flags})` : ""} | ${summary} |`;
+    const link = n.dir ? `[${n.base}/](../docs/notes/${n.base}) (${n.members} files)` : `[${n.base}](../docs/notes/${n.base})`;
+    const kind = n.kind || (kindByName(n.base) ? `${kindByName(n.base)}?` : "unknown");
+    return `| ${link} | ${kind} | ${n.remeasure || "—"} | ${n.dated ? n.date : "—"}${flags ? ` (${flags})` : ""} | ${summary} |`;
   });
   return [`# docs/notes — ${notes.length} live notes`, "",
-    `Built by \`node tools/docs/knowledge-gc.mjs --index\` from each note's \`Kind:\` / \`Re-measure-by:\` / \`Summary:\` header lines (summary falls back to the H1; \`unknown\` = no \`Kind:\` line). Gitignored and never committed (issue #5347): edit the note, then rebuild. "uncited" marks a note no live file names (${UNCITED_ALLOW} holds the grandfathered backlog, shrink-only).`,
+    `Built by \`node tools/docs/knowledge-gc.mjs --index\` from each note's \`Kind:\` / \`Re-measure-by:\` / \`Summary:\` header lines (summary falls back to the H1; \`kind?\` = inferred from the name, no \`Kind:\` line yet; \`unknown\` = neither). A \`name/\` row is a batch directory, aged and archived as one note. Gitignored and never committed (issue #5347): edit the note, then rebuild. "uncited" marks a note no live file names (${UNCITED_ALLOW} holds the grandfathered backlog, shrink-only); a plan that declares itself shipped or superseded is not a citer.`,
     "", "| Note | Kind | Re-measure by | Dated | What it records |", "|---|---|---|---|---|", ...rows, ""].join("\n");
 }
 
 /** True when the hand-written index still carries a generated block (the committed-table shape #5347 retired). */
 export const indexHasGeneratedBlock = (indexText) => indexText.includes(OPEN);
 
+// ---------------------------------------------------------------------------
+// The plans index (generated since 2026-11-09, built into the notes table artifact since #5349; it was a hand-kept list that still
+// called shipped plans "plan-only" and listed archived ones as live — audit W27)
+
+/** A plan's status word(s): the first `Status:` line's bold token, else its text up to a dash, comma or bracket. */
+export function planStatus(text) {
+  const line = text.split("\n").slice(0, 25).find((l) => /^(?:>\s*)?(?:\*\*)?Status(?:\*\*)?:/.test(l));
+  if (!line) return "—";
+  const rest = line.replace(/^(?:>\s*)?(?:\*\*)?Status(?:\*\*)?:(?:\*\*)?\s*/, "");
+  const bold = /^\*\*([^*]+)\*\*/.exec(rest);
+  const word = (bold ? bold[1] : rest.split(/\s+[—–(]|[,.;:]\s|\s\(/)[0]).replace(/[*`]/g, "").trim();
+  return word.length > 40 ? word.slice(0, 39).replace(/\s+\S*$/, "") + "…" : word || "—";
+}
+
+export function renderPlansBlock(files) {
+  const row = (rel, withStatus) => {
+    const text = read(rel);
+    const name = rel.replace(/^docs\/(?:archive\/)?plans\//, "");
+    const h1 = /^#\s+(.+)$/m.exec(text)?.[1] || name;
+    const summary = cell(header(text).summary || h1).slice(0, 300);
+    return withStatus ? `| [${cell(h1)}](../${rel}) | ${cell(planStatus(text))} | ${summary} |` : `| [${cell(h1)}](../${rel}) | ${summary} |`;
+  };
+  const live = files.filter((f) => /^docs\/plans\/(?:[^/]+\.md|[^/]+\/README\.md)$/.test(f)).sort();
+  const done = files.filter((f) => /^docs\/archive\/plans\/[^/]+\.md$/.test(f)).sort();
+  return ["## Plans", "",
+    "Built by `node tools/docs/knowledge-gc.mjs --index` from docs/plans/ and docs/archive/plans/: the status is each plan's own `Status:` line. A plan that ships or is superseded moves to the archive (`knowledge-gc.mjs --move docs/plans/<name>.md`).",
+    "", "### Live plans", "", "| Plan | Status | What it plans |", "|---|---|---|", ...live.map((f) => row(f, true)),
+    "", "### Archived plans (shipped or superseded)", "", "| Plan | What it planned |", "|---|---|", ...done.map((f) => row(f, false)),
+    ""].join("\n");
+}
+
 export function writeIndex() {
   fs.mkdirSync(path.join(ROOT, path.dirname(TABLE)), { recursive: true });
-  fs.writeFileSync(path.join(ROOT, TABLE), renderIndexBlock(scan().notes));
+  fs.writeFileSync(path.join(ROOT, TABLE), renderIndexBlock(scan().notes) + "\n" + renderPlansBlock(tracked()));
   return { file: TABLE };
 }
 

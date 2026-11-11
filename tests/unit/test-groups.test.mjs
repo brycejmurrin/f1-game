@@ -133,21 +133,21 @@ test("docs/TESTING.md documents every test group, and no group that is gone", ()
   assert.deepEqual(stale, [], "docs/TESTING.md lists a group that no longer exists in package.json");
 });
 
-test("docs/TESTING-COVERAGE.md names every root spec and unit suite", () => {
-  const doc = read("docs/TESTING-COVERAGE.md");
+test("the built coverage page describes every root spec and unit suite", async () => {
+  // The page is built on demand into artifacts/ (never committed since 2026-11-10), so the guard is the
+  // render itself: every suite gets a row, and no row falls through to "—" (no header, note or test title).
+  const { renderCoverage } = await import("../../tools/docs/gen-coverage-table.mjs");
+  const doc = renderCoverage();
   const link = section(read("docs/TESTING.md"), "5. Coverage table");
-  assert.match(link, /TESTING-COVERAGE\.md/, "docs/TESTING.md §5 must link to the generated coverage page");
+  assert.match(link, /gen-coverage-table\.mjs/, "docs/TESTING.md §5 must say how to build the coverage page");
   assert.ok(link.length < 2500, "docs/TESTING.md §5 inlined the coverage table again");
-  // A row may name a FAMILY with a glob — the 16 per-circuit foundation specs
-  // differ only by circuit and 16 identical rows would document nothing. A new
-  // KIND of spec still has to earn its own row.
-  const globs = [...doc.matchAll(/`([a-z0-9_-]*\*[a-z0-9_*-]*\.(?:spec\.js|test\.mjs))`/g)]
-    .map((m) => new RegExp("^" + m[1].replace(/[.]/g, "\\.").replace(/\*/g, "[a-z0-9_-]*") + "$"));
   const files = ["specs", "unit"].flatMap((d) => fs.readdirSync(path.join(ROOT, "tests", d)))
     .filter((f) => /\.(spec\.js|test\.(mjs|cjs))$/.test(f));
-  const missing = files.filter((f) => !doc.includes(f) && !globs.some((re) => re.test(f)));
-  assert.deepEqual(missing, [],
-    "a test file exists but is not described in docs/TESTING-COVERAGE.md — say what it covers, then node tools/docs/gen-coverage-table.mjs");
+  const missing = files.filter((f) => !doc.includes("| `" + f + "` |"));
+  assert.deepEqual(missing, [], "a test file has no row in the coverage page");
+  const blank = [...doc.matchAll(/^\| `([^`]+)` \| — \|$/gm)].map((m) => m[1]);
+  assert.deepEqual(blank, [],
+    "a test file says nothing about what it covers — give it a header comment, or a note above its path in tests/groups.json");
 });
 
 test("docs/TESTING.md's file-count floors never exceed the files on disk", () => {
