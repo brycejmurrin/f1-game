@@ -301,14 +301,10 @@
           }, (stage) => {
             const len = 46;
             const rows = 5;
-            // Pad on terrain (anchor sinks ~0.3 m; seat.box at a.c was buried).
-            // Seated on the HIGHEST of centre + four footprint corners: the
-            // grid-side grade left a corner 0.09 m proud of a centre-only pad.
+            // Pad on the highest of centre + 4 corners.
             let padY = terrainYAt(a.c[0], a.c[2]);
-            for (const [rr, tt] of [[-4, -24], [-4, 24], [4, -24], [4, 24]]) {
-              const q = vadd(vadd(a.c, a.r, rr), a.t, tt);
-              padY = Math.max(padY, terrainYAt(q[0], q[2]));
-            }
+            for (const [rr, tt] of [[-4, -24], [-4, 24], [4, -24], [4, 24]])
+              padY = Math.max(padY, terrainYAt(...[0, 2].map((i) => a.c[i] + a.r[i] * rr + a.t[i] * tt)));
             const pad = [a.c[0], padY + 0.15, a.c[2]];
             stage._mat = MAT.CONCRETE;
             seat.box(stage, pad, [8, 0.4, len + 2], [0.52, 0.52, 0.50], b);
@@ -324,8 +320,7 @@
               for (let j = 0; j < cnt; j++) {
                 const h2 = hash(K(sHollywood) * 17 + t * 41 + j * 13);
                 if (h2 < 0.45) continue;
-                seat.box(stage, vadd(vadd(foot, a.t, (j / Math.max(1, cnt - 1) - 0.5) * (len - 6)),
-                                     a.u, 0.2),
+                seat.box(stage, vadd(vadd(foot, a.t, (j / Math.max(1, cnt - 1) - 0.5) * (len - 6)), a.u, 0.2),
                   [0.55, 0.95, 1.3], CROWD[Math.floor(h2 * 97) % CROWD.length], b);
               }
             }

@@ -93,3 +93,7 @@ all `modelGroup(..., {required:true})` with positive seating rake:
 - Exact 2026 seat-block subdivision of each named stand on the MSV ticket map — hero blocks only.
 - Whether “Kentagon” (fan / older brief name for the clubhouse opposite Paddock Hill) is the same building MSV lists as Hailwoods Restaurant — both sit by the lower paddock; we keep the Kentagon silhouette as the infield clubhouse hero and do **not** invent a second restaurant mass.
 - 1956 Northolt pony-trotting grandstand (history only; long since replaced) — not modelled.
+
+## Start line (2026-11-11, #5316 leftovers)
+
+Moved onto the real start/finish line from the driver61 circuit guide coordinate; derivation, source and the scenery fixes are in [START-LINES.md](START-LINES.md) "donington, brands_hatch — MOVED 2026-11-11".
