@@ -1129,6 +1129,7 @@
     };
 
     /* SGSR1 spatial upscale (SGSR_FS in glsl-post.js) — present-size
+     *    [Qualcomm SGSR1, BSD-3-Clause: conditions and disclaimer in vendor/sgsr/LICENSE]
      *    reconstruct from render-size LDR/FXAA. 4-tap gatherComp (no
      *    textureGather) for GLX/WGX parity. Flag-gated in tlx-post.js. */
     const sgsrTex = VP.tex(texture(ctx.blackTex));
