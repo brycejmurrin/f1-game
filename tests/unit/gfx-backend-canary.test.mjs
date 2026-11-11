@@ -4562,7 +4562,7 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
 });
 
 test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry sheets are up", () => {
-  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
+  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h, asked) {", "function ", "readbackLdrPixels");
   assert.ok(body.includes("PerfGov.softwareGlUiReadbackDefer") && body.includes("softwareGlUiReadbackDefer()"));
   const gov = read("js/perf/governor.js");
   assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"') && gov.includes("quitReadbackDefer"), "quit MenuTeardown defer must not leak garage mask into readback");
