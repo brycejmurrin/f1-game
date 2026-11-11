@@ -29,6 +29,7 @@
 // built: monza still reachable); on #3241 and on the tip it passes. #3377's one-generation holders are
 // overwritten before these readings, so tests/unit/race-retain-vm.test.mjs (built, not yet stepped) pins them.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { heapByCtor } from "../helpers/scratch-heapagg.mjs";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
   HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues, gpuWrapperCounts, domLeakCounters, contextScopeCount, wrapperGrowth, censusBlindness,
@@ -127,7 +128,7 @@ test.describe.configure({ retries: 0 });
 async function body({ page }) {
   // Twelve race builds (6 cycles × monza+spa) on software GL plus forced GCs — long enough
   // for TLX caches to flatten before the heap/audioMB slope gate (H17).
-  test.setTimeout(1800000);   // + up to CONFIRM_CYCLES when the first pair is over the bound
+  test.setTimeout(2700000);   // + up to CONFIRM_CYCLES when the first pair is over the bound
   await page.addInitScript(() => {
     try { localStorage.setItem("apex26.gfxBackend", "three"); } catch (_) {}
     try { localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}   // as track-switch-memory: TLX init can exceed 8 s on a busy runner
@@ -163,6 +164,7 @@ async function body({ page }) {
       await expectNoReload(page, loads0, `cycle ${cycle}, menu after ${id}`);
       const menu = await censusAfterGc(page, cdp);
       log({ cycle, id, at: "menu", quietMs, pb, ...menu });
+      if (id === CIRCUITS[CIRCUITS.length - 1] && cycle >= 2) log({ cycle, at: "heap", ...(await heapByCtor(cdp, 30)) });
       expect(cycleCensusIssues(menu), "menu census must observe the requested renderer and usable counters").toEqual([]);
       expect(menu.aliveTracks.length, `cycle ${cycle}, menu after ${id}: ${menu.aliveTracks.join(", ")} still reachable after GC`).toBeLessThanOrEqual(1);
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
@@ -243,6 +245,7 @@ test("SCRATCH rcm B", async ({ page }) => {
   let err = null;
   try { await body({ page }); } catch (e) { err = String(e && e.message || e).replace(/\s+/g, " ").slice(0, 500); }
   let rows = []; try { rows = JSON.parse(fs.readFileSync("artifacts/logs/race-cycle-memory.json", "utf8")); } catch (_) {}
+  const heaps = rows.filter((r) => r.at === "heap").map((r) => ({ c: r.cycle, t: r.totalMB, top: r.top }));
   const menus = rows.filter((r) => r.at === "menu").map((r) => ({ c: r.cycle, id: r.id, heap: r.heapMB, q: r.quietMs, pb: r.pb }));
-  throw new Error("MEASURE " + JSON.stringify({ err, menus }));
+  throw new Error("MEASURE " + JSON.stringify({ err, menus, heaps }));
 });

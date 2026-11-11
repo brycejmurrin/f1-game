@@ -1207,9 +1207,8 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
-        "test:scratch-churnb",
-        "test:scratch-rcma",
-        "test:scratch-rcmb",
+        "test:scratch-churnc",
+        "test:scratch-rcmc",
         "test:shimmer",
         "test:smoke",
         "test:stall-reload-sw",
@@ -4288,16 +4287,12 @@
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
     },
     {
-      "name": "test:scratch-churnb",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-churnb-r1.spec.js tests/specs/scratch-churnb-r2.spec.js tests/specs/scratch-churnb-r3.spec.js tests/specs/scratch-churnb-r4.spec.js tests/specs/scratch-churnb-r5.spec.js tests/specs/scratch-churnb-r6.spec.js tests/specs/scratch-churnb-r7.spec.js tests/specs/scratch-churnb-r8.spec.js"
+      "name": "test:scratch-churnc",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-churnc-r1.spec.js tests/specs/scratch-churnc-r2.spec.js tests/specs/scratch-churnc-r3.spec.js tests/specs/scratch-churnc-r4.spec.js tests/specs/scratch-churnc-r5.spec.js tests/specs/scratch-churnc-r6.spec.js tests/specs/scratch-churnc-r7.spec.js tests/specs/scratch-churnc-r8.spec.js"
     },
     {
-      "name": "test:scratch-rcma",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcma-r1.spec.js tests/specs/scratch-rcma-r2.spec.js tests/specs/scratch-rcma-r3.spec.js tests/specs/scratch-rcma-r4.spec.js"
-    },
-    {
-      "name": "test:scratch-rcmb",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcmb-r1.spec.js tests/specs/scratch-rcmb-r2.spec.js tests/specs/scratch-rcmb-r3.spec.js tests/specs/scratch-rcmb-r4.spec.js tests/specs/scratch-rcmb-r5.spec.js tests/specs/scratch-rcmb-r6.spec.js tests/specs/scratch-rcmb-r7.spec.js tests/specs/scratch-rcmb-r8.spec.js"
+      "name": "test:scratch-rcmc",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcmc-r1.spec.js tests/specs/scratch-rcmc-r2.spec.js tests/specs/scratch-rcmc-r3.spec.js tests/specs/scratch-rcmc-r4.spec.js tests/specs/scratch-rcmc-r5.spec.js tests/specs/scratch-rcmc-r6.spec.js"
     },
     {
       "name": "test:service-worker",

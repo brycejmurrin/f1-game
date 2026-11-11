@@ -8295,14 +8295,12 @@
       "*": [
         "tests/specs/garage-prebuild.spec.js",
         "tests/specs/race-cycle-memory.spec.js",
-        "tests/specs/scratch-rcmb-r1.spec.js",
-        "tests/specs/scratch-rcmb-r2.spec.js",
-        "tests/specs/scratch-rcmb-r3.spec.js",
-        "tests/specs/scratch-rcmb-r4.spec.js",
-        "tests/specs/scratch-rcmb-r5.spec.js",
-        "tests/specs/scratch-rcmb-r6.spec.js",
-        "tests/specs/scratch-rcmb-r7.spec.js",
-        "tests/specs/scratch-rcmb-r8.spec.js"
+        "tests/specs/scratch-rcmc-r1.spec.js",
+        "tests/specs/scratch-rcmc-r2.spec.js",
+        "tests/specs/scratch-rcmc-r3.spec.js",
+        "tests/specs/scratch-rcmc-r4.spec.js",
+        "tests/specs/scratch-rcmc-r5.spec.js",
+        "tests/specs/scratch-rcmc-r6.spec.js"
       ]
     },
     "js/garage/scene-crew.js": {
@@ -11408,18 +11406,12 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
-        "tests/specs/scratch-rcma-r1.spec.js",
-        "tests/specs/scratch-rcma-r2.spec.js",
-        "tests/specs/scratch-rcma-r3.spec.js",
-        "tests/specs/scratch-rcma-r4.spec.js",
-        "tests/specs/scratch-rcmb-r1.spec.js",
-        "tests/specs/scratch-rcmb-r2.spec.js",
-        "tests/specs/scratch-rcmb-r3.spec.js",
-        "tests/specs/scratch-rcmb-r4.spec.js",
-        "tests/specs/scratch-rcmb-r5.spec.js",
-        "tests/specs/scratch-rcmb-r6.spec.js",
-        "tests/specs/scratch-rcmb-r7.spec.js",
-        "tests/specs/scratch-rcmb-r8.spec.js"
+        "tests/specs/scratch-rcmc-r1.spec.js",
+        "tests/specs/scratch-rcmc-r2.spec.js",
+        "tests/specs/scratch-rcmc-r3.spec.js",
+        "tests/specs/scratch-rcmc-r4.spec.js",
+        "tests/specs/scratch-rcmc-r5.spec.js",
+        "tests/specs/scratch-rcmc-r6.spec.js"
       ]
     },
     "js/physics/aero-zones.js": {
@@ -16711,18 +16703,12 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
-        "tests/specs/scratch-rcma-r1.spec.js",
-        "tests/specs/scratch-rcma-r2.spec.js",
-        "tests/specs/scratch-rcma-r3.spec.js",
-        "tests/specs/scratch-rcma-r4.spec.js",
-        "tests/specs/scratch-rcmb-r1.spec.js",
-        "tests/specs/scratch-rcmb-r2.spec.js",
-        "tests/specs/scratch-rcmb-r3.spec.js",
-        "tests/specs/scratch-rcmb-r4.spec.js",
-        "tests/specs/scratch-rcmb-r5.spec.js",
-        "tests/specs/scratch-rcmb-r6.spec.js",
-        "tests/specs/scratch-rcmb-r7.spec.js",
-        "tests/specs/scratch-rcmb-r8.spec.js",
+        "tests/specs/scratch-rcmc-r1.spec.js",
+        "tests/specs/scratch-rcmc-r2.spec.js",
+        "tests/specs/scratch-rcmc-r3.spec.js",
+        "tests/specs/scratch-rcmc-r4.spec.js",
+        "tests/specs/scratch-rcmc-r5.spec.js",
+        "tests/specs/scratch-rcmc-r6.spec.js",
         "tests/unit/css-has-scope.test.mjs"
       ]
     },
@@ -18832,18 +18818,12 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
-        "tests/specs/scratch-rcma-r1.spec.js",
-        "tests/specs/scratch-rcma-r2.spec.js",
-        "tests/specs/scratch-rcma-r3.spec.js",
-        "tests/specs/scratch-rcma-r4.spec.js",
-        "tests/specs/scratch-rcmb-r1.spec.js",
-        "tests/specs/scratch-rcmb-r2.spec.js",
-        "tests/specs/scratch-rcmb-r3.spec.js",
-        "tests/specs/scratch-rcmb-r4.spec.js",
-        "tests/specs/scratch-rcmb-r5.spec.js",
-        "tests/specs/scratch-rcmb-r6.spec.js",
-        "tests/specs/scratch-rcmb-r7.spec.js",
-        "tests/specs/scratch-rcmb-r8.spec.js",
+        "tests/specs/scratch-rcmc-r1.spec.js",
+        "tests/specs/scratch-rcmc-r2.spec.js",
+        "tests/specs/scratch-rcmc-r3.spec.js",
+        "tests/specs/scratch-rcmc-r4.spec.js",
+        "tests/specs/scratch-rcmc-r5.spec.js",
+        "tests/specs/scratch-rcmc-r6.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/results-sheet-lazy.test.mjs"

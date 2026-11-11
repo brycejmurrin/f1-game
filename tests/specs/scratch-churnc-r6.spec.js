@@ -59,7 +59,8 @@ async function body({ page }, testInfo) {
     testInfo.annotations.push({ type: "gpu-churn", description: "blind: no GPUDevice on this run (WebGL2 path), bind-group / buffer churn not measured" });
   }
 }
-test("SCRATCH churn B", async ({ page }, testInfo) => {
+test("SCRATCH churn C burn40", async ({ page }, testInfo) => {
+  await page.addInitScript((ms) => { const burn = () => { const t = performance.now(); while (performance.now() - t < ms) { /* slow every frame */ } requestAnimationFrame(burn); }; requestAnimationFrame(burn); }, 40);
   let err = null;
   try { await body({ page }, testInfo); } catch (e) { err = String(e && e.message || e).replace(/\s+/g, " ").slice(0, 900); }
   let o = null; try { o = JSON.parse(fs.readFileSync("artifacts/perf/idle-pipeline-churn-gpu.json", "utf8")); } catch (_) {}

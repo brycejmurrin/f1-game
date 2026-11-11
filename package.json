@@ -85,9 +85,8 @@
     "test:perf-budget": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js",
     "test:perf-idle-churn": "node tools/ci/run-playwright.mjs tests/specs/perf-idle-pipeline-churn.spec.js",
     "test:stall-reload-sw": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js",
-    "test:scratch-churnb": "node tools/ci/run-playwright.mjs tests/specs/scratch-churnb-r1.spec.js tests/specs/scratch-churnb-r2.spec.js tests/specs/scratch-churnb-r3.spec.js tests/specs/scratch-churnb-r4.spec.js tests/specs/scratch-churnb-r5.spec.js tests/specs/scratch-churnb-r6.spec.js tests/specs/scratch-churnb-r7.spec.js tests/specs/scratch-churnb-r8.spec.js",
-    "test:scratch-rcmb": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcmb-r1.spec.js tests/specs/scratch-rcmb-r2.spec.js tests/specs/scratch-rcmb-r3.spec.js tests/specs/scratch-rcmb-r4.spec.js tests/specs/scratch-rcmb-r5.spec.js tests/specs/scratch-rcmb-r6.spec.js tests/specs/scratch-rcmb-r7.spec.js tests/specs/scratch-rcmb-r8.spec.js",
-    "test:scratch-rcma": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcma-r1.spec.js tests/specs/scratch-rcma-r2.spec.js tests/specs/scratch-rcma-r3.spec.js tests/specs/scratch-rcma-r4.spec.js"
+    "test:scratch-churnc": "node tools/ci/run-playwright.mjs tests/specs/scratch-churnc-r1.spec.js tests/specs/scratch-churnc-r2.spec.js tests/specs/scratch-churnc-r3.spec.js tests/specs/scratch-churnc-r4.spec.js tests/specs/scratch-churnc-r5.spec.js tests/specs/scratch-churnc-r6.spec.js tests/specs/scratch-churnc-r7.spec.js tests/specs/scratch-churnc-r8.spec.js",
+    "test:scratch-rcmc": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcmc-r1.spec.js tests/specs/scratch-rcmc-r2.spec.js tests/specs/scratch-rcmc-r3.spec.js tests/specs/scratch-rcmc-r4.spec.js tests/specs/scratch-rcmc-r5.spec.js tests/specs/scratch-rcmc-r6.spec.js"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",

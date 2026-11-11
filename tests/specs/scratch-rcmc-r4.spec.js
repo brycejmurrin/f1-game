@@ -29,6 +29,7 @@
 // built: monza still reachable); on #3241 and on the tip it passes. #3377's one-generation holders are
 // overwritten before these readings, so tests/unit/race-retain-vm.test.mjs (built, not yet stepped) pins them.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { heapByCtor } from "../helpers/scratch-heapagg.mjs";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
   HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues, gpuWrapperCounts, domLeakCounters, contextScopeCount, wrapperGrowth, censusBlindness,
@@ -58,23 +59,35 @@ async function raceAndDrive(page, id) {
 // once closed over the cars and G.track, so the finished circuit was still reachable when the next was built
 // (Pages runs 4282/4284, 2026-10-28). Naming the files here maps them to this spec in the impact map.
 
-// THE MENU MUST BE QUIET BEFORE ITS HEAP COUNTS. The census forces GC, but live work in flight survives it:
+// THE MENU MUST BE SETTLED BEFORE ITS HEAP COUNTS. The census forces GC, but live work in flight survives it:
 // the title warm's race prep (js/perf/title-warm.js starts it after 1.2 s of title quiet), the menu program warm
 // and the garage prebuild. One post-warm pair read mid-prep swung ±35 MiB on unchanged heads (A·W56, 2026-10-26).
-// Wait until none runs for QUIET_MS (> the title warm's start delay), then read.
+// Quiet is not enough: the title's garage prebuild (js/garage/prebuild.js) STARTS only after its own 3 s of real
+// quiet plus a 1 s poll, so a read at 3 s without a busy flag landed either before it (~150-158 MiB) or after it
+// (~182-210 MiB): bimodal on the tip, 8 runs, 1 red at a 13.1 MiB/cycle median (#5288). So wait until the work
+// that WILL run has run: nothing busy for QUIET_MS AND the prebuild either ready or held by a blocker that does not
+// clear on its own (phone hold, off, a sheet, ...). Then every reading is the same settled menu.
 const QUIET_MS = 3000;
+const PREBUILD_TRANSIENT = new Set(["input-recent", "world-warm", "world-build", "home-unpainted"]);   // blockers that clear by waiting
 async function menuQuiet(page) {
   const t0 = Date.now();
   const hooks = await page.evaluate(() => { window.__rcmQuiet = null; const A = window.__apex;
     return { menuPrep: typeof A.menuPrep === "function" && !!A.menuPrep(), garagePrebuild: typeof A.garagePrebuild === "function" }; });
   expect(hooks, "menuQuiet needs __apex.menuPrep() (a snapshot) and __apex.garagePrebuild()").toEqual({ menuPrep: true, garagePrebuild: true });
-  await page.waitForFunction((quietMs) => {
-    const A = window.__apex, p = A.menuPrep(), g = A.garagePrebuild();
-    const busy = p.building || p.warming || p.warmFrames > 0 || !!(g && g.running);
-    const now = performance.now(), q = window.__rcmQuiet || (window.__rcmQuiet = { since: now });
-    if (busy) q.since = now;
-    return !busy && now - q.since >= quietMs;
-  }, QUIET_MS, { polling: 250, timeout: 120000 });
+  try {
+    await page.waitForFunction(([quietMs, transient]) => {
+      const A = window.__apex, p = A.menuPrep(), g = A.garagePrebuild();
+      const pending = !!(g && g.enabled && !g.ready && (g.blockers || []).every((b) => transient.includes(b)));
+      const busy = p.building || p.warming || p.warmFrames > 0 || !!(g && g.running) || pending;
+      const now = performance.now(), q = window.__rcmQuiet || (window.__rcmQuiet = { since: now });
+      if (busy) q.since = now;
+      return !busy && now - q.since >= quietMs;
+    }, [QUIET_MS, [...PREBUILD_TRANSIENT]], { polling: 250, timeout: 120000 });
+  } catch (e) {
+    const st = await page.evaluate(() => { const g = window.__apex.garagePrebuild();
+      return { prep: window.__apex.menuPrep(), prebuild: g && { enabled: g.enabled, ready: g.ready, running: g.running, blockers: g.blockers, last: g.last } }; }).catch(() => null);
+    throw new Error(`menu never settled in 120 s (busy prep, or a garage prebuild that never became ready): ${JSON.stringify(st).slice(0, 600)}`);
+  }
   return Date.now() - t0;
 }
 
@@ -115,7 +128,7 @@ test.describe.configure({ retries: 0 });
 async function body({ page }) {
   // Twelve race builds (6 cycles × monza+spa) on software GL plus forced GCs — long enough
   // for TLX caches to flatten before the heap/audioMB slope gate (H17).
-  test.setTimeout(1800000);   // + up to CONFIRM_CYCLES when the first pair is over the bound
+  test.setTimeout(2700000);   // + up to CONFIRM_CYCLES when the first pair is over the bound
   await page.addInitScript(() => {
     try { localStorage.setItem("apex26.gfxBackend", "three"); } catch (_) {}
     try { localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}   // as track-switch-memory: TLX init can exceed 8 s on a busy runner
@@ -151,6 +164,7 @@ async function body({ page }) {
       await expectNoReload(page, loads0, `cycle ${cycle}, menu after ${id}`);
       const menu = await censusAfterGc(page, cdp);
       log({ cycle, id, at: "menu", quietMs, pb, ...menu });
+      if (id === CIRCUITS[CIRCUITS.length - 1] && cycle >= 2) log({ cycle, at: "heap", ...(await heapByCtor(cdp, 30)) });
       expect(cycleCensusIssues(menu), "menu census must observe the requested renderer and usable counters").toEqual([]);
       expect(menu.aliveTracks.length, `cycle ${cycle}, menu after ${id}: ${menu.aliveTracks.join(", ")} still reachable after GC`).toBeLessThanOrEqual(1);
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
@@ -227,10 +241,11 @@ async function body({ page }) {
     }
   }
 }
-test("SCRATCH rcm A", async ({ page }) => {
+test("SCRATCH rcm B", async ({ page }) => {
   let err = null;
   try { await body({ page }); } catch (e) { err = String(e && e.message || e).replace(/\s+/g, " ").slice(0, 500); }
   let rows = []; try { rows = JSON.parse(fs.readFileSync("artifacts/logs/race-cycle-memory.json", "utf8")); } catch (_) {}
+  const heaps = rows.filter((r) => r.at === "heap").map((r) => ({ c: r.cycle, t: r.totalMB, top: r.top }));
   const menus = rows.filter((r) => r.at === "menu").map((r) => ({ c: r.cycle, id: r.id, heap: r.heapMB, q: r.quietMs, pb: r.pb }));
-  throw new Error("MEASURE " + JSON.stringify({ err, menus }));
+  throw new Error("MEASURE " + JSON.stringify({ err, menus, heaps }));
 });
