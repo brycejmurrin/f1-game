@@ -7698,7 +7698,8 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "showTouchControls": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/start-race-dock-fit.test.mjs"
       ],
       "simSeed": [
         "tests/unit/daily-challenge.test.mjs",
@@ -7736,6 +7737,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/start-race-dock-fit.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
       "startRaceCovered": [
