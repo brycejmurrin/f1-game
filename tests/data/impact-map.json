@@ -3855,7 +3855,8 @@
         "tests/unit/career-backup.test.mjs"
       ],
       "build": [
-        "tests/unit/career-backup.test.mjs"
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-ui-lazy.test.mjs"
       ],
       "download": [
         "tests/unit/mobile-native-download.test.mjs"
@@ -3970,6 +3971,9 @@
         "tests/unit/load-order.test.mjs"
       ],
       "ensure": [
+        "tests/unit/career-ui-lazy.test.mjs"
+      ],
+      "ensureBackup": [
         "tests/unit/career-ui-lazy.test.mjs"
       ]
     },
@@ -5282,6 +5286,9 @@
       "bootAgentSurface": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "bootPerfRig": [
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
+      ],
       "create": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -5322,6 +5329,9 @@
       ],
       "ensureNet": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
+      ],
+      "ensurePerfRig": [
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "ensureRaceSession": [
         "tests/unit/global-registry.test.mjs",
@@ -7689,7 +7699,8 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "showTouchControls": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/start-race-dock-fit.test.mjs"
       ],
       "simSeed": [
         "tests/unit/daily-challenge.test.mjs",
@@ -7727,6 +7738,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/start-race-dock-fit.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
       "startRaceCovered": [
@@ -10875,7 +10887,8 @@
       ],
       "load": [
         "tests/unit/bench-capture.test.mjs",
-        "tests/unit/bench-run.test.mjs"
+        "tests/unit/bench-run.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "median": [
         "tests/unit/bench-run.test.mjs"
@@ -10893,7 +10906,8 @@
         "tests/unit/bench-run.test.mjs"
       ],
       "resume": [
-        "tests/unit/bench-capture.test.mjs"
+        "tests/unit/bench-capture.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "scenes": [
         "tests/unit/bench-capture.test.mjs",

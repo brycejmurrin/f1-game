@@ -2630,7 +2630,7 @@ async function startRaceBody() {
   // drainDeferredCarWarm, one piece a countdown frame below); headless has no frames to drain them in.
   try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
   if (stale()) return false;
-  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
+  RaceEntryProfile.span("debrisPrime", () => DebrisWorld.prime());
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
   if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
@@ -2664,7 +2664,7 @@ async function startRaceBody() {
   document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
-  showTouchControls(true);
+  showTouchControls(true); updateHud(true);   // fit AFTER the dock exists: before it, no --hud-z-dock and raw-BUTTON-SIZE pedals until the next tick (tests/unit/start-race-dock-fit)
   dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); if (typeof CamFeel !== "undefined") { CamFeel.resetLatch(); CamFeel.resetFreeLook(); } // fresh race — drop free-cam, TV director, look-back latch; arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
@@ -3453,8 +3453,8 @@ wxArc = WeatherArc.create(G, { isTimeTrial, isQuali });
 // Tyre wear, the grip it costs and the fuel that argues with it
 // (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
 tyres = TyreModel.create(G);
-if (typeof SoakRun !== "undefined") SoakRun.create(G);   // AUTO SOAK (js/perf/soak-run.js): idle until PhoneRecorder's button calls start()
-if (typeof BenchRun !== "undefined") BenchRun.create(G);   // BENCHMARK (js/perf/bench-run.js): resumes its own multi-reload run, else idle
+// AUTO SOAK + BENCHMARK + PHONE TEST are LAZY_PERF: idle-loaded, or at once to resume a BENCHMARK run; bound on landing.
+lazyBundles.bootPerfRig(() => { SoakRun.create(G); BenchRun.create(G); });
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
