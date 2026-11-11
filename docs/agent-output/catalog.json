@@ -715,6 +715,11 @@
       ]
     },
     {
+      "path": "tools/ci/apt-cached-install.sh",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/assert-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -1164,6 +1169,11 @@
     },
     {
       "path": "tools/ci/reuse-draft-fast.sh",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
+      "path": "tools/ci/reuse-draft-selected.mjs",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"
     },
