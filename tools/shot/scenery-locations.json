@@ -2680,11 +2680,11 @@
       "track": "qatar",
       "name": "Turn 1 VVIP Canopy",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.051924,
+      "frac": 0.129098,
       "target": [
-        617.12,
-        7.75,
-        -136.03
+        533.04,
+        7.77,
+        198.39
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 56,
@@ -2697,15 +2697,15 @@
       "track": "qatar",
       "name": "Lusail Hill",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.067507,
+      "frac": 0.113492,
       "target": [
-        552.03,
-        5.16,
-        -4.79
+        659.66,
+        5.42,
+        241.41
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 64,
-      "viewDistanceM": 64,
+      "nearestRoadDistanceM": 70,
+      "viewDistanceM": 70,
       "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
     },
     {
@@ -3548,15 +3548,15 @@
       "track": "zolder",
       "name": "Main Grandstand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.012021,
+      "frac": 0.011999,
       "target": [
-        107.72,
-        6.53,
-        -179.19
+        -171.44,
+        5.65,
+        78.98
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 34.7,
-      "viewDistanceM": 34.7,
+      "nearestRoadDistanceM": 34.8,
+      "viewDistanceM": 34.8,
       "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
     },
     {
@@ -3565,15 +3565,15 @@
       "track": "zolder",
       "name": "Start/Finish Museum",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.018054,
+      "frac": 0.035545,
       "target": [
-        110.95,
-        -1.49,
-        -218.17
+        -172.19,
+        1.88,
+        41.18
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 65.6,
-      "viewDistanceM": 65.6,
+      "nearestRoadDistanceM": 41.5,
+      "viewDistanceM": 41.6,
       "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
     },
     {
@@ -3582,15 +3582,15 @@
       "track": "zolder",
       "name": "Villeneuve Poles",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.407019,
+      "frac": 0.051,
       "target": [
-        209.58,
-        2.13,
-        -140.28
+        -61.61,
+        2.64,
+        35.33
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 22.1,
-      "viewDistanceM": 22.1,
+      "nearestRoadDistanceM": 52.7,
+      "viewDistanceM": 52.7,
       "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
     },
     {
@@ -3599,16 +3599,16 @@
       "track": "zolder",
       "name": "Sterrenwacht",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.919787,
+      "frac": 0.023995,
       "target": [
-        -37.26,
-        1.8,
-        93.64
+        -36.91,
+        2.27,
+        91.34
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/zolder.js anchor K(0.1802)",
-      "projectedFrac": 0.492477,
-      "nearestRoadDistanceM": 52.7,
+      "projectedFrac": 0.596173,
+      "nearestRoadDistanceM": 53.5,
       "viewDistanceM": 79.5,
       "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
     }
