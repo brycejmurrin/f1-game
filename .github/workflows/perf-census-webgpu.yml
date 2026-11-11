@@ -62,7 +62,8 @@ jobs:
         run: |
           fail=0
           for track in monaco monza; do for cam in chase helmet; do for tier in desktop mobile; do
-            node tools/gfx/pass-census.mjs "$track" --webgpu --park --camera "$cam" $([ "$tier" = mobile ] && echo --mobile) --frames 60 --warm 60 \
+            tier_flag=(); if [ "$tier" = mobile ]; then tier_flag=(--mobile); fi
+            node tools/gfx/pass-census.mjs "$track" --webgpu --park --camera "$cam" "${tier_flag[@]}" --frames 60 --warm 60 \
               --baseline tests/data/pass-census-park.json --json "artifacts/census/park-$track-$cam-$tier.json" || fail=1
           done; done; done
           exit $fail
