@@ -77,6 +77,6 @@ node tools/gfx/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
 ```
 
 Missing `/usr/share/vulkan/icd.d/lvp_icd.json` → install `mesa-vulkan-drivers`
-(and persist the Cloud env snapshot — see `AGENTS.md` §Cursor Cloud).
+(and persist it in the Cloud env — see `docs/notes/CI-RENDERING-PERFORMANCE.md`).
 
 ---

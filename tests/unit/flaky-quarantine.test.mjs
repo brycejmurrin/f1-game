@@ -37,6 +37,17 @@ test("every quarantine row names a spec that exists and carries since/owner/why"
   }
 });
 
+test("no quarantine row is past its expiry: an expired row is inert, so it must be deleted, never re-dated", () => {
+  // loadQuarantine drops a row the day after `expires`, silently: on 2026-11-10
+  // eight of ten rows were dead weight that still read as protection (audit W27).
+  // This runs on the REAL clock on purpose, like knowledge-retention: the cure
+  // is to delete the row (the test then blocks on a retry, which is the policy)
+  // or to land fresh failed-run evidence with a new deadline.
+  const today = new Date().toISOString().slice(0, 10);
+  const expired = FILE.quarantine.filter((row) => row.expires < today).map((row) => `${row.spec} › ${row.title} (expired ${row.expires})`);
+  assert.deepEqual(expired, [], "delete the expired rows from tests/data/flaky-quarantine.json (AGENTS.md rule 9: a pass on retry is a red)");
+});
+
 test("every exact quarantine title is collected by the real browser runner", () => {
   // --list starts no browser. It expands dynamic titles and applies the real
   // project/manifest filters; a substring in source proves neither.
@@ -201,7 +212,8 @@ test("the selected gate honours the quarantine: its specs get a leg of their own
   const run = yml.slice(from, yml.indexOf("- name: Spec timings (junit", from));
   assert.ok(from > 0 && run.length > 0, "the selected job's run step is gone");
   assert.match(run, /APEX_FAIL_ON_FLAKY: 1/);
-  assert.match(run, /--retries=\$\{\{ matrix\.retries \|\| 0 \}\}/);
+  assert.match(run, /RETRIES: \$\{\{ matrix\.retries \|\| 0 \}\}/);
+  assert.match(run, /--retries="\$RETRIES"/);
 });
 
 // Fixture ledgers: the policy is pinned on rows these tests own, so retiring,

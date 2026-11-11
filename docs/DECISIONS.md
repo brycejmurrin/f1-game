@@ -7,23 +7,25 @@ quoting him; the quote lives here once (docs/plans/2026-11-03-agent-surface-rese
 old row's `superseded by` names it; rows are never deleted or renumbered.
 `tests/unit/knowledge-retention.test.mjs` checks that every `D-NNN` cited
 anywhere exists here, that ids are unique and sequential, and that each row's
-`cited by` paths exist.
+`related files` exist. A related file is where the decision lands or is enforced;
+it need not quote the id (the column was `cited by` until 2026-11-09, when 23 of
+30 rows listed files that never mention their id).
 
-Columns: `D-NNN | date (PT unless marked Z) | "verbatim words" | scope | via | cited by | superseded by`.
+Columns: `D-NNN | date (PT unless marked Z) | "verbatim words" | scope | via | related files | superseded by`.
 `via` is how the words reached the repo: `session` (Bryce typed it in that
 session), `relay` (a dispatcher quoted him with when and where; retired by
 D-001 §4.3 in favour of provenance), `AskUserQuestion`. "(recorded: …)" marks
 a decision whose exact words were not kept; the paraphrase is the citing
 comment's. Preferences about how Bryce likes to work (phone, Pacific time,
 small steps) stay in `.claude/memory/`; measured facts stay in the doc that
-uses them. Observations and bug reports he made are not decisions and are not
+uses them or a `docs/notes/` note with `Re-measure-by:` (docs/notes/AGENT-MEMORY.md). Observations and bug reports he made are not decisions and are not
 listed. Backfilled 2026-11-03 from the inline quotes
 (`grep -rn "Bryce, 20\|Bryce 20\|Bryce (20"`); notes keep their quotes.
 
-| id | date | words | scope | via | cited by | superseded by |
+| id | date | words | scope | via | related files | superseded by |
 |---|---|---|---|---|---|---|
 | D-001 | 2026-11-03 | "Let's fix all and add/edit new skills agents and any changes within one pr" | the agent-surface reset lands as ONE PR: hooks, settings, skills, agents, memory, docs and the retention tool included (docs/plans/2026-11-03-agent-surface-reset.md); 21-day cite-or-archive window; chat preferences stay in auto-memory, decisions get rows here | session | docs/plans/2026-11-03-agent-surface-reset.md, tools/docs/knowledge-gc.mjs, tests/unit/knowledge-retention.test.mjs | — |
-| D-002 | 2026-10-15 | (recorded: branch protection requires `CI` and nothing else; "it was twelve names") | the deploy branch's one required check is `CI` (`ci-verdict`); `gate` reads it | session | .github/workflows/ci.yml, tools/ci/merge-gate.mjs | — |
+| D-002 | 2026-10-15 | (recorded: branch protection requires `CI` and nothing else; "it was twelve names") | the deploy branch's one required check is `CI` (`ci-verdict`); `gate` reads it | session | .github/workflows/ci.yml, tools/ci/merge-gate.mjs | D-031 |
 | D-003 | 2026-10-17 | "The cut-off text at UI size 200% is fine as it is?" — "No" | preset blurbs and the career intro wrap in full at UI SIZE 150/200 (no line clamp) | session | tests/specs/ui-scale.spec.js, tests/unit/ui-improve-pass.test.mjs | — |
 | D-004 | 2026-10-17 | (recorded: HUD SIZE resizes the readouts and must not move or resize a single control) | BUTTONS mode: the touch controls follow BUTTON SIZE only | session | tests/specs/hud-layout.spec.js | — |
 | D-005 | 2026-10-18 | "Use ask user question for everything you want from me but explain" | a Bryce-attended session asks through AskUserQuestion with options and a recommendation | session | — (the memory topic retired 2026-11-03; this row is its home) | D-009 |
@@ -41,14 +43,15 @@ listed. Backfilled 2026-11-03 from the inline quotes
 | D-017 | 2026-10-26 ~23:00 | "Go deeper, do more web research, remember all agents Md Claude Md everything should be re considered. Wait ignore rules and we consider as I said. Let's implement all improvement" | AGENTS.md, CLAUDE.md and the memory are agent-written drafts to reconsider; audit improvements land in one PR | session | .claude/memory/rules-are-agent-written-drafts.md | D-001 |
 | D-018 | 2026-10-26 | (recorded: "THE BODY MARKER") | a PR-body line starting `CI: run` buys exactly what the `run-ci` label buys (Cursor workers 403 on labels) | session | .github/workflows/ci.yml, tests/unit/ci-ship-filter-geometry.test.mjs | — |
 | D-019 | 2026-10-27 | "You consider the options and make the best decisions" | open decisions inside a task are delegated: pick, record, proceed; the WP-L4 hook edits (merge/arm door, receipts, hold removal) included | session | .claude/hooks/protect-files.sh, (retired 2026-11-03: merge_policy.py) | — |
-| D-020 | 2026-10-27 | worker sessions "are sometimes getting stuck waiting for user instead of asking you or dispatcher message them" | an unattended session never ends a turn on a question to the user (AGENTS.md rule 13) | session | — (the memory topic retired 2026-11-03) | — |
+| D-020 | 2026-10-27 | worker sessions "are sometimes getting stuck waiting for user instead of asking you or dispatcher message them" | an unattended session never ends a turn on a question to the user (then AGENTS.md rule 13; since 2026-11-03 AGENTS.md §Coordination: "never a question to the user at the end of a turn") | session | — (the memory topic retired 2026-11-03) | — |
 | D-021 | 2026-10-28 | (recorded: launched sessions message the dispatcher; only the dispatcher uses AskUserQuestion) | question routing for dispatcher-launched sessions | session | — (the memory topic retired 2026-11-03) | D-001 (plan §4.1: the persistent dispatcher is retired) |
 | D-022 | 2026-10-28 | "Build at deploy" | served files in `BUILT_PATHS` are gitignored and built at deploy, never committed (AGENTS.md rule 11) | session | tests/unit/rulebook-guards.test.mjs, docs/notes/DEPLOY-TIME-GEN-2026-10-28.md | — |
 | D-023 | 2026-10-28 | (recorded: SKILL.md and each reference start with a summary when longer than ~200 lines) | progressive disclosure in skills | session | tests/unit/skill-progressive.test.mjs | — |
 | D-024 | 2026-10-29 | "Raise to 326" | `MAX_EAGER_SCRIPTS` 325 → 326 (EnergyPlan cannot be lazy) | session | tests/unit/boot-load-budget.test.mjs | — |
 | D-025 | 2026-10-30 ~16:51Z | "Raise budget +50 KB" | the boot-load budget 8.20 → 8.25 MB | relay | tests/unit/boot-load-budget.test.mjs | — |
-| D-026 | 2026-10-30 | "Yes, quoted relays count" | a dispatcher relaying his exact words with when and where passed on his grant | session | .claude/skills/steward/SKILL.md | D-001 (plan §4.3: provenance, not quoted relays) |
+| D-026 | 2026-10-30 | "Yes, quoted relays count" | a dispatcher relaying his exact words with when and where passed on his grant | session | — (steward stopped citing it when D-001 retired relays; corrected 2026-11-10) | D-001 (plan §4.3: provenance, not quoted relays) |
 | D-027 | 2026-10-30 | "B8 opt-in" | `?lab=tlxLite` and the other `?lab=` tiers ship OFF, opt-in | session | tests/unit/tlx-lite-lab.test.mjs, tests/unit/ai-racecraft-vm.test.mjs | — |
-| D-028 | 2026-11-01 ~00:15Z | "Yes, add the guard" | bash-guard refuses a command line carrying the phone-browser `mcp?token=` URL | AskUserQuestion, relayed by the dispatcher | .claude/hooks/bash-guard.sh | — |
+| D-028 | 2026-11-01 ~00:15Z | "Yes, add the guard" | bash-guard refuses a command line carrying the phone-browser `mcp?token=` URL — NEVER IMPLEMENTED: no hook scans for it (checked 2026-11-10); the phone-browser skill says keeping the URL out of shared text is on the agent | AskUserQuestion, relayed by the dispatcher | — (no hook implements it; corrected 2026-11-10) | — |
 | D-029 | 2026-11-03 | (recorded: issue #4625 — a fix to `gate` cannot pass the `gate` it fixes; Bryce disabled the Deploy-reset ruleset and merged by hand) | the gate-bootstrap path: a PR that fixes `gate`/`merge-gate`/`land.yml` and is itself blocked by the broken `gate` gets `needs-decision` plus ONE comment (the PR, the red `gate` line, "needs Bryce: bootstrap merge"); Bryce alone clicks: disable the Deploy-reset ruleset, merge the PR (merge commit), re-enable the ruleset, and only then the stalled `land` PRs re-gate (`retry`/next train). No agent merges, arms, edits the ruleset or tries other merge routes | session | tests/unit/merge-gate.test.mjs, .github/workflows/land.yml | — |
-| D-030 | 2026-11-06 ~19:05Z | "Things are still broken, let's reconsider from scratch. The title page should not be scrollable." | the landscape title screen never scrolls: every TITLE LAYOUT size, width and offset is a request and the overlay's content box is the law — a piece that would not fit is zoomed down (`--tf`), an offset past an edge is pulled back (`--tf-dx/-dy`), the art is a fixed layer that counts toward no scroll area, `#overlay` is `overflow: hidden` in the wide shape; portrait keeps its scroll fallback | relay (issue #5150, dispatcher) | css/title.css, css/menus.css, css/responsive.css, css/menu-destinations.css, js/ui/title-layout.js, tests/specs/title-fit.spec.js | — |
+| D-030 | 2026-11-06 ~19:05Z | "Things are still broken, let's reconsider from scratch. The title page should not be scrollable." | the landscape title screen never scrolls: every TITLE LAYOUT size, width and offset is a request and the overlay's content box is the law — a piece that would not fit is zoomed down (`--tf`), an offset past an edge is pulled back (`--tf-dx/-dy`), the art is a fixed layer that counts toward no scroll area, `#overlay` is `overflow: hidden` in the wide shape; portrait keeps its scroll fallback | issue #5150, opened under Bryce's own account (author_association OWNER) quoting him with time and place — not a relay (relays were retired by D-001; corrected 2026-11-10) | css/title.css, css/menus.css, css/responsive.css, css/menu-destinations.css, js/ui/title-layout.js, tests/specs/title-fit.spec.js | — |
+| D-031 | 2026-11-10 | (recorded: the live ruleset "Deploy-reset" on the deploy branch, which Bryce configures, requires exactly one check, `gate`, and binds admins; read 2026-11-10) | the deploy branch's one required check is `gate` (land.yml's commit status); `gate`'s `ci` row in turn reads `CI` green on the head | ruleset | AGENTS.md, tools/ci/merge-gate.mjs | — |

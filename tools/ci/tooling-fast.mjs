@@ -24,7 +24,7 @@
  * js/ or css/ edit to the whole tooling-fast group (see its RULES).
  *
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
- *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
+ *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy> (else local <deploy>; neither: exit 4), untracked files included: affected files only
  *   node tools/ci/tooling-fast.mjs --changed --no-sync-shortcut  # a HEAD that is a pure deploy-tip merge selects gen:check + docs only; this selects the branch diff (preflip-probe)
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
@@ -61,7 +61,7 @@ import { randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, changedWithUntracked, noDeployBaseMessage, resolveDeployBase } from "../lib/changed-files.mjs";
 import { loadGroups, filesOnly } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
 import { verificationIdentity, beginVerification, finishVerification, verificationMarker } from "./verification-receipt.mjs";
@@ -653,14 +653,33 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
   return out;
 }
 
-/** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
-function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
-  try {
-    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
-    return changedPaths([base], { cwd: root });
-  } catch (_) {
-    try { return changedPaths(["HEAD~1"], { cwd: root }); } catch (_) { return []; }
+/** Changed paths vs the deploy branch: the merge-base with origin/DEPLOY_BRANCH (else the local DEPLOY_BRANCH),
+ *  working tree included, untracked files too (a new file is invisible to `git diff` before `git add`, and the
+ *  AGENTS.md loop runs `--changed` before staging). Throws `code: "NO_DEPLOY_BASE"` when neither ref resolves: the
+ *  old HEAD~1 fallback selected the LAST COMMIT's files on a shallow clone and reported green for the branch
+ *  (audit W6, 2026-11-10). @returns {{ base: { ref: string, sha: string }, paths: string[] }} */
+export function changedVsDeploy(root = ROOT, { branch = DEPLOY_BRANCH, run } = {}) {
+  const gitOpts = run ? { cwd: root, run } : { cwd: root };
+  const base = resolveDeployBase(branch, gitOpts);
+  if (!base) {
+    const err = new Error(noDeployBaseMessage(branch, "tooling-fast"));
+    err.code = "NO_DEPLOY_BASE";
+    throw err;
   }
+  return { base, paths: changedWithUntracked(base.sha, gitOpts) };
+}
+
+/** The tooling-fast files ci.yml's four Structural guards shards ran for this diff: the whole floor when
+ *  guardsScope says full, else exactly the `--changed` selection (sync-merge shortcut included). run-group.mjs
+ *  `--skip-tf` subtracts THIS, not the whole floor: subtracting every tooling-fast member while guards ran a
+ *  selection left game-vm, physics-characterization-vm, real-replay-vm (and more) in no PR job (audit W6).
+ *  @returns {{ mode: "full" | "changed", reason: string, files: string[] }} */
+export function guardsRanFiles(changed, eventName, opts = {}) {
+  const scope = guardsScope(changed, eventName);
+  const floor = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
+  if (scope.mode === "full") return { ...scope, files: floor };
+  const meta = opts.synced ? selectSyncMerge(opts.synced, opts) : selectToolingFastChanged(changed, opts);
+  return { ...scope, files: meta.files, selection: meta.reason };
 }
 
 /**
@@ -707,7 +726,6 @@ export const GENERATED_FILES = Object.freeze({
   "docs/agent-index.json": { source: "tools/docs/gen-agent-index.mjs", always: true },
   "docs/agent-output/catalog.json": { source: "tools/gen/gen-output-surface.mjs", always: true },
   "docs/AGENT-HOOKS.md": { source: ".claude/hooks/*", always: true },
-  "docs/TESTING-COVERAGE.md": { source: "tests/groups.json", always: true },
   "tools/README.md": { source: "tools/**/@doc headers", always: true },
   "CHANGELOG.md": { source: "docs/changelog.d/*", always: true },
   "tools/shot/scenery-locations.json": { source: "js/circuits/scenery/*", always: true },
@@ -1206,7 +1224,8 @@ export function widenedLine(meta, fileCount) {
 /** The `--changed` header line: reason, the REAL diff size, the files chosen, and the path that forced a fallback. */
 export function changedHeader(meta, fileCount) {
   return `[tooling-fast] --changed reason=${meta.reason} changed=${meta.changed ?? 0} files=${fileCount}` +
-    `${meta.because ? ` because=${meta.because}` : ""} shards=${(meta.shards || []).join(",") || "none"}`;
+    `${meta.because ? ` because=${meta.because}` : ""} shards=${(meta.shards || []).join(",") || "none"}` +
+    `${meta.base ? ` base=${meta.base.ref}@${String(meta.base.sha).slice(0, 12)}` : ""}`;
 }
 export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against origin/${DEPLOY_BRANCH} — nothing was selected, nothing verified (exit 3).\n` +
   `  Commit or stage your edit, \`git fetch origin ${DEPLOY_BRANCH}\` if the ref is stale, or run without --changed for the whole floor.`;
@@ -1315,7 +1334,10 @@ if (isMain) {
   }
   if (parsed.printScope) {
     // ci.yml's guards shards: `mode=` and `reason=` lines for $GITHUB_OUTPUT (see guardsScope).
-    const r = guardsScope(changedVsDeploy(), process.env.GITHUB_EVENT_NAME);
+    // No deploy base reads as FULL: the narrow answer needs a diff, and the full floor is the fail-safe one.
+    let r;
+    try { r = guardsScope(changedVsDeploy().paths, process.env.GITHUB_EVENT_NAME); }
+    catch (e) { if (e.code !== "NO_DEPLOY_BASE") throw e; r = { mode: "full", reason: "no deploy base (shallow or unfetched clone)" }; }
     console.log(`mode=${r.mode}\nreason=${r.reason}`);
     process.exit(0);
   }
@@ -1337,8 +1359,19 @@ if (isMain) {
     // CI keeps the strict all-or-nothing shortcut; a local run (sync-pr.mjs's verify) scopes an impure sync to the merge.
     const scoped = parsed.noSyncShortcut || process.env.GITHUB_ACTIONS ? null : syncMergeScope();
     const synced = parsed.noSyncShortcut || scoped ? null : syncMergePaths();
+    let diff = null;
+    if (!scoped && !synced) {
+      try { diff = changedVsDeploy(); }
+      catch (e) {
+        if (e.code !== "NO_DEPLOY_BASE") throw e;
+        console.error(e.message);
+        console.log(closingLine(false, 0, 0));
+        process.exit(4);
+      }
+    }
     changedMeta = scoped ? selectSyncMerge(scoped.paths, { impure: scoped.impure })
-      : synced ? selectSyncMerge(synced) : selectToolingFastChanged(changedVsDeploy());
+      : synced ? selectSyncMerge(synced)
+      : { ...selectToolingFastChanged(diff.paths, { diffBase: diff.base.ref }), base: diff.base };
     if (scoped?.impure.length) console.log(`[tooling-fast] sync merge: ${scoped.paths.length} path(s) from the tip, ${scoped.impure.length} decided by the merge (${scoped.impure.slice(0, 6).join(", ")}${scoped.impure.length > 6 ? ", …" : ""}); --no-sync-shortcut selects the branch diff`);
     files0 = changedMeta.files;
     const wide = widenedLine(changedMeta, files0.length);

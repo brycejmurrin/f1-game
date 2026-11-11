@@ -1,13 +1,13 @@
 # Brake target (AI brakes too early / late, dives too deep)
 
 `AiDrive.brakeTarget(ctx)` (ai-drive.js) = min over look-ahead samples of
-`sqrt(vC² + 2·brake·0.85·d)`, `vC = cornerSpeed(k, latMax·bank·grip)·skill·diffCorner`
+`sqrt(vC² + 2·brake·margin·d)`, `vC = cornerSpeed(k, latMax·bank·grip)·skill·diffCorner`
 (`latMax` carries the aeroLoad scale), then multiplied by house `hold`, the craft
-LATE-BRAKE (attacking with room > 1.6 m: up to ×`lerp(1, 1.07, craft)` × house attack),
-`optimism` (±1.2 %) and `errMul` (a missed marker).
+LATE-BRAKE (attacking with room: a `craft` lerp × house attack), `optimism` and
+`errMul` (a missed marker). The literals are in `brakeTarget` itself.
 
 - "Dives too deep" = the late-brake / optimism terms.
-- "Brakes too early" = too low `vC` (k, grip, `diffCorner`, `skill`), too small `0.85`,
+- "Brakes too early" = too low `vC` (k, grip, `diffCorner`, `skill`), too small a brake margin,
   or `errMul`/`hold`.
 
 `brakeDecision` turns `speed - vLim` into a pedal (soft/full band from `consistency`).

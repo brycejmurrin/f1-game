@@ -4,12 +4,12 @@
 uses the checked-in Baku race data fixture (requires `--track baku`); explicit
 track-frame traces are honored, otherwise the probe builds deterministic synthetic
 two-car track-frame traces; `--fixture FILE` validates an explicit fixture
-before any server/browser boot. `--track`, `--backend three|webgl2|webgpu`,
-`--frames 1..120`, `--seed <uint32>` and contained `--out artifacts/...` select
-a bounded run. `--plan` performs offline preflight and creates no outputs.
+before any server/browser boot. `--track`, `--backend`, `--frames`, `--seed` and
+contained `--out artifacts/...` select a bounded run (ranges: `--help`). `--plan`
+performs offline preflight and creates no outputs.
 Start software-rendered smoke with one frame per phase at 640x360; increase
 frame counts for a longer motion sample when rendering capacity permits.
-`--timeout-ms 1000..900000` bounds the whole run. Each operation records its
+`--timeout-ms` bounds the whole run. Each operation records its
 effective budget and elapsed time; exhausted budgets remain failed evidence.
 
 Keep entry, seek, follow, exit and reentry in one session. Do not manually reset
@@ -29,4 +29,4 @@ Offline smoke evidence covers only the reported fixture contract. A plan is
 phase must remain explicit in the receipt. A software WebGPU run cannot prove
 native Apple/Windows GPU behavior. Never contact OpenF1 to make a smoke fixture.
 
-Polling: AGENTS.md rule 9. Use the shared backend-aware presented-canvas capture helper.
+Waiting: AGENTS.md rule 4 (skill check-changes); no poll loops (rule 13). Use the shared backend-aware presented-canvas capture helper.

@@ -3152,7 +3152,7 @@ box, `present` = css × min(`dpr`, the DPR cap: 1.5 on `mobileTier`, else 2),
 `buffer` = present × `scale`, `dprCap` the cap AS APPLIED (present / css),
 `pxPerCss` buffer / css and `ofDevice` buffer / (css × dpr) — the share of the
 panel's pixels the 3D view uses per axis. A DPR‑3 iPhone at 852×393 with
-RESOLUTION LOW (0.5, the touch default) reads `present [1278,590]`, `buffer
+RESOLUTION LOW (0.5; a phone defaults to AUTO capped at 0.75) reads `present [1278,590]`, `buffer
 [639,295]`, `pxPerCss 0.75`, `ofDevice 0.25`. Fields are `null` (never 0 or
 NaN) before a size exists. `js/agent/apex-lifecycle.js` `effectiveRes`;
 `tests/unit/render-effective-res.test.mjs` pins the rule and the numbers.
@@ -3496,10 +3496,11 @@ position with second-gaps, compact (team is an id string, one row per car):
 ```js
 __apex.field({ detail: "brief" })
 // { raceState, of, lapsTarget, player:{pos,lap,gapToLeaderS,intervalS},
-//   positions:[{ pos, id, code, team, isPlayer, lap, gapToLeaderS, intervalS }, …] }
+//   positions:[{ pos, id, code, team, isPlayer, retired, inPit, lap, gapToLeaderS, intervalS }, …] }
 ```
 
-`detail:"full"` adds `frac`, `speedKph`, `gapToLeaderM`, `finished` per row.
+`inPit` is true while the car is anywhere in the pit lane (`pitState` lane, box or
+out). `detail:"full"` adds `frac`, `speedKph`, `gapToLeaderM`, `finished` per row.
 `world().rivals` is the egocentric nearest-few for the driving decision; `field()`
 answers "where is everyone". Part of agent view being the **text-native mirror of
 the whole `__apex` toolkit** — see `agentHelp()`, whose `read` section names the

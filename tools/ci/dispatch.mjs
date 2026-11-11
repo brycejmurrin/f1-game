@@ -36,6 +36,10 @@
 // agent added gets ONE digest comment starting with `@brycejmurrin` from the Action's token (an agent writing as
 // brycejmurrin never notifies his phone), and no second digest while the previous one is the latest bot comment.
 //
+// Trust: only this repository's own PRs by the owner or a `*[bot]` (no fork head) are re-owned or nudged; a `ready`
+// issue launches only when the owner's account authored it or added `ready` (in person or through an agent); launch
+// claims and nudges count only when github-actions[bot] wrote them and their stamp is not in the future; the Board and
+// Dispatch issues are the numbers pinned in dispatch.json (`boardIssue`, `dispatchIssue`).
 // Task rules: (1) `ready` issues without `claimed` → one worker each (a `batch` issue is the ONE launch for its
 // `batched` members, and waits for what its "## Merge order" lands after), `priority` (Bryce's) first, newest next, within
 // maxLaunchesPerRun, maxLiveWorkers (launch comments younger than launchClaimHours) and maxLaunchesPerDay (launch
@@ -45,12 +49,14 @@
 // ONE `CONTINUE PR <n>` worker, unless a live worker's claim, foreign activity (a commit by another author in
 // foreignHours, or a lane:cursor push) or an unmerged prerequisite PR named in the body says wait; (3) deploy red (the
 // newest COMPLETED pages.yml run on the deploy branch failed) and no open PR labelled `deploy:red` → label the Board,
-// launch one fixer addressed `DEPLOY-RED <run id>`; (5) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
+// launch one fixer addressed `DEPLOY-RED <run id>` (none when the run's PLATFORM_STEP failed: a Pages-side publish
+// failure is a skip line on the Board, not a code fix); (5) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
 // acts on gets ONE comment per nudgeEveryMinutes (`dispatch: nudge …`) naming what to do next — a subscribed worker is
 // woken by the comment; (6) the Board markdown, ONE comment this tool edits on the issue titled `Board`
 // (marker `<!-- dispatch-board -->`). Idempotent: every launch is recorded as a comment on the issue/PR (deploy:red
 // fixers on the Board issue), and a launch comment younger than launchClaimHours is a live claim.
-// Rule 2's "last activity" is the PR's updated_at or its newest comment, this tool's launch/nudge comments excluded.
+// Rule 2's "last activity" is the head's push (its first workflow run, a server time) or the newest comment not written
+// by this tool; updated_at is not read (this tool's own nudges and labels move it).
 // Never stale: a `land` PR whose head has no failed check, no failed or long-pending `gate` status and no conflict, the
 // fold bots' PRs (head `bot/*`, author `*[bot]`), and a PR with a live claim. Every list call paginates.
 // Right before each fire (finding 7, 2026-10-30) the PR/issue is re-read: merged, closed or a non-Claude push in the
@@ -80,7 +86,7 @@ export const DEFAULT_CONFIG = {
   pause: false, maxLaunchesPerRun: 4, maxLaunchesPerDay: 24, maxLiveWorkers: 8, landQueueMax: 15, workerCostCapUsd: 10, workerStopAtK: 300,
   staleHours: { default: 2, codex: 6 }, launchClaimHours: 2, foreignHours: 2, nudgeAfterMinutes: 45, nudgeEveryMinutes: 60,
   deployBranch: "claude/f1-game-project-26h3ng", repo: "brycejmurrin/f1-game", owner: OWNER,
-  boardIssueTitle: "Board", dispatchIssueTitle: "Dispatch",
+  boardIssue: 1780, dispatchIssue: 3899, boardIssueTitle: "Board", dispatchIssueTitle: "Dispatch",
 };
 
 export function loadConfig(file = CONFIG_FILE, read = fs.readFileSync) {
@@ -98,6 +104,12 @@ export const ageLabel = (iso, now) => { const h = hoursAgo(iso, now); return !t(
 /** This tool's own comments (launch claims, nudges, digests, the Board) are never activity. Pure. */
 export const isDispatchComment = (body) => { const b = String(body || ""); return LAUNCH_RE.test(b) || NUDGE_RE.test(b) || b.startsWith(BOARD_MARKER) || b.includes(DIGEST_MARKER); };
 const isBot = (login) => /\[bot\]$/.test(String(login || ""));
+/** The Action's own identity: the only author whose launch claims and nudges count. */
+export const DISPATCH_BOT = "github-actions[bot]";
+/** A claim or nudge stamped more than this far ahead of `now` is not a claim (clock skew allowance). */
+export const FUTURE_SKEW_MS = 5 * 60e3;
+/** A comment this tool wrote: github-actions[bot] and one of its markers. Pure. */
+export const isOwnComment = (c) => c?.author === DISPATCH_BOT && isDispatchComment(c.body);
 
 /** The body's ```handoff block as {key: value} (keys lowercased, `not run` → notRun); null without one. Pure. */
 export function parseHandoff(body) {
@@ -111,19 +123,23 @@ export function parseHandoff(body) {
   return out;
 }
 
-/** The dispatcher's launch comments on one object: [{host, title, target, at, session}], newest first. Pure. */
+/** The dispatcher's launch comments on one object (github-actions[bot] only): [{host, title, target, at, session}],
+ *  newest first. Pure. */
 export function launchComments(comments) {
-  return (comments || []).map((c) => LAUNCH_RE.exec(String(c.body || ""))).filter(Boolean)
+  return (comments || []).filter((c) => c?.author === DISPATCH_BOT).map((c) => LAUNCH_RE.exec(String(c.body || ""))).filter(Boolean)
     .map((m) => ({ host: m[1], title: m[2], target: m[3], at: m[4], session: m[5] || null })).sort((a, b) => t(b.at) - t(a.at));
 }
+/** Is a stamp inside [now - hours, now + FUTURE_SKEW_MS]? A future stamp is never live. Pure. */
+const within = (iso, now, hours) => !!t(iso) && t(iso) <= now + FUTURE_SKEW_MS && hoursAgo(iso, now) < hours;
 /** The newest launch comment younger than `hours` (a live claim), or null. Pure. */
-export const liveLaunch = (comments, now, hours) => launchComments(comments).find((l) => hoursAgo(l.at, now) < hours) || null;
+export const liveLaunch = (comments, now, hours) => launchComments(comments).find((l) => within(l.at, now, hours)) || null;
 /** Launch comments younger than `hours` across every issue and PR of the state (the live-worker and per-day counts). Pure. */
 export const launchedWithin = (state, now, hours) => [...(state.issues || []), ...(state.prs || [])]
-  .flatMap((x) => launchComments(x.comments)).filter((l) => hoursAgo(l.at, now) < hours).length;
-/** The newest nudge comment younger than `minutes`, or null. Pure. */
+  .flatMap((x) => launchComments(x.comments)).filter((l) => within(l.at, now, hours)).length;
+/** The newest nudge comment (github-actions[bot] only) younger than `minutes`, or null. Pure. */
 export function recentNudge(comments, now, minutes) {
-  const at = (comments || []).map((c) => NUDGE_RE.exec(String(c.body || ""))?.[1]).filter(Boolean).sort((a, b) => t(b) - t(a))[0];
+  const at = (comments || []).filter((c) => c?.author === DISPATCH_BOT).map((c) => NUDGE_RE.exec(String(c.body || ""))?.[1])
+    .filter((iso) => iso && t(iso) <= now + FUTURE_SKEW_MS).sort((a, b) => t(b) - t(a))[0];
   return at && (now - t(at)) / 6e4 < minutes ? at : null;
 }
 
@@ -163,12 +179,26 @@ export function closingIssues(body, repo = DEFAULT_CONFIG.repo) {
   return [...ids];
 }
 
-/** A PR's last activity: its updated_at (push, comment, edit, label) or its newest comment, this tool's own comments
- *  excluded (the head commit's committer date is NOT the push time). Pure. */
-export const activityAt = (p) => Math.max(t(p.updated_at), t(p.last_comment_at),
-  ...(p.comments || []).filter((c) => !isDispatchComment(c.body)).map((c) => t(c.created_at)));
+/** A PR's last activity: the head's push (`pushed_at`, readState: the head's first workflow run) or its newest comment
+ *  this tool did not write; the PR's creation when neither is known. Not updated_at: this tool's own nudge comments and
+ *  label writes move it. Pure. */
+export const activityAt = (p) => Math.max(t(p.pushed_at), t(p.created_at), t(p.last_comment_at),
+  ...(p.comments || []).filter((c) => !isOwnComment(c)).map((c) => t(c.created_at)));
 /** A fold bot's PR (changelog-fold.yml / ratchets-fold.yml push `bot/<name>`; any `*[bot]` author): never re-owned. Pure. */
 export const isBotPr = (p) => /^bot\//.test(String(p.head_ref || "")) || isBot(p.author);
+/** Why the dispatcher must not act on PR `p`, or "": its head is not in `repo` (a fork) or its author is neither the
+ *  owner nor a `*[bot]`. Pure. */
+export function untrustedPr(p, repo, owner) {
+  if (String(p.head_repo || "").toLowerCase() !== String(repo || "").toLowerCase()) return `head in ${p.head_repo || "an unknown repository"}, not ${repo}`;
+  if (p.author !== owner && !isBot(p.author)) return `author ${p.author || "unknown"} is not ${owner}`;
+  return "";
+}
+/** Did the owner's account add `ready` to issue `i` (newest `labeled ready`, any app) or author it? Pure. */
+export function trustedReady(i, owner) {
+  if (i.author && i.author === owner) return true;
+  const e = (i.events || []).filter((x) => x?.event === "labeled" && x.label?.name === "ready").sort((a, b) => t(a.created_at) - t(b.created_at)).at(-1);
+  return !!e && e.actor?.login === owner;
+}
 
 const PREREQ_RES = [/\b(?:after|once|when)\s+(?:PR\s+)?#(\d{1,6})\s+(?:merges|merged|is merged|lands|has merged)\b/gi,
   /\b(?:builds?\s+on|depends?\s+on|blocked\s+by|stacked\s+on|requires|waits?\s+(?:for|on))\s+(?:PR\s+)?#(\d{1,6})\b/gi];
@@ -276,13 +306,16 @@ export const addressOf = (l) => l.kind === "issue" ? `ISSUE ${l.number}` : l.kin
 export const claimComment = (l, now, session) => `dispatch: launched claude:${l.title} for ${l.number ? `#${l.number}` : "deploy:red"} at ${new Date(now).toISOString()}${session ? ` as ${session}` : ""}`;
 
 /**
- * @param {{ issues?: object[], prs?: object[], deployRed?: boolean, deployRunId?: number|string|null }} state
+ * @param {{ issues?: object[], prs?: object[], deployRed?: boolean, deployRunId?: number|string|null, deployPlatform?: boolean }} state
  * @returns {{ launches, labels, digests, nudges, skipped, board, flags, live, launchedToday, landQueue, boardIssue, dispatchIssue }}
  */
 export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
-  const issues = state.issues || [], prs = state.prs || [], owner = config.owner || OWNER;
-  const byTitle = (title) => issues.find((i) => String(i.title || "").trim() === title) || null;
-  const board = byTitle(config.boardIssueTitle), dispatch = byTitle(config.dispatchIssueTitle);
+  const issues = state.issues || [], owner = config.owner || OWNER;
+  // A pinned number names the control issue; unpinned, the title must match and the author be the owner or a bot.
+  const control = (number, title) => (number
+    ? issues.find((i) => Number(i.number) === Number(number))
+    : issues.find((i) => String(i.title || "").trim() === title && (i.author === owner || isBot(i.author)))) || null;
+  const board = control(config.boardIssue, config.boardIssueTitle), dispatch = control(config.dispatchIssue, config.dispatchIssueTitle);
   const ownerLabel = (x, name) => !!x && ownerSet(x.labels, x.events, name, owner);
   const ignored = [];   // labels present but not Bryce's own click: reported, not honoured
   const why = (x, name) => { const e = newestLabelEvent(x.events, name); return `${name} on #${x.number} (${e ? describeActor(e) : "no label event fetched"})`; };
@@ -290,6 +323,7 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
   const flags = { pause: !!config.pause || steer(dispatch, "dispatch:pause"), mergePause: steer(dispatch, "dispatch:merge-pause") };
   const claimH = config.launchClaimHours, launches = [], labels = [], digests = [], nudges = [], skipped = [];
   const skip = (what, why) => skipped.push({ what, why });
+  const prs = (state.prs || []).filter((p) => { const u = untrustedPr(p, config.repo, owner); if (u) skip(`PR #${p.number}`, `not acted on: ${u}`); return !u; });
   const label = (number, add = [], remove = []) => { const r = labels.find((l) => l.number === number) || (labels.push({ number, add: [], remove: [] }), labels.at(-1)); r.add.push(...add); r.remove.push(...remove); };
   // Live workers = launch comments younger than launchClaimHours; the day's launches = those younger than 24 h.
   let live = launchedWithin(state, now, claimH);
@@ -320,8 +354,9 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     const claimed = prs.find((p) => has(p, "deploy:red"));
     const l = board ? liveLaunch(board.comments, now, claimH) : null;
     if (board && !has(board, "deploy:red")) label(board.number, ["deploy:red"]);
-    if (claimed) skip("deploy:red fixer", `PR #${claimed.number} carries deploy:red`);
-    else if (!board) skip("deploy:red fixer", `no open issue titled "${config.boardIssueTitle}" to record the launch on`);
+    if (state.deployPlatform) skip("deploy:red fixer", `pages.yml run ${state.deployRunId || "?"} failed on the Pages side (step "${PLATFORM_STEP}" failed: both publish attempts): no fixer, re-run the train`);
+    else if (claimed) skip("deploy:red fixer", `PR #${claimed.number} carries deploy:red`);
+    else if (!board) skip("deploy:red fixer", `no open Board issue (#${config.boardIssue || "?"}) to record the launch on`);
     else if (l && l.target === "deploy:red") skip("deploy:red fixer", `launched ${ageLabel(l.at, now)} ago (live claim)`);
     else launch("deploy-red", 0, "[Worker] deploy:red fixer", board.number, { runId: state.deployRunId || null });
   } else if (board && has(board, "deploy:red")) label(board.number, [], ["deploy:red"]);
@@ -371,12 +406,13 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
   const ready = issues.filter((i) => !i.pull_request && has(i, "ready") && !has(i, "claimed") && !has(i, "blocked") && !has(i, "needs-decision") && !has(i, "epic") && !isMember(i))
     .sort((a, b) => (ownerLabel(b, "priority") - ownerLabel(a, "priority")) || (t(b.updated_at) - t(a.updated_at)));
   for (const i of ready) if (has(i, "priority") && !ownerLabel(i, "priority")) ignored.push(why(i, "priority"));
+  for (const i of ready.filter((x) => !trustedReady(x, owner))) ignored.push(`ready on #${i.number} (neither authored nor labelled by ${owner})`);
   const linkedPrs = new Map();
   for (const p of prs) {
     if (p.state && p.state !== "open") continue;
     for (const n of closingIssues(p.body, config.repo)) linkedPrs.set(n, [...(linkedPrs.get(n) || []), p.number]);
   }
-  for (const i of queueFull ? [] : ready) {
+  for (const i of queueFull ? [] : ready.filter((x) => trustedReady(x, owner))) {
     const linked = linkedPrs.get(Number(i.number)) || (has(i, "batch") ? [...new Set(batchMembers(i.body).flatMap((n) => linkedPrs.get(n) || []))] : []);
     if (linked.length) { skip(`issue #${i.number}`, `already has open PR ${linked.map((n) => `#${n}`).join(", ")}`); continue; }
     const l = liveLaunch(i.comments, now, claimH);
@@ -411,6 +447,14 @@ export function renderBoard(state, plan, config, now) {
 }
 
 // ---- I/O: read GitHub state ----------------------------------------------------
+/** pages.yml's REST-visible marker (job `deploy`): `failure` only when both publish attempts failed after the recheck. */
+export const PLATFORM_STEP = "Pages publish failed (platform)";
+/** Did run `id` fail on the Pages side (the marker step failed)? An unreadable job list is false (a fixer launches). */
+export function platformFailure(api, id) {
+  const r = api(`actions/runs/${id}/jobs?per_page=100`);
+  if (r.error) return false;
+  return (r.json?.jobs || []).some((j) => j?.name === "deploy" && (j.steps || []).some((st) => st?.name === PLATFORM_STEP && st.conclusion === "failure"));
+}
 const get = (api, p) => { const r = api(p); if (r.error) throw new Error(`${p}: ${r.error}`); return r.json; };
 /** Every row of a list endpoint: `per_page=100&page=N` until a short page (one page silently dropped the Board once the
  *  repo passed 100 open issues). `pick` maps a page body to its rows (check-runs wrap theirs).
@@ -425,32 +469,40 @@ export function getAll(api, p, { pick = (j) => j, maxPages = 50 } = {}) {
   }
   return out;
 }
-const comments = (api, n) => getAll(api, `issues/${n}/comments`).map((c) => ({ id: c.id, author: c.user?.login, body: c.body, created_at: c.created_at, performed_via_github_app: c.performed_via_github_app || null, user: c.user }));
+const comments = (api, n) => getAll(api, `issues/${n}/comments`).map((c) => ({ id: c.id, author: c.user?.login, body: c.body, created_at: c.created_at, updated_at: c.updated_at, performed_via_github_app: c.performed_via_github_app, user: c.user }));
 /** The label events provenance reads: labeled / unlabeled rows with actor, app and time. */
 const labelEventsOf = (api, n) => getAll(api, `issues/${n}/events`, { pick: (j) => (Array.isArray(j) ? j : []) })
   .filter((e) => e.event === "labeled" || e.event === "unlabeled")
-  .map((e) => ({ event: e.event, label: { name: e.label?.name }, actor: { login: e.actor?.login }, created_at: e.created_at, performed_via_github_app: e.performed_via_github_app || null }));
+  .map((e) => ({ event: e.event, label: { name: e.label?.name }, actor: { login: e.actor?.login }, created_at: e.created_at, performed_via_github_app: e.performed_via_github_app }));
 /** The labels whose provenance a rule reads: events are fetched only for issues/PRs carrying one of them. */
-export const PROVENANCE_LABELS = ["priority", "needs-decision", "dispatch:pause", "dispatch:merge-pause"];
+export const PROVENANCE_LABELS = ["ready", "priority", "needs-decision", "dispatch:pause", "dispatch:merge-pause"];
+/** When the head `sha` was pushed: the earliest workflow run on it (a server time). An unreadable list falls back to
+ *  `fallback` (the PR's updated_at), which can only make a PR look busier, never idler. */
+const pushedAt = (api, sha, fallback) => {
+  const r = api(`actions/runs?head_sha=${encodeURIComponent(sha)}&per_page=100`);
+  if (r.error) return fallback || null;
+  return (r.json?.workflow_runs || []).map((w) => w.created_at).filter((x) => t(x)).sort((a, b) => t(a) - t(b))[0] || null;
+};
 
 export function readState({ api = githubApi, config, now = Date.now() } = {}) {
-  const special = [config.boardIssueTitle, config.dispatchIssueTitle];
+  const special = (i) => (config.boardIssue ? [config.boardIssue, config.dispatchIssue].includes(i.number) : [config.boardIssueTitle, config.dispatchIssueTitle].includes(String(i.title).trim()));
   const wantsEvents = (x) => labelsOf(x).some((l) => PROVENANCE_LABELS.includes(l));
   const rawIssues = getAll(api, "issues?state=open").filter((i) => !i.pull_request);
   // Comments: the Board/Dispatch issues, ready issues (launch claims), claimed issues and needs-decision issues (the answer).
   const issues = rawIssues.map((i) => {
-    const want = special.includes(String(i.title).trim()) || has(i, "ready") || has(i, "claimed") || has(i, "needs-decision");
-    return { number: i.number, title: i.title, body: i.body || "", labels: labelsOf(i), updated_at: i.updated_at,
+    const want = special(i) || has(i, "ready") || has(i, "claimed") || has(i, "needs-decision");
+    return { number: i.number, title: i.title, body: i.body || "", labels: labelsOf(i), updated_at: i.updated_at, author: i.user?.login || "",
       comments: want ? comments(api, i.number) : [], events: wantsEvents(i) ? labelEventsOf(api, i.number) : null };
   });
   const prs = getAll(api, `pulls?state=open&base=${encodeURIComponent(config.deployBranch)}`).map((p) => {
     const cs = comments(api, p.number);
     const out = { number: p.number, title: p.title, draft: !!p.draft, labels: labelsOf(p), head_sha: p.head.sha, head_ref: p.head.ref, body: p.body || "",
-      author: p.user?.login || "", created_at: p.created_at, updated_at: p.updated_at,
-      last_comment_at: cs.filter((c) => !isDispatchComment(c.body)).at(-1)?.created_at || null,
+      head_repo: p.head.repo?.full_name || null, author: p.user?.login || "", created_at: p.created_at, updated_at: p.updated_at,
+      pushed_at: untrustedPr({ head_repo: p.head.repo?.full_name, author: p.user?.login }, config.repo, config.owner || OWNER) ? null : pushedAt(api, p.head.sha, p.updated_at),
+      last_comment_at: cs.filter((c) => !isOwnComment(c)).at(-1)?.created_at || null,
       lane: labelsOf(p).find((l) => l.startsWith("lane:")) || null, comments: cs, events: wantsEvents(p) ? labelEventsOf(api, p.number) : null };
     // The foreign-activity probe reads commits only for PRs a takeover could target (stale or asked for).
-    if (has(p, "needs-owner") || hoursAgo(p.updated_at, now) >= config.staleHours.default)
+    if (has(p, "needs-owner") || (now - activityAt(out)) / 3.6e6 >= config.staleHours.default)
       out.commits = getAll(api, `pulls/${p.number}/commits`, { pick: (j) => (Array.isArray(j) ? j : []) }).slice(-30).map((c) => ({ author: c.author?.login || c.commit?.author?.name || "", at: c.commit?.committer?.date || c.commit?.author?.date }));
     if (has(p, "land")) {   // rule 2 needs to know whether a landing PR only waits (land.yml) or is red/conflicting
       out.mergeable_state = get(api, `pulls/${p.number}`)?.mergeable_state ?? null;
@@ -465,7 +517,7 @@ export function readState({ api = githubApi, config, now = Date.now() } = {}) {
   // The newest COMPLETED train: an in-progress run has no conclusion, which flapped deploy:red mid-incident.
   const run = get(api, `actions/workflows/pages.yml/runs?branch=${encodeURIComponent(config.deployBranch)}&status=completed&per_page=1`)?.workflow_runs?.[0];
   const deployRed = !!run && ["failure", "timed_out"].includes(run.conclusion);
-  return { issues, prs, deployRed, deployRunId: deployRed ? run.id : null };
+  return { issues, prs, deployRed, deployRunId: deployRed ? run.id : null, deployPlatform: deployRed ? platformFailure(api, run.id) : false };
 }
 
 // ---- I/O: the worker fire and the GitHub writes ---------------------------------------------------------------
@@ -522,10 +574,10 @@ export async function applyPlan(plan, { api = githubApi, config, log = console.l
   for (const d of plan.digests) { post(`issues/${d.on}/comments`, { body: d.body }); writes++; }
   for (const n of plan.nudges) { post(`issues/${n.on}/comments`, { body: n.body }); writes++; }
   if (plan.boardIssue) {
-    const mine = getAll(api, `issues/${plan.boardIssue}/comments`).find((c) => String(c.body || "").startsWith(BOARD_MARKER));
+    const mine = getAll(api, `issues/${plan.boardIssue}/comments`).find((c) => c.user?.login === DISPATCH_BOT && String(c.body || "").startsWith(BOARD_MARKER));
     if (mine) post(`issues/comments/${mine.id}`, { body: plan.board }, "PATCH"); else post(`issues/${plan.boardIssue}/comments`, { body: plan.board });
     writes++;
-  } else log(`= board: no open issue titled "${config.boardIssueTitle}" — the Board comment was not written`);
+  } else log(`= board: no open Board issue (#${config.boardIssue || "?"}) — the Board comment was not written`);
   // The claim comment is posted ONLY after the fire returned 200 with a session id: a refused fire leaves no claim.
   for (const l of plan.launches) {
     const why = launchRecheck(l, { api, now });

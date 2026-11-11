@@ -295,6 +295,90 @@ test("a replayed old offer is ignored; a fresh offer is still answered (created_
   await p;
 });
 
+// A relay replays an offer the host already used for an earlier guest (inside
+// the 300 s created_at slack). The guest answered it, latched, and ignored the
+// host's current offer; the host dropped the answer as wrong_offer.
+async function guestHears(h, w, text, createdAt) {
+  const sealed = await h.NetRendezvous.seal("ABCDEF", text, "offer");
+  w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(sealed), created_at: createdAt }]) });
+  for (let i = 0; i < 10; i++) await h.tick();
+}
+for (const reanswer of [true, false]) {
+  test(`a guest ${reanswer ? "answers" : "(without reanswer) ignores"} a NEWER offer after answering a replayed one`, async () => {
+    const h = boot();
+    const replies = [];
+    const token = { cancelled: false };
+    const p = h.NetNostr.directExchange({ code: "ABCDEF", token, reanswer,
+      reply: async (offer) => { replies.push(offer); return "ANSWER-" + offer; } });
+    await h.untilSockets(1);
+    const w = h.sockets[0];
+    w.open();
+    const now = Math.floor(Date.now() / 1000);
+    await guestHears(h, w, "CONSUMED-OFFER", now - 60);   // replayed: inside the slack
+    assert.deepEqual(replies, ["CONSUMED-OFFER"], "the first offer heard is answered at once");
+    await guestHears(h, w, "CONSUMED-OFFER", now - 55);   // a re-post of the same offer
+    await guestHears(h, w, "OLDER-OFFER", now - 120);     // signed earlier by the host
+    assert.equal(replies.length, 1, "neither a re-post nor an older offer is answered again");
+    await guestHears(h, w, "CURRENT-OFFER", now);         // the host's live offer
+    if (reanswer) {
+      assert.deepEqual(replies, ["CONSUMED-OFFER", "CURRENT-OFFER"], "the newer offer is answered");
+      const published = w.sent.filter((f) => f.startsWith('["EVENT"')).length;
+      assert.ok(published >= 2, "both answers reached the wire");
+    } else {
+      assert.equal(replies.length, 1, "control: the default exchange still latches");
+    }
+    token.cancelled = true;
+    await p;
+  });
+}
+
+test("a guest's re-answer that fails keeps the answer already on the wire, and re-answers are bounded", async () => {
+  const h = boot();
+  const replies = [];
+  const token = { cancelled: false };
+  const p = h.NetNostr.directExchange({ code: "ABCDEF", token, reanswer: true,
+    reply: async (offer) => { replies.push(offer); return offer === "B" ? null : "ANSWER-" + offer; } });
+  await h.untilSockets(1);
+  const w = h.sockets[0];
+  w.open();
+  const now = Math.floor(Date.now() / 1000);
+  await guestHears(h, w, "A", now - 10);
+  await guestHears(h, w, "B", now - 9);        // reply refuses (e.g. already connected)
+  let settledEarly = false;
+  p.then(() => { settledEarly = true; });
+  for (let i = 0; i < 10; i++) await h.tick();
+  assert.equal(settledEarly, false, "a failed re-answer does not fail the exchange");
+  for (let k = 0; k < 6; k++) await guestHears(h, w, "C" + k, now - 8 + k);
+  assert.equal(replies.length, 1 + h.NetNostr.REANSWER_MAX, "at most REANSWER_MAX further offers are answered");
+  token.cancelled = true;
+  await p;
+});
+
+// A relay refusing our event for its timestamp means this device's clock is
+// off; the advice blamed the room code ("Every room relay is refusing this code").
+test("a relay refusing our event as too old says the clock is off, not the code", async () => {
+  const h = boot();
+  const advised = [];
+  const room = await h.NetNostr.directExchange({ code: "ABCDEF", send: "OFFER", onJoiner: () => {},
+    onFail: (r) => advised.push(r) });
+  await h.untilSockets(2);
+  const [a] = h.sockets;
+  a.open();
+  for (let i = 0; i < 300 && !a.sent.some((f) => f.startsWith('["EVENT"')); i++) await h.tick();
+  const ev = JSON.parse(a.sent.find((f) => f.startsWith('["EVENT"')))[1];
+  a.onmessage({ data: JSON.stringify(["OK", ev.id, false, "invalid: created_at too early"]) });
+  assert.equal(advised.length, 1, "advised once");
+  assert.equal(advised[0].error, "clock_skew");
+  assert.equal(advised[0].advisory, true);
+  assert.match(advised[0].message, /clock/i);
+  assert.doesNotMatch(advised[0].message, /this code/i);
+  a.onmessage({ data: JSON.stringify(["OK", ev.id, false, "blocked: pubkey not admitted"]) });
+  assert.equal(advised.length, 1, "no second, contradicting advisory");
+  assert.ok(h.NetNostr.CLOCK_REFUSAL.test("invalid: event creation date is too far off from the current time"));
+  assert.ok(!h.NetNostr.CLOCK_REFUSAL.test("blocked: pubkey not in our web of trust"));
+  room.stop();
+});
+
 test("the ICE-restart listener holds one socket set for a race, not a re-dial every JOIN window (perf hunt 6)", async (t) => {
   // Scaled clock, 1/120: JOIN 12 s -> 100 ms, LISTEN 300 s -> 2.5 s, so one
   // real second is a fake 120 s of healthy racing. The loop is transport.js

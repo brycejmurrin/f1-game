@@ -79,18 +79,19 @@
     ],
     // hwZones are SOURCE index fractions (TrackSpace.range "source": racing
     // index = 0.2516 - s), then interpolated by arc; the arc windows below are
-    // MEASURED on the built hw (scratch/monaco-hw.cjs, 2026-10-05).
+    // MEASURED on the built hw (full-narrow span, re-measured 2026-11-10 after
+    // the start-line move left them ~0.06 of a lap stale; the data was right).
     hwZones: [
       // Casino Square: Massenet's apex (0.2124) through Casino corner
       // (0.2743) — racing index 0.167-0.280 -> source 0.9712 / 0.0844, a
       // wrap-through-zero zone (applyHwZones handles s1 < s0). The old
       // 0.1524-0.2131 narrowed arc 0.044-0.114, Ste Devote / Beau Rivage.
       { s0: 0.9712, s1: 0.0844, hw: 4.6, ease: 0.012 },  // arc 0.205-0.285 Massenet/Casino
-      { s0: 0.8217, s1: 0.8864, hw: 4.1, ease: 0.012 },  // arc 0.432-0.462 Loews hairpin
-      { s0: 0.7430, s1: 0.7741, hw: 4.3, ease: 0.012 },  // arc 0.485-0.510 Portier
-      { s0: 0.5579, s1: 0.5879, hw: 4.5, ease: 0.012 },  // arc 0.770-0.792 Tabac
-      { s0: 0.4848, s1: 0.5349, hw: 4.4, ease: 0.012 },  // arc 0.815-0.855 swimming pool
-      { s0: 0.3488, s1: 0.3918, hw: 4.3, ease: 0.012 },  // arc 0.930-0.955 Rascasse
+      { s0: 0.8217, s1: 0.8864, hw: 4.1, ease: 0.012 },  // arc 0.371-0.402 Loews hairpin
+      { s0: 0.7430, s1: 0.7741, hw: 4.3, ease: 0.012 },  // arc 0.425-0.460 Portier
+      { s0: 0.5579, s1: 0.5879, hw: 4.5, ease: 0.012 },  // arc 0.711-0.732 Tabac
+      { s0: 0.4848, s1: 0.5349, hw: 4.4, ease: 0.012 },  // arc 0.757-0.803 swimming pool
+      { s0: 0.3488, s1: 0.3918, hw: 4.3, ease: 0.012 },  // arc 0.871-0.896 Rascasse
     ],
     // Massenet and Mirabeau are TURN anchors (1-based into `turns` below): as
     // fracs (0.1286 / 0.2961) the _sceneryShift compensation landed them on

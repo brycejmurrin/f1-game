@@ -1,11 +1,7 @@
 // @ts-check
 /* Apex 26 — AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace.
  *
- * History: updateCar multiplied AI vmax by how far the leading human was ahead
- * (reverse-only rubber band). That is the classic unfair catch-up Black Rock /
- * Pure rejected — see Game Developer "The Pure Advantage" and GamesIndustry
- * "Rubber banding is not fair and not fun". Melder (Game AI Pro ch.42) keeps a
- * gentler band; this project defaults the other way.
+ * The default refuses the classic reverse-only rubber band (unfair catch-up).
  *
  * Modes (apex26.aiPace):
  *   scripted (default) — pace = tierV × skill × DIFF.ai × pacePhase only.

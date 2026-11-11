@@ -1,5 +1,7 @@
 # Agent memory — what persists between sessions (2026-09-24, rewritten 2026-11-03)
 
+Summary: Agent memory — what persists between sessions (2026-09-24)
+
 Kind: how-to · Re-measure-by: 2027-01-15
 
 Supersedes the "auto memory structurally cannot persist here" finding in
@@ -15,7 +17,6 @@ the `assume-unchanged` mark are retired.
 | Instructions | `AGENTS.md` (via `CLAUDE.md`), `docs/WORKERS.md`, `.claude/rules/` (by `paths:`) | every session | people, reviewed |
 | Decisions | `docs/DECISIONS.md` (`D-NNN` rows) | when a rule or test cites one | a PR, one row per decision |
 | Measured facts | the doc that uses them; a note with `Kind:` + `Re-measure-by:` | when cited | a PR; `tools/docs/knowledge-gc.mjs` flags an overdue re-measure |
-| Subagent memory | `.claude/agent-memory/<agent>/` (`memory: project`) | that subagent | the subagent; schema + expiry pinned by `agent-config.test.mjs` |
 | Preferences (auto memory) | tracked: `.claude/memory/`; Claude live: `~/.claude/projects/<repo>/memory/` | every host reads the tracked copy; Claude also loads the first 200 lines / 25 KB of `MEMORY.md` | people and Claude, through a PR |
 
 Coordination behaviour (merge commits, the `hold` label, `land`, subscribe, PT,

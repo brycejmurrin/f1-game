@@ -40,7 +40,9 @@ startLap})` — the one call from `js/data/` into the game. A script is cached
 only when `complete` (a winner classified, every lap in). Design and the pace loop:
 `docs/notes/REAL-RACE-2026-09-27.md`.
 
-Lazy closures on `TABS` — a direct reference at IIFE init is a TDZ throw
+The whole `js/data/` hub bundle (`F1API`, `DataHub`, every tab module) is `LAZY_DATA`
+(`tools/manifest.cjs`): nothing of it exists at boot; `ensureDataHub` (`js/core/lazy-bundles.js`)
+injects it on the first DATA open. Lazy closures on `TABS` — a direct reference at IIFE init is a TDZ throw
 that kills DataHub.
 
 ## Rules
@@ -55,11 +57,10 @@ that kills DataHub.
 Export tab (`loadExport`) → `references/export.md`.
 Season/year, stale-standings triage → `references/season-year.md`.
 
-Start with `tests/specs/data-lifecycle.spec.js` or `tests/specs/telemetry-compare.spec.js`
-through `node tools/ci/test-bg.mjs --spec <path>` (Bryce-attended, on his grant; else the PR's shard). Reserve
-the whole `hooks` group (`node tools/ci/remote-group.mjs hooks` on the pushed branch) for changes that need its
-wider surface. Node-only, seconds, run first:
+Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,
-`data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The group
-`lifecycle-unit` is not the hub spec: its file list is `tests/groups.json`
-`test:lifecycle-unit` (only `async-lifecycle` reads `api.js`/`live.js`).
+`data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The browser proof is
+`tests/specs/data-lifecycle.spec.js` / `telemetry-compare.spec.js`, which ride the `hooks` group: never run them
+locally — the PR shard runs them, or `node tools/ci/remote-group.mjs hooks` on the pushed branch.
+`node tools/ci/pick-tests.mjs <paths>` names the rest (its `lifecycle-unit` is not the hub spec: see
+`tests/groups.json` `test:lifecycle-unit`).

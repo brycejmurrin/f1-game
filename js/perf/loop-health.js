@@ -68,6 +68,7 @@ const LoopHealth = (() => {
   let lastFaultAt = 0;
   let lastMsg = "";
   let stopped = false;
+  let recoveries = 0;
   let slowRun = 0;
   let slowFrames = 0;
   let worstMs = 0;
@@ -221,6 +222,24 @@ const LoopHealth = (() => {
       return survive;
     },
 
+    // THE WAY BACK FROM THE CAP (#4994). Nothing scheduled a frame after the
+    // fatal rethrow, so a stopped loop stayed stopped for the life of the page
+    // and the next race was frozen too. The shell's error card calls this from
+    // BACK TO MENU after it has left the race: forget the tally and chain one
+    // window rAF through XrBoot, which remembers the tick it was bound with.
+    // FALSE = nothing was re-armed (not stopped, XR owns the clock, no tick
+    // bound); a fault that is still there simply reaches the cap again.
+    recover() {
+      if (!stopped) return false;
+      let armed = false;
+      try { armed = typeof XrBoot !== "undefined" && XrBoot.chainWindowRaf() === true; } catch (_) { /* no loop to re-arm */ }
+      if (!armed) return false;
+      run = 0; total = 0; stopped = false; recoveries++;
+      prevCleanAt = 0; slowRun = 0; shedRun = reloadRun = false;   // the dead stretch is not a slow frame
+      Log.warn("game", `loop re-armed after the fault cap (recovery ${recoveries})`);
+      return true;
+    },
+
     // Read by js/perf/gfx-debug-overlay.js on setInterval — the one surface that
     // still paints after the loop is gone. `frames` is the liveness signal and
     // staleMs only colour: a healthy headless page measured staleMs 6993 with
@@ -235,6 +254,7 @@ const LoopHealth = (() => {
         cap: RUN_CAP,
         totalCap: TOTAL_CAP,
         stopped,
+        recoveries,
         lastFault: lastMsg,
         // null, NOT 0: no frame has completed, so there is nothing to be stale
         staleMs: lastCleanAt ? Math.round(now() - lastCleanAt) : null,

@@ -12,11 +12,8 @@ career lock / ERS behaviour.
 ## ERS is not a low/medium/high tier
 
 The `ers` category in `js/car/parts.js` is a flat list of named deploy maps.
-There is **no option called "medium."** Real ids include `standard` (0-cost
-baseline), `regen_plus`, `harvest`, `split_deploy`, `mgu_k_max`, `deploy`,
-`thermal_max`, `torque_fill`, `overtake_focus`, `race_mode`, `full_attack`,
-`overcharge`, `supercapacitor`, `harvest_max`, `conduit_twin`, `burst_map`,
-plus one `SIGNATURE` clone per team, cost/stat-identical to its `equivalent`.
+There is **no option called "medium."** The ids are named deploy maps (`standard` is the 0-cost
+baseline), plus one `SIGNATURE` clone per team, cost/stat-identical to its `equivalent`.
 Signature ids are NOT a `sig_<team>_<category>` formula — they are named for
 the thing (`sig_audi_quattro`, `sig_alpine_boost`), and the team segment is not
 always the team id (`sig_rb_street`, `sig_aston_tunnel`).
@@ -105,17 +102,16 @@ resolution.
    `VISUAL_FIELD_REGISTRY`), `visualTier`; a team SIGNATURE clone needs `equivalent` (same cost/stats).
    Browser shots below: AFTER angles only (SKILL.md § BEFORE pack).
 7. **Node gates before any browser** (no server, edit-loop safe): `npm run test:garage-unit`
-   (aero-preview-fields, aero-shapes-d3c, front-wing-decal, parts-locked-equivalent,
-   `parts-distinct-mesh` — every option must change the hashed mesh — and the livery units); plus
+   (its file list is the `package.json` script; it includes `parts-distinct-mesh` — every option must
+   change the hashed mesh); plus
    `node --test tests/unit/parts-ladder.test.mjs` (a new-stats row must be worth buying: not dominated on
    all four stats) and `factory-ai-setup`. `parts-visual-distinctness` (the STYLE/SIGNATURE cost-and-stat
    parity pin) runs only in `test:sweeps-parts`.
-   Browser specs: `tests/specs/parts-catalog.spec.js` (12 tabs),
-   `parts-physics.spec.js` (mesh-hash collision).
-8. **Test and ship.** ONE spec locally, in the background:
-   `node tools/ci/test-bg.mjs --spec tests/specs/parts-catalog.spec.js` (or `parts-physics.spec.js`); a whole
-   group (`car`, or `modes` when you changed research locks or garage ownership UI — there is no
-   `test:career`) runs on the pushed branch: `node tools/ci/remote-group.mjs car` (AGENTS.md verification table). Check the shell via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
+   Browser specs: `tests/specs/parts-catalog.spec.js` (the category tabs),
+   `parts-physics.spec.js` (mesh-hash collision) — CI runs them, never a local run (AGENTS.md rule 5).
+8. **Test and ship.** `node tools/ci/pick-tests.mjs` names the groups (`car`; `modes` when you changed
+   research locks or garage ownership UI — there is no `test:career`); the PR runs them, and one whole
+   group runs on the pushed branch with `node tools/ci/remote-group.mjs car`. Check the shell via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
    before commit.
 
 ## Common mistakes
@@ -123,8 +119,9 @@ resolution.
 - Treating `Parts.CATALOG` as keyed by id — order matters; iterate the array.
 - Giving SIGNATURE options different cost or stat multipliers (`parts-visual-distinctness` fails, sweeps tier only).
 - Hand-writing a full `aero` CATALOG row for a look-only wing — that is a `STYLES` row (step 6).
-- Using `FACTORY_PRESETS` to change AI pace — meshes only; AI uses no parts →
-  midpoint aero/ERS.
+- Treating `FACTORY_PRESETS` as mesh-only — AI cars take their aeroLoad and ERS deploy/regen from it
+  (`factoryParts` in `js/game.js`'s field build; `factory-ai-setup.test.mjs`), so a preset edit moves AI
+  pace; only the stat `mods` stay human-only (`modsFor`).
 - Threading `owned` into `_resolve` / `getMods` — breaks non-career callers.
 - Adding ERS/aero literals instead of deriving from catalog spans.
 - Forgetting `visual` registry → silent geometry drift or

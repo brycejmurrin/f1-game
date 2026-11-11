@@ -14,7 +14,7 @@
 // assertions, tests/unit/assert-audit.test.mjs fails and says so — the exemption is
 // not allowed to quietly cover a file that stopped being a harness.
 import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
-import { setupApiMocks } from "../helpers/f1-api-mock.js";
+import { setupApiMocks, MOCK_NOW } from "../helpers/f1-api-mock.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
 const PORTRAIT  = { width: 390, height: 844 };   // iPhone 14
@@ -160,6 +160,9 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
     });
 
     test("10 f1 data hub", async ({ page }) => {
+      // The schedule fixture is the 2026 calendar: pin the date it was written for
+      // (setFixedTime fakes Date only; timers and rAF keep running).
+      await page.clock.setFixedTime(MOCK_NOW);
       await setupApiMocks(page);
       await page.goto("/");
       await waitReady(page);
@@ -365,6 +368,9 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
     });
 
     test("24 data hub schedule tab", async ({ page }) => {
+      // The schedule fixture is the 2026 calendar: pin the date it was written for
+      // (setFixedTime fakes Date only; timers and rAF keep running).
+      await page.clock.setFixedTime(MOCK_NOW);
       await setupApiMocks(page);
       await page.goto("/");
       await waitReady(page);

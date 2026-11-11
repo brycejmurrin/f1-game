@@ -179,7 +179,7 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
   const failed = [{ name: "Per-circuit geometry sweeps", conclusion: "failure" },
     { name: "Selected specs (change-aware gate)", conclusion: "failure" },
     { name: "Structural guards", conclusion: "success" },
-    { name: "Golden menus on a runner (trial, non-blocking)", conclusion: "skipped" }];
+    { name: "Golden menus on a runner (nightly)", conclusion: "skipped" }];
 
   const green = verdict([ci(B)]);
   assert.equal(green.out, `::notice::base ${B.slice(0, 7)} was green — run 11`);
@@ -211,7 +211,7 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
     "a red with no job list still reports something");
   // Advisory: every failure path is one line and an exit 0.
   const broken = verdict([ci(B)], [], { FAKE_GH: "fail" });
-  assert.match(broken.out, /^::notice::base verdict unavailable/);
+  assert.equal(broken.out, "::notice::base verdict unavailable: could not list ci.yml / pages.yml runs on deploy");
   for (const r of [green, red, broken]) assert.equal(r.status, 0, "base-verdict must never fail the job it reports in");
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -311,7 +311,7 @@ test("the CI guard shards always run; only their file list narrows, and the mode
     const steps = wf.jobs[id].steps;
     const scope = steps.findIndex((st) => st.id === "scope");
     assert.ok(scope >= 0, `${id} has the Guards scope step`);
-    assert.match(steps[scope].run, /tooling-fast\.mjs --print-scope/);
+    assert.equal(steps[scope].run, "node tools/ci/tooling-fast.mjs --print-scope | tee -a \"$GITHUB_OUTPUT\"");
     const hash = steps.find((st) => st.id === "h");
     assert.ok(steps.indexOf(hash) > scope, `${id}: the scope is known before the cache key`);
     // Through env, not inline: zizmor's template-injection audit fails the lints job on an inline step output.

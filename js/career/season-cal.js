@@ -27,9 +27,12 @@ const LAP_OPTS = [3, 5, 10, 25, 57];
 // into Tracks.LIST and tools/manifest.cjs carries a standing warning about what
 // that costs when the list is reordered; a saved calendar has to survive the
 // list growing, so it stores what it means.
+// Default REAL_2026; Tracks.SEASON = 24-ROUND (docs/CAREER.md §Calendar).
+function legacyIds() { return Tracks.SEASON.map((t) => t.id); }
+function defaultIds() { const ids = knownIds(REAL_2026.map((r) => r.id)); return ids.length === REAL_2026.length ? ids : legacyIds(); }
 function fresh() {
   return {
-    trackIds: Tracks.SEASON.map((t) => t.id),
+    trackIds: defaultIds(),
     quali: true,
     sprint: false,    // false | true (every round) | "rounds" (only the rounds in sprintIds)
     sprintIds: [],    // circuit ids that hold a sprint when sprint === "rounds"
@@ -91,6 +94,9 @@ if (store.subscribe) store.subscribe((change) => {
   // here synchronously and nulled the cfg it had just built, so the very next
   // statement threw on `cfg.trackIds` — SEASON SETUP ▸ APPLY died before
   // restart(), before the save, and before the sheet could close.
+  // RETRY SAVE rewrites our own object: keep seasonRevision armed (#4823).
+  if (change.local && !seasonConflict && activeSeason && change.key === SAVE_KEY &&
+      store.get(SAVE_KEY, null) === activeSeason) { seasonRevision = currentRevision(); return; }
   if (!change.foreign) return;
   if (change.clear || change.key === CFG_KEY) { cfg = null; resolved = null; }
   if (change.clear || change.key === SAVE_KEY) {
@@ -239,7 +245,8 @@ function scoreMap(raw) {
   const out = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
   Object.entries(raw).forEach(([id, value]) => {
-    const n = Number(value);
+    // Number() on an object can throw at boot: scalars only.
+    const n = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
     if (id && isFinite(n)) out[id] = Math.max(0, n);
   });
   return out;
@@ -266,7 +273,10 @@ function codeMap(raw) {
 // champion UI; blanking it wiped the table the moment the player re-opened SEASON.
 function resume(saved) {
   const s = saved && typeof saved === "object" ? saved : null;
-  activeCfg = frozenConfig(s && s.config ? s.config : config());
+  // A pre-snapshot save with no stored setup was raced on the 24.
+  const legacy = s && !s.config && store.get(CFG_KEY, null) == null
+    ? Object.assign(fresh(), { trackIds: legacyIds() }) : null;
+  activeCfg = frozenConfig(s && s.config ? s.config : legacy || config());
   resolved = null;
   const n = activeCfg.trackIds.length;
   // MAP THE ROUND BY CIRCUIT ID. A stored calendar holding an id this build
@@ -453,7 +463,7 @@ function pointsTable() {
 // Under 2 laps nothing; a Grand Prix pays column 1/2/3 below 25/50/75 %, a
 // sprint nothing below 50 %; the CLASSIC (1991–2002) table pays half below 75 %,
 // the rule of its era. The fastest-lap point needs 50 % (Art. 6.4).
-const SHORT_POINTS = [[6, 4, 3, 2, 1], [13, 10, 8, 6, 5, 4, 3, 2, 1], [19, 14, 12, 10, 8, 6, 4, 3, 2, 1]];
+const SHORT_POINTS = [[6, 4, 3, 2, 1], [13, 10, 8, 6, 5, 4, 3, 2, 1], [19, 14, 12, 9, 8, 6, 5, 3, 2, 1]];
 function shortFrac(run) { return run ? run.laps / Math.max(1, run.of) : 1; }
 function payTable(table, scoring, run) {
   if (!run) return table;
@@ -642,8 +652,8 @@ function drawRound(season) {
 // to the circuits this game has (all 23 do). Weekend dates are Fri–Sun (Baku
 // races on Saturday 26 Sep; Las Vegas on Saturday 21 Nov). Bahrain and Saudi
 // Arabia were cancelled in April over the Middle East conflict; the Bahrain GP
-// runs at SEPANG on 2–4 Oct. Qatar and Abu Dhabi are still scheduled (plan A;
-// Imola is the stated plan B, decision expected mid-October). Barcelona hosts
+// runs at SEPANG on 2–4 Oct. Qatar and Abu Dhabi confirmed 3 Oct, reaffirmed
+// 20 Oct (sources: docs/CAREER.md §Calendar). Barcelona hosts
 // the "Barcelona-Catalunya GP"; the Spanish GP moved to Madrid (Madring).
 // Sprints: China, Miami, Canada, Britain, Netherlands, Singapore.
 //   https://www.formula1.com/en/racing/2026
@@ -663,8 +673,8 @@ const REAL_2026 = Object.freeze([
 ].map(([id, from, to, sprint]) => Object.freeze({ id, from: "2026-" + from, to: "2026-" + to, sprint: !!sprint })));
 
 const PRESETS = [
-  { id: "full", label: "FULL" },
   { id: "real2026", label: "2026 REAL" },
+  { id: "full", label: "24-ROUND" },
   { id: "12", label: "12" },
   { id: "8", label: "8" },
   { id: "5", label: "5" },
@@ -717,6 +727,6 @@ return {
   resume, blank, restart, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, roundLaps, pointsTable,
   award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
-  presetIds, preset, shuffled, gpName,
+  presetIds, preset, shuffled, gpName, legacyIds,
 };
 })();

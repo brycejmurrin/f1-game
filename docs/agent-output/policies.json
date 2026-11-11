@@ -61,41 +61,6 @@
       "presentation": "native",
       "preserve": "Child stdio choice and original exit/signal, timeout and cleanup outcomes."
     },
-    "tools/archive/ci/measure-guard-commit.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Sample count/environment; measurement invokes guards and ratchet hook path"
-    },
-    "tools/archive/gen/trees/measure-tree-budget.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "@c4"
-    },
-    "tools/archive/gfx/decal-bake-probe.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "Pixel correctness counts for five enabled/disabled/extent/tile cases; --json artifact path; no timing or WebGPU claim."
-    },
-    "tools/archive/net/rtc-sync-probe.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "@c1"
-    },
-    "tools/archive/perf/devicefarm-boot.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Timestamped progress lines (device, session state, one line per timed boot with menu time, first contentful paint, load end, resource and cached counts, thermal state, session minutes) and the boot.json path; the endpoint URL is never printed."
-    },
-    "tools/archive/perf/ers-deploy-census.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "@c1"
-    },
-    "tools/archive/perf/touch-boost-probe.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "@c1"
-    },
     "tools/assets/gltf-check.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -616,6 +581,11 @@
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
     },
+    "tools/ci/file-verdict-reporter.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "A node --test reporter module: one JSON object of per-file event counts to its destination; never a command"
+    },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -655,11 +625,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Hash/key output consumed by ci.yml cache lookups; exit status and the printed key must stay byte-stable"
-    },
-    "tools/ci/js-debugger-smoke.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "list-tools / profile-summary step walls; clear stderr on wrapper break; exit 0 only when both pass"
     },
     "tools/ci/junit-failed.mjs": {
       "action": "protocol-only",
@@ -770,6 +735,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan; missing fleet-block field on a cursor/ branch"
+    },
+    "tools/ci/ready-sweep.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "STALE/DRIFTED rows with their cites; the ready over|within cap row; = ready-sweep verdict; exit 3 unreadable GitHub"
     },
     "tools/ci/release-provenance.mjs": {
       "action": "keep-native",
@@ -1015,286 +985,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
-    },
-    "tools/environment/.gitignore": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/ENVIRONMENT.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/MCP-STARTUP-SKILL.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/PLUGIN-BUILD.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/activate.sh": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "Idempotent sourced PATH activation, inherited runtime bindings and caller environment; no dependency installation or service startup."
-    },
-    "tools/environment/bin/f1-build-plugins": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/bin/f1-env": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/bind-canonical.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/boot-chat-mcp.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/build-plugins.py": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/check-chat-mcp-health.py": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/install-dependencies.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/install-local-plugins.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/install-tools.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/plugin-install.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/preflight.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/resume.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/test-environment.py": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/test-health.py": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/validate-shaders.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/environment/verify.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/fixtures/lifecycle-echo.mjs": {
-      "action": "protocol-only",
-      "presentation": "native",
-      "preserve": "Exact MCP JSON-RPC stdio and lifecycle ordering; preserve protocol errors, initialization and duplicate-notification behavior. Never summarize or wrap protocol stdout."
-    },
-    "tools/environment/install-environment.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/launch-mcp.sh": {
-      "action": "protocol-only",
-      "presentation": "native",
-      "preserve": "Exact MCP JSON-RPC stdio and lifecycle ordering; preserve protocol errors, initialization and duplicate-notification behavior. Never summarize or wrap protocol stdout."
-    },
-    "tools/environment/plugin-sources/.agents/plugins/marketplace.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-cloud-mcp/.app.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-cloud-mcp/.codex-plugin/plugin.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/.app.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/.codex-plugin/plugin.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/executor/.mcp.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/executor/mcp.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/plugin.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/scripts/agent-readiness.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/scripts/apex-tools-bridge.mjs": {
-      "action": "protocol-only",
-      "presentation": "native",
-      "preserve": "Exact MCP JSON-RPC stdio and lifecycle ordering; preserve protocol errors, initialization and duplicate-notification behavior. Never summarize or wrap protocol stdout."
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/scripts/readiness.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/codex-workflows.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/garage-parts.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/profiling.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/ui-inspection.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/workflows.md": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/tests/agent-setup.test.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/tests/bridge.test.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/plugin-sources/f1-dev-tools/tests/readiness.test.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/setup.sh": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/test-plugin-build.py": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/environment/test-stdio-lifecycle.py": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
     },
     "tools/garage-angles-fetch.mjs": {
       "action": "targeted-summary",
@@ -1565,11 +1255,6 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Actual backend selection and environmental failure; do not equate screenshot existence with renderer correctness."
-    },
-    "tools/gfx/gl-object-census.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Existing = gl-object-census terminal line, raw JSONL rows and final growth denominators."
     },
     "tools/gfx/gltf-selftest.mjs": {
       "action": "targeted-summary",
@@ -2101,11 +1786,6 @@
       "presentation": "native",
       "preserve": "Exact JSON-RPC stdio, upstream schemas, tool results, browser ownership and explicit release; never pass through terminal-output summarization."
     },
-    "tools/mcp/check-chat-browser.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
     "tools/mcp/check-chat-contract.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2419,11 +2099,6 @@
     "tools/perf/query.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "@c1"
-    },
-    "tools/perf/race-entry-timer.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
       "preserve": "@c1"
     },
     "tools/perf/runtime-memory.mjs": {
@@ -2751,6 +2426,41 @@
       "presentation": "native",
       "preserve": "@c7"
     },
+    "tools/track/corner-frames.cjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every offender row with its circuit, kind, stable key and offset metres; --baseline JSON is the test's shrink-only allowlist."
+    },
+    "tools/track/corner-names/jerez.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/kyalami.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/magny_cours.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/mexico.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/miami.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/montreal.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
     "tools/track/designer-code.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2875,6 +2585,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "LGPL attribution, imported status/IDs and actual write receipts; prose currently accompanies --json."
+    },
+    "tools/track/verify-track-baseline.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
     },
     "tools/track/verify-track.cjs": {
       "action": "targeted-summary",
@@ -3075,6 +2790,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c5"
+    },
+    "tools/ui/profile-survey.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per cell (window, screen, scroll / unsafe / fat / clipped / off / tap counts or ERROR), the final '= done N cells, E errors' line, and the report path under artifacts/; a cell that errored is unmeasured, never clean."
     },
     "tools/ui/reach-score.mjs": {
       "action": "keep-native",
