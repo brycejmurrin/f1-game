@@ -1431,7 +1431,7 @@
                can only change by quitting to the menu is one you cannot change
                when you discover you want it.
                MANUAL by default: the button IS the mechanic. AUTO exists because
-               inside a zone X-mode is never the wrong choice, so a player who
+               inside a zone straight mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
           <div id="pm-aero" class="set-row" role="group" aria-labelledby="pm-aero-label">
             <span class="tune-label" id="pm-aero-label">ACTIVE AERO</span>
@@ -2427,7 +2427,7 @@
          so they inherit the button's text colour; sized via .btn-ico in css/menus.css. -->
     <!-- HERO: the long game, on its own and taller than everything under it.
          It used to sit in a flat stack of five identical red buttons, which gave
-         a 24-round career the same weight as a single time trial. #mb-career-sub
+         a 23-round career the same weight as a single time trial. #mb-career-sub
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero" role="group" aria-label="Continue and career">
@@ -3363,7 +3363,7 @@
         <dd>In MANUAL, press your active aero control (keyboard <span data-help-keys="aero">Z</span>, controller <span data-help-pad="aero">D-pad ↑</span>, or AERO on screen) inside an activation zone. STRAIGHT MODE (the flaps open) reduces drag and grip; braking or leaving the zone closes the wings.
           <br>SETTINGS › DRIVING AIDS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
         <dt>OVERTAKE</dt>
-        <dd>Follow within one second to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, the Safety Car or red flag, or low grip in the wet. An allowance you do not use by the next lap is lost. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
+        <dd>Follow within one second at the detection line to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, the Safety Car or red flag, or low grip in the wet. An allowance you do not use by the next lap is lost. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt id="htp-2026rules">2026 RULES &mdash; ENERGY &amp; OVERTAKE</dt>
         <dd><b>Energy harvest.</b> The hybrid recovers energy when you brake or lift. With a <b>full battery</b> (about 4 MJ on the energy bar) there is nowhere to put it: braking and lifting recover nothing more, and you hear the engine note clip while it is full. The car does not slow down, but that energy is wasted. Spend charge with <span class="key">BOOST</span> or <span class="key">OVERTAKE</span> so the pack has room before the next braking zone.
           <br><b>Overtake Mode</b> is separate from BOOST and Active Aero: it is an extra 0.5 MJ allowance earned when you follow within one second at the detection line, then spent at will that lap (see <span class="key">OVERTAKE</span> above). It does not drain the main energy bar.</dd>
@@ -3846,7 +3846,6 @@
 <script defer crossorigin="anonymous" src="js/core/i18n.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/dom-apply.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/restore-points.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/geom.js?v=dev"></script>
@@ -4070,11 +4069,6 @@
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/post-fx-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/soak-run.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/gpu-test-run.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/phone-recorder.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/bench-capture.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/bench-run.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/fov-fit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage-ride.js?v=dev"></script>

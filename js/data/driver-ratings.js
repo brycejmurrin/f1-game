@@ -148,8 +148,13 @@ const DriverRatings = (function () {
     for (const k of ["speed", "accel", "cornering", "braking"]) sum += (b[k] || 1) / (w[k] || 1);
     return sum / 4;
   }
+  // #5035: a hired MY TEAM mate's build pace lands on the tier ladder, never past it: no build beats
+  // the fastest tier's car (TIER_V[0]) or drops below the slowest. Teams.TIER_V is the ladder.
+  function ladderPace(ratio, tier, ladder) {
+    return clamp(ratio, ladder[ladder.length - 1] / ladder[tier], ladder[0] / ladder[tier]);
+  }
 
   return { AXES, STYLE_AXES, BASE, HIRES, get, overall, fromTier, style01,
-           buildPace, hash32: Hash32.fnv1a, skill };
+           buildPace, ladderPace, hash32: Hash32.fnv1a, skill };
 })();
 Object.freeze(DriverRatings);

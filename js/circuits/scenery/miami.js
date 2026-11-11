@@ -460,7 +460,7 @@
         palette: [CORAL, PINK, TEAL, [1.0, 0.85, 0.60], GREYWHITE],
         lit: true, windowCol: WIN_AMBER,
       });
-      // Beach Club moved to T11–13 (s≈0.50) — see braking-zone section below.
+      // Beach Club moved to the T11 braking zone (s≈0.52) — see braking-zone section below.
 
       for (let m = 0; m < 3; m++) {
         const k = K(0.285 + m * 0.032);
@@ -670,16 +670,17 @@
         // Each on the OUTSIDE of its corner's built apex (def.turns; +k = left,
         // so a right-hander's outside is -1). The old T1 pair (0.06/0.08) sat
         // on T2/T3, the old T2/3 pair (0.16) on the T4-T5 straight, and the
-        // Turnpike chicane pair (0.64/0.67) on the straight past the T17
-        // hairpin, 40-228 m beyond the last apex. Index order is kept so the
+        // Turnpike chicane pair (0.64/0.67) on the straight past the 0.6333
+        // hairpin, 40-228 m beyond the last apex. Corner numbers are the
+        // official F1/FIA ones (def.turns). Index order is kept so the
         // hashed depth/length of every apron below stays as it was.
         const apronSpots = [
           [0.048, -1, 4.5],                    // T1 (0.0463, right)
-          [0.122, -1, 4.5],                    // T4 (0.1188, right)
+          [0.122, -1, 4.5],                    // unnumbered kink between T3 and T4 (0.1188, right)
           [0.065,  1, 4.0], [0.085, -1, 4.0],  // T2/3 (0.0628 left, 0.0823 right)
           [0.36,  1, 4.5],                     // marina exit
           [0.50,  1, 4.5], [0.52, -1, 4.5],   // T11 braking
-          [0.581, -1, 4.0], [0.598, 1, 4.0],  // Turnpike chicane T14/T15 (0.5793 right, 0.5968 left)
+          [0.6185, -1, 4.0], [0.6135, 1, 4.0],  // Turnpike chicane T15/T14 (0.6170 right, 0.6118 left)
           [0.94,  1, 4.0], [0.96, -1, 4.0],   // final corner
         ];
         for (let i = 0; i < apronSpots.length; i++) {
@@ -796,7 +797,7 @@
         neonSign(K(0.30), 1, 16, 10, NEON_CYAN);
       }
 
-      // 0.635 sat on the T17 hairpin (15 m radius) once the bogus
+      // 0.635 sat on the 0.6333 hairpin (15 m radius) once the bogus
       // sceneryStartFrac shift went: pier footprint rejected. 0.66 is the
       // straight beyond it.
       buildOverpass(0.66);
@@ -882,8 +883,8 @@
       guardrail(0.005, 0.05,  1, 3, GREYWHITE);
       guardrail(0.72,  0.80, -1, 3, GREYWHITE);
       // Tyre walls at chicane apexes, on the outside, in front of the 3 m wall.
-      tyreWall(0.591, 0.603,  1, 2.4, CORAL);   // Turnpike chicane T15 (left)
-      tyreWall(0.573, 0.586, -1, 2.4, TEAL);    // Turnpike chicane T14 (right)
+      tyreWall(0.6040, 0.6160,  1, 2.4, CORAL);   // Turnpike chicane T14 (left)
+      tyreWall(0.6130, 0.6250, -1, 2.4, TEAL);    // Turnpike chicane T15 (right)
       tyreWall(0.155, 0.175, -1, 2.4, PINK);
       every(180, (k) => marshalPost(k, 1, 5));
       // Low shrubs

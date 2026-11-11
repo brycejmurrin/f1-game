@@ -340,3 +340,95 @@ process.on("exit", () => fs.writeFileSync(${JSON.stringify(counterFile)}, JSON.s
     }
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
+
+test("batch importer preserves flat and authored normals across reflected nonuniform nodes", async () => {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const tmp = fs.mkdtempSync(path.join(ROOT, "artifacts", "import-normals-"));
+  const src = path.join(tmp, "src"), out = path.join(tmp, "out");
+  fs.mkdirSync(src); fs.mkdirSync(out);
+  try {
+    const q = 1 / Math.sqrt(2);
+    const p = new Float32Array([0,0,0, 1,0,1, 0,1,0, 0,0,1]);
+    const n = new Float32Array([-q,0,q, -q,0,q, -q,0,q, -q,0,q]);
+    const bin = Buffer.concat([Buffer.from(p.buffer), Buffer.from(n.buffer), Buffer.from(new Uint16Array([0,1,2,0,3,1]).buffer)]);
+    fs.writeFileSync(path.join(src, "mesh.bin"), bin);
+    const gltf = { asset:{version:"2.0"}, scenes:[{nodes:[0]}], nodes:[{scale:[-2,3,0.5],children:[1]},{mesh:0,rotation:[0,0,Math.sin(0.3),Math.cos(0.3)]}],
+      buffers:[{uri:"mesh.bin",byteLength:bin.length}],
+      bufferViews:[{buffer:0,byteLength:48},{buffer:0,byteOffset:48,byteLength:48},{buffer:0,byteOffset:96,byteLength:12}],
+      accessors:[{bufferView:0,componentType:5126,count:4,type:"VEC3"},{bufferView:1,componentType:5126,count:4,type:"VEC3"},
+        {bufferView:2,componentType:5123,count:6,type:"SCALAR"},{bufferView:2,componentType:5123,count:3,type:"SCALAR"}],
+      meshes:[{primitives:[{attributes:{POSITION:0},indices:2},{attributes:{POSITION:0,NORMAL:1},indices:3}]}] };
+    fs.writeFileSync(path.join(src, "normals.gltf"), JSON.stringify(gltf));
+    const r = cp.spawnSync(process.execPath, [path.join(ROOT,"tools/gen/import-models.mjs"),src,"--scale","1"],
+      {env:{...process.env,APEX_PACK_DIR:out},encoding:"utf8"});
+    assert.equal(r.status,0,r.stderr);
+    const mesh = await readAX26(path.join(out,"models/normals.bin"));
+    assert.equal(mesh.pos.length,27,"six flat corners followed by three compact authored vertices");
+    for (let t=0;t<mesh.idx.length;t+=3) {
+      const ids = Array.from(mesh.idx.slice(t,t+3));
+      const a=ids.map(i=>Array.from(mesh.pos.slice(i*3,i*3+3)));
+      const u=a[1].map((v,k)=>v-a[0][k]), v=a[2].map((v,k)=>v-a[0][k]);
+      const face=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+      const len=Math.hypot(...face);
+      for (const i of ids) for (let k=0;k<3;k++)
+        assert.ok(Math.abs(mesh.nrm[i*3+k]-face[k]/len)<1/32767+1e-6,"decoded normal agrees with geometric face within AX26 snorm16 quantization");
+    }
+    assert.ok(mesh.nrm[2]>0,"reflection preserves authored outward orientation");
+    gltf.nodes[0].scale = [0,3,0.5];
+    fs.writeFileSync(path.join(src,"singular.gltf"),JSON.stringify(gltf));
+    const flattened = cp.spawnSync(process.execPath,[path.join(ROOT,"tools/gen/import-models.mjs"),src,"--scale","1"],
+      {env:{...process.env,APEX_PACK_DIR:out},encoding:"utf8"});
+    assert.equal(flattened.status,0,flattened.stderr);
+    const manifest=JSON.parse(fs.readFileSync(path.join(out,"manifest.json"),"utf8"));
+    assert.ok(manifest.models.singular,"zero scale still admits nondegenerate flattened faces");
+    const flat = await readAX26(path.join(out,manifest.models.singular.file));
+    for (const i of [0,1,2,6,7,8])
+      assert.deepEqual(Array.from(flat.nrm.slice(i*3,i*3+3)),[-1,0,0],"flat and authored normals match the surviving YZ plane");
+  } finally { fs.rmSync(tmp,{recursive:true,force:true}); }
+});
+
+// #2501: glTF `normalized` integer accessors map to [0, 1] / [-1, 1] (glTF 2.0
+// §3.11); read raw, a quantized UV of 255 sampled the palette at u = 255.
+test("accessor reads normalized UNSIGNED_BYTE/SHORT and signed BYTE/SHORT as unit floats", async () => {
+  const { accessor } = await import("../../tools/gen/import-models.mjs");
+  const cases = [
+    [5121, Uint8Array, [0, 255, 51, 128], [0, 1, 0.2, 128 / 255]],
+    [5123, Uint16Array, [0, 65535, 13107, 32768], [0, 1, 0.2, 32768 / 65535]],
+    [5120, Int8Array, [-128, 127, -127, 0], [-1, 1, -1, 0]],
+    [5122, Int16Array, [-32768, 32767, 16384, 0], [-1, 1, 16384 / 32767, 0]],
+  ];
+  for (const [componentType, Ctor, raw, want] of cases) {
+    const bin = Buffer.from(new Ctor(raw).buffer);
+    const gltf = { bins: [bin], json: { bufferViews: [{ buffer: 0, byteLength: bin.length }],
+      accessors: [{ bufferView: 0, componentType, count: 2, type: "VEC2", normalized: true },
+        { bufferView: 0, componentType, count: 2, type: "VEC2" }] } };
+    const got = [...accessor(gltf, 0).data];
+    want.forEach((w, i) => assert.ok(Math.abs(got[i] - w) < 1e-6, `${Ctor.name}[${i}]: ${got[i]} != ${w}`));
+    assert.deepEqual([...accessor(gltf, 1).data], raw, `${Ctor.name} without normalized stays raw`);
+  }
+  const f32 = { bins: [Buffer.alloc(8)], json: { bufferViews: [{ buffer: 0, byteLength: 8 }],
+    accessors: [{ bufferView: 0, componentType: 5126, count: 1, type: "VEC2", normalized: true }] } };
+  assert.throws(() => accessor(f32, 0), /normalized needs a byte or short/);
+});
+
+// #2501: normals take the inverse-transpose. Under a non-uniform node scale
+// the plain matrix tilted a slanted face's normal toward the stretched axis.
+test("xformDir keeps normals perpendicular under non-uniform and mirrored node scales", async () => {
+  const { xformDir } = await import("../../tools/gen/import-models.mjs");
+  const unit = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const xf = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2], m[1] * p[0] + m[5] * p[1] + m[9] * p[2], m[2] * p[0] + m[6] * p[1] + m[10] * p[2]];
+  // A 45° face: tangent (1, -1, 0), normal (1, 1, 0). Scale x by 4, rotate 30° about z.
+  const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6);
+  for (const sx of [4, -4]) {
+    const m = [c * sx, s * sx, 0, 0, -s, c, 0, 0, 0, 0, 2, 0, 7, 8, 9, 1];   // column-major R * S
+    const t = xf(m, [1, -1, 0]), n = unit(xformDir(m, [1, 1, 0]));
+    assert.ok(Math.abs(dot(unit(t), n)) < 1e-9, `sx=${sx}: normal ${n} must stay perpendicular to the tangent`);
+    // Outward stays outward: the transformed normal points the same side as the transformed offset.
+    assert.ok(dot(n, xf(m, [1, 1, 0])) > 0, `sx=${sx}: a mirrored node must not flip the normal inward`);
+  }
+  // Rotation with uniform scale: the old result, the matrix applied as-is.
+  const r = [c * 3, s * 3, 0, 0, -s * 3, c * 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1];
+  const a = unit(xformDir(r, [0.3, 0.5, 0.8])), b = unit(xf(r, [0.3, 0.5, 0.8]));
+  a.forEach((x, i) => assert.ok(Math.abs(x - b[i]) < 1e-12, "uniform scale direction unchanged"));
+});

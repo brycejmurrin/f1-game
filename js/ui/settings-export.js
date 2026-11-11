@@ -540,7 +540,9 @@ function applyTtlb(bag) {
 // holds career saves, lap records and OAuth tokens under the same namespace,
 // and nothing outside these five shapes is ever read.
 const GARAGE_FORMAT = "apex26-garage-v1";
-const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets."];   // + ".custom." under livery
+// careerSetup.<flavour>.<slot>.<team> is a career's own setup sheet (#5036, SetupTune.keyFor):
+// it travels with the garage, and only applies where the slot holds the career whose seed it carries.
+const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets.", "careerSetup."];   // + ".custom." under livery
 const GARAGE_SINGLES = ["customTeam", "customLogo", "team", "driver"];
 const GARAGE_EXCLUDED = "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts";
 // A key is a garage key if it is one of the four singles or begins with a
@@ -754,7 +756,7 @@ function garageValue(k, v) {
     }
     return out;
   }
-  if (k.indexOf("setup.") === 0) {
+  if (k.indexOf("setup.") === 0 || k.indexOf("careerSetup.") === 0) {
     // SetupTune clamps each field on read; here only the size is bounded.
     return v && typeof v === "object" && !Array.isArray(v) && JSON.stringify(v).length <= 4096 ? v : undefined;
   }
@@ -934,6 +936,15 @@ function collectCareer() {
   return { format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
            excluded: CAREER_EXCLUDED, count: n, careers: out };
 }
+// CareerBackup is lazy (LAZY_CAREER_UI, #4748): the CAREER FILE buttons await
+// it so futureCareerSlot / poisonedCareerMoney never run without their gate.
+function careerReady() {
+  if (typeof CareerBackup !== "undefined") return Promise.resolve(true);
+  return typeof CareerUI !== "undefined" && CareerUI.ensureBackup ? CareerUI.ensureBackup() : Promise.resolve(false);
+}
+// A snapshot armed before the bundle landed holds no revisions: take it at apply time.
+const loadCareer = (file, revisions) => careerReady().then(() => applyCareer(file,
+  revisions && Object.keys(revisions.expectedRevisions).length ? revisions : undefined));
 // Freeze all possible destinations before opening the asynchronous picker.
 function careerRevisions() {
   const expectedRevisions = {};
@@ -1067,7 +1078,8 @@ function create(G) {
       b.textContent = `${label} — SAVING…`;
       try {
         tick();
-        const file = make();
+        let file = make();
+        if (file && typeof file.then === "function") file = await file;   // CAREER FILE waits for CareerBackup
         await download(file, name(file));
         const n = file.changed ? `${file.changed.length} changed` : `${file.count} keys`;
         flash(b, label, `SAVED (${n})`);
@@ -1128,6 +1140,7 @@ function create(G) {
   function mount() {
     const host = document.getElementById("pm-panel-files");
     if (!host || document.getElementById("pm-settings-file")) return;
+    careerReady();   // warm CareerBackup before the first CAREER FILE tap
     if (!leaveSubscribed && typeof SettingsNav !== "undefined" && SettingsNav.onLeave) {
       SettingsNav.onLeave((page) => { if (page === "files") { disarm(); ++pickVersion; } });
       leaveSubscribed = true;
@@ -1241,7 +1254,7 @@ function create(G) {
         collectGarage, () => `apex26-garage-${stamp()}.json`),
       groupHead("CAREER FILE"),
       saveBtn("pm-career-save", "SAVE CAREER FILE", "All six career slots and the active slot. Settings and garage builds are excluded.",
-        collectCareer, () => `apex26-career-${stamp()}.json`));
+        () => careerReady().then(collectCareer), () => `apex26-career-${stamp()}.json`));
     const restoreHelp = document.createElement("p");
     restoreHelp.className = "adv-help";
     restoreHelp.setAttribute("data-help", "keep");
@@ -1255,7 +1268,7 @@ function create(G) {
         applyGarage, "THE GARAGE", null, GARAGE_MAX_BYTES),
       groupHead("CAREER FILE"),
       loadBtn("pm-career-load", "LOAD CAREER FILE", "Replace career slots only, with protection against changes made after confirmation.",
-        applyCareer, "CAREER SAVES", careerRevisions,
+        loadCareer, "CAREER SAVES", careerRevisions,
         typeof CareerBackup !== "undefined" ? CareerBackup.MAX_BYTES : 5 * 1024 * 1024));
     sections[2].append(shareNote, shareIn, shareBtn, shareStatus);
     const scope = document.createElement("details");
@@ -1376,7 +1389,8 @@ function create(G) {
     return wrap;
   }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+  // #4798 gate (after SaveHealth's)
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(mount) : mount()), { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");
   _ui = { collect: (mode) => collect(mode, G), collectGarage, collectCareer,

@@ -350,7 +350,17 @@ const Particles = (function () {
     }
   }
 
+  // #5387 primeRace: an idle group draws one empty particle (TLX wraps its buffer).
+  let _prime = false;
+  function armPrime() { _prime = true; }
   function draw() {
+    _draw();
+    if (!_prime || !_gfx || !_gfx.drawParticles || !MAX) return;
+    _prime = false;
+    if (!_lastPa) { _vertA.fill(0, 0, 60); _gfx.drawParticles(_vertA, 60, false, true); }
+    if (!_lastPb) { _vertB.fill(0, 0, 60); _gfx.drawParticles(_vertB, 60, true, true); }
+  }
+  function _draw() {
     // The shower draws only on a frame its owner advanced it (rainUpdate, which
     // game.js calls only while the road is wet): a field nobody updates is a
     // frozen box of streaks at a stale eye — what a drying weather arc left
@@ -684,7 +694,7 @@ const Particles = (function () {
     return p;
   }
 
-  return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
+  return { init, clear, count, capacity, update, draw, armPrime, tyreSmoke, sparks, scrape, kickup, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
            flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats };
 })();
 Object.freeze(Particles);
