@@ -123,18 +123,19 @@ const SportingRegs = (function () {
   function createPassWatch(windowS, troubled) {
     const WIN = windowS > 0 ? windowS : GIVE_BACK_S;
     const fair = typeof troubled === "function" ? (o) => exempt(o) || !!troubled(o) : exempt;
-    // Arrays swapped each tick, not Sets: Set#clear() allocates a fresh hash table and the refill re-grows it
-    // (~2.4 KB a step at 20 cars). Each list is live up to its count (aheadN / nowN), scanned by has() (a field is
-    // ~20 cars); `length = 0` would drop V8's backing store every tick.
-    let ahead = [], now = [], aheadN = 0, nowN = 0, primed = false, finished = false;
+    // Counted arrays, not Sets: Set.clear() mints a new backing table and the
+    // refill grows it again, every step (#5057), and `length = 0` drops an
+    // array's store the same way. Field order is kept (a Set's insertion order);
+    // a scan over ~21 cars is cheaper than the rehash.
+    let ahead = [], now = [], nA = 0, nN = 0, primed = false, finished = false;
     const owed = [], lostTo = [];
     let t = 0;
-    function reset() { ahead.length = 0; now.length = 0; aheadN = nowN = 0; primed = false; finished = false; owed.length = 0; lostTo.length = 0; t = 0; }
-    function has(list, n, o) { for (let i = 0; i < n; i++) if (list[i] === o) return true; return false; }
+    const has = (list, n, o) => { for (let i = 0; i < n; i++) if (list[i] === o) return true; return false; };
+    function reset() { ahead.fill(null); now.fill(null); nA = nN = 0; primed = false; finished = false; owed.length = 0; lostTo.length = 0; t = 0; }
     function drop(list, o) { const i = list.indexOf(o); if (i >= 0) list.splice(i, 1); }
     function tick(p, field, level, dt) {
       if (!p || p.retired) { reset(); return null; }   // a retired car owes no place and can take no penalty
-      nowN = 0;
+      nN = 0;
       const finishPass = p.finished && !finished;
       for (let i = 0, f = field || []; i < f.length; i++) {   // indexed: tick runs every step
         const o = f[i];
@@ -142,32 +143,35 @@ const SportingRegs = (function () {
         const aheadNow = finishPass && o.finished && (o.lap || 0) === (p.lap || 0)
           && Number.isFinite(p.finishT) && Number.isFinite(o.finishT)
           ? o.finishT < p.finishT : o.prog > p.prog;
-        if (aheadNow) now[nowN++] = o;
+        if (aheadNow) now[nN++] = o;
       }
       let ev = null, gained = false;
       // The first finished sample still contains the final racing step. A
       // pass made on that step must be charged before post-flag coasting.
       const caution = level >= CAUTION_MIN && !finished && !p.retired && !inPit(p);
       if (primed && caution) {
-        for (let ai = 0; ai < aheadN; ai++) {
-          const o = ahead[ai];
+        for (let i = 0; i < nA; i++) {
+          const o = ahead[i];
           // Two cars can take the flag in this same sample: the later finisher
           // was still racing when passed, not an already-finished exemption.
           const justBehind = finishPass && o.finished && (o.lap || 0) === (p.lap || 0) && !o.retired && !inPit(o)
             && Number.isFinite(p.finishT) && o.finishT >= p.finishT && !(typeof troubled === "function" && troubled(o));
-          if (has(now, nowN, o) || (fair(o) && !justBehind)) continue;
+          if (has(now, nN, o) || (fair(o) && !justBehind)) continue;
           if (lostTo.indexOf(o) >= 0) { drop(lostTo, o); continue; }   // taking back what was taken
           if (owed.indexOf(o) < 0) { owed.push(o); gained = true; }
         }
         // A car that came past US under the caution: re-passing it is not an offence.
-        for (let ni = 0; ni < nowN; ni++) { const o = now[ni]; if (!has(ahead, aheadN, o) && !fair(o) && owed.indexOf(o) < 0 && lostTo.indexOf(o) < 0) lostTo.push(o); }
+        for (let i = 0; i < nN; i++) {
+          const o = now[i];
+          if (!has(ahead, nA, o) && !fair(o) && owed.indexOf(o) < 0 && lostTo.indexOf(o) < 0) lostTo.push(o);
+        }
       }
       if (level < CAUTION_MIN) lostTo.length = 0;
       if (owed.length) {
         // A passed car that pits, retires, finishes or is then STRICKEN (beached,
         // mid-incident, being rescued) can no longer be given its place back:
         // the debt drops, the same test that made passing it legal.
-        if (!p.finished) for (let i = owed.length - 1; i >= 0; i--) if (has(now, nowN, owed[i]) || fair(owed[i])) owed.splice(i, 1);
+        if (!p.finished) for (let i = owed.length - 1; i >= 0; i--) if (has(now, nN, owed[i]) || fair(owed[i])) owed.splice(i, 1);
         if (gained) {
           if (!(t > 0)) t = WIN;
           ev = { type: "warn", n: owed.length };
@@ -182,7 +186,7 @@ const SportingRegs = (function () {
           ev = { type: "penalty", n, sec: passPenaltyS(n) };
         }
       } else t = 0;
-      const sw = ahead; ahead = now; now = sw; aheadN = nowN;
+      const sw = ahead; ahead = now; now = sw; nA = nN;
       primed = true; finished = !!p.finished;
       return ev;
     }

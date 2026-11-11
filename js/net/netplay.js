@@ -223,7 +223,7 @@ const NetPlay = (function () {
       car.dnfAt = null; car.dnfWhy = null;
       car.incidentInvalidLap = true; car.lapTime = 0; car._secT0 = null;
     }
-    // A silent rival goes to the local AI; its packets bring it back.
+    // A silent rival goes to the local AI; a newer pose brings it back.
     // Keep owner lap evidence apart from speculative motion: fallback crossings
     // cannot finish a connected human, validate a LAP event, or seed gateLap.
     function goLocal(r) {
@@ -475,7 +475,10 @@ const NetPlay = (function () {
         const r = remotes.get(entry.id) || aiRemotes.get(entry.id);
         // adopt, not push: decodeSnapshot built `entry` for this packet alone
         // and nothing reads it after this loop, so the buffer keeps it uncopied.
-        if (r && r.interp.adopt(t - (entry.age || 0), entry, arrival)) {   // an aged (relayed) entry keeps its own stamp
+        // Reordering may fill an interpolation gap, but only a newer pose
+        // renews ownership. Old backlog must not keep an exhausted pose frozen
+        // on the wire, or reclaim a car already handed to the local AI.
+        if (r && r.interp.adopt(t - (entry.age || 0), entry, arrival) && r.interp.newest() === entry) {
           r.heardAt = Number.isFinite(arrival) ? arrival : (G.netNow != null ? G.netNow : r.heardAt);
           r.everHeard = true;
         }
@@ -1179,7 +1182,7 @@ const NetPlay = (function () {
       // spawn) while this tick's interp sample sits unused.
       for (const map of _poseMaps) for (const r of map.values()) {
         // SILENCE: past STALE_MS the local AI drives the car (owns() is false
-        // for it) instead of it standing on the line; a packet brings it back.
+        // for it) instead of it standing on the line; a newer pose brings it back.
         // A human rival that has never spoken stays posed where it is (it is
         // still building its circuit); a host AI car the host never names (a
         // grid the two screens disagree on) is the local AI's after STALE_MS.
