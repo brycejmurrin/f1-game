@@ -33,7 +33,7 @@ export function diagHooks() {
           key: key ? String(key).slice(0, 80) : null, road: !!(object.userData && object.userData.tlxLgRoad),
           ident: !!(e && e[0] === 1 && e[5] === 1 && e[10] === 1 && e[12] === 0 && e[13] === 0 && e[14] === 0),
           pos: e ? [Math.round(e[12]), Math.round(e[13]), Math.round(e[14])] : null, inst: !!(object.isInstancedMesh || (object.instanceMatrix && object.count > 0)),
-          mk: g ? (mk.get(g) || null) : null };
+          mk: g ? (mk.get(g) || (g.__coSrc && mk.get(g.__coSrc)) || null) : null };
       };
       const os = r._objects, cro = os.createRenderObject;
       os.createRenderObject = function (nodes, geos, rr, object, material, scene, camera, lightsNode, renderContext, clip, passId) {

@@ -2951,6 +2951,7 @@ const TLX = (function () {
         const s = neg ? 1 : 0;
         if (pair[s]) return pair[s];
         const v = new THREE.BufferGeometry();   // geo's own vertex/index buffers, no copy (the _mirOf pattern)
+        v.__coSrc = geo; v.__tlxKind = "co" + s;   // SCRATCH #5387 diag
         if (geo.index) v.setIndex(geo.index);
         for (const k in geo.attributes) v.setAttribute(k, geo.attributes[k]);
         v.drawRange.start = geo.drawRange.start; v.drawRange.count = geo.drawRange.count;
