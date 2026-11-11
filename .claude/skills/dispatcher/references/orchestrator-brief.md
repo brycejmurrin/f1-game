@@ -16,6 +16,9 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 - Re-verify on the deploy tip first; a worker closes an already-fixed issue with evidence and opens no PR.
 - Settle every human step before launch (a device check, a `config-ok` the diff will need, a decision) and cite the
   comment URL, so the worker verifies it instead of waiting [10].
+- `config-ok` on a ROUTINE config path you may add yourself, after you have read the PR's config diff; never let the
+  PR's own worker add it. A PROTECTED path (merge-gate `PROTECTED_CONFIG_PATH`: the gate, `land.yml`, `ci.yml`, hooks, settings)
+  needs Bryce's own tap (#5455). The gate cannot tell you from the worker: this half is a rule, not a check.
 - An ADOPT or TAKEOVER brief states evidence, not a verdict: the newest commit trailer and comment time on the PR,
   never "the owner cannot be reached" [11]. Post the adoption comment yourself before launching.
 
