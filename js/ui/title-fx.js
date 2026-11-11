@@ -241,7 +241,7 @@ const TitleFx = (function () {
       if (document.visibilityState === "hidden") ov.setAttribute("data-paused", "");
       else ov.removeAttribute("data-paused");
     });
-    // #4798: the title intro is eager; its Settings rows wait for the settings-lazy gate.
+    // #4798 gate: rows only
     if (gate) gate(wireRows); else wireRows();
   }
 

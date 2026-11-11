@@ -357,8 +357,7 @@ const AppearanceStudio = (function () {
       { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
     ]);
   }
-  // #4798: deferred scripts evaluate at "interactive", before DOMContentLoaded;
-  // the studio is Settings-only, so it waits for the settings-lazy gate.
+  // #4798 gate
   if (typeof document !== "undefined") {
     if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initUI) : initUI()), { once: true });
     else initUI();

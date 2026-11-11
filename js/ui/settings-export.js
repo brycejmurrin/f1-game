@@ -1376,8 +1376,7 @@ function create(G) {
     return wrap;
   }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
-  // #4798: mount at the settings-lazy gate; SettingsNav.show("files") still calls ensureMounted.
-  // game.js evaluates before DOMContentLoaded, so SaveHealth's DCL listener (eval-time) queues first.
+  // #4798 gate (after SaveHealth's)
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(mount) : mount()), { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");

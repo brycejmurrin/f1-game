@@ -1365,7 +1365,7 @@ const HudLayout = (function () {
     paintAll();
   }
 
-  // #4798: the Settings fold waits for the settings-lazy gate; apply and the watchers keep their timing.
+  // #4798 gate: build only
   function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); }
   apply();
   _pub = true;

@@ -384,7 +384,7 @@ function create(G) {
     if (helpSheet) new MutationObserver(prioritizeHelpInput)
       .observe(helpSheet, { attributes: true, attributeFilter: ["hidden"] });
   }
-  // #4798: the tables sit in CONTROLS and HELP, both behind a tap: re-render at the settings-lazy gate.
+  // #4798 gate (CONTROLS / HELP)
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(rerender) : rerender()), { once: true });
   else rerender();
   /* BUTTON NAMES — the manual override for a guess that cannot always be

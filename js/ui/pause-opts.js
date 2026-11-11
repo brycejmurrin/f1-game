@@ -251,7 +251,7 @@ const PauseOpts = (function () {
   }
 
   function initUI(gate) {
-    // #4798: the four rows wait for the settings-lazy gate; the pause card's own wiring does not.
+    // #4798 gate: rows only
     if (gate) gate(wireRows); else wireRows();
     paintSummary();
     paintBuild();

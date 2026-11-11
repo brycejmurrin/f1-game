@@ -440,8 +440,7 @@ const SettingDeps = (function () {
     refresh();
   }
   if (doc()) {
-    // #4798: every target sits behind a tap (no title-screen control), so the
-    // listeners and the documentElement observer arm at the settings-lazy gate.
+    // #4798 gate: every target sits behind a tap
     if (doc().readyState !== "complete") doc().addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(init) : init()), { once: true });
     else init();
   }

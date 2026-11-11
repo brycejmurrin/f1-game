@@ -94,6 +94,6 @@ test("SettingsExport mounts at the gate, queued after SaveHealth as at eval (#47
   const src = read("js/ui/settings-export.js");
   assert.match(src, /readyState !== "complete"\) document\.addEventListener\("DOMContentLoaded", \(\) => \(typeof SettingsNav !== "undefined" && SettingsNav\.lazy \? SettingsNav\.lazy\(mount\) : mount\(\)\)/);
   const shell = read("index.html");
-  assert.ok(shell.indexOf('src="js/ui/save-health.js') < shell.indexOf('src="js/game.js'),
+  assert.ok(shell.indexOf('src="js/ui/save-health.js') < shell.indexOf('src="js/game.js?v='),
     "SaveHealth's DCL listener registers (eval) before game.js runs SettingsExport.create, so its section stays first");
 });

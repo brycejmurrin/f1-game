@@ -268,7 +268,7 @@ const HudElements = (function () {
   }
 
   if (typeof document !== "undefined") {
-    // #4798: deferred scripts evaluate at "interactive"; the rows wait for the settings-lazy gate.
+    // #4798 gate
     if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => { apply(); typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initUI) : initUI(); }, { once: true });
     else initUI();
   }

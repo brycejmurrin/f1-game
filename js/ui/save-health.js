@@ -160,7 +160,7 @@ const SaveHealth = (function () {
     const host = document.getElementById("pm-panel-files"); if (host) mount(host);
   }
   if (typeof document !== "undefined" && document.addEventListener) {
-    // #4798: SAVES & DATA is Settings-only: mount at the settings-lazy gate (queued before SettingsExport's, as at eval).
+    // #4798 gate (queued before SettingsExport)
     if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(boot) : boot()), { once: true }); else boot();
   }
   // category stays module-local (inspect grouping).

@@ -269,7 +269,7 @@ const Captions = (function () {
 
   applyDom();
   if (typeof document !== "undefined") {
-    // #4798: deferred scripts evaluate at "interactive"; the rows wait for the settings-lazy gate.
+    // #4798 gate
     if (document.readyState !== "complete") {
       document.addEventListener("DOMContentLoaded", () => { applyDom(); typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initAppearanceRows) : initAppearanceRows(); }, { once: true });
     } else initAppearanceRows();
