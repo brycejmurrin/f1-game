@@ -17,7 +17,6 @@ export const GENERATED_PATHS = Object.freeze([
   "docs/agent-output/catalog.json",
   "docs/agent-index.json",
   "docs/AGENT-HOOKS.md",
-  "docs/TESTING-COVERAGE.md",
   "tests/data/impact-map.json",
   "tests/data/ratchets.json",
   "tools/shot/scenery-locations.json",
@@ -42,4 +41,21 @@ export const BUILT_PATHS = Object.freeze([
 export function isBuilt(p) {
   const s = String(p || "").replace(/^\.\//, "");
   return BUILT_PATHS.includes(s);
+}
+
+// RETIRED, NOT COMMITTED (2026-11-10). A generator output that left git for artifacts/ and is not a site
+// file, so it is not in BUILT_PATHS (those are staged into the deploy). The old path stays named here so
+// an old branch that still carries an edit to it merges: the conflict is modify/delete, and deploy.mjs's
+// cureableConflicts takes the deletion exactly as for a built path. Each entry is in .gitignore, so a
+// leftover local copy is never re-added (tests/unit/deploy-tool.test.mjs).
+// docs/TESTING-COVERAGE.md: 15 of the 16 open PRs that carried it conflicted with the tip on 2026-11-10;
+// the page is now artifacts/TESTING-COVERAGE.md (tools/docs/gen-coverage-table.mjs).
+export const RETIRED_PATHS = Object.freeze([
+  "docs/TESTING-COVERAGE.md",
+]);
+
+/** Is `p` (repo-relative, forward slashes) a retired generator output that git must not track? Pure. */
+export function isRetired(p) {
+  const s = String(p || "").replace(/^\.\//, "");
+  return RETIRED_PATHS.includes(s);
 }
