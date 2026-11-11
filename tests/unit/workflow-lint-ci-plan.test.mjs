@@ -98,6 +98,10 @@ test("fold workflows open their PR through open-bot-pr with LAND_TOKEN, after pu
     assert.doesNotMatch(open.with["issue-title"], /run_id|RUN_ID|\$/, `${f}: a stable issue title, so one issue collects every refusal`);
     assert.equal(w.jobs[job].environment.name, "land");
   }
+  // #5520: the ratchets fold's verdict line becomes a ticked Plan item in the PR body.
+  const rf = wf("ratchets-fold.yml").jobs.fold.steps;
+  assert.equal(rf.find((st) => st.name === "Open the PR").with.evidence, "${{ steps.fold.outputs.evidence }}");
+  assert.match(rf.find((st) => st.name === "Fold").run, /node tools\/check\/ratchets\.mjs \| tee ratchets\.log[\s\S]*echo "evidence<<APEX_PR_BODY_EOF"; echo "[^"]*\$\(tail -n 1 ratchets\.log\)"/);
 });
 
 test("open-bot-pr: a refusal fails, dispatches CI and opens ONE issue; it re-pings only after a day", () => {
@@ -124,6 +128,11 @@ test("open-bot-pr: a refusal fails, dispatches CI and opens ONE issue; it re-pin
   assert.ok(land.calls[0].startsWith("GH_TOKEN=pat pr create --repo o/r --base claude/f1-game-project-26h3ng --head bot/x --title t --body "), land.calls[0]);
   // #5520: the one-line body is wrapped in the template (tests/unit/bot-pr-body.test.mjs runs it through the gate's parser).
   assert.ok(land.calls.join("\n").includes("## Plan"), "the PR opens with the template body");
+  // FAIL SAFE: a wrapper that cannot run still opens the PR, with the plain body and a warning.
+  const bare = runWithFakeGh(run, { refusePr: false, env: { ...base, PR_TOKEN: "pat", GITHUB_WORKSPACE: "/nonexistent" } });
+  assert.equal(bare.code, 0, bare.out);
+  assert.deepEqual(bare.calls, ["GH_TOKEN=pat pr create --repo o/r --base claude/f1-game-project-26h3ng --head bot/x --title t --body b"]);
+  assert.match(bare.out, /::warning::open-bot-pr: tools\/ci\/bot-pr-body\.mjs failed; opening with the plain body/);
 });
 
 test("selected-verdict reds a PR on a touched js dir with no coverage; the train only warns (ci-7d C7)", () => {
