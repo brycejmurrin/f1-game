@@ -19,7 +19,9 @@
  *   3. That record tested the PR's MERGE ref (remote-group passes `pr`; the shard reads the merge commit's parents):
  *      record head == this PR head, record base == the base THIS run's merge commit sits on (the same commit pair,
  *      so the group run proves what this run's own legs would have; #5407). A branch-head run (base=none) never counts.
- *      And that base is still the deploy tip when this verdict runs (#5474's rule; a moved tip refuses).
+ *      The live deploy tip is NOT compared (orchestrator A, 2026-11-11 10:15 UTC, option 2): same head + same base
+ *      proves for the dropped specs exactly what this run's own legs prove for the rest; a tip that moves after CI
+ *      is the gate's `retest` row (PR #5485), not this file's.
  *   4. Default GL (llvmpipe) and APEX_FAIL_ON_FLAKY on (a retried pass fails the shard; AGENTS.md rule 9).
  *   5. The spec is covered whole: the file as one unit, or every piece j/k of one k.
  *   6. NO run on this head whose group contains the spec is anything but that: a failed, cancelled, still-running
@@ -95,7 +97,6 @@ export function covers(units, spec) {
  * @param {string}   q.count     the plan's dropped count (select's `dropped` output)
  * @param {string}   q.head      PR head sha
  * @param {string}   q.base      the base sha THIS run's merge commit sits on
- * @param {string}   q.tip       the deploy branch head right now ("" when the lookup failed)
  * @param {Array|null} q.runs    browser-group.yml runs on q.head (any order), or null on a lookup failure
  * @param {(group:string)=>string[]|null} q.groupSpecs the spec files of test:<group> (package.json), null if unknown
  * @param {(id:string)=>Array|null} q.jobsOf          a run's jobs, or null on a lookup failure
@@ -103,7 +104,8 @@ export function covers(units, spec) {
  * @returns {{accept:boolean, why:string, runs?:string[]}}
  */
 export function decide(q) {
-  const no = (why) => ({ accept: false, why });
+  let live = false;
+  const no = (why) => ({ accept: false, why, live });
   const dropped = [...new Set((q.dropped || []).filter(Boolean))].sort();
   if (!dropped.length) return no("the dropped spec names are missing (select's dropped_specs output is empty)");
   if (!/^\d+$/.test(String(q.count ?? "")) || Number(q.count) !== dropped.length) {
@@ -111,12 +113,9 @@ export function decide(q) {
   }
   if (!SHA.test(String(q.head || ""))) return no("no PR head sha");
   if (!SHA.test(String(q.base || ""))) return no("this run's base sha is unknown");
-  // #5474's tip rule: the base is still the deploy tip, so the accepted evidence is as fresh as a new run's.
-  if (!SHA.test(String(q.tip || ""))) return no("the deploy tip could not be read");
-  if (q.tip !== q.base) return no(`the deploy tip moved: this run sits on ${q.base.slice(0, 12)}, the tip is ${q.tip.slice(0, 12)} — run the group again and flip draft and back`);
   if (!Array.isArray(q.runs)) return no("the browser-group runs lookup failed");
   const mine = q.runs.filter((r) => r && r.path === GROUP_WORKFLOW_PATH && r.event === "workflow_dispatch" && r.head_sha === q.head);
-  const taint = new Map();   // spec -> why it is refused
+  const taint = new Map();   // spec -> why it is refused (a still-running run sets `live`: main() may wait for it)
   const units = new Map();   // run id -> units it proved
   const notes = [];
   for (const r of mine) {
@@ -125,6 +124,7 @@ export function decide(q) {
     const clean = r.status === "completed" && r.conclusion === "success" && (Number(r.run_attempt) || 1) === 1;
     const specs = t ? q.groupSpecs(t.group) : null;
     const state = `${r.status}/${r.conclusion || "-"}, attempt ${Number(r.run_attempt) || 1}`;
+    if (!clean && r.status !== "completed" && (!specs || dropped.some((s) => specs.includes(s)))) live = true;
     if (!clean) {
       // A red, cancelled, live or re-run group run of a dropped spec refuses it. Unknown contents refuse them all.
       for (const s of dropped) {
@@ -206,15 +206,27 @@ async function main(argv = process.argv.slice(2)) {
   let scripts = null;
   try { scripts = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts || null; } catch { /* below */ }
   const runs = SHA.test(head) ? pages(gh([`repos/${repo}/actions/workflows/browser-group.yml/runs?head_sha=${head}&per_page=100`, "--paginate"]), "workflow_runs") : null;
-  say(decide({
+  // THE BOUNDED WAIT (orchestrator A, 2026-11-11): a group run dispatched at the ready flip may still be running when
+  // this job starts. While a run of a dropped spec's group is queued or in progress, poll until WAIT_S (default 420 s:
+  // inside this job's 10-min cap, which stays as it is), then decide on what is there; a run still live is a refusal.
+  const waitS = Math.max(0, Math.min(480, Number(env.WAIT_S ?? 420) || 0));
+  const until = Date.now() + waitS * 1000;
+  const ask = (rs) => decide({
     dropped: String(env.DROPPED_SPECS || "").split(/\s+/), count: env.DROPPED, head,
-    base: env.CURRENT_BASE || currentBase(), runs,
-    tip: env.PR_BASE_REF ? (json(gh([`repos/${repo}/branches/${encodeURIComponent(env.PR_BASE_REF)}`]))?.commit?.sha || "") : "",
+    base: env.CURRENT_BASE || currentBase(), runs: rs,
     // A glob needs tests/specs on disk; a throw reads as unknown contents (refuses every dropped spec).
     groupSpecs: (g) => { try { return scripts && scripts[`test:${g}`] ? specsOf([`test:${g}`], scripts) : null; } catch { return null; } },
     jobsOf: (id) => pages(gh([`repos/${repo}/actions/runs/${id}/jobs?per_page=100`, "--paginate"]), "jobs"),
     annotationsOf: (jobId) => json(gh([`repos/${repo}/check-runs/${jobId}/annotations?per_page=100`])),
-  }));
+  });
+  const list = () => (SHA.test(head) ? pages(gh([`repos/${repo}/actions/workflows/browser-group.yml/runs?head_sha=${head}&per_page=100`, "--paginate"]), "workflow_runs") : null);
+  let v = ask(runs);
+  while (!v.accept && v.live && Date.now() + 30000 < until) {
+    console.error(`dropped-group-runs: ${v.why} — waiting for it (${Math.round((until - Date.now()) / 1000)} s left)`);
+    await new Promise((r) => setTimeout(r, 30000));
+    v = ask(list());
+  }
+  say(v);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

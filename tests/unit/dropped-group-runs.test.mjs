@@ -28,7 +28,7 @@ function world(over = {}) {
     2: [{ title: GROUP_RECORD_TITLE, message: groupRecordLine(rec({ units: ["tests/specs/audio-smoke.spec.js"], ...over.rec2 })) }],
   };
   return {
-    dropped: [UI], count: "1", head: HEAD, base: BASE, tip: BASE,
+    dropped: [UI], count: "1", head: HEAD, base: BASE,
     runs: [run, ...(over.extraRuns || [])],
     groupSpecs: (g) => GROUPS[g] || null,
     jobsOf: (id) => (String(id) === String(run.id) ? jobs : (over.jobsOf ? over.jobsOf(id) : null)),
@@ -66,9 +66,10 @@ test("refuse: a re-run attempt (green only on attempt 2)", () => {
 });
 
 test("refuse: a failed or cancelled group run, and a still-running one", () => {
-  for (const [status, conclusion] of [["completed", "failure"], ["completed", "cancelled"], ["in_progress", null]]) {
+  for (const [status, conclusion] of [["completed", "failure"], ["completed", "cancelled"], ["in_progress", null], ["queued", null]]) {
     const v = decide(world({ run: { status, conclusion } }));
     assert.equal(v.accept, false, `${status}/${conclusion}`);
+    assert.equal(v.live, status !== "completed", "only a queued or running group run is worth the bounded wait");
   }
 });
 
@@ -106,10 +107,8 @@ test("refuse: another base (the deploy tip moved between the group run and this 
   assert.equal(branch.accept, false);
   assert.match(branch.why, /branch head, not the PR merge ref/);
   assert.equal(decide(world({ rec1: { units: [UI], head: OLD } })).accept, false, "a record of another head");
-  const tip = decide(world({ q: { tip: OLD } }));
-  assert.equal(tip.accept, false, "the deploy tip moved since this run's base (#5474's rule)");
-  assert.match(tip.why, /deploy tip moved/);
-  assert.equal(decide(world({ q: { tip: "" } })).accept, false, "an unreadable tip");
+  // Option 2 (orchestrator A, 2026-11-11): same base as THIS run is the rule; the live tip is not read here.
+  assert.equal(decide(world({ q: { tip: OLD } })).accept, true, "a tip that moved after both runs is the gate's retest row, not this");
 });
 
 test("refuse: an unreadable or missing record, a failed shard record, a red job, unreadable jobs", () => {

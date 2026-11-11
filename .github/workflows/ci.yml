@@ -2961,6 +2961,7 @@ jobs:
       # ref). Every doubt is accept=false and the verdict below stays red. Rules: tools/ci/dropped-group-runs.mjs.
       - name: Did a browser-group run cover the dropped specs?
         id: group_runs
+        timeout-minutes: 8   # the bounded wait (WAIT_S 420 s) inside the job's own 10-min cap; a timeout is a red
         if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && inputs.concurrency_key == '' && needs.select.outputs.dropped != '0' }}
         continue-on-error: true
         env:
@@ -2968,7 +2969,6 @@ jobs:
           DROPPED: ${{ needs.select.outputs.dropped }}
           DROPPED_SPECS: ${{ needs.select.outputs.dropped_specs }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: node tools/ci/dropped-group-runs.mjs >> "$GITHUB_OUTPUT"
       - name: One answer for the change-aware gate
         env:
