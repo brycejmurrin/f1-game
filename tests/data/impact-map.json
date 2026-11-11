@@ -8164,6 +8164,14 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
+        "tests/specs/scratch-rcmz-r1.spec.js",
+        "tests/specs/scratch-rcmz-r2.spec.js",
+        "tests/specs/scratch-rcmz-r3.spec.js",
+        "tests/specs/scratch-rcmz-r4.spec.js",
+        "tests/specs/scratch-rcmz-r5.spec.js",
+        "tests/specs/scratch-rcmz-r6.spec.js",
+        "tests/specs/scratch-rcmz-r7.spec.js",
+        "tests/specs/scratch-rcmz-r8.spec.js",
         "tests/unit/deploy-staging.test.mjs"
       ]
     },
@@ -11399,7 +11407,15 @@
         "tests/unit/title-warm.test.mjs"
       ],
       "*": [
-        "tests/specs/race-cycle-memory.spec.js"
+        "tests/specs/race-cycle-memory.spec.js",
+        "tests/specs/scratch-rcmz-r1.spec.js",
+        "tests/specs/scratch-rcmz-r2.spec.js",
+        "tests/specs/scratch-rcmz-r3.spec.js",
+        "tests/specs/scratch-rcmz-r4.spec.js",
+        "tests/specs/scratch-rcmz-r5.spec.js",
+        "tests/specs/scratch-rcmz-r6.spec.js",
+        "tests/specs/scratch-rcmz-r7.spec.js",
+        "tests/specs/scratch-rcmz-r8.spec.js"
       ]
     },
     "js/physics/aero-zones.js": {
@@ -16691,6 +16707,14 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
+        "tests/specs/scratch-rcmz-r1.spec.js",
+        "tests/specs/scratch-rcmz-r2.spec.js",
+        "tests/specs/scratch-rcmz-r3.spec.js",
+        "tests/specs/scratch-rcmz-r4.spec.js",
+        "tests/specs/scratch-rcmz-r5.spec.js",
+        "tests/specs/scratch-rcmz-r6.spec.js",
+        "tests/specs/scratch-rcmz-r7.spec.js",
+        "tests/specs/scratch-rcmz-r8.spec.js",
         "tests/unit/css-has-scope.test.mjs"
       ]
     },
@@ -18800,6 +18824,14 @@
       ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
+        "tests/specs/scratch-rcmz-r1.spec.js",
+        "tests/specs/scratch-rcmz-r2.spec.js",
+        "tests/specs/scratch-rcmz-r3.spec.js",
+        "tests/specs/scratch-rcmz-r4.spec.js",
+        "tests/specs/scratch-rcmz-r5.spec.js",
+        "tests/specs/scratch-rcmz-r6.spec.js",
+        "tests/specs/scratch-rcmz-r7.spec.js",
+        "tests/specs/scratch-rcmz-r8.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/results-sheet-lazy.test.mjs"

@@ -1423,6 +1423,22 @@
       "twinned": false
     },
     {
+      "id": "scratch-rcmz",
+      "script": "test:scratch-rcmz",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-rcmz-r1.spec.js",
+        "tests/specs/scratch-rcmz-r2.spec.js",
+        "tests/specs/scratch-rcmz-r3.spec.js",
+        "tests/specs/scratch-rcmz-r4.spec.js",
+        "tests/specs/scratch-rcmz-r5.spec.js",
+        "tests/specs/scratch-rcmz-r6.spec.js",
+        "tests/specs/scratch-rcmz-r7.spec.js",
+        "tests/specs/scratch-rcmz-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",
