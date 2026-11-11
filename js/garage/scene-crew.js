@@ -280,7 +280,7 @@ const GarageCrew = (function () {
   function setLook(id) {
     if (LOOKS.includes(id) && id !== look) {
       look = id; free();
-      try { localStorage.setItem("apex26.crewLook", id); } catch (_) { /* private mode */ }
+      try { if (typeof GameStore !== "undefined" && GameStore.store) GameStore.store.rawSet("crewLook", id); else localStorage.setItem("apex26.crewLook", id); } catch (_) { /* private mode */ }
     }
     return look;
   }

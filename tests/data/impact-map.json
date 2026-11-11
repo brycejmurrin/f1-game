@@ -1783,6 +1783,7 @@
       "create": [
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/load-order.test.mjs"
       ],
       "edited": [
@@ -1796,6 +1797,9 @@
       ],
       "playable": [
         "tests/unit/flyby-panel.test.mjs"
+      ],
+      "preview": [
+        "tests/unit/garage-arrival.test.mjs"
       ]
     },
     "js/camera/flyby-panel.js": {
@@ -8384,6 +8388,9 @@
       "setLook": [
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs"
+      ],
+      "*": [
+        "tests/unit/settings-import-safety.test.mjs"
       ]
     },
     "js/garage/scene-dress.js": {
@@ -8493,7 +8500,8 @@
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/photo-studio.test.mjs",
-        "tests/unit/scene-live.test.mjs"
+        "tests/unit/scene-live.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs"
       ]
     },
     "js/garage/scene.js": {
@@ -8521,7 +8529,8 @@
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/photo-studio.test.mjs",
-        "tests/unit/scene-live.test.mjs"
+        "tests/unit/scene-live.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs"
       ],
       "draw": [
         "tests/unit/garage-arrival.test.mjs",
@@ -9676,6 +9685,9 @@
       "migrateSteerStore": [
         "tests/specs/steer-migration.spec.js"
       ],
+      "migrateValues": [
+        "tests/unit/settings-import-safety.test.mjs"
+      ],
       "touchSpeedFromSlider": [
         "tests/unit/touch-drag-speed.test.mjs"
       ],
@@ -9982,6 +9994,7 @@
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "create": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -19210,6 +19223,7 @@
         "tests/unit/key-binds.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs"
       ],
       "careerRow": [
@@ -19219,6 +19233,7 @@
       "collect": [
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs"
       ],
       "collectCareer": [
