@@ -69,6 +69,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { declaredTests } from "./select-budget.mjs";
+import { titlesIn } from "./test-observed.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -94,6 +95,18 @@ export const TWINNED = {
   "tests/specs/wake-lock.spec.js":          "tests/unit/wake-lock-vm.test.mjs",
   "tests/specs/world-physics.spec.js":      "tests/unit/world-physics-vm.test.mjs",
 };
+
+/** TWINNED specs whose browser copy was SHRUNK to the cases the VM cannot
+ *  see, while the twin carries every assertion (TK1-16, #3039). For these the
+ *  count check is "twin >= spec" plus "every spec test title is a twin test
+ *  title" (titlesIn; a template title compares by its literal chunks) instead
+ *  of equal counts. The value is why the rest of the spec left. */
+export const TWIN_SUBSET = {
+  "tests/specs/elevation-tracks.spec.js":
+    "the 4 banking-geometry audits are pure Tracks math and the per-circuit grade sweep is the same elevation-probes recipe in the twin, which sweeps all of Tracks.LIST; the browser keeps the chase-camera roll and the 2 banked bowls, the only rolled road/camera a render()-only throw could hide in",
+};
+const leafTitles = (file) =>
+  titlesIn(fs.readFileSync(path.join(ROOT, file), "utf8"), file).map((t) => t.full.split(" › ").pop());
 
 /** spec -> ITSELF, run under the `vmPage` adapter (tests/helpers/vm-page.js,
  *  APEX_VM_PAGE=1) instead of a hand-written twin. Same substitution as
@@ -394,6 +407,17 @@ export function verify() {
     if (!fs.existsSync(path.join(ROOT, spec))) { problems.push(`${spec}: spec is gone — drop the entry (and its twin, if it went with it)`); continue; }
     if (!fs.existsSync(path.join(ROOT, twin))) { problems.push(`${spec}: twin ${twin} is gone — the spec is back on the blocking gate, so drop the entry`); continue; }
     const s = declaredTests(spec), t = declaredTests(twin);
+    if (Object.hasOwn(TWIN_SUBSET, spec)) {
+      rows.push({ spec, twin, specTests: s, twinTests: t, subset: true });
+      const have = new Set(leafTitles(twin));
+      const missing = leafTitles(spec).filter((x) => !have.has(x));
+      if (s > t || missing.length) problems.push(
+        `${spec} is a TWIN_SUBSET of ${twin} but ` +
+        (s > t ? `declares ${s} tests to the twin's ${t}` : `has test(s) the twin does not: ${missing.join("; ")}`) +
+        ` — port it to the twin, or drop the entry so the browser copy gates again.`);
+      if (!fast.has(twin)) problems.push(`${twin} is in no group the Pages gate runs unconditionally — a twin only substitutes for a blocking spec if it BLOCKS`);
+      continue;
+    }
     rows.push({ spec, twin, specTests: s, twinTests: t });
     if (s !== t) problems.push(
       `${spec} declares ${s} tests but ${twin} declares ${t} — the twin has stopped covering the spec, ` +

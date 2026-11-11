@@ -85,8 +85,13 @@ test("a twin that loses a test is caught", async () => {
 
   // And the real pairs are all equal right now, which is what makes the
   // exclusion in select-specs sound rather than merely convenient.
-  for (const { spec, twin, specTests, twinTests } of verify().rows)
-    assert.equal(specTests, twinTests, `${spec} vs ${twin}`);
+  // A TWIN_SUBSET spec was shrunk to the render()-only cases, so its twin
+  // carries MORE tests; verify() also checks each spec title is a twin title.
+  for (const { spec, twin, specTests, twinTests, subset } of verify().rows) {
+    if (subset) assert.ok(specTests <= twinTests, `${spec} (${specTests}) vs ${twin} (${twinTests})`);
+    else assert.equal(specTests, twinTests, `${spec} vs ${twin}`);
+  }
+  assert.deepEqual(verify().problems, []);
 });
 
 test("the gated-node set is derived from ci.yml, not copied", () => {
