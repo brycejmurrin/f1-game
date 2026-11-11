@@ -2126,6 +2126,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
@@ -2148,7 +2149,6 @@
       ],
       "*": [
         "tests/unit/cam-comfort.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/trackside.test.mjs"
       ]
@@ -2659,6 +2659,7 @@
       "create": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
@@ -2798,6 +2799,7 @@
       ],
       "warmCarAssets": [
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-race-geom-warm.test.mjs"
@@ -19084,6 +19086,7 @@
       ],
       "create": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/scale-defaults.test.mjs",
@@ -19122,7 +19125,6 @@
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",

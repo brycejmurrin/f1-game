@@ -1069,6 +1069,7 @@ const CarDraw = (function () {
           getErsBar(); getOtLamp(false); getOtLamp(true);
           for (let g = 0; g <= 9; g++) getGearDigit(g);
           for (let d = 0; d <= 9; d++) getSpeedDigit(d);
+          _digitsPrimed = false;   // this race's first telemetry frame draws them all once (primeDigits)
           const styles = (CarMesh.LED_ROWS && Object.keys(CarMesh.LED_ROWS)) || ["std"];
           for (let s = 0; s < styles.length; s++) {
             for (let lit = 0; lit <= 9; lit++) getLedStrip(lit, styles[s]);
@@ -1463,6 +1464,21 @@ const CarDraw = (function () {
     const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
     const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
     const _digM = new Float32Array(16);
+    // #5387: a 7-segment digit's FIRST draw mints its TLX pool wrapper (render object, UBO, bind group), so each
+    // gear or speed digit the race had not shown yet did that mid-lap (diagnostic run 42949086546). The race's first
+    // telemetry frame draws every digit once per place it can hold (gear x1, speed x3, retro x4) on the wheel matrix
+    // shrunk 1e-4: invisible, same winding, the race's own (geometry, material) pairs. Re-armed per race warm.
+    let _digitsPrimed = false;
+    const _digP = new Float32Array(16);
+    function primeDigits(m, fx) {
+      _digitsPrimed = true;
+      for (let i = 0; i < 16; i++) _digP[i] = i < 12 ? m[i] * 1e-4 : m[i];
+      if (!fx) { if (typeof CarMesh.primeRetroDigits === "function") CarMesh.primeRetroDigits(_digP); return; }
+      for (let d = 0; d <= 9; d++) {
+        G.gfx.draw(getGearDigit(d), _digP, fx);
+        for (let k = 0; k < 3; k++) G.gfx.draw(getSpeedDigit(d), _digP, fx);
+      }
+    }
     // Sky-tint fallback is a MATTE card of the current TOD env — not a shiny
     // dielectric. roughness 0.08 / specular 0.7 made it pick up lamp speculars
     // and a stale day env cube so Monaco night glass read luma 0.39–0.58 against
@@ -1618,6 +1634,7 @@ const CarDraw = (function () {
       // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the
       // HUD shows gear and speed instead (js/camera/mode-switch.js).
       if (wheelStyle === "retro") {
+        if (!_digitsPrimed) primeDigits(_rigB, null);
         CarMesh.drawRetroTelemetry(_rigB,c,G.dashKph(c.speed || 0),G.raceT);
         return;
       }
@@ -1627,6 +1644,7 @@ const CarDraw = (function () {
       // lights, speed, pedal bars, ERS energy.
       const fx = _rigFx;
       G.gfx.draw(getGearDigit(M4.clamp(c.gear || 1, 0, 9)), _rigB, fx);
+      if (!_digitsPrimed) primeDigits(_rigB, fx);
       const rpmF = M4.clamp(((c.rpm || PhysicsConsts.IDLE_RPM) - PhysicsConsts.IDLE_RPM) / (PhysicsConsts.MAX_RPM - PhysicsConsts.IDLE_RPM), 0, 1);
       // At the limiter the strip stays LIT: full ramp <-> all-blue SHIFT NOW at
       // ~7 Hz (it went 9 <-> 0 — dark half the frames), steady blue under reduced motion.
