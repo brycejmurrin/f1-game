@@ -74,25 +74,48 @@ def symbol_of(pattern):
 
 
 def from_bash(command):
+    """(pattern, first path operand) of the first grep / rg / git grep in the command that searches FILES.
+
+    A grep that reads a pipe (`ps aux | grep Chrome`, `git log | grep Merge`) filters another command's output: it
+    has no path operand and is not first in its pipeline, so it is no code search and gets nothing."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     try:
-        words = shlex.split(command)
-    except ValueError:
+        from shellparse import commands
+        cmds = commands(command)
+    except Exception:
         return None, None
-    for i, w in enumerate(words):
-        if w not in ("grep", "rg", "egrep"):
+    first = {}
+    for c in cmds:
+        first.setdefault(c.pipe, c)
+    for c in cmds:
+        argv = c.argv
+        if c.prog == "git" and argv[1:2] == ["grep"]:
+            rest = argv[2:]
+        elif c.prog in ("grep", "rg", "egrep"):
+            rest = argv[1:]
+        else:
             continue
-        rest, j, pattern = words[i + 1:], 0, None
-        while j < len(rest) and rest[j] not in ("|", "&&", ";", "||"):
+        j, pattern, operands = 0, None, []
+        while j < len(rest):
             x = rest[j]
-            if x in ("-e", "--regexp") and j + 1 < len(rest):
-                return rest[j + 1], " ".join(rest[j + 2:j + 3])
-            if x.startswith("-"):
+            if pattern is None and x in ("-e", "--regexp") and j + 1 < len(rest):
+                pattern = rest[j + 1]
+                j += 2
+                continue
+            if x.startswith("-") and x != "-":
                 j += 2 if x in ARG_OPTS else 1
                 continue
-            pattern = x
-            break
-        if pattern:
-            return pattern, " ".join(rest[j + 1:j + 2])
+            if pattern is None:
+                pattern = x
+            else:
+                operands.append(x)
+            j += 1
+        if not pattern:
+            continue
+        piped = first.get(c.pipe) is not c
+        if piped and not operands:
+            continue                     # filtering a pipe, not searching the tree
+        return pattern, (operands[0] if operands else "")
     return None, None
 
 

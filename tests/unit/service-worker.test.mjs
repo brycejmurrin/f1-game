@@ -2255,3 +2255,49 @@ test("install carries runtime entries into the new generation, revalidated, and 
   assert.equal(await text("js/ui/hud.js?v=aaaaaaaaaaaa"), undefined, "unlisted ?v= keys are not carried");
   assert.ok(!asked.includes("/vendor/three-0.187.0/three.core.min.js"), "no download for a path-pinned file already on the device");
 });
+
+// ── W24 row 4: the version.json kill switch ──
+function killHarness({ fetchImpl } = {}) {
+  let unregistered = 0;
+  const h = createHarness({
+    fetchImpl: fetchImpl || (async () => new Response('{"build":321,"swKill":true}', { status: 200 })),
+    registration: { unregister: async () => { unregistered++; return true; } },
+  });
+  h.stores.set("apex26-320", new Map([[`${ORIGIN}/index.html`, new Response("shell")]]));
+  h.stores.set("apex26-voice", new Map());
+  h.stores.set("other-proj", new Map());
+  return { h, unregistered: () => unregistered };
+}
+
+test("kill switch: a version.json with swKill unregisters the worker and deletes every apex26 cache", async () => {
+  const { h, unregistered } = killHarness();
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/version.json?_=1`));
+  assert.equal((await (await ev.responsePromise).json()).swKill, true, "the page still gets the real answer");
+  await Promise.all(ev.lifetimes);
+  assert.equal(unregistered(), 1);
+  assert.deepEqual([...h.stores.keys()], ["other-proj"], "apex26-<n> and apex26-voice go; another project's cache stays");
+  const after = h.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=abcdefabcdef`));
+  assert.equal(after.responsePromise, undefined, "a retired worker no longer answers: the network does");
+});
+
+test("kill switch: an install under the flag refuses to install and creates no cache", async () => {
+  const fetchImpl = async (request) => {
+    const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (u.pathname.endsWith("/version.json")) return new Response('{"build":321,"swKill":true}', { status: 200 });
+    return installFetch()(request);
+  };
+  const h = createHarness({ fetchImpl });
+  await assert.rejects(h.lifecycleEvent("install").done(), /swKill/);
+  assert.equal(h.stores.has("apex26-321"), false);
+  assert.equal(h.skipped, 0);
+});
+
+test("kill switch: a version.json without the flag (or swKill false) changes nothing", async () => {
+  for (const body of ['{"build":321}', '{"build":321,"swKill":false}', '{"build":321,"swKill":"true"}']) {
+    const { h, unregistered } = killHarness({ fetchImpl: async () => new Response(body, { status: 200 }) });
+    const ev = h.fetchEvent(new Request(`${ORIGIN}/version.json?_=1`));
+    await ev.responsePromise; await Promise.all(ev.lifetimes);
+    assert.equal(unregistered(), 0, body);
+    assert.ok(h.stores.has("apex26-320"), body);
+  }
+});

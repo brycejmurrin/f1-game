@@ -34,6 +34,10 @@ export const DEVICES = Object.freeze({
   // Injected as --sal/--sar/--sat/--sab like hud-layout.spec.js: headless
   // Chromium reports env(safe-area-inset-*) as 0.
   "phone-landscape-844x390": { w: 844, h: 390, touch: true, ins: { sal: 47, sar: 47, sat: 0, sab: 21 } },
+  // The owner's iPhone (tools/lib/bryce-phone.mjs BRYCE_WINDOWS; issue #5262): Home Screen app and Safari tab. Named
+  // cells, not a matrix axis. `owner`: hud-survey seeds his live settings export unless --settings names another file.
+  "bryce-852x393": { w: 852, h: 393, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "standalone" },
+  "bryce-852x368": { w: 852, h: 368, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 }, owner: "safari" },
   "phone-portrait-390x844": { w: 390, h: 844, touch: true, ins: { sal: 0, sar: 0, sat: 47, sab: 34 } },
   // iPhone 15/16 Pro Max portrait (lead-only; HUD Desk readable-floor shots).
   "phone-portrait-430x932": { w: 430, h: 932, touch: true, ins: { sal: 0, sar: 0, sat: 59, sab: 34 } },

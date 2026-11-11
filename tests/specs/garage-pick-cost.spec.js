@@ -12,7 +12,10 @@ const PICKS = 4;
 // Measured on this branch (TLX, 844x390 touch, 4 picks, 2026-10-21): every pick 0 card repaints + 113 blits (113 adopted canvases since B·H32),
 // 1 Car3D.build, 2 LiveryTex.buildAtlas (the 1024 preview, then the deferred 2048). The ceilings ARE those
 // counts: one more is a regression. Atlas textures are held to one upload per atlas painted (below).
-const CEIL = Object.freeze({ cardPaints: 0, car3dBuilds: 1, atlases: 2 });
+// cardPaints 1 since #5224 (PR #5360, Bryce's decision 2026-11-10 15:35Z "raise garage-pick-cost CEIL to 1"): cards
+// paint at their own box x DPR, and the picked card moves from the factory fold into the grid, so it paints once
+// at the grid size (measured: cardPaints 1, cardReused 112). A second repaint is still the regression.
+const CEIL = Object.freeze({ cardPaints: 1, car3dBuilds: 1, atlases: 2 });
 
 test.describe("garage livery pick cost", () => {
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -43,11 +46,23 @@ test.describe("garage livery pick cost", () => {
     // pick's deferred upload can arrive during the next pick (B·H17's 3x run on 60118264).
     await page.evaluate(() => {
       const n = (window.__pickCount = { car3dBuilds: 0, atlases: 0, reuploads: 0, texByPick: {} });
-      window.__pick = 0;
+      window.__pick = 0; window.__pickOf = {};
       const atlas = new WeakMap(), uploaded = new WeakSet();
       const wrap = (obj, key, field, after) => { const f = obj[key]; obj[key] = function () { n[field]++; const r = f.apply(this, arguments); if (after) after(r); return r; }; };
       wrap(Car3D, "build", "car3dBuilds");   // eslint-disable-line no-undef -- script-level const in the page
-      wrap(LiveryTex, "buildAtlas", "atlases", (c) => { if (c && typeof c === "object") atlas.set(c, window.__pick); });   // eslint-disable-line no-undef
+      // An atlas is credited to the pick whose card names its livery, like its upload below: the 2048 is
+      // built on an idle slot (car-draw.js requestIdleCallback), which on a slow runner lands in the NEXT
+      // pick's window (CI on 17d0d8c: pick 2 counted 3). Unknown id: the window's pick, as before.
+      n.atlasByPick = {};
+      const buildAtlas = LiveryTex.buildAtlas;   // eslint-disable-line no-undef
+      LiveryTex.buildAtlas = function (teamId, liv) {   // eslint-disable-line no-undef
+        n.atlases++;
+        const k = liv && liv.id != null && window.__pickOf[liv.id] != null ? window.__pickOf[liv.id] : window.__pick;
+        n.atlasByPick[k] = (n.atlasByPick[k] || 0) + 1;
+        const c = buildAtlas.apply(this, arguments);
+        if (c && typeof c === "object") atlas.set(c, k);
+        return c;
+      };
       const creditAtlasUpload = (src) => {
         if (!src || !atlas.has(src)) return;
         const k = atlas.get(src);
@@ -83,18 +98,21 @@ test.describe("garage livery pick cost", () => {
     const rows = [];
     for (let i = 1; i <= PICKS; i++) {
       const before = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
-      await page.evaluate((k) => { window.__pick = k; const s = [...document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)")][k]; s.click(); }, i);
+      await page.evaluate((k) => {
+        window.__pick = k; const s = [...document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)")][k];
+        window.__pickOf[s.closest("[data-cs-livery]").dataset.csLivery] = k; s.click();
+      }, i);
       // The pick's synchronous rebuild plus a few frames for the deferred preview mesh / atlas.
       await page.evaluate(() => new Promise((done) => { let f = 0; const t = () => (++f >= 8 ? done(null) : requestAnimationFrame(t)); requestAnimationFrame(t); }));
       const after = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
       rows.push({ cardPaints: after.paints - before.paints, cardBlits: after.blits - before.blits, cardReused: after.reused - before.reused,
-        car3dBuilds: after.car3dBuilds - before.car3dBuilds, atlases: after.atlases - before.atlases,
+        car3dBuilds: after.car3dBuilds - before.car3dBuilds,
         reuploads: after.reuploads - before.reuploads });
     }
     // Late uploads settle, then each pick reads the uploads of the atlases IT painted.
     await page.evaluate(() => new Promise((done) => { let f = 0; const t = () => (++f >= 16 ? done(null) : requestAnimationFrame(t)); requestAnimationFrame(t); }));
-    const texByPick = await page.evaluate(() => ({ ...window.__pickCount.texByPick }));
-    for (const [i, r] of rows.entries()) r.textures = texByPick[i + 1] || 0;
+    const { texByPick, atlasByPick } = await page.evaluate(() => ({ texByPick: { ...window.__pickCount.texByPick }, atlasByPick: { ...window.__pickCount.atlasByPick } }));
+    for (const [i, r] of rows.entries()) { r.textures = texByPick[i + 1] || 0; r.atlases = atlasByPick[i + 1] || 0; }
     test.info().annotations.push({ type: "pick-cost", description: JSON.stringify(rows) });
     console.log("pick-cost " + JSON.stringify(rows));   // the measured counts behind CEIL, in the run log
     // Not vacuous: the attribution must still see the picks' own atlas uploads.
