@@ -659,7 +659,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 
 | Tool | Does | Suggested skill |
 |---|---|---|
-| **hooks/readonly-bash.sh** | PreToolUse Bash hook for read-only subagents: refuses write-shaped commands; `READONLY_BASH_ALLOW` is the one exception. | agent-config |
+| **hooks/readonly-bash.sh** | PreToolUse Bash hook for read-only subagents: an allowlist of read commands; `READONLY_BASH_ALLOW` is the one exception. | agent-config |
 | **hooks/scratch-md-only.sh** | PreToolUse Write\|Edit hook for the surface reviewer: the only writable path is scratch/**.md (its report). | agent-config |
 | **hooks/surveyor-scope.sh** | PreToolUse Write\|Edit hook for track-surveyor: writes land only in the circuit pair, scratch/** or artifacts/**. | survey-track |
 
