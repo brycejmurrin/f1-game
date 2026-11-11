@@ -113,7 +113,9 @@ const guard = (payload) => spawnSync("bash", [path.join(ROOT, ".cursor/hooks/she
 test("the shell adapter blocks what bash-guard blocks, from Cursor's and Codex's payload shapes", () => {
   const cursor = guard({ command: "pkill -f chrome", cwd: ROOT });
   assert.equal(cursor.status, 2, "Cursor shape: pkill -f");
-  assert.match(JSON.parse(cursor.stdout).agent_message, /pkill kills by name/, "Cursor reads WHY");
+  const why = "BLOCKED: pkill kills by name or command line: with -f it matches your own shell (its command line contains the pattern), "
+    + "and either way it takes Playwright's browsers and the parent's run.";
+  assert.equal(JSON.parse(cursor.stdout).agent_message.slice(0, why.length), why, "Cursor reads WHY");
   assert.equal(guard({ tool_name: "Bash", tool_input: { command: "git commit --no-verify -m x" } }).status, 2, "Codex shape: --no-verify");
   assert.equal(guard({ command: "gh pr merge 1", cwd: ROOT }).status, 2, "gh pr merge");
   assert.equal(guard({ command: "ls -la", cwd: ROOT }).status, 0, "an ordinary command passes");

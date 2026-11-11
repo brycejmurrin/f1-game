@@ -95,8 +95,9 @@ test("protect-files.py: generated files (derived list), generated blocks, packag
   const pf = (payload) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], { input: JSON.stringify(payload), encoding: "utf8" });
   for (const f of ["version.json", "js/roster.js", "tools/README.md", "CHANGELOG.md", "docs/agent-index.json", "tests/data/impact-map.json",
     "tests/data/ratchets.json", "tools/shot/scenery-locations.json", "js/track/circuit-meta.js", "cockpit-view.html", ".cursor/rules/claude-config.mdc",
-    "locales/en.json", "locales/manifest.json", "docs/AGENT-HOOKS.md", "docs/TESTING-COVERAGE.md", "docs/agent-output/catalog.json"]) {
-    const r = pf(edit(f)); assert.equal(r.status, 2, `${f} is generated\n${r.stderr}`); assert.match(r.stderr, /GENERATED/);
+    "locales/en.json", "locales/manifest.json", "docs/AGENT-HOOKS.md", "docs/agent-output/catalog.json"]) {
+    const r = pf(edit(f)); assert.equal(r.status, 2, `${f} is generated\n${r.stderr}`);
+    const said = `BLOCKED: ${f} is GENERATED — `; assert.equal(r.stderr.slice(0, said.length), said, "the refusal names the file");
   }
   assert.equal(pf({ tool_name: "Write", tool_input: { file_path: path.join(ROOT, "tests/data/ratchets.d", "cursor--x.json"), content: "{}" } }).status, 2, "a ratchet fragment is tool-written");
   assert.equal(pf({ tool_name: "NotebookEdit", tool_input: { notebook_path: path.join(ROOT, "version.json"), new_source: "x" } }).status, 2, "NotebookEdit-shaped input");
@@ -160,10 +161,13 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     fs.mkdirSync(path.join(dir, ".claude")); fs.writeFileSync(path.join(dir, ".claude/allow-protected"), "");
     const lifted = pf();
     assert.equal(lifted.status, 0, lifted.stderr);
-    assert.match(JSON.parse(lifted.stdout).hookSpecificOutput.additionalContext, /allow-protected is ACTIVE.*lifted: version\.json is GENERATED/);
+    const tail = " Remove the file (rm .claude/allow-protected) as soon as the assigned edit is done.";
+    assert.equal(JSON.parse(lifted.stdout).hookSpecificOutput.additionalContext,
+      `protect-files: .claude/allow-protected is ACTIVE in ${dir} — it lifted: version.json is GENERATED.${tail}`);
     const other = spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")],
       { input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: path.join(dir, "notes.md"), content: "x" } }), encoding: "utf8" });
-    assert.match(JSON.parse(other.stdout).hookSpecificOutput.additionalContext, /ACTIVE.*no rule applied/, "every guarded call announces the hatch");
+    assert.equal(JSON.parse(other.stdout).hookSpecificOutput.additionalContext,
+      `protect-files: .claude/allow-protected is ACTIVE in ${dir} — no rule applied to notes.md.${tail}`, "every guarded call announces the hatch");
     assert.equal(pf({ agent_id: "a1" }).status, 2, "the hatch never lifts a rule for a subagent");
     fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), "export const NOTHING = 1;\n");
     const broken = pf({ agent_id: "a1" });

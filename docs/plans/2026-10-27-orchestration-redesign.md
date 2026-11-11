@@ -1,5 +1,7 @@
 # Orchestration redesign: GitHub is the orchestrator
 
+Status: **SHIPPED** in #3895 on 2026-10-27. Not yet moved to the plans archive: workflows and tools cite this path, and moving it would edit them (audit W27, 2026-11-10).
+
 Proposal, 2026-10-27. Bryce's ask, typed in this session: "I feel like we need to re design our orchestration system,
 read full project and assume everyone is changeable and nothing is hard rules and all was created by parallel agents",
 then "Go deeper, read agent transcripts, look at codex transcripts". Status: SHIPPED in #3895 on 2026-10-27, with the §7 decisions ("Decided 2026-10-27"; the $15 hard-cap archive is still a follow-up).

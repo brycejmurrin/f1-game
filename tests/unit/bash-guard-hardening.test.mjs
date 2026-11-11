@@ -116,7 +116,8 @@ test("2b. a subagent's node/npm/shell command carries APEX_SUBAGENT=1 (updatedIn
     `import { launchChromium } from ${JSON.stringify(path.join(ROOT, "tools/lib/harness.mjs"))};
      try { await launchChromium(); console.log("launched"); } catch (e) { console.log(String(e.message)); }
      process.exit(0);`], { encoding: "utf8", env: { ...process.env, APEX_SUBAGENT: "1" }, timeout: 20000 });
-  assert.match(probe.stdout, /subagent never starts a browser/, probe.stderr);
+  assert.equal(probe.stdout, "a subagent never starts a browser (AGENTS.md rule 10; APEX_SUBAGENT is set): run the node-only route "
+    + "(--vm, --plan, --help, node --test) and report what needs a browser as NOT RUN.\n", probe.stderr);
 });
 
 test("2c. a subagent cannot write the guard hatches or the guard files from Bash; reads pass", () => {
