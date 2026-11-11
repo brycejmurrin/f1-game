@@ -112,7 +112,11 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   // 3. An agent's label on a routine-only diff passes, and says so.
   assert.deepEqual(configVerdict(routine, L, [agent(T1)]),
     { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/dispatch.mjs` });
-  for (const p of [".github/workflows/ci.yml", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".mcp.json", "tools/mcp/apex-extras.mjs", "tools/lib/generated-paths.mjs", ".github/actions/setup/action.yml", ".github/ISSUE_TEMPLATE/task.yml"])
+  // ci.yml decides what green means: protected (Bryce, 2026-11-11 "Protect ci.yml").
+  assert.equal(configVerdict([".github/workflows/ci.yml", "js/a.js"], L, [agent(T1)]).ok, false, "an agent's label on ci.yml is refused");
+  assert.match(configVerdict([".github/workflows/ci.yml"], L, [agent(T1)]).evidence, /protected path\(s\) \.github\/workflows\/ci\.yml/);
+  assert.equal(configVerdict([".github/workflows/ci.yml"], L, [ev("config-ok", T1)]).ok, true, "his own tap on ci.yml passes");
+  for (const p of [".github/workflows/pages.yml", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".mcp.json", "tools/mcp/apex-extras.mjs", "tools/lib/generated-paths.mjs", ".github/actions/setup/action.yml", ".github/ISSUE_TEMPLATE/task.yml"])
     assert.equal(configVerdict([p], L, [agent(T1)]).ok, true, `${p} is routine`);
   // 4. An agent's label older than the last config push is refused (the same timing rule as Bryce's).
   const stale = configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "after", evidence: "a push touching tools/ci/dispatch.mjs came" });

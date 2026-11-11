@@ -78,11 +78,12 @@ export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.
  *  `config-ok` tap covers a diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every
  *  other CONFIG_PATH). The gate (this module, which defines both lists; provenance; ready-gate; and the rest of the
  *  gate's import closure under tools/ci/, because a module's top level runs when the gate imports it — a test pins
- *  the closure), the land workflow, and every host's hooks and settings. */
+ *  the closure), the land workflow, ci.yml (it decides what green means; Bryce 2026-11-11 "Protect ci.yml"), and every
+ *  host's hooks and settings. */
 export const PROTECTED_CONFIG_PATH = new RegExp("^(" + [
   "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/ready-gate\\.mjs$",
   "tools/ci/github-api\\.mjs$", "tools/ci/github-token\\.mjs$", "tools/ci/preflip-probe\\.mjs$", "tools/ci/pick-tests\\.mjs$",
-  "\\.github/workflows/land\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
+  "\\.github/workflows/land\\.yml$", "\\.github/workflows/ci\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
   "\\.cursor/hooks", "\\.codex/hooks",
 ].join("|") + ")");
 export const isProtectedConfigPath = (p) => PROTECTED_CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
