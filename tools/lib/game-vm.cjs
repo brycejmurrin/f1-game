@@ -416,7 +416,7 @@ function makeGlx(record) {
 
 function buildSandbox(opts) {
   const vmSearch = opts && opts.search != null ? opts.search : "?seed=1";
-  const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [], carMeshes: "real", carMeshStubs: 0 };
+  const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [], carMeshes: "real", carMeshStubs: 0, rapier: !!(opts && opts.rapier) };
   const timers = makeTimers();
   const rafQueue = [];
   const echo = !!opts.verbose;
@@ -618,6 +618,40 @@ function stubCarMeshes(ctx, record) {
   C.buildWheelLayers = () => ({ rotating: empty(), fixed: empty() });
 }
 
+// createGame({ rapier: true }) — OPT-IN Rapier for the debris world.
+// js/physics/debris-world.js loads the vendored Rapier with a dynamic import();
+// a vm.Script without an import hook rejects it (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING),
+// so no headless race ever spawned debris, raised a yellow / VSC / safety car /
+// red flag from a crash, or ran an incident takeover. A custom callback needs
+// --experimental-vm-modules; USE_MAIN_CONTEXT_DEFAULT_LOADER (Node >= 21.7)
+// does not, but resolves with the HOST loader, so document.currentScript.src is
+// a file: URL while the script evaluates and RAPIER_URL lands on the vendored
+// file. Only that one file gets the hook. Opt-in because a live debris world
+// changes crash outcomes, and traces recorded without it must stay as they are.
+const RAPIER_SCRIPT = "js/physics/debris-world.js";
+function runRapierScript(body, ctx, filename) {
+  const loader = vm.constants && vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER;
+  if (!loader) throw new Error("game-vm: rapier:true needs Node >= 21.7 (vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER)");
+  const doc = ctx.document, was = doc ? doc.currentScript : null;
+  if (doc) doc.currentScript = { src: require("url").pathToFileURL(filename).href };
+  // The loader constant is flagged experimental and warns at the import (later,
+  // on a host turn): filter that one warning for the process, nothing else.
+  if (!process.emitWarning._apexRapier) {
+    const emit = process.emitWarning;
+    const quiet = function (w, ...rest) {
+      if (/USE_MAIN_CONTEXT_DEFAULT_LOADER/.test(String((w && w.message) || w))) return undefined;
+      return emit.call(process, w, ...rest);
+    };
+    quiet._apexRapier = true;
+    process.emitWarning = quiet;
+  }
+  try {
+    return new vm.Script(body, { filename, importModuleDynamically: loader }).runInContext(ctx);
+  } finally {
+    if (doc) doc.currentScript = was;
+  }
+}
+
 function runFile(ctx, relPath, record) {
   const src = fs.readFileSync(path.join(ROOT, relPath), "utf8");
   const t0 = performance.now();
@@ -626,7 +660,9 @@ function runFile(ctx, relPath, record) {
   // name made every twin report 0 % for the game sources it ran.
   const body = src.replace(/^const\b/gm, "var");
   const filename = path.join(ROOT, relPath);
-  const r = runScriptCached(body, ctx, { filename, root: ROOT });
+  const r = record.rapier && relPath === RAPIER_SCRIPT
+    ? runRapierScript(body, ctx, filename)
+    : runScriptCached(body, ctx, { filename, root: ROOT });
   record.scripts.push({ file: relPath, ms: +(performance.now() - t0).toFixed(1) });
   return r;
 }
@@ -652,12 +688,14 @@ async function settle(pred, maxTurns) {
  *           first manifest file — the VM's equivalent of page.addInitScript
  *   carMeshes false stubs Car3D's builders (~1 s a process; see stubCarMeshes)
  *           — OPT-IN, and never on a parity twin
+ *   rapier  true loads the vendored Rapier, so debris, crash flags and incident
+ *           takeovers run headless (see runRapierScript) — OPT-IN
  *   seat    "pin" (default: McLaren, empty parts sheet) | "shipped" (no garage
  *           seed — the GarageDefaults car a fresh browser boots)
  *   allowScriptErrors  true keeps a lazily injected script's load error in
  *           record.scripts instead of rejecting (createGame and race() reject
  *           by default; see assertScriptsLoaded)
- *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly(),
+ *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly({untilAllFlagged}),
  *             settle(pred), flushTimers(), record, bootMs, trackMs }
  */
 async function createGame(opts) {
@@ -834,11 +872,14 @@ async function createGame(opts) {
       // first finisher, not the human) and RETIRE it: a retired car is out of
       // `ranked`, so out of every traffic scan, collision and tow. Call after
       // race(); returns the removed car (null when there is no player).
-      aiOnly() {
+      // { untilAllFlagged: true } also arms __apex.flagHold(true): the race runs
+      // until every car takes the flag (or retires), not 3.5 s after the winner.
+      aiOnly(o) {
         const i = G ? G.cars.findIndex((c) => c.isPlayer || c.human) : -1;
         if (i < 0) return null;
         apex.carRole(i, { human: false });
         apex.retire(i, "bench");
+        if (o && o.untilAllFlagged) apex.flagHold(true);
         return G.cars[i];
       },
       settle,

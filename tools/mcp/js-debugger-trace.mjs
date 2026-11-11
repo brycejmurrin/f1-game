@@ -207,7 +207,6 @@ export function hitchWindowsFromCpuProfile(profile, { thresholdMs = 50, maxWindo
       url: shortUrl(n?.callFrame?.url),
       functionName: clip(n?.callFrame?.functionName || "(anon)", 120),
     });
-    if (windows.length >= maxWindows) break;
   }
   windows.sort((a, b) => b.durationMs - a.durationMs);
   return { windows: windows.slice(0, maxWindows), thresholdMs, scannedSamples: profile.samples.length };
@@ -245,18 +244,22 @@ export function summarizeHeapSample(profile, { top = 20 } = {}) {
 }
 
 /** Page-side rAF hitch sampler: install, wait, read. Used by debugger_profile action=hitch. */
-function hitchSamplerExpression({ durationMs = 2000, thresholdMs = 50, maxWindows = 20 } = {}) {
+export function hitchSamplerExpression({ durationMs = 2000, thresholdMs = 50, maxWindows = 20 } = {}) {
   const ms = Math.max(100, Math.min(30000, durationMs | 0));
   const thr = Math.max(8, Math.min(2000, thresholdMs | 0));
   const cap = Math.max(1, Math.min(50, maxWindows | 0));
   return `(()=>new Promise(resolve=>{
-    var thr=${thr}, cap=${cap}, end=performance.now()+${ms}, last=performance.now(), wins=[], frames=0;
+    var thr=${thr}, cap=${cap}, end=performance.now()+${ms}, last=performance.now(), wins=[], frames=0, hitches=0;
     function tick(t){
       frames++;
       var dt=t-last; last=t;
-      if(dt>=thr && wins.length<cap) wins.push({t:Math.round(t), durationMs:+dt.toFixed(1), sinceStartMs:Math.round(t-(end-${ms}))});
+      if(dt>=thr){
+        hitches++;
+        wins.push({t:Math.round(t), durationMs:+dt.toFixed(1), sinceStartMs:Math.round(t-(end-${ms}))});
+        if(wins.length>cap){ wins.sort(function(a,b){return b.durationMs-a.durationMs}); wins.length=cap; }
+      }
       if(t<end) requestAnimationFrame(tick);
-      else resolve({ok:true, durationMs:${ms}, thresholdMs:thr, frames:frames, windows:wins.sort(function(a,b){return b.durationMs-a.durationMs}).slice(0,cap)});
+      else resolve({ok:true, durationMs:${ms}, thresholdMs:thr, frames:frames, hitches:hitches, windows:wins.sort(function(a,b){return b.durationMs-a.durationMs}).slice(0,cap)});
     }
     requestAnimationFrame(tick);
   }))()`;

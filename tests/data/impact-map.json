@@ -155,8 +155,12 @@
       ]
     },
     "js/agent/apex-cam.js": {
+      "clearShot": [
+        "tests/unit/hooks-documented.test.mjs"
+      ],
       "hooks": [
-        "tests/unit/apex-cam-fallback.test.mjs"
+        "tests/unit/apex-cam-fallback.test.mjs",
+        "tests/unit/hooks-documented.test.mjs"
       ],
       "*": [
         "tests/unit/camera-defaults.test.mjs",
@@ -184,9 +188,11 @@
       ]
     },
     "js/agent/apex-lobby.js": {
-      "*": [
-        "tests/unit/car-presentation-canary.test.mjs",
+      "tick": [
         "tests/unit/overlay-publisher.test.mjs"
+      ],
+      "*": [
+        "tests/unit/car-presentation-canary.test.mjs"
       ]
     },
     "js/agent/apex-net.js": {
@@ -215,6 +221,7 @@
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/hooks-documented.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -248,6 +255,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
+        "tests/unit/js-debugger-trace.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
@@ -5335,6 +5343,7 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "emit": [
+        "tests/unit/harness-display.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
@@ -16143,7 +16152,8 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/vm-debug-preload.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {

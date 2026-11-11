@@ -77,7 +77,13 @@ test("toolingFast notes are comments, and the exported array is files only", () 
   }
 });
 
-test("shared benchmark policy generates wrappers only for affected Node groups and retains coverage rosters", () => {
+test("every generated node group runs through run-node-group.mjs, never a bare node --test (W25 row 13)", () => {
+  // A bare `node --test` exits 0 when a file calls process.exit(0) mid-run; 17 groups were generated that way.
+  const bare = Object.entries(doc.groups).filter(([name, def]) => def.kind === "node" && !pkg.scripts[name].startsWith(`node tools/ci/run-node-group.mjs ${name} `)).map(([n]) => n);
+  assert.deepEqual(bare, [], "regenerate with: node tools/gen/gen-test-groups.mjs");
+});
+
+test("shared benchmark policy isolates only the affected files and retains coverage rosters", () => {
   assert.equal(new Set(doc.isolatedFiles).size, doc.isolatedFiles.length);
   // audit4 E1 (2026-10-26): an isolated benchmark may live in a node group alone once the floor carve moved it out of
   // tooling-fast; it still runs alone first wherever run-node-group.mjs runs that group.
@@ -90,8 +96,10 @@ test("shared benchmark policy generates wrappers only for affected Node groups a
     ["--test", ...nodeFlags(def), ...extra, "ordinary-a", "ordinary-b"],
   ]);
   assert.equal(commandFor(def, isolated, "fixture"), "node tools/ci/run-node-group.mjs fixture ordinary-a bench-a ordinary-b bench-b --");
-  assert.equal(commandFor(def), `node --test --test-timeout=${NODE_TEST_TIMEOUT_MS} --test-concurrency=2 ordinary-a bench-a ordinary-b bench-b`);
-  assert.equal(commandFor({ kind: "node", flags: ["--test-timeout=5"], files: ["x"] }), "node --test --test-timeout=5 x", "a group-owned bound wins");
+  // W25 row 13: a group with no isolated file routes through the wrapper too (its flags are read from groups.json).
+  assert.equal(commandFor(def, [], "fixture"), "node tools/ci/run-node-group.mjs fixture ordinary-a bench-a ordinary-b bench-b --");
+  assert.throws(() => commandFor(def), /needs its manifest name/);
+  assert.deepEqual(nodeGroupPhases({ kind: "node", flags: ["--test-timeout=5"], files: ["x"] }, []), [["--test", "--test-timeout=5", "x"]], "a group-owned bound wins");
   assert.equal(commandFor({ kind: "browser", files: ["bench-a"] }, isolated), "node tools/ci/run-playwright.mjs bench-a");
   assert.equal(commandFor({ kind: "command", cmd: "unchanged" }, isolated), "unchanged");
   assert.deepEqual(nodeGroupPhases({ kind: "node", files: ["bench-a"] }, isolated), [["--test", `--test-timeout=${NODE_TEST_TIMEOUT_MS}`, "bench-a"]], "no empty pool may trigger Node test discovery");

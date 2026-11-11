@@ -30,6 +30,7 @@ import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy
 import { aliveRun } from "../ci/test-bg.mjs";
 import { CLAUDE_CATALOG, createClaudeTools } from "./apex-claude-agents.mjs";
 import { runningEndpoint } from "./debug-chrome.mjs";
+import { lockPayload, readLock, reapStaleLock as reapLockFile, writeLock } from "./job-admission.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } from "./ui-tools.mjs";
 import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
@@ -245,25 +246,15 @@ function testBgStatus() {
   return { recorded: true, mode: state.mode, running, browserRunning, runs };
 }
 
+// The lock carries its holder's start time (tools/mcp/job-admission.mjs): a live PID with another start time is a
+// reused PID, so the lock is stale; reaping moves the file aside and checks it before removing it.
 function lockInfo() {
-  if (!fs.existsSync(LOCK_PATH)) return { held: false };
-  let raw;
-  try {
-    raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
-  } catch {
-    return { held: true, stale: false, error: "unreadable" };
-  }
-  if (!isObject(raw) || !Number.isInteger(Number(raw.pid)) || Number(raw.pid) <= 0) return { held: true, stale: false, error: "invalid owner" };
-  const pid = Number(raw.pid);
-  if (!alive(pid)) return { held: false, stale: true, pid };
-  return { held: true, pid, since: raw.since || null, tool: raw.tool || null };
+  const { text: _text, ...info } = readLock(LOCK_PATH);
+  return info;
 }
 
 function reapStaleLock() {
-  const info = lockInfo();
-  if (info.stale && fs.existsSync(LOCK_PATH)) {
-    try { fs.unlinkSync(LOCK_PATH); } catch { /* ignore */ }
-  }
+  reapLockFile(LOCK_PATH);
 }
 
 function occupancyRefuse() {
@@ -326,12 +317,7 @@ export function acquireLock(tool) {
   const busy = occupancyRefuse();
   if (busy) return busy;
   fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
-  const payload = { pid: process.pid, since: Date.now(), tool };
-  try { fs.writeFileSync(LOCK_PATH, JSON.stringify(payload), { flag: "wx" }); }
-  catch (e) {
-    if (e.code === "EEXIST") return refuse("lock_held", "another tool claimed the browser lock", "Retry after the owner exits.");
-    throw e;
-  }
+  if (writeLock(LOCK_PATH, lockPayload(tool))) return refuse("lock_held", "another tool claimed the browser lock", "Retry after the owner exits.");
   const again = lockInfo();
   if (!again.held || again.pid !== process.pid) {
     return refuse(
@@ -506,13 +492,12 @@ const CATALOG = [
     name: "apex_bump_cache_check",
     week: 1,
     description: "Tree — are ?v= hashes and version.json consistent? --check --json only. Never --apply. Skill: check-changes.",
+    // bump-cache.mjs has no --since and no URL/deploy mode in the repo (strictFlags: --check --json --apply --at --root
+    // --advance --merge): since made the call exit 2 and target/url were ignored (W25). dryRun is the wrapper's own.
     inputSchema: {
       type: "object",
       properties: {
-        since: { type: "string" },
         dryRun: { type: "boolean" },
-        target: { type: "string", enum: ["local", "deploy"] },
-        url: { type: "string" },
       },
     },
   },
@@ -525,7 +510,7 @@ const CATALOG = [
   {
     name: "apex_debug_chrome",
     kind: "tree",
-    description: "Tree — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, 844x390 touch + iPhone UA by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
+    description: "Tree (status/stop); start takes the browser lock — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, 844x390 touch + iPhone UA by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses while the lock is held, a browser job runs, beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
     inputSchema: {
       type: "object",
       required: ["action"],
@@ -568,7 +553,7 @@ const CATALOG = [
         expr: { type: "string" },
         raw: { type: "boolean" },
         backend: { type: "string", enum: ["three", "webgl2", "webgpu"], description: "Pin the renderer the expr measures (default three = TLX)." },
-        vm: { type: "boolean", description: "Node VM route (tools/lib/game-vm.cjs): no Chromium, no rasters; refuses `backend`." },
+        vm: { type: "boolean", description: "Node VM route (tools/lib/game-vm.cjs): no Chromium, no rasters; refuses `backend`. The expr runs in the game's VM context and returns JSON; it is NOT a security boundary (`g` is the host-side handle)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -1715,9 +1700,7 @@ function buildArgv(name, args) {
       return argv;
     }
     case "apex_bump_cache_check": {
-      const argv = [...nodeTool("ci/bump-cache.mjs"), "--check", "--json"];
-      if (args.since) argv.push("--since", String(args.since));
-      return argv;
+      return [...nodeTool("ci/bump-cache.mjs"), "--check", "--json"];
     }
     case "apex_unit_test": {
       const file = String(args.file || "");
@@ -1821,6 +1804,7 @@ function buildArgv(name, args) {
           'Pass {"base":"HEAD~1","id":"monza"}. Never omit BASE — a clean tree would pass vacuously.',
         );
       }
+      refuseSelfParity(args);
       const argv = [...nodeTool("track/graph-parity.cjs")];
       if (args.all) argv.push("--all");
       else {
@@ -1849,6 +1833,23 @@ function buildArgv(name, args) {
     default:
       throw new Error(`no argv builder for ${name}`);
   }
+}
+
+/** graph-parity loads js/ and tools/manifest.cjs from BASE and from the working tree. When BASE is exactly that
+ *  tree (base HEAD on a clean checkout) it compares the tree with itself and always passes: refuse it here, where
+ *  the explicit BASE env would otherwise bypass the CLI's own clean-tree guard. A ref git cannot resolve is left
+ *  to the CLI, which reports it. Checked only when the CLI would really run: a dryRun or mock call shows the plan. */
+const PARITY_SCOPE = ["js", "tools/manifest.cjs"];
+export function selfParity(base, root = ROOT) {
+  const diff = spawnSync("git", ["diff", "--quiet", String(base), "--", ...PARITY_SCOPE], { cwd: root, encoding: "utf8" });
+  if (diff.status !== 0) return false;   // 1 = differs; 128 = not a ref (the CLI reports it)
+  const untracked = spawnSync("git", ["ls-files", "--others", "--exclude-standard", "--", ...PARITY_SCOPE], { cwd: root, encoding: "utf8" });
+  return untracked.status === 0 && !untracked.stdout.trim();
+}
+function refuseSelfParity({ base, dryRun }) {
+  if (dryRun || mockMode() || !selfParity(base)) return;
+  badArgs(`apex_graph_parity: base ${JSON.stringify(String(base))} is the working tree itself (no diff under js/ or tools/manifest.cjs), so parity would compare the tree with itself and pass vacuously`,
+    'Pass the ref the change is measured against, e.g. {"base":"origin/claude/f1-game-project-26h3ng","id":"monza"}, or the parent of the commit under test.');
 }
 
 function extraEnv(name, args) {
@@ -2582,6 +2583,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     // 2026-10-05): the whole fleet runs as a background job instead.
     const gate = gateTreeArgs(args);
     if (gate) return gate;
+    try { refuseSelfParity(args); } catch (e) { if (e.refuse) return e.refuse; throw e; }
     const r = extras().handlers.apex_job_start(   // sync: returns the jobId at once
       { kind: "graph_parity_all", base: args.base, dryRun: args.dryRun });
     const body = JSON.parse(r.content[0].text);
@@ -2623,8 +2625,11 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (pinned) return pinned;
   const env = extraEnv(name, args);
 
+  // apex_debug_chrome start launches Chromium, so it takes the browser lock and every occupancy check (a running
+  // browser job included). status and stop launch nothing and stay tree: stop must work while the browser is up.
+  const launchesBrowser = name === "apex_debug_chrome" && args.action === "start";
   if (args.dryRun) {
-    if (kind === "browser" && !mockMode()) {
+    if ((kind === "browser" || launchesBrowser) && !mockMode()) {
       const busy = occupancyRefuse();
       if (busy) return busy;
     }
@@ -2633,6 +2638,12 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   const hud = name === "apex_hud_shot" || name === "apex_hud_survey" || name === "apex_hud_mock";
   if (mockMode()) return name === "apex_hud_mock" ? hudMockMock(argv) : hud ? hudMock(name, argv, args) : mockSuccess(name, argv, env);
+
+  if (launchesBrowser) {
+    const took = acquireLock(name);
+    if (took) return took;
+    return runSpawn(argv, { timeoutMs: 120000, env, signal }).finally(releaseLock);
+  }
 
   if (hud && args.async !== false) {
     // Host MCP calls die at ~60–120 s; a cell is ~2 min and the quick matrix
@@ -2962,22 +2973,37 @@ function extras() {
 // 4,096 chars, code.claude.com/docs/en/mcp), so they carry the question → tool map a cold agent lacked
 // (MCP-REFINE-2026-10-30: it read pick_tests' groups as specs). Vendor tools are reads only (2026-11-03): no agent
 // session starts or messages another agent through Bryce's personal logins (docs/AGENT-SURFACE.md §Per vendor).
-export const ROUTES = [
+const ROUTE_PROSE = [
   "apex-tools: local CLI wraps (apex_*); the tools/ CLIs do the work, this server pins safe flags. Map: docs/AGENT-SURFACE.md.",
   "VENDOR READS ONLY — Cursor agent list/status/transcript: apex_cursor_agents; Claude CLI auth and local sessions: apex_claude_agents. " +
     "Neither sends, launches or steers an agent; GitHub (PR body, labels, comments) is the bus.",
   "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the ONE pre-push spec); " +
     "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; flyby framing: apex_frame_report; " +
     "one __apex expr without a browser: apex_eval {vm:true}; ?v= hashes: apex_bump_cache_check; TrackGraph parity: apex_graph_parity; " +
-    "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor; offline viewer page: apex_viewer. " +
+    "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor; offline viewer page: apex_viewer; " +
+    "plans with no browser: garage shots apex_garage_plan, a UI scenario apex_ui_mission_plan; two saved inspections: apex_ui_diff. " +
     "Plain CLIs (no wrap): circuit health `node tools/track/audit-circuit.cjs <id> --json`, car parts `node tools/car/parts-ladder.mjs --json`, " +
     "saved profiles `node tools/perf/query.mjs <file>`, shot targets `node tools/shot/shot-survey.mjs --list-locations --track <id>`.",
   "BROWSER (apex_status first; one browser at a time; holds the lock) — scene shots: apex_shot, apex_shot_survey; race HUD: apex_hud_mock (fastest), " +
     "apex_hud_shot, apex_hud_survey; menu screens: apex_ui_shot, apex_ui_fit, apex_ui_inspect; live __apex: apex_eval, apex_agent, or a persistent apex_track session; " +
-    "garage: apex_garage; frame budget: apex_profile. Minutes-long work: apex_job_start, then apex_job_status {wait}.",
+    "garage: apex_garage; frame budget: apex_profile; the shared debug Chromium js-debugger attaches to: apex_debug_chrome. " +
+    "Minutes-long work: apex_job_start, then apex_job_status {wait}; stop one: apex_job_cancel.",
   "Resources: apex://start-here (this map), apex://debug-hooks (the __apex reference by section). Never github.io (deploy-research subagent). " +
     "chrome_* is the chrome-devtools MCP. HTTP 127.0.0.1:3713 only.",
-].join("\n");
+];
+/** The instructions name EVERY tool in the table: the prose routes questions to tools, and a tool it does not name
+ *  is appended with the gist of its own catalog description, so a new tool is never missing (W25: 5 of 34 were). */
+export function routesFor(catalog, prose = ROUTE_PROSE) {
+  const text = prose.join("\n");
+  const missing = catalog.filter((t) => !new RegExp(`\\b${t.name}\\b`).test(text));
+  if (!missing.length) return text;
+  const gist = (d) => {
+    const s = String(d || "").replace(/^[^—]*—\s*/, "").split(/[.;:](?:\s|$)/)[0].trim();
+    return s.length > 80 ? `${s.slice(0, s.lastIndexOf(" ", 80))}…` : s;
+  };
+  return `${text}\nAlso: ${missing.map((t) => `${t.name} (${gist(t.description)})`).join("; ")}.`;
+}
+export const ROUTES = routesFor(CATALOG);
 
 // MCP resources: the references an agent reads before calling __apex hooks, served without booting anything.
 // DEBUG-HOOKS.md is ~310 KB, past every client's result cap in one read, so it is served by `## ` section

@@ -90,11 +90,11 @@ test("5: S1+S2+S3 equals the lap time — S3 closes at the line, not a whole ste
     g.apex.setInput({ throttle: true, steer: 0 });
     const T = G.track.total, secs = g.apex.info().sectors;
     const cross = (frac, lapTime) => {      // jump 5 m short of a line, then step across it with a 0.1 s step (~6 m)
-      g.apex.jump(frac - 5 / T, 60, 0); p.lapTime = lapTime;
+      g.apex.jump(frac - 5 / T, 60, 0, { keepLap: true }); p.lapTime = lapTime;   // the fixture fabricates the lap
       const lap = p.lap, idx = G.sectorIdx;
       for (let i = 0; i < 50 && p.lap === lap && G.sectorIdx === idx; i++) g.apex.step(0.1, 1);
     };
-    g.apex.jump((T - 8) / T, 60, 0); p.lap = 1; p.lapTime = 0;      // out-lap → the flying lap starts at the line
+    g.apex.jump((T - 8) / T, 60, 0, { keepLap: true }); p.lap = 1; p.lapTime = 0;      // out-lap → the flying lap starts at the line
     for (let i = 0; i < 50 && p.lap === 1; i++) g.apex.step(0.1, 1);
     cross(secs[0], 25); cross(secs[1], 55); cross(1, 88);
     assert.equal(p.lap, 3, "the flying lap closed");

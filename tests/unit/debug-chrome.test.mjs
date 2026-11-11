@@ -2,7 +2,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chromeArgs, refusal, stop, owns, DEVICES, headlessGamePlan, discoveryFile } from "../../tools/mcp/debug-chrome.mjs";
+import nodeFs from "node:fs";
+import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromeArgs, refusal, stop, owns, DEVICES, headlessGamePlan, discoveryFile, browserOccupant } from "../../tools/mcp/debug-chrome.mjs";
+import { readLock, lockPayload, reapStaleLock } from "../../tools/mcp/job-admission.mjs";
+import { processBirth } from "../../tools/mcp/job-admission.mjs";
+const REPO = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("discovery honors an absolute XDG config root without redirecting home", () => {
   assert.equal(discoveryFile({ configHome: "/workspace/runtime-config", home: "/readonly/home" }), "/workspace/runtime-config/chromium/DevToolsActivePort");
@@ -80,4 +86,72 @@ test("browser-use discovery file: Chrome's port + path format, removed only whil
   assert.equal(runningEndpoint({ pids, read: () => "chrome --remote-debugging-port=9222" }), "http://127.0.0.1:9222");
   assert.equal(runningEndpoint({ pids, read: () => null }), null);
   assert.equal(runningEndpoint({ pids: null }), null);
+});
+
+// ── One browser at a time (W25): the lock carries its holder's start time, reaping is race-safe, and
+// apex_debug_chrome start honours the lock and running browser jobs. Node processes only; nothing is launched.
+const tmpDir = (prefix) => { nodeFs.mkdirSync(nodePath.join(REPO, "artifacts"), { recursive: true }); return nodeFs.mkdtempSync(nodePath.join(REPO, "artifacts", prefix)); };
+test("browser lock: a reused PID is stale, a live stamped holder is held, a legacy lock falls back to liveness", () => {
+  const dir = tmpDir("browser-lock-"), lock = nodePath.join(dir, "apex-browser.lock");
+  try {
+    const mine = lockPayload("t");
+    assert.equal(typeof mine.birth, "string");
+    nodeFs.writeFileSync(lock, JSON.stringify(mine));
+    assert.equal(readLock(lock).held, true);
+    nodeFs.writeFileSync(lock, JSON.stringify({ ...mine, birth: mine.birth.replace(/[^:]+$/, "1") }));
+    const reused = readLock(lock);
+    assert.equal(reused.held, false); assert.equal(reused.stale, true, "same PID, other start time: the holder is gone");
+    nodeFs.writeFileSync(lock, JSON.stringify({ pid: process.pid, tool: "legacy" }));
+    assert.equal(readLock(lock).held, true, "no birth: liveness only");
+    nodeFs.writeFileSync(lock, JSON.stringify({ pid: 2147483646, tool: "dead" }));
+    assert.equal(readLock(lock).stale, true);
+  } finally { nodeFs.rmSync(dir, { recursive: true, force: true }); }
+});
+test("browser lock: reaping never removes a lock a new owner wrote after the stale one was judged", () => {
+  const dir = tmpDir("browser-lock-"), lock = nodePath.join(dir, "apex-browser.lock");
+  try {
+    const fresh = JSON.stringify({ pid: process.pid, tool: "new-owner", since: Date.now() });
+    nodeFs.writeFileSync(lock, JSON.stringify({ pid: 2147483646, tool: "dead" }));
+    // Between the stale read and the removal, another reaper clears it and a new owner takes the lock.
+    const alive = (pid) => { if (pid === 2147483646) { nodeFs.rmSync(lock); nodeFs.writeFileSync(lock, fresh); return false; } return true; };
+    const r = reapStaleLock(lock, { alive });
+    assert.equal(r.reaped, false);
+    assert.equal(nodeFs.readFileSync(lock, "utf8"), fresh, "the new owner's lock survives");
+    assert.deepEqual(nodeFs.readdirSync(dir), ["apex-browser.lock"], "no aside file left");
+    nodeFs.writeFileSync(lock, JSON.stringify({ pid: 2147483646, tool: "dead" }));
+    assert.equal(reapStaleLock(lock).reaped, true);
+    assert.equal(nodeFs.existsSync(lock), false);
+  } finally { nodeFs.rmSync(dir, { recursive: true, force: true }); }
+});
+test("debug-chrome start refuses while another holder has the lock or a browser job runs", () => {
+  const dir = tmpDir("debug-chrome-occ-");
+  const lockPath = nodePath.join(dir, "apex-browser.lock"), jobDir = nodePath.join(dir, "jobs");
+  nodeFs.mkdirSync(jobDir);
+  try {
+    assert.equal(browserOccupant({ lockPath, jobDir, ppid: 1 }), null);
+    nodeFs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, birth: processBirth(process.pid), tool: "apex_shot" }));
+    assert.equal(browserOccupant({ lockPath, jobDir, ppid: 1 }), `the browser lock (scratch/apex-browser.lock) is held by pid ${process.pid} (apex_shot)`);
+    assert.equal(browserOccupant({ lockPath, jobDir, ppid: process.pid }), null, "the apex_debug_chrome call that spawned this CLI holds it");
+    nodeFs.rmSync(lockPath);
+    const id = "hud_shot-t1-1-000000000001";
+    const job = { id, kind: "hud_shot", state: "running", browser: true, pid: process.pid, birth: processBirth(process.pid) };
+    nodeFs.writeFileSync(nodePath.join(jobDir, `${id}.json`), JSON.stringify(job));
+    assert.equal(browserOccupant({ lockPath, jobDir, ppid: 1 }), `browser job hud_shot-t1-1-000000000001 is running (pid ${process.pid}); apex_job_status / apex_job_cancel it first`);
+    nodeFs.writeFileSync(nodePath.join(jobDir, `${id}.json`), JSON.stringify({ ...job, birth: job.birth.replace(/[^:]+$/, "1") }));
+    assert.equal(browserOccupant({ lockPath, jobDir, ppid: 1 }), null, "a reused PID is not a running job");
+    nodeFs.writeFileSync(nodePath.join(jobDir, `${id}.json`), JSON.stringify(job));
+    nodeFs.writeFileSync(nodePath.join(jobDir, `${id}.exit`), "0");
+    assert.equal(browserOccupant({ lockPath, jobDir, ppid: 1 }), null, "a recorded exit frees it");
+  } finally { nodeFs.rmSync(dir, { recursive: true, force: true }); }
+});
+test("apex_debug_chrome start takes the browser lock; status and stop stay tree", () => {
+  const lock = nodePath.join(REPO, "scratch", "apex-browser.lock");
+  nodeFs.mkdirSync(nodePath.dirname(lock), { recursive: true });
+  nodeFs.writeFileSync(lock, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
+  try {
+    const call = (args) => JSON.parse(spawnSync(process.execPath, [nodePath.join(REPO, "tools/mcp/apex-tools-mcp.mjs"), "call", "apex_debug_chrome", JSON.stringify(args)],
+      { cwd: REPO, encoding: "utf8", env: { ...process.env, APEX_MCP_MOCK: "0", APEX_MCP_PS: "" }, timeout: 15000 }).stdout);
+    assert.equal(call({ action: "start", dryRun: true }).error, "lock_held");
+    for (const action of ["status", "stop"]) assert.equal(call({ action, dryRun: true }).ok, true, action);
+  } finally { nodeFs.rmSync(lock, { force: true }); }
 });

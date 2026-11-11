@@ -10,13 +10,19 @@ const integer = (description, minimum = 1, maximum = 1000000) => ({ type: "integ
 const endpoint = str("Loopback Chrome debugging origin, e.g. http://127.0.0.1:9222");
 const token = str("Current pause.token from debugger_state; invalid after resume, step, reload or detach");
 const expression = str("JavaScript expression", 16000);
-// destructiveHint only where the call can lose page state or run arbitrary code: detach (drops owned
-// breakpoints, resumes), control (cancel terminates a running script), evaluate/run (JS can mutate the page).
-// Breakpoints, logpoints and exception pauses only change debugger state.
-const DESTRUCTIVE = new Set(["debugger_detach", "debugger_control", "debugger_evaluate", "debugger_run", "debugger_break", "debugger_collect", "debugger_node_test", "debugger_profile"]);
+// destructiveHint where the call can lose page state or run page JavaScript: detach (drops owned
+// breakpoints, resumes), control (cancel terminates a running script), evaluate/run (JS can mutate the page),
+// breakpoint (its condition is JavaScript evaluated in the frame on every hit), logpoint (its expression is
+// evaluated in the frame on every hit) and instances (evaluates the constructor expression).
+// Removing a breakpoint and exception-pause configuration only change debugger state.
+const DESTRUCTIVE = new Set(["debugger_detach", "debugger_control", "debugger_evaluate", "debugger_run", "debugger_break", "debugger_collect", "debugger_node_test", "debugger_profile",
+  "debugger_breakpoint", "debugger_logpoint", "debugger_instances"]);
+// Breakpoint/logpoint URL guidance: the shell tags scripts ?v=dev and deferred loads use other ?v= values, so a
+// URL WITH a query matches only that exact load; a query-less URL or a bare repo path matches any ?v=.
+const SCRIPT_URL = "Script URL WITHOUT the ?v= query (matches the script under any query), or a bare repo path such as js/agent/apex.js (matched by path suffix). A URL that includes a query matches only that exact query; on a Node target a repo path";
 const obj = (properties, required = []) => ({ type: "object", properties, required, additionalProperties: false });
 const arr = (items, maxItems, description) => ({ type: "array", items, maxItems, description });
-const location = { url: str("Script URL. Without a query it matches any ?v=…; a bare path (js/agent/apex.js) matches by suffix; on a Node target a repo path", 1000),
+const location = { url: str(SCRIPT_URL, 1000),
   line: integer("ONE-based line"), column: integer("ONE-based column") };
 const IDEMPOTENT = new Set(["debugger_detach", "debugger_breakpoint", "debugger_remove_breakpoint", "debugger_exceptions"]);
 const def = (name, description, properties = {}, required = [], readOnlyHint = false) => ({ name, description,
@@ -33,8 +39,8 @@ export const TOOLS = [
   def("debugger_source", "Read a bounded script source excerpt. Lines and columns in this MCP are ONE-based.",
     { scriptId: str("Script id from debugger_scripts or a stack frame (or pass url)"), url: str("Exact script URL instead of scriptId; newest parse wins", 1000),
       startLine: integer("First line"), endLine: integer("Last line (alternative to count)"), count: integer("Line count, max 200", 1, 200) }, [], true),
-  def("debugger_breakpoint", "Set a URL breakpoint, optionally conditional. ONE-based line/column; URL breakpoints survive reload. Conditions execute JavaScript. Setting the same location again replaces it. Empty locations + warning = wrong URL or script not parsed.",
-    { url: str("Exact script URL, including query if present"), line: integer("Source line"), column: integer("Source column"), condition: { type: "string", maxLength: 4000 } }, ["url", "line"]),
+  def("debugger_breakpoint", "Set a URL breakpoint, optionally conditional. ONE-based line/column; URL breakpoints survive reload. Pass the URL without its ?v= query (or a bare repo path) so a reload with a different ?v= still binds. Conditions execute page JavaScript on every hit. Setting the same location again replaces it. Empty locations + warning = wrong URL or script not parsed.",
+    { url: str(SCRIPT_URL, 1000), line: integer("Source line"), column: integer("Source column"), condition: { type: "string", maxLength: 4000, description: "JavaScript evaluated in the frame on every hit; pauses when truthy" } }, ["url", "line"]),
   def("debugger_remove_breakpoint", "Remove a breakpoint created by this debugger session.", { id: str("Breakpoint id") }, ["id"]),
   def("debugger_control", "Pause on the next JS statement, resume, step over/into/out, or cancel (terminate the running script). Steps and pause wait up to waitMs (default 1500) for the new pause, so the reply carries the NEW token; a step may finish without pausing.",
     { action: { type: "string", enum: ["pause", "resume", "over", "into", "out", "cancel"] }, pauseToken: token, waitMs: integer("Wait for the next pause after a step/pause (default 1500; 0 = do not wait)", 0, 10000) }, ["action"]),
@@ -43,8 +49,8 @@ export const TOOLS = [
     { pauseToken: token, frame: integer("Zero-based frame index (first 10 frames retained)", 0, 9), expression, allowSideEffects: { type: "boolean" } }, ["pauseToken", "expression"]),
   def("debugger_properties", "Read own property descriptors without invoking getters. Object must belong to the current pause.",
     { pauseToken: token, objectId: str("Scope/evaluation/property objectId"), offset: integer("Property offset", 0), limit: integer("Page size", 1, 100) }, ["pauseToken", "objectId"], true),
-  def("debugger_logpoint", "Non-pausing breakpoint: records `expression` (evaluated in the frame) on each hit into a bounded page-side ring. For hot loops (NaN tracing). Read with debugger_logpoint_read.",
-    { url: str("Exact script URL"), line: integer("Source line"), column: integer("Source column"), expression: str("Expression to record, e.g. `speed`", 1000),
+  def("debugger_logpoint", "Non-pausing breakpoint: records `expression` (page JavaScript evaluated in the frame) on each hit into a bounded page-side ring. For hot loops (NaN tracing). Read with debugger_logpoint_read.",
+    { url: str(SCRIPT_URL, 1000), line: integer("Source line"), column: integer("Source column"), expression: str("Expression to record, e.g. `speed`", 1000),
       maxHits: integer("Ring size (default 100)", 1, 300), maxChars: integer("Max chars per value (default 200)", 10, 500) }, ["url", "line", "expression"]),
   def("debugger_logpoint_read", "Read (and optionally clear) logpoint hits: total hit count plus the newest `limit` retained values. Page must be running.",
     { id: str("Logpoint id (default: all)", 20), clear: { type: "boolean" }, limit: integer("Newest values per logpoint (default 50)", 1, 300) }, [], false),
