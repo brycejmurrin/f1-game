@@ -890,6 +890,10 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   v.field(() => 1000);
   const rivals = G.cars.filter((c) => !c.isPlayer).length;
   assert.ok(rivals >= 10, "a real field");
+  // The race warm builds each field car's decal mesh under the loading cover, so the prime frame only draws it.
+  const warmed0 = calls.getCarDecalMesh || 0;
+  carDraw.warmCarAssets();
+  assert.ok((calls.getCarDecalMesh || 0) - warmed0 >= G.cars.length, "the race warm fetches every field car's decal mesh");
   warming = true;
   assert.equal(prime(), 0, "a present held by a warm renders nothing: wait");
   warming = false;
