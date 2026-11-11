@@ -143,7 +143,7 @@ not tabled: they move with every edit and nothing reads them.
 | `fb-` | `tuner.css` | — |  |
 | `flag-` | `hud.css` | — |  |
 | `hud-` | `hud.css` | `helmet-visor.css`, `overlays.css`, `responsive.css`, `tokens.css`, `touch-controls.css`, `watch-transport.css` |  |
-| `in-` | `overlays.css` | `hud.css`, `tokens.css`, `touch-controls.css` |  |
+| `in-` | `overlays.css` | `hud.css`, `loading.css`, `tokens.css`, `touch-controls.css` |  |
 | `input-` | `hud.css` | — | pause input review and its static chart |
 | `ld-` | `loading.css` | — |  |
 | `limits-` | `hud.css` | — |  |
