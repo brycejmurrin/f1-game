@@ -101,6 +101,19 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.pr != '' && format('refs/pull/{0}/merge', inputs.pr) || '' }}
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # THE PLAN RECORD (#5480): what this shard will run, as an `apex-group-plan` annotation, written BEFORE any
+      # spec or test helper executes. A ready verdict counts only units in it (tools/ci/dropped-group-runs.mjs).
+      - name: Record this shard's plan
+        env:
+          APEX_FAIL_ON_FLAKY: 1
+          APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
+          GL: ${{ inputs.gl }}
+          GROUP: ${{ inputs.group }}
+          PLAN: ${{ inputs.plan }}
+          SHARD: ${{ matrix.shard }}
+          TOTAL: ${{ matrix.total }}
+          WORKERS: ${{ inputs.workers }}
+        run: node tools/ci/remote-group.mjs --plan-record
       # Cached Chromium (not the Playwright Docker image): restore ≈ install on
       # Linux, and Mesa/Xvfb still need the host runner — see
       # docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md §Docker.

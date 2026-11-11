@@ -15,7 +15,10 @@
  * each refusal has a unit test in tests/unit/dropped-group-runs.test.mjs):
  *   1. Every dropped spec file is named, and the names agree with the plan's dropped count.
  *   2. Some browser-group.yml run on the SAME head sha ran it: completed, success, attempt 1, and every job of that
- *      run passed and left a readable `apex-group` record (remote-group.mjs --run-shard writes one per shard).
+ *      run passed and left exactly one readable `apex-group-plan` record (its own step, written BEFORE any spec or
+ *      helper runs: what the shard will run) and exactly one `apex-group` end record (remote-group.mjs --run-shard:
+ *      the units whose junit shows a pass). The end record may claim only units in the plan, the plan only specs of
+ *      the dispatched group; a second record of either kind (something a test printed) refuses the run.
  *   3. That record tested the PR's MERGE ref (remote-group passes `pr`; the shard reads the merge commit's parents):
  *      record head == this PR head, record base == the base THIS run's merge commit sits on (the same commit pair,
  *      so the group run proves what this run's own legs would have; #5407). A branch-head run (base=none) never counts.
@@ -39,6 +42,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const GROUP_RECORD_TITLE = "apex-group";
+export const GROUP_PLAN_TITLE = "apex-group-plan";
 export const GROUP_WORKFLOW_PATH = ".github/workflows/browser-group.yml";
 const SHA = /^[0-9a-f]{40}$/;
 const UNIT_RE = /^(tests\/[A-Za-z0-9_./-]+\.spec\.(?:js|mjs|ts))(?:#([1-9]\d?)\/([1-9]\d?))?$/;
@@ -50,6 +54,22 @@ export function droppedSpecs(sel) {
     for (const s of (sel && sel[k]) || []) if (s && typeof s.file === "string") out.add(s.file);
   }
   return [...out].sort();
+}
+
+/** Spec files the junit shows PASSED: at least one testcase that is neither failed, errored nor skipped, and no
+ *  failed or errored one. Classnames are `specs/x.spec.js` (testDir ./tests); normalised to tests/specs/... */
+export function passedSpecFiles(xml) {
+  const pass = new Set(), bad = new Set();
+  for (const m of String(xml || "").matchAll(/<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g)) {
+    const cn = /\bclassname="([^"]*)"/.exec(m[1] || "");
+    if (!cn) continue;
+    let file = cn[1].split(" ")[0].replace(/^\.\//, "");
+    if (!file.startsWith("tests/")) file = "tests/" + file;
+    const body = m[2] || "";
+    if (/<(?:failure|error)\b/.test(body)) bad.add(file);
+    else if (!/<skipped\b/.test(body)) pass.add(file);
+  }
+  return new Set([...pass].filter((f) => !bad.has(f)));
 }
 
 /** One shard's record line. `units`: spec paths or `path#j/k` pieces it ran. */
@@ -121,9 +141,9 @@ export function decide(q) {
   for (const r of mine) {
     const id = String(r.id);
     const t = parseRunTitle(r.display_title || r.name);
-    const clean = r.status === "completed" && r.conclusion === "success" && (Number(r.run_attempt) || 1) === 1;
+    const clean = r.status === "completed" && r.conclusion === "success" && Number(r.run_attempt) === 1;   // a missing attempt is not "first"
     const specs = t ? q.groupSpecs(t.group) : null;
-    const state = `${r.status}/${r.conclusion || "-"}, attempt ${Number(r.run_attempt) || 1}`;
+    const state = `${r.status}/${r.conclusion || "-"}, attempt ${r.run_attempt ?? "?"}`;
     if (!clean && r.status !== "completed" && (!specs || dropped.some((s) => specs.includes(s)))) live = true;
     if (!clean) {
       // A red, cancelled, live or re-run group run of a dropped spec refuses it. Unknown contents refuse them all.
@@ -141,13 +161,30 @@ export function decide(q) {
     let why = "";
     for (const j of jobs) {
       if (j.conclusion !== "success") { why = `job ${j.name} is ${j.conclusion}`; break; }
-      const rec = parseGroupRecord((q.annotationsOf(String(j.id)) || []).find((a) => a && a.title === GROUP_RECORD_TITLE)?.message);
+      // EXACTLY ONE record per job (review S1, 2026-11-11): any process in the shard step (a spec's console.log, a
+      // helper) can print a `::notice title=apex-group::` line, so a second one means the record cannot be trusted.
+      // The PLAN record (written by its own step before any spec ran) bounds what the END record may claim: an
+      // annotation printed during the run is a claim, the plan written before it is the evidence of what was run.
+      const notesOf = q.annotationsOf(String(j.id)) || [];
+      const recs = notesOf.filter((a) => a && a.title === GROUP_RECORD_TITLE);
+      const plans = notesOf.filter((a) => a && a.title === GROUP_PLAN_TITLE);
+      if (recs.length > 1 || plans.length > 1) { why = `job ${j.name} has ${recs.length} ${GROUP_RECORD_TITLE} and ${plans.length} ${GROUP_PLAN_TITLE} records (something besides the shard steps printed one)`; break; }
+      const rec = parseGroupRecord(recs[0]?.message);
+      const plan = parseGroupRecord(plans[0]?.message);
       if (!rec) { why = `job ${j.name} left no readable ${GROUP_RECORD_TITLE} record`; break; }
+      if (!plan) { why = `job ${j.name} left no readable ${GROUP_PLAN_TITLE} record (its plan, written before the specs ran)`; break; }
+      if (plan.head !== rec.head || plan.base !== rec.base || plan.gl !== rec.gl || plan.group !== rec.group) { why = `job ${j.name}'s plan and end records disagree`; break; }
+      const outside = rec.units.find((u) => !plan.units.includes(u));
+      if (outside) { why = `job ${j.name}'s end record claims ${outside}, which its plan did not contain`; break; }
       if (!rec.ok) { why = `job ${j.name}'s record says it failed`; break; }
       if (rec.head !== q.head) { why = `job ${j.name} tested head ${rec.head.slice(0, 12)}`; break; }
       if (rec.base === "none") { why = "it tested the branch head, not the PR merge ref (dispatch it with remote-group.mjs, which passes the PR)"; break; }
       if (rec.base !== q.base) { why = `it tested base ${rec.base.slice(0, 12)}, this run tests ${q.base.slice(0, 12)}`; break; }
       if (rec.gl !== "llvmpipe" || rec.flaky !== "fail" || rec.group !== t.group) { why = `job ${j.name}'s record is gl=${rec.gl} flaky=${rec.flaky} group=${rec.group}`; break; }
+      // Every unit must be a spec of the group the run was dispatched for (#5480: "a spec the group did not contain").
+      const own = specs || [];
+      const alien = plan.units.find((u) => !own.includes(UNIT_RE.exec(u)[1]));
+      if (alien) { why = `job ${j.name}'s plan names ${alien}, which test:${t.group} does not contain`; break; }
       got.push(...rec.units);
     }
     if (why) { notes.push(`run ${id}: ${why}`); continue; }

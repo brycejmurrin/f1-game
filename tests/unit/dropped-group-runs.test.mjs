@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { parse as parseYAML } from "yaml";
 import {
-  decide, droppedSpecs, groupRecordLine, parseGroupRecord, parseRunTitle, covers, GROUP_RECORD_TITLE, GROUP_WORKFLOW_PATH,
+  decide, droppedSpecs, groupRecordLine, parseGroupRecord, parseRunTitle, covers, passedSpecFiles, GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, GROUP_WORKFLOW_PATH,
 } from "../../tools/ci/dropped-group-runs.mjs";
 import { runShardArgs, testedPair, prInput } from "../../tools/ci/remote-group.mjs";
 import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
@@ -23,9 +23,15 @@ function world(over = {}) {
   const run = { id: 300, path: GROUP_WORKFLOW_PATH, event: "workflow_dispatch", head_sha: HEAD, status: "completed", conclusion: "success", run_attempt: 1, display_title: "browser group ui on cursor/x (llvmpipe)", ...over.run };
   const rec = (o = {}) => ({ head: HEAD, base: BASE, gl: "llvmpipe", flaky: true, group: "ui", ok: true, ...o });
   const jobs = over.jobs || [{ id: 1, name: "ui (1/2)", conclusion: "success" }, { id: 2, name: "ui (2/2)", conclusion: "success" }];
+  // Each job: its plan record (what it would run, written before any spec) and its end record (what passed).
+  const pair = (units, o = {}, p = {}) => [
+    { title: GROUP_PLAN_TITLE, message: groupRecordLine(rec({ units, ...o, ...p })) },
+    { title: GROUP_RECORD_TITLE, message: groupRecordLine(rec({ units, ...o })) },
+  ];
+  const u1 = over.rec1?.units || [UI], u2 = over.rec2?.units || ["tests/specs/audio-smoke.spec.js"];
   const notes = over.notes || {
-    1: [{ title: GROUP_RECORD_TITLE, message: groupRecordLine(rec({ units: [UI], ...over.rec1 })) }],
-    2: [{ title: GROUP_RECORD_TITLE, message: groupRecordLine(rec({ units: ["tests/specs/audio-smoke.spec.js"], ...over.rec2 })) }],
+    1: pair(u1, over.rec1, over.plan1),
+    2: pair(u2, over.rec2, over.plan2),
   };
   return {
     dropped: [UI], count: "1", head: HEAD, base: BASE,
@@ -114,10 +120,47 @@ test("refuse: another base (the deploy tip moved between the group run and this 
 test("refuse: an unreadable or missing record, a failed shard record, a red job, unreadable jobs", () => {
   assert.equal(decide(world({ notes: { 1: [{ title: GROUP_RECORD_TITLE, message: "garbage" }], 2: [] } })).accept, false);
   assert.equal(decide(world({ notes: { 1: [] } })).accept, false);
+  const endOnly = { title: GROUP_RECORD_TITLE, message: groupRecordLine({ head: HEAD, base: BASE, gl: "llvmpipe", flaky: true, group: "ui", ok: true, units: [UI] }) };
+  const noPlan = decide(world({ notes: { 1: [endOnly], 2: [] }, jobs: [{ id: 1, name: "ui (1/1)", conclusion: "success" }] }));
+  assert.equal(noPlan.accept, false, "an end record without the plan record written before the specs ran");
+  assert.match(noPlan.why, /no readable apex-group-plan record/);
   assert.equal(decide(world({ rec1: { units: [UI], ok: false } })).accept, false);
   assert.equal(decide(world({ jobs: [{ id: 1, name: "ui (1/2)", conclusion: "failure" }] })).accept, false);
   assert.equal(decide(world({ q: { jobsOf: () => null } })).accept, false);
   assert.equal(decide(world({ q: { runs: null } })).accept, false, "a runs lookup failure");
+});
+
+test("refuse: a second record of either kind (a spec or helper printed one), an end claim outside the plan, a plan outside the group", () => {
+  const rec = (o) => groupRecordLine({ head: HEAD, base: BASE, gl: "llvmpipe", flaky: true, group: "ui", ok: true, units: [UI], ...o });
+  const one = [{ id: 1, name: "ui (1/1)", conclusion: "success" }];
+  const twoEnd = decide(world({ jobs: one, notes: { 1: [{ title: GROUP_PLAN_TITLE, message: rec() }, { title: GROUP_RECORD_TITLE, message: rec() }, { title: GROUP_RECORD_TITLE, message: rec() }] } }));
+  assert.equal(twoEnd.accept, false);
+  assert.match(twoEnd.why, /2 apex-group and 1 apex-group-plan records/);
+  const twoPlan = decide(world({ jobs: one, notes: { 1: [{ title: GROUP_PLAN_TITLE, message: rec() }, { title: GROUP_PLAN_TITLE, message: rec() }, { title: GROUP_RECORD_TITLE, message: rec() }] } }));
+  assert.equal(twoPlan.accept, false);
+  // The orchestrator's case: a run whose end annotation names a spec its plan did not contain.
+  const claim = decide(world({ rec1: { units: [UI] }, plan1: { units: ["tests/specs/audio-smoke.spec.js"] } }));
+  assert.equal(claim.accept, false);
+  assert.match(claim.why, /claims tests\/specs\/ui-scale\.spec\.js, which its plan did not contain/);
+  // Review S1's fixture: a green `hooks` run whose records claim ui-scale ran. ui-scale is not in test:hooks.
+  const hooks = decide(world({
+    run: { display_title: "browser group hooks on cursor/x (llvmpipe)" }, jobs: one,
+    notes: { 1: [{ title: GROUP_PLAN_TITLE, message: rec({ group: "hooks" }) }, { title: GROUP_RECORD_TITLE, message: rec({ group: "hooks" }) }] },
+  }));
+  assert.equal(hooks.accept, false);
+  assert.match(hooks.why, /test:hooks does not contain/);
+});
+
+test("junit is the evidence: a file passes with a passed case and no failure; skipped-only or failed files do not", () => {
+  const xml = `<testsuite><testcase classname="specs/ui-scale.spec.js" name="a"/><testcase classname="specs/ui-scale.spec.js" name="b"></testcase>
+<testcase classname="specs/new-hooks.spec.js" name="c"><skipped/></testcase>
+<testcase classname="specs/audio-smoke.spec.js" name="d"/><testcase classname="specs/audio-smoke.spec.js" name="e"><system-out>x</system-out><failure message="m"/></testcase></testsuite>`;
+  assert.deepEqual([...passedSpecFiles(xml)], [UI]);
+  assert.deepEqual([...passedSpecFiles("")], []);
+});
+
+test("refuse: a run with no run_attempt is not read as attempt 1", () => {
+  assert.equal(decide(world({ run: { run_attempt: undefined } })).accept, false);
 });
 
 test("refuse: a dropped spec the group run did not contain", () => {

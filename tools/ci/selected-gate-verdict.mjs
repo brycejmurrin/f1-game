@@ -233,7 +233,7 @@ function judgeSpecs(input) {
       ok: false,
       reason: `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log)${why ? `, and no separate run counts: ${why}` : ""}. `
         + "What counts: every dropped spec green in ONE browser-group run per group on this head and this base, first attempt, default GL — "
-        + "`node tools/ci/remote-group.mjs <group>` on the pushed branch (it tests the PR's merge ref), before or at the ready flip (this job waits up to 7 min for a running one); "
+        + "`node tools/ci/remote-group.mjs <group>` on the pushed branch (it tests the PR's merge ref), BEFORE the ready flip (this job waits at most 7 min for one still running, then reds); "
         + "after a red like this one, run it, then flip the PR to draft and back to ready (a new ready run on the same head; never a re-run of this one). "
         + "A failed, cancelled, re-run or branch-head group run does not count, nor does one on another base than this run's (the deploy tip moved between them: run it again). Or split the change.",
       infraRetry: false,
