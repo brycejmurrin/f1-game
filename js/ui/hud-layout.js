@@ -256,6 +256,8 @@ const HudLayout = (function () {
     save(stored());
     return true;
   }
+  // Leaving or backgrounding the page mid-gesture keeps what is on screen.
+  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", commit);
   const camSet = (modeId) => LAYOUT_SET(modeId);
   const has = (c) => !!(doc && doc.body && doc.body.classList && doc.body.classList.contains(c));
   /** Is the race HUD up? (#hud carries `hidden` outside a race — js/game.js.) */

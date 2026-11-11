@@ -291,6 +291,9 @@ const TitleLayout = (function () {
     save(a);
     return true;
   }
+  // Leaving or backgrounding the page mid-gesture keeps what is on screen.
+  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", commit);
+  if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", () => { if (doc.visibilityState === "hidden") commit(); });
   /** A request the box cannot give is not stored (#5199): after set(l) the fit
    *  runs now, and a SIZE it is holding (--tf) or an offset it pulled back from
    *  an edge (--tf-dx / --tf-dy) is written back as the value the screen

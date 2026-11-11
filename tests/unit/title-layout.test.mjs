@@ -52,7 +52,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
   const data = Object.assign({}, stored);
   const writes = [];   // every store.set: a synchronous localStorage write + subscriber notify on a phone
   const store = { get: (k, d) => (k in data ? data[k] : d), set: (k, v) => { writes.push(k); if (v === null) delete data[k]; else data[k] = v; } };
-  const timers = [], frames = [];
+  const timers = [], frames = [], winOn = {};
   const observers = [];
   class MutationObserver {
     constructor(fn) { this.fn = fn; observers.push(this); }
@@ -61,7 +61,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
   const sb = {
     document: dom.document, GameStore: { store }, Log: { info() {}, warn() {} }, MutationObserver,
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
-    innerWidth: 1000, innerHeight: 500,
+    innerWidth: 1000, innerHeight: 500, addEventListener: (n, fn) => (winOn[n] ||= []).push(fn),
   };
   if (fx) sb.TitleFx = fx;   // js/ui/title-fx.js's three title looks (loads first in the shell)
   if (raf) { sb.requestAnimationFrame = (fn) => frames.push(fn); sb.cancelAnimationFrame = (n) => { frames[n - 1] = null; }; }
@@ -77,7 +77,8 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
   const mutated = (el) => { for (const o of observers) if (o.target === el) o.fn(); };
   /** Run the queued animation frames (raf: true boots only). */
   const tick = () => { const todo = frames.splice(0); for (const fn of todo) if (fn) fn(); };
-  return { dom, M, data, writes, panel, titleBody, html: dom.documentElement, timers, rotate, mutated, tick };
+  const pagehide = () => { for (const fn of winOn.pagehide || []) fn(); };
+  return { dom, M, data, writes, pagehide, panel, titleBody, html: dom.documentElement, timers, rotate, mutated, tick };
 }
 
 test("normalize clamps every field and reads junk as shipped", () => {
@@ -298,6 +299,15 @@ test("editor: a drag paints once per frame and writes the store once, at the rel
   assert.deepEqual(w2, [], "no write per input event");
   d2.dispatch(y, { type: "change" });
   assert.deepEqual(w2, ["titleLayout"]);
+});
+
+test("leaving the page mid-gesture stores what is on screen", () => {
+  const { dom, data, pagehide } = boot();
+  const x = dom.byId("pm-tl-btns-x");
+  x.value = "-12"; dom.dispatch(x, { type: "input" });   // a reload before the thumb's release
+  assert.equal(data.titleLayout, undefined);
+  pagehide();
+  assert.equal(data.titleLayout.wide.btns.x, -12);
 });
 
 test("a live draft never masks a store write made by someone else (Undo, a profile)", () => {
