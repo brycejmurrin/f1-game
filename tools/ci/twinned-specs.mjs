@@ -162,6 +162,7 @@ export const ADAPTED = {
  *  reason is the whole entry. twinDebt() excludes these, so the ratchet can
  *  reach zero without asking for a substitution that would be a hole. */
 export const BROWSER_ONLY = {
+  "tests/specs/instanced-draw.spec.js": "its last test decodes the PRESENTED canvas (screenshotPresentedCanvas + frameContent) to prove the scene still draws with instancing on; game-vm stubs the renderer and presents no pixels, so the assertion has nothing to read there (W32 row 13, 2026-11-10)",
   "tests/specs/props-over-road.spec.js": "passes 52/52 under APEX_VM_PAGE=1 (~285 s, measured 2026-10-17) but is the selected-gate pin for js/track + js/circuits diffs: adapting it would drop it from the blocking browser plan and schedule 285 s of page-a on every circuit edit (select-specs.test.mjs pins it selected, PR #1289). The audit itself is already node-ported in tests/unit/props-over-road.test.mjs (test:sweeps)",
   "tests/specs/terrain-over-road.spec.js": "APEX_VM_PAGE=1 times out at BOOT_MS on the first waitForFunction (`window.__apex?.race`, line 25) and again for Red Bull Ring (line 46) — measured 45 s each, 2026-10-17; the groundY gap checks need the real boot/track settle the VM never reaches, and VM geometry has no asset pack. Structural, not a flake",
   "tests/specs/pit-signs.spec.js": "APEX_VM_PAGE=1 boots Albert Park but pitSigns().drawn stays 0 through TRACK_MS (waitForFunction 45 s) — the decal draw needs a real renderer frame, not a structural flake (measured 2026-09-30)",

@@ -15,8 +15,11 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
     const at = (fraction) => window.__apex.nodeAt(fraction).y;
     const modelDiagnostics = window.__apex.modelDiagnostics();
     const geometryDiagnostics = window.__apex.geometryDiagnostics();
+    // lat +-12 m: outside the carved road, where groundY samples terrain. The
+    // old -6/0/6 ladder sat inside the carve, where gap is null, and all 12
+    // probes passed the null-tolerant loop below having measured nothing.
     const ground = [0.070, 0.240, 0.438, 0.845].flatMap((fraction) =>
-      [-6, 0, 6].map((lat) => ({ fraction, lat, ...window.__apex.groundY(fraction, lat) }))
+      [-12, 12].map((lat) => ({ fraction, lat, ...window.__apex.groundY(fraction, lat) }))
     );
 
     return {
@@ -58,6 +61,8 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
   expect(audit.relief.essesClimb).toBeGreaterThan(18);
   expect(audit.relief.degnerBasin).toBeLessThan(-8);
   expect(audit.relief.crossover).toBeGreaterThan(2);
+  // Every probe must read terrain: all 8 do (headless VM, 2026-11-10), worst gap -0.090 m.
+  expect(audit.ground.filter((probe) => probe.gap !== null)).toHaveLength(8);
   for (const probe of audit.ground) {
     expect(probe.gap === null || probe.gap <= 0.18,
       `terrain at ${(probe.fraction * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);

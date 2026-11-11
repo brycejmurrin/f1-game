@@ -208,6 +208,8 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   // overshoot), so 1.3 was stale from before that array was tuned. Bound at
   // the measured value + headroom, not silently renarrowed to fit.
   expect(result.elevation.max - result.elevation.min).toBeLessThanOrEqual(3.6);
+  // A null gap passes the loop below; all 4 probes read terrain (headless VM, 2026-11-10).
+  expect(result.probes.filter((gap) => gap !== null)).toHaveLength(4);
   for (const gap of result.probes)
     expect(gap === null || gap <= 0.18).toBe(true);
 });

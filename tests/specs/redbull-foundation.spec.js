@@ -89,6 +89,8 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
     expect(session.walls.minOverHw, `${time} barrier clearance`).toBeGreaterThan(0);
   }
 
+  // A null gap passes the loop below; all 8 probes read terrain (headless VM, 2026-11-10).
+  expect(result.clearanceProbes.filter((probe) => probe.gap !== null)).toHaveLength(8);
   for (const probe of result.clearanceProbes) {
     expect(probe.gap === null || probe.gap <= TOL,
       `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);

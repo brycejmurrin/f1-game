@@ -101,11 +101,18 @@ test.describe("Interlagos track-owned foundation migration", () => {
         }
       }
       return {
+        sampled: gaps.length,
         maxGap: Math.max(...gaps),
         walls: window.__apex.wallStats(),
       };
     });
 
+    // groundY().gap is null inside the road carve, and Math.max() of no gaps is
+    // -Infinity, which passes the cap having measured nothing. 244 of the 600
+    // probes read terrain (headless VM, 2026-11-10); 200 leaves room for a
+    // retuned carve, while an all-null ladder fails.
+    expect(result.sampled).toBeGreaterThanOrEqual(200);
+    expect(Number.isFinite(result.maxGap)).toBe(true);
     expect(result.maxGap).toBeLessThanOrEqual(0.18);
     expect(result.walls.anyNaN).toBe(false);
     expect(result.walls.minB).toBeGreaterThan(1);

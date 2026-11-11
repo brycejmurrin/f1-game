@@ -139,12 +139,29 @@ test.describe.parallel("Career — isolation", () => {
     });
     await boot(page);
     await startCareer(page, { teamId: "haas", seat: 1, seed: 1 });
-    const changed = await page.evaluate(() => {
-      const c = window.__apex.career();
-      c.fitted.aero = "high";
-      return JSON.parse(localStorage.getItem("apex26.parts.haas"));
+    // Fit a part THROUGH THE CAREER GARAGE, so the career save path really runs.
+    // (Assigning c.fitted.aero on the in-memory object and then reading
+    // localStorage proved nothing: no save path ran, either build.)
+    await page.evaluate(() => window.__apex.careerMoney(99999));
+    await page.evaluate(() => document.getElementById("cr-garage").click());
+    await expect(page.locator("#carsetup")).toBeVisible();
+    await selectPartCategory(page);
+    const row = await page.evaluate(() => {
+      const r = document.querySelector("#cs-options .cs-opt.locked");
+      return r ? { id: r.dataset.csOpt, cat: r.dataset.csCat } : null;
     });
-    expect(changed.aero).toBe("low");   // untouched by the career build
+    expect(row, "the career garage offers a part to research and fit").not.toBeNull();
+    const click = (r) => page.evaluate((x) => document.querySelector(`.cs-opt[data-cs-opt="${x.id}"]`).click(), r);
+    await click(row);                                   // research it
+    if (await page.evaluate((r) => window.__apex.career().fitted[r.cat] !== r.id, row)) await click(row);   // then fit it
+    const after = await page.evaluate((r) => ({
+      fitted: window.__apex.career().fitted[r.cat],
+      saved: (JSON.parse(localStorage.getItem("apex26.career.driver.0") || "null") || {}).fitted,
+      free: JSON.parse(localStorage.getItem("apex26.parts.haas")),
+    }), row);
+    expect(after.fitted, "the career build took the part").toBe(row.id);
+    expect(after.saved && after.saved[row.cat], "the career SAVE took the part").toBe(row.id);
+    expect(after.free).toEqual({ engine: "stock", aero: "low" });   // untouched by the career build
   });
 
   test("career team development does not reach a Grand Prix", async ({ page }) => {

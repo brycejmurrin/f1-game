@@ -433,6 +433,14 @@ test.describe("Time Trial — sector splits", () => {
     // announces anything — the banner was removed as self-evident — but it still
     // teleports the car, which would move it off the boundary this test needs.)
     await page.evaluate(async () => {
+      // LATCH the flash: .sec-flash lives ~3 HUD ticks (~300 ms, _secFlash
+      // 0.35 at -0.1 a tick), short enough for a polled read to miss. A
+      // MutationObserver sees every class change on the strip.
+      window.__secFlashSeen = false;
+      const strip = document.getElementById("hud-sectors");
+      if (strip) new MutationObserver(() => {
+        if (strip.querySelector(".sec-flash, .sec-flash-pb, .sec-flash-slow")) window.__secFlashSeen = true;
+      }).observe(strip, { subtree: true, attributes: true, attributeFilter: ["class"] });
       window.__apex.headless(true);
       window.__apex.go();
       const sec = window.__apex.info().sectors || [1 / 3, 2 / 3];
@@ -447,13 +455,42 @@ test.describe("Time Trial — sector splits", () => {
       window.__apex.headless(false);
     });
 
-    const split = await page.evaluate(() => {
-      const last = window.__apex.sectorState().last;
-      const flash = document.querySelector("#hud-sectors .sec-flash, #hud-sectors .sec-flash-pb");
-      return { s1: last[0], flashed: !!flash };
-    });
+    const split = await page.evaluate(() => ({ s1: window.__apex.sectorState().last[0] }));
     expect(split.s1).not.toBeNull();
     expect(split.s1).toBeGreaterThan(0);
+    // The strip must FLASH for the crossing (`flashed` used to be computed and
+    // never asserted). game.js flashes a sector of >= 2 s on a flying lap
+    // (setLap(1) above; VM-measured S1 2.8 s). A first version polled for the
+    // class and missed its ~300 ms life on CI (run 42766757935); the observer
+    // latch installed before the crossing cannot.
+    expect(split.s1, "S1 under the 2 s flash gate — no flash is due").toBeGreaterThanOrEqual(2);
+    // The HUD paints only from the rAF loop, and updateHud returns early while
+    // G.frozen (js/ui/hud.js); act() steps physics without clearing it. So the
+    // page must be live for the flash to paint: record what the crossing left,
+    // unfreeze, and give rAF time with the observer armed.
+    const hudState = await page.evaluate(() => ({
+      frozen: window.__apex.freeze(),
+      hudHidden: !!(document.getElementById("hud") && document.getElementById("hud").hidden)
+        || document.body.classList.contains("hud-hidden"),
+      docHidden: document.hidden === true,
+      // The seam (#5296 GameHud.secFlash + #5339 __apex.hudSecFlash): calls = flashSector
+      // calls, painted = HUD ticks that set .sec-flash. "absent" / no_seam until both land.
+      secFlash: typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
+    }));
+    await page.evaluate(() => window.__apex.freeze(false));
+    const flashed = await page.waitForFunction(() => window.__secFlashSeen === true,
+      null, { polling: 100, timeout: 5000 }).then(() => true, () => false);
+    const secFlashAfter = await page.evaluate(() =>
+      typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent");
+    test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState, secFlashAfter }) });
+    // NOT ASSERTED (W32 row 10, candidate game finding, listed in PR #5302).
+    // With every game.js gate met (lap 1, forward entry, no incident, S1 2.8 s;
+    // sectorLast[0] is written by the block that calls hud.flashSector(0)), a
+    // live page (frozen false, HUD shown, document visible) latched NO
+    // .sec-flash* on #hud-sectors within 5 s: CI run 42827414372, job
+    // 129870057425, bcd7d73 (and run 42802375775 before it). The seam to settle
+    // it is a read-only GameHud secFlash() surfaced as __apex.hudSecFlash();
+    // until then the latch and the page state are recorded on every run.
   });
 });
 

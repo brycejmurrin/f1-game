@@ -214,11 +214,14 @@ test.describe("Budget system — unlimited toggle", () => {
 
   test("unlimited mode hides budget fill bar", async ({ page }) => {
     await openSetup(page);
+    // Buy a part FIRST: with nothing bought the bar reads scaleX(0) in both
+    // modes (js/garage/setup-sheet.js), so the old test could not fail.
+    await pickOpt(page, "engine", "race");
+    const fill = () => page.locator("#cs-budget-fill").evaluate((el) => el.style.transform);
+    expect(await fill(), "a paid part moves the bar off zero").toMatch(/scaleX\(0\.[1-9]/);
     await page.locator("#cs-unlimited").click();
-    const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
-      el.style.transform
-    );
-    expect(transform).toContain("scaleX(0)");
+    await expect(page.locator("#cs-unlimited")).toHaveClass(/\bon\b/);
+    expect(await fill()).toMatch(/scaleX\(0\)/);
   });
 
   test("unlimited button gets 'on' class when active", async ({ page }) => {

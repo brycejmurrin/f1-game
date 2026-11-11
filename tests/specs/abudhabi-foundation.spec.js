@@ -45,8 +45,11 @@ for (const timeOfDay of ["day", "night"]) {
       const definition = window.TrackDefs.find((entry) => entry.id === "abudhabi");
       const profile = window.__apex.trackProfile(360);
       const models = window.__apex.modelDiagnostics();
+      // lat +-12 m: outside the carved road, where groundY samples terrain. The
+      // old -6/0/6 ladder sat inside the carve, where gap is null, and all 12
+      // probes passed the null-tolerant loop below having measured nothing.
       const ground = [0.42, 0.55, 0.70, 0.88].flatMap((frac) =>
-        [-6, 0, 6].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).gap }))
+        [-12, 12].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).gap }))
       );
       return {
         definition: {
@@ -119,6 +122,8 @@ for (const timeOfDay of ["day", "night"]) {
 
     expect(result.walls.anyNaN).toBe(false);
     expect(result.walls.tightFrac).toBeGreaterThan(0.2);
+    // Every probe must read terrain: all 8 do (headless VM, 2026-11-10), worst gap -0.074 m.
+    expect(result.ground.filter((sample) => sample.gap !== null)).toHaveLength(8);
     for (const sample of result.ground)
       expect(sample.gap === null || sample.gap <= 0.18,
         `terrain over road at ${sample.frac} lat ${sample.lat}: ${sample.gap}`).toBe(true);

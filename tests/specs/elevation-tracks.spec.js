@@ -303,13 +303,21 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
         // Descent at top speed: gravity must not push meaningfully past the flat
         // top speed (start AT it so we measure overspeed, not deceleration).
-        window.__apex.jump(dnAt, flatMax, 0);
+        // AT means the car's own top speed, vmaxNow, which is what the gravity
+        // cap (vmax * 1.06) is relative to. Launching at flatMax (~41-45 m/s,
+        // an unsteered run's best) left the car ~15 m/s under the cap, so the
+        // cap was never reached and the check could not fail.
+        window.__apex.jump(dnAt, 40, 0);
         window.__apex.setInput({ steer: 0, throttle: true });
-        let maxV = 0;
+        window.__apex.step(1 / 60, 1);
+        const vTop = window.__apex.physState().vmaxNow;
+        window.__apex.jump(dnAt, vTop, 0);
+        let maxV = 0, vmaxPeak = vTop;
         for (let i = 0; i < 150; i++) {
           window.__apex.step(1 / 60, 1);
           const p = window.__apex.physState();
           maxV = Math.max(maxV, p.speed);
+          vmaxPeak = Math.max(vmaxPeak, p.vmaxNow);
           if (!Number.isFinite(p.speed) || !Number.isFinite(p.s) || !Number.isFinite(p.x)) finite = false;
         }
 
@@ -342,7 +350,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         }
         window.__apex.clearInput();
         window.__apex.setPhysics({ roadFollow: 0 });   // restore the shipped default
-        return { dn, up, maxV, flatMax, flatSteps, flatAt: +flatAt.toFixed(3), climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
+        return { dn, up, maxV, vTop, vmaxPeak, flatMax, flatSteps, flatAt: +flatAt.toFixed(3), climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
       }, { FLAT_LAUNCH, CLIMB_LAUNCH });
 
       expect(errors).toEqual([]);
@@ -372,7 +380,12 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         .toBeGreaterThan(30);
       expect(r.flatMax, "flat-out reference run was blocked — it lost ground from the launch")
         .toBeGreaterThanOrEqual(FLAT_LAUNCH);
-      expect(r.maxV).toBeLessThan(r.flatMax * 1.35); // no descent runaway past flat top speed (gravity adds a little downhill, but doesn't run away)
+      // No descent runaway: launched AT top speed on the steepest descent,
+      // gravity may add at most the 6 % margin over vmax (js/game.js gravity
+      // cap). Measured in the VM: 1.004-1.012x on six circuits.
+      expect(r.vTop, "descent did not start at a real top speed").toBeGreaterThan(FLAT_LAUNCH);
+      expect(r.maxV, `descent overspeed past vmax*1.06 (vmax ${r.vmaxPeak})`)
+        .toBeLessThanOrEqual(r.vmaxPeak * 1.06 + 1e-3);
       // Climbs freely (gravity isn't an invisible wall). The gain is modest on
       // tracks whose only grade is a shallow recovery (e.g. Bahrain's dip), large
       // on real climbs (Spa's Eau Rouge), so just require the car is still moving.

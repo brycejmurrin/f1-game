@@ -58,10 +58,13 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
     };
 
     const byFraction = {};
-    let max = 0, worst = null;
+    // meshes / pairs count what was measured: a capture with no props/glass
+    // index skips the loop and leaves max 0, a clean pass over nothing.
+    let max = 0, worst = null, meshes = 0, pairs = 0;
     for (const name of ["props", "glass"]) {
       const mesh = caps[name];
       if (!mesh?.pos || !mesh?.idx) continue;
+      meshes++;
       const { pos, idx } = mesh;
       for (let triangle = 0; triangle < idx.length; triangle += 3) {
         const a = idx[triangle] * 3, b = idx[triangle + 1] * 3, c = idx[triangle + 2] * 3;
@@ -82,6 +85,7 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
                   sample.z < minZ - 0.3 || sample.z > maxZ + 0.3) continue;
               const bc = barycentric(sample.x, sample.z, ax, az, bx, bz, cx, cz);
               if (!bc) continue;
+              pairs++;
               const surfaceY = ay + bc.u * (cy - ay) + bc.v * (by - ay);
               const overlap = surfaceY - sample.y;
               // No upper bound on the overlap (RC2-13: a prop poking >5 m through the road
@@ -121,10 +125,15 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
       .map(([fraction, overlap]) => ({ fraction: +fraction, overlap: +overlap.toFixed(2) }))
       .sort((a, b) => b.overlap - a.overlap)
       .slice(0, 8);
-    return { err: null, max: +max.toFixed(2), top, worst };
+    return { err: null, max: +max.toFixed(2), top, worst, meshes, pairs };
   });
 
   expect(result.err).toBeNull();
+  // Count what the scan measured, so a capture without props/glass index data
+  // fails instead of reporting max 0: 2 meshes, 12 triangle/sample hits
+  // (headless VM, 2026-11-10); the hit floor is > 0.
+  expect(result.meshes).toBeGreaterThanOrEqual(1);
+  expect(result.pairs).toBeGreaterThan(0);
   expect(result.max, JSON.stringify({ top: result.top, worst: result.worst })).toBeLessThanOrEqual(0.2);
 
   const audit = await page.evaluate(() => {
@@ -182,6 +191,9 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   expect(audit.walls.anyNaN).toBe(false);
   expect(audit.walls.minOverHw).toBeGreaterThanOrEqual(0.8);
   expect(audit.walls.maxB).toBeLessThanOrEqual(20);
+  // A null gap (inside the road carve) passes the every() below, so count the
+  // probes that read terrain: 12 of 20 (headless VM, 2026-11-10).
+  expect(audit.ground.filter((gap) => gap != null).length).toBeGreaterThanOrEqual(12);
   expect(audit.ground.every((gap) => gap == null || gap <= 0.18)).toBe(true);
   expect(audit.geometry.every((entry) => entry.ok)).toBe(true);
   expect(audit.models.invalid).toEqual([]);
