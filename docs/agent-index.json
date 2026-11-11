@@ -4180,6 +4180,11 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/race/retired-card.js",
+      "global": "RetiredCard",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/session-entry.js",
       "global": "SessionEntry",
       "roster": "tag"
@@ -4217,6 +4222,11 @@
     {
       "path": "js/race/start-lights.js",
       "global": "StartLights",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/stopped-cars.js",
+      "global": "StoppedCars",
       "roster": "LAZY_RACE_SESSION"
     },
     {
