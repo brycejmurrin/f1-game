@@ -55,7 +55,7 @@ test("judgeCells: an unopened screen, a screen with no control and an unrecorded
 test("planRun: the default plan is every window × the UI SIZE axis × the seven screens; bad values throw", () => {
   const plan = planRun(flags({}));
   assert.deepEqual(plan.windows, ["standalone", "safari", "w844"]);
-  assert.deepEqual(plan.scales, [61, 109, 51, 40]);
+  assert.deepEqual(plan.scales, [70, 109]);
   assert.deepEqual(plan.screens, ["title", "select", "garage", "settings", "hud", "pause", "results"]);
   assert.equal(plan.profile, true);
   assert.deepEqual(planRun(flags({ "--screens": "results,title", "--ui-scale": "61", "--window": "safari", "--profile": "legacy" })),
