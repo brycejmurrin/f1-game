@@ -1351,7 +1351,8 @@ resets with the engine.
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.
-Continuous layers over it, all on `sfxBus`: turbo whine (high sine), MGU-K
+Continuous layers use two buses: engine, whine, harvest, rivals and reverb use
+the selective `focusBus`; road feedback stays on `sfxBus`. Layers include turbo whine (high sine), MGU-K
 harvest whirr under deceleration, ERS deploy whine while the battery is
 deploying (level tracks charge, pitch sags under 20%), AIRFLOW (broadband
 bandpass rising with speed², plus kerb/offroad buffeting and wet spray), BRAKES
@@ -1370,7 +1371,7 @@ The player's ENGINE TONE tune (`js/audio/panel.js`) is a second trim over the
 voice. Every field is a constant multiplier, never a function of rev, so the
 pitch invariants (`tools/check/audio-test.cjs`, `tests/unit/audio-tune.test.mjs`)
 hold by construction. The pitch curve is four independent knobs,
-`rate(rev) = (0.25·idle + 0.45·revRange·rev^curve) · pitch`: IDLE the idle end,
+`rate(rev) = (0.17·idle + 0.5115·revRange·rev^curve) · pitch`: IDLE the idle end,
 REV RANGE the span, PITCH a transpose, CURVE the bend (>1 hangs low and climbs
 late). Character: GRAVEL, DETUNE, BRIGHTNESS, SUB. LIMITER: DEPTH, RATE (Hz),
 PITCH SAG (cents in step with the cut). BOOST: LEVEL (ERS whine + whoosh),
