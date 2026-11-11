@@ -2009,16 +2009,16 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         for (let m = 0; m < row.moves.length; m++) expect(Math.abs(back[m] - seen[0].moves[m]), `${row.moves[m]} has no hysteresis`).toBeLessThan(1);
       });
     }
-    // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 70 % on a phone (#5235).
-    test("pm-uiscale (every menu): a phone stops at 70 % with 12 px text and 44 px rows, and the row names the zoom its own sheet paints at", async ({ page }) => {
+    // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 50 % on a phone (#5452; 70 under #5235).
+    test("pm-uiscale (every menu): a phone stops at 50 % with 12 px text and 44 px rows, and the row names the zoom its own sheet paints at", async ({ page }) => {
       const ui = CONTROL_REG.size.find((r) => r.key === "uiScale");
-      await bootOwnerCell(page, cell, { race: false, store: { uiScale: 51 } });
+      await bootOwnerCell(page, cell, { race: false, store: { uiScale: 40 } });
       await page.locator("#mb-settings").click();
       await page.locator("#pm-open-appearance").click();
       await expect(page.locator("#" + ui.id)).toBeVisible();
       const sheetZoom = () => page.evaluate((id) => +getComputedStyle(document.getElementById(id).closest(".sheet")).zoom, ui.id);
       expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.phoneMin, max: ui.lim.max, value: ui.phoneMin, label: `${ui.phoneMin}%` });
-      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 51 % paints the minimum").toBe(String(ui.phoneMin / 100));
+      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 40 % paints the minimum").toBe(String(ui.phoneMin / 100));
       expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and is raised in storage on load").toBe(ui.phoneMin);
       // At the minimum: the open panel's token-sized text paints >= 12 px and its controls >= 44 px.
       const floor = await page.evaluate(() => {

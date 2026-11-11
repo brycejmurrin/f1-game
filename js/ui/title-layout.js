@@ -213,6 +213,17 @@ const TitleLayout = (function () {
     if (best) el.style.setProperty("--tf", best.toFixed(3));
     else { el.style.removeProperty("--tf"); el.setAttribute("data-home-floor", "off"); }
   }
+  /** `r` grown to the visible doors' drawn boxes (a transform's overhang included). */
+  function painted(el, r) {
+    let l = r.left, t = r.top, rt = r.right, b = r.bottom;
+    const doors = el.querySelectorAll ? el.querySelectorAll(".bigbtn") : [];
+    for (const d of doors) {
+      const q = d.getBoundingClientRect ? d.getBoundingClientRect() : null;
+      if (!q || !(q.width > 0 && q.height > 0)) continue;
+      l = Math.min(l, q.left); t = Math.min(t, q.top); rt = Math.max(rt, q.right); b = Math.max(b, q.bottom);
+    }
+    return { left: l, top: t, right: rt, bottom: b, width: rt - l, height: b - t };
+  }
   function fit() {
     if (!doc || typeof getComputedStyle !== "function") return;
     const ov = doc.getElementById("overlay");
@@ -245,8 +256,11 @@ const TitleLayout = (function () {
         r = el.getBoundingClientRect();
       }
       if (!(r.height > 0)) continue;
-      // The offset clamp: the overrun past an edge, the near edge winning.
+      // The offset clamp: the overrun past an edge, the near edge winning. It reads what PAINTS: the doors are
+      // skewX(-6deg), so a door's drawn box overhangs the cluster's layout box by ~2.3 px a side, and clamping the
+      // layout box let them cross the safe edge by 2-3 px (#5385, UI SIZE 50-61 on a phone).
       const z = el.offsetHeight > 0 ? r.height / el.offsetHeight : 1;
+      r = painted(el, r);
       let dx = 0, dy = 0;
       if (r.right > box.r) dx = box.r - r.right;
       if (r.left + dx < box.l) dx = box.l - r.left;

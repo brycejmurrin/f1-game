@@ -78,7 +78,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
   /** Run the queued animation frames (raf: true boots only). */
   const tick = () => { const todo = frames.splice(0); for (const fn of todo) if (fn) fn(); };
   const pagehide = () => { for (const fn of winOn.pagehide || []) fn(); };
-  return { dom, M, data, writes, pagehide, panel, titleBody, html: dom.documentElement, timers, rotate, mutated, tick };
+  return { dom, M, ctx, data, writes, pagehide, panel, titleBody, html: dom.documentElement, timers, rotate, mutated, tick };
 }
 
 test("normalize clamps every field and reads junk as shipped", () => {
@@ -514,4 +514,22 @@ test("the home-scene motion chip cannot steal HOW TO PLAY at compact 200%", () =
   const css = read("css/experience.css");
   assert.match(css, /#home-motion:disabled\s*\{\s*pointer-events:\s*none/);
   assert.match(css, /#home-motion\s*\{[^}]*zoom:\s*var\(--ui-compact-brand-scale\)/s);
+});
+
+// #5385: the offset clamp reads what PAINTS. The doors are skewX(-6deg), so a door's drawn box overhangs the cluster's
+// layout box by ~2.3 px a side; at UI SIZE 50-61 on his phone (852x393, inset 59) the right column painted to 795.3
+// against the 793 safe edge. The fit pulls the cluster back by the overhang, not by its layout box alone.
+test("the offset clamp keeps the skewed doors' painted edge inside the safe box (#5385)", () => {
+  const { dom, M, ctx } = boot({}, { editor: true });
+  const ov = dom.byId("overlay"), mb = dom.byId("menu-buttons"), door = dom.byId("mb-race");
+  door.className = "bigbtn";
+  const rect = (l, t, w, h) => ({ left: l, top: t, right: l + w, bottom: t + h, width: w, height: h, x: l, y: t });
+  ov.getBoundingClientRect = () => rect(0, 0, 852, 393);
+  mb.getBoundingClientRect = () => rect(327.5, 8, 465.5, 300);   // the layout box ends exactly at 852 - 59
+  Object.defineProperty(mb, "offsetHeight", { value: 300, configurable: true });
+  door.getBoundingClientRect = () => rect(559.7, 8, 235.6, 44);  // its skewed drawn box: right 795.3
+  mb.querySelectorAll = (sel) => (sel === ".bigbtn" ? [door] : []);
+  ctx.getComputedStyle = () => ({ paddingLeft: "59px", paddingRight: "59px", paddingTop: "8px", paddingBottom: "21px", getPropertyValue: () => "" });
+  M.fit();
+  assert.equal(mb.style.getPropertyValue("--tf-dx"), "-2.3px", "pulled in by the 2.3 px the skew overhangs");
 });
