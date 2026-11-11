@@ -104,6 +104,7 @@ const SaveSchemaRegistry = (function () {
     "instCellCache": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "installChipSeen": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "iosInstallSeen": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "iosWakeNoteSeen": entry("js/ui/platform-session.js (iOS 16.4-18.3 Home Screen wake-lock note, once)", "raw", 1, "rawScalar"),
     "liveryAsync": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "marbleGrip": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "mirrorInstEvery": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

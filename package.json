@@ -82,6 +82,7 @@
     "memory:show": "node tools/env/apex-memory.mjs show",
     "memory:retire": "node tools/env/apex-memory.mjs retire",
     "test:agent-output": "node tools/ci/run-node-group.mjs test:agent-output tests/unit/agent-experiment.test.mjs tests/unit/agent-inbox.test.mjs tests/unit/agent-message-contract.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs --",
+    "test:offline-precache": "node tools/ci/run-playwright.mjs tests/specs/offline-precache.spec.js",
     "test:perf-budget": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js",
     "test:perf-idle-churn": "node tools/ci/run-playwright.mjs tests/specs/perf-idle-pipeline-churn.spec.js",
     "test:stall-reload-sw": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js"

@@ -1358,6 +1358,15 @@
       "twinned": false
     },
     {
+      "id": "offline-precache",
+      "script": "test:offline-precache",
+      "kind": "browser",
+      "files": [
+        "tests/specs/offline-precache.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "perf-budget",
       "script": "test:perf-budget",
       "kind": "browser",
