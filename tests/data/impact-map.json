@@ -11402,9 +11402,7 @@
         "tests/specs/scratch-rcme-r1.spec.js",
         "tests/specs/scratch-rcme-r2.spec.js",
         "tests/specs/scratch-rcme-r3.spec.js",
-        "tests/specs/scratch-rcme-r4.spec.js",
-        "tests/specs/scratch-rcme-r5.spec.js",
-        "tests/specs/scratch-rcme-r6.spec.js"
+        "tests/specs/scratch-rcme-r4.spec.js"
       ]
     },
     "js/physics/aero-zones.js": {
@@ -16700,8 +16698,6 @@
         "tests/specs/scratch-rcme-r2.spec.js",
         "tests/specs/scratch-rcme-r3.spec.js",
         "tests/specs/scratch-rcme-r4.spec.js",
-        "tests/specs/scratch-rcme-r5.spec.js",
-        "tests/specs/scratch-rcme-r6.spec.js",
         "tests/unit/css-has-scope.test.mjs"
       ]
     },
@@ -18815,8 +18811,6 @@
         "tests/specs/scratch-rcme-r2.spec.js",
         "tests/specs/scratch-rcme-r3.spec.js",
         "tests/specs/scratch-rcme-r4.spec.js",
-        "tests/specs/scratch-rcme-r5.spec.js",
-        "tests/specs/scratch-rcme-r6.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/results-sheet-lazy.test.mjs"

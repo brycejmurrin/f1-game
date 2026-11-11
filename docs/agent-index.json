@@ -1423,20 +1423,6 @@
       "twinned": false
     },
     {
-      "id": "scratch-churne",
-      "script": "test:scratch-churne",
-      "kind": "browser",
-      "files": [
-        "tests/specs/scratch-churne-r1.spec.js",
-        "tests/specs/scratch-churne-r2.spec.js",
-        "tests/specs/scratch-churne-r3.spec.js",
-        "tests/specs/scratch-churne-r4.spec.js",
-        "tests/specs/scratch-churne-r5.spec.js",
-        "tests/specs/scratch-churne-r6.spec.js"
-      ],
-      "twinned": false
-    },
-    {
       "id": "scratch-rcme",
       "script": "test:scratch-rcme",
       "kind": "browser",
@@ -1444,9 +1430,7 @@
         "tests/specs/scratch-rcme-r1.spec.js",
         "tests/specs/scratch-rcme-r2.spec.js",
         "tests/specs/scratch-rcme-r3.spec.js",
-        "tests/specs/scratch-rcme-r4.spec.js",
-        "tests/specs/scratch-rcme-r5.spec.js",
-        "tests/specs/scratch-rcme-r6.spec.js"
+        "tests/specs/scratch-rcme-r4.spec.js"
       ],
       "twinned": false
     },

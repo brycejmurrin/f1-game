@@ -23,9 +23,11 @@ export async function facetPath(cdp) {
     const o = q[h++];
     for (let e = first[o]; e < first[o + 1]; e += EF) {
       const et = etypes[edges[e + eT]]; if (et === "weak" || et === "shortcut") continue;
-      const to = edges[e + eTo] / NF; if (parent[to] >= 0) continue;
+      const to = edges[e + eTo] / NF;
+      // The owner {x, z, reach, facets} is the hit, whether or not its array was reached first by another edge.
+      if (et === "property" && strings[edges[e + eN]] === "facets" && nm(to) === "Float64Array") { hit = o; break; }
+      if (parent[to] >= 0) continue;
       parent[to] = o; pedge[to] = e; q[t++] = to;
-      if (et === "property" && strings[edges[e + eN]] === "facets" && nm(to) === "Float64Array") { hit = to; break; }
     }
   }
   if (hit < 0) return { found: false };

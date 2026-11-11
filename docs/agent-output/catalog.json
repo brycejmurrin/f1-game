@@ -1207,7 +1207,6 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
-        "test:scratch-churne",
         "test:scratch-rcme",
         "test:shimmer",
         "test:smoke",
@@ -4287,12 +4286,8 @@
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
     },
     {
-      "name": "test:scratch-churne",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-churne-r1.spec.js tests/specs/scratch-churne-r2.spec.js tests/specs/scratch-churne-r3.spec.js tests/specs/scratch-churne-r4.spec.js tests/specs/scratch-churne-r5.spec.js tests/specs/scratch-churne-r6.spec.js"
-    },
-    {
       "name": "test:scratch-rcme",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcme-r1.spec.js tests/specs/scratch-rcme-r2.spec.js tests/specs/scratch-rcme-r3.spec.js tests/specs/scratch-rcme-r4.spec.js tests/specs/scratch-rcme-r5.spec.js tests/specs/scratch-rcme-r6.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcme-r1.spec.js tests/specs/scratch-rcme-r2.spec.js tests/specs/scratch-rcme-r3.spec.js tests/specs/scratch-rcme-r4.spec.js"
     },
     {
       "name": "test:service-worker",

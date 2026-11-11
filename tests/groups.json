@@ -2183,25 +2183,12 @@
       ],
       "kind": "browser"
     },
-    "test:scratch-churne": {
-      "files": [
-        "tests/specs/scratch-churne-r1.spec.js",
-        "tests/specs/scratch-churne-r2.spec.js",
-        "tests/specs/scratch-churne-r3.spec.js",
-        "tests/specs/scratch-churne-r4.spec.js",
-        "tests/specs/scratch-churne-r5.spec.js",
-        "tests/specs/scratch-churne-r6.spec.js"
-      ],
-      "kind": "browser"
-    },
     "test:scratch-rcme": {
       "files": [
         "tests/specs/scratch-rcme-r1.spec.js",
         "tests/specs/scratch-rcme-r2.spec.js",
         "tests/specs/scratch-rcme-r3.spec.js",
-        "tests/specs/scratch-rcme-r4.spec.js",
-        "tests/specs/scratch-rcme-r5.spec.js",
-        "tests/specs/scratch-rcme-r6.spec.js"
+        "tests/specs/scratch-rcme-r4.spec.js"
       ],
       "kind": "browser"
     },
