@@ -17876,6 +17876,10 @@
       "clearReadouts": [
         "tests/unit/hud-layout.test.mjs"
       ],
+      "commit": [
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
       "effective": [
         "tests/unit/hud-elements.test.mjs"
       ],
@@ -19390,6 +19394,9 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
+      "commit": [
+        "tests/unit/title-layout.test.mjs"
+      ],
       "current": [
         "tests/specs/title-fit.spec.js",
         "tests/unit/appearance-opts.test.mjs",
@@ -19401,6 +19408,9 @@
       ],
       "enter": [
         "tests/unit/title-layout.test.mjs"
+      ],
+      "finish": [
+        "tests/specs/ui-scale.spec.js"
       ],
       "isDefault": [
         "tests/unit/title-layout.test.mjs"
@@ -19430,6 +19440,9 @@
       ],
       "slider": [
         "tests/specs/title-fit.spec.js"
+      ],
+      "step": [
+        "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
