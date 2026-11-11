@@ -715,6 +715,11 @@
       ]
     },
     {
+      "path": "tools/ci/apt-cached-install.sh",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/assert-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -3636,6 +3641,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "no-direct-output",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/track/official-corners.cjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/track/osm-circuits.json",
