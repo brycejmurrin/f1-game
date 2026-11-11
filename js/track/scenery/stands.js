@@ -107,7 +107,7 @@ const SceneryStands = (function () {
       // boxes end too, so the joints close. The box axis is already their
       // difference (next - prev, the chord aim below); its length is
       // |p_next - p_prev| / 2 and its centre (2p + p_prev + p_next) / 4 — off
-      // the station by `off`, a sagitta as much as a slide along t. A box
+      // the station by `off` (a sub-10 cm sideways part is dropped, below). A box
       // CENTRED on the station and sized to its SHORTER chord (the old rule)
       // left half the difference open on the long side wherever the chords
       // differ: 239 of 1508 Jerez row pairs over the 0.5 m contract, max
@@ -135,7 +135,22 @@ const SceneryStands = (function () {
         }
         c = Math.min(lMax, lMin + JOINT_OVERLAP, curveCap);
         const pp = at(prev, latFromAnchor), pn = at(next, latFromAnchor);
-        off = [(pp[0] + pn[0] - 2 * p[0]) / 4, (pp[1] + pn[1] - 2 * p[1]) / 4, (pp[2] + pn[2] - 2 * p[2]) / 4];
+        const raw = [(pp[0] + pn[0] - 2 * p[0]) / 4, (pp[1] + pn[1] - 2 * p[1]) / 4, (pp[2] + pn[2] - 2 * p[2]) / 4];
+        // A SMALL sideways (sagitta) part is dropped: under SAGITTA_SNAP it
+        // closes next to nothing, but it is exactly the move that lands a row
+        // face inside the 2 cm coplanar band of dressing a circuit laid flush
+        // against the authored row line (mexico's seal-terrace riser lips stand
+        // 24 mm proud of the row fronts; an 8-20 mm sagitta made 5 coplanar
+        // spots, coplanar-faces 0 -> 5; the row's own rotation moves its face
+        // too, so 6 cm still left one spot and 10 cm is the measured clear).
+        // A larger one is kept: the deep bowl tiers and sharp terrace steps
+        // need it to meet.
+        const SAGITTA_SNAP = 0.10;
+        const cx = pn[0] - pp[0], cy = pn[1] - pp[1], cz = pn[2] - pp[2], cl = Math.hypot(cx, cy, cz) || 1;
+        const along = (raw[0] * cx + raw[1] * cy + raw[2] * cz) / cl;
+        const slide = [cx / cl * along, cy / cl * along, cz / cl * along];
+        const side3 = [raw[0] - slide[0], raw[1] - slide[1], raw[2] - slide[2]];
+        off = Math.hypot(side3[0], side3[1], side3[2]) < SAGITTA_SNAP ? slide : raw;
         swingCut = 0;
       } else {
         c = Math.min(cMin, curveCap);
