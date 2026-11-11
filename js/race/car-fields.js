@@ -80,6 +80,10 @@ const CarFields = (function () {
       ["_wireId"]],
     ["stationary-player retirement timer (game.js checkRetirements, AiDrive.stallStep; W26 row 5)",
       ["stallT"]],
+    ["written only by __apex.reset() (incident-sim release → _incidentOwned, the slip read-out zero → slipDeg): " +
+      "a reset that ADDED them was a late add on every car, and once stallT took one more slot it dropped all 22 " +
+      "cars to dictionary mode (hunt-apex-aiplace-reset-vm)",
+      ["_incidentOwned", "slipDeg"]],
   ];
 
   const KEYS = [];
@@ -240,6 +244,8 @@ const CarFields = (function () {
     if (!("classified" in c)) c.classified = undefined;
     if (!("_wireId" in c)) c._wireId = undefined;
     if (!("stallT" in c)) c.stallT = undefined;
+    if (!("_incidentOwned" in c)) c._incidentOwned = undefined;
+    if (!("slipDeg" in c)) c.slipDeg = undefined;
     return c;
   }
 
