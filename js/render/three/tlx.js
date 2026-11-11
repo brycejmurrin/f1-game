@@ -1275,7 +1275,8 @@ const TLX = (function () {
         if (fixedActive()) return W !== presentW || H !== presentH;
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
-      function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
+      // `out` (optional) is filled instead of a fresh object: tlx-post's per-present read.
+      function getPresentSize(out) { const o = out || {}; o.width = presentW || W; o.height = presentH || H; return o; }
       // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
       const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
       let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // a phone is ALWAYS mobileTier (glx-facade.js): no setting lifts this 1.5 cap, only the URL lab below (docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F1)

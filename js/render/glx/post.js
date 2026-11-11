@@ -116,14 +116,14 @@ const GLXPost = (function () {
     const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
 
     // POST_VS uUVScale — must be set on every use (WebGL defaults unset to 0).
-    function usePost(prog) {
+    function usePost(prog, exactSize = false) {
       useProg(prog);
       let loc = _uvLocs.get(prog);
       if (loc === undefined) {
         loc = prog ? gl.getUniformLocation(prog, "uUVScale") : null;
         _uvLocs.set(prog, loc);
       }
-      if (loc) gl.uniform2f(loc, _uvScaleX, _uvScaleY);
+      if (loc) gl.uniform2f(loc, exactSize ? 1 : _uvScaleX, exactSize ? 1 : _uvScaleY);
     }
     function setCoverScale(logicalW, logicalH) {
       _uvScaleX = allocW > 0 ? (logicalW / allocW) : 1;
@@ -1270,7 +1270,7 @@ const GLXPost = (function () {
       gl.viewport(x, y, w, h);
       gl.disable(gl.DEPTH_TEST);
       setBlend(false);
-      usePost(mirProg);
+      usePost(mirProg, true);   // mirrorTarget is exact-size, never the main scene's square cover
       bindVAO(core.skyVAO);   // POST_VS is a gl_VertexID triangle; WebGL2 still wants a VAO
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, mirTex);

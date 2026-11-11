@@ -824,6 +824,45 @@ function bootDevPanels() {
   return _devLoad;
 }
 
+// PERF RIG (LAZY_PERF, #4978 row 2): BENCHMARK and PHONE TEST off the boot
+// wall. game.js hands bootPerfRig the SoakRun/BenchRun create(G) calls it used to make;
+// the bundle lands at idle (its settings doors mount on their own timers), or
+// at once when BenchRun's multi-reload plan is waiting to resume.
+let _perfLoad = null, _perfBind = null;
+function perfResumePending() {
+  try {
+    const s = typeof GameStore !== "undefined" && GameStore.store;
+    return !!(s ? s.raw("apex26.benchRun") : localStorage.getItem("apex26.benchRun"));
+  } catch (_) { return false; }
+}
+function ensurePerfRig() {
+  if (_perfLoad) return _perfLoad;
+  const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_PERF) || [];
+  if (!files.length) return Promise.resolve(false);
+  _perfLoad = loadBackendScripts(files, ApexRoster.LAZY_PERF_EDGES || [], { strict: true }).then((ok) => {
+    bindPerfRig();
+    return ok !== false;
+  }).catch((e) => {
+    Log.warn("game", "perf rig failed to load: " + (e && e.message));
+    _perfLoad = null;
+    return false;
+  });
+  return _perfLoad;
+}
+let _perfBound = false;
+function bindPerfRig() {
+  if (_perfBound || !_perfBind || typeof SoakRun === "undefined" || typeof BenchRun === "undefined") return;
+  _perfBound = true;
+  try { _perfBind(); } catch (e) { Log.warn("game", "perf rig bind failed: " + (e && e.message)); }
+}
+function bootPerfRig(bind) {
+  _perfBind = bind;
+  bindPerfRig();
+  if (perfResumePending()) ensurePerfRig();
+  else scheduleIdle(() => { ensurePerfRig(); }, 3000);
+  return _perfLoad;
+}
+
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited at boot, on
 // purpose: awaiting it here would put the 338 KB straight back on the
 // critical path. Nothing in a menu resolves lighting — applyRaceSettings()
@@ -988,7 +1027,7 @@ function bootDesktopAudio() {
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

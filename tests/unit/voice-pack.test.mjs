@@ -18,7 +18,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createHash, webcrypto } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { binaryIntegrity, stampIntegrity, fullPhrases, phrases, recordClips } from "../../tools/gen/voicepack.mjs";
+import { binaryIntegrity, stampIntegrity, fullPhrases, phrases, recordClips, parseCli, publishFiles, checkPrior } from "../../tools/gen/voicepack.mjs";
+import { writeCorpus } from "../../tools/gen/voice-corpus.mjs";
 import { SAMPLES, requestFor } from "../../tools/gen/voice-audition.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -1488,4 +1489,88 @@ test("the announcer pack is fetched only while the announcer speaks", () => {
   const on = radio({ announcer: { enabled: () => true } });
   on.v.prepare();
   assert.equal(staged(on, "fable"), true, "announcer on: the presenter pack is staged");
+});
+
+// ── #2501: author-time hardening (voicepack.mjs / voice-corpus.mjs) ──
+test("voicepack CLI refuses unknown flags, valueless flags and a non-numeric --speed before any work", () => {
+  const ok = parseCli(["--append", "--id", "george", "--speed", "1.08", "--out", "x"]);
+  assert.equal(ok.flag("append"), true); assert.equal(ok.flag("opus"), false);
+  assert.equal(ok.arg("id", "fable"), "george"); assert.equal(ok.arg("voice", "bm_george"), "bm_george");
+  for (const [argv, re] of [[["--apend"], /unknown argument --apend/], [["george"], /unknown argument george/],
+    [["--id"], /--id needs a value/], [["--id", "--append"], /--id needs a value/],
+    [["--speed", "fast"], /--speed must be a positive number/], [["--speed", "0"], /positive/], [["--speed", "-1"], /positive/]]) {
+    assert.throws(() => parseCli(argv), re, argv.join(" "));
+  }
+  // The CLI answers a typo with exit 2 and touches nothing (it used to run a full rebuild).
+  const r = spawnSync(process.execPath, ["tools/gen/voicepack.mjs", "--apend", "--id", "george"], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+  assert.equal(r.status, 2, r.stderr); assert.match(r.stderr, /unknown argument --apend/);
+});
+
+test("voicepack publishes every file through a temp and a rename, and a failed write leaves the old pack whole", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-publish-"));
+  try {
+    const bin = path.join(dir, "p.bin"), json = path.join(dir, "p.json");
+    fs.writeFileSync(bin, "old bin"); fs.writeFileSync(json, "old json");
+    // The index's directory is missing, so its temp write throws after the .bin's temp is written.
+    assert.throws(() => publishFiles([[bin, "new bin"], [path.join(dir, "gone", "p.json"), "new json"]]));
+    assert.equal(fs.readFileSync(bin, "utf8"), "old bin", "no file moves until every temp is written");
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["p.bin", "p.json"], "temps are cleaned up");
+    publishFiles([[bin, "new bin"], [json, "new json"]]);
+    assert.equal(fs.readFileSync(bin, "utf8"), "new bin"); assert.equal(fs.readFileSync(json, "utf8"), "new json");
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["p.bin", "p.json"]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("voicepack --append refuses a published binary that does not match its index", () => {
+  const bin = Buffer.from("recorded bytes");
+  const man = { clips: { box: [0, 6, 0.4], now: [6, 8, 0.5] }, binary: binaryIntegrity(bin) };
+  checkPrior(man, bin, "george.bin");
+  assert.throws(() => checkPrior(man, Buffer.from("recorded bytez"), "george.bin"), /does not match its index/);
+  assert.throws(() => checkPrior({ clips: man.clips }, bin.subarray(0, 10), "legacy.bin"), /clip "now" .* outside the 10 B/);
+  assert.throws(() => checkPrior({ clips: { box: [0, 6, 0] } }, bin, "z.bin"), /no duration/);
+  // CLI: a tampered .bin stops the append with the published pack untouched.
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-prior-"));
+  try {
+    const clips = Object.fromEntries(fullPhrases("george", "radio").map(({ key }) => [key, [0, bin.length, 1.25]]));
+    const pack = { v: 1, id: "george", voice: "bm_george", speaker: "radio", speed: 1.12, clips, binary: binaryIntegrity(bin) };
+    fs.writeFileSync(path.join(dir, "george.json"), JSON.stringify(pack) + "\n");
+    fs.writeFileSync(path.join(dir, "george.bin"), "tampered bytes");
+    const r = spawnSync(process.execPath, ["tools/gen/voicepack.mjs", "--append", "--id", "george", "--out", dir,
+      "--kokoro", path.join(dir, "missing")], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+    assert.notEqual(r.status, 0); assert.match(r.stderr, /does not match its index/);
+    assert.equal(fs.readFileSync(path.join(dir, "george.bin"), "utf8"), "tampered bytes");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("recordClips re-renders an empty cached encode and refuses a clip with no readable duration", async () => {
+  const f = recordingFixture();
+  try {
+    const list = [{ key: "box", text: "Box" }];
+    await recordClips({ ...f.opts, list });
+    const mp3 = fs.readdirSync(f.dir).find((n) => n.endsWith(".mp3"));
+    fs.writeFileSync(path.join(f.dir, mp3), "");   // an encode killed mid-write
+    const again = await recordClips({ ...f.opts, list });
+    assert.deepEqual(f.counts(), { loads: 2, generations: 2 }, "the empty cache file is a miss, not a hit");
+    assert.ok(again.binary.length > 0 && again.clips.box[1] === again.binary.length);
+    const silent = path.join(f.dir, "silent-probe.cjs");
+    fs.writeFileSync(silent, `#!${process.execPath}\nconst a = process.argv.slice(2); if (a.length > 2) require("node:fs").writeFileSync(a.at(-1), "x");\n`, { mode: 0o755 });
+    await assert.rejects(recordClips({ ...f.opts, list: [{ key: "now", text: "Now" }], getFFmpeg: () => silent }), /no duration for now_/);
+  } finally { f.close(); }
+});
+
+test("voice-corpus writes nothing when a race failed, and publishes a full run by rename", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-corpus-"));
+  try {
+    const out = path.join(dir, "corpus.json");
+    fs.writeFileSync(out, "previous corpus");
+    const corpus = { radio: new Map([["BOX BOX", 2], ["ALPHA", 1]]), coach: new Map() };
+    assert.throws(() => writeCorpus(out, corpus, ["spa: G.setInput is not a function"]), /1 of 6 races failed.*\n  spa: G\.setInput/s);
+    assert.equal(fs.readFileSync(out, "utf8"), "previous corpus", "a partial run leaves the corpus as it was");
+    writeCorpus(out, corpus, []);
+    assert.deepEqual(JSON.parse(fs.readFileSync(out, "utf8")), { radio: ["ALPHA", "BOX BOX"], coach: [] });
+    assert.deepEqual(fs.readdirSync(dir), ["corpus.json"]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
