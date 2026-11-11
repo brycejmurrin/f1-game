@@ -5588,7 +5588,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
       // clamp to vmax made steep downhills feel inert once at pace).
       // Gravity may ADD up to the 6 % margin; it must not confiscate ERS/X
       // leftover already above it (that snap is what made hills clip).
-      const cap = vmax * 1.06;
+      const cap = c.human ? vmax * 1.06 : Math.min(vmax * 1.06, accelCeil);
       // ...but not into a car the BRAKES are holding: at a standstill gravity's a·dt re-took the
       // `speed > 0` braking branch every step, so brake-to-reverse never engaged on any descent.
       if (c.speed < cap && !(braking && c.speed <= a * dt)) c.speed = Math.min(cap, c.speed + a * dt);
