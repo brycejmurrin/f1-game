@@ -39,7 +39,7 @@ const MAX_EAGER_SCRIPTS = 317;
 // 8.15 MB: the cap came down from 8,220,000 with #5468 (#4748 career-backup → LAZY_CAREER_UI, #4978 row 2 perf rig →
 // LAZY_PERF). 8,150,000 is the owner's decision of 2026-11-11 (issue #5523, brycejmurrin "decision: 8150000",
 // 16:37:17Z), a deliberate exception to the "freed bytes are not headroom" default. Measured after #5468:
-// 314 scripts, 8,046,657 raw bytes → 103,343 B of room.
+// 314 scripts, 8,048,913 raw bytes (tip 240426c6) → 101,087 B of room.
 const MAX_EAGER_BYTES = 8_150_000;
 
 function eagerScripts() {
