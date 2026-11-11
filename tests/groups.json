@@ -355,6 +355,8 @@
     "// dispatch: the Actions dispatcher's pure plan over fixture GitHub state (ready launches and their addresses, provenance-gated priority/pause, caps, claims, stale → needs-owner + CONTINUE, codex 6 h, hold, deploy red, nudges, needs-decision digests, Board) and the fire path with a stubbed fetch; no network; < 0.5 s.",
     "tests/unit/dispatch.test.mjs",
     "tests/unit/docs-integrity.test.mjs",
+    "// Every DOM id literal in js/** exists (index.html, its own page, or a derived runtime creator), and shell-ids RUNTIME_IDS cannot go stale. ~1.5 s.",
+    "tests/unit/dom-id-literals.test.mjs",
     "// Decorrelated DriverRatings.BASE + skill()/overall personality pins.",
     "tests/unit/driver-ratings-personality.test.mjs",
     "tests/unit/driving-coach.test.mjs",
@@ -910,6 +912,8 @@
     "// sized this repo wrong on 2026-10-01), real-git fixture. ~1 s.",
     "tests/unit/repo-size.test.mjs",
     "tests/unit/report-server.test.mjs",
+    "// W30: tests/helpers/require-tool.mjs — a missing external tool skips loudly (counted) or fails when the job opts in.",
+    "tests/unit/require-tool.test.mjs",
     "tests/unit/res-scale-census.test.mjs",
     "// Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.",
     "tests/unit/results-cam.test.mjs",
@@ -1413,6 +1417,7 @@
     "test:audio-unit": {
       "files": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/asset-credits.test.mjs",
         "tests/unit/audio-mix-improvements.test.mjs",
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
@@ -1521,7 +1526,8 @@
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",
-        "tests/unit/followup-platform.test.mjs"
+        "tests/unit/followup-platform.test.mjs",
+        "tests/unit/notices.test.mjs"
       ],
       "kind": "node"
     },
@@ -2351,6 +2357,7 @@
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/settings-search.test.mjs",

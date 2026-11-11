@@ -136,9 +136,9 @@ test("the reporter keys a test on its SPEC, not on the file that declared it", a
   assert.equal(own.spec, "tests/specs/smoke.spec.js");
   assert.equal(own.title, "boots");
 
-  const viaHelper = at(["chromium", "manual/tracks-visual.spec.js", "monza", "renders"],
+  const viaHelper = at(["chromium", "specs/terrain-over-road.spec.js", "monza", "renders"],
                        "/repo/tests/helpers/track-helpers.js");
-  assert.equal(viaHelper.spec, "tests/manual/tracks-visual.spec.js",
+  assert.equal(viaHelper.spec, "tests/specs/terrain-over-road.spec.js",
     "the SPEC owns the test, not the helper that declared it");
   assert.equal(viaHelper.title, "monza › renders");
 
