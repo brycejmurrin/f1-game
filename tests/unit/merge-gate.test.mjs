@@ -1380,7 +1380,7 @@ test("config: a package.json diff that is only the generated test file lists is 
 
 /** Run 42880431465 (2026-11-10 18:57Z, head 1421575a), as its jobs API read on 2026-11-11: every ci / … job green,
  *  `deploy` failed in the Pages publish (PLATFORM_STEP failed), the live-shell check skipped. */
-const RUN_42880431465 = { id: 42880431465, head_sha: "1421575aec6a36eb2390e4731d87887f713ad13f", status: "completed", conclusion: "failure" };
+const RUN_42880431465 = { id: 42880431465, head_sha: "1421575aec6a36eb2390e4731d87887f713ad13f", status: "completed", conclusion: "failure", created_at: "2026-11-10T18:57:40Z" };
 const JOBS_42880431465 = [
   { name: "ci / Selected specs (change-aware gate) (selected-1, tests/specs/audit.spec.js)", conclusion: "success" },
   { name: "ci / CI", conclusion: "success" }, { name: "publishable", conclusion: "success" }, { name: "Stage and stamp the site", conclusion: "success" },
@@ -1410,6 +1410,12 @@ test("deploy tip (#5425): a spec-leg red is code; run 42880431465 (publish only)
   assert.deepEqual(codeRedJobs(both).map((j) => j.name), [SPEC_RED[0].name], "the marker excuses only `deploy`, never another red job");
   assert.equal(tipState({ ...RUN_42880431465, conclusion: "timed_out" }, [{ name: "ci / Smoke (1)", conclusion: "timed_out" }]).state, "code-red");
   for (const conclusion of ["success", "cancelled", "skipped"]) assert.equal(tipState({ ...RUN_42880431465, conclusion }).state, "green", conclusion);
+  // Fail closed: a failed run is `platform` only when the marker step failed.
+  assert.equal(tipState({ ...RUN_42880431465, conclusion: "startup_failure" }, []).state, "code-red", "a startup_failure with no jobs (a pages.yml syntax error) is code");
+  const cancelledJobs = tipState(RUN_42880431465, [{ name: "ci / CI", conclusion: "cancelled" }, { name: "deploy", conclusion: "cancelled", steps: [] }]);
+  assert.equal(cancelledJobs.state, "code-red", "a failed run whose jobs were all cancelled: " + cancelledJobs.evidence);
+  assert.match(cancelledJobs.evidence, /no job red and no Pages-side marker \(2 job\(s\) listed\)/);
+  assert.equal(real.runAt, "2026-11-10T18:57:40Z");
   assert.equal(tipState(null).state, "none");
 });
 
@@ -1420,11 +1426,15 @@ test("readDeployTip: the newest COMPLETED pages.yml run, its latest-attempt jobs
     const m = /^actions\/runs\/(\d+)\/jobs\?filter=latest&per_page=100&page=(\d+)$/.exec(p);
     return m ? { json: { jobs: jobPages[Number(m[2]) - 1] || [] } } : { error: `unexpected ${p}` }; };
   assert.equal(readDeployTip("deploy-x", req([{ id: 5, conclusion: "success" }], [])).state, "green");
-  assert.deepEqual(seen, ["actions/workflows/pages.yml/runs?branch=deploy-x&status=completed&per_page=1"], "a green run reads no jobs");
+  assert.deepEqual(seen, ["actions/workflows/pages.yml/runs?branch=deploy-x&status=completed&per_page=20"], "a green run reads no jobs");
   const many = Array.from({ length: 100 }, (_, i) => ({ name: `ci / leg ${i}`, conclusion: "success" }));
   const t = readDeployTip("deploy-x", req([RUN_42880431465], [many, [SPEC_RED[0]]]));
   assert.equal(t.state, "code-red", "a red on the second page of jobs is seen");
   assert.equal(readDeployTip("deploy-x", req([], [])).state, "none");
+  assert.equal(readDeployTip("deploy-x", req([{ id: 6, conclusion: "cancelled" }, { id: 5, conclusion: "skipped" }, { ...RUN_42880431465, id: 4 }], [SPEC_RED])).state, "code-red",
+    "a cancelled or skipped newest run says nothing: the read looks past it to the red one");
+  assert.match(readDeployTip("deploy-x", () => ({ json: {} })).error, /no workflow_runs array/, "a runs response without its array is an error, never `none`");
+  assert.match(readDeployTip("deploy-x", (p) => (p.includes("/jobs") ? { json: {} } : { json: { workflow_runs: [RUN_42880431465] } })).error, /no jobs array/, "a jobs response without its array is an error, never `platform`");
   assert.match(readDeployTip("deploy-x", () => ({ error: "HTTP 502" })).error, /pages\.yml runs on deploy-x: HTTP 502/);
   assert.match(readDeployTip("deploy-x", (p) => (p.includes("/jobs") ? { error: "HTTP 403" } : { json: { workflow_runs: [RUN_42880431465] } })).error, /jobs of pages\.yml run 42880431465: HTTP 403/);
 });
@@ -1441,13 +1451,21 @@ test("baseVerdict (#5425): a code-red tip WAITS; only Bryce's own `deploy:red` o
     assert.equal(own.ok, true, label); assert.match(own.evidence, new RegExp(`\`${label}\` added by brycejmurrin in person at 2026-11-11T08:00:00Z`));
     const agent = baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z", { app: APP })]);
     assert.equal(agent.ok, false, `${label} added through the Claude app does not lift the hold`); assert.equal(agent.pending, true);
-    assert.match(agent.evidence, new RegExp(`\`${label}\` is set but not last added by brycejmurrin in person`));
+    assert.match(agent.evidence, new RegExp(`\`${label}\` is set but not added by brycejmurrin in person after this red run started`));
     assert.equal(baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z"), ev(label, "2026-11-11T08:05:00Z", { app: APP })]).ok, false, `${label}: an agent's re-add after his click is the newest event`);
     assert.equal(baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z", { actor: "someone-else" })]).ok, false, `${label} by another login`);
     assert.equal(baseVerdict(red, [{ name: label }], null).ok, false, `${label} with no events read: provenance unknown is no grant`);
     assert.equal(baseVerdict(red, [], [ev(label, "2026-11-11T08:00:00Z")]).ok, false, `${label} removed since`);
   }
   for (const state of ["green", "platform", "none"]) assert.equal(baseVerdict({ state, evidence: "x" }, [], []).ok, true, state);
+  // Bound to THIS red: a click before the red run started (an earlier red, or `priority` set for scheduling) does not count.
+  for (const label of BASE_ESCAPE_LABELS) {
+    const old = baseVerdict(red, [{ name: label }], [ev(label, "2026-11-10T18:00:00Z")]);
+    assert.equal(old.ok, false, `${label} clicked at 18:00Z, before the red run started at 18:57:40Z`);
+    assert.match(old.evidence, /not added by brycejmurrin in person after this red run started \(2026-11-10T18:57:40Z\)/);
+    assert.equal(baseVerdict(red, [{ name: label }], [ev(label, "2026-11-10T18:58:00Z")]).ok, true, `${label} clicked after the run started`);
+    assert.equal(baseVerdict({ ...red, runAt: null }, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z")]).ok, false, `${label}: a red run with no start time binds nothing`);
+  }
 });
 
 test("evaluate: the base row reads the PR's base branch; a code-red tip waits (exit 3) with every other row ok, and the fixer lands on Bryce's own `deploy:red`", () => {

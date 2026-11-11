@@ -138,18 +138,22 @@ export function holdVerdict(labels, events = null, owner = OWNER) {
 export const BASE_ESCAPE_LABELS = Object.freeze(["deploy:red", "priority"]);
 
 /** base: `tip` is tipState() from tools/ci/lib/deploy-tip.mjs. A code red WAITS (pending) unless one of
- *  BASE_ESCAPE_LABELS is on the PR and its newest event is his own `labeled` (ownerSet: performed_via_github_app
- *  null, actor the owner); any other state passes. `events` null honours no escape. Pure. */
+ *  BASE_ESCAPE_LABELS is on the PR, its newest event is his own `labeled` (ownerSet: performed_via_github_app
+ *  null, actor the owner), AND that click is newer than the red run's start (`tip.runAt`): a label he set for an
+ *  earlier red, or `priority` set for scheduling, does not wave through a later red. Any other state passes.
+ *  `events` null honours no escape. Pure. */
 export function baseVerdict(tip, labels, events = null, owner = OWNER) {
   if (tip?.state !== "code-red") return row(true, tip?.evidence || "deploy tip state not given");
-  const mine = BASE_ESCAPE_LABELS.filter((l) => ownerSet(labels, events, l, owner));
+  const redAt = Date.parse(tip.runAt || "");
+  const after = (l) => { const t = Date.parse(newestLabelEvent(events, l)?.created_at || ""); return !!t && !!redAt && t > redAt; };
+  const mine = BASE_ESCAPE_LABELS.filter((l) => ownerSet(labels, events, l, owner) && after(l));
   if (mine.length) {
     const e = newestLabelEvent(events, mine[0]);
     return row(true, `${tip.evidence}; \`${mine[0]}\` added by ${owner} in person at ${e?.created_at || "?"}: this PR may land over the red tip (the fixer)`);
   }
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name));
   const notHis = BASE_ESCAPE_LABELS.filter((l) => names.includes(l));
-  const why = notHis.length ? `; \`${notHis.join("`, `")}\` is set but not last added by ${owner} in person, so it does not count` : "";
+  const why = notHis.length ? `; \`${notHis.join("`, `")}\` is set but not added by ${owner} in person after this red run started (${tip.runAt || "?"}), so it does not count` : "";
   return { ...row(false, `${tip.evidence}: merges wait until the tip is green${why}; the fixer's PR lands once ${owner} adds \`deploy:red\` to it himself`), pending: true };
 }
 

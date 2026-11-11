@@ -34,35 +34,43 @@ export function codeRedJobs(jobs) {
  * The tip's state from the newest completed pages.yml run and its jobs. Pure.
  * @param {object|null} run   workflow run (id, conclusion, head_sha) or null when the branch has no completed run
  * @param {object[]|null} jobs that run's jobs (latest attempt); null when not read (a green run needs none)
- * @returns {{ state: "green"|"code-red"|"platform"|"none", runId: number|null, jobs: string[], evidence: string }}
+ * A failed run is "platform" ONLY when the marker step failed and no other job is red; a failed run with no red job
+ * at all (a startup_failure with no jobs — a pages.yml syntax error — or every job cancelled) is a code red: the
+ * row fails closed. `runAt` is the run's created_at, so an escape label can be bound to this red (merge-gate base).
+ * @returns {{ state: "green"|"code-red"|"platform"|"none", runId: number|null, runAt: string|null, jobs: string[], evidence: string }}
  */
 export function tipState(run, jobs = null) {
-  if (!run) return { state: "none", runId: null, jobs: [], evidence: "no completed pages.yml run on the deploy branch" };
-  const id = run.id ?? null, sha = String(run.head_sha || "").slice(0, 8);
+  if (!run) return { state: "none", runId: null, runAt: null, jobs: [], evidence: "no completed pages.yml run on the deploy branch" };
+  const id = run.id ?? null, sha = String(run.head_sha || "").slice(0, 8), runAt = run.created_at || null;
   const at = `pages.yml run ${id} on ${sha || "?"}`;
-  if (!RED_RUN.has(run.conclusion)) return { state: "green", runId: id, jobs: [], evidence: `${at} concluded ${run.conclusion || "?"}` };
+  if (!RED_RUN.has(run.conclusion)) return { state: "green", runId: id, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion || "?"}` };
   const red = codeRedJobs(jobs);
-  if (!red.length) {
-    const why = platformStepFailed(jobs) ? `only job \`${DEPLOY_JOB}\` failed, at step "${PLATFORM_STEP}" (Pages side)` : "no job concluded red";
-    return { state: "platform", runId: id, jobs: [], evidence: `${at} concluded ${run.conclusion}, not on code: ${why}` };
+  if (!red.length && platformStepFailed(jobs)) {
+    return { state: "platform", runId: id, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion}, not on code: only job \`${DEPLOY_JOB}\` failed, at step "${PLATFORM_STEP}" (Pages side)` };
   }
+  if (!red.length) return { state: "code-red", runId: id, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion} with no job red and no Pages-side marker (${(jobs || []).length} job(s) listed): counted as code` };
   const names = red.map((j) => j.name);
   const shown = names.slice(0, 3).map((n) => `\`${n}\``).join(", ") + (names.length > 3 ? ` and ${names.length - 3} more` : "");
-  return { state: "code-red", runId: id, jobs: names, evidence: `${at} concluded ${run.conclusion} on code: failed job(s) ${shown}` };
+  return { state: "code-red", runId: id, runAt, jobs: names, evidence: `${at} concluded ${run.conclusion} on code: failed job(s) ${shown}` };
 }
 
-/** Read the tip: the newest completed pages.yml run on `branch`, then (only when it failed) its jobs, every page.
+/** Run conclusions that say nothing about the tip (a cancelled or skipped train): the read looks past them. */
+const SILENT_RUN = new Set(["cancelled", "skipped", "neutral", "stale"]);
+/** Read the tip: the newest completed pages.yml run on `branch` that is not cancelled or skipped (of the newest 20),
+ *  then (only when it failed) its jobs, every page. A response without its array is an error, never "none" or "green".
  *  → tipState(...) | { error }. `request(path)` → { json, error }. */
 export function readDeployTip(branch, request) {
-  const r = request(`actions/workflows/pages.yml/runs?branch=${encodeURIComponent(branch)}&status=completed&per_page=1`);
+  const r = request(`actions/workflows/pages.yml/runs?branch=${encodeURIComponent(branch)}&status=completed&per_page=20`);
   if (r?.error) return { error: `pages.yml runs on ${branch}: ${r.error}` };
-  const run = r?.json?.workflow_runs?.[0] || null;
+  if (!Array.isArray(r?.json?.workflow_runs)) return { error: `pages.yml runs on ${branch}: no workflow_runs array in the response` };
+  const run = r.json.workflow_runs.find((x) => !SILENT_RUN.has(x?.conclusion)) || null;
   if (!run || !RED_RUN.has(run.conclusion)) return tipState(run);
   const jobs = [];
   for (let page = 1; page <= 10; page++) {
     const j = request(`actions/runs/${run.id}/jobs?filter=latest&per_page=100&page=${page}`);
     if (j?.error) return { error: `jobs of pages.yml run ${run.id}: ${j.error}` };
-    const rows = Array.isArray(j?.json?.jobs) ? j.json.jobs : [];
+    if (!Array.isArray(j?.json?.jobs)) return { error: `jobs of pages.yml run ${run.id}: no jobs array in the response` };
+    const rows = j.json.jobs;
     jobs.push(...rows);
     if (rows.length < 100) return tipState(run, jobs);
   }
