@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BRYCE_WINDOWS, LEGACY_EXPORT, OWNER_EXPORT, UI_SIZE_AXIS, brycePhone, classifyShot, mismatches, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
@@ -181,4 +182,31 @@ test("summarize + reportLines: the screen factor is the median; an element off i
   assert.match(text, /button#big: live 100x40 → phone 94x38 \(0\.94x, 1\.979x the screen factor, score 0\.85\)/);
   assert.match(text, /= phone-shot-diff: screen 0\.475x, 1 element\(s\) differ, 2 unmatched$/);
   assert.match(reportLines(summarize([rows[5]]), { shot: "s.png", window: "standalone", pxPerCss: 2 }).join("\n"), /no confident match/);
+});
+
+// #5218: three Safari-tab cells disagreed (title-fit 852x283 67/21/67, menu-screens 852x344 59/21/59, the UI
+// contract 852x283 59/0/59). His phone read 852x368; tests/data/phone-windows.json is the one record and every
+// emulator of his phone reads it.
+test("phone windows: one record, the measured Safari tab, read by bryce-phone, title-fit and menu-screens", async () => {
+  const rec = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/phone-windows.json"), "utf8"));
+  assert.deepEqual([rec.windows.safari.width, rec.windows.safari.height, rec.dpr], [852, 368, 3], "the #5218 reading");
+  assert.match(rec.windows.safari.source, /#5218.*2026-11-10T02:40Z/);
+  for (const [name, w] of Object.entries(rec.windows)) {
+    assert.ok(w.measured && w.assumed && w.source, `${name} says what was measured, what was assumed, and where from`);
+    assert.deepEqual({ ...BRYCE_WINDOWS[name].insets }, w.insets, `bryce-phone ${name}`);
+    assert.deepEqual([BRYCE_WINDOWS[name].width, BRYCE_WINDOWS[name].height], [w.width, w.height], `bryce-phone ${name}`);
+  }
+  const { GEOS } = await import("../helpers/title-fit.mjs");
+  const geo = (n) => GEOS.find((g) => g.name === n);
+  for (const [cell, win] of [["852x393-standalone", "standalone"], ["852x368-safari", "safari"], ["844x390", "w844"]]) {
+    const g = geo(cell), w = rec.windows[win];
+    assert.ok(g, `title-fit has the ${cell} cell`);
+    assert.deepEqual([g.w, g.h, g.insets], [w.width, w.height, w.insets], `title-fit ${cell} = the record's ${win}`);
+  }
+  const ms = fs.readFileSync(path.join(ROOT, "tools/ui/menu-screens.mjs"), "utf8");
+  assert.match(ms, /tests\/data\/phone-windows\.json/);
+  assert.match(ms, /"ios-iphone-landscape-safari"[\s\S]{0,200}viewport: \{ width: PW\.safari\.width, height: PW\.safari\.height \}[\s\S]{0,200}ins\(PW\.safari\)/);
+  const tf = fs.readFileSync(path.join(ROOT, "tests/helpers/title-fit.mjs"), "utf8");
+  for (const [f, src] of [["title-fit.mjs", tf], ["menu-screens.mjs", ms]])
+    assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /height: (283|344)\b|\bh: (283|344)\b/, `${f}: no guessed Safari height outside a comment`);
 });

@@ -21,7 +21,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 const ctx2d = () => new Proxy({}, { get: () => () => {}, set: () => true });
 
-function boot() {
+function boot({ portrait = false, extra = {} } = {}) {
   const dom = makeDom();
   const rawCreate = dom.document.createElement;
   dom.document.createElement = (tag) => {
@@ -40,9 +40,10 @@ function boot() {
     GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
     TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
     setTimeout: () => 1, clearTimeout: () => {}, performance: { now: () => 1000 },
-    matchMedia: () => ({ matches: false, addListener() {}, removeListener() {} }),
+    matchMedia: (q) => ({ matches: portrait && /portrait/.test(q), addListener() {}, removeListener() {} }),
     getComputedStyle: () => ({ getPropertyValue: () => "", columnGap: "0px", rowGap: "0px", transform: "none" }),
   };
+  Object.assign(sb, extra);
   sb.window = sb;
   for (const f of ["js/ui/live-region.js", "js/ui/hud-minimap.js", "js/ui/hud-radio-lane.js", "js/ui/hud.js", "js/race/overtake-mode.js"]) {
     vm.runInNewContext(src(f), sb, { filename: absSrc(f) });
@@ -79,20 +80,24 @@ function boot() {
     parent.appendChild(e);
     return e;
   };
-  mk("hud-top", dom.body); mk("hud-bottom", dom.body);
+  mk("hud-top", dom.body);
+  // A laid-out bottom cluster, so fitPass's portrait GEAR-vs-ladder cap (bottom > 0) runs.
+  const rect = (l, w) => () => ({ left: l, right: l + w, width: w, top: 300, bottom: 340, height: 40, x: l, y: 300 });
+  mk("", mk("hud-bottom", dom.body), "hud-gearbox").getBoundingClientRect = rect(300, 200);
   const bar = mk("", dom.body, "hud-dock");
   const dockL = $("dock-left"), dockR = $("dock-right");
   for (const d of [dockL, dockR]) { if (d.parentNode) d.parentNode.removeChild(d); bar.appendChild(d); }
   // game.js layoutDocks moves whole GROUPS between the docks.
   const pedals = mk("dock-grp", dockL, "grp-pedals"), taps = mk("dock-grp", dockR, "grp-taps");
-  mk("touchbtn", pedals, "btn-brake"); mk("touchbtn", pedals, "btn-throttle");
+  pedals.getBoundingClientRect = rect(10, 60); taps.getBoundingClientRect = rect(770, 60);
+  mk("touchbtn", pedals, "btn-brake").getBoundingClientRect = rect(10, 60); mk("touchbtn", pedals, "btn-throttle");
   const boost = mk("touchbtn", taps, "btn-boost"); mk("touchbtn", taps, "btn-ot2");
   const calls = { n: 0 };
   for (const d of [dockL, dockR]) {
     const q = d.querySelectorAll;
     d.querySelectorAll = (sel) => { calls.n++; return q(sel); };
   }
-  return { hud, sb, calls, dockL, dockR, pedals, taps, boost, tick: () => hud.updateHud(true) };
+  return { hud, sb, dom, calls, dockL, dockR, pedals, taps, boost, tick: () => hud.updateHud(true) };
 }
 
 test("fitHud: 30 steady ticks run no dock querySelectorAll after the first", () => {
@@ -119,6 +124,52 @@ test("fitHud: a dock re-layout, a dock swap or an invalidate re-queries; a hidde
   h.sb.GameHud.invalidateFit();
   h.tick();
   assert.ok(h.calls.n > n, "a swap / invalidate re-queries");
+});
+
+// #3108 row 4: the PORTRAIT cap (GEAR vs the ladder discs) walked both docks with a fresh
+// querySelectorAll on every fit pass; it reads the same cached dockButtons() list now.
+// Measured (mini-dom, 844x390 rects): 6 dock querySelectorAll per invalidated portrait fit before, 2 after (the cache refill).
+test("fitHud portrait: the GEAR-vs-ladder cap reads the cached dock list, no extra querySelectorAll", () => {
+  for (const portrait of [false, true]) {
+    const h = boot({ portrait });
+    for (let i = 0; i < 3; i++) h.tick();
+    const n = h.calls.n;
+    h.sb.GameHud.invalidateFit(); h.tick();
+    assert.equal(h.calls.n - n, 2, (portrait ? "portrait" : "landscape") + ": one query per dock per invalidated fit, got " + (h.calls.n - n));
+  }
+});
+
+// #3108 row 3: HudMinimap's measure key concatenated body.className and three style reads
+// on every HUD tick. With a MutationObserver it is rebuilt only after a watched write.
+// Measured (mini-dom, 30 steady ticks): the key build (body.className + 3 style reads + 8 concats) ran 30 times before, 0 after.
+test("minimap: the measure key is rebuilt only after a watched attribute write, not per tick", () => {
+  const obs = [];
+  class MO {
+    constructor(cb) { this.cb = cb; this.q = []; this.targets = []; obs.push(this); }
+    observe(t, o) { this.targets.push([t, o]); }
+    takeRecords() { const q = this.q; this.q = []; return q; }
+  }
+  const h = boot({ extra: { MutationObserver: MO } });
+  const body = h.dom.document.body;
+  // The key's own read: body.dataset.density (nothing else in the HUD reads it).
+  let reads = 0, density = "";
+  Object.defineProperty(body.dataset, "density", { configurable: true, enumerable: true,
+    get() { reads++; return density; }, set(v) { density = v; } });
+  h.tick(); h.tick();
+  const first = reads;
+  assert.ok(first >= 1, "the first draw builds the key");
+  for (let i = 0; i < 30; i++) h.tick();
+  assert.equal(reads - first, 0, "steady ticks rebuilt the key " + (reads - first) + " times");
+  assert.equal(obs.length, 1, "one observer");
+  const watched = obs[0].targets.map(([t, o]) => (t === body ? "body" : t.id || t.tagName || "root") + ":" + o.attributeFilter.join(","));
+  assert.ok(watched.includes("body:class,data-density") && watched.includes("minimap:style"), watched.join(" "));
+  assert.equal(watched.length, 3, "body, <html> and #minimap are watched");
+  obs[0].q.push({ type: "attributes" });   // a body class write earlier in this task (takeRecords path)
+  h.tick();
+  assert.equal(reads - first, 1, "a watched write rebuilds the key once");
+  obs[0].cb([]);   // the async delivery path
+  h.tick(); h.tick();
+  assert.equal(reads - first, 2, "a delivered record rebuilds it once more");
 });
 
 test("HudTyres.paint: 10 paints query the chip at most once; a detached chip is re-queried", () => {

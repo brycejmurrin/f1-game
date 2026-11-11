@@ -414,7 +414,7 @@ test.describe("Title doors — a fast double tap is one tap", () => {
 // storage is not rewritten. BUTTONS SIZE stays honest (#5229's rule: the range is what fits, the
 // number is the painted size): its low end is the floor, it shows the painted 100 % over the
 // stored 60, and from there every stored step paints a bigger door until the box stops the thumb.
-const LIVE_GEOS = [GEOS[0], { name: "852x368", w: 852, h: 368, insets: GEOS[0].insets }, GEOS[2]];
+const LIVE_GEOS = GEOS.slice(0, 3);   // standalone, the measured 852x368 Safari tab, 844x390 (tests/data/phone-windows.json)
 for (const geo of LIVE_GEOS) {
   test.describe(`title touch floor ${geo.name}`, () => {
     test.use({ viewport: { width: geo.w, height: geo.h }, hasTouch: true, isMobile: true });

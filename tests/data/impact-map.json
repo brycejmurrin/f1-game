@@ -10744,6 +10744,9 @@
       ],
       "subscribe": [
         "tests/unit/overlay-publisher.test.mjs"
+      ],
+      "*": [
+        "tests/unit/overlay-feed.test.mjs"
       ]
     },
     "js/overlay/feed.js": {
@@ -10769,6 +10772,9 @@
       ]
     },
     "js/overlay/publisher.js": {
+      "boot": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
       "input": [
         "tests/unit/overlay-publisher.test.mjs"
       ],
@@ -10779,6 +10785,7 @@
         "tests/unit/overlay-publisher.test.mjs"
       ],
       "tick": [
+        "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs"
       ]
     },
@@ -18285,6 +18292,9 @@
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/service-worker.test.mjs"
+      ],
+      "dockButtons": [
+        "tests/unit/hud-dock-btn-cache.test.mjs"
       ],
       "fitHud": [
         "tests/specs/hud-layout.spec.js",

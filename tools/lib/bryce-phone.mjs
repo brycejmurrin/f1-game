@@ -10,7 +10,7 @@
 // WHAT IS MEASURED AND WHAT IS NOT. The `standalone` window (the installed Home Screen app: 852x393 CSS px, DPR 3,
 // env() insets left 59 / right 59 / bottom 21 / top 0) is the Chromium emulation the geometry hunt booted and read
 // back (PR #5216). The `safari` window's SIZE (852x368, DPR 3) was measured on his iPhone over the phone bridge on
-// 2026-11-09 (issue #5262); its insets were not, and are assumed equal to the standalone window's. `w844` (844x390,
+// 2026-11-10 02:40Z (#5218); its insets were not, and are assumed equal to the standalone window's. `w844` (844x390,
 // insets 47/21/47) is NOT his phone: it is the cell most reports and specs were written against, kept so a finding
 // can be compared across the two. `display-mode: standalone` cannot be emulated through CDP; no CSS rule keys on it.
 //
@@ -42,16 +42,13 @@ export const LEGACY_EXPORT = OWNER_PROFILES.legacy;
 export const UI_SIZE_AXIS = Object.freeze([70, 109]);
 export const STORE_PREFIX = "apex26.";
 
-/** The windows the acceptance layer runs. `owner` = one of his phone's own windows; `verified` names what confirmed the numbers. */
-export const BRYCE_WINDOWS = Object.freeze({
-  standalone: Object.freeze({ width: 852, height: 393, insets: Object.freeze({ top: 0, left: 59, bottom: 21, right: 59 }), owner: true,
-    verified: "Home Screen app. Chromium emulation read-back (PR #5216); insets on the real device pending #5218" }),
-  safari: Object.freeze({ width: 852, height: 368, insets: Object.freeze({ top: 0, left: 59, bottom: 21, right: 59 }), owner: true,
-    verified: "Safari tab. Size MEASURED on his iPhone over the phone bridge 2026-11-09 (DPR 3); insets ASSUMED equal to standalone" }),
-  w844: Object.freeze({ width: 844, height: 390, insets: Object.freeze({ top: 0, left: 47, bottom: 21, right: 47 }), owner: false,
-    verified: "NOT his phone: the iPhone 12-14 cell (tools/ui/menu-screens.mjs ios-iphone-landscape-844) most reports were measured on" }),
-});
-export const BRYCE_DPR = 3;
+/** The windows the acceptance layer runs, from THE record tests/data/phone-windows.json (#5218): `owner` = one of his
+ *  phone's own windows; `verified` names what confirmed the numbers. */
+export const PHONE_WINDOWS_FILE = "tests/data/phone-windows.json";
+const PHONE_WINDOWS = JSON.parse(fs.readFileSync(ROOT + PHONE_WINDOWS_FILE, "utf8"));
+export const BRYCE_WINDOWS = Object.freeze(Object.fromEntries(Object.entries(PHONE_WINDOWS.windows).map(([name, w]) =>
+  [name, Object.freeze({ width: w.width, height: w.height, insets: Object.freeze({ ...w.insets }), owner: w.owner, verified: w.verified })])));
+export const BRYCE_DPR = PHONE_WINDOWS.dpr;
 /** A screenshot of the standalone window is 2556x1179 device px; the app he sends them through downscales to 2000x923. */
 export const SHOT_ASPECT_TOLERANCE = 0.012;
 
