@@ -253,7 +253,8 @@ test("manifest.json: id keeps the installed identity, screenshots and shortcuts 
   for (const sh of m.screenshots) {
     assert.ok(fs.existsSync(path.join(ROOT, sh.src)), sh.src + " exists");
     assert.match(sh.sizes, /^\d+x\d+$/);
-    assert.equal(sh.form_factor, "wide");
+    // Absent = every form factor (a phone install prompt needs one): manifest-screenshots.test.mjs.
+    assert.ok(sh.form_factor === undefined || sh.form_factor === "wide" || sh.form_factor === "narrow", sh.src);
     assert.ok(sh.label, "a screenshot is labelled for assistive tech");
   }
   for (const sc of m.shortcuts) {

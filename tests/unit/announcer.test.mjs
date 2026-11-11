@@ -589,30 +589,33 @@ test("every lore line is one spoken sentence the synth can read", () => {
   }
 });
 
-// Baku is exempt from the night-slot rule: lore lines are pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side
-// credentials), so Baku was moved to a DAY default instead of growing an unbaked night line. The Baku test below pins that decision, so this
-// exemption cannot hide a night circuit with nothing to say after dark.
-const BAKED_GAP = ["baku"];
+// Baku defaults to DAY since 2026-11-10 (the Azerbaijan GP starts ~15:00 local; FIA 2026 pre-race procedure), so it is no longer
+// a `night: true` circuit; NIGHT stays selectable there, which is why its unbaked night line stays a todo below. Lore lines are
+// pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side credentials).
+const BAKED_GAP = [];
 test("every night circuit has a night line, so the announcer has something to say after dark", () => {
   const { CircuitLore } = load();
   const nights = readdirSync(join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js"))
     .filter((f) => /^ {4}night: true,/m.test(readFileSync(join(ROOT, "js/circuits", f), "utf8")))
     .map((f) => f.replace(/\.js$/, ""));
-  assert.ok(nights.length >= 6, `only found ${nights.join(", ")}`);
+  assert.ok(nights.includes("singapore") && !nights.includes("baku") && nights.length >= 6, `only found ${nights.join(", ")}`);
   assert.deepEqual(nights.filter((id) => !BAKED_GAP.includes(id) && !CircuitLore.LORE[id].night), [], "a night circuit has no `night` lore slot");
 });
 
-test("Baku races in daylight by default, so its identity line is a day line and the night-slot exemption hides nothing", () => {
-  // Decision: Baku defaults to day rather than carrying an unbaked night line. The circuit def is the default time of day
-  // (game.js: raceTimeOfDay "default" && def.night), so the def must not say night, and every BAKED_GAP id must be a day circuit.
+test("Baku races in daylight by default, so its identity line is a day line", () => {
+  // Decision (#5287): Baku defaults to day. The circuit def is the default time of day
+  // (game.js: raceTimeOfDay "default" && def.night), so the def must not say night.
   const { CircuitLore } = load();
-  for (const id of BAKED_GAP) {
-    const def = readFileSync(join(ROOT, "js/circuits", `${id}.js`), "utf8");
-    assert.doesNotMatch(def, /^ {4}night: true,/m, `${id} defaults to night but is exempt from the night-lore rule`);
-  }
+  const def = readFileSync(join(ROOT, "js/circuits", "baku.js"), "utf8");
+  assert.doesNotMatch(def, /^ {4}night: true,/m, "baku defaults to night");
   const line = CircuitLore.LORE.baku.line;
   assert.ok(line, "Baku has no identity line");
   assert.doesNotMatch(line, /\b(night|floodlit|floodlights?|dark|after dark|moon)\b/i, "Baku's identity line is a night line");
+});
+
+test("Baku's night line is a known gap (voice bake pending; NIGHT is selectable there)", { todo: true }, () => {
+  const { CircuitLore } = load();
+  assert.ok(CircuitLore.LORE.baku.night, "Baku can be raced at night but has no night lore line");
 });
 
 // Lore-duration assertion dropped by Bryce's decision on #5340 (option b); the lore rewrite + voice-pack re-bake is #5372.
@@ -1280,7 +1283,7 @@ const BAKU40 = {
     tyre: { compound: "medium", age: 8, used: false }, stops: [31, 36], passesMade: 3, passesLost: 6, best: { time: 107.208, lap: 29 }, penalties: [] }),
   leaderStops: 2,
 };
-const bakuTrack = { id: "baku", name: "Baku", gp: "Azerbaijan Grand Prix", country: "Azerbaijan", lengthKm: 6.003, night: true };
+const bakuTrack = { id: "baku", name: "Baku", gp: "Azerbaijan Grand Prix", country: "Azerbaijan", lengthKm: 6.003, night: false };
 const bakuJoin = (over = {}) => {
   const real = { title: "2026 Azerbaijan Grand Prix", driver: "Charles Leclerc", startLap: 40, realLaps: 51, watch: false, reel: false, story: BAKU40, ...over };
   return info({ track: bakuTrack, gp: real.title, tod: "day", real, story: { real } });

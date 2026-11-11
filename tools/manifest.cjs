@@ -1125,6 +1125,8 @@ const LAZY_RACE_SESSION = [
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
   "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
   "js/race/ceremony.js", // RaceCeremony: post-flag cooldown → parc fermé → podium → results (#4067); session-stub.js holds the title-time stub
+  "js/race/stopped-cars.js", // StoppedCars: cars stopped on the road, RaceControl's second hazard source (W34)
+  "js/race/retired-card.js", // RetiredCard: a retired solo player's RETIRED card + SKIP TO RESULTS (W34); RaceControl typeof-guards it
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat

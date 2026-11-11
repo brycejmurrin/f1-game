@@ -314,12 +314,66 @@ for (const dy of [-8, 8]) {
   });
 }
 
-test("cosine-hill shims are gone (elevation is per-node heights only)", () => {
+test("elevation is per-node heights: setHeights drives the selected point and the commit carries heights[]", () => {
   const h = boot();
-  assert.equal("hill" in h.ctx.DesignerProfile, false);
-  assert.equal("ADD" in h.ctx.DesignerProfile, false);
-  assert.equal(typeof h.pr.setBumps, "undefined");
-  assert.equal(typeof h.pr.setHeights, "function");
+  const list = h.list().slice(); list[3] = 10;
+  h.pr.setHeights(list);
+  h.pr.select(3);
+  assert.match(h.canvas.getAttribute("aria-label"), /Point 4 of \d+: \+?10(\.0+)? m/, "the node's own height");
+  h.pr.select(2);
+  assert.match(h.canvas.getAttribute("aria-label"), /Point 3 of \d+: \+?0(\.0+)? m/, "its neighbour keeps 0: no hill spreads it");
+  h.pr.select(3);
+  h.key("ArrowUp");
+  const c = commits(h.ev).at(-1);
+  assert.equal(c.i, 3); assert.equal(c.h, 11);
+  assert.equal(c.all.length, h.n, "a whole heights[] (no hill objects)");
+  assert.deepEqual(c.all.filter((v, k) => k !== 3 && v !== 0), [], "only node 3 changed");
+});
+
+test("an unbuildable edit keeps the selection: setBuilt(null) then setSelection holds the point and span (W10 #1)", () => {
+  const h = boot();
+  h.pr.select(4, 7);
+  h.ev.selects.length = 0;
+  // validate.js: off the map / under the minimum / over 14 km / a build error → verdict.tr null.
+  h.pr.setBuilt(null, null, h.d.pts);
+  h.pr.setSelection(4, 7);   // designer.js syncProfile
+  assert.deepEqual(plain(h.pr.selection()), { sel: 4, span: 7 });
+  assert.deepEqual(plain(h.ev.selects), [], "no onSelect(-1, -1) wiping FIX / DELETE POINT / TEST HERE");
+  h.pr.setSelection(h.n + 3, -1);
+  assert.deepEqual(plain(h.pr.selection()), { sel: -1, span: -1 }, "an index past the control loop still clears");
+});
+
+test("Tab is left to the browser: the strip never traps keyboard focus (W10 #5)", () => {
+  const h = boot();
+  for (const shiftKey of [false, true]) {
+    const e = h.key("Tab", { shiftKey });
+    assert.notEqual(e.defaultPrevented, true, "Tab" + (shiftKey ? "+Shift" : "") + " with nothing selected");
+  }
+  h.key("]");
+  assert.equal(h.pr.selected(), 0, "] still picks");
+  const e = h.key("Tab");
+  assert.notEqual(e.defaultPrevented, true, "Tab with a point selected moves focus on");
+  assert.equal(h.pr.selected(), 0, "…without cycling the point");
+});
+
+test("dragging a span that runs over the start line lifts every point in it once, and nothing else", () => {
+  const n = design().pts.length;
+  const hs = new Array(n).fill(0);
+  hs[n - 2] = 1; hs[n - 1] = 2; hs[0] = 3; hs[1] = 4;
+  const h = boot(hs);
+  h.pr.select(n - 2, 1);
+  assert.deepEqual(plain(h.pr.selection()), { sel: n - 2, span: 1 });
+  const g = h.grips().find((p) => p.r === 9);
+  assert.ok(g, "selected anchor grip drawn");
+  const to = { x: g.x, y: g.y - 12 };
+  h.fire("pointerdown", g, 1, { pointerType: "mouse" });
+  h.fire("pointermove", to);
+  h.fire("pointerup", to);
+  assert.equal(commits(h.ev).length, 1, "one commit on release");
+  const all = plain(h.list()), dh = all[n - 2] - hs[n - 2];
+  assert.ok(dh > 0, "the group rose");
+  for (const i of [n - 2, n - 1, 0, 1]) assert.equal(all[i], hs[i] + dh, "point " + i + " keeps its relative height");
+  for (let i = 2; i < n - 2; i++) assert.equal(all[i], 0, "point " + i + " outside the wrapped span stays put");
 });
 
 test("dense polygon: idle grips shrink to the point spacing instead of a solid band of circles", () => {

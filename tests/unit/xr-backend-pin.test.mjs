@@ -66,7 +66,7 @@ test('armed retained-capability ENTER uses the reversible pin instead of a reloa
   const ctx = vm.createContext({
     XrBoot: h.XrBoot,
     XrSession: { isPresenting: () => false, start: async () => { starts++; } },
-    ApexXR: { plan: () => ({ xrMode: 'armed', path: 'webgl2' }), rendererMatchesPlan: () => false },
+    ApexXR: { plan: () => ({ xrMode: 'armed', path: 'webgl2' }) },
     document: { createElement: () => ({ setAttribute() {}, addEventListener() {} }) },
     setTimeout: () => 1, clearTimeout() {},
   });

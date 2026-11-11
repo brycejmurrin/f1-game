@@ -140,6 +140,17 @@ test("set writes only moved elements and paints --hl-* on that element", () => {
   assert.equal("data-hl" in els[".hud-top"].attrs, false);
 });
 
+test("a live set paints without saving; commit saves the gesture once (#5031)", () => {
+  const { H, written, els } = load();
+  for (let x = 1; x <= 5; x++) H.set("map", { x }, "other", undefined, true);
+  assert.equal(written.hudLayout, undefined, "no storage write during the drag");
+  assert.equal(els["#minimap"].props["--hl-x"], "5", "every frame still paints");
+  assert.deepEqual({ ...H.get("map", "other") }, { x: 5, y: 0, s: 100 });
+  assert.equal(H.commit(), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 4, standard: { cockpit: {}, helmet: {}, other: { map: { x: 5, y: 0, s: 100 } } } });
+  assert.equal(H.commit(), false, "nothing left to save");
+});
+
 test("unbounded values survive; explicit reset clears the element and the store", () => {
   const { H, written, els } = load();
   assert.deepEqual({ ...H.set("tower", { x: 999, y: -999, s: 10 }, "other") }, { x: 999, y: -999, s: 10 });

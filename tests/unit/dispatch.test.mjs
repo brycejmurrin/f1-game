@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {
   planDispatch, batchMembers, batchLandsAfter, DEFAULT_CONFIG, parseHandoff, liveLaunch, activityAt, applyPlan, loadConfig, BOARD_MARKER, LAUNCH_RE, NUDGE_RE,
   DIGEST_MARKER, ANTHROPIC_VERSION, readState, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment,
-  addressOf, closingIssues, isDispatchComment, PROVENANCE_LABELS,
+  addressOf, closingIssues, isDispatchComment, PROVENANCE_LABELS, PLATFORM_STEP, platformFailure,
 } from "../../tools/ci/dispatch.mjs";
 
 const NOW = Date.parse("2026-11-03T12:00:00Z");
@@ -458,4 +458,19 @@ test("rule 2: the dispatcher's own nudges move updated_at but not idleness: a PR
   const p = planDispatch(state({ prs: [pr(70, { pushed_at: ago(4), updated_at: ago(1), comments: nudges })] }), cfg(), NOW);
   assert.deepEqual(p.launches.map((l) => l.address), ["CONTINUE PR 70"]);
   assert.equal(activityAt(pr(70, { pushed_at: ago(4), updated_at: ago(1), comments: nudges })), NOW - 4 * 3.6e6);
+});
+
+test("rule 3: a Pages-side publish failure (pages.yml's marker step failed) launches no fixer and says why on the Board", () => {
+  const p = planDispatch(state({ deployRed: true, deployRunId: 777, deployPlatform: true }), cfg(), NOW);
+  assert.deepEqual([p.launches.length, p.labels], [0, [{ number: 1, add: ["deploy:red"], remove: [] }]]);
+  assert.deepEqual(skips(p), [`deploy:red fixer: pages.yml run 777 failed on the Pages side (step "${PLATFORM_STEP}" failed: both publish attempts): no fixer, re-run the train`]);
+  assert.equal(p.board.includes("failed on the Pages side"), true);
+  const jobs = (steps, name = "deploy") => () => ({ json: { jobs: [{ name: "gate", steps: [] }, { name, steps }] } });
+  assert.equal(platformFailure(jobs([{ name: "Publish to Pages", conclusion: "success" }, { name: PLATFORM_STEP, conclusion: "failure" }]), 777), true);
+  assert.equal(platformFailure(jobs([{ name: PLATFORM_STEP, conclusion: "skipped" }, { name: "Confirm this commit may still be published (under the Pages lock)", conclusion: "failure" }]), 777), false, "a refusal is a fixer's job");
+  assert.equal(platformFailure(jobs([{ name: PLATFORM_STEP, conclusion: "failure" }], "stage"), 777), false, "only the deploy job's marker");
+  assert.equal(platformFailure(() => ({ error: "HTTP 502" }), 777), false, "unreadable: launch as before");
+  assert.equal(planDispatch(state({ deployRed: true, deployRunId: 777, deployPlatform: false }), cfg(), NOW).launches[0].address, "DEPLOY-RED 777");
+  const pages = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
+  assert.equal(pages.includes(`- name: ${PLATFORM_STEP}\n`), true, "the marker step pages.yml writes");
 });

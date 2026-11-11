@@ -92,7 +92,7 @@ test("sync-pr's failure path aborts a merge in progress, checks the checkout, an
   const r1 = returnTo("claude/x", "sync-pr-x", a.g);
   assert.ok(a.calls.includes("merge --abort"), "a merge in progress is aborted before the checkout");
   assert.equal(r1.ok, true);
-  assert.match(r1.line, /back on claude\/x; the attempt is kept on branch sync-pr-x/);
+  assert.equal(r1.line, "working tree back on claude/x; the attempt is kept on branch sync-pr-x for inspection");
   const stuck = { on: "sync-pr-x", refuse: true };
   const r2 = returnTo("claude/x", "sync-pr-x", fake(stuck).g);
   assert.equal(r2.ok, false);
@@ -174,8 +174,7 @@ test("extraction rejects nonnumeric, reversed, oversized and empty ranges", (t) 
   }
   const valid = cli("tools/check/extract-module.mjs", [file, "1", "1"]);
   assert.equal(valid.status, 0, valid.stderr);
-  assert.match(valid.stdout, /external/);
-  assert.match(valid.stdout, /offset/);
+  assert.equal(valid.stdout, "external×1 offset×1\n");
 });
 
 test("bloat scan reports missing explicit scopes alongside successfully scanned files", (t) => {
@@ -352,15 +351,15 @@ test("asset verifier checks material bytes, shape and low-tier licensing/identit
   assert.ok(/md5 missing/.test(bad.stderr + bad.stdout), bad.stderr + bad.stdout);
   manifest.materials.albedoMd5 = savedAlb;
   manifest.materials.low.layers[0].licence = "CC-BY";
-  bad = verify(); assert.equal(bad.status, 1); assert.match(bad.stderr, /materials.low.*licence/);
+  bad = verify(); assert.equal(bad.status, 1); assert.equal(bad.stderr, "  ✗ materials.low material concrete: licence \"CC-BY\" is not in the allow-list (CC0, CC0-1.0, Apex26-Procedural)\n  ✗ materials.low: layer identity, scale, source and licence must match high tier\n");
   manifest.materials.low.layers[0].licence = "CC0";
   fs.writeFileSync(path.join(pack, "a.png"), Buffer.from("broken"));
-  bad = verify(); assert.equal(bad.status, 1); assert.match(bad.stderr, /PNG/);
+  bad = verify(); assert.equal(bad.status, 1); assert.equal(bad.stderr, "  ✗ materials: a.png: not a PNG (bad signature)\n");
   fs.writeFileSync(path.join(pack, "a.png"), encodePNG(2, 33, Buffer.alloc(2 * 33 * 4)));
-  bad = verify(); assert.equal(bad.status, 1); assert.match(bad.stderr, /shape/);
+  bad = verify(); assert.equal(bad.status, 1); assert.equal(bad.stderr, "  ✗ materials: a.png shape 2x33 != 2x34\n  ✗ materials: a.png md5 mismatch\n");
   fs.writeFileSync(path.join(pack, "a.png"), png);
   manifest.materials.low.layers[0].scale = 6;
-  bad = verify(); assert.equal(bad.status, 1); assert.match(bad.stderr, /match high tier/);
+  bad = verify(); assert.equal(bad.status, 1); assert.equal(bad.stderr, "  ✗ materials.low: layer identity, scale, source and licence must match high tier\n");
 });
 
 test("WGX sky gate requires both descriptors and exact comparison/write state", () => {
@@ -418,11 +417,11 @@ test("#2186: runStages stops at the first failure or timeout, names the stage, a
   const r = runStages(stages, { run: (st) => { ran.push(st.name); return st.name === "b" ? 124 : 0; } });
   assert.deepEqual(ran, ["a", "b"]);
   assert.deepEqual({ ok: r.ok, failedAt: r.failedAt }, { ok: false, failedAt: "b" });
-  assert.match(r.error, /b timed out after 1 min/);
+  assert.equal(r.error, "b timed out after 1 min");
   const again = [];
   assert.equal(runStages(stages, { from: "b", run: (st) => { again.push(st.name); return 0; } }).ok, true);
   assert.deepEqual(again, ["b", "c"], "--from skips the stages that passed");
-  assert.match(runStages(stages, { from: "zz", run: () => 0 }).error, /no stage named zz/);
+  assert.equal(runStages(stages, { from: "zz", run: () => 0 }).error, "no stage named zz (stages: a, b, c)");
 });
 
 test("a stage timeout stops the stage with SIGTERM, so a runner that leads its own process groups can terminate them", () => {
