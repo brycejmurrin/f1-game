@@ -100,6 +100,15 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
     });
 
     await window.waitForLoadState("domcontentloaded");
+    // Boot can still navigate (gfx claim skip, UpdateCheck parity reload on web).
+    // Wait for the final app:// shell the assertions target — same bar as main.js --smoke.
+    await window.waitForFunction(
+      () => document.readyState === "complete"
+        && window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop === true
+        && /^app:\/\/apex\//.test(String(location.href)),
+      null,
+      { timeout: 60_000, polling: 100 },
+    );
     const title = await window.title();
     expect(title.length).toBeGreaterThan(0);
     expect(title).toMatch(/Apex/i);
