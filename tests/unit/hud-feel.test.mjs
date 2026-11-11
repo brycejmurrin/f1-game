@@ -1602,7 +1602,8 @@ for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
       assert.ok(row.min <= row.value && row.value <= row.max, `${wish}: value inside its own range`);
       assert.ok(row.value >= prev, `${wish}: a bigger wish never paints smaller`);
       prev = row.value;
-      assert.ok(row.label.startsWith(`${Math.round(row.value * 10) / 10}`.replace(/\.0$/, "")), `${wish}: "${row.label}" leads with the painted ${row.value}`);
+      const lead = `${Math.round(row.value * 10) / 10}`.replace(/\.0$/, "");
+      assert.equal(row.label.slice(0, lead.length), lead, `${wish}: "${row.label}" leads with the painted ${row.value}`);
       assert.equal(/ · max$/.test(row.label), row.max < r.lim.max && row.value >= row.max, `${wish}: "· max" exactly when the window's cap is reached ("${row.label}")`);
       if (r.key === "uiScale") {
         assert.deepEqual([row.min, row.max, row.value], [r.lim.min, r.lim.max, wish], `${wish}: UI SIZE is not clamped off a phone, and never from above (the title paints the whole range)`);
