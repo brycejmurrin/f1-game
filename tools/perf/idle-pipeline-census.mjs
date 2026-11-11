@@ -87,6 +87,13 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   await gas(true);
   await frames(page, WARM_FRAMES);
+  // THE GOVERNOR IS HELD FOR BOTH PASSES (#5387). PerfGov steps the render scale when frames run slow (a busy runner,
+  // a CPU burn), and each step re-creates the post targets: three rebinds the ~10 fullscreen passes that sample them
+  // (diagnostic run 42949086546: 549x254 -> 422x195 -> 633x293 under burn). That is a resize, a separate and intended
+  // cost, not idle churn. Pin the scale where it is and hold the tier; the spec asserts both held, then both are released.
+  const govAt = () => page.evaluate(() => { const r = window.__apex.renderScale({ lite: true }); return { scale: r.scale, tier: r.tier }; });
+  const gov0 = await govAt();
+  await page.evaluate((v) => { window.__apex.renderScale(v); window.__apex.govHold(true); }, gov0.scale);
   // THE COUNTED WINDOWS REPLAY A STRETCH THE WARM-UP ALREADY DREW (#5387). Frames are not distance: 120 warm frames
   // left the car short of scenery it then reached inside a window, and every geometry, pool wrapper and pass seen
   // there for the first time minted its render object and bind groups. Measured on the tip, 8 runs: 5 red, each one
@@ -112,9 +119,11 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
       bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) });
   }
   const replay = { jumped: !!jumped, warmM: Math.round(warmM), countedM: Math.round((await at()).prog - prog0) };
+  const gov = { scale0: gov0.scale, tier0: gov0.tier, ...(await govAt()) };
+  await page.evaluate(() => { window.__apex.govHold(false); window.__apex.renderScale(true); });
   await gas(false);
   const gpuDevice = await page.evaluate(() => window.__bpp.gpuDevice);
-  const out = { hook, forceGL, warm, gpuDevice, replay, windows };
+  const out = { hook, forceGL, warm, gpuDevice, replay, gov, windows };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/idle-pipeline-churn-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;
