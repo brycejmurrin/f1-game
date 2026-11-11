@@ -1044,6 +1044,7 @@
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/helmet-memo.test.mjs",
         "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-card-density.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
@@ -1330,6 +1331,15 @@
         "tests/unit/foundation-core-vm.test.mjs",
         "tests/unit/livery-contrast.test.mjs",
         "tests/unit/slider-effect.test.mjs"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "offline-precache",
+      "script": "test:offline-precache",
+      "kind": "browser",
+      "files": [
+        "tests/specs/offline-precache.spec.js"
       ],
       "twinned": false
     },

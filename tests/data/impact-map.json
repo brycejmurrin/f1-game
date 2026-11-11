@@ -5702,6 +5702,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/script-loader-late-eval.test.mjs",
         "tests/unit/script-loader-preload.test.mjs",
         "tests/unit/script-loader-retry-eval.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
@@ -5773,6 +5774,9 @@
       ],
       "hold": [
         "tests/unit/wake-lock-vm.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ios-wake-note.test.mjs"
       ]
     },
     "js/data/api-transport.js": {
@@ -8785,6 +8789,9 @@
         "tests/unit/livery-draft-mesh-cache.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
+      "fitLivSwatches": [
+        "tests/unit/livery-card-density.test.mjs"
+      ],
       "flushLivPreview": [
         "tests/unit/livery-design.test.mjs"
       ],
@@ -8802,6 +8809,9 @@
         "tests/unit/livery-design.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/team-livery.test.mjs"
+      ],
+      "livSwatchPx": [
+        "tests/unit/livery-card-density.test.mjs"
       ],
       "openSetup": [
         "tests/specs/parts-setup-ids.spec.js",
@@ -14948,6 +14958,7 @@
     },
     "js/render/shared/assets.js": {
       "_ensureScratchGl": [
+        "tests/unit/assets-scratch-gl-fallback.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs"
       ],
       "adopt": [
@@ -18697,6 +18708,9 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/platform-session-install.test.mjs"
       ],
+      "iosInstallNudge": [
+        "tests/unit/ios-wake-note.test.mjs"
+      ],
       "isActivation": [
         "tests/unit/audio-recovery.test.mjs"
       ],
@@ -18872,7 +18886,10 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
-      "refreshBtnFit": [
+      "parseCaps": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
+      "refreshFit": [
         "tests/unit/hud-feel.test.mjs"
       ],
       "setScale": [
@@ -18880,7 +18897,12 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
+      "sizeRow": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
       "*": [
+        "tests/specs/time-trial.spec.js",
+        "tests/specs/title-fit.spec.js",
         "tests/specs/ui-resize.spec.js",
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",

@@ -76,3 +76,10 @@ mobile/www/
 .smart-env/
 .claude/allow-protected
 .claude/allow-context-cap
+
+# Secrets never belong in the repo (audit 2026-11-09, W24 row 9): dotenv files,
+# private keys and certificates. `.env.example` is the one template allowed.
+.env*
+!.env.example
+*.pem
+*.key
