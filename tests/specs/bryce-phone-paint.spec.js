@@ -6,12 +6,14 @@
 // "48 px" button paints 29 px, and nothing said so. This spec boots the game the way his phone does — his window
 // (Home Screen app 852x393 with env() insets 59/21/59, the Safari tab 852x368 measured on the device, and the 844x390
 // cell older reports used), his live settings export — and judges the PAINTED result on title, select, garage,
-// settings, the race HUD, pause and results, at UI SIZE 61 (his) and 109 / 51 / 40:
+// settings, the race HUD, pause and results, at UI SIZE 70 (his: a phone stops at 70 %, so his stored 61 paints at 70)
+// and 109 (the touch default):
 //
 //   text paints >= 12 px · tap targets paint >= 44 px and own their centre · nothing crosses the safe box · no page scroll
 //
-// The product is RED on these floors today, by measurement, and the fix for the small sizes is the owner's pending
-// decision (#5235). So each cell asserts the EXACT number of violations recorded in tests/data/bryce-phone-paint.json:
+// The product is RED on these floors today, by measurement. The small sizes are gone from the axis: decision #5235
+// (a phone stops at 70 %) landed with #5384, which took the count on his three windows from 350 at 61 % to 114 at 70 %.
+// So each cell asserts the EXACT number of violations recorded in tests/data/bryce-phone-paint.json:
 // one more is a regression, one fewer is a stale ceiling (lower it: `node tools/ui/bryce-paint.mjs --write`). The
 // numbers only go down. Do not skip a cell and do not raise a number to get green.
 //

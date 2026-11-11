@@ -41,22 +41,25 @@
     // Elevation from SRTM bake in js/track/circuit-elevations.js
     // (`node tools/gen/bake-elevation.mjs redbull`). Three authored cosine
     // bumps left ~56% of the lap dead-flat between climbs — stair-step Styrian
-    // relief. Banks stay engine-frame on curated apexes (turns[i] noted).
+    // relief. Banks stay engine-frame on the turn apexes (turns[i] = FIA T(i+1) noted).
     bankZones: [
-      { frac: 0.49135, angleDeg: 4.0, widthM: 260 },  // turns[2] 0.4913 Schlossgold
-      { frac: 0.60245, angleDeg: 4.0, widthM: 180 },  // turns[3] 0.6024
-      { frac: 0.67625, angleDeg: 4.0, widthM: 160 },  // turns[5] 0.6752
-      { frac: 0.73225, angleDeg: 3.0, widthM: 120 },  // turns[7] 0.7322
-      { frac: 0.85265, angleDeg: 3.5, widthM: 110 },  // turns[8] 0.8526
-      { frac: 0.90495, angleDeg: 3.5, widthM: 90 },   // turns[9] 0.9049
+      { frac: 0.49135, angleDeg: 4.0, widthM: 260 },  // turns[3] T4 Schlossgold (apex 0.4907)
+      { frac: 0.60245, angleDeg: 4.0, widthM: 180 },  // turns[4] T5 (apex 0.6026; 2nd peak 0.6267)
+      { frac: 0.67625, angleDeg: 4.0, widthM: 160 },  // turns[5] T6 (apex 0.6754; 2nd peak 0.6959)
+      { frac: 0.73225, angleDeg: 3.0, widthM: 120 },  // turns[7] T8 (apex 0.7323)
+      { frac: 0.85265, angleDeg: 3.5, widthM: 110 },  // turns[8] T9 (apex 0.8526)
+      { frac: 0.90495, angleDeg: 3.5, widthM: 90 },   // turns[9] T10 (apex 0.9058)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors: timing-line splits. turns: one apex per corner of the FIA 2026 event-map
+    // numbering ("2026 Austrian Grand Prix - Circuit Map, Pit Lane Drawing, Emergency Exits
+    // Map and Red Zone", T1-T10; T2 = the Muenzer left kink on the climb to Remus,
+    // T7/T8 = the two right-hand peaks before the back straight), as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.29, 0.62],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
-    turns: [0.0851, 0.3036, 0.4913, 0.6024, 0.6267, 0.6752, 0.6958, 0.7322, 0.8526, 0.9049],
+    turns: [0.0849, 0.2332, 0.3032, 0.4907, 0.6026, 0.6754, 0.7164, 0.7323, 0.8526, 0.9058],
     furniture: { tree: "fir",   fol: [0.17, 0.40, 0.22], lamp: "none" },  // lush emerald alpine spruce
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",   tyre: "stack",   board: "banner",    gantry: "portal",     camera: "monopole",  hoarding: "banner" },
     standSet: ["crimson", "steel", "alu"],

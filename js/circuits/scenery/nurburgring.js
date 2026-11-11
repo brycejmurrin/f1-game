@@ -63,18 +63,18 @@
       const GRAVEL = [0.62, 0.58, 0.48];
 
       const openArena = (s) => (s >= 0.915 || s <= 0.20);  // pit-building belt starts .92; trees no longer held off by the old Veedol walls
-      // Schumacher-S bank keep-out: after the monotonic surveyHeights remap the
+      // Veedol-Schikane (T13-T14) bank keep-out: after the monotonic surveyHeights remap the
       // left-side marshal / tyre kit at ~0.79 clips a pine trunk (≥1.0 m). The
       // old scaffoldStand booked this corridor; indexSolid alone was not enough
       // once undulate stayed on for fleet seating.
-      const schumacherS = (s) => (s >= 0.766 && s <= 0.798);
+      const veedolS = (s) => (s >= 0.766 && s <= 0.798);
       // The spruce WALL. Like Hockenheim this circuit never called forestEdge(),
       // so its forest was scattered every() passes with daylight through them in
       // every direction. The Eifel plantation is the opposite of that: dense,
       // dark, uniform, and right up against the armco, so the back half of the
       // lap runs through a green trench. The scattered ranks that follow then
       // break up the wall's edge rather than being the whole wood.
-      // Split the back-half wall around Schumacher-S so the bank keep-out is empty.
+      // Split the back-half wall around the Veedol-Schikane so the bank keep-out is empty.
       for (const [s0, s1] of [[0.205, 0.565], [0.640, 0.766], [0.798, 0.915]]) {
         for (const side of [-1, 1]) {
           // Front rank, right side: skip the single node 0.4417. clearTreeDist
@@ -113,7 +113,7 @@
       }
       every(20, (k) => {
         const s = k / n;
-        if (openArena(s) || schumacherS(s)) return;
+        if (openArena(s) || veedolS(s)) return;
         const h = hash(k * 31);
         if (h < 0.12) return;
         const side = h < 0.5 ? -1 : 1;
@@ -122,7 +122,7 @@
       });
       every(32, (k) => {
         const s = k / n;
-        if (openArena(s) || schumacherS(s)) return;
+        if (openArena(s) || veedolS(s)) return;
         const h = hash(k * 53 + 9);
         if (h < 0.25) return;
         tree(k, h < 0.5 ? -1 : 1, 15 + h * 10, 10 + h * 7, h < 0.5 ? LEAF_D : LEAF);
@@ -130,14 +130,14 @@
       });
       every(52, (k) => {
         const s = k / n;
-        if (openArena(s) || schumacherS(s)) return;
+        if (openArena(s) || veedolS(s)) return;
         const h = hash(k * 67 + 17);
         if (h < 0.34) return;
         pine(k, h < 0.5 ? -1 : 1, 46 + h * 28, 23 + h * 15, FIR_D);
       });
       every(28, (k) => {
         const s = k / n;
-        if (openArena(s) || schumacherS(s)) return;
+        if (openArena(s) || veedolS(s)) return;
         const h = hash(k * 97 + 23);
         if (h < 0.58) return;
         bush(k, h < 0.78 ? -1 : 1, 6.5 + h * 4, [0.14, 0.31, 0.15]);
@@ -297,14 +297,17 @@
       cameraTower(K(0.190), 1, 9, { h: 14 });
       cameraTower(K(0.605), -1, 10, { h: 15 });
 
+      // T11 (apex .6025, right-hander after the Kumho-Kurve): runoff, tyres and
+      // a scaffold stand. The Dunlop-Kehre is T7 (.373), not this corner.
       groundPatch(K(0.605), -1, 6, [30, 0.18, 40], GRAVEL,
-        { id: "nurburgring-dunlop-gravel", samples: 7 });
+        { id: "nurburgring-t11-gravel", samples: 7 });
       tyreWall(0.588, 0.624, -1, 5, [0.20, 0.40, 0.85]);
       scaffoldStand(0.590, 0.628, 1, 15, 7);
       marshalPost(K(0.598), 1, 9);
 
+      // Veedol-Schikane (T13 .781 L / T14 .7865 R). The Schumacher-S is T8-T9 (.45/.48).
       groundPatch(K(0.785), 1, 5, [24, 0.18, 32], GRAVEL,
-        { id: "nurburgring-schumacher-gravel", samples: 6 });
+        { id: "nurburgring-veedol-gravel", samples: 6 });
       // Keep the roadside keep-out booked here: without it the deferred
       // scatter replants through this bank and clip-audit rises. No open tube
       // tribune: on the surveyed elevation its feet face-sample a fold-hit
@@ -313,8 +316,9 @@
       indexSolid(0.766, 0.798, 1, 12, 6 * 1.9 + 1);
       marshalPost(K(0.790), -1, 9);
 
+      // Coca-Cola-Kurve (T15) entry, outside of the long right-hander.
       groundPatch(K(0.832), -1, 5, [22, 0.18, 30], GRAVEL,
-        { id: "nurburgring-veedol-gravel", samples: 6 });
+        { id: "nurburgring-coca-cola-entry-gravel", samples: 6 });
       tyreWall(0.818, 0.846, -1, 4, [0.86, 0.20, 0.18]);
       marshalPost(K(0.826), 1, 9);
       // Coca-Cola Kurve (T15): final right-hander onto the pit straight — gravel
@@ -431,7 +435,7 @@
 
       // General-admission grass banks cut into the treeline on the back section.
       spectatorHill(0.36, 0.46, 1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
-      spectatorHill(0.70, 0.762, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });  // ends before the Schumacher-S scaffold stand (0.766, same side)
+      spectatorHill(0.70, 0.762, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });  // ends before the Veedol-Schikane keep-out (0.766, same side)
 
       {
         // Burg Nürburg: real ruin sits ~1.2 km NNE of the GP-Strecke centre

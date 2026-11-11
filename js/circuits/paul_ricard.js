@@ -75,13 +75,17 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
-    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    // sectors/turns: sector splits + turn apexes as RACING-LAP fractions (post
+    // startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs re-seats
+    // turns when the start line moves.
+    // turns: one apex per corner of the FIA 2022 French GP numbering (Race Director
+    // "Event Notes - Circuit Map v2", FRANCE_CIRCUIT_22 FIA v2, 21 Jul 2022), T1..T15
+    // in lap order, each at THIS centreline's curvature peak for that corner:
+    // T1 L, T2 R, T3 R, T4 L, T5 R, T6 R, T7 L, T8 L / T9 R (Mistral chicane),
+    // T10 R (Signes), T11 R, T12 L, T13 R (flat arc, mid-arc), T14 L, T15 R.
+    // The previous list split T1 into two peaks and had no T10 or T13.
     sectors: [0.333, 0.681],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0874, 0.0954, 0.1099, 0.2064, 0.2244, 0.2424, 0.2609, 0.3074, 0.4909, 0.5039, 0.7559, 0.8144, 0.8884, 0.9079, 0.9254],
+    turns: [0.0957, 0.1102, 0.2066, 0.2245, 0.2424, 0.2610, 0.3072, 0.4904, 0.5041, 0.7135, 0.7562, 0.8147, 0.8526, 0.9077, 0.9249],
     furniture: { tree: "stonePine",   fol: [0.14, 0.30, 0.16], lamp: "none",  sparse: true },  // bleached plateau — planting stays off the runoff
     kit: { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "tecpro",  board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "led" },
     standSet: ["alu", "navy", "pastel"],  // clinical: aluminium against the blue runoff

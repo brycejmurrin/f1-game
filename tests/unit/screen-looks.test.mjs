@@ -197,6 +197,31 @@ test("density / columns knobs re-run SheetShape so the tier follows at once", ()
 });
 
 /* ── folds ────────────────────────────────────────────────────────────── */
+test("#5054: with the settings router, rows build on the first APPEARANCE enter only; search knows every knob before", () => {
+  const enters = [], registered = [];
+  const nav = { onEnter: (fn) => enters.push(fn) };
+  const search = { register: (owner, rows) => registered.push([owner, rows.length]) };
+  const { dom, timers, panel, M } = boot({ settingsOpen: false, win: { SettingsNav: nav, SettingsSearch: search } });
+  const knobs = M.SCREENS.reduce((n, s) => n + s.knobs.length, 0);
+  assert.deepEqual(registered, [["screen-looks", knobs]], "descriptors registered at arm, before any row");
+  assert.equal(enters.length, 1);
+  assert.equal(dom.has("pm-look-datahub"), false, "no fold at boot (title intro)");
+  assert.equal(timers.length, 0, "no timer fallback builds it later");
+  enters[0]("audio");
+  assert.equal(dom.has("pm-look-datahub"), false, "another page builds nothing");
+  enters[0]("appearance");
+  assert.ok(dom.has("pm-look-datahub") && dom.has("pm-look-pause-style"), "APPEARANCE builds every fold");
+  const n = panel.children.length;
+  enters[0]("appearance");
+  assert.equal(panel.children.length, n, "a second enter mounts nothing");
+  assert.equal(registered.length, 1, "build does not re-register search");
+});
+
+test("#5054: settings already showing APPEARANCE when the router arms builds at once", () => {
+  const { dom } = boot({ settingsOpen: true, win: { SettingsNav: { onEnter() {} } } });
+  assert.ok(dom.has("pm-look-datahub"));
+});
+
 test("build: one fold per screen after TITLE SCREEN, in registry order; pause rows join PAUSE MENU; mount once", () => {
   const { dom, M, panel, pauseBody, tsBody, replay } = boot();
   const kids = panel.children;

@@ -327,14 +327,16 @@ const Assets = (function () {
       }
       return _scratchGl;
     }
-    let cv = null;
-    try {
-      cv = (typeof OffscreenCanvas !== "undefined")
-        ? new OffscreenCanvas(size, size)
-        : Object.assign(document.createElement("canvas"), { width: size, height: size });
-    } catch (_) { return null; }
-    const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
-    if (!gl) return null;
+    // DOM canvas if OffscreenCanvas lacks webgl2 (Safari 16.x)
+    const attrs = { premultipliedAlpha: false, antialias: false };
+    const tryCanvas = (make) => {
+      try { const c = make(); const g = c && c.getContext("webgl2", attrs); return g ? { cv: c, gl: g } : null; }
+      catch (_) { return null; }
+    };
+    const got = (typeof OffscreenCanvas !== "undefined" && tryCanvas(() => new OffscreenCanvas(size, size)))
+      || (typeof document !== "undefined" && tryCanvas(() => Object.assign(document.createElement("canvas"), { width: size, height: size })));
+    if (!got) return null;
+    const { cv, gl } = got;
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);

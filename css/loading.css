@@ -310,7 +310,9 @@
 
 /* ---------- WebXR ENTER VR (Phase 0) ---------- */
 /* Hidden until XrSession probe() reports immersive-vr support. Fixed corner
-   affordance — Quest Browser / Immersive Web Emulator; not a HUD overlay. */
+   affordance — Quest Browser / Immersive Web Emulator; not a HUD overlay.
+   ENTER (aria-pressed=false) hides while a race runs: on a phone it sat over
+   the touch dock (z 40) mid-race. EXIT VR stays. */
 #xr-enter {
   position: fixed;
   right: var(--safe-r);
@@ -327,6 +329,7 @@
   cursor: pointer;
   opacity: 0.85;
 }
+body.in-race #xr-enter[aria-pressed="false"] { display: none; }
 #xr-enter:focus-visible { opacity: 1; }
 @media (hover: hover) and (pointer: fine) {
   #xr-enter:hover { opacity: 1; }
