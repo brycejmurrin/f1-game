@@ -1059,7 +1059,8 @@ test("the TRACKED infra list names where the selector tools ACTUALLY live", () =
                    "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs",
                    "tools/ci/pick-unit-slices.mjs", "tools/ci/node-plan.mjs",
                    "tools/ci/geometry-paths.mjs", "tools/ci/twinned-specs.mjs",
-                   "tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh"]) {
+                   "tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh",
+                   "tools/ci/fat-shard.mjs"]) {
     assert.ok(hit(f), `${f} is selection machinery and must be TRACKED`);
     assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist — re-point TRACKED, do not pin a ghost`);
   }
