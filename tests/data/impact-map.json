@@ -1603,6 +1603,7 @@
       ],
       "*": [
         "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
     },
@@ -7971,6 +7972,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/session-status.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/shell-ids.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/steer-lock-taper.test.mjs",
@@ -17621,7 +17623,8 @@
       ],
       "*": [
         "tests/unit/hud-survey.test.mjs",
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/appearance-studio.js": {
@@ -17686,6 +17689,7 @@
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/settings-one-home.test.mjs"
       ]
     },
@@ -17721,7 +17725,8 @@
       "push": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs",
-        "tests/unit/loading-card.test.mjs"
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "radioWho": [
         "tests/unit/captions.test.mjs"
@@ -17868,6 +17873,7 @@
       "*": [
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/pick-tests.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/store-key-types.test.mjs"
       ]
@@ -18022,7 +18028,8 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
         "tests/unit/hud-layout-hidden.test.mjs",
-        "tests/unit/hud-survey.test.mjs"
+        "tests/unit/hud-survey.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/hud-inputs.js": {
@@ -18124,7 +18131,8 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
-        "tests/unit/hud-survey.test.mjs"
+        "tests/unit/hud-survey.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/hud-minimap.js": {
@@ -18486,7 +18494,8 @@
       ],
       "*": [
         "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/select-specs.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/layers.js": {
@@ -18826,6 +18835,7 @@
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"
       ]
     },
@@ -18955,7 +18965,8 @@
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/post-fx-opts.test.mjs"
+        "tests/unit/post-fx-opts.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "*": [
         "tests/unit/light-store-perchunk-pin.test.mjs",
@@ -19047,7 +19058,8 @@
     },
     "js/ui/save-health.js": {
       "boot": [
-        "tests/unit/save-durability.test.mjs"
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "cleanup": [
         "tests/unit/save-durability.test.mjs"
@@ -19236,6 +19248,9 @@
     "js/ui/setting-deps.js": {
       "refresh": [
         "tests/unit/setting-deps.test.mjs"
+      ],
+      "*": [
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/setting-row.js": {
@@ -19369,6 +19384,7 @@
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/store-key-types.test.mjs",
         "tests/unit/title-fx.test.mjs",
@@ -19599,6 +19615,7 @@
       ],
       "*": [
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ]
     },
@@ -19634,7 +19651,8 @@
       ],
       "move": [
         "tests/specs/ui-scale.spec.js",
-        "tests/unit/menu-nav-spatial.test.mjs"
+        "tests/unit/menu-nav-spatial.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "normalize": [
         "tests/unit/title-layout.test.mjs"

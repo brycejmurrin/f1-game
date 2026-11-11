@@ -979,6 +979,8 @@
     "tests/unit/session-status.test.mjs",
     "tests/unit/session-stub-surface.test.mjs",
     "tests/unit/session-transcript.test.mjs",
+    "// #4798: the Settings-only halves wait for SettingsNav.lazy in a VM boot (interactive, then DCL, then flush). ~0.2 s.",
+    "tests/unit/settings-lazy-gate.test.mjs",
     "tests/unit/settings-ttlb-backup.test.mjs",
     "// R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:",
     "// each re-derives a fact the source depends on (which livery fields move a",
