@@ -12490,9 +12490,6 @@
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/tyre-model.test.mjs"
       ],
-      "longFor": [
-        "tests/unit/tyre-model.test.mjs"
-      ],
       "optTemp": [
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
