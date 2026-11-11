@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -63,6 +64,21 @@ test("any open screen hides race HUD chrome, DISPLAY keeps the live tower", () =
   assert.match(css, /\.dock/);
   assert.match(css, /body:has\(> #pmsettings:not\(\[hidden\]\) > :where\(#pmsettings-inner\) > :where\(#pm-settings-body\) > :where\(\.pm-groups\) > #pm-panel-display:not\(\[hidden\]\)\)\s*:is\(/);
   assert.doesNotMatch(css, /body:has\(>? ?#pmsettings:not\(\[hidden\]\)\)\s*:is\(/);
+  // The selectors above prove the rules exist; the DECLARATIONS are the behaviour.
+  // Read the rules, not the text: the hide list must say `visibility: hidden` for
+  // every race cluster, and the DISPLAY carve-out must say `visible`.
+  const rules = cssRules(css);
+  const listOf = (sel) => sel.slice(sel.indexOf(":is(") + 4, sel.lastIndexOf(")")).split(",").map((s) => s.trim());
+  const hide = rules.filter((r) => /^body:has\(> \.screen:not\(\[hidden\]\)\) :is\(/.test(r.selector) && r.decls.has("visibility"));
+  const hidden = new Set(hide.filter((r) => r.decls.get("visibility") === "hidden").flatMap((r) => listOf(r.selector)));
+  for (const el of [".hud-bottom", ".hud-top", ".hud-gaps", "#minimap", "#hud-sectors", "#btn-cam", ".dock", "#pausebtn"]) {
+    assert.ok(hidden.has(el), `an open screen hides ${el} (visibility: hidden in the hide rule)`);
+  }
+  const keep = rules.filter((r) => r.selector.startsWith("body:has(> #pmsettings:not([hidden])") && r.selector.includes("#pm-panel-display:not([hidden])) :is("));
+  assert.ok(keep.length > 0, "the DISPLAY carve-out rule is found");
+  const kept = new Set(keep.filter((r) => r.decls.get("visibility") === "visible").flatMap((r) => listOf(r.selector)));
+  for (const el of [".hud-top", ".hud-gaps", "#minimap"]) assert.ok(kept.has(el), `DISPLAY keeps ${el} visible`);
+  assert.ok(!kept.has(".hud-bottom") && !kept.has(".dock"), "DISPLAY does not bring back the bottom cluster or the touch dock");
 });
 
 test("garage camera stack hides under a dim overlay, not under garage itself", () => {
@@ -245,9 +261,9 @@ test("a give-back warning is not starved behind the caution's own radio card: it
 test("losing focus while visible pauses a solo race; an iOS audio interruption does too; neither in a friend race", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8");
   const blur = game.match(/window\.addEventListener\("blur", \(\) => \{[\s\S]*?\n\}\);/)[0];
-  assert.match(blur, /document\.hidden \|\| document\.hasFocus\(\) \|\| navigator\.webdriver \|\| G\.netPlay\.active\(\)/, "settled, visible-only, never under automation or in MP");
+  assert.match(blur, /document\.hidden \|\| document\.hasFocus\(\) \|\| navigator\.webdriver \|\| G\.netPlay\.active\(\) \|\| G\.paused\)/, "settled, visible-only, never under automation, in MP or already paused (#5017)");
   assert.match(blur, /if \(G.state === "race" \|\| G.state === "count"\) setPaused\(true, "blur"\);/);
-  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(G.state === "race" \|\| G.state === "count"\) && !G\.netPlay\.active\(\)\) setPaused\(true, "audio-interrupted"\);/);
+  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(G.state === "race" \|\| G.state === "count"\) && !G\.netPlay\.active\(\) && !G\.paused\) setPaused\(true, "audio-interrupted"\);/, "#5017: never a second pause");
   const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
   assert.match(eng, /ctx\.state === "interrupted" && _onInterrupted/);
 });

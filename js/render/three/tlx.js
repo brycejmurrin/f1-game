@@ -1275,7 +1275,8 @@ const TLX = (function () {
         if (fixedActive()) return W !== presentW || H !== presentH;
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
-      function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
+      // `out` (optional) is filled instead of a fresh object: tlx-post's per-present read.
+      function getPresentSize(out) { const o = out || {}; o.width = presentW || W; o.height = presentH || H; return o; }
       // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
       const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
       let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // a phone is ALWAYS mobileTier (glx-facade.js): no setting lifts this 1.5 cap, only the URL lab below (docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F1)
@@ -2175,8 +2176,26 @@ const TLX = (function () {
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
       const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
+      // #5387: a chunked record's merge slot (and its wrapper) was made at its first 2+-chunk view, mid-lap. On a
+      // primeRace frame (gfx.primeChunkMerge) each slotless record gets one from its first two chunks, drawn at a
+      // ZERO matrix. Main pass only; the track pre-build stays on hold (Bryce).
+      let _chunkPrime = false, _chunkPrimeNow = false, _chunkPrimeN = 0;
+      const _chunkPrimeZ = new Float32Array(16);
+      function _primeMergeSlot(rec, order) {
+        const mesh = rec.chunked, mat = rec.mat;
+        if (!mesh || !mesh.chunks || mesh.chunks.length < 2 || (mesh._tlxMv && mesh._tlxMv[0])) return false;
+        if ((mat && (mat.transparent || mat.depthWrite === false)) || rec.al < 1) return false;   // the merge path never takes these
+        const vis = chunkedSys.visList;
+        vis[0] = mesh.chunks[0]; vis[1] = mesh.chunks[1];
+        const g = chunkedSys.mergeVisible(mesh, 2, 0);
+        if (!g) return false;
+        acquireMesh(g, _chunkPrimeZ, mat, rec).renderOrder = order;
+        _chunkPrimeN++;
+        return true;
+      }
       function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
         if (!chunkedSys) return 0;
+        if (_chunkPrimeNow && slot === 0 && _chunkMerge && chunkedSys.mergeVisible) _primeMergeSlot(rec, order);
         const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
         const mat = rec.mat;
         if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
@@ -3005,7 +3024,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1: uploads only through uploadStream (a dirty producer)
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
-        geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
+        geo.__tlxPin = true;   // a stream idle past PRUNE_IDLE_MS (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
         slot.geo = geo; slot.ib = ib; slot.cap = cap; slot.builds = (slot.builds | 0) + 1;   // memState().churn
         return true;
       }
@@ -4040,7 +4059,12 @@ const TLX = (function () {
         for (const p of caches.values()) pinPipe(p);
         return _pinnedPipes.size;
       }
-      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
+      // IDLE = LONGER THAN A LAP (#5387). At 20 s every lap's scenery outlived its wrappers (a lap is 60-130 s), so
+      // each lap dropped and re-minted them: render object, object UBO and bind group per wrapper, up to 49 bind
+      // groups in one frame (lap census, run 42941313887: spa lap 2 minted 286, monaco lap 2 pruned 321). At 600 s
+      // the second lap minted 2. Cost: ~100 more live wrappers at peak, +70-120 KB of UBOs, +0.2-1.0 MB JS heap;
+      // geometry is never the prune's (releaseGeometry frees a track's on its free). Bryce's choice, 2026-11-11.
+      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 600000;
       function prunePool(now) {
         const pin = typeof pinPipelines === "function" ? pinPipelines : null;   // typeof: sandboxed prunePool bodies
         if (pin && !_pinArmed) pin();   // arm the pin at the first present, before any warm builds a pipeline
@@ -4218,7 +4242,7 @@ const TLX = (function () {
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
-      // pool's 20-second idle sweep keeps a disposed track's BufferGeometry
+      // pool's idle sweep (PRUNE_IDLE_MS) keeps a disposed track's BufferGeometry
       // attributes strongly reachable while the replacement track is built —
       // exactly the synchronous peak game.js frees the old track to avoid.
       function releaseGeometry(geo) {
@@ -4288,7 +4312,7 @@ const TLX = (function () {
         ud.tlxLgRoad = rec && rec.lg ? 1 : 0;   // PER-CHUNK ROAD: the road draw only
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
-        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~20 s resolution)
+        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~seconds resolution)
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
         // will NEVER promote m.matrix → matrixWorld. The renderer uploads
         // matrixWorld as the model matrix: writing only `.matrix` leaves every
@@ -6025,7 +6049,8 @@ const TLX = (function () {
         // Callers await this, then cancelWarmRetry(), then free.
         warmSettled() { return _warmPending || Promise.resolve(); },
         cancelWarmRetry() { _warmRequested = false; },
-        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
+        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },
+        primeChunkMerge() { _chunkPrime = true; return _chunkPrimeN; },   // car-draw primeRace (#5387): the next present's main pass   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
@@ -6396,6 +6421,7 @@ const TLX = (function () {
         present(opts) {
           _poolBatch++;
           _kidsBegin(_kidsMain);
+          _chunkPrimeNow = _chunkPrime; _chunkPrime = false;   // primeChunkMerge: this present's main pass only (#5387)
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
           prunePool(_poolNow);
           flushDropped();
@@ -7058,7 +7084,7 @@ const TLX = (function () {
                   o.rUboKB = inf.memory.uniformBuffersSize != null ? +(inf.memory.uniformBuffersSize / 1024).toFixed(1) : null;
                   // Live RenderObjects (three's _objects cache). The per-object
                   // arm's buffer count is only comparable PER render object:
-                  // prunePool drops a wrapper's render object after 20 s idle
+                  // prunePool drops a wrapper's render object after PRUNE_IDLE_MS idle
                   // (dropWrapper), so the raw count follows how long a sample
                   // took, not the layout.
                   const ro = renderer._objects && renderer._objects._renderObjects;

@@ -41,6 +41,8 @@ test.describe.parallel("Career — the modes screen", () => {
       const daily = DailyChallenge.create({ store: GameStore.store });
       daily.select(day, "open");
       for (let i = 0; i < 8; i++) daily.record(90 + i, key(i));
+      // CareerBackup is LAZY_CAREER_UI (#4748): the title kicks the bundle, this waits for it.
+      if (!(await CareerUI.ensureBackup())) throw new Error("career backup bundle did not load");
       const envelope = CareerBackup.build();
       envelope.daily = { days: { [day]: { best: 80, laps: 1,
         classes: { [key(8)]: { best: 80, laps: 1 } } } } };
