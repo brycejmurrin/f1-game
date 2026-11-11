@@ -85,7 +85,8 @@
     "test:offline-precache": "node tools/ci/run-playwright.mjs tests/specs/offline-precache.spec.js",
     "test:perf-budget": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js",
     "test:perf-idle-churn": "node tools/ci/run-playwright.mjs tests/specs/perf-idle-pipeline-churn.spec.js",
-    "test:stall-reload-sw": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js"
+    "test:stall-reload-sw": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js",
+    "test:scratch-nc": "node tools/ci/run-playwright.mjs tests/specs/scratch-nc-r1.spec.js tests/specs/scratch-nc-r2.spec.js tests/specs/scratch-nc-r3.spec.js tests/specs/scratch-nc-r4.spec.js"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",

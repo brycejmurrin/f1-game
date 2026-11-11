@@ -1442,6 +1442,18 @@
       "twinned": false
     },
     {
+      "id": "scratch-nc",
+      "script": "test:scratch-nc",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-nc-r1.spec.js",
+        "tests/specs/scratch-nc-r2.spec.js",
+        "tests/specs/scratch-nc-r3.spec.js",
+        "tests/specs/scratch-nc-r4.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",
