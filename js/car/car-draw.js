@@ -972,7 +972,7 @@ const CarDraw = (function () {
         try {
           // Through the caches, never a kept handle: a leftover drained by a later countdown (a red-flag restart)
           // finds the atlas LRU may have dropped its texture since, and the cache rebuilds or hits as it should.
-          if (it.atlas) { const tex = getCarDecalTexture(it.c.team, carDecalNum(it.c.team, it.c), !!it.c.isPlayer); if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex); }
+          if (it.atlas) { warmDecalMesh(it.c); const tex = getCarDecalTexture(it.c.team, carDecalNum(it.c.team, it.c), !!it.c.isPlayer); if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex); }
           else if (it.caster) teamMesh(it.c.team, it.c, true);
           else if (it.crew && typeof PitCrewAnim !== "undefined") PitCrewAnim.warm(G, it.c);   // #5051: the stop's rig, not on the box frame
         } catch (e) { Log.warn("gfx", "deferred car warm failed for " + (it.c && it.c.team && it.c.team.id), e); }
@@ -988,6 +988,7 @@ const CarDraw = (function () {
         // A deferred car defers the whole phase — the paint too, since GLX, WGX and mobile TLX upload inside
         // createTexture, so deferring only the upload would be a no-op there (code-hunter, 2026-10-21).
         if (defer) { _deferredCarWarm.push({ c, atlas: true }); return; }
+        warmDecalMesh(c);   // its decal MESH too (#5387): primeRace draws it on the first frame, built here, not there
         const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
         // TLX defers every canvas to its first draw (gfx.js uploadTexture): push it
         // now, as the menu prep does, or the first warm frame uploads the field's
@@ -1277,14 +1278,20 @@ const CarDraw = (function () {
       Log.info("gfx", "selector car assets ready", done);
       return done;
     }
-    function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup, setup, stamp) {
+    // The decal mesh a car's decal draw uses (cached by CarMesh): drawCarDecals, and the race warm, which builds each
+    // field car's under the loading cover so primeRace's first-frame draw is not also its build (#5387).
+    function decalMeshFor(team, cockpit, usePlayerSetup, setup, stamp) {
       const state = teamDecalState(team, usePlayerSetup, setup, stamp);
       // A loaded GLB is a static body and does not consume procedural part recipes;
       // keep its overlay on stable default/legacy anchors as setup options change.
       const legacyBody = !!carModelBuf;
       const rl = deps.resolveLivery(team);
-      const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id, rl.bodyStyle) :
+      return cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id, rl.bodyStyle) :
         getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight, rl.bodyStyle);
+    }
+    function warmDecalMesh(c) { decalMeshFor(c.team, false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); }
+    function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup, setup, stamp) {
+      const mesh = decalMeshFor(team, cockpit, usePlayerSetup, setup, stamp);
       // PHOTO MODE upgrades rivals to the player-tier PREVIEW, lazily: one new
       // preview atlas per frame, nearest the photo camera first, a bounded set,
       // all freed when the mode closes (decalTextureFor / planPhotoAtlases).
