@@ -5,7 +5,7 @@ import { measureIdleWindows } from "../../tools/perf/idle-pipeline-census.mjs";
 
 function primeHooks() {
   const P = window.__pf = { ro: 0, bg: 0, frames: [], prime: null };
-  document.addEventListener("apex-scratch-prime", (e) => { if (!window.__primeMark) window.__primeMark = e.detail; });
+  document.addEventListener("apex-scratch-prime", (e) => { window.__primeMark = e.detail; P.marks = (P.marks || 0) + 1; if (P.ro0 == null) { P.ro0 = P.ro; P.bg0 = P.bg; } });
   const iv = setInterval(() => {
     try {
       const T = GLX.__tlx, r = T && T.renderer;
@@ -19,8 +19,9 @@ function primeHooks() {
         const m = window.__primeMark, t0 = performance.now(), ro0 = P.ro, bg0 = P.bg;
         const out = pres.apply(this, arguments);
         const t1 = performance.now();
-        if (m && !P.prime) P.prime = { off: m.off, presentMs: +(t1 - t0).toFixed(1), loopToEndMs: +(t1 - m.t).toFixed(1), ro: P.ro - ro0, bg: P.bg - bg0 };
+        if (m) { window.__primeMark = null; (P.primes = P.primes || []).push({ off: m.off, n: m.n, presentMs: +(t1 - t0).toFixed(1), loopToEndMs: +(t1 - m.t).toFixed(1), ro: P.ro - ro0, bg: P.bg - bg0, warming: !!(GLX.warming && GLX.warming()) }); P.prime = P.primes[P.primes.length - 1]; P.frames = []; }
         else if (P.prime && P.frames.length < 30) P.frames.push([+(t1 - t0).toFixed(1), P.ro - ro0, P.bg - bg0]);
+        P.roTotal = P.ro; P.bgTotal = P.bg;
         return out;
       };
     } catch (_) { /* not yet */ }
@@ -36,7 +37,7 @@ export function primeBody({ forceGL, off }) {
     const pf = await page.evaluate(() => window.__pf).catch((e) => ({ err: String(e) }));
     const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
     const after = (pf.frames || []).map((f) => f[0]);
-    throw new Error("MEASURE " + JSON.stringify({ forceGL, off, hook: res && res.hook, err, prime: pf.prime, after30: { medMs: med(after), maxMs: after.length ? Math.max(...after) : null, ro: (pf.frames || []).reduce((a, f) => a + f[1], 0), bg: (pf.frames || []).reduce((a, f) => a + f[2], 0) },
+    throw new Error("MEASURE " + JSON.stringify({ forceGL, off, hook: res && res.hook, err, primes: pf.primes, roSinceMark: pf.roTotal - pf.ro0, bgSinceMark: pf.bgTotal - pf.bg0, after30: { medMs: med(after), maxMs: after.length ? Math.max(...after) : null, ro: (pf.frames || []).reduce((a, f) => a + f[1], 0), bg: (pf.frames || []).reduce((a, f) => a + f[2], 0) },
       gov: res && res.gov, replay: res && res.replay, soft: res && res.soft, w: res && res.windows.map((w) => [w.pipelines, w.bindGroups, w.buffers]) }));
   };
 }

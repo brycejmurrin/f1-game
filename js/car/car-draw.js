@@ -1540,19 +1540,17 @@ const CarDraw = (function () {
       if (held()) return 0;
       // SCRATCH A/B (#5387, never merged): apex26.scratchRacePrime=0 skips the prime; both arms mark the frame.
       let _off = false; try { _off = localStorage.getItem("apex26.scratchRacePrime") === "0"; } catch (_) { /* on */ }
-      try { document.dispatchEvent(new CustomEvent("apex-scratch-prime", { detail: { off: _off, t: performance.now() } })); } catch (_) { /* no DOM */ }
-      if (_off) { _primeArmed = 0; return 0; }
       _primeArmed = 2;
       const Z = _primeZ; let n = 0;
-      const d = (mesh, opts) => { if (mesh) { gfx.draw(mesh, Z, opts); n++; } };
+      const d = (mesh, opts) => { if (mesh) { if (!_off) gfx.draw(mesh, Z, opts); n++; } };   // SCRATCH: the off arm walks the same path, draws nothing
       // Cockpit LCD: each digit once per place it can hold (the pool keys wrappers per occurrence: gear x1, speed x3).
       for (let k = 0; k <= 9; k++) { d(getGearDigit(k), _rigFx); for (let j = 0; j < 3; j++) d(getSpeedDigit(k), _rigFx); }
       const ws = CockpitOpts.wheel();
       if (CockpitOpts.wheelHasScreen(ws)) for (let lit = 0; lit <= 9; lit++) d(getLedStrip(lit, ws), _rigFx);
       d(getErsBar(), _rigFx); _rigFxA.alpha = 0.75; d(getErsBar(), _rigFxA);
       d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
-      if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
-      if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
+      if (!_off && typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
+      if (!_off && ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
       // Rivals: the shared near/far bodies, each team body, and every flap draw (closed set, open set, moving elements).
       if (paint) {
         const co = coOpt(paint);
@@ -1561,9 +1559,10 @@ const CarDraw = (function () {
           if (!c || c.isPlayer) continue;   // the player's own meshes draw from its first frame
           d(teamBodyMesh(c.team, c), paint);
           const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp);
-          for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(c.team, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
+          for (const b of [0, 1, 0.5]) { if (!_off) deps.drawAeroFlaps(c.team, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
         }
       }
+      try { document.dispatchEvent(new CustomEvent("apex-scratch-prime", { detail: { off: _off, n, t: performance.now() } })); } catch (_) { /* no DOM */ }
       return n;
     }
     // The rig's programs before the first onboard frame needs them (TLX gfx.warmDraws captures the draws
