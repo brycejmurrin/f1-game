@@ -988,7 +988,7 @@ const CarDraw = (function () {
         // A deferred car defers the whole phase — the paint too, since GLX, WGX and mobile TLX upload inside
         // createTexture, so deferring only the upload would be a no-op there (code-hunter, 2026-10-21).
         if (defer) { _deferredCarWarm.push({ c, atlas: true }); return; }
-        warmDecalMesh(c);   // its decal MESH too (#5387): primeRace draws it on the first frame, built here, not there
+        warmDecalMesh(c);   // #5387: built here, drawn by primeRace
         const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
         // TLX defers every canvas to its first draw (gfx.js uploadTexture): push it
         // now, as the menu prep does, or the first warm frame uploads the field's
@@ -1278,8 +1278,7 @@ const CarDraw = (function () {
       Log.info("gfx", "selector car assets ready", done);
       return done;
     }
-    // The decal mesh a car's decal draw uses (cached by CarMesh): drawCarDecals, and the race warm, which builds each
-    // field car's under the loading cover so primeRace's first-frame draw is not also its build (#5387).
+    // A car's decal mesh (CarMesh caches it); the race warm builds each field car's (#5387).
     function decalMeshFor(team, cockpit, usePlayerSetup, setup, stamp) {
       const state = teamDecalState(team, usePlayerSetup, setup, stamp);
       // A loaded GLB is a static body and does not consume procedural part recipes;
@@ -1545,6 +1544,7 @@ const CarDraw = (function () {
       _primeArmed = held ? 2 : 0;
       const Z = _primeZ; let n = 0;
       if (typeof gfx.primeChunkMerge === "function") gfx.primeChunkMerge();   // TLX: each chunked record's merge slot, this present
+      if (typeof Particles !== "undefined" && Particles.armPrime) Particles.armPrime();   // each particle stream, this frame
       const d = (mesh, opts) => { if (mesh) { gfx.draw(mesh, Z, opts); n++; } };
       // The pool keys wrappers per occurrence: each digit once per place (gear x1, speed x3).
       for (let k = 0; k <= 9; k++) { d(getGearDigit(k), _rigFx); for (let j = 0; j < 3; j++) d(getSpeedDigit(k), _rigFx); }
