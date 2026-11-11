@@ -3453,8 +3453,8 @@ wxArc = WeatherArc.create(G, { isTimeTrial, isQuali });
 // Tyre wear, the grip it costs and the fuel that argues with it
 // (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
 tyres = TyreModel.create(G);
-if (typeof SoakRun !== "undefined") SoakRun.create(G);   // AUTO SOAK (js/perf/soak-run.js): idle until PhoneRecorder's button calls start()
-if (typeof BenchRun !== "undefined") BenchRun.create(G);   // BENCHMARK (js/perf/bench-run.js): resumes its own multi-reload run, else idle
+// AUTO SOAK + BENCHMARK + PHONE TEST are LAZY_PERF: idle-loaded, or at once to resume a BENCHMARK run; bound on landing.
+lazyBundles.bootPerfRig(() => { SoakRun.create(G); BenchRun.create(G); });
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
@@ -4756,6 +4756,8 @@ const AI_PASS_LATCH_M = 16;    // m: the pass latch's window, read by BOTH ends.
 const AI_HEAD_VMIN = 6;        // vStd m/s: below this the position controller drives (dig-out, pit crawl)
 const AI_XTRACK_GAIN = 2.5;    // 1/s: Stanley cross-track gain, ~0.4 s to close an error
 const AI_HEAD_MAX = 0.45;      // rad: the heading a car may hold off the road tangent
+const AI_HEAD_JUMP = 4;        // vStd m/s: a speed jump between two heading writes no step drives — the speed was SET (rescue,
+                               // crash hand-back, drop-in): face the road as every placer's c.head does (#5338: a crawl's 0.45 rad was full lock at 80 m/s)
 const AI_YAW_LAT = 0.6;        // share of LAT_MAX·grip the heading change may spend (a_lat = v·yawRate)
 const AI_YAW_MAX = 1.2;        // rad/s: yaw-rate cap at crawl speeds
 const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separation bias may move the target
@@ -6002,7 +6004,7 @@ function updateCarLateral(c, dt, ranked, S) {
       steer = c.steerSm;
       // The heading the lateral speed this steer produces would need at this speed.
       const vl = steer * STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1);
-      c.aiHead = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -AI_HEAD_MAX, AI_HEAD_MAX) : 0;
+      c.aiHead = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -AI_HEAD_MAX, AI_HEAD_MAX) : 0; c.aiHeadV = vAbs;
     } else {
       // HEADING STATE. The old loop was proportional on POSITION:
       // steer = 0.9·err — 13.5 m/s of lateral speed per metre of error, the
@@ -6020,8 +6022,8 @@ function updateCarLateral(c, dt, ranked, S) {
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const headWant = AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax);   // stop before the edge (AiDrive.edgeHead)
-      const head0 = c.aiHead || 0;
-      c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
+      const head0 = c.aiHeadV != null && vStd(Math.abs(vAbs - c.aiHeadV)) > AI_HEAD_JUMP ? 0 : c.aiHead || 0;
+      c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt); c.aiHeadV = vAbs;
       gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // X-mode costs the AI its wings too
       steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * gripScale, 1), -1, 1);
       c.steerSm = steer;
@@ -8873,7 +8875,7 @@ HudElements.configure({ context: () => ({ state, hasPlayer: !!player, profile: h
         note.textContent = row.unavailableReason; LiveRegion.say(row.unavailableReason, "hud"); } }
     else { settingsNav.show(page, true); revealHudRequirement(target); } },
 });
-photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0),
+photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, ltStore, renderFrame: () => render(0),
   borrowCar: () => {
     // A fresh photo subject, never the last race's live car or seeded stream.
     const before = { cars, player }, rng = _simRngState;
