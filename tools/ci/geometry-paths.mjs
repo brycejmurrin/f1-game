@@ -35,7 +35,9 @@
  *              runs (no fleet rebuild: the whole tier is under a minute). A
  *              suite that reads a js/ path no tier names fails
  *              deploy-tool.test.mjs, so a suite cannot quietly start reading
- *              a file the trigger does not watch.
+ *              a file the trigger does not watch. Inputs a suite loads through
+ *              tests/helpers/ get DERIVED targeted rules (derivedTargeted), so
+ *              an editor-only edit runs the suites editor-vm boots it into.
  *
  * The alternation is deliberately NARROWER than pick-tests.mjs's sweeps rules:
  * this answers "can the FLEET REBUILD change?", not "which groups does this
@@ -140,7 +142,7 @@ function workerExtraPattern() {
   return "^(" + mods.map((f) => ere(f) + "$").join("|") + ")";
 }
 
-export const TARGETED = [
+const HAND_TARGETED = [
   { ere: "^(js/lighting/|js/render/shared/light-budget\\.js$|js/race/start-lights\\.js$)",
     suites: ["tests/unit/lamp-fixture-anchor.test.mjs"],
     why: "builds every circuit's lights from js/lighting/{frame-lights,knobs,lighting,track-lights}.js and light-budget.js, and hangs its start lamps with js/race/start-lights.js" },
@@ -177,6 +179,83 @@ export const TARGETED = [
     suites: ["tests/unit/driving-line-opts.test.mjs"],
     why: "the sheet's store round-trip; builds no circuit" },
 ];
+
+/** WHAT A SWEEP SUITE LOADS THROUGH ITS HELPERS (2026-11-10). The hand table
+ *  above and deploy-tool.test.mjs's no-drift scan both read a suite's OWN
+ *  source, so an input it loads through tests/helpers/ was invisible: editor-vm
+ *  runs hash32, the six js/editor/ files and js/ui/track-maps.js into the VM
+ *  that track-validate-fleet and kerb-berm-surface measure, and an edit to
+ *  js/editor/validate.js alone ran neither (no fleet match, no TARGETED rule).
+ *
+ *  DERIVED, never retyped: from each test:sweeps suite, follow every path
+ *  literal and relative import into tests/helpers/ (transitively), and collect
+ *  each js/, tools/ and tests/helpers/ path the suite or a helper names (the
+ *  helper files themselves included — a helper edit changes what the suite
+ *  measures). Comments are stripped first, as in the no-drift scan. tools/ is
+ *  collected but not followed: tools/manifest.cjs names every module in the
+ *  game, and the fleet half already watches tools/(track|lib)/.
+ *
+ *  FAIL SAFE: a helper a suite names that cannot be read throws — ci.yml's
+ *  filter turns the throw into run_all, deploy.mjs stops loudly. A derivation
+ *  that guessed would be a filter that fails open. */
+const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+/** Repo-relative js/, tools/ and tests/helpers/ paths one source file names. */
+export function fileReads(rel, src) {
+  const body = stripComments(src);
+  const lits = new Set();
+  for (const m of body.matchAll(/["'`]((?:\.\.?\/)*(?:js|tools|tests\/helpers)\/[\w./-]+\.(?:js|mjs|cjs))["'`]/g)) lits.add(m[1]);
+  for (const m of body.matchAll(/(?:\bfrom|\bimport|\brequire\(|\bimport\()\s*["'`](\.\.?\/[\w./-]+\.(?:js|mjs|cjs))["'`]/g)) lits.add(m[1]);
+  // path.join(ROOT, "js", "editor", "validate.js") — the split-segment spelling.
+  for (const m of body.matchAll(/["'](js|tools)["']((?:\s*,\s*["'][\w.-]+["'])+)/g)) {
+    lits.add(m[1] + "/" + [...m[2].matchAll(/["']([\w.-]+)["']/g)].map((x) => x[1]).join("/"));
+  }
+  const out = new Set();
+  for (const l of lits) {
+    const p = l.startsWith(".") ? path.posix.normalize(path.posix.join(path.posix.dirname(rel), l)) : l;
+    if (/^(js|tools|tests\/helpers)\//.test(p) && /\.(js|mjs|cjs)$/.test(p)) out.add(p);
+  }
+  return [...out];
+}
+
+/** Everything `suite` loads, itself and its helpers transitively: { reads, helpers }. */
+export function suiteReads(suite, root = ROOT) {
+  const reads = new Set(), helpers = new Set(), queue = [suite], seen = new Set([suite]);
+  while (queue.length) {
+    const f = queue.shift();
+    let src;
+    try { src = fs.readFileSync(path.join(root, f), "utf8"); }
+    catch (e) {
+      throw new Error(`geometry-paths: ${f} (loaded by sweep suite ${suite}) cannot be read (${e.code || e.message}) — ` +
+        "refusing to derive a trigger that cannot see what the suite loads");
+    }
+    for (const d of fileReads(f, src)) {
+      reads.add(d);
+      if (d.startsWith("tests/helpers/") && !seen.has(d)) { seen.add(d); helpers.add(d); queue.push(d); }
+    }
+  }
+  reads.delete(suite);
+  return { reads: [...reads].sort(), helpers: [...helpers].sort() };
+}
+
+/** One TARGETED rule per sweep suite for the inputs it reads that neither the
+ *  fleet pattern nor a hand rule naming THAT suite already covers. */
+export function derivedTargeted(suites = sweepOrder(), root = ROOT, hand = HAND_TARGETED) {
+  if (!suites.length) throw new Error("geometry-paths: no test:sweeps suites to derive helper inputs from — " +
+    "refusing a derived tier that would route nothing");
+  const rules = [];
+  for (const suite of suites) {
+    const { reads, helpers } = suiteReads(suite, root);
+    const extra = reads.filter((d) => !GEOMETRY_PATHS.test(d)
+      && !hand.some((r) => r.suites.includes(suite) && new RegExp(r.ere).test(d)));
+    if (!extra.length) continue;
+    rules.push({ ere: "^(" + extra.map((f) => ere(f) + "$").join("|") + ")", suites: [suite], derived: true,
+      why: `derived: what ${suite} loads${helpers.length ? " through " + helpers.join(", ") : ""} (suiteReads)` });
+  }
+  return rules;
+}
+
+export const TARGETED = [...HAND_TARGETED, ...derivedTargeted()];
 
 /** The targeted suites a set of changed paths needs, in test:sweeps order,
  *  deduplicated. Empty when none of the rules match. The caller decides the

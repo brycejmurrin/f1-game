@@ -81,6 +81,8 @@ const GameStore = (function () {
         }
         this._cache.set(key, v);
       }
+      // Stored null under an object/array default is a miss (W34: the garage threw); a null default keeps null.
+      if (v === null && d !== null && typeof d === "object") return this._def(k, d);
       return v === undefined ? this._def(k, d) : v;
     },
     // What the PLAYER stored (or set this session), with no shipped default and

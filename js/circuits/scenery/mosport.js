@@ -18,11 +18,11 @@
      4  s 0.0183 -1 11  Turn One, the top of the descent
      5  s 0.0467 +1 16  Turn 1 infield — kept OPEN so the drop shows
      6  s 0.1483 -1 10  approach to Clayton, steepest pitch, footbridge
-     7  s 0.1817 -1 14  Clayton Corner (T2), the plunging left
+     7  s 0.1817 -1 14  Clayton Corner (T2/2a), the plunging left
      8  s 0.2800 +1 18  Clayton -> Quebec, dark and enclosed both sides
      9  s 0.3117 -1 12  Quebec Corner (T3)
     10  s 0.4200 -1 22  the run down to Moss, lowest and most enclosed
-    11  s 0.4817 +1 15  MOSS CORNER (T5a/5b), the double apex — signature
+    11  s 0.4817 +1 15  MOSS CORNER (T5a/5b/5c), the double apex — signature
     12  s 0.5400 -1 20  Moss exit, the climb starts
     13  s 0.6600 -1 26  Mario Andretti Straightaway, the sky opens
     14  s 0.7400 +1 30  back-straight infield — drumlin farmland
@@ -215,11 +215,13 @@
       groundPatch(K(0.1400), -1, 12, [6, 0.16, 60], SAND);
       marshalPost(K(0.1300), -1, 13);
 
-      // 7. s 0.1817 -1 14 — CLAYTON CORNER (T2)
+      // 7. s 0.1817 -1 14 — CLAYTON CORNER (T2/2a; turns[1] = T2 apex 0.1495)
       //    A dramatic plunging left, 20 m of drop through the corner. Tyres
-      //    on the outside, a spectator bank behind them in the trees.
+      //    on the OUTSIDE (+1, right of a left-hander) from the T2 apex through
+      //    2a (built k peaks 0.150 / 0.185), clear of the footbridge piers at
+      //    0.1483; armco and a spectator bank in the trees on the inside.
       guardrail(0.1700, 0.2300, -1, 11, ARMCO);
-      tyreWall(0.1740, 0.1930, -1, 12.0, TYRE_R);
+      tyreWall(0.1510, 0.1930, 1, 12.0, TYRE_R);
       // Bank pushed well past the tyre wall (clip was 1.56–1.59 m @ 0.188).
       spectatorHill(0.1700, 0.2050, -1, 42, { rows: 2, col: GRASS });
       marshalPost(K(0.1817), -1, 15);
@@ -264,10 +266,10 @@
       for (let i = 0; i < 4; i++) specimen(K(0.3750 + i * 0.0180), 1, 44 + (i % 2) * 16, 200 + i * 9);
       slopeRidge(K(0.4150), 1, 82, 72, 20, 5.0, ROUGH);
 
-      // 11. s 0.4817 +1 15 — MOSS CORNER (T5a/5b), THE SIGNATURE
+      // 11. s 0.4817 +1 15 — MOSS CORNER (T5a/5b/5c), THE SIGNATURE
       //     Double-apex complex Stirling Moss asked for (Wikipedia / IMSA).
-      //     Repo turns[] names it T5a/5b — some maps say "T5" (UNCERTAIN label
-      //     only; geometry follows the def). Tyres on both apexes; a required
+      //     The operator map labels it 5a/5b/5c; turns[4] (T5) holds the
+      //     5b hairpin apex, 0.4812. Tyres on both apexes; a required
       //     modelGroup bank on the inside (a spectatorHill+terrace pair
       //     coplanar-clips for 1.8 m / 8 m²).
       tyreWall(0.4700, 0.4830, 1, 12.5, TYRE_R);
@@ -366,7 +368,7 @@
 
       // 15. s 0.8017 -1 12 — TURN 8, ENTRY TO THE ESSES
       //     Tyres at the apex, marshal post, wood tight. A pedestrian
-      //     crossing (real: footbridge at Turn 7).
+      //     crossing (real: the Canadian Tire bridge between T7 and T8).
       guardrail(0.7700, 0.8300, -1, 11, ARMCO);
       tyreWall(0.7940, 0.8110, -1, 12.0, TYRE_R);
       marshalPost(K(0.8017), -1, 14);

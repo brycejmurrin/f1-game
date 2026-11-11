@@ -177,3 +177,40 @@ test("a reused canceled pointer ID does not swallow a new contact elsewhere", ()
     preventDefault() { stopped++; }, stopImmediatePropagation() {} }));
   assert.equal(stopped, 0, "fresh contact remains native after pointer ID reuse");
 });
+
+// Audit W26 row 8 (2026-11-10): a REMOTE pedal (phone / XR) is rescaled past its 0.1
+// dead zone the way the gamepad trigger is (padPedalLevel), and a remote steer is
+// clamped where Input reads it.
+const remoteLvl = (v) => (v > 0.1 ? (v - 0.1) / 0.9 : 0);
+
+test("a remote pedal ramps from 0 at its dead zone instead of jumping to 11 % (W26 row 8)", () => {
+  const { Input, sb } = boot();
+  let t = 1000;
+  sb.performance = { now: () => t };
+  const press = (thr, brk) => { t += 16; Input.remoteSample({ source: "phone", roll: null, thr, brk }); };
+  press(0.11, 0);
+  assert.equal(Input.throttle(), true, "past the 0.1 resting-thumb band it is a press");
+  assert.ok(Input.throttleLevel() < 0.02, "an 11 % press is a ~1 % pedal, not 11 %: " + Input.throttleLevel());
+  for (const v of [0.25, 0.55, 0.8]) {
+    press(v, 0);
+    assert.ok(Math.abs(Input.throttleLevel() - remoteLvl(v)) < 1e-12, `throttle ${v} -> ${remoteLvl(v)}, got ${Input.throttleLevel()}`);
+    press(0, v);
+    assert.ok(Math.abs(Input.brakeLevel() - remoteLvl(v)) < 1e-12, `brake ${v} -> ${remoteLvl(v)}, got ${Input.brakeLevel()}`);
+  }
+  press(1, 1);
+  assert.equal(Input.throttleLevel(), 1, "full travel is still exactly 1");
+  assert.equal(Input.brakeLevel(), 1);
+});
+
+test("a remote STEER outside -1..1 is clamped where Input reads it (W26 row 8)", () => {
+  const { Input, sb } = boot();
+  let t = 1000;
+  sb.performance = { now: () => t };
+  for (const [raw, sign] of [[5, 1], [-7, -1], [1e9, 1]]) {
+    t += 16;
+    Input.remoteSample({ source: "xr", steer: raw, thr: 0, brk: 0 });
+    assert.equal(Input.debugState().remote.stick, sign, "the stored stick is clamped: " + raw);
+    const s = Input.steer(1 / 60);
+    assert.ok(Math.abs(s) <= 1 && Math.sign(s) === sign, `steer(${raw}) stays inside full lock: ${s}`);
+  }
+});

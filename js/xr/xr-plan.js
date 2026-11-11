@@ -1,14 +1,15 @@
 /* Apex 26 — XRPlan: pure boot-time VR renderer path selection.
  *
- * Decides { path, backendPref, forceGL, … } from capability + preference bags
- * only — no DOM / navigator reads. The shippable VR path is TLX + forceWebGL
- * (`backendPref:"three"`, `forceGL:true`): GLX has no attachXrSession, so a
+ * Decides { path, backendPref, … } from capability + preference bags only —
+ * no DOM / navigator reads. The shippable VR path is TLX + forceWebGL
+ * (`backendPref:"three"`, path "webgl2"): GLX has no attachXrSession, so a
  * "webgl2" boot override left ENTER VR unable to attach (renderer-boot.js).
- * Experimental WebGPU XR stays opt-in (TLX, forceGL false). The override
- * never writes apex26.gfxBackend — disarming restores the 2D pick.
- *
- * Consumed by ApexXR (js/xr/apex-xr.js) and the thin backendPreference()
- * hook in js/game.js.
+ * Experimental WebGPU XR stays opt-in (path "webgpu"). The plan never writes
+ * apex26.gfxBackend. It is advisory: ApexXR.stats() reports it, and
+ * ApexXR.bootPick() could only steer a boot that found ApexXR resident, which
+ * a real boot never does (LAZY_XR loads after the renderer). What really moves
+ * a player onto the XR-capable renderer is XrBoot.ensureXrBackend()'s pin and
+ * reload on the ENTER VR tap.
  */
 "use strict";
 
@@ -35,7 +36,6 @@ const XRPlan = (function () {
       xrMode: "off",
       path: null,
       backendPref: null,
-      forceGL: false,
       reasons: [],
       fallbacks: [],
     }, extra || {});
@@ -47,7 +47,6 @@ const XRPlan = (function () {
       xrMode: "armed",
       path: PATH_WEBGL2,
       backendPref: "three",
-      forceGL: true,
       reasons,
       fallbacks,
     };
@@ -57,7 +56,7 @@ const XRPlan = (function () {
    * @param {{ caps?: object, prefs?: object, boot?: object }} input
    * caps: { xr, vr, gpu, xrgpu, mobileQuest? }
    * prefs: { xr: "0"|"1", xrBackend: "webgl2"|"webgpu", gfxBackend? }
-   * boot: { xrFallback? } — xrFallback "webgl2" forces the shippable TLX+forceGL path
+   * boot: { xrFallback? } — xrFallback "webgl2" forces the shippable webgl2 path
    */
   function resolve(input) {
     const caps = (input && input.caps) || {};
@@ -111,7 +110,6 @@ const XRPlan = (function () {
         xrMode: "armed",
         path: PATH_WEBGPU,
         backendPref: "three",
-        forceGL: false,
         reasons,
         fallbacks,
       };

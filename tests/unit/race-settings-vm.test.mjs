@@ -454,6 +454,9 @@ test("a MIXED race arms a weather arc at the start and walks it; the plan is the
   assert.equal(g.G.weatherArc.dur, 200);
   // Walk it: the weather has moved off dry well before the arc ends…
   g.apex.headless(true); g.apex.go();
+  // The AI drives the player's car: a player parked 60 s under green is retired (W26 row 5,
+  // AiDrive.stallSweep), and the race it ends would stop the arc this test walks.
+  g.apex.carRole(g.apex.carRoles().findIndex((r) => r.local), { human: false });
   g.apex.step(1 / 30, 30 * 150);
   assert.notEqual(g.G.raceWeather, "dry", "the arc moved the weather");
   // …and the chip's pick comes back when the race is left.

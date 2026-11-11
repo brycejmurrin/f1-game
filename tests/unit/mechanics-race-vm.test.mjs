@@ -216,14 +216,18 @@ test("rescuePlayer deletes the lap in time trial and qualifying, not in a race a
   await tt();
   const p = g.G.player;
   const flags = (c) => ({ inv: !!c.incidentInvalidLap, cut: !!c.qualiCut });
-  const run = (c, session) => { g.G.session = session; c.incidentInvalidLap = false; c.qualiCut = false; g.G.rescuePlayer(c); return flags(c); };
+  const run = (c, session, lap = 1) => { g.G.session = session; c.lap = lap; c.incidentInvalidLap = false; c.qualiCut = false; g.G.rescuePlayer(c); return flags(c); };
+  const lap0 = p.lap;
   try {
     assert.deepEqual(run(p, "tt"), { inv: true, cut: false }, "time trial: the lap is invalid (no quali sheet to cut)");
     assert.deepEqual(run(p, "quali"), { inv: true, cut: true }, "qualifying: invalid AND no time on the sheet");
+    // Audit 2026-11-09 W2 #5: lap 0 is the run to the line — no timed lap to delete, and the
+    // start-line crossing never clears qualiCut, so a session with no lap read NO TIME.
+    assert.deepEqual(run(p, "quali", 0), { inv: true, cut: false }, "qualifying, lap 0: nothing timed to delete");
     assert.deepEqual(run(p, "race"), { inv: false, cut: false }, "a race has no lap-validity concept to add");
     p.human = false;   // the AI's role (a time trial has no rivals to borrow)
     assert.deepEqual(run(p, "tt"), { inv: false, cut: false }, "an AI car's rescue never touches lap validity");
-  } finally { p.human = true; g.G.session = "race"; }
+  } finally { p.human = true; p.lap = lap0; p.qualiCut = false; g.G.session = "race"; }
 });
 
 // 01-F5 (hunt2): handing a flipped human car back called G.rescuePlayer BEFORE the car left the takeover; the real

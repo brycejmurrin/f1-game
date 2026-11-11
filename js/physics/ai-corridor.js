@@ -90,8 +90,14 @@ const AiCorridor = (function () {
     const best = out.left.score > out.right.score ? out.left : out.right;
     out.side = Number.isFinite(best.score) ? best.side : 0;
     out.reason = out.side ? (out.side < 0 ? "pass left" : "pass right") : "follow: no reachable passing lane";
+    out.of = blocker;   // the car this plan was made against (planAllows)
     return out;
   }
-  return Object.freeze({ choose });
+  // A plan gates the pull-aside only against the blocker it was made for (W26): c.passPlan is
+  // refreshed only at latch time, so a side-0 verdict used to block every later blocker.
+  function planAllows(plan, blocker) {
+    return !plan || plan.of !== blocker || !!plan.side;
+  }
+  return Object.freeze({ choose, planAllows });
 })();
 Object.freeze(AiCorridor);
