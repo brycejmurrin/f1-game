@@ -268,6 +268,24 @@ test("an unreadable DROPPED count fails closed with an honest message (#4481)", 
   assert.deepEqual(seen, [[false, true, false], [false, true, false], [false, false, true], [true, true]]);
 });
 
+test("W31: the select step fails closed on an empty plan for a code diff; a docs diff's empty plan passes", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8");
+  const report = src.slice(src.lastIndexOf("node -e '") + "node -e '".length, src.lastIndexOf("'"));
+  const dir = mkTmpDir("sel-empty-");
+  try {
+    const run = (reason) => {
+      fs.writeFileSync(path.join(dir, "sel.json"), JSON.stringify({ reason, selected: [], shards: [], groups: [], tracked: [], unmatched: [], overBudgetSpecs: [], coveredByFixedGates: [], skipped: [] }));
+      try { execFileSync(process.execPath, ["-e", report], { cwd: dir, env: { ...process.env, GITHUB_OUTPUT: path.join(dir, "out") }, encoding: "utf8", stdio: "pipe" }); return 0; }
+      catch (e) { return e.status; }
+    };
+    assert.equal(run("infra"), 1, "infra with no job fails closed");
+    assert.equal(run("matched"), 1, "a code diff with no job fails closed");
+    assert.equal(run("partial"), 1);
+    assert.equal(run("docs"), 0, "docs-only: an empty plan is a pass");
+    assert.equal(run("none"), 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // ---- #5241 G5: a green matrix that ran nothing ----
 test("#5241 G5: selected=success with a started shard that left no testcase, or no evidence, is red", () => {
   assert.equal(selectedGateVerdict({ ...base }).ok, true);
@@ -277,4 +295,13 @@ test("#5241 G5: selected=success with a started shard that left no testcase, or 
   assert.equal(selectedGateVerdict({ ...base, evidence: { started: [], junit: [] } }).ok, false);
   assert.equal(selectedGateVerdict({ ...base, evidence: { started: ["a-1"], junit: ["a-1"], downloadFailed: true } }).ok, false);
   assert.equal(selectedGateVerdict({ ...base, selected: "skipped", evidence: { started: [], junit: [] } }).ok, true, "an empty plan has no shard to prove");
+});
+
+test("#5304: groups the runner fan-out could not represent are named on the verdict line, never a verdict of their own", () => {
+  const ok = selectedGateVerdict({ ...base, unrepresented: "test:perf-race-entry test:stall-reload-sw" });
+  assert.equal(ok.ok, true);
+  assert.match(ok.reason, /not run on this PR: test:perf-race-entry, test:stall-reload-sw, nightly rota covers them$/);
+  assert.equal(selectedGateVerdict({ ...base, unrepresented: "" }).reason, selectedGateVerdict({ ...base }).reason);
+  const red = selectedGateVerdict({ ...base, dropped: "1", unrepresented: "test:perf-session" });
+  assert.equal(red.ok, false, "naming never exempts a drop");
 });
