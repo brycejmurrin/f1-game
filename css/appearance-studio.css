@@ -44,7 +44,7 @@
 #appearance-studio input[type="search"],
 #appearance-studio input:not([type]),
 #appearance-studio select {
-  font-size: 16px;
+  font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
 }
 #appearance-studio [data-as="segment"] > button { flex: 1 1 auto; min-width: var(--tap-paint); }
 #appearance-studio button[aria-pressed="true"] { background: var(--red); color: var(--menu-accent-ink, var(--text)); border-color: var(--red); box-shadow: var(--edge); }
