@@ -46,7 +46,7 @@ const CarFields = (function () {
     ["curvature, tyre-load telemetry, applied speed band, last along-track delta (_alPrevDp), overtake-armed edge (wasArmed), vmax",
       ["kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "wasArmed", "_vmaxNow"]],
     ["surface/pit flags and the driver's own turn-in/steer state (the steerSm seed MUST stay undefined)",
-      ["onKerb", "inPitLane", "kTurn", "wheelLock", "steerSm", "brakeDemand", "throttleDemand", "steerCommand"]],
+      ["onKerb", "inPitLane", "kTurn", "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand"]],
     ["brake heat, exhaust pop, throttle edge and the last push distance (audio/fx and Collide)",
       ["brakeHeat", "exhaustPop", "wasOnThrottle", "_pushD"]],
     ["sector timing and the pre-collision snapshot Collide restores from",
@@ -109,7 +109,7 @@ const CarFields = (function () {
       "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain"]],
     ["pre-declared undefined (or makeCars null) and later a number: HeapObject -> Tagged",
       ["rank", "_snapProg", "_snapX", "_snapSpeed", "kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "_vmaxNow", "kTurn",
-      "wheelLock", "steerSm", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
+      "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
       "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "skidIntensity", "passSide", "passBest",
       "_lapTimeAtLine", "fxSparkI", "kerbSndT", "kerbHapT", "pitWorked", "_otS", "_otLap", "aiBias", "holdOff",
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
@@ -173,6 +173,7 @@ const CarFields = (function () {
     if (!("kTurn" in c)) c.kTurn = undefined;
     if (!("wheelLock" in c)) c.wheelLock = undefined;
     if (!("steerSm" in c)) c.steerSm = undefined;
+    if (!("aiHeadV" in c)) c.aiHeadV = undefined;
     if (!("brakeDemand" in c)) c.brakeDemand = undefined;
     if (!("throttleDemand" in c)) c.throttleDemand = undefined;
     if (!("steerCommand" in c)) c.steerCommand = undefined;
