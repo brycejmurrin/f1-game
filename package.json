@@ -85,7 +85,8 @@
     "test:perf-budget": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js",
     "test:perf-idle-churn": "node tools/ci/run-playwright.mjs tests/specs/perf-idle-pipeline-churn.spec.js",
     "test:stall-reload-sw": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js",
-    "test:scratch-primeft2": "node tools/ci/run-playwright.mjs tests/specs/scratch-primeft-m1.spec.js tests/specs/scratch-primeft-m2.spec.js tests/specs/scratch-primeft-m3.spec.js tests/specs/scratch-primeft-m4.spec.js"
+    "test:scratch-primeft2": "node tools/ci/run-playwright.mjs tests/specs/scratch-primeft-m1.spec.js tests/specs/scratch-primeft-m2.spec.js tests/specs/scratch-primeft-m3.spec.js tests/specs/scratch-primeft-m4.spec.js",
+    "test:scratch-primebis": "node tools/ci/run-playwright.mjs tests/specs/scratch-primeft-b1.spec.js tests/specs/scratch-primeft-b2.spec.js tests/specs/scratch-primeft-b3.spec.js tests/specs/scratch-primeft-b4.spec.js tests/specs/scratch-primeft-b5.spec.js tests/specs/scratch-primeft-b6.spec.js tests/specs/scratch-primeft-b7.spec.js tests/specs/scratch-primeft-b8.spec.js"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",

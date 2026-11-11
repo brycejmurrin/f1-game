@@ -2185,6 +2185,19 @@
       ],
       "kind": "browser"
     },
+    "test:scratch-primebis": {
+      "files": [
+        "tests/specs/scratch-primeft-b1.spec.js",
+        "tests/specs/scratch-primeft-b2.spec.js",
+        "tests/specs/scratch-primeft-b3.spec.js",
+        "tests/specs/scratch-primeft-b4.spec.js",
+        "tests/specs/scratch-primeft-b5.spec.js",
+        "tests/specs/scratch-primeft-b6.spec.js",
+        "tests/specs/scratch-primeft-b7.spec.js",
+        "tests/specs/scratch-primeft-b8.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:scratch-primeft2": {
       "files": [
         "tests/specs/scratch-primeft-m1.spec.js",

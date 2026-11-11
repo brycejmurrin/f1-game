@@ -1207,6 +1207,7 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
+        "test:scratch-primebis",
         "test:scratch-primeft2",
         "test:shimmer",
         "test:smoke",
@@ -4299,6 +4300,10 @@
     {
       "name": "test:results-flow",
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
+    },
+    {
+      "name": "test:scratch-primebis",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-primeft-b1.spec.js tests/specs/scratch-primeft-b2.spec.js tests/specs/scratch-primeft-b3.spec.js tests/specs/scratch-primeft-b4.spec.js tests/specs/scratch-primeft-b5.spec.js tests/specs/scratch-primeft-b6.spec.js tests/specs/scratch-primeft-b7.spec.js tests/specs/scratch-primeft-b8.spec.js"
     },
     {
       "name": "test:scratch-primeft2",

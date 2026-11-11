@@ -1549,7 +1549,7 @@ const CarDraw = (function () {
       if (!held && _primeArmed === 2) { _primeArmed = 0; return 0; }
       _primeArmed = held ? 2 : 0;
       // SCRATCH A/B (#5387, never merged): apex26.scratchRacePrime=0 walks the same path and draws nothing.
-      let _off = false; try { _off = localStorage.getItem("apex26.scratchRacePrime") === "0"; } catch (_) { /* on */ }
+      let _off = false, _mode = null; try { _mode = localStorage.getItem("apex26.scratchRacePrime"); _off = _mode === "0"; } catch (_) { /* on */ }
       const Z = _primeZ; let n = 0;
       if (!_off && typeof gfx.primeChunkMerge === "function") gfx.primeChunkMerge();   // SCRATCH: off arm skips it
       const gfx0 = gfx; const gfxP = _off ? { draw() {}, drawShadow: gfx0.drawShadow ? () => {} : null, drawMark: gfx0.drawMark ? () => {} : null } : gfx0;
@@ -1577,9 +1577,9 @@ const CarDraw = (function () {
           if (!c) continue;
           if (gfxP.drawShadow) { gfxP.drawShadow(Z, 2.4, 5.8); n++; }
           if (gfxP.drawMark) { gfxP.drawMark(Z, 1, 1); n++; }
-          if (!_off) queueCarDecals(c.team, Z, carDecalNum(c.team, c), false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); n++;
+          if (!_off && _mode !== "nodecals") queueCarDecals(c.team, Z, carDecalNum(c.team, c), false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); n++;
           _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
-          for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
+          if (_mode !== "nodiscs") for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
           if (c.isPlayer) continue;   // the player's own meshes draw from its first frame
           d(_sharedRivalBody, co); d(_farRivalBody, co);
           d(teamBodyMesh(c.team, c), paint);
