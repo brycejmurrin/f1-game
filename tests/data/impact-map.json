@@ -586,7 +586,6 @@
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
-        "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
@@ -944,11 +943,6 @@
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
-      "playWatchMedia": [
-        "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/audio-tune.test.mjs",
-        "tests/unit/mix-duck-radio.test.mjs"
-      ],
       "radioSting": [
         "tests/unit/audio-tune.test.mjs"
       ],
@@ -971,6 +965,7 @@
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/pu-harvest-audio.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs",
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/wind-speed.test.mjs"
@@ -14093,9 +14088,6 @@
       "eventStep": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
-      "finish": [
-        "tests/unit/capture-tools-regressions.test.mjs"
-      ],
       "fitFrame": [
         "tests/unit/real-replay-frame-fit.test.mjs"
       ],
@@ -14128,8 +14120,8 @@
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
-      "playRadio": [
-        "tests/unit/capture-tools-regressions.test.mjs"
+      "pose": [
+        "tests/unit/real-replay-audio-focus.test.mjs"
       ],
       "reelFor": [
         "tests/unit/real-replay-captions.test.mjs",
@@ -14140,6 +14132,7 @@
       ],
       "seek": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
@@ -14149,10 +14142,12 @@
       ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "setSpeed": [
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
@@ -14162,31 +14157,31 @@
       ],
       "start": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "status": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "stop": [
-        "tests/unit/capture-tools-regressions.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
-      "stopRadioClip": [
-        "tests/unit/capture-tools-regressions.test.mjs"
-      ],
       "tick": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
@@ -14907,6 +14902,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/notices.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -16447,6 +16443,7 @@
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/notices.test.mjs",
         "tests/unit/perf-try.test.mjs"
       ]
     },
