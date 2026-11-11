@@ -2455,7 +2455,7 @@ const TLX = (function () {
         // or the god-ray march shades (both reject receivers past the radius).
         const reach = shadow && opts.reach && opts.reach[3] > 0 ? opts.reach : null, reach2 = reach ? reach[3] * reach[3] : 0;
         const sc = batch.srcColors, dc = shadow ? null : batch.packColors;
-        let n = firstDirty;
+        let n = firstDirty, _shSig = 0;   // SCRATCH #5463: signature of the cells this shadow cull packed
         for (let ci = firstCell, cn = useKey ? kN : cs.length; ci < cn; ci++) {
           const c = useKey ? cs[ks[ci]] : cs[ci];
           if (!useKey && !TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
@@ -2465,6 +2465,7 @@ const TLX = (function () {
           // Indexed for — `for…of` on c.idx minted an iterator per visible cell
           // per cull (camera + shadow). GLX/WGX already use indexed loops.
           const idx = c.idx;
+          if (shadow) _shSig = (Math.imul(_shSig, 31) + (useKey ? ks[ci] : ci) + 1) | 0;   // SCRATCH #5463
           for (let j = 0, jn = idx.length; j < jn; j++) {
             const i = idx[j];
             // No src.subarray — per-instance views were GC on Vegas-scale batches
@@ -2484,7 +2485,21 @@ const TLX = (function () {
         // when the camera cull overwrote it later in the same frame.
         // Do not touch _cullPlanes: that cache means "this pack is on the
         // GPU", and we did not upload.
-        if (opts && opts.upload === false) { batch._shadowFresh = true; return n; }
+        if (opts && opts.upload === false) {
+          // SCRATCH #5463 (never merge): would a per-batch shadow cell-set key have hit? Same packed cells, same
+          // reach, same destination (the batch's own caster array, not the shared scratch).
+          try {
+            const S = cullInstances._sh5463 || (cullInstances._sh5463 = { calls: 0, copies: 0, hit: 0, hitCopies: 0, hitCaster: 0, hitCasterCopies: 0, scratch: 0, frames: 0, lastF: -1, perFrameMax: 0, _pf: 0, empty: 0 });
+            S.calls++; S.copies += n; if (n === 0) S.empty++;
+            const rk = reach ? reach[0] + "," + reach[1] + "," + reach[2] + "," + reach[3] : "";
+            const same = batch._sh5463Sig === _shSig && batch._sh5463N === n && batch._sh5463R === rk;
+            if (same) { S.hit++; S.hitCopies += n; if (dst === batch._shCasterArr && batch._sh5463Dst === dst) { S.hitCaster++; S.hitCasterCopies += n; } }
+            if (dst !== batch._shCasterArr) S.scratch++;
+            batch._sh5463Sig = _shSig; batch._sh5463N = n; batch._sh5463R = rk; batch._sh5463Dst = dst;
+            const now = performance.now(); if (now - (S._t || 0) > 4) { S.frames++; S._t = now; }
+          } catch (_) { /* scratch counter */ }
+          batch._shadowFresh = true; return n;
+        }
         // visible is the CAMERA count the lit draw reads; a shadow cull's n must
         // not overwrite it (GLX/WGX: the camera count survives the shadow cull).
         batch.visible = n;
@@ -4040,7 +4055,7 @@ const TLX = (function () {
         for (const p of caches.values()) pinPipe(p);
         return _pinnedPipes.size;
       }
-      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
+      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 600000;   // SCRATCH: #5397 value
       function prunePool(now) {
         const pin = typeof pinPipelines === "function" ? pinPipelines : null;   // typeof: sandboxed prunePool bodies
         if (pin && !_pinArmed) pin();   // arm the pin at the first present, before any warm builds a pipeline
@@ -4274,6 +4289,18 @@ const TLX = (function () {
           m.frustumCulled = false;
           list[k] = m;
           meshPool.push(m); acquireMesh.n = (acquireMesh.n | 0) + 1;   // memState().churn: a new three RenderObject
+          try {   // SCRATCH #5447 (never merge): name every new wrapper (and first-seen geometry) with its caller
+            const L = acquireMesh._nm5447 || (acquireMesh._nm5447 = { rows: [], geoSeen: new WeakSet(), n: 0, newGeo: 0 });
+            const gNew = !L.geoSeen.has(geo); if (gNew) { L.geoSeen.add(geo); L.newGeo++; }
+            L.n++;
+            if (L.rows.length < 1500) {
+              let st = ""; try { st = (new Error().stack || "").split("\n").slice(2, 9).map((x) => x.trim().replace(/^at\s+/, "").replace(/https?:\/\/[^\s)]*\//g, "").replace(/\?v=[a-z0-9]+/g, "")).filter((x) => !/tlx\.js/.test(x)).slice(0, 3).join(" <- "); } catch (_) { /* */ }
+              const pa = geo && geo.attributes && geo.attributes.position;
+              let lap = null; try { const ps = window.__apex && window.__apex.physState(); lap = ps ? [ps.lap, Math.round(ps.prog)] : null; } catch (_) { /* */ }
+              L.rows.push({ t: Math.round(performance.now()), lap, k, gNew, v: pa ? pa.count : -1, ix: geo && geo.index ? geo.index.count : -1,
+                gn: (geo && geo.name) || "", gu: geo && geo.userData ? Object.keys(geo.userData).slice(0, 4).join(",") : "", mn: (mat && (mat.name || mat.type)) || "", mir: !!_mirActive, st });
+            }
+          } catch (_) { /* scratch log */ }
         }
         // Assigned anyway: the pair is what the mesh was KEYED on, so these are
         // no-ops in steady state — and a no-op assignment is what keeps three's
@@ -7026,6 +7053,7 @@ const TLX = (function () {
                         dropLater: { now: _dropLater.length, held: _dropStat.held, overflow: _dropStat.overflow },
                         // Hunt 6, lifetime: wrappers minted / pruned (each mint is a three RenderObject: object UBO + bind
                         // group), FX streams (re)built (a vertex buffer each), and headless readbacks (one MAP_READ createBuffer each).
+                        scr5447: acquireMesh._nm5447 || null, scr5463: cullInstances._sh5463 || null,   // SCRATCH (never merge)
                         churn: { poolNew: acquireMesh.n | 0, poolPruned: prunePool.n | 0, softReads: _softBlitGen,
                                  streamNew: [skidStream, lineStream, glowStream, ...partStreams].reduce((n, s) => n + (s.builds | 0), 0) },
                         // The mirror sweep reports what it FREED, not that it ran:

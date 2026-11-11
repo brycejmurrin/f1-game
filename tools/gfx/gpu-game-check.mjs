@@ -140,7 +140,12 @@ const path3 = flag("--path", "webgpu");
 // until the race), so fifteen beats held 0-5 s of a parked race. The race
 // gate below waits for the race itself; --beats sizes what it then measures.
 // SCRATCH #5447 (never merged): --ls apex26.gcBeats=N lengthens the TLX/WebGPU leg only (the workflow pins --beats 20).
-const _lsBeats = extraLs.map((s) => /^apex26\.gcBeats=(\d+)$/.exec(s)).find(Boolean);
+// SCRATCH (second form): --ls apex26.gcLong=N lengthens ONLY the relaunch step's cold leg (12-min step cap); its warm
+// leg exits at once. Every other leg keeps its pinned beats.
+const _jsonArg = flag("--json", "") || "";
+const _lsLong = extraLs.concat(String(process.env.CENSUS_LS || "").split(/\s+/)).map((s) => /^apex26\.gcLong=(\d+)$/.exec(s)).find(Boolean);   // the relaunch step passes no --ls: read the job env
+if (_lsLong && /relaunch-warm/.test(_jsonArg)) { console.log("scratch: gcLong set, warm relaunch leg skipped"); process.exit(0); }
+const _lsBeats = (_lsLong && /relaunch-cold/.test(_jsonArg)) ? _lsLong : (_lsLong ? null : extraLs.map((s) => /^apex26\.gcBeats=(\d+)$/.exec(s)).find(Boolean));
 const beats = (_lsBeats && backend === "three" && path3 === "webgpu") ? Math.max(1, +_lsBeats[1])
   : Math.max(1, Math.round(Number(flag("--beats", 15))) || 15);
 // --no-drive keeps the car parked for the window (the pre-2026-09-22 census).
@@ -1234,6 +1239,7 @@ try {
               return { bc: st.life.Buffer.created, bd: st.life.Buffer.destroyed, bl: st.buf.size, bmb: +(b / 1048576).toFixed(2), cls: c,
                 tc: st.life.Texture.created, td: st.life.Texture.destroyed, tl: st.tex.size, tmb: +(tb / 1048576).toFixed(2), sites: st.sites.size, armed: st.armedCreates }; } catch (_) { return null; } })(),
             lap: (() => { try { const p = A && A.physState ? A.physState() : null; return p ? { lap: p.lap, prog: p.prog != null ? +(+p.prog).toFixed(3) : null, v: p.speed != null ? Math.round(p.speed) : null } : null; } catch (_) { return null; } })(),
+            sh: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const S = t && t.memState ? t.memState().scr5463 : null; return S ? { c: S.calls, cp: S.copies, h: S.hit, hcp: S.hitCopies, hc: S.hitCaster, hccp: S.hitCasterCopies, scr: S.scratch, ev: S.frames, e0: S.empty } : null; } catch (_) { return null; } })(),
             churn: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null; return m && m.churn ? m.churn : null; } catch (_) { return null; } })(),
             ubo: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
               return m && m.rUbo != null ? { n: m.rUbo, kb: m.rUboKB, ver: m.groupVer, pms: m.presentMs, dr: m.draws } : null; } catch (_) { return null; } })(),
@@ -1357,6 +1363,7 @@ try {
     try {
       out.gpuMem = await bounded(() => page.evaluate(gpuMemSnapshot, 60), 10000, "gpu-mem-read");
       out.createAttribution = createAttribution(out.gpuMem, out.window && out.window.frames);
+      out.newMeshLog = await bounded(() => page.evaluate(() => { try { const t = GLX.__tlx.memState().scr5447; return t ? { n: t.n, newGeo: t.newGeo, rows: t.rows } : null; } catch (_) { return null; } }), 10000, "nm-read");   // SCRATCH #5447
     } catch (e) { out.gpuMem = null; out.createAttribution = { note: "gpu-mem read failed: " + String((e && e.message) || e).slice(0, 80) }; }
     // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
     // 100 ms (the ones a player feels), and the resource calls those frames
