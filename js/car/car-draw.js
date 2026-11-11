@@ -1070,7 +1070,7 @@ const CarDraw = (function () {
           getErsBar(); getOtLamp(false); getOtLamp(true);
           for (let g = 0; g <= 9; g++) getGearDigit(g);
           for (let d = 0; d <= 9; d++) getSpeedDigit(d);
-          _primeArmed = 1;   // primeRace
+          _primeArmed = 1;
           const styles = (CarMesh.LED_ROWS && Object.keys(CarMesh.LED_ROWS)) || ["std"];
           for (let s = 0; s < styles.length; s++) {
             for (let lit = 0; lit <= 9; lit++) getLedStrip(lit, styles[s]);
@@ -1278,7 +1278,6 @@ const CarDraw = (function () {
       Log.info("gfx", "selector car assets ready", done);
       return done;
     }
-    // A car's decal mesh (CarMesh caches it).
     function decalMeshFor(team, cockpit, usePlayerSetup, setup, stamp) {
       const state = teamDecalState(team, usePlayerSetup, setup, stamp);
       // A loaded GLB is a static body and does not consume procedural part recipes;
@@ -1521,10 +1520,9 @@ const CarDraw = (function () {
       || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
     // Windscreen / aeroscreen glass: a faint tint that still shows the road.
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
-    // DEPLOY-ONLY DRAWS ARE PINNED (#3677): TLX prunes a pool wrapper unseen for 20 s, and the dash ERS bar's
-    // pulse, the active OT lamp, the ERS strip and the lift flame draw only while ERS deploys or GAS lifts. On
-    // WebGPU that wrapper was its pipeline's last holder, so every BOOST press after a straight rebuilt it
-    // mid-race ("every press, a hitch"). gfx.pinMesh is feature-detected; GLX/WGX keep no such pool.
+    // DEPLOY-ONLY DRAWS ARE PINNED (#3677): TLX prunes idle pool wrappers (PRUNE_IDLE_MS), and the ERS bar pulse,
+    // active OT lamp, ERS strip and lift flame draw only while deploying or lifting; unpinned, a BOOST press rebuilt
+    // the pipeline mid-race. gfx.pinMesh is feature-detected; GLX/WGX keep no such pool.
     const _pinned = new WeakSet();
     const pin = (m) => { if (m && !_pinned.has(m)) { _pinned.add(m); if (typeof G.gfx.pinMesh === "function") G.gfx.pinMesh(m); } return m; };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
@@ -1551,7 +1549,6 @@ const CarDraw = (function () {
       d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
       if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
       if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
-      // Per car: the pool keys wrappers per occurrence.
       if (paint) {
         const co = coOpt(paint), cars = G.cars;
         _primeWheelOpts.emissive = night ? 0.12 : 0;
