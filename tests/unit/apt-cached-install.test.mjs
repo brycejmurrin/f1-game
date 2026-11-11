@@ -25,7 +25,15 @@ const STUBS = {
     "esac",
   ].join("\n"),
   // APT_REACH seam: HOST PORT answers unless the mirror is down.
-  reach: 'echo "reach $1:$2" >> "$STATE/probes"; [ -e "$STATE/dns-down" ] && exit 2; exit 0',
+  reach: 'echo "reach $1:$2" >> "$STATE/probes"; grep -q " $1$" "$STATE/hosts" && exit 0; [ -e "$STATE/dns-down" ] && exit 2; exit 0',
+  // System resolver: answers unless dns-down; with dns-flaky, only the first of every three asks.
+  resolve: [
+    'echo "$1" >> "$STATE/resolves"',
+    '[ -e "$STATE/dns-down" ] && exit 2',
+    'if [ -e "$STATE/dns-flaky" ]; then n=$(grep -c "^$1$" "$STATE/resolves"); [ $((n % 3)) -eq 1 ] || exit 2; fi',
+    'echo 10.0.0.7',
+  ].join("\n"),
+  doh: 'echo "$1" >> "$STATE/doh"; [ -e "$STATE/doh-ok" ] && echo "203.0.113.9 https://cloudflare-dns.com/dns-query" && exit 0; exit 1',
   "apt-config": '[ -e "$STATE/apt-proxy" ] && echo \'Acquire::http::Proxy "http://proxy:3128";\'; exit 0',
   "apt-get": [
     'echo "apt-get $*" >> "$STATE/calls"',
@@ -55,6 +63,7 @@ function fixture(t, { installed = [], want = [], cached = [], flags = [], source
     for (const p of cached) fs.writeFileSync(path.join(cache, `${p}_1.0_amd64.deb`), p);
   }
   for (const f of flags) fs.writeFileSync(path.join(state, f), "");
+  fs.writeFileSync(path.join(state, "hosts"), "127.0.0.1 localhost\n");
   fs.writeFileSync(path.join(root, "sources.list"), "# deb http://commented.example/ubuntu x main\ndeb http://azure.archive.ubuntu.com/ubuntu noble main\n");
   // The runner image's shape (job 130569884615): URIs: mirror+file:/etc/apt/apt-mirrors.txt.
   fs.writeFileSync(path.join(root, "apt-mirrors.txt"), "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n");
@@ -66,16 +75,19 @@ function fixture(t, { installed = [], want = [], cached = [], flags = [], source
       encoding: "utf8", timeout: 20000,
       env: {
         ...process.env, PATH: `${bin}:${process.env.PATH}`, STATE: state, APT_SUDO: "", APT_RETRY_SLEEP: "0",
-        APT_REACH: path.join(bin, "reach"), RUNNER_TEMP: root,
+        APT_REACH: path.join(bin, "reach"), APT_RESOLVE: path.join(bin, "resolve"), APT_DOH: path.join(bin, "doh"),
+        APT_HOSTS_FILE: path.join(state, "hosts"), RUNNER_TEMP: root,
         https_proxy: "", HTTPS_PROXY: "", http_proxy: "", HTTP_PROXY: "",
         APT_SOURCES: sourceFiles, GITHUB_OUTPUT: out, ...env,
       },
     });
     const calls = fs.existsSync(path.join(state, "calls")) ? fs.readFileSync(path.join(state, "calls"), "utf8") : "";
     const output = fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "";
+    const read = f => fs.existsSync(path.join(state, f)) ? fs.readFileSync(path.join(state, f), "utf8") : "";
+    const hosts = read("hosts"), doh = read("doh");
     const probes = fs.existsSync(path.join(state, "probes")) ? fs.readFileSync(path.join(state, "probes"), "utf8") : "";
     const has = p => fs.existsSync(path.join(state, "db", p));
-    return { r, calls, output, has, probes, log: r.stdout + r.stderr + "\ncalls:\n" + calls };
+    return { r, calls, output, has, probes, hosts, doh, log: r.stdout + r.stderr + "\ncalls:\n" + calls };
   };
   return { run, cache };
 }
@@ -117,9 +129,10 @@ test("a cached .deb for a package the image already has is not reinstalled (no d
 test("nothing available (no cache, no apt mirror answers): fails at once with the distinct mirror error", (t) => {
   const { run, cache } = fixture(t, { flags: ["apt-down", "dns-down"] });
   const started = Date.now();
-  const { r, calls, probes, log } = run(["--label", "mesa-xvfb", "--cache", cache, "libegl1"]);
+  const { r, calls, probes, hosts, log } = run(["--label", "mesa-xvfb", "--cache", cache, "libegl1"]);
   assert.equal(r.status, 3, log);
   assert.equal(calls, "", "no apt attempt when no mirror answers:\n" + log);
+  assert.equal(hosts, "127.0.0.1 localhost\n", "nothing pinned when no resolver answers");
   // Plain URIs and the mirror+file list, de-duplicated, each on its scheme's port.
   assert.deepEqual(probes.trim().split("\n").sort(), ["reach azure.archive.ubuntu.com:80", "reach security.ubuntu.com:443"]);
   assert.equal(r.stdout.trim().split("\n").at(-1),
@@ -147,6 +160,33 @@ test("a failed attempt names its step and prints the tail of apt's own output", 
   assert.equal(r.status, 1, log);
   assert.match(r.stdout, /::warning::lint-bins glslang-tools: apt attempt 1: apt-get update \(cap 120 s\) exited 100/);
   assert.match(r.stdout, /::group::lint-bins glslang-tools: last apt output \(attempt 1\)\nE: Failed to fetch \S+  Temporary failure resolving 'security\.ubuntu\.com'\n::endgroup::/);
+});
+
+test("a resolver that answers every time: no pin, no public-resolver call", (t) => {
+  const { run } = fixture(t, { want: ["libegl1"] });
+  const { r, hosts, doh, log } = run(["libegl1"]);
+  assert.equal(r.status, 0, log);
+  assert.equal(hosts, "127.0.0.1 localhost\n");
+  assert.equal(doh, "");
+});
+
+test("system resolver fails, a public resolver answers: pinned for this job and apt proceeds", (t) => {
+  const { run } = fixture(t, { want: ["libegl1"], flags: ["dns-down", "doh-ok"] });
+  const { r, calls, hosts, log } = run(["--label", "mesa-xvfb", "libegl1"]);
+  assert.equal(r.status, 0, log);
+  assert.match(hosts, /^203\.0\.113\.9 azure\.archive\.ubuntu\.com$/m);
+  assert.match(hosts, /^203\.0\.113\.9 security\.ubuntu\.com$/m);
+  assert.match(r.stdout, /::warning::mesa-xvfb: security\.ubuntu\.com resolved 0\/3 times through the system resolver; pinned 203\.0\.113\.9 \(from https:\/\/cloudflare-dns\.com\/dns-query\)/);
+  assert.match(calls, /^apt-get install /m);
+});
+
+test("a flaky system resolver: its own answer is pinned, no public resolver asked", (t) => {
+  const { run } = fixture(t, { want: ["libegl1"], flags: ["dns-flaky"] });
+  const { r, hosts, doh, log } = run(["libegl1"]);
+  assert.equal(r.status, 0, log);
+  assert.match(hosts, /^10\.0\.0\.7 security\.ubuntu\.com$/m);
+  assert.match(r.stdout, /pinned 10\.0\.0\.7 \(from the system resolver \(1\/3 answers\)\)/);
+  assert.equal(doh, "");
 });
 
 test("a broken cached set is removed and apt installs instead", (t) => {

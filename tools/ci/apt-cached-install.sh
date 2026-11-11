@@ -7,7 +7,8 @@
 # that outage cost nothing when the job has what it needs, and seconds when it does not:
 #   1. every package already installed (dpkg-query)        -> no apt, no network, exit 0
 #   2. the .debs in --cache DIR cover the missing ones      -> `dpkg -i` offline, exit 0
-#   3. no apt mirror answers (DNS + TCP, mirror+file lists) -> fail at once: "runner package
+#   3. a mirror name resolves only sometimes                -> pin its address for this job (3a)
+#      no apt mirror answers (DNS + TCP, mirror+file lists) -> fail at once: "runner package
 #      mirror unreachable", exit 3, instead of three five-minute apt attempts
 #   4. bounded apt (the mesa-xvfb rules of 2026-09-30 and 2026-11-10: per-call caps, one
 #      shared --budget, `dpkg --configure -a` after a cut-short attempt); the .debs apt
@@ -21,7 +22,8 @@
 #   --plan  print the missing packages (also `missing=` to $GITHUB_OUTPUT) and exit 0.
 # Test seams (tests/unit/apt-cached-install.test.mjs): APT_SUDO (default: sudo unless root),
 # APT_SOURCES (apt source files/dirs), APT_RETRY_SLEEP (seconds between attempts, default 10),
-# APT_REACH (command HOST PORT that exits 0 when a mirror answers; default getent + TCP connect).
+# APT_REACH (command HOST PORT that exits 0 when a mirror answers; default getent + TCP connect),
+# APT_RESOLVE (HOST -> IPv4 via the system resolver), APT_DOH (HOST -> "IP RESOLVER"), APT_HOSTS_FILE.
 # @section runner
 set -uo pipefail
 LABEL=apt; CACHE=""; BUDGET=300; PLAN=0
@@ -106,8 +108,60 @@ mapfile -t MIRRORS < <(apt_uris | sed -nE 's#^(https?)://([^/@]*@)?([^/:]+)(:([0
       if [[ -z $port ]]; then if [[ $scheme == https ]]; then port=443; else port=80; fi; fi
       echo "$host:$port"
     done | sort -u)
+# 3a. Pin a FLAKY mirror name for this job (#5519, 2026-11-11 15:13Z: Canonical's authoritative DNS for
+# ubuntu.com answered intermittently, SERVFAIL "Name servers did not respond", while the mirrors themselves
+# served InRelease in 0.56 s). Each mirror host is resolved three times through the system resolver; 3/3
+# answers change nothing. Fewer: pin the system's own answer, or with none, a public resolver's (DoH:
+# Cloudflare, then Google), as one /etc/hosts line, logged as a ::warning:: naming host, IP and source.
+# Only hosts from the runner's own apt sources / mirror lists; never a hard-coded address; never when the
+# system resolver answers every time. INTEGRITY: apt verifies the signed InRelease and every package hash
+# (and an https mirror's certificate names the host), so a wrong address cannot deliver a tampered
+# package; it can only fail, which is the state this step starts from.
+HOSTS_FILE=${APT_HOSTS_FILE:-/etc/hosts}
+valid_ip() { [[ $1 =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; }
+resolve_system() {
+  if [[ -n ${APT_RESOLVE:-} ]]; then "$APT_RESOLVE" "$1"; return; fi
+  timeout 5 getent ahostsv4 "$1" 2>/dev/null | awk 'NR == 1 { print $1 }'
+}
+resolve_public() {   # prints "IP RESOLVER"
+  if [[ -n ${APT_DOH:-} ]]; then "$APT_DOH" "$1"; return; fi
+  local url ip
+  for url in "https://cloudflare-dns.com/dns-query" "https://dns.google/resolve"; do
+    ip=$(curl -fsS --max-time 5 -H 'accept: application/dns-json' "$url?name=$1&type=A" 2>/dev/null \
+      | grep -oE '"data": ?"[0-9.]+"' | grep -oE '[0-9.]+' | head -1)
+    if [[ -n $ip ]] && valid_ip "$ip"; then echo "$ip $url"; return 0; fi
+  done
+  return 1
+}
+pin_flaky_mirrors() {
+  local m h a ip src answers seen=" " _
+  for m in "${MIRRORS[@]}"; do
+    h=${m%:*}
+    [[ $seen == *" $h "* ]] && continue
+    seen+="$h "
+    grep -qE "[[:space:]]$h([[:space:]]|\$)" "$HOSTS_FILE" 2>/dev/null && continue
+    answers=0; ip=""
+    for _ in 1 2 3; do
+      a=$(resolve_system "$h")
+      if [[ -n $a ]] && valid_ip "$a"; then answers=$((answers + 1)); ip=$a; fi
+    done
+    [[ $answers -eq 3 ]] && continue
+    if [[ -n $ip ]]; then src="the system resolver ($answers/3 answers)"
+    else
+      read -r ip src < <(resolve_public "$h") || true
+      if [[ -z ${ip:-} ]] || ! valid_ip "$ip"; then
+        echo "::warning::$LABEL: $h did not resolve through the system resolver (0/3) or a public resolver; not pinned"
+        continue
+      fi
+    fi
+    if echo "$ip $h" | $SUDO tee -a "$HOSTS_FILE" >/dev/null; then
+      echo "::warning::$LABEL: $h resolved $answers/3 times through the system resolver; pinned $ip (from $src) in $HOSTS_FILE for this job"
+    fi
+  done
+}
 if [[ ${#MIRRORS[@]} -gt 0 ]] && ! proxied; then
   answered=0
+  pin_flaky_mirrors
   for m in "${MIRRORS[@]}"; do
     if reach "${m%:*}" "${m##*:}"; then answered=1; break; fi
   done
