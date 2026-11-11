@@ -528,7 +528,9 @@ function applyTtlb(bag) {
 // holds career saves, lap records and OAuth tokens under the same namespace,
 // and nothing outside these five shapes is ever read.
 const GARAGE_FORMAT = "apex26-garage-v1";
-const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets."];   // + ".custom." under livery
+// careerSetup.<flavour>.<slot>.<team> is a career's own setup sheet (#5036, SetupTune.keyFor):
+// it travels with the garage, and only applies where the slot holds the career whose seed it carries.
+const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets.", "careerSetup."];   // + ".custom." under livery
 const GARAGE_SINGLES = ["customTeam", "customLogo", "team", "driver"];
 const GARAGE_EXCLUDED = "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts";
 // A key is a garage key if it is one of the four singles or begins with a
@@ -720,7 +722,7 @@ function garageValue(k, v) {
     }
     return out;
   }
-  if (k.indexOf("setup.") === 0) {
+  if (k.indexOf("setup.") === 0 || k.indexOf("careerSetup.") === 0) {
     // SetupTune clamps each field on read; here only the size is bounded.
     return v && typeof v === "object" && !Array.isArray(v) && JSON.stringify(v).length <= 4096 ? v : undefined;
   }

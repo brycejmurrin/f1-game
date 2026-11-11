@@ -624,6 +624,19 @@ test("the garage file carries what the player BUILT, and nothing else in the nam
   assert.ok(!/parts|"livery(?:\.[^"]*)?":|setup\.|customTeam/.test(JSON.stringify(collect("all")).replace(/"excluded":"[^"]*"/, "")));
 });
 
+test("#5036: a career's own setup sheet round-trips through the garage file beside the free-play one", () => {
+  const free = { arbF: 9, arbR: 3, rideF: 20, rideR: 70, brakeBias: 58 };
+  const mine = { arbF: 4, arbR: 6, rideF: 25, rideR: 60, brakeBias: 56, seed: 4242 };
+  const out = boot({ disk: { "apex26.setup.mercedes": JSON.stringify(free), "apex26.careerSetup.driver.0.mercedes": JSON.stringify(mine) } }).garage();
+  assert.deepEqual(out.garage["setup.mercedes"], free);
+  assert.deepEqual(out.garage["careerSetup.driver.0.mercedes"], mine);
+  const b = boot();
+  const r = b.loadGarage(out);
+  assert.equal(r.ok, true);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.setup.mercedes")), free, "the free-play choices come back unchanged");
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.careerSetup.driver.0.mercedes")), mine, "the career choices and their seed stamp come back unchanged");
+});
+
 test("an empty or blocked store still produces a valid garage file", () => {
   const f = boot().garage();
   assert.equal(f.format, "apex26-garage-v1");

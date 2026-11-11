@@ -39,6 +39,8 @@ const SaveSchemaRegistry = (function () {
     { re: /^parts\./, owner: "js/garage/setup-sheet.js", lane: "json", v: 1, validate: validators.json },
     { re: /^livery\./, owner: "js/car/custom-liveries.js", lane: "json", v: 1, validate: validators.json },
     { re: /^setup\./, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
+    // A career's own sheet (#5036): careerSetup.<flavour>.<slot>.<team>, the tune plus the career seed.
+    { re: /^careerSetup\.(driver|myteam)\.[0-2]\.[A-Za-z0-9_-]{1,64}$/, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
     // Named garage sheets (js/garage/setup-presets.js). Must precede any looser
     // setup.* consumer; the write-site scan used to skip *presets.js entirely.
     { re: /^setupPresets\./, owner: "js/garage/setup-presets.js", lane: "json", v: 1, validate: validators.json },

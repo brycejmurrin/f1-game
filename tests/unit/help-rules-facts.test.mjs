@@ -32,6 +32,15 @@ test("help: no retired mode names, Overtake cooldown, 'in a row' ladder or full-
   assert.deepEqual(Object.keys(retired).filter((k) => retired[k].test(help + "\n" + tooltip)), []);
 });
 
+// #5308: the 1 s check happens at ONE place on the lap (js/race/overtake-mode.js
+// Detection Line; FIA 2026 Sporting Regulations, formula1.com "EXPLAINED: the key
+// terms for F1's new-for-2026 rules"), so the HOW TO PLAY entry must say where.
+test("help: the OVERTAKE entry arms at the detection line, as overtake-mode.js does", () => {
+  const entry = (help.match(/<dt>OVERTAKE<\/dt>\s*<dd>([\s\S]*?)<\/dd>/) || [])[1] || "";
+  assert.match(entry, /within one second at the detection line/);
+  assert.match(read("js/race/overtake-mode.js"), /AT THE DETECTION LINE/);
+});
+
 test("help: ACTIVE AERO and GEARS are named in the panel that holds them", () => {
   const panelOf = (id) => { const at = html.indexOf('id="' + id + '"'); return (html.slice(html.lastIndexOf("<section", at), at).match(/id="([^"]+)"/) || [])[1]; };
   assert.deepEqual([panelOf("pm-aero"), panelOf("pm-gears")], ["pm-panel-driving", "pm-panel-driving"]);
