@@ -252,6 +252,7 @@
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
@@ -3769,6 +3770,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/parts-visual-distinctness.test.mjs",
         "tests/unit/pick-tests.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
@@ -4939,6 +4941,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/merge-surveyor.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/prop-clipping.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -5068,6 +5071,7 @@
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs"
@@ -5221,6 +5225,7 @@
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/quali-persist.test.mjs",
@@ -6986,7 +6991,8 @@
         "tests/unit/track-validate-fleet.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs"
       ]
     },
     "js/editor/workspace.js": {
@@ -7886,6 +7892,7 @@
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
@@ -17459,6 +17466,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
@@ -17768,6 +17776,7 @@
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/podium-beat.test.mjs",
         "tests/unit/quali-persist.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -18390,7 +18399,8 @@
         "tests/unit/store-registry.test.mjs"
       ],
       "*": [
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/layers.js": {
@@ -18638,6 +18648,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
@@ -18685,6 +18696,7 @@
         "tests/specs/menu-keyboard.spec.js",
         "tests/unit/docs-integrity.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs"
       ]
     },
@@ -18779,7 +18791,8 @@
       ],
       "*": [
         "tests/unit/photo-kit.test.mjs",
-        "tests/unit/prepush-floor.test.mjs"
+        "tests/unit/prepush-floor.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/platform-session.js": {
@@ -19611,6 +19624,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/cvd-palette.test.mjs",
         "tests/unit/free-cam.test.mjs",
+        "tests/unit/geometry-paths-baseline.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
     },

@@ -64,6 +64,7 @@ export function shardEvidence(junitIn, startedIn) {
  *   selected: string,
  *   guards: string,
  *   dropped?: string,
+ *   unrepresented?: string,
  *   called?: string,
  *   draft?: string,
  *   failedSpecs?: string[],
@@ -72,6 +73,13 @@ export function shardEvidence(junitIn, startedIn) {
  * @returns {{ ok: boolean, reason: string, infraRetry: boolean, failedSpecs: string[] }}
  */
 export function selectedGateVerdict(input) {
+  const v = selectedGateVerdictCore(input);
+  // Groups the runner fan-out left out (every spec in the group over budget): never silent, never a verdict of their own.
+  const groups = String(input.unrepresented || "").trim().split(/\s+/).filter(Boolean);
+  if (groups.length) v.reason += ` — not run on this PR: ${groups.join(", ")}, nightly rota covers them`;
+  return v;
+}
+function selectedGateVerdictCore(input) {
   // A red `Structural guards` is reported by its own check and keeps `CI` red
   // (ci-verdict needs guards), so this check judges only the change-aware specs
   // and no longer repeats it (2026-10-16 CI jobs review: 9 of 9 guards-red runs
@@ -203,7 +211,7 @@ function judgeSpecs(input) {
     };
   }
   if (selected === "skipped") {
-    reason = "nothing this diff touches has a spec — an empty plan is a pass";
+    reason = "no selected job ran: an empty plan is a pass only for a docs-only diff (the select step fails closed on an empty plan for a code diff, and select-specs puts the boot floor in every other plan)";
   }
   return { ok: true, reason, infraRetry, failedSpecs };
 }
@@ -231,6 +239,7 @@ function main(argv = process.argv.slice(2)) {
     selected: process.env.SELECTED,
     guards: process.env.GUARDS,
     dropped: process.env.DROPPED,
+    unrepresented: process.env.UNREPRESENTED,
     called: process.env.CALLED,
     draft: process.env.DRAFT,
     failedSpecs,
