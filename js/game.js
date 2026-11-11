@@ -6642,7 +6642,7 @@ function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.
 // (kinematic in s/x like coast; classification, finishT and lap untouched). Throttle/brake slew the speed, steer moves x.
 function cooldownDrives() { const rc = RaceCeremony.get(); return state === "results" && !!rc && rc.status().inputOwner === "player"; }
 function cooldownDrive(c, dt) {
-  const inp = inputOf(c), thr = inp ? !!inp.throttle : Input.throttle(), brk = inp ? !!inp.brake : Input.brakeLevel() > 0;
+  const inp = inputOf(c), thr = false && (inp ? !!inp.throttle : Input.throttle()), brk = inp ? !!inp.brake : Input.brakeLevel() > 0;
   const steer = inp ? clamp(+inp.steer || 0, -1, 1) : Input.steer(dt), vMax = vTop() * 0.55;
   c.speed = clamp(c.speed + (thr ? 18 : brk ? -40 : -6) * dt, 0, vMax); c._coastHeld = false;
   c.s = wrapS(c.s + c.speed * dt); c.prog += c.speed * dt;
