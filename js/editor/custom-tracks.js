@@ -329,7 +329,6 @@ const CustomTracks = (function () {
   }
 
   const isCustom = (def) => !!(def && def.custom);
-  // content id → first RED message or null (STALE DESIGNS, below).
   const _verdicts = new Map();
 
   /** Rebuild the custom tail of Tracks.LIST from storage. Never mid-race: the
@@ -346,7 +345,7 @@ const CustomTracks = (function () {
       try { Tracks.LIST.push(TrackDef.fromRaw(toRaw(it))); n++; }
       catch (e) { Log.warn("track", "customTracks: skipped " + it.id + ": " + (e && e.message || e)); }
     }
-    for (const id of _verdicts.keys()) if (!items.some((it) => it.id === id)) _verdicts.delete(id);   // a deleted design's verdict
+    for (const id of _verdicts.keys()) if (!items.some((it) => it.id === id)) _verdicts.delete(id);
     return n;
   }
 
@@ -540,18 +539,13 @@ const CustomTracks = (function () {
     }, (e) => { _editorLoad = null; throw e; });
     return _editorLoad;
   }
-  // ── STALE DESIGNS (#5048) ────────────────────────────────────────────────
-  // A stored design passed the validator of the build that SAVED it; sanitize()
-  // only proves the engine can load it. TrackValidate is in the lazy designer
-  // bundle, so a design is judged against today's rules once per session, off
-  // the boot path, and the verdict is kept by CONTENT id (an edit is a new id).
+  // STALE DESIGNS (#5048): today's verdict (first RED message or null) by content id.
   const _staleTold = new Set();
   const later = (fn, ms) => { if (typeof setTimeout === "function") setTimeout(fn, ms); else fn(); };
   let _judging = null, _sweepFailed = false;
   const unjudged = () => load().items.filter((it) => !_verdicts.has(it.id));
-  /** The first RED rule a stored design breaks today; null when it passes or is unjudged. */
   function stale(id) { return _verdicts.get(id) || null; }
-  /** Judge every stored design not yet judged. Resolves the count judged, -1 when the validator did not load. */
+  /** Resolves the count judged, -1 when the validator did not load. */
   function judgeStored() {
     if (_judging) return _judging;
     if (!unjudged().length) return Promise.resolve(0);
@@ -559,7 +553,7 @@ const CustomTracks = (function () {
       if (!ok || typeof TrackValidate === "undefined") return -1;
       let n = 0;
       for (const it of unjudged()) {
-        if (racing()) break;   // a centreline build per design: never under a race
+        if (racing()) break;
         let red = null;
         try { const v = TrackValidate.check(it), bad = v.issues.find((i) => i.level === "red"); red = v.ok ? null : (bad && bad.msg) || "This loop cannot be built"; }
         catch (e) { red = "This loop cannot be checked: " + (e && e.message || e); }
@@ -572,7 +566,6 @@ const CustomTracks = (function () {
       .finally(() => { if (_judging === run) _judging = null; });
     return run;
   }
-  /** One banner per session for a stale design: the picked circuit (`id`), else the selected one. */
   function tellStale(id) {
     id = id || selectedId();
     if (!id || !stale(id) || _staleTold.has(id) || racing()) return false;
@@ -583,7 +576,6 @@ const CustomTracks = (function () {
     return true;
   }
   const _asked = new Set();
-  /** The picker's badge: today's RED rule or null. Judges an unjudged circuit once; a RED verdict calls `again`. */
   function badge(id, again) {
     const why = stale(id);
     if (why || _verdicts.has(id) || _asked.has(id) || racing()) return why;
@@ -591,11 +583,8 @@ const CustomTracks = (function () {
     judgeStored().then(() => { if (stale(id)) { tellStale(id); if (again) again(); } });
     return null;
   }
-  /** Boot and every menu return: judge only when a custom circuit is selected (it is about to be
-   *  raced) or the validator is already resident, so no other player pays for the designer bundle. */
   function staleSweep() {
     const resident = typeof TrackValidate !== "undefined";
-    // A sweep whose bundle did not load (offline) is not retried on every menu return.
     if (racing() || !(resident || (selectedId() && !_sweepFailed))) return Promise.resolve(false);
     return new Promise((res) => { if (typeof requestIdleCallback === "function") requestIdleCallback(() => res(), { timeout: 4000 }); else later(res, 800); })
       .then(() => judgeStored()).then((n) => { _sweepFailed = n === -1; return tellStale(); }).catch(() => false);
@@ -617,13 +606,10 @@ const CustomTracks = (function () {
    *  re-reads it on quit, as it does the #ghost= link). Resolves true when a
    *  design opened, false when the link was refused or absent, null when deferred. */
   let hashGeneration = 0, _lostLink = null;
-  // The designer bundle did not load (offline): the fragment left in the URL made
-  // every menu return and hashchange load it again and warn again, with nothing
-  // on screen (#5048). Keep the link in memory, strip it, say so once; the TRACK
-  // DESIGNER door puts it back and retries.
+  // The bundle did not load: strip the link, say so once; the door retries (#5048).
   function loseLink(hash) {
     _lostLink = hash;
-    const rest = hash.replace(/^#/, "").split("&").filter((p) => p && !p.startsWith("track="));   // TrackCodec.withoutTrack; the codec is in the bundle that failed
+    const rest = hash.replace(/^#/, "").split("&").filter((p) => p && !p.startsWith("track="));
     try { history.replaceState(history.state, "", location.pathname + location.search + (rest.length ? "#" + rest.join("&") : "")); } catch (_) { /* a sandboxed page */ }
     say("TRACK LINK DID NOT LOAD — TAP TRACK DESIGNER TO RETRY");
   }
@@ -705,7 +691,6 @@ const CustomTracks = (function () {
         if (!ok || cancelled || generation !== doorGeneration || typeof TrackDesigner === "undefined") return;
         if (layers && ((layers.inRace && layers.inRace()) || (layers.top && layers.top() !== owner))) return;
         if (_lostLink && !/[#&]track=/.test(String(location.hash || ""))) {
-          // The retry the banner promised: the link back in the URL, opened as on arrival.
           const rest = String(location.hash || "").replace(/^#/, ""), link = _lostLink.replace(/^#/, "").split("&").filter((p) => p.startsWith("track="))[0];
           _lostLink = null;
           try { history.replaceState(history.state, "", location.pathname + location.search + "#" + (rest ? rest + "&" : "") + link); } catch (_) { /* a sandboxed page */ }
