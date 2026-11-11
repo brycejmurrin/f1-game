@@ -3,7 +3,7 @@ import { BOOT_MS } from "./fixtures.js";
 import { raceGate } from "../../tools/lib/census-entry.mjs";
 
 function pageHooks() {
-  const P = window.__lp = { frames: 0, bg: 0, buf: 0, live: 0, liveN: 0, perFrameBg: 0, laps: [], cur: null };
+  const P = window.__lp = { frames: 0, bg: 0, buf: 0, live: 0, liveN: 0, perFrameBg: 0, laps: [], cur: null, ubo: 0, uboN: 0, rb: 0 };
   const sizes = new WeakMap();
   const iv = setInterval(() => {
     try {
@@ -12,9 +12,9 @@ function pageHooks() {
       P.armed = true; clearInterval(iv);
       const cb = dev.createBindGroup, cbuf = dev.createBuffer;
       dev.createBindGroup = function () { P.bg++; P.perFrameBg++; return cb.apply(this, arguments); };
-      dev.createBuffer = function (d) { P.buf++; const b = cbuf.apply(this, arguments); try { sizes.set(b, d.size | 0); P.live += d.size | 0; P.liveN++; } catch (_) {} return b; };
+      dev.createBuffer = function (d) { P.buf++; const b = cbuf.apply(this, arguments); try { if (!(d.usage & 1)) { const u = !!(d.usage & 64); sizes.set(b, [d.size | 0, u]); P.live += d.size | 0; P.liveN++; if (u) { P.ubo += d.size | 0; P.uboN++; } } else P.rb++; } catch (_) {} return b; };
       const ds = GPUBuffer.prototype.destroy;
-      GPUBuffer.prototype.destroy = function () { const s = sizes.get(this); if (s != null) { P.live -= s; P.liveN--; sizes.delete(this); } return ds.apply(this, arguments); };
+      GPUBuffer.prototype.destroy = function () { const s = sizes.get(this); if (s != null) { P.live -= s[0]; P.liveN--; if (s[1]) { P.ubo -= s[0]; P.uboN--; } sizes.delete(this); } return ds.apply(this, arguments); };
     } catch (_) { /* not yet */ }
   }, 50);
 }
@@ -57,7 +57,7 @@ export function lapBody({ track, knobs }) {
           const s = snap();
           P.laps.push({ lap: c.lap, secs: +((performance.now() - c.t0) / 1000).toFixed(1), frames: P.frames - c.f0, bindGroups: P.bg - c.bg0, buffers: P.buf - c.buf0,
             minted: s.poolNew - c.new0, pruned: s.poolPruned - c.pr0, peakPool: c.peakPool, endPool: s.pool, peakRObj: c.peakRObj, endRObj: s.rObj,
-            maxBgFrame: c.maxBgFrame, maxBgAt: c.maxBgAt, wrapBg3s: c.wrapBg, gpuLiveMB: +(P.live / 1048576).toFixed(2), gpuLiveN: P.liveN });
+            maxBgFrame: c.maxBgFrame, maxBgAt: c.maxBgAt, wrapBg3s: c.wrapBg, gpuLiveMB: +(P.live / 1048576).toFixed(2), gpuLiveN: P.liveN, uboKB: +(P.ubo / 1024).toFixed(1), uboN: P.uboN, readbacks: P.rb, state: (() => { try { const i = window.__apex.info(); return i.state + " n=" + i.n + "/" + i.lapsTarget; } catch (_) { return "?"; } })() });
           open(lap);
         }
         try { window.__apex.jump(d / total % 1, v); window.__apex.snapCam(); } catch (_) {}
