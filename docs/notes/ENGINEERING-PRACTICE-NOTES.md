@@ -1,5 +1,7 @@
 # Engineering practice — research notes (2026-08)
 
+Summary: Why the game loop's clamps and caps are load-bearing, what `seed()` can and cannot promise given float non-associativity, the characterization-test method, and the state of the no-build bet.
+
 Reading around while the Phase 5 verification runs finished. Unlike
 `CI-RENDERING-PERFORMANCE.md`, most of this is **confirmatory**: the interesting
 result is that three things this repo already does turn out to match canonical

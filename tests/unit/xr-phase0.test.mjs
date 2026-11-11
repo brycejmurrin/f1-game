@@ -194,19 +194,12 @@ test("XrSession.sessionInit never lists webgpu while the attach is WebGL-only; f
   assert.equal(ctx.XrSession.featureGranted({ enabledFeatures: new Set(["webgpu"]) }, "webgpu"), true);
 });
 
-test("vendor ships XRButton / VRButton / WebGLXRFallback and pinned IWER under tests/vendor", () => {
-  for (const f of [
-    "vendor/three-0.187.0/addons/webxr/XRButton.js",
-    "vendor/three-0.187.0/addons/webxr/VRButton.js",
-    "vendor/three-0.187.0/addons/webxr/WebGLXRFallback.js",
-    "tests/vendor/iwer-2.5.0.min.js",
-  ]) {
-    assert.ok(fs.existsSync(path.join(ROOT, f)), f);
-  }
+// The three webxr addons (XRButton / VRButton / WebGLXRFallback) had no importer: js/xr/ builds its own
+// ENTER VR path. They left the vendored tree on 2026-11-10 (dead-weight audit W17).
+test("pinned IWER ships under tests/vendor; the unimported three webxr addons stay out of vendor", () => {
+  assert.ok(fs.existsSync(path.join(ROOT, "tests/vendor/iwer-2.5.0.min.js")));
   const m = JSON.parse(read("vendor/three-0.187.0/MANIFEST.json"));
-  assert.ok(m.files["addons/webxr/XRButton.js"]);
-  assert.ok(m.files["addons/webxr/VRButton.js"]);
-  assert.ok(m.files["addons/webxr/WebGLXRFallback.js"]);
+  for (const f of ["addons/webxr/XRButton.js", "addons/webxr/VRButton.js", "addons/webxr/WebGLXRFallback.js"]) assert.ok(!m.files[f], f);
   const iwer = read("tests/vendor/iwer-2.5.0.min.js");
   assert.match(iwer, /XRDevice/);
   assert.match(iwer, /metaQuest3/);

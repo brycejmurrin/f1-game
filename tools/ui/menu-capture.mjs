@@ -31,6 +31,7 @@ import {
   pickViewports,
   listScreenIds,
   getScreen,
+  seedOwnerProfile,
 } from "./menu-screens.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -205,6 +206,7 @@ export async function runMenuShot(opts = {}) {
   try {
     browser = await launchChromium({ args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
     const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
+    await seedOwnerProfile(ctx, resolveViewport(vpName));   // bryce-* cells boot on his live settings export
     const page = await ctx.newPage();
     await bootPage(page, srv.url, { hideGame: opts.hideGame !== false, scale, lang: opts.lang });
     await resetToTitle(page, srv.url, opts.hideGame !== false, opts.lang);
@@ -266,9 +268,11 @@ export async function runMenuGallery(opts = {}) {
   const queue = [];
   for (const vp of viewports) for (const sc of scales) queue.push([vp, sc]);
 
-  async function sweepViewport([baseName, vpOpts, why, insets], scale) {
+  async function sweepViewport(vpEntry, scale) {
+    const [baseName, vpOpts, why, insets] = vpEntry;
     const vpName = baseName + scaleTag(scale);
     const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
+    await seedOwnerProfile(ctx, vpEntry);   // bryce-* cells boot on his live settings export
     const page = await ctx.newPage();
     let booted = false;
     try {

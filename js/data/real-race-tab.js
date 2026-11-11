@@ -32,10 +32,11 @@ const DataRealRace = (function () {
     let loading = null;    // {done, total} while the positions load
     let requestGen = 0, replayUi = null, traceError = "", partialTraces = null, traceWork = Promise.resolve();
     let driveAction = null;
+    let queuedGo = null;   // a WATCH tapped while the same race's positions load: runs when they land (latest wins, #5063)
     // A download in flight leaves ~20 queued /location requests in the transport's
     // FIFO that every other tab would wait behind; drop them (showTab cancels this
     // tab BEFORE it starts the next tab's load).
-    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; releaseIncomplete(); }
+    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; queuedGo = null; replayUi = null; driveAction = null; traceError = ""; releaseIncomplete(); }
     function releaseIncomplete() { partialTraces = null; if (traces && !traces.complete) traces = null; }
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
@@ -47,8 +48,10 @@ const DataRealRace = (function () {
       return fetchRaw(sessionKey, !!fresh).then((raw) => {
         if (current && !current()) throw new Error("cancelled");
         const script = build(raw, findTeam, tracks());
-        if (!script.drivers.length) throw new Error(NO_RACE_MSG);
+        // Forget an incomplete race BEFORE the no-drivers throw: an empty pre-race
+        // /drivers body cached for seven days kept the weekend's race unplayable (#5063).
         if (script.complete) remember(script); else if (!fresh) forgetRaw(sessionKey);
+        if (!script.drivers.length) throw new Error(NO_RACE_MSG);
         return Object.assign({}, script, { provenance: "fetched" });
       });
     }
@@ -82,7 +85,7 @@ const DataRealRace = (function () {
     function renderBody(meta, body) {
       ++requestGen;
       releaseIncomplete();
-      loading = null; replayUi = null; driveAction = null; traceError = "";
+      loading = null; queuedGo = null; replayUi = null; driveAction = null; traceError = "";
       const myGen = ++bodyGen;
       clear(body);
       if (!meta || meta.sessionKey == null) { body.appendChild(emptyMsg(NO_RACE_MSG)); return; }
@@ -100,8 +103,10 @@ const DataRealRace = (function () {
         });
       }).then(null, (e) => {
         if (myGen !== bodyGen) return;
-        Log.warn("data", "real race script failed: " + (e && e.message ? e.message : e));
         clear(slot);
+        // No timing yet is an answer, not a failure: no RETRY to spend ~11 requests on (#5063).
+        if (e && e.message === NO_RACE_MSG) { slot.appendChild(emptyMsg(NO_RACE_MSG)); return; }
+        Log.warn("data", "real race script failed: " + (e && e.message ? e.message : e));
         const failure = emptyMsg(FETCH_FAIL_MSG);
         failure.setAttribute("role", "status");
         const retry = el("button", "dh-retry", "RETRY"); retry.type = "button";
@@ -164,7 +169,7 @@ const DataRealRace = (function () {
       const highlights = mk("HIGHLIGHTS", "Watch the highlights of the race, recreated", () => watch(script, slot, 1, true));
       const full = mk("WATCH FROM L" + startLap, "Watch the race recreated from lap " + startLap, () => watch(script, slot, startLap, false));
       const cancel = mk("CANCEL DOWNLOAD", "Cancel the real positions download", () => {
-        requestGen++; loading = null; traceError = "Download cancelled. RETRY keeps the cars already loaded.";
+        requestGen++; loading = null; queuedGo = null; traceError = "Download cancelled. RETRY keeps the cars already loaded.";
         F1API.cancelAll(); updateReplayRow();
       });
       replayUi = { script, slot, state, coverage, coverageBody, progress, load, highlights, full, cancel };
@@ -201,7 +206,11 @@ const DataRealRace = (function () {
       u.highlights.disabled = u.full.disabled = !!loading; u.cancel.hidden = !busy;
     }
     function loadTraces(script, slot, then, refresh = false) {
-      if (loading) return false;
+      if (loading) {
+        if (!then || loading.sessionKey !== script.sessionKey) return false;
+        queuedGo = then; return true;
+      }
+      queuedGo = null;
       const mine = ++requestGen;
       const current = () => mine === requestGen && (!isOpen || isOpen()) && (!slot || slot.isConnected !== false);
       loading = { done: 0, total: script.drivers.length, sessionKey: script.sessionKey }; traceError = ""; updateReplayRow();
@@ -212,10 +221,11 @@ const DataRealRace = (function () {
         .then((tr) => {
           if (!current()) return;
           traces = tr; partialTraces = tr; loading = null; updateReplayRow();
-          if (then) then(tr);
+          const next = queuedGo || then; queuedGo = null;
+          if (next) next(tr);
         }, (e) => {
           if (!current()) return;
-          loading = null; traceError = "Could not load real positions. Check your connection and RETRY.";
+          loading = null; queuedGo = null; traceError = "Could not load real positions. Check your connection and RETRY.";
           Log.warn("data", "real positions: " + (e && e.message || e)); updateReplayRow();
         });
       return true;

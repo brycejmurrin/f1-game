@@ -1,13 +1,6 @@
 "use strict";
 /* Apex 26 — FLYBY SHOT SEQUENCER: the pre-race loading screen's camera.
  *
- * WHAT IT REPLACES. The menu camera was one continuous crawl: `s` advanced with
- * the wall clock and camVantage("cinematic") solved a broadcast rig around it.
- * That rig has no idea what is standing beside the track — its only lateral
- * guard, `corr`, is applied on STREET circuits and is Infinity everywhere else —
- * so on an open circuit the eye sat 22 m off the racing line and flew through
- * whatever was there. Reported as "the flyby goes through a building".
- *
  * WHAT A SHOT IS. A list of shots, each a move from one camera pose to another
  * over a duration. Poses are TRACK-RELATIVE and anchored on landmarks, never on
  * world coordinates:
@@ -113,8 +106,6 @@ const FlybySeq = (function () {
   function clearEye(track, eye, margin) { return FlybyClear.clearEye(track, eye, margin); }
   function groundAt(track, x, z, y) { return FlybyClear.groundAt(track, x, z, y); }
   function floorEye(track, eye) { return FlybyClear.floorEye(track, eye); }
-
-  // ---- what this circuit looks like ----------------------------------------
 
   /* TERRAIN IS NOT A LANDMARK. Ranked by raw volume the answer is always the
      scenery nobody came to see: Spa's biggest props are 240 m mountains and
@@ -246,8 +237,6 @@ const FlybySeq = (function () {
     track._fbBounds = { x: cx, y: cy, z: cz, rad: rad, pts: pts, face: face };
     return track._fbBounds;
   }
-
-  // ---- anchors -------------------------------------------------------------
 
   function wrapS(track, s) {
     const total = track.total || 1;
@@ -585,7 +574,6 @@ const FlybySeq = (function () {
     return out;
   }
 
-  // ---- the inverse: a world point back to a pose ---------------------------
   //
   // THE FREE CAMERA'S "COPY AS FLYBY POSE". A camera flown to a good spot is a
   // world point, and a world point is exactly what a shot list must not hold
@@ -732,8 +720,6 @@ const FlybySeq = (function () {
     };
   }
 
-  // ---- easing --------------------------------------------------------------
-
   const EASE = {
     linear: (u) => u,
     in: (u) => u * u,
@@ -779,8 +765,6 @@ const FlybySeq = (function () {
     return out;
   }
   const _pa = [0, 0, 0], _pb = [0, 0, 0];
-
-  // ---- the shipped sequence ------------------------------------------------
 
   /* NINE SHOTS OVER FLY_MS (24 s), ~2.4-3.1 s each. Durations stay fractions
      so retuning the budget rebalances all of them rather than truncating the
@@ -922,8 +906,6 @@ const FlybySeq = (function () {
     const lit = Math.max(1, Math.min(3, lightsLit | 0));
     return (lit - 0.5) / 3;
   }
-
-  // ---- solve ---------------------------------------------------------------
 
   const _eye = [0, 0, 0], _tgt = [0, 0, 0];
   const _out = { eye: _eye, tgt: _tgt, fov: 50, index: 0, id: "", cut: false, lift: 0, corner: 0 };

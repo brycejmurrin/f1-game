@@ -6,7 +6,10 @@
 # (ci-resolve-before.sh diffs against the empty tree), never HEAD~1.
 set -eu
 fail() { echo "::error::SELECTED GATE FAILED CLOSED: $1"; exit 1; }
-chmod +x tools/ci/ci-resolve-before.sh 2>/dev/null || true
+# No `chmod +x` here: the helper is run through `bash`, and it is committed 100644, so a chmod made it a
+# MODIFIED path in the very diff select-specs reads. Every PR then listed it as a changed infra path
+# (reason=infra on 20 of 20 sampled runs, 2026-11-09), which made the "unmatched" fail-closed branch
+# below unreachable and hid the CSS-only narrowing (docs/notes/TEST-TRUTH-HUNT-2026-11-09.md G2).
 if [ -f tools/ci/ci-resolve-before.sh ]; then
   BEFORE="$(EVENT="${EVENT:-}" PUSH_BEFORE="${PUSH_BEFORE:-}" PR_BASE="${PR_BASE:-}" CALLED="${CALLED:-false}" bash tools/ci/ci-resolve-before.sh)" \
     || fail "could not resolve comparison base"
@@ -69,6 +72,9 @@ node -e '
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of (r.coveredByManualOptIn || []))
     console.log(`COVERED BY MANUAL OPT-IN (env-gated; not a selected-gate verdict): ${s.file} (${s.tests} tests)`);
+  // Named, never silent (#5241 G3): these left the browser legs; node-plan / pick-unit-slices run their twins.
+  for (const s of (r.coveredByVmTwin || []))
+    console.log(`COVERED BY A VM TWIN (no browser leg; its node slice runs it): ${s.file} (${s.tests} tests) -> ${s.twin}`);
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
   for (const s of (r.unreadable || []))

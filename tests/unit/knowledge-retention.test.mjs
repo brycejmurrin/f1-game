@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ROOT, DAYS, SIZE_CAP, SIZE_ALLOW, UNCITED_ALLOW, INDEX, REFUSED_PREFIX, KIND_REQUIRED_FROM,
-  scan, header, renderIndex, demoteArchiveLinks, liveDocNoArchive, tracked,
+  scan, header, renderIndexBlock, indexHasGeneratedBlock, demoteArchiveLinks, liveDocNoArchive, tracked,
 } from "../../tools/docs/knowledge-gc.mjs";
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -67,16 +67,29 @@ test("the allow-lists only shrink: an entry that is cited, pinned, under the cap
   assert.deepEqual(dup(JSON.parse(read(SIZE_ALLOW))), []);
 });
 
-test(`${INDEX} is what knowledge-gc.mjs --index generates (the notes block is not hand-edited)`, () => {
-  const cur = read(INDEX);
-  assert.equal(renderIndex(cur, r.notes), cur, `run: node tools/docs/knowledge-gc.mjs --index`);
+test(`${INDEX} is hand prose: the notes table is built (knowledge-gc.mjs --index → artifacts/), never committed`, () => {
+  // A committed table sorted newest-first with a live count made every note-adding PR conflict with every
+  // other, and a merge that skipped the regen left the tip red (issue #5347). Each row now reads the note's
+  // own header lines, so nothing shared changes when a note lands.
+  assert.equal(indexHasGeneratedBlock(read(INDEX)), false, `${INDEX} carries a <!-- gen:notes --> block again`);
+  assert.equal(files.includes("artifacts/NOTES-TABLE.md"), false, "the built notes table is tracked");
+});
+
+test("every live note renders one table row from its own header lines", () => {
+  const table = renderIndexBlock(r.notes);
+  for (const n of r.notes) assert.ok(table.includes(`](../docs/notes/${n.base})`), `${n.file} has no row`);
+  for (const n of r.notes) if (n.summary) assert.ok(n.summary.length >= 12, `${n.file}: a Summary: line says what the note records`);
 });
 
 // ---------------------------------------------------------------------------
 // docs/DECISIONS.md — the D-NNN ledger
 
-test("every D-NNN cited anywhere exists in docs/DECISIONS.md, ids are unique and sequential, and each row's cited-by paths exist", () => {
+test("every D-NNN cited anywhere exists in docs/DECISIONS.md, ids are unique and sequential, and each row's related files exist", () => {
   const ledger = read("docs/DECISIONS.md");
+  // The sixth column is RELATED FILES, not "cited by": it was named "cited by" while
+  // 23 of 30 rows listed files that never mention their id (audit W27, 2026-11-09).
+  // Existence is what is checked; the header keeps the name honest.
+  assert.match(ledger, /^\| id \| date \| words \| scope \| via \| related files \| superseded by \|$/m, "the ledger header names the sixth column `related files`");
   const rows = ledger.split("\n").filter((l) => /^\| D-\d{3} \|/.test(l));
   const ids = rows.map((l) => /^\| (D-\d{3}) \|/.exec(l)[1]);
   assert.ok(ids.length >= 1, "the ledger holds no rows");
@@ -85,7 +98,7 @@ test("every D-NNN cited anywhere exists in docs/DECISIONS.md, ids are unique and
   const tracks = new Set(files);
   for (const l of rows) {
     const cells = l.split("|").slice(1, -1).map((c) => c.trim());
-    assert.equal(cells.length, 7, `${cells[0]}: seven columns (id | date | words | scope | via | cited by | superseded by)`);
+    assert.equal(cells.length, 7, `${cells[0]}: seven columns (id | date | words | scope | via | related files | superseded by)`);
     for (const tok of cells[5].split(",").map((s) => s.trim()).filter((s) => /^[\w.-]+\/[\w./-]+$/.test(s)))
       assert.ok(tracks.has(tok), `${cells[0]} cites ${tok}, which is not a tracked file`);
     for (const m of cells[6].matchAll(/D-\d{3}/g)) assert.ok(have.has(m[0]), `${cells[0]} is superseded by ${m[0]}, which has no row`);
@@ -102,10 +115,23 @@ test("every D-NNN cited anywhere exists in docs/DECISIONS.md, ids are unique and
 // ---------------------------------------------------------------------------
 // The pure core, on fixtures with a pinned clock
 
-test("header() reads Kind:, Re-measure-by: and the Supersedes pin from the first lines", () => {
-  assert.deepEqual(header("# T\n\nKind: measurement · Re-measure-by: 2026-12-01\n"), { kind: "measurement", remeasure: "2026-12-01", pinned: false });
-  assert.deepEqual(header("# T\n**Kind:** how-to\n\nSupersedes: [x](X.md)\n"), { kind: "how-to", remeasure: null, pinned: true });
-  assert.deepEqual(header("# T\nno header\n"), { kind: null, remeasure: null, pinned: false });
+test("header() reads Kind:, Re-measure-by:, Summary:, the H1 and the Supersedes pin from the first lines", () => {
+  const h = (kind, remeasure, summary, pinned, superseded = false) => ({ kind, remeasure, summary, h1: "T", pinned, superseded });
+  assert.deepEqual(header("# T\n\nKind: measurement · Re-measure-by: 2026-12-01\n"), h("measurement", "2026-12-01", null, false));
+  assert.deepEqual(header("# T\n**Kind:** how-to\n\nSupersedes: [x](X.md)\n"), h("how-to", null, null, true));
+  assert.deepEqual(header("# T\nno header\n"), h(null, null, null, false));
+  assert.deepEqual(header("# T\n\nSummary: what it records\n\nSuperseded by: [y](Y.md)\n"), h(null, null, "what it records", true, true));
+});
+
+test("renderIndexBlock(): Summary: wins over the H1, newest first, flags uncited/superseded, escapes pipes", () => {
+  const row = (base, o) => ({ base, dated: true, date: base.slice(-13, -3), cited: true, pinned: false, superseded: false, kind: "design", remeasure: null, summary: null, h1: base, ...o });
+  const t = renderIndexBlock([row("A-2026-01-01.md", { h1: "Old | title" }), row("B-2026-02-01.md", { summary: "Hand summary", cited: false, pinned: true, superseded: true })]);
+  const lines = t.split("\n");
+  assert.equal(lines[0], "# docs/notes — 2 live notes");
+  assert.deepEqual(lines.filter((l) => l.startsWith("| [")), [
+    "| [B-2026-02-01.md](../docs/notes/B-2026-02-01.md) | design | — | 2026-02-01 (uncited, pinned, superseded) | Hand summary |",
+    "| [A-2026-01-01.md](../docs/notes/A-2026-01-01.md) | design | — | 2026-01-01 | Old \\| title |",
+  ], "newest first; Summary: over the H1; flags; pipes escaped");
 });
 
 test("scan() with a pinned clock: uncited past the window is stale, a citation or the allow-list clears it, a refused prefix ignores age", () => {

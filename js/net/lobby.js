@@ -123,17 +123,6 @@ const NetLobby = (function () {
       };
     }
 
-    // HELLO is stored and relayed to guests: keep only localProfile() fields (+ from/rank).
-    function cleanHello(p) {
-      const out = { team: p.team, driver: p.driver, parts: null };
-      if (p.from != null) out.from = p.from;
-      if (p.rank != null) out.rank = p.rank;
-      if (p.parts && typeof p.parts === "object") {
-        out.parts = {};
-        for (const k of Object.keys(p.parts).slice(0, 24)) if (["string", "number"].includes(typeof p.parts[k])) out.parts[k] = p.parts[k];
-      }
-      return out;
-    }
 
     // Turn a peer's declared ids into multipliers, locally. Falls back to the
     // team's factory numbers if anything about the setup does not resolve —
@@ -564,6 +553,8 @@ const NetLobby = (function () {
       say("Connected.");
       transports.set(id, t);
       if (transport === t) { transport = null; pendingId = null; }
+      // A code join keeps hearing offers until it connects (swap reanswer): stop it.
+      if (role === "guest" && codeWait) { codeWait.cancelled = true; codeWait = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
       if (typeof NetRendezvous !== "undefined" && NetRendezvous.verifyFor) NetRendezvous.verifyFor(t.pc).then((v) => {
@@ -584,7 +575,7 @@ const NetLobby = (function () {
       // Nothing legitimate sends more than a handful a second (a seat clash
       // settles in one round trip), so past HELLO_RATE in a rolling second
       // the rest are dropped on the floor. Separate windows per event.
-      const helloTimes = [], readyTimes = [], qualiTimes = [], settingsTimes = [];
+      const helloTimes = [], readyTimes = [], qualiTimes = [], settingsTimes = [], qabortTimes = [];
       const rosterWindows = new Map(), pendingRoster = new Map();
       const underRate = (times, limit = HELLO_RATE) => {
         const now = performance.now();
@@ -628,8 +619,8 @@ const NetLobby = (function () {
       // into one slot — and a peer that can name itself is a peer that can name
       // somebody else.
       made.onEvent(NetPlay.EV.HELLO, (p) => rosterEvent("hello", p, (p) => {
+        p = LobbyRoster.cleanHello(p);
         if (!p) { renderRoom(); return; }
-        p = cleanHello(p);
         // WHOSE profile this is. On the host, always the connection it came in
         // on — a guest that could name itself could name somebody else. On a
         // guest, a `from` is a profile the HOST is RELAYING on behalf of
@@ -734,21 +725,20 @@ const NetLobby = (function () {
       // same reasoning as HELLO above), and seat exclusivity makes team:seat
       // a driver identity; the id format is seasonDriverId's
       // (js/core/store.js): "team:driver". No profile yet means no claim —
-      // HELLO is sent at connect, long before anyone can drive a lap. On a
-      // guest there is nothing to narrow to: its one connection is the host's,
-      // and the host legitimately speaks for the whole field.
+      // HELLO is sent at connect, long before anyone can drive a lap. A guest's
+      // one connection is the host's, which speaks for the whole (seated) field.
       // NEVER THE LOCAL SEAT, either role: a peer whose HELLO claimed this
       // player's team:seat (or a relay naming it) must not post a time over
       // the one this player drives — qualiDriven() would take it as theirs.
       function sendersOwnDriver(d) {
         const me = Teams.LIST[G.teamIdx] || Teams.LIST[0];
         if (me && d.driverId === me.id + ":" + (G.driverIdx || 0)) return false;
-        if (role !== "host") return true;
-        // Per-connection QUALI+QLIVE cap (host relays each event to every guest).
-        if (!underRate(qualiTimes, QUALI_RATE)) return false;
-        const p = _peers.get(id);
-        return !!(p && p.team && d.driverId != null
-          && d.driverId === p.team + ":" + (p.driver || 0));
+        // Per-connection QUALI+QLIVE cap; a guest's one link relays the room, and
+        // only a driver some HELLO seated is accepted (#5012).
+        if (!underRate(qualiTimes, role === "host" ? QUALI_RATE : NetPlay.QUALI_GUEST_RATE)) return false;
+        if (role !== "host") return [..._peers.values()].some((p) => p && typeof p.team === "string" && d.driverId === p.team + ":" + (p.driver || 0));
+        const seat = heldSeat(id);
+        return !!(seat && d.driverId != null && d.driverId === seat);
       }
       // QUALI and the lap in progress (QLIVE): the receivers live in NetPlay
       // (bindQuali — ONE validation site for both phases); only the sender
@@ -764,11 +754,13 @@ const NetLobby = (function () {
         }
       });
       // Guest abortQuali → host grades that HELLO's driver no-time (relayed QUALI).
+      // Rate-gated per connection like QUALI: each one is relayed to every other guest.
       made.onEvent(QABORT, () => {
         if (role !== "host" || !friendQualifying) return;
-        const p = _peers.get(id);
-        if (!p || !p.team) return;
-        const q = { driverId: p.team + ":" + (p.driver || 0), t: Infinity, noTime: true };
+        if (!underRate(qabortTimes, QABORT_RATE)) return;
+        const seat = heldSeat(id);
+        if (!seat) return;
+        const q = { driverId: seat, t: Infinity, noTime: true };
         if (G.onPeerQuali) G.onPeerQuali(q);
         for (const [other, sess] of sessions) {
           if (other !== id) try { sess.sendEvent(NetPlay.EV.QUALI, { driverId: q.driverId, t: null, noTime: true }); } catch (e) { /* departing peer */ }
@@ -795,6 +787,7 @@ const NetLobby = (function () {
     const HELLO_RATE = 5, EVENT_WINDOW_MS = NetPlay.EVENT_WINDOW_MS;   // per connection, per event
     const QUALI_RATE = NetPlay.QUALI_RATE;          // QUALI + QLIVE together, per connection
     const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
+    const QABORT_RATE = 2;     // per connection, per window: a guest leaves the sheet once
     const QGO = "qgo";         // host→guest "quali is over, I am starting the race" (additive: old clients ignore the type)
     let qualiAborted = false;  // this guest backed out of friend quali and is waiting in the room for the host
     const _peers = new Map();
@@ -1025,6 +1018,12 @@ const NetLobby = (function () {
       if (role === "host") return joinRank(id);
       const p = _peers.get(id);
       return p && p.from != null ? (p.rank || 0) : 0;   // untagged = the host
+    }
+
+    // The seat a host-side connection may speak for (LobbyRoster.heldSeat).
+    function heldSeat(id) {
+      const me = Teams.LIST[G.teamIdx] || Teams.LIST[0];
+      return LobbyRoster.heldSeat(_peers, id, me ? me.id + ":" + (G.driverIdx || 0) : null, joinRank);
     }
 
     // A guest yields to the host and to guests that joined EARLIER, never to
@@ -1276,9 +1275,9 @@ const NetLobby = (function () {
         try { sess.sendEvent(NetPlay.EV.LEFT, { evicted: true }); } catch (e) { /* leaving */ }
       }
       Log.info("net", "host removed " + id);
-      // ACK BEFORE CLOSE: shutdown() drops the SCTP queue (pc.close()), so a
-      // LEFT sent and closed in one breath never reaches the guest, who then
-      // reads "The host left the room". The guest closes its own end on
+      // ACK BEFORE CLOSE: shutdown("local") lingers only ~500 ms for the SCTP
+      // queue, so a LEFT sent and closed in one breath can still miss a slow
+      // guest, who then reads "The host left the room". The guest closes on
       // LEFT { evicted } — that close is the ack; EVICT_GRACE_MS is the
       // fallback for a guest that never answers.
       if (!sess) { try { t.close(); } catch (e) { /* its close handler is the cleanup */ } return true; }
@@ -1582,7 +1581,7 @@ const NetLobby = (function () {
       }
       if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
       if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
-      NetHandshake.consumeInviteUrl(); if (res.peer) _peers.set(PEER_ONE, res.peer);
+      NetHandshake.consumeInviteUrl(); if (res.peer) _peers.set(PEER_ONE, LobbyRoster.cleanCodeProfile(res.peer));
       if (e.answer) e.answer.value = res.code;
       if (e.answerHint) e.answerHint.hidden = false;
       if (e.answerActions) e.answerActions.hidden = false;
@@ -1626,7 +1625,7 @@ const NetLobby = (function () {
       // ALSO left a phantom "peer" entry that no session ever answers for —
       // so peersReady() could never be true and START was unreachable. Found
       // by tools/net/rtc-e2e-3p, which is the only thing that can see it.
-      if (res.peer) _peers.set(id || PEER_ONE, res.peer);
+      if (res.peer) _peers.set(id || PEER_ONE, LobbyRoster.cleanCodeProfile(res.peer));
       waitForOpen();
       return res;
     }
@@ -1834,7 +1833,7 @@ const NetLobby = (function () {
               if (acc.error !== "already_answered" && acc.error !== "wrong_offer") say(acc.message || "That answer could not be read.", true);
               return;
             }
-            if (acc.peer) _peers.set(id, acc.peer);
+            if (acc.peer) _peers.set(id, LobbyRoster.cleanCodeProfile(acc.peer));
             // CLOSE THE ROOM WHILE THIS ANSWER NEGOTIATES, REOPEN ONCE IT IS UP.
             //
             // Historically this got Trystero's own RTCPeerConnection out of
@@ -1890,7 +1889,7 @@ const NetLobby = (function () {
       const acc = await NetHandshake.acceptAnswer(initialTransport, got.payload);
       if (!operationCurrent(gen) || transport !== initialTransport) return cancelledResult();
       if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return acc; }
-      if (acc.peer) _peers.set(pendingId || PEER_ONE, acc.peer);
+      if (acc.peer) _peers.set(pendingId || PEER_ONE, LobbyRoster.cleanCodeProfile(acc.peer));
       waitForOpen();
       return { ok: true, code };
     }
@@ -1911,7 +1910,7 @@ const NetLobby = (function () {
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
       if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
-      const pending = transport;
+      let pending = transport;   // replaced when a newer offer is answered (reply, below)
       say("Looking for that room…");
       codeWait = { cancelled: false };
       let answered = null;
@@ -1926,12 +1925,32 @@ const NetLobby = (function () {
       let found = false;
       const done = await NetRendezvous.swap({
         code, slot: "answer", want: "offer", token: codeWait,
+        // A relay can replay an offer the host already used for somebody else:
+        // answer a newer one the host posts while ours is still unconnected.
+        reanswer: true,
+        onFail: (r) => { if (r && r.advisory && operationCurrent(gen) && !transports.has(pid)) say(r.message, true); },
         onTick: () => {
           if (!operationCurrent(gen) || found || watching || transports.has(pid)) return;
           say("Looking for that room… (code " + code + ")");
         },
         reply: async (inviteCode) => {
           if (!operationCurrent(gen) || transport !== pending) return null;
+          if (answered && answered.ok) {
+            // A NEWER offer while the first answer is unconnected. Connected (or
+            // connecting on DTLS) means the first was the live one: keep it.
+            const st = pending.stats ? pending.stats() : null;
+            if (transports.has(pid) || pending.status === "open" || (st && st.connection === "connected")) return null;
+            // An answered pc cannot take a second offer: a fresh one answers it.
+            if (!newTransport("guest")) return null;
+            pending = transport;
+            const res = await NetHandshake.acceptInvite(pending, inviteCode, localProfile());
+            if (!operationCurrent(gen) || transport !== pending) return null;
+            if (!res.ok) return null;
+            if (res.peer) _peers.set(PEER_ONE, LobbyRoster.cleanCodeProfile(res.peer));
+            answered = res;
+            waitForOpen();   // the watcher on the dropped transport ended with it
+            return res.code;
+          }
           found = true;
           say("Found it — answering…");
           // Default gather (waitForIce re-check + null-candidate end). A short
@@ -1940,7 +1959,7 @@ const NetLobby = (function () {
           const res = await NetHandshake.acceptInvite(pending, inviteCode, localProfile());
           if (!operationCurrent(gen) || transport !== pending) return null;
           if (!res.ok) { answered = res; return null; }
-          if (res.peer) _peers.set(PEER_ONE, res.peer);
+          if (res.peer) _peers.set(PEER_ONE, LobbyRoster.cleanCodeProfile(res.peer));
           answered = res;
           watch();
           return res.code;

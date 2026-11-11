@@ -576,6 +576,7 @@ function syncGarageExitChrome() {
 }
 
 function buildSetup() {
+  clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;   // #4928: this rebuild already reads csLivQuery
   clearSurfaceControls();
   if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
   syncGarageExitChrome();
@@ -622,7 +623,6 @@ function buildSetup() {
   const teamEl = $("cs-team");
   teamEl.textContent = team.name.toUpperCase();
   teamEl.title = team.name;
-
 
   const budgetEl = $("cs-budget");
   const budgetFill = $("cs-budget-fill");
@@ -910,6 +910,15 @@ let csLivQuery = "";           // #3339: filter string sticky across rebuilds
 // End/Home can land past content-visibility; phone collapsed for scroll). Once
 // the player toggles, the boolean sticks across rebuilds.
 let csLivFactoryOpen = null;
+// #4928: sticky across rebuilds WITHIN one visit and one team only; the hide
+// observer and a team change reset it. The debounce timer is module-level so a
+// later rebuild (a row tap, CREATE, ✎, a close) cancels the stale one.
+let csLivQueryTeam = null;
+let csLivSearchTimer = 0;
+function resetLivSearch() {
+  csLivQuery = ""; csLivFactoryOpen = null; csLivQueryTeam = null;
+  clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;
+}
 function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
   if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
@@ -1039,8 +1048,10 @@ function buildLiveryOptions(container, team) {
   livBuild++;
   const cur = getLiveryId(team.id);
   const customIds = new Set(getCustomLiveries(team.id).map((l) => l.id));
+  if (csLivQueryTeam !== team.id) { resetLivSearch(); csLivQueryTeam = team.id; }
   const q = String(csLivQuery || "").trim().toLowerCase();
-  const match = (liv) => !q || String(liv.name || "").toLowerCase().includes(q) || String(liv.id || "").toLowerCase().includes(q);
+  // The FITTED row always shows, whatever the query (#4928).
+  const match = (liv) => !q || liv.id === cur || String(liv.name || "").toLowerCase().includes(q) || String(liv.id || "").toLowerCase().includes(q);
 
   // #3339: search + collapse factory finishes so phone scroll is not ~25 screens.
   {
@@ -1053,12 +1064,14 @@ function buildLiveryOptions(container, team) {
     search.value = csLivQuery;
     search.autocomplete = "off";
     search.onclick = (e) => e.stopPropagation();
-    let searchTimer = 0;
     search.oninput = () => {
       csLivQuery = search.value;
       // Debounce rebuild so each keystroke is not a full swatch pass.
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
+      clearTimeout(csLivSearchTimer);
+      csLivSearchTimer = setTimeout(() => {
+        csLivSearchTimer = 0;
+        const cs = $("carsetup");
+        if (csLivCreating || csActiveCat !== "livery" || !cs || cs.hidden) return;
         const caret = search.selectionStart;
         buildSetup();
         const again = $("cs-options")?.querySelector(".cs-liv-search");
@@ -1688,7 +1701,7 @@ function discardLivDraft() {
 }
 if (typeof MutationObserver === "function") {
   const cs = $("carsetup");
-  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
+  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); resetLivSearch(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
 // ESCAPE IS ONE LEVEL. With the paint editor open, Escape pressed the garage's

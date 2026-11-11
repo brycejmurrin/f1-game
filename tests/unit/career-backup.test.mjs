@@ -1089,7 +1089,7 @@ test("backup preview follows mode/extras scope and explains shared identity with
   const second = h.CareerBackup.preview(envelope, { flavours: ["myteam"], includeProgressExtras: false });
   assert.equal(second.slots.length, 1);
   assert.equal(second.extras.length, 1);
-  assert.match(second.extras[0], /MY TEAM identity: restore separately with each imported career/);
+  assert.equal(second.extras[0], "MY TEAM identity: restore separately with each imported career; other careers and one-off GP appearance are preserved");
   assert.equal(h.CareerBackup.preview(envelope, { includeExtras: false }).extras.length, 1, "slot-owned identity still accompanies the slot");
   assert.equal(JSON.stringify([...h.disk]), before);
 });
@@ -1115,7 +1115,7 @@ test("slot and extras quota failures preserve session success but never claim co
     const ui = bootBackupUi(h);
     await ui.selectBackup(envelope);
     await ui.clickImport();
-    assert.match(ui.notices.at(-1), /RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP/);
+    assert.equal(ui.notices.at(-1), "RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP");
   }
 });
 
@@ -1167,7 +1167,7 @@ test("the other-mode preview names the incoming team and retains an earlier savi
   assert.match(notes, /Backup: 2026 · Murrin GP/);
   h.ctx.localStorage.setItem = put;
   await ui.clickImport();
-  assert.match(ui.notices.at(-1), /SAVE NOT CONFIRMED; KEEP YOUR BACKUP/);
+  assert.equal(ui.notices.at(-1), "RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP");
   assert.equal(h.store.get("career.myteam.0").money, 5150);
 });
 
@@ -1334,7 +1334,7 @@ for (const flavour of ["driver", "myteam"]) test(`legacy file picker refuses a p
   resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }),
     "career.myteam.0": save({ flavour: "myteam", money: 60 }), careerSlot: "myteam:0" })));
   await settleLegacy();
-  assert.match(ui.button.textContent, /CONFLICT/);
+  assert.equal(ui.button.textContent, "LOAD CAREER FILE — CONFLICT");
   assert.deepEqual(slotSnap(h.disk), before, "even the unchanged destination is not partly imported");
   assert.equal(h.disk.get("apex26.careerSlot"), pointer);
   assert.equal(ui.timers.some((t) => t.ms === 600), false, "a refused file never reloads");
@@ -1349,7 +1349,7 @@ test("legacy file confirmation captures revisions on the first tap, including th
   ui.button.onclick();
   ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }), careerSlot: "driver:0" }))));
   await settleLegacy();
-  assert.match(ui.button.textContent, /CONFLICT/);
+  assert.equal(ui.button.textContent, "LOAD CAREER FILE — CONFLICT");
   assert.deepEqual(slotSnap(h.disk), before);
   assert.equal(JSON.parse(h.disk.get("apex26.careerSlot")), "myteam:2");
 });
@@ -1361,7 +1361,7 @@ test("legacy file imports both modes and refreshes the selected career through t
   ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }),
     "career.myteam.0": save({ flavour: "myteam", team: "custom", money: 60 }), careerSlot: "myteam:0" }))));
   await settleLegacy();
-  assert.match(ui.button.textContent, /3 APPLIED, RELOADING/);
+  assert.equal(ui.button.textContent, "LOAD CAREER FILE — 3 APPLIED, RELOADING…");
   assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 50);
   assert.equal(h.Career.data().money, 60);
   assert.equal(h.Career.slot().flavour, "myteam");
@@ -1392,7 +1392,7 @@ test("legacy imports report refused storage and stay on the page", async () => {
   ui.button.onclick(); ui.button.onclick();
   ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.1": save({ money: 50 }), careerSlot: "driver:1" }))));
   await settleLegacy();
-  assert.match(ui.button.textContent, /STORAGE FULL/);
+  assert.equal(ui.button.textContent, "LOAD CAREER FILE — STORAGE FULL — 1 NOT SAVED");
   assert.equal(h.disk.get("apex26.career.driver.1"), original);
   assert.equal(h.disk.get("apex26.careerSlot"), pointer);
   assert.equal(ui.timers.some((t) => t.ms === 600), false);
@@ -2174,4 +2174,15 @@ test("NEW CAREER BACK steps back to the slot picker and restores the borrowed li
   assert.ok(empty(), "the slot picker is shown again");
   ui.G.$("cr-back").onclick();
   assert.equal(toTitle, 1, "BACK from the title-opened picker then leaves to the title");
+});
+
+test("a MY TEAM identity captured on a device with no GP keys falls back to the caller's default (#4945)", () => {
+  const b = loadHarness();
+  b.Career.start({ flavour: "myteam", teamId: "custom", seed: 1 });
+  assert.equal(b.Career.data().flavour, "myteam");
+  assert.ok(Object.hasOwn(b.Career.data().myTeamIdentity, "livery.custom"), "the nulls are captured as own keys");
+  b.Career.engage(true);
+  assert.equal(b.Career.inCareer(), true);
+  assert.equal(b.Career.identityValue("livery.custom", "default"), "default");
+  assert.equal(b.Career.identityValue("customTeam", "fallback"), "fallback");
 });

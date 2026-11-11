@@ -399,8 +399,16 @@ export function trackBrowserOwner(browser, owner, entry) {
  * https://playwright.dev/docs/api/class-browserserver#browser-server-process
  * https://playwright.dev/docs/api/class-browsertype#browser-type-launch-server */
 export async function launchChromium(opts = {}, {
-  chromium = require("playwright").chromium, closeTimeoutMs = 5000, kill = process.kill.bind(process),
+  chromium, closeTimeoutMs = 5000, kill = process.kill.bind(process),
 } = {}) {
+  // A subagent never starts a browser (AGENTS.md rule 10). .claude/hooks/bash-guard.py exports APEX_SUBAGENT=1 into
+  // a subagent's commands, so every launcher that comes through here refuses without the hook naming it. An injected
+  // `chromium` (a unit test's fake) launches nothing and is exempt.
+  if (!chromium && process.env.APEX_SUBAGENT) {
+    throw new Error("a subagent never starts a browser (AGENTS.md rule 10; APEX_SUBAGENT is set): run the node-only route "
+      + "(--vm, --plan, --help, node --test) and report what needs a browser as NOT RUN.");
+  }
+  chromium ||= require("playwright").chromium;
   const startedEpoch = shutdownEpoch;
   const { browserFlavor = "auto", ...launchOptions } = opts;
   const flavor = normalizeBrowserFlavor(browserFlavor);

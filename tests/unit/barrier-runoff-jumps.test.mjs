@@ -193,6 +193,18 @@ test("fleet: the NON-pit side inside the pit window has no clearance step over 1
   assert.deepEqual(bad, [], `non-pit side steps >= 1.5 m inside the pit window: ${bad.join(", ")}`);
 });
 
+test("fleet: no wallAt pocket over 3 m on the pit side at the lane taper (#5079)", () => {
+  // openBoundary left taper nodes (lane narrower than a car) at the run-off
+  // default between a wall-bound lane node and the run-off past the window,
+  // and featherAfterOpen protects keep nodes: 30 pockets of 4.07-7.73 m on 24
+  // circuits (estoril 6.10, monaco 7.73, baku 7.59). Fails on the old source.
+  const rows = measuredFleet().filter((row) => row.hasPitComplex);
+  const bad = rows.filter((row) => row.pitPocketMax > 3)
+    .map((row) => `${row.id} ${row.pitPocketMax.toFixed(2)}`);
+  assert.ok(rows.length >= 40, `only ${rows.length} pit complexes checked`);
+  assert.deepEqual(bad, [], `pit-side wallAt pockets over 3 m: ${bad.join(", ")}`);
+});
+
 test("street barrier: the last panel closes on node 0, not past it (10-F2, odd n)", () => {
   // The panel walk stepped k += 2 and wrapped the last span with `% n`: on an odd node
   // count the final panel ran n-1, 0, 1 (two nodes, ~8 m) on top of the first (0, 1, 2).

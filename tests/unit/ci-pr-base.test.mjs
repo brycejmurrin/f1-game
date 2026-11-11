@@ -109,42 +109,58 @@ test("Structural guards ignores ship ceiling raises but still rejects a PR raise
   }
 });
 
-test("15-F5: a green draft run is reused only while the base branch has not moved since it started", () => {
+test("15-F5: a green draft run is reused only on its first attempt and the same base SHA", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "reuse-draft-"));
   try {
-    // A stub `gh`: the runs list carries one green pull_request ci.yml run; the commit lookup prints the base tip's date.
+    const BASE = "b".repeat(40);
+    // A stub `gh`: one green pull_request ci.yml run, its jobs, and its tooling A record (an annotation).
     fs.writeFileSync(path.join(dir, "gh"), [
       "#!/usr/bin/env bash",
       'case "$2" in',
+      '  repos/o/r/check-runs/*/annotations*) printf \'%s\' "$STUB_ANN" ;;',
       '  repos/o/r/actions/runs/*/jobs*) printf \'%s\' "$STUB_JOBS" ;;',
-      '  repos/o/r/actions/runs*) printf \'{"workflow_runs":[{"id":77,"status":"completed","conclusion":"success","path":".github/workflows/ci.yml","event":"pull_request","run_started_at":"2026-10-10T10:00:00Z"}]}\' ;;',
-      '  repos/o/r/commits/*) printf \'%s\\n\' "$STUB_TIP_DATE" ;;',
+      '  repos/o/r/actions/runs*) printf \'{"workflow_runs":[{"id":77,"run_attempt":%s,"status":"completed","conclusion":"success","path":".github/workflows/ci.yml","event":"pull_request"}]}\' "$STUB_ATTEMPT" ;;',
       '  *) exit 1 ;;',
       "esac",
     ].join("\n"), { mode: 0o755 });
-    const reuse = (tipDate, extra = {}) => cp.spawnSync("bash", [path.join(ROOT, "tools/ci/reuse-draft-fast.sh")], {
+    const script = path.join(ROOT, "tools/ci/reuse-draft-fast.sh");
+    const ann = (msg) => JSON.stringify([{ title: "apex-guards", message: msg }]);
+    const reuse = (extra = {}) => cp.spawnSync("bash", [script], {
       encoding: "utf8",
       env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_ACTION: "ready_for_review",
-        PR_HEAD_SHA: "a".repeat(40), PR_BASE_REF: "ship", GITHUB_RUN_ID: "1", STUB_TIP_DATE: tipDate,
-        STUB_JOBS: JSON.stringify({ jobs: [{ name: "Structural guards (tooling A)", conclusion: "success" }] }), ...extra },
+        PR_HEAD_SHA: "a".repeat(40), GITHUB_RUN_ID: "1", CURRENT_BASE: BASE, STUB_ATTEMPT: "1",
+        STUB_ANN: ann(`mode=changed base=${BASE}`),
+        STUB_JOBS: JSON.stringify({ jobs: [{ id: 5, name: "Structural guards (tooling A)", conclusion: "success" }] }), ...extra },
     });
-    const r1 = reuse("2026-10-10T09:00:00Z");
-    assert.match(r1.stdout, /reuse=true/, r1.stderr);
-    assert.match(r1.stdout, /run=77/);
-    const r2 = reuse("2026-10-10T11:30:00Z");
-    assert.match(r2.stdout, /reuse=false/, "the base took a commit after the draft run started: the merge-dependent checks must re-run");
-    assert.match(r2.stderr, /moved/);
-    // No base ref, or an unreadable tip date, is not "same": fail safe.
-    assert.match(reuse("2026-10-10T09:00:00Z", { PR_BASE_REF: "" }).stdout, /reuse=false/);
-    assert.match(reuse("").stdout, /reuse=false/);
+    const r1 = reuse();
+    assert.equal(r1.stdout, "reuse=true\nrun=77\nguards_mode=changed\n", r1.stderr);
+    const moved = reuse({ CURRENT_BASE: "c".repeat(40) });
+    assert.equal(moved.stdout, "reuse=false\n", "the base moved since the draft ran: the merge-dependent checks must re-run");
+    assert.equal(moved.stderr, "reuse-draft-fast: draft run 77 tested base bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, this run tests cccccccccccccccccccccccccccccccccccccccc — merge-dependent checks must re-run\n");
+    const rerun = reuse({ STUB_ATTEMPT: "2" });
+    assert.equal(rerun.stdout, "reuse=false\n", "a draft that passed only on a re-run is not reused");
+    assert.equal(rerun.stderr, "reuse-draft-fast: ci.yml run 77 passed on attempt 2, not its first — run the fast tier\n");
+    // No base, no record, or a malformed record is not "same": fail safe.
+    assert.equal(reuse({ CURRENT_BASE: "", GITHUB_EVENT_NAME: "workflow_dispatch" }).stdout, "reuse=false\n");
+    assert.equal(reuse({ STUB_ANN: "[]" }).stdout, "reuse=false\n");
+    assert.equal(reuse({ STUB_ANN: ann("mode=full base=xyz") }).stdout, "reuse=false\n");
     // #2184: a run that concluded success with tooling A SKIPPED (a cancelled-then-green
     // shape; until 2026-11-03 also an opted-out draft) tested nothing and is never reused.
-    const skipOnly = reuse("2026-10-10T09:00:00Z", { STUB_JOBS: JSON.stringify({ jobs: [
-      { name: "Structural guards (tooling B)", conclusion: "skipped" },
-      { name: "Structural guards (tooling A)", conclusion: "skipped" }] }) });
-    assert.match(skipOnly.stdout, /reuse=false/, "a skip-only green run must not stand in for the fast tier");
-    assert.match(skipOnly.stderr, /did not run and pass/);
-    assert.match(reuse("2026-10-10T09:00:00Z", { STUB_JOBS: "" }).stdout, /reuse=false/, "an unreadable jobs list fails safe");
+    const skipOnly = reuse({ STUB_JOBS: JSON.stringify({ jobs: [
+      { id: 4, name: "Structural guards (tooling B)", conclusion: "skipped" },
+      { id: 5, name: "Structural guards (tooling A)", conclusion: "skipped" }] }) });
+    assert.equal(skipOnly.stdout, "reuse=false\n", "a skip-only green run must not stand in for the fast tier");
+    assert.equal(skipOnly.stderr, "reuse-draft-fast: ci.yml run 77 concluded success but its tooling A shard did not run and pass (a skip-only run) — run the fast tier\n");
+    assert.equal(reuse({ STUB_JOBS: "" }).stdout, "reuse=false\n", "an unreadable jobs list fails safe");
+    // --record writes the annotation and the step output.
+    const out = path.join(dir, "out");
+    const rec = cp.spawnSync("bash", [script, "--record"], { encoding: "utf8", cwd: ROOT,
+      env: { ...process.env, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_NAME: "pull_request", GITHUB_OUTPUT: out, SCOPE_MODE: "full", REUSED_MODE: "" } });
+    assert.match(rec.stdout, /^::notice title=apex-guards::mode=full base=[0-9a-f]{40}$/m, rec.stderr);
+    assert.equal(fs.readFileSync(out, "utf8"), "guards_mode=full\n");
+    const odd = cp.spawnSync("bash", [script, "--record"], { encoding: "utf8", cwd: ROOT,
+      env: { ...process.env, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_NAME: "schedule", GITHUB_OUTPUT: "", SCOPE_MODE: "weird" } });
+    assert.equal(odd.stdout, "::notice title=apex-guards::mode=unknown base=none\n", "an unexpected scope is recorded as unknown, off a PR there is no base");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  assert.match(ci, /PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/, "the reuse step passes the base ref");
+  assert.match(ci, /bash tools\/ci\/reuse-draft-fast\.sh --record/, "tooling A records its guards scope");
 });

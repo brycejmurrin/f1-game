@@ -7,10 +7,11 @@ name: CI
 #
 # The jobs are split by what they cost, so the common case stays fast:
 #
-#   guards   ~8 min wall (461 s median 2026-10-05), two parallel tooling-fast
-#                                  shards then ratchet/audit on the aggregator
-#                                  still named `Structural guards`. Split because
-#                                  the old single job's header still said ~2m20s.
+#   guards   four parallel tooling-fast shards, `Structural guards (tooling
+#                                  A..D)` (guards-a..d); the ratchet / audit /
+#                                  coverage steps run at the end of tooling B,
+#                                  and the no-checkout aggregator `Structural
+#                                  guards` joins the four under one name.
 #                                  This is the job that must never be red;
 #                                  everything it asserts is a property a
 #                                  compiler would enforce in a language that had
@@ -183,9 +184,9 @@ on:
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#running-your-pull_request-workflow-based-on-the-base-and-head-branch-of-a-pull-request
     branches:
       - claude/f1-game-project-26h3ng
-    # NO paths-ignore HERE (2026-09-30). Branch protection on the deploy
-    # branch requires this workflow's fast-tier jobs, and a required check
-    # that never reports blocks the merge for good — so a prose-only PR,
+    # NO paths-ignore HERE (2026-09-30). land.yml's `gate` status (the one
+    # check the deploy branch's ruleset requires) reads this workflow's `CI`
+    # check, and a check that never reports blocks the landing for good — so a prose-only PR,
     # which the old filter kept out of this workflow entirely, could never
     # merge. Every PR runs the fast tier now; the per-PR node plan
     # (tools/ci/node-plan.mjs) skips the multi-minute scripts on a diff that
@@ -261,22 +262,9 @@ on:
         type: string
         required: false
         default: ""
-      # REUSE THE FAST TIER'S TREE-ONLY JOBS (2026-09-16). A deploy-branch push
-      # runs guards, node-suites, sweeps-parts and driving-model (the fast
-      # tier), pokes the train, and the train's gate ran all four AGAIN on the
-      # same tree — measured: ~12 min of fast tier, then ~14 min of full tier,
-      # serially, sharing nothing. Those four depend on the TREE only (no diff
-      # base, no selection), so the same bytes give the same answer. pages.yml's
-      # verdict passes the id of a completed, successful fast-tier ci.yml run
-      # on this exact tree; the four jobs skip and the gate is smoke + sweeps +
-      # selection (the change-aware `selected` always re-runs: its base is the
-      # LIVE commit here, which can be older than the push's `before`). Empty
-      # on every direct run, and on a train whose tip has no green fast tier.
-      fast_tier_run:
-        description: "id of a green fast-tier ci.yml run on this exact tree; its tree-only jobs are skipped"
-        type: string
-        required: false
-        default: ""
+      # NO fast_tier_run INPUT (removed 2026-11-10). It let the train skip the tree-only jobs on a tree
+      # whose fast tier was green; no caller has passed it since the deploy-branch fast tier went
+      # (2026-10-16), so every `inputs.fast_tier_run == ''` guard was always true and is gone.
       # NO SMOKE-ONLY INPUT (removed 2026-10-14). pages.yml fed it from the
       # verdict's ship-only output, always false since 2026-10-07
       # (tools/ci/pages-reuse-verdict.sh), so every job guard testing it
@@ -317,7 +305,10 @@ concurrency:
   # concurrency_key, and its own `pages-gate-*` group has cancel-in-progress
   # false. (The deploy branch's `ship-fast` push group, 2026-10-03 to
   # 2026-10-16, is gone with the push trigger.)
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
+  # A PR run keys on the PR NUMBER (`ci-pr-<n>`), not its head branch name: two PRs whose heads share a
+  # name (one from a fork) no longer cancel each other. Every other fallback carries its own prefix.
+  # ci-cancel-on-close.yml joins `ci-pr-<n>`.
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)) || format('ref-{0}', github.ref_name) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # DIFF-RELATIVE COUNTERS ON A PR, ABSOLUTE ON THE TIP (2026-10-26, system audit
@@ -336,10 +327,15 @@ jobs:
     name: Structural guards (tooling A)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # 12 cancelled this job at load 6+ with every file passing (2026-10-21); the shards are balanced since #3389
-    if: ${{ (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
+      checks: read     # the reuse step reads the draft run's guards record (an annotation)
+    # The guards scope this run tested (full | changed | unknown), also written as the
+    # `apex-guards` annotation that tools/ci/pages-reuse-verdict.sh and the ready run's
+    # reuse step read back (tools/ci/reuse-draft-fast.sh, THE RECORD).
+    outputs:
+      guards_mode: ${{ steps.record.outputs.guards_mode }}
     env:
       # #1712: nightly schedule is the NO_MEMO auditor (always runs); other events
       # may skip on an inputs-hash verdict-cache hit.
@@ -371,7 +367,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_ACTION: ${{ github.event.action }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
@@ -387,6 +382,12 @@ jobs:
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
         run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+      - name: Record the guards scope
+        id: record
+        env:
+          SCOPE_MODE: ${{ steps.scope.outputs.mode }}
+          REUSED_MODE: ${{ steps.reuse.outputs.guards_mode }}
+        run: bash tools/ci/reuse-draft-fast.sh --record
       # #1712: per-job inputs-hash verdict cache (lookup-only). A prior green
       # run on the same declared inputs (any branch; deploy tip is the default
       # branch so its verdicts are visible) skips the shard. Nightly NO_MEMO=1
@@ -438,10 +439,10 @@ jobs:
     name: Structural guards (tooling B)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
+      checks: read     # the reuse step reads the draft run's guards record (an annotation)
     env:
       # #1712: same NO_MEMO auditor as guards-a (nightly schedule always runs).
       NO_MEMO: ${{ github.event_name == 'schedule' && '1' || '' }}
@@ -458,7 +459,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_ACTION: ${{ github.event.action }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
@@ -551,10 +551,10 @@ jobs:
     name: Structural guards (tooling C)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
+      checks: read     # the reuse step reads the draft run's guards record (an annotation)
     env:
       # #1712: nightly schedule is the NO_MEMO auditor (always runs); other events
       # may skip on an inputs-hash verdict-cache hit.
@@ -586,7 +586,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_ACTION: ${{ github.event.action }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
@@ -646,10 +645,10 @@ jobs:
     name: Structural guards (tooling D)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
+      checks: read     # the reuse step reads the draft run's guards record (an annotation)
     env:
       NO_MEMO: ${{ github.event_name == 'schedule' && '1' || '' }}
     steps:
@@ -666,7 +665,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_ACTION: ${{ github.event.action }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
@@ -717,7 +715,7 @@ jobs:
     name: Structural guards
     needs: [guards-a, guards-b, guards-c, guards-d]
     runs-on: ubuntu-latest
-    if: ${{ (!cancelled() && inputs.fast_tier_run == '') }}
+    if: ${{ !cancelled() }}
     timeout-minutes: 5
     # NO CHECKOUT, NO npm ci (2026-10-15): the ratchet / audit / coverage /
     # behind-ship steps run at the end of tooling B, where the tree and the
@@ -739,7 +737,6 @@ jobs:
     name: Workflow and shader lints
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
     env:
@@ -781,7 +778,6 @@ jobs:
     name: Pure-node unit suites (${{ matrix.slice }})
     needs: [select]
     runs-on: ubuntu-latest
-    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
     # NEVER skipped for any_node=false (2026-09-30, PR #522): a job skipped at
     # the job level never expands its matrix, so the one check it reports is
     # "Pure-node unit suites (${{ matrix.slice }})" and the six REQUIRED names
@@ -801,7 +797,7 @@ jobs:
     # Pages call (`concurrency_key` set) skip the job; a merge interaction in
     # a node slice surfaces at the nightly. With no draft run to reuse, this
     # job no longer asks the ready_for_review reuse question.
-    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (inputs.concurrency_key == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -891,7 +887,7 @@ jobs:
       # circuits that moved (APEX_CIRCUITS). The seconds-long scripts always
       # run. A deploy-branch push, a Pages call, a dispatch or the nightly run
       # EVERYTHING, exactly as before: a merge is gated whole before the train
-      # ships it, so the `fast_tier_run` reuse contract is unchanged. Anything
+      # ships it. Anything
       # the planner cannot route runs everything (tools/ci/node-plan.mjs).
       # THE DELTA GATE ON A DEPLOY PUSH AND THE TRAIN (2026-09-30). The push
       # that merges a circuit-only PR rebuilt the whole fleet the PR had just
@@ -936,7 +932,17 @@ jobs:
             node tools/ci/node-plan.mjs --all --sh > "$PLAN"
             echo "no gated base for this $EVENT: every script runs"
           fi
+      # slider-effect.test.mjs (test:node-slow, the `slow` slice) needs Pillow + numpy; pinned so a
+      # release never changes the measurement. APEX_REQUIRE_TOOLS below makes their absence a failure
+      # on that slice instead of a skip.
+      - name: Python image deps for the slow slice (Pillow, numpy)
+        if: matrix.needed != 'false' && matrix.slice == 'slow'
+        run: python3 -m pip install --disable-pip-version-check --user "pillow==11.3.0" "numpy==2.3.2"
       - name: Pure-node unit suites
+        env:
+          SLICE: ${{ matrix.slice }}
+          NEEDED: ${{ matrix.needed }}
+          APEX_REQUIRE_TOOLS: ${{ matrix.slice == 'slow' && 'pillow,numpy' || '' }}
         run: |
           # ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
@@ -945,12 +951,12 @@ jobs:
           # matrix.needed=false (deploy push / train rows): the name still
           # reports for the Pages reuse check, but no work runs for a
           # slice this diff does not select.
-          if [ "${{ matrix.needed }}" = "false" ]; then
-            echo "SKIPPED slice ${{ matrix.slice }} — not selected for this diff (needed=false)"
+          if [ "$NEEDED" = "false" ]; then
+            echo "SKIPPED slice $SLICE — not selected for this diff (needed=false)"
             exit 0
           fi
           . "${RUNNER_TEMP:-.}/node-plan.sh"
-          case "${{ matrix.slice }}" in
+          case "$SLICE" in
             vm-a1)
               # The Node VM harness: js/game.js headless, exact parity with the
               # physics baseline (tests/unit/physics-characterization-vm.test.mjs).
@@ -970,8 +976,11 @@ jobs:
               # rows, greedy by median: here net-unit 33 s, audio-unit 33 s,
               # state-unit 5 s, desktop-unit 0.5 s beside a 112 s shard. Still
               # always-on (never guarded by planned()); on a matched PR plan
-              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
-              # the `npm run` else-branch stays for gateNodeSuites / deploy.
+              # NODE_PLAN_SKIP_TF=1 runs each group through
+              # `tools/ci/run-group.mjs --skip-tf`, which leaves out the files
+              # the Structural guards shards cover (that script decides which;
+              # its header is the rule); the `npm run` else-branch stays for
+              # gateNodeSuites / deploy.
               # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
               # tools/ci/pick-unit-slices.mjs SLICE_SCRIPTS mirrors these arms and
               # its test pins the two in step.
@@ -1048,12 +1057,11 @@ jobs:
               # (tests/groups.json; test:game-vm-b is still the whole list locally).
               # Re-cut 2026-10-15 by per-file runner medians (LPT over 59 files,
               # ~850 s of serial test time each; survey note §7): the 2026-09-30
-              # cut measured 437 s vs 220 s on a runner. NODE_PLAN_SKIP_TF=1 drops
-              # the VM files Structural guards already runs (tooling-fast:
-              # real-replay-vm 98 s, game-vm, red-flag-fuel-vm here;
-              # physics-characterization-vm, session-entry-vm on b2) — both jobs
-              # share one `if:`, so a matched plan ran them twice (test audit T5,
-              # 2026-10-05). --all / fail-safe keep npm run.
+              # cut measured 437 s vs 220 s on a runner. NODE_PLAN_SKIP_TF=1 leaves
+              # out the VM files the Structural guards shards cover, as
+              # `tools/ci/run-group.mjs --skip-tf` decides (a matched plan used to
+              # run them in both jobs: test audit T5, 2026-10-05). --all /
+              # fail-safe keep npm run.
               if planned test:game-vm-b1; then
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
               npm run test:game-vm-b1
@@ -1075,13 +1083,9 @@ jobs:
     permissions:
       contents: read
       actions: read
-    # NOT tree-only, so NOT skipped by `fast_tier_run` (2026-09-24). Its filter
-    # diffs a BASE (the push's `before`, or the train's live `before_sha`), so a
-    # green fast tier only proves the census for the LAST push's diff: push A
-    # edits js/car/ and its census goes red, push B (tests only) skips the
-    # census and goes green, and the train that reused B's run shipped A's car
-    # change never censused against what is live. On the train the filter diffs
-    # live..tip and skips cheaply when no parts path moved.
+      checks: read     # the reuse step reads the draft run's guards record (an annotation)
+    # Its filter diffs a BASE (the PR's base, or the train's live `before_sha`):
+    # on the train it diffs live..tip and skips cheaply when no parts path moved.
     # ready_for_review on an unchanged head SHA reuses the draft census.
     # Every PR push runs it (a draft included); deploy pushes and the Pages
     # train apply the live-diff filter.
@@ -1113,7 +1117,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_ACTION: ${{ github.event.action }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       # DOES THIS DIFF TOUCH THE CAR THE CENSUS PHOTOGRAPHS?
       #
@@ -1666,12 +1669,11 @@ jobs:
     name: Driving model (characterization traces)
     needs: [select]
     runs-on: ubuntu-latest
-    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
     # Also skipped when unit-plan says this diff does not need the characterization
     # (ci-verdict treats that skip as a pass). Not on the Pages call
     # (`concurrency_key` set; decision D2 in the CI selection plan,
     # PR #2560 §6): 0 train catches in 40 h; PRs and the nightly keep it.
-    if: ${{ (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && needs.select.outputs.driving == 'true') }}
+    if: ${{ (inputs.concurrency_key == '' && needs.select.outputs.driving == 'true') }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1681,6 +1683,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      checks: read     # the reuse step reads the draft run's guards record (an annotation)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1692,7 +1695,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_ACTION: ${{ github.event.action }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
         if: steps.reuse.outputs.reuse != 'true'
@@ -1999,11 +2001,9 @@ jobs:
     # and asks nothing a draft fast tier does not need. One runner, one
     # checkout, one npm ci, one queue hop in front of node rows, selected legs,
     # smoke, renderer-macos and xr alike — five job starts and a hop fewer per
-    # run (docs/notes/CI-CLOG-SURVEY-2026-10-15.md). The slice plan runs
-    # whenever the node matrix does (`fast_tier_run == ''`), so a dispatch
-    # without a diff still gets its --all plan; the spec selection keeps its
-    # own event test on the step.
-    if: ${{ (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}
+    # run (docs/notes/CI-CLOG-SURVEY-2026-10-15.md). The job and its slice plan
+    # always run, so a dispatch without a diff still gets its --all plan; the
+    # spec selection keeps its own event test on the step.
     # actions:read on top of the workflow default — the base-verdict step at the
     # end lists this workflow's runs on the deploy branch. A job that names
     # permissions gets ONLY what it names, hence contents too.
@@ -2174,7 +2174,6 @@ jobs:
       # level when none is (its `if:`).
       - name: Plan node unit slices
         id: plan
-        if: ${{ inputs.fast_tier_run == '' }}
         env:
           NEEDED_ONLY: ${{ github.event_name == 'pull_request' }}
           EVENT: ${{ github.event_name }}
@@ -2691,7 +2690,9 @@ jobs:
       # Marker and JUnit artifacts diagnose which planned shards ran. A failed
       # or cancelled shard remains red even when it failed before this marker.
       - name: Mark the run step reached
-        run: mkdir -p .selected-started && echo "${{ matrix.name }}" > .selected-started/marker.txt
+        env:
+          LEG: ${{ matrix.name }}
+        run: mkdir -p .selected-started && echo "$LEG" > .selected-started/marker.txt
       - name: Upload the run-step marker
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -2714,19 +2715,27 @@ jobs:
           # the per-circuit loops (CIRCUIT_FILTERED_TESTS) then run just those.
           # Empty = the whole fleet, which is every other diff.
           APEX_CIRCUITS: ${{ matrix.circuits }}
+          # The plan's values reach the shell as data, never as script text.
+          SHARD: ${{ matrix.shard }}
+          SPECS: ${{ matrix.specs }}
+          RETRIES: ${{ matrix.retries || 0 }}
         run: |
           # matrix.shard is set when shards() split a loop-expanded spec across
           # Playwright --shard=i/n jobs (tracks-walls ~63 tests). Empty for the
           # ordinary budgeted / single-file oversize rows.
           SHARD_FLAG=""
-          if [ -n "${{ matrix.shard }}" ]; then SHARD_FLAG="--shard=${{ matrix.shard }}"; fi
+          if [ -n "$SHARD" ]; then SHARD_FLAG="--shard=$SHARD"; fi
           # RETRIES COME FROM THE PLAN (R3-CI-HEALTH-4, 2026-10-10): 0 for every
           # leg, except a leg select-specs built for QUARANTINED specs only
           # (tests/data/flaky-quarantine.json), which gets 1 — so the
           # quarantine's pass-on-retry path exists here at all, and
           # APEX_FAIL_ON_FLAKY above still reds any un-quarantined flake. A
           # quarantined spec never shares a leg, so nothing else is retried.
-          npm test -- ${{ matrix.specs }} --retries=${{ matrix.retries || 0 }} --timeout=180000 --max-failures=3 $SHARD_FLAG
+          case "$RETRIES" in ''|*[!0-9]*) echo "::error::retries must be a number"; exit 2 ;; esac
+          # SPECS is a space-separated list of spec paths: split on purpose, no globbing.
+          set -f
+          # shellcheck disable=SC2086
+          npm test -- $SPECS --retries="$RETRIES" --timeout=180000 --max-failures=3 $SHARD_FLAG
       # The failing-spec carry-forward is written ONCE, by selected-verdict,
       # from every shard's junit (below). Each shard used to save it under one
       # shared key: run 37198214523's three `selected` jobs raced for
@@ -2777,8 +2786,9 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # THE GOLDEN-MENU CHECK. Blocking on scheduled/manual runs: a mismatch is
-  # evidence that the committed UI baseline is stale or the runner changed.
+  # THE GOLDEN-MENU CHECK. Blocking on scheduled/manual runs (ci-verdict needs
+  # it): a mismatch is evidence that the committed UI baseline is stale or the
+  # runner changed. The history below explains how it started as a trial.
   #
   # The header above already names `test:baseline` as the group that arguably
   # belongs in the gate and is not in it, and gives the reason: the six goldens
@@ -2945,9 +2955,11 @@ jobs:
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
 
   baseline-trial:
-    name: Golden menus on a runner (trial, non-blocking)
+    name: Golden menus on a runner (nightly)
     # Nightly and dispatches only (PRs until 2026-09-29, below): never a push,
-    # and never the Pages call, whose conclusion gates the deploy.
+    # and never the Pages call, whose conclusion gates the deploy. Where it
+    # runs it BLOCKS: ci-verdict needs it, so a golden mismatch turns the
+    # nightly's or the dispatch's `CI` red.
     #
     # THE COMMENT ABOVE WAS FALSE FOR SIX DAYS. A called workflow reports the
     # CALLER's event, so a "deploy now" train — pages.yml dispatched, calling
@@ -2994,15 +3006,15 @@ jobs:
           if-no-files-found: ignore
       - name: Verdict
         if: always()
+        env:
+          GOLDENS: ${{ steps.goldens.outcome }}
         run: |
-          if [ "${{ steps.goldens.outcome }}" = "success" ]; then
-            echo "GOLDENS MATCH on ubuntu-latest. One data point for step (b);"
-            echo "collect a few across PRs before routing renderer/lighting here."
+          if [ "$GOLDENS" = "success" ]; then
+            echo "GOLDENS MATCH on ubuntu-latest."
           else
-            echo "GOLDENS DIFFER on ubuntu-latest. This job is non-blocking and"
-            echo "the workflow stays green. Download the golden-menus-runner"
-            echo "artifact and compare -actual/-diff against the committed PNGs:"
-            echo "the IMAGES are the problem to solve before any routing change."
+            echo "GOLDENS DIFFER on ubuntu-latest, so this run's CI is red. Download"
+            echo "the golden-menus-runner artifact and compare -actual/-diff against"
+            echo "the committed PNGs: re-bless the images or fix the UI change."
           fi
 
   # THE STAGED BUILD BOOTS (#3110, 2026-10-19). Every other browser job serves
@@ -3082,9 +3094,10 @@ jobs:
   # needed job skipped by its `if:` is a pass here too, so each needed job
   # owns the rule for when skipping is honest (selected-verdict owns the
   # selected gate's — an empty or dropped plan — which is why it is needed
-  # here, not just `selected`). Branch protection requires `CI` and nothing
-  # else (Bryce, 2026-10-15; it was twelve names): it is the only check, and
-  # it carries the FAILURES of smoke, the sweeps, renderer-macos and xr, not their
+  # here, not just `selected`). The deploy branch's ruleset requires one
+  # commit status, `gate`, which land.yml posts after tools/ci/merge-gate.mjs
+  # reads this job's `CI` check (among its other rows); `CI` itself is not a
+  # required check. It carries the FAILURES of smoke, the sweeps, renderer-macos, xr and baseline-trial, not their
   # execution: only REQUIRE_SUCCESS (full-tier PR runs) must have run, and the
   # job summary lists executed vs skipped jobs (#3507).
   # tools/ci/ci-verdict.mjs.

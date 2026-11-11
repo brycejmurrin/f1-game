@@ -1,0 +1,105 @@
+name: Phone shots
+
+# PHONE SCREENSHOTS TO WORKERS (#5246, approved 2026-11-10). A cloud session's proxy answers
+# github.com/user-attachments/... with 403, so a screenshot the owner attaches to an issue or PR from his phone never
+# reached a worker. This job runs where GitHub attachments ARE reachable (a runner), copies the owner's attached images
+# with tools/ui/issue-shots.mjs and commits them under <n>/ on the orphan `phone-shots` branch. A worker reads them with
+# `node tools/ui/issue-shots.mjs <n> --branch` (docs/AGENT-SURFACE.md). The branch is never merged or deployed;
+# prune-branches.mjs keeps it by name. It grows by about 1 MB per screenshot.
+#
+# Trust. The trigger is issue text, so nothing from the event reaches a shell: the issue number, owner login and
+# body test ride `if:` expressions and `env:`, never `${{ }}` inside `run:`. The job runs only when the SENDER is the
+# repo owner and the text names a GitHub attachment host; the tool then keeps only images the owner wrote
+# (`--author`), only GitHub attachment URLs (`--attachments-only`), at most 20 images of at most 20 MB each, over
+# https only, and deletes any file whose header is not PNG/JPEG/GIF/WebP. File names are a hash of the URL. The code
+# that runs is the deploy tip's, never the event's: the checkout is pinned to the deploy branch.
+#
+# Least privilege: contents: write is the only grant (the push), and the step pushes the one explicit refspec
+# HEAD:refs/heads/phone-shots, never anything else. GitHub cannot scope a token to one branch; the deploy branch's
+# ruleset ("Deploy-reset") refuses this token there anyway. A push made with GITHUB_TOKEN starts no workflow run.
+# workflow_dispatch with an issue number re-copies one issue (a backfill, or a run that hit a flake).
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:   # zizmor: ignore[dangerous-triggers] owner-sent only; the body is never interpolated or run, the tool reads it as data from the deploy branch's checkout
+    types: [created, edited]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "issue or PR number to copy screenshots from"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phone-shots
+  cancel-in-progress: false
+
+jobs:
+  copy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.sender.login == github.repository_owner &&
+       (contains(github.event.comment.body || github.event.issue.body, 'github.com/user-attachments/') ||
+        contains(github.event.comment.body || github.event.issue.body, 'user-images.githubusercontent.com/')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # The tool imports only node builtins and tools/lib (no npm install).
+      - name: Copy the owner's attached images
+        id: copy
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          case "$ISSUE" in ''|*[!0-9]*) echo "not an issue number: $ISSUE"; exit 2;; esac
+          out="$RUNNER_TEMP/shots/$ISSUE"
+          set +e
+          node tools/ui/issue-shots.mjs "$ISSUE" --author "$OWNER" --attachments-only --out "$out" | tee -a "$GITHUB_STEP_SUMMARY"
+          code=${PIPESTATUS[0]}
+          set -e
+          # 0 = at least one saved, 1 = none on the issue (nothing to do), 3 = every download failed.
+          if [ "$code" = 1 ]; then echo "found=0" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$code" != 0 ]; then exit "$code"; fi
+          echo "found=1" >> "$GITHUB_OUTPUT"
+      - name: Commit them to the phone-shots branch
+        if: steps.copy.outputs.found == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+        run: |
+          set -euo pipefail
+          case "$ISSUE" in ''|*[!0-9]*) echo "not an issue number: $ISSUE"; exit 2;; esac
+          work="$RUNNER_TEMP/phone-shots"
+          git init -q "$work"
+          cd "$work"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          remote="https://github.com/$GITHUB_REPOSITORY"
+          if git -c "http.https://github.com/.extraheader=$auth" fetch -q --depth=1 "$remote" refs/heads/phone-shots; then
+            git checkout -q -B phone-shots FETCH_HEAD
+          else
+            git checkout -q --orphan phone-shots
+            printf '%s\n' "Phone screenshots copied from issue attachments by .github/workflows/phone-shots.yml (#5246)." \
+              "One folder per issue/PR number. Read: node tools/ui/issue-shots.mjs <n> --branch. Never merged." > README.md
+            git add README.md
+          fi
+          mkdir -p "$ISSUE"
+          cp "$RUNNER_TEMP/shots/$ISSUE"/shot-* "$ISSUE"/
+          git add -- "$ISSUE"
+          if git diff --cached --quiet; then echo "no new image for #$ISSUE"; exit 0; fi
+          git -c user.name="apex-phone-shots-bot" -c user.email="noreply@anthropic.com" \
+            commit -q -m "phone-shots: #$ISSUE from run $GITHUB_RUN_ID"
+          git -c "http.https://github.com/.extraheader=$auth" push -q "$remote" HEAD:refs/heads/phone-shots
+          echo "pushed #$ISSUE to phone-shots: $(git rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"

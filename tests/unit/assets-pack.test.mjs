@@ -1263,7 +1263,7 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
     assert.ok(m.materials.layers.length >= 10, "expected the SCALES table layers");
     for (const L of m.materials.layers) {
       assert.equal(L.licence, "Apex26-Procedural", `${L.id} must be procedural`);
-      assert.match(L.source, /^procedural:/);
+      assert.equal(L.source, "procedural:tools/gen/assets.mjs");
     }
     assert.ok(m.models.keep, "bake-synthetic must preserve models");
     assert.ok(m.env["*|day"], "bake-synthetic must preserve env");
@@ -1572,12 +1572,17 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.deepEqual(lowControl.uploads[0].brick,
       [...decodePNG(fs.readFileSync(path.join(dir, man.materials.low.albedo))).rgba.subarray(2 * 4 * 4 * 4, 3 * 4 * 4 * 4)]);
     const oldLow = fs.readFileSync(path.join(dir, man.materials.low.albedo));
-    // #4702: GRAPHICS: HIGH on a phone lifts the pack to the high tier; MEDIUM stays low.
+    // #5225: on a phone only GRAPHICS: LOW keeps the low tier; MEDIUM (the phone
+    // default) and HIGH take the high tier (#4702 lifted HIGH alone).
     const onHigh = await readMobile({ GfxQuality: { current: () => "high" } });
     assert.equal(onHigh.state.tier, "high");
     assert.equal(onHigh.uploads[0].size, 8);
     const onMedium = await readMobile({ GfxQuality: { current: () => "medium" } });
-    assert.equal(onMedium.state.tier, "low");
+    assert.equal(onMedium.state.tier, "high", "a phone on GRAPHICS: MEDIUM takes the 256 px tier (#5225)");
+    assert.equal(onMedium.uploads[0].size, 8);
+    const onLow = await readMobile({ GfxQuality: { current: () => "low" } });
+    assert.equal(onLow.state.tier, "low", "GRAPHICS: LOW on a phone keeps the 128 px tier");
+    assert.equal(onLow.uploads[0].size, 4);
 
     // Retain another layer's provenance plus unrelated records during a patch.
     const other = { mat: 1, id: "concrete", scale: 1.25, source: "procedural:keep", licence: "CC0", author: "Fixture" };
@@ -1610,7 +1615,7 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     const verified = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "verify"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8", timeout: 10000 });
     assert.equal(verified.status, 0, verified.stderr || verified.stdout);
-    assert.match(verified.stdout, /verify: OK/);
+    assert.equal(verified.stdout, "pack: 0 KB / 8 MB budget\nverify: OK\n");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -2125,7 +2130,7 @@ test("unknown bake flag is refused before rewriting the pack", () => {
   const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
     { encoding: "utf8" });
   assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
-  assert.match(r.stderr, /unknown flag --dry-run/, `expected unknown-flag error, got:\n${r.stderr}`);
+  assert.equal(r.stderr, "error: unknown flag --dry-run (accepted: --size --models)\n", `expected unknown-flag error, got:\n${r.stderr}`);
 });
 
 test("assets.mjs --help prints usage and exits 0", () => {

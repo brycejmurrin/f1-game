@@ -1,6 +1,8 @@
 # Agent surface reset — plan and evidence (2026-11-03)
 
-Status: IN PROGRESS on branch `cursor/agent-surface-reset-7f3a` (one PR, every layer). Bryce, 2026-11-03, in the
+Status: **SHIPPED** (re-checked against the tree 2026-11-10) — the one-PR reset landed: the retention tool tools/docs/knowledge-gc.mjs, the decision ledger docs/DECISIONS.md (D-001) and the steward skill exist; the branch named below is gone. Kept here, not archived: files owned by other lanes cite this path (audit W27, 2026-11-10).
+
+Earlier status: IN PROGRESS on branch `cursor/agent-surface-reset-7f3a` (one PR, every layer). Bryce, 2026-11-03, in the
 reviewing session: "Let's fix all and add/edit new skills agents and any changes within one pr" — the grant for the
 hook, settings and memory edits below (recorded as D-001 in ./docs/DECISIONS.md). Paths written as `./x` do not exist
 yet at the time of this commit; they are created by this PR. The review reports this plan summarises were produced in

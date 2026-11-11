@@ -118,7 +118,7 @@ window.MenuNav = (function () {
   function wheelPx(e) {
     let d = e.deltaY;
     if (e.deltaMode === 1) d *= LINE_PX;
-    else if (e.deltaMode === 2) d *= window.innerHeight * PAGE_FRAC;
+    else if (e.deltaMode === 2) d *= (document.documentElement.clientHeight || window.innerHeight) * PAGE_FRAC;
     return d;
   }
 
@@ -608,7 +608,7 @@ window.MenuNav = (function () {
       }
       const sign = key === "PageDown" ? 1 : -1;
       const pane = region ||
-        nearestPane(layer, window.innerWidth / 2, window.innerHeight / 2, sign);
+        nearestPane(layer, (document.documentElement.clientWidth || window.innerWidth) / 2, (document.documentElement.clientHeight || window.innerHeight) / 2, sign);
       // scrollPane takes VIEWPORT px (it divides by the pane's zoom), but
       // clientHeight is local — feed it local×zoom or a page step travels
       // local/zoom² of the pane: 225% at UI SIZE 40% (1.35 pane-heights

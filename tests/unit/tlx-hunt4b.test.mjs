@@ -531,12 +531,18 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
   const W1 = mk(THREE, TSL, renderer, scene, camera, lit, post, shadowSys, { getItem: (k) => (k in ls ? ls[k] : null) },
     globalThis.Log, soft, noEnv);
   const calls = [];
+  // r187 scissors a bound target by the TARGET's scissorTest (Renderer._renderScene); the backend's updateScissor
+  // runs only when the render context it built has scissor on, so it is the effective-scissor witness.
+  const be = renderer.backend, upd = be.updateScissor.bind(be);
+  let effScissor = 0;
+  be.updateScissor = (rc) => { effScissor++; return upd(rc); };
   const base = renderer.render.bind(renderer);
   renderer.render = (sc, cam) => {
-    const tg = renderer.getRenderTarget();
-    calls.push({ tg, test: renderer.getScissorTest(), sc: tg ? tg.scissor.clone() : null, ac: renderer.autoClear,
-      mrt: renderer.getMRT(), name: tg && tg.texture ? tg.texture.name : null, size: tg ? [tg.width, tg.height] : null });
-    return base(sc, cam);
+    const tg = renderer.getRenderTarget(), e0 = effScissor;
+    const rec = { tg, test: tg ? tg.scissorTest : renderer.getScissorTest(), sc: tg ? tg.scissor.clone() : null, ac: renderer.autoClear,
+      mrt: renderer.getMRT(), name: tg && tg.texture ? tg.texture.name : null, size: tg ? [tg.width, tg.height] : null, eff: 0 };
+    calls.push(rec);
+    try { return base(sc, cam); } finally { rec.eff = effScissor - e0; }
   };
   const warm = async () => { W1.startProgramWarm({ ssao: 0.5, bloom: 0.5, godray: 0, reflect: 0.2, exposure: 1 }); await W1.pending(); };
   return { renderer, post, W1, calls, warm, fg };
@@ -558,12 +564,16 @@ test("A-W1: the warm's last stage DRAWS the scene, the post chain, the mirror an
   }
   const sc = h.calls.filter((c) => c.tg === sceneRT);
   assert.equal(sc.length, 1, "the scene, once, into the live scene target");
-  assert.equal(sc[0].test, true, "under the scissor test");
+  assert.equal(sc[0].test, true, "under the TARGET's scissor test (r187 ignores renderer.setScissorTest for a bound target)");
+  assert.ok(sc[0].eff >= 1, "three built a scissored render context: the backend applied the 1x1 rect");
   assert.deepEqual(sc[0].sc.toArray(), [0, 0, 1, 1], "a 1x1 scissor");
   assert.equal(sc[0].mrt, h.W1.mrtNode(), "with the ssrTag MRT exactly as present() sets it");
   const postDraws = h.calls.filter((c) => c.tg !== sceneRT && c.name !== "TLXWarmCast.color" && c.tg.width > 4);
   assert.ok(postDraws.length >= 3, `the post chain's passes, each into its own target (${postDraws.length})`);
-  for (const c of postDraws) { assert.equal(c.test, true); assert.deepEqual(c.sc.toArray(), [0, 0, 1, 1]); }
+  for (const c of postDraws) {
+    assert.equal(c.test, true, "each post target's own scissorTest"); assert.deepEqual(c.sc.toArray(), [0, 0, 1, 1]);
+    assert.ok(c.eff >= 1, "the backend applied the post pass's 1x1 scissor");
+  }
   assert.equal(h.calls.filter((c) => c.size[0] === 4 && c.size[1] === 4).length, 1, "the mirror's world into a 4x4 copy of mirRT's state");
   assert.ok(h.calls.every((c) => c.tg !== h.W1.mirRT()), "never the live mirror target (a lite rung may composite it before it re-renders)");
   const casts = h.calls.filter((c) => c.name === "TLXWarmCast.color");
@@ -572,7 +582,11 @@ test("A-W1: the warm's last stage DRAWS the scene, the post chain, the mirror an
   assert.equal(h.renderer.autoClear, true, "autoClear restored");
   assert.equal(h.renderer.getScissorTest(), false, "scissor test restored");
   assert.deepEqual(sceneRT.scissor.toArray(), [0, 0, 320, 180], "the scene target's scissor restored");
-  for (const c of postDraws) assert.deepEqual(c.tg.scissor.toArray(), [0, 0, c.tg.width, c.tg.height], "each post target's scissor restored");
+  assert.equal(sceneRT.scissorTest, false, "the scene target's scissorTest restored");
+  for (const c of postDraws) {
+    assert.deepEqual(c.tg.scissor.toArray(), [0, 0, c.tg.width, c.tg.height], "each post target's scissor restored");
+    assert.equal(c.tg.scissorTest, false, "each post target's scissorTest restored");
+  }
   assert.equal(h.renderer.getRenderTarget(), target0, "target restored");
   assert.equal(h.renderer.getMRT(), mrt0, "MRT restored");
   const d = h.W1.stages.drawn;

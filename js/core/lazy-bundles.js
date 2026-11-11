@@ -754,6 +754,32 @@ function loadAgentSurface() {
   })();
   return _agentLoad;
 }
+// SETTINGS > CLAUDE LINK (#5259): the door loads js/agent/bridge-link.js ALONE (a LAZY_AGENT file; the shared
+// `loaded` set keeps loadAgentSurface from injecting it twice) and opens its panel. The rest of the agent surface
+// is fetched only when the player taps LINK there. Resolves false when the file could not load.
+let _bridgeLinkLoad = null;
+function openBridgeLink() {
+  if (!_bridgeLinkLoad) {
+    _bridgeLinkLoad = Promise.resolve(loadBackendScripts(AGENT_FILES.filter((f) => /\/bridge-link\.js$/.test(f)), [], { loaded: agentScriptsLoaded }))
+      .then(() => typeof BridgeLink !== "undefined", () => false)
+      .then((ok) => { if (!ok) _bridgeLinkLoad = null; return ok; });
+  }
+  return _bridgeLinkLoad.then((ok) => ok && BridgeLink.open({ loadAgentSurface }));
+}
+// The door is built here, not in index.html: the shell's node count is a shrink-only ratchet (BENCHMARK's door,
+// js/perf/bench-run.js mount, does the same). css/settings-controls.css makes it fixed-size chrome.
+function mountBridgeLinkDoor() {
+  const hub = typeof document !== "undefined" && document.getElementById ? document.getElementById("pm-settings-index") : null;
+  if (!hub || !document.createElement || document.getElementById("pm-claude-link")) return;
+  const door = document.createElement("button"), small = document.createElement("small");
+  door.id = "pm-claude-link"; door.type = "button"; door.textContent = "CLAUDE LINK\u2026";
+  small.textContent = "Let a Claude session read this app through a GitHub issue";
+  door.appendChild(small);
+  door.addEventListener("click", () => {
+    openBridgeLink().then((ok) => { if (!ok) small.textContent = "Could not load. Check the connection, then tap again."; });
+  });
+  hub.appendChild(door);
+}
 async function bootAgentSurface() {
   if (!wantAgentSurface()) return;
   try { await loadAgentSurface(); }
@@ -941,7 +967,8 @@ function bootDesktopAudio() {
 
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
-return { ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+mountBridgeLinkDoor();
+return { openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

@@ -662,7 +662,7 @@ function loadSetupUi(opts = {}) {
     $: (id) => dom.byId(id), els: { select: dom.byId("select"), overlay: dom.byId("overlay") },
     cssCol: () => "#fff", store: { get: (k, d) => (k === "garageTab" ? "livery" : d), set() {} },
     arrToHex: () => "#112233", hexToArr: () => [0.1, 0.2, 0.3],
-    getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => "default", saveLiveryId() {},
+    getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: opts.getLiveryId || (() => "default"), saveLiveryId() {},
     getCustomLiveries: opts.getCustomLiveries || (() => []),
     setCustomLiveries() {},
     getLiveries: opts.getLiveries || (() => []),
@@ -685,6 +685,7 @@ function loadSetupUi(opts = {}) {
   };
   // Optional matchMedia so the factory-fold desktop/phone default is testable.
   if (opts.matchMedia) extra.matchMedia = opts.matchMedia;
+  if (opts.timers) { extra.setTimeout = opts.timers.set; extra.clearTimeout = opts.timers.clear; }
   const sb = sandbox(dom, extra);
   vm.runInNewContext(src("js/garage/setup-experiments.js"), sb, { filename: absSrc("js/garage/setup-experiments.js") });
   vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
@@ -804,6 +805,37 @@ test("garage: livery grid search + factory fold (#3339)", () => {
   phone.ui.buildSetup();
   assert.equal(phone.$("cs-options").querySelector("details.cs-liv-factory").open, false,
     "phone keeps the factory fold collapsed");
+});
+
+test("garage: the livery search resets on close and team change, keeps FITTED, and a stale debounce never rebuilds (#4928)", () => {
+  const factory = [];
+  for (let i = 0; i < 6; i++) factory.push({ id: i ? "f" + i : "default", name: (i === 2 ? "Gold " : "Paint ") + i, c1: [1, 0, 0], c2: [0, 0, 1] });
+  const pending = new Map(); let seq = 0;
+  const timers = { set: (fn) => { pending.set(++seq, fn); return seq; }, clear: (id) => { pending.delete(id); } };
+  const { dom, ui, G, $, observers } = loadSetupUi({ getLiveries: () => factory, getLiveryId: () => "f4", timers });
+  const mo = observers.find((o) => o.target === $("carsetup"));
+  const rows = () => $("cs-options").querySelectorAll("button").filter((b) => b.dataset.csLivery).map((b) => b.dataset.csLivery);
+  ui.openSetup(); empty(dom, "cs-options"); ui.buildSetup();
+  const search = $("cs-options").querySelector(".cs-liv-search");
+  search.value = "gold"; search.oninput();
+  assert.equal(pending.size, 1, "one debounce armed");
+  empty(dom, "cs-options"); ui.buildSetup();
+  assert.equal(pending.size, 0, "any rebuild cancels the stale debounce");
+  assert.deepEqual(rows().sort(), ["f2", "f4"], "the query filters, but the FITTED row stays");
+  // A keystroke, then CREATE inside 120 ms: the debounce must not rebuild the editor.
+  $("cs-options").querySelector(".cs-liv-search").oninput();
+  $("cs-options").querySelector(".cs-liv-create").onclick();
+  for (const fn of pending.values()) fn();
+  assert.ok($("cs-options").querySelector(".cs-liv-editor"), "editor still open");
+  // Close the garage: the query dies with the visit.
+  $("carsetup").hidden = true; mo.cb([]);
+  empty(dom, "cs-options"); ui.buildSetup();
+  assert.equal($("cs-options").querySelector(".cs-liv-search").value, "", "search box empty on the next visit");
+  assert.equal(rows().length, 6, "unfiltered: every livery is listed again (fold included)");
+  // Team change resets it too.
+  $("cs-options").querySelector(".cs-liv-search").value = "gold"; $("cs-options").querySelector(".cs-liv-search").oninput();
+  G.teamIdx = 2; empty(dom, "cs-options"); ui.buildSetup();
+  assert.equal($("cs-options").querySelector(".cs-liv-search").value, "", "a team change clears the query");
 });
 
 test("career hub: the round's brief is three pressable choices, with the taken one marked", () => {

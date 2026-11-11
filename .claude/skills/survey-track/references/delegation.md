@@ -7,7 +7,7 @@ Circuit <id>, target <year/layout>. Start SHA <sha>.
 Evidence (ABSOLUTE main-checkout paths — scratch/ is gitignored and absent from your worktree; Read them there):
   <main-checkout>/scratch/survey-track/<id>/evidence.json
   <main-checkout>/scratch/captures/survey-track/<id>/
-OWNED (the only writes the edit hook allows): js/circuits/<id>.js, js/circuits/scenery/<id>.js, plus scratch/ and artifacts/
+OWNED (the edit hook allows only circuit pairs, scratch/ and artifacts/; this id is bound at hand-back): js/circuits/<id>.js, js/circuits/scenery/<id>.js, plus scratch/ and artifacts/
 FORBIDDEN: js/track/**, js/render/**, assets/pack/**, tests/**, docs/** (incl. docs/tracks/<id>.md), any other circuit, generated files
 Goal: <3-5 observable improvements, each with an evidence id>
 Done when: node tools/track/verify-track.cjs <id> passes; hand back the diff summary,

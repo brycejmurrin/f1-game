@@ -28,14 +28,13 @@ const GLXBackend = (function () {
   //
   // The eager GLX facade owns the single device sniff, ahead of eval-time
   // consumers and deferred renderers. Read that tier rather than re-sniffing.
-  // A capable phone can opt into the desktop-quality tier (full DPR + MSAA +
-  // full-res atlases + 2048 shadows) via the pause-menu GRAPHICS: HIGH setting.
-  // Default OFF — the safe tier is what keeps memory-limited devices alive.
+  // A phone is ALWAYS the memory-safe tier: the facade sets mobileTier = isMobile and
+  // no GRAPHICS preset lifts it (the old GRAPHICS: HIGH opt-in to full DPR is gone).
   const IS_MOBILE = GLX.isMobile;
   // INSTANCE CELL-SET CULL CACHE — owned by js/render/shared/inst-cells.js
   // (apex26.instCellCache=0 escape hatch). Numbers: docs/PERF-FINDINGS.md 2c.
-  // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
-  // key off this, so HIGH restores full quality (a reload re-runs init with it).
+  // MOBILE TIER = any phone (GLX.mobileTier === GLX.isMobile). All the memory
+  // downgrades, the 1.5 DPR cap included, key off this; no setting restores them.
   const MOBILE_TIER = GLX.mobileTier;
   let _ctxLost = false, _lossCounted = false;   // lost→restore; counted loss arms ctxLostNotice (#3513)
   // Past the ctx-loss reload budget: record for __apex.diag() without painting

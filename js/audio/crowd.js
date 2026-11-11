@@ -71,7 +71,7 @@ var CrowdAudio = (function () {
   let standTrack = null;
   let wrapped = false;
   let _orig = null;
-  let idled = false;             // LAB audioIdle: bed + cheers unplugged from the bus
+  let idled = false;             // audio idle (#5053): bed + cheers unplugged from the bus
 
   function context() {
     if (host && typeof host.context === "function") return host.context();
@@ -118,7 +118,7 @@ var CrowdAudio = (function () {
     idled = false;
   }
 
-  // LAB audioIdle (engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // Audio idle, on by default (#5053; engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
   // idle(true) unplugs the bed gain and every cheer gain from the bus once
   // silence() has faded them; idle(false) plugs them back. Same nodes, same ctx.
   function idle(on) {
@@ -290,11 +290,13 @@ var CrowdAudio = (function () {
     return best;
   }
 
-  function fireCheer(peak, dur) {
+  // `once`: a once-per-race event (the chequered flag) that the spacing gap must
+  // not swallow. It still needs a free voice and a live race.
+  function fireCheer(peak, dur, once) {
     if (!cheers || !cheers.length || !actx) return false;
     if (!sfxOk() || !liveOk()) return false;
     const t0 = now();
-    if (t0 - lastCheerT < CHEER_MIN_GAP * 0.35) return false;
+    if (!once && t0 - lastCheerT < CHEER_MIN_GAP * 0.35) return false;
     let v = null;
     for (let i = 0; i < cheers.length; i++) {
       if (cheers[i].freeAt <= t0) { v = cheers[i]; break; }
@@ -338,7 +340,12 @@ var CrowdAudio = (function () {
     if (player.finished && !sawFinish) {
       sawFinish = true;
       swell(0.09, 2.2);
-      fireCheer(CHEER_PEAK, 0.9);
+      // THE FLAG'S OWN CHEER, past the spacing gap (`once`). The swell's cheer
+      // just set lastCheerT, so the gap always refused this one; and when a
+      // grandstand or position cheer had fired in the 0.84 s before the line,
+      // the gap refused the swell's cheer too and the flag got no cheer at all.
+      // Now it layers on the swell's cheer, or stands alone when that was spaced out.
+      fireCheer(CHEER_PEAK, 0.9, true);
     }
     if (!player.finished) sawFinish = false;
     if (pos > 0) lastPos = pos;

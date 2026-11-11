@@ -44,7 +44,7 @@ const Parts = (function () {
           desc: "Audi 2026 power unit — strong braking recovery and mid-range punch",            speed: 1.07, accel: 1.12, braking: 1.06, visual: {"in": 1.48, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 0.76, shoulderHeight: 0.92, undercut: 1.28, coke: 1.30, tailWidth: 0.76, coverHeight: 1.12, scoopLip: 2}, visualTier: 2 },
         // Non-exclusive upgrades above factory level
         { id: "torque_curve",  label: "Torque Curve",  cost:  40, desc: "Rebalanced mapping — strong traction out of slow corners",        accel: 1.06, cornering: 1.03, visual: {"in": 1.0, "inlet": 1, "outlet": 1, podWidth: 0.98, shoulderHeight: 1.04, undercut: 1.02, coke: 1.06, tailWidth: 0.95, coverHeight: 1.00, chimney: 0, servicePanel: 2, heatShield: 1}, visualTier: 1 },
-        { id: "hybrid_max",    label: "Hybrid Max",    cost: 150, desc: "Full MGU-K/H synergy — broad power gains across all four metrics", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: {"in": 1.3, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.08, shoulderHeight: 1.15, undercut: 0.89, coke: 0.95, tailWidth: 1.06, coverHeight: 1.13, chimney: 1, servicePanel: 2, heatShield: 0}, visualTier: 2 },
+        { id: "hybrid_max",    label: "Hybrid Max",    cost: 150, desc: "Full MGU-K harvest and deploy — broad power gains across all four metrics", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: {"in": 1.3, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.08, shoulderHeight: 1.15, undercut: 0.89, coke: 0.95, tailWidth: 1.06, coverHeight: 1.13, chimney: 1, servicePanel: 2, heatShield: 0}, visualTier: 2 },
         { id: "sig_mercedes_zero", label: "Downwash PU", cost: 150, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "hybrid_max",
           desc: "Mercedes signature compact installation — Hybrid Max performance in a tighter cooling form", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: { in: 1.40, snork: 1, twin: 1, inlet: 2, outlet: 3, podWidth: 0.90, shoulderHeight: 0.94, undercut: 1.22, coke: 1.18, tailWidth: 0.84, coverHeight: 0.92 , scoopLip: 2}, visualTier: 2 },
         { id: "quali_engine",  label: "Quali Mode",    cost: 195, desc: "Unrestricted qualifying spec — peak power, no thermal limits",    speed: 1.10, accel: 1.09, braking: 0.97, visual: {"in": 1.65, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.20, shoulderHeight: 1.24, undercut: 0.78, coke: 0.84, tailWidth: 1.18, coverHeight: 1.22, chimney: 3, servicePanel: 4, heatShield: 2}, visualTier: 2 },
@@ -178,7 +178,8 @@ const Parts = (function () {
         // carbon colour in car3d — correct enough for a steel disc carrying pad
         // transfer, and not a knob this file can separate.
         { id: "drilled",     label: "Drilled Steel",    cost:  25, desc: "Cross-drilled steel discs — improved heat management",                      braking: 1.05, visual: {"cal": null, "duct": 0.72, caliperPos: 0, coverOpen: 1, rotor: 1, rotorScale: 1.06, discFace: 1}, visualTier: 1 },
-        { id: "sport",       label: "Sport",            cost:  40, desc: "Improved pads and discs",                                                   speed: 0.99, braking: 1.08, visual: {"cal": [0.95, 0.45, 0.05], "duct": 0.95, caliperPos: 0.9, coverOpen: 1, rotor: 1, rotorScale: 1.00, scoop: 0, caliper: 1}, visualTier: 2 },
+        // own: ownership key, "sport" is also a suspension id (#5043)
+        { id: "sport",       own: "sport_brakes", label: "Sport", cost:  40, desc: "Improved pads and discs",                                                   speed: 0.99, braking: 1.08, visual: {"cal": [0.95, 0.45, 0.05], "duct": 0.95, caliperPos: 0.9, coverOpen: 1, rotor: 1, rotorScale: 1.00, scoop: 0, caliper: 1}, visualTier: 2 },
         // Light alloy: the smallest disc on the ladder behind a solid cover, and
         // the caliper swung round to ~155° for the mass distribution the desc
         // sells. rotorScale 0.92 is a 25 mm radius cut — past the 20 mm floor on
@@ -737,6 +738,7 @@ const Parts = (function () {
     const eq = cat.options.find((o) => o.id === eqId);
     const opt = Object.assign({}, eq, { id, label, tag: "STYLE", equivalent: eqId,
       desc: `${eq.label} performance — ${look}`, visual: Object.assign({}, eq.visual, visual) });
+    delete opt.own;   // a STYLE row owns its own id
     cat.options.push(opt);
   }
 
@@ -844,13 +846,21 @@ const Parts = (function () {
   // The installed predicate itself, so a caller that must read the WORKS build
   // outside the era (CareerAiDev.worksSetup) can put the exact ruleset back.
   function legality() { return _legal; }
+  // Ownership key: owned lists have no category, so a repeated paid id carries a
+  // unique `own`; fitted ids keep the plain id (#5043, career-parts-regs.test.mjs).
+  function ownId(opt) { return opt ? (opt.own || opt.id) : null; }
+  function ownIdOf(catId, id) {
+    const cat = CATALOG.find((c) => c.id === catId);
+    const opt = cat && cat.options.find((o) => o.id === id);
+    return opt ? ownId(opt) : id;
+  }
   function isOptionAvailable(opt, team, owned) {
     const ctx = teamContext(team);
     const suppliers = opt.suppliers || (opt.supplier ? [opt.supplier] : null);
     const teams = opt.teams || (opt.team ? [opt.team] : null);
     if (suppliers && !suppliers.includes(ctx.engine)) return false;
     if (teams && !teams.includes(ctx.id)) return false;
-    if (owned && !owned.has(opt.id)) return false;
+    if (owned && !owned.has(ownId(opt))) return false;
     if (_legal && !_legal(opt)) return false;
     return true;
   }
@@ -1043,7 +1053,7 @@ const Parts = (function () {
   return {
     optLabel, catLabel,
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
-    resolveSetup, isOptionAvailable,
+    resolveSetup, isOptionAvailable, ownId, ownIdOf,
     getFactorySetup, factoryKey,
     getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
     setLegality, legalityKey, legality,

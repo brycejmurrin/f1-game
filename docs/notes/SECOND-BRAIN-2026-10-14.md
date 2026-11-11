@@ -1,5 +1,7 @@
 # Second brain — Obsidian and agent memory, weighed (2026-10-14)
 
+Summary: Obsidian and agent-memory tools (Basic Memory, Mem0, Zep/Graphiti, Letta, MCP memory, Notion, Logseq) weighed for an agent fleet: keep knowledge in git, Obsidian as a human viewer only; the context-rot and memory-poisoning evidence behind the hidden-Unicode, memory `source:` and `Supersedes:` guards.
+
 Research behind the knowledge guards in `tests/unit/agent-config.test.mjs` (hidden-Unicode, memory `source:`) and `tests/unit/docs-integrity.test.mjs` (`Supersedes:` pairs). Three parallel web passes (Obsidian for agents, memory tools, knowledge practice) plus `AGENT-MEMORY.md`; the backlog half is `AGENT-WORK-TRACKING-2026-10-14.md` (PR #1519). Sources inline; nothing below was measured on this box except the repo facts named.
 
 **Shipped from Step 1 (2026-10-14):** the hidden-character test, the `source:` check, the two-way `Supersedes:` / `Superseded by:` check, `.obsidian/` gitignored, and a monthly knowledge-audit Routine.

@@ -24,7 +24,7 @@
  * js/ or css/ edit to the whole tooling-fast group (see its RULES).
  *
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
- *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
+ *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy> (else local <deploy>; neither: exit 4), untracked files included: affected files only
  *   node tools/ci/tooling-fast.mjs --changed --no-sync-shortcut  # a HEAD that is a pure deploy-tip merge selects gen:check + docs only; this selects the branch diff (preflip-probe)
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
@@ -61,7 +61,7 @@ import { randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, changedWithUntracked, noDeployBaseMessage, resolveDeployBase } from "../lib/changed-files.mjs";
 import { loadGroups, filesOnly } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
 import { verificationIdentity, beginVerification, finishVerification, verificationMarker } from "./verification-receipt.mjs";
@@ -653,14 +653,33 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
   return out;
 }
 
-/** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
-function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
-  try {
-    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
-    return changedPaths([base], { cwd: root });
-  } catch (_) {
-    try { return changedPaths(["HEAD~1"], { cwd: root }); } catch (_) { return []; }
+/** Changed paths vs the deploy branch: the merge-base with origin/DEPLOY_BRANCH (else the local DEPLOY_BRANCH),
+ *  working tree included, untracked files too (a new file is invisible to `git diff` before `git add`, and the
+ *  AGENTS.md loop runs `--changed` before staging). Throws `code: "NO_DEPLOY_BASE"` when neither ref resolves: the
+ *  old HEAD~1 fallback selected the LAST COMMIT's files on a shallow clone and reported green for the branch
+ *  (audit W6, 2026-11-10). @returns {{ base: { ref: string, sha: string }, paths: string[] }} */
+export function changedVsDeploy(root = ROOT, { branch = DEPLOY_BRANCH, run } = {}) {
+  const gitOpts = run ? { cwd: root, run } : { cwd: root };
+  const base = resolveDeployBase(branch, gitOpts);
+  if (!base) {
+    const err = new Error(noDeployBaseMessage(branch, "tooling-fast"));
+    err.code = "NO_DEPLOY_BASE";
+    throw err;
   }
+  return { base, paths: changedWithUntracked(base.sha, gitOpts) };
+}
+
+/** The tooling-fast files ci.yml's four Structural guards shards ran for this diff: the whole floor when
+ *  guardsScope says full, else exactly the `--changed` selection (sync-merge shortcut included). run-group.mjs
+ *  `--skip-tf` subtracts THIS, not the whole floor: subtracting every tooling-fast member while guards ran a
+ *  selection left game-vm, physics-characterization-vm, real-replay-vm (and more) in no PR job (audit W6).
+ *  @returns {{ mode: "full" | "changed", reason: string, files: string[] }} */
+export function guardsRanFiles(changed, eventName, opts = {}) {
+  const scope = guardsScope(changed, eventName);
+  const floor = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
+  if (scope.mode === "full") return { ...scope, files: floor };
+  const meta = opts.synced ? selectSyncMerge(opts.synced, opts) : selectToolingFastChanged(changed, opts);
+  return { ...scope, files: meta.files, selection: meta.reason };
 }
 
 /**
@@ -707,7 +726,6 @@ export const GENERATED_FILES = Object.freeze({
   "docs/agent-index.json": { source: "tools/docs/gen-agent-index.mjs", always: true },
   "docs/agent-output/catalog.json": { source: "tools/gen/gen-output-surface.mjs", always: true },
   "docs/AGENT-HOOKS.md": { source: ".claude/hooks/*", always: true },
-  "docs/TESTING-COVERAGE.md": { source: "tests/groups.json", always: true },
   "tools/README.md": { source: "tools/**/@doc headers", always: true },
   "CHANGELOG.md": { source: "docs/changelog.d/*", always: true },
   "tools/shot/scenery-locations.json": { source: "js/circuits/scenery/*", always: true },
@@ -802,11 +820,65 @@ export function syncMergePaths(root = ROOT, opts = {}) {
   }
 }
 
-/** Selection for a pure sync merge: `gen:check` plus the docs tests. */
+/** deploy.mjs's `REGEN_MESSAGE`: the commit `regenerateDerived` adds on top of a sync merge (prepush-floor.test.mjs pins them equal). */
+export const SYNC_REGEN_SUBJECT = "merge: regenerate derived files on the union (npm run gen)";
+
+/**
+ * A deploy-tip sync, pure or not, with the paths the MERGE itself decided (2026-11-10, docs/notes/TOOLING-HUNT-2026-11-09.md).
+ * `syncMergePaths` is all-or-nothing: one regenerated digest (tools/shot/scenery-locations.json on 8 of 14 real syncs)
+ * or one auto-merged file sent the sync back to the whole branch diff, which the push before it had already verified.
+ * Here HEAD is the sync merge, or deploy.mjs's regen commit right on top of it, and `impure` is every path whose merged
+ * content neither side verified: a path BOTH sides changed since the merge base (auto-merged, hand-resolved, or one
+ * side dropped) and a path whose content is not the tip's (regenerated or hand-edited in the merge).
+ * Same refusals as syncMergePaths: a dirty tree, a second parent off the deploy branch, a HEAD already on it.
+ * LOCAL ONLY: the CLI ignores it under GITHUB_ACTIONS, so CI's proof of the pushed head is unchanged.
+ * @returns {{ paths: string[], impure: string[] }|null}
+ */
+export function syncMergeScope(root = ROOT, opts = {}) {
+  const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    if (git("status", "--porcelain")) return null;
+    let merge = "HEAD";
+    let parents = git("rev-list", "--parents", "-n", "1", merge).split(/\s+/).slice(1);
+    if (parents.length === 1 && git("log", "-1", "--format=%s", "HEAD") === SYNC_REGEN_SUBJECT) {
+      merge = parents[0];
+      parents = git("rev-list", "--parents", "-n", "1", merge).split(/\s+/).slice(1);
+    }
+    if (parents.length !== 2) return null;
+    const [p1, p2] = parents;
+    const reach = (a, b) => { try { execFileSync("git", ["merge-base", "--is-ancestor", a, b], { cwd: root, stdio: "ignore" }); return true; } catch (_) { return false; } };
+    const tipRef = `origin/${DEPLOY_BRANCH}`;
+    if (opts.tipRef !== null && (!reach(p2, opts.tipRef || tipRef) || reach("HEAD", opts.tipRef || tipRef))) return null;
+    const names = (...a) => git("diff", "--name-only", ...a).split("\n").filter(Boolean);
+    const paths = names(p1, "HEAD");
+    if (!paths.length) return null;
+    const base = git("merge-base", p1, p2);
+    const mine = new Set(names(base, p1));
+    const both = names(base, p2).filter((f) => mine.has(f));
+    const blob = (rev, f) => { try { return git("rev-parse", "--verify", "-q", `${rev}:${f}`); } catch (_) { return ""; } };
+    const notTips = paths.filter((f) => blob("HEAD", f) !== blob(p2, f));
+    return { paths, impure: [...new Set([...both, ...notTips])].sort() };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Selection for a sync merge: `gen:check` plus the docs tests, plus — when `opts.impure` names paths the merge itself
+ * decided (syncMergeScope) — what `--changed` selects for THOSE paths alone. An impure path that forces the whole floor
+ * still forces it (the returned `widened` says which).
+ */
 export function selectSyncMerge(paths, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
-  const files = allFiles.filter((f) => GENERATED_SEED_TESTS.includes(f));
-  return { files, reason: "sync-merge", genCheck: true, shards: shardsCoveringFiles(files, allFiles), changed: paths.length };
+  const seeds = allFiles.filter((f) => GENERATED_SEED_TESTS.includes(f));
+  const impure = opts.impure || [];
+  if (!impure.length) return { files: seeds, reason: "sync-merge", genCheck: true, shards: shardsCoveringFiles(seeds, allFiles), changed: paths.length };
+  const { impure: _drop, ...inner } = opts;
+  const sel = selectToolingFastChanged(impure, inner);
+  const pool = [...allFiles, ...sel.files.filter((f) => !allFiles.includes(f))];
+  const want = new Set([...seeds, ...sel.files]);
+  const files = pool.filter((f) => want.has(f));
+  return { ...sel, files, reason: `sync-merge+${sel.reason}`, genCheck: true, shards: shardsCoveringFiles(files.filter((f) => allFiles.includes(f)), allFiles), changed: paths.length, impure: impure.length };
 }
 
 /** Wall-time estimate above which --changed prints the background-with-log hint. */
@@ -1152,7 +1224,8 @@ export function widenedLine(meta, fileCount) {
 /** The `--changed` header line: reason, the REAL diff size, the files chosen, and the path that forced a fallback. */
 export function changedHeader(meta, fileCount) {
   return `[tooling-fast] --changed reason=${meta.reason} changed=${meta.changed ?? 0} files=${fileCount}` +
-    `${meta.because ? ` because=${meta.because}` : ""} shards=${(meta.shards || []).join(",") || "none"}`;
+    `${meta.because ? ` because=${meta.because}` : ""} shards=${(meta.shards || []).join(",") || "none"}` +
+    `${meta.base ? ` base=${meta.base.ref}@${String(meta.base.sha).slice(0, 12)}` : ""}`;
 }
 export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against origin/${DEPLOY_BRANCH} — nothing was selected, nothing verified (exit 3).\n` +
   `  Commit or stage your edit, \`git fetch origin ${DEPLOY_BRANCH}\` if the ref is stale, or run without --changed for the whole floor.`;
@@ -1261,7 +1334,10 @@ if (isMain) {
   }
   if (parsed.printScope) {
     // ci.yml's guards shards: `mode=` and `reason=` lines for $GITHUB_OUTPUT (see guardsScope).
-    const r = guardsScope(changedVsDeploy(), process.env.GITHUB_EVENT_NAME);
+    // No deploy base reads as FULL: the narrow answer needs a diff, and the full floor is the fail-safe one.
+    let r;
+    try { r = guardsScope(changedVsDeploy().paths, process.env.GITHUB_EVENT_NAME); }
+    catch (e) { if (e.code !== "NO_DEPLOY_BASE") throw e; r = { mode: "full", reason: "no deploy base (shallow or unfetched clone)" }; }
     console.log(`mode=${r.mode}\nreason=${r.reason}`);
     process.exit(0);
   }
@@ -1280,8 +1356,23 @@ if (isMain) {
   let files0 = parsed.files;
   let changedMeta = null;
   if (parsed.changed) {
-    const synced = parsed.noSyncShortcut ? null : syncMergePaths();
-    changedMeta = synced ? selectSyncMerge(synced) : selectToolingFastChanged(changedVsDeploy());
+    // CI keeps the strict all-or-nothing shortcut; a local run (sync-pr.mjs's verify) scopes an impure sync to the merge.
+    const scoped = parsed.noSyncShortcut || process.env.GITHUB_ACTIONS ? null : syncMergeScope();
+    const synced = parsed.noSyncShortcut || scoped ? null : syncMergePaths();
+    let diff = null;
+    if (!scoped && !synced) {
+      try { diff = changedVsDeploy(); }
+      catch (e) {
+        if (e.code !== "NO_DEPLOY_BASE") throw e;
+        console.error(e.message);
+        console.log(closingLine(false, 0, 0));
+        process.exit(4);
+      }
+    }
+    changedMeta = scoped ? selectSyncMerge(scoped.paths, { impure: scoped.impure })
+      : synced ? selectSyncMerge(synced)
+      : { ...selectToolingFastChanged(diff.paths, { diffBase: diff.base.ref }), base: diff.base };
+    if (scoped?.impure.length) console.log(`[tooling-fast] sync merge: ${scoped.paths.length} path(s) from the tip, ${scoped.impure.length} decided by the merge (${scoped.impure.slice(0, 6).join(", ")}${scoped.impure.length > 6 ? ", …" : ""}); --no-sync-shortcut selects the branch diff`);
     files0 = changedMeta.files;
     const wide = widenedLine(changedMeta, files0.length);
     if (wide) console.log(wide);

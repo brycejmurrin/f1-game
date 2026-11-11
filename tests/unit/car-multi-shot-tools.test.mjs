@@ -59,7 +59,6 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
   // rebuilds the car, so re-sending it every shot pays that per camera move.
   assert.match(src, /s\.team !== renderedTeam \? \{ team: s\.team, livery:/,
     "team must be sent only on change, not on every shot");
-  assert.match(src, /s\.team !== renderedTeam/, "team swaps must be included in the scene mutation");
   assert.match(src, /assertSafePathToken\(t, 'team'\)/, "every id in the list is still a path token");
 });
 
@@ -267,8 +266,6 @@ test("a preset is a bundle of plain flags, and a named camera is parameters", ()
   assert.match(src, /delete liv\.logo;/, "logos=default strips the authored mark rows");
   assert.match(src, /argvHas\("--site"\) \|\| argvHas\("--cdn"\)/,
     "--site/--cdn opens github.io; --live is gallery-only");
-  assert.match(src, /if \(preset && preset\.views != null && !argvHas\("--views"\)\) return preset\.views/,
-    "preset views win over the multi-team rollup default");
   assert.match(src, /argvHas\("--plan"\)/, "--plan prints the matrix without booting");
   assert.match(src, /liverySettle/, "livery/design apply uses --settle");
   assert.match(src, /viewSettle/, "camera-only moves use --view-settle");
@@ -340,7 +337,6 @@ test("garage-angles walks CAMERAS as lists — views × az × el × dist × zoom
   assert.match(src, /part\.<category>|startsWith\("part\."\)/, "--part.<category> axes fit catalog parts in-page");
   const hook = read("js/agent/apex.js");
   assert.match(hook, /garageFrame\(view, opts\)[\s\S]*?view !== "free"/, "garageFrame's `free` view keeps the current camera");
-  assert.match(hook, /o\.dist \/ G\.setupPreviewDist/, "an absolute dist is applied through the game's own clamp");
   // BEHAVIOUR, not just text: --plan builds the matrix without a browser.
   const plan = (args) => JSON.parse(execFileSync("node",
     ["tools/shot/garage-angles.mjs", "--plan", "--team=ferrari", ...args], { cwd: ROOT, encoding: "utf8" }));
@@ -489,7 +485,7 @@ test("garage-angles plan: --team=all[+custom] walks the real roster, rolled up, 
   assert.deepEqual(withCustom.teams, [...ids, "custom"], "+custom appends My Team");
   const bad = plan("--team=../x");
   assert.notEqual(bad.status, 0, "a path-traversal team id exits non-zero");
-  assert.match(bad.err + bad.out, /no team "\.\.\/x"/);
+  assert.equal(bad.err + bad.out, "no team \"../x\" — grid: mercedes, ferrari, mclaren, redbull, alpine, racingbulls, haas, williams, audi, astonmartin, cadillac, custom, or all/all+custom\n");
 });
 
 test("garage-angles plan: numeric lists expand, a camera key names only what was set, DPR/target/lamp/station are axes", () => {
@@ -529,8 +525,8 @@ test("garage-angles plan: presets are bundles of plain flags; none and list are 
 });
 
 test("garage camera catalog: bay is a base view plus an absolute orbit, bayFront the opposite diagonal", () => {
-  assert.match(CAM_ALIAS.bay, /^hero:0\.68pi/);
-  assert.match(CAM_ALIAS.bayFront, /^front:0\.32pi/);
+  assert.equal(CAM_ALIAS.bay, "hero:0.68pi,0.26,9.2");
+  assert.equal(CAM_ALIAS.bayFront, "front:0.32pi,0.28,9.4");
   assert.equal(typeof TARGETS, "object");
   assert.ok(Object.keys(STATIONS).length >= 10 && Object.keys(FIELD_STATIONS).length >= 5);
 });

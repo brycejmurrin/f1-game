@@ -1,10 +1,20 @@
 "use strict";
 /*
  * MusicLib — bring your own music. The player picks audio files off their
- * device; we keep them in this browser forever and hand them to GameAudio as
+ * device; we keep them in this browser's storage and hand them to GameAudio as
  * extra playlist entries, so a personal soundtrack plays over the race exactly
  * like the shipped CC0 tracks. Nothing is uploaded anywhere — there is no
  * server, this game is static files on GitHub Pages.
+ *
+ * KEPT, NOT KEPT FOREVER. Browser storage is "best effort" unless the origin is
+ * persisted: Safari deletes a site's script-writable storage (IndexedDB
+ * included) after seven days of Safari use without the player interacting with
+ * the site (webkit.org/blog/10218), and evicts best-effort origins under storage
+ * pressure (webkit.org/blog/14403). A Home Screen web app keeps its own counter,
+ * and a persisted origin is excluded from eviction — so after the first track
+ * is saved, add() asks navigator.storage.persist() once (WebKit grants it on
+ * heuristics such as Home Screen use; Chrome on engagement). A refusal changes
+ * nothing; the files are still saved.
  *
  * WHY INDEXEDDB AND NOT localStorage. localStorage is a synchronous *string*
  * store with a ~5 MB origin budget shared with every other apex26.* key, and
@@ -41,10 +51,12 @@ window.MusicLib = (function () {
   const DEAD_MSG = "your browser can't store files here";
 
   let dbPromise = null;      // memoised open, so init() is safe to call twice
+  let dbHandle = null;       // the connection dbPromise resolved to, while it is believed alive
   let readyPromise = null;   // memoised init()
   let addQueue = Promise.resolve(); // serialises imports, including separate file-picker events
   let generation = 0;        // prevents an invalidated read from restoring a closed connection
   let wired = false;
+  let persistAsked = false;  // navigator.storage.persist() is asked once per page
   let usable = (() => { try { return typeof indexedDB !== "undefined" && !!indexedDB; } catch (e) { return false; } })();
   let cache = [];            // [{id, name, size, added}] — mirrors the store, for sync count()
   const health = new Map();
@@ -68,11 +80,16 @@ window.MusicLib = (function () {
         }
         settled = true;
         if (timer !== null) clearTimeout(timer);
-        if (db) db.onversionchange = () => {
-          try { db.close(); } catch (e) { /* another lifecycle path closed it first */ }
-          generation++; dbPromise = null; readyPromise = null; usable = false;
-          render();
-        };
+        if (db) {
+          dbHandle = db;
+          db.onclose = () => dropDb(db);
+          db.onversionchange = () => {
+            try { db.close(); } catch (e) { /* another lifecycle path closed it first */ }
+            if (dbHandle === db) dbHandle = null;
+            generation++; dbPromise = null; readyPromise = null; usable = false;
+            render();
+          };
+        }
         res(db || null);
       };
       try {
@@ -102,31 +119,49 @@ window.MusicLib = (function () {
     return dbPromise;
   }
 
+  // iOS drops the connection behind a suspended page, often with no close
+  // event: a throwing transaction() (InvalidStateError) or an UnknownError
+  // abort is the only sign. The library on disk is intact and loaded tracks
+  // keep playing, so only the handle is forgotten; the operation that found it
+  // dead runs once more on a fresh connection.
+  const connectionLost = (e) => !!e && (e.name === "InvalidStateError" || e.name === "UnknownError");
+  function dropDb(db) {
+    if (dbHandle !== db) return;
+    dbHandle = null; dbPromise = null;
+    try { db.close(); } catch (e) { /* already closed */ }
+  }
+  function withDb(run, again) {
+    return openDb().then((db) => new Promise((res, rej) => {
+      if (!db) { rej(new Error("unavailable")); return; }
+      const fail = (e) => {
+        if (!connectionLost(e)) { rej(e); return; }
+        dropDb(db);
+        if (again) rej(e); else res(withDb(run, true));
+      };
+      try { run(db, res, fail); } catch (e) { fail(e); }
+    }));
+  }
+
   // One transaction per call. Resolves on `oncomplete`, not on the request's
   // success: a quota failure surfaces when the transaction tries to commit, and
   // reading the id early would let us report a write that never landed.
   function write(fn) {
-    return openDb().then((db) => new Promise((res, rej) => {
-      if (!db) { rej(new Error("unavailable")); return; }
-      let t;
-      try { t = db.transaction(STORE, "readwrite"); } catch (e) { rej(e); return; }
+    return withDb((db, res, fail) => {
+      const t = db.transaction(STORE, "readwrite");
       let out;
       const r = fn(t.objectStore(STORE));
       if (r) r.onsuccess = () => { out = r.result; };
       t.oncomplete = () => res(out);
-      t.onerror = t.onabort = () => rej(t.error || (r && r.error) || new Error("write failed"));
-    }));
+      t.onerror = t.onabort = () => fail(t.error || (r && r.error) || new Error("write failed"));
+    });
   }
 
   function readAll() {
-    return openDb().then((db) => new Promise((res, rej) => {
-      if (!db) { rej(new Error("unavailable")); return; }
-      let r;
-      try { r = db.transaction(STORE, "readonly").objectStore(STORE).getAll(); }
-      catch (e) { rej(e); return; }
+    return withDb((db, res, fail) => {
+      const r = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
       r.onsuccess = () => res(r.result || []);
-      r.onerror = () => rej(r.error || new Error("read failed"));
-    }));
+      r.onerror = () => fail(r.error || new Error("read failed"));
+    });
   }
 
   // The playlist id namespace is a contract with js/audio/engine.js: user uploads
@@ -273,6 +308,20 @@ window.MusicLib = (function () {
     return readyPromise;
   }
 
+  // Resolves the grant (true/false) or null where the API is absent; never throws.
+  function askPersist() {
+    if (persistAsked) return Promise.resolve(null);
+    persistAsked = true;
+    try {
+      const st = typeof navigator !== "undefined" && navigator.storage;
+      if (!st || typeof st.persist !== "function") return Promise.resolve(null);
+      return Promise.resolve(st.persist()).then((granted) => {
+        if (typeof Log !== "undefined") Log.info("audio", "MY TRACKS storage persist " + (granted ? "granted" : "not granted"));
+        return !!granted;
+      }, () => null);
+    } catch (e) { return Promise.resolve(null); }
+  }
+
   function niceName(file) {
     const raw = String(file.name || "").replace(/\.[^.]+$/, "").replace(/[_\s]+/g, " ").trim();
     if (!raw) return "untitled";
@@ -287,7 +336,9 @@ window.MusicLib = (function () {
 
   function add(files) {
     const list = files ? Array.prototype.slice.call(files) : [];
-    const added = addQueue.then(() => init()).then(() => {
+    // A failed reopen leaves `usable` false behind a memoised init(); the cache
+    // is still right, so probe the store again instead of refusing until reload.
+    const added = addQueue.then(() => init()).then(() => { if (!usable && readyPromise) return openDb(); }).then(() => {
       const out = { added: 0, skipped: 0, errors: [] };
       if (!list.length) return out;
       if (!usable) { out.skipped = list.length; out.errors.push(DEAD_MSG); render(DEAD_MSG); return out; }
@@ -312,12 +363,13 @@ window.MusicLib = (function () {
           }, (err) => {
             out.skipped++;
             const quota = err && (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED");
-            out.errors.push(file.name + (quota ? ": no room left in this browser's storage" : " could not be saved"));
+            out.errors.push(file.name + (quota ? ": no room left in this browser's storage"
+              : connectionLost(err) || !usable ? " could not be saved: storage was disconnected. Close and reopen the app, then try again" : " could not be saved"));
           });
         });
       }
       return chain.then(() => {
-        if (accepted.length) call("addTracks", accepted);
+        if (accepted.length) { call("addTracks", accepted); askPersist(); }
         let msg = out.added ? out.added + (out.added === 1 ? " track added" : " tracks added")
           : (out.skipped && !out.errors.length ? "already in your library" : "");
         if (out.errors.length) msg = (msg ? msg + " · " : "") + out.errors.join(" · ");

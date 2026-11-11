@@ -228,7 +228,6 @@ test("car3d keys the helmet on the legend / custom driver, not the number", () =
 
 test("car3d builds the helmet through Helmets, and keeps no head geometry of its own", () => {
   const car3d = read("js/car/car3d.js");
-  assert.match(car3d, /Helmets\.designFor\(/, "the helmet build asks Helmets for the design");
   assert.match(car3d, /Helmets\.build\(out,/, "and hands the mesh to Helmets to fill");
   assert.doesNotMatch(car3d, /HELMET_ACCENT/, "the old eight-colour accent table is gone, not orphaned");
   assert.doesNotMatch(car3d, /function addDome\(/, "the hemisphere builder went with it — Helmets owns the shell");

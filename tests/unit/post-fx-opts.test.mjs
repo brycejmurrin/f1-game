@@ -16,6 +16,9 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { createRequire } from "node:module";
+
+const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/post-fx-opts.js";
@@ -45,9 +48,9 @@ function load(stored = {}) {
   return { M: vm.runInContext("PostFxOpts", ctx), rows, stored };
 }
 
-test("it claims pm-ssao and pm-godrays, and the shell declares both rows with their selects", () => {
+test("it claims pm-debris, pm-ssao and pm-godrays (DEBRIS is PostFxOpts.debris), and the shell declares both rows with their selects", () => {
   const { rows } = load();
-  assert.deepEqual([...rows.keys()], ["pm-ssao", "pm-godrays"]);
+  assert.deepEqual([...rows.keys()], ["pm-debris", "pm-ssao", "pm-godrays"]);
   for (const [id, label] of [["pm-ssao", "AMBIENT OCCLUSION"], ["pm-godrays", "GOD-RAYS"]]) {
     assert.ok(SHELL.includes(`id="${id}"`), id + " must exist in index.html");
     assert.ok(SHELL.includes(`id="${id}-sel"`), id + "-sel must exist — SettingRow needs the select");
@@ -104,9 +107,40 @@ test("gate() zeroes EVERY strength a switched-off pass is gated on, and nothing 
   assert.deepEqual({ ...M.gate(full()) }, { ssao: 0.8, contact: 0.5, godray: 0, lampVol: 0, bloom: 1 });
   M.set("ssao", false);
   assert.deepEqual({ ...M.gate(full()) }, { ssao: 0, contact: 0, godray: 0, lampVol: 0, bloom: 1 });
-  // game.js routes look-post shed then the GRAPHICS AO/god-ray switches.
+  // game.js routes look-post shed then the GRAPHICS AO/god-ray switches (the
+  // gate's effect on a real frame is the game-VM test below).
   assert.ok(GAME.includes("PostFxOpts.applyLookShed(po,"));
-  assert.ok(GAME.includes("PostFxOpts.gate(po);"));
+});
+
+test("a real game frame hands gfx.present() the GATED strengths once AO and god-rays are switched off", async () => {
+  // Boots js/game.js in the VM, records what render() passes to gfx.present(),
+  // then flips both GRAPHICS switches: the very next frames must carry zeroed
+  // ssao+contact and godray+lampVol, bloom untouched. Before the flip the same
+  // frame carries non-zero AO and god-ray strengths, so the zeros are the gate's.
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const seen = [];
+    const gfx = g.G.gfx;
+    gfx.present = (po) => { seen.push({ ssao: po.ssao, contact: po.contact, godray: po.godray, lampVol: po.lampVol, bloom: po.bloom }); };
+    // The VM's inert GLX hands back no frustum planes; render() culls rivals against six.
+    gfx.makeFrustumPlanes = () => Array.from({ length: 6 }, () => [0, 0, 0, 1e9]);
+    let clock = g.sandbox.performance.now();
+    const frames = (n) => { for (let i = 0; i < n; i++) { g.step(1); g.pumpFrame(clock += 1000 / 60); } };
+    frames(3);
+    assert.ok(seen.length >= 1, "render() reached gfx.present()");
+    const on = seen[seen.length - 1];
+    assert.ok(on.ssao > 0 || on.contact > 0, "AO ON: the frame carries AO strength " + JSON.stringify(on));
+    assert.ok(on.godray > 0 || on.lampVol > 0, "god-rays ON: the frame carries god-ray strength " + JSON.stringify(on));
+    const PostFxOpts = g.sandbox.PostFxOpts;
+    PostFxOpts.set("ssao", false); PostFxOpts.set("godrays", false);
+    const n0 = seen.length;
+    frames(2);
+    assert.ok(seen.length > n0, "frames presented after the switch");
+    const off = seen[seen.length - 1];
+    assert.deepEqual({ ssao: off.ssao, contact: off.contact, godray: off.godray, lampVol: off.lampVol }, { ssao: 0, contact: 0, godray: 0, lampVol: 0 },
+      "both passes gated off at present()");
+    assert.equal(off.bloom, on.bloom, "bloom is not either switch's");
+  } finally { g.close(); }
 });
 
 test("applyLookShed zeros look-defining strengths when lookPostShed is true", () => {

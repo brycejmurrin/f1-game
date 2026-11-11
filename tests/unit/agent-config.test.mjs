@@ -284,13 +284,12 @@ test("the Bash guard blocks every shape of the kill that orphans browsers", () =
 
 test("the Bash guard refuses a browser run from inside a subagent, and only there", () => {
   // AGENTS.md §Verification 10 was prose plus a body lint; every agent carries
-  // Bash. Hook input from a subagent names it (agent_id / agent_type, or a
-  // transcript under subagents/ — the shape this session's own transcripts
-  // have); the main session carries none of those and keeps every command.
+  // Bash. Hook input from a subagent names it by agent_id (agent_type alone is
+  // the session's --agent); the main session carries none and keeps every command.
   const run = (command, sub) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
     input: JSON.stringify({
       tool_name: "Bash", tool_input: { command },
-      ...(sub ? { transcript_path: "/root/.claude/projects/p/s/subagents/agent-abc.jsonl" } : {}),
+      ...(sub ? { agent_id: "a1" } : {}),
     }),
     encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
   });
@@ -343,10 +342,10 @@ test("a subagent cannot reach a browser through MCP tools either", () => {
   const run = (payload) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/mcp-browser-guard.sh")],
     { input: JSON.stringify(payload), encoding: "utf8" });
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }).status, 2);
-  assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" }).status, 2);
-  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_control", agent_type: "reviewer" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_control", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__js-debugger__debugger_state" }).status, 0, "parent retains debugger access");
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate" }).status, 0, "the main session keeps its browser");
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }).status, 0, "tree tools stay open to subagents");
@@ -751,7 +750,7 @@ test("every skill reference is linked from its SKILL.md and, past 100 lines, ope
 // rule. Nothing any agent reads may tell it to squash again.
 test("no agent-facing file tells an agent to arm or merge with SQUASH", () => {
   const files = spawnSync("git", ["ls-files", "AGENTS.md", ".claude/agents", ".claude/skills", ".claude/rules",
-    ".cursor", "cursor-plugins", ".codex", ".agents", "docs/notes/APEX-STEWARD-CARD-2026-10-05.md", "tools/ci/deploy.mjs"],
+    ".cursor", ".codex", ".agents", "docs/notes/APEX-STEWARD-CARD-2026-10-05.md", "tools/ci/deploy.mjs"],
     { cwd: ROOT, encoding: "utf8" }).stdout.split("\n").filter(Boolean)
     .filter((f) => !fs.lstatSync(path.join(ROOT, f)).isSymbolicLink());
   assert.ok(files.length > 20, "the agent-facing file listing came back nearly empty");

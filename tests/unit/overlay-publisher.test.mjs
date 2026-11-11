@@ -51,6 +51,7 @@ const FIELD = {
     { pos: 1, code: "LEC", team: "ferrari", isPlayer: false, retired: false, lap: 3, gapToLeaderS: 0, intervalS: 0 },
     { pos: 2, code: "YOU", team: "custom", isPlayer: true, retired: false, lap: 3, gapToLeaderS: 0.84, intervalS: 0.84 },
     { pos: 3, code: "VER", team: "redbull", isPlayer: false, retired: true, lap: 2, gapToLeaderS: 9.1, intervalS: 8.26 },
+    { pos: 4, code: "NOR", team: "mclaren", isPlayer: false, retired: false, inPit: true, lap: 2, gapToLeaderS: 30.2, intervalS: 21.1 },
   ],
 };
 const TEAMS = [{ id: "ferrari", color: [0.91, 0, 0.18] }, { id: "custom", color: [1, 1, 1] }];
@@ -63,16 +64,27 @@ test("input maps __apex field/info/sectorState onto the v1 frame, with team colo
   }));
   assert.equal(frame.state, "race"); assert.equal(frame.track, "monza");
   assert.equal(frame.lap, 3); assert.equal(frame.laps, 12); assert.equal(frame.seq, 7);
-  assert.deepEqual(j(frame.rows.map((r) => [r.pos, r.code, r.team, r.interval, r.you, r.pit])), [
-    [1, "LEC", "rgb(232,0,46)", null, false, false],
-    [2, "YOU", "rgb(255,255,255)", 0.84, true, false],
-    [3, "VER", "", 8.26, false, true],
-  ]);
+  assert.deepEqual(j(frame.rows.map((r) => [r.pos, r.code, r.team, r.interval, r.you, r.pit, r.out])), [
+    [1, "LEC", "rgb(232,0,46)", null, false, false, false],
+    [2, "YOU", "rgb(255,255,255)", 0.84, true, false, false],
+    [3, "VER", "", 8.26, false, false, true],
+    [4, "NOR", "", 21.1, false, true, false],
+  ], "a retired car is OUT, not PIT; a car in the pit lane is PIT");
+  assert.deepEqual(j(frame.battle), { ahead: "LEC", behind: "YOU", gapS: 0.84 }, "the battle is the real 0.84 s interval");
   assert.equal(frame.sectors.last[0].tone, "green", "a PB that is not under the field best is green, not purple");
   const purple = Feed.frame(Pub.input({ field: FIELD, sectors: { last: [24.9], bests: [24.9], fieldBest: [25.0] } }));
   assert.equal(purple.sectors.last[0].tone, "purple");
+  // Cars 14.2 s apart are no battle (brief rows have no prog/speed: the progress scan called it 0.00 s).
+  const apart = (rows) => ({ ...FIELD, positions: rows.map((r, i) => ({ pos: i + 1, code: r[0], team: "x", lap: 3,
+    retired: !!r[2], inPit: !!r[3], intervalS: i ? r[1] : 0, gapToLeaderS: 0 })) });
+  assert.equal(Feed.frame(Pub.input({ field: apart([["LEC"], ["VER", 14.2]]) })).battle, null);
+  assert.deepEqual(j(Feed.frame(Pub.input({ field: apart([["LEC"], ["VER", 3.1], ["NOR", 0.7], ["PIA", 0.4]]) })).battle),
+    { ahead: "NOR", behind: "PIA", gapS: 0.4 }, "the closest pair under 1 s");
+  assert.deepEqual(j(Feed.frame(Pub.input({ field: apart([["LEC"], ["VER", 0.5], ["NOR", 0.1, false, true]]) })).battle),
+    { ahead: "LEC", behind: "VER", gapS: 0.5 }, "a car in the pit lane is not fighting");
+  assert.equal(Feed.frame(Pub.input({ field: apart([["LEC"], ["VER", 0.2, true]]) })).battle, null, "nor is a retired car");
   const empty = Feed.frame(Pub.input({ field: null, info: null }));
-  assert.equal(empty.state, "idle"); assert.equal(empty.rows.length, 0);
+  assert.equal(empty.state, "idle"); assert.equal(empty.rows.length, 0); assert.equal(empty.battle, null);
 });
 
 test("the caption tap turns #announce changes into captions with fresh ids, and null when hidden", () => {
@@ -111,10 +123,12 @@ test("bridge: an overlay's hello starts the host, frames reach it, a full frame 
   const pubTimers = timers();
   const apex = { field: () => FIELD, info: () => ({ state: "race", track: "monza" }), sectorState: () => null };
   const pub = Pub.start({ bridge: host, apex: () => apex, document: null, teams: TEAMS, timers: pubTimers });
+  assert.equal(Pub.lastSeq(), 0, "no frame built yet");
   pub.tick(); pub.tick();
   assert.equal(got.length, 2);
+  assert.equal(Pub.lastSeq(), got[1].seq, "lastSeq is the newest frame's seq (overlay-live.spec waits past it)");
   assert.equal(got[0].full, true, "a new overlay gets a full frame first");
-  assert.equal(got[0].rows.length, 3, "the tower rows survive the channel");
+  assert.equal(got[0].rows.length, FIELD.positions.length, "the tower rows survive the channel");
   assert.equal(got[1].full, undefined, "then patches");
   assert.equal(got[1].rows, undefined, "an unchanged tower is not re-sent");
   Bridge.subscribe(() => {}, { BroadcastChannel: FakeChannel, timers: timers(), id: "ov-2" });

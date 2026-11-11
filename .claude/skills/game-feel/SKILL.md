@@ -31,14 +31,19 @@ must be AUDIO or VISUAL (body attitude, particles, HUD); shake and haptics alone
 3. Prove physics AND race determinism without a browser:
    ```sh
    node --test tests/unit/physics-characterization-vm.test.mjs tests/unit/player-dynamics-vm.test.mjs
-   node --test tests/unit/determinism-replay-vm.test.mjs   # same seed twice, AI finishing order: catches FX RNG/state leaks
+   node --test tests/unit/determinism-replay-vm.test.mjs   # same seed twice, AI running order
    ```
-   The first two pin the player model only; the third is the race-level check.
-   Never regenerate `tests/data/physics-baseline.json` to make it pass. Then the single specs
-   (AGENTS.md §Verification, rules 5 and 10): `node tools/ci/test-bg.mjs --spec tests/specs/physics-characterization.spec.js`,
-   then `--spec tests/specs/agent-determinism.spec.js`. Touching `feel.hitStop`:
+   The first two pin the player model only; the third is the race-level check. The VM
+   (`tools/lib/game-vm.cjs`) steps `update()` only: `render()` never runs and audio is stubbed
+   silent, so these catch FX state or RNG written in the sim tick, NOT a cosmetic draw in the
+   render/audio path. Never regenerate `tests/data/physics-baseline.json` to make it pass.
+   No local browser specs (AGENTS.md rule 5): the PR's CI proves the rest. Rendered-frame
+   determinism is `tests/specs/agent-determinism-frame.spec.js`; `node tools/ci/pick-tests.mjs`
+   names its group, and `node tools/ci/remote-group.mjs <group>` runs it on the pushed branch.
+   The browser characterization traces run in their own CI job. Touching `feel.hitStop`:
    compare `__apex.obs()` and lap time before/after on a seeded run.
-4. See / hear it live at 844×390 touch: skill **mcp-probe** (`__apex.obs()`/`physState()` for kerb state).
+4. See / hear it live at 844×390 touch: skill **mcp-probe**. Kerb state is not in `obs()`/`physState()`:
+   read `__apex.world().physics.onKerb`, the `kerb` flag of `__apex.cars()`, or `__apex.carState()` (`kerbCueT`).
 
 ## When NOT to use
 

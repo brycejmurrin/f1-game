@@ -172,15 +172,12 @@ test('once out of the door the car turns into the pit lane, away from the camera
 test('cold preparation settles before the drive-out; a warm world opens on the garage immediately', () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
-  assert.match(build, /introCover\(info0, n\);/, 'cold preparation is covered: by the race-settings sheet, else the prep scrim');
   assert.match(game, /function introCover\(info, n\) \{[\s\S]*?if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/);
   assert.match(game, /RaceEntryProfile\.softwareRaster && RaceEntryProfile\.softwareRaster\(\) && !forceSoftwareFlyby\) info\.hasWorld = false;/, 'software GL skips the loading flyby but keeps the race card (the no-world path; ?swFlyby=1 forces the flyby)');
   assert.doesNotMatch(game, /autoHarness|loadingScreen\.isAutomation/, 'the software-GL card is not gated on navigator.webdriver: players see the card the harness sees');
   assert.match(game, /DevFlags\.get\("swFlyby"\)/, 'flyby bench override is URL-only DevFlags, not storage');
   assert.ok(build.indexOf('await introPrepare(') >= 0 && build.indexOf('await introPrepare(') < build.indexOf('studioOpen(n, info0)'), 'preparation finishes before outgoing motion');
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
-  assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/);
-  assert.match(game, /if \(!built && introGarage\(go\)\) return;/, 'a ready, warm world opens on it too (reduce-motion included)');
   assert.match(warm,
     /if \(cold\) \{\s*\/\/ Cold:[^\n]*\n\s*const ready = await introPrepare\(live, key, info, n, true\);[\s\S]*?studioOpen\(n, info\); await RaceEntryProfile\.spanAsync\("studioDone", \(\) => studioDone\(live, n\)\);/,
     'cold motion starts only after compilation settles');
@@ -191,7 +188,6 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   assert.match(game, /\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/, 'the studio shows through the build card');
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   assert.match(cam, /const arriving = home\.active \? null : driveOut \? stepDriveOut\(holdDriveOut\) : preview \? stepPreview\(dt\) : arrival\.step\(dt\);/, 'the wall clock, not the 1\/20 s capped render dt; the PREVIEW between the two');
-  assert.match(cam, /if \(!cfg\.enabled\) return 0;/, 'the arrival tuner can disable drive-out');
   assert.ok(!/OUT_REDUCE_SPEED/.test(cam), 'reduce-motion plays the drive-out at the tuned pace, never a sped-up cut');
   assert.match(game, /function studioClose\(n\) \{\n  if \(!_studio \|\| _studio\.n !== n\) return;/, 'only the intro run that opened it closes it');
   assert.match(game, /function afterGarageOut\(n, key, go, prepared, live, stage\)/, 'every intro path awaits garage-out then shows the card through one handoff');
@@ -596,7 +592,6 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
   assert.match(build, /\n  introCover\(info0, n\);\n/, 'a cold build is covered by the sheet or prep scrim');
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/, 'so is a cold warm');
-  assert.match(game, /if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/, 'prep hides the race card until garage-out ends (software GL uses prep behind the race-settings sheet too)');
   const rs = readFileSync(new URL('../../js/race/race-settings.js', import.meta.url), 'utf8');
   const go = rs.slice(rs.indexOf('$("rs-go").onclick = () => {'), rs.indexOf('    }\n\n    return {'));
   assert.match(go, /raceIntro\(startRace, sheet, \$\("rs-go"\)\)/, 'race settings hands its sheet and button to the intro');

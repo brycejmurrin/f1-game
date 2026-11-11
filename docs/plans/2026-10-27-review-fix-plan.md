@@ -1,5 +1,7 @@
 # Review fix plan, 2026-10-27
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: OPEN. Built from the second, from-scratch Opus pass (R2):
 [notes/review-2026-10-27/r2/](../notes/review-2026-10-27/r2/) — 36 skill reviews, 9 code hunts, 6 domain reviews
 (workflows, relay/fleet leftovers, agents + hooks, docs, dead tools, landing design). The first pass

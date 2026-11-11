@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -87,19 +88,50 @@ test("a failed start after the lobby closed lands on the menu WITH a visible not
   } finally { document.getElementById = realGet; lobby.cancel(); }
 });
 
-test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliability are race rules; a paused friend race brakes the car", async () => {
+test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliability are race rules", async () => {
   const { readFileSync } = await import("node:fs");
   const r = (f) => readFileSync(new URL("../../" + f, import.meta.url), "utf8");
   const game = r("js/game.js");
   // driven(Infinity) when every lap was deleted for track limits (NO TIME), else 0.
   assert.match(game, /quali\.simulate\(qualiNet\.driven\([^\n]*\? Infinity : 0\)\);[^\n]*\s*reportModelQuali\(\);/, "SIMULATE sends the model's time");
   assert.match(game, /if \(!\(myLap > 0\)\) reportModelQuali\(\);/, "a lap with no valid time sends the model's time");
-  assert.match(game, /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
   const lobby = r("js/net/lobby.js");
   assert.match(lobby, /tyres: G\.raceTyreWear, reliab: G\.raceReliability,/);
   // Applied in memory only (roomOnly puts the guest's save back) — behaviour
   // pinned in net-authority.test.mjs "never overwrite the guest's SAVED choice".
   assert.match(lobby, /if \(own\(next, "tyres"\)\) roomOnly\("tyreWear", \(\) => \{ G\.raceTyreWear = next\.tyres; \}\);/);
+});
+
+// A FRIEND RACE RUNS ON UNDER THE PAUSE CARD, so the local car must brake
+// (game.js inputOf → PAUSED_NET_INPUT), not coast or keep the live throttle.
+// The real game in the VM, the room faked only at netPlay.active(). Each phase
+// starts from the same spot and speed on Monza's main straight: the paused
+// networked car, throttle HELD, must shed far more speed than a coasting one.
+test("a paused friend race brakes the car (the real game, stepped under the pause)", async () => {
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G, apex } = g;
+    apex.headless(true);
+    assert.ok((await g.stepUntil(() => G.state === "race" && G.raceT > 1, { maxSteps: 60 * 30 })).ok, "lights out");
+    const shed = (input, frames) => {
+      apex.jump(0.01, 60, 0); apex.setInput(input);
+      g.step(frames);
+      return 60 - G.player.speed;
+    };
+    const coast = shed({ throttle: false, brake: false }, 30);
+    const active = G.netPlay.active;
+    G.netPlay.active = () => true;
+    try {
+      G.els.pausebtn.onclick();
+      assert.equal(G.paused, true, "the pause card is up");
+      const t0 = G.raceT;
+      const paused = shed({ throttle: true, brake: false }, 30);
+      assert.ok(G.raceT > t0, "a networked race keeps running under the card");
+      assert.ok(coast >= 0, `coasting does not gain speed (${coast})`);
+      assert.ok(paused > 2 * coast + 2, `paused + networked, throttle held: the car brakes (shed ${paused.toFixed(2)} m/s vs coast ${coast.toFixed(2)})`);
+    } finally { G.netPlay.active = active; }
+  } finally { g.close(); }
 });
 
 test("the HUD hides eligible garage work during a friend race and restores it when solo", () => {
@@ -230,6 +262,19 @@ test("a qabort outside friend quali does nothing", async () => {
   try {
     peerSays("qabort", null); await sleep(30);          // still in the room
     assert.equal(laps.length, 0);
+  } finally { lobby.cancel(); }
+});
+
+test("the host drops a guest's QABORT flood: each one is a QUALI relayed to every other guest", async () => {
+  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const laps = [];
+  G.onPeerQuali = (q) => laps.push(q);
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    for (let i = 0; i < 200; i++) peerSays("qabort", null);
+    await sleep(120);
+    assert.ok(laps.length >= 1, "the first still releases the host's wait");
+    assert.ok(laps.length <= 2, "a flood is capped per connection (got " + laps.length + ")");
   } finally { lobby.cancel(); }
 });
 
