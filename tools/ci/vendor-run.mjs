@@ -8,6 +8,7 @@
  *
  *   node tools/ci/vendor-run.mjs <codex|cursor|grok> --cwd DIR --prompt "…" [--write] [--timeout 600] [--model M]
  *   node tools/ci/vendor-run.mjs all --cwd DIR --prompt-file FILE        (each in turn, one JSON line each)
+ *   Add --parallel to all to start every vendor at once, printing as each finishes; incompatible with --write.
  *   node tools/ci/vendor-run.mjs <vendor> --cwd DIR --prompt "…" --write --verify "node --test t.mjs"
  * `--verify CMD` runs `bash -c CMD` in DIR after a turn that exited 0 and adds `verify: { code, tail }`; ok then
  * decides ok (exit 0 and verify 0), so the runner proves the work instead of trusting the agent. A runner's optional
@@ -174,12 +175,17 @@ const flag = (argv, name) => { const i = argv.indexOf(name); return i >= 0 ? arg
 
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const which = argv[0];
+  const parallel = argv.includes("--parallel");
+  if (parallel && argv.includes("--write")) throw new Error("--parallel cannot be combined with --write: agents would edit the same directory");
   const file = flag(argv, "--prompt-file");
   const opts = { cwd: flag(argv, "--cwd"), prompt: file ? fs.readFileSync(file, "utf8") : flag(argv, "--prompt"),
     write: argv.includes("--write"), model: flag(argv, "--model") || null, verify: flag(argv, "--verify") || null,
     timeoutMs: Number(flag(argv, "--timeout") || 600) * 1000, ...deps };
   const env = opts.env || process.env;
   const names = which === "all" ? Object.keys(RUNNERS).filter((n) => n !== "claude" || env.APEX_CLAUDE_CONFIG_DIR || env.APEX_CLAUDE_B_OAUTH_TOKEN) : [which];
+  if (which === "all" && parallel) return Promise.all(names.map(async (n) => {
+    const row = await runVendor(n, opts); if (deps.onRow) deps.onRow(row); return row;
+  }));
   const rows = [];
   for (const n of names) { const row = await runVendor(n, opts); rows.push(row); if (deps.onRow) deps.onRow(row); }
   return rows;

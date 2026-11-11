@@ -8,10 +8,33 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { VENDORS, checkVendor, main, scrub, savedSignIns } from "../../tools/ci/vendor-doctor.mjs";
-import { secondAccountEnv, codexEnv, runVendor } from "../../tools/ci/vendor-run.mjs";
+import { secondAccountEnv, codexEnv, runVendor, main as runMain } from "../../tools/ci/vendor-run.mjs";
 
 const SECRET = "xai-ABCDEFGHIJKLMNOPQRSTUVWX";
 const fakeRun = (table) => async (bin, argv) => table[`${bin} ${argv.join(" ")}`] ?? { code: 127, out: "" };
+
+test("all --parallel starts every vendor together, streams completion order and refuses writes", async () => {
+  const started = [], finished = [], emitted = [];
+  let startedAtFirstFinish;
+  const vendors = ["codex", "cursor", "grok", "claude"];
+  const spawnImpl = async (bin) => {
+    const vendor = bin === "cursor-agent" ? "cursor" : bin;
+    started.push(vendor);
+    await new Promise((resolve) => setTimeout(resolve, (4 - vendors.indexOf(vendor)) * 20));
+    if (!finished.length) startedAtFirstFinish = [...started];
+    finished.push(vendor);
+    return { code: 0, out: JSON.stringify({ result: "DONE" }) };
+  };
+  const argv = ["all", "--parallel", "--cwd", process.cwd(), "--prompt", "q"];
+  const deps = { env: { APEX_CLAUDE_CONFIG_DIR: "/b" }, spawnImpl, onRow: (row) => emitted.push(row.vendor) };
+  const rows = await runMain(argv, deps);
+  assert.deepEqual(startedAtFirstFinish, vendors, "all vendors start before the first finishes");
+  assert.deepEqual(rows.map((row) => row.vendor), vendors);
+  assert.deepEqual(finished, [...vendors].reverse());
+  assert.deepEqual(emitted, finished, "onRow streams each completion immediately");
+  await assert.rejects(runMain([...argv, "--write"], deps), /--parallel cannot be combined with --write/);
+  assert.deepEqual(started, vendors, "the rejected write starts no vendors");
+});
 
 test("Codex checks version and login in the saved home without exposing the saved auth", async () => {
   const b64 = Buffer.from('{"tokens":{"access_token":"saved-secret"}}').toString("base64");
