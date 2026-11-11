@@ -14,6 +14,7 @@ import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import { loadCar3D } from "../../tools/car/cockpit-pale-sweep.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -875,9 +876,11 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   const paint = { roughness: 0.3, carFinish: true };
   const drawn = [];
   G.gfx.draw = (mesh, m) => drawn.push({ name: mesh && mesh.carMesh, arg: mesh && mesh.arg, zero: Array.from(m).every((x) => x === 0) });
-  let warming = false;
+  let warming = false, quads = [];
   G.gfx.warming = () => warming;
-  const prime = () => { drawn.length = 0; flaps.length = 0; extras.length = 0; return carDraw.primeRace(paint); };
+  G.gfx.drawShadow = (m) => quads.push({ kind: "shadow", zero: Array.from(m).every((x) => x === 0) });
+  G.gfx.drawMark = (m) => quads.push({ kind: "mark", zero: Array.from(m).every((x) => x === 0) });
+  const prime = () => { drawn.length = 0; flaps.length = 0; extras.length = 0; quads = []; return carDraw.primeRace(paint, false); };
   const tally = (name) => { const n = {}; for (const r of drawn) if (r.name === name) n[r.arg] = (n[r.arg] || 0) + 1; return n; };
   const ten = (k) => Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => [d, k]));
   assert.equal(prime(), 0, "not armed before a race warm");
@@ -897,9 +900,12 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   assert.deepEqual(tally("getSpeedDigit"), ten(3), "every speed digit three times (a reading holds up to three of one)");
   assert.deepEqual(tally("getLedStrip"), ten(1), "every LED strip state of the wheel in use");
   assert.equal(extras.length, 1, "the wheel extras once"); assert.equal(extras[0].every((x) => x === 0), true, "at the zero matrix");
-  // Bodies come from car-draw itself (not CarMesh): each rival's team body + the shared near body (the harness has
-  // no CarGeometry.decimate, so no far body is built to prime).
-  assert.equal(drawn.filter((d) => !d.name).length, rivals + 1, "every rival's team body and the shared rival body");
+  // Bodies and wheels come from car-draw itself (not CarMesh). The pool keys a wrapper per OCCURRENCE, so a mesh shared
+  // across cars is drawn once per car that can show it: per rival its team body, the shared near body (the harness has
+  // no CarGeometry.decimate, so no far body), and its wheel set twice over (F, R, FFixed, RFixed: 2 front, 2 rear).
+  assert.equal(drawn.filter((d) => !d.name).length, rivals * (1 + 1 + 8), "per rival: team body, shared body, 8 wheel draws");
+  assert.equal(quads.filter((q) => q.kind === "shadow" && q.zero).length, G.cars.length, "one blob-shadow quad per field car");
+  assert.equal(quads.filter((q) => q.kind === "mark" && q.zero).length, G.cars.length, "one skid-mark quad per field car");
   assert.equal(flaps.length, rivals * 3, "per rival: closed set, open set, moving elements");
   assert.deepEqual([...new Set(flaps.map((f) => `${f.b}:${f.still}`))].sort(), ["0.5:false", "0:true", "1:true"]);
   assert.equal(flaps.every((f) => f.zero && f.paint === paint), true, "with the frame's paint, at the zero matrix");
@@ -913,4 +919,24 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   ctx.CockpitOpts.wheel = () => "retro";
   carDraw.warmCarAssets(); prime();
   assert.equal(retro.length, 1, "the RETRO wheel primes its own digits, once");
+});
+
+test("primeRace follows the field it is given (a short field) and keys the wheels on game.js's own _wheelOpts", () => {
+  const draw = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../js/car/car-draw.js"), "utf8");
+  const game = gameSource();
+  const lit = (src, name) => { const m = src.match(new RegExp("const " + name + " = (\\{[^}]*\\});")); return m && m[1]; };
+  assert.equal(lit(draw, "_primeWheelOpts"), lit(game, "_wheelOpts"), "car-draw's copy of the wheel opts is game.js's literal");
+  assert.match(game, /carDraw\.primeRace\(paint, night\);/, "game.js primes on its main pass with the frame's paint and night");
+  const v = carDrawVm({ cam: "chase" });
+  const { ctx, G } = v;
+  ctx.CockpitOpts = Object.assign({}, loadOpts({}).opts, { haloSize: () => 2, body: () => "standard", wheel: () => "f1" });
+  const carDraw = ctx.CarDraw.create(G, { resolveLivery: () => ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
+    drawAeroFlaps() {}, damp: (a) => a, isTimeTrial: () => false, isQuali: () => false });
+  let shadows = 0;
+  G.gfx.drawShadow = () => { shadows++; };
+  v.field(() => 1000);
+  G.cars = G.cars.slice(0, 4);   // a practice / VS FRIEND sized field
+  carDraw.warmCarAssets();
+  carDraw.primeRace({ roughness: 0.3 }, true);
+  assert.equal(shadows, 4, "the occurrence count is the field it was handed, not 22");
 });
