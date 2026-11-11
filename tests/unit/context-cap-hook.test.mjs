@@ -112,3 +112,18 @@ test("--guard fails closed when the cap is known and the count is not; the FIRST
     assert.equal(g(ev(first)), "deny", "160k is over the FIRST cap's hard 150k");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("STOP AT: start+<N>k is a budget above the first assistant entry's context (decision 4, 2026-11-11)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
+  const at = (k) => ({ type: "assistant", message: { usage: { input_tokens: 1000, cache_read_input_tokens: k * 1000 - 1000 } } });
+  const write = (rows) => { const p = path.join(dir, "t.jsonl"); fs.writeFileSync(p, rows.map((r) => JSON.stringify(r)).join("\n") + "\n"); return p; };
+  try {
+    const brief = { type: "user", message: { content: "ISSUE 1. STOP AT: start+250k." } };
+    const under = write([brief, at(100), at(340)]);
+    assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: under, session_id: "r1" }), "", "340k is under 100k + 250k");
+    const over = write([brief, at(100), at(360)]);
+    assert.match(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: over, session_id: "r2" }), /context 360k \/ cap 350k \(brief STOP AT start 100k\+250k; hard 400k\)/);
+    const one = write([brief, at(260)]);
+    assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: one, session_id: "r3" }), "", "a lone entry is the start: 260k is under 260k + 250k");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
