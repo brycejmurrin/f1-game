@@ -11,8 +11,8 @@ Symbols are in `js/career/season-cal.js` unless named; locate them with apex-lsp
 preferences AND `activeCfg`). Use it rather than `setConfig()` + `restart()` + `save()`.
 
 - Changed rules on a season in progress only ARM a two-tap confirm ("RESTART? — SEASON IS LOST",
-  `G.armConfirm`, called from `season-ui.js`; defined in `js/game.js`); one tap, or BACK (which
-  discards the draft), changes nothing.
+  `G.armConfirm`, called from `season-ui.js`; defined in `js/game.js`); one tap, or BACK (with
+  unapplied edits it arms its own "DISCARD EDITS?"), changes nothing.
 - The SETUP draft opens from `SeasonCal.config()` (preferences), not `G.season.config`: a resumed
   save freezes its own config, and a foreign `seasonCfg` write reloads the preferences. So a chip can
   read ON while the live season races OFF.

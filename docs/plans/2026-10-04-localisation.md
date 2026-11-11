@@ -1,10 +1,12 @@
 # Localisation (i18n) — plan (2026-10-04)
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the I18n layer exists (js/core/i18n.js, i18n-pseudo.js, locales/en.json, tools/gen/gen-locales.mjs, pseudo-locale audit #3310); only English ships and no language picker was found.
 
 Date: 2026-10-04
 Status when written: **PLAN** — docs-only; implement as ten draft PRs against `claude/f1-game-project-26h3ng`, one slice each, in the
-order below. Do not merge; the merge worker takes green ready PRs one at a time (AGENTS.md §Concurrent PRs).
+order below. Do not merge; the merge worker takes green ready PRs one at a time (AGENTS.md §Coordination).
 Scope: a no-build-step translation layer (`I18n` global, lazily fetched locale JSON, English fallback), the language picker,
 pseudo-locale layout testing, a contribution lint, and an incremental screen-by-screen migration. NOT a translation of the
 whole game in one PR, and NOT voice re-recording beyond an optional late slice.

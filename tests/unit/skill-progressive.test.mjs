@@ -333,7 +333,7 @@ test("every custom subagent declares name, description, and model", () => {
     // pinned to the cheap tier (https://code.claude.com/docs/en/sub-agents).
     "Explore.md": "haiku",
   };
-  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
+  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.";
   for (const f of files) {
     const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
     const fm = frontmatter(text);
@@ -513,8 +513,8 @@ test("apex-shared.mdc stays a pointer, not a second AGENTS.md", () => {
 });
 
 test("file-family skills keep their file anchors in the body", () => {
-  // `paths:` (allowed again 2026-11-03) only auto-loads the skill beside a matching file; the body anchors
-  // are what a chat-only ask reads, so they stay.
+  // Skills carry no `paths:` gate (skill-descriptions.test.mjs); the body anchors are what a chat-only ask
+  // reads, so they stay.
   for (const [name, re] of Object.entries({
     "renderer-debug": /js\/render\/glx/,
     "new-track": /js\/circuits/,
@@ -576,7 +576,8 @@ test("slim-bloat is the Claude-simplify analog and stays a thin index", () => {
   assert.match(fm.description, /Use when/i);
   assert.match(fm.description, /bloat|dead|extract|split/i);
   assert.ok(skill.split("\n").length <= 180, "slim-bloat SKILL.md must stay a thin index");
-  assert.match(skill, /bloat-auditor/);
+  assert.match(skill, /code-hunter/);
+  assert.doesNotMatch(skill, /bloat-auditor/);
   assert.match(skill, /bloat-scan\.mjs/);
   assert.match(skill, /extract-module\.mjs/);
   assert.match(skill, /mcp-probe|Context7|context7/i);
@@ -637,3 +638,77 @@ test("long skill files open with a table of contents", () => {
   }
   assert.deepEqual(missing, [], "add a `## Contents` list of the file's `##` headings in its first 20 lines");
 });
+
+// ── lighting-tuner scripts/merge-proposals.mjs (the one skill script with behaviour) ──
+// A per-track edit back to the slider default must survive when the shared "*|tod|wx" stamp sets that knob
+// (dropping it would resolve to the stamp, not the default). --check only: js/lighting/presets.js is never written.
+{
+const LT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const { execFileSync } = await import("node:child_process");
+const { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } = fs;
+const { join } = path;
+const vm = (await import("node:vm")).default;
+const ROOT = LT_ROOT;
+const SCRIPT = join(ROOT, ".claude/skills/lighting-tuner/scripts/merge-proposals.mjs");
+
+function load(file, expr) {
+  const ctx = vm.createContext({ window: {} });
+  return vm.runInContext(readFileSync(join(ROOT, file), "utf8") + ";\n" + expr, ctx, { filename: join(ROOT, file) });
+}
+const presets = load("js/lighting/presets.js", "window.LightPresets");
+const defs = new Map(load("js/lighting/knobs.js", "LightKnobs.TUNE_DEFS").map((d) => [d.id, d]));
+const circuits = readdirSync(join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+
+// A shared-stamp knob that differs from its slider default (no "*|tod" cond pin), and a circuit whose row for
+// that condition does (pinned) or does not (unpinned) set it.
+function pick(pinned) {
+  for (const [key, vals] of Object.entries(presets)) {
+    const parts = key.split("|");
+    if (parts[0] !== "*" || parts.length !== 3) continue;
+    const cond = presets["*|" + parts[1]];
+    for (const [id, v] of Object.entries(vals)) {
+      const d = defs.get(id);
+      if (!d || id === "wetness" || v === d.def || (cond && id in cond)) continue;
+      for (const track of circuits) {
+        const row = presets[`${track}|${parts[1]}|${parts[2]}`];
+        const pins = !!row && id in row && row[id] !== v;
+        if (pins === pinned) return { key: `${track}|${parts[1]}|${parts[2]}`, existed: !!row, id, d, stamp: v };
+      }
+    }
+  }
+  throw new Error(`no circuit/stamp knob pair with pinned=${pinned}`);
+}
+
+function runCheck(edits) {
+  const dir = join(ROOT, "artifacts/tmp");
+  mkdirSync(dir, { recursive: true });
+  const tmp = mkdtempSync(join(dir, "merge-proposals-"));
+  try {
+    const file = join(tmp, "edits.js");
+    writeFileSync(file, "window.LightEdits = " + JSON.stringify(edits) + ";\n");
+    return JSON.parse(execFileSync(process.execPath, [SCRIPT, file, "--check"], { cwd: ROOT, encoding: "utf8" }));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+test("a per-track knob reset to default is kept when the *|tod|wx stamp sets it", () => {
+  const { key, existed, id, d, stamp } = pick(false);
+  const out = runCheck({ [key]: { [id]: d.def } });
+  assert.equal(out.ok, true);
+  assert.deepEqual(existed ? out.changes.changed : out.changes.added, [key],
+    `${key}.${id}=${d.def} must be written (the stamp sets ${stamp})`);
+});
+
+test("a per-track knob equal to the stamp value is dropped as redundant", () => {
+  const { key, id, stamp } = pick(false);
+  const out = runCheck({ [key]: { [id]: stamp } });
+  assert.deepEqual(out.changes, { added: [], deleted: [], changed: [] });
+});
+
+test("a delta setting a pinned knob back to the stamp value unpins it", () => {
+  const { key, id, stamp } = pick(true);
+  const out = runCheck({ [key]: { [id]: stamp } });
+  assert.equal(out.changes.changed.length + out.changes.deleted.length, 1, `${key}.${id} pin must be removed`);
+});
+}

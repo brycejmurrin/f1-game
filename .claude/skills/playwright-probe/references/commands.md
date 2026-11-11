@@ -8,19 +8,20 @@
 
 ## Committed tools (use these first)
 
-`apex_viewer` (MCP) opens the car/circuit viewer page (`tools/carview.html`) for a framed look.
+`apex_viewer` (MCP, no browser) writes one self-contained car/circuit viewer page under `artifacts/viewer/`.
 
 ```sh
 # Same CLIs via MCP (takes scratch/apex-browser.lock; apex_status first):
 #   ./tools/mcp/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
 #   ./tools/mcp/apex-tools-mcp.sh call apex_shot '{"track":"monza","frac":0.1}'
 #   ./tools/mcp/apex-tools-mcp.sh call apex_hud_shot '{"cam":"cockpit","preset":"clean"}'   # race HUD: shot + boxes + findings (survey-ui-matrix)
-# Plain CLIs (no MCP wrap): tools/car/carshot.mjs, tools/check/quick-validate.mjs. The wraps cannot pin a backend.
+# Plain CLIs (no MCP wrap): tools/car/carshot.mjs, tools/check/quick-validate.mjs. apex_eval takes `backend` and `vm`; apex_shot cannot pin a backend.
 # One-off: boot the game, evaluate an __apex expression, print JSON.
 node tools/shot/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
 node tools/shot/apex-eval.mjs monaco "a.camera()"
 node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
 node tools/shot/apex-eval.mjs monaco "a.info()" --backend webgl2   # pin a backend (recipes.md §Backends)
+node tools/shot/apex-eval.mjs monza "a.corners().length" --vm     # Node VM: no Chromium, no pixels (header: what it can't answer)
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
 node tools/shot/apex-capture.mjs cameras [track] [outdir]
@@ -51,14 +52,14 @@ writes JPEG q85 (human review); `--raster` writes `__apex.render` JSON only
 (no pixels). It warns on blank frames and `free-cam inactive`. Speed notes:
 `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md`.
 
-Finding `frac` (no browser): `turns:` in `js/circuits/<id>.js` (Spa Eau Rouge compression ~0.075).
-`turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco bore
-racing 0.449-0.524) or `node tools/shot/flicker-gate.mjs --list` (sites carry racing/scenery fracs).
+Finding `frac` (no browser): `turns:` in `js/circuits/<id>.js` (its comment names each bend;
+read the value there). `turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco's
+measured bore window) or `node tools/shot/flicker-gate.mjs --list` (sites carry racing/scenery fracs).
 `trackside` here is the free-cam `view({look:"in"})`, not the `trackside` CAM_MODES rig.
 
 ## Before/after captures
 
-The tools serve the working tree, and AGENTS.md rule 2 forbids source edits while a capture runs.
+The tools serve the working tree, so never edit sources while a capture runs (AGENTS.md rule 2: edit, then verify).
 Edit already made:
 
 1. `git stash push -m pp-<tag>`, then `git stash list --format='%H %gs'` to read its sha.
@@ -68,7 +69,7 @@ Edit already made:
 
 Name the out path per state: `artifacts/cmp/{before,after}/<track>-T1.png`. Several corners: one
 `--batch` file per state,
-`[{"track":"bahrain","frac":0.1038,"cam":"park","out":"artifacts/cmp/before/bahrain-T1.png"}, …]`
+`[{"track":"bahrain","frac":<turns[0]>,"cam":"park","out":"artifacts/cmp/before/bahrain-T1.png"}, …]`
 (one boot each). `backend-compare` diffs GLX vs TLX within one run, not A vs B; compare the two
 runs' PNGs/manifests (`<label>-manifest.json`) yourself. Worked tunnel example: recipes.md
 §Tunnel before/after. Car-only: `tools/shot/garage-angles.mjs --against=<git ref>` does both in one run.

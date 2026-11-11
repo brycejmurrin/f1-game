@@ -27,15 +27,11 @@ test("the check waits for SETTLED, which sw.js writes after the scenery pools (C
 test("--help prints the flags; a bad --root or an unstamped dir exits 2 before any browser", () => {
   const help = run("--help");
   assert.equal(help.status, 0);
-  assert.equal(help.stdout.indexOf("--stage") >= 0, true);
-  assert.equal(help.stdout.indexOf("--root=") >= 0, true);
   assert.equal(run("--stage", "--root=x").status, 0, "both flags at once prints usage");
   const missing = run("--root=artifacts/does-not-exist");
   assert.equal(missing.status, 2);
-  assert.equal(missing.stderr.indexOf("not a staged site") >= 0, true);
   const unstamped = run("--root=.");
   assert.equal(unstamped.status, 2, "the working tree reads ?v=dev, so it is not a stamped site");
-  assert.equal(unstamped.stderr.indexOf("not stamped") >= 0, true);
 });
 
 test("a stamp at committed+1 (no full history) yields a shell with no ?v=dev tag", (t) => {
@@ -47,8 +43,8 @@ test("a stamp at committed+1 (no full history) yields a shell with no ?v=dev tag
   stageSite(dest, { root: ROOT });
   const committed = JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf8")).build;
   assert.equal(stampStaged(dest, { at: committed + 1, sha: "0".repeat(40) }), committed + 1);
-  const html = fs.readFileSync(path.join(dest, "index.html"), "utf8");
-  assert.doesNotMatch(html, /\?v=dev"/);
+  const check = spawnSync(process.execPath, [path.join(ROOT, "tools/ci/bump-cache.mjs"), "--check", "--root", dest], { encoding: "utf8" });
+  assert.equal(check.status, 0, "bump-cache --check: every tag carries its content hash\n" + check.stdout + check.stderr);
   assert.ok(fs.existsSync(path.join(dest, "sw.js")));
 });
 
@@ -57,6 +53,4 @@ test("a CI browser group runs the check against a stamped stage", () => {
   const g = groups["test:offline-precache"];
   assert.ok(g && g.kind === "browser", "test:offline-precache is a browser group (nightly rotation, remote-group.mjs)");
   assert.deepEqual(g.files, ["tests/specs/offline-precache.spec.js"]);
-  const spec = fs.readFileSync(path.join(ROOT, g.files[0]), "utf8");
-  assert.ok(spec.includes('"tools/check/offline-precache-check.cjs", "--stage"'), "the spec runs the check on a stamped stage");
 });

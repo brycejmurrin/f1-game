@@ -1,6 +1,8 @@
 # PWA shortcuts, race-weekend calendar (.ics) and install enhancements
 
-Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — manifest.json has shortcuts and js/data/schedule.js has a race countdown; no .ics export found in js/.
+Status: **SHIPPED** (re-checked against the code 2026-11-10) — manifest.json shortcuts, the race countdown in js/data/schedule.js and the calendar export js/data/ics.js all exist. Archived.
+
+Earlier status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — manifest.json has shortcuts and js/data/schedule.js has a race countdown; no .ics export found in js/.
 
 **Date:** 2026-10-04
 **Status when written:** PLAN
@@ -12,7 +14,7 @@ Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — manifest.js
 |---|---|---|
 | `.claude/skills/pwa-cache-service-worker/SKILL.md` | `sw.js`, `version.json`, precache rules, "never bump `version.json` mid-run" | Binding. This plan touches `sw.js` at most for one optional seed (Slice 2). |
 | `.claude/skills/data-hub/SKILL.md` | Hub tabs, `F1API`, cache TTLs, "API DOM via `textContent` only" | The schedule source and the DOM rule. |
-| `docs/notes/INPUT-GHOSTS-2026-10-01.md` | Ghost formats (local ghosts vs APXG1 pose envelopes) | Slice 4 reuses `GhostShare`, adds no format. |
+| `INPUT-GHOSTS-2026-10-01.md (archived)` | Ghost formats (local ghosts vs APXG1 pose envelopes) | Slice 4 reuses `GhostShare`, adds no format. |
 | `docs/PLATFORM.md` | iOS/Safari quirks, what a static Pages host gives | Slice 4 findings are appended there, not here. |
 | `docs/notes/REAL-RACE-2026-09-27.md` | OpenF1 bodies, pacing, 429 behaviour | Rate-limit facts below defer to it. |
 | `.claude/skills/season-mode/SKILL.md` | The in-game Season calendar (`Tracks.SEASON`) | Different thing: this plan is the REAL 2026 calendar, not the game's season. |

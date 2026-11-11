@@ -30,14 +30,15 @@ function boot({ ua, standalone = false, stored = new Map() }) {
   }, { filename: absSrc("js/ui/platform-session.js") });
   return { els, msg, stored, dismiss: () => els["ios-install-x"].onclick() };
 }
-const noted = (s) => s.msg.textContent.includes("18.4 or later");
+const NOTE = "On iOS 16.4\u201318.3 the screen may dim mid-race in the Home Screen app. Update to iOS 18.4 or later to fix it.";
+const noted = (s) => s.msg.textContent.endsWith(NOTE);
 
 for (const [v, broken] of [["16.3", false], ["16.4", true], ["17.5", true], ["18.3", true], ["18.4", false], ["26.1", false]]) {
   test(`Safari on iOS ${v}: the install nudge ${broken ? "carries" : "omits"} the wake-lock note`, () => {
     const s = boot({ ua: UA(v) });
     assert.equal(s.els["ios-install"].hidden, false, "the nudge still shows");
     assert.equal(noted(s), broken);
-    assert.ok(s.msg.textContent.startsWith("Add Apex 26"), "the install instructions stay");
+    assert.equal(s.msg.textContent, "Add Apex 26 to your Home Screen" + (broken ? " " + NOTE : ""), "the install instructions stay");
     s.dismiss();
     assert.equal(s.stored.get("iosInstallSeen"), true);
     assert.equal(s.stored.get("iosWakeNoteSeen"), broken ? true : undefined);

@@ -667,12 +667,19 @@
       }
 
       if (typeof runoffApron === "function") {
+        // Each on the OUTSIDE of its corner's built apex (def.turns; +k = left,
+        // so a right-hander's outside is -1). The old T1 pair (0.06/0.08) sat
+        // on T2/T3, the old T2/3 pair (0.16) on the T4-T5 straight, and the
+        // Turnpike chicane pair (0.64/0.67) on the straight past the T17
+        // hairpin, 40-228 m beyond the last apex. Index order is kept so the
+        // hashed depth/length of every apron below stays as it was.
         const apronSpots = [
-          [0.06,  1, 4.5], [0.08, -1, 4.5],   // T1
-          [0.16,  1, 4.0], [0.16, -1, 4.0],   // T2/3
+          [0.048, -1, 4.5],                    // T1 (0.0463, right)
+          [0.122, -1, 4.5],                    // T4 (0.1188, right)
+          [0.065,  1, 4.0], [0.085, -1, 4.0],  // T2/3 (0.0628 left, 0.0823 right)
           [0.36,  1, 4.5],                     // marina exit
           [0.50,  1, 4.5], [0.52, -1, 4.5],   // T11 braking
-          [0.64,  1, 4.0], [0.67, -1, 4.0],   // Turnpike chicane
+          [0.581, -1, 4.0], [0.598, 1, 4.0],  // Turnpike chicane T14/T15 (0.5793 right, 0.5968 left)
           [0.94,  1, 4.0], [0.96, -1, 4.0],   // final corner
         ];
         for (let i = 0; i < apronSpots.length; i++) {
@@ -874,9 +881,9 @@
       }
       guardrail(0.005, 0.05,  1, 3, GREYWHITE);
       guardrail(0.72,  0.80, -1, 3, GREYWHITE);
-      // Tyre walls at chicane apexes
-      tyreWall(0.645, 0.66,  1, 2.4, CORAL);
-      tyreWall(0.66,  0.69, -1, 2.4, TEAL);
+      // Tyre walls at chicane apexes, on the outside, in front of the 3 m wall.
+      tyreWall(0.591, 0.603,  1, 2.4, CORAL);   // Turnpike chicane T15 (left)
+      tyreWall(0.573, 0.586, -1, 2.4, TEAL);    // Turnpike chicane T14 (right)
       tyreWall(0.155, 0.175, -1, 2.4, PINK);
       every(180, (k) => marshalPost(k, 1, 5));
       // Low shrubs
