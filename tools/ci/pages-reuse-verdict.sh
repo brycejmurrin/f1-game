@@ -103,9 +103,12 @@ reuse_invalidated() {
 # gate_ran <run-id>: prints `yes <tooling-A job id>` only when the run's jobs
 # show the full gate ran and passed (see the header). Paginated: a full gate's
 # selected matrix can push the job list past one page. Any lookup failure
-# prints nothing.
+# prints nothing. Buffer only successful API responses: a failed later page
+# may leave valid JSON on stdout, which is not complete evidence.
 gate_ran() {
-  gh api "repos/$REPO/actions/runs/$1/jobs?per_page=100" --paginate 2>/dev/null | node -e '
+  local json
+  json="$(gh api "repos/$REPO/actions/runs/$1/jobs?per_page=100" --paginate 2>/dev/null)" || return 0
+  printf '%s' "$json" | node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
       let jobs = [];
       try {
@@ -125,7 +128,9 @@ gate_ran() {
 # guards_full <job-id>: prints `yes` when that tooling A job's record says it ran
 # the whole guards floor (`mode=full`). A missing or unreadable record is not full.
 guards_full() {
-  gh api "repos/$REPO/check-runs/$1/annotations?per_page=100" 2>/dev/null | node -e '
+  local json
+  json="$(gh api "repos/$REPO/check-runs/$1/annotations?per_page=100" 2>/dev/null)" || return 0
+  printf '%s' "$json" | node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
       let rows = []; try { rows = JSON.parse(s); } catch (_) { return; }
       const r = (Array.isArray(rows) ? rows : []).find((a) => a && a.title === "apex-guards");
@@ -166,7 +171,7 @@ for c in $candidates; do
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
         (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
         (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
-      for (const r of runs.filter(gate)) console.log(`${r.id} ${Number(r.run_attempt) || 1} ${r.path} ${r.event} ${r.html_url || r.id}`);
+      for (const r of runs.filter(gate)) console.log(`${r.id} ${Number.isInteger(r.run_attempt) && r.run_attempt > 0 ? r.run_attempt : "unknown"} ${r.path} ${r.event} ${r.html_url || r.id}`);
     });')"
   while read -r id attempt path event url; do
     [ -n "$id" ] || continue
