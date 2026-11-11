@@ -20,12 +20,6 @@ const I18n = (function () {
     return i < 0 ? tag : tag.slice(0, i);
   }
 
-  // `?lang=en_US` threw for the session (#4550): `_` as `-`, canonical, else en.
-  function cleanTag(lang) {
-    const tag = String(lang || "").trim().replace(/_/g, "-");
-    try { return (tag && Intl.getCanonicalLocales(tag)[0]) || "en"; } catch (_) { return "en"; }
-  }
-
   function readQueryLang() {
     const loc = (typeof globalThis !== "undefined" && globalThis.location)
       || (typeof location !== "undefined" ? location : null);
@@ -223,7 +217,7 @@ const I18n = (function () {
   }
 
   async function boot(lang) {
-    const next = cleanTag(lang || resolveDetectOrder());
+    const next = lang || resolveDetectOrder();
     activeLang = next;
     setHtmlLang(next);
     readyDone = false;
@@ -252,7 +246,7 @@ const I18n = (function () {
   }
 
   async function set(lang, opts) {
-    const next = cleanTag(lang);
+    const next = String(lang || "en").trim() || "en";
     const persist = !(opts && opts.persist === false);
     if (persist && typeof GameStore !== "undefined") GameStore.store.set(LANG_KEY, next);
     await boot(next);
