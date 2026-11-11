@@ -15729,6 +15729,9 @@
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "_primeMergeSlot": [
+        "tests/unit/tlx-prune-pin.test.mjs"
+      ],
       "_resolveWarmWhere": [
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
