@@ -124,6 +124,43 @@ ready.
 
 Every work item has a pull request. Findings not yet assigned are tracked in issue #5335.
 
+## Outcome as of 2026-11-11 16:45 Pacific
+
+29 of the 34 work items are on the deploy branch. Landing sessions adopted most of the pull requests after the workers
+finished, and combined some of them, so a work item's fix may have merged under another item's pull request.
+
+| Outcome | Work items |
+|---|---|
+| Merged under its own PR | W1 #5260, W2 #5268, W3 #5273, W4 #5257, W5 #5279, W6 #5265, W7 #5277, W8 #5261, W9 #5274, W11 #5270, W12 #5287, W13 #5276, W14 #5278, W15 #5280, W16 #5275, W17 #5267, W18 #5269, W19 #5294, W20 #5291, W23 #5298, W24 #5300, W27 #5290, W28 #5293, W29 #5305, W30 #5340, W31 #5304, W34 #5351 |
+| Merged inside another PR | W10 (#5263 closed, carried by #5351); W26 (#5336, carried by #5268) |
+| Open | W21 #5303 (held on three triangle-ceiling raises); W22 #5296, which also carries W32 #5302 and W25 #5339; W33 #5348 |
+
+Follow-up pull requests that also merged: #5370 (the merge gate accepts a regenerated test list in `package.json`; the
+dispatcher reads a platform-side Pages failure) and #5376 (the overlay spec waits on a feed sequence).
+
+Deferred inside merged work, with no owner:
+
+- Voice re-bake: the lore corrections for Monaco, Shanghai, Vegas, Istanbul Turn 8 and Sepang (W3), and Madrid's lap
+  length and Mexico's race name (W5). The announcer reads these lines from recordings.
+- Zolder's start line, and the Donington and Brands Hatch start lines (W12). The Zolder move was reverted: the scenery
+  kits assume a different line and there was no surveyed coordinate.
+- Hungaroring and Zandvoort pit sides, the Watkins Glen Esses, Mugello's elevation (W12).
+- Jerez's corner-labelled scenery kits, which a later start-line move (#5110) left up to 990 m from their corners.
+- Per-read hashing of cached responses (W24, declined for phone CPU cost) and carrying circuit stills across cache
+  generations.
+- The car-effects spec row, the Spa props scan and the VR non-blank capture (W32): each needs a hook the game lacks.
+- 229 of the 242 merges the 2026-11-06 rollbacks erased. W33's ledger lists them; 13 are re-landed in #5348.
+
+Rows refuted after the table above was written:
+
+| Row | Outcome | By |
+|---|---|---|
+| E live-play row 7 (Back does nothing) | Already handled by `guardBack` (#4986) | W34 |
+| E live-play row 10 (requests repeated four times) | Deliberate cache warms; cache hits on the live site | W34 |
+| F (Portimao is missing T11) | It was missing T12; Hungaroring and Monza turn lists were already right | W12 |
+| F (Istanbul Turn 8 is quadruple-apex) | Sources give three or four apexes | W3 |
+| Candidate found during the fixes: Time Trial sector flash never paints | Not a bug; the test watched the wrong element | W32, W22 |
+
 ## Not assigned to a worker yet
 
 - Multiplayer design: longer room codes, a verify step that gates READY, TURN.
