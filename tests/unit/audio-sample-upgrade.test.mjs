@@ -6,13 +6,13 @@
  * ran its whole distance on the oscillator fallback. setEngine() now restarts
  * the engine once, the first time it sees samples it is not using.
  *
- * js/audio/engine.js has no other node harness: this is a fake AudioContext just
+ * This harness uses a fake AudioContext just
  * wide enough for createCtx/startEngine/setEngine/stopEngine (every node is a
  * generic connect/start/stop object with AudioParam-shaped fields). The fetch
- * of the two sample files is held back until the test releases it.
+ * of the engine sample is held back until the test releases it.
  *
  * Run: node --test tests/unit/audio-sample-upgrade.test.mjs
- *   APEX_AUDIO_SRC=<path> evaluates another copy of audio.js (old-code proof).
+ *   APEX_AUDIO_SRC=<path> evaluates another copy of engine.js (old-code proof).
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -98,6 +98,63 @@ test("an engine started on the synth voice upgrades to the samples once they dec
   GameAudio.setEngine(0.7, 0, false, 0.7, 5, {});
   GameAudio.setEngine(0.8, 0, false, 0.8, 6, {});
   assert.equal(counts.src, srcAfter, "one restart, not one per frame");
+});
+
+test("engine sample work belongs to the context that requested it", async (t) => {
+  for (const stage of ["fetch", "decode-first", "decode-last", "decode-reject"]) {
+    await t.test(stage, async () => {
+      let clock = 1000, template;
+      const contexts = [], requests = [], warnings = [];
+      const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+      const { GameAudio: A, ctx } = boot({
+        Date: { now: () => clock },
+        Log: { info() {}, debug() {}, warn: (...args) => warnings.push(args), enabled: () => false },
+        fetch: () => new Promise((resolve) => requests.push(() => resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }))),
+        AudioContext: function () {
+          const owner = { ...template, state: "running", decodes: [], copies: [],
+            close() { this.state = "closed"; return Promise.resolve(); },
+            decodeAudioData(ab, resolve, reject) { this.decodes.push({ resolve, reject }); },
+            createBuffer(ch, len, sr) {
+              const buf = template.createBuffer(ch, len, sr); this.copies.push(buf); return buf;
+            },
+          };
+          contexts.push(owner); return owner;
+        },
+      });
+      template = ctx;
+      A.setMusicEnabled(false); A.init(); A.startEngine();
+      const old = contexts[0];
+      if (stage !== "fetch") { requests[0](); await flush(); assert.equal(old.decodes.length, 1); }
+      old.state = "interrupted";
+      A.init(); clock += 1000; A.init();
+      assert.equal(contexts.length, 2, "a later gesture replaces the stalled context");
+      const fresh = contexts[1], before = fresh.copies.length;
+      if (stage === "fetch") {
+        requests[0](); await flush();
+        assert.equal(fresh.decodes.length, 0, "old fetch cannot decode on the replacement context");
+        assert.equal(old.decodes.length, 0, "old fetch cannot decode on the retired context either");
+      } else if (stage !== "decode-last") {
+        if (stage === "decode-reject") old.decodes[0].reject(new Error("retired decode"));
+        else old.decodes[0].resolve(sampleBuf(4, 4000));
+        await flush();
+        assert.equal(A.debug().samplesReady, false, "obsolete completion cannot publish readiness");
+        assert.equal(fresh.copies.length, before, "obsolete completion cannot allocate a loop copy");
+        assert.equal(warnings.length, 0, "retired failure is not a current audio failure");
+      }
+      requests[1](); await flush();
+      assert.equal(fresh.decodes.length, 1);
+      fresh.decodes[0].resolve(sampleBuf(4, 8000)); await flush();
+      assert.equal(A.debug().samplesReady, true, "replacement decode still publishes");
+      assert.equal(fresh.copies.length, before + 1);
+      if (stage === "decode-last") {
+        old.decodes[0].resolve(sampleBuf(4, 4000)); await flush();
+        assert.equal(fresh.copies.length, before + 1, "late obsolete decode cannot replace the fresh loop");
+      }
+      A.setEngine(0.6, 0, false, 0.6, 4, {});
+      assert.equal(A.debug().usingSamples, true, "the live engine upgrades after its own decode");
+      A.stopEngine();
+    });
+  }
 });
 
 test("music PCM cache: a phone keeps only the playing track, desktop the two most recent", async () => {
