@@ -8163,6 +8163,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "*": [
+        "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/deploy-staging.test.mjs"
       ]
     },
