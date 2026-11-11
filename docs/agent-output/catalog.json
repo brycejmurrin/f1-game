@@ -1162,6 +1162,11 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/reuse-draft-selected.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/run-group.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -2000,6 +2005,11 @@
       ]
     },
     {
+      "path": "tools/gfx/gpu-mem-webgpu.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/gfx/knob-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2028,6 +2038,15 @@
       "path": "tools/gfx/mem-cycles-lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/gfx/pass-census-lib.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/gfx/pass-census.mjs",
