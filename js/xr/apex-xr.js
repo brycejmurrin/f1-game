@@ -75,8 +75,10 @@ const ApexXR = (function () {
     };
   }
 
-  /** Async capability probe. Writes apex26.xrCaps for the next boot's sync pick. */
-  async function detect() {
+  /** Capability probe. A stored apex26.xrCaps answer is adopted WITHOUT asking navigator.xr
+   *  (#4324 / #5417: the ask bars the bfcache), synchronously, so XrSession is seeded before
+   *  XrUi.mount looks; `force` asks anyway. A live answer is stored for the next boot. */
+  async function detect(force) {
     if (_detecting) return _detecting;
     _detecting = (async () => {
       const caps = syncCapsFromCache();
@@ -86,18 +88,23 @@ const ApexXR = (function () {
       caps.mobileQuest = typeof navigator !== "undefined" && questUa(navigator.userAgent);
       // Only rewrite apex26.xrCaps when the probe settles. A throw must not wipe
       // a positive latch (bootPick / VR rows still need the last good detect).
-      if (caps.xr && navigator.xr && navigator.xr.isSessionSupported) {
+      const stored = lsGet(LS_CAPS);
+      let known = true;
+      if (!force && (stored === "1" || stored === "0")) {
+        caps.vr = stored === "1";
+      } else if (caps.xr && navigator.xr && navigator.xr.isSessionSupported) {
         try {
           const vr = !!(await navigator.xr.isSessionSupported("immersive-vr"));
           caps.vr = vr;
           storeCaps(vr);
-        } catch (_) { /* keep caps.vr from syncCapsFromCache */ }
+        } catch (_) { known = false; /* keep caps.vr from syncCapsFromCache */ }
       } else {
         caps.vr = false;
         storeCaps(false);
       }
       _caps = caps;
       _plan = null; // invalidate so plan() re-resolves
+      if (known && typeof XrSession !== "undefined" && XrSession.seed) XrSession.seed(caps.vr);
       if (typeof XROpts !== "undefined" && XROpts.onCaps) {
         try { XROpts.onCaps(caps); } catch (_) { /* UI optional */ }
       }

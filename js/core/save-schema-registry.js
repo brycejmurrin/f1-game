@@ -144,8 +144,6 @@ const SaveSchemaRegistry = (function () {
     "tlxInstPad": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxLampStatic": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxMirFold": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
-    "tlxGodray11": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
-    "tlxMir11": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxMirLampCap": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxMirMips": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxMirWarmLazy": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -165,7 +163,6 @@ const SaveSchemaRegistry = (function () {
     "tlxSkipBatches": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxSkyCache": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxSkyCache512": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
-    "tlxTag8": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxTagDiscard": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxTagLess": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxViz": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -212,7 +209,7 @@ const SaveSchemaRegistry = (function () {
     rendezvous: entry("js/net/rendezvous.js", "raw", 1, "rawScalar"),
     seasonCfg: entry("js/career/season-cal.js", "json", 1, "season"),
     shareUndo: entry("js/ui/share-code.js", "json", 1, "json"),
-    xrCaps: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),   // stored immersive-vr answer "0"|"1": boots read it, never probe (#4324, #5417)
+    xrCaps: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrEnterPending: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrPrevBackend: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
   };

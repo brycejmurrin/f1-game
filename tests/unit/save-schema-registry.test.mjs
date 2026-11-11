@@ -37,6 +37,7 @@ const READ_EXEMPT = new Map([
   ["js/game.js", new Set(["tlxWarmBeforePack"])],   // hunt 5 A kill switch, set by hand
   ["js/render/renderer-boot.js", new Set(["gfxBootStepMs"])],   // slow-CI boot step cap, set by specs
   ["js/render/three/tlx.js", new Set(["tlxFixedTargets", "tlxPackAsync"])],   // hand-set TLX A/B kill switches
+  ["js/render/three/tlx-post.js", new Set(["tlxMir11", "tlxTag8", "tlxGodray11"])],   // hand-set phone format trims (#2649), read through _fmtOn
 ]);
 const READ_OPS = new Set(["get", "getItem", "raw"]);   // M1-17: a read of a key the registry cannot resolve is a typo or an orphan
 
