@@ -53,7 +53,7 @@ test("pit duel uses observed crossings and suppresses incomplete or lap-down tim
   script.drivers[0].laps[1] = 10; script.drivers[0].dnf = true;
   assert.equal(api.pitDuel(script, 1, 2, 2, 2).available, false);
   script.drivers[0].dnf = false; script.drivers[0].lapStart[1] = 30;
-  assert.match(api.pitDuel(script, 1, 2, 2, 2).reason, /lap-down/);
+  assert.equal(api.pitDuel(script, 1, 2, 2, 2).reason, "Unavailable: possible lap-down mismatch.");
 });
 
 test("feed coverage records windows and gaps without implying retirement", () => {
@@ -461,7 +461,7 @@ test("a failed fetch does not read as an unpublished session", async () => {
   const msg = find(tree, (n) => hasCls(n, "dh-empty"));
   assert.equal(msg.length, 1);
   assert.notEqual(msg[0].text, "NOTHING YET");
-  assert.match(msg[0].text, /Couldn't load/);
+  assert.equal(msg[0].text, "Couldn't load this session's classification. Pick it again in a moment — the free F1 API rate-limits hard.");
 });
 
 // /drivers is a separate request and a separate failure. Losing it must cost
@@ -499,6 +499,5 @@ test("RESULTS header remaps a moved venue through placeLabel", async () => {
   );
   const metaEl = find(tree, (n) => hasCls(n, "dh-lr-meta"))[0];
   assert.ok(metaEl, "the session header meta line exists");
-  assert.match(metaEl.text, /Kuala Lumpur, Malaysia/);
-  assert.doesNotMatch(metaEl.text, /Kuala Lumpur, Bahrain/);
+  assert.equal(metaEl.text, "Kuala Lumpur, Malaysia · 2026-10-04T12:00:00Z");
 });
