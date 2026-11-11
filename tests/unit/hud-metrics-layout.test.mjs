@@ -336,9 +336,10 @@ function cssRules() {
   }
   return rules;
 }
-const subjectHas = (sel, id) => new RegExp("#" + id + "(?![\\w-])").test(splitTop(sel, /[\s>+~]/).pop());
+/** `id` is an id ("hud-delta") or a class token (".hud-gaps"). */
+const subjectHas = (sel, id) => new RegExp((id[0] === "." ? "\\" + id : "#" + id) + "(?![\\w-])").test(splitTop(sel, /[\s>+~]/).pop());
 const displayOf = (body) => (body.match(/(?:^|[;\s])display\s*:\s*([^;}]+)/) || [])[1]?.trim();
-/** Every plain hide of #id beats every non-`none` display rule that could reach #id. */
+/** Every plain hide of #id (or .class) beats every non-`none` display rule that could reach #id. */
 function assertPlainHidesWin(id) {
   const rules = cssRules().filter((r) => subjectHas(r.sel, id) && displayOf(r.body));
   const hides = rules.filter((r) => /^none\b/.test(displayOf(r.body)));
@@ -397,5 +398,14 @@ test("F-13 slice 4: RELATIVE, STRATEGY and INPUTS hide in plain rules that out-r
     const hide = rows.find((r) => r.sel === `#${id} > div[hidden]`), show = rows.find((r) => r.sel === `#${id} > div`);
     assert.ok(hide && show, `#${id} rows have a layout and a [hidden] hide`);
     assert.ok(beats(specificity(hide.sel), specificity(show.sel)) > 0 && hide.layer === show.layer);
+  }
+});
+
+test("F-13 slice 5: the MAP and GAPS toggles hide in plain display:none", () => {
+  for (const [tok, sel] of [["minimap", "body.hud-hide-map #minimap"], [".hud-gaps", "body.hud-hide-gaps .hud-gaps"]]) {
+    const { hides } = assertPlainHidesWin(tok);
+    const h = hides.find((r) => r.sel === sel);
+    assert.ok(h, sel + " still hides");
+    assert.doesNotMatch(h.body, /!important/, sel + " needs no !important");
   }
 });
