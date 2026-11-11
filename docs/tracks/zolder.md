@@ -8,6 +8,18 @@
 > Pit / S/F landmarks use `sl()`; corner props stay on authored `K()`. Do not
 > retune frame keys without a per-circuit probe (`docs/tracks/START-LINES.md`).
 
+> **START LINE — DO NOT MOVE IT AFTER THE CHICANE (verdict 2026-11-11, #5287).** A
+> 2026-11-10 pass (W12) moved `startFrac` 0.1226 → 0.2170, onto the straight after
+> the built left-right chicane, reading that chicane as the final one. It is the
+> FIRST corner (Earste chicane, "first left"), so the move was reverted before
+> landing. Evidence: en.wikipedia "Circuit Zolder" puts Bianchi at turn 4, and the
+> `K()`-framed Bianchi kit sits on the apex 0.2170 numbered T1, with every
+> corner-named kit three numbers off (`node tools/track/corner-frames.cjs zolder`);
+> the built lap runs R16 m right → 580 m → left-right chicane → 616 m. Whether the
+> S/F sits before the chicane (0.1226, chicane reading) or one corner earlier
+> before the R16 right (kit reading) needs a surveyed coordinate:
+> `docs/tracks/START-LINES.md` "Zolder: NOT moved".
+
 ## 1. Setting
 
 Pine heath and sand in Belgian Limburg, on the site of old coal workings. Ten Belgian Grands Prix, and the circuit where Gilles Villeneuve was killed in qualifying in 1982. Gently undulating, hemmed in by pine — with the Heusden-Zolder mine terril readable on the skyline from the pits.
