@@ -13,15 +13,16 @@
 // HOW. Same boot as the pass census (PR #2699, issue #2657): headless Chromium, TLX forced onto three's WebGL2 path, program
 // links stubbed unless --real-link, `--mobile` forces the phone tier, then race → go → jump and WARM frames.
 //
-// --webgpu (#4783 row 3) runs three's WebGPU backend (Bryce's iPhone path, D-013) on Mesa lavapipe and counts
-// GPUDevice.createTexture / createBuffer minus destroy() instead (tools/gfx/gpu-mem-webgpu.mjs). Lavapipe is a software
-// adapter, so TLX skips batches there: the bytes are exact for what that run asked for, not a phone's number.
+// --webgpu (#4783 row 3) runs three's WebGPU backend (Bryce's iPhone path, D-013) on software WebGPU and counts
+// GPUDevice.createTexture / createBuffer minus destroy() instead (tools/gfx/gpu-mem-webgpu.mjs). The launch asks for Mesa
+// lavapipe but the adapter is google/swiftshader (#5450; checked, exit 1 on any other). It is a software adapter, so TLX
+// skips batches there: the bytes are exact for what that run asked for, not a phone's number.
 //
 //   node tools/gfx/gpu-mem-census.mjs [track=monaco] [--warm 60] [--mobile] [--real-link] [--webgpu] [--json PATH]
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV, WEBGPU_CENSUS_ARM, adapterMismatch } from "../lib/harness.mjs";
 import { gpuMemInitSource, gpuMemSnapshot } from "./gpu-mem-webgpu.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
@@ -31,7 +32,7 @@ exitIfHelp(argv, `usage: node tools/gfx/gpu-mem-census.mjs [track=monaco] [--war
   --visits then switches to each listed circuit in turn (the race path) and prints the net bytes and GL create/delete counts after each,
   which describes explicit create/delete activity across track switches (three #34597, issue #2651).
   --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
-  --webgpu runs three's WebGPU backend on Mesa lavapipe and counts GPUDevice.createTexture / createBuffer minus destroy() (exit 1 if three falls back to WebGL2).
+  --webgpu runs three's WebGPU backend on software WebGPU (google/swiftshader adapter; exit 1 on any other, #5450) and counts GPUDevice.createTexture / createBuffer minus destroy() (exit 1 if three falls back to WebGL2).
   Requested GPU allocation estimates by format on TLX's WebGL2 path, from the allocation calls (allocation estimates, not a driver number).
   Link calls are stubbed unless --real-link, so the scene reaches steady state quickly under SwiftShader.`);
 
@@ -49,7 +50,7 @@ if (!Number.isSafeInteger(WARM) || WARM < 0 || WARM > 10000) throw new Error("--
 const VISITS = String(flag("--visits", "") || "").split(",").map((x) => x.trim()).filter(Boolean);
 const REAL_LINK = argv.includes("--real-link");
 const MOBILE = argv.includes("--mobile");
-// --webgpu: three's WebGPU backend on Mesa lavapipe (needs the lvp ICD; SwiftShader cannot run it), as pass-census does.
+// --webgpu: three's WebGPU backend on the census launch, as pass-census does (adapter google/swiftshader, #5450).
 const WEBGPU = argv.includes("--webgpu");
 const JSON_OUT = flag("--json", null);
 const WAIT_MS = Math.max(60000, +process.env.APEX_PROFILE_WAIT_MS || 60000);
@@ -238,10 +239,14 @@ async function main() {
     const correctness = { status: REAL_LINK ? (ok ? "pass" : "fail") : "unverified",
       reason: REAL_LINK ? "Observed native link statuses and API/page errors; this is not a pixel or hardware-performance validation." : "Shader operations were stubbed; native rendering correctness was not tested." };
     const report = { ...out, ok, measurement: { status: ok ? "pass" : "fail", estimates: out.unknownCount ? "incomplete" : "supported-formats-only", interpretation: "Protocol completion and observed errors only; unknown estimates do not establish a negative leak finding." },
-      correctness: WEBGPU ? { status: "unverified", reason: "Counts createTexture/createBuffer descriptors on a software WebGPU adapter (lavapipe); no pixel, hardware or driver-residency validation." } : correctness, presented, track: VISITS.at(-1) || track, initialTrack: track, initial, final: out, visits, backend,
+      correctness: WEBGPU ? { status: "unverified", reason: "Counts createTexture/createBuffer descriptors on a software WebGPU adapter (google/swiftshader); no pixel, hardware or driver-residency validation." } : correctness, presented, track: VISITS.at(-1) || track, initialTrack: track, initial, final: out, visits, backend,
       shaderLinkMode: WEBGPU ? "webgpu" : REAL_LINK ? "native" : "stubbed", errors, pageErrorCount, interpretation: "Observed requested allocations minus explicit deletes, not driver residency. GC, context teardown, implicit resources and unsupported/compressed allocations are not subtracted or fully measured; totals can overcount or undercount actual live storage. Stubbed shader mode does not establish native rendering correctness.",
       provenance: { tool: "tools/gfx/gpu-mem-census.mjs", warm: WARM, mobile: MOBILE, requestedAPI: WEBGPU ? "webgpu" : "webgl2", renderer: await page.evaluate(() => { const b = window.renderer?.backend, gl = b?.gl; if (gl) return { version: gl.getParameter(gl.VERSION), renderer: gl.getParameter(gl.RENDERER) };
         const ai = b?.device?.adapterInfo; return ai ? { vendor: ai.vendor, architecture: ai.architecture, device: ai.device, description: ai.description } : null; }) } };
+    if (WEBGPU) {   // #5450: the adapter provenance.renderer read is the claimed one, or the run fails
+      const bad = adapterMismatch(report.provenance.renderer);
+      if (bad) { report.adapterMismatch = bad; console.error(`gpu-mem-census: --webgpu is the ${WEBGPU_CENSUS_ARM} arm: ${bad}`); process.exitCode = 1; }
+    }
     if (!ok) process.exitCode = 1;
     if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify(report, null, 2)); }
   } finally {

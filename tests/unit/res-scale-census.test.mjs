@@ -44,9 +44,8 @@ test("the WebGPU census arm names its adapter and refuses any other (#5450)", as
 
 // Every tool that launches the census arm either checks the adapter or is named here with why not (only shrinks).
 const ADAPTER_UNCHECKED = new Map([
-  ["tools/gfx/pass-census.mjs", "PR #5446 owns it (the WebGPU census arms); #5450 asks it to call adapterMismatch"],
   ["tools/gfx/gfx-probe.mjs", "a probe that prints the adapter, not a census filed under a label (#5450 'not checked here')"],
-  ["tools/gfx/gpu-game-check.mjs", "PR #5446 owns it; #5450 'not checked here'"],
+  ["tools/gfx/gpu-game-check.mjs", "a GPU smoke check, not a census filed under a label (#5450 'not checked here')"],
   ["tools/perf/first-race-census.mjs", "#5450 'not checked here': needs its own adapterInfo read"],
   ["tools/perf/lit-wgsl-census.mjs", "#5450 'not checked here': needs its own adapterInfo read"],
 ]);

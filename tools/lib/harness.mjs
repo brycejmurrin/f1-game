@@ -64,7 +64,8 @@ export const adapterMismatch = _wgpuArgs.adapterMismatch;
 /** The adapter three's WebGPU backend runs on (GPUDevice.adapterInfo, else GPUAdapter.info), or null. #5450. */
 export async function readWebgpuAdapter(page) {
   return page.evaluate(() => {
-    const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend;
+    const r = (window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer) || window.renderer;   // window.renderer: ?three-devtools=1
+    const b = r && r.backend;
     const i = (b && b.device && b.device.adapterInfo) || (b && b.adapter && b.adapter.info);
     return i ? { vendor: i.vendor, architecture: i.architecture, device: i.device, description: i.description } : null;
   });

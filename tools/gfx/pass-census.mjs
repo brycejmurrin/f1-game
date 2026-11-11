@@ -30,7 +30,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV, WEBGPU_CENSUS_ARM, adapterMismatch, readWebgpuAdapter } from "../lib/harness.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { parkKey, parkPasses, baselineCell, uboFlat, compareParkBaseline, PARK_MEMORY_REPORTED } from "./pass-census-lib.mjs";
 
@@ -38,7 +38,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--camera MODE] [--park] [--park-at 0.1] [--baseline FILE] [--ls key=value]... [--tune knob=value]... [--json PATH]
   --by-object attributes each pass's triangles to object groups (the mesh's userData flags: tlxLgRoad, tlxBatch, ...), for the mirror and main passes.
-  --webgpu runs three's WebGPU backend on Mesa lavapipe (CI Lavapipe shard) instead of the WebGL2 pin.
+  --webgpu runs three's WebGPU backend instead of the WebGL2 pin: software WebGPU on the google/swiftshader adapter (the launch asks for lavapipe; Dawn gives SwiftShader, #5450). Exits 1 on any other adapter.
   --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
   --park freezes the normal camera at 10% of the track, pins tier/resolution, and preserves the real fog/distance budgets (free cameras disable them).
   --park-at sets the lap fraction the parked camera sits at (0 to 1, default 0.1); implies nothing without --park.
@@ -73,7 +73,8 @@ for (let i = 0; i < argv.length; i++) if (argv[i] === "--ls" || argv[i].startsWi
   if (!pair) throw new Error("--ls requires key=value");
   LS[pair[1].startsWith("apex26.") ? pair[1] : "apex26." + pair[1]] = pair[2];
 }
-// --webgpu: three's WebGPU backend (Bryce's iPhone path) on Mesa lavapipe. Needs the lvp ICD; SwiftShader cannot run it.
+// --webgpu: three's WebGPU backend (Bryce's iPhone path) on software WebGPU. The launch asks for Mesa lavapipe, but the
+// adapter is google/swiftshader (#5450); the run records it and refuses any other (adapterMismatch, below).
 // Software skips batches (skipBatches: true), so counts are exact for the deterministic scenario but not equal to hardware.
 const WEBGPU = argv.includes("--webgpu");
 const TUNES = {};
@@ -177,6 +178,11 @@ async function main() {
     const ok = await page.waitForFunction(() => !!window.renderer, null, { timeout: WAIT_MS, polling: 100 }).then(() => true, () => false);
     if (!ok) throw new Error("window.renderer never appeared: this tool measures TLX (backend three) behind ?three-devtools=1");
     const backend = await page.evaluate(() => { const b = window.renderer.backend; return { api: b && b.isWebGPUBackend ? "webgpu" : "webgl2", forceWebGL: !(b && b.isWebGPUBackend) }; });
+    const adapter = WEBGPU && backend.api === "webgpu" ? await readWebgpuAdapter(page) : null;
+    if (WEBGPU && backend.api === "webgpu") {   // #5450: numbers are filed under the adapter they ran on, or not at all
+      const bad = adapterMismatch(adapter);
+      if (bad) throw new Error(`--webgpu is the ${WEBGPU_CENSUS_ARM} arm: ${bad}`);
+    }
     await page.evaluate(async ({ warm, park }) => {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
       for (let i = 0; i < warm; i++) { if (!park) A.setInput({ throttle: true, steer: 0.35 * Math.sin(i / 25) }); await raf(); }
@@ -266,7 +272,7 @@ async function main() {
       for (const e of byObj.slice(0, 24)) console.log((e.pass + " | " + e.group).slice(0, 56).padEnd(58) + String(e.callsPerFrame).padStart(11) + String(e.trisPerFrame).padStart(12));
       if (!byObj.length) console.log("(no renderObject calls seen: this three build does not expose renderer.renderObject)");
     }
-    const summary = { track, frames: rows.frames, backend: backend.api, forceWebGL: backend.forceWebGL,
+    const summary = { track, frames: rows.frames, backend: backend.api, adapter, forceWebGL: backend.forceWebGL,
       stubbedLinks: !REAL_LINK && !WEBGPU, requestedWebgpu: WEBGPU, skipBatches: WEBGPU ? true : undefined, mobileTier: MOBILE, parked: PARK, tunes: TUNES,
       callsPerFrame: +total.calls.toFixed(1), trisPerFrame: total.tris, pageErrors: errors.length };
     if (PARK) {
