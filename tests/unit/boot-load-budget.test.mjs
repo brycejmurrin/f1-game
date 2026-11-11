@@ -36,8 +36,11 @@ const MAX_EAGER_SCRIPTS = 317;
 // Cause: #4260 grew js/ui/screen-looks.js +8.6 KB (tip 8,209,755); #3981's ERS sector plan adds ~6 KB next.
 // 8.22 MB: lowered by #4978 rows 1+4 (tip 8,228,695 → 8,198,163 raw, −30.5 KB).
 // 8.18 MB: lowered by #4748 career-backup → LAZY_CAREER_UI (tip 8,213,577 → 8,159,200 raw, −54.4 KB).
-// 8.07 MB: lowered by #4978 row 2 perf rig → LAZY_PERF (8,159,200 → 8,045,152 raw, −114.0 KB).
-const MAX_EAGER_BYTES = 8_070_000;
+// 8.15 MB: the cap came down from 8,220,000 with #5468 (#4748 career-backup → LAZY_CAREER_UI, #4978 row 2 perf rig →
+// LAZY_PERF). 8,150,000 is the owner's decision of 2026-11-11 (issue #5523, brycejmurrin "decision: 8150000",
+// 16:37:17Z), a deliberate exception to the "freed bytes are not headroom" default. Measured after #5468:
+// 314 scripts, 8,046,657 raw bytes → 103,343 B of room.
+const MAX_EAGER_BYTES = 8_150_000;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");
