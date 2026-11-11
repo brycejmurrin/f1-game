@@ -1069,7 +1069,7 @@ const CarDraw = (function () {
           getErsBar(); getOtLamp(false); getOtLamp(true);
           for (let g = 0; g <= 9; g++) getGearDigit(g);
           for (let d = 0; d <= 9; d++) getSpeedDigit(d);
-          _digitsPrimed = false;   // this race's first telemetry frame draws them all once (primeDigits)
+          _primeArmed = 1;   // this race's first rendered frame draws every one of them once (primeRace)
           const styles = (CarMesh.LED_ROWS && Object.keys(CarMesh.LED_ROWS)) || ["std"];
           for (let s = 0; s < styles.length; s++) {
             for (let lit = 0; lit <= 9; lit++) getLedStrip(lit, styles[s]);
@@ -1464,21 +1464,6 @@ const CarDraw = (function () {
     const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
     const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
     const _digM = new Float32Array(16);
-    // #5387: a 7-segment digit's FIRST draw mints its TLX pool wrapper (render object, UBO, bind group), so each
-    // gear or speed digit the race had not shown yet did that mid-lap (diagnostic run 42949086546). The race's first
-    // telemetry frame draws every digit once per place it can hold (gear x1, speed x3, retro x4) on the wheel matrix
-    // shrunk 1e-4: invisible, same winding, the race's own (geometry, material) pairs. Re-armed per race warm.
-    let _digitsPrimed = false;
-    const _digP = new Float32Array(16);
-    function primeDigits(m, fx) {
-      _digitsPrimed = true;
-      for (let i = 0; i < 16; i++) _digP[i] = i < 12 ? m[i] * 1e-4 : m[i];
-      if (!fx) { if (typeof CarMesh.primeRetroDigits === "function") CarMesh.primeRetroDigits(_digP); return; }
-      for (let d = 0; d <= 9; d++) {
-        G.gfx.draw(getGearDigit(d), _digP, fx);
-        for (let k = 0; k < 3; k++) G.gfx.draw(getSpeedDigit(d), _digP, fx);
-      }
-    }
     // Sky-tint fallback is a MATTE card of the current TOD env — not a shiny
     // dielectric. roughness 0.08 / specular 0.7 made it pick up lamp speculars
     // and a stale day env cube so Monaco night glass read luma 0.39–0.58 against
@@ -1537,6 +1522,46 @@ const CarDraw = (function () {
     const _pinned = new WeakSet();
     const pin = (m) => { if (m && !_pinned.has(m)) { _pinned.add(m); if (typeof G.gfx.pinMesh === "function") G.gfx.pinMesh(m); } return m; };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
+    // #5387 THE RACE'S FIRST RENDERED FRAME DRAWS EVERY MESH ITS WARM BUILT (Bryce, 2026-11-11: "Yes, in this PR").
+    // The race warm builds the cockpit LCD set, each rival's flap sets and elements and the shared rival bodies, but
+    // TLX makes a mesh's pool wrapper and render object (UBO, bind group) at its first RENDERED draw, so each one was
+    // minted mid-lap the first time it came into view (diagnostic runs 42949086546, 42952935336; warmDraws compiles
+    // through probe meshes, pipelines only). game.js calls this once per main-pass frame before its car loop. Armed
+    // per race warm (a restart re-arms it), it draws every (geometry, material) pair once at a ZERO 3x3 matrix:
+    // zero-area triangles, no fragment, no depth, on TLX, GLX and WGX. Never in the mirror pass. A TLX present held
+    // by a warm renders nothing, so it waits for warming()/warmQueued() to clear and re-primes once if the frame it
+    // primed started a warm. Returns the draws issued.
+    let _primeArmed = 0;   // 0 off, 1 armed, 2 primed last frame (re-prime if that present was held)
+    const _primeZ = new Float32Array(16);
+    function primeRace(paint) {
+      if (!_primeArmed || carModelBuf || !G.cars || !G.cars.length) return 0;   // the menu prep arms it too: wait for the race's field
+      const gfx = G.gfx, held = () => !!((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
+      if (_primeArmed === 2) { if (!held()) { _primeArmed = 0; return 0; } _primeArmed = 1; }   // that present started a warm: again
+      if (held()) return 0;
+      _primeArmed = 2;
+      const Z = _primeZ; let n = 0;
+      const d = (mesh, opts) => { if (mesh) { gfx.draw(mesh, Z, opts); n++; } };
+      // Cockpit LCD: each digit once per place it can hold (the pool keys wrappers per occurrence: gear x1, speed x3).
+      for (let k = 0; k <= 9; k++) { d(getGearDigit(k), _rigFx); for (let j = 0; j < 3; j++) d(getSpeedDigit(k), _rigFx); }
+      const ws = CockpitOpts.wheel();
+      if (CockpitOpts.wheelHasScreen(ws)) for (let lit = 0; lit <= 9; lit++) d(getLedStrip(lit, ws), _rigFx);
+      d(getErsBar(), _rigFx); _rigFxA.alpha = 0.75; d(getErsBar(), _rigFxA);
+      d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
+      if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
+      if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
+      // Rivals: the shared near/far bodies, each team body, and every flap draw (closed set, open set, moving elements).
+      if (paint) {
+        const co = coOpt(paint);
+        d(_sharedRivalBody, co); d(_farRivalBody, co);
+        for (const c of G.cars || []) {
+          if (!c || c.isPlayer) continue;   // the player's own meshes draw from its first frame
+          d(teamBodyMesh(c.team, c), paint);
+          const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp);
+          for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(c.team, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
+        }
+      }
+      return n;
+    }
     // The rig's programs before the first onboard frame needs them (TLX gfx.warmDraws captures the draws
     // and compiles them; GLX/WGX have no warmDraws). Both seats: cockpit/helmet with the wheel, visor without.
     // Outside a frame: the decal it queues is dropped by the next beginDecals(), and dt 0 moves nothing.
@@ -1634,7 +1659,6 @@ const CarDraw = (function () {
       // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the
       // HUD shows gear and speed instead (js/camera/mode-switch.js).
       if (wheelStyle === "retro") {
-        if (!_digitsPrimed) primeDigits(_rigB, null);
         CarMesh.drawRetroTelemetry(_rigB,c,G.dashKph(c.speed || 0),G.raceT);
         return;
       }
@@ -1644,7 +1668,6 @@ const CarDraw = (function () {
       // lights, speed, pedal bars, ERS energy.
       const fx = _rigFx;
       G.gfx.draw(getGearDigit(M4.clamp(c.gear || 1, 0, 9)), _rigB, fx);
-      if (!_digitsPrimed) primeDigits(_rigB, fx);
       const rpmF = M4.clamp(((c.rpm || PhysicsConsts.IDLE_RPM) - PhysicsConsts.IDLE_RPM) / (PhysicsConsts.MAX_RPM - PhysicsConsts.IDLE_RPM), 0, 1);
       // At the limiter the strip stays LIT: full ramp <-> all-blue SHIFT NOW at
       // ~7 Hz (it went 9 <-> 0 — dark half the frames), steady blue under reduced motion.
@@ -2236,7 +2259,7 @@ const CarDraw = (function () {
       teamMesh, teamBodyMesh, sharedRivalBodyMesh, farRivalBodyReady, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures, sweepStaleDecals, decalBytes,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      advanceWheelPhases, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, warmCockpitTelemetry, drainDeferredCarWarm, drawExhaustFx, glassState, drawMirrorCar,
+      advanceWheelPhases, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, warmCockpitTelemetry, primeRace, drainDeferredCarWarm, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
       // __apex.menuPrep().cars: the last menu car prep that ran to its end.
       prepareMenuCarAssets: (current) => prepareMenuCarAssets(current).then((r) => { if (r) _menuCarPrep = r; return r; }),
