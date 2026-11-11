@@ -1033,6 +1033,7 @@
     "// The start gantry's five lamps follow the countdown: one additive glow per",
     "// lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.",
     "tests/unit/start-lights.test.mjs",
+    "tests/unit/start-race-dock-fit.test.mjs",
     "tests/unit/start-race-latch.test.mjs",
     "tests/unit/steel-role.test.mjs",
     "// Mid-corner lift-off snap cap (COAST_YAW_* in consts + player-forces): yaw",
