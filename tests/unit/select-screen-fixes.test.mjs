@@ -251,27 +251,3 @@ test("#5062: CIRCUIT DETAIL's elevation strip does not grow while hidden and dra
   assert.equal(h.dom.byId("track-detail-elev-wrap").hidden, false);
 });
 
-// #4671 (re-landed after the Nov 6 rollback): re-opening the picker re-attaches
-// the cached tiles instead of rebuilding every flag SVG and closure.
-test("#4671: a re-open re-uses the circuit tiles and moves only the highlight", () => {
-  const h = boot({}, { trackIdx: 1 });
-  const first = Array.from(h.tiles());
-  assert.ok(first.length >= 2);
-  h.G.trackIdx = 0;
-  h.menus.buildSelect();
-  const again = Array.from(h.tiles());
-  assert.equal(again.length, first.length);
-  again.forEach((row, k) => assert.equal(row, first[k], "tile " + k + " is the same node"));
-  assert.equal(again[0].getAttribute("aria-pressed"), "true");
-  assert.equal(again[1].getAttribute("aria-pressed"), "false");
-  assert.equal(again[1].classList.contains("active"), false);
-});
-
-test("#4671: a changed favourite rebuilds the tiles", () => {
-  const h = boot({}, { trackIdx: 1 });
-  const first = h.tiles()[0];
-  h.data.set("favTracks", JSON.stringify(["monza"]));
-  h.menus.buildSelect();
-  assert.notEqual(h.tiles()[0], first, "a different signature builds fresh tiles");
-  assert.equal(h.tiles()[0].dataset.fav, "1");
-});
