@@ -724,7 +724,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/spec-timings.mjs** | Merges junit/reporter durations into `tests/data/spec-timings.json` (bounded, per env); `--check` flags 2x growth. |
 | **ci/test-bg.mjs** | Runs ONE browser spec in the BACKGROUND under a one-run lock and a loadavg gate; `--status`, `--wait`, `--stop`. |
 | **ci/test-coverage-audit.mjs** | Coverage guard (`npm run test:audit`): every spec / unit file must be reachable from a topical `test:<group>` script. |
-| **ci/test-honesty.mjs** | Finds tests that pass by not testing: bare `test.skip`/`fixme`/`todo` without a `SKIP-OK:` reason, and empty bodies. |
+| **ci/test-honesty.mjs** | Finds tests that pass by not testing: unexplained skip/fixme/todo, empty bodies, an early bare return before any assert. |
 | **ci/test-observed.mjs** | Which tests have I never seen run? Declared spec titles (espree) vs every title any `artifacts/logs/` run reported. |
 | **ci/test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`; refuses (exit 3) while busy (`--max-load`). Foreground. |
 | **ci/tooling-fast.mjs** | Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list. |
@@ -741,7 +741,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 |---|---|
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
 | **ci/dispatch.json** | `ci/dispatch.mjs`, `ci/lib/provenance.mjs`, `tests/unit/dispatch.test.mjs` |
-| **ci/worker-prompt.md** | `ci/dispatch.mjs` |
+| **ci/worker-prompt.md** | `ci/dispatch.mjs`, `tests/unit/dispatch.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |

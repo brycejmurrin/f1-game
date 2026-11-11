@@ -5,7 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { createHash } from "node:crypto";
-import { fetchBytes, verifyLive } from "../../tools/ci/verify-live.mjs";
+import { DEFAULT_LIVE_FILES, fetchBytes, verifyLive } from "../../tools/ci/verify-live.mjs";
+import { STAGE_ROOT_FILES } from "../../tools/desktop/stage-files.mjs";
 
 const sri = (bytes) => `sha256-${createHash("sha256").update(bytes).digest("base64")}`;
 
@@ -37,6 +38,25 @@ test("verifyLive checks secondary HTML, service worker, and every lazy integrity
     assert.equal(result.ok, true, result.errors.join("\n"));
     assert.deepEqual(result.errors, []);
     assert.ok(result.checked.includes("js/core/lazy-bundles.js"));
+  } finally { server.close(); }
+});
+
+test("#5306: the default list is every staged root page plus version.json and sw.js, and a stale overlay.html is a mismatch", async () => {
+  assert.deepEqual(STAGE_ROOT_FILES.filter((f) => f.endsWith(".html") && !DEFAULT_LIVE_FILES.includes(f)), [], "every staged .html is verified");
+  assert.deepEqual(["version.json", "sw.js", "overlay.html", "bench.html"].filter((f) => !DEFAULT_LIVE_FILES.includes(f)), []);
+  assert.equal(DEFAULT_LIVE_FILES[0], "index.html");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const local = new Map(DEFAULT_LIVE_FILES.map((f) => [f, Buffer.from(f === "index.html" ? '<html><head><script type="application/json" id="apex-lazy-integrity">{}</script></head></html>' : `local ${f}`)]));
+  for (const [name, body] of local) await fs.writeFile(path.join(root, name), body);
+  const live = new Map(local);
+  live.set("overlay.html", Buffer.from("stale overlay"));
+  const { server, base } = await fixtureServer(live);
+  try {
+    const result = await verifyLive({ baseUrl: base, root });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.errors.filter((e) => !/overlay\.html/.test(e)), [], result.errors.join("\n"));
+    assert.equal(result.errors.length, 1);
+    assert.ok(result.checked.includes("bench.html"));
   } finally { server.close(); }
 });
 

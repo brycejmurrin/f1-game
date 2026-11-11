@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   planDispatch, batchMembers, batchLandsAfter, DEFAULT_CONFIG, parseHandoff, liveLaunch, activityAt, applyPlan, loadConfig, BOARD_MARKER, LAUNCH_RE, NUDGE_RE,
-  DIGEST_MARKER, ANTHROPIC_VERSION, readState, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment,
+  DIGEST_MARKER, ANTHROPIC_VERSION, readState, landedCount, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment,
   addressOf, closingIssues, isDispatchComment, PROVENANCE_LABELS, PLATFORM_STEP, platformFailure,
 } from "../../tools/ci/dispatch.mjs";
 
@@ -234,12 +234,21 @@ test("needs-decision: a Bryce `decision:` comment newer than the label clears it
 test("board: the markdown carries the marker, one row per open PR (owner from the handoff block), launches by address, caps and the land queue", () => {
   const body = "```handoff\nowner: claude:session_01ABCDEFGHIJKLMNOP\n```";
   const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(70, { labels: ["area:tooling", "lane:claude"], body, draft: false }), pr(71)] }), cfg(), NOW);
-  assert.deepEqual(p.board.split("\n").slice(0, 13), [BOARD_MARKER, `## Board — ${ISO}`, "",
-    "pause: false · merge-pause: false · deploy: green", "caps: launches/run 4; launches/day 0/24; live claims 1/8; cost cap $10 · land queue 0/15", "",
+  assert.deepEqual(p.board.split("\n").slice(0, 14), [BOARD_MARKER, `## Board — ${ISO}`, "",
+    "pause: false · merge-pause: false · deploy: green", "caps: launches/run 4; launches/day 0/24; live claims 1/8; cost cap $10 · land queue 0/15",
+    "ready cap: unknown (the merged-PR count for the last 7 d could not be read)", "",
     "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
     "| #70 | PR 70 | ready | 30h | claude:session_01ABCDEFGHIJKLMNOP | 30m ago | area:tooling, lane:claude |", "| #71 | PR 71 | draft | 30h | - | 30m ago | - |", "",
     "### Launches this run (1)", "- ISSUE 10: [Worker] #10 Task 10"]);
   assert.equal(p.boardIssue, 1);
+  // D16 (#5402): the Board carries ready-sweep's cap row; #11 is claimed, so 1 launchable of 2 ready.
+  const capped = planDispatch(state({ issues: [board(), issue(10, ["ready"]), issue(11, ["ready", "claimed"])], landed: 0 }), cfg(), NOW);
+  assert.equal(capped.board.split("\n")[5], "ready over cap: 1 launchable of 2 ready vs 0 PRs landed in 7 d");
+  assert.equal(planDispatch(state({ issues: [board(), issue(10, ["ready"])], landed: 3 }), cfg(), NOW).board.split("\n")[5], "ready within cap: 1 launchable of 1 ready vs 3 PRs landed in 7 d");
+  const q = [];
+  assert.equal(landedCount((u) => { q.push(u); return { json: { total_count: 12 } }; }, DEFAULT_CONFIG, Date.parse("2026-11-11T12:00:00Z")), 12);
+  assert.equal(q[0], `https://api.github.com/search/issues?q=${encodeURIComponent("repo:brycejmurrin/f1-game is:pr is:merged merged:>=2026-11-04")}&per_page=1`);
+  assert.equal(landedCount(() => ({ error: "HTTP 403" }), DEFAULT_CONFIG, NOW), null, "an unreadable count is unknown, never 0");
   const landing = (n) => Array.from({ length: n }, (_, k) => pr(200 + k, { labels: ["land"], draft: false }));
   const full = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: landing(15) }), cfg(), NOW);
   assert.deepEqual([full.launches.length, full.landQueue, skips(full)], [0, 15, ["issue launches paused: 15 PRs waiting to land (max 15) — land before starting more"]]);
@@ -473,4 +482,10 @@ test("rule 3: a Pages-side publish failure (pages.yml's marker step failed) laun
   assert.equal(planDispatch(state({ deployRed: true, deployRunId: 777, deployPlatform: false }), cfg(), NOW).launches[0].address, "DEPLOY-RED 777");
   const pages = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
   assert.equal(pages.includes(`- name: ${PLATFORM_STEP}\n`), true, "the marker step pages.yml writes");
+});
+
+test("worker-prompt.md: the saved prompt's Ending carries the D17 reporting line (#5402), word for word", () => {
+  const text = fs.readFileSync(new URL("../../tools/ci/worker-prompt.md", import.meta.url), "utf8");
+  const ending = text.slice(text.indexOf("Ending:"), text.indexOf("Nobody reads this chat.")).replace(/\s+/g, " ");
+  assert.ok(ending.includes("Report by send_message to the session that launched you, when one did: at start (your reading of the task), at every push (head sha, PR number), at CI green or red, and at any refusal or blocker."), ending);
 });

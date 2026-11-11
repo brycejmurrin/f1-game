@@ -3152,5 +3152,5 @@ jobs:
           # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow
           # run would otherwise read green). Measured on recent full-tier runs: they never skip there, unlike
           # driving-model / sweeps / the macOS leg, which the change-aware selection skips legitimately.
-          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards-c,guards-d,guards,select,smoke,staged-boot' || '' }}
+          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards-c,guards-d,guards,select,selected-verdict,smoke,staged-boot' || '' }}
         run: node tools/ci/ci-verdict.mjs

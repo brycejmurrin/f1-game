@@ -104,9 +104,9 @@ test("compact-wide live Home grid-places #menu-secondary under the door stack", 
   assert.doesNotMatch(secondaryBlock[0], /display:\s*none/);
 });
 
-test("portrait live Home #menu-buttons is tall before data-home-ready", async () => {
+test("portrait live Home #menu-buttons is tall before data-home-ready", async (t) => {
   const chrome = process.env.APEX_CHROME || "/usr/local/bin/google-chrome";
-  if (!fs.existsSync(chrome)) return;
+  if (!fs.existsSync(chrome)) return t.skip(`no Chrome at ${chrome} (the real fix, a resolved browser plus an assert, is #5340)`);
   // Ephemeral port — fixed :3456 races other tooling-fast / serve jobs.
   const { startStaticServer, launchChromium, shutdown } = await import("../../tools/lib/harness.mjs");
   const srv = await startStaticServer(ROOT);
