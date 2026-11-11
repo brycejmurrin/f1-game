@@ -107,7 +107,7 @@ const SettingsSearch = (function () {
     return () => { if (owners.get(owner) === rows) { owners.delete(owner); rowCache = null; for (const fn of subscribers) fn(); } };
   }
   function optionsOf(row) {
-    // Labels only: never select, dispatch change or load a lazy bundle. Cached per row key/child count.
+    // Labels only (no select/change/lazy load); cached per row.
     const extra = typeof row.options === "function" ? String(row.options() || "") : String(row.options || "");
     const hit = optionText.get(row.target);
     if (hit && hit.el && hit.el.isConnected !== false && optionSig(hit.el) === hit.sig) return hit.labels + " " + extra;
@@ -138,7 +138,7 @@ const SettingsSearch = (function () {
     const control = /^(BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(target.tagName) ? target
       : target.querySelector("button:not([disabled]),input:not([disabled]),select:not([disabled]),summary");
     if (!control || control.disabled || control.closest("[hidden]")) return false;
-    // CSS-hidden device-only controls: check visibility and the real focus result.
+    // Device-only rows may be CSS-hidden: check focus landed.
     if (control.checkVisibility && !control.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true })) return false;
     if (control.getClientRects && control.getClientRects().length === 0) return false;
     control.focus({ preventScroll: true });
@@ -200,7 +200,7 @@ const SettingsSearch = (function () {
       if (slot.button.textContent !== label) slot.button.textContent = label;
       slot.button.onclick = () => {
         clearFeedback();
-        // Commit navigation ownership only after the destination wins the lazy race.
+        // Own navigation only once the lazy race is won.
         const arrived = () => {
           last = row.id; fromSearch = true;
           if (o.onSelect) o.onSelect(row.page);
@@ -217,7 +217,7 @@ const SettingsSearch = (function () {
       const matches = find(input.value);
       const caption = input.value.trim() ? matches.length + " matching settings" : "Search names or everyday terms. Your settings stay as they are.";
       if (note.textContent !== caption) note.textContent = caption;
-      // Reuse row nodes; replaceChildren() per input reallocated a button per match.
+      // Reuse row nodes (no per-keystroke realloc).
       const keep = [];
       for (const row of matches) {
         const slot = slotFor(row);
@@ -246,7 +246,7 @@ const SettingsSearch = (function () {
         return document.activeElement === target;
       },
       cancel() { fromSearch = false; clearFeedback(); },
-      // Fresh sessions start unfiltered; restore() still returns BACK to the query.
+      // Fresh sessions start unfiltered.
       reset() { fromSearch = false; clearFeedback(); if (input.value) { input.value = ""; paint(); } },
       dispose() { subscribers.delete(paint); clearFeedback(); box.remove(); },
       input,

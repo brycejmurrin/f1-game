@@ -29,8 +29,7 @@ const GripSteer = (function () {
     braking: false, shaped: 0, capSm: 0, dt: 0,
   };
   const _out = { delta: 0, capSm: 0 };
-  // apply()'s return bag: ONE shared object, overwritten each call (read it
-  // before the next call; copy fields to keep them).
+  // apply()'s shared return bag: overwritten each call.
   const _res = { delta: 0, capSm: 0 };
   function res(delta, capSm) { _res.delta = delta; _res.capSm = capSm; return _res; }
 
@@ -105,8 +104,7 @@ const GripSteer = (function () {
 
     const dt = Math.max(+state.dt || 1 / 60, 1e-4);
     const a = 1 - Math.exp(-dt / TAU);
-    // Unset (0) filter state seeds at the target cap, not at 0 (which crushed
-    // lock for the first frames); cap >= 0.25*alphaPk > 0 so a seed is never 0.
+    // Unset (0) state seeds at cap, not 0 (that crushed early lock).
     const prev = state.capSm > 0 ? state.capSm : cap;
     const capSm = prev + (cap - prev) * a;
 

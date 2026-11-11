@@ -2,8 +2,7 @@
  * per-circuit camera bookmarks (apex26.freecamMarks). Pure helpers + a thin DOM
  * binder FreeCam.create calls so free-cam.js stays the panel owner. DoF is a
  * CSS soft-focus overlay (no GLX/TLX/WGX optical DoF yet — flyby plan rejected
- * backend DoF); bookmarks are world eye/target/fov (+ optional roll).
- * Hunt findings (finite marks): PR #4648 (photo hunt, 2026-11-03). */
+ * backend DoF); bookmarks are world eye/target/fov (+ optional roll). */
 const PhotoKit = (function () {
   "use strict";
 
@@ -15,8 +14,7 @@ const PhotoKit = (function () {
   const fin = (v) => typeof v === "number" && isFinite(v);
   const clamp = M4.clamp;   // js/core/mat4.js — the shared one
 
-  /** Three finite world coords, or null. Bare `+v[i]` used to persist NaN and
-   *  FreeCam.place then wrote NaN into photoCam (aim → NaN yaw/pitch). */
+  // Three finite coords or null: a NaN mark poisoned FreeCam.place (#4648).
   function vec3(v) {
     if (!v || v.length < 3) return null;
     const x = +v[0], y = +v[1], z = +v[2];
@@ -33,8 +31,7 @@ const PhotoKit = (function () {
     const all = loadAll(store);
     const list = all[trackId];
     if (!Array.isArray(list)) return [];
-    // Drop corrupt rows from older builds / hand-edited storage so LOAD never
-    // feeds FreeCam.place a NaN eye (saveMark now refuses them at write time).
+    // Drop corrupt stored rows (saveMark refuses them now).
     return list.filter((m) => m && vec3(m.eye) && vec3(m.target));
   }
 

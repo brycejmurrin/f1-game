@@ -1,4 +1,4 @@
-/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its DOM buttons. Photo mode ONLY — the lighting tuner's lt-* buttons (help toggle, RESET, COPY VALUES) live in js/lighting/tuner-panel.js. Hunt findings (scale bump, FOV clamp): PR #4648 (photo hunt, 2026-11-03). */
+/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its DOM buttons. Photo mode ONLY — the lighting tuner's lt-* buttons (help toggle, RESET, COPY VALUES) live in js/lighting/tuner-panel.js. #4648. */
 const Photomode = (function () {
   "use strict";
 
@@ -91,10 +91,7 @@ function enterPhotoMode() {
   G.photoMode = true;
   PerfGov.setAutoRes(false);
   G._photoPrevScale = gfx.getRenderScale ? gfx.getRenderScale() : 1;
-  // Raise to 1 for framing: PerfGov may have stepped the live race to 0.7/0.85,
-  // and setAutoRes(false) alone would freeze that soft scale for the whole shot.
-  // Exit restores _photoPrevScale. Photo Studio's capture path does the same
-  // raise around its readback (js/ui/photo-studio.js).
+  // Full scale while framing (PerfGov may sit at 0.7); exit restores it (#4648).
   if (gfx.setRenderScale && G._photoPrevScale < 1) gfx.setRenderScale(1);
   initPhotoCam();
   document.body.classList.add("photo-mode");
@@ -313,8 +310,7 @@ $("pc-hud").onclick = () => setPhotoUiHidden(true);
 }
 $("pc-restore").onclick = () => setPhotoUiHidden(false);
 $("pc-fov").oninput = (e) => {
-  // Match FreeCam.clampFov / #pc-fov min..max — a non-finite or out-of-range
-  // value (scripted set, a missing attribute) must not leave photoCam.fov at 0/NaN.
+  // As FreeCam.clampFov: never 0/NaN.
   const v = +e.target.value;
   photoCam.fov = (typeof v === "number" && isFinite(v)) ? Math.max(20, Math.min(110, v)) : 60;
 };

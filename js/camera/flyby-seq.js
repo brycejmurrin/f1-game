@@ -1360,7 +1360,7 @@ const FlybySeq = (function () {
     return out;
   }
   const DIP_MS = 150, REDUCED_DIP_MS = 300;
-  // `on` (optional) is shotAt(u, shots) already computed by the caller: solve() passes its own (same u, same list).
+  // `on` (optional): the caller's shotAt(u, shots).
   function presentation(u, shots, reduced, on) {
     if (!on) on = shotAt(u, shots);
     const cuts = boundaries(shots);
