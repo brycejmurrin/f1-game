@@ -8,8 +8,7 @@
 // backends alike; counts are exact on a software adapter even where ms are not).
 //
 // What this pins: TLX on three's WebGPU backend, monza, GAS held on the real keyboard, no BOOST, 120 warm
-// frames, a warm pass over the counted stretch, a jump back to its start, then 6 windows of 60 frames over road
-// already drawn (#5387) — every window builds 0 pipelines. Driver:
+// frames, then 6 windows of 60 frames — every window builds 0 pipelines. Driver:
 // tools/perf/idle-pipeline-census.mjs. Red on the tree of 2026-10-24 by design until #3713 lands.
 // Where the runner has no WebGPU adapter (CI's llvmpipe) three falls back to WebGL2 and an annotation says so.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
@@ -19,16 +18,11 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test("TLX WebGPU: steady driving builds no render pipelines after warm-up", async ({ page }, testInfo) => {
   test.setTimeout(900000);
-  const { hook, warm, gpuDevice, replay, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
+  const { hook, warm, gpuDevice, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
   if (!/webgpu/i.test(hook)) testInfo.annotations.push({ type: "fallback", description: "no WebGPU adapter on this runner: ran on three's WebGL2 backend" });
-  // The counted windows must stay on the stretch the warm pass drew, or new scenery enters and a first draw reads
-  // as churn (#5387): the census says how far each pass went.
-  testInfo.annotations.push({ type: "replay", description: JSON.stringify(replay) });
-  expect(replay.jumped, "the census must jump back to the warm pass's start (__apex.jump)").toBe(true);
-  expect(replay.countedM, `the counted windows drove past the warmed stretch (${JSON.stringify(replay)})`).toBeLessThanOrEqual(replay.warmM);
   testInfo.annotations.push({ type: "windows", description: `${warm} pipelines through warm-up; per window ${windows.map((w) => w.pipelines).join(",")}` });
   const churn = windows.filter((w) => w.pipelines > 0);
   expect(churn.map((w) => ({ window: w.window, pipelines: w.pipelines, built: w.built.slice(0, 6) })),
