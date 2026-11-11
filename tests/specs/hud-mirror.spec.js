@@ -242,6 +242,8 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   });
   if (requirePixels) expect(bands, "GLX presents through #game-soft").toBeTruthy();
   if (readable) expect(bands, "a readable presented frame must yield glass bands (software path)").toBeTruthy();
+  else test.info().annotations.push({ type: "mirror-glass-bands-unread",
+    description: "frame not readable by this probe on a GPU backend: glass bands not asserted (the software lanes assert them)" });
   if (bands) {
     const bd = JSON.stringify(bands);
     let decided = 0;
