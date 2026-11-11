@@ -2245,7 +2245,8 @@
         "tests/unit/light-grid.test.mjs"
       ],
       "persist": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "refreshStoredContext": [
         "tests/unit/cam-context-alloc.test.mjs"
@@ -2506,6 +2507,7 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -2650,6 +2652,9 @@
         "tests/unit/daily-challenge.test.mjs"
       ],
       "cockpitCaster": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
+      "cockpitKey": [
         "tests/unit/car-presentation-vm.test.mjs"
       ],
       "cockpitShadowMesh": [
@@ -3855,7 +3860,8 @@
         "tests/unit/career-backup.test.mjs"
       ],
       "build": [
-        "tests/unit/career-backup.test.mjs"
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-ui-lazy.test.mjs"
       ],
       "download": [
         "tests/unit/mobile-native-download.test.mjs"
@@ -3970,6 +3976,9 @@
         "tests/unit/load-order.test.mjs"
       ],
       "ensure": [
+        "tests/unit/career-ui-lazy.test.mjs"
+      ],
+      "ensureBackup": [
         "tests/unit/career-ui-lazy.test.mjs"
       ]
     },
@@ -5282,6 +5291,9 @@
       "bootAgentSurface": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "bootPerfRig": [
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
+      ],
       "create": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -5322,6 +5334,9 @@
       ],
       "ensureNet": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
+      ],
+      "ensurePerfRig": [
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "ensureRaceSession": [
         "tests/unit/global-registry.test.mjs",
@@ -7689,7 +7704,8 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "showTouchControls": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/start-race-dock-fit.test.mjs"
       ],
       "simSeed": [
         "tests/unit/daily-challenge.test.mjs",
@@ -7727,6 +7743,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/start-race-dock-fit.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
       "startRaceCovered": [
@@ -10876,7 +10893,8 @@
       ],
       "load": [
         "tests/unit/bench-capture.test.mjs",
-        "tests/unit/bench-run.test.mjs"
+        "tests/unit/bench-run.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "median": [
         "tests/unit/bench-run.test.mjs"
@@ -10894,7 +10912,8 @@
         "tests/unit/bench-run.test.mjs"
       ],
       "resume": [
-        "tests/unit/bench-capture.test.mjs"
+        "tests/unit/bench-capture.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs"
       ],
       "scenes": [
         "tests/unit/bench-capture.test.mjs",
@@ -15656,6 +15675,9 @@
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
+      "presentSize": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
       "releaseMirror": [
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs"
@@ -18194,6 +18216,7 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "push": [
+        "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"

@@ -6487,7 +6487,7 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
-  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
+  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbBs = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
   const buildPendingCockpitBody = eval("(function(){" + fnBody(read("js/car/car-draw.js"), "buildPendingCockpitBody") + "})");
   const cockpitKey = eval("(function(team, car, visualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitKey") + "})");
   const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");
