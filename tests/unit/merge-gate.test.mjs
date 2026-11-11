@@ -175,6 +175,7 @@ test("configPushState: config-ok binds to the PR's own config diff at label time
   // Fixture 1: a pure tip merge. The tip's own config files are not in the PR's three-dot diff; the PR's own are byte-identical.
   assert.equal(s(later, { [H0]: [hook, js("j0")], [H2]: [hook, js("j2")] }), "covered", "a sync merge (or a non-config push) keeps the label");
   assert.match(q(later, { [H0]: [hook], [H2]: [hook] }).evidence, /own config diff is unchanged since 00000000 \(1 file/);
+  assert.equal(q(later, { [H0]: [hook], [H2]: [hook] }).from, H0, "covered names the head at label time");
   // Fixture 2: the merge's conflict resolution edits the PR's own config file (a new blob).
   assert.equal(s(later, { [H0]: [hook], [H2]: [{ ...hook, sha: "b2", patch: "@@ -1 +1 @@\n-a\n+c" }] }), "after", "a resolution that changes the PR's config file voids it");
   // ... or keeps the PR's blob over a tip that changed the same file (a revert of the tip's change: the patch differs).
@@ -182,6 +183,7 @@ test("configPushState: config-ok binds to the PR's own config diff at label time
   // Fixture 3: a second commit by the PR that touches a config path (a new file, a rename, a deletion).
   const p3 = q(later, { [H0]: [hook], [H2]: [hook, { filename: "tools/ci/merge-gate.mjs", status: "modified", sha: "m", changes: 1, patch: "+x" }] });
   assert.equal(p3.state, "after");
+  assert.equal(p3.from, H0, "after names the head at label time (the ratchet-raise row reads it)");
   assert.match(p3.evidence, /tools\/ci\/merge-gate\.mjs/);
   assert.equal(s(later, { [H0]: [js("j0")], [H2]: [{ filename: "js/a.js", previous_filename: ".claude/hooks/x.sh", status: "renamed", sha: "r", changes: 0 }] }), "after", "a later rename out of a hook");
   assert.equal(s(later, { [H0]: [hook], [H2]: [] }), "after", "a config change that left the PR's diff is a change too");
@@ -729,6 +731,9 @@ test("land.yml concurrency (WP-L3a, c): noise labels run alone, CI re-gates neve
   assert.equal(group(cfg("labeled", ["land", "config-ok"])), "land-7", "Bryce's config-ok click on a `land` PR re-gates it in the PR's own group (#5432)");
   assert.equal(group(cfg("unlabeled", ["land"])), "land-7");
   assert.equal(group(cfg("labeled", ["config-ok"])), "land-noise-99", "without `land` it is noise");
+  const rr = (action, labels) => ({ ...cfg(action, labels), event: { ...cfg(action, labels).event, label: { name: "ratchet-raise" } } });
+  assert.equal(group(rr("labeled", ["land", "ratchet-raise"])), "land-7", "ratchet-raise (#5405) re-gates like config-ok");
+  assert.equal(group(rr("labeled", ["ratchet-raise"])), "land-noise-99");
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], prt("labeled", "land")), true);
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], wr("cursor/x", [{ number: 7 }])), false, "a CI or train re-gate never cancels");
 });
@@ -740,6 +745,9 @@ test("land.yml resolve (#5432): a config-ok click on a `land` PR reaches resolve
   assert.equal(ifs("unlabeled", "config-ok", ["land"]), true, "config-ok removed on a land PR (the gate then refuses at once)");
   assert.equal(ifs("labeled", "config-ok", ["config-ok"]), false, "no `land`: nothing to gate");
   assert.equal(ifs("labeled", "needs-owner", ["land", "needs-owner"]), false, "any other label stays noise");
+  assert.equal(ifs("labeled", "ratchet-raise", ["land", "ratchet-raise"]), true, "ratchet-raise on a land PR re-gates (#5405)");
+  assert.equal(ifs("unlabeled", "ratchet-raise", ["land"]), true);
+  assert.equal(ifs("labeled", "ratchet-raise", ["ratchet-raise"]), false);
   assert.equal(ifs("labeled", "land", ["land"]), true);
   assert.equal(ifs("unlabeled", "hold", []), true);
   // resolve then picks exactly this PR: a pull_request_target event resolves `numbers=("$PR_NUMBER")`, one gate.

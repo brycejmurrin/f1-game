@@ -208,7 +208,8 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false }) {
  * changes any of them voids it. An unreadable or possibly truncated compare is "unknown" (waits; a fresh click
  * covers it). `pkgGeneratedAt(ref)` → true when package.json's change at `ref` is only the generated test lists:
  * package.json is skipped on both sides only when that holds at the head AND at `from`.
- * → { state: "covered"|"after"|"unknown", evidence }. Side effects only through `request` and `pkgGeneratedAt`.
+ * → { state: "covered"|"after"|"unknown", evidence, from? } (`from`: the head at label time, once known; the
+ * ratchet-raise row reads it). Side effects only through `request` and `pkgGeneratedAt`.
  */
 export function configPushState({ pr, head, headRef, labelAt, request, base = DEPLOY, pkgGeneratedAt = null }) {
   const t = (iso) => Date.parse(iso || "") || 0;
@@ -233,8 +234,8 @@ export function configPushState({ pr, head, headRef, labelAt, request, base = DE
   const a = keys(was), b = keys(now);
   const differ = [...new Set([...a.keys(), ...b.keys()])].filter((p) => a.get(p) !== b.get(p)).sort();
   return differ.length
-    ? { state: "after", evidence: `a push changing the PR's own config diff (${differ.slice(0, 3).join(", ")}${differ.length > 3 ? ", …" : ""}; ${from.slice(0, 8)} → ${head.slice(0, 8)}) came` }
-    : { state: "covered", evidence: `the PR's own config diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same blobs and patches)` };
+    ? { state: "after", from, evidence: `a push changing the PR's own config diff (${differ.slice(0, 3).join(", ")}${differ.length > 3 ? ", …" : ""}; ${from.slice(0, 8)} → ${head.slice(0, 8)}) came` }
+    : { state: "covered", from, evidence: `the PR's own config diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same blobs and patches)` };
 }
 
 /** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan fails (skill steward
