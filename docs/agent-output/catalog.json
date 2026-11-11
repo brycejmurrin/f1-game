@@ -1207,6 +1207,7 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
+        "test:scratch-churnf",
         "test:shimmer",
         "test:smoke",
         "test:stall-reload-sw",
@@ -4283,6 +4284,10 @@
     {
       "name": "test:results-flow",
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
+    },
+    {
+      "name": "test:scratch-churnf",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-churnf-r1.spec.js tests/specs/scratch-churnf-r2.spec.js tests/specs/scratch-churnf-r3.spec.js tests/specs/scratch-churnf-r4.spec.js tests/specs/scratch-churnf-r5.spec.js tests/specs/scratch-churnf-r6.spec.js tests/specs/scratch-churnf-r7.spec.js tests/specs/scratch-churnf-r8.spec.js"
     },
     {
       "name": "test:service-worker",

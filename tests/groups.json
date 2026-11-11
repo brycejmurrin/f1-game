@@ -2183,6 +2183,19 @@
       ],
       "kind": "browser"
     },
+    "test:scratch-churnf": {
+      "files": [
+        "tests/specs/scratch-churnf-r1.spec.js",
+        "tests/specs/scratch-churnf-r2.spec.js",
+        "tests/specs/scratch-churnf-r3.spec.js",
+        "tests/specs/scratch-churnf-r4.spec.js",
+        "tests/specs/scratch-churnf-r5.spec.js",
+        "tests/specs/scratch-churnf-r6.spec.js",
+        "tests/specs/scratch-churnf-r7.spec.js",
+        "tests/specs/scratch-churnf-r8.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",

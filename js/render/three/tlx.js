@@ -4040,7 +4040,7 @@ const TLX = (function () {
         for (const p of caches.values()) pinPipe(p);
         return _pinnedPipes.size;
       }
-      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
+      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = (() => { try { const v = +localStorage.getItem("apex26.scratchPruneIdleMs"); return v > 0 ? v : 20000; } catch (_) { return 20000; } })();   // SCRATCH #5387
       function prunePool(now) {
         const pin = typeof pinPipelines === "function" ? pinPipelines : null;   // typeof: sandboxed prunePool bodies
         if (pin && !_pinArmed) pin();   // arm the pin at the first present, before any warm builds a pipeline
@@ -4072,6 +4072,7 @@ const TLX = (function () {
           // render object with it, or three keeps the geometry anyway).
           dropWrapper(m); prunePool.n = (prunePool.n | 0) + 1;   // memState().churn (held on the function, as cullInstances._shPack)
         }
+        if (meshPool.length !== w) { (prunePool.log || (prunePool.log = [])).push({ t: Math.round(now), n: meshPool.length - w }); }   // SCRATCH #5387
         meshPool.length = w;
       }
 
@@ -7026,7 +7027,7 @@ const TLX = (function () {
                         dropLater: { now: _dropLater.length, held: _dropStat.held, overflow: _dropStat.overflow },
                         // Hunt 6, lifetime: wrappers minted / pruned (each mint is a three RenderObject: object UBO + bind
                         // group), FX streams (re)built (a vertex buffer each), and headless readbacks (one MAP_READ createBuffer each).
-                        churn: { poolNew: acquireMesh.n | 0, poolPruned: prunePool.n | 0, softReads: _softBlitGen,
+                        churn: { pruneLog: (prunePool.log || []).slice(-40), poolNew: acquireMesh.n | 0, poolPruned: prunePool.n | 0, softReads: _softBlitGen,
                                  streamNew: [skidStream, lineStream, glowStream, ...partStreams].reduce((n, s) => n + (s.builds | 0), 0) },
                         // The mirror sweep reports what it FREED, not that it ran:
                         // the first version of this lever never executed and read

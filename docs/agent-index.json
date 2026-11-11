@@ -1423,6 +1423,22 @@
       "twinned": false
     },
     {
+      "id": "scratch-churnf",
+      "script": "test:scratch-churnf",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-churnf-r1.spec.js",
+        "tests/specs/scratch-churnf-r2.spec.js",
+        "tests/specs/scratch-churnf-r3.spec.js",
+        "tests/specs/scratch-churnf-r4.spec.js",
+        "tests/specs/scratch-churnf-r5.spec.js",
+        "tests/specs/scratch-churnf-r6.spec.js",
+        "tests/specs/scratch-churnf-r7.spec.js",
+        "tests/specs/scratch-churnf-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",
