@@ -894,3 +894,13 @@ test("#5237: a rotation resets the fit's retry budget, at the flip and after the
   ctx._fitRetry = 31; ctx._fitKey = "k2"; timers[0][0]();
   assert.deepEqual([ctx._fitRetry, ctx._fitKey], [0, ""], "and again once the viewport settles");
 });
+
+test("#5256 (Bryce 2026-11-11, option A): in landscape touch the top band's anchor is pinned at 1.5, not BUTTON SIZE", () => {
+  const css = read("css/hud.css");
+  assert.equal(decl(cssRules(css), ":root", "--tap-root"), "var(--tap)", ":root's own 44 px rung, resolved on :root");
+  const at = css.indexOf("@media (orientation: landscape) {\n  body:not(.desktop) { --hud-btn-z: 1.5;");
+  assert.ok(at > 0, "the landscape touch pin");
+  assert.match(css.slice(at, at + 160), /--tap-hud: calc\(var\(--tap-root\) \* 1\.5\);/, "the band is 66 px whatever BUTTON SIZE says");
+  // fitHud's side cap reserves the same footprint there, so the tower budget is BUTTON-SIZE-independent too.
+  assert.match(read("js/ui/hud.js"), /const bz = vpW\(\) > vpH\(\) && !document\.body\.classList\.contains\("desktop"\) \? 1\.5/);
+});

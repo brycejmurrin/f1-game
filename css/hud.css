@@ -69,6 +69,13 @@
 :root {
   --hud-btn-z: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5);
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
+  --tap-root: var(--tap);   /* resolved here: :root's 44 px, not the touch body's 52 (KNOWN below) */
+}
+/* LANDSCAPE TOUCH PINS THE BAND AT ITS 150 % FOOTPRINT (#5256, Bryce 2026-11-11 "Lower, fixed"). CAM / PAUSE are a
+   fixed 44 px there (#5179), so following BUTTON SIZE only moved the sector plate and resized the tower with the
+   slider. js/ui/hud.js capChrome reserves the same 1.5. */
+@media (orientation: landscape) {
+  body:not(.desktop) { --hud-btn-z: 1.5; --tap-hud: calc(var(--tap-root) * 1.5); }
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
    and PAUSE paint 44px on a phone. Restating it on body:not(.desktop) was tried
