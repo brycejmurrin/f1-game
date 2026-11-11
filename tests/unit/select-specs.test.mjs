@@ -1983,3 +1983,12 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
   assert.equal(routed.floor, null);
   assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
 });
+
+test("W31 row 12: a renderer, loop or vendor edit runs the unpinned shipped-defaults spec", async () => {
+  const { select: sel } = await import("../../tools/ci/select-specs.mjs");
+  for (const f of ["js/render/three/tlx.js", "js/game.js", "vendor/three-0.187.0/three.core.min.js"]) {
+    const r = sel(undefined, DEFAULT_BUDGET_MIN, { files: [f] });
+    const got = [r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file));
+    assert.equal(got.filter((x) => x === "tests/specs/shipped-defaults.spec.js").length, 1, `${f}: ${got.length} planned`);
+  }
+});

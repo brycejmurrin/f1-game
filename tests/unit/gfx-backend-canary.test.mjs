@@ -1064,6 +1064,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
     // RESET must not leave diag() quoting a reason from before it.
     "apex26.gfxFallbackWhy",
+    // What the unset default's own boot probe saw when it bound GLX (renderer-boot.js, #5304).
+    "apex26.gfxAdapterWhy",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
 
@@ -1179,7 +1181,7 @@ test("applyBackend clears session renderer latches before reload", () => {
   const latchSeed = Object.fromEntries([
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
-    "apex26.gfxFallbackWhy",
+    "apex26.gfxFallbackWhy", "apex26.gfxAdapterWhy",
   ].map((k) => [k, "1"]));
   const a = bootPicker({
     ls: { "apex26.gfxBackend": "webgl2" },
@@ -1198,7 +1200,7 @@ test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () =
   const latchSeed = Object.fromEntries([
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
-    "apex26.gfxFallbackWhy",
+    "apex26.gfxFallbackWhy", "apex26.gfxAdapterWhy",
   ].map((k) => [k, "1"]));
   const three = bootPicker({
     ls: { "apex26.gfxBackend": "three" },
