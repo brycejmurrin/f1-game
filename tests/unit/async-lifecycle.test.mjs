@@ -394,7 +394,7 @@ test("a quota-aborted music import releases its duplicate reservation for a queu
   const file = { name: "Retry.mp3", type: "audio/mpeg", size: 123 };
   const [failed, recovered] = await Promise.all([f.lib.add([file]), f.lib.add([file])]);
   assert.equal(failed.added, 0); assert.equal(failed.skipped, 1);
-  assert.match(failed.errors[0], /no room left/);
+  assert.equal(failed.errors[0], "Retry.mp3: no room left in this browser's storage");
   assert.equal(recovered.added, 1); assert.equal(recovered.skipped, 0);
   assert.equal(f.rows.length, 1); assert.equal(f.lib.count(), 1); assert.equal(f.urls(), 1); assert.equal(f.playlist.size, 1);
 });
@@ -427,7 +427,7 @@ test("music library says why an upload failed while storage cannot be reopened, 
   f.connections[0].closed = true; f.down(true);
   const failed = await f.lib.add([{ name: "Lost.mp3", type: "audio/mpeg", size: 200 }]);
   assert.equal(failed.added, 0); assert.equal(failed.skipped, 1);
-  assert.match(failed.errors[0], /storage was disconnected.*reopen the app/i);
+  assert.equal(failed.errors[0], "Lost.mp3 could not be saved: storage was disconnected. Close and reopen the app, then try again");
   assert.equal(f.lib.available(), false); assert.equal(f.lib.count(), 1, "the loaded track stays in the list");
   f.down(false);
   const recovered = await f.lib.add([{ name: "Lost.mp3", type: "audio/mpeg", size: 200 }]);
@@ -474,7 +474,7 @@ test("a timed-out API fetch releases the shared queue", async () => {
     await new Promise((resolve) => setImmediate(resolve));
   }
 
-  assert.match(firstError.message, /timed out/);
+  assert.equal(firstError.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=1");
   assert.equal(calls.length, 2);
   await second;
 });
@@ -508,7 +508,7 @@ test("a response whose BODY stalls still times out and releases the queue", asyn
     timers.shift()();
     await new Promise((resolve) => setImmediate(resolve));
   }
-  assert.match(firstError.message, /timed out/, "a stalled body is a timeout, not a hang");
+  assert.equal(firstError.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=1", "a stalled body is a timeout, not a hang");
   assert.equal(calls.length, 2, "the next request is not stuck behind it");
   await second;
 });
@@ -535,7 +535,7 @@ test("API auth failures never fall back to stale cached data", async () => {
 
   await assert.rejects(context.__api.weather(7, 0), (err) => {
     assert.equal(err.status, 403);
-    assert.match(err.message, /Not authenticated/);
+    assert.equal(err.message, "Not authenticated");
     return true;
   });
 });
@@ -647,7 +647,7 @@ test("LIVE position/interval requests use watermarks and never touch localStorag
   live._mergeIntervalBatch(state, gaps);
 
   assert.equal(h.calls[0], "https://api.openf1.org/v1/position?session_key=999");
-  assert.match(h.calls[1], /position\?session_key=999&date%3E=2026-07-26T14%3A44%3A00Z$/);
+  assert.equal(h.calls[1], "https://api.openf1.org/v1/position?session_key=999&date%3E=2026-07-26T14%3A44%3A00Z");
   assert.equal(state.positionCursor, "2026-07-26T14:44:30Z");
   assert.equal(state.intervals[44], 0);
   assert.deepEqual(h.sets, [], "LIVE history/deltas must remain memory-only");

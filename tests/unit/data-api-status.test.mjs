@@ -82,7 +82,7 @@ for (const status of [401, 403]) {
       assert.equal(out.value, undefined, "the cached rainfall must not hide a lockout");
       assert.equal(out.error.status, status);
       assert.equal(out.error.retryAfterMs, 0);
-      if (body === "stall" || body === "abort") assert.match(out.error.message, /timed out/);
+      if (body === "stall" || body === "abort") assert.equal(out.error.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=7");
       assert.equal(out.error.cancelled, undefined, "a deadline is not user cancellation");
       assert.equal(h.calls.length, 1, "authentication failures never retry");
       assert.equal(h.timers.size, 0, "the deadline is reclaimed");
@@ -116,10 +116,10 @@ test("headers arriving late do not restart or extend the attempt deadline", asyn
   await h.advance(1);
   const error = await pending;
   assert.equal(error.status, 401);
-  assert.match(error.message, /timed out/);
+  assert.equal(error.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=7");
   h.lateBodies[0].resolve('{"detail":"late detail"}');
   await h.flush();
-  assert.match(error.message, /timed out/, "late body completion cannot mutate the delivered timeout");
+  assert.equal(error.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=7", "late body completion cannot mutate the delivered timeout");
   assert.equal(h.calls.length, 1);
   assert.equal(h.writes.length, 0);
   assert.equal(h.timers.size, 0);
@@ -255,7 +255,7 @@ test('a "null" error body cannot dodge the 403 stale-cache refusal', async () =>
     // The generic HTTP path must fire — with its status attached — instead of
     // a statusless TypeError from reading .detail off null.
     assert.equal(err.status, 403);
-    assert.match(err.message, /HTTP 403/);
+    assert.equal(err.message, "HTTP 403 for https://api.openf1.org/v1/weather?session_key=7");
     return true;
   });
 });
@@ -264,7 +264,7 @@ test('a "null" error body cannot dodge the 401 stale-cache refusal', async () =>
   const api = lockoutHarness(401, "null");
   await assert.rejects(api.weather(7, 0), (err) => {
     assert.equal(err.status, 401);
-    assert.match(err.message, /HTTP 401/);
+    assert.equal(err.message, "HTTP 401 for https://api.openf1.org/v1/weather?session_key=7");
     return true;
   });
 });
@@ -273,7 +273,7 @@ test("a structured detail body still surfaces its own message and status", async
   const api = lockoutHarness(403, JSON.stringify({ detail: "Not authenticated" }));
   await assert.rejects(api.weather(7, 0), (err) => {
     assert.equal(err.status, 403);
-    assert.match(err.message, /Not authenticated/);
+    assert.equal(err.message, "Not authenticated");
     return true;
   });
 });
@@ -540,13 +540,13 @@ test("overlapping attempts retain separate original deadlines and release capaci
   await h.flush(); await h.advance(14999);
   assert.equal(h.calls.length, 2);
   await h.advance(1);
-  assert.match((await first).message, /timed out/);
+  assert.equal((await first).message, "Request timed out for https://api.openf1.org/v1/location?session_key=1");
   assert.equal(h.calls[0].signal.aborted, true);
   assert.equal(h.calls[1].signal.aborted, false);
   assert.equal(h.calls[2].at, 1_015_000, "first deadline releases a slot without waiting for the second body");
   await third;
   await h.advance(400);
-  assert.match((await second).message, /timed out/);
+  assert.equal((await second).message, "Request timed out for https://api.openf1.org/v1/location?session_key=2");
   assert.equal(h.calls[1].signal.aborted, true);
   assert.equal(h.timers.size, 0);
   assert.equal(h.peak.openf1, 2);
@@ -702,7 +702,7 @@ test("a response body that ignores abort is still bounded by the full-attempt ti
   await new Promise((r) => setImmediate(r));
   deadline();
   const err = await first;
-  assert.match(err.message, /timed out/);
+  assert.equal(err.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=1");
   assert.equal(err.cancelled, undefined, "deadline remains a fetch failure, eligible for stale fallback");
   const recovered = await context.__api.weather(2, 0);
   assert.equal(recovered.rainfall, 7);
@@ -764,7 +764,7 @@ test("Retry-After is honoured as sent up to 90 s; longer than that fails fast on
   assert.equal(twoMin.calls(), 1, "no retry against a 120 s ask");
   assert.equal(twoMin.timers.length, 0, "no backoff timer either");
   assert.equal(err.status, 429);
-  assert.match(err.message, /HTTP 429/);
+  assert.equal(err.message, "HTTP 429 for https://api.openf1.org/v1/weather?session_key=8");
   assert.equal(err.retryAfterMs, 120000, "the server's ask is reported uncapped");
 });
 

@@ -240,8 +240,8 @@ test("harvest clip cue fires once on a full pack at straight-line pace", () => {
   G.vTop = () => 90;
   on.tick(1 / 60);
   assert.equal(said.length, 1);
-  assert.match(said[0][0], /ENERGY FULL — LIFT OR DEPLOY ON STRAIGHTS/);
-  assert.match(said[0][0], /full battery can clip the engine on straights/);
+  assert.match(said[0][0], /ENERGY FULL — DEPLOY ON STRAIGHTS/);
+  assert.match(said[0][0], /a full battery stops harvesting, so spend some/);
   step(on, 30);
   assert.equal(said.length, 1, "once only");
 });

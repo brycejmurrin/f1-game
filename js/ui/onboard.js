@@ -24,7 +24,7 @@ const Onboard = (function () {
     brake: "into the corner",
     ot: "you are close enough to use it",
     aero: "you can open it now",
-    harvest: "full battery can clip the engine on straights",
+    harvest: "a full battery stops harvesting, so spend some",
   };
 
   /** Broadcast-only: mirrors the 2026 PU harvest clip gate in js/audio/engine.js
@@ -74,7 +74,7 @@ const Onboard = (function () {
     return typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded() ? "touch" : "keyboard";
   }
   function verb(key) {
-    if (key === "harvest") return "ENERGY FULL — LIFT OR DEPLOY ON STRAIGHTS";
+    if (key === "harvest") return "ENERGY FULL — DEPLOY ON STRAIGHTS";
     const action = ACTION_OF[key];
     const touch = !!(typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded());
     const NOUN = { brake: "BRAKE", ot: "OVERTAKE", aero: "ACTIVE AERO" }[key];
