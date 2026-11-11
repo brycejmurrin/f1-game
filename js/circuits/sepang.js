@@ -1,5 +1,9 @@
 /* Apex 26 — SEPANG INTERNATIONAL CIRCUIT definition (data only).
-   Retired circuit (`classic: true`): last Malaysian GP 2017.
+   Malaysian GP 1999-2017, and back on the calendar in 2026: the FIA lists the
+   round as the "2026 Bahrain Grand Prix in Malaysia" (Oct 2-4; fia.com event
+   documents, e.g. 2026_bahrain_grand_prix_in_malaysia_-_final_race_classification.pdf).
+   `classic: true` still groups it with the retired circuits in the picker; the
+   2026 round reaches it through REAL_2026 (js/career/season-cal.js).
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";

@@ -485,7 +485,7 @@ test("garage-angles plan: --team=all[+custom] walks the real roster, rolled up, 
   assert.deepEqual(withCustom.teams, [...ids, "custom"], "+custom appends My Team");
   const bad = plan("--team=../x");
   assert.notEqual(bad.status, 0, "a path-traversal team id exits non-zero");
-  assert.match(bad.err + bad.out, /no team "\.\.\/x"/);
+  assert.equal(bad.err + bad.out, "no team \"../x\" — grid: mercedes, ferrari, mclaren, redbull, alpine, racingbulls, haas, williams, audi, astonmartin, cadillac, custom, or all/all+custom\n");
 });
 
 test("garage-angles plan: numeric lists expand, a camera key names only what was set, DPR/target/lamp/station are axes", () => {
@@ -525,8 +525,8 @@ test("garage-angles plan: presets are bundles of plain flags; none and list are 
 });
 
 test("garage camera catalog: bay is a base view plus an absolute orbit, bayFront the opposite diagonal", () => {
-  assert.match(CAM_ALIAS.bay, /^hero:0\.68pi/);
-  assert.match(CAM_ALIAS.bayFront, /^front:0\.32pi/);
+  assert.equal(CAM_ALIAS.bay, "hero:0.68pi,0.26,9.2");
+  assert.equal(CAM_ALIAS.bayFront, "front:0.32pi,0.28,9.4");
   assert.equal(typeof TARGETS, "object");
   assert.ok(Object.keys(STATIONS).length >= 10 && Object.keys(FIELD_STATIONS).length >= 5);
 });

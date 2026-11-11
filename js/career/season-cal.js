@@ -463,7 +463,7 @@ function pointsTable() {
 // Under 2 laps nothing; a Grand Prix pays column 1/2/3 below 25/50/75 %, a
 // sprint nothing below 50 %; the CLASSIC (1991–2002) table pays half below 75 %,
 // the rule of its era. The fastest-lap point needs 50 % (Art. 6.4).
-const SHORT_POINTS = [[6, 4, 3, 2, 1], [13, 10, 8, 6, 5, 4, 3, 2, 1], [19, 14, 12, 10, 8, 6, 4, 3, 2, 1]];
+const SHORT_POINTS = [[6, 4, 3, 2, 1], [13, 10, 8, 6, 5, 4, 3, 2, 1], [19, 14, 12, 9, 8, 6, 5, 3, 2, 1]];
 function shortFrac(run) { return run ? run.laps / Math.max(1, run.of) : 1; }
 function payTable(table, scoring, run) {
   if (!run) return table;

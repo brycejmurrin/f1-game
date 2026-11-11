@@ -127,13 +127,13 @@ for (const failure of ["refused", "rejected"]) {
     await opening;
     assert.equal(h.dom.byId("overlay").hidden, false, "menu returns after the title door hid it");
     assert.equal(h.dom.byId("career").hidden, true);
-    assert.match(h.messages[0], /COULD NOT LOAD.*TRY AGAIN/);
-    assert.match(h.dom.byId("mb-career-sub").textContent, /COULD NOT LOAD.*TRY AGAIN/, "the title button carries the visible notice");
-    assert.match(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load.*Try again/);
+    assert.equal(h.messages[0], "CAREER COULD NOT LOAD — PLEASE TRY AGAIN");
+    assert.equal(h.dom.byId("mb-career-sub").textContent, "COULD NOT LOAD · TRY AGAIN", "the title button carries the visible notice");
+    assert.equal(h.dom.byId("mb-career").getAttribute("aria-label"), "Career modes — could not load. Try again.");
     h.dom.byId("overlay").hidden = true;
     const retry = h.ui.openSlots("title");
     assert.equal(h.dom.byId("mb-career-sub").textContent, "DRIVER CAREER · MY TEAM", "retry restores the career summary");
-    assert.doesNotMatch(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load/);
+    assert.equal(h.dom.byId("mb-career").getAttribute("aria-label"), "Career modes — DRIVER CAREER · MY TEAM");
     assert.equal(h.pending.length, 1, "failed promise is not cached");
     h.complete();
     await retry;

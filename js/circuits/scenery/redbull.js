@@ -95,7 +95,7 @@
       fence(0.0, 1.0, -1, 4.2, 4.5, [0.74, 0.76, 0.80]);
       fence(0.0, 1.0, 1, 4.2, 4.5, [0.74, 0.76, 0.80]);
 
-      // Big braking-zone tyre walls on the outside of the heavy stops (T1, T3, T4).
+      // Big braking-zone tyre walls on the outside of the corners (FIA 2026 numbering).
       const rbRed = [0.82, 0.10, 0.16], rbNavy = [0.10, 0.14, 0.40], rbYel = [0.95, 0.80, 0.10];
       const RB_HILL_CROWD = [
         [1.00, 0.58, 0.05], [0.98, 0.62, 0.10], [0.94, 0.66, 0.22],
@@ -107,7 +107,7 @@
       tyreWall(0.08, 0.13, 1, 6.5, rbRed);    // outside Turn 1 (Niki Lauda)
       tyreWall(0.2785, 0.3285, -1, 6.5, rbYel); // outside Turn 3 (Remus) hairpin
       tyreWall(0.467, 0.517, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
-      tyreWall(0.72, 0.77, -1, 6.0, rbNavy);
+      tyreWall(0.72, 0.77, -1, 6.0, rbNavy);    // outside Turn 8 (right-hander, apex 0.7323)
 
       // Green runoff aprons at the heavy stops — alpine meadow pans, not grey gravel.
       const GRN_APRON = (pal && pal.runoff) || [0.32, 0.52, 0.24];
@@ -415,7 +415,7 @@
         ]) {
           backdrop(K(sfrac), side, 52 + distOff, [szW, szH, 68], col);
         }
-        // T4 outside (L): amphitheatre bank on the descent
+        // T3 Remus outside (L): amphitheatre bank on the descent to Schlossgold
         backdrop(K(0.33), -1, 34, [85, 20, 55], GN);
         backdrop(K(0.35), -1, 50, [105, 28, 68], GM);
         backdrop(K(0.37), -1, 68, [120, 34, 78], GF);

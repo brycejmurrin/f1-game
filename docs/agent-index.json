@@ -751,6 +751,7 @@
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
+        "tests/unit/curvature-contract-vm.test.mjs",
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
@@ -759,6 +760,7 @@
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
@@ -812,6 +814,7 @@
         "tests/unit/settings-reload-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
+        "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
@@ -855,6 +858,7 @@
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
+        "tests/unit/curvature-contract-vm.test.mjs",
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
@@ -862,6 +866,7 @@
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
@@ -915,6 +920,7 @@
         "tests/unit/settings-reload-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
+        "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
@@ -938,9 +944,11 @@
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
+        "tests/unit/curvature-contract-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
@@ -967,6 +975,7 @@
         "tests/unit/red-flag-fuel-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
         "tests/unit/redbull-orbit-clear.test.mjs",
+        "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
@@ -1046,6 +1055,7 @@
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/helmet-memo.test.mjs",
         "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-card-density.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
@@ -1336,6 +1346,15 @@
       "twinned": false
     },
     {
+      "id": "offline-precache",
+      "script": "test:offline-precache",
+      "kind": "browser",
+      "files": [
+        "tests/specs/offline-precache.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "perf-budget",
       "script": "test:perf-budget",
       "kind": "browser",
@@ -1477,6 +1496,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
@@ -1490,6 +1510,7 @@
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/duel-row.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
@@ -1673,6 +1694,7 @@
         "tests/specs/agent-determinism.spec.js",
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
+        "tests/specs/bryce-phone-paint.spec.js",
         "tests/specs/css-player-smoke.spec.js",
         "tests/specs/dev-tools.spec.js",
         "tests/specs/engine-audio-offline.spec.js",
@@ -4170,6 +4192,11 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/race/retired-card.js",
+      "global": "RetiredCard",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/session-entry.js",
       "global": "SessionEntry",
       "roster": "tag"
@@ -4207,6 +4234,11 @@
     {
       "path": "js/race/start-lights.js",
       "global": "StartLights",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/stopped-cars.js",
+      "global": "StoppedCars",
       "roster": "LAZY_RACE_SESSION"
     },
     {

@@ -5,6 +5,7 @@
 import { CliArgError } from "../lib/cli-args.mjs";
 import { createRequire } from "node:module";
 import { pickCircuit } from "./circuit-axis.mjs";
+import { brycePhone, seedStoreInPage } from "../lib/bryce-phone.mjs";
 
 const require = createRequire(import.meta.url);
 const { devices } = require("playwright");
@@ -47,6 +48,14 @@ export const VIEWPORTS = [
   ["ios-iphone-landscape-844", { ...devices["iPhone 13 landscape"], viewport: { width: 844, height: 390 }, screen: { width: 844, height: 390 } },
     "iPhone 13 full-screen geometry, 844x390 CSS; browser toolbar excluded",
     { t: 0, r: 47, b: 21, l: 47 }],
+  // THE OWNER'S PHONE (tools/lib/bryce-phone.mjs, issue #5262). Named `bryce-*` so an `ios-*` glob never picks them
+  // up. The 5th element marks the cell: seedOwnerProfile() then boots it on his live settings export (UI SIZE 61 %),
+  // and layout-audit sets real env() insets and prints the PAINTED sizes (tools/lib/paint-floor.mjs).
+  ...["standalone", "safari"].map((w) => {
+    const p = brycePhone({ window: w, dpr: 2, profile: false });
+    return [p.name, { ...p.contextOptions }, `Bryce's iPhone, ${w === "standalone" ? "Home Screen app" : "Safari tab"} ${p.viewport.width}x${p.viewport.height}, his live settings export — ${p.verified}`,
+      { t: p.insets.top, r: p.insets.right, b: p.insets.bottom, l: p.insets.left }, { bryce: w }];
+  }),
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
   ["ios-ipad-landscape",    { ...devices["iPad Pro 11 landscape"], deviceScaleFactor: 1 },
@@ -639,4 +648,16 @@ export function pickScreens(all, patternArg) {
 
 export function pickViewports(all, patternArg) {
   return pickByName(all, patternArg, ([n]) => n, "--viewports");
+}
+
+/**
+ * Owner cells (`bryce-*`): seed his live settings export before the first script runs, so the cell boots the way his
+ * phone does. A no-op for every other viewport. Call it on the context right after newContext. Returns the preset or null.
+ */
+export async function seedOwnerProfile(ctx, vpEntry) {
+  const mark = vpEntry && vpEntry[4];
+  if (!mark || !mark.bryce) return null;
+  const preset = brycePhone({ window: mark.bryce, dpr: 2 });
+  await ctx.addInitScript(seedStoreInPage, preset.localStorage);
+  return preset;
 }

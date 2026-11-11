@@ -137,7 +137,7 @@ test("the comment stripper actually strips (or every ban below is vacuous)", () 
   const out = stripComments(src);
   assert.equal((out.match(/\|\| 0\) > 0/g) || []).length, 1,
     `the stripper left commented code behind:\n${out}`);
-  assert.match(out, /const keep = \(g\.h \|\| 0\) > 0;/, "the stripper ate real code");
+  assert.equal(out, " \n \nconst x = 1; \nconst keep = (g.h || 0) > 0;", "the stripper ate real code");
 });
 
 // `(x || 0) > 0` cannot tell "measured zero" from "measured nothing", and in a
@@ -339,7 +339,7 @@ test("CLI clarity (#1702 #1699 #1696 #1694): help paths answer fast without side
     assert.match(r.stdout, want, rel);
   }
   // pick-unit-slices --help must print usage, not a computed plan.
-  assert.doesNotMatch(run("tools/ci/pick-unit-slices.mjs", "--help").stdout, /reason|fail-safe plan/);
+  assert.equal(run("tools/ci/pick-unit-slices.mjs", "--help").stdout, "usage: node tools/ci/pick-unit-slices.mjs [paths…] [--since REF] [--json] [--all] [--github-output] [--needed-only] [--costs]\n  Which Pure-node CI matrix slices a diff needs; fail-safe: an unclaimed path selects every slice.\n  no paths: the diff against the deploy merge-base.   --help: this text, nothing is computed.\n");
   // scan-globals --help writes no artifact.
   const graph = at("artifacts/dep-graph.json");
   const before = fs.existsSync(graph) ? fs.statSync(graph).mtimeMs : null;
@@ -366,8 +366,7 @@ test("CLI clarity (#1702 #1699 #1696 #1694): help paths answer fast without side
   // A bad extract-module range is a message, not a SyntaxError stack. js/game.js lines 1-3 open a comment.
   const bad = run("tools/check/extract-module.mjs", "js/game.js", "1", "3");
   assert.equal(bad.status, 1);
-  assert.match(bad.stderr, /does not parse as a program/);
-  assert.doesNotMatch(bad.stderr, /\n\s+at /);
+  assert.equal(bad.stderr, "range 1-3 of js/game.js does not parse as a program (Unterminated comment); pass whole functions or statements\n");
   // baked-scenery documents --limit (the cheap smoke).
   assert.match(fs.readFileSync(at("tools/shot/baked-scenery.mjs"), "utf8"), /--limit=1/);
 });
@@ -379,8 +378,12 @@ test("offline-precache-check --help prints usage and does not launch Chromium", 
   const r = spawnSync(process.execPath, [tool("offline-precache-check.cjs"), "--help"],
     { encoding: "utf8", cwd: ROOT, timeout: 10000 });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /usage:.*offline-precache-check\.cjs/);
-  assert.doesNotMatch(r.stdout, /\(raced online\)/, "must exit before the server/Chromium path");
+  // The usage gained --stage / --root= with #5300 (PWA offline audit), which
+  // landed one merge after #5392 pinned the old two-line text exactly.
+  assert.equal(r.stdout, "usage: node tools/check/offline-precache-check.cjs [--stage | --root=<staged dir>] [warmCircuit] [coldCircuit]\n"
+    + "  Defaults: warm=spa cold=cota, the working tree on 127.0.0.1. Launches Chromium (~1-2 min).\n"
+    + "  --stage  stage + stamp the site into artifacts/offline-precache/site first (what pages.yml ships)\n"
+    + "  --root=  serve an already staged, stamped site directory\n", "must exit before the server/Chromium path");
 });
 
 test("garage-angles / render-car reject an unknown flag (exit 2 + usage) before Chromium; hud-mock -h is help", () => {
@@ -560,7 +563,7 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
       "the LAN collector must not accept unauthenticated reads");
     const help = await fetch(authorised("/apex-report"));
     assert.equal(help.status, 200);
-    assert.match(await help.text(), /collector/);
+    assert.equal(await help.text(), "apex-report collector. POST a JSON bundle from the authenticated report page.\n");
 
     // ?report=1 is the console-free path for a phone (iOS Safari has no console
     // without a Mac and a cable). It must be opt-in: an injected button in every
@@ -637,7 +640,7 @@ test("report-server: rejects malformed bundles without saving or consuming sessi
     const next = await post("two.json", body);
     assert.equal(next.status, 200); await next.json();
     const over = await post("over-quota.json", body);
-    assert.equal(over.status, 413); assert.match(await over.text(), /quota/);
+    assert.equal(over.status, 413); assert.equal(await over.text(), "report quota exceeded");
     assert.deepEqual(fs.readdirSync(srv.out).sort(), ["one.json", "two.json"]);
     assert.equal(fs.readFileSync(path.join(srv.out, "one.json"), "utf8"), body);
   } finally { await srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
@@ -837,7 +840,7 @@ test("occlusion-estimate resolves game-vm and --help exits without booting it", 
   const r = spawnSync(process.execPath, [tool("occlusion-estimate.mjs"), "--help"],
     { encoding: "utf8", cwd: ROOT, timeout: 10000 });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /usage:.*occlusion-estimate/);
+  assert.equal(r.stdout, "usage: node tools/check/occlusion-estimate.mjs [track] [cameras]\nenv:   OCC_W OCC_H  (default 256x144)\n");
 });
 
 test("profile-gameloop.mjs: page-ready waits come from APEX_PROFILE_WAIT_MS, never below 20 s", () => {

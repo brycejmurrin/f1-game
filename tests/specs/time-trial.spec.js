@@ -111,6 +111,45 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
     await testInfo.attach("energy-review-phone", { body: await page.screenshot(), contentType: "image/png" });
   });
 
+  // ROW 3 (2026-11-10): at 844x390 the full brief filled the hero section, so
+  // the still flexed to nothing — #sel-map-btn painted at y 330-405 against a
+  // 390 viewport, the TURNS / LENGTH band rose over the GOAL row and the foot
+  // cut it. The section never scrolls on the phone card, so every part must be
+  // on screen, above the foot, and GOAL clear of the numbers.
+  test("the Practice picker fits the phone: map, GOAL and the numbers on screen, apart", async ({ page }) => {
+    await page.locator("#mb-practice").tap();
+    await expect(page.locator("#select-title")).toHaveText("PRACTICE");
+    await expect(page.locator("#practice-brief")).toBeVisible();
+    await expect(page.locator("#practice-goal-row")).toBeVisible();
+    await expect(page.locator("#sel-inner")).toHaveAttribute("data-density", "compact");
+    const stats = ["#sel-preview-meta > div:nth-child(2)", "#sel-preview-meta > div:nth-child(3)"];
+    for (const sel of stats) await expect(page.locator(sel)).toBeVisible();
+    const settled = await page.evaluate(settleLayout, { root: "#sel-inner" });
+    expect(settled.stable, "the picker layout settled").toBe(true);
+    const fit = await page.evaluate((stats) => {
+      const box = (sel) => {
+        const r = document.querySelector(sel).getBoundingClientRect();
+        return { sel, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      };
+      return {
+        vh: innerHeight, vw: innerWidth,
+        foot: box("#sel-inner > .sheet-foot"),
+        map: box("#sel-map-btn"), goal: box("#practice-goal-row"),
+        stats: stats.map(box),
+      };
+    }, stats);
+    const overlap = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+    for (const r of [fit.map, fit.goal, ...fit.stats]) {
+      expect(r.top, `${r.sel} top inside the viewport`).toBeGreaterThanOrEqual(0);
+      expect(r.bottom, `${r.sel} bottom inside the viewport`).toBeLessThanOrEqual(fit.vh);
+      expect(r.bottom, `${r.sel} clear of the foot`).toBeLessThanOrEqual(fit.foot.top + 0.5);
+      expect(r.left, `${r.sel} left inside the viewport`).toBeGreaterThanOrEqual(0);
+      expect(r.right, `${r.sel} right inside the viewport`).toBeLessThanOrEqual(fit.vw);
+    }
+    for (const s of fit.stats) expect(overlap(fit.goal, s), `GOAL row overlaps ${s.sel}`).toBe(false);
+    expect(fit.goal.bottom, "GOAL sits above the still").toBeLessThanOrEqual(fit.map.top + 0.5);
+  });
+
   test("cancelling Practice twice leaves ordinary TT and Race pickers usable", async ({ page }) => {
     for (let visit = 0; visit < 2; visit++) {
       await page.locator("#mb-practice").tap();
@@ -655,8 +694,12 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
     const rows = [], helpSettlements = [];
 
     try {
-      for (const pct of [40,80,100,130,150,200]) {
+      // A PHONE'S UI SIZE STOPS AT 70 % (#5235, js/ui/scale.js phoneUi: coarse pointer and a short side <= 500 px);
+      // a tablet and a desktop keep the full 40 %. The slider's own `min` is the contract, so it is asserted.
+      const uiMin = device.touch && Math.min(device.viewport.width, device.viewport.height) <= 500 ? 70 : 40;
+      for (const pct of [uiMin,80,100,130,150,200]) {
         await press('#mb-settings'); await press('#pm-open-appearance');
+        await expect(page.locator('#pm-uiscale'), `${device.name}: UI SIZE minimum`).toHaveAttribute('min', String(uiMin));
         await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); }, pct);
         await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
         await press('#pm-settings-close'); await press('#pm-open-driving');

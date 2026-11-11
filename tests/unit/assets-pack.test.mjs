@@ -1263,7 +1263,7 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
     assert.ok(m.materials.layers.length >= 10, "expected the SCALES table layers");
     for (const L of m.materials.layers) {
       assert.equal(L.licence, "Apex26-Procedural", `${L.id} must be procedural`);
-      assert.match(L.source, /^procedural:/);
+      assert.equal(L.source, "procedural:tools/gen/assets.mjs");
     }
     assert.ok(m.models.keep, "bake-synthetic must preserve models");
     assert.ok(m.env["*|day"], "bake-synthetic must preserve env");
@@ -1615,7 +1615,7 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     const verified = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "verify"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8", timeout: 10000 });
     assert.equal(verified.status, 0, verified.stderr || verified.stdout);
-    assert.match(verified.stdout, /verify: OK/);
+    assert.equal(verified.stdout, "pack: 0 KB / 8 MB budget\nverify: OK\n");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -2130,7 +2130,7 @@ test("unknown bake flag is refused before rewriting the pack", () => {
   const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
     { encoding: "utf8" });
   assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
-  assert.match(r.stderr, /unknown flag --dry-run/, `expected unknown-flag error, got:\n${r.stderr}`);
+  assert.equal(r.stderr, "error: unknown flag --dry-run (accepted: --size --models)\n", `expected unknown-flag error, got:\n${r.stderr}`);
 });
 
 test("assets.mjs --help prints usage and exits 0", () => {
