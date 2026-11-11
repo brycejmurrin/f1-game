@@ -472,6 +472,8 @@
     "tests/unit/garage-crew.test.mjs",
     "tests/unit/garage-entrance-motion.test.mjs",
     "tests/unit/garage-finish-remap.test.mjs",
+    "// #5462: the stepped arrival pose and the crew rigs' draw streams pinned bit for bit, and zero objects a frame (interpreter-only census child, ~9 s).",
+    "tests/unit/garage-frame-garbage.test.mjs",
     "tests/unit/garage-interior-gate.test.mjs",
     "// The Blender garage light cues (ctx.cue in GarageScene.live) and the podium / rain / neon moods.",
     "tests/unit/garage-light-cues.test.mjs",

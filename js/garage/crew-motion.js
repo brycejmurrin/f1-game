@@ -47,10 +47,12 @@ const GarageCrewMotion = (function () {
     for (const name of names) gfx.freeMesh(rig.mesh[name]);
     return names.length;
   }
+  // Lengths: Math.sqrt of the squares, not Math.hypot, whose V8 builtin copies its arguments into a
+  // fresh array per call (#5462; ~9 KB a SERVICE frame). Within an ulp of hypot at bay scales.
   // Two-bone IK in the figure's YZ plane. Feet remain at Blender's authored
   // ground targets while knees bend; the same solver keeps arm lengths fixed.
   function joint(y, z, ty, tz, a, b, bend, out) {
-    const dy = ty - y, dz = tz - z, raw = Math.hypot(dy, dz), d = Math.max(.001, Math.min(a + b - .0001, raw));
+    const dy = ty - y, dz = tz - z, raw = Math.sqrt(dy * dy + dz * dz), d = Math.max(.001, Math.min(a + b - .0001, raw));
     const uy = raw > .001 ? dy / raw : -1, uz = raw > .001 ? dz / raw : 0;
     const along = (a * a - b * b + d * d) / (2 * d), h = Math.sqrt(Math.max(0, a * a - along * along));
     out[0] = y + uy * along + uz * h * bend; out[1] = z + uz * along - uy * h * bend;
@@ -60,7 +62,7 @@ const GarageCrewMotion = (function () {
   // hip (x, y, z) to ankle (tx, ty, tz) the knee bends along the part of +z
   // (forward) perpendicular to the hip-ankle line.
   function leg(x, y, z, tx, ty, tz, out) {
-    const dx = tx - x, dy = ty - y, dz = tz - z, raw = Math.hypot(dx, dy, dz), d = Math.max(.001, Math.min(THIGH + SHIN - .0001, raw));
+    const dx = tx - x, dy = ty - y, dz = tz - z, raw = Math.sqrt(dx * dx + dy * dy + dz * dz), d = Math.max(.001, Math.min(THIGH + SHIN - .0001, raw));
     const ux = dx / raw, uy = dy / raw, uz = dz / raw;
     const along = (THIGH * THIGH - SHIN * SHIN + d * d) / (2 * d), h = Math.sqrt(Math.max(0, THIGH * THIGH - along * along)), n = Math.sqrt(1 - uz * uz);
     out[0] = x + ux * along - uz * ux * h / n;
@@ -72,8 +74,8 @@ const GarageCrewMotion = (function () {
   // span scaled to `length`, in the figure's frame (rig.x/z, yaw cos/sin cy/sy).
   // footYaw (a boot) replaces the rotation with a plain yaw.
   function part(rig, gfx, name, x, y, z, dy, dz, length, opts, dx = 0, footYaw = null) {
-    const m = rig.m, cy = rig.cy, sy = rig.sy, d = Math.hypot(dx, dy, dz), nx = dx / d, ny = dy / d, nz = dz / d;
-    const h = Math.hypot(dx, dy), xx = h > .00001 ? Math.abs(dy) / h : 1, xy = h > .00001 ? -(dy < 0 ? -1 : 1) * dx / h : 0;
+    const m = rig.m, cy = rig.cy, sy = rig.sy, d = Math.sqrt(dx * dx + dy * dy + dz * dz), nx = dx / d, ny = dy / d, nz = dz / d;
+    const h = Math.sqrt(dx * dx + dy * dy), xx = h > .00001 ? Math.abs(dy) / h : 1, xy = h > .00001 ? -(dy < 0 ? -1 : 1) * dx / h : 0;
     const zx = xy * nz, zy = -xx * nz, zz = xx * ny - xy * nx;
     m[0] = cy * xx; m[1] = xy; m[2] = -sy * xx; m[3] = 0;
     m[4] = (cy * dx + sy * dz) / length; m[5] = dy / length; m[6] = (-sy * dx + cy * dz) / length; m[7] = 0;
