@@ -71,13 +71,22 @@ slow passes. The slowest window must also stay within **4×** of the fastest
 (`SPREAD_RATIO`); that is the stall check. `APEX_PERF_HOT_STRICT=1` tightens
 the ceiling to **1.75×**.
 
+Every window is at least `MIN_WINDOW_MS` (20 ms at the baseline ms/call), so
+`physState` runs 2800 calls a window and `nodeAt` 20000 (2026-11-11, #2394).
+At 200 and 2000 calls those windows were ~1.8 and ~2.6 ms, shorter than one
+scheduler slice: a single 8–25 ms preemption made one window 5–6× its sibling
+on a loaded box (6/30 runs red beside 8 busy neighbours). The ratios and the
+per-call baseline did not change; the spread now resolves a stall of about
+three windows (~60–75 ms) instead of ~5 ms, which was below the box's own
+off-CPU gaps and so never a signal.
+
 Three idle runs on this container (2026-10-29), median ms/call:
 
 | Bench | run 1 | run 2 | run 3 | median | within-run spread |
 |---|---:|---:|---:|---:|---:|
 | `step` (80) | 1.632 | 1.664 | 1.663 | 1.663 | 1.02–1.08 |
-| `physState` (200) | 0.011 | 0.011 | 0.011 | 0.011 | 1.02–1.21 |
-| `nodeAt` (2000) | 0.002 | 0.002 | 0.002 | 0.002 | 1.16–1.38 |
+| `physState` (200; now 2800) | 0.011 | 0.011 | 0.011 | 0.011 | 1.02–1.21 |
+| `nodeAt` (2000; now 20000) | 0.002 | 0.002 | 0.002 | 0.002 | 1.16–1.38 |
 
 `nodeAt` is sub-microsecond per call after warmup, so its ceiling only catches
 a stall. Rewrite the baseline only when the hot path changed on purpose, and
