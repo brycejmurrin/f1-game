@@ -233,6 +233,36 @@ function adaptedSourceWhy(f) {
   return built === null || built.has(id) ? `circuit ${id} is built by an ADAPTED spec (vm-page runs it)` : "";
 }
 
+/** THE CHARACTERIZATION'S INPUTS (2026-11-10). Both copies of the physics
+ *  characterization — the VM twin (tests/unit/physics-characterization-vm.test.mjs,
+ *  on whichever slice groups.json gives it) and the browser spec (the
+ *  driving-model job) — race a circuit, so the circuit's def and scenery, the
+ *  track engine that builds it and the car parts that set its numbers move the
+ *  baseline. Before, a js/circuits/monza.js or js/track/tracks.js diff ran
+ *  neither copy and js/car/parts.js skipped driving-model. The raced circuits
+ *  are read from the two files (circuitsOf, helpers followed), not hardcoded;
+ *  an unreadable file or a whole-roster walk counts every circuit (fail safe). */
+export const CHARACTERIZATION = {
+  vm: "tests/unit/physics-characterization-vm.test.mjs",
+  spec: "tests/specs/physics-characterization.spec.js",
+};
+const CHARACTERIZATION_ENGINE = [/^js\/track\/tracks\.js$/, /^js\/track\/core\//, /^js\/car\/parts\.js$/];
+export function characterizationCircuits() {
+  const ids = new Set();
+  for (const f of Object.values(CHARACTERIZATION)) {
+    const sub = circuitsOf(f);
+    if (sub === null || sub.size === 0) return null;   // unknown → every circuit
+    for (const id of sub) ids.add(id);
+  }
+  return ids;
+}
+function characterizationWhy(f, raced) {
+  if (CHARACTERIZATION_ENGINE.some((re) => re.test(f))) return `physics characterization input: ${f}`;
+  const m = /^js\/circuits\/(?:scenery\/)?([^/]+)\.js$/.exec(f);
+  if (!m) return "";
+  return raced === null || raced.has(m[1]) ? `circuit ${m[1]} is raced by the physics characterization` : "";
+}
+
 /** THE BROWSER PLAN'S HALF OF THE SUBSTITUTION (#5241 G3). select-specs drops a twinned spec from the browser legs
  *  because "its VM twin runs on the node gate"; nothing checked that the node gate was going to. RULES above route by
  *  PATH, the browser plan routes by GROUP, and the two disagree: a js/ui diff routes the boot group, whose
@@ -290,6 +320,8 @@ export function pick(files, opts = {}) {
   };
   const addPages = (why) => { add("page-a", why); add("page-b", why); };
   const unmatched = [];
+  let racedMemo;
+  const raced = () => (racedMemo === undefined ? (racedMemo = characterizationCircuits()) : racedMemo);
 
   for (const f of files) {
     let hit = false;
@@ -314,6 +346,15 @@ export function pick(files, opts = {}) {
 
     const sourceWhy = adaptedSourceWhy(f);
     if (sourceWhy) { hit = true; addPages(sourceWhy); }
+
+    const charWhy = characterizationWhy(f, raced());
+    if (charWhy) {
+      hit = true;
+      add("driving-model", charWhy);
+      const vmOwners = owners.get(CHARACTERIZATION.vm);
+      // Not in any slice's group (moved, renamed): select every node slice, never none.
+      for (const s of vmOwners && vmOwners.size ? vmOwners : NODE_SLICES) add(s, charWhy);
+    }
 
     if (GEOMETRY_PATHS.test(f)) {
       hit = true;

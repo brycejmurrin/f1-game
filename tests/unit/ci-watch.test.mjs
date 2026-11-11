@@ -12,6 +12,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { inheritedNotes, baseRunFor, latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, cancelledExternal, supersededByPr, fileState, waitingJobs } from "../../tools/ci/ci-watch.mjs";
 import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
+import * as ciWatch from "../../tools/ci/ci-watch.mjs";
+import fs from "node:fs";
+import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
 const job = (id, name, status, conclusion, steps = []) => ({ id, name, status, conclusion, steps, html_url: `u/${id}` });
@@ -561,6 +565,29 @@ test("inheritedNotes (#2665): says `base red since <sha>` only when the deploy t
   const flaky = inheritedNotes({ job: j, annos: ["    tests/specs/hud-mirror.spec.js:12 boom"], quarantine: q });
   assert.match(flaky[0], /in flaky-quarantine\.json: tests\/specs\/hud-mirror\.spec\.js.*expires 2026-11-15/);
   assert.deepEqual(inheritedNotes({ job: j, annos: ["    tests/specs/season.spec.js:1 x"], quarantine: q }), []);
+});
+
+test("the flake hint reads only ACTIVE quarantine rows: an expired row is not 'a retry pass is allowed once'", () => {
+  // ci-watch read the raw ledger, so a row past its inclusive expiry (which the
+  // reporter's loadQuarantine drops: its flakes block again) still printed the
+  // retry-allowed hint. activeQuarantine goes through flaky-policy.mjs itself.
+  assert.equal(typeof ciWatch.activeQuarantine, "function", "ci-watch exports activeQuarantine (filters through flaky-policy.mjs)");
+  const root = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  fs.mkdirSync(nodePath.join(root, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(nodePath.join(root, "scratch", "ci-watch-quarantine-"));
+  const file = nodePath.join(dir, "ledger.json");
+  const row = (spec, expires) => ({ spec, since: "2026-01-01", owner: "fixture-owner", title: "Fixture › wobbles",
+    why: "fixture row used only by this unit test, measured nowhere", evidence: "https://example.invalid/run/1",
+    review: "fixture review", expires, signature: "^boom" });
+  try {
+    fs.writeFileSync(file, JSON.stringify({ quarantine: [row("fixture/old.spec.js", "2026-02-01"), row("fixture/live.spec.js", "2026-03-01")] }));
+    const active = ciWatch.activeQuarantine(file, new Date("2026-02-15T12:00:00Z"));
+    assert.deepEqual(active.map((r) => r.spec), ["fixture/live.spec.js"], "the expired row is dropped, the live one kept");
+    const j = job(5, "smoke (TLX)", "completed", "failure");
+    assert.deepEqual(inheritedNotes({ job: j, annos: ["    fixture/old.spec.js:3 boom"], quarantine: active }), [], "no retry hint for an expired row");
+    assert.match(inheritedNotes({ job: j, annos: ["    fixture/live.spec.js:3 boom"], quarantine: active })[0], /a retry pass is allowed once/);
+    assert.equal(ciWatch.activeQuarantine(nodePath.join(dir, "missing.json")).length, 0, "no ledger, no hint");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("baseRunFor reads the deploy branch's newest completed run once per workflow and survives a failing lookup", () => {

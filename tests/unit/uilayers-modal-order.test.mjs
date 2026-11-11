@@ -152,6 +152,41 @@ test("topmodal does not preventDefault a non-cancelable focusin (F9)", () => {
   assert.match(src, /No preventDefault: `focusin` is NOT cancelable/);
 });
 
+test("topmodal onFocusIn pulls stray focus back into the top layer without calling preventDefault (F9)", () => {
+  // The REAL handler, on both of its pull-back branches: a stray focusin
+  // outside a hidden-toggled pane (#select) and one on <body> under a <dialog>.
+  // The regex above only reads a window after a `focusin` comment, so a
+  // preventDefault added earlier in the handler passed it.
+  const body = { id: "body" };
+  const stray = { id: "stray" };
+  const run = (tagName) => {
+    const focused = [];
+    const btn = { id: "btn", disabled: false, getAttribute: () => null, hidden: false,
+      focus(o) { focused.push(o); } };
+    const layer = { id: tagName === "DIALOG" ? "pausemenu" : "select", tagName,
+      contains: (el) => el === btn || el === layer, querySelectorAll: () => [btn], focus() {} };
+    const context = {
+      window: { UiLayers: { top: () => layer } },
+      document: { readyState: "loading", body, addEventListener() {}, getElementById: () => null, querySelectorAll: () => [] },
+      WeakSet, WeakMap,
+      Log: { info() {}, warn() {} },
+    };
+    context.globalThis = context;
+    vm.createContext(context);
+    vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
+    let prevented = 0;
+    const e = { type: "focusin", cancelable: false, target: tagName === "DIALOG" ? body : stray, relatedTarget: null,
+      preventDefault() { prevented++; } };
+    context.window.TopModal.onFocusIn(e);
+    return { focused, prevented };
+  };
+  for (const tag of ["DIV", "DIALOG"]) {
+    const r = run(tag);
+    assert.equal(r.focused.length, 1, `${tag}: focus is pulled back onto the layer's first control`);
+    assert.equal(r.prevented, 0, `${tag}: focusin is not cancelable — preventDefault there is a no-op that reads as a guard`);
+  }
+});
+
 test("menunav releases its per-press measurement cache (F11)", () => {
   const src = read("js/ui/menu-nav.js");
   assert.match(src, /try \{ navKey\(e\); \} finally \{ _boxes = null; \}/,
