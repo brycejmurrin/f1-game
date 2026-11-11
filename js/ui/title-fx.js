@@ -218,7 +218,7 @@ const TitleFx = (function () {
     if (typeof Input !== "undefined" && Input.vibrate) Input.vibrate(8);
   }
 
-  function initUI() {
+  function initUI(gate) {
     const ov = overlay();
     if (ov) {
       if (mode() === "reduce" || introMode() === "off") endIntro();
@@ -241,7 +241,8 @@ const TitleFx = (function () {
       if (document.visibilityState === "hidden") ov.setAttribute("data-paused", "");
       else ov.removeAttribute("data-paused");
     });
-    wireRows();
+    // #4798: the title intro is eager; its Settings rows wait for the settings-lazy gate.
+    if (gate) gate(wireRows); else wireRows();
   }
 
   // TITLE SCREEN fold rows under SETTINGS › APPEARANCE. REDUCE MOTION is
@@ -284,7 +285,7 @@ const TitleFx = (function () {
   // after this file, so only a document that is already COMPLETE wires now.
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => initUI(typeof SettingsNav !== "undefined" ? SettingsNav.lazy : null), { once: true });
   }
 
   return {

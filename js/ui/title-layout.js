@@ -762,7 +762,8 @@ const TitleLayout = (function () {
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", build, { once: true });
+    // #4798: the fold waits for the settings-lazy gate (AppearanceStudio builds it too).
+    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(build) : build()), { once: true });
     else build();
   }
 

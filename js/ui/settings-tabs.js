@@ -79,7 +79,10 @@ const SettingsNav = (function () {
   }
   function lazy(fn) {
     if (typeof fn !== "function") return;
-    if (typeof document === "undefined" || document.readyState === "complete") { fn(); return; }
+    if (typeof document === "undefined" || document.readyState === "complete") {
+      if (lazyQ) { lazyQ.push(fn); flushLazy(); } else fn();   // a queued initialiser still runs first
+      return;
+    }
     if (lazyQ) { lazyQ.push(fn); return; }
     lazyQ = [fn];
     for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, flushLazy, true);
@@ -206,6 +209,7 @@ const SettingsNav = (function () {
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
     function show(want, focus, after, audioTried) {
       stopRestore();
+      flushLazy();   // #4798: rows are wired before home paints its door summaries
       const request = ++generation;
       const id = Object.hasOwn(routes, want) ? want : "home";
       mark("apex:settings:show");

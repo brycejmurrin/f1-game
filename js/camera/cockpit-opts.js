@@ -408,7 +408,11 @@ function initUI() {
 }
 
 if (typeof document !== "undefined") {
-  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+  // #4798: paintVisor stays in the DCL task; the fold waits for the settings-lazy gate.
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => {
+    paintVisor();
+    if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+  }, { once: true });
   else initUI();
 }
 

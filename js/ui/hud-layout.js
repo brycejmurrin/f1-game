@@ -1365,12 +1365,15 @@ const HudLayout = (function () {
     paintAll();
   }
 
-  function init() { apply(); build(); watchPackUnhide(); watchReadoutSizes(); }
+  // #4798: the Settings fold waits for the settings-lazy gate; apply and the watchers keep their timing.
+  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); }
   apply();
   _pub = true;
   if (doc) {
-    if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true });
-    else init();
+    const atGate = (fn) => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(fn) : fn());
+    if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", () => init(atGate), { once: true });
+    else if (doc.readyState === "complete") init();
+    else init((fn) => doc.addEventListener("DOMContentLoaded", () => atGate(fn), { once: true }));
   }
 
   // Public surface: PACK_AIR + packPhoneRects for the unit packer; KEY / LIM /
