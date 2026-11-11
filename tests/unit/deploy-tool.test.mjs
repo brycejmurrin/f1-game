@@ -4,7 +4,7 @@
 // real diff, preflight refuses what the protocol refuses, and --help exits 0
 // without touching git. plan()/main() need the network and are not run here.
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
-import { GENERATED_PATHS, BUILT_PATHS } from "../../tools/lib/generated-paths.mjs";
+import { GENERATED_PATHS, BUILT_PATHS, RETIRED_PATHS } from "../../tools/lib/generated-paths.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
@@ -266,9 +266,10 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.equal(cure(["docs/agent-output/catalog.json", "docs/agent-output/policies.json"]), false, "policies.json is hand-written");
 
   // System audit 2026-10-26: the merge-conflict hot spots that are generated —
-  // gen-agent-index's three outputs, the coverage table, and the scenery survey
-  // cache (75 conflicts in 7 days) — cure; their sources still do not.
-  const derived = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md", "docs/TESTING-COVERAGE.md"];
+  // gen-agent-index's three outputs and the scenery survey cache (75 conflicts
+  // in 7 days) — cure; their sources still do not. (The coverage table left git
+  // on 2026-11-10: RETIRED_PATHS, cured as a deletion below.)
+  const derived = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md"];
   assert.equal(cure(derived), true);
   assert.deepEqual(cureableConflicts(derived).derivedF, derived);
   assert.equal(cure(["tools/shot/scenery-locations.json"]), true, "the scenery cache regenerates");
@@ -294,8 +295,9 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
  * clean-but-stale merge: both sides rewrote the committed ladder figures to the
  * same "N of M+1", git merged the identical hunks, and the union was a file
  * short until mergeDeployTip() re-ran the generators. The ladder figures are
- * not committed any more. The coverage page is: it lists every unit file, so
- * the union's only follow-up is docs/TESTING-COVERAGE.md. Built in a throwaway
+ * not committed any more, and since 2026-11-10 neither is the coverage page
+ * (artifacts/TESTING-COVERAGE.md, built on demand), so the union needs NO
+ * follow-up commit at all. Built in a throwaway
  * copy of the tree (text files only) and merged with the REAL mergeDeployTip()
  * from the copy's own deploy.mjs.
  *
@@ -303,7 +305,7 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
  * already carried a stale ARCHITECTURE.md count (#697+#740, 2026-10-02) made
  * regenerateDerived write a follow-up commit for a reason that has nothing to
  * do with the unit-file merge under test, and this assertion went red. */
-test("two sides that each add a unit file merge clean and refresh only the coverage page", () => {
+test("two sides that each add a unit file merge clean with no derived follow-up", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-regen-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   const genCheck = () => spawnSync("npm", ["run", "-s", "gen:check"], { cwd: dir, encoding: "utf8" });
@@ -339,10 +341,10 @@ test("two sides that each add a unit file merge clean and refresh only the cover
       `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); console.log(await m.mergeDeployTip());`],
       { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     assert.doesNotMatch(out, /AGENTS\.md|TESTING\.md|PREPUSH-GATE-LADDER/, "no ladder doc needed re-deriving: " + out);
-    assert.match(out, /TESTING-COVERAGE\.md/, "a new unit file is a coverage row: " + out);
-    assert.equal(g("log", "-1", "--format=%s"), REGEN_MESSAGE, "the coverage page is the derived follow-up");
-    assert.deepEqual(g("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").split("\n").filter(Boolean), ["docs/TESTING-COVERAGE.md"]);
-    assert.equal(g("log", "-1", "--skip=1", "--format=%P").split(" ").length, 2, "the commit under the follow-up is the merge");
+    // The verdict is the last line (npm run gen's own output precedes it): "merged", no "regenerated …" clause.
+    assert.equal(out.trim().split("\n").pop(), "merged", "a unit file on each side needs no regenerated follow-up: " + out);
+    assert.notEqual(g("log", "-1", "--format=%s"), REGEN_MESSAGE);
+    assert.equal(g("log", "-1", "--format=%P").split(" ").length, 2, "HEAD is the merge itself");
     const check = genCheck();
     assert.equal(check.status, 0, "every generated file is fresh on the bare merge:\n" + check.stdout + check.stderr);
     assert.equal(g("status", "--porcelain"), "");
@@ -997,17 +999,25 @@ test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs
 
 // BUILT, NOT COMMITTED (2026-10-28): the tip deleted js/track/circuit-meta.js; a branch from before that regenerated
 // it for a circuit edit. The merge is a modify/delete conflict, and the cure is to take the deletion.
-test("a BUILT path's modify/delete conflict is cureable, and `git rm --cached` resolves it as a deletion", () => {
-  assert.ok(BUILT_PATHS.length > 0);
-  for (const p of BUILT_PATHS) {
+// RETIRED (2026-11-10): docs/TESTING-COVERAGE.md left git for artifacts/ the same way; same conflict, same cure.
+test("RETIRED_PATHS are gitignored, untracked, not generated, and not site files", () => {
+  assert.ok(RETIRED_PATHS.length > 0);
+  for (const p of RETIRED_PATHS) {
+    assert.equal(spawnSync("git", ["check-ignore", "-q", "--no-index", "--", p], { cwd: ROOT }).status, 0, `${p} must be in .gitignore`);
+    assert.equal(execFileSync("git", ["ls-files", "--", p], { cwd: ROOT, encoding: "utf8" }).trim(), "", `${p} must not be tracked`);
+    assert.equal(GENERATED_PATHS.includes(p) || BUILT_PATHS.includes(p), false, `${p} is retired: it is in no other list`);
+  }
+});
+
+for (const rel of [BUILT_PATHS[0], ...RETIRED_PATHS]) test(`${rel}: a modify/delete conflict is cureable, and \`git rm --cached\` resolves it as a deletion`, () => {
+  for (const p of [...BUILT_PATHS, ...RETIRED_PATHS]) {
     const c = cureableConflicts([p]);
-    assert.equal(c.cureable, true, `${p}: a built path must be cureable`);
+    assert.equal(c.cureable, true, `${p}: a built or retired path must be cureable`);
     assert.deepEqual(c.builtF, [p]);
   }
-  assert.equal(cureableConflicts([BUILT_PATHS[0], "tools/manifest.cjs"]).cureable, false, "a real conflict beside it still stops");
+  assert.equal(cureableConflicts([rel, "tools/manifest.cjs"]).cureable, false, "a real conflict beside it still stops");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-built-cure-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
-  const rel = BUILT_PATHS[0];
   try {
     g("init", "-q", "-b", "tip");
     g("config", "user.email", "t@t"); g("config", "user.name", "t");
@@ -1080,7 +1090,6 @@ function generatorCureFixture(output, generator, failure) {
 
 for (const [output, generator] of [
   ["docs/agent-index.json", "tools/docs/gen-agent-index.mjs"],
-  ["docs/TESTING-COVERAGE.md", "tools/docs/gen-coverage-table.mjs"],
   ["tools/shot/scenery-locations.json", "tools/shot/gen-scenery-locations.cjs"],
 ]) {
   test(`conflict cure waits for ${generator} before the merge commit`, () => {
