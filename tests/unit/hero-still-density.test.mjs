@@ -124,9 +124,9 @@ test("the stills folder stays inside its byte budget (lazy: one circuit's file p
 });
 
 /** The generator's HERO table and heroOf(), evaluated with a given --frac (importing the script would shoot). */
-function heroApi(fracArg = "") {
+function heroApi(fracArg = "", aimArg = []) {
   const block = gen.slice(gen.indexOf("const HERO = {"), gen.indexOf("const only = "));
-  return vm.runInNewContext(block + "\n({ HERO, ORBIT, heroOf })", { fracArg }, { filename: absSrc("tools/gen/track-stills.mjs") });
+  return vm.runInNewContext(block + "\n({ HERO, ORBIT, heroOf })", { fracArg, aimArg }, { filename: absSrc("tools/gen/track-stills.mjs") });
 }
 
 test("#5342: a HERO entry may re-aim its own camera [yaw, pitch, dist]; every other circuit keeps the shared orbit", () => {
@@ -142,5 +142,15 @@ test("#5342: a HERO entry may re-aim its own camera [yaw, pitch, dist]; every ot
     assert.deepEqual([o.yaw, o.pitch, o.dist], [...h[2]], id);
   }
   for (const id of ["imola", "estoril", "watkins_glen", "baku"]) assert.ok(Array.isArray(HERO[id][2]), `${id} is re-aimed (#5342)`);
+  assert.deepEqual(Object.values(heroApi("", [100, 30, 45]).heroOf("imola")).slice(2), [100, 30, 45], "--aim overrides even a re-aimed circuit");
   assert.equal(heroApi("0.3").heroOf(plain).frac, 0.3, "--frac still overrides the section, not the aim");
+});
+
+test("#5343: the generator captures through the generation-checked wait, never a skipped one", () => {
+  const call = gen.slice(gen.indexOf("const shot = await screenshotPresentedCanvas("), gen.indexOf("const png = shot.buf;"));
+  assert.ok(call.length > 0, "the capture call is where the size guard expects it");
+  assert.doesNotMatch(call, /skipAwait/, "skipAwait read an unblitted 300x150 #game-soft (zolder, estoril)");
+  assert.match(call, /awaitMs: 240000/, "the wait gets the same 240 s budget as the capture");
+  assert.match(call, /capture readiness\|did not present/, "a readiness timeout fails the circuit instead of a page screenshot of the overlay");
+  assert.doesNotMatch(gen, /awaitPresentedFrame\(/, "its 8 s timeout failed silently");
 });

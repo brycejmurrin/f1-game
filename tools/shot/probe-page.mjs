@@ -623,12 +623,16 @@ export async function readSoftCanvasBytes(page, {
     // A FALLBACK #view / #game must be sized to the window (innerWidth x DPR, ±1 px), and is size-checked BEFORE
     // flat() asks it for "2d" (which claims an uncontexted canvas for good). zolder's track captured the unsized
     // 300x150 default #game as its 1600x900 still (issue #5343); refused, the frame goes to CDP, which composites
-    // what is on screen. #game-soft (the blit target) and a preferred carview #view read at any non-empty size.
+    // what is on screen. A preferred carview #view reads at any non-empty size.
     const dpr = devicePixelRatio > 0 ? devicePixelRatio : 1;
     const sized = (c) => !!(c && c.width > 0 && c.height > 0);
     const windowSized = (c) => sized(c) && Math.abs(c.width - Math.round(innerWidth * dpr)) <= 1
       && Math.abs(c.height - Math.round(innerHeight * dpr)) <= 1;
-    const softLive = sized(soft) && flat(soft);
+    // #game-soft is only live once a frame has been blitted into it: until then it keeps the HTML default 300x150
+    // (not the window's aspect) while it covers the real frame (#5343). A blit at any render scale keeps the aspect.
+    const windowAspect = (c) => sized(c) && innerHeight > 0
+      && Math.abs(c.width / c.height - innerWidth / innerHeight) <= 0.02 * (innerWidth / innerHeight);
+    const softLive = windowAspect(soft) && flat(soft);
     const g = (pv && sized(view) && flat(view)) ? view
       : softLive ? soft
       : (windowSized(view) && flat(view)) ? view

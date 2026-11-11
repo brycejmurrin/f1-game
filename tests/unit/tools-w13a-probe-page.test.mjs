@@ -96,7 +96,10 @@ test("#5343: the soft path refuses an unsized 300x150 fallback canvas (CDP compo
   assert.deepEqual(z.asked, [], "and it is never asked for a context (that would claim it for good)");
   assert.equal((await softRead({ game: { w: 1600, h: 900 } })).id, "game", "a window-sized flat #game still reads");
   assert.equal((await softRead({ game: { w: 3201, h: 1800 } }, { dpr: 2 })).id, "game", "innerWidth x DPR, ±1 px");
-  assert.equal((await softRead({ "game-soft": { w: 1200, h: 675, kind: "2d" }, game: { w: 300, h: 150 } })).id, "game-soft", "the blit target reads at any non-empty size");
+  assert.equal((await softRead({ "game-soft": { w: 1200, h: 675, kind: "2d" }, game: { w: 300, h: 150 } })).id, "game-soft", "a blitted overlay reads at any render scale");
+  // estoril in the #5342 batch: TLX created #game-soft, the first SwiftShader readback had not landed, the overlay
+  // was still the 300x150 default over a real 1600x900 #game (WebGL: refused) — so null, and the caller waits or CDPs.
+  assert.equal((await softRead({ "game-soft": { w: 300, h: 150, kind: "2d" }, game: { w: 1600, h: 900, kind: "webgl2" } })).id, null, "an unpresented overlay is not the frame");
   assert.equal((await softRead({ view: { w: 300, h: 150 } })).id, null, "a fallback #view must be sized too");
   assert.equal((await softRead({ view: { w: 800, h: 600, kind: "2d" } }, { preferView: true })).id, "view", "carview's own canvas is asked for by name");
   assert.equal((await softRead({ game: { w: 1600, h: 900, kind: "webgl2" } })).id, null, "a WebGL #game is still refused");

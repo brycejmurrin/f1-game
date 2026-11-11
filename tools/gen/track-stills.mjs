@@ -7,6 +7,7 @@
 //   node tools/gen/track-stills.mjs --force          # re-shoot all of them
 //   node tools/gen/track-stills.mjs --only monza,spa # a subset
 //   node tools/gen/track-stills.mjs --frac 0.12      # lap fraction (default 0.06)
+//   node tools/gen/track-stills.mjs --only imola --force --aim 215,11,22   # try a camera before HERO keeps it
 //
 // One headless Chromium, one page, every circuit in turn: __apex.tt(id) builds
 // the world SOLO (no rivals), the player is parked half a lap away so no car is
@@ -30,7 +31,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sharp from "sharp";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
-import { awaitPresentedFrame, screenshotPresentedCanvas } from "../shot/probe-page.mjs";
+import { screenshotPresentedCanvas } from "../shot/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const OUT_DIR = resolve(ROOT, "assets", "stills");
@@ -54,10 +55,13 @@ function flag(argv, name, fallback) {
 const argv = process.argv.slice(2);
 const force = argv.includes("--force");
 const fracArg = flag(argv, "--frac", "");
+// `--aim yaw,pitch,dist` overrides every circuit's camera for one run (trying a re-aim before it goes into HERO).
+const aimArg = (flag(argv, "--aim", "") || "").split(",").filter(Boolean).map(Number);
+if (aimArg.length && (aimArg.length !== 3 || !aimArg.every(Number.isFinite))) throw new Error("--aim takes yaw,pitch,dist");
 
 // The signature section per circuit — [arc lap fraction, time of day, optional [yaw, pitch, dist] (ORBIT below)].
-// A re-aim's before -> after is `node tools/shot/frame-report.mjs --pose=<the orbit's eye:target:50> --subject lap`
-// (score 0-100, no browser), measured 2026-11-11.
+// A re-aim is chosen on real pixels (`--only <id> --force --aim y,p,d`). frame-report's VM scene (`--pose … --subject
+// lap`, no browser) is a fast first pass but missed the canopy that blocked estoril and baku's walls (2026-11-11).
 // The fraction is in the frame Tracks.sample() and __apex.orbit() read
 // (docs/tracks/<id>.md quotes its landmarks in this frame; the frac-keyed
 // grandstand tables in js/circuits/ are in the scenery-shifted frame and must
@@ -71,7 +75,7 @@ const HERO = {
   albert_park:  [0.47,  "dawn"],    // the lakeside run
   anderstorp:   [0.58,  "day"],     // out onto the runway back straight
   bahrain:      [0.10,  "default"], // the Turn 1 hairpin (night race)
-  baku:         [0.44,  "default", [215, 18, 42]], // the Old City castle squeeze (night); re-aimed #5342: frame-report 75 -> 99
+  baku:         [0.44,  "default", [175, 35, 45]], // the Old City castle squeeze (a day race since c75282f); re-aimed #5342: looks down the lane between the walls
   brands_hatch: [0.008, "dawn"],    // over the lip into Paddock Hill
   buddh:        [0.45,  "day"],     // the drop into the Turn 10-11 double-apex
   buenos_aires: [0.06,  "dusk"],
@@ -79,7 +83,7 @@ const HERO = {
   cota:         [0.10,  "dusk"],    // the Turn 1 climb
   dijon:        [0.70,  "day"],     // into the Parabolique
   donington:    [0.18,  "day"],     // Hollywood, looking down the Craner fall
-  estoril:      [0.88,  "dawn", [115, 18, 30]],    // into the Parabolica; re-aimed #5342: a structure 2 m off the lens, 56 -> 99
+  estoril:      [0.88,  "dawn", [155, 28, 60]],    // into the Parabolica; re-aimed #5342: up and back, over the structure 2 m off the old lens
   fuji:         [0.27,  "dawn"],    // out of Turn 1 into the tree-lined esses
   hockenheim:   [0.46,  "day"],     // the Spitzkehre
   hungaroring:  [0.04,  "day"],     // the downhill Turn 1
@@ -126,7 +130,7 @@ const HERO = {
 const ORBIT = Object.freeze([155, 11, 42]);
 const heroOf = (id) => {
   const h = HERO[id] || [0.06, "default"];
-  const aim = Array.isArray(h[2]) && h[2].length === 3 && h[2].every(Number.isFinite) ? h[2] : ORBIT;
+  const aim = aimArg.length === 3 ? aimArg : Array.isArray(h[2]) && h[2].length === 3 && h[2].every(Number.isFinite) ? h[2] : ORBIT;
   return { frac: fracArg ? parseFloat(fracArg) : h[0], tod: h[1], yaw: aim[0], pitch: aim[1], dist: aim[2] };
 };
 const only = (flag(argv, "--only", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -192,8 +196,13 @@ try {
     // several seconds a frame, and the screenshot waits for a frame. Under
     // load those two timed out three passes running while every other
     // circuit shot in under 90 s.
-    await awaitPresentedFrame(page);
-    const shot = await screenshotPresentedCanvas(page, { skipAwait: true, timeout: 240000 }).catch(async () => {
+    // The wait is the capture's own generation-checked one (awaitCaptureReady), never skipped: the software blit is
+    // a GPU readback that takes tens of seconds on SwiftShader, and until the first one lands `#game-soft` is the
+    // HTML default 300x150 canvas painted over the real frame. awaitPresentedFrame's 8 s default timed out silently
+    // and `skipAwait` then read that unpresented overlay: zolder in the #5223 batch, estoril in #5342's (#5343).
+    // A readiness timeout fails the circuit (re-run it); only a CDP failure after a presented frame falls back.
+    const shot = await screenshotPresentedCanvas(page, { awaitMs: 240000, timeout: 240000 }).catch(async (err) => {
+      if (/capture readiness|did not present|no presentation clock/.test(String(err && err.message))) throw err;
       const png = await page.screenshot({ timeout: 240000, animations: "disabled" });
       return { buf: png };
     });
