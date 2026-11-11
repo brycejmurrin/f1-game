@@ -1567,6 +1567,12 @@ const CarDraw = (function () {
           if (!c) continue;
           if (gfx.drawShadow) { gfx.drawShadow(Z, 2.4, 5.8); n++; }
           if (gfx.drawMark) { gfx.drawMark(Z, 1, 1); n++; }
+          // Its decal set, through the real path: queued here, built and drawn by game.js's flushDecals after the car
+          // loop (a decal mesh was otherwise BUILT on a car's first close view, and TLX's batched decal run with it).
+          queueCarDecals(c.team, Z, carDecalNum(c.team, c), false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); n++;
+          // Its spin discs (one per wheel; blended, alpha < 1), as the wheel draw's run 2 does when a car is near and fast.
+          _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
+          for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
           if (c.isPlayer) continue;   // the player's own meshes draw from its first frame
           d(_sharedRivalBody, co); d(_farRivalBody, co);
           d(teamBodyMesh(c.team, c), paint);
