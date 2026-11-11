@@ -21,7 +21,7 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test("TLX WebGPU: steady driving builds no render pipelines after warm-up", async ({ page }, testInfo) => {
   test.setTimeout(900000);
-  const { hook, warm, gpuDevice, replay, gov, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
+  const { hook, warm, gpuDevice, replay, gov, soft, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
@@ -48,7 +48,16 @@ test("TLX WebGPU: steady driving builds no render pipelines after warm-up", asyn
     // it is reported (annotation) and not failed; a size that recurs in a second window IS churn (released and
     // rebuilt). Everything else, and every bind group, must be 0.
     const firstUse = (b) => b.kind === "createBuffer" && /create(Index)?Attribute/.test(b.from || "") && /updateForRender/.test(b.from || "");
-    const other = windows.map((w) => ({ window: w.window, bindGroups: w.bindGroups, built: w.gpuBuilt.filter((b) => !firstUse(b)).slice(0, 6) }))
+    // The SOFT-BLIT READBACK is not a player's cost (#5387): tlx.js copies each frame back for putImageData only on a
+    // software adapter or headless (.claude/rules/render-tlx.md: a headed player has neither flag), and that MAP_READ
+    // buffer comes from _startSoftBlitRead. It is skipped by its creating stack only; every bind group stays counted.
+    const softRead = (b) => b.kind === "createBuffer" && /_startSoftBlitRead/.test(b.from || "");
+    const readbacks = windows.map((w) => w.gpuBuilt.filter(softRead).length);
+    testInfo.annotations.push({ type: "soft-blit-readbacks", description: `per window ${readbacks.join(",")}; path ${JSON.stringify(soft)}` });
+    if (readbacks.some((n) => n > 0)) {
+      expect(!!(soft && (soft.softAdapter || soft.headless) && soft.reads > 0), `a readback was exempted, so this run must be on the soft-blit path (${JSON.stringify(soft)})`).toBe(true);
+    }
+    const other = windows.map((w) => ({ window: w.window, bindGroups: w.bindGroups, built: w.gpuBuilt.filter((b) => !firstUse(b) && !softRead(b)).slice(0, 6) }))
       .filter((w) => w.bindGroups > 0 || w.built.length > 0);
     expect(other, "idle windows that created bind groups or non-first-draw buffers after warm-up").toEqual([]);
     const seen = new Map();

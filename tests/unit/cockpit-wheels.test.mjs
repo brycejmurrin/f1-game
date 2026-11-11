@@ -856,38 +856,61 @@ test("the head shift is small and bounded, and the shifted eye stays well clear 
   }
 });
 
-// #5387: a digit's first draw mints its TLX pool wrapper mid-lap, so the race's first telemetry frame draws every
-// digit once per place it can hold, shrunk on the wheel matrix (invisible). Once per race: the next frame does not.
-test("the race's first telemetry frame primes every gear and speed digit once per place, shrunk; then never again", () => {
+// #5387: TLX makes a mesh's pool wrapper and render object at its first RENDERED draw, so every mesh the race warm
+// built (cockpit LCD set, rival flap sets and elements, shared bodies) minted mid-lap the first time it came into view.
+// CarDraw.primeRace draws each pair once at a ZERO matrix on the race's first rendered frame, then never again.
+test("primeRace: the race's first rendered frame draws every warm-built mesh once at a zero matrix, then nothing", () => {
   const v = carDrawVm({ cam: "cockpit" });
   const { ctx, G } = v;
   ctx.CockpitOpts = Object.assign({}, loadOpts({}).opts, { haloSize: () => 2, body: () => "standard", wheel: () => "f1", interior: () => "carbon" });
-  ctx.Car3D.cockpitMirrorGlass = () => [];
-  const retro = [];
+  const extras = [], retro = [], flaps = [];
   ctx.CarMesh = new Proxy({}, { get: (_o, k) => k === "WHEEL_ROLL_LAMBDA" ? 12 : k === "cockpitWheelRoll" ? (x) => x
-    : k === "primeRetroDigits" ? (m) => retro.push(Array.from(m)) : (a) => ({ carMesh: String(k), arg: a }) });
-  // create() destructures the digit getters, so build a CarDraw on this CarMesh (the helper's ignores the digit).
+    : k === "primeWheelExtras" ? (m) => extras.push(Array.from(m)) : k === "primeRetroDigits" ? (m) => retro.push(Array.from(m))
+    : (a) => ({ carMesh: String(k), arg: a }) });
+  // create() destructures the getters, so build a CarDraw on this CarMesh (the helper's ignores the argument).
   const carDraw = ctx.CarDraw.create(G, { resolveLivery: () => ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
-    drawAeroFlaps() {}, damp: (a) => a, isTimeTrial: () => false, isQuali: () => false });
+    drawAeroFlaps: (team, aLvl, b, m, paint, style, only, still) => flaps.push({ team: team.id, b, still, zero: Array.from(m).every((x) => x === 0), paint }),
+    damp: (a) => a, isTimeTrial: () => false, isQuali: () => false });
   Object.assign(G, { raceTimeOfDay: "day", track: { total: 5000, def: {} }, dashKph: (sp) => sp * 3.6, raceT: 0 });
-  v.field(() => 1000);
-  const c = Object.assign(G.player, { gear: 3, rpm: 9000, speed: 50, energy: 0.5 });
+  const paint = { roughness: 0.3, carFinish: true };
   const drawn = [];
-  G.gfx.draw = (mesh, m) => drawn.push({ name: mesh && mesh.carMesh, arg: mesh && mesh.arg, s: Math.hypot(m[0], m[1], m[2]) });
-  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-  const frame = () => { drawn.length = 0; carDraw.drawCockpitRig(c, base, 1 / 60, {}, false); return drawn.filter((d) => d.s < 1e-3); };
-  const tally = (rows, name) => { const n = {}; for (const r of rows) if (r.name === name) n[r.arg] = (n[r.arg] || 0) + 1; return n; };
+  G.gfx.draw = (mesh, m) => drawn.push({ name: mesh && mesh.carMesh, arg: mesh && mesh.arg, zero: Array.from(m).every((x) => x === 0) });
+  let warming = false;
+  G.gfx.warming = () => warming;
+  const prime = () => { drawn.length = 0; flaps.length = 0; extras.length = 0; return carDraw.primeRace(paint); };
+  const tally = (name) => { const n = {}; for (const r of drawn) if (r.name === name) n[r.arg] = (n[r.arg] || 0) + 1; return n; };
   const ten = (k) => Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => [d, k]));
-  const first = frame();
-  assert.deepEqual(tally(first, "getGearDigit"), ten(1), "every gear digit once (a gear shows one)");
-  assert.deepEqual(tally(first, "getSpeedDigit"), ten(3), "every speed digit three times (a reading holds up to three of one)");
-  assert.equal(first.length, 40, "nothing else is drawn shrunk");
-  assert.deepEqual(frame(), [], "the second frame primes nothing");
+  assert.equal(prime(), 0, "not armed before a race warm");
+  G.cars = [];
   carDraw.warmCarAssets();
-  assert.equal(frame().length, 40, "the next race's warm re-arms it");
+  assert.equal(prime(), 0, "armed, but no field yet (the menu): nothing drawn and still armed");
+  v.field(() => 1000);
+  const rivals = G.cars.filter((c) => !c.isPlayer).length;
+  assert.ok(rivals >= 10, "a real field");
+  warming = true;
+  assert.equal(prime(), 0, "a present held by a warm renders nothing: wait");
+  warming = false;
+  const n = prime();
+  assert.ok(n > 0, "the first free frame primes");
+  assert.equal(drawn.every((d) => d.zero), true, "every prime draw is at the zero matrix");
+  assert.deepEqual(tally("getGearDigit"), ten(1), "every gear digit once");
+  assert.deepEqual(tally("getSpeedDigit"), ten(3), "every speed digit three times (a reading holds up to three of one)");
+  assert.deepEqual(tally("getLedStrip"), ten(1), "every LED strip state of the wheel in use");
+  assert.equal(extras.length, 1, "the wheel extras once"); assert.equal(extras[0].every((x) => x === 0), true, "at the zero matrix");
+  // Bodies come from car-draw itself (not CarMesh): each rival's team body + the shared near body (the harness has
+  // no CarGeometry.decimate, so no far body is built to prime).
+  assert.equal(drawn.filter((d) => !d.name).length, rivals + 1, "every rival's team body and the shared rival body");
+  assert.equal(flaps.length, rivals * 3, "per rival: closed set, open set, moving elements");
+  assert.deepEqual([...new Set(flaps.map((f) => `${f.b}:${f.still}`))].sort(), ["0.5:false", "0:true", "1:true"]);
+  assert.equal(flaps.every((f) => f.zero && f.paint === paint), true, "with the frame's paint, at the zero matrix");
+  assert.equal(prime(), 0, "the next frame: nothing (the primed present rendered)");
+  assert.equal(prime(), 0, "and never again this race");
+  carDraw.warmCarAssets(); prime();
+  warming = true;
+  assert.equal(prime(), 0, "the primed present started a warm (held): re-armed, waiting");
+  warming = false;
+  assert.ok(prime() > 0, "so it primes again on the next free frame");
   ctx.CockpitOpts.wheel = () => "retro";
-  carDraw.warmCarAssets();
-  frame(); frame();
-  assert.equal(retro.length, 1, "the RETRO wheel primes its own digits once");
-  assert.equal(Math.hypot(retro[0][0], retro[0][1], retro[0][2]) < 1e-3, true, "on a shrunk matrix");
+  carDraw.warmCarAssets(); prime();
+  assert.equal(retro.length, 1, "the RETRO wheel primes its own digits, once");
 });

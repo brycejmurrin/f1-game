@@ -975,8 +975,8 @@ function _retroDigit(n) {
   }
   return _retroDigits[n];
 }
-// car-draw.js primeDigits (#5387): every retro digit at each of the 4 places it can show, once, at the caller's
-// shrunk matrix, so no digit's first draw (pool wrapper + render object) lands mid-lap.
+// CarDraw.primeRace (#5387): every retro digit at each of the 4 places it can show, once, at the caller's zero
+// matrix, so no digit's first draw (pool wrapper + render object) lands mid-lap.
 function primeRetroDigits(m) { for (let n = 0; n <= 9; n++) for (let k = 0; k < 4; k++) _gfx.draw(_retroDigit(n), m, _AX_FX); }
 function drawRetroTelemetry(mat,c,kph,t) {
   // Same integer as #hud-speed-n / modern LCD (HudReadouts.spdDigits).
@@ -1038,6 +1038,15 @@ function drawWheelExtras(mat, c, t) {
   _axM[0] *= ax; _axM[1] *= ax; _axM[2] *= ax;
   if (ax < 0.999) _AX_PULSE.alpha = 0.65 + 0.35 * Math.sin(t * 20);
   _gfx.draw(getAeroBar(true), _axM, ax < 0.999 ? _AX_PULSE : _AX_FX);
+}
+// CarDraw.primeRace (#5387): every wheel-extra mesh with the opts its live draw uses, once, at the caller's zero
+// matrix (no fragments): the throttle x brake status tiles, the three aero lamps, the bar and its pulsing fill.
+function primeWheelExtras(m) {
+  const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
+  for (let th = 0; th <= 4; th++) for (let br = 0; br <= 4; br++) _gfx.draw(getWheelStatus(mph, th, br), m, _AX_FX);
+  for (let s = 0; s <= 2; s++) _gfx.draw(getAeroLamp(s), m, _AX_FX);
+  _gfx.draw(getAeroBar(false), m, _AX_FX); _gfx.draw(getAeroBar(true), m, _AX_FX);
+  _AX_PULSE.alpha = 0.65; _gfx.draw(getAeroBar(true), m, _AX_PULSE);
 }
 // The pre-race grid strobe, in one place: game.js draws from it and
 // __apex.carEffects() reports from it, so the hook cannot drift from the draw.
@@ -1283,7 +1292,7 @@ function getOtLamp(active) {
 }
 
   // MIRROR_GLASS_V stays module-local (only getMirrorGlass reads it).
-  return { init, releaseIdleFlaps, flapState, getMirrorFallback, getMirrorGlass, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel: CockpitRig.getCockpitWheel, cockpitWheelOpts: CockpitRig.cockpitWheelOpts, wheelFinish: CockpitRig.wheelFinish, WHEEL_FINISHES: CockpitRig.WHEEL_FINISHES, WHEEL_DEFAULT: CockpitRig.WHEEL_DEFAULT, wheelFinishPass: CockpitRig.wheelFinishPass, getCockpitDash: CockpitRig.getCockpitDash, getCockpitCabin: CockpitRig.getCockpitCabin, getCockpitGlass: CockpitRig.getCockpitGlass, COCKPIT_WHEELS: CockpitRig.COCKPIT_WHEELS, getLedStrip: CockpitRig.getLedStrip, LED_ROWS: CockpitRig.LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getWheelStatus, getAeroLamp, getAeroBar, drawWheelExtras, drawRetroTelemetry, primeRetroDigits, drawClassicTelemetry: CockpitRig.drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, releaseIdleFlaps, flapState, getMirrorFallback, getMirrorGlass, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel: CockpitRig.getCockpitWheel, cockpitWheelOpts: CockpitRig.cockpitWheelOpts, wheelFinish: CockpitRig.wheelFinish, WHEEL_FINISHES: CockpitRig.WHEEL_FINISHES, WHEEL_DEFAULT: CockpitRig.WHEEL_DEFAULT, wheelFinishPass: CockpitRig.wheelFinishPass, getCockpitDash: CockpitRig.getCockpitDash, getCockpitCabin: CockpitRig.getCockpitCabin, getCockpitGlass: CockpitRig.getCockpitGlass, COCKPIT_WHEELS: CockpitRig.COCKPIT_WHEELS, getLedStrip: CockpitRig.getLedStrip, LED_ROWS: CockpitRig.LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getWheelStatus, getAeroLamp, getAeroBar, drawWheelExtras, primeWheelExtras, drawRetroTelemetry, primeRetroDigits, drawClassicTelemetry: CockpitRig.drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll: CockpitRig.cockpitWheelRoll, WHEEL_ROLL_LAMBDA: CockpitRig.WHEEL_ROLL_LAMBDA, getForearm: CockpitRig.getForearm, suitColour: CockpitRig.suitColour, forearmEnds: CockpitRig.forearmEnds, forearmMatrix: CockpitRig.forearmMatrix, drawForearms: CockpitRig.drawForearms, ARM_R: CockpitRig.ARM_R, ARM_TAPER: CockpitRig.ARM_TAPER };
 })();
 Object.freeze(CarMesh);

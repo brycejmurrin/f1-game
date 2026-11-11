@@ -2765,6 +2765,9 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/menu-car-prep-yield.test.mjs"
       ],
+      "primeRace": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "putBoundedMesh": [
         "tests/unit/car-presentation-vm.test.mjs"
       ],
