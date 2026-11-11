@@ -746,6 +746,11 @@
       ]
     },
     {
+      "path": "tools/ci/bot-pr-body.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/branch-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
