@@ -21,8 +21,9 @@ const require = createRequire(import.meta.url);
 let sceneryLocations;
 function sceneryLocationRows() {
   if (sceneryLocations) return sceneryLocations;
-  ensureOnDemand('tools/shot/scenery-locations.json');
-  const sceneryCatalog = JSON.parse(readFileSync(new URL('../shot/scenery-locations.json', import.meta.url), 'utf8'));
+  // Read the path ensure-built just built (relative to the repo root), never a hard-coded copy beside this file.
+  const { target } = ensureOnDemand('tools/shot/scenery-locations.json');
+  const sceneryCatalog = JSON.parse(readFileSync(new URL(`../../${target}`, import.meta.url), 'utf8'));
   return (sceneryLocations = sceneryCatalog.locations.map(l => ({ ...l, kind: 'scenery',
     aliases: [...new Set([l.id.split('/')[1], l.modelId, l.name.toLowerCase()])],
     verification: `required scenery model emitted; ${l.stationMethod === 'source-viewpoint' ? 'source-backed viewing station' : 'nearest-road camera candidate'} ${l.viewDistanceM} m from model; framing unverified${l.viewDistanceM > 150 ? `; distant landmark${l.stationMethod === 'source-viewpoint' ? '' : ', road viewpoint uncertain'}` : ''}`,
