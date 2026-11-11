@@ -428,17 +428,23 @@ const Input = (function () {
     // yet seeds focus, exactly as the pad's first press does.
     navUp: () => padMenu.remoteNav("up"), navDown: () => padMenu.remoteNav("down"),
     navLeft: () => padMenu.remoteNav("left"), navRight: () => padMenu.remoteNav("right"),
-    navSelect: () => { padMenu.activate(); },
+    // A PHONE may not press RESET / DELETE / IMPORT (InputPadMenu.isDestructive):
+    // those take a tap on this screen. The XR controllers are the local player.
+    navSelect: () => padMenu.activate(remoteOwner === "xr" ? null : remoteGuard),
     navBack: () => { padMenu.escape(); },
   };
+  function remoteGuard(el) {
+    if (!InputPadMenu.isDestructive(el)) return false;
+    if (typeof Log !== "undefined") Log.info("input", "phone SELECT refused on a destructive control: tap it on this screen");
+    return true;
+  }
   function remoteEvent(kind) {
     const fn = REMOTE_EDGES[kind];
     if (!fn) return false;
     const menuEdge = kind === "pause" || kind.startsWith("nav");
     if (!menuEdge && remoteDrivingBlocked()) return false;
     if (!menuEdge) noteInputSource(remStick ? "controller" : "phone");
-    fn();
-    return true;
+    return fn() !== false;
   }
   // Forget the current remote command without tearing down the paired transport.
   // reset() uses this on blur/visibility loss; the next fresh sample can take
@@ -1205,8 +1211,9 @@ const Input = (function () {
      exactly one finger is down, because a Touch identifier and a pointerId are
      not the same namespace and correlating them under multi-touch would be
      guesswork. Two fingers on the glass simply falls back to the touch path,
-     which has always worked. Chromium-only; `in` is the feature test MDN
-     recommends and Safari takes the else branch. */
+     which has always worked. Chromium since 58 and Safari since 18.2 (MDN
+     compat), so an iPhone on iOS 18.2+ takes this path too; a browser without
+     it fails the typeof test below and keeps the touch path alone. */
   function onCanvasPointerMove(e) {
     if (steerMode !== "touch" || touches.size !== 1) return;
     // A mouse or pen moving on a touch laptop is not the finger: its coalesced
@@ -1835,6 +1842,9 @@ const Input = (function () {
   }
 
   const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
+  // The pad's rule (padPedalLevel): the dead zone is RESCALED, not a gate, so travel
+  // ramps from 0 at the threshold to 1 at full press instead of jumping 0 -> 11 %.
+  function remotePedalLevel(v) { return v > REMOTE_PEDAL_ON ? clamp((v - REMOTE_PEDAL_ON) / (1 - REMOTE_PEDAL_ON), 0, 1) : 0; }
   // remoteActive() FIRST: it is a clock compare, and with no phone paired (the common case) it ends the
   // test before remoteDrivingBlocked() walks the UI layers — that walk ran every physics step (B·H11).
   function remoteThrottle() { return remoteActive() && !remoteDrivingBlocked() && remThr > REMOTE_PEDAL_ON; }
@@ -1877,13 +1887,13 @@ const Input = (function () {
   function throttleLevel() {
     if (keyThrottle) return 1;
     if (btnThrottle && !navBlocksTouch()) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
-    if (remoteThrottle()) return remThr;
+    if (remoteThrottle()) return remotePedalLevel(remThr);
     return padThrottleVal;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
     if (btnBrake && !navBlocksTouch()) return btnBrakeVal;
-    if (remoteBrake()) return remBrk;
+    if (remoteBrake()) return remotePedalLevel(remBrk);
     return padBrakeVal;
   }
 

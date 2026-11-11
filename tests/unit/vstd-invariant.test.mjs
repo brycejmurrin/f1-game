@@ -45,6 +45,7 @@ import { speedLiteralViolations, stripNonCode, readFiles, violationKey, rosterFi
 // `code` is the line it lives on, so moving code around does not silently widen
 // the exemption: a threshold that migrates to a new line must be re-justified.
 const ALLOWED = [
+  {"file": "js/race/stopped-cars.js", "expr": "Math.abs(c.speed || 0) < STOP_V", "code": "if (!c || c.finished || !(Math.abs(c.speed || 0) < STOP_V) || !Number.isFinite(c.s)) continue;", "why": "race control's stopped-car hazard (W34): a car standing still on the road, an absolute standstill tolerance in metres per second like the launch-grid check above, never a fraction of racing speed"},
   {"file": "js/race/setup-trial-session.js", "expr": "Math.abs(c.speed) > 1", "code": "![\"count\", \"race\"].includes(G.state) || !Number.isFinite(c.speed) || Math.abs(c.speed) > 1 ||", "why": "absolute standstill verification for a fresh launch grid, matching the launch drill; this is motion tolerance in metres per second, not a fraction of racing speed"},
   // ── relative closing speed between two cars in contact ──
   // (Was: (dProg >= 0 ? b.speed - a.speed : …) > 0.5 — now uses hoisted

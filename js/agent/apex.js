@@ -53,7 +53,7 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
-  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
+  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking", "stallT",
   // #1628 wheel state: rim speeds and slip ratios re-seed from c.speed (WheelState.ensure) on the next step.
   "vwF", "vwR", "kappaF", "kappaR", "_wsV",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on

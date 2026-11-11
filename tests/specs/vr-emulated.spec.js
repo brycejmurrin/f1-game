@@ -344,7 +344,7 @@ test("controller disconnect and visibility-blurred pause the race and restore on
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 
-test("WebGPU path negotiates via enabledFeatures and falls back to WebGL2", async ({ page }) => {
+test("VR RENDERER WEBGPU still runs the WebGL2 session (the feature is not requested)", async ({ page }) => {
   test.setTimeout(180_000);
   // Opt-in preference before boot; IWER will not grant `webgpu`, so backend must be webgl2.
   await page.addInitScript(() => {
@@ -364,12 +364,13 @@ test("WebGPU path negotiates via enabledFeatures and falls back to WebGL2", asyn
     return {
       without: XrSession.featureGranted(fake, "webgpu"),
       withIt: XrSession.featureGranted({ enabledFeatures: ["local-floor", "webgpu"] }, "webgpu"),
+      // The attach is WebGL-only (XRWebGLLayer): the feature is never requested.
       init: XrSession.sessionInit(true).optionalFeatures.includes("webgpu"),
     };
   });
   expect(granted.without).toBe(false);
   expect(granted.withIt).toBe(true);
-  expect(granted.init).toBe(true);
+  expect(granted.init).toBe(false);
 
   await endVr(page);
   expect(page.__xrPageErrors || []).toEqual([]);

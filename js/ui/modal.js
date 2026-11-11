@@ -441,23 +441,30 @@ window.TopModal = (function () {
      EDIT RACE: #sel-go then #rs-go). Keyboard activation (detail 0), a
      script's el.click() (untrusted) and automation (navigator.webdriver,
      whose bot-speed clicks are deliberate, as loading-card.js treats it)
-     always pass; tests/unit/menu-a11y-audit.test.mjs covers the guard. */
-  const SHIELD_MS = 350, SHIELD_PX = 32;
+     always pass; tests/unit/menu-a11y-audit.test.mjs covers the guard.
+     Pointer down/up too (W34); only a click opens a window. */
+  const SHIELD_MS = 350, SHIELD_PX = 32, SHOW_LATE_MS = 5000;
   let lastTap = null, shield = null;
+  // Time an event by its input stamp: a slow build queues the ghost (W34).
+  const evtAt = (e) => (e && e.timeStamp > 0 && typeof performance !== "undefined" && performance.timeOrigin > 0
+    ? performance.timeOrigin + e.timeStamp : Date.now());
   function shieldLayer(layer) {
-    if (lastTap && Date.now() - lastTap.at < SHIELD_MS) shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y };
+    if (lastTap && Date.now() - lastTap.at < SHOW_LATE_MS) shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y };
   }
   function onClickShield(e) {
-    if (!e.isTrusted || e.detail === 0) return;
+    const isClick = e.type === "click";
+    if (!e.isTrusted || (isClick && e.detail === 0)) return;
     if (typeof navigator !== "undefined" && navigator && navigator.webdriver === true) return;
-    const s = shield, now = Date.now();
+    const s = shield, now = evtAt(e);
     if (s && now < s.until && s.layer.contains(e.target) &&
         Math.hypot(e.clientX - s.x, e.clientY - s.y) <= SHIELD_PX) {
       e.preventDefault();
-      e.stopImmediatePropagation();
+      // A pointer event stops short of its target only: other window-capture
+      // listeners (input.js's hold-release net) must still see the lift.
+      if (isClick) e.stopImmediatePropagation(); else e.stopPropagation();
       return;
     }
-    lastTap = { at: now, x: e.clientX, y: e.clientY };
+    if (isClick) lastTap = { at: now, x: e.clientX, y: e.clientY };
   }
 
   function init() {
@@ -468,6 +475,8 @@ window.TopModal = (function () {
     document.addEventListener("keydown", onEscape, true);
     document.addEventListener("focusin", onFocusIn, true);
     window.addEventListener("click", onClickShield, true);
+    window.addEventListener("pointerdown", onClickShield, true);
+    window.addEventListener("pointerup", onClickShield, true);
   }
 
   // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
