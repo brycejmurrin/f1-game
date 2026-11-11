@@ -465,11 +465,14 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-create, #
 @media (pointer: coarse) {
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) {
   --home-b: max(1, var(--ui-compact-scale));
+  /* The doors' text rung, held at its 70 % size (#5452): --fs-micro grows as 12px / --ui-scale to undo a menu zoom the
+     floor does not apply, so under 70 % the labels outgrew their doors and no row count fit (USE AS CONTROLLER 108/104). */
+  --home-fs: min(var(--fs-micro), calc(12px / .7));
   zoom: calc(var(--home-b) * max(1, var(--tl-btns-size, 1)) * var(--tf, 1));
 }
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) .bigbtn { min-height: calc(44.2px / var(--home-b)); }
-body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-create .bigbtn { font-size: max(calc(var(--fs-micro) * .74 * var(--ui-compact-text, 1)), calc(var(--fs-micro) * .86 / var(--home-b))); }
-body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-secondary .bigbtn { font-size: max(calc(var(--fs-micro) * .64 * var(--ui-compact-text, 1)), calc(var(--fs-micro) * .86 / var(--home-b))); }
+body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-create .bigbtn { font-size: max(calc(var(--home-fs) * .74 * var(--ui-compact-text, 1)), calc(var(--home-fs) * .86 / var(--home-b))); }
+body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-secondary .bigbtn { font-size: max(calc(var(--home-fs) * .64 * var(--ui-compact-text, 1)), calc(var(--home-fs) * .86 / var(--home-b))); }
 body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #menu-hero { flex-direction: row; }
 body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #menu-retention { display: contents; }
 body[data-shape="wide"] #overlay #menu-buttons[data-home-rows] #mb-career { flex: 1 1 0; }

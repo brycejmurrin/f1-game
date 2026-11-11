@@ -1,1 +1,1 @@
-Fixed: on a phone the UI SIZE slider no longer sticks at its left end — it now goes down to 50 % (it stopped at 70 %), so you can zoom the menus out further. A saved size you already have is kept (#5452).
+Fixed: on a phone the UI SIZE slider no longer sticks at its left end — it now goes down to 50 % (it stopped at 70 %), so you can zoom the menus out further. A saved size you already have is kept, and the title buttons stay full finger size at the smaller sizes (#5452).
