@@ -245,9 +245,9 @@ test("a give-back warning is not starved behind the caution's own radio card: it
 test("losing focus while visible pauses a solo race; an iOS audio interruption does too; neither in a friend race", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8");
   const blur = game.match(/window\.addEventListener\("blur", \(\) => \{[\s\S]*?\n\}\);/)[0];
-  assert.match(blur, /document\.hidden \|\| document\.hasFocus\(\) \|\| navigator\.webdriver \|\| G\.netPlay\.active\(\)/, "settled, visible-only, never under automation or in MP");
+  assert.match(blur, /document\.hidden \|\| document\.hasFocus\(\) \|\| navigator\.webdriver \|\| G\.netPlay\.active\(\) \|\| G\.paused\)/, "settled, visible-only, never under automation, in MP or already paused (#5017)");
   assert.match(blur, /if \(G.state === "race" \|\| G.state === "count"\) setPaused\(true, "blur"\);/);
-  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(G.state === "race" \|\| G.state === "count"\) && !G\.netPlay\.active\(\)\) setPaused\(true, "audio-interrupted"\);/);
+  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(G.state === "race" \|\| G.state === "count"\) && !G\.netPlay\.active\(\) && !G\.paused\) setPaused\(true, "audio-interrupted"\);/, "#5017: never a second pause");
   const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
   assert.match(eng, /ctx\.state === "interrupted" && _onInterrupted/);
 });
