@@ -4970,7 +4970,8 @@
         "tests/specs/monaco-foundation.spec.js",
         "tests/specs/season.spec.js",
         "tests/unit/boot-script-repair-overlay.test.mjs",
-        "tests/unit/camera-ride.test.mjs"
+        "tests/unit/camera-ride.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs"
       ]
     },
     "js/circuits/montreal.js": {
@@ -13288,6 +13289,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs"
@@ -17077,6 +17079,7 @@
         "tests/unit/scene-live.test.mjs"
       ],
       "*": [
+        "tests/unit/help-rules-facts.test.mjs",
         "tests/unit/home-world.test.mjs"
       ]
     },
