@@ -92,8 +92,12 @@ test("a forced LAYOUT name hides; AUTO and MAP/GAPS are untouched", () => {
 test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
+  // AERO and BRAKE BIAS hide through the one plain-display rule shared with the other hide reasons (F-13 slice 3).
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   for (const sel of ["#hud-sectors", "#hud-box-best", "#hud-energy", "#hud-ot", "#hud-aero", "#hud-bb"])
-    assert.match(css, new RegExp("body\\.hud-prof-minimal " + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(css, new RegExp(/#hud-(aero|bb)$/.test(sel)
+      ? "body:is\\([^)]*\\.hud-prof-minimal[^)]*\\) :is\\([^)]*" + esc(sel) + "[^{]*\\{ display: none; \\}"
+      : "body\\.hud-prof-minimal " + esc(sel)));
   // The inset reads are guarded on the rect having a WIDTH, and each falls back
   // to the other side rather than to a viewport-wide number.
   assert.match(hud, /mmR && mmR\.width \? Math\.max\(0, mmR\.left - 10 \* mz\) : null/);
@@ -364,5 +368,17 @@ test("F-13 slice 2: #hud-delta hides in plain display:none, and nothing could be
     const h = hides.find((r) => r.sel === sel);
     assert.ok(h, sel + " still hides");
     assert.doesNotMatch(h.body, /!important/, sel + " needs no !important");
+  }
+});
+
+test("F-13 slice 3: #hud-aero and #hud-bb hide in ONE plain rule for every reason", () => {
+  for (const id of ["hud-aero", "hud-bb"]) {
+    const { hides } = assertPlainHidesWin(id);
+    for (const h of hides.filter((r) => r.file === "hud.css" || r.file === "watch-transport.css"))
+      assert.doesNotMatch(h.body, /!important/, `${h.sel} (${h.file}) needs no !important`);
+    const one = hides.filter((r) => /^body:is\(/.test(r.sel)).map((r) => r.sel).join(" ");
+    for (const why of ["hud-prof-minimal", "hud-bcam", "hud-met-timing", "hud-met-compact", "bc-on", "watch-controls-on"])
+      assert.match(one, new RegExp("\\." + why + "\\b"), `${why} still hides #${id}`);
+    assert.ok(hides.some((r) => r.sel === `body[data-hud-hide~="${id.slice(4)}"] #${id}`), `the ${id.slice(4)} toggle still hides #${id}`);
   }
 });
