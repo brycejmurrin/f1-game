@@ -3850,6 +3850,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/perf/metrics-panel.js",
+      "global": "GameMetricsPanel",
+      "roster": "LAZY_PERF"
+    },
+    {
       "path": "js/perf/phone-recorder.js",
       "global": "PhoneRecorder",
       "roster": "LAZY_PERF"

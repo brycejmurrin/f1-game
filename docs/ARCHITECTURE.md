@@ -159,6 +159,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `phone-recorder.js` | `PhoneRecorder` | LAZY_PERF | PhoneRecorder: a phone-only soak recorder (issue #1633). |
 | `bench-capture.js` | `BenchCapture` | LAZY_PERF | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
 | `bench-run.js` | `BenchRun` | LAZY_PERF | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
+| `metrics-panel.js` | `GameMetricsPanel` | LAZY_PERF | GameMetricsPanel: the METRICS overlay panel (snapshot + painter). |
 
 **`js/render/`**
 

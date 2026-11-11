@@ -19,6 +19,8 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+// The painter + snapshot() are LAZY_PERF (#4978 row 3); a harness that wants them loads both.
+const PANEL = readFileSync(join(ROOT, "js/perf/metrics-panel.js"), "utf8");
 
 function load(opts) {
   const disk = new Map(Object.entries(opts.store || {}));
@@ -48,7 +50,8 @@ function load(opts) {
   seedLog(ctx);
   seedStore(ctx);   // metrics.js persists through GameStore.store's raw lane, over the fake localStorage above
   vm.runInContext(SRC, ctx, { filename: absSrc("js/perf/metrics-overlay.js") });
-  return { M: vm.runInContext("GameMetrics", ctx), disk, Log: vm.runInContext("Log", ctx) };
+  if (opts.panel !== false) vm.runInContext(PANEL, ctx, { filename: absSrc("js/perf/metrics-panel.js") });
+  return { M: vm.runInContext("GameMetrics", ctx), disk, Log: vm.runInContext("Log", ctx), ctx };
 }
 
 test("frametime reset counts only long tasks starting in its current window", () => {
@@ -499,7 +502,7 @@ test("game.js hands the overlay the memoised loader, not a widened boot gate", (
 // The granted width comes from the CSS step and does not depend on what was
 // painted into it, which is what makes the decision stable.
 test("the wide/narrow choice reads the granted width, never the painted one", () => {
-  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const src = PANEL;
   // To fitsWide()'s OWN closing brace: snapshot() is declared earlier in the
   // file, so anchoring the slice on it produced an empty string and every
   // assertion below passed vacuously.
@@ -528,7 +531,7 @@ test("the wide/narrow choice reads the granted width, never the painted one", ()
 //   ot:      3.6 s   cooldown 12.9 s
 // Names match the __apex hook so a player's screenshot maps onto physState().
 test("the PHYS page renders every physState field it fetches", () => {
-  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const src = PANEL;
   const carried = ["towing", "xVmaxGain", "xDfLoss", "drain", "regen", "brakeBias", "otTime", "otMJ"];
   const snap = src.slice(src.indexOf("function snapshot()"), src.indexOf("function ensurePanel()"));
   for (const f of carried) {
@@ -547,7 +550,7 @@ test("the PHYS page renders every physState field it fetches", () => {
 // (narrow) and 52 (wide) characters and sized the CSS steps to hold exactly
 // that, so a new row wider than its budget silently truncates on a phone.
 test("new PHYS rows stay inside the measured line budgets", () => {
-  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const src = PANEL;
   // The widest value each new row can render, with every number at full width.
   const wide = [
     "x cost:  vmax +0.000   df -0.000",
@@ -587,11 +590,46 @@ test("GOV surfaces a WebGPU stall that never threw", () => {
   assert.equal(s.stallSlow, 4);
   assert.equal(s.stallWorst, 1800);
   assert.equal(s.stallAct, "shed");
-  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const src = PANEL;
   const paint = src.slice(src.indexOf("function paintOverlay()"));
   assert.ok(paint.includes("stallRow(s, true)") && paint.includes("stallRow(s, false)"));
   const narrow = "stall 10  60000 reload";
   const wide = "stall:   slow 10  worst 60000  reload";
   assert.ok(narrow.length <= 25, narrow.length + " ch");
   assert.ok(wide.length <= 52, wide.length + " ch");
+});
+
+// #4978 row 3: the painter is LAZY_PERF. The eager half must still boot a
+// stored METRICS=ON player: the first paint asks LazyBundles for the perf rig
+// ONCE (no 4 Hz retry loop), and paints the moment it lands.
+test("METRICS ON before the LAZY_PERF panel lands asks the perf rig once, then paints", async () => {
+  let asks = 0, land = null;
+  const rig = new Promise((r) => { land = r; });
+  const appended = [];
+  const el = () => ({ dataset: {}, children: [], style: {}, setAttribute() {}, addEventListener() {}, appendChild(c) { this.children.push(c); } });
+  const ctx = load({ panel: false, store: { "apex26.metrics": "1" },
+    document: { readyState: "complete", createElement: el, body: { appendChild: (n) => appended.push(n) } } });
+  const M = ctx.M;
+  // The test harness has no LazyBundles yet at eval: the boot paint declines
+  // without latching, the way a FULL-order race with lazy-bundles.js would.
+  assert.equal(appended.length, 0, "no panel before its bundle");
+  assert.equal(JSON.stringify(M.snapshot()), JSON.stringify({ on: true, page: "gov" }), "the eager half answers snapshot() before the panel lands");
+  const vmctx = ctx.ctx;
+  vmctx.LazyBundles = { ensurePerfRig: () => { asks++; return rig; } };
+  M.setPage("car"); M.setPage("gov");   // two paints while the bundle is in flight
+  assert.equal(asks, 1, "one ask per ON, not one per paint");
+  vm.runInContext(PANEL, vmctx, { filename: absSrc("js/perf/metrics-panel.js") });
+  land(true);
+  await new Promise((r) => setTimeout(r, 0));   // the cross-realm then() settles on a later tick
+  assert.equal(appended.length, 1, "the panel paints as soon as LAZY_PERF lands");
+  assert.equal(appended[0].id, "game-metrics");
+});
+
+test("the METRICS painter ships in LAZY_PERF, not on the eager boot", async () => {
+  const { createRequire } = await import("node:module");
+  const M = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  assert.ok(M.LAZY_PERF.includes("js/perf/metrics-panel.js"));
+  assert.ok(!M.FULL.includes("js/perf/metrics-panel.js"));
+  assert.ok(M.FULL.includes("js/perf/metrics-overlay.js"), "the rows, keys and picks stay eager");
+  assert.doesNotMatch(SRC, /function snapshot\(\) \{\n  const pg/, "snapshot()'s body moved to the panel");
 });
