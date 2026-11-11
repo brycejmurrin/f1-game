@@ -25,11 +25,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const css = fs.readFileSync(path.join(ROOT, "css/data.css"), "utf8");
-const js = fs.readFileSync(path.join(ROOT, "js/data/telemetry-player.js"), "utf8");
 
 /** The colour token `.<base>.<state>` resolves to, e.g. ("dh-gdelta","dh-pos"). */
 function tokenFor(base, state) {
@@ -42,11 +44,48 @@ function tokenFor(base, state) {
 // Both widgets key on `timeAtDist(other, d) - refT`, so positive means BEHIND.
 const BEHIND_IS_POS = ["dh-gdelta", "dh-laneboard-dl"];
 
-test("the source really does use one sign convention for both deltas", () => {
-  // If this drifts, the assertion below is measuring the wrong thing.
-  const behind = js.match(/-\s*refT;\s*\/\/\s*>0:[^\n]*behind/g) || [];
-  assert.ok(behind.length >= 2,
-    `expected both deltas to be commented ">0: … behind"; found ${behind.length}`);
+// The REAL paint block (DataTelemetryPlayer.paintFrame -> updateGauges) over a
+// fake classList: the side that is BEHIND the reference must come out `dh-pos`
+// on the gauge AND on the lane board, the side ahead `dh-neg`. If either sign
+// drifts, the CSS assertions below are measuring the wrong thing.
+const ctx = vm.createContext({});
+seedLog(ctx);
+for (const file of ["js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-player.js"])
+  vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
+const player = vm.runInContext("DataTelemetryPlayer", ctx).create({}, { paintFrame() {} });
+
+function cell() {
+  const cls = new Set();
+  return { textContent: "", style: {}, cls,
+    classList: { toggle(c, on) { if (on) cls.add(c); else cls.delete(c); return !!on; }, contains: (c) => cls.has(c) } };
+}
+// A constant-speed lap over 1000 m that takes `finish` seconds.
+const lane = (finish) => ({
+  car: [{ t: 0, speed: 180 }, { t: finish, speed: 180 }],
+  cum: { t: [0, finish], d: [0, 1000] },
+});
+function paint(primaryT, compareT, thirdT) {
+  const primary = lane(primaryT), compare = lane(compareT), third = lane(thirdT);
+  const view = {
+    cursorT: 40, primary, compare, laps: [primary, compare, third], rpmMax: 12000,
+    g: { speed: [], gear: [], thr: [], brk: [], rpm: [], drs: [],
+      delta: cell(), board: [{ spd: cell(), ref: true }, { spd: cell(), dl: cell() }, { spd: cell(), dl: cell() }] },
+  };
+  player.paintFrame(view);
+  const state = (c) => [...c.cls].filter((k) => k === "dh-pos" || k === "dh-neg").join(",");
+  return { gauge: state(view.g.delta), compareLane: state(view.g.board[1].dl), thirdLane: state(view.g.board[2].dl) };
+}
+
+test("the paint block marks the BEHIND side dh-pos and the AHEAD side dh-neg on both widgets", () => {
+  // compare (82 s) and third (84 s) trail the 80 s reference: both are behind.
+  assert.deepEqual(paint(80, 82, 84), { gauge: "dh-pos", compareLane: "dh-pos", thirdLane: "dh-pos" },
+    "a trailing driver must be dh-pos (the slower ink) on the gauge and the lane board");
+  // compare (78 s) and third (76 s) lead it: both are ahead.
+  assert.deepEqual(paint(80, 78, 76), { gauge: "dh-neg", compareLane: "dh-neg", thirdLane: "dh-neg" },
+    "a leading driver must be dh-neg (the faster ink) on the gauge and the lane board");
+  // Level within the 0.02 s dead band: neither colour.
+  assert.deepEqual(paint(80, 80, 80), { gauge: "", compareLane: "", thirdLane: "" },
+    "a dead heat paints neither colour");
 });
 
 test("a positive delta is the SLOWER colour on every widget that uses it", () => {

@@ -31,6 +31,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { glxSoftHarness } from "../helpers/glx-soft-harness.mjs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -4304,11 +4305,21 @@ test("GLX backendState and race entry defer pack retry on software GL (#3584)", 
   assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
 });
 
-test("software GL garage path gates readback and stall reload (#3589)", () => {
+test("software GL garage path gates readback and stall reload (#3589)", async () => {
   const loop = readFile("js/perf/loop-health.js");
   assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"') && loop.includes('"race-settings"'));
   const soft = readFile("js/render/glx/soft.js");
   assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
+  // …and the gate is APPLIED: the real soft.js, run. Under the defer a capture
+  // waiter is satisfied with a generation bump and NO framebuffer readback;
+  // without it the same waiter costs exactly one readback.
+  for (const [deferOn, wantReads] of [[true, 0], [false, 1]]) {
+    const h = glxSoftHarness({ defer: () => deferOn });
+    const waiter = h.soft.awaitSoftPresent(1000);
+    h.soft.blitIfDue();
+    assert.equal(h.reads(), wantReads, `softwareGlUiReadbackDefer() ${deferOn}: ${wantReads} readback(s)`);
+    await waiter;   // resolves either way: __apex.awaitPresent() must not hang under the defer
+  }
   const assets = readFile("js/render/shared/assets.js");
   assert.ok(assets.includes("deferScratchReadback") && assets.includes("softwareGlUiReadbackDefer"));
   const game = gameSource();
