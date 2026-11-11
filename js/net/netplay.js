@@ -839,6 +839,9 @@ const NetPlay = (function () {
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
       }
+      // Each friend's paint for this race (#5037), stamped on its car as car.netPaint
+      // for the car draw (the draw half is a follow-up: see the issue).
+      if (remotes.size && typeof LobbyRoster !== "undefined") LobbyRoster.paintField(G.cars || [], remoteList(), (team) => G.getLiveryId(team.id) === "default");
       if ((role !== SpectatePolicy.SPECTATOR && (!localCar || (!remotes.size && !(role === "host" && hasSpectator))))
           || (role === SpectatePolicy.SPECTATOR && !(G.cars || []).length)) {
         // start() adopts the lobby's sessions, but a failed adoption must not

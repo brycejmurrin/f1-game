@@ -119,10 +119,10 @@ const NetLobby = (function () {
       return {
         team: team.id,
         driver: G.driverIdx || 0,
-        parts: setup,   // no livery: no peer ever read it, and a custom one cannot be built from an id
+        parts: setup,   // no livery here: this is also what an invite CODE carries (helloProfile adds it)
       };
     }
-
+    const helloProfile = () => LobbyRoster.withLivery(localProfile(), G);   // HELLO alone carries the paint job (#5037)
 
     // Turn a peer's declared ids into multipliers, locally. Falls back to the
     // team's factory numbers if anything about the setup does not resolve —
@@ -767,7 +767,7 @@ const NetLobby = (function () {
         }
         say("A player left qualifying — their time is set to none.");
       });
-      made.sendEvent(NetPlay.EV.HELLO, Object.assign(localProfile(), role === "host" ? { rank: joinRank(id) } : null));
+      made.sendEvent(NetPlay.EV.HELLO, Object.assign(helloProfile(), role === "host" ? { rank: joinRank(id) } : null));
       if (role === "host") {
         publishSettings();
         // Existing READY before this connection opened (host + earlier guests).
@@ -977,7 +977,7 @@ const NetLobby = (function () {
       // the garage, and what goes on the wire should be the seat you end up in
       // rather than the one you are about to be moved out of. When it fires it
       // sends the hello itself, so this must not send a second.
-      if (what === "car") { if (!resolveSeatClash()) broadcast(NetPlay.EV.HELLO, localProfile()); }
+      if (what === "car") { if (!resolveSeatClash()) broadcast(NetPlay.EV.HELLO, helloProfile()); }
       else publishSettings();
       if (selfReady) setReady(false);
       renderRoom();
@@ -1098,7 +1098,7 @@ const NetLobby = (function () {
       const seatTxt = now.driver + (now.team ? " (" + now.team + ")" : "");
       say(onCustom ? (mineTeam.legends ? "LEGENDS" : "MY TEAM") + " cars only exist on your own screen — you're driving " + seatTxt + " for this race."
                    : was.driver + " was taken — you're driving " + seatTxt + ".");
-      broadcast(NetPlay.EV.HELLO, localProfile());
+      broadcast(NetPlay.EV.HELLO, helloProfile());
       if (selfReady) setReady(false);
       const garage = $("carsetup");
       if (garage && !garage.hidden && G.buildSetup) G.buildSetup();

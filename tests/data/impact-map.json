@@ -2633,7 +2633,8 @@
       ],
       "beginDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-draw-decal-sweep.test.mjs"
+        "tests/unit/car-draw-decal-sweep.test.mjs",
+        "tests/unit/net-peer-livery.test.mjs"
       ],
       "carDecalNum": [
         "tests/unit/livery-tier.test.mjs"
@@ -2705,7 +2706,8 @@
       "flushDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-draw-decal-sweep.test.mjs",
-        "tests/unit/livery-tier.test.mjs"
+        "tests/unit/livery-tier.test.mjs",
+        "tests/unit/net-peer-livery.test.mjs"
       ],
       "freeBodyPair": [
         "tests/unit/car-presentation-vm.test.mjs"
@@ -2784,11 +2786,13 @@
       ],
       "teamBodyMesh": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/net-peer-livery.test.mjs"
       ],
       "teamDecalState": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/net-peer-livery.test.mjs"
       ],
       "teamMesh": [
         "tests/specs/parts-mesh-cache.spec.js",
@@ -3490,6 +3494,7 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/net-peer-livery.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -10111,11 +10116,30 @@
       ]
     },
     "js/net/lobby-roster.js": {
+      "cleanCodeProfile": [
+        "tests/unit/net-peer-livery.test.mjs"
+      ],
+      "cleanHello": [
+        "tests/unit/net-peer-livery.test.mjs"
+      ],
+      "packLivery": [
+        "tests/unit/net-peer-livery.test.mjs"
+      ],
+      "paintField": [
+        "tests/unit/net-peer-livery.test.mjs"
+      ],
+      "peerPaint": [
+        "tests/unit/net-peer-livery.test.mjs"
+      ],
       "replace": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-peer-livery.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs"
+      ],
+      "withLivery": [
+        "tests/unit/net-peer-livery.test.mjs"
       ],
       "*": [
         "tests/unit/net-authority.test.mjs"

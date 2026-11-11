@@ -1299,6 +1299,7 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-nostr-sockets.test.mjs",
+        "tests/unit/net-peer-livery.test.mjs",
         "tests/unit/net-qr.test.mjs",
         "tests/unit/net-rendezvous.test.mjs",
         "tests/unit/net-roster.test.mjs",
