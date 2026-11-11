@@ -1207,8 +1207,8 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
-        "test:scratch-churnd",
-        "test:scratch-rcmd",
+        "test:scratch-churne",
+        "test:scratch-rcme",
         "test:shimmer",
         "test:smoke",
         "test:stall-reload-sw",
@@ -4287,12 +4287,12 @@
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
     },
     {
-      "name": "test:scratch-churnd",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-churnd-r1.spec.js tests/specs/scratch-churnd-r2.spec.js tests/specs/scratch-churnd-r3.spec.js tests/specs/scratch-churnd-r4.spec.js tests/specs/scratch-churnd-r5.spec.js tests/specs/scratch-churnd-r6.spec.js tests/specs/scratch-churnd-r7.spec.js tests/specs/scratch-churnd-r8.spec.js"
+      "name": "test:scratch-churne",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-churne-r1.spec.js tests/specs/scratch-churne-r2.spec.js tests/specs/scratch-churne-r3.spec.js tests/specs/scratch-churne-r4.spec.js tests/specs/scratch-churne-r5.spec.js tests/specs/scratch-churne-r6.spec.js"
     },
     {
-      "name": "test:scratch-rcmd",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcmd-r1.spec.js tests/specs/scratch-rcmd-r2.spec.js tests/specs/scratch-rcmd-r3.spec.js tests/specs/scratch-rcmd-r4.spec.js tests/specs/scratch-rcmd-r5.spec.js tests/specs/scratch-rcmd-r6.spec.js"
+      "name": "test:scratch-rcme",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcme-r1.spec.js tests/specs/scratch-rcme-r2.spec.js tests/specs/scratch-rcme-r3.spec.js tests/specs/scratch-rcme-r4.spec.js tests/specs/scratch-rcme-r5.spec.js tests/specs/scratch-rcme-r6.spec.js"
     },
     {
       "name": "test:service-worker",

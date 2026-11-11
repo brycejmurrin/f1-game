@@ -85,8 +85,8 @@
     "test:perf-budget": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js",
     "test:perf-idle-churn": "node tools/ci/run-playwright.mjs tests/specs/perf-idle-pipeline-churn.spec.js",
     "test:stall-reload-sw": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js",
-    "test:scratch-churnd": "node tools/ci/run-playwright.mjs tests/specs/scratch-churnd-r1.spec.js tests/specs/scratch-churnd-r2.spec.js tests/specs/scratch-churnd-r3.spec.js tests/specs/scratch-churnd-r4.spec.js tests/specs/scratch-churnd-r5.spec.js tests/specs/scratch-churnd-r6.spec.js tests/specs/scratch-churnd-r7.spec.js tests/specs/scratch-churnd-r8.spec.js",
-    "test:scratch-rcmd": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcmd-r1.spec.js tests/specs/scratch-rcmd-r2.spec.js tests/specs/scratch-rcmd-r3.spec.js tests/specs/scratch-rcmd-r4.spec.js tests/specs/scratch-rcmd-r5.spec.js tests/specs/scratch-rcmd-r6.spec.js"
+    "test:scratch-churne": "node tools/ci/run-playwright.mjs tests/specs/scratch-churne-r1.spec.js tests/specs/scratch-churne-r2.spec.js tests/specs/scratch-churne-r3.spec.js tests/specs/scratch-churne-r4.spec.js tests/specs/scratch-churne-r5.spec.js tests/specs/scratch-churne-r6.spec.js",
+    "test:scratch-rcme": "node tools/ci/run-playwright.mjs tests/specs/scratch-rcme-r1.spec.js tests/specs/scratch-rcme-r2.spec.js tests/specs/scratch-rcme-r3.spec.js tests/specs/scratch-rcme-r4.spec.js tests/specs/scratch-rcme-r5.spec.js tests/specs/scratch-rcme-r6.spec.js"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",

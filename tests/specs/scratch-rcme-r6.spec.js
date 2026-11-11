@@ -29,7 +29,7 @@
 // built: monza still reachable); on #3241 and on the tip it passes. #3377's one-generation holders are
 // overwritten before these readings, so tests/unit/race-retain-vm.test.mjs (built, not yet stepped) pins them.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { heapRetainers } from "../helpers/scratch-heapagg.mjs";
+import { facetPath } from "../helpers/scratch-heapagg.mjs";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
   HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues, gpuWrapperCounts, domLeakCounters, contextScopeCount, wrapperGrowth, censusBlindness,
@@ -152,7 +152,7 @@ async function body({ page }) {
       const menu = await censusAfterGc(page, cdp);
       const pb = await page.evaluate(() => { const p = window.__apex.menuPrep(); return p && { t: p.trackId, k: p.key, w: !!p.world }; });
       log({ cycle, id, at: "menu", quietMs, pb, ...menu });
-      if (id === CIRCUITS[CIRCUITS.length - 1] && cycle >= 2) log({ cycle, at: "heap", ...(await heapRetainers(cdp, 15)) });
+      if (id === CIRCUITS[CIRCUITS.length - 1] && cycle >= 2) log({ cycle, at: "heap", heapMB: menu.heapMB, ...(await facetPath(cdp)) });
       expect(cycleCensusIssues(menu), "menu census must observe the requested renderer and usable counters").toEqual([]);
       expect(menu.aliveTracks.length, `cycle ${cycle}, menu after ${id}: ${menu.aliveTracks.join(", ")} still reachable after GC`).toBeLessThanOrEqual(1);
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
@@ -229,11 +229,11 @@ async function body({ page }) {
     }
   }
 }
-test("SCRATCH rcm D", async ({ page }) => {
+test("SCRATCH rcm E", async ({ page }) => {
   let err = null;
   try { await body({ page }); } catch (e) { err = String(e && e.message || e).replace(/\s+/g, " ").slice(0, 300); }
   let rows = []; try { rows = JSON.parse(fs.readFileSync("artifacts/logs/race-cycle-memory.json", "utf8")); } catch (_) {}
   const menus = rows.filter((r) => r.at === "menu").map((r) => ({ c: r.cycle, id: r.id, heap: r.heapMB, alive: r.aliveTracks, pb: r.pb }));
-  const heaps = rows.filter((r) => r.at === "heap").map((r) => ({ c: r.cycle, f64: r.f64, arr: r.arr }));
+  const heaps = rows.filter((r) => r.at === "heap").map((r) => ({ c: r.cycle, heap: r.heapMB, found: r.found, path: r.path }));
   throw new Error("MEASURE " + JSON.stringify({ err, menus, heaps }));
 });

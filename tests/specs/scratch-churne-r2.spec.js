@@ -19,6 +19,30 @@ import { measureIdleWindows } from "../../tools/perf/idle-pipeline-census.mjs";
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test.describe.configure({ retries: 0 });
+function roHookInit() {
+  const R = window.__roc = { log: [], n: 0 };
+  const iv = setInterval(() => {
+    try {
+      const T = typeof GLX !== "undefined" ? GLX.__tlx : null, r = T && T.renderer, os = r && r._objects;
+      if (!os || typeof os.createRenderObject !== "function" || !window.__bpp) return;
+      clearInterval(iv);
+      const keys = new WeakMap(), o = os.createRenderObject;
+      os.createRenderObject = function (nodes, geos, rr, object, material, scene, camera, lightsNode, renderContext, clippingContext, passId) {
+        const k = [material && material.id, renderContext && renderContext.id, lightsNode && lightsNode.id, passId == null ? "" : String(passId), object && object.geometry && object.geometry.id].join("|");
+        let ks = keys.get(object); const objSeen = !!ks; if (!ks) keys.set(object, ks = new Set());
+        const keySeen = ks.has(k); ks.add(k);
+        if (window.__bpp.gpuLogOn && R.log.length < 300) {
+          let par = object && object.parent; const chain = []; for (let i = 0; par && i < 3; i++) { chain.push(par.name || par.type); par = par.parent; }
+          R.log.push({ at: window.__bpp.frames, objSeen, keySeen, obj: (object.type || "") + ":" + (object.name || ""), par: chain.join("<"), mat: (material.type || "") + ":" + (material.name || ""),
+            ctx: renderContext && renderContext.id, lights: lightsNode && lightsNode.id, pass: passId == null ? null : String(passId).slice(0, 30),
+            verts: object.geometry && object.geometry.attributes && object.geometry.attributes.position ? object.geometry.attributes.position.count : null, inst: !!object.isInstancedMesh });
+        }
+        return o.apply(this, arguments);
+      };
+    } catch (_) { /* not yet */ }
+  }, 50);
+}
+
 async function body({ page }, testInfo) {
   test.setTimeout(900000);
   const { hook, warm, gpuDevice, replay, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
@@ -57,11 +81,14 @@ async function body({ page }, testInfo) {
     testInfo.annotations.push({ type: "gpu-churn", description: "blind: no GPUDevice on this run (WebGL2 path), bind-group / buffer churn not measured" });
   }
 }
-test("SCRATCH churn D burn0", async ({ page }, testInfo) => {
+test("SCRATCH churn E burn0", async ({ page }, testInfo) => {
   if (0) await page.addInitScript((ms) => { const burn = () => { const t = performance.now(); while (performance.now() - t < ms) { /* slow every frame */ } requestAnimationFrame(burn); }; requestAnimationFrame(burn); }, 0);
+  await page.addInitScript(roHookInit);
   let err = null;
   try { await body({ page }, testInfo); } catch (e) { err = String(e && e.message || e).replace(/\x1b\[[0-9;]*m/g, "").replace(/\s+/g, " ").slice(0, 900); }
   let o = null; try { o = JSON.parse(fs.readFileSync("artifacts/perf/idle-pipeline-churn-gpu.json", "utf8")); } catch (_) {}
   const W = o && o.windows.map((w) => ({ w: w.window, p: w.pipelines, bg: w.bindGroups, b: w.buffers }));
-  throw new Error("MEASURE " + JSON.stringify({ burn: 0, err, replay: o && o.replay, W }));
+  const roc = await page.evaluate(() => window.__roc).catch(() => null);
+  const g = {}; if (roc) for (const r of roc.log) { const k = [r.objSeen ? (r.keySeen ? "REBUILT" : "REKEYED") : "NEWOBJ", r.obj, r.par, r.mat, "ctx" + r.ctx, "L" + r.lights, r.pass, r.inst ? "inst" : "", r.verts].join("|"); const a = g[k] || (g[k] = { n: 0, at0: r.at, at1: r.at }); a.n++; a.at1 = r.at; }
+  throw new Error("MEASURE " + JSON.stringify({ burn: 0, err: err && err.slice(0, 200), replay: o && o.replay, W, ro: Object.entries(g).sort((a, b) => b[1].n - a[1].n).slice(0, 20) }));
 });
