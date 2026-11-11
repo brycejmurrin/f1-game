@@ -2217,6 +2217,15 @@
       ],
       "kind": "browser"
     },
+    "test:scratch-nc": {
+      "files": [
+        "tests/specs/scratch-nc-r1.spec.js",
+        "tests/specs/scratch-nc-r2.spec.js",
+        "tests/specs/scratch-nc-r3.spec.js",
+        "tests/specs/scratch-nc-r4.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",
