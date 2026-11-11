@@ -141,12 +141,19 @@ const CarFx = (function () {
     function emit(c, g, dt, state) {
       if (!c || !g || !(dt > 0)) return;
       plank(c, g, dt);
+    }
+
+    // An AI lock-up's marks are world state that persists, so game.js calls this
+    // ABOVE the side-frustum cull and the FX distance ball: a rival that locked up
+    // off screen still leaves its mark for when the camera turns round (#4669).
+    function marks(c, g, dt, state) {
+      if (!c || !g || !(dt > 0)) return;
       if (state === "race" && !c.isPlayer && skids && skids.stampFor) aiMarks(c, g, dt);
     }
 
     function status() { return { sparks: stats.sparks, marks: stats.marks }; }
 
-    return { emit, status, haze };
+    return { emit, marks, status, haze };
   }
 
   // heatHaze / LOCK_MIN / HAZE_TAU stay module-private: create() closes over them;

@@ -7030,6 +7030,9 @@
       "mark": [
         "tests/unit/car-fx.test.mjs"
       ],
+      "marks": [
+        "tests/unit/car-fx.test.mjs"
+      ],
       "pick": [
         "tests/unit/car-fx.test.mjs"
       ],
@@ -11651,6 +11654,9 @@
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
       ],
+      "lateralScales": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "launchDone": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11790,6 +11796,9 @@
       "sbsEase": [
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
+      ],
+      "sbsLimits": [
+        "tests/unit/ai-drive.test.mjs"
       ],
       "sepClamp": [
         "tests/unit/ai-drive.test.mjs"
@@ -12999,13 +13008,25 @@
       ]
     },
     "js/race/energy-plan.js": {
+      "forecast": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
       "fromStore": [
         "tests/unit/energy-plan.test.mjs"
       ],
       "isNeutral": [
         "tests/unit/energy-plan.test.mjs"
       ],
+      "learn": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
       "plan": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "reset": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "setOverride": [
         "tests/unit/energy-plan.test.mjs"
       ],
       "setPlan": [
