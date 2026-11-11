@@ -606,6 +606,12 @@ test("stallHandoffCover reads game state and loading phase through bindGame, nev
   soft = true; state = "race";
   assert.ok(P.introBudgetLeft() > 0, "the software intro budget is open");
   assert.equal(P.stallHandoffCover(), true, "software GL race inside the intro budget");
+  // The readback defer must NOT take that leg: a software-GL capture in the race's first 45 s read an
+  // unread #game-soft (camera.spec "chase presented meaningful pixels", hud-mirror GLX glass bands 0; #5296).
+  assert.equal(P.readbackCover(), false, "a live software-GL race is no readback cover");
+  state = "count";
+  assert.equal(P.readbackCover(), true, "the countdown still defers readback");
+  state = "race";
   soft = false;
   assert.equal(P.stallHandoffCover(), false, "hardware GL race: no cover");
   P.bindGame({ state: () => { throw new Error("mid-boot"); } });

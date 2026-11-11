@@ -11208,6 +11208,9 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
+      "readbackCover": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
       "requestWarm": [
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"

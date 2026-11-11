@@ -722,7 +722,8 @@ return {
   softwareGlUiReadbackDefer() {
     if (!PerfGov.softwareRaster()) return false;
     try {
-      if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stallHandoffCover && RaceEntryProfile.stallHandoffCover()) return true;
+      // readbackCover, not stallHandoffCover: the watchdog's software-GL race intro leg (45 s) left #game-soft unread.
+      if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.readbackCover && RaceEntryProfile.readbackCover()) return true;
     } catch (_) { /* harness */ }
     try {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.quitReadbackDefer && MenuTeardown.quitReadbackDefer()) return true;
