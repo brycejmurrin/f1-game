@@ -14,10 +14,11 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict,
+  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
+import { AGENT_APP_SLUG, byAgent, byOwner } from "../../tools/ci/lib/provenance.mjs";
 import { BOUND_MAX_AGE_MIN, receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -81,19 +82,77 @@ test("configVerdict: a diff touching a config path needs `config-ok` last added 
   assert.deepEqual(configVerdict(["docs/TESTING.md", "js/game.js"], [], null), { ok: true, evidence: "no config path (harness, CI tools, agent config) in the diff (2 file(s))" });
   const files = [".github/workflows/dispatch.yml", "js/game.js"];
   assert.deepEqual(configVerdict(files, [], []), { ok: false, evidence: "needs config-ok from brycejmurrin: the diff edits .github/workflows/dispatch.yml" });
-  assert.deepEqual(configVerdict(files, ["config-ok"], [ev("config-ok", T1, { app: APP })]),
-    { ok: false, evidence: "needs config-ok from brycejmurrin: the label was last added by brycejmurrin via app claude — only his own click counts (the diff edits .github/workflows/dispatch.yml)" });
   assert.deepEqual(configVerdict(files, ["config-ok"], []),
-    { ok: false, evidence: "needs config-ok from brycejmurrin: the label was found but its label event was not — only his own click counts (the diff edits .github/workflows/dispatch.yml)" });
-  assert.deepEqual(configVerdict(files, [{ name: "config-ok" }], [ev("config-ok", T1)]), { ok: true, evidence: `config-ok added by brycejmurrin at ${T1} covers .github/workflows/dispatch.yml` });
-  assert.equal(configVerdict(files, ["config-ok"], [ev("config-ok", T1), ev("config-ok", T2, { event: "unlabeled" }), ev("config-ok", "2026-11-03T12:00:00Z", { app: APP })]).ok, false, "Bryce's old click does not cover an agent's re-add");
+    { ok: false, evidence: "needs config-ok from brycejmurrin: the label was found but its label event was not — only his own click, or an agent's (claude app) on routine paths, counts (the diff edits .github/workflows/dispatch.yml)" });
+  assert.deepEqual(configVerdict(files, [{ name: "config-ok" }], [ev("config-ok", T1)]), { ok: true, evidence: `config-ok by owner (brycejmurrin) at ${T1} covers .github/workflows/dispatch.yml` });
+  assert.equal(configVerdict(files, ["config-ok"], [ev("config-ok", T1), ev("config-ok", T2, { event: "unlabeled" }), ev("config-ok", "2026-11-03T12:00:00Z", { app: APP })]).ok, false, "Bryce's old click does not cover an agent's re-add after his own removal");
   const many = configVerdict([".claude/hooks/a.sh", ".claude/hooks/b.sh", ".claude/hooks/c.sh", ".claude/hooks/d.sh", ".claude/hooks/e.sh"], [], []);
-  assert.equal(many.evidence, "needs config-ok from brycejmurrin: the diff edits .claude/hooks/a.sh, .claude/hooks/b.sh, .claude/hooks/c.sh, .claude/hooks/d.sh, …");
+  assert.equal(many.evidence, "needs config-ok from brycejmurrin: the diff edits .claude/hooks/a.sh, .claude/hooks/b.sh, .claude/hooks/c.sh, .claude/hooks/d.sh, …; protected path(s), his own tap only: .claude/hooks/a.sh, .claude/hooks/b.sh, .claude/hooks/c.sh, .claude/hooks/d.sh, …");
   const ok = [ev("config-ok", T1)];
   assert.equal(configVerdict(files, ["config-ok"], ok, "brycejmurrin", { state: "covered", evidence: "x" }).ok, true);
   assert.deepEqual(configVerdict(files, ["config-ok"], ok, "brycejmurrin", { state: "after", evidence: "a push touching .claude/hooks/a.sh came" }),
-    { ok: false, evidence: `needs a fresh config-ok from brycejmurrin: a push touching .claude/hooks/a.sh came after his label at ${T1} (remove and re-add it)` });
+    { ok: false, evidence: `needs a fresh config-ok: a push touching .claude/hooks/a.sh came after the label at ${T1} (config-ok by owner (brycejmurrin; remove and re-add it)` });
   assert.equal(configVerdict(files, ["config-ok"], ok, "brycejmurrin", { state: "unknown", evidence: "x" }).pending, true);
+});
+
+test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths only; protected paths need Bryce's own tap", () => {
+  const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z", T3 = "2026-11-03T12:00:00Z";
+  const L = ["config-ok"];
+  const agent = (at, o) => ev("config-ok", at, { app: APP, ...o });
+  const routine = [".github/workflows/dispatch.yml", "package.json", "tools/ci/dispatch.mjs", "js/game.js"];
+  const prot = [".github/workflows/land.yml", "tools/ci/dispatch.mjs"];
+  // 1. Bryce's own tap on a protected diff passes.
+  assert.deepEqual(configVerdict(prot, L, [ev("config-ok", T1)]), { ok: true, evidence: `config-ok by owner (brycejmurrin) at ${T1} covers .github/workflows/land.yml, tools/ci/dispatch.mjs` });
+  // 2. An agent's label on a protected diff is refused and names the protected paths.
+  assert.deepEqual(configVerdict(prot, L, [agent(T1)]),
+    { ok: false, evidence: "needs config-ok from brycejmurrin himself: an agent's label (brycejmurrin via app claude) covers routine config paths only, and the diff edits protected path(s) .github/workflows/land.yml" });
+  for (const p of ["tools/ci/merge-gate.mjs", "tools/ci/lib/provenance.mjs", "tools/ci/ready-gate.mjs", ".claude/hooks/x.sh", ".claude/settings.json", ".claude/settings.local.json",
+    "tools/hooks/readonly-bash.sh", ".githooks/pre-push", ".cursor/hooks.json", ".codex/hooks.json"]) assert.equal(configVerdict([p], L, [agent(T1)]).ok, false, `${p} is protected`);
+  assert.equal(configVerdict(["docs/a.md", "x", ".claude/hooks/a.sh"].concat(routine), L, [agent(T1)]).ok, false, "one protected path needs his tap for the whole row");
+  // 3. An agent's label on a routine-only diff passes, and says so.
+  assert.deepEqual(configVerdict(routine, L, [agent(T1)]),
+    { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/dispatch.mjs` });
+  // ci.yml decides what green means: protected (Bryce, 2026-11-11 "Protect ci.yml").
+  assert.equal(configVerdict([".github/workflows/ci.yml", "js/a.js"], L, [agent(T1)]).ok, false, "an agent's label on ci.yml is refused");
+  assert.match(configVerdict([".github/workflows/ci.yml"], L, [agent(T1)]).evidence, /protected path\(s\) \.github\/workflows\/ci\.yml/);
+  assert.equal(configVerdict([".github/workflows/ci.yml"], L, [ev("config-ok", T1)]).ok, true, "his own tap on ci.yml passes");
+  for (const p of [".github/workflows/pages.yml", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".mcp.json", "tools/mcp/apex-extras.mjs", "tools/lib/generated-paths.mjs", ".github/actions/setup/action.yml", ".github/ISSUE_TEMPLATE/task.yml"])
+    assert.equal(configVerdict([p], L, [agent(T1)]).ok, true, `${p} is routine`);
+  // 4. An agent's label older than the last config push is refused (the same timing rule as Bryce's).
+  const stale = configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "after", evidence: "a push touching tools/ci/dispatch.mjs came" });
+  assert.equal(stale.ok, false);
+  assert.match(stale.evidence, /^needs a fresh config-ok: a push touching tools\/ci\/dispatch\.mjs came after the label at .* by agent \(claude app\), routine paths only/);
+  assert.equal(configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "unknown", evidence: "x" }).pending, true);
+  // 5. Bryce's own unlabel after an agent's label refuses, and voids a later agent re-add until his own.
+  assert.equal(configVerdict(routine, [], [agent(T1), ev("config-ok", T2, { event: "unlabeled" })]).ok, false, "label gone");
+  const vetoed = configVerdict(routine, L, [agent(T1), ev("config-ok", T2, { event: "unlabeled" }), agent(T3)]);
+  assert.equal(vetoed.ok, false);
+  assert.match(vetoed.evidence, /he removed it himself at 2026-11-03T11:00:00Z/);
+  assert.equal(configVerdict(routine, L, [ev("config-ok", T2, { event: "unlabeled" }), agent(T3), ev("config-ok", T1)]).ok, false, "created_at orders the walk, not the list");
+  assert.equal(configVerdict(routine, L, [ev("config-ok", T1, { event: "unlabeled" }), ev("config-ok", T2), agent(T3)]).ok, true, "his own re-add lifts his veto");
+  assert.equal(configVerdict(routine, L, [agent(T1), agent(T2, { event: "unlabeled" }), agent(T3)]).ok, true, "an agent's own removal vetoes nothing");
+  // 6. An event from any other app slug is refused.
+  for (const app of [{ slug: "copilot-swe-agent" }, { slug: "github-actions" }, { slug: "Claude" }, { name: "claude" }, {}])
+    assert.equal(configVerdict(routine, L, [ev("config-ok", T1, { app })]).ok, false, JSON.stringify(app));
+  assert.equal(configVerdict(routine, L, [ev("config-ok", T1, { app: APP, actor: "someone-else" })]).ok, false, "another login through the claude app");
+  // 7. An event with no performed_via_github_app field is refused.
+  const { performed_via_github_app: _, ...noField } = ev("config-ok", T1);
+  assert.equal(configVerdict(routine, L, [noField]).ok, false);
+  assert.equal(configVerdict(prot, L, [noField]).ok, false);
+  assert.equal(byAgent(noField), false);
+  assert.equal(byAgent(agent(T1)), true);
+  assert.equal(byOwner(agent(T1)), false, "byOwner is unchanged: an app event is never the owner's");
+  assert.equal(AGENT_APP_SLUG, "claude");
+  assert.deepEqual([configLabelKind(ev("config-ok", T1)), configLabelKind(agent(T1)), configLabelKind(agent(T1, { event: "unlabeled" })), configLabelKind(noField)], ["owner", "agent", null, null]);
+});
+
+test("PROTECTED_CONFIG_PATH covers every tools/ci module the gate loads (a module's top level runs at import)", () => {
+  const seen = new Set(gateClosure(ROOT));   // the same walk the gate receipt hashes (tools/lib/gate-receipt.mjs)
+  assert.ok(seen.has("tools/ci/lib/provenance.mjs"), "provenance is in the closure");
+  const gaps = [...seen].filter((f) => isConfigPath(f) && !isProtectedConfigPath(f));
+  assert.deepEqual(gaps, [], "a gate module an agent's config-ok could approve");
+  assert.ok(seen.has("tools/ci/github-api.mjs") && seen.size >= 8, [...seen].join(", "));
+  for (const f of seen) if (isProtectedConfigPath(f)) assert.equal(isConfigPath(f), true, `${f}: protected implies config`);
 });
 
 test("configPushState: config-ok binds to the PR's own config diff at label time; a push that changes it needs a fresh label", () => {
@@ -283,6 +342,13 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["config"], "a workflow edit without Bryce's config-ok");
   f.pull.labels = [{ name: "config-ok" }]; f.events.push(ev("config-ok", "2026-11-03T10:00:00Z"));
   assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true, "config-ok by Bryce's own click");
+  f.events.push(ev("config-ok", "2026-11-03T10:05:00Z", { app: APP }));
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["config"], "an agent's re-add on land.yml (protected) does not count (#5455)");
+  f.files[f.files.length - 1] = { filename: ".github/workflows/dispatch.yml" };
+  const agentOk = evaluate({ pr: 7, ...f.deps });
+  assert.equal(agentOk.ok, true, "an agent's config-ok covers a routine workflow (#5455): " + agentOk.rows.config.evidence);
+  assert.match(agentOk.rows.config.evidence, /by agent \(claude app\), routine paths only/);
+  f.events.pop(); f.files[f.files.length - 1] = { filename: ".github/workflows/land.yml" };
   f.prRuns.push({ head_sha: "c".repeat(40), created_at: "2026-11-03T09:30:00Z", pull_requests: [{ number: 7 }] });
   f.prRuns[0].created_at = "2026-11-03T10:30:00Z";
   const own = (sha) => [{ filename: ".github/workflows/land.yml", status: "modified", sha, changes: 1, patch: `+${sha}` }];
@@ -346,7 +412,7 @@ test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a r
   logs.length = 0;
   f.files.push({ filename: ".claude/hooks/bash-guard.sh" });
   assert.equal(main(["--pr", "7", "--json", "artifacts/g.json"], deps), 2);
-  assert.ok(logs.some((l) => l === "= gate config: FAIL needs config-ok from brycejmurrin: the diff edits .claude/hooks/bash-guard.sh"), logs.join("\n"));
+  assert.ok(logs.some((l) => l === "= gate config: FAIL needs config-ok from brycejmurrin: the diff edits .claude/hooks/bash-guard.sh; protected path(s), his own tap only: .claude/hooks/bash-guard.sh"), logs.join("\n"));
   assert.ok(logs.at(-1).startsWith("= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=FAIL"));
   const j = written["/nowhere/artifacts/g.json"];
   assert.equal(j.ok, false); assert.equal(j.rows.config.ok, false); assert.equal("maxBehind" in j, false);
