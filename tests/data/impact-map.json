@@ -18867,7 +18867,10 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
-      "refreshBtnFit": [
+      "parseCaps": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
+      "refreshFit": [
         "tests/unit/hud-feel.test.mjs"
       ],
       "setScale": [
@@ -18875,7 +18878,12 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
+      "sizeRow": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
       "*": [
+        "tests/specs/time-trial.spec.js",
+        "tests/specs/title-fit.spec.js",
         "tests/specs/ui-resize.spec.js",
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
