@@ -1529,34 +1529,24 @@ const CarDraw = (function () {
     const _pinned = new WeakSet();
     const pin = (m) => { if (m && !_pinned.has(m)) { _pinned.add(m); if (typeof G.gfx.pinMesh === "function") G.gfx.pinMesh(m); } return m; };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
-    // #5387 THE RACE'S FIRST RENDERED FRAME DRAWS EVERY MESH ITS WARM BUILT (Bryce, 2026-11-11: "Yes, in this PR").
-    // The race warm builds the cockpit LCD set, each rival's flap sets and elements and the shared rival bodies, but
-    // TLX makes a mesh's pool wrapper and render object (UBO, bind group) at its first RENDERED draw, so each one was
-    // minted mid-lap the first time it came into view (diagnostic runs 42949086546, 42952935336; warmDraws compiles
-    // through probe meshes, pipelines only). game.js calls this once per main-pass frame before its car loop. Armed
-    // per race warm (a restart re-arms it), it draws every (geometry, material) pair once at a ZERO 3x3 matrix:
-    // zero-area triangles, no fragment, no depth, on TLX, GLX and WGX. Never in the mirror pass. A TLX present held
-    // by a warm renders nothing, so it waits for warming()/warmQueued() to clear and re-primes once if the frame it
-    // primed started a warm. Returns the draws issued.
+    // #5387: the race's first frames draw every mesh its warm built, once, at a ZERO matrix (no fragments): TLX mints
+    // a wrapper's render object at its first RENDERED draw, so each was minted mid-lap. Main pass only; armed per race
+    // warm. Returns the draws issued.
     let _primeArmed = 0;   // 0 off, 1 armed, 2 primed under a held present (done at the first free one)
     const _primeZ = new Float32Array(16);
-    // game.js's _wheelOpts (js/game.js, `const _wheelOpts`; emissive is set per frame: 0.12 at night, 0 by day). A copy, so
-    // the prime's wheel draws key the same material (cockpit-wheels pins the two literals equal).
+    // A copy of game.js's `const _wheelOpts` (cockpit-wheels pins them equal); emissive 0.12 at night.
     const _primeWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
     function primeRace(paint, night) {
       if (!_primeArmed || carModelBuf || !G.cars || !G.cars.length) return 0;   // the menu prep arms it too: wait for the race's field
       const gfx = G.gfx, held = !!((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
-      // UNDER THE COVER FIRST (Bryce: "under the loading screen"). A TLX present held by a warm paints nothing, but its
-      // draws are acquired and the warm's compile builds their render objects behind the loading cover; priming
-      // there keeps the ~600 creations out of a painted frame (run 42965184136: a free-frame prime painted 650 ms,
-      // a held-frame one left the first frame in the off band). So prime every held frame (cheap once built) and
-      // stop at the first free one; with no warm at all (a menu-warmed entry, GLX, WGX) prime the first free frame.
+      // Prime every present a warm holds (its compile builds them under the loading cover) and stop at the first
+      // free one; with no warm at all, prime the first free frame.
       if (!held && _primeArmed === 2) { _primeArmed = 0; return 0; }
       _primeArmed = held ? 2 : 0;
       const Z = _primeZ; let n = 0;
       if (typeof gfx.primeChunkMerge === "function") gfx.primeChunkMerge();   // TLX: each chunked record's merge slot, this present
       const d = (mesh, opts) => { if (mesh) { gfx.draw(mesh, Z, opts); n++; } };
-      // Cockpit LCD: each digit once per place it can hold (the pool keys wrappers per occurrence: gear x1, speed x3).
+      // The pool keys wrappers per occurrence: each digit once per place (gear x1, speed x3).
       for (let k = 0; k <= 9; k++) { d(getGearDigit(k), _rigFx); for (let j = 0; j < 3; j++) d(getSpeedDigit(k), _rigFx); }
       const ws = CockpitOpts.wheel();
       if (CockpitOpts.wheelHasScreen(ws)) for (let lit = 0; lit <= 9; lit++) d(getLedStrip(lit, ws), _rigFx);
@@ -1564,12 +1554,8 @@ const CarDraw = (function () {
       d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
       if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 29; }
       if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
-      // Rivals: the shared near/far bodies, each team body, and every flap draw (closed set, open set, moving elements).
-      // Per car, with the field's own size (a restart, VS FRIEND or a short practice field re-arms with its count). The
-      // pool keys a wrapper per OCCURRENCE of a (geometry, material) in a frame, so a mesh SHARED across cars is drawn
-      // once per car that can show it: the shared near/far bodies, each car's wheel set (2 front, 2 rear, rotating and
-      // fixed), the blob-shadow and skid-mark quads. Otherwise the first frame with more rivals at one LOD than ever
-      // before (the field spread out ahead) minted the extra wrappers mid-race (proof run 42959284024: ~111 bind groups).
+      // Per field car, as shared meshes key a wrapper per occurrence: shadow, mark, decals, spin discs; rivals add
+      // the shared/far/team bodies, flap sets and wheel set.
       if (paint) {
         const co = coOpt(paint), cars = G.cars;
         _primeWheelOpts.emissive = night ? 0.12 : 0;
@@ -1579,10 +1565,7 @@ const CarDraw = (function () {
           if (!c) continue;
           if (gfx.drawShadow) { gfx.drawShadow(Z, 2.4, 5.8); n++; }
           if (gfx.drawMark) { gfx.drawMark(Z, 1, 1); n++; }
-          // Its decal set, through the real path: queued here, built and drawn by game.js's flushDecals after the car
-          // loop (a decal mesh was otherwise BUILT on a car's first close view, and TLX's batched decal run with it).
           queueCarDecals(c.team, Z, carDecalNum(c.team, c), false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); n++;
-          // Its spin discs (one per wheel; blended, alpha < 1), as the wheel draw's run 2 does when a car is near and fast.
           _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
           for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
           if (c.isPlayer) continue;   // the player's own meshes draw from its first frame
