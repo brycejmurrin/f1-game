@@ -4178,19 +4178,24 @@
       "roster": "tag"
     },
     {
-      "path": "js/race/real-race-pace.js",
-      "global": "RealRacePace",
-      "roster": "tag"
-    },
-    {
-      "path": "js/race/real-race.js",
+      "path": "js/race/real-race-boot.js",
       "global": "RealRace",
       "roster": "tag"
     },
     {
+      "path": "js/race/real-race-pace.js",
+      "global": "RealRacePace",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
+      "path": "js/race/real-race.js",
+      "global": "RealRaceBody",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
       "path": "js/race/real-replay.js",
       "global": "RealReplay",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/race/reliability.js",
@@ -5045,7 +5050,7 @@
     {
       "path": "js/ui/watch-transport.js",
       "global": "WatchTransport",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/workers/bitmap-decode-client.js",

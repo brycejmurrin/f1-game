@@ -908,6 +908,7 @@ declare const StartLights: GameModuleFactory;
 declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
+declare const RealRaceBody: GameModuleFactory;
 declare const FlyingStart: GameModuleFactory;
 declare const JumpStartPenalty: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;

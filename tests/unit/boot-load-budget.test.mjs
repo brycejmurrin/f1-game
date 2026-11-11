@@ -31,14 +31,17 @@ const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 // gfx-debug-overlay (LAZY_DEV) off the wall (326 → 323); the freed slots are not headroom for new eager files.
 // 322: #4748 moved career-backup into LAZY_CAREER_UI (tip 320 → 319 tags).
 // 317: #4978 row 2 moved the perf rig (bench-run, bench-capture, phone-recorder, gpu-test-run, soak-run) to LAZY_PERF (319 → 314).
-const MAX_EAGER_SCRIPTS = 317;
+// 314: #4978 row 6 moved watch-transport, real-replay, real-race-pace and the real-race body to LAZY_REAL_RACE
+// behind a FULL stub (js/race/real-race-boot.js) (314 → 311).
+const MAX_EAGER_SCRIPTS = 314;
 // 8.25 MB: raised from 8.20 MB by Bryce's grant (2026-10-30 ~16:51Z, quoted via the dispatcher: "Raise budget +50 KB").
 // Cause: #4260 grew js/ui/screen-looks.js +8.6 KB (tip 8,209,755); #3981's ERS sector plan adds ~6 KB next.
 // 8.22 MB: lowered by #4978 rows 1+4 (tip 8,228,695 → 8,198,163 raw, −30.5 KB).
 // 8.18 MB: lowered by #4748 career-backup → LAZY_CAREER_UI (tip 8,213,577 → 8,159,200 raw, −54.4 KB).
 // 8.07 MB: lowered by #4978 row 2 perf rig → LAZY_PERF (8,159,200 → 8,045,152 raw, −114.0 KB).
 // 8.047 MB: lowered by #4978 row 3 METRICS painter → LAZY_PERF metrics-panel.js (8,045,152 → 8,022,367 raw, −22.8 KB).
-const MAX_EAGER_BYTES = 8_047_000;
+// 7.941 MB: lowered by #4978 row 6 real-race family → LAZY_REAL_RACE (8,023,872 → 7,915,806 raw, −108.1 KB).
+const MAX_EAGER_BYTES = 7_941_000;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");
