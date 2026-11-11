@@ -41,6 +41,15 @@ const BANK_M = 60;     // a bank zone centre within this of its named apex
 const KIT_M = 60;      // a corner kit's window within this of its corner's apex
 const APPROACH_M = 300; // an "approach"/"braking" kit: this far before the apex
 const PEAK_K = 0.004;  // rad/m: smoothed |k| below this is not a corner (BANK_STRAIGHT_K)
+// A numbered corner can be a real kink gentler than PEAK_K (Red Bull's Muenzer
+// left, Mosport's Andretti-straight kinks, Baku's right flick between two lefts).
+// Such a turn passes only on its OWN local feature: a strict extremum of signed
+// curvature (smoothed ±KINK_SMOOTH_M) over ±KINK_WIN_M, standing at least
+// KINK_PROM off the mean of the curvature KINK_BASE_M either side, within the
+// same TURN_M, and either gentler than PEAK_K or a sign flick against both
+// sides. A turn off its kink or on a featureless straight still fails.
+const KINK_SMOOTH_M = 8, KINK_WIN_M = 24, KINK_BASE_M = 40;
+const KINK_PROM = 0.0001; // rad/m
 // Named corners, one file per circuit (tools/track/corner-names/<id>.json:
 // { "why": "...", "names": { "Adelaide": 6 } }, turn numbers 1-based into THIS
 // def's turns[]) — one file each so two circuit PRs never conflict.
@@ -64,6 +73,35 @@ function smoothedCurv(track, halfM) {
     out[i] = s / (2 * w + 1);
   }
   return out;
+}
+
+// The sub-PEAK_K kink a turn at lap fraction t sits on, or null (see KINK_*).
+function kinkAt(track, t, k8) {
+  const n = track.n, ds = track.total / n;
+  const at = (i) => k8[((i % n) + n) % n];
+  const c = Math.round(wrap01(t) * n), r = Math.round(TURN_M / ds);
+  const w = Math.max(1, Math.round(KINK_WIN_M / ds)), b = Math.max(w + 1, Math.round(KINK_BASE_M / ds));
+  let best = null;
+  for (let i = c - r; i <= c + r; i++) {
+    const k = at(i);
+    let isMax = true, isMin = true;
+    for (let j = 1; j <= w && (isMax || isMin); j++) {
+      const a = at(i - j), z = at(i + j);
+      if (!(k > a && k > z)) isMax = false;
+      if (!(k < a && k < z)) isMin = false;
+    }
+    if (!isMax && !isMin) continue;
+    const prom = Math.abs(k - (at(i - b) + at(i + b)) / 2);
+    if (prom < KINK_PROM) continue;
+    // Only a GENTLE kink (|k| under PEAK_K) or a flick against the bends either
+    // side (k opposite in sign to both) — a full-strength corner the |k| peak
+    // finder already sees must meet TURN_M against that peak, not this one.
+    const flick = Math.sign(k) !== 0 && Math.sign(at(i - b)) === -Math.sign(k) && Math.sign(at(i + b)) === -Math.sign(k);
+    if (Math.abs(k) >= PEAK_K && !flick) continue;
+    const m = lapGap(i / n, t) * track.total;
+    if (!best || m < best.m) best = { f: wrap01(i / n), k, prom, m };
+  }
+  return best;
 }
 
 // Local maxima of |k| smoothed over ±8 m (|k| BEFORE the average, so an
@@ -206,6 +244,7 @@ function measure(Tracks, id) {
   const n = track.n, L = track.total;
   const ksm = smoothedCurv(track, 12);
   const peaks = peaksOf(track);
+  const k8 = smoothedCurv(track, KINK_SMOOTH_M);
   const turns = def.turns || [];
   const names = namesFor(id);
   const src = fs.readFileSync(path.join(ROOT, "js/circuits", id + ".js"), "utf8");
@@ -216,6 +255,12 @@ function measure(Tracks, id) {
     let best = null;
     for (const p of peaks) { const d = lapGap(p.f, t); if (!best || d < best.d) best = { d, p }; }
     const m = best ? best.d * L : Infinity;
+    const kink = m > TURN_M ? kinkAt(track, t, k8) : null;
+    if (kink) {
+      rows.push({ circuit: id, kind: "turn", key: "T" + (i + 1), offsetM: Math.round(kink.m), bad: false,
+        detail: `turns[${i}]=${t} on a sub-threshold kink at ${kink.f.toFixed(4)} (k ${kink.k.toExponential(1)}, prominence ${kink.prom.toExponential(1)}); nearest peak ${Math.round(m)} m` });
+      return;
+    }
     rows.push({ circuit: id, kind: "turn", key: "T" + (i + 1), offsetM: Math.round(m),
       bad: m > TURN_M, detail: `turns[${i}]=${t} ${best ? (lapDelta(t, best.p.f) < 0 ? "before" : "past") + " peak " + best.p.f.toFixed(4) : "no peak"}` });
   });
@@ -356,7 +401,7 @@ function audit(ids, Tracks) {
   return rows;
 }
 
-module.exports = { audit, measure, cornersIn, lineLabels, stableKey, context, TURN_M, BANK_M, KIT_M };
+module.exports = { audit, measure, cornersIn, lineLabels, stableKey, context, kinkAt, TURN_M, BANK_M, KIT_M };
 
 if (require.main === module) {
   const argv = process.argv.slice(2);

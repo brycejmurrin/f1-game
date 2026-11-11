@@ -25,4 +25,9 @@ interface RaceControlPort {
   }) => void;
   readonly announce: (text: string, seconds: number, kind: string) => unknown;
   readonly wetness: () => number | undefined;
+  /** Per-frame RETIRED-card tick (js/race/retired-card.js); optional. */
+  readonly playerWait?: () => void;
+  /** Cars stopped on the road (js/race/stopped-cars.js): null, or the flag they ask for. Optional: harnesses omit it. */
+  readonly stopped?: (step: number) => { level: number; sector: number; frac: number; cause: string; n: number } | null;
+  readonly stoppedReset?: () => void;
 }
