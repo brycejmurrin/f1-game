@@ -16,7 +16,9 @@ Recent merges: [CHANGELOG.md](CHANGELOG.md).
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-across a **24-round season** of low-poly 3D tracks. The season rounds:
+on low-poly 3D tracks, across a season on the real 2026 calendar (23 rounds,
+Albert Park to Abu Dhabi), with the original 24-round calendar still
+available. The season rounds:
 Bahrain, Monaco, Silverstone, Spa, Monza, Suzuka, Singapore, COTA,
 Interlagos, Las Vegas, Madrid, Jeddah, Albert Park, Shanghai, Miami,
 Montreal, Red Bull Ring, Hungaroring, Baku, Mexico City, Qatar, Abu Dhabi,
@@ -28,7 +30,7 @@ Night races run under floodlights.
 2026-regulation game mechanics:
 
 - **Electric boost** — hold BOOST to deploy battery energy; deployment tapers
-  away at high speed, exactly like the 2026 power units. Recharge by braking
+  away at high speed, as the 2026 power units do. Recharge by braking
   and lifting.
 - **Active Aero** — in MANUAL, press **Z** (or **AERO** on screen) inside an
   activation zone to open the wings (**STRAIGHT MODE**): less drag and grip;
@@ -252,11 +254,8 @@ __apex.groundY(0.11, 12);    // rendered terrain height + gap vs the road at a p
 
 ## Credits
 
-Music: free demo tracks from
-[Beatscribe's Homebrew VGM assets](https://github.com/Beatscribe/homebrew_vgm)
-([more at beatscribe.itch.io](https://beatscribe.itch.io)), released under
-**CC0 1.0** (public domain) and downsampled for the web. See
-[`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine drone is looped sample clips pitched by rpm and gear (see
+Music: the six playlist tracks were provided by the project owner for this
+game; see [`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine drone is looped sample clips pitched by rpm and gear (see
 [`assets/sfx/CREDITS.txt`](assets/sfx/CREDITS.txt)); the other sound effects are
 synthesized in-browser with the Web Audio API.
 The team-radio voice is synthetic speech from
