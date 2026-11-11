@@ -5,8 +5,7 @@ const GarageEntranceMotion = (function () {
   const WHEEL_RADIUS = 0.34;   // fitted CarWheels tyre radius, matched in the Blender source
   const MIRROR = new Set(["x", "yaw", "steer"]);
   let checked = null, usable = false;
-  // The check's closures live in valid(), not data(): a closure capturing `d` gave data() a
-  // fresh context on every call, its cached path included (40 B a frame, #5462).
+  // Apart: closures in data() gave every call a context (#5462).
   function valid(d) {
     return !!d && d.version === 1 && Array.isArray(d.columns)
       && FIELDS.every((key, i) => d.columns[i] === key)

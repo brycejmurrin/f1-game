@@ -3,7 +3,7 @@ const GarageArrival = (function () {
   "use strict";
   const DOOR_S = 1.8;
   const ease = GarageCrewDraw.ease;
-  // Math.hypot by V8's own algorithm (bit-identical there) without the builtin's per-call array (#5462).
+  // V8's Math.hypot, minus its per-call array (#5462).
   function hypot(a, b, c) {
     const three = c !== undefined;
     a = Math.abs(a); b = Math.abs(b); c = three ? Math.abs(c) : 0;
@@ -71,7 +71,6 @@ const GarageArrival = (function () {
   // the wet (the shipped rule, setup-camera.js), FLASH = the FIA rain light's blink.
   const REAR = Object.freeze(["auto", "on", "off", "flash"]);
   const moodIds = () => typeof GarageScene !== "undefined" && GarageScene.MOODS ? Object.keys(GarageScene.MOODS) : [];
-  // moodIds().includes(id), no array.
   const hasMood = (id) => typeof GarageScene !== "undefined" && !!GarageScene.MOODS && Object.prototype.propertyIsEnumerable.call(GarageScene.MOODS, id);
   /* LIGHT CUE: a Blender-keyframed GarageScene cue (scene.js CUES: lights up,
    * photo flashes, amber beacon, pulse, lights out) played over the sequence's
@@ -115,20 +114,11 @@ const GarageArrival = (function () {
     if (config.fastest && !out) parts.push("FASTEST LAP");
     return parts.join(" · ");
   }
-  /* STYLE: a whole look in one tap, above the rows (phone UX: 33 rows is a lot
-   * to scroll). Each is a partial settings object laid over the saved one, so
-   * crews, timing and AFTER THE RACE stay the player's; RESET is the shipped look.
-   * BROADCAST: the TV pit-lane coverage — three locked-off cameras, broadcast
-   * light, captions. CINEMA: the Blender crane (no CAMERA MOVE on top: a push
-   * carried the lens into a crew member and the car past the frame edge,
-   * 2026-10-30 844x390 capture), slow-mo at the door, GOLDEN HOUR under bars (the
-   * showroom mood blacked the room out while the car was still in the lane),
-   * no captions. DOCUMENTARY: a heavy handheld
-   * drifting through three cameras under the garage's own light. SHOWCASE: the
-   * Blender orbit circling the car while the SPOTLIGHT cue dims the room and
-   * sweeps a follow-spot onto it, a launch reveal (the garage's own light: the
-   * showroom mood under the cue's dim played black, 2026-11-02 844x390 capture). NIGHT SHIFT: a light handheld on the high corner, drifting,
-   * under the overnight-service mood, the way a 24-hour race's garage looks. */
+  /* STYLE: a whole look in one tap (33 rows is a lot to scroll on a phone), laid over the saved
+   * settings, so crews, timing and AFTER THE RACE stay the player's; RESET is the shipped look.
+   * CINEMA has no CAMERA MOVE (a push carried the lens into a crew member) and GOLDEN HOUR (the
+   * showroom mood blacked the room out mid-lane), 2026-10-30 844x390; SHOWCASE keeps the garage's
+   * light (showroom under the spotlight cue's dim played black, 2026-11-02). */
   const STYLES = Object.freeze({
     broadcast: Object.freeze({ label: "BROADCAST", look: { angle: "director", move: "still", sway: 0, zoom: 0, fov: 54, light: "broadcast", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
     cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "still", sway: 0.5, zoom: 6, fov: 48, light: "goldenhour", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
@@ -186,7 +176,6 @@ const GarageArrival = (function () {
    * first read of a config object decides; the next playback's fresh object
    * adopts whatever has landed by then. */
   const _pinned = new WeakMap();
-  // Per frame: no closure, no joined key (#5462).
   const PIN_CREW = Object.freeze({ __proto__: null, in: "crew:in", out: "crew:out", home: "crew:home" });
   function pinMap(config) { let m = _pinned.get(config); if (!m) { m = {}; _pinned.set(config, m); } return m; }
   function rigFor(config) {
@@ -551,7 +540,6 @@ const GarageArrival = (function () {
   // eye at 4.0-4.3 m (2026-10-30 captures, HIGH CORNER +0.5 m).
   // look = { config, k (0..1 through the shot), last (the final shot) } carries
   // CAMERA MOVE, HANDHELD and FINAL SHOT ZOOM; defaults leave the shipped framing.
-  // eye / aim are copied onto the pose's own pair (fresh, or a pooled pose's), so no scratch escapes.
   const _pairs = new WeakMap();
   function posePair(pose) { let p = _pairs.get(pose); if (!p) { p = { eye: [0, 0, 0], aim: [0, 0, 0] }; _pairs.set(pose, p); } return p; }
   function shot(out, eye, aim, t, calm, lift = 0, look = null, pair = null) {
@@ -606,7 +594,6 @@ const GarageArrival = (function () {
    * BEAT; "home" adds its result's flavour. Defaults reproduce the shipped
    * constants exactly (DURATION / OUT_DURATION / OUT_SETTLE). */
   const holdOf = (c, dflt) => typeof c.hold === "number" ? c.hold : dflt;
-  // timeline()'s fields in its key order, into o; per-frame callers fill one scratch per kind (#5462).
   function timelineInto(o, config, dir) {
     const c = config || DEFAULT, door = Number.isFinite(c.door) ? c.door : DOOR_S;
     const car = Number.isFinite(c.carSpeed) && c.carSpeed > 0 ? c.carSpeed : 1, tail = Number.isFinite(c.endBeat) ? c.endBeat : 0;
@@ -624,7 +611,7 @@ const GarageArrival = (function () {
     return o;
   }
   function timeline(config = DEFAULT, dir = "in") { return timelineInto({}, config, dir); }
-  const T_POSE = { in: {}, out: {} }, T_CLOCK = { in: {}, out: {} };   // a pose's; duration's and rigU's
+  const T_POSE = { in: {}, out: {} }, T_CLOCK = { in: {}, out: {} };
   const scratchT = (pair, config, dir) => timelineInto(dir === "out" ? pair.out : pair.in, config, dir);
   function crewExtra(config, dir) {
     const crew = crewFor(config, dir), service = crew === "service";
@@ -635,24 +622,29 @@ const GarageArrival = (function () {
     return scratchT(T_CLOCK, config, dir).base + extra;
   }
   const entranceSources = new WeakMap();
-  /* #5462: poseIn / poseOut fill `o` when given (the player's one pose per sequence), else a fresh
-   * object (pose(t) stays pure). Scratch never escapes; what consumers write onto a playing pose
-   * (setup-camera's distance, GarageExterior fitPose / groundPose) is cleared each frame. */
+  // #5462: poseIn / poseOut fill `o` if given (one pose per playback); consumer writes clear per frame.
   const CONSUMER_KEYS = Object.freeze(["distance", "exteriorUnsupported", "groundY", "groundForward", "groundRight"]);
   const AUTHORED_KEYS = Object.freeze(["articulated", "wheelDistance", "steer", "bodyPitch", "bodyHeave"]);
   function clearKeys(o, keys) { for (let i = 0; i < keys.length; i++) if (o[keys[i]] !== undefined) o[keys[i]] = undefined; }
   const P_IN = {}, P_ENTRANCE = {}, AIM = [0, 0, 0], EYE = [0, 0, 0], LOOK = { config: null, last: false, k: 0 };
   const SPRINT_ARRIVE = {};
   const sprintArrive = (r) => SPRINT_ARRIVE[r.arrive] || (SPRINT_ARRIVE[r.arrive] = r.arrive.replace(/^RACE /, "SPRINT "));
-  // homeTitle only when an input moved.
-  const TITLE = { r: null, result: null, pos: null, driver: null, sprint: null, grid: null, fastest: null, text: "" };
+  // The pose fields poseIn and poseOut share, in their key order.
+  function lookOf(o, config, dir) {
+    o.mood = lightFor(config, dir); o.cue = cueFor(config, dir); o.swell = lookNum(config, "swell", 1); o.bars = !!config.bars;
+    o.captions = config.captions !== false; o.rearLight = config.rearLight || "auto"; o.sound = config.sound !== false;
+  }
+  function carOf(o, config, dir, rs, t, T, p) {
+    o.crew = crewFor(config, dir); o.fov = rs ? rs.fov : config.fov; o.door = ease(t / T.door); o.x = p.x; o.z = p.z; o.yaw = p.yaw;
+  }
+  const TITLE_IN = ["result", "pos", "driver", "sprint", "grid", "fastest"], TITLE = { r: null, text: "" };
   function titleNow(config, r) {
-    const m = TITLE;
-    if (m.r === r && m.result === config.result && m.pos === config.pos && m.driver === config.driver && m.sprint === config.sprint
-      && m.grid === config.grid && m.fastest === config.fastest) return m.text;
-    m.text = homeTitle(config, r);
-    m.r = r; m.result = config.result; m.pos = config.pos; m.driver = config.driver; m.sprint = config.sprint; m.grid = config.grid; m.fastest = config.fastest;
-    return m.text;
+    let same = TITLE.r === r;
+    for (let i = 0; same && i < 6; i++) same = TITLE[TITLE_IN[i]] === config[TITLE_IN[i]];
+    if (same) return TITLE.text;
+    TITLE.r = r;
+    for (let i = 0; i < 6; i++) TITLE[TITLE_IN[i]] = config[TITLE_IN[i]];
+    return (TITLE.text = homeTitle(config, r));
   }
   function poseIn(seconds, config, calm, dir, o) {
     const pair = o ? posePair(o) : null;
@@ -682,9 +674,8 @@ const GarageArrival = (function () {
       ? set3(AIM, Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)) : aimAt(cam, p, t < T.door, AIM);
     const rs = rig ? rigOn(rig, dir, t, end, T.door, p, config, side) : null;
     o.active = t < end; o.serviceTime = t - T.park; o.seconds = t; o.direction = "in"; o.sequence = dir; o.result = r ? config.result : null;
-    o.engine = !(r && r.pushed); o.side = side; o.calm = calm; o.camera = rig || cam; o.shot = n + 1; o.mood = lightFor(config, dir); o.cue = cueFor(config, dir); o.swell = lookNum(config, "swell", 1);
-    o.bars = !!config.bars; o.captions = config.captions !== false; o.rearLight = config.rearLight || "auto"; o.sound = config.sound !== false; o.crewClear = 1 - ease((t - (T.park - .3)) / .3); o.crew = crewFor(config, dir); o.fov = rs ? rs.fov : config.fov;
-    o.door = ease(t / T.door); o.x = p.x; o.z = p.z; o.yaw = p.yaw; o.label = label;
+    o.engine = !(r && r.pushed); o.side = side; o.calm = calm; o.camera = rig || cam; o.shot = n + 1; lookOf(o, config, dir);
+    o.crewClear = 1 - ease((t - (T.park - .3)) / .3); carOf(o, config, dir, rs, t, T, p); o.label = label;
     if (authored) {
       // Channels describe authored motion, not renderer readiness. The ground root
       // remains y=0; body pitch/heave belong on a separate body-only transform.
@@ -725,7 +716,6 @@ const GarageArrival = (function () {
     return o;
   }
   const KNOTS = new Array(6);
-  // Not inline: a closure in rigU gave it a context every frame (#5462).
   function keyedKnots(dir) {
     const c = settings({ angle: "left", enterCrew: "current", homeCrew: "current", result: "win" });
     return beatKnots(timeline(c, dir), duration(c, dir));
@@ -823,9 +813,8 @@ const GarageArrival = (function () {
       aim[0] -= cs * 2.2 * k;
     }
     o.active = t < end; o.serviceTime = t; o.seconds = t; o.direction = "out"; o.sequence = "out"; o.engine = true; o.side = side; o.calm = calm; o.camera = rig || cam;
-    o.shot = n + 1; o.mood = lightFor(config, "out"); o.cue = cueFor(config, "out"); o.swell = lookNum(config, "swell", 1); o.bars = !!config.bars; o.captions = config.captions !== false;
-    o.rearLight = config.rearLight || "auto"; o.sound = config.sound !== false;
-    o.crewClear = ease((t - (go - .3)) / .3); o.crew = crewFor(config, "out"); o.fov = rs ? rs.fov : config.fov; o.door = ease(t / T.door); o.x = p.x; o.z = p.z; o.yaw = p.yaw;
+    o.shot = n + 1; lookOf(o, config, "out");
+    o.crewClear = ease((t - (go - .3)) / .3); carOf(o, config, "out", rs, t, T, p);
     o.label = delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE";
     shot(o, e, aim, t, calm, config.height || 0, look, pair);
     look.config = null;
@@ -839,7 +828,6 @@ const GarageArrival = (function () {
   function wallNow() { try { return performance.now() / 1000; } catch (_) { return 0; } }
   function create($, reducedMotion, readSettings = () => DEFAULT, clock = wallNow) {
     let state = null, time = 0, config = DEFAULT, last = 0, dir = "in", posed = pose;
-    // One pose per sequence, refilled every frame (#5462).
     const own = { in: {}, home: {}, out: {} }, into = () => own[dir] || own.in;
     const root = $("carsetup"), panel = $("cs-inner"), controls = $("cs-stack");
     const overlay = $("cs-arrival"), skip = $("cs-arrival-skip"), label = $("cs-arrival-label");

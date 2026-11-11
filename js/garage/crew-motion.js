@@ -47,8 +47,7 @@ const GarageCrewMotion = (function () {
     for (const name of names) gfx.freeMesh(rig.mesh[name]);
     return names.length;
   }
-  // Lengths: Math.sqrt of the squares, not Math.hypot, whose V8 builtin copies its arguments into a
-  // fresh array per call (#5462; ~9 KB a SERVICE frame). Within an ulp of hypot at bay scales.
+  // sqrt, not Math.hypot: V8's makes an array per call (#5462).
   // Two-bone IK in the figure's YZ plane. Feet remain at Blender's authored
   // ground targets while knees bend; the same solver keeps arm lengths fixed.
   function joint(y, z, ty, tz, a, b, bend, out) {

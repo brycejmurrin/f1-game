@@ -108,7 +108,6 @@ const GarageCrewChoreo = (function () {
     gfx.draw(mesh, parent ? mul(p.w, parent, m) : m, opts);
   }
   // A unit +y tube stretched from a to b (member-local points turned by yaw).
-  // sqrt of the squares, not Math.hypot (a fresh argument array per call on V8; crew-motion.js).
   function spanTo(p, gfx, ox, oz, yaw, ax, ay, az, bx, by, bz, parent, opts) {
     const c = Math.cos(yaw), s = Math.sin(yaw), m = p.m;
     const x0 = ox + c * ax + s * az, z0 = oz - s * ax + c * az, x1 = ox + c * bx + s * bz, z1 = oz - s * bx + c * bz;
