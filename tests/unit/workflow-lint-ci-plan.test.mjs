@@ -61,8 +61,9 @@ function runWithFakeGh(script, { refusePr, env = {} }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-"));
   try {
     const log = path.join(dir, "gh.log");
-    fs.writeFileSync(path.join(dir, "gh"), `#!/bin/sh
-echo "GH_TOKEN=$GH_TOKEN $*" >> "${log}"
+    // One log line per call: a multi-line --body (#5520's template) is logged with its newlines escaped.
+    fs.writeFileSync(path.join(dir, "gh"), `#!/usr/bin/env bash
+line="GH_TOKEN=$GH_TOKEN $*"; printf '%s\\n' "\${line//$'\\n'/\\\\n}" >> "${log}"
 case "$1 $2" in
   "pr create") ${refusePr ? 'echo "pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)" >&2; exit 1' : "exit 0"} ;;
   "issue list") printf '%s' "$ISSUE_ROW"; exit 0 ;;
@@ -71,7 +72,7 @@ exit 0
 `, { mode: 0o755 });
     const r = spawnSync("bash", ["-c", `set -euo pipefail\n${script}`], { cwd: dir, encoding: "utf8",
       env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://x", GITHUB_RUN_ID: "1",
-        RUNNER_TEMP: dir, GIT_DIR: path.join(ROOT, ".git"), ISSUE_ROW: "", PR_TOKEN: "", GH_TOKEN: "default", ...env } });
+        RUNNER_TEMP: dir, GIT_DIR: path.join(ROOT, ".git"), GITHUB_WORKSPACE: ROOT, ISSUE_ROW: "", PR_TOKEN: "", GH_TOKEN: "default", ...env } });
     const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [];
     return { code: r.status, calls, out: r.stdout + r.stderr };
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -119,8 +120,10 @@ test("open-bot-pr: a refusal fails, dispatches CI and opens ONE issue; it re-pin
   assert.deepEqual(verbsOf(ok.calls), ["pr create", "workflow run"], "a default-token PR starts no CI, so CI is dispatched");
   const land = runWithFakeGh(run, { refusePr: false, env: { ...base, PR_TOKEN: "pat" } });
   assert.equal(land.code, 0, land.out);
-  assert.deepEqual(land.calls, ["GH_TOKEN=pat pr create --repo o/r --base claude/f1-game-project-26h3ng --head bot/x --title t --body b"],
-    "a LAND_TOKEN PR starts its own CI: no dispatch");
+  assert.equal(land.calls.length, 1, "a LAND_TOKEN PR starts its own CI: no dispatch");
+  assert.ok(land.calls[0].startsWith("GH_TOKEN=pat pr create --repo o/r --base claude/f1-game-project-26h3ng --head bot/x --title t --body "), land.calls[0]);
+  // #5520: the one-line body is wrapped in the template (tests/unit/bot-pr-body.test.mjs runs it through the gate's parser).
+  assert.ok(land.calls.join("\n").includes("## Plan"), "the PR opens with the template body");
 });
 
 test("selected-verdict reds a PR on a touched js dir with no coverage; the train only warns (ci-7d C7)", () => {
