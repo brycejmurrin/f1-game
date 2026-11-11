@@ -327,9 +327,11 @@ const Teams = (function () {
   const CTRL = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
   function cleanText(v, fb, n, upper) {
     if (typeof v !== "string") return fb;
-    let s = v.replace(CTRL, "").trim().slice(0, n).trim();
+    // Uppercase BEFORE the cut ("ß" grows to "SS") and cut by code point, so an
+    // emoji is never halved into a lone surrogate (#5046).
+    let s = v.replace(CTRL, "").trim();
     if (upper) s = s.toUpperCase();
-    return s || fb;
+    return Array.from(s).slice(0, n).join("").trim() || fb;
   }
   const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
   const fin = (v) => typeof v === "number" && Number.isFinite(v);

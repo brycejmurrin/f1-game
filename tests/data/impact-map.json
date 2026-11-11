@@ -3996,6 +3996,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-ui-lazy.test.mjs",
         "tests/unit/load-order.test.mjs",
@@ -4013,8 +4014,12 @@
       "openHub": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-ui-lazy.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
+      ],
+      "openOffers": [
+        "tests/unit/career-hub-spend.test.mjs"
       ],
       "openSlots": [
         "tests/unit/career-backup.test.mjs",
@@ -4470,9 +4475,11 @@
     },
     "js/career/custom-team.js": {
       "create": [
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs"
       ],
       "init": [
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs"
       ],
       "legendSeat": [
@@ -4482,6 +4489,7 @@
         "tests/unit/boot-input-shape.test.mjs"
       ],
       "openCustomize": [
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs"
       ],
       "syncCustomTeam": [
@@ -4520,6 +4528,7 @@
       ],
       "*": [
         "tests/unit/career-hire-rating.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ]
     },
@@ -6230,6 +6239,7 @@
       ],
       "sanitizeCustom": [
         "tests/unit/career-data-audio-improvements.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "*": [
@@ -17759,6 +17769,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-experience.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
+        "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",

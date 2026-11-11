@@ -236,6 +236,25 @@ prepareSite().then(() => srv.listen(0, "127.0.0.1", async () => {
       if (after.count < repairProbe.before) bad.push("offline repair probe deleted apex26-* caches");
       if (!after.names.includes(repairProbe.cache)) bad.push("offline repair probe lost the install cache name");
       await p1.reload({ waitUntil: "domcontentloaded" });
+      // The probe took js/game.js out of the install cache, and only this
+      // online reload puts it back: sw.js's fetch-miss `remember` hashes the
+      // body and cache.put()s it AFTER the page has its bytes. Closing the page
+      // at domcontentloaded and killing the server raced that write, so step 3
+      // went offline without js/game.js and read "the game did not boot offline
+      // at all" (Pages runs #5078 and #5081, 2 of the first 5 on the tip). Wait
+      // for the key the probe removed; a restore that never comes is its own
+      // failure, not a boot failure.
+      const restored = await p1.evaluate(async (name) => {
+        const t0 = Date.now();
+        for (let i = 0; i < 240; i++) {
+          const keys = await (await caches.open(name)).keys();
+          if (keys.some((r) => /\/js\/game\.js/.test(r.url))) return { ok: true, ms: Date.now() - t0, polls: i };
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        return { ok: false, ms: Date.now() - t0 };
+      }, repairProbe.cache).catch((e) => ({ ok: false, why: String(e.message).slice(0, 80) }));
+      console.log("repair probe restore:", JSON.stringify(restored));
+      if (!restored.ok) bad.push("js/game.js did not return to the precache after the online reload");
     }
     await p1.close();
 
@@ -292,7 +311,7 @@ prepareSite().then(() => srv.listen(0, "127.0.0.1", async () => {
                  presets: !!(window.LightPresets && Object.keys(window.LightPresets).length) };
       }).catch(() => got);
     }
-    console.log(`offline ${TRACK}: instanced=${got.instanced} (Node ${want})  TrackScenery=${got.hasScenery}  LightPresets=${got.presets}  pageErrors=${errs.length}`);
+    console.log(`offline ${TRACK}: instanced=${got.instanced} (Node ${want})  TrackScenery=${got.hasScenery}  LightPresets=${got.presets}  pageErrors=${errs.length}${errs.length ? " [" + errs.join(" | ") + "]" : ""}`);
     // COLD circuit offline vs the same circuit online: a bare build loses most
     // of its props, so this is a large, unambiguous gap, not a judgement call.
     if (got.instanced !== ref) bad.push(`OFFLINE BARE BUILD: ${TRACK} ${got.instanced} instanced offline vs ${ref} online`);

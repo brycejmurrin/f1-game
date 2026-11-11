@@ -312,20 +312,27 @@ const CustomTeam = (function () {
       }
       $("cz-cancel").onclick = () => { czClearPreview(); getEls().customize.hidden = true; };
       $("cz-save").onclick = () => {
-        const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
+        // Uppercase BEFORE the cut ("ß" grows to "SS") and cut by code point, so a
+        // CODE stays 3 wide and an emoji is never halved into a lone surrogate (#5046).
+        const clean = (v, fb, n, upper) => {
+          v = (v || "").trim(); if (upper) v = v.toUpperCase();
+          return Array.from(v).slice(0, n).join("").trim() || fb;
+        };
+        // SAVE edits the dialog's fields only: an imported team keeps its tier,
+        // engine and second driver (#5046).
         const prev = loadCustomTeam();
         const ct = {
-          id: "custom", engine: "Custom", tier: 2, custom: true,
+          ...prev, id: "custom", custom: true,
           name: clean($("cz-name").value, "My Team", 22),
-          short: clean($("cz-short").value, "YOU", 4).toUpperCase(),
+          short: clean($("cz-short").value, "YOU", 4, true),
           color: hexToRgb($("cz-color").value),
           color2: hexToRgb($("cz-color2").value),
           stats: prev.stats || DEFAULT_CUSTOM.stats,
           drivers: [{
             name: clean($("cz-driver").value, "Your Name", 22),
-            code: clean($("cz-code").value, "YOU", 3).toUpperCase(),
+            code: clean($("cz-code").value, "YOU", 3, true),
             num: clamp(Number.isFinite(parseInt($("cz-num").value, 10)) ? parseInt($("cz-num").value, 10) : 99, 0, 99),   // #0 is a number, not "blank"
-          }],
+          }, ...(Array.isArray(prev.drivers) ? prev.drivers.slice(1) : [])],
         };
         ct.livery = czLivFromDialog();
         identitySet("customTeam", ct);
