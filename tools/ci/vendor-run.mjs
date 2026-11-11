@@ -8,9 +8,12 @@
  *
  *   node tools/ci/vendor-run.mjs <codex|cursor|grok> --cwd DIR --prompt "…" [--write] [--timeout 600] [--model M]
  *   node tools/ci/vendor-run.mjs all --cwd DIR --prompt-file FILE        (each in turn, one JSON line each)
- * `claude` runs the Claude CLI under ANOTHER account: APEX_CLAUDE_CONFIG_DIR names that account's config directory
- * (`CLAUDE_CONFIG_DIR=<dir> claude auth login` once), and every variable of the hosting session (CLAUDE_CODE_*,
- * CLAUDECODE, ANTHROPIC_*) is dropped so the child never inherits the host's identity. Without it `claude` is refused.
+ * `claude` runs the Claude CLI under ANOTHER account, never the hosting session's. Give it one of:
+ *   APEX_CLAUDE_B_OAUTH_TOKEN  a `claude setup-token` token of that account, saved by Bryce in the cloud environment
+ *   APEX_CLAUDE_CONFIG_DIR     that account's config directory (`CLAUDE_CONFIG_DIR=<dir> claude auth login` once)
+ * Every variable of the hosting session (CLAUDE_*, ANTHROPIC_*, CCR_*) is dropped from the child. Codex reads its
+ * sign-in from APEX_CODEX_HOME when set; APEX_CODEX_AUTH_JSON_B64 (base64 of auth.json, saved the same way) seeds
+ * that directory once when it holds no auth.json. No value of any of these is ever printed.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -25,6 +28,7 @@ export const RUNNERS = Object.freeze({
       "-C", cwd, "-o", lastFile, ...(model ? ["-m", model] : []), "-"],
     stdin: true,
     text: ({ lastFile }) => fs.existsSync(lastFile) ? fs.readFileSync(lastFile, "utf8") : "",
+    env: codexEnv,
   },
   cursor: {
     bins: ["cursor-agent", "agent"],
@@ -47,16 +51,31 @@ export const RUNNERS = Object.freeze({
   },
 });
 
-/** The child env for a second Claude account: its own config dir, none of the hosting session's identity. */
-export function secondAccountEnv(env) {
-  const dir = env.APEX_CLAUDE_CONFIG_DIR;
-  if (!dir) throw new Error("claude needs APEX_CLAUDE_CONFIG_DIR (the second account's config directory)");
+/** The child env for a second Claude account: its own token or config dir, none of the hosting session's identity. */
+export function secondAccountEnv(env, { tmpDir } = {}) {
+  const token = env.APEX_CLAUDE_B_OAUTH_TOKEN, dir = env.APEX_CLAUDE_CONFIG_DIR;
+  if (!token && !dir) throw new Error("claude needs APEX_CLAUDE_B_OAUTH_TOKEN or APEX_CLAUDE_CONFIG_DIR (the second account)");
   const out = {};
   for (const [k, v] of Object.entries(env)) {
-    if (/^(CLAUDE_CODE_|CLAUDECODE$|CLAUDE_|ANTHROPIC_|CCR_|APEX_CLAUDE_)/.test(k)) continue;
+    if (/^(CLAUDE_|CLAUDECODE$|ANTHROPIC_|CCR_|APEX_CLAUDE_|APEX_CODEX_)/.test(k)) continue;
     out[k] = v;
   }
-  out.CLAUDE_CONFIG_DIR = dir;
+  if (dir) out.CLAUDE_CONFIG_DIR = dir;
+  else { out.CLAUDE_CONFIG_DIR = path.join(tmpDir, "claude-b-config"); out.CLAUDE_CODE_OAUTH_TOKEN = token; }
+  return out;
+}
+
+/** Codex child env: APEX_CODEX_HOME selects the sign-in directory; a saved auth.json seeds it once, mode 0600. */
+export function codexEnv(env) {
+  const home = env.APEX_CODEX_HOME;
+  if (!home) return env;
+  const auth = path.join(home, "auth.json");
+  if (env.APEX_CODEX_AUTH_JSON_B64 && !fs.existsSync(auth)) {
+    fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(auth, Buffer.from(env.APEX_CODEX_AUTH_JSON_B64, "base64"), { mode: 0o600 });
+  }
+  const out = { ...env, CODEX_HOME: home };
+  delete out.APEX_CODEX_AUTH_JSON_B64; delete out.APEX_CLAUDE_B_OAUTH_TOKEN;
   return out;
 }
 
@@ -113,7 +132,7 @@ export async function runVendor(vendor, { cwd, prompt, write = false, model = nu
   const t0 = Date.now();
   let res = { code: 127, out: "" };
   try {
-    const childEnv = r.env ? r.env(env) : env;
+    const childEnv = r.env ? r.env(env, { tmpDir: dir }) : env;
     for (const bin of r.bins) {
       res = await spawnImpl(bin, r.argv(ctx), { cwd: ctx.cwd, input: r.stdin ? prompt : null, timeoutMs, env: childEnv });
       if (res.code !== 127) break;
@@ -135,7 +154,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     write: argv.includes("--write"), model: flag(argv, "--model") || null,
     timeoutMs: Number(flag(argv, "--timeout") || 600) * 1000, ...deps };
   const env = opts.env || process.env;
-  const names = which === "all" ? Object.keys(RUNNERS).filter((n) => n !== "claude" || env.APEX_CLAUDE_CONFIG_DIR) : [which];
+  const names = which === "all" ? Object.keys(RUNNERS).filter((n) => n !== "claude" || env.APEX_CLAUDE_CONFIG_DIR || env.APEX_CLAUDE_B_OAUTH_TOKEN) : [which];
   const rows = [];
   for (const n of names) { const row = await runVendor(n, opts); rows.push(row); if (deps.onRow) deps.onRow(row); }
   return rows;

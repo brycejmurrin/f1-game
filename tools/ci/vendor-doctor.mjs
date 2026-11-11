@@ -91,11 +91,21 @@ export async function checkVendor(name, { run = runBin, fetchImpl = globalThis.f
   return row;
 }
 
+/** Which saved sign-ins the runner (vendor-run.mjs) will find: variable NAMES and booleans only. */
+export function savedSignIns(env = process.env) {
+  const has = (k) => Boolean(env[k]);
+  return { vendor: "saved", claudeB: has("APEX_CLAUDE_B_OAUTH_TOKEN") ? "APEX_CLAUDE_B_OAUTH_TOKEN" : has("APEX_CLAUDE_CONFIG_DIR") ? "APEX_CLAUDE_CONFIG_DIR" : null,
+    codex: has("APEX_CODEX_AUTH_JSON_B64") ? "APEX_CODEX_AUTH_JSON_B64" : has("APEX_CODEX_HOME") ? "APEX_CODEX_HOME" : null,
+    next: [...(has("APEX_CLAUDE_B_OAUTH_TOKEN") || has("APEX_CLAUDE_CONFIG_DIR") ? [] : ["second Claude account: save a `claude setup-token` token as APEX_CLAUDE_B_OAUTH_TOKEN in the cloud environment"]),
+      ...(has("APEX_CODEX_AUTH_JSON_B64") || has("APEX_CODEX_HOME") ? [] : ["codex: save base64 of ~/.codex/auth.json as APEX_CODEX_AUTH_JSON_B64 and set APEX_CODEX_HOME, or `codex login --device-auth` each session"])] };
+}
+
 export async function main(argv = process.argv.slice(2), deps = {}) {
   const i = argv.indexOf("--only");
   const names = i >= 0 ? String(argv[i + 1] || "").split(",").filter(Boolean) : Object.keys(VENDORS);
   const rows = [];
   for (const name of names) rows.push(await checkVendor(name, deps));
+  if (i < 0) rows.push(savedSignIns(deps.env || process.env));
   return rows;
 }
 

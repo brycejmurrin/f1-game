@@ -4,7 +4,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { VENDORS, checkVendor, main, scrub } from "../../tools/ci/vendor-doctor.mjs";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { VENDORS, checkVendor, main, scrub, savedSignIns } from "../../tools/ci/vendor-doctor.mjs";
+import { secondAccountEnv, codexEnv, runVendor } from "../../tools/ci/vendor-run.mjs";
 
 const SECRET = "xai-ABCDEFGHIJKLMNOPQRSTUVWX";
 const fakeRun = (table) => async (bin, argv) => table[`${bin} ${argv.join(" ")}`] ?? { code: 127, out: "" };
@@ -67,4 +71,54 @@ test("main honours --only and rejects an unknown vendor", async () => {
   const rows = await main(["--only", "claude"], { env: {}, run: fakeRun({ "claude --version": { code: 0, out: "2.1.322 (Claude Code)" }, "claude auth status": { code: 0, out: '{"loggedIn": true}' } }), fetchImpl: null });
   assert.deepEqual(rows.map((r) => [r.vendor, r.version, r.login]), [["claude", "2.1.322", true]]);
   await assert.rejects(main(["--only", "gemini"], { env: {}, run: fakeRun({}), fetchImpl: null }), /unknown vendor: gemini/);
+});
+
+test("savedSignIns reports variable names, never values", () => {
+  const row = savedSignIns({ APEX_CLAUDE_B_OAUTH_TOKEN: SECRET, APEX_CODEX_HOME: "/x" });
+  assert.deepEqual([row.claudeB, row.codex, row.next], ["APEX_CLAUDE_B_OAUTH_TOKEN", "APEX_CODEX_HOME", []]);
+  assert.ok(!JSON.stringify(row).includes(SECRET));
+  assert.equal(savedSignIns({}).next.length, 2);
+});
+
+test("the second-account env drops the host session's identity and carries the saved token only to the child", () => {
+  const host = { PATH: "/bin", CLAUDE_CODE_REMOTE: "1", CLAUDECODE: "1", ANTHROPIC_BASE_URL: "https://x", CCR_X: "1", CLAUDE_CODE_OAUTH_TOKEN: "host-token" };
+  assert.throws(() => secondAccountEnv(host, { tmpDir: "/t" }), /APEX_CLAUDE_B_OAUTH_TOKEN or APEX_CLAUDE_CONFIG_DIR/);
+  const byToken = secondAccountEnv({ ...host, APEX_CLAUDE_B_OAUTH_TOKEN: SECRET }, { tmpDir: "/t" });
+  assert.deepEqual(Object.keys(byToken).sort(), ["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "PATH"]);
+  assert.equal(byToken.CLAUDE_CODE_OAUTH_TOKEN, SECRET);
+  assert.equal(byToken.CLAUDE_CONFIG_DIR, path.join("/t", "claude-b-config"));
+  const byDir = secondAccountEnv({ ...host, APEX_CLAUDE_CONFIG_DIR: "/b" }, { tmpDir: "/t" });
+  assert.deepEqual([byDir.CLAUDE_CONFIG_DIR, byDir.CLAUDE_CODE_OAUTH_TOKEN], ["/b", undefined]);
+});
+
+test("codexEnv seeds auth.json once at 0600 and never passes the saved secrets on", () => {
+  const home = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-")), "codex");
+  const b64 = Buffer.from('{"tokens":{}}').toString("base64");
+  const env = codexEnv({ PATH: "/bin", APEX_CODEX_HOME: home, APEX_CODEX_AUTH_JSON_B64: b64, APEX_CLAUDE_B_OAUTH_TOKEN: SECRET });
+  assert.equal(env.CODEX_HOME, home);
+  assert.equal(env.APEX_CODEX_AUTH_JSON_B64, undefined);
+  assert.equal(env.APEX_CLAUDE_B_OAUTH_TOKEN, undefined);
+  assert.equal(fs.readFileSync(path.join(home, "auth.json"), "utf8"), '{"tokens":{}}');
+  assert.equal(fs.statSync(path.join(home, "auth.json")).mode & 0o777, 0o600);
+  fs.writeFileSync(path.join(home, "auth.json"), "refreshed");
+  codexEnv({ APEX_CODEX_HOME: home, APEX_CODEX_AUTH_JSON_B64: b64 });
+  assert.equal(fs.readFileSync(path.join(home, "auth.json"), "utf8"), "refreshed", "a refreshed sign-in is never overwritten");
+  assert.deepEqual(codexEnv({ PATH: "/bin" }), { PATH: "/bin" });
+});
+
+test("runVendor builds read-only argv per vendor, scrubs the answer and reports a missing CLI", async () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-cwd-"));
+  const seen = [];
+  const spawnImpl = async (bin, argv, o) => { seen.push([bin, argv, o.env]); return { code: 0, out: JSON.stringify({ result: `hi ${SECRET} someone@example.com` }) }; };
+  const row = await runVendor("claude", { cwd, prompt: "q", env: { PATH: "/bin", CLAUDE_CODE_REMOTE: "1", APEX_CLAUDE_B_OAUTH_TOKEN: SECRET }, spawnImpl });
+  assert.deepEqual([row.ok, row.text], [true, "hi <key> <email>"]);
+  assert.deepEqual(seen[0][1].slice(0, 6), ["-p", "q", "--output-format", "json", "--permission-mode", "plan"]);
+  assert.equal(seen[0][2].CLAUDE_CODE_REMOTE, undefined);
+  const cur = await runVendor("cursor", { cwd, prompt: "q", env: {}, spawnImpl });
+  assert.ok(seen.at(-1)[1].includes("ask") && !seen.at(-1)[1].includes("--force"), "read-only is the default");
+  assert.equal(cur.ok, true);
+  const gone = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 127, out: "" }) });
+  assert.deepEqual([gone.ok, gone.error], [false, "cli_not_found"]);
+  await assert.rejects(runVendor("codex", { cwd: "/nope", prompt: "q" }), /existing directory/);
+  assert.equal(fs.readdirSync(cwd).length, 0, "the temp directory is removed");
 });
