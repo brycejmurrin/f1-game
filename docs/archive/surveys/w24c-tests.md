@@ -13,7 +13,7 @@ Device Farm test types so profiling is better. This file is the **tests** lane:
 concrete new or extended tests ranked by impact on catching phone memory /
 frame-time regressions earlier.
 
-Inventory: generated [`docs/TESTING-COVERAGE.md`](../../TESTING-COVERAGE.md).
+Inventory: generated `docs/TESTING-COVERAGE.md` (built into `artifacts/` since 2026-11-10).
 Prior art (do not re-propose as missing): I-1/I-2 mem-census +
 `track-switch-memory`; race-cycle `aliveTracks` gate; M-4 / M-4a soundtrack
 stream + song-change unit pins (`tests/unit/audio-sample-upgrade.test.mjs`);
