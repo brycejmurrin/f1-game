@@ -190,6 +190,8 @@ const XROpts = (function () {
       hostParent.appendChild(wrap);
     }
     _host = wrap;
+    // Boots read apex26.xrCaps; this page is the one re-ask (#5417).
+    if (typeof SettingsNav !== "undefined") SettingsNav.onEnter((id) => { if (id === "display") XrBoot.recheck(); });
   }
 
   if (typeof document !== "undefined") {

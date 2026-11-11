@@ -305,3 +305,31 @@ for (const curvature of [0, 0.01]) {
     });
   }
 }
+
+// #2501: startline-probe candidate and calibration validation.
+test("startline-probe --frac takes only <id>=<frac in [0,1)>, and --calibrate can fail", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { parseCandidates, calibration, KNOWN_T1 } = require(path.join(ROOT, "tools", "track", "startline-probe.cjs"));
+  const ok = parseCandidates(["monza", "--frac", "spa=0.25", "monza=0", "--json", "--frac=imola=0.5"]);
+  assert.deepEqual(ok.candidates, { spa: 0.25, monza: 0, imola: 0.5 });
+  assert.deepEqual([...ok.fracTok].sort(), [2, 3, 5]);
+  assert.equal(parseCandidates(["monza"]).candidates, null);
+  for (const bad of [["--frac", "spa="], ["--frac", "spa=0.4x"], ["--frac", "spa=1"], ["--frac", "spa=-0.1"],
+    ["--frac", "spa"], ["--frac=spa=NaN"], ["--frac"], ["--frac", "--json"]]) {
+    assert.throws(() => parseCandidates(bad), /--frac/, bad.join(" "));
+  }
+  const row = (id, hand) => ({ id, now: { apex: { hand, k: 0.01, distM: 100 } } });
+  const [a, b] = Object.entries(KNOWN_T1);
+  assert.equal(calibration([row(a[0], a[1]), row(b[0], b[1])]).ok, true);
+  const flipped = calibration([row(a[0], a[1] === "LEFT" ? "RIGHT" : "LEFT"), row(b[0], b[1])]);
+  assert.deepEqual([flipped.ok, flipped.hit, flipped.seen], [false, 1, 2]);
+  const none = calibration([row("not_a_calibration_circuit", "LEFT")]);
+  assert.deepEqual([none.ok, none.seen], [false, 0], "a sweep with no calibration circuit has calibrated nothing");
+  // The CLIs refuse before building a circuit.
+  const run = (f, args) => spawnSync(process.execPath, [path.join(ROOT, "tools", "track", f), ...args], { encoding: "utf8", timeout: 20000 });
+  const r1 = run("startline-probe.cjs", ["--frac", "monza=abc"]);
+  assert.equal(r1.status, 2, r1.stderr); assert.match(r1.stderr, /--frac monza=abc/);
+  const r2 = run("startline-snap.cjs", ["--json", "monzza"]);
+  assert.equal(r2.status, 2, r2.stderr); assert.equal(r2.stdout, "", "no JSON for a circuit nobody checked");
+  assert.match(r2.stderr, /no located start line for monzza/);
+});
