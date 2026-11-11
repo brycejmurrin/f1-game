@@ -12,8 +12,9 @@
 //   node tools/perf/first-race-census.mjs [--track monza] [--tod day] [--lap 100] [--cam helmet] [--no-lavapipe] [--go] [--cpu]
 //        [--ls "apex26.k=v ..."] [--json artifacts/perf/first-race-census.json]
 //
-// Output: `= first-race-census track=… api=… warm=… pre=N post=M sync=S misses=K dist=…m` and one line per pipeline built
-// after lights-out: `  +<s> <state> key=<matCache key|-> <obj> <mat> rt=<target> sx=<±1> attrs=<…> <build ms>`.
+// Output: `= first-race-census track=… api=… warm=… pre=N post=M sync=S misses=K dist=…m docs=D navigations=N` and one line per pipeline built
+// after lights-out: `  +<s> <state> key=<matCache key|-> <obj> <mat> rt=<target> sx=<±1> attrs=<…> <build ms>`. A run whose final
+// read finds no hook prints `= first-race-census FAILED hookLost …` and exits 1.
 import { startStaticServer, launchChromium, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { gotoGame } from "../shot/probe-page.mjs";
 import { raceGate } from "../lib/census-entry.mjs";
@@ -91,6 +92,56 @@ export function hookFrames(cpu) {
   return "ok";
 }
 
+// Init-script body (#5283): the hooks used to go in with a one-shot page.evaluate after boot, so a reload between
+// the hook and the final read (race entry, a boot-guard repair) dropped window.__frc and the read threw. As an init
+// script they re-install in every document once GLX.__tlx / PerfSpans exist, and a document's pipelines are carried
+// over a reload in sessionStorage (pagehide) so window.__frcPrev lists the earlier documents.
+export function installScript(cpu) {
+  return `(() => {
+  const hookPipelines = ${hookPipelines.toString()};
+  const hookFrames = ${hookFrames.toString()};
+  const KEY = "apex26.frcPrev";
+  try { window.__frcPrev = JSON.parse(sessionStorage.getItem(KEY) || "[]"); } catch (_) { window.__frcPrev = []; }
+  addEventListener("pagehide", () => { try { const P = window.__frc;
+    if (P) sessionStorage.setItem(KEY, JSON.stringify([...window.__frcPrev, { url: location.href, hook: window.__frcHook || null, pipes: P.pipes, lightsAt: P.lightsAt }])); } catch (_) { /* quota: best-effort */ } });
+  let pipesOk = false, framesOk = false, tries = 0;
+  (function tryHook() {   // every 50 ms until both hook, for at most ~4 min (the boot's own ceiling is 180 s)
+    try { if (!pipesOk) { const r = hookPipelines(); if (r.startsWith("ok")) { pipesOk = true; window.__frcHook = r; } } } catch (_) { /* booting */ }
+    try { if (!framesOk) { const r = hookFrames(${cpu ? "true" : "false"}); framesOk = r === "ok" || !!window.__frcFrames; } } catch (_) { /* booting */ }
+    if ((!pipesOk || !framesOk) && ++tries < 4800) setTimeout(tryHook, 50);
+  })();
+})();`;
+}
+
+/** The console summary and exit code of one run. A run whose final read found no window.__frc is hookLost: a failed
+ * census, never "0 late pipelines" (#5283). Pure: the unit test runs it. */
+export function summarize(r, o) {
+  const post = r.post || {};
+  const hookLost = !Array.isArray(post.pipes);
+  const docs = [...(post.prev || []), { pipes: post.pipes || [], lightsAt: post.lightsAt }];
+  const all = docs.flatMap((d) => d.pipes || []);
+  const late = [], groups = [];
+  for (const d of docs) { const x = latePipelines(d.pipes, d.lightsAt); late.push(...x.late); groups.push(...x.groups.map((g) => ({ ...g, lightsAt: d.lightsAt }))); }
+  const missNew = (post.matMissKeys || []).filter((k) => !((r.pre || {}).matMissKeys || []).includes(k));
+  const navs = (r.navigations || []).length;
+  const lines = [];
+  lines.push(`= first-race-census${hookLost ? " FAILED hookLost" : ""} track=${o.track} tod=${o.tod || "default"} hook=${r.hook} lavapipe=${o.lavapipe} ` +
+    `pre=${all.length - late.length} post=${late.length} sync=${late.filter((p) => !p.async).length} groups=${groups.length} misses=${missNew.length} dist=${post.dist}m` +
+    ` docs=${docs.length} navigations=${navs}` +
+    // matMiss / matEvict deltas over the lap: an evicted warm material is re-minted as a NEW identity, so its pipelines build again.
+    (r.pre && r.pre.mat && post.mat ? ` matMiss=+${post.mat[1] - r.pre.mat[1]} matEvict=+${post.mat[2] - r.pre.mat[2]} (pre ${r.pre.mat.join("/")})` : ""));
+  if (hookLost) lines.push("  hookLost: the final read found no window.__frc (the document was replaced and the hook did not re-install); navigations: " +
+    JSON.stringify(r.navigations || []));
+  for (const p of groups) lines.push(`  +${((p.at - (p.lightsAt || p.at)) / 1000).toFixed(1)}s x${p.n} ${p.state} key=${p.key || "-"} ${p.obj} ${p.mat} ` +
+    `rt=${p.rt} sx=${p.sx} tr=${p.transparent} attrs=${p.attrs}${p.indexed ? " idx" : ""} ${p.ms}ms${p.async ? " async" : ""}`);
+  for (const k of missNew) lines.push(`  miss ${k}`);
+  const fr = post.frames;
+  if (fr) for (const [i, row] of [...fr.count.slice(-3), ...fr.race.slice(0, 6)].entries()) lines.push(`  frame ${i} ${row[0]} ${row[1]}ms ${JSON.stringify(row[2])}`);
+  if (r.profiles) lines.push("profiles: " + r.profiles.join(" ") + "  (node tools/perf/cpuprofile-summary.mjs <file>)");
+  lines.push("json: " + o.json);
+  return { hookLost, lines, exitCode: hookLost ? 1 : 0 };
+}
+
 /** The pipelines built after lights-out (state "race"), grouped by what a pre-mint keys on. Pure: the unit test runs it. */
 export function latePipelines(pipes, lightsAt) {
   const late = (pipes || []).filter((p) => p.state === "race" || (lightsAt != null && p.at >= lightsAt));
@@ -120,13 +171,19 @@ async function run(o) {
       for (const [k, v] of ls) localStorage.setItem(k, v);
     }, o.ls);
     await page.addInitScript(driver);
-    await gotoGame(page, server.url, 180000);
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.renderer, null, { polling: 200, timeout: 180000 });
-    out.hook = await page.evaluate(hookPipelines);
+    await page.addInitScript({ content: installScript(o.cpu) });
+    // Every main-frame navigation, so a reload between the hook and the final read is named, not guessed (#5283).
+    const t0 = Date.now();
+    out.navigations = [];
+    page.on("framenavigated", (f) => { if (f === page.mainFrame()) out.navigations.push({ atMs: Date.now() - t0, url: f.url() }); });
     const profs = {};
     if (o.cpu) { const cdp = await ctx.newCDPSession(page); await cdp.send("Profiler.enable"); await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
       cdp.on("Profiler.consoleProfileFinished", (e) => { profs[e.title] = e.profile; }); }
-    out.hookFrames = await page.evaluate(hookFrames, o.cpu);
+    await gotoGame(page, server.url, 180000);
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.renderer, null, { polling: 200, timeout: 180000 });
+    // The init script hooks once the backend exists; a TLX without createRenderPipeline never reports ok.
+    out.hook = await page.waitForFunction(() => window.__frcHook, null, { polling: 100, timeout: 10000 }).then((h) => h.jsonValue()).catch(() => "no three backend");
+    out.hookFrames = await page.evaluate(() => (window.__frcFrames ? "ok" : "no PerfSpans"));
     // The device's entry (devicefarm-iphone.mjs KICK_API): race() and the lights run out on their own. --go skips the
     // countdown, so state is "race" before the entry warm even starts and every warm build reads as post-lights.
     await page.evaluate(async ([t, tod, cam, go]) => { const A = window.__apex; await (tod ? A.race(t, tod, "dry") : A.race(t, undefined, "dry"));
@@ -140,9 +197,10 @@ async function run(o) {
     await page.evaluate(() => window.__lfDrive.stop());
     if (o.cpu) { mkdirSync("artifacts/profiles", { recursive: true });
       out.profiles = Object.entries(profs).map(([k, p]) => { const f = `artifacts/profiles/first-race-${k}.cpuprofile`; writeFileSync(f, JSON.stringify(p)); return f; }); }
-    out.post = await page.evaluate(() => { const P = window.__frc; let ms = null; try { ms = GLX.__tlx.memState(); } catch (_) { /* none */ }
-      return { pipes: P.pipes, lightsAt: P.lightsAt, dist: Math.round(window.__lfDrive.dist), off: window.__lfDrive.off, err: window.__lfDrive.err, matMissKeys: ms && ms.matMissKeys, frames: window.__frcFrames || null,
-        mat: ms && [ms.matHit, ms.matMiss, ms.matEvict] }; });
+    out.post = await page.evaluate(() => { const P = window.__frc || null, D = window.__lfDrive || {}; let ms = null; try { ms = GLX.__tlx.memState(); } catch (_) { /* none */ }
+      // No P = the hook is lost: pipes stays null so summarize() fails the census instead of printing post=0.
+      return { pipes: P ? P.pipes : null, lightsAt: P ? P.lightsAt : null, prev: window.__frcPrev || [], dist: Math.round(D.dist || 0), off: D.off, err: D.err,
+        matMissKeys: ms && ms.matMissKeys, frames: window.__frcFrames || null, mat: ms && [ms.matHit, ms.matMiss, ms.matEvict] }; });
   } finally {
     mkdirSync(path.dirname(o.json), { recursive: true });
     writeFileSync(o.json, JSON.stringify(out, null, 1));
@@ -155,20 +213,9 @@ async function run(o) {
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const r = await run(o);
-  const post = r.post || {}, pipes = post.pipes || [];
-  const { late, groups } = latePipelines(pipes, post.lightsAt);
-  const missNew = (post.matMissKeys || []).filter((k) => !((r.pre || {}).matMissKeys || []).includes(k));
-  console.log(`= first-race-census track=${o.track} tod=${o.tod || "default"} hook=${r.hook} lavapipe=${o.lavapipe} pre=${pipes.length - late.length} ` +
-    `post=${late.length} sync=${late.filter((p) => !p.async).length} groups=${groups.length} misses=${missNew.length} dist=${post.dist}m` +
-    // matMiss / matEvict deltas over the lap: an evicted warm material is re-minted as a NEW identity, so its pipelines build again.
-    (r.pre && r.pre.mat && post.mat ? ` matMiss=+${post.mat[1] - r.pre.mat[1]} matEvict=+${post.mat[2] - r.pre.mat[2]} (pre ${r.pre.mat.join("/")})` : ""));
-  for (const p of groups) console.log(`  +${((p.at - (post.lightsAt || p.at)) / 1000).toFixed(1)}s x${p.n} ${p.state} key=${p.key || "-"} ${p.obj} ${p.mat} ` +
-    `rt=${p.rt} sx=${p.sx} tr=${p.transparent} attrs=${p.attrs}${p.indexed ? " idx" : ""} ${p.ms}ms${p.async ? " async" : ""}`);
-  for (const k of missNew) console.log(`  miss ${k}`);
-  const fr = post.frames;
-  if (fr) for (const [i, row] of [...fr.count.slice(-3), ...fr.race.slice(0, 6)].entries()) console.log(`  frame ${i} ${row[0]} ${row[1]}ms ${JSON.stringify(row[2])}`);
-  if (r.profiles) console.log("profiles: " + r.profiles.join(" ") + "  (node tools/perf/cpuprofile-summary.mjs <file>)");
-  console.log("json: " + o.json);
+  const { lines, exitCode } = summarize(r, o);
+  for (const l of lines) console.log(l);
+  if (exitCode) process.exitCode = exitCode;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(e); process.exit(1); });

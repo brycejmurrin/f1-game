@@ -529,6 +529,7 @@
       "kind": "node",
       "files": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/asset-credits.test.mjs",
         "tests/unit/audio-mix-improvements.test.mjs",
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
@@ -658,7 +659,8 @@
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",
-        "tests/unit/followup-platform.test.mjs"
+        "tests/unit/followup-platform.test.mjs",
+        "tests/unit/notices.test.mjs"
       ],
       "twinned": false
     },
@@ -1592,6 +1594,7 @@
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/settings-search.test.mjs",
@@ -2495,7 +2498,7 @@
     {
       "path": "js/career/career-backup.js",
       "global": "CareerBackup",
-      "roster": "tag"
+      "roster": "LAZY_CAREER_UI"
     },
     {
       "path": "js/career/career-planning-ui.js",
@@ -3805,12 +3808,12 @@
     {
       "path": "js/perf/bench-capture.js",
       "global": "BenchCapture",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/bench-run.js",
       "global": "BenchRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/gfx-debug-overlay.js",
@@ -3830,7 +3833,7 @@
     {
       "path": "js/perf/gpu-test-run.js",
       "global": "GpuTestRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/loop-health.js",
@@ -3855,7 +3858,7 @@
     {
       "path": "js/perf/phone-recorder.js",
       "global": "PhoneRecorder",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/quality-preset.js",
@@ -3880,7 +3883,7 @@
     {
       "path": "js/perf/soak-run.js",
       "global": "SoakRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/spans.js",
