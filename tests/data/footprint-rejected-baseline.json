@@ -1,11 +1,5 @@
 {
-  "_why": "Shrink-only: non-pit \"footprint rejected\" modelGroups per circuit (tools/track/footprint-rejected.cjs). A new id fails; a landed id must be removed (--all --update). Measured 2026-11-10.",
-  "interlagos": [
-    "interlagos-arq-senna",
-    "interlagos-crowd-905",
-    "interlagos-crowd-921",
-    "interlagos-favela-17"
-  ],
+  "_why": "Shrink-only: non-pit \"footprint rejected\" modelGroups per circuit (tools/track/footprint-rejected.cjs). A new id fails; a landed id must be removed (--all --update). Measured 2026-11-10. 2026-11-11: interlagos's four rows removed \u2014 the tip's Interlagos fix lands arq-senna, favela-17, crowd-905 and crowd-921.",
   "jeddah": [
     "kit:jeddah:pit-building"
   ],
