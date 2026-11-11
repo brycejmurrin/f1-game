@@ -4,7 +4,12 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "spa",
-    pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
+    // The pit complex (TrackPit) is on the driver's RIGHT of the main straight:
+    // FIA "2026 Belgian Grand Prix - Competition Notes - Circuit Map, Pit Lane
+    // Drawing, Emergency Exits Map and Red Zone" (v4, 16.07.26) — the pit lane
+    // leaves at the Bus Stop, runs inside the start straight and rejoins inside
+    // La Source; the drawing puts the F1 garages on the far side of the lane.
+    pit: { side: 1 },
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.9 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -59,18 +64,21 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors/turns: sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.28, 0.68],
-    // 2025 Belgian GP map (Formula 1; event 25–27 July, consulted 2026-10-19):
-    // https://www.formula1.com/en/racing/2025/belgium
-    // Nineteen physical bends: Eau Rouge/Raidillon 2L/3R/4L, Les Combes
-    // 5R/6L/7R, Bruxelles 8R, Pouhon 10L/11L, Fagnes 12R/13L,
-    // Stavelot 14R/15R, Blanchimont 16L/17L, Bus Stop 18R/19L.
-    // Stations identify bends on the existing built trace, not surveyed GPS
-    // apex coordinates. Keep the road, elevation and authored bank centres.
-    turns: [0.0350, 0.1307, 0.1430, 0.1615, 0.3260, 0.3370, 0.3595, 0.4168, 0.4500, 0.5225, 0.5567, 0.6230, 0.6505, 0.6855, 0.7150, 0.8152, 0.8653, 0.9435, 0.9515],
+    // turns: FIA 2026 event-map numbering — "2026 Belgian Grand Prix -
+    // Competition Notes - Circuit Map, Pit Lane Drawing, Emergency Exits Map
+    // and Red Zone" (FIA decision document, v4 issued 16.07.26), p.2, 19
+    // corners: La Source 1R, Eau Rouge/Raidillon 2L/3R/4L, Les Combes
+    // 5R/6L/7R, Bruxelles 8R, 9L, Pouhon 10L/11L, Fagnes 12R/13L, 14R/15R,
+    // Blanchimont 16L/17L, Bus Stop 18R/19L. One apex per FIA corner, each
+    // the built centreline's |curvature| peak for that bend (not surveyed GPS).
+    // T8 Bruxelles stays on its 0.4168 station (the corner's other curvature
+    // peak, 0.4105, is 44 m away; tests/specs/spa-foundation.spec.js pins the
+    // station matched to the F1 map within 25 m).
+    turns: [0.0351, 0.1307, 0.1434, 0.1618, 0.3258, 0.3374, 0.3598, 0.4168, 0.4502, 0.5227, 0.5567, 0.6200, 0.6505, 0.6857, 0.7150, 0.8152, 0.8653, 0.9436, 0.9516],
     furniture: { tree: "fir", bakedPines: true, fol: [0.14, 0.31, 0.21], lamp: "none" },  // shared authored/forest pine registry
     kit: { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["darkSteel", "steel", "concrete"],

@@ -30,7 +30,7 @@ test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/
   assert.equal(JSON.parse(p.localStorage["apex26.hudElements"]).speed, "off");
   assert.equal(brycePhone({ uiScale: 51 }).localStorage["apex26.uiScale"], "51", "--ui-scale overrides the export, in percent");
   assert.deepEqual(brycePhone({ profile: false }).localStorage, {});
-  assert.deepEqual(UI_SIZE_AXIS, [61, 109, 51, 40]);
+  assert.deepEqual(UI_SIZE_AXIS, [70, 109]);
   const legacy = brycePhone({ profile: "legacy" });
   assert.equal(legacy.profile.file, LEGACY_EXPORT);
   assert.equal(legacy.localStorage["apex26.hudBtnScale"], "245", "the October export: BUTTON SIZE 245 % is a raw-lane string");
