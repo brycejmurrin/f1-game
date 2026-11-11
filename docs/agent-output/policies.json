@@ -471,6 +471,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/ci/apt-cached-install.sh": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "GitHub ::error::/::warning:: lines verbatim; the distinct mirror-unreachable text; exit 3 vs 1; populated=1 to GITHUB_OUTPUT"
+    },
     "tools/ci/assert-audit.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
