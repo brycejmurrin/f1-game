@@ -68,7 +68,8 @@ test("ai-ratings.mjs --json: craft/awareness/consistency are decorrelated", () =
   assert.equal(j.decorrelated, true);
   // Slice 3+: style axes are present and zero-mean by construction.
   assert.equal(j.style.present, true);
-  assert.deepEqual(j.styleAxes, ["aggression", "optimism", "composure"]);
+  assert.deepEqual(j.styleAxes, ["aggression", "optimism", "composure", "tyreCare", "qualiBias", "ersBias"]);
+  for (const ax of ["tyreCare", "qualiBias", "ersBias"]) assert.equal(j.style.sums[ax], 0, `${ax} is zero-mean (#1566)`);
   assert.equal(j.style.sums.aggression, 0);
   assert.equal(j.style.sums.optimism, 0);
   assert.equal(j.style.sums.composure, 0);

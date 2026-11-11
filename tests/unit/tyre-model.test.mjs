@@ -1290,3 +1290,13 @@ test("lapsLeft measures the wear rate over the laps AND the part-lap driven on t
   c.prog = 2000;   // at the line the whole-lap count is exact, as before
   assert.ok(Math.abs(s.lapsLeft(c) - (2 / 0.54) * 0.46) < 1e-9);
 });
+
+test("tyre care (#1566): an AI's style scales its tyre load symmetrically; the human load ignores it", () => {
+  const base = { consistency: 0.75, accSm: 2 };
+  const mid = T.aiLoad(base, 7), kind = T.aiLoad({ ...base, tyreCare: 1 }, 7), hard = T.aiLoad({ ...base, tyreCare: -1 }, 7);
+  assert.ok(kind < mid && mid < hard, `${kind} < ${mid} < ${hard}`);
+  assert.ok(Math.abs((mid - kind) - (hard - mid)) < 1e-9, "zero-mean column, zero-mean wear");
+  assert.equal(T.aiLoad({ ...base, tyreCare: NaN }, 7), mid, "a bad value is neutral");
+  const h = { human: true, speed: 50, yawRateCur: 0.3, axFrac: 0.2 };
+  assert.equal(T.humanLoad({ ...h, tyreCare: 1 }, 40), T.humanLoad(h, 40), "never the player");
+});

@@ -72,6 +72,7 @@ const Quali = (function () {
   const PACE_CORNER = 1.1;
 
   const EXEC_SPREAD = 0.012;
+  const QUALI_BIAS = 0.003;
 
   // Time-trial MEDALS as multiples of the reference pole (referencePole below):
   // gold beats the modelled pole, silver is within 3 %, bronze within 7 %.
@@ -232,7 +233,9 @@ const Quali = (function () {
       const r = DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat));
       const spread = EXEC_SPREAD * (1 - r.consistency / 100);
       const draw = Career.hash(seed, round, "quali", c.driverId || c.code) - 0.5;
-      return base * (1 + draw * 2 * spread);
+      // Quali bias (#1566, zero-mean style axis): a one-lap specialist finds up to
+      // QUALI_BIAS of the lap on Saturday, a Sunday driver loses it. Race pace and a player's simulated lap untouched.
+      return base * (1 + draw * 2 * spread) * (c.isPlayer || c.human || !r.qualiBias ? 1 : 1 - QUALI_BIAS * DriverRatings.style01(r.qualiBias));
     }
 
     function drivenMap(driven) {

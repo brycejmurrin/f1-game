@@ -12,7 +12,7 @@ const AiDrive = (function () {
   // aggression / optimism are signed style traits (−1..+1), default neutral.
   const _traits = {
     craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75,
-    aggression: 0, optimism: 0, composure: 0,
+    aggression: 0, optimism: 0, composure: 0, ersBias: 0,
   };
   function traits(c) {
     _traits.craft = c.craft != null ? c.craft : 0.75;
@@ -23,6 +23,7 @@ const AiDrive = (function () {
     _traits.aggression = c.aggression != null ? c.aggression : 0;
     _traits.optimism = c.optimism != null ? c.optimism : 0;
     _traits.composure = c.composure != null ? c.composure : 0;
+    _traits.ersBias = c.ersBias != null ? c.ersBias : 0;
     return _traits;
   }
 
@@ -473,6 +474,7 @@ const AiDrive = (function () {
     return roll < 1 - Math.exp(-rate * dt);
   }
 
+  const ERS_BIAS = 0.06;
   function wantBoost(ctx) {
     const energy = ctx.energy || 0;
     if (energy <= 0.02) return false;
@@ -496,7 +498,10 @@ const AiDrive = (function () {
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
     const dep = ctx.ersDeploy != null ? ctx.ersDeploy : 0.5;
     const regen = ctx.ersRegen != null ? ctx.ersRegen : 0.5;
-    const rich = energy > (0.55 - hs.attack * 0.08 - (dep - 0.5) * 0.10);
+    // ERS deploy bias (#1566, AI-only, zero-mean style axis): an eager deployer
+    // calls the battery "rich" sooner, a hoarder later. ±0.06 of charge at the extremes.
+    const eb = ctx.traits && ctx.traits.ersBias != null ? clamp(ctx.traits.ersBias, -1, 1) : 0;
+    const rich = energy > (0.55 - hs.attack * 0.08 - (dep - 0.5) * 0.10 - ERS_BIAS * eb);
     const desperate = energy > 0.25 && catching;
     const bank = ctx.traits.awareness > (0.8 - hs.hold * 0.08)
       && energy < (0.4 - hs.hold * 0.05 + (regen - 0.5) * 0.08) && !catching && !defending;
