@@ -40,6 +40,8 @@
     "// Pass-completion: passHunger / coverConcede / tow+fire+latch extras, plus the",
     "// #2356 attack-zone soft pull. Permanent only; streets stay prior baselines. No VM.",
     "tests/unit/ai-pass-complete.test.mjs",
+    "// #5338: an AI car whose speed is set (rescue, crash hand-back, drop-in) starts facing the road (game-vm, ~5 s).",
+    "tests/unit/ai-placed-heading-vm.test.mjs",
     "// Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality",
     "// dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.",
     "tests/unit/ai-ratings-math.test.mjs",
