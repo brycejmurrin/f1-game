@@ -2129,7 +2129,7 @@
     "tools/perf/vm-alloc-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Window KB/frame values with their (gc) marks, the mean, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
+      "preserve": "The objects (gated), boxed and heap KB/frame means, window objects/boxed values with their (gc) marks, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
     },
     "tools/perf/vm-leak-census.mjs": {
       "action": "keep-native",
