@@ -1390,7 +1390,7 @@ const CarDraw = (function () {
     // The last key's inputs, so the per-frame call (default camera) builds no
     // string and no closure on a hit — the hoisted factory reads _cb*.
     let _cbFinish = -1;
-    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
+    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbBs = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
     function buildPendingCockpitBody() {
       const team = _cbTeam, source = deps.resolveLivery(team);
       const view = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.view(source) : null, liv = view ? view.livery : source;
@@ -1414,18 +1414,19 @@ const CarDraw = (function () {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
       // is always this team's key — no per-frame partsVisualKey() rebuild.
       const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick, 4 faired
-      // BODY: the cockpit style plus the livery's chassis (Car3D.bodyStyleKey), one _cbBody input.
+      // BODY: the cockpit style plus the livery's chassis (Car3D.bodyStyleKey), two inputs
+      // compared apart, so a hit concatenates nothing (#5057; the key string is built on a miss).
       // Keyed on the RESOLVED body: "team" and unknown ids are the team's own
       // geometry and share its key instead of each costing a rebuild (#3111 F17).
       const rawBs = deps.resolveLivery(team).bodyStyle;
       const bk = Car3D.bodyStyleKey ? Car3D.bodyStyleKey(team.id, rawBs) : rawBs, bs = bk && bk !== team.id ? bk : "";
-      const body = CockpitOpts.body() + (bs ? ":S" + bs : "");
+      const body = CockpitOpts.body();
       const finish = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.stamp() : 0;
-      if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum || finish !== _cbFinish) {
-        _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + (bs ? ":S" + bs : "") + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
+      if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || bs !== _cbBs || num !== _cbNum || finish !== _cbFinish) {
+        _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + body + (bs ? ":S" + bs : "") + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
         _cbKey += ":F" + finish; _cbFinish = finish;
         _cbShKey = _cbKey + ":FP";   // the first-person caster: same cache (and wipes), its own key
-        _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbNum = num;
+        _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbBs = bs; _cbNum = num;
       }
       _cbTeam = team;
       _cbParts = playerPartsFor(team, visualKey);
@@ -1691,11 +1692,12 @@ const CarDraw = (function () {
       const kmh = (typeof HudReadouts !== "undefined" && HudReadouts.spdDigits)
         ? HudReadouts.spdDigits(dash)
         : Math.max(0, Math.min(999, typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(dash) : Math.round(dash)));
-      const ds = String(kmh);
-      for (let i = 0; i < ds.length; i++) {
-        _digT[12] = -0.034 + (i - (ds.length - 1) / 2) * 0.0135; _digT[13] = 0.022; _digT[14] = -0.0335;
+      // Digits by arithmetic, not String(kmh) (#5057): both sources give an integer 0..999.
+      const kv = Math.max(0, Math.min(999, Math.round(kmh) || 0)), nd = kv >= 100 ? 3 : kv >= 10 ? 2 : 1;
+      for (let i = 0, div = nd === 3 ? 100 : nd === 2 ? 10 : 1; i < nd; i++, div /= 10) {
+        _digT[12] = -0.034 + (i - (nd - 1) / 2) * 0.0135; _digT[13] = 0.022; _digT[14] = -0.0335;
         M4.mulTo(_digM, _rigB, _digT);
-        G.gfx.draw(getSpeedDigit(+ds[i]), _digM, fx);
+        G.gfx.draw(getSpeedDigit(Math.floor(kv / div) % 10), _digM, fx);
       }
       // ERS charge fill in the slot under the LCD; pulses while deploying.
       const en = M4.clamp(c.energy || 0, 0, 1);
