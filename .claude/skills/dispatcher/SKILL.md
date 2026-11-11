@@ -22,6 +22,10 @@ session loads skill `steward` §Lane.
   `tools/ci/worker-prompt.md`, whose URL and token are the `WORKER_FIRE_URL` / `WORKER_FIRE_TOKEN` secrets
   `dispatch.yml` reads; the `LAND_TOKEN` secret for `land.yml` (skill `steward` `references/vendors.md`).
 
+A session that launches workers itself (`create_session`) while the Action is off writes its briefs from
+[`references/orchestrator-brief.md`](references/orchestrator-brief.md): what to check before a wave, the brief
+template, and what to send while workers run.
+
 ## Why was issue #n not picked up?
 1. `--plan` output: a `SKIP issue #n: <why>` line names the reason (open PR closing it, live claim, a cap reached,
    paused, land-queue backpressure, `lane:cursor`); `IGNORED priority on #n` means an agent, not Bryce, set the label.

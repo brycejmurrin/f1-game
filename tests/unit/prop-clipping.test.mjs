@@ -211,7 +211,9 @@ test("stale-row policy: strict locally, scoped to the diff on a PR, advisory on 
 test("clip-audit --lower ratchets one row down and is idempotent", () => {
   // APEX_CIRCUITS narrows this to the scoped circuit; one build, a few seconds.
   const { scope } = createRequire(import.meta.url)("../../tools/lib/circuit-scope.cjs");
-  const id = scope(Object.keys(BASELINE))[0];
+  // A scoped circuit with no baseline row (kyalami: 0 severe) leaves nothing to lower:
+  // the run then exercises --lower on the first baseline circuit instead of on `undefined`.
+  const id = scope(Object.keys(BASELINE))[0] || Object.keys(BASELINE)[0];
   const dir = mkdtempSync(path.join(ROOT, "scratch", "clip-lower-"));
   try {
     const file = path.join(dir, "baseline.json");
