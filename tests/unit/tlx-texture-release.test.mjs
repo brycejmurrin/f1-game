@@ -54,7 +54,7 @@ function liftTextures({ mobileTier = false, isMobile = false, initTexture = () =
   // The real backend methods and retired-texture pool, real vendored Texture/dispose dispatcher;
   // only GPU upload is stubbed. `pool`/`stat`/`age` expose the pool for the reuse tests below.
   return new Function("THREE", "releaseTexSource", "texStandIn", "mobileTier", "isMobile", "renderer", "fx", "ImageBitmap",
-    `${pool}return ({${create}${refill}${free} pool: _texPool, stat: _texStat, age: ageTexPool });`)(
+    `${pool}return ({${create}${refill}${free} pool: _texPool, stat: _texStat, age: ageTexPool, flush: flushTexPool });`)(
     THREE, releaseTexSource, texStandIn, mobileTier, isMobile, { initTexture }, fx, Bitmap);
 }
 
@@ -417,4 +417,24 @@ test("a parked texture drops its CPU source", () => {
   assert.notEqual(t.image, src, "the canvas is not pinned by the pool");
   assert.equal(t.image.width, 1);
   assert.equal(t.onUpdate, null);
+});
+
+test("flushTexPool disposes every pooled texture now, with its decal materials (dropTrackWorld)", () => {
+  const { gfx, released } = poolRig();
+  const hs = [1, 2, 3].map((i) => gfx.createTexture(canvas(64 * i, 64)));
+  const texes = hs.map((h) => h.tex);
+  for (const h of hs) gfx.freeTexture(h);
+  assert.equal(gfx.pool.length, 3);
+  gfx.flush();
+  assert.equal(gfx.pool.length, 0, "pool empty without waiting TEX_POOL_MS");
+  assert.deepEqual(released, texes);
+  assert.equal(gfx.stat.disposed, 3);
+  gfx.flush();   // idempotent
+  assert.equal(gfx.stat.disposed, 3);
+});
+
+test("dropTrackWorld flushes the gfx texture pool", () => {
+  const g = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const body = slice(g, "function dropTrackWorld()", "// THE BUILD IN STEPS", "dropTrackWorld");
+  assert.match(body, /gfx\.flushTexPool\(\)/);
 });
