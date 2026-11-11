@@ -5698,6 +5698,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/script-loader-late-eval.test.mjs",
         "tests/unit/script-loader-preload.test.mjs",
         "tests/unit/script-loader-retry-eval.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
@@ -5769,6 +5770,9 @@
       ],
       "hold": [
         "tests/unit/wake-lock-vm.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ios-wake-note.test.mjs"
       ]
     },
     "js/data/api-transport.js": {
@@ -14935,6 +14939,7 @@
     },
     "js/render/shared/assets.js": {
       "_ensureScratchGl": [
+        "tests/unit/assets-scratch-gl-fallback.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs"
       ],
       "adopt": [
@@ -18683,6 +18688,9 @@
       "installChip": [
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/platform-session-install.test.mjs"
+      ],
+      "iosInstallNudge": [
+        "tests/unit/ios-wake-note.test.mjs"
       ],
       "isActivation": [
         "tests/unit/audio-recovery.test.mjs"
