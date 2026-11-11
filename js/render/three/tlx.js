@@ -2175,8 +2175,30 @@ const TLX = (function () {
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
       const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
+      // #5387 (Bryce, 2026-11-11: "Allow it under the loading screen", ONLY these small merge geometries; the track and
+      // scenery pre-build stays on hold). A chunked record's main-pass MERGE SLOT (tlx-chunked mergeVisible) was made
+      // the first time that record had 2+ visible chunks, and its pool wrapper and render object (UBO, bind group) with
+      // it, so a record that first merged mid-lap minted them there (proof runs 42963201936 / 42963212978). On the
+      // frame car-draw's primeRace primes (gfx.primeChunkMerge), each chunked record still without a slot gets one
+      // from its first two chunks (a small index; a later, larger visible set grows it in place, an index buffer and
+      // no new wrapper), drawn once at a ZERO matrix: zero-area, no fragment, no depth. Main pass only.
+      let _chunkPrime = false, _chunkPrimeNow = false, _chunkPrimeN = 0;
+      const _chunkPrimeZ = new Float32Array(16);
+      function _primeMergeSlot(rec, order) {
+        const mesh = rec.chunked, mat = rec.mat;
+        if (!mesh || !mesh.chunks || mesh.chunks.length < 2 || (mesh._tlxMv && mesh._tlxMv[0])) return false;
+        if ((mat && (mat.transparent || mat.depthWrite === false)) || rec.al < 1) return false;   // the merge path never takes these
+        const vis = chunkedSys.visList;
+        vis[0] = mesh.chunks[0]; vis[1] = mesh.chunks[1];
+        const g = chunkedSys.mergeVisible(mesh, 2, 0);
+        if (!g) return false;
+        acquireMesh(g, _chunkPrimeZ, mat, rec).renderOrder = order;
+        _chunkPrimeN++;
+        return true;
+      }
       function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
         if (!chunkedSys) return 0;
+        if (_chunkPrimeNow && slot === 0 && _chunkMerge && chunkedSys.mergeVisible) _primeMergeSlot(rec, order);
         const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
         const mat = rec.mat;
         if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
@@ -6030,7 +6052,8 @@ const TLX = (function () {
         // Callers await this, then cancelWarmRetry(), then free.
         warmSettled() { return _warmPending || Promise.resolve(); },
         cancelWarmRetry() { _warmRequested = false; },
-        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
+        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },
+        primeChunkMerge() { _chunkPrime = true; return _chunkPrimeN; },   // car-draw primeRace (#5387): the next present's main pass   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
@@ -6401,6 +6424,7 @@ const TLX = (function () {
         present(opts) {
           _poolBatch++;
           _kidsBegin(_kidsMain);
+          _chunkPrimeNow = _chunkPrime; _chunkPrime = false;   // primeChunkMerge: this present's main pass only (#5387)
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
           prunePool(_poolNow);
           flushDropped();

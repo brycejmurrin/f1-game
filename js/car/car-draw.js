@@ -1552,6 +1552,7 @@ const CarDraw = (function () {
       let _off = false; try { _off = localStorage.getItem("apex26.scratchRacePrime") === "0"; } catch (_) { /* on */ }
       _primeArmed = 2;
       const Z = _primeZ; let n = 0;
+      if (!_off && typeof gfx.primeChunkMerge === "function") gfx.primeChunkMerge();   // SCRATCH: off arm skips it
       const gfx0 = gfx; const gfxP = _off ? { draw() {}, drawShadow: gfx0.drawShadow ? () => {} : null, drawMark: gfx0.drawMark ? () => {} : null } : gfx0;
       const d = (mesh, opts) => { if (mesh) { gfxP.draw(mesh, Z, opts); n++; } };
       // Cockpit LCD: each digit once per place it can hold (the pool keys wrappers per occurrence: gear x1, speed x3).
