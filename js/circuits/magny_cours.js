@@ -23,11 +23,11 @@
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
       { kind: "foliage", s0: 0.40, s1: 0.50 },
-      // Vault stands (scenery vaultStand): Lycée 0.902-0.942 and Adelaide 0.556-0.606 (side -1),
+      // Vault stands (scenery vaultStand): Lycée 0.941-0.967 and Adelaide 0.400-0.426 (side -1),
       // Estoril 0.152-0.194 (side +1).
       // The generic roadside scatter put crowns through their back rows (clip 19 + 2 pairs).
-      { kind: "foliage", side: -1, s0: 0.895, s1: 0.95 },
-      { kind: "foliage", side: -1, s0: 0.55, s1: 0.64 },
+      { kind: "foliage", side: -1, s0: 0.935, s1: 0.975 },
+      { kind: "foliage", side: -1, s0: 0.392, s1: 0.434 },
       { kind: "foliage", side: 1, s0: 0.148, s1: 0.20 },       // Estoril vault stand 0.152-0.194
     ],
     // Central-French farmland: soft, cool, slightly overcast light over green
@@ -48,10 +48,14 @@
       { s: 0.52, halfM: 340, rise: -6.0 },
       { s: 0.80, halfM: 320, rise: 4.5 },
     ],
+    // hwZones are control-point INDEX fractions (docs/SCENERY-API.md §hwZones), not lap
+    // fractions. Measured built narrowing (full width / eased edge, arc fraction):
+    // Estoril 0.148-0.191 / 0.140-0.198 (T2-T5 0.145-0.195), Adelaide 0.413-0.419 /
+    // 0.394-0.440 (T6 0.413), Lycée 0.954-0.980 / 0.929-0.986 (T15-T17 0.954-0.984).
     hwZones: [
-      { s0: 0.150, s1: 0.195, hw: 6.3, ease: 0.012 },  // Estoril
-      { s0: 0.560, s1: 0.600, hw: 6.2, ease: 0.012 },  // Adelaide hairpin
-      { s0: 0.900, s1: 0.945, hw: 6.4, ease: 0.012 },  // Lycée
+      { s0: 0.100, s1: 0.200, hw: 6.3, ease: 0.012 },  // Estoril
+      { s0: 0.335, s1: 0.360, hw: 6.2, ease: 0.012 },  // Adelaide hairpin
+      { s0: 0.905, s1: 0.960, hw: 6.4, ease: 0.012 },  // Lycée
     ],
     bankZones: [
       { turn: 1, angleDeg: 3.0, widthM: 110 },  // re-seated frac 0.06 (was 135 m off any apex)

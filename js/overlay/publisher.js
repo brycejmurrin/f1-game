@@ -8,6 +8,10 @@ const OverlayPublisher = (function () {
 
   const TICK_MS = 250;
   const BATTLE_S = 1.0;   // Broadcast's battle threshold (js/race/broadcast.js BATTLE_S)
+  // The seq of the newest frame the live publisher built (0: none yet). A test
+  // that changes the field reads it in the same turn, then waits for a frame
+  // past it instead of guessing the 4 Hz cadence with wall time.
+  let latest = 0;
 
   function css(rgb) {
     return Array.isArray(rgb) && rgb.length >= 3
@@ -99,7 +103,8 @@ const OverlayPublisher = (function () {
       // Expire silent peers: report() otherwise runs only on an incoming message, so a crashed overlay tab kept this loop alive.
       if (typeof deps.bridge.peers === "function") deps.bridge.peers();
       if (deps.bridge.takeFresh()) differ.reset();
-      const frame = OverlayFeed.frame(input({ seq: ++seq, field, info, sectors, caption, teams: deps.teams }));
+      latest = ++seq;
+      const frame = OverlayFeed.frame(input({ seq, field, info, sectors, caption, teams: deps.teams }));
       const patch = differ.next(frame, Date.now());
       if (patch) deps.bridge.send(patch);
       return patch;
@@ -137,7 +142,7 @@ const OverlayPublisher = (function () {
     return bridge;
   }
 
-  return Object.freeze({ TICK_MS, BATTLE_S, css, battleOf, input, tapCaptions, start, boot });
+  return Object.freeze({ TICK_MS, BATTLE_S, lastSeq: () => latest, css, battleOf, input, tapCaptions, start, boot });
 })();
 Object.freeze(OverlayPublisher);
 if (typeof document !== "undefined" && !document.querySelector('main#overlay[role="region"]')) OverlayPublisher.boot();

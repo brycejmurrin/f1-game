@@ -278,7 +278,7 @@ Agent-facing generated pages: the coverage table, the hook index and the static 
 | Tool | Does | Suggested skill |
 |---|---|---|
 | **docs/gen-agent-index.mjs** | Regenerates `docs/agent-index.json`, `docs/AGENT-HOOKS.md` and `tests/data/impact-map.json`; `--check`. | agent-view |
-| **docs/gen-coverage-table.mjs** | Regenerates the per-file coverage page from each suite's header (or its groups.json note); `--check`. | check-changes |
+| **docs/gen-coverage-table.mjs** | Builds the per-file coverage page (artifacts/, never committed) from each suite's header or groups.json note. | check-changes |
 | **docs/knowledge-gc.mjs** | docs/notes retention: lists uncited notes; `--apply` archives them and repoints links; `--index`; `--move`. | slim-bloat |
 
 ### `tools/shot/`
@@ -416,6 +416,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/centreline-kinks.cjs** | Lists single-node centreline kinks (node radius < half-width) per circuit; `--gate` pins counts, `--update` lowers. | — |
 | **track/clip-audit.cjs** | PROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`. | scenery-dress |
 | **track/coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
+| **track/corner-frames.cjs** | Fleet audit: turns[] on curvature peaks, bankZones and corner-labelled scenery kits on the corner they name. | survey-track |
 | **track/designer-code.mjs** | Headless designer share-code checker: decode APXT1/APXT2 via editor-vm, validate + insight summary; `--json`. | new-track |
 | **track/float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |
 | **track/footprint-rejected.cjs** | Shrink-only ratchet on modelGroups whose emitted footprint is rejected every build (non-pit "footprint rejected"). | scenery-dress |
@@ -749,6 +750,12 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `ci/tooling-fast.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/agent-scope-hooks.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/prepush-floor.test.mjs`, `tests/unit/track-shot-survey.test.mjs`, `track/merge-surveyor.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/dijon-clips-coplanar.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
+| **track/corner-names/jerez.json** | — |
+| **track/corner-names/kyalami.json** | — |
+| **track/corner-names/magny_cours.json** | — |
+| **track/corner-names/mexico.json** | — |
+| **track/corner-names/miami.json** | — |
+| **track/corner-names/montreal.json** | — |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |
 | **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/specs/f1-track-accuracy.spec.js`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |
 | **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/props-tri-ratchet.test.mjs`, `tests/unit/select-specs.test.mjs` |
