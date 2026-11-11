@@ -1423,6 +1423,22 @@
       "twinned": false
     },
     {
+      "id": "scratch-paint",
+      "script": "test:scratch-paint",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-paint-r1.spec.js",
+        "tests/specs/scratch-paint-r2.spec.js",
+        "tests/specs/scratch-paint-r3.spec.js",
+        "tests/specs/scratch-paint-r4.spec.js",
+        "tests/specs/scratch-paint-r5.spec.js",
+        "tests/specs/scratch-paint-r6.spec.js",
+        "tests/specs/scratch-paint-r7.spec.js",
+        "tests/specs/scratch-paint-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",

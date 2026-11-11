@@ -1207,6 +1207,7 @@
         "test:physics-core",
         "test:render",
         "test:results-flow",
+        "test:scratch-paint",
         "test:shimmer",
         "test:smoke",
         "test:stall-reload-sw",
@@ -4298,6 +4299,10 @@
     {
       "name": "test:results-flow",
       "command": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js"
+    },
+    {
+      "name": "test:scratch-paint",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/scratch-paint-r1.spec.js tests/specs/scratch-paint-r2.spec.js tests/specs/scratch-paint-r3.spec.js tests/specs/scratch-paint-r4.spec.js tests/specs/scratch-paint-r5.spec.js tests/specs/scratch-paint-r6.spec.js tests/specs/scratch-paint-r7.spec.js tests/specs/scratch-paint-r8.spec.js"
     },
     {
       "name": "test:service-worker",
