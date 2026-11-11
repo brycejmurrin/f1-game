@@ -454,6 +454,9 @@ const TrackBuildClient = (function () {
       }
     });
     if (!msg || msg.type !== "preview" || !msg.track) return false;
+    // An adopted centreline is a cache hit for buildCenterline, which then never
+    // derives the shift on this def: carry the worker's, as replay() does (#5081).
+    if (Number.isFinite(msg.sceneryShift)) def._sceneryShift = msg.sceneryShift;
     return !!Tracks.adoptPreviewCenterline(def, msg.track);
   }
 

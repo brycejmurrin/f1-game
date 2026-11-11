@@ -329,6 +329,8 @@ const CustomTracks = (function () {
   }
 
   const isCustom = (def) => !!(def && def.custom);
+  // content id → first RED message or null: this session's validator verdict on a stored design (STALE DESIGNS, below).
+  const _verdicts = new Map();
 
   /** Rebuild the custom tail of Tracks.LIST from storage. Never mid-race: the
    *  race holds its def by reference and an index shift would re-point trackIdx. */
@@ -344,6 +346,7 @@ const CustomTracks = (function () {
       try { Tracks.LIST.push(TrackDef.fromRaw(toRaw(it))); n++; }
       catch (e) { Log.warn("track", "customTracks: skipped " + it.id + ": " + (e && e.message || e)); }
     }
+    for (const id of _verdicts.keys()) if (!items.some((it) => it.id === id)) _verdicts.delete(id);   // a deleted design's verdict
     return n;
   }
 
@@ -520,6 +523,8 @@ const CustomTracks = (function () {
   /** game.js hands the façade + the lazy loader; the designer screen (PR4) and
    *  the #track= share link (PR5) hang off this. Idempotent, DOM-optional. */
   let _editorLoad = null, _G = null, _hooks = null;
+  const racing = () => typeof UiLayers !== "undefined" && !!UiLayers.inRace && UiLayers.inRace();
+  const say = (msg) => !!(_G && typeof _G.announce === "function") && _G.announce(msg, 5, "info") !== false;
   // Files that evaluated on an earlier (failed) attempt: each opens with a
   // script-level `const`, so re-injecting one on the retry tap threw "already
   // declared" and raised the red error overlay over the designer.
@@ -534,6 +539,58 @@ const CustomTracks = (function () {
       return true;
     }, (e) => { _editorLoad = null; throw e; });
     return _editorLoad;
+  }
+  // ── STALE DESIGNS (#5048) ────────────────────────────────────────────────
+  // A stored design passed the validator of the build that SAVED it; sanitize()
+  // only proves the engine can load it. TrackValidate is in the lazy designer
+  // bundle, so a design is judged against today's rules once per session, off
+  // the boot path, and the verdict is kept by CONTENT id (an edit is a new id).
+  const _staleTold = new Set();
+  const later = (fn, ms) => { if (typeof setTimeout === "function") setTimeout(fn, ms); else fn(); };
+  let _judging = null, _sweepFailed = false;
+  const unjudged = () => load().items.filter((it) => !_verdicts.has(it.id));
+  /** The first RED rule a stored design breaks today, else null (null too while unjudged). */
+  function stale(id) { return _verdicts.get(id) || null; }
+  /** Judge every stored design not yet judged. Resolves the count judged, -1 when the validator did not load. */
+  function judgeStored() {
+    if (_judging) return _judging;
+    if (!unjudged().length) return Promise.resolve(0);
+    const run = _judging = ensureEditor().then(async (ok) => {
+      if (!ok || typeof TrackValidate === "undefined") return -1;
+      let n = 0;
+      for (const it of unjudged()) {
+        if (racing()) break;   // a centreline build per design: never under a race
+        let red = null;
+        try { const v = TrackValidate.check(it), bad = v.issues.find((i) => i.level === "red"); red = v.ok ? null : (bad && bad.msg) || "This loop cannot be built"; }
+        catch (e) { red = "This loop cannot be checked: " + (e && e.message || e); }
+        _verdicts.set(it.id, red);
+        n++;
+        await new Promise((r) => later(r, 0));
+      }
+      return n;
+    }).catch((e) => { Log.warn("track", "stored designs not re-checked: " + (e && e.message || e)); return -1; })
+      .finally(() => { if (_judging === run) _judging = null; });
+    return run;
+  }
+  /** One banner per session for a stale design: the picked circuit (`id`), else the selected one. */
+  function tellStale(id) {
+    id = id || selectedId();
+    if (!id || !stale(id) || _staleTold.has(id) || racing()) return false;
+    const def = Tracks.LIST.find((t) => t.id === id);
+    if (!say(String(def && def.name || "THIS CIRCUIT").toUpperCase() + " BREAKS TODAY'S TRACK RULES — FIX IT IN TRACK DESIGNER")) return false;
+    Log.warn("track", "stored design " + id + " fails today's rules: " + stale(id));
+    _staleTold.add(id);
+    return true;
+  }
+  /** Boot and every menu return: judge only when a custom circuit is selected (it is about to be
+   *  raced) or the validator is already resident, so no other player pays for the designer bundle. */
+  function staleSweep() {
+    const resident = typeof TrackValidate !== "undefined";
+    // A sweep whose bundle did not load (offline) is not retried on every menu return.
+    if (racing() || !(resident || (selectedId() && !_sweepFailed))) return Promise.resolve(false);
+    // Idle: the first call is game.js's boot, and the bundle is ~20 scripts.
+    return new Promise((res) => { if (typeof requestIdleCallback === "function") requestIdleCallback(() => res(), { timeout: 4000 }); else later(res, 800); })
+      .then(() => judgeStored()).then((n) => { _sweepFailed = n === -1; return tellStale(); }).catch(() => false);
   }
   // TEST HERE's way back (TrackDesigner.testHere): { id, sel, span, s } of the
   // design the test drive left from. MEMORY ONLY, never localStorage — a reload
@@ -551,7 +608,17 @@ const CustomTracks = (function () {
    *  re-open it. Mid-race it waits, fragment intact, for the menu (game.js
    *  re-reads it on quit, as it does the #ghost= link). Resolves true when a
    *  design opened, false when the link was refused or absent, null when deferred. */
-  let hashGeneration = 0;
+  let hashGeneration = 0, _lostLink = null;
+  // The designer bundle did not load (offline): the fragment left in the URL made
+  // every menu return and hashchange load it again and warn again, with nothing
+  // on screen (#5048). Keep the link in memory, strip it, say so once; the TRACK
+  // DESIGNER door puts it back and retries.
+  function loseLink(hash) {
+    _lostLink = hash;
+    const rest = hash.replace(/^#/, "").split("&").filter((p) => p && !p.startsWith("track="));   // TrackCodec.withoutTrack; the codec is in the bundle that failed
+    try { history.replaceState(history.state, "", location.pathname + location.search + (rest.length ? "#" + rest.join("&") : "")); } catch (_) { /* a sandboxed page */ }
+    say("TRACK LINK DID NOT LOAD — TAP TRACK DESIGNER TO RETRY");
+  }
   function consumeTrackHash() {
     const generation = ++hashGeneration;
     // An armed test-drive return goes first: mid-race it waits (kept armed),
@@ -572,10 +639,13 @@ const CustomTracks = (function () {
       }).catch((e) => { Log.warn("track", "test drive return failed: " + (e && e.message || e)); return false; });
     }
     const hash = typeof location !== "undefined" ? String(location.hash || "") : "";
-    if (!/[#&]track=/.test(hash)) return Promise.resolve(false);
+    if (!/[#&]track=/.test(hash)) { staleSweep(); return Promise.resolve(false); }
     if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) { Log.info("track", "share link deferred: racing"); return Promise.resolve(null); }
     return ensureEditor().then(async (ok) => {
-      if (!ok || typeof TrackCodec === "undefined" || typeof TrackDesigner === "undefined") return false;
+      if (!ok || typeof TrackCodec === "undefined" || typeof TrackDesigner === "undefined") {
+        if (generation === hashGeneration && location.hash === hash && !racing()) loseLink(hash);
+        return false;
+      }
       // A malformed fragment (`%E0%A4%A`) must not throw past here: the strip
       // below would never run and every hashchange would re-throw.
       let code = null;
@@ -593,7 +663,12 @@ const CustomTracks = (function () {
       Log.info("track", "share link opened " + r.id);
       TrackDesigner.open({ design: r.design, shared: true });
       return true;
-    }).catch((e) => { if (generation !== hashGeneration || location.hash !== hash) return false; Log.warn("track", "share link failed: " + (e && e.message || e)); return false; });
+    }).catch((e) => {
+      if (generation !== hashGeneration || location.hash !== hash) return false;
+      Log.warn("track", "share link failed: " + (e && e.message || e));
+      if (!racing()) loseLink(hash);
+      return false;
+    });
   }
   function create(G, hooks) {
     _G = G; _hooks = hooks || {};
@@ -621,6 +696,13 @@ const CustomTracks = (function () {
       return ensureEditor().then((ok) => {
         if (!ok || cancelled || generation !== doorGeneration || typeof TrackDesigner === "undefined") return;
         if (layers && ((layers.inRace && layers.inRace()) || (layers.top && layers.top() !== owner))) return;
+        if (_lostLink && !/[#&]track=/.test(String(location.hash || ""))) {
+          // The retry the banner promised: the link back in the URL, opened as on arrival.
+          const rest = String(location.hash || "").replace(/^#/, ""), link = _lostLink.replace(/^#/, "").split("&").filter((p) => p.startsWith("track="))[0];
+          _lostLink = null;
+          try { history.replaceState(history.state, "", location.pathname + location.search + "#" + (rest ? rest + "&" : "") + link); } catch (_) { /* a sandboxed page */ }
+          return consumeTrackHash().then((opened) => { if (opened === false) TrackDesigner.open(); });
+        }
         TrackDesigner.open();
       }).finally(() => {
         if (doc && doc.removeEventListener) {
@@ -635,6 +717,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { COLLECTION_FORMAT, exportCollection, importCollection, preflightCollection, commitCollectionPreflight, cancelCollectionPreflight, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
+  return { COLLECTION_FORMAT, exportCollection, importCollection, preflightCollection, commitCollectionPreflight, cancelCollectionPreflight, LIMITS, KERB_STYLES, stale, judgeStored, tellStale, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
 })();
 Object.freeze(CustomTracks);
