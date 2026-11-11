@@ -1,6 +1,6 @@
 // SCRATCH MEASUREMENT (#5387) — never merged. Tip census + pool-churn logging; arms: CPU burn, prune idle override.
 import fs from "node:fs";
-import { test, expect, BOOT_MS } from "./fixtures.js";
+import { test, BOOT_MS } from "./fixtures.js";
 import { measureIdleWindows } from "../../tools/perf/idle-pipeline-census.mjs";
 
 function roHookInit() {
@@ -29,10 +29,8 @@ function roHookInit() {
   }, 50);
 }
 
-export function scratchTest(name, { burn, pruneIdleMs }) {
-  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
-  test.describe.configure({ retries: 0 });
-  test(name, async ({ page }) => {
+export function scratchBody({ burn, pruneIdleMs }) {
+  return async ({ page }) => {
     test.setTimeout(900000);
     if (burn) await page.addInitScript((ms) => { const b = () => { const t = performance.now(); while (performance.now() - t < ms) { /* burn */ } requestAnimationFrame(b); }; requestAnimationFrame(b); }, burn);
     if (pruneIdleMs) await page.addInitScript((v) => { try { localStorage.setItem("apex26.scratchPruneIdleMs", String(v)); } catch (_) {} }, pruneIdleMs);
@@ -46,5 +44,5 @@ export function scratchTest(name, { burn, pruneIdleMs }) {
     const g = {};
     for (const r of (roc.log || [])) { const k = [r.objSeen ? "OLDOBJ" : "NEWOBJ", "geoSeen" + Math.min(r.geoSeen, 2), r.par, r.mat, "ctx" + r.ctx, r.pin ? "pin" : "", r.verts].join("|"); const a = g[k] || (g[k] = { n: 0, at0: r.at, at1: r.at }); a.n++; a.at1 = r.at; }
     throw new Error("MEASURE " + JSON.stringify({ burn, pruneIdleMs: pruneIdleMs || 20000, err, W, end: roc.end, memS: roc.memS && roc.memS.slice(-60), ro: Object.entries(g).sort((a, b) => b[1].n - a[1].n).slice(0, 14) }));
-  });
+  };
 }

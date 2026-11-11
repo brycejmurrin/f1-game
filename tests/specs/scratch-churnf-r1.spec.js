@@ -1,3 +1,6 @@
 // SCRATCH (#5387) — never merged.
-import { scratchTest } from "../helpers/scratch-churnf.mjs";
-scratchTest("SCRATCH churnf r1 burn0 prune0", { burn: 0, pruneIdleMs: 0 });
+import { test } from "../helpers/fixtures.js";
+import { scratchBody } from "../helpers/scratch-churnf.mjs";
+test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+test.describe.configure({ retries: 0 });
+test("SCRATCH churnf r1 burn0 prune0", scratchBody({ burn: 0, pruneIdleMs: 0 }));
