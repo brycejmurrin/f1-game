@@ -30,6 +30,22 @@
 // overwritten before these readings, so tests/unit/race-retain-vm.test.mjs (built, not yet stepped) pins them.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { facetPath } from "../helpers/scratch-heapagg.mjs";
+function bpHookInit() {
+  const iv = setInterval(() => {
+    if (typeof Tracks === "undefined" || typeof Tracks.buildPaced !== "function" || Tracks.__bpWrapped) return;
+    clearInterval(iv);
+    const o = Tracks.buildPaced, L = window.__bpLog = [];
+    try { Tracks.__bpWrapped = true; } catch (_) { /* frozen */ }
+    Tracks.buildPaced = function (def) {
+      const rec = { id: def && def.id, t0: Math.round(performance.now()), from: (new Error().stack || "").split("\n").slice(2, 7).map((l) => l.trim().replace(/^at\s+/, "").replace(/\s*\(.*$/, "")).join(" < ") };
+      if (L.length > 40) L.shift(); L.push(rec);
+      const p = o.apply(this, arguments);
+      p.then((r) => { rec.t1 = Math.round(performance.now()); rec.ok = !!r; }, (e) => { rec.t1 = Math.round(performance.now()); rec.err = String(e).slice(0, 80); });
+      return p;
+    };
+  }, 20);
+}
+
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
   HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues, gpuWrapperCounts, domLeakCounters, contextScopeCount, wrapperGrowth, censusBlindness,
@@ -123,6 +139,7 @@ async function body({ page }) {
   });
   await page.addInitScript(censusInitScript);
   await page.addInitScript(reloadWatchInitScript);
+  await page.addInitScript(bpHookInit);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("HeapProfiler.enable");
   await page.goto("/?three-devtools=1");   // TLX exposes window.renderer only behind this flag
@@ -152,7 +169,14 @@ async function body({ page }) {
       const menu = await censusAfterGc(page, cdp);
       const pb = await page.evaluate(() => { const p = window.__apex.menuPrep(); return p && { t: p.trackId, k: p.key, w: !!p.world }; });
       log({ cycle, id, at: "menu", quietMs, pb, ...menu });
-      if (id === CIRCUITS[CIRCUITS.length - 1] && cycle >= 2) log({ cycle, at: "heap", heapMB: menu.heapMB, ...(await facetPath(cdp)) });
+      if (id === CIRCUITS[CIRCUITS.length - 1]) {
+        const t0 = await page.evaluate(() => ({ now: Math.round(performance.now()), building: Tracks.building(), log: (window.__bpLog || []).slice(-6) }));
+        let endAt = null;
+        { const w0 = Date.now(); try { await page.waitForFunction(() => !Tracks.building(), null, { polling: 250, timeout: 30000 }); endAt = Date.now() - w0; } catch (_) { endAt = null; } }
+        const after = endAt != null && t0.building ? await censusAfterGc(page, cdp) : null;
+        log({ cycle, at: "heap", heapMB: menu.heapMB, census: t0, endAfterMs: endAt, heapAfterMB: after && after.heapMB,
+          bpAfter: await page.evaluate(() => (window.__bpLog || []).slice(-6)) });
+      }
       expect(cycleCensusIssues(menu), "menu census must observe the requested renderer and usable counters").toEqual([]);
       expect(menu.aliveTracks.length, `cycle ${cycle}, menu after ${id}: ${menu.aliveTracks.join(", ")} still reachable after GC`).toBeLessThanOrEqual(1);
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
@@ -234,6 +258,6 @@ test("SCRATCH rcm E", async ({ page }) => {
   try { await body({ page }); } catch (e) { err = String(e && e.message || e).replace(/\s+/g, " ").slice(0, 300); }
   let rows = []; try { rows = JSON.parse(fs.readFileSync("artifacts/logs/race-cycle-memory.json", "utf8")); } catch (_) {}
   const menus = rows.filter((r) => r.at === "menu").map((r) => ({ c: r.cycle, id: r.id, heap: r.heapMB, alive: r.aliveTracks, pb: r.pb }));
-  const heaps = rows.filter((r) => r.at === "heap").map((r) => ({ c: r.cycle, heap: r.heapMB, found: r.found, path: r.path }));
+  const heaps = rows.filter((r) => r.at === "heap").map((r) => ({ c: r.cycle, heap: r.heapMB, census: r.census, endAfterMs: r.endAfterMs, heapAfterMB: r.heapAfterMB, bpAfter: r.bpAfter }));
   throw new Error("MEASURE " + JSON.stringify({ err, menus, heaps }));
 });
