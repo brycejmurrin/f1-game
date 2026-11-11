@@ -219,13 +219,18 @@ const STRIP = {
   //   ground is above the awning (-24 emitted); the street-panel skirt buries its
   //   bottom faces (buried 633 → 722, bottom 661 → 668). Emission on top of #5079 274383 → 274359,
   //   strip-after 255453 → 255333.
+  // → #5511 official FIA turn list (2026-11-11): corner and braking boards
+  //   re-seat on the 19 official apexes (the hash-picked braking-board sets
+  //   key on the apex node). +432 emitted / +432 survive; the strip itself
+  //   is unchanged (19026). Emission 274359 → 274791, strip-after 255333 → 255765.
   // → W21 #2204 curveTier midpoint-to-midpoint rows (2026-11-10): curved
   //   bleacher/scaffold rows span to their chord midpoints and rails take their
   //   own tier. Emission 274099 → 274135, strip-after 255181 → 255289.
   // → merged (#5303 over #5254, 2026-11-10): the deltas add exactly (+36 emitted) → 274395 / 255441.
   // → curveTier drops a sub-10 cm sideways sagitta (2026-11-11, mexico coplanar): same
   //   emission, 34 more enclosed faces stripped: strip-after 255441 → 255407.
-  monaco: { before: 274395, after: 255407 },
+  // → merged (#5303 over #5511, 2026-11-11): the deltas add exactly (+36 emitted, +74 strip-after) → 274827 / 255839.
+  monaco: { before: 274827, after: 255839 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
