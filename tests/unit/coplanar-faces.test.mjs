@@ -190,3 +190,13 @@ test("CLI: a boolean flag never swallows the circuit id after it; bad numeric ov
     assert.throws(() => optsFrom(bad, false), /needs a positive number/, bad.join(" "));
   }
 });
+
+// #2501: --json is one JSON document; --why's text report refuses it.
+test("coplanar-audit refuses --json --why before building anything", () => {
+  let err;
+  try { execFileSync(process.execPath, [path.join(ROOT, "tools", "track", "coplanar-audit.cjs"), "monza", "--json", "--why"], { encoding: "utf8", stdio: "pipe", timeout: 20000 }); }
+  catch (e) { err = e; }
+  assert.ok(err, "must exit non-zero");
+  assert.equal(err.status, 2); assert.equal(err.stdout, "");
+  assert.match(err.stderr, /--why is a text report/);
+});

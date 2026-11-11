@@ -714,7 +714,7 @@
           place(K(s), side, 16.5, [1.6, 1.4, 4.5], SEAT_NAVY[Math.floor(s * 90) % SEAT_NAVY.length]);
         }
       }
-      // Mexican GP trackside signage at Foro entry / exit / Peraltada
+      // Mexican GP trackside signage at the Foro Sol entry and in the stadium (T12-T13)
       billboard(K(0.715), -1, 10, 16, 5.5, FLAG_G);
       billboard(K(0.715),  1, 10, 14, 5.0, FLAG_R);
       billboard(K(0.870), -1, 10, 16, 5.5, FLAG_R);
@@ -908,11 +908,11 @@
       tyreWall(0.450, 0.462,  1, 4.5, ORANGE);   // T4
       tyreWall(0.503, 0.515, -1, 4.5, PINK);     // T6
       tyreWall(0.669, 0.681, -1, 4.5, GREEN);    // T10
-      tyreWall(0.932, 0.944, -1, 4.5, ORANGE);   // T16
+      tyreWall(0.932, 0.944, -1, 4.5, ORANGE);   // T17
       // Apex kerb accents on the INSIDE of the remaining apexes. Not T5: its
       // inside strip (+1 at 0.4701, built R ~28 m) is guard-dropped (place=2).
       for (const [s, side] of [[0.2776, -1], [0.2891, 1], [0.4531, -1],   // T2 T3 T4
-                               [0.5066, 1], [0.5836, -1], [0.6721, 1], [0.9346, 1]]) { // T6 T7 T10 T16
+                               [0.5066, 1], [0.5836, -1], [0.6721, 1], [0.9346, 1]]) { // T6 T7 T10 T17
         kerb(s, side, 8);
       }
       // Boulevard lamp posts down the park straights.
