@@ -74,13 +74,17 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
-    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    // sectors/turns: sector splits + turn apexes as RACING-LAP fractions (post
+    // startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs re-seats
+    // turns when the start line moves.
+    // turns: one apex per corner of the FIA 2021 Portuguese GP Circuit Map (Doc 1,
+    // "2021 Portuguese Grand Prix - Circuit Map.pdf", 15 corners), in FIA order;
+    // each frac is the curvature peak of THIS centreline at that corner. T6 is the
+    // gentle left kink on the climb out of the T5 hairpin, T9 the left at the foot
+    // of the descent from T8, T12 the left into the T13 dip; T14 is the right-hand
+    // loop's first (strongest) peak. No researched sectors — consumers fall back to thirds.
     sectors: [0.33, 0.657],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0757, 0.1112, 0.1457, 0.1777, 0.3012, 0.4037, 0.4372, 0.5657, 0.5822, 0.6742, 0.6802, 0.7217, 0.7337, 0.7482, 0.8497],
+    turns: [0.0761, 0.1115, 0.1461, 0.1780, 0.3016, 0.3578, 0.4036, 0.4373, 0.5160, 0.5653, 0.5825, 0.6240, 0.6793, 0.7217, 0.8505],
     furniture: { tree: "stonePine",   fol: [0.14, 0.31, 0.16], lamp: "none",  sparse: true },  // thin Algarve pine; the elevation is the view
     kit: { marshal: "cabin",     rail: "wArmco",      fence: "leaning",   tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },
     standSet: ["terracotta", "concrete", "alu"],  // Algarve pantile over hillside terracing

@@ -236,6 +236,7 @@ function makeCarsBoot() {
       aiSetup:t=>CareerAiDev.fittedOf(career,t),driverOverride:()=>null,
       teamStats:t=>t.stats,paceMult:()=>active?tdev:1};
     var cars=[],player=null,teamIdx=Teams.LIST.findIndex(t=>t.id==='haas'),driverIdx=0;
+    var clampDriverIdx=()=>{};   // makeCars clamps the seat first (game.js); the seat is valid here
     var TIER_V=Teams.TIER_V,IDLE_RPM=PhysicsConsts.IDLE_RPM;
     var gridTeams=()=>Teams.LIST, seatsFor=t=>t.custom?[t.drivers[0],t.drivers[0]]:t.drivers;
     var simRnd=()=>{draws++;return .5},clamp=M4.clamp;

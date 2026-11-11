@@ -3,7 +3,7 @@
 Game setting: **DAY**, **green theme (parkland)**. Render as procedural colored boxes, no textures.
 
 ## 1. Setting
-A semi-permanent street circuit looping **anticlockwise** around **Albert Park Lake**, a few km south of Melbourne's CBD. Public park roads close to host the race: wide, smooth tarmac threading through manicured parkland, lake frontage, palm avenues, and temporary grandstands, with the distant **city skyline** rising beyond the water on the lake side. Length 5.278 km, 14 corners (after the 2022 removal of the T9/10 chicane) — fast and flowing.
+A semi-permanent street circuit looping **clockwise** around **Albert Park Lake**, a few km south of Melbourne's CBD. Public park roads close to host the race: wide, smooth tarmac threading through manicured parkland, lake frontage, palm avenues, and temporary grandstands, with the distant **city skyline** rising beyond the water on the lake side. Length 5.278 km, 14 corners (after the 2022 removal of the T9/10 chicane) — fast and flowing.
 
 Sources: [Formula 1 circuit guide 2026](https://www.formula1.com/en/latest/article/circuit-guide-2026-australian-grand-prix-albert-park.19zPlhKhMbTaVNFIPKAAMa); [Wikipedia — Albert Park Circuit](https://en.wikipedia.org/wiki/Albert_Park_Circuit).
 

@@ -11,7 +11,8 @@ A clear-to-hazy spring/autumn sky, soft and slightly milky toward the horizon. R
 ## 3. Elevation
 Real Suzuka undulation from the SRTM bake in `js/track/circuit-elevations.js`
 (~40 m peak-to-trough). Continuous climb through the Esses / Degner, drop
-into the underpass, Spoon low, climb toward 130R — not two isolated cosine
+into the underpass, Spoon high (the bake's maximum, +21.9 m at racing 0.65; the
+minimum is -18.2 m at 0.149, the first-corner complex), then down toward 130R — not two isolated cosine
 bumps with flat plateaus. The **figure-8 flyover** stays a `bridges` lift
 (terrain does not follow) near s≈0.82.
 
@@ -27,7 +28,7 @@ bumps with flat plateaus. The **figure-8 flyover** stays a `bridges` lift
 | 0.18–0.22 | L | mid | **Cherry trees**: sparse pink sakura along the Esses climb (not Motopia) |
 | 0.37 | over | near | **Crossover underpass**: dark enlarged portal where back loop dips under straight |
 | 0.45 | R | mid | Hairpin grandstand: compact stacked box bank, advertising hoarding strip |
-| 0.62 | L | mid | Spoon grandstand: low curved box terrace at the low point |
+| 0.62 | L | mid | Spoon grandstand: low curved box terrace near the lap's high point |
 | 0.81 | over | near | **Crossover bridge**: bold green span lifting line over the main straight |
 | 0.84 | R | mid | 130R grandstand: thin tall box bank tight to the flat-out left |
 | 0.94 | both | near | **Casio Triangle** stands: paired box terraces framing the final chicane |

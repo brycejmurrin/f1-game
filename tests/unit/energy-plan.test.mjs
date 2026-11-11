@@ -78,3 +78,19 @@ test("VM: a neutral plan is byte-identical; DEPLOY in every sector turns BOOST o
   assert.ok(deploy.boosted > 0, "DEPLOY switched BOOST on at a sector entry");
   assert.ok(deploy.energy < base.energy, `and it spent charge (${deploy.energy} < ${base.energy})`);
 });
+
+test("W26 6b: a DEPLOY wish a flat battery blocks at entry is retried in that sector, and fires once", () => {
+  const P = load();
+  P.setPlan(["deploy", "save", "manual"]);
+  const c = { _secIdx: 0, boostOn: false, energy: 0 };
+  assert.equal(P.toggleFor(c, false), false, "entry with a flat battery cannot deploy");
+  c.energy = 0.3;   // harvested back mid-sector
+  assert.equal(P.toggleFor(c, false), true, "the unsatisfied wish acts once there is charge");
+  c.boostOn = true; c.boostOn = false;   // then the player overrides
+  assert.equal(P.toggleFor(c, false), false, "having acted, the plan does not fight the player");
+  // A wish already satisfied at entry is stamped: a later player press is not undone.
+  c._secIdx = 1; c.boostOn = false;
+  assert.equal(P.toggleFor(c, false), false, "SAVE with BOOST already off: satisfied");
+  c.boostOn = true;
+  assert.equal(P.toggleFor(c, false), false, "the player's mid-sector BOOST stands");
+});
