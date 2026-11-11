@@ -32,6 +32,7 @@ test("first gesture + RACE with default settings has an AudioContext and a runni
   const { g, sb, fa } = await bootAndGesture();
   try {
     assert.equal(fa.made.length, 1, "title: the first gesture created no AudioContext (title loop silent)");
+    assert.equal(fa.made[0].resumedAtBirth, true, "init() must resume the new (suspended) context in the creating turn");
     await g.race("monza", "day", "dry");
     g.apex.setInput({ throttle: true, steer: 0 });
     g.step(300);

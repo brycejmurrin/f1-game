@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { fuzz, mutate, findBadLiveValues, makeRng, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
+import { fuzz, mutate, findBadLiveValues, findPollutedObjects, makeRng, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
@@ -297,6 +297,10 @@ function bootSettingsExport() {
       if (v === undefined || (typeof v === "number" && !Number.isFinite(v))) {
         store._bad.push({ k, v });
       }
+      // A value whose object prototype was swapped (`out["__proto__"] = [r,g,b]`
+      // in a decoder) stringifies clean, so look before the JSON round trip.
+      const polluted = findPollutedObjects(v);
+      if (polluted.length) store._bad.push({ k, polluted });
       disk.set("apex26." + k, JSON.stringify(v));
       return true;
     },
@@ -323,6 +327,8 @@ function bootSettingsExport() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
+  // The livery.custom.* door hands rows to CustomLiveries.normalizeImported.
+  vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: false }, soundOn: false };
@@ -341,6 +347,8 @@ const GARAGE_CORPUS = [
   { format: "apex26-garage-v1", garage: { team: 2, driver: 0 } },
   { format: "apex26-garage-v1", garage: { team: "abc", customTeam: {} } },
   { format: "apex26-garage-v1", garage: { "__proto__": { polluted: 1 }, team: 1 } },
+  // A shape-sound custom livery, so mutate()'s own-"__proto__" rows reach cleanLivery.
+  { format: "apex26-garage-v1", garage: { "livery.custom.ferrari": [{ id: "mine", name: "Mine", c1: [1, 0, 0], c2: [0, 0, 1], c3: [0, 1, 0] }] } },
   null,
 ];
 
@@ -359,7 +367,7 @@ test("SettingsExport.applySettings/applyGarage never throw or poison store (N=20
     }
     assertNoThrowResult("applySettings", sRes, "ok-reason");
     assertNoThrowResult("applyGarage", gRes, "ok-reason");
-    assert.deepEqual(store._bad, [], `store received NaN/undefined: ${JSON.stringify(store._bad)}`);
+    assert.deepEqual(store._bad, [], `store received NaN/undefined or a prototype-swapped object: ${JSON.stringify(store._bad)}`);
   });
 });
 

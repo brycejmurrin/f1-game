@@ -65,6 +65,19 @@ test("bahrain grandstandEx calls keep positive seating rake (no hollow shells)",
   env.release(track);
 
   assert.ok(calls.length >= 20, `expected many grandstandEx calls, got ${calls.length}`);
+  // "Bahrain has grandstands", asserted directly: the skip below treats a
+  // zero-prim stand as a guarded suppression, so a grandstandEx that emitted
+  // NOTHING anywhere passed this test. Suppression is the exception (today all
+  // 20 calls emit); the main-straight and Turn 1 stands are the venue's.
+  const emitting = calls.filter((c) => c.prims > 0);
+  assert.ok(emitting.length >= Math.ceil(calls.length * 0.9),
+    `only ${emitting.length}/${calls.length} bahrain grandstandEx calls emitted geometry`);
+  for (const [s, what] of [[0.984, "main straight"], [0.025, "Turn 1"]]) {
+    const c = calls.find((x) => Math.abs(x.s - s) < 0.002);
+    assert.ok(c, `bahrain authors a ${what} grandstand near s=${s}`);
+    assert.ok(c.prims >= 40 && c.seating >= 20,
+      `${what} grandstand must ship with seating (prims ${c.prims}, seating ${c.seating})`);
+  }
   const bad = [];
   for (const c of calls) {
     // A fully suppressed stand (onTrack / no seating after nudge) emits 0
