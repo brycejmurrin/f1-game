@@ -3,6 +3,9 @@
  * paint; maps wait on cache / idle / worker.
  * Also: a null 2D context on the elevation sparkline (or the outline canvas)
  * must hide the sparkline and return, not throw into the error overlay (#4469).
+ * Also: a HIDDEN sparkline (zero box: display:none in the compact picker) is not
+ * resized; it used to fall back to its own buffer and multiply it by dpr on
+ * every pick, 280x36 -> 22680x2916 at dpr 3 (#5062).
  *
  * Run: node --test tests/unit/select-preview-defer.test.mjs
  */
@@ -46,7 +49,7 @@ function boot(o = {}) {
     cancelIdleCallback() {},
     getComputedStyle: () => ({ getPropertyValue: () => "", display: "flex", flexDirection: "row", gridTemplateColumns: "none", paddingTop: "0px", paddingBottom: "0px" }),
     innerWidth: 1000, innerHeight: 600, requestAnimationFrame: () => 0, cancelAnimationFrame() {},
-    devicePixelRatio: 1,
+    devicePixelRatio: o.dpr || 1,
     Tracks: { LIST },
     Teams: { LIST: [] },
     Flags: { svg: () => "" },
@@ -86,6 +89,7 @@ function boot(o = {}) {
   elev.width = 280;
   elev.height = 36;
   elev.hidden = false;
+  if (o.elevBox !== null) elev._rect = o.elevBox || { width: 280, height: 36 };   // mini-dom clientWidth/Height
   if (o.elevContext !== undefined) elev.getContext = () => o.elevContext;
   dom.document.body.appendChild(elev);
   const G = {
@@ -170,4 +174,28 @@ test("idle flush runs the deferred map paint", () => {
   flushIdle();
   assert.ok(stats().cornersCalls >= 1, "idle callback must paint maps");
   assert.ok(stats().drawCalls >= 1, "idle callback must draw");
+});
+
+const ctx2d = () => ({ setTransform() {}, clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fill() {},
+  closePath() {}, fillText() {}, measureText: () => ({ width: 10 }), createLinearGradient: () => ({ addColorStop() {} }), save() {}, restore() {} });
+
+test("#5062: a hidden (zero-box) sparkline keeps its buffer across picks at dpr 3", () => {
+  const { menus, elev } = boot({ cached: true, dpr: 3, elevProfile: [0, 12, 4, 0], elevContext: ctx2d(), elevBox: null });
+  for (let k = 0; k < 4; k++) menus.updateTrackPreview();
+  assert.equal(elev.width, 280, "the buffer must not grow while the canvas has no box");
+  assert.equal(elev.height, 36);
+});
+
+test("#5062: a visible sparkline sizes to its box x dpr, and stays there", () => {
+  const { menus, elev } = boot({ cached: true, dpr: 3, elevProfile: [0, 12, 4, 0], elevContext: ctx2d(), elevBox: { width: 280, height: 36 } });
+  for (let k = 0; k < 4; k++) menus.updateTrackPreview();
+  assert.equal(elev.width, 840);
+  assert.equal(elev.height, 108);
+  assert.equal(elev.hidden, false);
+});
+
+test("#5062: the sparkline buffer is capped at 4096 px a side", () => {
+  const { menus, elev } = boot({ cached: true, dpr: 3, elevProfile: [0, 12, 4, 0], elevContext: ctx2d(), elevBox: { width: 2000, height: 36 } });
+  menus.updateTrackPreview();
+  assert.ok(elev.width <= 4096, "width " + elev.width);
 });
