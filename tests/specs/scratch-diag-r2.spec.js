@@ -1,5 +1,5 @@
 // @ts-check
-// SCRATCH PROOF COPY (#5387) of perf-idle-pipeline-churn.spec.js — never merged.
+// SCRATCH DIAGNOSTIC COPY (#5387) of perf-idle-pipeline-churn.spec.js — never merged.
 // Steady driving must not compile anything: after a warm-up, equal idle race windows build ZERO render pipelines.
 //
 // #3713 (A·W50): the BOOST gate's no-BOOST control windows still built an fx particle-stream pipeline
@@ -15,16 +15,24 @@
 // Where the runner has no WebGPU adapter (CI's llvmpipe) three falls back to WebGL2 and an annotation says so.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { measureIdleWindows } from "../../tools/perf/idle-pipeline-census.mjs";
+import { diagHooks, groupRows } from "../helpers/scratch-diag.mjs";
 
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test.describe.configure({ retries: 0 });
-test("SCRATCH proof burn40 r11: steady driving builds no render pipelines after warm-up", async ({ page }, testInfo) => {
-  await page.addInitScript((ms) => { const b = () => { const t = performance.now(); while (performance.now() - t < ms) { /* slow every frame */ } requestAnimationFrame(b); }; requestAnimationFrame(b); }, 40);
+test("SCRATCH diag normal r2: steady driving builds no render pipelines after warm-up", async ({ page }, testInfo) => {
+  await page.addInitScript(diagHooks);
   test.setTimeout(900000);
   const { hook, warm, gpuDevice, replay, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
-  console.log("PROOF " + JSON.stringify({ hook, gpuDevice, replay, w: windows.map((w) => [w.pipelines, w.bindGroups, w.buffers]) }));   // SCRATCH
+  {   // SCRATCH: name what window 1 (new render objects) and the rebinds are
+    const D = await page.evaluate(() => window.__dg).catch((e) => ({ err: String(e) }));
+    const roG = groupRows(D.ro, ["obj", "par", "kind", "verts", "key", "road", "ident", "inst", "geoSeen", "ctx", "pass"]);
+    const rbG = groupRows(D.rb, ["obj", "kind", "verts", "key", "road", "ident", "bg", (r) => (r.changed || []).map((c) => c.name + ":" + c.tex + ":" + c.id + ":" + c.wh).join("+")]);
+    const rbGen = (D.rb || []).slice(0, 6).map((r) => ({ at: r.at, obj: r.obj, ch: r.changed }));
+    console.log("DIAG " + JSON.stringify({ burn: 0, replay, w: windows.map((w) => [w.pipelines, w.bindGroups, w.buffers]), nRO: (D.ro || []).length, nRB: (D.rb || []).length,
+      bakes: D.bakes, err: D.err, roFrames: [...new Set((D.ro || []).map((r) => r.at))].slice(0, 20), rbFrames: [...new Set((D.rb || []).map((r) => r.at))].slice(0, 30), roG, rbG, rbGen }));
+  }
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
   if (!/webgpu/i.test(hook)) testInfo.annotations.push({ type: "fallback", description: "no WebGPU adapter on this runner: ran on three's WebGL2 backend" });

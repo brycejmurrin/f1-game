@@ -85,8 +85,7 @@
     "test:perf-budget": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js",
     "test:perf-idle-churn": "node tools/ci/run-playwright.mjs tests/specs/perf-idle-pipeline-churn.spec.js",
     "test:stall-reload-sw": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js",
-    "test:scratch-proofa": "node tools/ci/run-playwright.mjs tests/specs/scratch-proof-r1.spec.js tests/specs/scratch-proof-r2.spec.js tests/specs/scratch-proof-r3.spec.js tests/specs/scratch-proof-r4.spec.js tests/specs/scratch-proof-r5.spec.js tests/specs/scratch-proof-r6.spec.js tests/specs/scratch-proof-r7.spec.js tests/specs/scratch-proof-r8.spec.js",
-    "test:scratch-proofb": "node tools/ci/run-playwright.mjs tests/specs/scratch-prebuild-m1.spec.js tests/specs/scratch-prebuild-m2.spec.js tests/specs/scratch-prebuild-m3.spec.js tests/specs/scratch-prebuild-m4.spec.js tests/specs/scratch-proof-r10.spec.js tests/specs/scratch-proof-r11.spec.js tests/specs/scratch-proof-r12.spec.js tests/specs/scratch-proof-r9.spec.js"
+    "test:scratch-diag": "node tools/ci/run-playwright.mjs tests/specs/scratch-diag-r1.spec.js tests/specs/scratch-diag-r2.spec.js tests/specs/scratch-diag-r3.spec.js tests/specs/scratch-diag-r4.spec.js tests/specs/scratch-diag-r5.spec.js tests/specs/scratch-diag-r6.spec.js tests/specs/scratch-diag-r7.spec.js tests/specs/scratch-diag-r8.spec.js"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",
