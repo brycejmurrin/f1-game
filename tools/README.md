@@ -699,7 +699,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
-| **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (actor = owner, no app), decision: comments, label events. |
+| **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (owner, no app), byAgent, decision: comments, label events. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok for harness edits, gen + ratchets. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
