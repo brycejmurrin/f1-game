@@ -106,11 +106,10 @@ Load from the SKILL.md index when the task needs this detail.
         shipped circuits). To capture it, add the row with a placeholder value, run that
         test, and paste the hash its `<id>: <hash> != golden …` line prints,
      8. the def-file count literal in `tests/unit/tyre-model.test.mjs` (its tyreSeverity test),
-     9. `tools/shot/scenery-locations.json`: a GENERATED, committed catalog whose `sourceDigest` hashes every
-        `js/circuits/**`, `tests/data/landmarks/*.json` and track-VM file (`tools/shot/scenery-source-hash.cjs`).
-        ANY def/scenery/landmark edit stales it, and the merge gate (`tools/ci/merge-gate.mjs`) refuses the PR.
-        Regenerate with `node tools/shot/gen-scenery-locations.cjs` (builds every circuit: background it,
-        AGENTS.md rule 4; `--check` verifies) and commit the result; never hand-edit it.
+     9. nothing for `tools/shot/scenery-locations.json`: it is BUILT ON DEMAND and gitignored since 2026-11-11
+        (`ON_DEMAND_PATHS`, `tools/lib/generated-paths.mjs`). Its next reader rebuilds it
+        (`node tools/gen/ensure-built.mjs --with tools/shot/scenery-locations.json`, ~47 s), and the merge gate
+        builds it on the merge: a viewpoint that no longer emits refuses the PR. Never commit or hand-edit it.
      Optional per-id tables (absent = the default; no unit test was found requiring a
      row on 2026-10-27): `js/lighting/presets.js` `"<id>|tod|wx"` rows, `js/data/circuit-lore.js`.
      Removing a circuit instead is a FOUR-file pass, not the three this file
@@ -161,7 +160,7 @@ node tools/track/rotate-markings.cjs --check           # read-only proposed tran
 evidence, then apply the `--check` proposal by editing the def's `turns`/`sectors` yourself.
 Green = each count equals its `"<id>"` row in `tools/track/{clip,coplanar,float}-baseline.json` (an absent float row = 0) and in `tests/data/scenery-audit-baseline.json`; `props-tris-baseline.json` is a ratchet ceiling, so a lower measure is fine. Read the rows, never a number quoted in prose. Re-run after the edit;
 a geometry/scenery edit that moves a count means updating that baseline row to the measured value, in the same commit,
-and EVERY def/scenery/landmark edit regenerates `tools/shot/scenery-locations.json` (step 2, item 9) or the merge gate refuses it.
+and the merge gate builds `tools/shot/scenery-locations.json` from the merged circuits (step 2, item 9); nothing is committed for it.
 `import-circuit-path.mjs --self-check` can exit 1 on a known committed-path drift row (see `docs/archive/plans/skilltest-content-pipeline.md`); a FAIL row for the circuit you touched is yours.
 
 ## Adding a bridge or an elevation bump to an existing def

@@ -273,6 +273,23 @@ test("no shipped file references a STAGE_EXCLUDE path", () => {
   assert.deepEqual(offenders, [], "a shipped file names an excluded path: stage it again or drop the reference");
 });
 
+// BUILT ON DEMAND (2026-11-11, issue #5427): a tools-only generator output that git ignores. A committed or
+// re-added copy is what made two circuit PRs conflict; it must stay out of git and out of the staged site.
+test("every ON_DEMAND_PATHS file is gitignored, untracked, not a site file, and has a builder", async () => {
+  const { ON_DEMAND_PATHS, BUILT_PATHS, GENERATED_PATHS, isBuilt } = await import("../../tools/lib/generated-paths.mjs");
+  const { ensureOnDemand } = await import("../../tools/gen/ensure-built.mjs");
+  const git = (...a) => spawnSync("git", a, { cwd: ROOT, encoding: "utf8" });
+  assert.ok(ON_DEMAND_PATHS.length > 0);
+  for (const p of ON_DEMAND_PATHS) {
+    assert.equal(git("check-ignore", "-q", "--no-index", "--", p).status, 0, `${p} must be in .gitignore`);
+    assert.equal(git("ls-files", "--", p).stdout.trim(), "", `${p} must not be tracked`);
+    assert.equal(STAGE_DIRS.includes(p.split("/")[0]), false, `${p} is tools-only: it must not sit under a staged directory`);
+    assert.equal(BUILT_PATHS.includes(p) || GENERATED_PATHS.includes(p), false, `${p} is in one list only`);
+    assert.equal(isBuilt(p), true, `${p}: deploy.mjs cures its modify/delete conflict as a built path`);
+  }
+  assert.throws(() => ensureOnDemand("tools/README.md"), /not in ON_DEMAND_PATHS/, "an unknown target fails loudly, never a silent skip");
+});
+
 // BUILT, NOT COMMITTED (2026-10-28; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): a served generator output that
 // git ignores reaches the live site only because stageSite renders it from source. Pin both halves.
 test("every BUILT_PATHS file is gitignored, untracked, and rendered into the staged site from source", async () => {

@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { ensureOnDemand } from '../gen/ensure-built.mjs';
 
 // Racing-space fractions, not authored scenery fractions. Visual verification is separate.
 export const SURVEY_LOCATIONS = [
@@ -14,11 +15,19 @@ export const SURVEY_LOCATIONS = [
 ].map(([id, name, frac]) => ({ id, name, track: 'spa', frac,
   aliases: [name.toLowerCase(), id.split('/')[1]], source: 'docs/tracks/spa.md §3', verification: 'source-located; framing unverified' }));
 const require = createRequire(import.meta.url);
-const sceneryCatalog = JSON.parse(readFileSync(new URL('../shot/scenery-locations.json', import.meta.url), 'utf8'));
-const SCENERY_LOCATIONS = sceneryCatalog.locations.map(l => ({ ...l, kind: 'scenery',
-  aliases: [...new Set([l.id.split('/')[1], l.modelId, l.name.toLowerCase()])],
-  verification: `required scenery model emitted; ${l.stationMethod === 'source-viewpoint' ? 'source-backed viewing station' : 'nearest-road camera candidate'} ${l.viewDistanceM} m from model; framing unverified${l.viewDistanceM > 150 ? `; distant landmark${l.stationMethod === 'source-viewpoint' ? '' : ', road viewpoint uncertain'}` : ''}`,
-}));
+// The scenery catalog is BUILT ON DEMAND, not committed (ON_DEMAND_PATHS, issue #5427): read it through
+// ensure-built on first use, which rebuilds a missing, stale or hand-edited copy (~47 s cold, ~50 ms after) and
+// throws when the generator does, so a survey never runs on an old catalog.
+let sceneryLocations;
+function sceneryLocationRows() {
+  if (sceneryLocations) return sceneryLocations;
+  ensureOnDemand('tools/shot/scenery-locations.json');
+  const sceneryCatalog = JSON.parse(readFileSync(new URL('../shot/scenery-locations.json', import.meta.url), 'utf8'));
+  return (sceneryLocations = sceneryCatalog.locations.map(l => ({ ...l, kind: 'scenery',
+    aliases: [...new Set([l.id.split('/')[1], l.modelId, l.name.toLowerCase()])],
+    verification: `required scenery model emitted; ${l.stationMethod === 'source-viewpoint' ? 'source-backed viewing station' : 'nearest-road camera candidate'} ${l.viewDistanceM} m from model; framing unverified${l.viewDistanceM > 150 ? `; distant landmark${l.stationMethod === 'source-viewpoint' ? '' : ', road viewpoint uncertain'}` : ''}`,
+  })));
+}
 let circuitLocations;
 
 // The authored `turns` are racing-lap fractions. Read the built definitions
@@ -52,7 +61,7 @@ export function listSurveyLocations(track, custom = null) {
   const all = indexedLocations();
   if (!all.has(track)) throw new Error(`Unknown track ${track}; choose ${[...all.keys()].join(', ')}`);
   return [...SURVEY_LOCATIONS.filter(l => l.track === track).map(l => ({ ...l, kind: 'named' })),
-    ...SCENERY_LOCATIONS.filter(l => l.track === track), ...all.get(track)];
+    ...sceneryLocationRows().filter(l => l.track === track), ...all.get(track)];
 }
 export const CAMERA_RECIPES = {
   overview: { cam: 'orbit', az: 40, el: 40, dist: 90, h: 1.5, fov: 55 },

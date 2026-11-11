@@ -172,7 +172,7 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), "export const NOTHING = 1;\n");
     const broken = pf({ agent_id: "a1" });
     assert.equal(broken.status, 2);
-    assert.equal(broken.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
+    assert.equal(broken.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

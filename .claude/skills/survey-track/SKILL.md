@@ -67,9 +67,8 @@ scope `REJECT` lists files outside the pair plus `scratch/`/`artifacts/`: reject
 (the edit hook cannot bind the circuit id).
 
 A campaign merges the branches one at a time in that loop (disjoint pairs do not conflict). After
-the last merge (one circuit or a campaign) the PARENT regenerates `tools/shot/scenery-locations.json`
-once (`node tools/shot/gen-scenery-locations.cjs`; not part of `npm run gen`) — the one home for
-that step — then runs the gate.
+the last merge (one circuit or a campaign) the PARENT runs the gate; `tools/shot/scenery-locations.json` is
+built on demand (gitignored since 2026-11-11), so nothing is regenerated or committed for it.
 
 ## References
 

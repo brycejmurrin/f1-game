@@ -8,6 +8,11 @@
 // (rebuild every circuit and compare, about a minute). A passed check or a write records
 // `artifacts/cache/scenery-catalog.json` = { inputs: scenerySourceDigest, catalog: sha256 of the file }, and
 // `--check --cached` answers from that receipt when both still match (the unit test's path).
+//
+// BUILT ON DEMAND, NOT COMMITTED (2026-11-11, issue #5427): the catalog is gitignored (ON_DEMAND_PATHS in
+// tools/lib/generated-paths.mjs), so two PRs that each change a circuit no longer conflict in it. A reader calls
+// `ensureCatalog()` (through tools/gen/ensure-built.mjs `ensureOnDemand`): the receipt answers in ~50 ms when
+// inputs and bytes are unchanged; a missing, stale or hand-edited copy is rebuilt (~47 s); a throw fails the reader.
 "use strict";
 
 const fs = require("node:fs");
@@ -157,22 +162,42 @@ function writeReceipt(text) {
   } catch { /* a read-only tree: the next check rebuilds */ }
 }
 
-const check = process.argv.includes("--check");
-if (check && process.argv.includes("--cached") && receiptHolds()) {
-  console.log("OK scenery catalog: unchanged inputs and bytes since the last passed check (artifacts/cache/scenery-catalog.json)");
-  process.exit(0);
+/**
+ * Make the catalog exist and match this checkout's inputs. Returns "fresh" (receipt holds: unchanged inputs and
+ * bytes), "missing" or "stale" (rebuilt and written). Throws when the generator does.
+ * @returns {"fresh" | "missing" | "stale"}
+ */
+function ensureCatalog() {
+  if (fs.existsSync(outFile) && receiptHolds()) return "fresh";
+  const was = fs.existsSync(outFile) ? "stale" : "missing";
+  const text = JSON.stringify(generate(), null, 2) + "\n";
+  const tmp = `${outFile}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, text);
+  fs.renameSync(tmp, outFile);
+  writeReceipt(text);
+  return was;
 }
-const actual = JSON.stringify(generate(), null, 2) + "\n";
-if (check) {
-  if (!fs.existsSync(outFile) || fs.readFileSync(outFile, "utf8") !== actual) {
-    console.error("scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs");
-    process.exitCode = 1;
-  } else {
-    writeReceipt(actual);
-    console.log(`OK scenery catalog: ${JSON.parse(actual).locations.length} emitted locations`);
+
+module.exports = { ensureCatalog, receiptHolds, TARGET: "tools/shot/scenery-locations.json" };
+
+if (require.main === module) {
+  const check = process.argv.includes("--check");
+  if (check && process.argv.includes("--cached") && receiptHolds()) {
+    console.log("OK scenery catalog: unchanged inputs and bytes since the last passed check (artifacts/cache/scenery-catalog.json)");
+    process.exit(0);
   }
-} else {
-  fs.writeFileSync(outFile, actual);
-  writeReceipt(actual);
-  console.log(`Wrote ${outFile}: ${JSON.parse(actual).locations.length} emitted locations`);
+  const actual = JSON.stringify(generate(), null, 2) + "\n";
+  if (check) {
+    if (!fs.existsSync(outFile) || fs.readFileSync(outFile, "utf8") !== actual) {
+      console.error("scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs");
+      process.exitCode = 1;
+    } else {
+      writeReceipt(actual);
+      console.log(`OK scenery catalog: ${JSON.parse(actual).locations.length} emitted locations`);
+    }
+  } else {
+    fs.writeFileSync(outFile, actual);
+    writeReceipt(actual);
+    console.log(`Wrote ${outFile}: ${JSON.parse(actual).locations.length} emitted locations`);
+  }
 }

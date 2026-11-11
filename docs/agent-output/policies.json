@@ -2341,11 +2341,6 @@
       "presentation": "native",
       "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
     },
-    "tools/shot/scenery-locations.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c5"
-    },
     "tools/shot/scenery-source-hash.cjs": {
       "action": "no-direct-output",
       "presentation": "native",

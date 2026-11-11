@@ -4,7 +4,7 @@ it through .cursor/hooks/edit-guard.sh).
 Rules, read from the hook payload on stdin, all on the REPO-RELATIVE path of the target:
 
   1. A GENERATED file is never hand-edited (AGENTS.md rule 11). The list is derived, never copied:
-       * whole files: GENERATED_PATHS and BUILT_PATHS of tools/lib/generated-paths.mjs, the generator targets
+       * whole files: GENERATED_PATHS, BUILT_PATHS and ON_DEMAND_PATHS of tools/lib/generated-paths.mjs, the generator targets
          (tools/gen/targets.mjs GENERATORS, tools/gen/gen-shell.mjs TARGETS) that carry no block markers,
          CHANGELOG.md, tests/data/ratchets.d/*.json, .cursor/rules/*.mdc (but the hand-written ones
          gen-cursor-rules.mjs names in HAND_WRITTEN) and locales/en.json + locales/manifest.json;
@@ -112,10 +112,12 @@ def generated(root):
     """(whole-file map rel → why, block-mode set). Raises when a source list cannot be read."""
     src = open(os.path.join(root, "tools/lib/generated-paths.mjs"), encoding="utf8").read()
     gp, bp = js_strings(src, "GENERATED_PATHS"), js_strings(src, "BUILT_PATHS")
-    if gp is None or bp is None:
-        raise ValueError("tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS not found")
+    od = js_strings(src, "ON_DEMAND_PATHS")
+    if gp is None or bp is None or od is None:
+        raise ValueError("tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found")
     whole = {p: WHY_GEN for p in gp}
     whole.update({p: "it is BUILT, never committed: node tools/gen/ensure-built.mjs writes it (BUILT_PATHS)" for p in bp})
+    whole.update({p: f"it is BUILT ON DEMAND, never committed: node tools/gen/ensure-built.mjs --with {p} writes it (ON_DEMAND_PATHS)" for p in od})
     whole["CHANGELOG.md"] = "a PR adds a fragment docs/changelog.d/<slug>.md; node tools/gen/gen-changelog.mjs --fold writes it"
     whole["tests/data/ratchets.json"] = "node tools/check/ratchets.mjs --update (or the commit hook's --auto-raise) writes it"
     for p in ("locales/en.json", "locales/manifest.json"):

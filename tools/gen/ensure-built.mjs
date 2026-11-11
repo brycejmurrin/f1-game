@@ -21,12 +21,20 @@
  *
  *   node tools/gen/ensure-built.mjs           # one line per built file: fresh | built (missing) | rebuilt (stale)
  *   node tools/gen/ensure-built.mjs --quiet   # silent unless a generator fails (the git hooks)
- *   node tools/gen/ensure-built.mjs --list    # the built paths, one per line
- * Exit 1 when a generator throws (a circuit def that no longer evaluates).
+ *   node tools/gen/ensure-built.mjs --list    # the built paths, one per line (on-demand ones tagged)
+ *   node tools/gen/ensure-built.mjs --with tools/shot/scenery-locations.json   # also one ON_DEMAND_PATHS file
+ *   node tools/gen/ensure-built.mjs --all     # BUILT_PATHS and every ON_DEMAND_PATHS file
+ * Exit 1 when a generator throws (a circuit def that no longer evaluates); exit 2 for an unknown --with path.
+ *
+ * ON_DEMAND_PATHS (2026-11-11, issue #5427) are tools-only outputs too slow for every checkout (the scenery
+ * catalog rebuilds every circuit, ~47 s). The default run leaves them alone; each reader calls `ensureOnDemand`
+ * before it reads, so a fresh clone, a CI job or a new agent container builds the file the first time a reader
+ * needs it and answers from its receipt after that. They are never staged into the site.
  */
 import path from "node:path";
 import { ROOT, isMain, argGate, ensureFile } from "./gen-lib.mjs";
-import { BUILT_PATHS } from "../lib/generated-paths.mjs";
+import { createRequire } from "node:module";
+import { BUILT_PATHS, ON_DEMAND_PATHS } from "../lib/generated-paths.mjs";
 import * as circuitMeta from "./gen-circuit-meta.mjs";
 
 /** BUILT_PATHS entry → the generator that renders it (sync, reads this checkout's sources). */
@@ -38,6 +46,30 @@ for (const p of BUILT_PATHS) {
 }
 for (const p of RENDER.keys()) {
   if (!BUILT_PATHS.includes(p)) throw new Error(`ensure-built: ${p} has a generator here but is not in BUILT_PATHS`);
+}
+
+/** ON_DEMAND_PATHS entry → (root) => "fresh" | "missing" | "stale"; each owns its own staleness receipt. */
+const ON_DEMAND = new Map([
+  ["tools/shot/scenery-locations.json", (root) => createRequire(import.meta.url)(path.join(root, "tools/shot/gen-scenery-locations.cjs")).ensureCatalog()],
+]);
+for (const p of ON_DEMAND_PATHS) {
+  if (!ON_DEMAND.has(p)) throw new Error(`ensure-built: ${p} is in ON_DEMAND_PATHS but no generator here builds it`);
+}
+for (const p of ON_DEMAND.keys()) {
+  if (!ON_DEMAND_PATHS.includes(p)) throw new Error(`ensure-built: ${p} has an on-demand builder here but is not in ON_DEMAND_PATHS`);
+}
+
+/**
+ * Build one ON_DEMAND_PATHS file if it is missing, stale or hand-edited. A reader calls this right before it
+ * reads the file; a generator that throws propagates (the reader fails loudly, it never reads an old copy).
+ * @param {string} target repo-relative ON_DEMAND_PATHS entry
+ * @param {{ root?: string }} [opts]
+ * @returns {{ target: string, was: "fresh" | "missing" | "stale" }}
+ */
+export function ensureOnDemand(target, { root = ROOT } = {}) {
+  const build = ON_DEMAND.get(target);
+  if (!build) throw new Error(`ensure-built: ${target} is not in ON_DEMAND_PATHS (${ON_DEMAND_PATHS.join(", ")})`);
+  return { target, was: build(path.resolve(root)) };
 }
 
 /**
@@ -72,15 +104,24 @@ export function builtLine(rows) {
 
 if (isMain(import.meta.url)) {
   const argv = process.argv.slice(2);
-  const gated = argGate(argv, { allowed: ["--quiet", "--list"] });
+  const withPaths = argv.flatMap((a, i) => (a === "--with" ? [argv[i + 1]] : a.startsWith("--with=") ? [a.slice(7)] : []));
+  const gated = argGate(argv.filter((a, i) => !(a === "--with" || argv[i - 1] === "--with" || a.startsWith("--with="))), { allowed: ["--quiet", "--list", "--all"] });
   if (gated !== null) process.exit(gated);
   if (argv.includes("--list")) {
     for (const p of BUILT_PATHS) console.log(p);
+    for (const p of ON_DEMAND_PATHS) console.log(`${p} (on demand)`);
     process.exit(0);
   }
+  for (const p of withPaths) {
+    if (!ON_DEMAND_PATHS.includes(p)) {
+      console.error(`ensure-built: --with ${p || "(nothing)"}: not an ON_DEMAND_PATHS file (${ON_DEMAND_PATHS.join(", ")})`);
+      process.exit(2);
+    }
+  }
+  const extra = argv.includes("--all") ? [...ON_DEMAND_PATHS] : withPaths;
   let rows;
   try {
-    rows = ensureBuilt();
+    rows = [...ensureBuilt(), ...extra.map((t) => ensureOnDemand(t))];
   } catch (e) {
     console.error(`ensure-built: FAILED — ${e && e.message || e}`);
     process.exit(1);
