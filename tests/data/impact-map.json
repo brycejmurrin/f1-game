@@ -2132,6 +2132,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
@@ -2154,7 +2155,6 @@
       ],
       "*": [
         "tests/unit/cam-comfort.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/trackside.test.mjs"
       ]
@@ -2670,6 +2670,7 @@
       "create": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
@@ -2717,6 +2718,7 @@
       "flushDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-draw-decal-sweep.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
       "freeBodyPair": [
@@ -2776,6 +2778,9 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/menu-car-prep-yield.test.mjs"
       ],
+      "primeRace": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "putBoundedMesh": [
         "tests/unit/car-presentation-vm.test.mjs"
       ],
@@ -2810,6 +2815,7 @@
       ],
       "warmCarAssets": [
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-race-geom-warm.test.mjs"
@@ -7108,6 +7114,9 @@
       ]
     },
     "js/fx/particles.js": {
+      "armPrime": [
+        "tests/unit/particles-dirty.test.mjs"
+      ],
       "capacity": [
         "tests/unit/car-fx.test.mjs",
         "tests/unit/droplets-spray.test.mjs"
@@ -15940,6 +15949,9 @@
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "_primeMergeSlot": [
+        "tests/unit/tlx-prune-pin.test.mjs"
+      ],
       "_resolveWarmWhere": [
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
@@ -19366,6 +19378,7 @@
       ],
       "create": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/scale-defaults.test.mjs",
@@ -19404,7 +19417,6 @@
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",

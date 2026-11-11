@@ -7831,7 +7831,7 @@ function render(dt) {
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
   carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt); shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
-  carDraw.beginDecals();   // accumulate car decals, flush in one batch after the loop
+  carDraw.beginDecals(); carDraw.primeRace(paint, night);   // accumulate car decals, flush in one batch after the loop; primeRace: warm-built car meshes (#5387)
   // Particle emit ball: 110 m at full quality; shrinks with PerfGov.autoShed so
   // a struggling device stops spawning sub-pixel puffs that only starve the pool.
   // Squared once per frame — same divisor spray/rain already use for density.
