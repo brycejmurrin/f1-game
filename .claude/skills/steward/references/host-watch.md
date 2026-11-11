@@ -12,3 +12,12 @@ Use when the host lists no PR-subscription tool, no `Monitor`, or no timer.
 4. Record the missing subscription / reminder capability as unverified in the PR body; never claim an automation was armed.
 5. Check the active tool catalog with `node tools/check/doctor.mjs --catalog <file>`; a missing connector cannot be
    fixed by inventing tool results.
+
+## A refused subscription
+
+`subscribe_pr_activity` answering "Could not subscribe to this PR" is not transient on a PR another account's session
+opened (every `claude/audit-*` PR, 45 of 45 calls on 2026-11-09/10; no other PR failed): do not retry, and do not
+unsubscribe other PRs to "free" it. Use step 1 above and say so in the Hand-off block. Where the host's own notice
+asks for a timed check-in, keep it at 50 minutes or less and re-arm only after a state change: a wake after an hour
+of idle re-reads the whole context (measured $3–10 a wake, against $0.25–0.60 inside the hour;
+`docs/notes/ORCHESTRATION-REVIEW-2026-11-11.md` rank 9).

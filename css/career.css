@@ -542,8 +542,8 @@
 /* An offer is a TILE, not a list row: it is a commitment of one to three seasons
    and the tap target has to say so. Same grid as .cr-teamtile — colour bar, name,
    meta under it — plus a STAY/MOVE tag, which is the thing a player actually scans
-   for. Selection state is deliberately absent: clicking one signs it, there is no
-   in-between state to show. */
+   for. Selection state is deliberately absent: a tap opens the compare preview
+   (SIGN CONTRACT / CANCEL), and BACK or Escape there returns to this list. */
 .co-offer {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-rows: auto auto; column-gap: 10px; align-items: center;
