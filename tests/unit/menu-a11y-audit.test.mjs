@@ -899,6 +899,62 @@ test("TopModal: the ghost-tap shield swallows only a fast pointer repeat at the 
   assert.equal(click(row).stopped, false, "a slow swap: the next tap is a choice, not a double tap's ghost");
 });
 
+test("TopModal: the shield also swallows the ghost's pointerdown/pointerup, but only a click opens it (W34 row 6)", () => {
+  let now = 1000;
+  const h = bootTopModal(["overlay", "trackdesigner"], { Date: { now: () => now } });
+  const overlay = h.layer("overlay"), td = h.layer("trackdesigner");
+  td.hidden = true;
+  const door = h.add(overlay, "mb-designer", { y: 100 });
+  const canvas = h.add(td, "td-canvas", { y: 100 });
+  h.TopModal.scanLayers();
+  const ev = (type, target, o = {}) => {
+    const e = { type, target, isTrusted: true, detail: type === "click" ? 1 : 0, clientX: 100, clientY: 110, stopped: false, immediate: false, ...o };
+    e.preventDefault = () => {};
+    e.stopPropagation = () => { e.stopped = true; };
+    e.stopImmediatePropagation = () => { e.stopped = true; e.immediate = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  assert.equal(ev("pointerup", door).stopped, false);
+  assert.equal(ev("click", door).stopped, false, "the opening tap passes");
+  h.flip(td, false);
+  now += 120;
+  assert.equal(ev("pointerdown", canvas).stopped, true, "the 120 ms ghost's pointerdown never reaches the canvas");
+  const up = ev("pointerup", canvas);
+  assert.equal(up.stopped, true, "nor its pointerup (the designer places a point on it)");
+  assert.equal(up.immediate, false, "but other window-capture listeners (input.js's hold-release net) still see the lift");
+  assert.equal(ev("pointerup", canvas, { clientX: 500 }).stopped, false, "elsewhere on the new screen is a choice");
+  now += 400;
+  assert.equal(ev("pointerup", canvas).stopped, false, "after SHIELD_MS the canvas is live");
+  // A pointer event never opens a window of its own: with no click before the show, nothing is shielded.
+  h.flip(td, true); now += 5000;
+  ev("pointerdown", door); ev("pointerup", door);
+  h.flip(td, false); now += 50;
+  assert.equal(ev("pointerup", canvas).stopped, false);
+});
+
+test("TopModal: a ghost queued behind a slow screen build is judged by its own input time (W34 SEASON)", () => {
+  let now = 1000;
+  const h = bootTopModal(["overlay", "select"], { Date: { now: () => now }, performance: { timeOrigin: 1000, now: () => now - 1000 } });
+  const overlay = h.layer("overlay"), select = h.layer("select");
+  select.hidden = true;
+  const door = h.add(overlay, "mb-season", { y: 100 });
+  const map = h.add(select, "sel-map-btn", { y: 100 });
+  h.TopModal.scanLayers();
+  const click = (target, at) => {
+    const e = { type: "click", target, isTrusted: true, detail: 1, clientX: 100, clientY: 110, timeStamp: at - 1000, stopped: false };
+    e.preventDefault = () => {};
+    e.stopImmediatePropagation = () => { e.stopped = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  assert.equal(click(door, 1000).stopped, false);
+  now = 1900;                                  // the picker build held the thread 900 ms…
+  h.flip(select, false);
+  assert.equal(click(map, 1120).stopped, true, "…but the second tap happened 120 ms after the first");
+  assert.equal(click(map, 1950).stopped, false, "a tap made after the swap is a choice");
+});
+
 test("TopModal: automation (navigator.webdriver) is never shielded — its fast clicks are deliberate", () => {
   let now = 1000;
   const h = bootTopModal(["overlay", "select"], { Date: { now: () => now }, navigator: { webdriver: true } });

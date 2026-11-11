@@ -494,6 +494,42 @@ test("a stamp over a span that wraps the start line, and deleting point 0, keep 
   keep(plain(b.D.state().design), "delete point 0", 1e-6);
 });
 
+test("a full-lap width zone overlaps every span: SPAN WIDTH reads it, the base width clears it, a narrower span replaces it (W10 #2)", () => {
+  const b = bootHooked();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const item = b.C.sanitize(design({ baseHW: 8, hwZones: [{ s0: 0, s1: 1, hw: 5, ease: 0.025 }] }));
+  b.D.open({ design: item, shared: true });
+  const row = rowOf(b.root, "SPAN WIDTH m"), val = row.children[2];
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9]);
+  assert.equal(val.textContent, "5.0", "the road under the span is the full-lap zone's, not the 8.0 base");
+  assert.equal(b.D.setSpanWidth(8), true, "the base width clears the zone it overlaps");
+  assert.deepEqual(plain(b.D.state().design.hwZones), []);
+  b.D.undo();
+  assert.equal(b.D.state().design.hwZones.length, 1);
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.equal(b.D.setSpanWidth(6), true);
+  const z = plain(b.D.state().design.hwZones);
+  assert.equal(z.length, 1, "one zone: the span's, not the span's plus the full lap");
+  assert.equal(z[0].hw, 6); assert.notEqual(z[0].s1 - z[0].s0, 1);
+  b.D.close();
+});
+
+test("the map canvas leaves Tab to the browser; [ ] still walk the points (W10 #5)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const canvas = b.root.querySelector("canvas");
+  const key = (k, shiftKey = false) => { const e = { type: "keydown", key: k, shiftKey }; b.dom.dispatch(canvas, e); return e; };
+  assert.notEqual(key("Tab").defaultPrevented, true);
+  assert.equal(b.D.state().sel, -1, "Tab selects nothing");
+  key("]");
+  assert.equal(b.D.state().sel, 0);
+  assert.notEqual(key("Tab").defaultPrevented, true, "a selected point does not trap Tab either");
+  assert.notEqual(key("Tab", true).defaultPrevented, true);
+  assert.equal(b.D.state().sel, 0, "…and does not cycle");
+  b.D.close();
+});
+
 test("full-lap width survives REVERSE and START HERE through storage and engine rebuild", () => {
   const b = bootScreen();
   b.D.init(b.G, { custom: b.C, root: b.root });

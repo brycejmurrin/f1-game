@@ -39,29 +39,29 @@ const ROWS = [
   {
     name: "armed default → webgl2 path on TLX+forceGL (not GLX)",
     input: { caps: CAPS_FULL, prefs: { xr: "1", xrBackend: "webgl2" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three" },
   },
   {
     name: "armed unset xrBackend → TLX+forceGL",
     input: { caps: CAPS_FULL, prefs: { xr: "1" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three" },
   },
   {
     name: "armed + webgpu with all caps → three / experimental",
     input: { caps: CAPS_FULL, prefs: { xr: "1", xrBackend: "webgpu" } },
-    want: { xrMode: "armed", path: "webgpu", backendPref: "three", forceGL: false },
+    want: { xrMode: "armed", path: "webgpu", backendPref: "three" },
   },
   {
     name: "armed + webgpu missing gpu → fallback TLX+forceGL",
     input: { caps: CAPS_NO_GPU, prefs: { xr: "1", xrBackend: "webgpu" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three" },
     fallbackFrom: "webgpu",
     fallbackReason: "no navigator.gpu",
   },
   {
     name: "armed + webgpu missing XRGPUBinding → fallback TLX+forceGL",
     input: { caps: CAPS_NO_XRGPU, prefs: { xr: "1", xrBackend: "webgpu" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three" },
     fallbackFrom: "webgpu",
     fallbackReason: "no XRGPUBinding",
   },
@@ -72,7 +72,7 @@ const ROWS = [
       prefs: { xr: "1", xrBackend: "webgpu" },
       boot: { xrFallback: "webgl2" },
     },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three" },
     fallbackFrom: "webgpu",
     fallbackReason: "xrFallback latch",
   },
@@ -89,12 +89,12 @@ const ROWS = [
   {
     name: "garbage xrBackend → TLX+forceGL when armed",
     input: { caps: CAPS_FULL, prefs: { xr: "1", xrBackend: "metal" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three" },
   },
   {
     name: "xr=true boolean accepted as armed",
     input: { caps: CAPS_FULL, prefs: { xr: true, xrBackend: "webgl2" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three" },
   },
   {
     name: "Quest UA still arms webgpu experimental with a reason",
@@ -113,7 +113,7 @@ const ROWS = [
       caps: CAPS_FULL,
       prefs: { xr: "1", xrBackend: "webgl2", gfxBackend: "three" },
     },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three" },
   },
   {
     name: "storage-blocked shape: missing caps.vr with xr on → off",
@@ -130,9 +130,8 @@ test("XRPlan.resolve table (≥15 rows)", () => {
     assert.equal(got.xrMode, row.want.xrMode, row.name + " xrMode");
     assert.equal(got.path, row.want.path, row.name + " path");
     assert.equal(got.backendPref, row.want.backendPref, row.name + " backendPref");
-    if (row.want.forceGL != null) {
-      assert.equal(got.forceGL, row.want.forceGL, row.name + " forceGL");
-    }
+    // forceGL had no reader (the ENTER VR pin writes apex26.tlxForceGL); W10 #9 removed it.
+    assert.equal("forceGL" in got, false, row.name + " no forceGL field");
     assert.ok(Array.isArray(got.reasons), row.name + " reasons array");
     assert.ok(Array.isArray(got.fallbacks), row.name + " fallbacks array");
     if (row.fallbackFrom) {

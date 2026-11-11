@@ -291,28 +291,33 @@ const HudArrange = (() => {
       // manual anchors, before a drag or size change. The finger never jumps.
       const before = el.getBoundingClientRect();
       if (!(before.width > 0 && before.height > 0)) return orig;
-      HudLayout.set(id, orig, context.set, context.profile);
+      HudLayout.set(id, orig, context.set, context.profile, true);
       let after = el.getBoundingClientRect();
       const size = after.width > 0 ? orig.s * before.width / after.width : orig.s;
       const base = Object.assign({}, orig, { s: Number.isFinite(size) && size > 0 ? size : orig.s });
-      HudLayout.set(id, base, context.set, context.profile);
+      HudLayout.set(id, base, context.set, context.profile, true);
       after = el.getBoundingClientRect();
       const adopted = Object.assign({}, base, {
         x: orig.x + (before.left - after.left) / window.innerWidth * 100,
         y: orig.y + (before.top - after.top) / window.innerHeight * 100,
       });
-      HudLayout.set(id, adopted, context.set, context.profile);
+      HudLayout.set(id, adopted, context.set, context.profile, true);
       return adopted;
     }
-    function flush() {
+    /* A gesture frame paints only (#5031): no storage write, no layout read. The
+       clash marks, the strip's slot and the one save wait for flush() at the end. */
+    function paint() {
       if (raf) {
         if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(raf);
         else clearTimeout(raf);
       }
       raf = 0;
       const p = pending; pending = null;
-      if (p) HudLayout.set(p.id, p.v, p.set, p.profile);
+      if (!p) return;
+      const e = HudLayout.set(p.id, p.v, p.set, p.profile, true);
+      if (nameEl && e && p.id === selected) nameEl.textContent = Number(e.s.toPrecision(4)) + "%";
     }
+    function flush() { paint(); HudLayout.commit(); }
     /* Bind queued edits to the layout visible when the gesture started. */
     function queue(id, v) {
       if (id === "map" && v.s != null) { const orig = dragOrig(id); v = Object.assign({ x: orig.x, y: orig.y }, v); }
@@ -320,10 +325,7 @@ const HudArrange = (() => {
       pending = { id, set: context.set, profile: context.profile,
         v: Object.assign(pending ? pending.v : {}, v) };
       if (raf) return;
-      raf = (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 16))(() => {
-        flush();
-        if (editing) after();
-      });
+      raf = (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 16))(paint);
     }
     /* HIDDEN PIECES STAY REACHABLE WHILE ARRANGING. body[data-hud-hide] hides a
        piece with display:none, so a piece hidden here (or earlier in SETTINGS)
@@ -559,7 +561,7 @@ const HudArrange = (() => {
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
       if (drag && drag.id === id && !pinch) {
         // second finger on the same piece: a pinch
-        flush();
+        paint();
         const p0 = pointers.get(drag.pid);
         pinch = { id, pid: e.pointerId, d0: p0 ? dist(p0, { x: e.clientX, y: e.clientY }) : 0, s0: current(id).s };
         try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
@@ -587,16 +589,19 @@ const HudArrange = (() => {
     }
     function onPointerUp(e) {
       if (!editing) return;
-      flush();
+      paint();
       pointers.delete(e.pointerId);
+      let ended = false;
       if (pinch && drag && (e.pointerId === pinch.pid || e.pointerId === drag.pid)) {
         const pid = e.pointerId === pinch.pid ? drag.pid : pinch.pid;
         const point = pointers.get(pid), id = drag.id;
         pinch = null;
         drag = point ? { id, pid, startX: point.x, startY: point.y, orig: dragOrig(id) } : null;
-        after(); return;
-      }
-      if (drag && e.pointerId === drag.pid) { drag = null; after(); }
+        ended = true;
+      } else if (drag && e.pointerId === drag.pid) { drag = null; ended = true; }
+      // The one save of the gesture: when the last finger on the piece lifts.
+      if (!drag) HudLayout.commit();
+      if (ended) after();
     }
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("pointermove", onPointerMove, true);

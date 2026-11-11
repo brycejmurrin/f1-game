@@ -11,6 +11,8 @@
  *     const/let/function/class names are globals other scripts destructure at
  *     eval (tools/manifest.cjs HARD_EDGES). Minified, each must still be declared.
  *  3. Directives, kept names, no sourceMappingURL, and byte determinism.
+ *  4. The shell (#5050): staged css/*.css and index.html lose their comments
+ *     and nothing else the page reads (rule count, tag list, CSP per script).
  * The staged boot itself is CI's `staged-boot` job (ci.yml).
  */
 import { test } from "node:test";
@@ -25,7 +27,9 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { minifyInWorkers } from "../../tools/desktop/minify-worker.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
-import { MINIFY_OPTIONS, canMinify, minifyExcluded, minifySource, minifyStaged, minifyTargets, minifyJobCount, unminifiedPolicy } from "../../tools/desktop/minify.mjs";
+import { MINIFY_OPTIONS, canMinify, minifyExcluded, minifySource, minifyStaged, minifyTargets, minifyJobCount, unminifiedPolicy,
+  minifyCss, minifyShellHtml, minifyStagedShell, cssTargets } from "../../tools/desktop/minify.mjs";
+import { inlineScripts, cspFor, scriptHash } from "../../tools/gen/gen-shell.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -342,4 +346,71 @@ test("minifyStaged without terser: throws in a release build, logs and skips in 
   assert.match(JSON.parse(pr.stdout).skipped, /allowed: GitHub Actions pull_request build/);
   assert.match(pr.stderr, /::warning::stage: terser is not installed/);
   assert.equal(fs.readFileSync(path.join(dir, "js", "a.js"), "utf8"), src, "skipped stage keeps source bytes");
+});
+
+/* ── the shell: css/*.css and index.html (#5050) ───────────────────────── */
+// The `{` count outside comments and strings: one per rule block, the cheap
+// rule-count proxy the issue names (the CSSOM comparison is the PR's probe).
+function braces(css) {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g, "").split("{").length - 1;
+}
+const CSS_FILES = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(".css")).sort();
+
+test("#5050 minifyCss: every css/*.css keeps its rule count and loses every comment but /*!", () => {
+  for (const f of CSS_FILES) {
+    const src = read("css/" + f);
+    const min = minifyCss(src, f);
+    assert.equal(braces(min), braces(src), `${f}: rule blocks`);
+    assert.deepEqual(min.match(/\/\*(?!!)/g), null, `${f}: no plain comment survives`);
+    assert.equal(min.length < src.length, true, `${f}: smaller`);
+    assert.equal(minifyCss(min, f), min, `${f}: idempotent`);
+  }
+});
+
+test("#5050 minifyCss: strings, url() bodies and token seams are kept exactly", () => {
+  assert.equal(minifyCss('a  ,\n  b  {  content: "x  /* y */  z" ;  }'), 'a , b{content: "x  /* y */  z"}\n');
+  assert.equal(minifyCss(".a { background: url( a  b.png ) ; margin: 1px/**/solid; }"), ".a{background: url( a  b.png );margin: 1px solid}\n");
+  assert.equal(minifyCss(".a/* c */.b { --x: ; }"), ".a.b{--x: ;}\n");
+  assert.equal(minifyCss("/*! keep */\n/* drop */ .a{ color : red }"), "/*! keep */ .a{color : red}\n");
+  assert.equal(minifyCss("@media (min-width: 600px) {\n  .a > .b + .c { width: calc(1px + 2px) !important; }\n}\n"),
+    "@media (min-width: 600px){.a > .b + .c{width: calc(1px + 2px) !important}}\n");
+  assert.throws(() => minifyCss("a { /* open"), /unterminated comment/);
+});
+
+test("#5050 minifyShellHtml: comments go, the tag list stays, every inline script's CSP hash matches its staged body", async () => {
+  const src = read("index.html");
+  const tags = (h) => [...h.replace(/<!--[\s\S]*?-->/g, "").matchAll(/<(?:script|link)\b[^>]*>/gi)].map((m) => m[0]).filter((t) => !/http-equiv/.test(t));
+  const { minify: terserMinify } = await import("terser");
+  const minifyScript = async (body) => (await terserMinify(body, { ...MINIFY_OPTIONS, format: { ...MINIFY_OPTIONS.format } })).code;
+  const out = await minifyShellHtml(src, { minifyScript });
+  assert.deepEqual(out.match(/<!--/g), null, "no HTML comment left");
+  assert.deepEqual(tags(out), tags(src), "every <script>/<link> tag (src, href, media, type) is byte-identical");
+  const bodies = inlineScripts(out);
+  assert.equal(bodies.length, inlineScripts(src).length, "same inline scripts");
+  const meta = out.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/);
+  assert.equal(meta[1], cspFor(out), "the CSP is regenerated for the staged bodies");
+  for (const b of bodies) assert.equal(meta[1].includes(scriptHash(b).slice(1, -1)), true, "hashed: " + b.slice(0, 40));
+  assert.equal(bodies.find((b) => b.trim().startsWith("{")), inlineScripts(src).find((b) => b.trim().startsWith("{")), "the importmap is not touched");
+  assert.equal(out.length < src.length, true);
+  const keep = await minifyShellHtml(src, { minifyScript: null });
+  assert.deepEqual(inlineScripts(keep), inlineScripts(src), "no terser: bodies and so the CSP are unchanged");
+  assert.deepEqual(keep.match(/<!--/g), null, "comments go without terser too");
+  assert.equal(await minifyShellHtml("<p>a</p>\n  <!-- x -->\n<p>b<!-- y --></p>\n<script>//<!-- kept\n</script>\n"),
+    "<p>a</p>\n<p>b</p>\n<script>//<!-- kept\n</script>\n", "a comment's own line goes; script data is never scanned");
+});
+
+test("#5050 minifyStagedShell: a staged css/ and index.html are rewritten in place, totals reported", async (t) => {
+  const tmp = fs.mkdtempSync(path.join(ROOT, "scratch", "stage-shell-"));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(tmp, "css"));
+  for (const f of ["tokens.css", "title.css"]) fs.copyFileSync(path.join(ROOT, "css", f), path.join(tmp, "css", f));
+  fs.copyFileSync(path.join(ROOT, "index.html"), path.join(tmp, "index.html"));
+  assert.deepEqual(cssTargets(tmp), ["css/title.css", "css/tokens.css"]);
+  const r = await minifyStagedShell(tmp);
+  assert.equal(r.css.files, 2);
+  assert.equal(r.css.before, Buffer.byteLength(read("css/tokens.css")) + Buffer.byteLength(read("css/title.css")));
+  assert.equal(r.css.after, fs.statSync(path.join(tmp, "css/tokens.css")).size + fs.statSync(path.join(tmp, "css/title.css")).size);
+  assert.equal(r.html.after, fs.statSync(path.join(tmp, "index.html")).size);
+  assert.equal(r.html.scripts, await canMinify());
+  assert.equal(fs.readFileSync(path.join(tmp, "css/tokens.css"), "utf8"), minifyCss(read("css/tokens.css"), "css/tokens.css"));
 });

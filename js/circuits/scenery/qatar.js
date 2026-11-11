@@ -19,18 +19,24 @@
       // 1 - def._sceneryShift at the 4 dp brands_hatch uses.
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
+      // Pit straight sides. The engine's pit complex (garages, pit wall) takes
+      // def.pit.side +1, the RIGHT: the FIA 2025 pit-lane drawing puts the lane
+      // and F1 garages on the inside of T16, the infield of this clockwise lap.
+      // This file had the paddock on the left and the main stand on the right;
+      // mirrored as mexico / paul_ricard (DEFECT-LEDGER "paul_ricard — FIXED").
+      const PIT = 1, STAND = -PIT;
 
       if (circuitKit) {
         circuitKit.hospitality({
-          id: "kit:qatar:hospitality", frac: sl(0.86), side: -1, gap: 85,
+          id: "kit:qatar:hospitality", frac: sl(0.86), side: PIT, gap: 85,
           size: [18, 9, 34], modules: 4, required: true,
         });
         circuitKit.serviceCompound({
-          id: "kit:qatar:paddock-service", frac: sl(0.895), side: -1, gap: 72,
+          id: "kit:qatar:paddock-service", frac: sl(0.895), side: PIT, gap: 72,
           size: [24, 7, 42], vehicles: 8, required: true,
         });
         circuitKit.recoveryBay({
-          id: "kit:qatar:recovery-bay", frac: sl(0.845), side: -1, gap: 58,
+          id: "kit:qatar:recovery-bay", frac: sl(0.845), side: PIT, gap: 58,
           size: [16, 6, 20], required: true,
         });
         circuitKit.marshalShelter({
@@ -158,8 +164,8 @@
         // Start/finish densification: ~every 55 m along the pit straight.
         along(sl(0.89), sl(0.09), 55, (k) => {
           if (typeof floodMast === "function") {
-            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: false });
-            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: false });
+            floodMast(k, PIT, 32, { h: MAST_H_SF, cool: true, pool: false });
+            floodMast(k, STAND, 36, { h: MAST_H_SF, cool: true, pool: false });
           }
         });
       } else {
@@ -204,7 +210,7 @@
       // idiom). This file's s = 0 is the scenery origin (sceneryStartFrac 0.80),
       // not the start line — bankZones' 0.0415 apex is a corner in this frame —
       // so K(0.00) stood the 402 m slab at engine frac ~0.695, in the T12-T14
-      // complex, 0.3 of a lap from the engine pit lane (0.94-0.04, left) and
+      // complex, 0.3 of a lap from the engine pit lane (0.94-0.04, PIT side) and
       // the start gantry. sl(f) lands at engine frac f: the slab, offices,
       // halls, pit wall, timing mast, media centre and the main stand opposite
       // now stand on the real pit straight. The villas, kits, S/F masts,
@@ -215,7 +221,7 @@
         // bays: its keep-out reaches 30.1 m past the road edge along the row
         // (measured), and at the old 10.5 m gap the slab stood in it and was
         // superseded whole. 40 m = 30.1 + half the 18 m footprint + a shoulder.
-        const a = anchor(K(sl(0.00)), -1, 40), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.00)), PIT, 40), b = [a.r, a.u, a.t];
         const PIT_LEN = 402; // Guinness: 402.1 m — nearest whole metre
         const PIT_H = 12;
         const c = vadd(a.c, a.u, PIT_H * 0.55);
@@ -226,29 +232,29 @@
           addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, PIT_LEN], WHITE, b);
           // Day fascia — cool shadow band under the parapet so the Guinness
           // slab keeps a hard silhouette against desert sand (#3365).
-          addBox(stage, vadd(vadd(a.c, a.u, 10.2), a.r, 8.12),
+          addBox(stage, vadd(vadd(a.c, a.u, 10.2), a.r, -PIT * 8.12),
             [0.20, 0.9, PIT_LEN - 6], [0.42, 0.44, 0.48], b);
-          addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, 8.05),
+          addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, -PIT * 8.05),
             [0.25, 0.5, PIT_LEN - 2], [0.78, 0.78, 0.76], b);
-          addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, 8.08),
+          addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, -PIT * 8.08),
             [0.22, 1.2, PIT_LEN - 4], WIN_WARM, b);
           addBox(stage, vadd(a.c, a.u, 11.4), [17.2, 0.7, PIT_LEN + 1], WHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.u, 12.05), a.r, -1.5),
+          addBox(stage, vadd(vadd(a.c, a.u, 12.05), a.r, PIT * 1.5),
             [11, 0.4, PIT_LEN * 0.70], [0.88, 0.88, 0.86], b);
-          addBox(stage, vadd(vadd(a.c, a.u, 12.7), a.r, 8.15),
+          addBox(stage, vadd(vadd(a.c, a.u, 12.7), a.r, -PIT * 8.15),
             [0.18, 1.0, PIT_LEN * 0.68], WIN_COOL, b);
           for (let i = -2; i <= 2; i++) {
             const pod = vadd(vadd(a.c, a.u, 13.5), a.t, i * 70);
             addBox(stage, pod, [9, 3.0, 14], WHITE, b);
-            addBox(stage, vadd(vadd(pod, a.r, 4.6), a.u, 0.1),
+            addBox(stage, vadd(vadd(pod, a.r, -PIT * 4.6), a.u, 0.1),
               [0.16, 2.0, 12], WIN_WARM, b);
           }
           // Race-control tower — Tilke: "on the southern end". Placed at the
           // pit-entry / T16 end of the slab. Geographic south not independently
           // verified here; aft end is the conventional race-control seat.
-          const rcBase = vadd(vadd(a.c, a.t, -(PIT_LEN * 0.46)), a.r, -2);
+          const rcBase = vadd(vadd(a.c, a.t, -(PIT_LEN * 0.46)), a.r, PIT * 2);
           addBox(stage, vadd(rcBase, a.u, 14), [12, 28, 12], WHITE, b);
-          addBox(stage, vadd(vadd(rcBase, a.u, 22), a.r, 6.1),
+          addBox(stage, vadd(vadd(rcBase, a.u, 22), a.r, -PIT * 6.1),
             [0.22, 10, 10], WIN_COOL, b);
           addBox(stage, vadd(rcBase, a.u, 28.4), [14, 0.7, 14], WHITE, b);
           addBox(stage, vadd(rcBase, a.u, 30.0), [7, 3.2, 7], [0.82, 0.84, 0.86], b);
@@ -266,29 +272,29 @@
       })();
       // Secondary hospitality / team offices behind the pit face (not the
       // Guinness slab — that is qatar-pit-slab above).
-      building(K(sl(0.01)), -1, 24, 12, 8, 80,
+      building(K(sl(0.01)), PIT, 24, 12, 8, 80,
         { kind: "slab", wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
       // Pit-lane keep-out wall; garage doors are modelled on the slab above.
-      wall(sl(0.96), sl(0.08), -1, 3, 1.0, [0.85, 0.85, 0.85]);
+      wall(sl(0.96), sl(0.08), PIT, 3, 1.0, [0.85, 0.85, 0.85]);
 
       for (let i = 0; i < 6; i++) {
         const s = (0.965 + i * 0.024) % 1;
         const hf = hash(i * 11 + 7);
         const hallH = 6 + hf * 3;
-        building(K(sl(s)), -1, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,
+        building(K(sl(s)), PIT, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,
           { kind: "hall", wall: WHITE, window: WIN_COOL, floor: 3.0 });
         const roofTop = hallH * 0.5;
-        const a = anchor(K(sl(s)), -1, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(s)), PIT, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, roofTop - 0.05), [14, 0.55, 16], WHITE, b);
       }
 
       (function paddockMediaCentre() {
-        const a = anchor(K(sl(0.925)), -1, 72), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.925)), PIT, 72), b = [a.r, a.u, a.t];
         modelGroup("qatar-paddock-media-centre", {
           center: vadd(a.c, a.u, 5.5), size: [30, 12, 76], basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 4.5), [28, 9, 74], [0.82, 0.83, 0.84], b);
-          addBox(stage, vadd(vadd(a.c, a.u, 6.8), a.r, 14.05),
+          addBox(stage, vadd(vadd(a.c, a.u, 6.8), a.r, -PIT * 14.05),
             [0.24, 2.0, 68], WIN_COOL, b);
           addBox(stage, vadd(a.c, a.u, 9.3), [30, 0.65, 76], WHITE, b);
           for (const dz of [-26, -13, 0, 13, 26]) {
@@ -303,9 +309,9 @@
       // alone put gantry(0.012) — and the start lamps it carries — 1.6 km away.
       gantry(sl(0.0), 7.5, [0.12, 0.12, 0.14]);
       // Slim timing mast at S/F (race control lives on qatar-pit-slab).
-      tower(K(sl(0.985)), -1, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
+      tower(K(sl(0.985)), PIT, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
 
-      // Main grandstand (R): long covered stand along the pit straight —
+      // Main grandstand (STAND side, opposite the pits): long covered stand along the pit straight —
       // upgraded capacity ~40,000 (racingcircuits.info / PlanetF1). A continuous
       // raked roofed stand is sourced; a crescent plan is a survey ask without
       // an independent plan source, so we keep a gently stepped long stand
@@ -314,14 +320,15 @@
       // https://www.planetf1.com/news/first-look-revamped-lusail-international-circuit-qatar
       //
       // Gap 36 (was 15): dual_lite day S/F orbit (az 45 / el 20 / dist 42) puts
-      // the eye ~28 m on +1 — inside the old bowl/roof, so the frame was a dark
+      // the eye ~28 m on +1 (then the stand side; +1 is PIT since the FIA
+      // pit-side flip — the framing needs a re-capture) — inside the old bowl/roof, so the frame was a dark
       // slit onto sand (#3365). Past the orbit corridor the stand still reads as
       // the S/F hero from the track and from trackside beyond.
       (function mainGrandstand() {
         const MAIN_GAP = 36; // past dual_lite S/F orbit eye (~28 m lateral)
         for (let i = 0; i < 5; i++) {
           const s = 0.9565 + i * (82 / 5400); // 82 m pitch for 80 m stands: no 28 m gaps
-          qatarStand(`qatar-main-stand-${i}`, sl(s % 1), 1, MAIN_GAP, 80,
+          qatarStand(`qatar-main-stand-${i}`, sl(s % 1), STAND, MAIN_GAP, 80,
             [0.86, 0.86, 0.84], [0.18, 0.18, 0.22], i === 0);
         }
       })();
@@ -329,8 +336,8 @@
       (function straightAds() {
         let i = 0;
         along(sl(0.90), sl(0.085), 28, (k) => {
-          if (i % 4 === 3) arabicSign(k, 1, 5, 9, 3.2, [0.98, 0.94, 0.66], [0.10, 0.30, 0.20]);
-          else billboard(k, 1, 5, 9, 3.2, AD[i % AD.length]);
+          if (i % 4 === 3) arabicSign(k, STAND, 5, 9, 3.2, [0.98, 0.94, 0.66], [0.10, 0.30, 0.20]);
+          else billboard(k, STAND, 5, 9, 3.2, AD[i % AD.length]);
           i++;
         });
       })();
@@ -338,11 +345,20 @@
       arabicSign(K(0.735), -1, 34, 20, 4.2, [0.97, 0.95, 0.90], [0.44, 0.06, 0.18]);
       arabicSign(K(0.935), 1, 26, 18, 4.0, [0.98, 0.90, 0.40], [0.12, 0.13, 0.17]);
 
-      qatarStand("qatar-t1-stand-a", sl(0.053), 1, 20, 95,
+      // T1 ensemble (2026-11 corner-frames fix): built T1 is a RIGHT-hander
+      // running racing ~0.09-0.13, apex turns[0] 0.1157. The kits were keyed
+      // ~0.045 lap early (on the pit straight, ~120 m before turn-in) with the
+      // hill, stands and tyre wall on +1, the INSIDE of a right-hander. They
+      // now sit on T1OUT = -1, the outside of the braking zone and run-off
+      // (docs/tracks/qatar.md: Lusail Hill outside T1). The main stands (-1)
+      // end ~racing 0.025, so the braking-zone stands start clear of them.
+      // The VVIP villa + canopy follow on the T1 exit, outside, past the hill.
+      const T1OUT = -1;
+      qatarStand("qatar-t1-stand-a", sl(0.084), T1OUT, 20, 95,
         SHELL_SANDSTONE, [0.18, 0.18, 0.21], true);
-      qatarStand("qatar-t1-stand-b", sl(0.070), 1, 20, 65,
+      qatarStand("qatar-t1-stand-b", sl(0.100), T1OUT, 20, 65,
         SHELL_SANDSTONE, [0.18, 0.18, 0.21]);
-      tyreWall(sl(0.04), sl(0.085), 1, 5, [0.90, 0.86, 0.20]);
+      tyreWall(sl(0.088), sl(0.128), T1OUT, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(sl(0.05)), -1, 6);
       billboard(K(sl(0.065)), 1, 6, 12, 3.8, AD[0]);
 
@@ -357,7 +373,8 @@
       // keeps a silhouette against desert sand in daylight (night flood pools
       // previously carried the identity).
       (function lusailHill() {
-        const a = anchor(K(sl(0.068)), 1, 56), b = [a.r, a.u, a.t];
+        const HS = -T1OUT; // terraces step toward the track (authored for +1)
+        const a = anchor(K(sl(0.114)), T1OUT, 62), b = [a.r, a.u, a.t];
         modelGroup("qatar-lusail-hill", {
           center: vadd(a.c, a.u, 7.2), size: [48, 17, 92], basis: b,
         }, (stage) => {
@@ -369,23 +386,23 @@
             const y = 1.4 + row * 1.55;
             const inset = 7 + row * 3.2;
             const outR = 7 + row * 2.5;
-            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -outR),
+            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -HS * outR),
               [17 - row * 1.4, 0.5, 74 - inset * 1.3], GRASS, b);
-            addBox(stage, vadd(vadd(a.c, a.u, y - 0.4), a.r, -outR + 0.55),
+            addBox(stage, vadd(vadd(a.c, a.u, y - 0.4), a.r, HS * (-outR + 0.55)),
               [1.1, 0.95, 72 - inset * 1.3], [0.30, 0.26, 0.20], b);
           }
           // Viewing rail + crest path (raised with the mound).
-          addBox(stage, vadd(vadd(a.c, a.u, 11.2), a.r, -14),
+          addBox(stage, vadd(vadd(a.c, a.u, 11.2), a.r, -HS * 14),
             [0.22, 1.15, 58], STEEL, b);
           addBox(stage, vadd(a.c, a.u, 10.4), [8, 0.32, 64], [0.50, 0.50, 0.47], b);
           // Day-facing crest wall — darker band so the hill rim reads against sand.
-          addBox(stage, vadd(vadd(a.c, a.u, 9.6), a.r, -18),
+          addBox(stage, vadd(vadd(a.c, a.u, 9.6), a.r, -HS * 18),
             [0.35, 2.4, 50], [0.22, 0.20, 0.18], b);
         }, { required: true });
         // Soft GA bank further out than the required mound so ladders do not
         // share planes with qatar-lusail-hill terraces.
         if (typeof spectatorHill === "function") {
-          spectatorHill(sl(0.060), sl(0.082), 1, 78, {
+          spectatorHill(sl(0.104), sl(0.126), T1OUT, 88, {
             rows: 3, rise: 1.15, depth: 2.1, density: 0.42, step: 12,
             grass: GRASS, riser: [0.36, 0.32, 0.24],
           });
@@ -413,11 +430,11 @@
 
       // T1 VVIP — white villa + ~60 m branch-style sail canopy (replaces mosque)
       (function t1Vvip() {
-        building(K(sl(0.048)), -1, 36, 18, 9, 32,
+        building(K(sl(0.125)), T1OUT, 36, 18, 9, 32,
           { kind: "dome", wall: WHITE, window: WIN_COOL, floor: 3.4 });
-        building(K(sl(0.058)), -1, 40, 14, 7, 24,
+        building(K(sl(0.134)), T1OUT, 40, 14, 7, 24,
           { kind: "arch", wall: [0.91, 0.91, 0.89], window: WIN_WARM, floor: 3.2 });
-        const a = anchor(K(sl(0.052)), -1, 48), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.129)), T1OUT, 48), b = [a.r, a.u, a.t];
         modelGroup("qatar-t1-vvip-canopy", {
           center: vadd(a.c, a.u, 8.3), size: [62, 17, 38], basis: b,
         }, (stage) => {
@@ -596,7 +613,10 @@
       }
       marshalPost(K(0.88), 1, 6);
 
-      // Same reasoning as T2/T3: temporary open seating, not a built stand.
+      // T11-T12 temporary open seating (as the mid-lap bleacher above), not a built stand.
+      // Authored frame: 0.91-0.961 lands at racing 0.605-0.656 (built T11 0.6046 L,
+      // T12 0.661 R), tyre wall on T11's outside. Not the Turn 16 stand the
+      // fallback ids and docs/tracks/qatar.md name — that one is not built.
       if (typeof bleacher === "function") {
         bleacher(0.927, 0.961, 1, 15, {
           rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,
@@ -643,11 +663,11 @@
       every(vergeStep, (k) => {
         // every() hands the AUTHORED-frame node; the pit wall (sl(0.96..0.08))
         // is keyed in RACING terms, so compare in racing terms too — the raw
-        // authored s skipped racing 0.65-0.80 (T12-T14) instead of the straight.
+        // authored s skipped racing 0.65-0.80 (T12-T15) instead of the straight.
         const s = (((k % n) + n) % n / n + 1 - SL) % 1;
         for (const side of [-1, 1]) {
-          // Pit keep-out wall owns the left shoulder on the S/F (gap 3).
-          if (side === -1 && (s >= 0.94 || s <= 0.10)) continue;
+          // Pit keep-out wall owns the PIT shoulder on the S/F (gap 3).
+          if (side === PIT && (s >= 0.94 || s <= 0.10)) continue;
           groundPatch(k, side, GREEN_GAP + side * 0.08, [GREEN_W, 0.15, vergeLen], GRASS,
             { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
         }
@@ -664,13 +684,13 @@
         // Re-keying them through sl() was tried: it moves bays onto inside curves and
         // flatCoplanar rises 2 -> 9 (ground-audit), so the windows stay where they
         // are and the labels below name where they really land.
-          [0.10, 0.22, 1, 16],   // racing 0.795-0.915 (T14-T16 approach, S/F)
+          [0.10, 0.22, 1, 16],   // racing 0.795-0.915 (T15-T16, S/F)
           [0.10, 0.22, -1, 16],
           [0.26, 0.38, 1, 16],   // racing 0.955-0.075 (pit straight, T1)
           [0.26, 0.38, -1, 16],
-          [0.52, 0.66, 1, 16],   // racing 0.215-0.355 (T4-T6)
+          [0.52, 0.66, 1, 16],   // racing 0.215-0.355 (T3 exit-T5)
           [0.52, 0.66, -1, 16],
-          [0.78, 0.90, 1, 16],   // racing 0.475-0.595 (T10-T11)
+          [0.78, 0.90, 1, 16],   // racing 0.475-0.595 (T8 exit-T10)
           [0.78, 0.90, -1, 16],
         ];
         for (const [s0, s1, side, step] of bays) {
@@ -690,7 +710,7 @@
         const LED = [
           [0.85, 0.18, 0.16], [0.16, 0.42, 0.78], [0.92, 0.74, 0.14], [0.10, 0.62, 0.42],
         ];
-        // Four clusters behind the pit / paddock face (left of S/F), spaced
+        // Four clusters behind the pit / paddock face (PIT side of S/F), spaced
         // along the Guinness slab so they read as one paddock ensemble.
         const emitVillaCluster = (stage, a0, b, g) => {
           for (let v = 0; v < 4; v++) {
@@ -706,25 +726,25 @@
             }
             // Body + set-back upper storey (curved-front read via frustum).
             addFrustum(stage, vadd(base, a0.u, 0.7), 9.2, 7.0, 7.6, wall, 8, b);
-            addBox(stage, vadd(vadd(base, a0.r, 1.0), a0.u, 5.0),
+            addBox(stage, vadd(vadd(base, a0.r, -PIT * 1.0), a0.u, 5.0),
               [7.6, 3.8, 7.8], wall, b);
             // First-floor LED brand screen (Tilke: "Imposing LED Screens") —
             // sits on the body face, not floating free.
             stage._mat = MAT.GLASS;
-            addBox(stage, vadd(vadd(base, a0.r, -4.4), a0.u, 5.0),
+            addBox(stage, vadd(vadd(base, a0.r, PIT * 4.4), a0.u, 5.0),
               [0.20, 2.8, 6.4], LED[(g + v) % LED.length], b);
             stage._mat = MAT.STONE;
             // Roof slab bottom touches the upper storey top (5.0+1.9=6.9).
             addBox(stage, vadd(base, a0.u, 7.15), [9.6, 0.5, 8.6], WHITE, b);
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(base, a0.r, -4.8), a0.u, 3.6),
+            addBox(stage, vadd(vadd(base, a0.r, PIT * 4.8), a0.u, 3.6),
               [2.2, 0.20, 6.6], LAMP, b);
             stage._mat = 0;
           }
         };
         // Literal modelGroup("…") ids — scenery-api-contract scans the source.
         {
-          const a0 = anchor(K(sl(0.955)), -1, 56), b = [a0.r, a0.u, a0.t];
+          const a0 = anchor(K(sl(0.955)), PIT, 56), b = [a0.r, a0.u, a0.t];
           if (!(typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16))) {
             modelGroup("qatar-hospitality-villas-1", {
               center: vadd(a0.c, a0.u, 6.0), size: [20, 14, 46], basis: b,
@@ -736,7 +756,7 @@
           [2, 0.995, "qatar-hospitality-villas-3"],
           [3, 0.025, "qatar-hospitality-villas-4"],
         ]) {
-          const a0 = anchor(K(sl(s0)), -1, 56);
+          const a0 = anchor(K(sl(s0)), PIT, 56);
           if (typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16)) continue;
           const b = [a0.r, a0.u, a0.t];
           modelGroup(id, {

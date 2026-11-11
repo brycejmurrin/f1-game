@@ -960,9 +960,11 @@ test("flyMsFor: habitual short cut waits for warmReady (would fail before the wa
 
 test("metaRows: a circuit gets its facts; a real race joined mid-race gets the lap, your place, tyres, stops, leader and flag", () => {
   const metaRows = (...a) => JSON.parse(JSON.stringify(LS.metaRows(...a)));   // the module's arrays are another realm's
-  const track = { id: "baku", name: "BAKU", lengthKm: 6.003, night: true };
+  // Baku races in daylight (night: false since 2026-11-10); "default" reads DAY, an explicit night pick reads NIGHT.
+  const track = { id: "baku", name: "BAKU", lengthKm: 6.003, night: false };
   assert.deepEqual(metaRows({ track, laps: 12, weather: "dry", tod: "default" }, 20),
-    [["LAPS", "12"], ["LENGTH", "6.003 km"], ["TURNS", "20"], ["WEATHER", "DRY"], ["TIME", "NIGHT"]]);
+    [["LAPS", "12"], ["LENGTH", "6.003 km"], ["TURNS", "20"], ["WEATHER", "DRY"], ["TIME", "DAY"]]);
+  assert.deepEqual(metaRows({ track, laps: 12, weather: "dry", tod: "night" }, 20).at(-1), ["TIME", "NIGHT"]);
   const story = {
     lap: 40, realLaps: 51, grid: false, leader: { code: "RUS" }, out: [{}, {}, {}, {}, {}, {}], cautions: [],
     you: { running: true, pos: 5, gap: { s: 3.3, lapsDown: 0 }, tyre: { compound: "medium", age: 8 }, stops: [31, 36] },
