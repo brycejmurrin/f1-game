@@ -14,9 +14,7 @@ const KNOWN = ["--team", "--out", "--help"];
 test("an unknown flag throws CliArgError naming the near miss and what is accepted", () => {
   assert.throws(() => makeFlags(["--tema=redbull"], KNOWN), (e) => {
     assert.ok(e instanceof CliArgError);
-    assert.match(e.message, /unknown flag --tema/);
-    assert.match(e.message, /did you mean --team/);
-    assert.match(e.message, /accepts: --team --out --help/);
+    assert.equal(e.message, "unknown flag --tema — did you mean --team?\n  accepts: --team --out --help");
     return true;
   });
 });
@@ -50,8 +48,7 @@ test("--help: exitIfHelp prints the text and exits 0; a CLI built on parseFlags 
   assert.equal(help.stdout.trim(), "usage: x");
   const bad = run(`import {parseFlags} from "./tools/lib/cli-args.mjs"; parseFlags(["--tema"], ["--team"])`);
   assert.equal(bad.status, 1);
-  assert.match(bad.stderr, /unknown flag --tema — did you mean --team/);
-  assert.doesNotMatch(bad.stderr, /\n\s+at /, "a typo is the caller's, not a crash");
+  assert.equal(bad.stderr, "unknown flag --tema — did you mean --team?\n  accepts: --team\n", "a typo is the caller's, not a crash");
   assert.equal(typeof exitIfHelp, "function");
   assert.equal(typeof parseFlags, "function");
 });

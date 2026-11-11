@@ -102,3 +102,54 @@ test("protect-files: MAIN may edit shared-contract files under a subdirectory; l
 });
 
 // stop-guard.sh was deleted 2026-11-03 with the local browser runs it watched (plan §4.2 / §4.7).
+
+// Behavioural rows for the advisory hooks (W14): the real scripts on a throwaway repo under artifacts/.
+function hookRepo(prefix) {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", prefix));
+  spawnSync("git", ["init", "-q", dir]);
+  const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+  return { dir, put, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("post-edit.sh: a js/ file that does not parse is named; a new test file with no header comment is told it needs one", () => {
+  const r = hookRepo("post-edit-");
+  // fixture paths in a throwaway repo, spelled in parts so they never read as references into this tree
+  const BAD = ["js", "bad.js"].join("/"), GOOD = ["js", "good.js"].join("/"), NEW = ["tests/unit", "new-thing.test.mjs"].join("/"), BARE = ["tests/unit", "bare-thing.test.mjs"].join("/");
+  try {
+    r.put(BAD, "function (\n");
+    r.put(NEW, "// new-thing — covers x.\n");
+    r.put(BARE, "import test from \"node:test\";\n");
+    const hook = (rel) => {
+      const out = spawnSync("bash", [path.join(ROOT, ".claude/hooks/post-edit.sh")], { encoding: "utf8",
+        input: JSON.stringify({ tool_name: "Edit", hook_event_name: "PostToolUse", tool_input: { file_path: path.join(r.dir, rel) } }) });
+      assert.equal(out.status, 0, out.stderr);
+      return out.stdout.trim() ? JSON.parse(out.stdout).hookSpecificOutput.additionalContext : "";
+    };
+    assert.equal(hook(BAD).split("\n")[0], `[post-edit] ${BAD} does not parse:`);
+    // A header comment is all the built coverage page needs (#5389 retired the committed docs/ copy).
+    assert.equal(hook(NEW), "", "a new test with a header comment needs nothing more from this hook");
+    assert.equal(hook(BARE), "[post-edit] bare-thing.test.mjs is not fully registered — test:guards fails the commit until it is:\n"
+      + "  - give it a one-sentence header comment (what it covers): its row in the built coverage page (`node tools/docs/gen-coverage-table.mjs` → artifacts/TESTING-COVERAGE.md) is read from it");
+    r.put(GOOD, "var x = 1;\n");
+    assert.equal(hook(GOOD), "", "a clean edit says nothing");
+  } finally { r.rm(); }
+});
+
+test("session-start.sh dry mode: names the bounded install and an open hatch, and changes nothing", () => {
+  const r = hookRepo("session-start-");
+  try {
+    r.put("package.json", "{}\n"); r.put("package-lock.json", "{}\n"); r.put(".githooks/pre-commit", "#!/bin/sh\n");
+    r.put(".claude/allow-protected", "");
+    const out = spawnSync("bash", [path.join(ROOT, ".claude/hooks/session-start.sh")], { encoding: "utf8", timeout: 60000,
+      env: { ...process.env, CLAUDE_PROJECT_DIR: r.dir, APEX_SESSION_START_DRY: "1", APEX_SKIP_SESSION_INSTALL: "" } });
+    assert.equal(out.status, 0, out.stderr);
+    // The first two fields and the last are fixed; the ones between (Chromium, lsp, branch, loadavg) depend on the box.
+    const head = "apex26 session-start: npm ci: would run (dry); hooksPath: would set .githooks (was unset; dry); ";
+    assert.equal(out.stdout.slice(0, head.length), head);
+    assert.equal(out.stdout.trim().split("; ").at(-1), "HATCH ACTIVE: .claude/allow-protected (remove it when the assigned edit is done);");
+    assert.ok(!fs.existsSync(path.join(r.dir, "node_modules")), "no install ran");
+    assert.equal(spawnSync("git", ["-C", r.dir, "config", "--get", "core.hooksPath"], { encoding: "utf8" }).stdout.trim(), "", "no git config write");
+    const src = fs.readFileSync(path.join(ROOT, ".claude/hooks/session-start.sh"), "utf8");
+    assert.match(src, /timeout -k 5 120 npm ci/, "the install is bounded inside the 300 s hook");
+  } finally { r.rm(); }
+});

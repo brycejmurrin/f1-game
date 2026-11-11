@@ -22,9 +22,52 @@ var RadioVoice = (function () {
     comm: "announcer",
   });
   // Prosody per channel: flat and official, calm and explanatory, quick and
-  // clipped. On iOS every English voice sounds the same (the platform returns
-  // no voice list and picks its own), so prosody is the ONLY differentiator
-  // there and has to carry the distinction alone.
+  // clipped. It is the differentiator of last resort: where getVoices() comes
+  // back empty (Chrome's first read, a synth with nothing installed) the
+  // platform picks one voice for everything and prosody carries the channel
+  // alone. iOS is NOT that case — it returns a PARTIAL list (the preinstalled
+  // voices; downloaded ones are missing, bugs.webkit.org/show_bug.cgi?id=290497)
+  // — so there each channel gets its own voice from VOICE_LADDER below.
+  // THE DEFAULT VOICE PER CHANNEL, when the player has not picked one. The old
+  // default was the first three voices of the alphabetised English list, which
+  // on an iPhone is Aaron / Albert / Arthur — Albert being one of Apple's
+  // novelty voices — so race control could come out of a joke voice. Each
+  // channel now walks its own ladder, like js/audio/announcer.js PREFERRED, and
+  // a voice one channel took is skipped by the next (control, then coach, then
+  // radio), so the three stay three voices wherever the list allows.
+  //   control: flat, official, British — Race Control reads like the FIA.
+  //   coach:   calm and explanatory — a clear US/AU voice.
+  //   radio:   the race engineer, quick — a second British/Irish/AU male.
+  // Names cover Apple (iOS/macOS preinstalled), Google (Chrome) and Microsoft
+  // (Edge/Windows) English voices.
+  const NOVELTY = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|kathy|organ|pipe organ|ralph|superstar|trinoids|whisper|wobble|zarvox|fred|grandma|grandpa)\b/i;
+  const VOICE_LADDER = Object.freeze({
+    control: [/^daniel\b/i, /^google uk english male/i, /\b(ryan|george)\b/i, /^(arthur|oliver|malcolm)\b/i, /^en[-_]gb/i],
+    coach: [/^samantha\b/i, /^google us english/i, /\b(aria|jenny|zira)\b/i, /^(karen|moira|tessa|nicky|ava|allison|susan)\b/i, /^en[-_](us|au)/i],
+    radio: [/^(arthur|oliver|gordon|aaron|rishi|tom|evan|nathan)\b/i, /^google uk english/i, /\b(thomas|guy|david|mark)\b/i, /^daniel\b/i, /^en[-_](gb|ie|au|in)/i],
+  });
+  const LADDER_ORDER = ["control", "coach", "radio"];
+  function ladderHit(rung, v) { return rung.test(v.name || "") || (rung.source.startsWith("^en") && rung.test(v.lang || "")); }
+  /** Pure over the list (the test hands it any platform's voices): the voice a
+   *  channel gets with no stored pick. Never a novelty voice while any other is
+   *  listed; null only for an empty list. */
+  function pickChannelVoice(speaker, list) {
+    const all = (Array.isArray(list) ? list : []).filter(Boolean);
+    if (!all.length) return null;
+    const plain = all.filter((v) => !NOVELTY.test(v.name || ""));
+    const pool = plain.length ? plain : all;
+    const taken = new Set();
+    const order = LADDER_ORDER.indexOf(speaker) >= 0 ? LADDER_ORDER : [speaker];
+    for (const sp of order) {
+      const ladder = VOICE_LADDER[sp] || [];
+      let hit = null;
+      for (const rung of ladder) { hit = pool.find((v) => !taken.has(v) && ladderHit(rung, v)); if (hit) break; }
+      if (!hit) hit = pool.find((v) => !taken.has(v)) || pool[0];
+      if (sp === speaker) return hit;
+      taken.add(hit);
+    }
+    return pool[0];
+  }
   const TONE = Object.freeze({
     control: { pitch: 0.9, rate: 1.05 },
     coach: { pitch: 1.0, rate: 0.95 },
@@ -578,9 +621,9 @@ var RadioVoice = (function () {
       voices = voicesAny.filter((v) => v.localService);
       return remoteOk ? voicesAny : voices;
     }
-    // An EMPTY list is not a refusal. Safari returns nothing from getVoices()
-    // and picks a system default itself, so voice = null is the Safari path and
-    // it must still speak — prosody alone then carries the channel.
+    // An EMPTY list is not a refusal: voice = null lets the platform pick its
+    // default and the line must still speak — prosody alone then carries the
+    // channel. (iOS returns a partial list, not an empty one: VOICE_LADDER.)
     /* The player's pick by NAME, else the shipped spread.
      *
      * BY NAME AND NOT BY INDEX, because the index is not stable: the list is
@@ -604,8 +647,7 @@ var RadioVoice = (function () {
       if (speaker === "announcer" && typeof Announcer !== "undefined") {
         const pick = Announcer.pickVoice(v, want); if (pick) return v.find(x => x.name === pick.name) || null;
       }
-      const i = { control: 0, coach: 1, radio: 2 }[speaker] || 0;
-      return v[i % v.length];
+      return pickChannelVoice(speaker, v);
     }
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
     function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
@@ -1033,7 +1075,7 @@ var RadioVoice = (function () {
 
   // hashSeed / PACK_STOP_TAIL_S stay module-local (speakPack deadline +
   // radioBand/squelchPlan seeds); no outside caller reaches for them.
-  return { create, inert, plan, spokenLang, hasVoiceFor, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
+  return { create, inert, plan, pickChannelVoice, spokenLang, hasVoiceFor, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
            PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S,
            ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S,
            radioBand, squelchPlan, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };

@@ -68,6 +68,7 @@
 // Playwright run (check /proc/loadavg < 3).
 import fs from "node:fs";
 import path from "node:path";
+import { OWNER_EXPORT } from "../lib/bryce-phone.mjs";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -434,8 +435,11 @@ async function runGroup(browser, group, plan, log) {
     const t0 = Date.now();
     await page.goto(plan.url, { waitUntil: "domcontentloaded", timeout: plan.waitMs });
     await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: plan.waitMs });
-    if (plan.settings) {
-      const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), plan.settings);
+    // An owner device (bryce-*) boots on his live settings export unless --settings named another file.
+    const settings = plan.settings || (dev.owner ? JSON.parse(fs.readFileSync(path.join(ROOT, OWNER_EXPORT), "utf8")) : null);
+    if (settings) {
+      if (!plan.settings) log(`settings: owner device ${c0.device} → ${OWNER_EXPORT}`);
+      const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), settings);
       if (!imp.ok || imp.failed) throw new Error(`--settings import incomplete: ${JSON.stringify(imp)}`);
       log(`settings: ${imp.applied} applied, ${imp.skipped} skipped`);
       // The boot-group init script runs again on reload, so the cell's boot keys win over the file's.

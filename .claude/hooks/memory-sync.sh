@@ -1,19 +1,24 @@
 #!/bin/bash
-# memory-sync.sh restore — put the tracked auto memory (.claude/memory/) where
-# the CLI reads it, once, at SessionStart (settings.json). One way: the repo
-# wins. A cloud container starts empty every time, and the CLI turns auto
-# memory off in remote sessions unless CLAUDE_CODE_DISABLE_AUTO_MEMORY is
-# falsy (settings.json sets "0"); `autoMemoryDirectory` cannot point here from
-# a checked-in settings file. The live dir is keyed on the MAIN checkout (every
-# worktree shares one), non-alphanumerics replaced by '-'.
+# memory-sync.sh restore — put the tracked auto memory (.claude/memory/) where the CLI reads it, at the START of a
+# session (SessionStart). One way: the repo copy fills the live dir. A cloud container starts empty every time, and
+# the CLI turns auto memory off in remote sessions unless CLAUDE_CODE_DISABLE_AUTO_MEMORY is falsy (settings.json
+# sets "0"); `autoMemoryDirectory` cannot point here from a checked-in settings file. The live dir is keyed on the
+# MAIN checkout (every worktree shares one), non-alphanumerics replaced by '-'.
 #
-# No save (the three-way sync, its baseline dir and the index mark that hid the
-# files from git status went with plan §4.9): a memory that should outlive the session is edited in
-# .claude/memory/ with `node tools/env/apex-memory.mjs` and committed like any
-# file (docs/notes/AGENT-MEMORY.md). Cloud only (CLAUDE_CODE_REMOTE=true) unless
-# APEX_MEMORY_SYNC=1: a laptop's live dir already persists and holds personal
+# Only on a new session: the hook input's `source` (https://code.claude.com/docs/en/hooks §SessionStart: startup,
+# resume, clear, compact, fork) must be "startup" when it is given, so a resume or a compaction never rewrites a
+# memory written mid-session. And a live file changed AFTER the last restore (newer than $LIVE/.restored) is kept,
+# not overwritten; the line names it, so a memory worth keeping is copied into .claude/memory/ and committed
+# (`node tools/env/apex-memory.mjs`, docs/notes/AGENT-MEMORY.md). No save back. Cloud only
+# (CLAUDE_CODE_REMOTE=true) unless APEX_MEMORY_SYNC=1: a laptop's live dir already persists and holds personal
 # memories that must not be overwritten. Always exits 0.
 [ "${1:-restore}" = restore ] || exit 0
+INPUT=""
+[ -t 0 ] || INPUT=$(timeout 2 cat 2>/dev/null)
+SOURCE=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
+try: print(str(json.load(sys.stdin).get("source") or ""))
+except Exception: print("")' 2>/dev/null)
+[ -z "$SOURCE" ] || [ "$SOURCE" = startup ] || exit 0
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || [ "${APEX_MEMORY_SYNC:-}" = "1" ] || exit 0
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 COMMON=$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
@@ -22,10 +27,17 @@ LIVE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(printf '%s' "$MAIN" | sed '
 REPO="$MAIN/.claude/memory"
 [ -d "$REPO" ] || exit 0
 mkdir -p "$LIVE" 2>/dev/null || exit 0
-n=0
+STAMP="$LIVE/.restored"
+n=0; kept=()
 for f in "$REPO"/*.md; do
   [ -f "$f" ] || continue
-  if ! cmp -s "$f" "$LIVE/$(basename "$f")"; then cp -f "$f" "$LIVE/" 2>/dev/null && n=$((n + 1)); fi
+  live="$LIVE/$(basename "$f")"
+  cmp -s "$f" "$live" && continue
+  if [ -f "$live" ] && [ -f "$STAMP" ] && [ "$live" -nt "$STAMP" ]; then kept+=("$(basename "$f")"); continue; fi
+  cp -f "$f" "$LIVE/" 2>/dev/null && n=$((n + 1))
 done
-echo "memory: $n in from .claude/memory/ (repo wins; edit memories there)"
+touch "$STAMP" 2>/dev/null
+msg="memory: $n in from .claude/memory/ (repo fills the live dir; edit memories there)"
+[ ${#kept[@]} -gt 0 ] && msg="$msg; KEPT live edits newer than the last restore, differing from the repo: ${kept[*]} (copy into .claude/memory/ and commit to keep them)"
+echo "$msg"
 exit 0
