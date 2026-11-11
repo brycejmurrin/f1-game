@@ -42,19 +42,44 @@ function liftMemo() {
   assert.match(body, /function buildMatKey\(/, "buildMatKey is not in the lifted range");
   assert.match(body, /function matKeyFor\(/, "matKeyFor is not in the lifted range");
   // eslint-disable-next-line no-new-func
-  return new Function(`"use strict";${body};return { buildMatKey, matKeyFor };`)();
+  return new Function(`"use strict";${body};
+    let builds = 0;
+    const originalBuild = buildMatKey;
+    // matKeyFor calls buildMatKey through this binding, so the wrapper counts its
+    // builds. Return the ORIGINAL function: callers that read its source (the
+    // field list parsed from buildMatKey.toString()) must see the real builder.
+    buildMatKey = (...args) => { builds++; return originalBuild(...args); };
+    return { buildMatKey: originalBuild, matKeyFor, builds: () => builds };`)();
 }
 
 const { buildMatKey, matKeyFor } = liftMemo();
 
-// Every field the builder reads, with a value that is NOT its default — so a
-// compare that forgot this field returns the previous key and this test fails.
-const FIELDS = [
-  ["emissive", 0.5], ["alpha", 0.25], ["roughness", 0.31], ["metalness", 0.77],
-  ["specular", 0.11], ["detail", 3], ["clearcoat", 0.9], ["carPaint", 1],
-  ["sparkle", 0.2], ["doubleSided", true], ["noAlphaWrite", true],
-  ["noDepthTest", true], ["depthBias", [2, 3]],
-];
+// A value that is NOT its default for each field — so a compare that forgot
+// the field returns the previous key and the fuzz below fails.
+const VALUES = {
+  emissive: 0.5, alpha: 0.25, roughness: 0.31, metalness: 0.77,
+  specular: 0.11, detail: 3, clearcoat: 0.9, carPaint: 1,
+  sparkle: 0.2, carFinish: true, doubleSided: true, noAlphaWrite: true,
+  noDepthTest: true, depthBias: [2, 3],
+};
+
+// The fields come FROM buildMatKey's own source, not a hand list: a field
+// added to the key (carFinish was, and the hand list never learned it) is
+// fuzzed the moment it is read, or this fails naming the field to give a value.
+const READS = [...new Set([...buildMatKey.toString().matchAll(/\bo\.(\w+)/g)].map((m) => m[1]))];
+const FIELDS = READS.map((f) => [f, VALUES[f]]);
+
+test("every field buildMatKey reads has a non-default fuzz value", () => {
+  assert.ok(READS.length >= 12, `only ${READS.length} fields parsed out of buildMatKey: ${READS}`);
+  assert.deepEqual(READS.filter((f) => !(f in VALUES)), [],
+    "buildMatKey reads a field with no entry in VALUES — add a non-default value for it");
+  for (const [f, v] of FIELDS) {
+    const o = {};
+    const base = buildMatKey(o, false, false);
+    o[f] = v;
+    assert.notEqual(buildMatKey(o, false, false), base, `VALUES.${f} is the key's default — pick another`);
+  }
+});
 
 test("the memo never returns a key a fresh build would not", () => {
   // ONE object identity throughout: a fresh object gets a fresh memo, so only
@@ -104,12 +129,18 @@ test("the chunked and instanced flags are part of the compare, not just the key"
   assert.equal(matKeyFor(o, false, false), plain);
 });
 
-test("a repeated call on unchanged input returns the SAME string instance", () => {
-  // The point of the memo, stated as a test: no rebuild means no new string.
-  // Object.is on the instance is the only way to see that from outside — an
-  // equal-but-fresh string would pass every assertion above and allocate
-  // exactly as much as before.
+test("unchanged input skips the key builder; mutation rebuilds exactly once", () => {
+  // Primitive strings compare by value. Count actual production builder calls,
+  // so an always-rebuild implementation returning equal strings cannot pass.
+  const memo = liftMemo();
   const o = { roughness: 0.4, emissive: 0.2 };
-  const a = matKeyFor(o, false, false);
-  assert.ok(Object.is(a, matKeyFor(o, false, false)), "the key was rebuilt for identical input");
+  const a = memo.matKeyFor(o, false, false);
+  assert.equal(memo.builds(), 1);
+  for (let i = 0; i < 10; i++) assert.equal(memo.matKeyFor(o, false, false), a);
+  assert.equal(memo.builds(), 1, "identical inputs must not rebuild");
+  o.roughness = 0.7;
+  assert.notEqual(memo.matKeyFor(o, false, false), a);
+  assert.equal(memo.builds(), 2, "mutation rebuilds once");
+  memo.matKeyFor(o, false, false);
+  assert.equal(memo.builds(), 2);
 });
