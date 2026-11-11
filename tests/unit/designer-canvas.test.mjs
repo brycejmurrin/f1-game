@@ -493,6 +493,10 @@ test("destroy removes every input subscription and is idempotent", () => {
   const remove = h.canvas.removeEventListener;
   h.canvas.removeEventListener = (type, fn) => { removed.push(type); remove(type, fn); };
   h.cv.destroy(); h.cv.destroy();
+  // Every registration must be gone, not just a remove call per type: a
+  // destroy that removed a different function reference leaves the real one live.
+  const live = [...h.canvas._listeners].filter(([, l]) => l.length).map(([t, l]) => `${t}×${l.length}`);
+  assert.deepEqual(live, [], "listeners still registered after destroy");
   assert.deepEqual(removed.sort(), ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'keydown', 'wheel', 'dblclick', 'pointerleave'].sort());
   const before = JSON.stringify(h.ev);
   h.dom.dispatch(h.canvas, { type: "keydown", key: "ArrowUp" });
@@ -539,3 +543,31 @@ test("batch() coalesces setter repaints into one render (#4476)", () => {
   h.cv.batch(() => {});
   assert.equal(count(), 0, "a batch that changed nothing paints nothing");
 });
+
+// The destroy test above trusts tests/helpers/mini-dom.mjs's registry: removing
+// a function that was never added must remove NOTHING. The helper's old
+// splice(indexOf(fn), 1) took -1 as "the last listener", so a destroy() that
+// removed a different reference still emptied the list and could not fail.
+for (const where of ["element", "document"]) {
+  test(`mini-dom ${where}: removing an unregistered function keeps every listener`, () => {
+    const dom = makeDom();
+    const target = where === "element" ? dom.document.createElement("canvas") : dom.document;
+    const a = (e) => e.hits.push("a"), b = (e) => e.hits.push("b");
+    const send = () => {
+      const ev = { type: "keydown", hits: [] };
+      if (where === "element") dom.dispatch(target, ev); else target.dispatchEvent(ev);
+      return ev.hits;
+    };
+    target.addEventListener("keydown", a);
+    target.addEventListener("keydown", b);
+    target.removeEventListener("keydown", () => {});
+    target.removeEventListener("keyup", a);
+    assert.deepEqual(send(), ["a", "b"], "a stray remove must not drop the last listener");
+    target.removeEventListener("keydown", a);
+    assert.deepEqual(send(), ["b"], "a real remove drops exactly that function");
+    target.removeEventListener("keydown", a);
+    assert.deepEqual(send(), ["b"], "removing it twice is a no-op");
+    target.removeEventListener("keydown", b);
+    assert.deepEqual(send(), []);
+  });
+}
