@@ -2183,6 +2183,19 @@
       ],
       "kind": "browser"
     },
+    "test:scratch-lapg": {
+      "files": [
+        "tests/specs/scratch-lapg-r1.spec.js",
+        "tests/specs/scratch-lapg-r2.spec.js",
+        "tests/specs/scratch-lapg-r3.spec.js",
+        "tests/specs/scratch-lapg-r4.spec.js",
+        "tests/specs/scratch-lapg-r5.spec.js",
+        "tests/specs/scratch-lapg-r6.spec.js",
+        "tests/specs/scratch-lapg-r7.spec.js",
+        "tests/specs/scratch-lapg-r8.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",

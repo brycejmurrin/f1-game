@@ -4040,7 +4040,10 @@ const TLX = (function () {
         for (const p of caches.values()) pinPipe(p);
         return _pinnedPipes.size;
       }
-      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
+      const PRUNE_EVERY_MS = 5000;
+      // SCRATCH #5387 round 7 knobs: idle ms, a count cap (prune only past it, oldest-idle first), keep-first (c).
+      const _sk = (k) => { try { return +localStorage.getItem("apex26.scratch" + k) || 0; } catch (_) { return 0; } };
+      const PRUNE_IDLE_MS = _sk("PruneIdleMs") || 20000, _SC_CAP = _sk("PruneCap"), _SC_KEEP1 = _sk("PruneKeepFirst");
       function prunePool(now) {
         const pin = typeof pinPipelines === "function" ? pinPipelines : null;   // typeof: sandboxed prunePool bodies
         if (pin && !_pinArmed) pin();   // arm the pin at the first present, before any warm builds a pipeline
@@ -4054,6 +4057,8 @@ const TLX = (function () {
           // only while ERS deploys, and on WebGPU the wrapper is its pipeline's last holder, so a prune between
           // two BOOST presses made every press rebuild the pipeline mid-race (#3677).
           if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS || (m.geometry && m.geometry.__tlxPin)) { meshPool[w++] = m; continue; }
+          if (_SC_CAP && meshPool.length - (i - w) <= _SC_CAP) { meshPool[w++] = m; continue; }   // SCRATCH (b)
+          if (_SC_KEEP1) { const bm = meshByGeo.get(m.geometry), l0 = bm && bm.get(m.material); if (l0 && l0[0] === m) { meshPool[w++] = m; continue; } }   // SCRATCH (c)
           const byMat = meshByGeo.get(m.geometry);
           if (byMat) {
             // Drop the wrapper from its occurrence list; an emptied list and an
@@ -4072,6 +4077,7 @@ const TLX = (function () {
           // render object with it, or three keeps the geometry anyway).
           dropWrapper(m); prunePool.n = (prunePool.n | 0) + 1;   // memState().churn (held on the function, as cullInstances._shPack)
         }
+        if (meshPool.length !== w) { (prunePool.log || (prunePool.log = [])).push({ t: Math.round(now), n: meshPool.length - w }); }   // SCRATCH #5387
         meshPool.length = w;
       }
 
@@ -7026,7 +7032,7 @@ const TLX = (function () {
                         dropLater: { now: _dropLater.length, held: _dropStat.held, overflow: _dropStat.overflow },
                         // Hunt 6, lifetime: wrappers minted / pruned (each mint is a three RenderObject: object UBO + bind
                         // group), FX streams (re)built (a vertex buffer each), and headless readbacks (one MAP_READ createBuffer each).
-                        churn: { poolNew: acquireMesh.n | 0, poolPruned: prunePool.n | 0, softReads: _softBlitGen,
+                        churn: { pruneLog: (prunePool.log || []).slice(-40), poolNew: acquireMesh.n | 0, poolPruned: prunePool.n | 0, softReads: _softBlitGen,
                                  streamNew: [skidStream, lineStream, glowStream, ...partStreams].reduce((n, s) => n + (s.builds | 0), 0) },
                         // The mirror sweep reports what it FREED, not that it ran:
                         // the first version of this lever never executed and read

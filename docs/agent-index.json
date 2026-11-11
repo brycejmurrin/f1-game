@@ -1423,6 +1423,22 @@
       "twinned": false
     },
     {
+      "id": "scratch-lapg",
+      "script": "test:scratch-lapg",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-lapg-r1.spec.js",
+        "tests/specs/scratch-lapg-r2.spec.js",
+        "tests/specs/scratch-lapg-r3.spec.js",
+        "tests/specs/scratch-lapg-r4.spec.js",
+        "tests/specs/scratch-lapg-r5.spec.js",
+        "tests/specs/scratch-lapg-r6.spec.js",
+        "tests/specs/scratch-lapg-r7.spec.js",
+        "tests/specs/scratch-lapg-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",
