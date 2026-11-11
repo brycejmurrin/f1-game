@@ -482,7 +482,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `stub.js` | `GameAudio` | tag | audio stub for the title script wall. |
-| `signal.js` | `GameAudioSignal` | LAZY_AUDIO | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the… |
+| `signal.js` | `GameAudioSignal` | LAZY_AUDIO | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, oneShotOk?, now }) uses live service functions; resetContext discards only… |
 | `soundtrack.js` | `GameAudioSoundtrack` | LAZY_AUDIO | GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live… |
 | `race-mix-audition.js` | `RaceMixAudition` | LAZY_AUDIO | Explicit settings gesture: a bounded sample using the existing user buses. |
 | `radio-fx.js` | `GameAudioRadioFx` | LAZY_AUDIO | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |

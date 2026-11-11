@@ -83,3 +83,32 @@ test("guard mode refuses malformed input while advisory mode stays silent", () =
     const advisory = go(false); assert.equal(advisory.status, 0, advisory.stderr); assert.equal(advisory.stdout, "");
   }
 });
+
+test("--guard fails closed when the cap is known and the count is not; the FIRST STOP AT is the cap", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
+  try {
+    const g = (payload, env = {}) => {
+      const r = spawnSync("python3", [HOOK, "--guard"], { input: JSON.stringify(payload), encoding: "utf8",
+        env: { ...process.env, CLAUDE_PROJECT_DIR: dir, APEX_CTX_CAP: "", APEX_CTX_SOFT: "", APEX_CTX_HARD: "", ...env } });
+      assert.equal(r.status, 0, r.stderr);
+      return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : "none";
+    };
+    const ev = (t) => ({ hook_event_name: "PreToolUse", tool_name: "Agent", transcript_path: t, session_id: "g", tool_input: { prompt: "x" } });
+    assert.equal(g(ev(path.join(dir, "missing.jsonl")), { APEX_CTX_SOFT: "100" }), "deny", "env cap, no transcript");
+    assert.equal(g(ev(path.join(dir, "missing.jsonl"))), "none", "no cap, no transcript: nothing to enforce");
+    const zero = path.join(dir, "zero.jsonl");
+    fs.writeFileSync(zero, [{ type: "user", message: { content: "STOP AT: 100k" } }, { type: "assistant", message: { usage: { input_tokens: 0 } } }]
+      .map((r) => JSON.stringify(r)).join("\n") + "\n");
+    assert.equal(g(ev(zero)), "deny", "a zero-usage newest entry is not a count");
+    const noAsst = path.join(dir, "noasst.jsonl");
+    fs.writeFileSync(noAsst, JSON.stringify({ type: "user", message: { content: "STOP AT: 100k" } }) + "\n");
+    assert.equal(g(ev(noAsst)), "deny", "no assistant entry");
+    const older = path.join(dir, "older.jsonl");
+    fs.writeFileSync(older, [{ type: "user", message: { content: "STOP AT: 100k" } },
+      { type: "assistant", message: { usage: { input_tokens: 10000 } } }, { type: "assistant", message: { usage: { input_tokens: 0 } } }]
+      .map((r) => JSON.stringify(r)).join("\n") + "\n");
+    assert.equal(g(ev(older)), "none", "the newest non-zero count is used: 10k under the cap");
+    const first = transcript(dir, "STOP AT: 100k. (The last session was told STOP AT: 400k.)", 160);
+    assert.equal(g(ev(first)), "deny", "160k is over the FIRST cap's hard 150k");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

@@ -108,6 +108,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
 | **lib/over-road-scan.cjs** | Pure over-road triangle scan shared by tests/specs/terrain-over-road.spec.js (runs in the page) and its unit test. | — |
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
+| **lib/paint-floor.mjs** | PAINTED size of every on-screen control and text node (own px × zoom × transform): what a thumb and an eye get. | — |
 | **lib/pr-snapshot.mjs** | Shared per-PR GitHub reads (list, PR, files, checks, runs, jobs, comments) behind one ETag cache on disk. | — |
 | **lib/presentation.mjs** | Bounded presentation diagnostics, late-resource cleanup, and scene-specific picker receipts for probes. | — |
 | **lib/proc-stat-reader.mjs** | Bound shared Linux proc-stat descriptors while reading fresh process metadata on every sample. | — |
@@ -490,6 +491,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 |---|---|---|
 | **ui/audit-diff.mjs** | Library behind `layout-audit --diff <before.json>`: added / fixed findings per screen\|viewport cell (no browser). | survey-ui-matrix |
 | **ui/audit-summary.mjs** | Bounded summary of a layout-audit audit.json: totals, worst cells, per-screen rollup, one cell expanded on request. | survey-ui-matrix |
+| **ui/bryce-paint.mjs** | Owner-phone acceptance: PAINTED text/tap sizes, safe box, page scroll per window × UI SIZE; measure or check. | — |
 | **ui/bryce-phone.mjs** | Print the shared "Bryce's phone" preset, or boot the page on it and prove the emulation took (--measure). | — |
 | **ui/circuit-axis.mjs** | The `--circuits` axis for the two menu screens that draw a circuit (#select preview, #track-detail) in the fit tools. | survey-ui-matrix |
 | **ui/css-play.mjs** | One-screen CSS edit loop: host the tree, open a menu, dump structured DOM, hot-swap a stylesheet, screenshot. | css-play |
@@ -660,7 +662,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 
 | Tool | Does | Suggested skill |
 |---|---|---|
-| **hooks/readonly-bash.sh** | PreToolUse Bash hook for read-only subagents: refuses write-shaped commands; `READONLY_BASH_ALLOW` is the one exception. | agent-config |
+| **hooks/readonly-bash.sh** | PreToolUse Bash hook for read-only subagents: an allowlist of read commands; `READONLY_BASH_ALLOW` is the one exception. | agent-config |
 | **hooks/scratch-md-only.sh** | PreToolUse Write\|Edit hook for the surface reviewer: the only writable path is scratch/**.md (its report). | agent-config |
 | **hooks/surveyor-scope.sh** | PreToolUse Write\|Edit hook for track-surveyor: writes land only in the circuit pair, scratch/** or artifacts/**. | survey-track |
 
