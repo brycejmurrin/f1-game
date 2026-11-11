@@ -1286,6 +1286,11 @@
       "presentation": "native",
       "preserve": "MB units, actual mobile/desktop workload and optional --json destination; do not suppress the largest allocations."
     },
+    "tools/gfx/gpu-mem-webgpu.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/gfx/knob-ab.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1305,6 +1310,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
+    },
+    "tools/gfx/pass-census-lib.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "--collect prints the whole baseline JSON on stdout (it is redirected into a file); conflicts go to stderr with exit 1."
     },
     "tools/gfx/pass-census.mjs": {
       "action": "keep-native",
@@ -2124,7 +2134,7 @@
     "tools/perf/vm-alloc-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Window KB/frame values with their (gc) marks, the mean, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
+      "preserve": "The objects (gated), boxed and heap KB/frame means, window objects/boxed values with their (gc) marks, the baseline ratio and limit, the `= vm-alloc-census ok|OVER` line, exit status and the --json artifact."
     },
     "tools/perf/vm-leak-census.mjs": {
       "action": "keep-native",
