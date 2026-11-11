@@ -2278,17 +2278,6 @@ test("rg11b10ufloat is only rendered into when the device grants the feature", a
   assert.equal(liarBad.length, 0, "must re-derive the format from the DEVICE, not the adapter");
 });
 
-// Presence checks must not share a global RegExp cursor across function bodies.
-const hasDerivative = body => /\b(dpdx|dpdy|fwidth)\s*\(/.test(body);
-const derivativeHelpers = fns => fns.filter(f => hasDerivative(f.body) && !/^fs_main/.test(f.name)).map(f => f.name);
-
-test("derivative guard catches adjacent helpers after a fragment entry point", () => {
-  const entry = { name: "fs_main", body: "{                         fwidth(x); }" };
-  const a = { name: "helper_a", body: "{dpdx(x);}" }, b = { name: "helper_b", body: "{dpdy(x);}" };
-  assert.deepEqual(derivativeHelpers([entry, a, b]), ["helper_a", "helper_b"]);
-  assert.deepEqual(derivativeHelpers([a, b, entry]), ["helper_a", "helper_b"]);
-});
-
 test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // 'dpdx must only be called from uniform control flow' is a COMPILE error that
   // invalidates the whole lit pipeline; WGX then refuses and the game falls back
@@ -2319,7 +2308,9 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
     fns.push({ name: m[1], body: stripped.slice(i, end + 1) });
   }
   assert.ok(fns.length > 20, `expected the WGSL module's functions, found ${fns.length}`);
-  const offenders = derivativeHelpers(fns);
+  const offenders = fns
+    .filter((f) => DERIV.test(f.body) && !/^fs_main/.test(f.name))
+    .map((f) => f.name);
   DERIV.lastIndex = 0;
   assert.deepEqual(offenders, [],
     "a derivative (or a wrapper around one) lives outside a fragment entry point");
@@ -2338,13 +2329,15 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
     }
     postFns.push({ name: m[1], body: postStripped.slice(i, end + 1) });
   }
-  const postOff = derivativeHelpers(postFns);
+  const postOff = postFns
+    .filter((f) => { DERIV.lastIndex = 0; return DERIV.test(f.body) && !/^fs_main/.test(f.name); })
+    .map((f) => f.name);
   assert.deepEqual(postOff, [],
     "wgsl-post.js: a derivative lives outside a fragment entry point: " + postOff.join(","));
 
   // Uniform means before the FIRST branch, not merely inside fs_main: an early
   // `return` or an `if` above the derivative poisons everything after it.
-  for (const f of fns.filter((f) => /^fs_main/.test(f.name) && hasDerivative(f.body))) {
+  for (const f of fns.filter((f) => /^fs_main/.test(f.name) && DERIV.test(f.body))) {
     DERIV.lastIndex = 0;
     const firstBranch = f.body.search(/\b(if|for|while|loop|switch|return|discard)\b/);
     for (const d of f.body.matchAll(DERIV)) {

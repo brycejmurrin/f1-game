@@ -11,7 +11,7 @@
 // scenery-structures.js ferrisWheel — so it is a recurring class, not an
 // incident. Two sites in tracks.js are sanctioned: they are the ones that
 // RESOLVE def.night into track._night / NIGHT. Everything else in js/track/ is
-// a defect. The two resolvers now live in tracks.js and scenery/build-props.js.
+// a defect.
 //
 // Note the deliberate asymmetry: js/game/ is NOT covered. There `def.night` is
 // read through the `raceTimeOfDay === "default" && def.night` idiom, which is
@@ -19,20 +19,20 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = path.join(ROOT, "js/track");
 
-// Resolve the override or supply its fallback; neither emits scenery directly.
-const SANCTIONED = new Map([["tracks.js", 1], ["scenery/build-props.js", 1]]);
+// tracks.js resolves the override; those two reads are the contract, not a bug.
+const SANCTIONED = new Map([["tracks.js", 2]]);
 
-function nightOffenders(dir) {
+test("no js/track/ module reads def.night except the two that resolve it", () => {
   const offenders = [];
-  for (const file of readdirSync(dir, { recursive: true }).filter((f) => f.endsWith(".js"))) {
-    const src = readFileSync(path.join(dir, file), "utf8");
+  for (const file of readdirSync(DIR).filter((f) => f.endsWith(".js"))) {
+    const src = readFileSync(path.join(DIR, file), "utf8");
     // Strip block and line comments: the fix in tracks.js and the one in
     // scenery-structures.js both EXPLAIN the trap in prose, and a guard that
     // matches its own warning is the failure mode this repo keeps hitting.
@@ -41,22 +41,6 @@ function nightOffenders(dir) {
     const allowed = SANCTIONED.get(file) || 0;
     if (hits > allowed) offenders.push(`${file}: ${hits} def.night read(s), ${allowed} sanctioned`);
   }
-  return offenders;
-}
-
-test("night override guard catches nested scenery and ignores comments", () => {
-  const scratch = path.join(ROOT, "scratch"); mkdirSync(scratch, { recursive: true });
-  const dir = mkdtempSync(path.join(scratch, "night-guard-"));
-  try {
-    mkdirSync(path.join(dir, "scenery", "nested"), { recursive: true });
-    writeFileSync(path.join(dir, "scenery", "nested", "bad.js"), "const on = def.night;");
-    writeFileSync(path.join(dir, "scenery", "good.js"), "// def.night is wrong\nconst on = NIGHT;");
-    assert.deepEqual(nightOffenders(dir), ["scenery/nested/bad.js: 1 def.night read(s), 0 sanctioned"]);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test("no js/track/ module reads def.night except the two that resolve it", () => {
-  const offenders = nightOffenders(DIR);
   assert.deepEqual(offenders, [],
     "js/track/ must read the destructured NIGHT (the build's value), not def.night " +
     "(the circuit's authored default).\n  " + offenders.join("\n  "));

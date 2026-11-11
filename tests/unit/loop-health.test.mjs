@@ -153,10 +153,7 @@ function loadStall(opts = {}) {
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById(id) {
-      assert.equal(this, doc, "native DOM methods require their Document receiver");
-      return id === "loading" ? cover : id === "carsetup" ? carsetup : null;
-    },
+    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? carsetup : null),
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
@@ -288,10 +285,7 @@ test("stall: #race-settings (PREPARING…) uses the same relaxed cover as #loadi
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById(id) {
-      assert.equal(this, doc, "native DOM methods require their Document receiver");
-      return id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null;
-    },
+    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null),
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,

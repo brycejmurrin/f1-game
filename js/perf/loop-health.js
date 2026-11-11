@@ -137,9 +137,9 @@ const LoopHealth = (() => {
     try {
       const g = typeof document !== "undefined" && document.getElementById;
       if (!g) return false;
-      const cs = g.call(document, "carsetup");
+      const cs = g("carsetup");
       if (cs && !cs.hidden) return true;
-      const rs = g.call(document, "race-settings");
+      const rs = g("race-settings");
       return !!(rs && !rs.hidden);
     } catch (_) { return false; }
   }
