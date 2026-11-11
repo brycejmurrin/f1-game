@@ -1162,6 +1162,11 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/reuse-draft-selected.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/run-group.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
