@@ -48,6 +48,10 @@
     "#hud-gearbox",
     "#hud-speed"
    ],
+   "//movesTop": "the top band's widget: HUD SIZE's two bands each paint min(slider, own cap); ui-scale.spec.js checks both (#5478)",
+   "movesTop": [
+    "#hud-box-pos"
+   ],
    "still": [
     "#btn-steer-left",
     "#btn-throttle",

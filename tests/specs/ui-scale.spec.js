@@ -1986,21 +1986,32 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         expect(held.max, "and keeps at least 95 % of it").toBeGreaterThanOrEqual(at.max * 0.95);
         const stops = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round((held.min + (held.max - held.min) * t) * 4) / 4);
         const seen = [];
+        // HUD SIZE paints two bands, each min(slider, its own cap) (#5256: the tower's cap no longer follows the dock, so
+        // it can pass the bottom row's). A band held at its cap is named in the label; each band's widgets paint
+        // exactly its number, and every step grows at least one band. Other rows: one band, `moves`, at the slider.
+        const bands = row.movesTop ? [["bot", row.moves], ["top", row.movesTop]] : [["", row.moves]];
         for (const v of stops) {
           await driveSize(page, row.id, v);
           const st = await sizeRowState(page, row.id);
           expect(st.value, `${v}: the slider holds the value it was given`).toBe(v);
           expect([st.min, st.max], `${v}: the range holds while the slider moves`).toEqual([held.min, held.max]);
           expect(st.label.startsWith(`${v % 1 ? v.toFixed(1) : v}%`), `${v}: label "${st.label}" leads with the value`).toBe(true);
-          seen.push({ v, moves: await widths(page, row.moves), still: await widths(page, row.still) });
+          const caps = await page.evaluate(() => UiScale.parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")));
+          const paints = bands.map(([k]) => (k ? Math.min(v, Math.ceil(caps[k] * 100 - 1e-6)) : v));
+          bands.forEach(([k], b) => {
+            if (k && paints[b] < v - 0.5) expect(st.label, `${v}: the label names the ${k === "top" ? "top" : "bottom"} row held at ${paints[b]} %`).toContain(` · ${k === "top" ? "top" : "bottom"} row ${paints[b]}%`);
+          });
+          seen.push({ v, paints, bands: await Promise.all(bands.map(([, sels]) => widths(page, sels))), still: await widths(page, row.still) });
         }
         for (let i = 1; i < seen.length; i++) {
-          for (let m = 0; m < row.moves.length; m++) {
-            expect(seen[i].moves[m], `${row.moves[m]} grows from ${seen[i - 1].v} % to ${seen[i].v} % (no dead travel)`).toBeGreaterThan(seen[i - 1].moves[m] + 0.5);
-            // The number is the painted size: widths scale with the slider (2 % for the band's 1 % zoom grid).
-            const ratio = (seen[i].moves[m] / seen[0].moves[m]) / (seen[i].v / seen[0].v);
-            expect(Math.abs(ratio - 1), `${row.moves[m]} at ${seen[i].v} % paints ${seen[i].moves[m]} px, ${seen[0].moves[m]} px at ${seen[0].v} %`).toBeLessThan(0.02);
-          }
+          expect(seen[i].paints.some((p, b) => p > seen[i - 1].paints[b]), `${seen[i - 1].v} % -> ${seen[i].v} % grows a band (no dead travel)`).toBe(true);
+          bands.forEach(([k, sels], b) => sels.forEach((sel, m) => {
+            const w = seen[i].bands[b][m], was = seen[i - 1].bands[b][m], w0 = seen[0].bands[b][m];
+            if (seen[i].paints[b] > seen[i - 1].paints[b]) expect(w, `${sel} grows from ${seen[i - 1].v} % to ${seen[i].v} % (no dead travel)`).toBeGreaterThan(was + 0.5);
+            // The number is the painted size: widths scale with the band's number (2 % for the band's 1 % zoom grid).
+            const ratio = (w / w0) / (seen[i].paints[b] / seen[0].paints[b]);
+            expect(Math.abs(ratio - 1), `${sel} at ${seen[i].v} % (${k || "band"} ${seen[i].paints[b]} %) paints ${w} px, ${w0} px at ${seen[0].v} %`).toBeLessThan(0.02);
+          }));
           for (let s = 0; s < row.still.length; s++) {
             expect(Math.abs(seen[i].still[s] - seen[0].still[s]), `${row.still[s]} must not move with ${row.id}: ${seen[0].still[s]} px at ${seen[0].v} %, ${seen[i].still[s]} px at ${seen[i].v} %`).toBeLessThan(1);
           }
@@ -2008,7 +2019,7 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         // And back down: the first stop paints what it painted on the way up.
         await driveSize(page, row.id, stops[0]);
         const back = await widths(page, row.moves);
-        for (let m = 0; m < row.moves.length; m++) expect(Math.abs(back[m] - seen[0].moves[m]), `${row.moves[m]} has no hysteresis`).toBeLessThan(1);
+        for (let m = 0; m < row.moves.length; m++) expect(Math.abs(back[m] - seen[0].bands[0][m]), `${row.moves[m]} has no hysteresis`).toBeLessThan(1);
       });
     }
     // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 70 % on a phone (#5235).
