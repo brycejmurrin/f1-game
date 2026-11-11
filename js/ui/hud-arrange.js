@@ -54,8 +54,8 @@ const HudArrange = (() => {
     return Number.isFinite(next) && next > 0 ? next : s;
   };
   /** Pure: the painted size (%) of a widget stored at `s` under CSS zoom `z` (#5256): `--hl-s` is a `scale`, the band
-   *  zoom (fit-capped, or raw HUD SIZE once adopted) multiplies it, so the stored 63.76 at HUD 155 % reads 99 %. */
-  const paintedSize = (s, z) => Number((s * (z > 0 && Number.isFinite(z) ? z : 1)).toPrecision(3));   // 3 digits: 98.99 reads 99, a tiny size stays > 0
+   *  zoom (fit-capped, or raw HUD SIZE once adopted) multiplies it, so the stored 63.76 at HUD 155 % reads 98.99 %. */
+  const paintedSize = (s, z) => Number((s * (z > 0 && Number.isFinite(z) ? z : 1)).toPrecision(4));   // 4 digits, as the stored readout had; a tiny size stays > 0
   /** Pure: every pair of rects [{id, l, t, r, b}] that overlap by more than `min` px on both axes.
    *  Pairs are [a.id, b.id] in input order; a pair where neither id starts with "#" is two HUD pieces. */
   function clashes(rects, min) {

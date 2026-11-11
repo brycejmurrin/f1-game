@@ -672,7 +672,7 @@ test('editor: size labels are concise without rounding stored fractional or tiny
   e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointerup');
   const fractional = e.get('map').s;
   assert.ok(Math.abs(fractional - 200 / 3) < 1e-12);
-  assert.equal(e.ids.get('hud-arrange-name').textContent, '66.7%');   // three significant digits of the painted size (#5256)
+  assert.equal(e.ids.get('hud-arrange-name').textContent, '66.67%');
   e.ids.get('hud-arrange-element').onchange();
   assert.equal(e.get('map').s, fractional, 'painting the label never rounds the stored size');
   for (let i = 0; i < 40; i++) e.ids.get('hud-arrange-smaller').onclick();
@@ -687,9 +687,9 @@ test('editor: size labels are concise without rounding stored fractional or tiny
 
 /* #5256: the size readout is the PAINTED size (stored `s` is a `scale` under the band zoom), and the pieces the touch
    buttons carry (OVERTAKE / AERO / BRAKE BIAS) are not offered on touch, where they have no box to arrange. */
-test("paintedSize: the stored factor times the zoom it paints under, three digits; no zoom reads the factor", () => {
+test("paintedSize: the stored factor times the zoom it paints under, four digits; no zoom reads the factor", () => {
   const A = load();
-  assert.equal(A.paintedSize(63.76, 1.5525), 99, "an adopted widget at HUD 155 % paints 99 %, not 63.76");
+  assert.equal(A.paintedSize(63.76, 1.5525), 98.99, "an adopted widget at HUD 155 % paints 98.99 %, not 63.76");
   assert.equal(A.paintedSize(100, 0.99), 99, "an automatic widget under a 0.99 band cap paints 99 %");
   assert.ok(A.paintedSize(1e-9, 1) > 0, "a tiny size never reads 0");
   assert.equal(A.paintedSize(80, undefined), 80);
