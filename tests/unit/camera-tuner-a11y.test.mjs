@@ -82,3 +82,22 @@ test("camera tuner resolves built track definitions instead of saved menu select
   assert.deepEqual(JSON.parse(JSON.stringify(CamTune.context())), { track: "suzuka", car: "ferrari" });
   assert.equal(CamTune.getScoped("track", "chase", "height"), 0);
 });
+
+// #5066: CAMERA TUNER is a VISUAL STUDIO tool. Its DONE (#ct-close) must give back exactly the page it was opened
+// from, never the HUD & CAMERA page (#pm-panel-display) underneath or beside it.
+test("camera tuner close returns to VISUAL STUDIO and unhides no other settings page", () => {
+  const { dom, G } = bootPanel();
+  const shell = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const pages = [...shell.matchAll(/id="(pm-panel-[a-z0-9-]+)"/g)].map((m) => m[1]);
+  assert.ok(pages.includes("pm-panel-visual") && pages.includes("pm-panel-display"), "the shell still has both pages");
+  for (const id of pages) dom.byId(id).hidden = id !== "pm-panel-visual";   // settings open on VISUAL STUDIO
+  G.paused = true; G.els.pmsettings.hidden = false;
+  dom.byId("pm-camtune").onclick();
+  assert.equal(dom.byId("camtune").hidden, false, "the tuner opened");
+  assert.equal(dom.byId("pm-panel-visual").hidden, true, "VISUAL STUDIO steps aside for the live preview");
+  dom.byId("ct-close").onclick();
+  assert.equal(dom.byId("camtune").hidden, true);
+  assert.equal(G.els.pmsettings.hidden, false, "back to the settings menu");
+  assert.deepEqual(pages.filter((id) => !dom.byId(id).hidden), ["pm-panel-visual"],
+    "exactly one pm-panel-* is unhidden, and it is pm-panel-visual");
+});
