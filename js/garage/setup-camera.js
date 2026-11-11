@@ -494,6 +494,19 @@ function startHome(from) {
   arrival.start({ home: p });
   return true;
 }
+// PIT OUT (#4745): a stop's release, the drive-out at 1.6x in the paused bay, then done() once (closePitWork), on
+// its end, SKIP / Esc or a second DONE. Tuner off, reduced motion and automation hand back at once. Bay-local and
+// paused: no control to move (docs/PHYSICS.md).
+let handoff = null;
+const auto = () => typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation();
+function fireHandoff() { const p = handoff; handoff = null; if (p) p.done(); }
+function startPitOut(done) {
+  handoff = { done };
+  if (!GarageArrival.settings(G.store.get("garageArrival", null)).enabled || reducedMotion() || auto()) { fireHandoff(); return false; }
+  endHome(); arrival.start({ out: true, rate: 1.6 });
+  return true;
+}
+function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandoff(); return true; }
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
@@ -1053,6 +1066,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  if (handoff && !driveOut && !preview && !home.active && !(arriving && arriving.active)) fireHandoff();   // the show ended or was skipped
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
   if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
@@ -1504,7 +1518,7 @@ return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
-  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { arrival.cancel(); sequenceLook(null); }, noteResult, startHome,
+  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { handoff = null; arrival.cancel(); sequenceLook(null); }, startPitOut, skipPitOut, noteResult, startHome,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,

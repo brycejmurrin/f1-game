@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { absSrc } from '../helpers/abs-src.mjs';
 import { fnSource } from '../helpers/fn-source.mjs';
 import { makeDom } from '../helpers/mini-dom.mjs';
+import { gameSource } from '../helpers/game-source.mjs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
 vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/arrival.js') });
@@ -2000,4 +2001,26 @@ test('noteResult carries the race to the way home: driver, fastest lap, wet, nig
   G.raceWeather = 'dry'; G.raceTimeOfDay = 'day'; rival.best = 80;
   const d = note([rival, player], {});
   assert.deepEqual([d.fastest, d.wet, d.night], [false, false, false]);
+});
+test('PIT OUT: start({out,rate}) plays the drive-out quicker, ends inactive, skip finishes it, caption says RACE', () => {
+  const { $, arrival } = harness();
+  arrival.start({ out: true, rate: 1.6 });
+  assert.equal(arrival.state.direction, 'out');
+  assert.equal($('cs-arrival-skip').textContent, 'SKIP TO RACE');
+  assert.equal($('cs-inner').inert, true);
+  let steps = 0;
+  while (arrival.state.active && steps < 1000) { arrival.step(0.1); steps++; }
+  const quick = steps;
+  assert.ok(!arrival.state.active && $('cs-inner').inert === false, 'ends on its own and unlocks the sheet');
+  arrival.start({ out: true });
+  steps = 0;
+  while (arrival.state.active && steps < 1000) { arrival.step(0.1); steps++; }
+  assert.ok(quick < steps * 0.75, `1.6x release (${quick} steps) is shorter than 1x (${steps})`);
+  arrival.start({ out: true, rate: 1.6 }); $('cs-arrival-skip').onclick();
+  assert.ok(!arrival.state.active, 'skip ends the show');
+  arrival.start(); assert.equal(arrival.state.direction, 'in'); assert.equal($('cs-arrival-skip').textContent, 'SKIP TO WORK');
+});
+test('PIT OUT wiring: DONE/BACK in a pit stop route through startPitOut, which fires done once', () => {
+  const g = gameSource();
+  assert.equal((g.match(/setupCam\.startPitOut\(closePitWork\)/g) || []).length, 2, 'cs-done and garageBack');
 });
