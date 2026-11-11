@@ -81,7 +81,7 @@
       const WOODS_A = 0.378, WOODS_B = 0.845;
       const inWoods = (s) => s >= WOODS_A && s <= WOODS_B;
       // Marshal posts inside the woods (blocks 5/6) — the verge scrub yields.
-      const WOOD_POSTS = [[0.430, 1], [0.458, -1], [0.528, -1], [0.630, -1], [0.756, 1]];
+      const WOOD_POSTS = [[0.430, 1], [0.458, -1], [0.523, -1], [0.630, -1], [0.756, 1]];
 
       /* 0. SHARED HELPERS — the three things the bowl needs a lot of:      */
       /*    parked cars, boundary planting, and a guarded set-back test.    */
@@ -211,7 +211,9 @@
       }
       // Burger vans, awnings and portaloo blocks scattered on the rim.
       for (const [s, d, sz, col] of [
-        [0.070, 41, [3.0, 3.2, 7.5], CHALK], [0.086, 42, [2.6, 3.0, 6.5], STEEL],
+        // (0.086 van dropped: the 2026-11 line move re-rounds every K() node
+        // by one, and it then stood 2.3 m inside the 0.082/0.090 rim hut.)
+        [0.070, 41, [3.0, 3.2, 7.5], CHALK],
         // (0.184 burger van dropped: built-frame it lands on the Paddock Hill
         // catering row, block 2, and stood inside its first hut.)
         [0.204, 41, [2.4, 2.8, 6.0], RENDER],
@@ -274,7 +276,7 @@
       // The bowl is tight, so these sit on the OUTSIDE only: a hedgerow run on
       // the infield would cross the far side of the loop and be guard-dropped.
       hedge(0.104, 0.166, -1, 44, 2.2, OAK_D);
-      hedge(0.222, 0.296, -1, 46, 2.2, OAK_D);
+      hedge(0.222, 0.281, -1, 46, 2.2, OAK_D);   // ends short of 0.285: its boxes fought on the Clark Curve exit
       hedge(0.894, 0.952, -1, 42, 2.0, OAK_D);
       // Post-and-rail between the rim path and the car park fields (instanced).
       wall(0.056, 0.146, -1, 70, 1.3, RENDER);
@@ -520,10 +522,8 @@
       if (clear(K(sl(0.950)), 1, 40, 10)) {
         building(K(sl(0.950)), 1, 40, 15, 6.0, 13, {});
       }
-      // Gap 42: the office row above the bays runs 27..41 m (w 14).
-      if (clear(K(sl(0.942)), 1, 42, 10)) {
-        house(K(sl(0.942)), 1, 42, 10, 4.5, 9, {});
-      }
+      // (sl(0.942) house dropped with the line move to the real Brabham
+      // straight: there it stood inside the Clark Curve lock-up row, block 3.)
 
       // The KENTAGON — circuit bar/clubhouse opposite Paddock Hill Grandstand
       // (docs/tracks brief; historical fan name). MSV 2022 venue doc lists
@@ -819,7 +819,7 @@
       // (row 0.532/-1, 12 m). The only furniture in the wood besides barriers.
       groundPatch(K(0.534), -1, 20, [22, 0.3, 30], GRAVEL);
       groundPatch(K(0.545), -1, 18, [18, 0.3, 22], GRAVEL);
-      marshalPost(K(0.528), -1, 13);
+      marshalPost(K(0.523), -1, 13);   // just short of the 0.526 tyre wall it stood in
       // Gravel at the other two places the GP loop needs it, plus Surtees and
       // the drop out of Sheene.
       groundPatch(K(0.468), 1, 17, [20, 0.3, 26], GRAVEL);
@@ -938,7 +938,11 @@
       // carries its own road guard; ids stay string literals so ensureScenery
       // fetches them. Tents behind the paddock, TV camera pods at the big corners.
       // Paddock/pit complex travels with sl(); bowl/woods cameras stay in ID frame.
-      for (const s of [0.030, 0.045, 0.055]) bakedModel("k_tentlong", K(sl(s)), 1, 70, { scale: 2.4 });
+      // 52 m, not 70: on the real Brabham straight the paddock is ~70-100 m
+      // deep, so 70 m reached the Graham Hill / Cooper Straight tree line.
+      for (const s of [0.030, 0.045, 0.055]) {
+        if (clear(K(sl(s)), 1, 52, 22)) bakedModel("k_tentlong", K(sl(s)), 1, 52, { scale: 2.4 });
+      }
       bakedModel("k_camera_exclusive", K(sl(0.014)), -1, 13, { scale: 3 }); // Paddock Hill
       for (const [s, side] of [[0.076, -1], [0.190, -1], [0.378, -1], [0.914, -1]])
         bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
