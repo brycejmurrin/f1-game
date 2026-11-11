@@ -68,7 +68,7 @@ test("SCRATCH final burn40 r9: steady driving builds no render pipelines after w
     const readbacks = windows.map((w) => w.gpuBuilt.filter(softRead).length);
     testInfo.annotations.push({ type: "soft-blit-readbacks", description: `per window ${readbacks.join(",")}; path ${JSON.stringify(soft)}` });
     if (readbacks.some((n) => n > 0)) {
-      expect(!!(soft && (soft.softAdapter || soft.headless) && soft.reads > 0), `a readback was exempted, so this run must be on the soft-blit path (${JSON.stringify(soft)})`).toBe(true);
+      expect(!!(soft && (soft.softAdapter || soft.headless) && soft.softBlit), `a readback was exempted, so this run must be on the soft-blit path (${JSON.stringify(soft)})`).toBe(true);
     }
     const other = windows.map((w) => ({ window: w.window, bindGroups: w.bindGroups, built: w.gpuBuilt.filter((b) => !firstUse(b) && !softRead(b)).slice(0, 6) }))
       .filter((w) => w.bindGroups > 0 || w.built.length > 0);
