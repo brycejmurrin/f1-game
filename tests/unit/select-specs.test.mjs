@@ -24,9 +24,11 @@ import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
+import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
+import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -2077,3 +2079,144 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
   });
 }
 
+// DURATION-BALANCED FAT PIECES (P8 #4548 row 6). The count shard split each fat
+// spec into equal TEST COUNTS: hud-layout quarters ran 6.1/8.6/11.8/6.3 min at
+// 14 tests each (run 41606130214). tools/ci/fat-shard.mjs LPT-packs the titles
+// by measured seconds and run-playwright.mjs runs each piece as a --test-list.
+const FAT_SPECS = ["career", "career-season", "career-hub", "hud-layout"].map((f) => `tests/specs/${f}.spec.js`);
+const spread = (secs) => Math.max(...secs) / Math.min(...secs);
+const pieceSecsOf = (costs, pieces) => pieces.map((idx) => idx.reduce((t, k) => t + costs[k], 0));
+const fatPieces = (f) => shards(fit([f], 30, { rank: () => 0, db: EMPTY }), EMPTY, new Set())
+  .filter((j) => j.specs === f).length;
+
+test("fat-shard: every fat spec's pieces cover its full title list exactly once, balanced to <= 1.2 by the committed table", () => {
+  const db = loadDb(path.join(ROOT, TIMINGS_FILE));
+  const worstCount = [];
+  for (const f of FAT_SPECS) {
+    const titles = specTitles(f);
+    assert.ok(titles && titles.length, `${f}: the stub lister read its titles`);
+    // declaredTests() may undercount a loop it cannot size (hud-layout: 54 of
+    // the 56 a CI run reports); the lister runs the loops, so never fewer.
+    assert.ok(titles.length >= declaredTests(f), `${f}: ${titles.length} listed titles under the static count ${declaredTests(f)}`);
+    assert.equal(unlistable(titles), null, `${f}: every title round-trips a --test-list line`);
+    const n = fatPieces(f);
+    assert.ok(n >= 2, `${f} runs as pieces`);
+    const plan = fatShardPlan(f, n, db, FAT_UI_SEC_PER_TEST, titles);
+    assert.ok(plan, `${f}: a plan for ${n} pieces`);
+    const union = plan.pieces.flatMap((p) => p.titles);
+    assert.equal(new Set(union).size, union.length, `${f}: no title in two pieces`);
+    assert.deepEqual([...union].sort(), [...titles].sort(), `${f}: the pieces are exactly the spec's titles`);
+    assert.ok(plan.pieces.every((p) => p.titles.length > 0), `${f}: no empty piece`);
+    const secs = plan.pieces.map((p) => p.sec);
+    assert.ok(spread(secs) <= 1.2, `${f}: planned piece seconds ${secs.map(Math.round).join("/")} spread ${spread(secs).toFixed(2)} > 1.2`);
+    worstCount.push(spread(pieceSecsOf(plan.costs, countSplitPieces(titles.length, n))));
+  }
+  // The check discriminates: Playwright's count shard of the same table is over it.
+  assert.ok(Math.max(...worstCount) > 1.2, `count split spreads ${worstCount.map((x) => x.toFixed(2))}: the balance check would not have caught it`);
+});
+
+test("fat-shard: unknown titles are priced at the spec's rate, never dropped", () => {
+  const f = "tests/specs/hud-layout.spec.js";
+  const db = { specs: { [f]: { t: { "a": [["d", "llvmpipe", 10]], "b": [["d", "llvmpipe", 30]] } } } };
+  assert.deepEqual(titleCosts(f, ["a", "b", "new"], db, 45), [10, 30, 20]);
+  assert.deepEqual(titleCosts(f, ["x", "y"], EMPTY, 45), [45, 45], "no table at all: the fallback rate");
+  // A synthetic 2x skew the count shard keeps and LPT removes.
+  const costs = [60, 60, 60, 60, 20, 20, 20, 20];
+  assert.equal(spread(pieceSecsOf(costs, countSplitPieces(costs.length, 2))), 3);
+  assert.ok(spread(lptPieces(costs, 2).map((p) => p.sec)) <= 1.2);
+});
+
+test("fat-shard: the n rewritten legs select every test exactly once, even one the lister missed", () => {
+  const f = "tests/specs/hud-layout.spec.js";
+  const listed = ["v › one", "v › two", "v › three", "solo", "w › four", "w › five", "w › six"];
+  const real = [...listed, "w › added later"];   // a test the stub could not see
+  const db = { specs: { [f]: { t: Object.fromEntries(listed.map((t, i) => [t, [["d", "llvmpipe", 10 + 7 * i]]])) } } };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-"));
+  const n = 3;
+  const hits = new Map(real.map((t) => [t, 0]));
+  for (let i = 1; i <= n; i++) {
+    const r = fatShardArgs([f, "--retries=0", `--shard=${i}/${n}`], { db, fallbackSec: 45, outDir, titlesOf: () => listed });
+    assert.ok(!r.args.some((a) => a.startsWith("--shard")), "the count shard is replaced");
+    const flag = r.args.find((a) => a.startsWith("--test-list"));
+    assert.ok(flag && r.args.includes(f) && r.args.includes("--retries=0"), `leg ${i}: ${r.args.join(" ")}`);
+    const [name, file] = flag.split("=");
+    assert.equal(name, i === n ? "--test-list-invert" : "--test-list");
+    const lines = fs.readFileSync(file, "utf8").trim().split("\n");
+    // rootDir-relative (#4812): a repo-relative "tests/specs/…" line matches no test.
+    const head = `specs/hud-layout.spec.js › `;
+    assert.ok(lines.every((l) => l.startsWith(head)), `lines name the rootDir-relative file then the title path: ${lines[0]}`);
+    const named = new Set(lines.map((l) => l.slice(head.length)));
+    for (const t of real) if (named.has(t) !== (name === "--test-list-invert")) hits.set(t, hits.get(t) + 1);
+  }
+  fs.rmSync(outDir, { recursive: true, force: true });
+  assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], "every test runs on exactly one leg");
+  // Left alone: no shard, a non-fat spec, a grep, a list it cannot write.
+  const keep = (args, titlesOf = () => listed) => fatShardArgs(args, { db, fallbackSec: 45, outDir, titlesOf }).args;
+  assert.deepEqual(keep([f]), [f]);
+  assert.deepEqual(keep(["tests/specs/smoke.spec.js", "--shard=1/2"]), ["tests/specs/smoke.spec.js", "--shard=1/2"]);
+  assert.deepEqual(keep([f, "--grep=x", "--shard=1/2"]), [f, "--grep=x", "--shard=1/2"]);
+  assert.deepEqual(keep([f, "--shard=1/2"], () => null), [f, "--shard=1/2"], "unlistable spec: Playwright's count shard");
+  assert.deepEqual(keep([f, "--shard=1/2"], () => ["a", "a › b"]), [f, "--shard=1/2"], "a prefix title could claim two tests");
+  // The Playwright the lists are written for still reads them.
+  const program = path.join(ROOT, "node_modules/playwright/lib/program.js");
+  if (fs.existsSync(program)) {
+    const src = fs.readFileSync(program, "utf8");
+    assert.match(src, /--test-list <file>/);
+    assert.match(src, /--test-list-invert <file>/);
+  }
+});
+
+// #4812: the plan above was balanced, yet hud-layout piece 4/4 ran all 56 tests
+// (26-40 min) while 1..3 ran none: the list lines named "tests/specs/…" and
+// Playwright matches them against rootDir-relative paths. Only REAL Playwright
+// can say what a list selects, so this lists each leg with it (no browser:
+// --list loads the config and the spec, ~1 s a call).
+const PW_CLI = path.join(ROOT, "node_modules/@playwright/test/cli.js");
+const pwList = (args) => new Promise((resolve, reject) => {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const kid = spawn(process.execPath, [PW_CLI, "test", ...args, "--list", "--reporter=json"], { cwd: ROOT, env });
+  let out = "", err = "";
+  kid.stdout.on("data", (d) => { out += d; });
+  kid.stderr.on("data", (d) => { err += d; });
+  kid.on("error", reject);
+  kid.on("close", () => {
+    try {
+      const j = JSON.parse(out);
+      const ids = [];
+      const walk = (s, at) => {
+        for (const x of s.suites || []) walk(x, [...at, x.title]);
+        for (const sp of s.specs || []) for (const t of sp.tests || [{}]) ids.push([t.projectName, ...at, sp.title].join(" › "));
+      };
+      for (const s of j.suites || []) walk(s, [s.title]);
+      resolve({ rootDir: j.config.rootDir, ids });
+    } catch (e) { reject(new Error(`playwright --list ${args.join(" ")}: ${e.message}\n${err.slice(-800)}`)); }
+  });
+});
+
+test("#4812 fat-shard: real Playwright runs every fat-spec test on exactly one leg, piece n within 1.5x its share", { skip: !fs.existsSync(PW_CLI) && "no @playwright/test" }, async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-pw-"));
+  try {
+    const db = loadDb(path.join(ROOT, TIMINGS_FILE));
+    await Promise.all(FAT_SPECS.map(async (f) => {
+      const n = fatPieces(f);
+      const all = await pwList([f]);
+      assert.equal(path.relative(ROOT, all.rootDir), PW_ROOT_DIR, "Playwright's rootDir is the one list lines are written against");
+      assert.equal(listFile(f), path.relative(all.rootDir, path.join(ROOT, f)).split(path.sep).join("/"));
+      const legs = await Promise.all(Array.from({ length: n }, (_, k) => {
+        const r = fatShardArgs([f, `--shard=${k + 1}/${n}`], { db, fallbackSec: FAT_UI_SEC_PER_TEST, outDir });
+        assert.ok(r.args.some((a) => a.startsWith("--test-list")), `${f} leg ${k + 1}: ${r.note}`);
+        return pwList(r.args);
+      }));
+      const hits = new Map(all.ids.map((id) => [id, 0]));
+      for (const leg of legs) for (const id of leg.ids) hits.set(id, (hits.get(id) ?? 0) + 1);
+      assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], `${f}: every test on exactly one leg`);
+      const sizes = legs.map((l) => l.ids.length);
+      const share = all.ids.length / n;
+      assert.ok(sizes.every((m) => m > 0), `${f}: no empty leg (${sizes.join("/")})`);
+      assert.ok(sizes[n - 1] <= 1.5 * share, `${f}: piece ${n}/${n} lists ${sizes[n - 1]} of ${all.ids.length} tests (share ${share.toFixed(1)}; legs ${sizes.join("/")})`);
+    }));
+  } finally {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  }
+});

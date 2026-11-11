@@ -15,7 +15,10 @@ import {
   megasForThisShard,
   megaSoloFlags,
   playwrightShard,
+  FAT_UI_SEC_PER_TEST,
 } from "./select-specs.mjs";
+import { timings } from "./select-budget.mjs";
+import { fatShardArgs } from "./fat-shard.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MIME = {
@@ -220,7 +223,17 @@ if (peeled && mega.length > 0 && shardTok && !hasSpecTarget(rest)) {
   mega = [];
   rest = args;
 }
-const mainArgs = peeled ? rest : args;
+// A FAT UI SPEC'S --shard=i/n PIECE IS DURATION-BALANCED (P8 #4548): the count
+// shard gave hud-layout quarters of 6.1-11.8 min at 14 tests each. fat-shard.mjs
+// swaps the flag for a --test-list of this piece's LPT-packed titles (the last
+// piece takes --test-list-invert of the others, so no test is lost or doubled).
+let mainArgs = peeled ? rest : args;
+if (!peeled && !listing) {
+  const fat = fatShardArgs(mainArgs, { db: timings(), fallbackSec: FAT_UI_SEC_PER_TEST,
+    outDir: join(ROOT, "artifacts", `fat-shard-${port}`) });
+  if (fat.note) console.error(`[playwright] ${fat.note}`);
+  mainArgs = fat.args;
+}
 // Each mega runs on exactly ONE shard, spread by expected time (megaShardPlan).
 const megaHere = peeled ? megasForThisShard(args, mega) : [];
 const runMegaHere = megaHere.length > 0;
