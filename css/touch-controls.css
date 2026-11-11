@@ -1024,4 +1024,21 @@ body[data-density="compact"] #campicker {
    safe-area compensation of its own. Sizing comes from .minibtn; the only rule
    it still needs is the one below, in css/menus.css, that stops it stretching
    to the full width of the brand column. */
+
+/* RETIRED (js/race/retired-card.js builds it): the driving controls go, one card
+   stays, centred in the safe area; its button is a 44 px touch target and the
+   card is ~150 px tall, so it fits 844x390 landscape. */
+body[data-retired-wait] .dock-grp, body[data-retired-wait] .touchbtn { display: none !important; }
+#retired-card {
+  position: fixed; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  box-sizing: border-box; max-width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  display: flex; flex-direction: column; align-items: center; gap: var(--gap);
+  padding: var(--gap) calc(var(--gap) * 2); border-radius: 12px; background: var(--panel); color: var(--text);
+  border: 1px solid color-mix(in oklab, var(--text) 18%, transparent); text-align: center;
+}
+#retired-card[hidden] { display: none; }
+#retired-card b { font-size: 1.35rem; letter-spacing: .12em; }
+#retired-card span { font-size: .85rem; opacity: .8; }
+#retired-card button { min-height: 44px; min-width: 44px; padding: 0 calc(var(--gap) * 1.5); font: inherit; font-weight: 700;
+  border-radius: 8px; border: 0; background: var(--red); color: var(--text); touch-action: manipulation; }
 } /* @layer overlays */

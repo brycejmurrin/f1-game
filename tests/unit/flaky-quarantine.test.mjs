@@ -136,9 +136,9 @@ test("the reporter keys a test on its SPEC, not on the file that declared it", a
   assert.equal(own.spec, "tests/specs/smoke.spec.js");
   assert.equal(own.title, "boots");
 
-  const viaHelper = at(["chromium", "manual/tracks-visual.spec.js", "monza", "renders"],
+  const viaHelper = at(["chromium", "specs/terrain-over-road.spec.js", "monza", "renders"],
                        "/repo/tests/helpers/track-helpers.js");
-  assert.equal(viaHelper.spec, "tests/manual/tracks-visual.spec.js",
+  assert.equal(viaHelper.spec, "tests/specs/terrain-over-road.spec.js",
     "the SPEC owns the test, not the helper that declared it");
   assert.equal(viaHelper.title, "monza › renders");
 
@@ -266,11 +266,16 @@ test("invalid quarantine identity or review metadata cannot waive a failure", ()
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "quarantine-policy-"));
   const file = path.join(dir, "ledger.json");
   const row = fixtureRow();
+  // Inside the fixture's validity window: at a date past its expiry every row
+  // blocks, and removing a field would prove nothing (the positive control).
+  const at = new Date("2026-01-15T00:00:00Z");
   try {
+    fs.writeFileSync(file, JSON.stringify({quarantine: [row]}));
+    assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], loadQuarantine(file, at)).fail, false, "the complete row waives (control)");
     for (const key of ["title", "owner", "review", "evidence", "expires"]) {
       const invalid = {...row}; delete invalid[key];
       fs.writeFileSync(file, JSON.stringify({quarantine: [invalid]}));
-      const q = loadQuarantine(file, new Date("2026-10-15T00:00:00Z"));
+      const q = loadQuarantine(file, at);
       assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], q).fail, true, key);
     }
     assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], new Set([row.spec])).fail, true, "spec membership alone cannot waive a test");

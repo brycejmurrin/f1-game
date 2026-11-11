@@ -20,6 +20,7 @@
 // does; the band's other candidate — the sticky utility-row scrim #menu-buttons
 // paints only as a scroller (.sf-scroll) — cannot appear once nothing scrolls.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { GEOS, profiles, sweep, settleInPage, measureInPage, judge, judgeStored, judgeFloor, judgeLabels, liveStore, LIVE_TITLE, staleLaunchInPage, firstFlagsInPage } from "../helpers/title-fit.mjs";
 
 const SETTLE_FRAMES = 12;
@@ -153,6 +154,46 @@ test.describe("title fit stale landscape launch 852x393-standalone", () => {
       expect({ density: m.density, shape: m.shape }, "and SheetShape kept it").toEqual({ density: "compact", shape: "wide" });
       expect(m.kb, "no phantom keyboard band from the stale innerHeight").toBeNull();
       expect(judge(m, { offsets: prof.offsets }), `${geo.name} stale launch: ${JSON.stringify({ fit: m.fit, mb: m.mb, ov: m.ov })}`).toEqual([]);
+    });
+  }
+});
+
+// THE PHONE CONTROLLER PAGE NEVER SCROLLS EITHER. ROW 9 (2026-11-10): it scrolled at 844x390 —
+// document height 417 in a 390 window. html/body are overflow: hidden, which
+// stops the gesture but not the extent, so the pairing column (taller than a
+// lying-down phone) and the rotating rim both grew the document. Each screen
+// now clips or scrolls its own box; the document is exactly the window on the
+// pairing screen, the wheel (?demo) and the menu pad (?demo=menu), both ways up.
+test.describe("Phone controller page — fits without a document scroll", () => {
+  for (const [name, viewport] of [["landscape 844x390", { width: 844, height: 390 }], ["portrait 390x844", { width: 390, height: 844 }]]) {
+    test.describe(name, () => {
+      test.use({ viewport, hasTouch: true, isMobile: true });
+      for (const [screen, url, linked] of [["pairing", "/controller.html", false], ["wheel", "/controller.html?demo", true], ["menu pad", "/controller.html?demo=menu", true]]) {
+        test(`${screen} screen: scrollHeight <= innerHeight`, async ({ page }) => {
+          await page.goto(url);
+          await page.waitForFunction(() => !!window.__apexPad, null, { polling: 100, timeout: BOOT_MS });
+          if (linked) await expect(page.locator("body")).toHaveClass(/\blinked\b/);
+          // Two frames: the demo dash paints on rAF; fonts may re-wrap the copy.
+          await page.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
+          const m = await page.evaluate(() => ({
+            vh: innerHeight, vw: innerWidth,
+            sh: document.documentElement.scrollHeight, sw: document.documentElement.scrollWidth,
+            bodySh: document.body.scrollHeight,
+          }));
+          expect(m.sh, `${screen} ${name}: document height`).toBeLessThanOrEqual(m.vh);
+          expect(m.bodySh, `${screen} ${name}: body height`).toBeLessThanOrEqual(m.vh);
+          expect(m.sw, `${screen} ${name}: document width`).toBeLessThanOrEqual(m.vw);
+          if (!linked) {
+            // The pairing controls are on screen, not just clipped into a box.
+            for (const sel of ["#code", "#connect"]) {
+              const r = await page.locator(sel).boundingBox();
+              expect(r, `${sel} has a box`).not.toBeNull();
+              expect(r.y, `${sel} top`).toBeGreaterThanOrEqual(0);
+              expect(r.y + r.height, `${sel} bottom`).toBeLessThanOrEqual(m.vh);
+            }
+          }
+        });
+      }
     });
   }
 });
@@ -305,6 +346,63 @@ test.describe("title layout controls 852x393-standalone", () => {
       const back = await pieces(page);
       expect(back.stored, "the landscape layout survived a rotation").toEqual(set.stored);
       for (const p of Object.keys(PIECE)) expect(near(back[p], set[p], 1), `${p} after rotation: ${JSON.stringify(back[p])} vs ${JSON.stringify(set[p])}`).toBe(true);
+    });
+  }
+});
+
+// W34 row 6 (audit 2026-11-10): a 120 ms double tap on a title door must end on
+// the SAME screen a single tap does — the second tap may not reach whatever the
+// new screen put under the finger (SETTINGS → BACK, SEASON → CIRCUIT DETAIL,
+// TRACK DESIGNER → its RACE button). TopModal's shield exempts automation
+// (navigator.webdriver), so this page reports a player's browser.
+test.describe("Title doors — a fast double tap is one tap", () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
+  const DOORS = ["mb-race", "mb-settings", "mb-vs", "mb-season", "mb-designer"];
+
+  async function openLayers(page) {
+    return page.evaluate(() => window.UiLayers.LAYER_IDS.filter((id) => {
+      const el = document.getElementById(id);
+      return !!el && !el.hidden && (el.tagName !== "DIALOG" || el.open);
+    }).sort().join(","));
+  }
+  async function settle(page) {
+    // Lazy doors (VS FRIEND's net bundle, the designer) swap in late: wait for
+    // the title to give way, then let any second activation play out.
+    await page.waitForFunction(() => { const t = window.UiLayers.top(); return !!t && t.id !== "overlay"; },
+      null, { polling: 100, timeout: BOOT_MS }).catch(() => {});
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 700)));
+  }
+  async function tapDoor(page, id, twice) {
+    await page.addInitScript(() => Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false }));
+    await page.goto("/");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    const box = await page.locator("#" + id).boundingBox();
+    if (!box) throw new Error("door not on screen: " + id);
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    // The taps go out over CDP with explicit input timestamps 120 ms apart and
+    // without waiting between them: a page-side delay (or awaiting the first
+    // tap's handling) only starts once the door's handler frees the main thread,
+    // so on a slow runner the "second tap" really came after the window.
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      const t0 = Date.now() / 1000, pt = [{ x, y }];
+      const send = (type, timestamp, touchPoints) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints, timestamp });
+      const sent = [send("touchStart", t0, pt), send("touchEnd", t0 + 0.03, [])];
+      if (twice) sent.push(send("touchStart", t0 + 0.12, pt), send("touchEnd", t0 + 0.15, []));
+      await Promise.all(sent);
+    } finally { await cdp.detach(); }
+    await settle(page);
+    return openLayers(page);
+  }
+
+  for (const id of DOORS) {
+    test(`#${id}: a 120 ms double tap lands where a single tap does`, async ({ page }) => {
+      const once = await tapDoor(page, id, false);
+      expect(once, "the single tap opened a screen").not.toBe("overlay");
+      const twice = await tapDoor(page, id, true);
+      expect(twice).toBe(once);
     });
   }
 });

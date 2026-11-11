@@ -34,7 +34,7 @@
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.92, s1: 0.18 },  // pit straight through San Donato
       { kind: "foliage", s0: 0.36, s1: 0.46 },
-      { kind: "foliage", s0: 0.286, s1: 0.342 },  // Casanova terrazza: engine scatter cones cut its tiers (clip 0.301/0.334)
+      { kind: "foliage", s0: 0.286, s1: 0.342 },  // Materassi-Borgo San Lorenzo (T4-T5) terrazza: engine scatter cones cut its tiers (clip 0.301/0.334)
       { kind: "foliage", s0: 0.852, s1: 0.906 },  // Bucine terrazza (clip 0.888)
     ],
     // Tuscan hill light: warm, golden, slightly hazy; cypress-dark greens.
@@ -50,6 +50,10 @@
       runoff:        [0.37, 0.39, 0.23],  // dry Tuscan grass-gravel verge, not the default tan (survey defect 4)
       sunDir:        [0.44, 0.64, 0.32],
     },
+    // Elevation UNDER-MODELLED (built ~21 m vs real ~41 m: SRTM 30 m over it-1914, 2026-11-10;
+    // mugellocircuit.it: Poggio Secco highest, Arrabbiata 1 lowest). A 42 m fit buried the
+    // Bucine terrazza tiers and the far vine rows (ground-audit buried 5 -> 64); the scenery
+    // must be re-seated before the fitted profile can land (parent work).
     elevations: [
       { s: 0.16, halfM: 340, rise: 10.0 },   // climb after San Donato
       { s: 0.34, halfM: 380, rise: -11.0 },  // drop to Casanova-Savelli
@@ -58,26 +62,33 @@
       { s: 0.92, halfM: 300, rise: 6.0 },    // rise onto the main straight
     ],
     hwZones: [
-      { s0: 0.290, s1: 0.335, hw: 6.3, ease: 0.012 },  // Casanova-Savelli
-      { s0: 0.620, s1: 0.660, hw: 6.4, ease: 0.012 },  // Correntaio
+      { s0: 0.290, s1: 0.335, hw: 6.3, ease: 0.012 },  // Materassi-Borgo San Lorenzo (T4-T5; unsourced width)
+      { s0: 0.685, s1: 0.728, hw: 6.4, ease: 0.012 },  // Correntaio (T12, apex 0.698; was 0.620-0.660 = Palagio exit)
       { s0: 0.860, s1: 0.900, hw: 6.4, ease: 0.012 },  // Bucine
     ],
     bankZones: [
       { frac: 0.150, angleDeg: 4.0, widthM: 130 },   // San Donato (T1 0.1447-0.16)
-      { frac: 0.470, angleDeg: 5.0, widthM: 150 },   // Arrabbiata 1
-      { frac: 0.520, angleDeg: 5.0, widthM: 140 },   // Arrabbiata 2
-      { frac: 0.880, angleDeg: 4.5, widthM: 140 },   // Bucine
+      { frac: 0.470, angleDeg: 5.0, widthM: 150 },   // Arrabbiata 1 (T8)
+      { frac: 0.520, angleDeg: 5.0, widthM: 140 },   // Arrabbiata 2 (T9)
+      { frac: 0.880, angleDeg: 4.5, widthM: 140 },   // Bucine (T15)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks (Arrabbiata 1/2 at 0.476/0.521 are wide, R~85-97 m, so
-    // added by hand over the duplicate T5 0.2277 and T12 0.7137 halves of the T4-T5 and T11-T12 corners) of THIS centreline in lap order, N = the
-    // researched real turn count. No researched sectors — consumers fall back to thirds.
-    sectors: [0.34, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.1447, 0.1557, 0.1967, 0.2187, 0.3002, 0.3187, 0.3857, 0.476, 0.521, 0.5927, 0.6162, 0.6982, 0.7552, 0.7732, 0.8572],
+    // sectors/turns as RACING-LAP fractions (post startFrac/reverse), never fmap'd —
+    // tools/track/rotate-markings.cjs re-seats turns when the start line moves.
+    // turns: one apex per numbered corner of the FIA 2020 Tuscan GP circuit map
+    // (fia.com decision-document "2020 Tuscan Grand Prix - Circuit Map.pdf", TUS DOC 1,
+    // 15 corners), names from mugellocircuit.it/en/the-track/tracks-description:
+    // T1 San Donato, T2 Luco, T3 Poggio Secco, T4 Materassi, T5 Borgo San Lorenzo,
+    // T6 Casanova, T7 Savelli, T8 Arrabbiata 1, T9 Arrabbiata 2, T10 Scarperia,
+    // T11 Palagio, T12 Correntaio, T13 Biondetti 1, T14 Biondetti 2, T15 Bucine.
+    // Apexes are this centreline's curvature peaks; Arrabbiata 1/2 (0.476/0.521) are wide
+    // R~85-97 m double-peaked sweeps, picked by hand between their peaks.
+    // sectors: FIA map "S1 60m before Turn 6", "S2 140m before Turn 12", measured back from
+    // the T6/T12 apexes on the built 5226 m lap (the map does not say which point of the
+    // corner it measures from: +/-0.01).
+    sectors: [0.374, 0.671],
+    turns: [0.1447, 0.1967, 0.2187, 0.3002, 0.3187, 0.3857, 0.4109, 0.476, 0.521, 0.5927, 0.6162, 0.6982, 0.7552, 0.7732, 0.8572],
     furniture: { tree: "cypress", fol: [0.20, 0.44, 0.20], lamp: "none" },  // Tuscan broadleaf behind the cypress ranks
     kit: { marshal: "cabin",     rail: "armco",       fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["crimson", "terracotta", "concrete"],  // Ferrari red over Tuscan clay

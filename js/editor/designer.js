@@ -70,7 +70,7 @@ const TrackDesigner = (function () {
     GESTURES: Object.freeze([
       { input: "Touch", text: "Tap a point to select · RANGE then tap or drag to an end point on either view for a SPAN · drag a selected point or span to move · tap the road to add / double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap then drag vertically (≥44 px)." },
       { input: "Mouse", text: "Click a point to select · RANGE drag selects a section without moving it · POINT drag past a short threshold moves it (a SPAN moves as a group) · click the road to add one · double-click to delete · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
-      { input: "Keyboard", text: "Tab / [ ] cycle points · arrows nudge the selected point or SPAN 1 m (10 m with Shift) · Delete removes the anchor · Enter stamps · Esc deselects · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height (whole SPAN when one is selected)." },
+      { input: "Keyboard", text: "[ ] cycle points (Tab moves on) · arrows nudge the selected point or SPAN 1 m (10 m with Shift) · Delete removes the anchor · Enter stamps · Esc deselects · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height (whole SPAN when one is selected)." },
       { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point or SPAN selected, the d-pad nudges it on the canvas; B lets go of the selection, and B again closes the designer." },
     ]),
     LIMITS: "2.5–7 km a lap · 8–200 points · 24 saved circuits · no online play on your own circuits yet.",
@@ -378,7 +378,7 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { pts: next }), "delete");
     return true;
   }
-  /** Cycle the selected control point (PREV / NEXT POINT, Tab / [ ]). */
+  /** Cycle the selected control point (PREV / NEXT POINT, [ ]). */
   function cyclePoint(dir) {
     if (!design || !design.pts || !design.pts.length) return false;
     const N = design.pts.length;
@@ -1879,8 +1879,11 @@ const TrackDesigner = (function () {
     const c = TrackZones.cumArc(design.pts), L = c[design.pts.length];
     return L > 0 ? [c[sel] / L, c[span] / L] : null;
   }
-  /** Two lap ranges share road (s1 < s0 runs over the line; touching ends do not count). */
+  /** Two lap ranges share road (s1 < s0 runs over the line; touching ends do not count).
+   *  {s0: 0, s1: 1} is the whole lap (CustomTracks keeps it; zones.js / fixes.js
+   *  carry it whole): its wrapped length is 0, so it is caught first. */
   function rangesOverlap(a0, a1, b0, b1) {
+    if ((a0 === 0 && a1 === 1) || (b0 === 0 && b1 === 1)) return true;
     const len = (x0, x1) => TrackZones.wrap01(x1 - x0);
     const inside = (x, x0, x1) => { const d = TrackZones.wrap01(x - x0); return d > ZONE_EPS && d < len(x0, x1) - ZONE_EPS; };
     return Math.abs(TrackZones.wrap01(a0 - b0 + 0.5) - 0.5) < ZONE_EPS || inside(b0, a0, a1) || inside(a0, b0, b1);
@@ -1888,8 +1891,10 @@ const TrackDesigner = (function () {
   function spanHW() {
     if (!design) return 7;
     const f = hasSpan() ? spanFracs() : null;
-    const z = f && (design.hwZones || []).find((q) => rangesOverlap(f[0], f[1], q.s0, q.s1));
-    return z ? z.hw : design.baseHW;
+    // The engine keeps the narrower where zones overlap (def.js applyHwZones).
+    let hw = design.baseHW;
+    if (f) for (const q of design.hwZones || []) if (rangesOverlap(f[0], f[1], q.s0, q.s1)) hw = Math.min(hw, q.hw);
+    return hw;
   }
   /** Narrow the selected span to half-width hw (5 m … the base): one hwZone,
    *  replacing any it overlaps; the base width clears it. The engine only ever
