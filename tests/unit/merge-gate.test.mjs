@@ -74,8 +74,8 @@ test("configVerdict: a diff touching a config path needs `config-ok` last added 
   assert.equal(CONFIG_LABEL, "config-ok");
   for (const p of [".claude/hooks/bash-guard.sh", ".claude/settings.json", ".github/workflows/dispatch.yml", ".githooks/pre-commit", "./.claude/hooks/x.py",
     ".claude/settings.local.json", "tools/ci/merge-gate.mjs", "tools/ci/lib/provenance.mjs", ".github/actions/setup/action.yml", ".mcp.json", "tools/hooks/readonly-bash.sh", "tools/mcp/apex-extras.mjs",
-    "tools/lib/generated-paths.mjs", "package.json", ".cursor/hooks.json", ".codex/hooks.json", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".github/ISSUE_TEMPLATE/task.yml"]) assert.equal(isConfigPath(p), true, p);
-  for (const p of [".claude/skills/steward/SKILL.md", ".github/labels.json", "js/game.js", ".claude/rules/claude-config.md", "desktop/package.json", "tools/lib/cli-args.mjs"]) assert.equal(isConfigPath(p), false, p);
+    "tools/lib/generated-paths.mjs", "package.json", ".cursor/hooks.json", ".codex/hooks.json", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".github/ISSUE_TEMPLATE/task.yml", "tools/lib/cli-args.mjs", "tools/gen/gen-test-groups.mjs"]) assert.equal(isConfigPath(p), true, p);
+  for (const p of [".claude/skills/steward/SKILL.md", ".github/labels.json", "js/game.js", ".claude/rules/claude-config.md", "desktop/package.json", "tools/lib/git-run.mjs"]) assert.equal(isConfigPath(p), false, p);
   assert.deepEqual(filePaths([{ filename: "docs/TESTING.md", previous_filename: ".claude/hooks/bash-guard.sh" }, { filename: "js/a.js" }]), ["docs/TESTING.md", ".claude/hooks/bash-guard.sh", "js/a.js"], "a rename counts by both names");
   assert.deepEqual(configFiles(["docs/a.md", ".githooks/pre-push", "js/a.js"]), [".githooks/pre-push"]);
   const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z";
@@ -146,13 +146,17 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   assert.deepEqual([configLabelKind(ev("config-ok", T1)), configLabelKind(agent(T1)), configLabelKind(agent(T1, { event: "unlabeled" })), configLabelKind(noField)], ["owner", "agent", null, null]);
 });
 
-test("PROTECTED_CONFIG_PATH covers every tools/ci module the gate loads (a module's top level runs at import)", () => {
+test("PROTECTED_CONFIG_PATH covers every module in the gate's import closure, inside tools/ci/ and outside it (#5467; a module's top level runs at import)", () => {
   const seen = new Set(gateClosure(ROOT));   // the same walk the gate receipt hashes (tools/lib/gate-receipt.mjs)
   assert.ok(seen.has("tools/ci/lib/provenance.mjs"), "provenance is in the closure");
-  const gaps = [...seen].filter((f) => isConfigPath(f) && !isProtectedConfigPath(f));
-  assert.deepEqual(gaps, [], "a gate module an agent's config-ok could approve");
   assert.ok(seen.has("tools/ci/github-api.mjs") && seen.size >= 8, [...seen].join(", "));
+  for (const f of ["tools/gen/gen-test-groups.mjs", "tools/lib/cli-args.mjs", "tools/lib/gate-receipt.mjs"]) assert.ok(seen.has(f), `${f} is in the closure`);
+  const notConfig = [...seen].filter((f) => !isConfigPath(f));
+  assert.deepEqual(notConfig, [], "a gate module a PR could change with no config-ok at all");
+  const notProtected = [...seen].filter((f) => !isProtectedConfigPath(f));
+  assert.deepEqual(notProtected, [], "a gate module an agent's config-ok could approve");
   for (const f of seen) if (isProtectedConfigPath(f)) assert.equal(isConfigPath(f), true, `${f}: protected implies config`);
+  assert.equal(isConfigPath("tools/lib/cli-args.mjs.bak"), false, "anchored: a sibling file is not swept in");
 });
 
 test("configPushState: config-ok binds to the pushes made before it; a later push touching a config path needs a fresh label", () => {

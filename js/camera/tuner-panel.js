@@ -423,10 +423,10 @@ function openCamTuner() {
   $("ct-json").hidden = true;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pmsettings.hidden = true;             // unobstructed live preview (opened from settings)
-  // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own
-  // .hidden survives underneath and reappears the moment pmsettings does.
-  const displayPage = $("pm-panel-display");
-  if (displayPage) displayPage.hidden = true;
+  // Nested under VISUAL STUDIO (#pm-panel-visual): hide that page too, and give
+  // exactly it back on close; never the HUD & CAMERA page (#5066).
+  const visualPage = $("pm-panel-visual");
+  if (visualPage) visualPage.hidden = true;
   applyLive();
 }
 function closeCamTuner(showPauseMenu) {
@@ -435,8 +435,8 @@ function closeCamTuner(showPauseMenu) {
   document.body.classList.remove("lt-open");
   if (showPauseMenu && G.paused) {
     els.pmsettings.hidden = false;   // back to the settings menu
-    const displayPage = $("pm-panel-display");
-    if (displayPage) displayPage.hidden = false;   // ...specifically its DISPLAY page
+    const visualPage = $("pm-panel-visual");
+    if (visualPage) visualPage.hidden = false;   // ...specifically its VISUAL STUDIO page
   }
 }
 $("pm-camtune").onclick = openCamTuner;
@@ -445,7 +445,7 @@ $("ct-reset").onclick = () => {
   if (_scope === "global") CamTune.resetGlobal();
   else if (_scope === "track" || _scope === "car") CamTune.resetScoped(_scope, curMode());
   else CamTune.reset(curMode());
-  CamTune.persist(); applyLive(); refreshCamTunePanel();
+  CamTune.persist(_scope === "track" || _scope === "car" ? _scope : undefined); applyLive(); refreshCamTunePanel();
 };
 $("ct-reset-all").onclick = () => {
   CamTune.resetAll(); CamTune.persist(); CamTune.persist("track"); CamTune.persist("car");

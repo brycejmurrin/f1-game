@@ -129,7 +129,9 @@ const XrUi = (function () {
       // Kick the probe; button stays hidden until capability fires true.
       // Visible ⇒ immersive-vr is supported; click path always acts (attach,
       // backend switch+reload, or flashMessage) — never a silent no-op.
-      Promise.resolve(XrSession.probe()).then((ok) => show(!!ok));
+      // A seeded answer (XrBoot, from apex26.xrCaps) must not re-ask navigator.xr (#4324, #5417).
+      if (typeof XrSession.isProbed === "function" && XrSession.isProbed()) show(!!XrSession.isSupported());
+      else Promise.resolve(XrSession.probe()).then((ok) => show(!!ok));
     }
     return _btn;
   }
