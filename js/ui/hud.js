@@ -1126,8 +1126,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     const tR = layoutRect(_hudTop), botInt = (tR.bottom - satPx) / zoomDiv(_hudTop, zTopPub);
     // #5179 shrank the pair to a fixed 44 px; the band keeps the footprint the old --tap-hud pair (44 x BUTTON
     // SIZE <= 150 %) reserved, so freeing it never grows the rest of the HUD into the lifted sector plate.
-    const bz = vpW() > vpH() && !document.body.classList.contains("desktop") ? 1   // landscape touch: the real 44 px pair; the plate is pinned (css/hud.css, #5256), capRow clears it
-      : Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
+    const bz = Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
     const pR = els.pausebtn && !els.pausebtn.hidden ? els.pausebtn.getBoundingClientRect() : null, pauseL = pR && pR.width ? pR.right - 44 * bz : Infinity;
     for (const el of [els.btnCam, els.pausebtn]) {
       const r = el && !el.hidden ? layoutRect(el) : null;
