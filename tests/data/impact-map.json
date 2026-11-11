@@ -19082,6 +19082,9 @@
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/select-season-tab.test.mjs"
       ],
+      "closeTrackDetail": [
+        "tests/unit/select-screen-fixes.test.mjs"
+      ],
       "create": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
