@@ -940,7 +940,7 @@ function fitHud() {
   if (fitPass(true, scale, btnScale, placedSectors)) fitPass(false, scale, btnScale, placedSectors);
   else ["--hud-z-top", "--hud-z-bot"].forEach((p, i) => (zWas[i] ? root.style.setProperty(p, zWas[i]) : root.style.removeProperty(p)));   // nothing laid out
 }
-let _fitCanon = null;   // the cap pass's { top, bot }, consumed by the paint pass
+let _fitCanon = null;   // the cap pass's { top, bot, topMax }, consumed by the paint pass
 let _tyreRestack = null;   // the paint pass's stored limits-left TYRES restack { key, leftBot, metricsB } (#2797)
 function fitPass(canon, scale, btnScale, placedSectors) {
   const root = document.documentElement;
@@ -1155,6 +1155,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (hInt > 0 && y0 + hInt > 0 && scR.top > tR.top + ROW_AIR) capRow = (scR.top - ROW_AIR - satPx) / (y0 + hInt);
   }
   let capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
+  // The rung above follows HUD SIZE; its slider's range is the ceiling over all rungs (#5478).
+  let topMax = Math.min(capChrome, capRow, Math.max(capLong, capShort, capNo));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -1458,7 +1460,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       // Floor at 11 painted px over --fs-micro 14 (Apple HIG's 11 pt minimum; the
       // 10 px READABLE_Z floor painted POS / LAP / TIME at 10.1 px, UI-HUNT-2-HUD).
       const cap = Math.max(11 / 14, (roomL - gL.h * zDL) / Math.max(1, height));
-      capTop = Math.min(capTop, cap); capBot = Math.min(capBot, cap);
+      capTop = Math.min(capTop, cap); topMax = Math.min(topMax, cap); capBot = Math.min(capBot, cap);
     }
 
   }
@@ -1519,13 +1521,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       root.style.setProperty(prop, String(Math.max(floor, q)));
     }
   };
-  if (canon) { set("--hud-z-top", capTop, scale); set("--hud-z-bot", capBot, scale); _fitCanon = { top: capTop, bot: capBot }; return true; }
-  capTop = _fitCanon.top; capBot = Math.min(_fitCanon.bot, capPortrait);
+  if (canon) { set("--hud-z-top", capTop, scale); set("--hud-z-bot", capBot, scale); _fitCanon = { top: capTop, bot: capBot, topMax }; return true; }
+  capTop = _fitCanon.top; topMax = _fitCanon.topMax; capBot = Math.min(_fitCanon.bot, capPortrait);
   if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
   // What this window can paint: "top bot pedals steer steerKeep btnFloor" zooms, 9 = no limit (UiScale, #5206).
-  hStyle(root, "--hud-cap", [capTop, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
+  hStyle(root, "--hud-cap", [topMax, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
   // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
   // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
   // The paint pass measured it under the zoom the cap pass published, so it is
