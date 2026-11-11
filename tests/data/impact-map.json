@@ -7858,7 +7858,6 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rank-sort-alloc-vm.test.mjs",
-        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/service-worker.test.mjs",

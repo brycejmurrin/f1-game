@@ -29,7 +29,7 @@ test("the real-race body is LAZY_REAL_RACE, not on the boot wall; the stub is", 
     assert.ok(!tags.has(f), f + " has no index.html tag");
   }
   assert.ok(manifest.FULL.includes("js/race/real-race-boot.js") && tags.has("js/race/real-race-boot.js"), "the RealRace stub boots eagerly");
-  assert.ok(manifest.FULL.indexOf("js/race/real-race-boot.js") < manifest.FULL.indexOf("js/game.js"), "the stub evaluates before game.js creates it");
+  assert.ok(manifest.FULL.indexOf("js/race/real-race-boot.js") < manifest.FULL.indexOf(manifest.PATHS.GAME), "the stub evaluates before game.js creates it");
 });
 
 function stubWorld() {
