@@ -112,7 +112,10 @@ def generated(root):
     """(whole-file map rel → why, block-mode set). Raises when a source list cannot be read."""
     src = open(os.path.join(root, "tools/lib/generated-paths.mjs"), encoding="utf8").read()
     gp, bp = js_strings(src, "GENERATED_PATHS"), js_strings(src, "BUILT_PATHS")
-    od = js_strings(src, "ON_DEMAND_PATHS")
+    # ON_DEMAND_PATHS is newer than the hook's other lists (2026-11-11): a tree from before it (an older branch's
+    # worktree edited from a newer checkout) has none, which means no on-demand file, not an unreadable list.
+    # Present but unresolvable still fails closed, like the other two.
+    od = js_strings(src, "ON_DEMAND_PATHS") if re.search(r"\bON_DEMAND_PATHS\s*=", src) else []
     if gp is None or bp is None or od is None:
         raise ValueError("tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found")
     whole = {p: WHY_GEN for p in gp}

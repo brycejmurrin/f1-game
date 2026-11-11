@@ -169,6 +169,16 @@ test("protect-files.py: the hatch lifts the rules for the MAIN session only, and
     assert.equal(JSON.parse(other.stdout).hookSpecificOutput.additionalContext,
       `protect-files: .claude/allow-protected is ACTIVE in ${dir} — no rule applied to notes.md.${tail}`, "every guarded call announces the hatch");
     assert.equal(pf({ agent_id: "a1" }).status, 2, "the hatch never lifts a rule for a subagent");
+    // A tree from before ON_DEMAND_PATHS (an older branch's worktree edited from a newer checkout) has no such list:
+    // that is "no on-demand file", not an unreadable list, so the other rules still hold there (2026-11-11, #5427).
+    const gpSrc = fs.readFileSync(path.join(ROOT, "tools/lib/generated-paths.mjs"), "utf8");
+    fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), gpSrc.replace(/export const ON_DEMAND_PATHS = Object\.freeze\(\[[\s\S]*?\]\);/, ""));
+    const older = pf({ agent_id: "a1" });
+    assert.equal(older.status, 2, `an older tree still protects version.json\n${older.stderr}`);
+    assert.equal(older.stderr.startsWith("BLOCKED: version.json is GENERATED — "), true, older.stderr);
+    // Present but unresolvable fails closed, like the other two lists.
+    fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), gpSrc.replace(/export const ON_DEMAND_PATHS = Object\.freeze\(\[[\s\S]*?\]\);/, "export const ON_DEMAND_PATHS = Object.freeze([someVar]);"));
+    assert.match(pf({ agent_id: "a1" }).stderr, /could not load the generated-file list/);
     fs.writeFileSync(path.join(dir, "tools/lib/generated-paths.mjs"), "export const NOTHING = 1;\n");
     const broken = pf({ agent_id: "a1" });
     assert.equal(broken.status, 2);
