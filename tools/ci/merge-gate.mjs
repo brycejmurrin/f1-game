@@ -40,6 +40,8 @@
 //             newer tip merges and the PR select (tooling-fast's own --changed selection; the touched tests/unit files
 //             when that widens to the whole floor) run once; a failing, timed-out or un-runnable re-test refuses.
 //             Bryce's pick, 2026-11-11 ~09:02Z: "Quick re-test at merge (Recommended)" (#5407 option b).
+//             It catches ACCIDENTAL crossings: the merge result's own scripts (gen:check, the ratchets) ran before it
+//             as the same user and could steer it, the same trust the gen and ratchets rows already have.
 // The `distance` row (merge-base at most N game merges behind the tip) was retired 2026-11-03 (plan §6): gen and
 // ratchets already run on the real merge result, which is what catches composition reds; the row only bought syncs.
 //
@@ -215,10 +217,13 @@ export function treeCeilingsAt(ref, request) {
   return { tree };
 }
 
-/** The tree metrics whose ceiling is higher at `after` than at `before` (both carry it). Pure. */
+/** The tree metrics whose ceiling is higher at `after` than at `before`, and those `before` carries that `after` does
+ *  not: ratchets.mjs measures only the metrics ratchets.json names, so deleting one removes its ceiling, the widest
+ *  raise there is (`to: null`, shown as "removed"). A metric only `after` carries is a new ceiling, no raise. Pure. */
 export function treeRaises(before, after) {
-  return Object.keys(after || {}).filter((m) => Object.hasOwn(before || {}, m) && after[m] > before[m]).sort()
-    .map((m) => ({ metric: m, from: before[m], to: after[m] }));
+  const b = before || {}, a = after || {};
+  return Object.keys(b).filter((m) => !Object.hasOwn(a, m) || a[m] > b[m]).sort()
+    .map((m) => ({ metric: m, from: b[m], to: Object.hasOwn(a, m) ? a[m] : null }));
 }
 
 /**
@@ -226,8 +231,8 @@ export function treeRaises(before, after) {
  * configPushState over the ratchet files). An agent's label never counts. Pure.
  */
 export function raiseVerdict(raises, labels, events = null, owner = OWNER, push = null) {
-  if (!raises?.length) return row(true, "no tree-wide ratchet ceiling rises in the diff");
-  const shown = raises.slice(0, 4).map((r) => `${r.metric} ${r.from}→${r.to}`).join(", ") + (raises.length > 4 ? ", …" : "");
+  if (!raises?.length) return row(true, "no tree-wide ratchet ceiling rises or is removed in the diff (per-file ceilings are the commit hook's --auto-raise, not this row's)");
+  const shown = raises.slice(0, 4).map((r) => `${r.metric} ${r.from}→${r.to === null ? "removed" : r.to}`).join(", ") + (raises.length > 4 ? ", …" : "");
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
   const last = newestLabelEvent(events, RAISE_LABEL);
   if (!names.includes(RAISE_LABEL)) return row(false, `needs ${RAISE_LABEL} from ${owner}: the diff raises a tree-wide ceiling (${shown}) — lower the count instead, or ask him`);
@@ -418,20 +423,32 @@ export const RETEST_TIMEOUT_MS = 420_000;
 const UNIT_TEST = /^tests\/unit\/.+\.test\.mjs$/;
 /** Workers for the re-test (a land-gate runner has 4 vCPU, gen:check and the ratchets already ran). */
 export const RETEST_JOBS = 2;
+/** tooling-fast's per-file bound for the re-test, inside RETEST_TIMEOUT_MS. */
+export const RETEST_FILE_TIMEOUT_S = 180;
 
 /**
  * The first-parent commits on `tip` that are not in `head` and are newer than `ciAt` − RETEST_MARGIN_MIN, and the
  * paths each changed against its first parent, plus the PR's own paths (merge-base..head). Git only, in `cwd` (the
  * throw-away worktree). → { commits, newer, pr } | { error }.
  */
-export function newerTipPaths({ cwd, tip, head, ciAt, gitRun = git }) {
+export function newerTipPaths({ cwd, tip, head, ciAt, ciBase = "", gitRun = git }) {
   const at = Date.parse(String(ciAt || ""));
   if (!Number.isFinite(at)) return { error: `the CI run's creation time is unreadable (${JSON.stringify(ciAt ?? null)})` };
   const since = new Date(at - RETEST_MARGIN_MIN * 60_000).toISOString();
   const lines = (r) => String(r.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean);
   const list = gitRun(["rev-list", "--first-parent", `--since=${since}`, tip, `^${head}`], cwd);
   if (list.status !== 0) return { error: `git rev-list on ${String(tip).slice(0, 8)}: ${(list.stderr || "").trim().split("\n")[0]}` };
-  const commits = lines(list), newer = new Set();
+  // A date is not a commit (reuse-draft-fast.sh, 2026-11-10): when the run recorded the base its merge ref sat on
+  // (the `apex-guards` annotation), every first-parent tip commit after THAT base is re-tested too. Union only: the
+  // record can widen the window, never narrow it; an unreadable or unknown base leaves the time window alone.
+  const recorded = /^[0-9a-f]{40}$/.test(String(ciBase || "")) && gitRun(["cat-file", "-e", `${ciBase}^{commit}`], cwd).status === 0;
+  let byBase = [];
+  if (recorded) {
+    const r = gitRun(["rev-list", "--first-parent", tip, `^${head}`, `^${ciBase}`], cwd);
+    if (r.status !== 0) return { error: `git rev-list ${String(tip).slice(0, 8)} since base ${ciBase.slice(0, 8)}: ${(r.stderr || "").trim().split("\n")[0]}` };
+    byBase = lines(r);
+  }
+  const commits = [...new Set([...lines(list), ...byBase])], newer = new Set();
   for (const c of commits) {
     const d = gitRun(["diff", "--name-only", `${c}^1`, c], cwd);
     if (d.status !== 0) return { error: `git diff of tip commit ${c.slice(0, 8)}: ${(d.stderr || "").trim().split("\n")[0]}` };
@@ -444,7 +461,20 @@ export function newerTipPaths({ cwd, tip, head, ciAt, gitRun = git }) {
     if (d.status !== 0) return { error: `the PR's own paths (merge-base..head): ${(d.stderr || "").trim().split("\n")[0]}` };
     pr = lines(d);
   }
-  return { commits, newer: [...newer].sort(), pr };
+  return { commits, newer: [...newer].sort(), pr, base: recorded ? ciBase : "" };
+}
+
+/** The base SHA the green CI run's merge ref sat on, from its tooling A `apex-guards` annotation
+ *  (`mode=<m> base=<sha>`, tools/ci/reuse-draft-fast.sh THE RECORD) → sha, or "" when unreadable. GitHub reads only. */
+export function ciRecordedBase(run, request) {
+  if (!run?.id) return "";
+  const jobs = listAll(`actions/runs/${run.id}/jobs`, request, (j) => j?.jobs, 5);
+  if (jobs.error) return "";
+  const a = jobs.rows.find((j) => String(j?.name || "").replace(/^ci \/ /, "") === "Structural guards (tooling A)");
+  if (!a?.id) return "";
+  const ann = request(`check-runs/${a.id}/annotations?per_page=100`);
+  const rec = (Array.isArray(ann.json) ? ann.json : []).find((x) => x?.title === "apex-guards");
+  return /\bbase=([0-9a-f]{40})\b/.exec(String(rec?.message || ""))?.[1] || "";
 }
 
 /** The gate checkout's own tooling-fast `--changed` selection for `paths` (never the PR's copy: a PR must not choose
@@ -476,10 +506,10 @@ export function retestPlan({ newer = [], pr = [], selection, exists = () => true
  * anything; otherwise run the planned unit files with the merge result's tooling-fast, stripped environment, once.
  * Every failure to read, select or run refuses (never a silent pass). → { ok, evidence }.
  */
-export function retestOnMerge({ cwd, tip, head, ciAt, run = spawnSync, gitRun = git, select = gateSelection } = {}) {
-  const t = newerTipPaths({ cwd, tip, head, ciAt, gitRun });
+export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", run = spawnSync, gitRun = git, select = gateSelection } = {}) {
+  const t = newerTipPaths({ cwd, tip, head, ciAt, ciBase, gitRun });
   if (t.error) return row(false, `re-test not runnable: ${t.error}`);
-  if (!t.commits.length) return row(true, `no tip merge since the CI run's base (created ${ciAt}, margin ${RETEST_MARGIN_MIN} min): CI tested this combination`);
+  if (!t.commits.length) return row(true, `no tip merge since the CI run's base (created ${ciAt}, margin ${RETEST_MARGIN_MIN} min${t.base ? `; recorded base ${t.base.slice(0, 8)}` : "; no recorded base"}): CI tested this combination`);
   const sel = select([...new Set([...t.newer, ...t.pr])].sort());
   if (sel?.error) return row(false, `re-test not runnable: ${sel.error}`);
   const plan = retestPlan({ newer: t.newer, pr: t.pr, selection: sel, exists: (f) => fs.existsSync(path.join(cwd, f)) });
@@ -492,7 +522,16 @@ export function retestOnMerge({ cwd, tip, head, ciAt, run = spawnSync, gitRun = 
   }
   const env = untrustedEnv();
   delete env.NODE_TEST_CONTEXT;
-  const r = run(process.execPath, ["tools/ci/tooling-fast.mjs", `--jobs=${RETEST_JOBS}`, "--quiet", ...plan.files], { cwd, env, encoding: "utf8", timeout: RETEST_TIMEOUT_MS, maxBuffer: 32 << 20 });
+  // Output to a file, not a pipe: spawnSync's timeout kills only the direct child, and a test grandchild still
+  // holding the pipe would keep the gate waiting until the job cap. A per-file bound inside the cap as well.
+  const log = path.join(cwd, "artifacts", "merge-gate-retest.log");
+  let fd = null;
+  try { fs.mkdirSync(path.dirname(log), { recursive: true }); fd = fs.openSync(log, "w"); } catch (e) { return row(false, `re-test not runnable: its log ${log}: ${e.message}`); }
+  let r;
+  try {
+    r = run(process.execPath, ["tools/ci/tooling-fast.mjs", `--jobs=${RETEST_JOBS}`, "--quiet", `--file-timeout=${RETEST_FILE_TIMEOUT_S}`, ...plan.files], { cwd, env, stdio: ["ignore", fd, fd], timeout: RETEST_TIMEOUT_MS });
+  } finally { try { fs.closeSync(fd); } catch { /* closed */ } }
+  if (r && r.stdout == null) { let text = ""; try { text = fs.readFileSync(log, "utf8"); } catch { /* no log */ } r = { ...r, stdout: text, stderr: "" }; }
   const shown = plan.files.slice(0, 4).join(", ") + (plan.files.length > 4 ? ` (+${plan.files.length - 4})` : "");
   if (r.error || r.status !== 0) {
     const fails = `${r.stdout || ""}\n${r.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => /\bFAIL\b/.test(l)).slice(0, 3).join(" | ");
@@ -525,7 +564,7 @@ export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = 
 
 /** The catalog child's exit code for "no sourceDigest field": the gate then runs the generator's full `--check`. */
 const NO_DIGEST = 3;
-export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge, ciAt = null, retest = retestOnMerge } = {}) {
+export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge, ciAt = null, ciBase = "", retest = retestOnMerge } = {}) {
   const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
   const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
   const fetched = fetchForGate({ pr, head, headRef, cwd, base });
@@ -572,7 +611,7 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
   }
   const rat = ratchets({ cwd: wt, run });
   // `ciAt` null: the ci row has no green run to compare against, so the re-test waits for it (evaluate says so).
-  const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, run });
+  const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, ciBase, run });
   cleanup();
   return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog ${rebuilt ? "rebuild check" : "digest"} 0`, tip, ratchets: rat, retest: re };
 }
@@ -688,7 +727,8 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   } else {
     // The re-test compares against the green CI run's creation (the merge ref it tested is that old or newer).
     const ciAt = rows.ci.ok ? String(ciRun?.created_at || "") : null;
-    const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base, ciAt });
+    const ciBase = rows.ci.ok ? ciRecordedBase(ciRun, request) : "";
+    const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base, ciAt, ciBase });
     if (g.error) return { error: g.evidence };
     tip = g.tip || "";
     rows.gen = row(g.ok, g.evidence);

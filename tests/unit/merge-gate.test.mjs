@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, newerTipPaths, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict,
+  configFiles, filePaths, configPushState, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, treeRaises, raiseVerdict,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
@@ -247,7 +247,7 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.equal(v.ok, true, JSON.stringify(v.rows));
   assert.deepEqual(Object.keys(v.rows), ROWS);
   assert.deepEqual([v.head, v.base, v.tip], [HEAD, "deploy-x", TIP]);
-  assert.deepEqual(f.calls[0], { pr: 7, head: HEAD, headRef: "cursor/x", cwd: "/nowhere", base: "deploy-x", ciAt: "2026-11-03T09:01:00Z" }, "the merge targets the PR's own base, and the re-test compares against the green CI run's creation");
+  assert.deepEqual(f.calls[0], { pr: 7, head: HEAD, headRef: "cursor/x", cwd: "/nowhere", base: "deploy-x", ciAt: "2026-11-03T09:01:00Z", ciBase: "" }, "the merge targets the PR's own base, and the re-test compares against the green CI run's creation");
   f.pull.labels = [{ name: "hold" }];
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["hold"]);
   f.pull.labels = []; f.pull.body = "## Plan\n- [ ] still open\n";
@@ -1345,7 +1345,7 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     let tip = git(W, undefined, "rev-parse", "HEAD");
     const quiet = retestOnMerge({ cwd: W, tip, head, ciAt, run, select });
     assert.equal(quiet.ok, true, quiet.evidence);
-    assert.match(quiet.evidence, /^no tip merge since the CI run's base \(created 2026-11-11T01:00:00Z, margin 15 min\)/);
+    assert.match(quiet.evidence, /^no tip merge since the CI run's base \(created 2026-11-11T01:00:00Z, margin 15 min; no recorded base\)/);
     assert.equal(calls.length, 0, "nothing runs when CI tested this combination");
     // #5392's shape lands AFTER the CI run: it pins the tool's --help as exact text (the test file changes).
     write("tests/unit/tools-runnable.test.mjs", "// v2: exact two-line --help\n"); git(W, at("2026-11-11T01:44:54Z"), "commit", "-q", "-am", "#5392");
@@ -1355,7 +1355,7 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     const green = retestOnMerge({ cwd: W, tip, head, ciAt, run, select });
     assert.equal(green.ok, true, green.evidence);
     assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0].argv, ["tools/ci/tooling-fast.mjs", "--jobs=2", "--quiet", "tests/unit/tools-runnable.test.mjs"], "the merge result's tooling-fast runs the touched test");
+    assert.deepEqual(calls[0].argv, ["tools/ci/tooling-fast.mjs", "--jobs=2", "--quiet", "--file-timeout=180", "tests/unit/tools-runnable.test.mjs"], "the merge result's tooling-fast runs the touched test");
     assert.equal(calls[0].cwd, W);
     assert.equal(calls[0].env.GITHUB_TOKEN, undefined, "the PR's code runs with the stripped environment");
     assert.match(green.evidence, /1 tip merge\(s\) since the CI run .*1 unit file\(s\) re-tested on the merge result .*tools-runnable\.test\.mjs passed/);
@@ -1382,7 +1382,25 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     assert.equal(RETEST_MARGIN_MIN, 15);
     assert.equal(newerTipPaths({ cwd: W, tip, head, ciAt: "2026-11-11T01:50:00Z" }).commits.length, 1, "01:44:54 is inside 01:50 - 15 min");
     assert.equal(newerTipPaths({ cwd: W, tip, head, ciAt: "2026-11-11T02:00:00Z" }).commits.length, 0);
+    // A date is not a commit: when the run recorded the base its merge ref sat on, every tip commit after that base
+    // is re-tested even if the time window misses it (here the 00:20 "old merge" is outside 02:00 − 15 min).
+    const baseSha = git(W, undefined, "rev-parse", "HEAD~2");
+    const wide = newerTipPaths({ cwd: W, tip, head, ciAt: "2026-11-11T02:00:00Z", ciBase: baseSha });
+    assert.deepEqual([wide.commits.length, wide.base, wide.newer], [2, baseSha, [U("old"), "tests/unit/tools-runnable.test.mjs"]]);
+    // Union only: a recorded base never narrows the time window; an unknown base is ignored.
+    assert.equal(newerTipPaths({ cwd: W, tip, head, ciAt, ciBase: tip }).commits.length, 1, "the window still holds #5392");
+    assert.deepEqual([newerTipPaths({ cwd: W, tip, head, ciAt: "2026-11-11T02:00:00Z", ciBase: "e".repeat(40) }).commits.length], [0]);
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("#5407 ciRecordedBase: the green run's tooling A `apex-guards` annotation names the base its merge ref sat on; unreadable is \"\"", () => {
+  const B = "b".repeat(40);
+  const req = (p) => p.startsWith("actions/runs/500/jobs") ? { json: { jobs: [{ id: 11, name: "Smoke (a)" }, { id: 12, name: "Structural guards (tooling A)" }] } }
+    : p.startsWith("check-runs/12/annotations") ? { json: [{ title: "other", message: "x" }, { title: "apex-guards", message: `mode=changed base=${B}` }] } : { error: `unexpected ${p}` };
+  assert.equal(ciRecordedBase({ id: 500 }, req), B);
+  assert.equal(ciRecordedBase({ id: 500 }, (p) => (p.startsWith("check-runs/") ? { json: [{ title: "apex-guards", message: "mode=full base=none" }] } : req(p))), "");
+  assert.equal(ciRecordedBase({ id: 500 }, () => ({ error: "HTTP 502" })), "");
+  assert.equal(ciRecordedBase(undefined, req), "");
 });
 
 test("#5407 retestPlan: the gate's own selection, kept to files the merge has; a widened selection falls back to the touched unit files and says so", () => {
@@ -1434,6 +1452,9 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   };
   assert.deepEqual(treeCeilingsAt(MB, ghRequest), { tree: { assertPins: 105, bareCatches: 10 } });
   assert.deepEqual(treeRaises({ a: 1, b: 5 }, { a: 2, b: 4, c: 9 }), [{ metric: "a", from: 1, to: 2 }], "lowered and new ceilings are no raise");
+  // Deleting a tree metric removes its ceiling (ratchets.mjs measures only what ratchets.json names): a raise.
+  assert.deepEqual(treeRaises({ assertPins: 8223, bareCatches: 29 }, { assertPins: 8223 }), [{ metric: "bareCatches", from: 29, to: null }]);
+  assert.match(raiseVerdict([{ metric: "bareCatches", from: 29, to: null }], [], []).evidence, /raises a tree-wide ceiling \(bareCatches 29→removed\)/);
   const f = fakes();
   f.files.push({ filename: FRAG("cursor--x") });
   const request = (p) => ghRequest(p) || (p.startsWith("compare/") ? { json: { merge_base_commit: { sha: MB }, files: [{ filename: FRAG("cursor--x") }] } } : f.deps.request(p));
@@ -1463,7 +1484,7 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   f.pull.labels = []; f.events.length = 0;
   at[HEAD].frags[FRAG("cursor--x")] = { tree: { assertPins: -2 }, files: { "css/hud.css": { lines: 20 } } };
   r = rowOf();
-  assert.deepEqual(r, { ok: true, evidence: "no tree-wide ratchet ceiling rises in the diff" });
+  assert.deepEqual(r, { ok: true, evidence: "no tree-wide ratchet ceiling rises or is removed in the diff (per-file ceilings are the commit hook's --auto-raise, not this row's)" });
   // No ratchet file in the diff: no reads at all.
   f.files.pop();
   assert.deepEqual(evaluate({ pr: 7, ...f.deps, trusted: true }).rows.raise, { ok: true, evidence: "no ratchet ceiling file in the diff" });
