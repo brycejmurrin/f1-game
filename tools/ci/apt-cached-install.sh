@@ -133,19 +133,26 @@ resolve_public() {   # prints "IP RESOLVER"
   done
   return 1
 }
+pinned() { awk -v h="$1" '$1 !~ /^#/ { for (i = 2; i <= NF; i++) if ($i == h) f = 1 } END { exit !f }' "$HOSTS_FILE" 2>/dev/null; }
+# `pin_flaky_mirrors force` (after a FAILED apt attempt): pin every mirror host not yet pinned, even on 3/3.
+# The records' TTLs are under a minute (Cloudflare DoH 15:21Z: security.ubuntu.com A ttl 40, azure CNAME
+# 57 -> A 7), so three lookups can all come from systemd-resolved's cache and the name be lost mid-apt;
+# a healthy day never gets here (attempt 1 succeeds), an outage day retries with pinned names.
+PIN_OK=1
 pin_flaky_mirrors() {
-  local m h a ip src answers seen=" " _
+  local force=${1:-} m h a ip src answers seen=" " _
+  [[ $PIN_OK == 1 && ${#MIRRORS[@]} -gt 0 ]] || return 0
   for m in "${MIRRORS[@]}"; do
     h=${m%:*}
     [[ $seen == *" $h "* ]] && continue
     seen+="$h "
-    grep -qE "[[:space:]]$h([[:space:]]|\$)" "$HOSTS_FILE" 2>/dev/null && continue
+    pinned "$h" && continue
     answers=0; ip=""
     for _ in 1 2 3; do
       a=$(resolve_system "$h")
       if [[ -n $a ]] && valid_ip "$a"; then answers=$((answers + 1)); ip=$a; fi
     done
-    [[ $answers -eq 3 ]] && continue
+    [[ $answers -eq 3 && -z $force ]] && continue
     if [[ -n $ip ]]; then src="the system resolver ($answers/3 answers)"
     else
       read -r ip src < <(resolve_public "$h") || true
@@ -155,11 +162,12 @@ pin_flaky_mirrors() {
       fi
     fi
     if echo "$ip $h" | $SUDO tee -a "$HOSTS_FILE" >/dev/null; then
-      echo "::warning::$LABEL: $h resolved $answers/3 times through the system resolver; pinned $ip (from $src) in $HOSTS_FILE for this job"
+      echo "::warning::$LABEL: $h resolved $answers/3 times through the system resolver; pinned $ip (from $src) in $HOSTS_FILE for this job${force:+ (after a failed apt attempt)}"
     fi
   done
 }
-if [[ ${#MIRRORS[@]} -gt 0 ]] && ! proxied; then
+if proxied; then PIN_OK=0; fi
+if [[ ${#MIRRORS[@]} -gt 0 && $PIN_OK == 1 ]]; then
   answered=0
   pin_flaky_mirrors
   for m in "${MIRRORS[@]}"; do
@@ -220,6 +228,7 @@ for attempt in 1 2 3; do
     && apt_with_budget 180 install -y -qq --no-install-recommends "${MISS[@]}" || rc=$?
   if [[ $rc -eq 0 ]]; then ok=1; break; fi
   explain_attempt "$rc"
+  pin_flaky_mirrors force
   repair_dpkg
   if [[ -z $(missing) ]]; then
     echo "::warning::$LABEL: apt attempt $attempt was cut short; dpkg --configure -a finished the install"

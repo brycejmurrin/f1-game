@@ -38,6 +38,7 @@ const STUBS = {
   "apt-get": [
     'echo "apt-get $*" >> "$STATE/calls"',
     '[ -e "$STATE/interrupted" ] && { echo "E: dpkg was interrupted"; exit 100; }',
+    '[ -e "$STATE/apt-needs-pin" ] && ! grep -q " security.ubuntu.com$" "$STATE/hosts" && { echo "E: Temporary failure resolving \'security.ubuntu.com\'"; exit 100; }',
     '[ -e "$STATE/apt-down" ] && { echo "E: Failed to fetch https://security.ubuntu.com/x.deb  Temporary failure resolving \'security.ubuntu.com\'"; exit 100; }',
     '[ -n "${APT_STALL:-}" ] && sleep "$APT_STALL"',
     'case " $* " in',
@@ -50,7 +51,7 @@ const STUBS = {
   ].join("\n"),
 };
 
-function fixture(t, { installed = [], want = [], cached = [], flags = [], sources } = {}) {
+function fixture(t, { installed = [], want = [], cached = [], flags = [], sources, hostsExtra = "" } = {}) {
   const root = fs.mkdtempSync(path.resolve("scratch/apt-cached-install-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const bin = path.join(root, "bin"), state = path.join(root, "state"), cache = path.join(root, "cache");
@@ -63,7 +64,7 @@ function fixture(t, { installed = [], want = [], cached = [], flags = [], source
     for (const p of cached) fs.writeFileSync(path.join(cache, `${p}_1.0_amd64.deb`), p);
   }
   for (const f of flags) fs.writeFileSync(path.join(state, f), "");
-  fs.writeFileSync(path.join(state, "hosts"), "127.0.0.1 localhost\n");
+  fs.writeFileSync(path.join(state, "hosts"), "127.0.0.1 localhost\n" + hostsExtra);
   fs.writeFileSync(path.join(root, "sources.list"), "# deb http://commented.example/ubuntu x main\ndeb http://azure.archive.ubuntu.com/ubuntu noble main\n");
   // The runner image's shape (job 130569884615): URIs: mirror+file:/etc/apt/apt-mirrors.txt.
   fs.writeFileSync(path.join(root, "apt-mirrors.txt"), "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n");
@@ -187,6 +188,34 @@ test("a flaky system resolver: its own answer is pinned, no public resolver aske
   assert.match(hosts, /^10\.0\.0\.7 security\.ubuntu\.com$/m);
   assert.match(r.stdout, /pinned 10\.0\.0\.7 \(from the system resolver \(1\/3 answers\)\)/);
   assert.equal(doh, "");
+});
+
+test("the probe reads 3/3 (cache), attempt 1 fails: every mirror is pinned, attempt 2 succeeds", (t) => {
+  const { run } = fixture(t, { want: ["libegl1"], flags: ["apt-needs-pin"] });
+  const { r, calls, hosts, doh, log } = run(["--label", "mesa-xvfb", "libegl1"]);
+  assert.equal(r.status, 0, log);
+  assert.equal((calls.match(/^apt-get update/gm) || []).length, 2, log);
+  assert.match(hosts, /^10\.0\.0\.7 security\.ubuntu\.com$/m);
+  assert.match(hosts, /^10\.0\.0\.7 azure\.archive\.ubuntu\.com$/m);
+  assert.match(r.stdout, /pinned 10\.0\.0\.7 \(from the system resolver \(3\/3 answers\)\) in \S+ for this job \(after a failed apt attempt\)/);
+  assert.equal(doh, "");
+});
+
+test("forced pin with no resolver at all: unchanged, exit 1 with the apt text", (t) => {
+  const { run } = fixture(t, { want: ["libegl1"], flags: ["apt-needs-pin"] });
+  // The probe passes (reach is answered), then every resolver fails before the forced pin.
+  const { r, hosts, log } = run(["--label", "mesa-xvfb", "libegl1"], { APT_RESOLVE: "false", APT_DOH: "false" });
+  assert.equal(r.status, 1, log);
+  assert.equal(hosts, "127.0.0.1 localhost\n");
+  assert.match(r.stdout, /::error::mesa-xvfb: apt could not install libegl1 within 300 s and up to 3 attempts/);
+});
+
+test("an existing hosts entry is matched as a whole name, not a regex", (t) => {
+  const { run } = fixture(t, { want: ["libegl1"], flags: ["dns-down", "doh-ok"], hostsExtra: "192.0.2.1 securityxubuntuxcom\n# 192.0.2.2 security.ubuntu.com\n" });
+  const { r, hosts, log } = run(["libegl1"]);
+  assert.equal(r.status, 0, log);
+  // "securityxubuntuxcom" and a commented-out line matched the old unanchored grep; neither counts as pinned.
+  assert.match(hosts, /^203\.0\.113\.9 security\.ubuntu\.com$/m);
 });
 
 test("a broken cached set is removed and apt installs instead", (t) => {
