@@ -608,13 +608,22 @@ const TyreModel = (function () {
   function weatherGrip(tread, w) {
     const table = PhysicsConsts.WET_GRIP, t = Number.isInteger(tread) && tread >= 0 && tread <= 2 ? tread : 0;
     w = clamp(w, 0, 1);
-    return w <= 0.5 ? 1 + (table.wet[t] - 1) * w * 2 : table.wet[t] + (table.rain[t] - table.wet[t]) * (w - 0.5) * 2;
+    return w <= 0.5 ? table.dry[t] + (table.wet[t] - table.dry[t]) * w * 2 : table.wet[t] + (table.rain[t] - table.wet[t]) * (w - 0.5) * 2;
   }
   function treadFor(weather, wetness) {
     if (Number.isFinite(wetness)) return wetness >= 0.72 ? 2 : wetness >= 0.25 ? 1 : 0;
     return weather === "rain" || weather === "storm" ? 2 : weather === "wet" ? 1 : 0;
   }
   function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
+  // The tread a car's grip reads (game.js gripMult, aquaInto). `null` is the
+  // competent-field sentinel: the tread the conditions call for. A car that
+  // FOLLOWS THE WEATHER (c.wxFollow, set by the session's fit) reads its
+  // record's tread, which the session's update keeps on the weather's call.
+  function treadOf(c, weather, wetness) {
+    if (!c) return 0;
+    if (c.wxFollow && c.tyre) return c.tyre.tread || 0;
+    return c.tread == null ? treadFor(weather, wetness) : c.tread;
+  }
 
   // ── AQUAPLANING ───────────────────────────────────────────────────────────
   // Above a speed, a tyre in STANDING water rides up on a water wedge and the
@@ -665,7 +674,7 @@ const TyreModel = (function () {
   // the tread the conditions call for.
   const _aq = { mul: 1, safeV: Infinity };
   function aquaInto(c, speedStd, weather, wetness) {
-    const tread = c && c.tread != null ? c.tread : treadFor(weather, wetness);
+    const tread = treadOf(c, weather, wetness);
     _aq.mul = aquaplane(speedStd, wetness, tread);
     _aq.safeV = aquaplaneSafeV(wetness, tread);
     return _aq;
@@ -783,6 +792,13 @@ const TyreModel = (function () {
     function fit(c, record) {
       if (!c) return;
       applyCompound(c, record, on());
+      // WEAR OFF, A GARAGE SLICK: THE SET FOLLOWS THE WEATHER (#5253, Bryce
+      // 2026-11-11: "Automatic set"). With wear off there is no pit lane, so a
+      // dry start that turns to rain left the player on slicks at 0.72 grip
+      // against a field at 0.97. Such a car now drives on the tyre the weather
+      // calls for, as the AI field does, and back when it dries (followWeather
+      // in update). A treaded set the player chose in the garage stays theirs.
+      c.wxFollow = !on() && c.tread !== null && !!c.tyreOpt && !c.tyreOpt.wetTread;
       c.tyreWear = 0;
       c.tyreWearF = 0; c.tyreWearR = 0;
       // A FRESH SET COMES OUT OF BLANKETS, not up to temperature. This one line
@@ -895,7 +911,17 @@ const TyreModel = (function () {
     // Integrate one physics tick. Distance-based, not time-based: wear reaches
     // 1.0 after `lifeLaps` laps at load 1.0, which is what makes the constant
     // above mean what its name says regardless of pace, PACE or lap time.
+    // Keep a following car's RECORD on the weather's tread: grip (treadOf), the
+    // HUD letter and the band colour read it. c.tread and c.mods stay as fitted,
+    // because they are the session-record key (session-records.js). Allocates
+    // only on a change of tread.
+    function followWeather(c) {
+      const want = treadFor(G.raceWeather, G.trackWetness ? G.trackWetness() : wetness(G.raceWeather, G.weatherArc));
+      if ((c.tyre ? c.tyre.tread || 0 : -1) === want) return;
+      c.tyre = want > 0 ? classRecord(classForTread(want)) : optionRecord(c.tyreOpt);
+    }
     function update(c, dt) {
+      if (c && c.wxFollow && !c.retired) followWeather(c);
       if (!on() || !c || c.retired || c.finished) return;
       const track = G.track;
       if (!track || !(track.total > 0) || !(dt > 0)) return;
@@ -1103,7 +1129,7 @@ const TyreModel = (function () {
     T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
     HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, classForTread, wetness, weatherGrip,
+    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, classForTread, wetness, weatherGrip,
     aquaplane, aquaplaneSafeV, aquaInto, AQUA_WET, AQUA_ONSET, AQUA_RAMP, AQUA_LOSS, asRain,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,

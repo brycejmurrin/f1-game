@@ -438,13 +438,16 @@ cell is 0.88. Through `weatherGrip`'s lerp the inter/full crossover is wetness
 ~0.68 on grip alone and ~0.79 with the catalog's dry cornering cost (0.94 vs
 0.90), bracketing treadFor's 0.72; slick/inter with that cost crosses at ~0.24.
 `tests/unit/wet-grip-ladder.test.mjs` pins the ordering. The table cannot say
-"a full wet is worse than an inter on a near-dry road" by itself — the dry knot
-is 1 for every tread inside `weatherGrip` — so that half lives in the catalog's
-stat cost. CLOSED (was a KNOWN GAP): `gripMult` once mapped `tread == null`
-(wear-off AI) to the full-wet column, which is not "the right tyre" below
-wetness ~0.68; `js/game.js` `gripMult` now reads
-`c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread`,
-so a tread-less car gets the tyre the conditions call for.
+"a full wet is worse than an inter on a near-dry road" through its `dry` row
+(slick 1, inter 0.92, full wet 0.90; #5289, 2026-11-11). That cost used to live
+in the catalog's stat rows on the player alone; a wet set now costs a human
+what it costs an AI (`TyreModel.applyCompound`), so both pay it here. CLOSED
+(was a KNOWN GAP): `gripMult` once mapped `tread == null` (wear-off AI) to the
+full-wet column, which is not "the right tyre" below wetness ~0.68;
+`js/game.js` `gripMult` now reads `TyreModel.treadOf(c, raceWeather,
+trackWetness())`: a tread-less car gets the tyre the conditions call for, and
+so does a wear-off car on its own garage slick (`c.wxFollow`, #5253), whose
+record the session keeps on the weather's tread.
 
 ### The three call shapes
 

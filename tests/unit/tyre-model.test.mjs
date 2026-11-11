@@ -96,6 +96,37 @@ test("a wet or inter set costs a human exactly what it costs an AI: 1 + off on v
   assert.equal(car.mods.cornering, base.cornering * 1.12);
 });
 
+test("wear OFF: a garage slick follows the weather's tread; a garage wet set, wear on and the AI sentinel do not (#5253)", () => {
+  const slick = T.optionRecord(TYRES.find((o) => o.id === "soft")), inter = TYRES.find((o) => o.id === "intermediate");
+  let wet = 0;
+  const G = { lapsTarget: 5, track: { total: 5386, def: {} }, LAT_MAX: 22, raceTyreWear: "off",
+              raceWeather: "dry", weatherArc: null, trackWetness: () => wet };
+  const s = T.create(G);
+  const car = { human: true, tread: 0, tyreOpt: TYRES.find((o) => o.id === "soft"), tyreBaseMods: { speed: 1, accel: 1, cornering: 1, braking: 1 }, mods: {} };
+  s.fit(car, slick);
+  assert.equal(car.wxFollow, true);
+  const key = JSON.stringify([car.tread, car.mods]);
+  wet = 1; G.raceWeather = "rain"; s.update(car, 1 / 60);
+  assert.equal(car.tyre.code, "W"); assert.equal(T.treadOf(car, "rain", 1), 2);
+  wet = 0.5; G.raceWeather = "wet"; s.update(car, 1 / 60);
+  assert.equal(car.tyre.code, "I"); assert.equal(T.treadOf(car, "wet", 0.5), 1);
+  wet = 0; G.raceWeather = "dry"; s.update(car, 1 / 60);
+  assert.equal(car.tyre.id, "soft"); assert.equal(T.treadOf(car, "dry", 0), 0);
+  assert.equal(JSON.stringify([car.tread, car.mods]), key, "c.tread / c.mods (the session-record key) never move");
+  // A treaded set the player chose stays theirs; an explicit tread on it is honoured.
+  const own = { human: true, tread: 0, tyreOpt: inter, tyreBaseMods: car.tyreBaseMods, mods: {} };
+  s.fit(own, T.optionRecord(inter));
+  assert.equal(own.wxFollow, false); assert.equal(T.treadOf(own, "dry", 0), 1);
+  own.tread = 0; assert.equal(T.treadOf(own, "rain", 1), 0, "a caller's pinned tread wins");
+  // The AI field keeps its sentinel; wear on keeps the fitted set (there is a pit lane).
+  const ai = { tread: null }; s.fit(ai, T.classRecord("medium"));
+  assert.equal(ai.wxFollow, false); assert.equal(T.treadOf(ai, "rain", 1), 2);
+  s.setLevel("real");
+  const on = { human: true, tread: 0, tyreOpt: car.tyreOpt, tyreBaseMods: car.tyreBaseMods, mods: {} };
+  s.fit(on, slick);
+  assert.equal(on.wxFollow, false); assert.equal(T.treadOf(on, "rain", 1), 0);
+});
+
 test("fitting preserves the ordinary AI null-tread competent-field sentinel", () => {
   const s = ctxFor();
   const car = { lap: 1, tread: null };
