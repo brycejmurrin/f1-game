@@ -137,6 +137,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 
 | Tool | Does | Suggested skill |
 |---|---|---|
+| **ci/apt-cached-install.sh** | Installs CI apt packages without the mirror when it can: none if dpkg has them, cached .debs, then bounded apt. | — |
 | **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
