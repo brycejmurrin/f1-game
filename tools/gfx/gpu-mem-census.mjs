@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// gpu-mem-census.mjs — Requested GPU allocation estimates (textures, renderbuffers, buffers) on TLX's WebGL2 path, by format.
-// @doc Requested WebGL2 allocation estimates by format, with explicit-delete accounting and coverage limits.
+// gpu-mem-census.mjs — Requested GPU allocation estimates (textures, renderbuffers, buffers) on TLX, by format: WebGL2, or WebGPU with --webgpu.
+// @doc Requested WebGL2 or WebGPU (--webgpu) allocation estimates by format, with explicit-delete accounting.
 // @skill renderer-debug / playwright-probe
 //
 // WHAT IT ANSWERS. "What allocations were observed at wrapped WebGL2 API boundaries?" The numbers are COMPUTED from the
@@ -13,19 +13,25 @@
 // HOW. Same boot as the pass census (PR #2699, issue #2657): headless Chromium, TLX forced onto three's WebGL2 path, program
 // links stubbed unless --real-link, `--mobile` forces the phone tier, then race → go → jump and WARM frames.
 //
-//   node tools/gfx/gpu-mem-census.mjs [track=monaco] [--warm 60] [--mobile] [--real-link] [--json PATH]
+// --webgpu (#4783 row 3) runs three's WebGPU backend (Bryce's iPhone path, D-013) on Mesa lavapipe and counts
+// GPUDevice.createTexture / createBuffer minus destroy() instead (tools/gfx/gpu-mem-webgpu.mjs). Lavapipe is a software
+// adapter, so TLX skips batches there: the bytes are exact for what that run asked for, not a phone's number.
+//
+//   node tools/gfx/gpu-mem-census.mjs [track=monaco] [--warm 60] [--mobile] [--real-link] [--webgpu] [--json PATH]
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
+import { gpuMemInitSource, gpuMemSnapshot } from "./gpu-mem-webgpu.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/gfx/gpu-mem-census.mjs [track=monaco] [--warm 60] [--real-link] [--mobile] [--visits a,b,...] [--json PATH]
+exitIfHelp(argv, `usage: node tools/gfx/gpu-mem-census.mjs [track=monaco] [--warm 60] [--real-link] [--mobile] [--webgpu] [--visits a,b,...] [--json PATH]
   --visits then switches to each listed circuit in turn (the race path) and prints the net bytes and GL create/delete counts after each,
   which describes explicit create/delete activity across track switches (three #34597, issue #2651).
   --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
+  --webgpu runs three's WebGPU backend on Mesa lavapipe and counts GPUDevice.createTexture / createBuffer minus destroy() (exit 1 if three falls back to WebGL2).
   Requested GPU allocation estimates by format on TLX's WebGL2 path, from the allocation calls (allocation estimates, not a driver number).
   Link calls are stubbed unless --real-link, so the scene reaches steady state quickly under SwiftShader.`);
 
@@ -43,20 +49,22 @@ if (!Number.isSafeInteger(WARM) || WARM < 0 || WARM > 10000) throw new Error("--
 const VISITS = String(flag("--visits", "") || "").split(",").map((x) => x.trim()).filter(Boolean);
 const REAL_LINK = argv.includes("--real-link");
 const MOBILE = argv.includes("--mobile");
+// --webgpu: three's WebGPU backend on Mesa lavapipe (needs the lvp ICD; SwiftShader cannot run it), as pass-census does.
+const WEBGPU = argv.includes("--webgpu");
 const JSON_OUT = flag("--json", null);
 const WAIT_MS = Math.max(60000, +process.env.APEX_PROFILE_WAIT_MS || 60000);
 
 /** Page-side init script: force TLX onto three's WebGL2 path and (unless --real-link) stub program links. */
-function initScript({ stub, mobile }) {
+function initScript({ stub, mobile, webgpu }) {
   try {
     if (mobile) localStorage.setItem("apex26.forceMobileTier", "1");
     localStorage.setItem("apex26.gfxBackend", "three");
-    localStorage.setItem("apex26.tlxForceGL", "1");
+    localStorage.setItem("apex26.tlxForceGL", webgpu ? "0" : "1");
     localStorage.setItem("apex26.gfxBootStepMs", "45000");
     sessionStorage.setItem("apex26.wgxCapture", "0");
   } catch (_) { /* blocked storage: the defaults still run TLX */ }
   window.__TEST_MODE = true;
-  if (!stub) return;
+  if (!stub || webgpu) return;
   for (const C of [window.WebGL2RenderingContext, window.WebGLRenderingContext]) {
     if (!C) continue;
     const P = C.prototype;
@@ -150,10 +158,11 @@ async function main() {
   let srv, browser;
   try {
     srv = await startStaticServer(ROOT);
-    browser = await launchChromium({ args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] });
+    browser = await launchChromium(WEBGPU ? { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new", "--disable-background-timer-throttling"], env: { ...process.env, ...WEBGPU_LAVAPE_ENV } }
+      : { args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] });
     const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
-    await ctx.addInitScript(initScript, { stub: !REAL_LINK, mobile: MOBILE });
-    await ctx.addInitScript(installWrap);
+    await ctx.addInitScript(initScript, { stub: !REAL_LINK, mobile: MOBILE, webgpu: WEBGPU });
+    if (WEBGPU) await ctx.addInitScript(gpuMemInitSource({ armed: false })); else await ctx.addInitScript(installWrap);
     const page = await ctx.newPage();
     const errors = []; let pageErrorCount = 0;
     page.on("pageerror", (e) => { pageErrorCount++; if(errors.length<200)errors.push(String(e).slice(0, 200)); });
@@ -166,12 +175,23 @@ async function main() {
     const rendererReady = await page.waitForFunction(() => !!window.renderer, null, { timeout: WAIT_MS, polling: 100 }).then(() => true, () => false);
     if (!rendererReady) throw new Error("window.renderer never appeared: this tool measures TLX (backend three) behind ?three-devtools=1");
     const backend = await page.evaluate(() => { const b = window.renderer.backend, gl = b && b.gl; return { api: gl instanceof WebGL2RenderingContext ? "webgl2" : b && b.isWebGPUBackend ? "webgpu" : "unknown", forceWebGL: gl instanceof WebGL2RenderingContext }; });
-    if (backend.api !== "webgl2") throw new Error("Requested WebGL2 but renderer reports " + backend.api);
+    if (backend.api !== (WEBGPU ? "webgpu" : "webgl2")) throw new Error("Requested " + (WEBGPU ? "WebGPU" : "WebGL2") + " but renderer reports " + backend.api);
+    // Software WebGPU compiles pipelines lazily and rAF runs far ahead of presented frames, so the warm is counted in
+    // tlx.js's own present counter (docs/notes/PERF-CENSUS-WEBGPU-2026-11-04.md run 13), not in rAF ticks.
+    const presents = () => page.evaluate(() => { try { return window.GLX.__tlx.backendState().presents | 0; } catch (_) { return -1; } });
+    const presents0 = WEBGPU ? await presents() : 0;
     await page.evaluate(async (warm) => {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
       for (let i = 0; i < warm; i++) { A.setInput({ throttle: true, steer: 0.35 * Math.sin(i / 25) }); await raf(); }
     }, WARM);
-    const snap = async () => page.evaluate(async () => {
+    let presented = null;
+    if (WEBGPU) {
+      const want = presents0 + Math.min(WARM, 30);
+      const reached = await page.waitForFunction((n) => { try { return window.GLX.__tlx.backendState().presents >= n; } catch (_) { return false; } }, want, { timeout: 240000, polling: 500 }).then(() => true, () => false);
+      presented = (await presents()) - presents0;
+      if (!reached) console.error(`webgpu: only ${presented} frames presented within 240s of the warm (wanted ${want - presents0})`);
+    }
+    const snapGL = async () => page.evaluate(async () => {
       const raf = () => new Promise((r) => requestAnimationFrame(r));
       for (let i = 0; i < 5; i++) await raf();
       const st = WebGL2RenderingContext.prototype.__gm;
@@ -185,6 +205,14 @@ async function main() {
       return { cat: Object.entries(cat).map(([k, v]) => ({ k, n: v.n, mb: mb(v.b), bigMB: mb(v.big) })).sort((a, b) => b.mb - a.mb), big,
         life: JSON.parse(JSON.stringify(st.life)), texMB: mb([...st.tex.values()].reduce((s, e) => s + e.b, 0)), rbMB: mb([...st.rb.values()].reduce((s, e) => s + e.b, 0)), bufMB: mb(bb), tex: st.tex.size, unknown: st.unknown, failed: st.failed, contexts: st.contexts, failedCount: st.failedCount, unknownCount: st.unknownCount, links: st.links, linkCount: st.linkCount || 0, failedLinkCount: st.failedLinkCount || 0 };
     });
+    // The WebGPU rows carry the same fields the report reads; a WebGL-only field is 0 or empty there.
+    const snap = WEBGPU ? async () => {
+      await page.evaluate(async () => { const raf = () => new Promise((r) => requestAnimationFrame(r)); for (let i = 0; i < 5; i++) await raf(); });
+      const g = await page.evaluate(gpuMemSnapshot, 40);
+      if (!g) throw new Error("--webgpu: no GPUDevice was wrapped (GPUDevice.prototype.__gmw missing)");
+      return { ...g, rbMB: 0, failed: [], failedCount: 0, contexts: 1, links: [], linkCount: 0, failedLinkCount: 0,
+        life: { Texture: { created: g.life.Texture.created, deleted: g.life.Texture.destroyed }, Buffer: { created: g.life.Buffer.created, deleted: g.life.Buffer.destroyed } } };
+    } : snapGL;
     const initial = await snap();
     let out = initial;
     const visits = [{ track, texMB: out.texMB, rbMB: out.rbMB, bufMB: out.bufMB, life: out.life }];
@@ -202,16 +230,18 @@ async function main() {
     console.log("largest textures:", out.big.join(" | "));
     if (VISITS.length) {
       console.log("\nvisit            net MB (tex+rb+buf)   created/deleted: Texture  Buffer  VertexArray  Program  Shader");
-      for (const v of visits) { const l = v.life, f = (k) => `${l[k].created}/${l[k].deleted}`; console.log(v.track.padEnd(16) + String(+(v.texMB + v.rbMB + v.bufMB).toFixed(1)).padStart(12) + "          " + [f("Texture"), f("Buffer"), f("VertexArray"), f("Program"), f("Shader")].map((x) => x.padStart(10)).join("")); }
+      for (const v of visits) { const l = v.life, f = (k) => (l[k] ? `${l[k].created}/${l[k].deleted}` : "-"); console.log(v.track.padEnd(16) + String(+(v.texMB + v.rbMB + v.bufMB).toFixed(1)).padStart(12) + "          " + [f("Texture"), f("Buffer"), f("VertexArray"), f("Program"), f("Shader")].map((x) => x.padStart(10)).join("")); }
     }
-    console.log("= gpu-mem " + JSON.stringify({ track: VISITS.at(-1) || track, mobile: MOBILE, texMB: out.texMB, rbMB: out.rbMB, bufMB: out.bufMB, errors: pageErrorCount }));
+    console.log("= gpu-mem " + JSON.stringify({ track: VISITS.at(-1) || track, mobile: MOBILE, api: backend.api, texMB: out.texMB, rbMB: out.rbMB, bufMB: out.bufMB, textures: out.tex, errors: pageErrorCount }));
     const nativeFailure = REAL_LINK && (out.failedLinkCount > 0 || out.linkCount === 0);
     const ok = pageErrorCount === 0 && out.failedCount === 0 && !nativeFailure;
     const correctness = { status: REAL_LINK ? (ok ? "pass" : "fail") : "unverified",
       reason: REAL_LINK ? "Observed native link statuses and API/page errors; this is not a pixel or hardware-performance validation." : "Shader operations were stubbed; native rendering correctness was not tested." };
-    const report = { ...out, ok, measurement: { status: ok ? "pass" : "fail", estimates: out.unknownCount ? "incomplete" : "supported-formats-only", interpretation: "Protocol completion and observed errors only; unknown estimates do not establish a negative leak finding." }, correctness, track: VISITS.at(-1) || track, initialTrack: track, initial, final: out, visits, backend,
-      shaderLinkMode: REAL_LINK ? "native" : "stubbed", errors, pageErrorCount, interpretation: "Observed requested allocations minus explicit deletes, not driver residency. GC, context teardown, implicit resources and unsupported/compressed allocations are not subtracted or fully measured; totals can overcount or undercount actual live storage. Stubbed shader mode does not establish native rendering correctness.",
-      provenance: { tool: "tools/gfx/gpu-mem-census.mjs", warm: WARM, mobile: MOBILE, requestedAPI: "webgl2", renderer: await page.evaluate(() => { const gl = window.renderer?.backend?.gl; return gl ? { version: gl.getParameter(gl.VERSION), renderer: gl.getParameter(gl.RENDERER) } : null; }) } };
+    const report = { ...out, ok, measurement: { status: ok ? "pass" : "fail", estimates: out.unknownCount ? "incomplete" : "supported-formats-only", interpretation: "Protocol completion and observed errors only; unknown estimates do not establish a negative leak finding." },
+      correctness: WEBGPU ? { status: "unverified", reason: "Counts createTexture/createBuffer descriptors on a software WebGPU adapter (lavapipe); no pixel, hardware or driver-residency validation." } : correctness, presented, track: VISITS.at(-1) || track, initialTrack: track, initial, final: out, visits, backend,
+      shaderLinkMode: WEBGPU ? "webgpu" : REAL_LINK ? "native" : "stubbed", errors, pageErrorCount, interpretation: "Observed requested allocations minus explicit deletes, not driver residency. GC, context teardown, implicit resources and unsupported/compressed allocations are not subtracted or fully measured; totals can overcount or undercount actual live storage. Stubbed shader mode does not establish native rendering correctness.",
+      provenance: { tool: "tools/gfx/gpu-mem-census.mjs", warm: WARM, mobile: MOBILE, requestedAPI: WEBGPU ? "webgpu" : "webgl2", renderer: await page.evaluate(() => { const b = window.renderer?.backend, gl = b?.gl; if (gl) return { version: gl.getParameter(gl.VERSION), renderer: gl.getParameter(gl.RENDERER) };
+        const ai = b?.device?.adapterInfo; return ai ? { vendor: ai.vendor, architecture: ai.architecture, device: ai.device, description: ai.description } : null; }) } };
     if (!ok) process.exitCode = 1;
     if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify(report, null, 2)); }
   } finally {

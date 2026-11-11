@@ -1,6 +1,7 @@
 // provenance.mjs — "did Bryce decide this": a GitHub label event or comment is the owner's only when its actor is the
-// owner AND it was not performed through a GitHub App.
-// @doc Provenance of GitHub label events and comments: byOwner (actor = owner, no app), decision: comments, label events.
+// owner AND it was not performed through a GitHub App. byAgent names the other kind (owner login through the Claude
+// app), which only the config row's routine paths accept (#5455).
+// @doc Provenance of GitHub label events and comments: byOwner (owner, no app), byAgent, decision: comments, label events.
 // @section runner
 // @skill steward
 //
@@ -33,6 +34,18 @@ export const actorOf = (evt) => evt?.actor?.login ?? evt?.user?.login ?? null;
 export function byOwner(evt, owner = OWNER) {
   if (!evt || !owner) return false;
   return actorOf(evt) === owner && Object.hasOwn(evt, "performed_via_github_app") && evt.performed_via_github_app === null;
+}
+
+/** The GitHub App slug every agent in this repo writes through (the Claude GitHub App). */
+export const AGENT_APP_SLUG = "claude";
+
+/** Did an agent perform this event: the owner's login AND `performed_via_github_app.slug` is AGENT_APP_SLUG? GitHub
+ *  cannot tell one Claude session from another (the orchestrator, a PR's own worker), so this proves "an agent", not
+ *  which one. Only merge-gate's config row reads it, for ROUTINE config paths (#5455). Pure. */
+export function byAgent(evt, owner = OWNER) {
+  if (!evt || !owner) return false;
+  const app = evt.performed_via_github_app;
+  return actorOf(evt) === owner && !!app && typeof app === "object" && app.slug === AGENT_APP_SLUG;
 }
 
 /** Was this comment edited after it was posted (`updated_at` later than `created_at`)? Pure. */

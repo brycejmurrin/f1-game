@@ -2017,6 +2017,11 @@
       ]
     },
     {
+      "path": "tools/gfx/gpu-mem-webgpu.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/gfx/knob-ab.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2045,6 +2050,15 @@
       "path": "tools/gfx/mem-cycles-lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/gfx/pass-census-lib.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/gfx/pass-census.mjs",
