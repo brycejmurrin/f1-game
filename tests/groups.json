@@ -2183,6 +2183,41 @@
       ],
       "kind": "browser"
     },
+    "test:scratch-churnb": {
+      "files": [
+        "tests/specs/scratch-churnb-r1.spec.js",
+        "tests/specs/scratch-churnb-r2.spec.js",
+        "tests/specs/scratch-churnb-r3.spec.js",
+        "tests/specs/scratch-churnb-r4.spec.js",
+        "tests/specs/scratch-churnb-r5.spec.js",
+        "tests/specs/scratch-churnb-r6.spec.js",
+        "tests/specs/scratch-churnb-r7.spec.js",
+        "tests/specs/scratch-churnb-r8.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:scratch-rcma": {
+      "files": [
+        "tests/specs/scratch-rcma-r1.spec.js",
+        "tests/specs/scratch-rcma-r2.spec.js",
+        "tests/specs/scratch-rcma-r3.spec.js",
+        "tests/specs/scratch-rcma-r4.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:scratch-rcmb": {
+      "files": [
+        "tests/specs/scratch-rcmb-r1.spec.js",
+        "tests/specs/scratch-rcmb-r2.spec.js",
+        "tests/specs/scratch-rcmb-r3.spec.js",
+        "tests/specs/scratch-rcmb-r4.spec.js",
+        "tests/specs/scratch-rcmb-r5.spec.js",
+        "tests/specs/scratch-rcmb-r6.spec.js",
+        "tests/specs/scratch-rcmb-r7.spec.js",
+        "tests/specs/scratch-rcmb-r8.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",

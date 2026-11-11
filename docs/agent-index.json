@@ -1423,6 +1423,50 @@
       "twinned": false
     },
     {
+      "id": "scratch-churnb",
+      "script": "test:scratch-churnb",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-churnb-r1.spec.js",
+        "tests/specs/scratch-churnb-r2.spec.js",
+        "tests/specs/scratch-churnb-r3.spec.js",
+        "tests/specs/scratch-churnb-r4.spec.js",
+        "tests/specs/scratch-churnb-r5.spec.js",
+        "tests/specs/scratch-churnb-r6.spec.js",
+        "tests/specs/scratch-churnb-r7.spec.js",
+        "tests/specs/scratch-churnb-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "scratch-rcma",
+      "script": "test:scratch-rcma",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-rcma-r1.spec.js",
+        "tests/specs/scratch-rcma-r2.spec.js",
+        "tests/specs/scratch-rcma-r3.spec.js",
+        "tests/specs/scratch-rcma-r4.spec.js"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "scratch-rcmb",
+      "script": "test:scratch-rcmb",
+      "kind": "browser",
+      "files": [
+        "tests/specs/scratch-rcmb-r1.spec.js",
+        "tests/specs/scratch-rcmb-r2.spec.js",
+        "tests/specs/scratch-rcmb-r3.spec.js",
+        "tests/specs/scratch-rcmb-r4.spec.js",
+        "tests/specs/scratch-rcmb-r5.spec.js",
+        "tests/specs/scratch-rcmb-r6.spec.js",
+        "tests/specs/scratch-rcmb-r7.spec.js",
+        "tests/specs/scratch-rcmb-r8.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",
