@@ -388,8 +388,7 @@ const api = {
     // harness needs to read a result correctly. `practice` is derived (a Time
     // Trial is always one), so it is NOT the same question as session === "tt".
     practice: G.practice, duel: G.duel,
-    raceQuali: !!G.raceQuali, raceGrid: G.raceGrid,
-    lapsTarget: G.lapsTarget,
+    raceQuali: !!G.raceQuali, raceGrid: G.raceGrid, lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
     // tickBody's holds: while `warming`, real frames charge neither the countdown nor
