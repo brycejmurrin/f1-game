@@ -251,9 +251,34 @@ not read the answers at the source.
 | 7. Orchestrator autonomy | "Reversible acts, reported after": tick a Plan line, re-request a gate, close a duplicate, archive a finished session, message workers. Never: merge, cancel a run, recommend cancelling one, or touch his labels | No gate patch. P5 guards the label half (an MCP label write must not drop his label). The rest is wording: AGENTS.md §Coordination and the brief template in this PR. | Issue draft I7 below. |
 | Transcripts | "Discard, keep the findings" | Nothing: the raw transcripts are not pushed, published or copied; they go when this session's container does. The findings, quotes and session ids stay in this note. | — |
 
-### Issues to file
+### Decided on Bryce's delegation
 
-This session writes only to its own branch and PR, so these are drafts for the orchestrator or Bryce to file. Each is
+Bryce to this review session, 2026-11-11 ~05:22Z (Nov 10, 9:22 PM PT): "Consider all decisions and make them for
+me". The decisions below are this session's, made on that delegation. A delegation in chat is not a `config-ok`:
+every PR that touches a config path still needs his own click on that PR.
+
+- **The seven decisions** stand as option (a) each, which is also what the orchestrator relayed as his answers.
+- **Order of work**, by clicks and CI rounds saved: #5432 (P1 and P2: a sync must not void `config-ok`; a click
+  re-runs the gate), #5427 (build the generated files), #5425 (gate holds on a red tip; with #5407), #5426 (ready
+  flip reuses the draft verdict), #5431 (orchestrator autonomy wording and the label guard), #5428 (cap as a
+  budget, start + 250k), #5429 (rule 13 wording), #5430 (class grants).
+- **`package.json`** is not gitignored: its generated `test:*` lines are replaced by one wrapper that reads
+  `tests/groups.json` at run time, so a new test no longer edits it (#5427).
+- **`sync-only` is made permanent by P1** (#5432), with no grant; class grants (#5430) start with
+  `generated-only` and `force-clean-behind`.
+- **Draft leg cap** (decision 2, option b) is not taken: it trades coverage for speed, and the reuse alone removes
+  the duplicate work.
+- **AGENTS.md wording** for rule 13 and for orchestrator autonomy is decided as written in #5429 and #5431; the
+  edits ship in their own PRs, inside the existing byte and rule-line budgets.
+- **Rank 15 against #5404** (does a re-run-to-green land or not): whoever takes #5416 settles it first, by test.
+- **The raw transcripts** are discarded with this session's container.
+- **This PR lands**: it is prose, its checks are green, and the skill wording should reach the next wave of
+  workers. A `hold` label from Bryce stops it.
+
+### Issues filed
+
+Filed by this session on that delegation, unlabelled (the orchestrator schedules them): I1 #5425, I2 #5426,
+I3 #5427, I4 #5428, I5 #5429, I6 #5430, I7 #5431, I8 #5432. The drafts below are their bodies. Each is
 written for a worker starting cold. Every one touches a config path, so each PR needs Bryce's `config-ok`. Existing
 issues that already carry part of the work: #5407 (crossings), #5403 (full-tier verdict), #5416 (the `now:` Plan
 item and the re-run row: P6), #5401 (preflip cap), #5402 (worker-prompt report line: P9, second half), #5212
