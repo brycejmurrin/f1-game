@@ -6,7 +6,7 @@ In-race camera behaviour that used to live as scattered branches in
 
 ## Free-look
 
-On **cockpit / hood / visor / t-cam** only: right stick (standard axes 2/3) and
+On **cockpit / hood / visor / t-cam / helmet** only: right stick (standard axes 2/3) and
 RMB-drag on the game canvas yaw/pitch the aim about the eye. Offsets are
 additive on top of the CAMERA TUNER's yaw/pitch, damp back to zero when the
 stick is released and the right button is up (a held, still RMB holds the
@@ -39,7 +39,7 @@ full chase widen. Side still adds its street-corridor term on top.
 | effect | where | modes |
 |---|---|---|
 | Trauma shake (`shake` in game.js → `CamFeel.shake`) | every race camera | all (`CamTune.shakeOffset` applies COMFORT › HEAD BOB / reduce-motion). Real-time sum-of-sines noise, so the same rms reaches the damper at any fps (was per-frame `Math.random()`: 2.2x stronger at 30 than 144 fps). On the bolted set the eye moves ≤ `TUB_EYE_MAX` 3 cm and the trauma becomes aim rotation |
-| Speed buzz | game.js after vantage | cockpit, hood, visor, tcam (`CamFeel.isBuzzMode`; amp via `CamTune.buzzAmp`) |
+| Speed buzz | game.js after vantage | cockpit, hood, visor, tcam, helmet (`CamFeel.isBuzzMode`; amp via `CamTune.buzzAmp`) |
 | Kerb rib shiver | `vantage.js` `onboardAttitude` | same bolted set (incl. tcam) |
 
 Buzz stays off on a wet road (SSR flicker); comfort scaling lives in CamTune.

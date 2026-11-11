@@ -265,17 +265,19 @@ test('the first presented garage frame takes over its preparation cover, then ha
 });
 test('GARAGE ENTER & LEAVE is an ADVANCED VISUALS tool: opens over the settings page, DONE gives it back', () => {
   const { $ } = harness();
-  $('pmsettings').hidden = false; $('pm-panel-display').hidden = false;
+  // The tool lives on VISUAL STUDIO; HUD & CAMERA is a sibling page that stays hidden (#5066).
+  $('pmsettings').hidden = false; $('pm-panel-visual').hidden = false; $('pm-panel-display').hidden = true;
   Arrival.bindSettings($, { get: () => null, set() {} });
   $('pm-garrival').onclick();
   assert.equal($('garrival').hidden, false);
   assert.equal($('pmsettings').hidden, true, 'the settings page stands down');
-  assert.equal($('pm-panel-display').hidden, true, 'and so does its DISPLAY page');
+  assert.equal($('pm-panel-visual').hidden, true, 'and so does its VISUAL STUDIO page');
   assert.equal($('ga-close').focused, true);
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, true);
   assert.equal($('pmsettings').hidden, false, 'back to the settings page');
-  assert.equal($('pm-panel-display').hidden, false);
+  assert.equal($('pm-panel-visual').hidden, false, 'VISUAL STUDIO, the page the tool came from');
+  assert.equal($('pm-panel-display').hidden, true, 'HUD & CAMERA is not stacked under it');
   assert.equal($('pm-garrival').focused, true, 'focus returns to the tool button');
   const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   assert.match(shell, /<button id="pm-garrival"[^>]*>GARAGE ENTER &amp; LEAVE&hellip;<\/button>/);
@@ -2000,4 +2002,12 @@ test('noteResult carries the race to the way home: driver, fastest lap, wet, nig
   G.raceWeather = 'dry'; G.raceTimeOfDay = 'day'; rival.best = 80;
   const d = note([rival, player], {});
   assert.deepEqual([d.fastest, d.wet, d.night], [false, false, false]);
+});
+
+test('#5066: the ADVANCED VISUALS tools hide and give back VISUAL STUDIO, never the HUD & CAMERA page', () => {
+  for (const file of ['js/garage/arrival.js', 'js/lighting/tuner-panel.js', 'js/camera/flyby-editor.js', 'js/camera/tuner-panel.js']) {
+    const src = readFileSync(new URL('../../' + file, import.meta.url), 'utf8');
+    assert.equal(src.includes('"pm-panel-display"'), false, file + ' touches the HUD & CAMERA page');
+    assert.equal(src.includes('$("pm-panel-visual")'), true, file + ' hides and restores VISUAL STUDIO');
+  }
 });
