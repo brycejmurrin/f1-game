@@ -48,7 +48,8 @@
       "slack": 200
     },
     "assertPinsAll": {
-      "ceiling": 10351,
+      "baseline": "2026-11-10 (audit item 9): re-seeded at the TRUE count after the counter learned the indirect shape (a bool from includes()/test()/indexOf() that a later assert reads); was 10320 under the old counter, +39 indirect sites. Shrink-only: lower it as those sites are rewritten, never raise it to absorb them.",
+      "ceiling": 10359,
       "slack": 200
     },
     "bareCatches": {
