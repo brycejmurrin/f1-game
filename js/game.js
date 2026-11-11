@@ -2630,7 +2630,7 @@ async function startRaceBody() {
   // drainDeferredCarWarm, one piece a countdown frame below); headless has no frames to drain them in.
   try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
   if (stale()) return false;
-  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
+  RaceEntryProfile.span("debrisPrime", () => DebrisWorld.prime());
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
   if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
@@ -2664,7 +2664,7 @@ async function startRaceBody() {
   document.body.classList.add("in-race");
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
-  showTouchControls(true);
+  showTouchControls(true); updateHud(true);   // fit AFTER the dock exists: before it, no --hud-z-dock and raw-BUTTON-SIZE pedals until the next tick (tests/unit/start-race-dock-fit)
   dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); if (typeof CamFeel !== "undefined") { CamFeel.resetLatch(); CamFeel.resetFreeLook(); } // fresh race — drop free-cam, TV director, look-back latch; arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
