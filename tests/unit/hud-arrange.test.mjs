@@ -105,7 +105,8 @@ test("create: inert without a document or HudLayout; the pure API is frozen", ()
 // Exercise the real editor listeners with a tiny DOM and a controllable frame queue.
 function editor(pieceId = "piece", options = {}) {
   const ids = new Map(), listeners = {}, frames = new Map(), writes = [], observers = [];
-  let frame = 0, set = 'chase', profile = 'standard';
+  let frame = 0, set = 'chase', profile = 'standard', dirty = false;
+  const stats = { saves: 0, rects: 0 };   // storage writes; layout reads of the piece (each one a forced layout on a phone)
   class El {
     constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.attrs = {}; this.listeners = {}; this.hidden = false; this.style = { removeProperty(k) { delete this[k]; }, setProperty(k,v) { this[k]=v; }, getPropertyValue(k) { return this[k] || ""; } }; this.isConnected = true; }
     set textContent(v) { this._text = v; this.children = []; } get textContent() { return this._text || this.children.map(c => c.textContent).join(''); }
@@ -121,6 +122,7 @@ function editor(pieceId = "piece", options = {}) {
     contains(e) { return this === e || this.children.some(c => c.contains(e)); }
     closest(sel) { return sel === "#" + pieceId && this.id === pieceId ? this : null; }
     getBoundingClientRect() {
+      if (this.id === pieceId) stats.rects++;
       if (this.id === 'hud-arrange-bar') {
         const left = parseFloat(this.style.left) || 0, top = parseFloat(this.style.top) || 0;
         return { left, top, right: left + this.offsetWidth, bottom: top + this.offsetHeight, width: this.offsetWidth, height: this.offsetHeight };
@@ -160,15 +162,17 @@ function editor(pieceId = "piece", options = {}) {
   const key = (sn = set, pn = profile) => sn + ':' + pn;
   const get = (id, sn, pn) => ({ x: 0, y: 0, s: 100, ...values.get(key(sn, pn)) });
   const layout = { ELEMENTS: [[pieceId, 'Piece', '#' + pieceId]], shown: () => set, profile: () => profile, get,
-    set(id, v, sn, pn) {
-      writes.push({ id, v: { ...v }, sn, pn });
+    set(id, v, sn, pn, live) {
+      writes.push({ id, v: { ...v }, sn, pn, live: !!live });
+      if (live) dirty = true; else { stats.saves++; dirty = false; }
       const stored = options.snap ? Object.fromEntries(Object.entries(v).map(([k,n]) => [k, Math.round(n)])) : v;
       values.set(key(sn, pn), { ...get(id, sn, pn), ...stored });
       const el = ids.get(pieceId);
       el.setAttribute('data-hl-user', '');
       el.setAttribute('data-hl-v4', '');
       if (id === 'map') { el.style.removeProperty('--hud-clear-x'); el.style.removeProperty('--hud-clear-y'); }
-    }, resetEl() {} };
+      return get(id, sn, pn);
+    }, commit() { if (!dirty) return false; dirty = false; stats.saves++; return true; }, resetEl() {} };
   const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
   const elements = { isOn: id => on.has(id), setMany(ids, enabled) {
     for (const id of ids) { visibilityWrites.push({ id, enabled }); if (enabled) on.add(id); else on.delete(id); }
@@ -194,7 +198,7 @@ function editor(pieceId = "piece", options = {}) {
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
   const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
   const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };
-  return { api, fire, tick, writes, ids, frames, doc, get, observers, on, visibilityWrites, preferences, viewport,
+  return { api, fire, tick, writes, stats, ids, frames, doc, get, observers, on, visibilityWrites, preferences, viewport,
     chooseVisibility(value) { const select = ids.get('hud-arrange-vis'); select.value = value; select.dispatchEvent({ type: 'change' }); },
     context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
 }
@@ -209,6 +213,26 @@ test('editor: exit flushes the final drag once into its original camera/style an
   assert.equal(e.writes.at(-1).sn, 'chase'); assert.equal(e.writes.at(-1).pn, 'standard');
   assert.equal(e.writes.at(-1).v.x, 10); assert.equal(e.frames.size, 0);
   e.tick(); assert.equal(e.writes.length, 4, 'no gesture is flushed twice');
+});
+
+test('editor: a drag paints every frame but saves once, and reads layout only at its ends (#5031)', () => {
+  for (const gesture of ['drag', 'pinch']) {
+    const e = editor(); e.api.setEditing(true);
+    e.fire('pointerdown');
+    if (gesture === 'pinch') e.fire('pointerdown', { pointerId: 2, clientX: 200 });
+    const painted = e.writes.length, rects = e.stats.rects;
+    assert.equal(e.stats.saves, 0, gesture + ': the press adopts its painted origin without saving it');
+    for (let i = 1; i <= 10; i++) { e.fire('pointermove', { pointerId: gesture === 'pinch' ? 2 : 1, clientX: 200 + i * 10 }); e.tick(); }
+    assert.equal(e.writes.length - painted, 10, gesture + ': one paint per frame');
+    assert.equal(e.writes.slice(painted).every((w) => w.live), true, gesture + ': every frame is a live paint');
+    assert.equal(e.stats.saves, 0, gesture + ': no storage write while the finger is down');
+    assert.equal(e.stats.rects, rects, gesture + ': no forced layout read while the finger is down');
+    if (gesture === 'pinch') { e.fire('pointerup', { pointerId: 2 }); assert.equal(e.stats.saves, 0, 'one finger still holds the piece'); }
+    e.fire('pointerup');
+    assert.equal(e.stats.saves, 1, gesture + ': exactly one write at the end of the gesture');
+    e.api.setEditing(false);
+    assert.equal(e.stats.saves, 1, gesture + ': exit has nothing left to save');
+  }
 });
 
 test('editor: lifting either pinch finger rebases the remaining drag without a position jump', () => {

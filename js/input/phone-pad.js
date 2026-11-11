@@ -95,11 +95,43 @@ const PhonePad = (function () {
     const ring = ringer(opts.doc !== undefined ? opts.doc : (typeof document !== "undefined" ? document : null));
     input.setRemoteHaptics(null);  // clear the previous peer before any hello can arrive
 
+    // ADMISSION. With `opts.admit(peer, whenId)` the link is open but DEAF until
+    // the game says yes: samples, edges, acks, haptics and the dash all wait.
+    // `peer` is { fp, id }: fp = the DTLS fingerprint of the answer we applied
+    // (fresh per RTCPeerConnection, so it names this connection only), id =
+    // the phone page's peer id from its hello, which survives a re-dial.
+    // whenId(ms) resolves with the id once the hello lands, or null after ms.
+    let admitted = typeof opts.admit !== "function", gated = 0, rejectWhy = null;
+    let helloSeen = false, peerId = null, hapticsOn = false;
+    const idWaiters = [];
+    const peer = { fp: remoteFingerprint(transport), get id() { return peerId; } };
+    const whenId = (ms) => (helloSeen || closed ? Promise.resolve(peerId) : new Promise((res) => {
+      const t = setTimeout(() => res(peerId), ms);
+      idWaiters.push((v) => { clearTimeout(t); res(v); });
+    }));
+    const applyHaptics = () => input.setRemoteHaptics(hapticsOn ? (ms) => transport.send(T.EVENT, encodeHaptic(ms)) : null);
+    let deciding = false;
+    function decide() {
+      if (admitted || deciding || closed) return;
+      deciding = true;
+      let verdict;
+      try { verdict = opts.admit(peer, whenId); } catch (e) { verdict = false; }
+      Promise.resolve(verdict).then((ok) => ok === true, () => false).then((ok) => {
+        deciding = false;
+        if (closed) return;
+        if (!ok) { rejectWhy = "rejected"; try { transport.close(); } catch (e) { /* already closed */ } onClose("rejected"); return; }
+        admitted = true;
+        applyHaptics();
+        if (opts.onAdmitted) { try { opts.onAdmitted(peer); } catch (e) { /* caller's problem */ } }
+      });
+    }
+
     transport.onMessage((channel, data) => {
       if (closed) return;
       if (channel === T.STATE) {
         const s = decodeSample(data);
         if (!s) { junk++; return; }
+        if (!admitted) { gated++; return; }
         // Unordered channel: an older sample after a newer one is thrown away,
         // never applied — it would steer the car back where the phone was.
         if (s.seq <= lastSeq && lastSeq - s.seq < 30000) { stale++; return; }
@@ -114,8 +146,12 @@ const PhonePad = (function () {
       if (ev.t === "hi" && ev.side === "pad" && ev.p === PROTO) {
         peerAck = !!ev.ack;
         helloPending = !transport.send(T.EVENT, encodeHello("host", false, true));
-        input.setRemoteHaptics(ev.haptics ? (ms) => transport.send(T.EVENT, encodeHaptic(ms)) : null);
+        hapticsOn = !!ev.haptics;
+        if (admitted) applyHaptics();
+        // The FIRST hello names the peer; a later one cannot rename it mid-link.
+        if (!helloSeen) { helloSeen = true; peerId = ev.id || null; for (const w of idWaiters.splice(0)) w(peerId); }
       }
+      if (ev.t === "ev" && !admitted) { gated++; return; }
       if (ev.t === "ev") {
         events++;
         const nav = ev.k.startsWith("nav") && ring;
@@ -127,6 +163,8 @@ const PhonePad = (function () {
     const onClose = (why) => {
       if (closed) return;
       closed = true;
+      if (rejectWhy) why = rejectWhy;
+      for (const w of idWaiters.splice(0)) w(peerId);
       if (ring) ring.stop();
       if (raf) { try { cancelAnimationFrame(raf); } catch (e) { /* no rAF here */ } raf = 0; }
       input.remoteLost("phone");
@@ -138,14 +176,16 @@ const PhonePad = (function () {
     const armed = () => {
       if (closed) return;
       helloPending = !transport.send(T.EVENT, encodeHello("host", false, true));
+      if (!peer.fp) peer.fp = remoteFingerprint(transport);
       if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* caller's problem */ } }
+      decide();
     };
     if (transport.status === "open") armed(); else transport.onOpen(armed);
 
     // The dash: sampled and sent from the same pump, ~15 Hz, unreliable — a
     // dropped frame is replaced 66 ms later, so nothing is worth a retransmit.
     function sendHud(t) {
-      if (!opts.hud || transport.status !== "open" || t - hudAt < HUD_MS) return;
+      if (!opts.hud || !admitted || transport.status !== "open" || t - hudAt < HUD_MS) return;
       hudAt = t;
       let h = null;
       try { h = opts.hud(); } catch (e) { h = null; }
@@ -170,8 +210,70 @@ const PhonePad = (function () {
     return {
       pump,
       close() { try { transport.close(); } catch (e) { /* already closed */ } onClose(); },
-      stats: () => ({ samples, events, stale, junk, huds, lastSeq, open: !closed && transport.status === "open" }),
+      stats: () => ({ samples, events, stale, junk, huds, lastSeq, gated, admitted, open: !closed && transport.status === "open" }),
     };
+  }
+
+  // The DTLS fingerprint of the description the far end made (NetSdp.fingerprint:
+  // lower-case hex), or null for a transport with no RTCPeerConnection (loopback).
+  function remoteFingerprint(transport) {
+    try {
+      const pc = transport && transport.pc;
+      const d = pc && (pc.currentRemoteDescription || pc.remoteDescription);
+      return d && d.sdp && typeof NetSdp !== "undefined" && NetSdp.fingerprint ? NetSdp.fingerprint(d.sdp) : null;
+    } catch (e) { return null; }
+  }
+
+  // ── desktop: ALLOW / REJECT on the game's own screen ─────────────────────
+  // Built here (js/input), not in the shell: it exists only while a phone is
+  // waiting. Touch-sized (48 px buttons) and short enough for 844×390. Only a
+  // TRUSTED click counts — the phone's own SELECT is a synthetic click, and
+  // the link is deaf while this is up anyway. Returns { result, dismiss }.
+  function askOnScreen(doc, text) {
+    if (!doc || !doc.body || typeof doc.createElement !== "function") return { result: Promise.resolve(false), dismiss() {} };
+    let settle = null, done = false;
+    const result = new Promise((r) => { settle = r; });
+    const mk = (tag, style, txt) => {
+      const n = doc.createElement(tag);
+      if (n.style) Object.assign(n.style, style || {});
+      if (txt != null) n.textContent = txt;
+      return n;
+    };
+    const box = mk("div", { position: "fixed", left: "0", top: "0", right: "0", bottom: "0", zIndex: "2147483000",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", boxSizing: "border-box",
+      background: "rgba(0,0,0,0.6)" });
+    box.id = "phonepad-confirm";
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-labelledby", "phonepad-confirm-h");
+    const card = mk("div", { background: "#15171c", color: "#fff", border: "2px solid #fff", borderRadius: "12px",
+      padding: "14px 18px", maxWidth: "440px", maxHeight: "100%", overflow: "auto", boxSizing: "border-box",
+      textAlign: "center", font: "600 16px/1.35 system-ui, sans-serif" });
+    const h = mk("div", { font: "800 20px/1.2 system-ui, sans-serif", margin: "0 0 6px" }, "Phone connected");
+    h.id = "phonepad-confirm-h";
+    const p = mk("div", { margin: "0 0 12px" }, text);
+    const row = mk("div", { display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" });
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      try { if (box.parentNode) box.parentNode.removeChild(box); } catch (e) { /* already gone */ }
+      settle(ok === true);
+    };
+    const button = (label, ok, bg) => {
+      const b = mk("button", { minWidth: "132px", minHeight: "48px", padding: "10px 18px", borderRadius: "10px",
+        border: "2px solid #fff", background: bg, color: "#fff", font: "800 18px system-ui, sans-serif",
+        touchAction: "manipulation", cursor: "pointer" }, label);
+      b.type = "button";
+      b.setAttribute("data-phonepad", ok ? "allow" : "reject");
+      b.addEventListener("click", (e) => { if (e && e.isTrusted === false) return; finish(ok); });
+      return b;
+    };
+    row.appendChild(button("ALLOW", true, "#1d7a3a"));
+    row.appendChild(button("REJECT", false, "#8a1c1c"));
+    card.appendChild(h); card.appendChild(p); card.appendChild(row);
+    box.appendChild(card);
+    doc.body.appendChild(box);
+    return { result, dismiss: () => finish(false) };
   }
 
   // ── desktop: the whole pairing flow, with signalling ─────────────────────
@@ -191,6 +293,8 @@ const PhonePad = (function () {
       relayUrl: () => NetRendezvous.baseUrl(),
       swap: (o) => NetRendezvous.swap(o),
       makeCode: () => NetRendezvous.makeCode(),
+      // ALLOW / REJECT on the game screen: { result: Promise<boolean>, dismiss() }.
+      confirm: (text) => askOnScreen(typeof document !== "undefined" ? document : null, text),
     }, deps || {});
     const say = (t, bad) => { if (ui.say) { try { ui.say(t, !!bad); } catch (e) { /* ui's problem */ } } };
     const qr = (url, code) => { if (ui.qr) { try { ui.qr(url, code); } catch (e) { /* ui's problem */ } } };
@@ -203,6 +307,31 @@ const PhonePad = (function () {
     // hosted again for the room's own lifetime (nostr HOST_TIMEOUT_MS), and the
     // phone dials it again by itself. A private relay's one mailbox is not reusable.
     let relink = false, roomTiming = null;
+    // WHO MAY STEER. Anyone holding the room code can answer it (and the code is
+    // hosted again after a drop), so a phone is admitted only once the player
+    // taps ALLOW on THIS screen. `trusted` is the admitted peer ({ fp, id }, id
+    // read live: the hello may land after ALLOW); a re-link is let straight back
+    // in only when it is that same peer, anything else asks again.
+    let trusted = null, asking = null;
+    const HELLO_WAIT_MS = 1500;   // how long a re-link waits for the phone to name itself
+    const samePeer = (p) => !!trusted && ((!!trusted.id && p.id === trusted.id) || (!!trusted.fp && p.fp === trusted.fp));
+    async function admit(p, whenId) {
+      if (trusted) {
+        if (trusted.id && !p.id) await whenId(HELLO_WAIT_MS);
+        if (samePeer(p)) { Log.info("input", "phone pad re-link: same phone"); return true; }
+      }
+      if (phase !== "connecting") return false;
+      phase = "confirming";
+      say("A phone connected — tap ALLOW on this screen to let it steer, or REJECT.");
+      let c = null;
+      try { c = deps.confirm("A phone joined with this game's room code. Let it steer this game?"); } catch (e) { c = null; }
+      asking = c && typeof c.dismiss === "function" ? c : null;
+      let ok = false;
+      try { ok = (await (c && c.result !== undefined ? c.result : c)) === true; } catch (e) { ok = false; }
+      asking = null;
+      return ok && phase === "confirming";
+    }
+    function dismissAsk() { const a = asking; asking = null; if (a) { try { a.dismiss(); } catch (e) { /* ui's problem */ } } }
     const recoveryState = () => ({ phase, reconnecting: relink && ["preparing", "waiting", "connecting"].includes(phase), publicRelay: !deps.usingPrivateRelay(),
       startedAt: roomTiming ? roomTiming.startedAt : null, deadlineAt: roomTiming ? roomTiming.deadlineAt : null });
     function recoveryChanged() { if (ui.recovery) { try { ui.recovery(recoveryState()); } catch (e) { /* ui's problem */ } } }
@@ -226,6 +355,7 @@ const PhonePad = (function () {
     function cancel() {
       if (phase === "cancelled") return;
       phase = "cancelled";
+      dismissAsk();
       dropRoom();
       if (active) { active.close(); active = null; }
       else if (transport) { try { transport.close(); } catch (e) { /* already closed */ } }
@@ -278,16 +408,30 @@ const PhonePad = (function () {
             }
             active = link(transport, {
               hud: ui.hud || null,
+              admit,
+              // The channel is up: one phone per room, so the room closes now;
+              // the phone steers only once admit() says yes (onAdmitted).
               onOpen: () => {
-                phase = "linked"; relink = false;
                 dropRoom();
                 qr(null, null);
+              },
+              onAdmitted: (p) => {
+                phase = "linked"; relink = false; trusted = p;
                 say("Phone connected — tilt to steer. RECALIBRATE TILT levels it.");
                 Log.info("input", "phone pad linked");
                 if (ui.linked) { try { ui.linked(); } catch (e) { /* ui's problem */ } }
               },
               onClose: (why) => {
                 if (phase === "cancelled") return;
+                dismissAsk();
+                if (why === "rejected") {
+                  phase = "lost"; relink = false; active = null; transport = null;
+                  dropRoom();
+                  say("Phone rejected — press STEER THIS GAME WITH A PHONE for a new code.", true);
+                  Log.info("input", "phone pad rejected");
+                  if (ui.lost) { try { ui.lost(); } catch (e) { /* ui's problem */ } }
+                  return;
+                }
                 const wasLinked = phase === "linked";
                 // A link that died before it opened (ICE failed) still holds
                 // the room's relay sockets; nothing will use them now.
@@ -351,7 +495,8 @@ const PhonePad = (function () {
   // button state the page keeps: { roll(), thr(), brk(), held() }. Returns
   // { sample(), event(k), pump(), close(), stats() }; the page calls sample()
   // from deviceorientation and on every pedal change, and pump() each frame.
-  // `opts.onHud(h)` receives every dash packet.
+  // `opts.onHud(h)` receives every dash packet; `opts.peerId` (hex) rides the
+  // hello so the game can recognise this page when it re-dials (host() admit).
   function padSession(transport, src, opts) {
     opts = opts || {};
     const T = NetTransport;
@@ -365,7 +510,7 @@ const PhonePad = (function () {
     const canVibrate = () => typeof opts.vibrate === "function" || (typeof navigator !== "undefined" && typeof navigator.vibrate === "function" && navigator.maxTouchPoints > 0);
     function flush() {
       if (closed || transport.status !== "open") return;
-      if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("pad", canVibrate(), true));
+      if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("pad", canVibrate(), true, opts.peerId));
       while (pending.length) {
         const edge = pending[0];
         if (now() - edge.at > (NAV_REPEAT[edge.k] ? NAV_MAX_AGE_MS : EDGE_MAX_AGE_MS)) { pending.shift(); expired++; continue; }
@@ -461,7 +606,7 @@ const PhonePad = (function () {
     encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, decodeEvent,
     teamHex, fmtLap, paintHud,
     padUrl, codeFromUrl,
-    link, host, padSession, pad,
+    link, host, padSession, pad, askOnScreen,
   };
 })();
 Object.freeze(PhonePad);

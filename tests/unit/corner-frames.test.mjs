@@ -52,3 +52,51 @@ test("corner-frames: label parsing names the corners a comment means", () => {
   assert.equal(lab[4].own, "// T3");
   assert.equal(lab[6].head, null);
 });
+
+// Sub-PEAK_K kinks (#5287): a numbered corner gentler than PEAK_K passes only on
+// its OWN local curvature extremum within TURN_M — never by being near nothing.
+test("corner-frames: the four real sub-threshold kinks count as on their corner", () => {
+  const want = ["baku|T9", "redbull|T2", "mosport|T6", "mosport|T7"];
+  const got = want.map((k) => rows.find((r) => r.stable === k)).map((r) => r && r.bad);
+  assert.deepEqual(got, [false, false, false, false]);
+});
+
+function fakeTrack(n, total, kAt) {
+  const curv = new Float64Array(n);
+  for (let i = 0; i < n; i++) curv[i] = kAt(i);
+  return { n, total, curv };
+}
+// 4 m nodes; a gentle 5e-4 rad/m bump (≈ Mosport's T6) centred on node 500.
+const N = 1000, LAP = 4000, BUMP = (i) => 5e-4 * Math.exp(-((((i - 500) * 4) / 30) ** 2));
+
+test("corner-frames kinkAt: a turn on a gentle kink is on it", () => {
+  const tr = fakeTrack(N, LAP, BUMP);
+  const k = CF.kinkAt(tr, 500 / N, tr.curv);
+  assert.equal(k && k.m, 0);
+});
+
+test("corner-frames kinkAt: a turn 30 m off its kink still fails", () => {
+  const tr = fakeTrack(N, LAP, BUMP);
+  assert.equal(CF.kinkAt(tr, (500 + 30 / 4) / N, tr.curv), null);
+});
+
+test("corner-frames kinkAt: a turn on a featureless straight still fails", () => {
+  // deterministic ±1e-5 rad/m ripple: OSM-spline noise, no corner
+  const tr = fakeTrack(N, LAP, (i) => 1e-5 * Math.sin(i * 1.7) + 5e-6 * Math.sin(i * 0.37));
+  assert.equal(CF.kinkAt(tr, 300 / N, tr.curv), null);
+});
+
+// The loophole the "gentle or flick" clause shuts (fleet run 1 flipped buddh,
+// imola T7 and mugello T9 this way): a FULL-strength corner whose turn misses
+// its |k| peak by 15 m but sits on the signed-curvature extremum must still fail.
+test("corner-frames: a strong corner 15 m off its |k| peak still fails on the signed extremum", () => {
+  // signed curvature: a 2e-2 rad/m corner at node 500; |k| carries a sharper
+  // spike 15 m (≈4 nodes) later, so the |k| peak and the signed extremum differ
+  const strong = (i) => 2e-2 * Math.exp(-((((i - 500) * 4) / 30) ** 2));
+  const tr = fakeTrack(N, LAP, strong);
+  assert.equal(CF.kinkAt(tr, 500 / N, tr.curv), null, "|k| ≥ PEAK_K and no sign flick: kinkAt never vouches for it");
+  // and a true flick of the same strength (opposite sign to both sides) still counts
+  const flick = fakeTrack(N, LAP, (i) => 9e-3 - 1.8e-2 * Math.exp(-((((i - 500) * 4) / 12) ** 2)));
+  const f = CF.kinkAt(flick, 500 / N, flick.curv);
+  assert.equal(f && f.m, 0);
+});
