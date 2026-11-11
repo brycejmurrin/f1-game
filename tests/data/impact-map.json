@@ -423,6 +423,9 @@
       "silence": [
         "tests/unit/crowd-audio.test.mjs"
       ],
+      "swell": [
+        "tests/unit/crowd-audio.test.mjs"
+      ],
       "update": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
@@ -491,6 +494,7 @@
         "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "deployBoost": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "driveBrakeTone": [
@@ -544,12 +548,14 @@
         "tests/unit/wind-speed.test.mjs"
       ],
       "lightsOut": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "onInterrupted": [
         "tests/unit/lazy-audio-yield.test.mjs"
       ],
       "pitGun": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs"
       ],
       "rebuildCtx": [
@@ -775,6 +781,7 @@
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "deployLevel": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "detach": [
@@ -785,7 +792,8 @@
       ],
       "harvestLevel": [
         "tests/unit/audio-tune.test.mjs",
-        "tests/unit/ers-audio-layer.test.mjs"
+        "tests/unit/ers-audio-layer.test.mjs",
+        "tests/unit/pu-harvest-audio.test.mjs"
       ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
@@ -1003,6 +1011,9 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
+      ],
+      "pickChannelVoice": [
+        "tests/unit/radio-voice.test.mjs"
       ],
       "plan": [
         "tests/unit/announcer.test.mjs",

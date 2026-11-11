@@ -1,10 +1,20 @@
 "use strict";
 /*
  * MusicLib — bring your own music. The player picks audio files off their
- * device; we keep them in this browser forever and hand them to GameAudio as
+ * device; we keep them in this browser's storage and hand them to GameAudio as
  * extra playlist entries, so a personal soundtrack plays over the race exactly
  * like the shipped CC0 tracks. Nothing is uploaded anywhere — there is no
  * server, this game is static files on GitHub Pages.
+ *
+ * KEPT, NOT KEPT FOREVER. Browser storage is "best effort" unless the origin is
+ * persisted: Safari deletes a site's script-writable storage (IndexedDB
+ * included) after seven days of Safari use without the player interacting with
+ * the site (webkit.org/blog/10218), and evicts best-effort origins under storage
+ * pressure (webkit.org/blog/14403). A Home Screen web app keeps its own counter,
+ * and a persisted origin is excluded from eviction — so after the first track
+ * is saved, add() asks navigator.storage.persist() once (WebKit grants it on
+ * heuristics such as Home Screen use; Chrome on engagement). A refusal changes
+ * nothing; the files are still saved.
  *
  * WHY INDEXEDDB AND NOT localStorage. localStorage is a synchronous *string*
  * store with a ~5 MB origin budget shared with every other apex26.* key, and
@@ -46,6 +56,7 @@ window.MusicLib = (function () {
   let addQueue = Promise.resolve(); // serialises imports, including separate file-picker events
   let generation = 0;        // prevents an invalidated read from restoring a closed connection
   let wired = false;
+  let persistAsked = false;  // navigator.storage.persist() is asked once per page
   let usable = (() => { try { return typeof indexedDB !== "undefined" && !!indexedDB; } catch (e) { return false; } })();
   let cache = [];            // [{id, name, size, added}] — mirrors the store, for sync count()
   const health = new Map();
@@ -297,6 +308,20 @@ window.MusicLib = (function () {
     return readyPromise;
   }
 
+  // Resolves the grant (true/false) or null where the API is absent; never throws.
+  function askPersist() {
+    if (persistAsked) return Promise.resolve(null);
+    persistAsked = true;
+    try {
+      const st = typeof navigator !== "undefined" && navigator.storage;
+      if (!st || typeof st.persist !== "function") return Promise.resolve(null);
+      return Promise.resolve(st.persist()).then((granted) => {
+        if (typeof Log !== "undefined") Log.info("audio", "MY TRACKS storage persist " + (granted ? "granted" : "not granted"));
+        return !!granted;
+      }, () => null);
+    } catch (e) { return Promise.resolve(null); }
+  }
+
   function niceName(file) {
     const raw = String(file.name || "").replace(/\.[^.]+$/, "").replace(/[_\s]+/g, " ").trim();
     if (!raw) return "untitled";
@@ -344,7 +369,7 @@ window.MusicLib = (function () {
         });
       }
       return chain.then(() => {
-        if (accepted.length) call("addTracks", accepted);
+        if (accepted.length) { call("addTracks", accepted); askPersist(); }
         let msg = out.added ? out.added + (out.added === 1 ? " track added" : " tracks added")
           : (out.skipped && !out.errors.length ? "already in your library" : "");
         if (out.errors.length) msg = (msg ? msg + " · " : "") + out.errors.join(" · ");

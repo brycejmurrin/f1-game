@@ -295,7 +295,9 @@ test("selective focus routes engine/rivals/reverb separately from critical tyre 
   assert.equal(passByDest, focus, "pass-by pool attaches to selective engine bus");
   const focusedOutputs = counts.nodes.filter((n) => n.connections.includes(focus));
   assert.ok(focusedOutputs.some((n) => n.kind === "panner"), "rival panners feed focus");
-  assert.ok(focusedOutputs.filter((n) => n.kind === "gain").length >= 6, "engine/sub/whine/harvest/ERS/reverb outputs feed focus");
+  // Five, not six: the sixth was the legacy ersGain, deleted (audit W19) — it only ever rendered at 0; the
+  // MGU-K whine is ErsLayer's, which this harness does not load.
+  assert.ok(focusedOutputs.filter((n) => n.kind === "gain").length >= 5, "engine/sub/whine/harvest/reverb outputs feed focus");
   assert.ok(counts.nodes.filter((n) => n.kind === "gain" && n.connections.includes(critical)).length >= 8,
     "skid/brake/scrub/lock and other road feedback retain critical bus");
   const before = counts.nodes.length; A.brakeCue(1); A.driveBrakeTone(1); A.cornerCall("L");
