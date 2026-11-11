@@ -340,3 +340,49 @@ process.on("exit", () => fs.writeFileSync(${JSON.stringify(counterFile)}, JSON.s
     }
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
+
+// #2501: glTF `normalized` integer accessors map to [0, 1] / [-1, 1] (glTF 2.0
+// §3.11); read raw, a quantized UV of 255 sampled the palette at u = 255.
+test("accessor reads normalized UNSIGNED_BYTE/SHORT and signed BYTE/SHORT as unit floats", async () => {
+  const { accessor } = await import("../../tools/gen/import-models.mjs");
+  const cases = [
+    [5121, Uint8Array, [0, 255, 51, 128], [0, 1, 0.2, 128 / 255]],
+    [5123, Uint16Array, [0, 65535, 13107, 32768], [0, 1, 0.2, 32768 / 65535]],
+    [5120, Int8Array, [-128, 127, -127, 0], [-1, 1, -1, 0]],
+    [5122, Int16Array, [-32768, 32767, 16384, 0], [-1, 1, 16384 / 32767, 0]],
+  ];
+  for (const [componentType, Ctor, raw, want] of cases) {
+    const bin = Buffer.from(new Ctor(raw).buffer);
+    const gltf = { bins: [bin], json: { bufferViews: [{ buffer: 0, byteLength: bin.length }],
+      accessors: [{ bufferView: 0, componentType, count: 2, type: "VEC2", normalized: true },
+        { bufferView: 0, componentType, count: 2, type: "VEC2" }] } };
+    const got = [...accessor(gltf, 0).data];
+    want.forEach((w, i) => assert.ok(Math.abs(got[i] - w) < 1e-6, `${Ctor.name}[${i}]: ${got[i]} != ${w}`));
+    assert.deepEqual([...accessor(gltf, 1).data], raw, `${Ctor.name} without normalized stays raw`);
+  }
+  const f32 = { bins: [Buffer.alloc(8)], json: { bufferViews: [{ buffer: 0, byteLength: 8 }],
+    accessors: [{ bufferView: 0, componentType: 5126, count: 1, type: "VEC2", normalized: true }] } };
+  assert.throws(() => accessor(f32, 0), /normalized needs a byte or short/);
+});
+
+// #2501: normals take the inverse-transpose. Under a non-uniform node scale
+// the plain matrix tilted a slanted face's normal toward the stretched axis.
+test("xformDir keeps normals perpendicular under non-uniform and mirrored node scales", async () => {
+  const { xformDir } = await import("../../tools/gen/import-models.mjs");
+  const unit = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const xf = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2], m[1] * p[0] + m[5] * p[1] + m[9] * p[2], m[2] * p[0] + m[6] * p[1] + m[10] * p[2]];
+  // A 45° face: tangent (1, -1, 0), normal (1, 1, 0). Scale x by 4, rotate 30° about z.
+  const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6);
+  for (const sx of [4, -4]) {
+    const m = [c * sx, s * sx, 0, 0, -s, c, 0, 0, 0, 0, 2, 0, 7, 8, 9, 1];   // column-major R * S
+    const t = xf(m, [1, -1, 0]), n = unit(xformDir(m, [1, 1, 0]));
+    assert.ok(Math.abs(dot(unit(t), n)) < 1e-9, `sx=${sx}: normal ${n} must stay perpendicular to the tangent`);
+    // Outward stays outward: the transformed normal points the same side as the transformed offset.
+    assert.ok(dot(n, xf(m, [1, 1, 0])) > 0, `sx=${sx}: a mirrored node must not flip the normal inward`);
+  }
+  // Rotation with uniform scale: the old result, the matrix applied as-is.
+  const r = [c * 3, s * 3, 0, 0, -s * 3, c * 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1];
+  const a = unit(xformDir(r, [0.3, 0.5, 0.8])), b = unit(xf(r, [0.3, 0.5, 0.8]));
+  a.forEach((x, i) => assert.ok(Math.abs(x - b[i]) < 1e-12, "uniform scale direction unchanged"));
+});

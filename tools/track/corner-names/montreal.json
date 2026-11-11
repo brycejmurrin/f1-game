@@ -1,4 +1,4 @@
 {
-  "why": "Montreal def.turns[] has 14 apexes (built: hairpin turns[11]=0.6178, k<0 right-hander, r~16 m; final chicane right-left turns[13]=0.8983). Real-world numbering differs (L Epingle is the FIA T10, the final chicane T13-T14), so names map onto THIS def: hairpin -> 12, final chicane / Wall of Champions -> 14.",
-  "names": { "L'Épingle": 12, "Épingle": 12, "Epingle": 12, "hairpin": 12, "Wall of Champions": 14, "final chicane": 14 }
+  "why": "Montreal def.turns[] is the official F1/FIA 2026 numbering since 2026-11-11 (tools/track/official-corners.cjs): L'Epingle hairpin = T10 (turns[9] 0.6178), final chicane = T13-T14 (0.8983 / 0.9052), Wall of Champions on T14's exit.",
+  "names": { "L'Épingle": 10, "Épingle": 10, "Epingle": 10, "hairpin": 10, "Wall of Champions": 14, "final chicane": [13, 14] }
 }

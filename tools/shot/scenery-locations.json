@@ -1525,15 +1525,15 @@
       "track": "jerez",
       "name": "Lorenzo Corner",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.936248,
+      "frac": 0.922876,
       "target": [
-        -94.56,
-        5.78,
-        -140.03
+        -84.47,
+        5.35,
+        -146.21
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 22.9,
-      "viewDistanceM": 22.9,
+      "nearestRoadDistanceM": 20.9,
+      "viewDistanceM": 20.9,
       "source": "tests/data/landmarks/jerez.json; js/circuits/scenery/jerez.js"
     },
     {

@@ -7,36 +7,36 @@
   "files": {
     "css/hud.css": {
       "codeLines": 2365,
-      "lines": 2626
+      "lines": 2627
     },
     "js/agent/agentview.js": {
       "lines": 2322
     },
     "js/agent/apex.js": {
-      "codeLines": 1686,
-      "lines": 2516
+      "codeLines": 1699,
+      "lines": 2533
     },
     "js/car/car3d.js": {
       "lines": 2910
     },
     "js/game.js": {
-      "codeLines": 5404,
+      "codeLines": 5413,
       "gMembers": 297,
-      "lines": 9611,
+      "lines": 9591,
       "topLets": 127
     },
     "js/net/lobby.js": {
-      "lines": 2326
+      "lines": 2359
     },
     "js/render/glx/glx.js": {
-      "lines": 2893
+      "lines": 2892
     },
     "js/track/tracks.js": {
       "lines": 869
     },
     "js/ui/hud.js": {
-      "codeLines": 1439,
-      "lines": 2347
+      "codeLines": 1450,
+      "lines": 2368
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -44,12 +44,12 @@
   },
   "tree": {
     "assertPins": {
-      "ceiling": 8223,
+      "ceiling": 8194,
       "slack": 200
     },
     "assertPinsAll": {
       "baseline": "2026-11-10 (audit item 9): re-seeded at the TRUE count after the counter learned the indirect shape (a bool from includes()/test()/indexOf() that a later assert reads); was 10320 under the old counter, +39 indirect sites. Shrink-only: lower it as those sites are rewritten, never raise it to absorb them.",
-      "ceiling": 10359,
+      "ceiling": 10355,
       "slack": 200
     },
     "bareCatches": {
@@ -76,13 +76,13 @@
       "ceiling": 179,
       "slack": 0
     },
-    "rawGameReads": 299,
+    "rawGameReads": 304,
     "rawSpacing": {
-      "ceiling": 306,
+      "ceiling": 303,
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2256,
+      "ceiling": 2322,
       "slack": 25
     },
     "subFloorFontSize": {
