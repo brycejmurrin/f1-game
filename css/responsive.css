@@ -270,8 +270,16 @@ body:not(.hud-hidden) #hud-restore { display: none; }
    everything else. The rows then fill the cluster instead of their per-shape
    shipped widths. */
 :root[data-title-btnw] #menu-buttons {
-  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1));
-  max-width: none; min-width: 0; justify-self: center;
+  --_tl-bw: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1));
+  width: var(--_tl-bw);
+  max-width: none; min-width: 0;
+  /* CENTRED ON ITS COLUMN even when wider than it (#4529 part 3). In portrait
+     the shipped width is already ~94 % of the screen, so a big WIDTH overran
+     the column and a centred grid item pinned to the start edge: measured
+     2026-11-11 at 393x852, WIDTH 100 painted 12..405px. A start-aligned item
+     with a symmetric margin stays centred whatever its width. */
+  justify-self: start;
+  margin-inline: calc((100% - var(--_tl-bw)) / 2);
 }
 /* THE FLOOR IS THE TRACK (#5167 part F, UI contract 2026-11-06 §4.1: "width
    as a share of the viewport without a floor" goes). On a landscape phone the
@@ -284,7 +292,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
    request narrower than that fills the track exactly as AUTO does, and a
    wider request still widens the cluster, which the fit still contains. */
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
-  width: max(100%, calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1)));
+  --_tl-bw: max(100%, calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1)));
 }
 :root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min

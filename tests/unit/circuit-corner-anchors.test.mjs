@@ -87,7 +87,7 @@ test("Monaco bank zones peak on Massenet and Mirabeau, not Ste Devote", () => {
   };
   const rows = [
     { name: "Massenet", turn: 3, sign: +1, halfM: 30 },
-    { name: "Mirabeau", turn: 7, sign: -1, halfM: 80 },
+    { name: "Mirabeau", turn: 5, sign: -1, halfM: 80 }, // official T5 Mirabeau Haute (def T7 before 2026-11-11)
   ];
   for (const r of rows) {
     assert.ok(def.bankZones.some(b => b.turn === r.turn), `${r.name}: a { turn: ${r.turn} } bank zone`);

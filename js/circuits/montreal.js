@@ -24,7 +24,7 @@
       { kind: "foliage", s0: 0, s1: 1 },
       // Foldbacks need a furniture-free envelope on both sides.
       { kinds: ["lighting"], s0: 0.05, s1: 0.09 },   // T1-T2 foldback
-      { kinds: ["lighting"], s0: 0.60, s1: 0.64 },   // hairpin foldback (apex turns[11] 0.6178)
+      { kinds: ["lighting"], s0: 0.60, s1: 0.64 },   // T10 hairpin foldback (apex turns[9] 0.6178)
     ],
     pal: { zenith: [0.30, 0.50, 0.82], horizon: [0.74, 0.80, 0.86], grass: [0.24, 0.50, 0.20], runoff: [0.18, 0.38, 0.16], fogDensity: 0.0014, sunDir: [0.5134360308102702, 0.6067880364121376, 0.6067880364121376], sun: [1, 0.92, 0.78], sunColor: [1, 0.9, 0.76] },
     // Racing-frame fracs (scenery-frame values +0.8598), so each bank sits on
@@ -32,9 +32,9 @@
     bankZones: [
       { frac: 0.0769, angleDeg: 3.0, widthM: 120 },   // T2
       { frac: 0.2296, angleDeg: 3.0, widthM: 120 },   // T5
-      { frac: 0.3041, angleDeg: 3.0, widthM: 110 },   // T7-T8
-      { frac: 0.4734, angleDeg: 3.0, widthM: 90 },    // T10-T11
-      { frac: 0.6197, angleDeg: 3.0, widthM: 80 },    // the hairpin
+      { frac: 0.3041, angleDeg: 3.0, widthM: 110 },   // T7
+      { frac: 0.4734, angleDeg: 3.0, widthM: 90 },    // T9
+      { frac: 0.6197, angleDeg: 3.0, widthM: 80 },    // T10, the hairpin
     ],
     elevations: [
       { s: 0.4846, halfM: 220, rise: 1.25 },   // s re-keyed (0.52, 0.115, 0.755) so each bump stays put without the 0.915 frame
@@ -49,7 +49,12 @@
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.277, 0.607],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
-    turns: [0.0603, 0.0768, 0.1698, 0.1808, 0.2288, 0.2883, 0.3038, 0.3113, 0.4633, 0.4728, 0.4793, 0.6178, 0.6488, 0.8983],
+    // turns[]: the FIA 2026 Canadian GP numbering (14 turns; F1 live-timing corner
+    // markers fitted onto this centreline, rms 5.6 m), one built apex per number:
+    // T1-T2 Senna S, T3-T4, T5 kink, T6-T7, T8-T9 chicane, T10 L'Épingle hairpin
+    // (r ≈ 16 m), T11 exit kink, T12 the gentle right kink on the Casino straight
+    // (a sub-PEAK_K kink here, r ≈ 1300 m), T13-T14 the final chicane.
+    turns: [0.0603, 0.0768, 0.1698, 0.1808, 0.2337, 0.2883, 0.3038, 0.4633, 0.4728, 0.6178, 0.6488, 0.7369, 0.8983, 0.9052],
     furniture: { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },  // lush island maple/conifer
     kit: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["alu", "steel", "teal"],  // teal is the park's own colour (COL.basinTeal)
