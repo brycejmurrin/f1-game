@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { announceLife } from "../helpers/announce-life.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -32,6 +33,7 @@ function load() {
   };
 }
 const { RV, RL, RR } = load();
+const cardLife = announceLife(RV);
 
 const LONG = { pos: 20, passed: "VERSTAPPEN", by: "VERSTAPPEN", n: 12, gap: "10.5", ahead: "VERSTAPPEN",
   behind: "VERSTAPPEN", rate: "0.8", laps: 12, gapA: "10.5", gapB: "10.5", time: "1:32.4", delta: "2.3",
@@ -43,19 +45,24 @@ function lineCase(key, msg) {
   const kind = tv ? "comm" : "info";
   const lead = tv ? 0 : RV.RADIO_LEAD_S;
   const dur = RR.durFor(msg, kind);
-  const life = Math.max(RV.ANN_CARD_MIN_S, dur + RV.ANN_CARD_PAD_S);
+  const life = cardLife(msg, dur, kind);   // the banner's own life, run
   const p = RV.plan({ msg, life, kind, lead, enabled: true, soundOn: true, api: true, state: "race" });
   const voiceEnd = lead + (p.budgetMs || 0) / 1000;
   return { key, msg, kind, lead, dur, life, p, voiceEnd };
 }
 
-test("durFor and cardLifeS agree with js/game.js showAnnounce", () => {
+test("durFor and cardLifeS agree with the card life js/race/announce-banner.js showAnnounce sets", () => {
   const msg = "GAP TO VERSTAPPEN 10.5. CLOSING 0.8 A LAP";
   const dur = RR.durFor(msg, "info");
   const want = RV.cardDurS({ msg, kind: "info", lead: RV.RADIO_LEAD_S });
   assert.equal(dur, want);
   const life = Math.max(RV.ANN_CARD_MIN_S, dur + RV.ANN_CARD_PAD_S);
   assert.equal(life, RV.cardLifeS({ msg, kind: "info", lead: RV.RADIO_LEAD_S }));
+  // …and the banner itself (js/race/announce-banner.js showAnnounce, run, not
+  // re-derived) gives that card exactly cardLifeS — the life the voice budgets.
+  assert.equal(cardLife(msg, dur, "info"), RV.cardLifeS({ msg, kind: "info", lead: RV.RADIO_LEAD_S }));
+  assert.equal(cardLife("BOX", 0.5, "box"), RV.ANN_CARD_MIN_S, "a short card is floored at ANN_CARD_MIN_S");
+  assert.equal(cardLife("BOX", 4, "box"), 4 + RV.ANN_CARD_PAD_S, "a long one is its dur plus ANN_CARD_PAD_S");
 });
 
 test("every phrasebook line fits its card when spoken (no truncation)", () => {
