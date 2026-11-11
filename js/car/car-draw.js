@@ -1570,6 +1570,9 @@ const CarDraw = (function () {
           if (!c) continue;
           if (gfxP.drawShadow) { gfxP.drawShadow(Z, 2.4, 5.8); n++; }
           if (gfxP.drawMark) { gfxP.drawMark(Z, 1, 1); n++; }
+          if (!_off) queueCarDecals(c.team, Z, carDecalNum(c.team, c), false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); n++;
+          _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
+          for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
           if (c.isPlayer) continue;   // the player's own meshes draw from its first frame
           d(_sharedRivalBody, co); d(_farRivalBody, co);
           d(teamBodyMesh(c.team, c), paint);

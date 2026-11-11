@@ -864,10 +864,10 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   const v = carDrawVm({ cam: "cockpit" });
   const { ctx, G } = v;
   ctx.CockpitOpts = Object.assign({}, loadOpts({}).opts, { haloSize: () => 2, body: () => "standard", wheel: () => "f1", interior: () => "carbon" });
-  const extras = [], retro = [], flaps = [];
+  const extras = [], retro = [], flaps = [], calls = {};
   ctx.CarMesh = new Proxy({}, { get: (_o, k) => k === "WHEEL_ROLL_LAMBDA" ? 12 : k === "cockpitWheelRoll" ? (x) => x
     : k === "primeWheelExtras" ? (m) => extras.push(Array.from(m)) : k === "primeRetroDigits" ? (m) => retro.push(Array.from(m))
-    : (a) => ({ carMesh: String(k), arg: a }) });
+    : (a) => { calls[k] = (calls[k] || 0) + 1; return { carMesh: String(k), arg: a }; } });
   // create() destructures the getters, so build a CarDraw on this CarMesh (the helper's ignores the argument).
   const carDraw = ctx.CarDraw.create(G, { resolveLivery: () => ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
     drawAeroFlaps: (team, aLvl, b, m, paint, style, only, still) => flaps.push({ team: team.id, b, still, zero: Array.from(m).every((x) => x === 0), paint }),
@@ -906,6 +906,16 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   assert.equal(drawn.filter((d) => !d.name).length, rivals * (1 + 1 + 8), "per rival: team body, shared body, 8 wheel draws");
   assert.equal(quads.filter((q) => q.kind === "shadow" && q.zero).length, G.cars.length, "one blob-shadow quad per field car");
   assert.equal(quads.filter((q) => q.kind === "mark" && q.zero).length, G.cars.length, "one skid-mark quad per field car");
+  assert.equal(drawn.filter((d) => d.name === "getSpinDisc").length, G.cars.length * 4, "four spin discs per field car (one per wheel)");
+  // Each car's decal set is QUEUED at the zero matrix; game.js's flushDecals after the car loop builds and draws it.
+  drawn.length = 0;
+  G.gfx.drawDecal = (mesh, m) => drawn.push({ name: mesh && mesh.carMesh, zero: Array.from(m).every((x) => x === 0) });
+  const built0 = calls.getCarDecalMesh || 0;
+  carDraw.flushDecals(false);
+  // The harness has no decal textures, so drawCarDecals builds each car's decal mesh but has nothing to bind: the
+  // BUILD, which used to wait for a car's first close view, is what the prime moves to race start.
+  assert.equal((calls.getCarDecalMesh || 0) - built0, G.cars.length, "every field car's decal mesh is fetched in the prime frame's flush");
+  assert.equal(drawn.every((d) => d.zero), true, "at the zero matrix");
   assert.equal(flaps.length, rivals * 3, "per rival: closed set, open set, moving elements");
   assert.deepEqual([...new Set(flaps.map((f) => `${f.b}:${f.still}`))].sort(), ["0.5:false", "0:true", "1:true"]);
   assert.equal(flaps.every((f) => f.zero && f.paint === paint), true, "with the frame's paint, at the zero matrix");
