@@ -1,11 +1,25 @@
 Music tracks in this folder
 
-menu.mp3   — provided by the project owner for this game.
-song2.mp3  — provided by the project owner for this game.
-song3.mp3  — provided by the project owner for this game.
-song4.mp3  — provided by the project owner for this game.
-song5.mp3  — provided by the project owner for this game.
-song6.mp3  — provided by the project owner for this game.
+menu.mp3, song2.mp3 … song6.mp3 — the six tracks of the in-game playlist.
+
+What is known and what is not (2026-11-10)
+------------------------------------------
+Known: the project owner provided all six for this game. They are NOT the
+Beatscribe CC0 loops a README once credited: those (race_a.wav, race_b.wav,
+night.wav) were removed, see below. The files carry no title, artist or
+copyright tags (encoder tags only: Lavf / LAME).
+Not known: who composed and performed each track, where it came from, and the
+licence it is used under. Until the owner records that here, each row below says
+"unknown" and the file is listed in tests/data/asset-credits-unknown.json, a
+shrink-only baseline that tests/unit/asset-credits.test.mjs holds.
+
+Rows (one per audio file; tests/unit/asset-credits.test.mjs reads them)
+file: menu.mp3 | source: provided by the project owner | author: unknown | licence: unknown
+file: song2.mp3 | source: provided by the project owner | author: unknown | licence: unknown
+file: song3.mp3 | source: provided by the project owner | author: unknown | licence: unknown
+file: song4.mp3 | source: provided by the project owner | author: unknown | licence: unknown
+file: song5.mp3 | source: provided by the project owner | author: unknown | licence: unknown
+file: song6.mp3 | source: provided by the project owner | author: unknown | licence: unknown
 
 These six are the in-game playlist: they play in sequence in the menu and on
 through the race, and SKIP TRACK in the pause menu jumps to the next one. Add

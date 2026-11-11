@@ -144,6 +144,7 @@
 /* Driving has one coach readout and optional tasks. Full-width folds retain
    native disclosure visibility; only their content gets vertical spacing. */
 :is(#pm-panel-practice, #pm-panel-strategy, #pm-panel-review, #pm-panel-progress) > details,
+#pm-panel-credits > :is(details, p),
 #pm-panel-driving > :is(details, #pm-coach-status, #pm-coach-tip) {
   grid-column: 1 / -1;
   min-width: 0;
@@ -155,7 +156,7 @@
    value floor (that clips MANUAL / DEFAULT on other pages). */
 :is(#pm-panel-practice, #pm-panel-strategy) .set-row > div,
 #pm-panel-driving .set-row > div { flex-wrap: wrap; }
-:is(#pm-panel-practice, #pm-panel-strategy, #pm-panel-review, #pm-panel-progress) details > :not(summary),
+:is(#pm-panel-practice, #pm-panel-strategy, #pm-panel-review, #pm-panel-progress, #pm-panel-credits) details > :not(summary),
 #pm-panel-driving details > :not(summary) { margin-block: calc(var(--gap) * 0.5); }
 :is(#pm-panel-review, #pm-panel-progress) :is(#pm-incident-log, #pm-ai-decisions, #pm-badges-list),
 #pm-panel-driving :is(#pm-coach-tip, #pm-incident-log, #pm-ai-decisions, #pm-badges-list) {
@@ -167,6 +168,12 @@
 #pm-panel-review :is(#pm-incident-log, #pm-ai-decisions),
 #pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
 #pm-badges-list { list-style: none; padding-inline-start: 0; }
+/* ABOUT & CREDITS (desktop/scripts/notices.mjs writes the rows). Links are
+   inline text, wrapped anywhere so a long licence path never widens the pane. */
+#pm-panel-credits ul { list-style: none; padding-inline-start: 0; font-size: var(--fs-micro); line-height: 1.45; overflow-wrap: anywhere; }
+#pm-panel-credits li + li { margin-top: calc(var(--gap) * 0.35); }
+#pm-panel-credits li > a:first-child { font-weight: 700; }
+#pm-panel-credits a { color: inherit; text-decoration: underline; }
 
 /* UI Fit r6: Settings ACCESSIBILITY — last colourblind help sat under BACK
    at 844×390 (survey rank 8). The region stays overflow:visible (no second

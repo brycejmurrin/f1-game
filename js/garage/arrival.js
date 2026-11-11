@@ -438,7 +438,7 @@ const GarageArrival = (function () {
     // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
     // it takes the settings page's place while open and gives it back on DONE.
     const page = (on) => {
-      const ps = $("pmsettings"), dp = $("pm-panel-display");
+      const ps = $("pmsettings"), dp = $("pm-panel-visual");   // VISUAL STUDIO, the tools' page (#5066)
       if (ps) ps.hidden = !on;
       if (dp) dp.hidden = !on;
     };
