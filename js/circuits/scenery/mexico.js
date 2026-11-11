@@ -714,7 +714,7 @@
           place(K(s), side, 16.5, [1.6, 1.4, 4.5], SEAT_NAVY[Math.floor(s * 90) % SEAT_NAVY.length]);
         }
       }
-      // Mexican GP trackside signage at Foro entry / exit / Peraltada
+      // Mexican GP trackside signage at the Foro Sol entry and in the stadium (T12-T13)
       billboard(K(0.715), -1, 10, 16, 5.5, FLAG_G);
       billboard(K(0.715),  1, 10, 14, 5.0, FLAG_R);
       billboard(K(0.870), -1, 10, 16, 5.5, FLAG_R);

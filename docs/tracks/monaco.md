@@ -83,3 +83,9 @@ apartments (balcony rails + night glow), Fairmont hairpin hotel as closed
 `monaco-fairmont-*` modelGroups with balcony rails, harbour quay steps /
 shore lip / bollard densify (local only — no shared water core), S/F +
 Rascasse fence banners, harbour-side paddock motorhomes, quay night glow.
+
+## Turn numbers (2026-11-11, #5316 leftovers)
+
+Source: F1 live-timing circuit corner markers (`https://api.multiviewer.app/api/v1/circuits/22/2026`, the data FastF1 `get_circuit_info()` reads), fitted onto the built centreline by `tools/track/official-corners.cjs` (rms 5.6 m), checked against the FIA 2026 event circuit map (19 turns: Ste Dévote, Beau Rivage, Massenet, Casino, Mirabeau Haute, Grand Hotel hairpin, Mirabeau Bas, Portier, tunnel, Nouvelle chicane (T10-T11), Tabac, Swimming Pool (T13-T16), T17, Rascasse, Anthony Noghès). Each `turns[k-1]` is the built curvature apex nearest official marker k (corner-frames: 0 turn offenders).
+
+Old list drifted from Casino on (Casino was def T6, the tunnel T9 had no entry, the chicane was def T12). Mirabeau bank zone re-keyed turn 7 -> 5; the Massenet zone keyed turn 3 now builds on the real Massenet apex. Open: the FIA marker for T17 sits on a gentle left kink (0.8459) while the tight right at 0.8797 (T18) is where the Rascasse bar and bank stand; left as built, needs a look at the FIA PDF.
