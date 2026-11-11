@@ -8,6 +8,7 @@ const RealReplay = (function () {
   const SPEEDS = [0.25, 0.5, 1, 2, 4, 8];   // replay speeds the +/- keys step through
   const LEAD_S = 8;       // a highlight starts this many real seconds before its moment
   const HOLD_S = 5;       // and holds this long after it
+  const RADIO_LINK_S = 15;   // the transport's link to a team radio clip's source stays up this long after the message
   const CAPTION_S = 3;    // a caption stays this long; an event further back than this on a seek is not re-announced
   const SPOKEN_RATE_MAX = 2;   // replay RATE (1x, 2x...), not m/s: above it the commentator cannot keep up, captions do
   const ENDED_S = 3;      // a trace with no sample this long is a stopped car
@@ -106,8 +107,9 @@ const RealReplay = (function () {
   /** raw: Float32Array [t, x, y, …] (t seconds from lights out; x, y feed metres).
    *  Returns {t, prog, x, n, end}: prog is the unwrapped arc length so a lap is
    *  prog/total, x the lateral offset (+right). A car behind the line on the
-   *  grid starts at a negative prog (lap 0, as gridUp lays it). */
-  function trackTrace(track, fit, raw) {
+   *  grid starts at a negative prog (lap 0, as gridUp lays it). lapStart (optional,
+   *  the driver's recorded lap start times) anchors a trace that begins mid-race. */
+  function trackTrace(track, fit, raw, lapStart) {
     const n = raw.length / 3 | 0, total = track.total;
     const t = new Float32Array(n), prog = new Float32Array(n), x = new Float32Array(n);
     const cos = Math.cos(fit.th), sin = Math.sin(fit.th);
@@ -152,7 +154,19 @@ const RealReplay = (function () {
       let i0 = 0;
       while (i0 < n - 1 && t[i0] < 0) i0++;
       const m = ((prog[i0] % total) + total) % total;
-      const shift = prog[i0] - (m > total / 2 ? m - total : m);
+      // A trace that joins mid-race: the arc alone cannot count laps, so take
+      // the lap from the recorded timing and the place in it from the arc —
+      // the wrap nearest where the lap's elapsed time puts the car.
+      let L = -1;
+      if (Array.isArray(lapStart)) for (let k = 1; k < lapStart.length; k++) if (lapStart[k] != null && lapStart[k] <= t[i0]) L = k;
+      let want = m > total / 2 ? m - total : m;
+      if (L >= 1) {
+        const next = lapStart[L + 1], prev = lapStart[L - 1];
+        const dur = next != null && next > lapStart[L] ? next - lapStart[L] : prev != null && lapStart[L] > prev ? lapStart[L] - prev : 0;
+        const guess = L * total + (dur > 0 ? clamp((t[i0] - lapStart[L]) / dur, 0, 1) * total : 0);
+        want = m + total * Math.round((guess - m) / total);
+      }
+      const shift = prog[i0] - want;
       if (shift) for (let i = 0; i < n; i++) prog[i] -= shift;
     }
     return { t, prog, x, n, end: n ? t[n - 1] : 0 };
@@ -252,13 +266,13 @@ const RealReplay = (function () {
       if (!fit) return null;
       Log.info("game", "RealReplay.fit ref=" + ref.code + " pts=" + pts.length + " rms=" + fit.rms.toFixed(2) + "m rot=" + (fit.th * 180 / Math.PI).toFixed(1) + " refl=" + fit.refl);
     }
-    for (const k of Object.keys(traces.cars || {})) out.set(+k, trackTrace(track, fit, traces.cars[k]));
+    for (const k of Object.keys(traces.cars || {})) { const d = (script.drivers || []).find((x) => +x.num === +k); out.set(+k, trackTrace(track, fit, traces.cars[k], d && d.lapStart)); }
     return { fit, byNum: out };
   }
 
   // ── The engine ────────────────────────────────────────────────────────────
   function create(G) {
-    let run = null;   // {script, cars: Map car->{num, tr, d}, T, speed, follow, reel, reelIdx, list, fired, fit, finished, onKey, audio}
+    let run = null;   // {script, cars: Map car->{num, tr, d}, T, speed, follow, reel, reelIdx, list, fired, fit, finished, onKey}
     let captionGeneration = 0;
     let transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
@@ -309,7 +323,7 @@ const RealReplay = (function () {
       if (o.startLap > 1 && lead && Array.isArray(lead.lapStart) && lead.lapStart[o.startLap - 1] != null) T = lead.lapStart[o.startLap - 1];
       if (reel && reel.length) T = reel[0].t - LEAD_S;
       T = clamp(T, startT, duration);
-      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, eventCursor: eventCursor(list, T), fit: built.fit, finished: false, onKey: null, audio: null };
+      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, eventCursor: eventCursor(list, T), fit: built.fit, finished: false, onKey: null };
       run.startT = startT; run.duration = duration; run.events = events; run.onTimeline = o.onTimeline;
       run.savedCamera = G.camMode;
       run.cameraOwner = {};
@@ -328,10 +342,10 @@ const RealReplay = (function () {
       if (bc) bc.start({ auto, tower: o.tower !== false });
       if (reel && reel.length) cutTo(reel[0]);
       // THE COMMENTARY (js/race/race-radio.js): the replay's highlights are the
-      // news, told with the REAL drivers' names, never over a team radio clip.
+      // news, told with the REAL drivers' names. Real team radio is caption-only
+      // (docs/DECISIONS.md D-032): nothing of the broadcast audio is fetched or played.
       if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching({
         nameOf: (c) => { const f = run && run.cars.get(c); return f && f.d && typeof RadioLines !== "undefined" ? RadioLines.surname(f.d) : null; },
-        radioBusy: () => !!(run && run.audio && !run.audio.paused && !run.audio.ended),
       });
       run.onKey = (e) => onKey(e);
       try { window.addEventListener("keydown", run.onKey, true); } catch (e) { /* no window: a VM */ }
@@ -341,21 +355,11 @@ const RealReplay = (function () {
       return true;
     }
 
-    function stopRadioClip() {
-      if (!run || !run.audio) return;
-      try {
-        if (run.audio.stop) run.audio.stop();
-        else run.audio.pause();
-      } catch (e) { /* already gone */ }
-      run.audio = null;
-    }
-
     function stop() {
       if (!run) return;
       captionGeneration++;
       if (transport) transport.stop();
       try { if (run.onKey) window.removeEventListener("keydown", run.onKey, true); } catch (e) { /* no window */ }
-      stopRadioClip();
       if (bc) bc.stop();
       if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching(null);
       if (G.setCamMode && run.savedCamera != null) G.setCamMode(run.savedCamera, { persist: false, owner: run.cameraOwner, release: true });
@@ -384,7 +388,7 @@ const RealReplay = (function () {
       if (c) setFollow(c);
       return c ? c.code : null;
     }
-    function setSpeed(v) { if (run && v > 0) { run.speed = clamp(v, SPEEDS[0], SPEEDS[SPEEDS.length - 1]); if (run.speed !== 1 && run.audio) stopRadioClip(); } return run ? run.speed : 0; }
+    function setSpeed(v) { if (run && v > 0) { run.speed = clamp(v, SPEEDS[0], SPEEDS[SPEEDS.length - 1]); } return run ? run.speed : 0; }
     function stepSpeed(dir) {
       if (!run) return 0;
       let i = SPEEDS.findIndex((s) => s >= run.speed - 1e-6); if (i < 0) i = SPEEDS.length - 1;
@@ -407,12 +411,11 @@ const RealReplay = (function () {
       reposition(T, highlight, true);
     }
     // Discontinuities release timeline history. An automatic overlapping clip
-    // only changes the picture: its clock, event cursor and audio keep running.
+    // only changes the picture: its clock and event cursor keep running.
     function reposition(t, highlight, paint = false, continuous = false) {
       if (!continuous) {
         captionGeneration++;
-        run.T = t; run.eventCursor = eventCursor(run.list, t);
-        stopRadioClip();
+        run.T = t; run.eventCursor = eventCursor(run.list, t); run.radio = null;
         pose(true);
         if (G.raceT != null) G.raceT = Math.max(0, run.T);
         if (run.onTimeline) run.onTimeline(run.T);
@@ -440,10 +443,6 @@ const RealReplay = (function () {
     function setPaused(v) {
       if (!run) return false;
       run.paused = !!v;
-      if (run.audio) {
-        if (run.paused) run.audio.pause();
-        else if (run.speed === 1 && !run.audio.ended) { const p = run.audio.play(); if (p && p.catch) p.catch(() => { /* a blocked audio clip does not block playback */ }); }
-      }
       if (transport) transport.paint();
       return run.paused;
     }
@@ -573,7 +572,9 @@ const RealReplay = (function () {
         if (h.t > run.T) break;
         run.eventCursor++;
         if (h.t < run.T - CAPTION_S) continue;   // seeked past: not news any more
-        if (h.kind === "radio") { if (run.speed === 1) playRadio(h); continue; }
+        // TEAM RADIO IS CAPTION-ONLY (D-032): the card names the driver and the
+        // transport links out to the source; the recording is never fetched or played.
+        if (h.kind === "radio") { caption(h.text, "info"); run.radio = h; continue; }
         // SPOKEN when the commentator can keep up (<= 2x): the commentary card
         // carries the words. A caption instead would pre-empt that card and cut
         // the voice mid-word (radio-voice stops a line an unspoken card replaces).
@@ -594,90 +595,6 @@ const RealReplay = (function () {
       if (num == null) return null;
       for (const [c, f] of run.cars) if (f.num === num) return c;
       return null;
-    }
-    // tick() stops with the page, so a clip mid-sentence played on over a call
-    // or a backgrounded tab until it ran out: cut it with the page.
-    // …and with the PAUSE CARD, for the same reason: the game loop returns
-    // before update() while paused, so the replay clock froze under the card
-    // while the clip talked on over it — the "voice over a stopped game"
-    // radio-voice.js cuts its own lines for on this same observer. Cut, not
-    // held: like a hidden tab, the clip's moment has passed by the resume.
-    // LITERAL id (tests/unit/shell-ids.test.mjs), as radio-voice.js does.
-    // Gate on G.paused too: rotate-block / photo-mode re-hide #pausemenu in the
-    // same task as setPaused(true), so MutationObserver runs after the card is
-    // already hidden again and `!pause.hidden` alone never fires (#1029's twin).
-    const cutClip = () => stopRadioClip();
-    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-      document.addEventListener("visibilitychange", () => { if (document.hidden) cutClip(); });
-      const pause = typeof document.getElementById === "function" ? document.getElementById("pausemenu") : null;
-      if (pause && typeof MutationObserver === "function") {
-        new MutationObserver(() => { if (G.paused || !pause.hidden) cutClip(); }).observe(pause, { attributes: true, attributeFilter: ["hidden"] });
-      }
-    }
-    // OpenF1 clips run through GameAudioRadioFx (band-pass, compressor, duck) when
-    // the lazy audio bundle is up; plain HTMLAudio + duck is the last resort.
-    function playRadio(h) {
-      if (!h.url || typeof Audio === "undefined") return;
-      const vol = G.radio && G.radio.volume ? G.radio.volume() : 0.9;
-      if (!G.soundOn || !(vol > 0)) { caption(h.text, "info"); return; }
-      try {
-        stopRadioClip();
-        let clip = null;
-        if (typeof GameAudioRadioFx !== "undefined" && GameAudioRadioFx && GameAudioRadioFx.playWatchMedia) {
-          clip = GameAudioRadioFx.playWatchMedia(h.url, { volume: vol });
-        } else if (typeof GameAudio !== "undefined" && GameAudio && GameAudio.radioMediaClip) {
-          clip = GameAudio.radioMediaClip(h.url, { volume: vol });
-        }
-        if (!clip) {
-          const engine = typeof GameAudio !== "undefined" ? GameAudio : null;
-          const generation = engine && engine.ctxGen ? engine.ctxGen() : null, owner = {};
-          const a = new Audio(h.url);
-          a.volume = Math.min(1, vol);
-          let held = false, playing = false, disposed = false, ducked = true;
-          const current = () => !disposed && run && run.audio === clip && (!engine || !engine.ctxGen || engine.ctxGen() === generation);
-          const audible = () => G.soundOn && !a.muted && a.volume > 0 && !a.paused && !a.ended && (!G.radio || !G.radio.volume || G.radio.volume() > 0);
-          const release = () => {
-            if (held && current() && engine && engine.setVoiceFocusHold) engine.setVoiceFocusHold(false, owner);
-            held = false;
-          };
-          const syncFocus = () => {
-            if (!playing || !audible()) { release(); return; }
-            if (current() && !held && engine && engine.setVoiceFocusHold) { engine.setVoiceFocusHold(true, owner); held = true; }
-          };
-          const interrupted = () => { playing = false; release(); };
-          const unduck = () => { if (current() && ducked && engine && engine.setRadioDuck) engine.setRadioDuck(false); ducked = false; };
-          const off = () => {
-            interrupted();
-            unduck();
-            disposed = true;
-            for (const [event, fn] of Object.entries(listeners)) {
-              if (a.removeEventListener) a.removeEventListener(event, fn);
-              else if (a["on" + event] === fn) a["on" + event] = null;
-            }
-          };
-          // A play request or a stalled fetch is not proof of audible playback.
-          const listeners = {
-            playing: () => { playing = true; syncFocus(); },
-            waiting: interrupted, pause: interrupted, ended: off, error: off,
-            volumechange: syncFocus,
-          };
-          for (const [event, fn] of Object.entries(listeners)) {
-            if (a.addEventListener) a.addEventListener(event, fn);
-            else a["on" + event] = fn;
-          }
-          if (engine && engine.setRadioDuck) engine.setRadioDuck(true);
-          clip = {
-            get paused() { return a.paused; },
-            get ended() { return a.ended; },
-            pause() { a.pause(); interrupted(); unduck(); },
-            play() { if (current() && !ducked && engine && engine.setRadioDuck) { engine.setRadioDuck(true); ducked = true; } const p = a.play(); if (p && p.catch) p.catch(off); return p; },
-            stop() { a.pause(); off(); },
-          };
-        }
-        run.audio = clip;
-        if (clip.play && clip.paused) { const p = clip.play(); if (p && p.catch) p.catch(() => { /* autoplay refused */ }); }
-        caption(h.text, "info");
-      } catch (e) { stopRadioClip(); /* no audio: silent replay */ }
     }
     function finish() {
       if (!run || run.finished) return;
@@ -739,7 +656,9 @@ const RealReplay = (function () {
       const followed = run.follow && run.cars.get(run.follow);
       return { T: +run.T.toFixed(2), duration: run.duration, paused: run.paused, speed: run.speed, follow: followed && followed.d ? followed.d.code : null, reel: run.reel ? run.reel.length : 0, reelIdx: run.reelIdx,
                highlights: run.list.length, fit: run.fit ? { rms: +run.fit.rms.toFixed(2), refl: run.fit.refl } : null, finished: run.finished,
-               cars: [...run.cars.values()].filter((f) => f.tr).length, broadcast: bc ? bc.status() : null };
+               cars: [...run.cars.values()].filter((f) => f.tr).length, broadcast: bc ? bc.status() : null,
+               // The last team radio message as text plus its source link (caption-only, D-032).
+               radio: run.radio && run.T - run.radio.t <= RADIO_LINK_S ? { text: run.radio.text, lap: run.radio.lap, url: run.radio.url || "" } : null };
     }
 
     const api = { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, setPaused, eventStep, seekEvent, isRunning: () => !!run,
