@@ -8293,7 +8293,8 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "*": [
-        "tests/specs/garage-prebuild.spec.js"
+        "tests/specs/garage-prebuild.spec.js",
+        "tests/specs/race-cycle-memory.spec.js"
       ]
     },
     "js/garage/scene-crew.js": {

@@ -35,6 +35,34 @@ export function hookPipelines() {
   // The twin counters (#4783): bind groups and buffers minted on the GPUDevice itself, with the label of the
   // first few so a culprit is named. WebGL2 has no device: both stay 0 and `gpuDevice` says so.
   P.bindGroups = 0; P.buffers = 0; P.gpuLog = []; P.gpuDevice = false; P.gpuLogOn = false;   // the log opens after warm-up: warm-up alone fills any cap
+  // FIRST DRAWS (#5387). A geometry drawn for the first time gets a new render object, and three binds it inside
+  // Bindings.getForRender: one bindGroup_object plus its uniform buffers. That is content entering view, not churn
+  // (measured on the tip, 8 runs: 5 red, each ONE frame minting 33-48 render objects for never-drawn geometry at
+  // frame 799-957, and nothing in any other window; the 120 warm frames do not cover the lap). So every device
+  // object minted while getForRender binds such a render object is tagged firstDraw and counted apart; a render
+  // object rebuilt for a geometry already drawn (released and minted again) stays untagged and fails the spec.
+  P.bindGroupsFirst = 0; P.buffersFirst = 0; P.firstDrawObjects = 0; P.firstDrawLog = []; P.firstDrawHooked = false;
+  const binds = T.renderer._bindings;
+  let firstNow = false;
+  if (binds && typeof binds.getForRender === "function") {
+    const seenGeo = new WeakSet(), og = binds.getForRender;
+    P.firstDrawHooked = true;
+    binds.getForRender = function (ro) {
+      const geo = ro && ro.geometry, first = !!geo && !seenGeo.has(geo);
+      if (!first) return og.apply(this, arguments);
+      seenGeo.add(geo);
+      if (P.gpuLogOn) {
+        P.firstDrawObjects++;
+        try {
+          const pos = geo.attributes && geo.attributes.position;
+          if (P.firstDrawLog.length < 100) P.firstDrawLog.push({ at: P.frames, obj: ((ro.object && ro.object.type) || "") + ":" + ((ro.object && ro.object.name) || ""),
+            mat: ((ro.material && ro.material.type) || "") + ":" + ((ro.material && ro.material.name) || ""), verts: pos ? pos.count : null });
+        } catch (_) { /* naming is best-effort */ }
+      }
+      firstNow = true;
+      try { return og.apply(this, arguments); } finally { firstNow = false; }
+    };
+  }
   const dev = be.device;
   if (dev && typeof dev.createBindGroup === "function" && typeof dev.createBuffer === "function") {
     P.gpuDevice = true;
@@ -42,7 +70,8 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage,
+        if (firstNow) P[key + "First"]++;
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, firstDraw: firstNow, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage,
           from: (new Error().stack || "").split("\n").slice(2, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 600) }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
@@ -88,16 +117,19 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   const warm = await page.evaluate(() => { window.__bpp.gpuLogOn = true; return window.__bpp.count; });
   const windows = [];
   for (let i = 1; i <= WINDOWS; i++) {
-    const snap = () => page.evaluate(() => ({ p: window.__bpp.count, bg: window.__bpp.bindGroups, b: window.__bpp.buffers, g: window.__bpp.gpuLog.length }));
+    const snap = () => page.evaluate(() => { const P = window.__bpp;
+      return { p: P.count, bg: P.bindGroups, b: P.buffers, g: P.gpuLog.length, bgF: P.bindGroupsFirst, bF: P.buffersFirst, fd: P.firstDrawObjects }; });
     const c0 = await snap();
     await frames(page, WINDOW_FRAMES);
     const c1 = await snap();
     windows.push({ window: i, pipelines: c1.p - c0.p, built: await page.evaluate(([a, b]) => window.__bpp.log.slice(a, b), [c0.p, c1.p]),
-      bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) });
+      bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]),
+      firstDrawBindGroups: c1.bgF - c0.bgF, firstDrawBuffers: c1.bF - c0.bF, firstDrawObjects: c1.fd - c0.fd });
   }
   await gas(false);
-  const gpuDevice = await page.evaluate(() => window.__bpp.gpuDevice);
-  const out = { hook, forceGL, warm, gpuDevice, windows };
+  const { gpuDevice, firstDrawLog, firstDrawHooked } = await page.evaluate(() => ({ gpuDevice: window.__bpp.gpuDevice,
+    firstDrawLog: window.__bpp.firstDrawLog, firstDrawHooked: window.__bpp.firstDrawHooked }));
+  const out = { hook, forceGL, warm, gpuDevice, firstDrawHooked, firstDrawLog, windows };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/idle-pipeline-churn-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;
