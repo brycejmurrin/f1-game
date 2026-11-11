@@ -894,11 +894,8 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   const warmed0 = calls.getCarDecalMesh || 0;
   carDraw.warmCarAssets();
   assert.ok((calls.getCarDecalMesh || 0) - warmed0 >= G.cars.length, "the race warm fetches every field car's decal mesh");
-  warming = true;
-  assert.equal(prime(), 0, "a present held by a warm renders nothing: wait");
-  warming = false;
   const n = prime();
-  assert.ok(n > 0, "the first free frame primes");
+  assert.ok(n > 0, "with no warm, the first free frame primes");
   assert.equal(drawn.every((d) => d.zero), true, "every prime draw is at the zero matrix");
   assert.deepEqual(tally("getGearDigit"), ten(1), "every gear digit once");
   assert.deepEqual(tally("getSpeedDigit"), ten(3), "every speed digit three times (a reading holds up to three of one)");
@@ -923,13 +920,17 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   assert.equal(flaps.length, rivals * 3, "per rival: closed set, open set, moving elements");
   assert.deepEqual([...new Set(flaps.map((f) => `${f.b}:${f.still}`))].sort(), ["0.5:false", "0:true", "1:true"]);
   assert.equal(flaps.every((f) => f.zero && f.paint === paint), true, "with the frame's paint, at the zero matrix");
-  assert.equal(prime(), 0, "the next frame: nothing (the primed present rendered)");
+  assert.equal(prime(), 0, "the next frame: nothing (no warm held the primed one)");
   assert.equal(prime(), 0, "and never again this race");
-  carDraw.warmCarAssets(); prime();
+  // Under a warm: a held present paints nothing, but its draws are compiled behind the loading cover, so the prime
+  // goes there, on every held frame, and stops at the first free one (no ~600 creations in a painted frame).
+  carDraw.warmCarAssets();
   warming = true;
-  assert.equal(prime(), 0, "the primed present started a warm (held): re-armed, waiting");
+  assert.ok(prime() > 0, "a held present primes (the warm's compile builds the render objects)");
+  assert.ok(prime() > 0, "and the next held one");
   warming = false;
-  assert.ok(prime() > 0, "so it primes again on the next free frame");
+  assert.equal(prime(), 0, "the first free frame after a held prime: nothing left to build");
+  assert.equal(prime(), 0, "then never again");
   ctx.CockpitOpts.wheel = () => "retro";
   carDraw.warmCarAssets(); prime();
   assert.equal(retro.length, 1, "the RETRO wheel primes its own digits, once");

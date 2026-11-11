@@ -1538,19 +1538,18 @@ const CarDraw = (function () {
     // zero-area triangles, no fragment, no depth, on TLX, GLX and WGX. Never in the mirror pass. A TLX present held
     // by a warm renders nothing, so it waits for warming()/warmQueued() to clear and re-primes once if the frame it
     // primed started a warm. Returns the draws issued.
-    let _primeArmed = 0;   // 0 off, 1 armed, 2 primed last frame (re-prime if that present was held)
+    let _primeArmed = 0;   // 0 off, 1 armed, 2 primed under a held present (done at the first free one)
     const _primeZ = new Float32Array(16);
     // game.js's _wheelOpts (js/game.js, `const _wheelOpts`; emissive is set per frame: 0.12 at night, 0 by day). A copy, so
     // the prime's wheel draws key the same material (cockpit-wheels pins the two literals equal).
     const _primeWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
     function primeRace(paint, night) {
       if (!_primeArmed || carModelBuf || !G.cars || !G.cars.length) return 0;   // the menu prep arms it too: wait for the race's field
-      const gfx = G.gfx, held = () => !!((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
-      if (_primeArmed === 2) { if (!held()) { _primeArmed = 0; return 0; } _primeArmed = 1; }   // that present started a warm: again
-      if (held()) return 0;
+      const gfx = G.gfx, held = !!((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
+      if (!held && _primeArmed === 2) { _primeArmed = 0; return 0; }
+      _primeArmed = held ? 2 : 0;
       // SCRATCH A/B (#5387, never merged): apex26.scratchRacePrime=0 walks the same path and draws nothing.
       let _off = false; try { _off = localStorage.getItem("apex26.scratchRacePrime") === "0"; } catch (_) { /* on */ }
-      _primeArmed = 2;
       const Z = _primeZ; let n = 0;
       if (!_off && typeof gfx.primeChunkMerge === "function") gfx.primeChunkMerge();   // SCRATCH: off arm skips it
       const gfx0 = gfx; const gfxP = _off ? { draw() {}, drawShadow: gfx0.drawShadow ? () => {} : null, drawMark: gfx0.drawMark ? () => {} : null } : gfx0;
