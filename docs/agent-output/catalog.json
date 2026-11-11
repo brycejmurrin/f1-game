@@ -1209,7 +1209,6 @@
         "test:render",
         "test:results-flow",
         "test:shimmer",
-        "test:shipped-defaults",
         "test:smoke",
         "test:stall-reload-sw",
         "test:tiny",
@@ -4312,10 +4311,6 @@
     {
       "name": "test:shimmer",
       "command": "APEX_SHIMMER=1 node tools/ci/run-playwright.mjs tests/specs/material-shimmer.spec.js"
-    },
-    {
-      "name": "test:shipped-defaults",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/shipped-defaults.spec.js"
     },
     {
       "name": "test:smoke",

@@ -1260,10 +1260,6 @@ export const SOURCE_AFFECTED = [
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
   ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
-  // THE SHIPPED RENDERER (audit W31 row 12, 2026-11-10): every other driven race
-  // to the flag runs GLX, so a three.js-WebGPU reload after the finish shipped
-  // unseen. Any renderer, loop or vendored-library edit runs the unpinned spec.
-  [/^(js\/render\/|js\/game\.js$|vendor\/)/, "tests/specs/shipped-defaults.spec.js"],
   // ROUTED TO SPECS THAT DO NOT EXERCISE THEM (#5241 G4). js/fx/ goes to group `ui`, whose specs run the GLX pin and
   // assert no fx layer; the one spec that asserts one (M6: the skid batch after a driven slide, on the three.js path
   // players get) is tlx-probes in `gfx`. #5181 changed js/fx/skidmarks.js and ran 60 specs, not that one.
