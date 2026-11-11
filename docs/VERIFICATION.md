@@ -17,7 +17,7 @@ pushed branch. A Bryce-attended session may run ONE named spec locally on his ex
 |---|---|
 | docs or skills only | the docs-only fast path (AGENTS.md §The loop) |
 | tools, tests | `tooling-fast --changed` plus the touched test file; the full suite runs on the PR as `Structural guards` |
-| one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`; that circuit's foundation spec runs on the PR |
+| one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`; that circuit's foundation cases run on the PR (`tests/specs/circuit-foundation.spec.js` under APEX_CIRCUITS=<id>, or its ADAPTED spec) |
 | one subsystem with its own spec | the floor (`tooling-fast --changed`); the spec `select-specs` names runs on the PR, or `remote-group.mjs <group>` on the pushed branch |
 | `js/render/webgpu/` or `js/render/three/` | the path-scoped rule in `.claude/rules/` says what to run; software probes are not evidence about a player's GPU, so dispatch `gpu-census.yml` on `macos-latest` and read its Verdict step |
 | engine / physics / `js/game.js` | the local floor is `tooling-fast --changed`; the groups `pick-tests` names run on the PR; name any left unrun as not-run in the PR |
