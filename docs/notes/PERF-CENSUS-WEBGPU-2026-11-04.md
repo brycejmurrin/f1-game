@@ -63,8 +63,9 @@ once presenting, the renderer is at fault and that run's rows say where.
   camera to come to rest (the chase rig eased for 300 frames after `snapCam()`), and counts its warm and its window in
   presented frames. Before that, two boots of one tree disagreed (monza: main pass 143067 vs 143139 triangles, mirror
   23 vs 21 calls); after it, they agree on every pass. `geometries` and `uniformBuffers` still differ between boots
-  (193 vs 194, 352 vs 362: lifetime totals that follow the menu frames before the race), so the exact compare covers
-  the pass counts, `textures` and `renderTargets`, and prints the other two.
+  (193 vs 194, 352 vs 362: lifetime totals that follow the menu frames before the race), and so does `textures` on the
+  phone tier (40 vs 39 in two runs, #5451), so the exact compare covers the pass counts and `renderTargets`, and prints
+  the other three.
 
 ### First run of the new legs (perf-census-webgpu 42979924558, head d2bb399c, 2026-11-11)
 
@@ -82,6 +83,12 @@ Dawn's SwiftShader adapter. Every number from this workflow is a software WebGPU
   `rgba8unorm 2048x2560` with 12 mips (26.67 MB); the phone tier's is two `256x256x17` arrays (5.67 MB each).
 - Time: the parked step took 2 min 27 s and the memory step 30 s, so about 3 runner minutes added to a job that now
   takes 4 min 9 s in all.
+
+**Second run (42983871455, head eb78b0db), the stability evidence.** Every pass count in all 8 cells equals the first
+run exactly, the camera came to rest and the uniform buffers were flat in all 8. One number differed: `textures` in
+`monza|helmet|mobile` read 39 where the first run read 40, and the phone-tier memory leg read 39 textures (30.07 MB)
+where it had read 40 (30.48 MB). A texture count that differs between two boots of one tree does not belong in an
+exact compare, so `textures` is printed and not compared; which texture is sometimes absent is #5451.
 
 The same wrapper on a real GPU (gpu-census 42979981148, macos-latest, Apple Metal, montreal, end of a 476-frame driven
 window): textures 125.76 MB (51), buffers 37.99 MB (1603). The sun shadow map there is `depth24plus 2048x2048` (16 MB)

@@ -16,13 +16,14 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The memory counters a parked cell GATES on (three's renderer.info.memory through tlx.js memState().resources).
- *  Only the two that are the same on every boot: `geometries` and `uniformBuffers` are lifetime totals that follow how
- *  many menu frames ran before the race (two boots of one tree, monza, 2026-11-11: geometries 193 vs 194, uniform
- *  buffers 352 vs 362, with every pass count identical), so they are printed and kept out of the exact compare. */
-export const PARK_MEMORY_KEYS = Object.freeze(["textures", "renderTargets"]);
+/** The memory counter a parked cell GATES on (three's renderer.info.memory through tlx.js memState().resources).
+ *  Only `renderTargets`, the one that was the same in every cell of every run (16 of 16). The others are lifetime
+ *  totals that are not the same on two boots of one tree, with every pass count identical: `geometries` 193 vs 194 and
+ *  `uniformBuffers` 352 vs 362 (monza, SwiftShader WebGL2), and `textures` 40 vs 39 on the phone tier (monza helmet,
+ *  perf-census-webgpu runs 42979924558 and 42983871455; #5451). They are printed and kept out of the exact compare. */
+export const PARK_MEMORY_KEYS = Object.freeze(["renderTargets"]);
 /** Printed with the cell, never compared. */
-export const PARK_MEMORY_REPORTED = Object.freeze(["geometries", "uniformBuffers", "uniformBuffersSize"]);
+export const PARK_MEMORY_REPORTED = Object.freeze(["textures", "geometries", "uniformBuffers", "uniformBuffersSize"]);
 
 /** One cell's identity: circuit, camera, tier, backend and where on the lap the camera is parked. */
 export function parkKey({ track, camera, mobile, backend, at }) {
@@ -90,8 +91,10 @@ export function collectBaseline(files, source) {
   for (const { name, json } of files) {
     const park = json && json.summary && json.summary.park;
     if (!park || !park.key || !park.cell) continue;
-    if (cells[park.key] && JSON.stringify(cells[park.key]) !== JSON.stringify(park.cell)) conflicts.push(`${park.key} (${name})`);
-    cells[park.key] = park.cell;
+    // Re-derived with the CURRENT key list, so a run recorded before a counter left the compare still collects.
+    const cell = baselineCell(park.cell.passes, park.memoryEnd || park.cell.memory);
+    if (cells[park.key] && JSON.stringify(cells[park.key]) !== JSON.stringify(cell)) conflicts.push(`${park.key} (${name})`);
+    cells[park.key] = cell;
   }
   const sorted = {};
   for (const k of Object.keys(cells).sort()) sorted[k] = cells[k];

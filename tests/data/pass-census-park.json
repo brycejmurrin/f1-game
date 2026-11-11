@@ -100,7 +100,6 @@
     }
    },
    "memory": {
-    "textures": 45,
     "renderTargets": 15
    }
   },
@@ -168,7 +167,6 @@
     }
    },
    "memory": {
-    "textures": 38,
     "renderTargets": 9
    }
   },
@@ -276,7 +274,6 @@
     }
    },
    "memory": {
-    "textures": 47,
     "renderTargets": 16
    }
   },
@@ -354,7 +351,6 @@
     }
    },
    "memory": {
-    "textures": 40,
     "renderTargets": 10
    }
   },
@@ -452,7 +448,6 @@
     }
    },
    "memory": {
-    "textures": 45,
     "renderTargets": 15
    }
   },
@@ -520,7 +515,6 @@
     }
    },
    "memory": {
-    "textures": 37,
     "renderTargets": 9
    }
   },
@@ -628,7 +622,6 @@
     }
    },
    "memory": {
-    "textures": 47,
     "renderTargets": 16
    }
   },
@@ -706,7 +699,6 @@
     }
    },
    "memory": {
-    "textures": 40,
     "renderTargets": 10
    }
   }

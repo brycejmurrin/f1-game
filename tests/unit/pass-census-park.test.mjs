@@ -23,7 +23,7 @@ test("the cell key names circuit, camera, tier, backend and the parked lap fract
   ], ["monaco|chase|desktop|webgpu|at0.1", "monza|default|mobile|webgl2-stubbed|at0.5", "spa|helmet|desktop|webgpu|at0.1"]);
 });
 
-test("a cell keeps each pass's [min, max] per render and drops the cadence; memory keeps only the boot-stable counters", () => {
+test("a cell keeps each pass's [min, max] per render and drops the cadence; memory keeps only the boot-stable counter", () => {
   const passes = parkPasses(ROWS);
   assert.deepEqual(passes, {
     "output 640x360": { renders: 3, calls: [60, 61], tris: [143067, 143100] },
@@ -32,9 +32,9 @@ test("a cell keeps each pass's [min, max] per render and drops the cadence; memo
   });
   assert.deepEqual(baselineCell(passes, MEM), {
     passes: { "output 230x66": { calls: [23, 23], tris: [29595, 29595] }, "output 640x360": { calls: [60, 61], tris: [143067, 143100] }, "rt 256x256": { calls: [1, 1], tris: [15496, 15496] } },
-    memory: { textures: 45, renderTargets: 14 },
+    memory: { renderTargets: 14 },
   });
-  assert.deepEqual([...PARK_MEMORY_KEYS], ["textures", "renderTargets"]);
+  assert.deepEqual([...PARK_MEMORY_KEYS], ["renderTargets"]);
 });
 
 test("uniform buffers must be flat over the parked window, and an absent count is a failure, not a pass", () => {
@@ -44,7 +44,7 @@ test("uniform buffers must be flat over the parked window, and an absent count i
   assert.deepEqual(uboFlat(null, MEM), ["uniformBuffers not reported (null -> 352)", "uniformBuffersSize not reported (null -> 95264)"]);
 });
 
-test("the baseline compare is exact: one triangle, a pass that vanished, a new pass and a texture are each a diff", () => {
+test("the baseline compare is exact: one triangle, a pass that vanished, a new pass and a render target are each a diff", () => {
   const cell = baselineCell(parkPasses(ROWS), MEM), key = "monza|default|desktop|webgl2-stubbed|at0.1";
   const base = { cells: { [key]: JSON.parse(JSON.stringify(cell)) } };
   assert.deepEqual(compareParkBaseline(null, key, cell), { status: "no-baseline", diffs: [] });
@@ -54,12 +54,12 @@ test("the baseline compare is exact: one triangle, a pass that vanished, a new p
   moved.passes["output 640x360"].tris = [143067, 143101];
   delete moved.passes["rt 256x256"];
   moved.passes["rt 512x512"] = { calls: [1, 1], tris: [9, 9] };
-  moved.memory.textures = 46;
+  moved.memory.renderTargets = 15;
   assert.deepEqual(compareParkBaseline(base, key, moved), { status: "diff", diffs: [
     'pass "output 640x360" tris [143067,143101] != baseline [143067,143100]',
     'pass "rt 256x256" did not run (baseline calls 1,1 tris 15496,15496)',
     'pass "rt 512x512" is not in the baseline (calls 1,1 tris 9,9)',
-    "memory.textures 46 != baseline 45",
+    "memory.renderTargets 15 != baseline 14",
   ] });
 });
 
