@@ -40,8 +40,12 @@ export const RUNNERS = Object.freeze({
   grok: {
     bins: ["grok"],
     argv: ({ cwd, write, model, promptFile, rules }) => ["--prompt-file", promptFile, "--cwd", cwd, "--output-format", "json",
-      "--permission-mode", write ? "acceptEdits" : "plan", ...(rules ? ["--rules", rules] : []), ...(model ? ["-m", model] : [])],
-    text: ({ out }) => { const j = wholeJson(out); return j?.result ?? j?.text ?? lastText(j) ?? ""; },
+      "--permission-mode", write ? "acceptEdits" : "plan", ...(write ? ["--allow", "Edit", "--allow", "Write"] : []),
+      ...(rules ? ["--rules", rules] : []), ...(model ? ["-m", model] : [])],
+    // A headless Grok run that needed an approval it could not ask for ends `cancelled`: that is a failure, not an answer.
+    text: ({ out }) => { const j = wholeJson(out); return j?.stopReason === "cancelled" ? "" : (j?.result ?? j?.text ?? lastText(j) ?? ""); },
+    // Grok Build reads XAI_API_KEY; the cloud environment stores the same key as GROK_API_KEY.
+    env: (env) => (env.XAI_API_KEY || !env.GROK_API_KEY ? env : { ...env, XAI_API_KEY: env.GROK_API_KEY }),
   },
   claude: {
     bins: ["claude"],
@@ -85,9 +89,9 @@ function lastJson(out) {
   return null;
 }
 function wholeJson(out) {
-  const s = String(out); const i = s.indexOf("{");
-  if (i < 0) return null;
-  try { return JSON.parse(s.slice(i)); } catch { return lastJson(out); }
+  const s = String(out); const i = s.indexOf("{"), k = s.lastIndexOf("}");
+  if (i < 0 || k < i) return null;
+  try { return JSON.parse(s.slice(i, k + 1)); } catch { return lastJson(out); }
 }
 /** Grok's json output nests the answer in message content blocks; take the last text block found. */
 function lastText(node) {

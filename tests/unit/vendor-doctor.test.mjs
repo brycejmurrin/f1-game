@@ -119,6 +119,12 @@ test("runVendor builds read-only argv per vendor, scrubs the answer and reports 
   const cur = await runVendor("cursor", { cwd, prompt: "q", env: {}, spawnImpl });
   assert.ok(seen.at(-1)[1].includes("ask") && !seen.at(-1)[1].includes("--force"), "read-only is the default");
   assert.equal(cur.ok, true);
+  await runVendor("grok", { cwd, prompt: "q", env: { GROK_API_KEY: SECRET }, spawnImpl });
+  assert.equal(seen.at(-1)[2].XAI_API_KEY, SECRET, "the stored GROK_API_KEY reaches Grok Build under the name it reads");
+  await runVendor("grok", { cwd, prompt: "q", write: true, env: {}, spawnImpl });
+  assert.ok(seen.at(-1)[1].join(" ").includes("--permission-mode acceptEdits --allow Edit --allow Write"), "Grok write mode pre-approves edits");
+  const cancelled = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 0, out: '{"text":"I will","stopReason":"cancelled"}\npermission required: Edit was not run' }) });
+  assert.equal(cancelled.ok, false, "a cancelled headless Grok run is not a pass");
   const gone = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 127, out: "" }) });
   assert.deepEqual([gone.ok, gone.error], [false, "cli_not_found"]);
   await assert.rejects(runVendor("codex", { cwd: "/nope", prompt: "q" }), /existing directory/);
