@@ -1433,7 +1433,7 @@ function driverSkill(team, d, di) {
     craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
     experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
     aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism), composure: DriverRatings.style01(r.composure),
-    tyreCare: DriverRatings.style01(r.tyreCare), ersBias: DriverRatings.style01(r.ersBias),   // #1566 AI style: TyreModel.aiLoad, AiDrive.wantBoost
+    tyreCare: DriverRatings.style01(r.tyreCare), ersBias: DriverRatings.style01(r.ersBias),   // #1566
   };
 }
 const buildPace = DriverRatings.buildPace;

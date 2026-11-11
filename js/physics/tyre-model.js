@@ -255,9 +255,7 @@ const TyreModel = (function () {
   const LOAD_AI_BASE = 0.92;
   const LOAD_AI_STYLE = 0.45;   // full spread across the consistency axis
   const LOAD_AI_LONG = 0.30;
-  // Tyre care (#1566, AI-only, zero-mean style axis): a gentle driver loads its
-  // set up to 12 % less, a hard one 12 % more. The human load never reads it.
-  const LOAD_AI_CARE = 0.12;
+  const LOAD_AI_CARE = 0.12;   // tyre care (#1566, AI-only style axis): ±12 % load
   // …AND THE AI NEEDS ITS OWN DIVISOR, for the reason the player has LOAD_REF.
   // The three constants above were authored to read ~1.03 for a mid driver, but
   // that is the base and the style term ALONE: the longitudinal term adds to

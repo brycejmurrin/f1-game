@@ -498,8 +498,7 @@ const AiDrive = (function () {
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
     const dep = ctx.ersDeploy != null ? ctx.ersDeploy : 0.5;
     const regen = ctx.ersRegen != null ? ctx.ersRegen : 0.5;
-    // ERS deploy bias (#1566, AI-only, zero-mean style axis): an eager deployer
-    // calls the battery "rich" sooner, a hoarder later. ±0.06 of charge at the extremes.
+    // ERS deploy bias (#1566, AI style axis): "rich" ±ERS_BIAS of charge.
     const eb = ctx.traits && ctx.traits.ersBias != null ? clamp(ctx.traits.ersBias, -1, 1) : 0;
     const rich = energy > (0.55 - hs.attack * 0.08 - (dep - 0.5) * 0.10 - ERS_BIAS * eb);
     const desperate = energy > 0.25 && catching;

@@ -233,8 +233,7 @@ const Quali = (function () {
       const r = DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat));
       const spread = EXEC_SPREAD * (1 - r.consistency / 100);
       const draw = Career.hash(seed, round, "quali", c.driverId || c.code) - 0.5;
-      // Quali bias (#1566, zero-mean style axis): a one-lap specialist finds up to
-      // QUALI_BIAS of the lap on Saturday, a Sunday driver loses it. Race pace and a player's simulated lap untouched.
+      // Quali bias (#1566, AI style axis): ±QUALI_BIAS of the lap; never a player's.
       return base * (1 + draw * 2 * spread) * (c.isPlayer || c.human || !r.qualiBias ? 1 : 1 - QUALI_BIAS * DriverRatings.style01(r.qualiBias));
     }
 
