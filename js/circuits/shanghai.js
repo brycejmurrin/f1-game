@@ -34,7 +34,7 @@
       { frac: 0.0133, angleDeg: 5.0, widthM: 200 },   // built ~0.10: T3 (exit of the T1-2 spiral)
       { frac: 0.1433, angleDeg: 3.0, widthM: 110 },
       { frac: 0.2134, angleDeg: 4.0, widthM: 250 },
-      { frac: 0.2888, angleDeg: 3.5, widthM: 180 },
+      { frac: 0.2825, angleDeg: 3.5, widthM: 180 },   // built ~0.372: T8, the long right (pre-rotation frac, _sceneryShift)
       { frac: 0.4431, angleDeg: 4.0, widthM: 300 },   // built ~0.53: T12-T13 right onto the back straight
       { frac: 0.7326, angleDeg: 3.0, widthM: 100 },   // built ~0.82: T14 hairpin
       { frac: 0.9985, angleDeg: 4.0, widthM: 280 },   // built ~0.09: T2 (spiral); frac zones are pre-rotation (_sceneryShift)

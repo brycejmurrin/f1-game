@@ -603,7 +603,10 @@
       }
       marshalPost(K(0.88), 1, 6);
 
-      // Same reasoning as T2/T3: temporary open seating, not a built stand.
+      // T11-T12 temporary open seating (as the mid-lap bleacher above), not a built stand.
+      // Authored frame: 0.91-0.961 lands at racing 0.605-0.656 (built T11 0.6046 L,
+      // T12 0.661 R), tyre wall on T11's outside. Not the Turn 16 stand the
+      // fallback ids and docs/tracks/qatar.md name — that one is not built.
       if (typeof bleacher === "function") {
         bleacher(0.927, 0.961, 1, 15, {
           rows: 6, rise: 0.78, setback: 1.05, step: 17, density: 0.42,

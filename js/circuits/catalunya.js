@@ -59,7 +59,7 @@
     ],
     bankZones: [
       { turn: 1, angleDeg: 3.5, widthM: 120 },   // Elf (FIA T1 = turns[0]); was turn: 2, which resolved onto the T2 left
-      { frac: 0.3726, angleDeg: 4.0, widthM: 130 },   // Repsol
+      { turn: 4, angleDeg: 4.0, widthM: 130 },   // Repsol (FIA T4 = turns[3]); was frac: 0.3726, 128 m past the built apex on the exit
       { turn: 9, angleDeg: 4.5, widthM: 150 },   // Campsa (FIA T9 = turns[8])
       { turn: 14, angleDeg: 3.0, widthM: 120 },   // final corner (FIA T14 = turns[13])
     ],

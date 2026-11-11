@@ -217,9 +217,11 @@
 
       // 7. s 0.1817 -1 14 — CLAYTON CORNER (T2/2a; turns[1] = T2 apex 0.1495)
       //    A dramatic plunging left, 20 m of drop through the corner. Tyres
-      //    on the outside, a spectator bank behind them in the trees.
+      //    on the OUTSIDE (+1, right of a left-hander) from the T2 apex through
+      //    2a (built k peaks 0.150 / 0.185), clear of the footbridge piers at
+      //    0.1483; armco and a spectator bank in the trees on the inside.
       guardrail(0.1700, 0.2300, -1, 11, ARMCO);
-      tyreWall(0.1740, 0.1930, -1, 12.0, TYRE_R);
+      tyreWall(0.1510, 0.1930, 1, 12.0, TYRE_R);
       // Bank pushed well past the tyre wall (clip was 1.56–1.59 m @ 0.188).
       spectatorHill(0.1700, 0.2050, -1, 42, { rows: 2, col: GRASS });
       marshalPost(K(0.1817), -1, 15);

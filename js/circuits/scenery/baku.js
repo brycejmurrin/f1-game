@@ -609,7 +609,7 @@
         }
       }
 
-      // Icheri Sheher grandstand — castle exit (T11–12 range; guides vary).
+      // Icheri Sheher grandstand — past the castle exit at T13 (FIA 2026 numbering; guides vary).
       // Gap 18 clears the rampart pillars at 19.4; positive rake via crowdBank.
       if (grandstandEx) {
         grandstandEx(0.532, 1, 18, 58, null, null, {

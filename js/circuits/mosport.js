@@ -78,7 +78,12 @@
     // corner, matched by registering the trace onto the map (~1.1 m/px). Sub-labels
     // are one turn each: T2/2a is Clayton (apex T2; 2a is its exit, ~0.18),
     // T5a/5b/5c is Moss (apex 5b, the hairpin), T8 opens the Esses. T6 and T7 are
-    // the Mario Andretti Straightaway kinks (|k| ~0.0005 and ~0.003, flat).
+    // the Mario Andretti Straightaway kinks, flat: each sits on the built local
+    // |k| maximum of its kink (8 m smoothed, 2026-11-11: T6 0.5961 |k| 0.00054,
+    // ~3.6 deg right; T7 0.7040 |k| 0.0037, ~13 deg right), both under
+    // corner-frames' PEAK_K 0.004, so that audit finds no peak there and measures
+    // them to 0.529 and T8 (0.7996) instead. T6 is not the left
+    // flicks at 0.505 / 0.529 (~38 deg together): read here as 5c, Moss exit.
     // T4 takes the left at the Chevrolet bridge (map marker), not the equal
     // left at ~0.417 just before Moss. No researched sectors — consumers fall back to thirds.
     //
@@ -86,7 +91,7 @@
     // at 0.185, Quebec at 0.307, Moss at 0.491, the Esses at 0.873 and Whites at
     // 0.937 — each within ~80 m of the apex carrying its map number below.
     sectors: [0.334, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0183, 0.1495, 0.2787, 0.3856, 0.4812, 0.6000, 0.7040, 0.8016, 0.8820, 0.9176],
+    turns: [0.0183, 0.1495, 0.2787, 0.3856, 0.4812, 0.5961, 0.7040, 0.8016, 0.8820, 0.9176],
     furniture: { tree: "broad", fol: [0.22, 0.40, 0.20], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],

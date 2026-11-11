@@ -275,7 +275,7 @@
       grandstandEx(0.700, -1, 14, 40, null, null,
         { livery: "concrete", tiers: 1, roof: "flat", endWalls: true,
           roofCol: [0.72, 0.74, 0.78] });
-      // Tribuna B — outside T12, uncovered (follows the arc).
+      // Tribuna B — outside the T12 approach, uncovered (follows the arc).
       // https://oversteer48.com/grandstand-b-circuit-de-catalunya-barcelona/
       bleacher(0.778, 0.788, -1, 12, {
         rows: 6, rise: 0.55, setback: 0.85, frame: "steel",
@@ -286,7 +286,7 @@
         rows: 6, rise: 0.55, setback: 0.85, frame: "steel",
         frameCol: [0.52, 0.53, 0.55], plankCol: BONE, density: 0.35, step: 8,
       });
-      // Tribuna C — beside G toward T13–14; farther gap (gravel runoff between).
+      // Tribuna C — beside G at T12; farther gap (gravel runoff between).
       bleacher(0.804, 0.812, -1, 22, {
         rows: 5, rise: 0.55, setback: 0.85, frame: "steel",
         frameCol: [0.55, 0.56, 0.58], plankCol: [0.90, 0.78, 0.30], density: 0.30, step: 9,
