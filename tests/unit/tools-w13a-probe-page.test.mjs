@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   shotTimeoutMs, parseShotTimeout, resolveShotTimeoutMs, tileClips,
-  screenshotPresentedCanvas,
+  screenshotPresentedCanvas, readSoftCanvasBytes,
 } from "../../tools/shot/probe-page.mjs";
 
 test("shotTimeoutMs scales above 1.5 Mpx (1920×1080)", () => {
@@ -67,4 +67,37 @@ test("CDP full-frame timeout falls back to cdp-tiled when tileFallback is on", a
   assert.equal(shot.via, "cdp-tiled");
   assert.ok(shot.bytes > 0);
   assert.ok(sends >= 5, `expected 1 timed full + 4 tiles, got ${sends}`);
+});
+
+/** readSoftCanvasBytes run for real, its page.evaluate against a fake window: `canvases` is id -> { w, h, kind }. */
+async function softRead(canvases, { vw = 1600, vh = 900, dpr = 1, preferView = false } = {}) {
+  const asked = [];
+  const make = (id, { w, h, kind = "none" }) => ({
+    id, width: w, height: h,
+    getContext(type) { asked.push(id); if (kind === "none") kind = type; return kind === type ? {} : null; },
+    toDataURL: () => "data:image/png;base64," + Buffer.from(id).toString("base64"),
+  });
+  const els = Object.fromEntries(Object.entries(canvases).map(([id, c]) => [id, make(id, c)]));
+  const keys = ["document", "innerWidth", "innerHeight", "devicePixelRatio"];
+  const saved = keys.map((k) => Object.getOwnPropertyDescriptor(globalThis, k));
+  Object.assign(globalThis, { document: { getElementById: (id) => els[id] || null }, innerWidth: vw, innerHeight: vh, devicePixelRatio: dpr });
+  try {
+    const r = await readSoftCanvasBytes({ evaluate: async (fn, arg) => fn(arg) }, { preferView });
+    return { id: r && r.id, asked };
+  } finally {
+    keys.forEach((k, i) => (saved[i] ? Object.defineProperty(globalThis, k, saved[i]) : delete globalThis[k]));
+  }
+}
+
+test("#5343: the soft path refuses an unsized 300x150 fallback canvas (CDP composites the 1600x900 frame instead)", async () => {
+  // zolder: #game-soft not live, #game still the 300x150 default — the old chooser claimed it as "2d" and read it.
+  const z = await softRead({ "game-soft": { w: 0, h: 0, kind: "2d" }, game: { w: 300, h: 150 } });
+  assert.equal(z.id, null, "unsized -> null -> CDP");
+  assert.deepEqual(z.asked, [], "and it is never asked for a context (that would claim it for good)");
+  assert.equal((await softRead({ game: { w: 1600, h: 900 } })).id, "game", "a window-sized flat #game still reads");
+  assert.equal((await softRead({ game: { w: 3201, h: 1800 } }, { dpr: 2 })).id, "game", "innerWidth x DPR, ±1 px");
+  assert.equal((await softRead({ "game-soft": { w: 1200, h: 675, kind: "2d" }, game: { w: 300, h: 150 } })).id, "game-soft", "the blit target reads at any non-empty size");
+  assert.equal((await softRead({ view: { w: 300, h: 150 } })).id, null, "a fallback #view must be sized too");
+  assert.equal((await softRead({ view: { w: 800, h: 600, kind: "2d" } }, { preferView: true })).id, "view", "carview's own canvas is asked for by name");
+  assert.equal((await softRead({ game: { w: 1600, h: 900, kind: "webgl2" } })).id, null, "a WebGL #game is still refused");
 });

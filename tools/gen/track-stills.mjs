@@ -55,7 +55,9 @@ const argv = process.argv.slice(2);
 const force = argv.includes("--force");
 const fracArg = flag(argv, "--frac", "");
 
-// The signature section per circuit — [arc lap fraction, time of day].
+// The signature section per circuit — [arc lap fraction, time of day, optional [yaw, pitch, dist] (ORBIT below)].
+// A re-aim's before -> after is `node tools/shot/frame-report.mjs --pose=<the orbit's eye:target:50> --subject lap`
+// (score 0-100, no browser), measured 2026-11-11.
 // The fraction is in the frame Tracks.sample() and __apex.orbit() read
 // (docs/tracks/<id>.md quotes its landmarks in this frame; the frac-keyed
 // grandstand tables in js/circuits/ are in the scenery-shifted frame and must
@@ -69,7 +71,7 @@ const HERO = {
   albert_park:  [0.47,  "dawn"],    // the lakeside run
   anderstorp:   [0.58,  "day"],     // out onto the runway back straight
   bahrain:      [0.10,  "default"], // the Turn 1 hairpin (night race)
-  baku:         [0.44,  "default"], // the Old City castle squeeze (night)
+  baku:         [0.44,  "default", [215, 18, 42]], // the Old City castle squeeze (night); re-aimed #5342: frame-report 75 -> 99
   brands_hatch: [0.008, "dawn"],    // over the lip into Paddock Hill
   buddh:        [0.45,  "day"],     // the drop into the Turn 10-11 double-apex
   buenos_aires: [0.06,  "dusk"],
@@ -77,11 +79,11 @@ const HERO = {
   cota:         [0.10,  "dusk"],    // the Turn 1 climb
   dijon:        [0.70,  "day"],     // into the Parabolique
   donington:    [0.18,  "day"],     // Hollywood, looking down the Craner fall
-  estoril:      [0.88,  "dawn"],    // into the Parabolica
+  estoril:      [0.88,  "dawn", [115, 18, 30]],    // into the Parabolica; re-aimed #5342: a structure 2 m off the lens, 56 -> 99
   fuji:         [0.27,  "dawn"],    // out of Turn 1 into the tree-lined esses
   hockenheim:   [0.46,  "day"],     // the Spitzkehre
   hungaroring:  [0.04,  "day"],     // the downhill Turn 1
-  imola:        [0.12,  "dawn"],    // Tamburello
+  imola:        [0.12,  "dawn", [215, 11, 22]],    // Tamburello; re-aimed #5342: 86 % of the frame was a tree <30 m, 9 -> 82
   indianapolis: [0.88,  "dusk"],    // the banked sweep onto the straight
   interlagos:   [0.06,  "dusk"],    // the Senna S plunge
   istanbul:     [0.40,  "day"],     // Turn 8
@@ -114,13 +116,18 @@ const HERO = {
   spa:          [0.07,  "dawn"],    // Eau Rouge in the mist
   suzuka:       [0.16,  "dusk"],    // the Esses
   vegas:        [0.60,  "default"], // the Strip (night race)
-  watkins_glen: [0.70,  "day"],     // the climb out of the Boot
+  watkins_glen: [0.70,  "day", [140, 25, 30]],     // the climb out of the Boot; re-aimed #5342: the eye sat inside a structure, 0 -> 81
   zandvoort:    [0.15,  "dawn"],    // the Hugenholtz bowl
   zolder:       [0.12,  "day"],     // the Scots-pine run away from the chicane
 };
+// The TV camera every still uses (`__apex.orbit(frac, yaw, pitch, dist, ...)`): 155 degrees round, 11 up, 42 m out.
+// A HERO entry's optional third element `[yaw, pitch, dist]` re-aims ONE circuit whose section a tree or wall blocks
+// from the shared angle (#5342); it moves only the capture camera, never the circuit.
+const ORBIT = Object.freeze([155, 11, 42]);
 const heroOf = (id) => {
   const h = HERO[id] || [0.06, "default"];
-  return { frac: fracArg ? parseFloat(fracArg) : h[0], tod: h[1] };
+  const aim = Array.isArray(h[2]) && h[2].length === 3 && h[2].every(Number.isFinite) ? h[2] : ORBIT;
+  return { frac: fracArg ? parseFloat(fracArg) : h[0], tod: h[1], yaw: aim[0], pitch: aim[1], dist: aim[2] };
 };
 const only = (flag(argv, "--only", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
 const WAIT_MS = Math.max(5, parseFloat(flag(argv, "--wait", "180"))) * 1000;
@@ -149,7 +156,7 @@ try {
   for (const id of circuits) {
     const t0 = Date.now();
     try {
-    const { frac, tod } = heroOf(id);
+    const { frac, tod, yaw, pitch, dist } = heroOf(id);
     // tt(), not race(): time trial is solo, so the only car on the circuit is
     // the player — parked half a lap from the camera below.
     await page.evaluate(({ id, tod }) => window.__apex.tt(id, tod), { id, tod });
@@ -158,7 +165,7 @@ try {
       return i && i.track === id;
     }, id, { timeout: WAIT_MS, polling: 100 });
     await sleep(1200);
-    await page.evaluate(({ frac }) => {
+    await page.evaluate(({ frac, yaw, pitch, dist }) => {
       const a = window.__apex;
       a.go(); a.park((frac + 0.5) % 1); a.freeze(true);
       if (a.hud) a.hud(false);
@@ -169,15 +176,16 @@ try {
       // came out with green arrows down every one of them because the default
       // had since moved. An asset generator must not inherit a preference.
       if (a.drivingLine) a.drivingLine("off");
-      // TV camera: 42 m behind the section, a touch to the right, 11 degrees
-      // up, looking down the road so the shape of the section reads. A free
+      // TV camera (ORBIT, or the circuit's own aim): by default 42 m behind the
+      // section, a touch to the right, 11 degrees up, looking down the road so
+      // the shape of the section reads. A free
       // cam sets G.dbgCam directly — never snapCam() after it (that clears it).
-      a.orbit(frac, 155, 11, 42, 1.5, { fov: 50 });
+      a.orbit(frac, yaw, pitch, dist, 1.5, { fov: 50 });
       a.step && a.step(1 / 60, 4);
       // Every DOM overlay off the frame — the screenshot clips the page, not the
       // canvas, so the CAM badge and any HUD chip would bake into the still.
       for (const el of document.body.children) if (el.id !== "game" && el.id !== "game-soft" && el.tagName !== "CANVAS") el.style.visibility = "hidden";
-    }, { frac });
+    }, { frac, yaw, pitch, dist });
     await sleep(500);
     // 240 s, not Playwright's 30 s or shot.mjs's 60 s: a night street circuit
     // (Singapore, Las Vegas — thousands of lit windows) costs SwiftShader

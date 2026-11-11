@@ -620,11 +620,19 @@ export async function readSoftCanvasBytes(page, {
     // null and let the caller fall through to CDP, which composites the real
     // frame. #game-soft is the 2D blit target and reads back correctly.
     const flat = (c) => { try { return !!(c && c.getContext("2d")); } catch (_) { return false; } };
-    const softLive = !!(soft && soft.width > 0 && soft.height > 0 && flat(soft));
-    const g = (pv && view && view.width > 0 && flat(view)) ? view
+    // A FALLBACK #view / #game must be sized to the window (innerWidth x DPR, ±1 px), and is size-checked BEFORE
+    // flat() asks it for "2d" (which claims an uncontexted canvas for good). zolder's track captured the unsized
+    // 300x150 default #game as its 1600x900 still (issue #5343); refused, the frame goes to CDP, which composites
+    // what is on screen. #game-soft (the blit target) and a preferred carview #view read at any non-empty size.
+    const dpr = devicePixelRatio > 0 ? devicePixelRatio : 1;
+    const sized = (c) => !!(c && c.width > 0 && c.height > 0);
+    const windowSized = (c) => sized(c) && Math.abs(c.width - Math.round(innerWidth * dpr)) <= 1
+      && Math.abs(c.height - Math.round(innerHeight * dpr)) <= 1;
+    const softLive = sized(soft) && flat(soft);
+    const g = (pv && sized(view) && flat(view)) ? view
       : softLive ? soft
-      : (view && view.width > 0 && flat(view)) ? view
-      : (game && game.width > 0 && flat(game)) ? game
+      : (windowSized(view) && flat(view)) ? view
+      : (windowSized(game) && flat(game)) ? game
       : null;
     if (!g || typeof g.toDataURL !== "function") return null;
     try {

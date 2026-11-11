@@ -122,3 +122,25 @@ test("the stills folder stays inside its byte budget (lazy: one circuit's file p
   assert.ok(big <= BIG_TOTAL, `1600 px stills total ${big} B`);
   assert.ok(worst <= BIG_WORST, `largest 1600 px still ${worst} B`);
 });
+
+/** The generator's HERO table and heroOf(), evaluated with a given --frac (importing the script would shoot). */
+function heroApi(fracArg = "") {
+  const block = gen.slice(gen.indexOf("const HERO = {"), gen.indexOf("const only = "));
+  return vm.runInNewContext(block + "\n({ HERO, ORBIT, heroOf })", { fracArg }, { filename: absSrc("tools/gen/track-stills.mjs") });
+}
+
+test("#5342: a HERO entry may re-aim its own camera [yaw, pitch, dist]; every other circuit keeps the shared orbit", () => {
+  const { HERO, ORBIT, heroOf } = heroApi();
+  assert.deepEqual([...ORBIT], [155, 11, 42], "the shared TV camera");
+  const plain = Object.keys(HERO).find((id) => !Array.isArray(HERO[id][2]));
+  assert.deepEqual({ ...heroOf(plain) }, { frac: HERO[plain][0], tod: HERO[plain][1], yaw: 155, pitch: 11, dist: 42 });
+  assert.deepEqual({ ...heroOf("not_a_circuit") }, { frac: 0.06, tod: "default", yaw: 155, pitch: 11, dist: 42 });
+  for (const [id, h] of Object.entries(HERO)) {
+    if (h[2] === undefined) continue;
+    assert.ok(Array.isArray(h[2]) && h[2].length === 3 && h[2].every(Number.isFinite), `${id}: the aim is [yaw, pitch, dist]`);
+    const o = heroOf(id);
+    assert.deepEqual([o.yaw, o.pitch, o.dist], [...h[2]], id);
+  }
+  for (const id of ["imola", "estoril", "watkins_glen", "baku"]) assert.ok(Array.isArray(HERO[id][2]), `${id} is re-aimed (#5342)`);
+  assert.equal(heroApi("0.3").heroOf(plain).frac, 0.3, "--frac still overrides the section, not the aim");
+});
