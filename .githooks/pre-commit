@@ -13,20 +13,18 @@
 # relative hooksPath there: https://git-scm.com/docs/githooks#_description,
 # https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath).
 # Set by package.json "prepare" (every `npm install`/`npm ci`) and re-asserted by
-# .claude/hooks/session-start.sh; bash-guard.sh refuses a commit when no
-# pre-commit hook would run.
+# .claude/hooks/session-start.sh at every session start.
 #
-# AGENTS.md rule 12: a commit runs test:guards; a docs-only commit runs
-# docs-integrity alone; ratchet growth <= 40 lines is auto-raised into the
-# commit. APEX_SKIP_GUARDS=1 bypasses, only when the guards themselves are the
-# change. Inside an agent's Bash tool the suite runs under THAT call's timeout
+# AGENTS.md rule 12: a commit runs test:guards; a prose-only commit (every staged
+# path a .md, or a survey image/report) runs docs-integrity alone; ratchet growth
+# <= 40 lines is auto-raised into the commit. There is no skip: a red guard is
+# fixed, including when the guards are the change. Inside an agent's Bash tool the suite runs under THAT call's timeout
 # (Claude Code: 2 min by default), so give the commit call a longer one, or run
 # `npm run test:guards` first: a green run for the same staged tree, < 10 min
 # old, is reused here (#2889, tools/ci/guards-verdict.mjs,
 # artifacts/pre-commit-guards.ok). Optional apex.guardTimeout /
 # APEX_GUARD_TIMEOUT wraps the suite in `timeout -k 5` (no default when unset).
 set -u
-[ "${APEX_SKIP_GUARDS:-}" = 1 ] && exit 0
 ROOT=$(git rev-parse --show-toplevel) || exit 1
 cd "$ROOT" || exit 1
 mkdir -p artifacts
@@ -70,10 +68,10 @@ DOCS_ONLY=1
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$GENERATED" in *" $f "*) DOCS_ONLY=0; break ;; esac
-  # Prose: docs/, any .md, skills and agents; survey images and reports under
-  # artifacts/{shots/tracks,shots/gallery,track-survey} (2026-10-15,
-  # docs/notes/SURVEY-ASSETS-BRANCH.md). Never a generated doc (above).
-  printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
+  # Prose is classed by EXTENSION, not directory: a .md anywhere, an image under docs/, and the survey images
+  # and reports under artifacts/{shots/tracks,shots/gallery,track-survey} (docs/notes/SURVEY-ASSETS-BRANCH.md).
+  # A script under docs/ or .claude/skills/ is code and runs the guards. Never a generated doc (above).
+  printf '%s' "$f" | grep -Eq '\.md$|^docs/.+\.(png|jpe?g|webp|svg|gif)$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
 done <<LIST
 $STAGED
 LIST
@@ -195,7 +193,7 @@ if [ -n "${BUDGET:-}" ]; then
   RC=$?
   if [ "$RC" != 0 ]; then
     if [ "$RC" = 124 ] || [ "$RC" = 137 ]; then
-      echo "pre-commit: BLOCKED — npm run test:guards did not finish within ${BUDGET}s (apex.guardTimeout / APEX_GUARD_TIMEOUT). Retry on an idle box, raise the budget with \`git config apex.guardTimeout <sec>\`, or APEX_SKIP_GUARDS=1 only when the guards themselves are the change. Log: $LOG" >&2
+      echo "pre-commit: BLOCKED — npm run test:guards did not finish within ${BUDGET}s (apex.guardTimeout / APEX_GUARD_TIMEOUT). Retry on an idle box or raise the budget with \`git config apex.guardTimeout <sec>\`. Log: $LOG" >&2
       exit 1
     fi
     guards_red; exit 1

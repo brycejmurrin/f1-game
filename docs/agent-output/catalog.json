@@ -1198,6 +1198,7 @@
         "test:input",
         "test:modes",
         "test:net",
+        "test:offline-precache",
         "test:perf-budget",
         "test:perf-frametime",
         "test:perf-idle-churn",
@@ -2316,6 +2317,11 @@
     },
     {
       "path": "tools/lib/pack-assets.cjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/paint-floor.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -3782,6 +3788,16 @@
       ]
     },
     {
+      "path": "tools/ui/bryce-paint.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--verbose"
+      ]
+    },
+    {
       "path": "tools/ui/bryce-phone.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -4249,6 +4265,10 @@
       "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/car-mesh-anchors.test.mjs tests/unit/cockpit-crest-stripe.test.mjs tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/cover-legibility.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/livery-contrast.test.mjs tests/unit/slider-effect.test.mjs"
     },
     {
+      "name": "test:offline-precache",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/offline-precache.spec.js"
+    },
+    {
       "name": "test:perf-budget",
       "command": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js"
     },
@@ -4302,7 +4322,7 @@
     },
     {
       "name": "test:state-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-parts-regs.test.mjs tests/unit/career-planning.test.mjs tests/unit/career-readslot-quota.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-btn-cache.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout-hidden.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/layout-presets.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/overlay-publisher.test.mjs tests/unit/overlay-render.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race-tab-no-race.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/season-calendar-default.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-parts-regs.test.mjs tests/unit/career-planning.test.mjs tests/unit/career-readslot-quota.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/help-rules-facts.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-btn-cache.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout-hidden.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/layout-presets.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/overlay-publisher.test.mjs tests/unit/overlay-render.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race-tab-no-race.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/season-calendar-default.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
     },
     {
       "name": "test:steering-unit",
@@ -4330,7 +4350,7 @@
     },
     {
       "name": "test:ui",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/agent-determinism.spec.js tests/specs/audio-smoke.spec.js tests/specs/browser-ui-hunt.spec.js tests/specs/css-player-smoke.spec.js tests/specs/dev-tools.spec.js tests/specs/engine-audio-offline.spec.js tests/specs/hud-audit.spec.js tests/specs/hud-layout.spec.js tests/specs/menu-keyboard.spec.js tests/specs/menu-survey.spec.js tests/specs/menu-traversal.spec.js tests/specs/music-library.spec.js tests/specs/named-controls.spec.js tests/specs/persistence.spec.js tests/specs/photo-studio-conditions.spec.js tests/specs/photo-studio.spec.js tests/specs/picker-edit-button.spec.js tests/specs/picker-tab-inplace.spec.js tests/specs/rotation-recovery.spec.js tests/specs/title-fit.spec.js tests/specs/title-menu-rotation.spec.js tests/specs/ui-button-touch.spec.js tests/specs/ui-redesign.spec.js tests/specs/ui-resize.spec.js tests/specs/ui-scale.spec.js tests/specs/watch-transport-layout.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/agent-determinism.spec.js tests/specs/audio-smoke.spec.js tests/specs/browser-ui-hunt.spec.js tests/specs/bryce-phone-paint.spec.js tests/specs/css-player-smoke.spec.js tests/specs/dev-tools.spec.js tests/specs/engine-audio-offline.spec.js tests/specs/hud-audit.spec.js tests/specs/hud-layout.spec.js tests/specs/menu-keyboard.spec.js tests/specs/menu-survey.spec.js tests/specs/menu-traversal.spec.js tests/specs/music-library.spec.js tests/specs/named-controls.spec.js tests/specs/persistence.spec.js tests/specs/photo-studio-conditions.spec.js tests/specs/photo-studio.spec.js tests/specs/picker-edit-button.spec.js tests/specs/picker-tab-inplace.spec.js tests/specs/rotation-recovery.spec.js tests/specs/title-fit.spec.js tests/specs/title-menu-rotation.spec.js tests/specs/ui-button-touch.spec.js tests/specs/ui-redesign.spec.js tests/specs/ui-resize.spec.js tests/specs/ui-scale.spec.js tests/specs/watch-transport-layout.spec.js"
     },
     {
       "name": "test:vm-page",

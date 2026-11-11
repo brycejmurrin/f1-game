@@ -1,31 +1,33 @@
 #!/bin/bash
-# PreToolUse guard for the MCP tools that launch or drive a browser
-# (playwright-official, chrome-devtools, js-debugger, the browser apex_* tools,
-# apex_debug_chrome start, browser-use, browserstack live sessions):
-#   * a SUBAGENT never starts one (AGENTS.md §Verification 10; the payload
-#     carries agent_id / agent_type or a subagents/ transcript);
-#   * the MAIN session does not open one while a `playwright test` /
-#     run-playwright.mjs process is live in THIS checkout (one browser is the
-#     box's whole capacity; AGENTS.md §Seeing the game). Scoped by
-#     /proc/<pid>/cwd, so another worktree's run does not count.
-# Exit 2 refuses; an unreadable payload is a refusal (fail closed).
+# PreToolUse guard for the MCP tools that launch or drive a browser (the settings.json matcher selects the
+# candidates; .claude/hooks/mcp_browser_rules.py judges each call on its name AND tool_input, so a tree-mode call
+# such as apex_eval {vm:true}, debugger_node_test, output_read or a tree-kind apex_job_start passes):
+#   * a SUBAGENT (the payload's agent_id) never starts or drives one (AGENTS.md §Verification 10);
+#   * the MAIN session does not open one while a `playwright test` / run-playwright.mjs process is live in THIS
+#     checkout (one browser is the box's whole capacity). Scoped by /proc/<pid>/cwd, so another worktree's run
+#     does not count.
+# Exit 2 refuses; an unreadable payload is a refusal (fail closed). A seatbelt against accidents, not a boundary.
 command -v python3 >/dev/null 2>&1 || { echo "BLOCKED: mcp-browser-guard needs python3 (fail closed)." >&2; exit 2; }
 python3 /dev/fd/3 "$(cd "$(dirname "$0")/../.." && pwd)" 3<<'PY'
-import json, os, re, sys
+import json, os, sys
+root = os.path.realpath(sys.argv[1])
+sys.path.insert(0, os.path.join(root, ".claude", "hooks"))
+from mcp_browser_rules import is_browser_call
 try:
     d = json.load(sys.stdin)
     if not isinstance(d, dict): raise ValueError
 except Exception:
     sys.stderr.write("BLOCKED: mcp-browser-guard could not read the hook payload, so it cannot tell a subagent from the main session; a browser tool is refused rather than risk a second Chromium.\n"); sys.exit(2)
 name = str(d.get("tool_name") or "")
-ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
-BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|js-debugger__.+|plugin_browser-use.*|browserstack__(run\w*Session|run\w*Tests\w*|take\w*Screenshot|startAccessibilityScan|runPercyScan)|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start))$")
-debug_start = name == "mcp__apex-tools__apex_debug_chrome" and str(ti.get("action") or "start").strip().lower() not in ("status", "stop", "list", "help")
-if not (BROWSER.match(name) or debug_start):
+ti = d.get("tool_input", {})
+if isinstance(ti, str):
+    try: ti = json.loads(ti)
+    except ValueError: ti = None
+if not is_browser_call(name, ti if isinstance(ti, dict) else None, root):
     sys.exit(0)
-if d.get("agent_id") or d.get("agent_type") or "/subagents/" in str(d.get("transcript_path") or ""):
-    sys.stderr.write("BLOCKED: " + name + " drives a browser, and a subagent never starts one (AGENTS.md §Verification 10). Use the node-only checks and report what needs a browser as NOT RUN.\n"); sys.exit(2)
-root = os.path.realpath(sys.argv[1])
+aid = d.get("agent_id")
+if isinstance(aid, str) and aid.strip():
+    sys.stderr.write("BLOCKED: " + name + " drives a browser, and a subagent never starts one (AGENTS.md §Verification 10). Use the node-only routes (apex_eval {vm:true}, debugger_node_test, a tree-kind apex_job_start) and report what needs a browser as NOT RUN.\n"); sys.exit(2)
 for pid in (p for p in os.listdir("/proc") if p.isdigit()):
     try:
         argv = [a.decode("utf8", "replace") for a in open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0") if a]

@@ -9,8 +9,10 @@
  *   node tools/desktop/stage.mjs --out _site --stamp --at 3695 --sha <hex>
  *   node tools/desktop/stage.mjs --out _site --stamp-only --sha "$GITHUB_SHA"   (pages.yml)
  *
- * The stage MINIFIES the copied js/**\/*.js (tools/desktop/minify.mjs; #3110)
- * before any stamp, so the ?v= hashes and SRI cover the shipped bytes.
+ * The stage MINIFIES the copied js/**\/*.js (tools/desktop/minify.mjs; #3110),
+ * then css/*.css and index.html (comments out, inline scripts through terser,
+ * CSP regenerated; #5050), before any stamp, so the ?v= hashes and SRI cover
+ * the shipped bytes.
  * `--no-minify` stages the source bytes as they are (the A/B baseline).
  *
  * Without `--stamp`, tags stay `?v=dev` (matches a local serve of the repo).
@@ -32,7 +34,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { STAGE_DIRS, STAGE_ROOT_FILES, stageExcluded } from "./stage-files.mjs";
-import { minifyStaged } from "./minify.mjs";
+import { minifyStaged, minifyStagedShell } from "./minify.mjs";
 import { buildInto } from "../gen/ensure-built.mjs";
 
 const require = createRequire(import.meta.url);
@@ -140,12 +142,14 @@ export function stageSite(outDir, opts = {}) {
  * stageSite, then minify the staged js/ (what the CLI and so pages.yml ship).
  * @param {string} outDir
  * @param {{ root?: string, minify?: boolean }} [opts] minify defaults to true
- * @returns {Promise<{ dest: string, minified: null | { skipped: string } | { files: number, before: number, after: number } }>}
+ * The shell pass (css/*.css + index.html, #5050) runs after js/ and before any stamp.
+ * @returns {Promise<{ dest: string, minified: null | { skipped: string } | { files: number, before: number, after: number }, shell: null | Awaited<ReturnType<typeof minifyStagedShell>> }>}
  */
 export async function stageSiteMinified(outDir, opts = {}) {
   const dest = stageSite(outDir, opts);
   const minified = opts.minify === false ? null : await minifyStaged(dest);
-  return { dest, minified };
+  const shell = opts.minify === false ? null : await minifyStagedShell(dest);
+  return { dest, minified, shell };
 }
 
 /** `git <args>` in `root`, trimmed stdout; throws on a non-zero exit. */
@@ -237,7 +241,7 @@ export function desktopVersionFromBuild(build, apexVersion) {
 function usage() {
   console.log(`usage: node tools/desktop/stage.mjs --out <dir> [--stamp] [--at N] [--sha HEX]
   --out     destination folder (replaced)
-  --no-minify   stage js/ unminified (default: minify, tools/desktop/minify.mjs)
+  --no-minify   stage js/, css/ and index.html unminified (default: minify, tools/desktop/minify.mjs)
   --stamp       run bump-cache --apply on the staged copy
   --stamp-only  stamp the tree already staged at --out (no re-copy)
   --at N        build number for the stamp (default: 2000 + git rev-list --count HEAD; refuses a shallow clone)
@@ -255,13 +259,13 @@ async function main() {
     process.exit(2);
   }
   const outAbs = path.isAbsolute(out) ? out : path.join(ROOT, out);
-  let dest, minified = null;
+  let dest, minified = null, shell = null;
   if (flag("--stamp-only")) {
     assertStageDest(outAbs, ROOT);
     if (!fs.existsSync(path.join(outAbs, "index.html"))) throw new Error(`stage: --stamp-only: nothing staged at ${outAbs}`);
     dest = outAbs;
   } else {
-    ({ dest, minified } = await stageSiteMinified(outAbs, { minify: !flag("--no-minify") }));
+    ({ dest, minified, shell } = await stageSiteMinified(outAbs, { minify: !flag("--no-minify") }));
   }
   let build = null;
   if (flag("--stamp") || flag("--stamp-only")) {
@@ -280,6 +284,7 @@ async function main() {
     build: ver.build,
     stamped: build,
     minified,
+    shell,
     desktopVersion: desktopVersionFromBuild(ver.build),
   }));
 }

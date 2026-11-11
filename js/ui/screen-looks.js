@@ -544,17 +544,6 @@ const ScreenLooks = (function () {
     Log.info("ui", "ScreenLooks.build");
     let after = byId("pm-titlescreen");
     for (const s of SCREENS) after = buildScreen(s, after);
-    if (typeof SettingsSearch !== "undefined") {
-      const descriptors = [];
-      for (const s of SCREENS) for (const n of s.knobs) descriptors.push({
-        id: "look-" + s.id + "-" + n.k,
-        label: s.title + " " + n.label.toLowerCase(),
-        page: "appearance",
-        target: "pm-look-" + s.id + "-" + n.k,
-        aliases: "layout screen appearance " + s.id,
-      });
-      SettingsSearch.register("screen-looks", descriptors);
-    }
     // TITLE SCREEN keeps its own fold; it gains the PEEK button, last (after REPLAY INTRO).
     const tsBody = byId("pm-titlescreen-body");
     if (tsBody) {
@@ -579,13 +568,45 @@ const ScreenLooks = (function () {
   }
   function refresh() { for (const id in built) if (id !== "_done") { built[id].paintRows(); built[id].paintSum(); } }
 
+  /* Search finds every knob before its row exists: descriptors are data, and a
+     search jump shows "appearance" first, whose enter (below) builds the row
+     before SettingsSearch reveals it (SettingsNav.show runs fireEnter, then
+     the jump's callback). */
+  function registerSearch() {
+    if (typeof SettingsSearch === "undefined") return;
+    const descriptors = [];
+    for (const s of SCREENS) for (const n of s.knobs) descriptors.push({
+      id: "look-" + s.id + "-" + n.k,
+      label: s.title + " " + n.label.toLowerCase(),
+      page: "appearance",
+      target: "pm-look-" + s.id + "-" + n.k,
+      aliases: "layout screen appearance " + s.id,
+    });
+    SettingsSearch.register("screen-looks", descriptors);
+  }
+
+  /* #5054: the rows (8 folds, 65 knobs: ~450 nodes, ~260 listeners) are built
+     on the first APPEARANCE enter, never in the title intro. With the settings
+     router present that enter is the only trigger (or now, when the page is
+     already showing); a host with no router (a unit harness, a tool page) has
+     no enter to wait for, so it builds once the document is parsed. */
+  function arm() {
+    registerSearch();
+    const panel = byId("pm-panel-appearance");
+    if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) {
+      SettingsNav.onEnter((id) => { if (id === "appearance") build(); });
+      const sheet = byId("pmsettings");
+      if (panel && !panel.hidden && !(sheet && sheet.hidden)) build();
+    } else build();
+  }
+
   apply();
 
   // Deferred scripts run while readyState is "interactive"; only a document
-  // that is already COMPLETE builds now (same rule as js/ui/pause-opts.js).
+  // that is already COMPLETE arms now (same rule as js/ui/pause-opts.js).
   if (doc) {
-    if (doc.readyState === "complete") build();
-    else doc.addEventListener("DOMContentLoaded", build, { once: true });
+    if (doc.readyState === "complete") arm();
+    else doc.addEventListener("DOMContentLoaded", arm, { once: true });
   }
 
   return {
