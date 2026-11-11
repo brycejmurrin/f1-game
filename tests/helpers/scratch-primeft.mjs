@@ -5,6 +5,7 @@ import { measureIdleWindows } from "../../tools/perf/idle-pipeline-census.mjs";
 
 function primeHooks() {
   const P = window.__pf = { ro: 0, bg: 0, frames: [], prime: null };
+  const iv2 = setInterval(() => { try { const A = window.__apex; if (!A || A.__raceWrapped || typeof A.race !== "function") return; const r = A.race; A.race = function () { P.raceAt = performance.now(); return r.apply(this, arguments); }; A.__raceWrapped = true; clearInterval(iv2); } catch (_) {} }, 20);
   document.addEventListener("apex-scratch-prime", (e) => { window.__primeMark = e.detail; P.marks = (P.marks || 0) + 1; if (P.ro0 == null) { P.ro0 = P.ro; P.bg0 = P.bg; } });
   const iv = setInterval(() => {
     try {
@@ -19,7 +20,7 @@ function primeHooks() {
         const m = window.__primeMark, t0 = performance.now(), ro0 = P.ro, bg0 = P.bg;
         const out = pres.apply(this, arguments);
         const t1 = performance.now();
-        if (m) { window.__primeMark = null; (P.primes = P.primes || []).push({ off: m.off, n: m.n, presentMs: +(t1 - t0).toFixed(1), loopToEndMs: +(t1 - m.t).toFixed(1), ro: P.ro - ro0, bg: P.bg - bg0, warming: !!(GLX.warming && GLX.warming()) }); P.prime = P.primes[P.primes.length - 1]; P.frames = []; }
+        if (m) { window.__primeMark = null; (P.primes = P.primes || []).push({ off: m.off, n: m.n, presentMs: +(t1 - t0).toFixed(1), loadMs: P.raceAt ? Math.round(t1 - P.raceAt) : null, loopToEndMs: +(t1 - m.t).toFixed(1), ro: P.ro - ro0, bg: P.bg - bg0, warming: !!(GLX.warming && GLX.warming()) }); P.prime = P.primes[P.primes.length - 1]; P.frames = []; }
         else if (P.prime && P.frames.length < 30) P.frames.push([+(t1 - t0).toFixed(1), P.ro - ro0, P.bg - bg0]);
         P.roTotal = P.ro; P.bgTotal = P.bg;
         return out;

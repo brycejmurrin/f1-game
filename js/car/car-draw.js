@@ -1289,7 +1289,7 @@ const CarDraw = (function () {
       return cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id, rl.bodyStyle) :
         getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight, rl.bodyStyle);
     }
-    function warmDecalMesh(c) { decalMeshFor(c.team, false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); }
+    function warmDecalMesh(c) { try { if (localStorage.getItem("apex26.scratchRacePrime") === "0") return; } catch (_) { /* on */ } decalMeshFor(c.team, false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); }
     function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup, setup, stamp) {
       const mesh = decalMeshFor(team, cockpit, usePlayerSetup, setup, stamp);
       // PHOTO MODE upgrades rivals to the player-tier PREVIEW, lazily: one new
