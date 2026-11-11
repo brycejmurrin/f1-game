@@ -224,8 +224,7 @@
       ],
       "settled": [
         "tests/specs/camera-hooks.spec.js",
-        "tests/specs/monaco-foundation.spec.js",
-        "tests/specs/redbull-foundation.spec.js",
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/devicefarm-syslog.test.mjs"
       ],
       "*": [
@@ -4866,7 +4865,7 @@
     },
     "js/circuits/abudhabi.js": {
       "*": [
-        "tests/specs/abudhabi-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/albert_park.js": {
@@ -4914,7 +4913,7 @@
     "js/circuits/monaco.js": {
       "*": [
         "tests/specs/boot-guard.spec.js",
-        "tests/specs/monaco-foundation.spec.js",
+        "tests/specs/circuit-foundation.spec.js",
         "tests/specs/season.spec.js",
         "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/camera-ride.test.mjs",
@@ -4923,7 +4922,7 @@
     },
     "js/circuits/montreal.js": {
       "*": [
-        "tests/specs/montreal-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/monza.js": {
@@ -4952,7 +4951,7 @@
     },
     "js/circuits/qatar.js": {
       "*": [
-        "tests/specs/qatar-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/scenery/abudhabi.js": {
@@ -4973,7 +4972,8 @@
     },
     "js/circuits/scenery/cota.js": {
       "*": [
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/circuits/scenery/dijon.js": {
@@ -5052,7 +5052,7 @@
     },
     "js/circuits/scenery/montreal.js": {
       "*": [
-        "tests/specs/montreal-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/scenery/monza.js": {
@@ -5087,7 +5087,7 @@
     },
     "js/circuits/scenery/qatar.js": {
       "narrow": [
-        "tests/specs/qatar-foundation.spec.js",
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/floodmast-lamp-register.test.mjs",
         "tests/unit/qatar-day-sf-orbit.test.mjs",
         "tests/unit/scenery-guards.test.mjs"
@@ -5174,7 +5174,7 @@
     },
     "js/circuits/vegas.js": {
       "*": [
-        "tests/specs/vegas-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/core/clipboard.js": {
@@ -17340,12 +17340,11 @@
     },
     "js/track/scenery/pits.js": {
       "build": [
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/lazy-track-build.test.mjs"
       ],
       "*": [
-        "tests/specs/bahrain-foundation.spec.js",
         "tests/specs/imola-foundation.spec.js",
-        "tests/specs/montreal-foundation.spec.js",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
@@ -17409,6 +17408,7 @@
     },
     "js/track/tracks.js": {
       "build": [
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/baku-migration.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -17421,6 +17421,7 @@
         "tests/unit/track-def-factory.test.mjs"
       ],
       "buildCenterline": [
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/build-steps.test.mjs",
         "tests/unit/circuit-def-fields.test.mjs",
         "tests/unit/track-def-factory.test.mjs"
@@ -17448,7 +17449,6 @@
         "tests/unit/props-over-road.test.mjs"
       ],
       "*": [
-        "tests/specs/monaco-foundation.spec.js",
         "tests/specs/new-hooks.spec.js",
         "tests/specs/season-format.spec.js",
         "tests/unit/agent-scope-hooks.test.mjs",

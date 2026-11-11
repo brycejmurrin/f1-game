@@ -1126,7 +1126,7 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   const props = "tests/specs/props-over-road.spec.js";
   const terrain = "tests/specs/terrain-over-road.spec.js";
   const shimmer = "tests/specs/material-shimmer.spec.js";
-  const qatar = "tests/specs/qatar-foundation.spec.js";
+  const qatar = "tests/specs/circuit-foundation.spec.js";   // qatar's foundation case lives here (TK2-17)
   assert.equal(isMegaSweepSpec(props), false,
     "props-over-road is under the selected gate; peel must not isolate it");
   assert.equal(isMegaSweepSpec(terrain), false,
@@ -1312,10 +1312,10 @@ test("run-playwright keeps native --shard for megas-only oversize jobs (PR #1110
   assert.deepEqual(soloPart.rest, alone);
   assert.deepEqual(playwrightShard(alone), { index: 1, total: 3 });
   // Packed with a sibling: peel stays the packed-group path (megaShardPlan).
-  const packed = ["--shard=2/4", "tests/specs/qatar-foundation.spec.js", tlx];
+  const packed = ["--shard=2/4", "tests/specs/circuit-foundation.spec.js", tlx];
   const p = partitionMegaSweepArgs(packed);
   assert.deepEqual(p.mega, [tlx]);
-  assert.ok(p.rest.some((a) => a.includes("qatar-foundation")), "sibling stays on the shared shard");
+  assert.ok(p.rest.some((a) => a.includes("circuit-foundation")), "sibling stays on the shared shard");
 });
 
 test("mega solos spread across shards longest-first, each on exactly one shard (T1)", () => {
@@ -1589,7 +1589,7 @@ test("a circuit landmark registry + its foundation spec stay circuit-scoped (PR 
   const files = [
     "js/circuits/scenery/monza.js",
     "tests/data/landmarks/monza.json",
-    "tests/specs/monza-foundation.spec.js",
+    "tests/specs/foundation/monza.js",
     "tools/ci/select-specs.mjs",
     "tests/unit/select-specs.test.mjs",
   ];
@@ -1647,6 +1647,51 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\).*impactAffected\.includes\(f\)\) \? 2 : 3/,
     "own foundation specs rank as affected (2)");
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
+});
+
+/* ONE FOUNDATION SPEC (TK2-17, #3039). Thirteen per-circuit foundation specs became
+ * tests/specs/circuit-foundation.spec.js + one case module per circuit
+ * (tests/specs/foundation/<id>.js). The selection must not get worse: a one-circuit
+ * diff still runs only that circuit's cases (APEX_CIRCUITS, billed at its own count),
+ * and anything the routing cannot narrow runs every circuit. */
+test("TK2-17: a circuit's foundation cases route through the registry, scoped to that circuit", () => {
+  const R = "tests/specs/circuit-foundation.spec.js";
+  assert.equal(foundationSpec("monza"), R, "a merged circuit's foundation spec is the registry");
+  assert.equal(foundationSpec("cota"), "tests/specs/cota-foundation.spec.js", "an ADAPTED circuit keeps its own file");
+  assert.ok(!fs.existsSync(path.join(ROOT, foundationSpec("madrid"))), "a circuit with no foundation names a path that is not there");
+  // circuitsTouched: a case module names its circuit; the registry itself is the loop, so not scoped.
+  assert.deepEqual(circuitsTouched(["tests/specs/foundation/spa.js"], null), { ids: ["spa"], scoped: true, dataResolved: [] });
+  assert.equal(circuitsTouched([R], null).scoped, false, "editing the registry edits every circuit's cases");
+  assert.deepEqual(circuitsTouched([R], null).ids, [], "the registry's own name is not a circuit id");
+  assert.equal(circuitsTouched(["tests/helpers/foundation-roster.js"], null).scoped, false);
+  assert.ok(CIRCUIT_FILTERED_TESTS.has(R), "the registry reads APEX_CIRCUITS, so it is a filtered loop");
+  const row = (r) => [...r.selected, ...r.oversize, ...(r.overflow || []), ...(r.spill || []), ...(r.overBudgetRun || [])]
+    .find((x) => x.file === R);
+  const one = (files) => select(undefined, undefined, { files });
+  // A scenery-only edit: the registry runs (affected, rank 2), billed for spa's 5 cases, with APEX_CIRCUITS=spa.
+  const spa = one(["js/circuits/scenery/spa.js"]);
+  assert.deepEqual(spa.circuits, ["spa"]);
+  assert.equal(row(spa)?.rank, 2);
+  assert.equal(row(spa)?.tests, 5, "billed for the cases APEX_CIRCUITS=spa registers, not all 24");
+  assert.ok(spa.shards.filter((s) => s.specs.split(" ").includes(R)).every((s) => s.circuits === "spa"));
+  // An edited case module is an edited spec (rank 0), still scoped to its circuit.
+  const mod = one(["tests/specs/foundation/monza.js"]);
+  assert.deepEqual(mod.changedSpecs, [R]);
+  assert.deepEqual(mod.circuits, ["monza"]);
+  assert.equal(row(mod)?.rank, 0);
+  assert.equal(row(mod)?.tests, 1);
+  // An ADAPTED circuit's diff does not pull the registry in: its own file is VM-covered, as before.
+  const cota = one(["js/circuits/scenery/cota.js"]);
+  assert.equal(row(cota), undefined, "a scoped diff to a circuit the registry lacks drops it (otherCircuit)");
+  assert.ok(cota.coveredByVmTwin.some((x) => x.file === "tests/specs/cota-foundation.spec.js"));
+  // FAIL CLOSED: the registry edited, or a circuit + engine diff, runs EVERY circuit (no APEX_CIRCUITS).
+  const whole = one([R]);
+  assert.deepEqual(whole.circuits, []);
+  assert.equal(row(whole)?.tests, 24, "the loop itself changed: all of it runs");
+  const engine = one(["js/circuits/monza.js", "js/track/tracks.js"]);
+  assert.deepEqual(engine.circuits, [], "not circuit-only: the whole fleet");
+  assert.equal(row(engine)?.rank, 2, "monza's own foundation is still affected");
+  assert.equal(row(engine)?.tests, 24, "…and runs every circuit's cases, more than before, never fewer");
 });
 
 test("a circuit edit routes the specs that RACE that circuit, read from the files (T2)", () => {
@@ -1909,7 +1954,7 @@ test("lanes: a run's legs take distinct lanes from a run-number-rotated start", 
 test("spec-less js dirs route to a module-specific spec, and a dir with no coverage at all is named (ci-7d C7)", async () => {
   const { specsAffectedBySource, jsCoverageGaps, GENERIC_BOOT_SPECS, nodeTestsNaming } = await import("../../tools/ci/select-specs.mjs");
   assert.deepEqual(specsAffectedBySource(["js/track/build-worker.js"]).sort(),
-    ["tests/specs/monza-foundation.spec.js", "tests/specs/track-switch-release.spec.js"]);
+    ["tests/specs/circuit-foundation.spec.js", "tests/specs/track-switch-release.spec.js"]);
   assert.deepEqual(specsAffectedBySource(["js/workers/bitmap-decode-worker.js"]), ["tests/specs/garage-livery-fit.spec.js"]);
   assert.ok(nodeTestsNaming("js/workers/bitmap-decode-worker.js").includes("tests/unit/bitmap-decode-worker.test.mjs"));
   // Real routing: none of the six dirs ci-7d named is uncovered today.

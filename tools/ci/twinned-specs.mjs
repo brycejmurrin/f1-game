@@ -189,12 +189,12 @@ export const BROWSER_ONLY = {
   "tests/specs/understeer-cue.spec.js": "portable by every static measure and 0/7 under the adapter (317 s) — the standing proof that eligibility is not fidelity (docs/TESTING.md §vmPage)",
   "tests/specs/audit.spec.js": "two evaluate bodies do not survive source serialisation into the VM (`Unexpected token ';'`): 8/10",
   "tests/specs/debris.spec.js": "loads rapier through a dynamic import, which node:vm has no import callback for (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING): 1/5",
+  // TK2-17 (#3039): the qatar and suzuka foundations, which carried this row as their own files.
+  "tests/specs/circuit-foundation.spec.js": "the qatar and suzuka cases (tests/specs/foundation/{qatar,suzuka}.js) time out at BOOT_MS on waitForFunction under APEX_VM_PAGE=1 (track never settles in the VM — measured 45 s, 2026-09-30), and the other eleven import test from @playwright/test (fixtures.js pins GLX + tyre wear off; see ADAPTED above); structural, not a flake",
   // Measured 2026-09-22, right after the 25-test file was split: the 9-test
   // drag half became statically portable (the auto-throttle test that drives a
   // real race moved to touch-pedals.spec.js) and immediately appeared in
   // twinDebt. RUNNING it settles the question the static scan cannot.
-  "tests/specs/qatar-foundation.spec.js": "APEX_VM_PAGE=1 times out at BOOT_MS on waitForFunction (track never settles in the VM — measured 45 s, 2026-09-30); structural boot, not a flake",
-  "tests/specs/suzuka-foundation.spec.js": "APEX_VM_PAGE=1 times out at BOOT_MS on waitForFunction (track never settles in the VM — measured 45 s, 2026-09-30); structural boot, not a flake",
   "tests/specs/touch-steer.spec.js": "8/9 in 1.7 s, and the ninth is structural: the release ramp advances by min(0.1, elapsed) of WALL CLOCK, and waitForTimeout advances no clock in the VM, so `lifting off ramps back to centre` reads ~0.99 where a browser reads 0. Proved rather than guessed: raising the poll gap from 20 ms to 120 ms changes the browser ladder completely (0.53 -> 1.00 over the same ticks) and moves the VM reading 0.9835 -> 0.9874 — it is not polling too fast, time is not passing",
 };
 

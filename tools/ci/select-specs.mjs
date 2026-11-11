@@ -28,7 +28,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { pick, stripSpecOwner, extraSpecs } from "./pick-tests.mjs";
-import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
+import { MEASURED, capacity, declaredTests, declaredTestsIn, caseModules, caseModuleIds, scopedCaseModules, specSecPerTest, timings } from "./select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
@@ -175,7 +175,7 @@ function constEnv(ast, dir, depth = 0) {
  *  (garage-out-before-card, 285 s) read as 0 while only literals counted. An
  *  argument that is NOT constant (a variable, a call) is unknown, and unknown
  *  is billed as `test.slow()` — over the cap — never as free. */
-export function maxDeclaredTimeout(file) {
+export function maxDeclaredTimeout(file, scope = null) {
   let ast, env;
   try {
     const abs = path.join(ROOT, file);
@@ -213,6 +213,8 @@ export function maxDeclaredTimeout(file) {
     for (const k of Object.keys(x)) if (k !== "loc" && k !== "range") walk(x[k]);
   };
   walk(ast);
+  // A registry spec's test.setTimeout calls live in its case modules (TK2-17).
+  for (const m of scope ? scopedCaseModules(file, scope) : caseModules(file)) max = Math.max(max, maxDeclaredTimeout(m));
   return max;
 }
 
@@ -583,7 +585,7 @@ export function measuredCheap(file, db = timings()) {
  *  p75). `db` pins the timing history (tests pass an empty one). */
 export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS,
   overBudgetShards = MAX_OVER_BUDGET_SHARDS, spillShards = MAX_SPILL_SHARDS, staleFirst = false,
-  includeTwinned = false } = {}) {
+  includeTwinned = false, scope = null } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
@@ -591,7 +593,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
   const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByManualOptIn = [], coveredByVmTwin = [];
   const unreadable = [];
   for (const file of specs) {
-    const tests = declaredTests(file);
+    const tests = scope ? declaredTestsIn(file, scope) : declaredTests(file);
     // A SPEC THIS TOOL CANNOT READ IS NOT A SPEC IT MAY IGNORE. This used to
     // `continue` into no bucket at all, so a path that is missing, renamed or
     // unparseable left the selection with no trace anywhere in the report —
@@ -617,7 +619,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       coveredByVmTwin.push({ file, tests, twin: twinOf(file) });
       continue;
     }
-    const own = maxDeclaredTimeout(file);
+    const own = maxDeclaredTimeout(file, scope);
     // >=, NOT >. A spec that declares EXACTLY the gate's budget is saying it
     // needs all of it, with nothing left for a runner slower than the box that
     // number was measured on — and the gate's runner always is. Under `>` such
@@ -1015,7 +1017,13 @@ export const CIRCUIT_DEF = /^js\/circuits\/([a-z0-9_]+)\.js$/;
 // fleet specs it could not afford (PR #1015: props-over-road, tracks-walls,
 // parts-physics). Filename IS the circuit id, same as CIRCUIT_FILE.
 export const CIRCUIT_LANDMARK = /^tests\/data\/landmarks\/([a-z0-9_]+)\.json$/;
-export const CIRCUIT_FOUNDATION = /^tests\/specs\/([a-z0-9-]+)-foundation\.spec\.js$/;
+// TK2-17 (#3039): one circuit's foundation cases are either its own ADAPTED
+// `<id>-foundation.spec.js` (albert-park, cota, imola: vm-page runs them) or the
+// case module `tests/specs/foundation/<id>.js` that FOUNDATION_REGISTRY registers.
+// The registry spec itself is NOT here: an edit to it edits the per-circuit loop
+// (CIRCUIT_FILTERED_TESTS), so it runs whole.
+export const FOUNDATION_REGISTRY = "tests/specs/circuit-foundation.spec.js";
+export const CIRCUIT_FOUNDATION = /^tests\/specs\/(?:foundation\/([a-z0-9_]+)\.js|(?!circuit-foundation\.)([a-z0-9-]+)-foundation\.spec\.js)$/;
 // Data files keyed `{ <category>: { <circuit id>: … } }`: a change here is
 // scoped to the ids whose rows differ. Reading them needs the base, so a
 // base git cannot show leaves the file TRACKED, exactly as before.
@@ -1036,6 +1044,9 @@ export const CIRCUIT_FILTERED_TESTS = new Set([
   // 1500 s all-circuits body the selected gate excluded). Honours
   // APEX_CIRCUITS so a circuit-only PR does not bill the whole roster.
   "tests/specs/props-over-road.spec.js",
+  // The circuit foundations, one spec since TK2-17 (#3039): a one-circuit diff
+  // runs only that circuit's cases (tests/helpers/foundation-roster.js).
+  FOUNDATION_REGISTRY,
   "tests/unit/elevation-tracks-vm.test.mjs",
   // The fleet sweeps (2026-09-30): each narrows its roster loop, or the roster
   // floor it holds a scoped audit CLI to (tools/lib/circuit-scope.cjs).
@@ -1066,8 +1077,22 @@ const scopeNeutral = (f) => DOCS_ONLY.some((re) => re.test(f))
   // was meant to keep affordable (PR #1015: props-over-road, tracks-walls,
   // parts-physics).
   || f === "tools/ci/select-specs.mjs";
-export const foundationSpec = (id) => `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
+/** The spec that runs circuit `id`'s foundation cases: its own ADAPTED file when
+ *  one exists, else the registry when it has a case module for `id`, else the
+ *  per-circuit path (absent: the caller's existsSync filter drops it). */
+export const foundationSpec = (id) => {
+  const own = `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
+  if (fs.existsSync(path.join(ROOT, own))) return own;
+  return caseModuleIds(FOUNDATION_REGISTRY).includes(id) ? FOUNDATION_REGISTRY : own;
+};
 const FOUNDATION = /^tests\/specs\/(.+)-foundation\.spec\.js$/;
+/** The specs whose case modules include `f` (tests/specs/<dir>/<x>.js): an edit
+ *  there is an edit to those specs (changedSpecs, rank 0). */
+export function specsRegistering(f, root = ROOT) {
+  if (!/^tests\/specs\/[^/]+\/[^/]+\.js$/.test(f)) return [];
+  return fs.readdirSync(path.join(root, "tests/specs")).filter((n) => n.endsWith(".spec.js"))
+    .map((n) => `tests/specs/${n}`).filter((s) => caseModules(s).includes(f)).sort();
+}
 
 /* WHICH CIRCUITS DOES A SCRIPT BUILD? (2026-09-30) Every game-vm-b twin races
  * a fixed circuit — monza for 30 of 40, a handful on spa, baku, monaco,
@@ -1083,8 +1108,9 @@ const require_cjs = (rel) => createRequire(import.meta.url)(rel);
 const WHOLE_ROSTER = [/manifest\.cjs"\)\.CIRCUITS/, /for\s*\([^)]*\bof\s+[\w.]*Tracks\.LIST\b/, /Tracks\.LIST\.(map|forEach|filter|some|every|reduce|flatMap)\(/,
   /readdirSync\([^)]*circuits/];
 const FOUNDATION_GLOB = /-foundation\.spec\.js/;
-const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith("-foundation.spec.js"))
-  .map((f) => f.replace("-foundation.spec.js", "").replace(/-/g, "_"));
+const foundationIds = () => [...fs.readdirSync(path.join(ROOT, "tests/specs"))
+  .filter((f) => f.endsWith("-foundation.spec.js") && `tests/specs/${f}` !== FOUNDATION_REGISTRY)
+  .map((f) => f.replace("-foundation.spec.js", "").replace(/-/g, "_")), ...caseModuleIds(FOUNDATION_REGISTRY)].sort();
 
 /** The circuit ids one test file can build: a Set, or `null` for the whole roster. */
 export function circuitsOf(file, seen = new Set()) {
@@ -1109,7 +1135,10 @@ export function circuitsOf(file, seen = new Set()) {
   const ids = new Set();
   if (FOUNDATION_GLOB.test(text) && /readdirSync\(/.test(text)) for (const id of foundationIds()) ids.add(id);
   for (const id of CIRCUIT_IDS()) if (new RegExp(`["'\`]${id}["'\`]`).test(text)) ids.add(id);
-  for (const m of text.matchAll(/(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+)["']/g)) {
+  // A spec's case modules (`./foundation/<id>.js`, TK2-17) are followed like its helpers.
+  const caseImport = /^tests\/specs\/[^/]+\.spec\.js$/.test(file)
+    ? /(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+|\.\/[^"']+)["']/g : /(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+)["']/g;
+  for (const m of text.matchAll(caseImport)) {
     const sub = circuitsOf(path.posix.join(path.posix.dirname(file), m[1]), seen);
     if (sub === null) return null;
     for (const id of sub) ids.add(id);
@@ -1187,7 +1216,7 @@ export function circuitsTouched(changed, ref, root = ROOT) {
     const lm = CIRCUIT_LANDMARK.exec(f);
     if (lm) { ids.add(lm[1]); dataResolved.push(f); continue; }
     const fd = CIRCUIT_FOUNDATION.exec(f);
-    if (fd) { ids.add(fd[1].replace(/-/g, "_")); continue; }
+    if (fd) { ids.add((fd[1] || fd[2]).replace(/-/g, "_")); continue; }
     if (PER_CIRCUIT_DATA.has(f)) {
       const d = ref ? dataCircuits(f, ref, root) : null;
       if (d) { d.forEach((id) => ids.add(id)); dataResolved.push(f); continue; }
@@ -1258,7 +1287,7 @@ export const SOURCE_AFFECTED = [
   // switch are its browser evidence; bitmap decode feeds the garage livery
   // atlas. js/overlay and js/share are node-covered (overlay-feed, share-card*),
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
-  ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
+  ...["track-switch-release", "circuit-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
   // ROUTED TO SPECS THAT DO NOT EXERCISE THEM (#5241 G4). js/fx/ goes to group `ui`, whose specs run the GLX pin and
   // assert no fx layer; the one spec that asserts one (M6: the skid batch after a driven slide, on the three.js path
@@ -1588,13 +1617,15 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const lightDiff = docsOnly || kind === "docs";
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
-  const changedSpecs = changed.filter((f) => /^tests\/specs\/.+\.spec\.js$/.test(f)
-    && fs.existsSync(path.join(ROOT, f)));
+  // An edited case module (tests/specs/foundation/<id>.js) is an edit to the spec
+  // that registers it; on a circuit-only diff APEX_CIRCUITS then runs just its cases.
+  const changedSpecs = [...new Set(changed.flatMap((f) => (/^tests\/specs\/.+\.spec\.js$/.test(f) ? [f] : specsRegistering(f))))]
+    .filter((f) => fs.existsSync(path.join(ROOT, f)));
   const imported = specsImporting(changed);
   const failed = (opts.failed || []).filter((f) => fs.existsSync(path.join(ROOT, f)));
   // The touched circuits' own foundation specs are AFFECTED, like an import;
   // on a circuit-scoped diff another circuit's foundation is not a candidate.
-  const ownFoundations = circ.ids.map(foundationSpec).filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const ownFoundations = [...new Set(circ.ids.map(foundationSpec))].filter((f) => fs.existsSync(path.join(ROOT, f)));
   // Source modules whose browser gate is over-budget when merely routed (see
   // SOURCE_AFFECTED) — same rank-2 elevation as an import / own foundation.
   const sourceAffected = specsAffectedBySource(routing);
@@ -1632,7 +1663,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     : "matched";
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
     : (standalone.includes(f) || imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f) || impactAffected.includes(f)) ? 2 : 3;
-  const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst };
+  // The plan's APEX_CIRCUITS (circuits, below): a registry spec is billed for the cases it will register.
+  const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst,
+    scope: circ.scoped ? circ.ids : null };
   let cut = fit(candidates, budgetMin, fitOpts);
   // THE FLOOR: infra and partial diffs always carry it; any other non-docs diff
   // whose plan came out with nothing to run gets it too. Never an empty plan
