@@ -5,7 +5,7 @@
 #   js/**/*.js                    -> node --check (does it still parse?)
 #   tests/specs/*.spec.js,
 #   tests/unit/*.test.{mjs,cjs}   -> is the new file registered (groups.json,
-#                                    a header for the generated docs/TESTING-COVERAGE.md row)?
+#                                    a header for its built coverage-page row)?
 #   tools/manifest.cjs            -> node tools/gen/gen-shell.mjs --check
 #   tests/groups.json             -> node tools/gen/gen-test-groups.mjs --check
 #   js/lighting/knobs.js          -> node tools/gen/gen-slider-doc.mjs --check
@@ -54,9 +54,10 @@ esac
 
 # A NEW TEST FILE IS THREE REGISTRATIONS, not one (2026-09-24 audit): a group in
 # tests/groups.json (else nothing runs it — test-coverage-audit /
-# prepush-gate-coverage, now in test:guards), a first-line header the generated
-# docs/TESTING-COVERAGE.md row is read from, and the regenerated page. Say which
-# are missing at the edit, not failures at the commit.
+# prepush-gate-coverage, now in test:guards) and a first-line header comment: the
+# coverage page (artifacts/TESTING-COVERAGE.md, built on demand since #5389, never
+# committed) reads the row from it. Say which are missing at the edit, not
+# failures at the commit.
 case "$REL" in
   tests/specs/*.spec.js|tests/unit/*.test.mjs|tests/unit/*.test.cjs)
     BASE=$(basename "$REL"); MISSING=()
@@ -68,7 +69,9 @@ case "$REL" in
       if [ "$AUDIT_RC" -ne 0 ] && printf '%s' "$AUDIT_OUT" | grep -qF "$BASE"; then
         MISSING+=("add it to a group in tests/groups.json (a spec: one topical browser group; a unit file: toolingFast or a ci.yml node group), then \`node tools/gen/gen-test-groups.mjs\`")
       fi
-      grep -qF "$BASE" docs/TESTING-COVERAGE.md 2>/dev/null || MISSING+=("regenerate its docs/TESTING-COVERAGE.md row: give the file a one-sentence header comment (what it covers), then \`node tools/docs/gen-coverage-table.mjs\` (npm run gen)")
+      # headerSentence() (tools/gen/gen-arch-table.mjs) skips blanks, a shebang, "use strict" and a @ts pragma.
+      FIRST=$(grep -m1 -vE '^\s*$|^#!|^\s*"use strict";\s*$|^\s*//\s*@ts-(no)?check\s*$' "$REL" 2>/dev/null)
+      case "$FIRST" in /\**|//*) ;; *) MISSING+=("give it a one-sentence header comment (what it covers): its row in the built coverage page (\`node tools/docs/gen-coverage-table.mjs\` → artifacts/TESTING-COVERAGE.md) is read from it") ;; esac
     fi
     # (No "declare > 180 s" advice: that used to tell authors how to opt a
     # spec OUT of the change-aware gate. Since 2026-10-04 a declared-slow

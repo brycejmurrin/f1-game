@@ -111,14 +111,14 @@ function hookRepo(prefix) {
   return { dir, put, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
-test("post-edit.sh: a js/ file that does not parse is named; a new test file points at the generated coverage page", () => {
+test("post-edit.sh: a js/ file that does not parse is named; a new test file with no header comment is told it needs one", () => {
   const r = hookRepo("post-edit-");
   // fixture paths in a throwaway repo, spelled in parts so they never read as references into this tree
-  const BAD = ["js", "bad.js"].join("/"), GOOD = ["js", "good.js"].join("/"), NEW = ["tests/unit", "new-thing.test.mjs"].join("/");
+  const BAD = ["js", "bad.js"].join("/"), GOOD = ["js", "good.js"].join("/"), NEW = ["tests/unit", "new-thing.test.mjs"].join("/"), BARE = ["tests/unit", "bare-thing.test.mjs"].join("/");
   try {
     r.put(BAD, "function (\n");
     r.put(NEW, "// new-thing — covers x.\n");
-    r.put("docs/TESTING-COVERAGE.md", "| other.test.mjs | x |\n");
+    r.put(BARE, "import test from \"node:test\";\n");
     const hook = (rel) => {
       const out = spawnSync("bash", [path.join(ROOT, ".claude/hooks/post-edit.sh")], { encoding: "utf8",
         input: JSON.stringify({ tool_name: "Edit", hook_event_name: "PostToolUse", tool_input: { file_path: path.join(r.dir, rel) } }) });
@@ -126,10 +126,10 @@ test("post-edit.sh: a js/ file that does not parse is named; a new test file poi
       return out.stdout.trim() ? JSON.parse(out.stdout).hookSpecificOutput.additionalContext : "";
     };
     assert.equal(hook(BAD).split("\n")[0], `[post-edit] ${BAD} does not parse:`);
-    const t = hook(NEW);
-    // The whole message: the coverage-table row is the fix it names, and nothing points at the retired TESTING.md §5 table.
-    assert.equal(t, "[post-edit] new-thing.test.mjs is not fully registered — test:guards fails the commit until it is:\n"
-      + "  - regenerate its docs/TESTING-COVERAGE.md row: give the file a one-sentence header comment (what it covers), then `node tools/docs/gen-coverage-table.mjs` (npm run gen)");
+    // A header comment is all the built coverage page needs (#5389 retired the committed docs/ copy).
+    assert.equal(hook(NEW), "", "a new test with a header comment needs nothing more from this hook");
+    assert.equal(hook(BARE), "[post-edit] bare-thing.test.mjs is not fully registered — test:guards fails the commit until it is:\n"
+      + "  - give it a one-sentence header comment (what it covers): its row in the built coverage page (`node tools/docs/gen-coverage-table.mjs` → artifacts/TESTING-COVERAGE.md) is read from it");
     r.put(GOOD, "var x = 1;\n");
     assert.equal(hook(GOOD), "", "a clean edit says nothing");
   } finally { r.rm(); }
