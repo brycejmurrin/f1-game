@@ -732,9 +732,13 @@
 
     // Output logical size of a pass (phys mode; the shaders' VP.uv reads it).
     function vset(pass, w, h) { if (phys && pass && pass.V) pass.V.set(w, h); }
+    // ONE scratch pair, read at once by every caller (up to once a present on a
+    // fixed phone target): a fresh [w, h] and {width, height} a frame (#5057).
+    const _psOut = { width: 0, height: 0 }, _ps = [0, 0];
     function presentSize() {
-      const ps = ctx.getPresentSize ? ctx.getPresentSize() : null;
-      return [ps && ps.width ? ps.width : PW, ps && ps.height ? ps.height : PH];
+      const ps = ctx.getPresentSize ? ctx.getPresentSize(_psOut) : null;
+      _ps[0] = ps && ps.width ? ps.width : PW; _ps[1] = ps && ps.height ? ps.height : PH;
+      return _ps;
     }
 
     /** Resolve the HDR scene to the canvas — the glx/post.js present() port.

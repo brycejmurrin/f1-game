@@ -105,10 +105,16 @@ const GarageCrew = (function () {
   // THE DRAWN NOSE for the car in the bay: Car3D's tip station moved by the
   // body style (styledNoseStations' tip rule), so the front jack's saddle is
   // seated under THIS chassis' nose. y is the station centre, h its full height.
+  // Memoised on the two tables it reads (Car3D's style entry and nose stations,
+  // both static): draw() asks every frame of an arrival (#4974).
+  const NOSE_DEFAULT = [{ z: 2.60, y: 0.245, h: 0.072 }, { z: 2.00, y: 0.315, h: 0.235 }], NO_STYLE = {};
+  let _noseN = null, _noseSt = null, _nose = null;
   function noseTip(teamId, liv) {
     const C = typeof Car3D !== "undefined" ? Car3D : null;
-    const N = C && C.CHASSIS ? C.CHASSIS.nose : [{ z: 2.60, y: 0.245, h: 0.072 }, { z: 2.00, y: 0.315, h: 0.235 }];
-    const st = C && C.teamStyleOf ? C.teamStyleOf(C.bodyStyleKey ? C.bodyStyleKey(teamId, liv && liv.bodyStyle) : teamId) : {};
+    const N = C && C.CHASSIS ? C.CHASSIS.nose : NOSE_DEFAULT;
+    const st = C && C.teamStyleOf ? C.teamStyleOf(C.bodyStyleKey ? C.bodyStyleKey(teamId, liv && liv.bodyStyle) : teamId) : NO_STYLE;
+    if (_nose && N === _noseN && st === _noseSt) return _nose;
+    _noseN = N; _noseSt = st;
     const tz = st.noseTipZ || 0, dr = st.noseDroop || 0, sl = st.noseSlim || 1, sil = Math.abs(st.coverLift || 0) > 1e-6;
     // Tip and mid stations as styledNoseStations builds them; the cone between
     // them is a straight loft, so its underside is a line.
@@ -117,7 +123,7 @@ const GarageCrew = (function () {
     const mY = N[1].y + dr * (sil ? 0.85 : 0.45) + (sil ? (sl < 0.7 ? -0.04 : 0) + (sl > 1.2 ? 0.03 : 0) : 0);
     const mid = { z: N[1].z + tz * (sil ? 0.72 : 0.45), under: mY - N[1].h * mSl / 2 };
     const at = (z) => tip.under + (mid.under - tip.under) * (tip.z - z) / (tip.z - mid.z);
-    return { z: tip.z, under: tip.under, at };
+    return (_nose = Object.freeze({ z: tip.z, under: tip.under, at }));
   }
   // A manual front jack in bay metres: its frame stands on two wheels just
   // ahead of the front wing's leading edge (z 2.72, every chassis) or of the
@@ -209,9 +215,10 @@ const GarageCrew = (function () {
     }
     return m;
   }
+  const C1_DEFAULT = Object.freeze([0.30, 0.32, 0.36]), C2_DEFAULT = Object.freeze([0.85, 0.86, 0.88]);   // hoisted: a literal default was two arrays a frame
   function build(liv, teamId, style = look) {
-    const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
-    const c2 = rgb(liv && (liv.c2 || liv.accent || liv.stripe), [0.85, 0.86, 0.88]);
+    const c1 = rgb(liv && liv.c1, C1_DEFAULT);
+    const c2 = rgb(liv && (liv.c2 || liv.accent || liv.stripe), C2_DEFAULT);
     const nose = noseTip(teamId, liv), noseY = nose.at(nose.z - 0.1);
     // Snapshot components rather than a weighted sum: distinct palettes can
     // share a numeric hash, and the editor can mutate a colour array in place.
@@ -263,14 +270,16 @@ const GarageCrew = (function () {
 
   /** Where everyone stands for a pose: pure, so it is testable. `cam` is the
    *  side of the bay the camera stands on (sign of the eye's x). */
-  function layout(pose, cam) {
-    const back = ease(pose.door), out = pose.z > 0.3 || Math.abs(pose.x || 0) > 0.3;
+  const freshLayout = () => ({ mechanics: [[0, 0, Math.PI / 2], [0, 0, -Math.PI / 2]], lollipop: { x: 0, z: LOLLI_Z, yaw: 0, raise: 0 } });
+  const _layout = freshLayout();   // draw()'s: rewritten every frame (#4974)
+  function layout(pose, cam, out = freshLayout()) {
+    const back = ease(pose.door), moved = pose.z > 0.3 || Math.abs(pose.x || 0) > 0.3;
     const mx = MECH_X0 + (MECH_X1 - MECH_X0) * back, mz = MECH_Z0;
-    const raise = Number.isFinite(pose.crewClear) ? LOWERED + (RAISED - LOWERED) * pose.crewClear : out ? RAISED : LOWERED;
-    return {
-      mechanics: [[-mx, mz, Math.PI / 2], [mx, mz, -Math.PI / 2]],      // [x, z, yaw]: facing the car
-      lollipop: { x: cam * LOLLI_X, z: LOLLI_Z, yaw: cam > 0 ? Math.PI : 0, raise },
-    };
+    const raise = Number.isFinite(pose.crewClear) ? LOWERED + (RAISED - LOWERED) * pose.crewClear : moved ? RAISED : LOWERED;
+    const M = out.mechanics, lp = out.lollipop;   // mechanics [x, z, yaw]: facing the car
+    M[0][0] = -mx; M[0][1] = mz; M[1][0] = mx; M[1][1] = mz;
+    lp.x = cam * LOLLI_X; lp.yaw = cam > 0 ? Math.PI : 0; lp.raise = raise;
+    return out;
   }
   function init(g) {
     if (g !== gfx) { free(); gfx = g; }
@@ -294,7 +303,7 @@ const GarageCrew = (function () {
     const choreo = typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.has(pose.crew);
     const style = choreo ? "choreo" : POSE_STYLE[pose.crew] || look;
     build(liv, teamId, style);
-    const L = layout(pose, eye && eye[0] > 0 ? 1 : -1);
+    const L = layout(pose, eye && eye[0] > 0 ? 1 : -1, _layout);
     // A Blender variant (GarageCrewChoreo) is the whole crew bar the lollipop.
     if (choreo && motionRig) GarageCrewChoreo.draw(motionRig, choreoProps, gfx, pose.crew, pose.seconds || 0, pose.side, pose.seconds || 0, !!pose.calm, o);
     else {
