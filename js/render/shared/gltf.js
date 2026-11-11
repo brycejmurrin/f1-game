@@ -382,9 +382,12 @@ const GLTF = (function () {
               vcolA.data.some((v) => !Number.isFinite(v))) throw new Error("GLTF: invalid COLOR_0 accessor");
         }
 
-        // transform + emit vertices
-        for (let i = 0; i < vCount; i++) {
-          let p = [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]];
+        // glTF primitives without NORMAL have implicit flat normals. Split
+        // indexed corners before deriving them; sharing would smooth hard edges.
+        const emitted = normals ? vCount : indices.length;
+        for (let i = 0; i < emitted; i++) {
+          const vi = normals ? i : indices[i];
+          let p = [positions[vi * 3], positions[vi * 3 + 1], positions[vi * 3 + 2]];
           p = mPoint(world, p);
           posOut.push(p[0] * scale, p[1] * scale, p[2] * scale);
 
@@ -402,12 +405,14 @@ const GLTF = (function () {
           let cr = baseCol[0], cg = baseCol[1], cb = baseCol[2];
           if (vcolA) {
             const ncn = vcolA.numComponents;
-            cr *= vcolA.data[i * ncn];
-            cg *= vcolA.data[i * ncn + 1];
-            cb *= vcolA.data[i * ncn + 2];
+            cr *= vcolA.data[vi * ncn];
+            cg *= vcolA.data[vi * ncn + 1];
+            cb *= vcolA.data[vi * ncn + 2];
           }
           colOut.push(cr, cg, cb);
         }
+
+        if (!normals) indices = Array.from({ length: emitted }, (_, i) => i);
 
         // Restore counter-clockwise front faces on a mirrored node (swap the
         // 2nd and 3rd index of every triangle) BEFORE any normal is derived
@@ -421,14 +426,14 @@ const GLTF = (function () {
           indices = flipped;
         }
 
-        // compute averaged vertex normals if the primitive had none
+        // derive flat normals on the now-independent triangle corners
         if (!normals) {
-          computeVertexNormals(posOut, indices, vertBase, vCount, nrmOut);
+          computeVertexNormals(posOut, indices, vertBase, emitted, nrmOut);
         }
 
         // emit indices, offset by this primitive's vertex base
         for (let i = 0; i < indices.length; i++) idxOut.push(indices[i] + vertBase);
-        vertBase += vCount;
+        vertBase += emitted;
       }
     }
 
@@ -443,10 +448,9 @@ const GLTF = (function () {
     return { pos, nrm, col, idx };
   }
 
-  // Smooth (angle-agnostic) vertex normals: accumulate each triangle's unit
-  // face normal onto its three (shared) vertices, then normalize once per
-  // vertex. `vertBase`/`vertCount` scope the normalize pass to exactly the
-  // vertices this call's primitive wrote into the shared nrmOut buffer.
+  // Accumulate unit face normals and normalize each emitted vertex. The
+  // caller splits triangle corners for implicit flat normals; no hard edge
+  // shares an accumulator. vertBase/vertCount restrict writes to this primitive.
   function computeVertexNormals(posOut, indices, vertBase, vertCount, nrmOut) {
     for (let t = 0; t + 2 < indices.length; t += 3) {
       const ia = vertBase + indices[t];

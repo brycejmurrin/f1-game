@@ -84,10 +84,9 @@ const Frustum = (function () {
   }
 
   // Bucket instanced-batch instances into cellSize XZ cells with a conservative
-  // AABB per cell (instance reach = model extent x largest per-instance scale).
+  // AABB per cell (local bounding sphere transformed along each world axis).
   // Same grid the chunked meshes use, so "nearby" means the same thing to both.
-  // Byte-identical to the three builders it replaced (GLX createInstancedBatch,
-  // WGX, TLX): same key, same insertion order, same bounds.
+  // Shared by GLX, WGX and TLX: same keys and insertion order.
   function bucketInstances(matrices, n, pos, cell, radius) {
     let reach = radius || 0;
     // The reach is the mesh's bounding RADIUS: the farthest vertex's distance
@@ -104,19 +103,20 @@ const Frustum = (function () {
     const buckets = new Map();
     for (let i = 0; i < n; i++) {
       const b = i * 16, x = matrices[b + 12], y = matrices[b + 13], z = matrices[b + 14];
-      // Column lengths ARE the per-instance scale (orthonormal basis * scale).
-      const sx = Math.hypot(matrices[b], matrices[b + 1], matrices[b + 2]);
-      const sy = Math.hypot(matrices[b + 4], matrices[b + 5], matrices[b + 6]);
-      const sz = Math.hypot(matrices[b + 8], matrices[b + 9], matrices[b + 10]);
-      const r = reach * Math.max(sx, sy, sz);
+      // A row's length is the support of the transformed local sphere on
+      // that world axis. Largest-column scale is only safe for orthogonal
+      // bases; parent nonuniform scale followed by rotation can shear them.
+      const rx = reach * Math.hypot(matrices[b], matrices[b + 4], matrices[b + 8]);
+      const ry = reach * Math.hypot(matrices[b + 1], matrices[b + 5], matrices[b + 9]);
+      const rz = reach * Math.hypot(matrices[b + 2], matrices[b + 6], matrices[b + 10]);
       const key = (Math.floor(x / cell) + 1024) * 4096 + (Math.floor(z / cell) + 1024);
       let bk = buckets.get(key);
       if (!bk) buckets.set(key, (bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }));
       bk.idx.push(i);
       const mn = bk.mn, mx = bk.mx;
-      if (x - r < mn[0]) mn[0] = x - r; if (x + r > mx[0]) mx[0] = x + r;
-      if (y - r < mn[1]) mn[1] = y - r; if (y + r > mx[1]) mx[1] = y + r;
-      if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
+      if (x - rx < mn[0]) mn[0] = x - rx; if (x + rx > mx[0]) mx[0] = x + rx;
+      if (y - ry < mn[1]) mn[1] = y - ry; if (y + ry > mx[1]) mx[1] = y + ry;
+      if (z - rz < mn[2]) mn[2] = z - rz; if (z + rz > mx[2]) mx[2] = z + rz;
     }
     return [...buckets.values()];
   }

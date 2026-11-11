@@ -917,15 +917,19 @@ so the pack is fetched at boot and blended by default; `matTex(0)` turns it off.
 
 ### `assets() → {supported, pack, uploaded, tier, layers, normal, scales, bytes, models, error}`
 State of the pack. `supported:false` means the active renderer has no
-texture-array path — true on WGX (WebGPU), which has not ported the procedural
-material system either. `pack:false` means no pack is installed. **Both are
-normal states** in which the game renders its pure-procedural look; neither is
-an error. `scales` is the per-`MAT`-id world tile size in metres (`0` = that
+texture-array path. GLX, TLX and WGX implement material arrays; consult the
+observed backend rather than assuming WGX is unsupported. `pack:false` means
+no manifest is cached. `uploaded:true` records prepared arrays handed to the
+backend, not a completed GPU upload or newly presented frame (TLX uploads lazily).
+A missing manifest does not exclude browser-adopted maps. Inspect `error` and
+the material-map fields separately; the unsupported path uses procedural materials.
+`scales` is the per-`MAT`-id world tile size in metres (`0` = that
 material has no baked layer — `FLAT`, `GLASS` and `FLAG` never do).
 
 ### `texCensus() → {bytes, count, mb, byKind, biggest, excludes}`
-**RESIDENT** texture bytes from the active backend — what is on the GPU now,
-not what was ever created. GLX only; WGX and TLX declare it absent, so this
+**Tracked allocation bytes** from the active backend, calculated from texture
+dimensions, layers, format and mip levels. This is not driver residency. GLX
+only; WGX and TLX declare it absent, so this
 answers `{supported:false, bytes:null}` there rather than a measured zero.
 
 Read it on a full grid before touching any texture resolution policy. It exists
@@ -946,7 +950,7 @@ __apex.texCensus()
 texture, and the livery atlas is 1024×1280. `excludes` is load-bearing, not
 decoration: render targets are created straight against `gl` in `shadow.js` /
 `post.js` and never reach this ledger, so a total here is never the whole
-picture. A lost context reports nothing resident (plus `contextLost:true`)
+picture. A lost context reports zero tracked live bytes (plus `contextLost:true`)
 rather than the last number it held.
 
 Analysis and the plan built on it: `notes/PERF-FINDINGS.md` §2av,

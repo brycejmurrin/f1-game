@@ -13323,10 +13323,12 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "createTexture": [
+        "tests/unit/assets-pack.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "createTextureArray": [
+        "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "cssSize": [
@@ -13389,10 +13391,12 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "freeTexture": [
+        "tests/unit/assets-pack.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "init": [
+        "tests/unit/assets-pack.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -13436,6 +13440,7 @@
         "tests/unit/render-final-contracts.test.mjs"
       ],
       "setMaterialMaps": [
+        "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "setRenderScale": [
@@ -13867,6 +13872,7 @@
         "tests/unit/lamp-chunks.test.mjs"
       ],
       "aabbInFrustum": [
+        "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/xr-cull-union.test.mjs"
       ],
       "bucketInstances": [

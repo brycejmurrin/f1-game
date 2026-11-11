@@ -1314,17 +1314,17 @@ const GLXBackend = (function () {
     return tex;
   }
 
-  // Adopt (or clear, with a falsy argument) the baked material maps. Frees any
-  // previously-bound arrays so a pack swap — tier change, test teardown — can't
-  // leak GPU memory.
+  // Adopt (or clear) material maps; release outgoing texture identities once.
   function setMaterialMaps(maps) {
     _matGen++;   // bindMaterialMaps rebinds + re-uploads the scales on the next begin()
-    if (matAlbedoTex) { _texForget(matAlbedoTex); gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
-    if (matNormalTex) { _texForget(matNormalTex); gl.deleteTexture(matNormalTex); matNormalTex = null; }
+    // Ownership follows texture identity, not the slot. A scale-only update
+    // or an albedo/normal alias must not delete a texture we are keeping.
+    const albedo = maps && maps.albedo || null, normal = maps && maps.normal || null;
+    for (const old of new Set([matAlbedoTex, matNormalTex]))
+      if (old && old !== albedo && old !== normal) freeTexture(old);
+    matAlbedoTex = albedo; matNormalTex = normal;
     matTexScales.fill(0);
     if (!maps) return;
-    matAlbedoTex = maps.albedo || null;
-    matNormalTex = maps.normal || null;
     const sc = maps.scales;
     if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) matTexScales[i] = +sc[i] > 0 ? +sc[i] : 0;
     // No albedo array means no baked material at all: zero every scale so the

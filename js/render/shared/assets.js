@@ -591,7 +591,8 @@ const Assets = (function () {
   }
 
   // Load + upload the baked material arrays. Resolves to true only when the
-  // arrays are actually live on the GPU; false (never a rejection) otherwise.
+  // arrays are prepared and handed to the backend; false (never a rejection)
+  // otherwise. TLX schedules lazy GPU upload, so true is not presentation evidence.
   // Safe to call repeatedly — concurrent calls share one in-flight promise.
   function load(opts) {
     if (_loadPromise) return _loadPromise;
@@ -676,8 +677,8 @@ const Assets = (function () {
         // A missing normal array is survivable — albedo alone still helps.
       }
       // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
-      // path) hands back a token with `ready`; the pack is live — and load()
-      // resolves — only once every array is filled. A failed fill reads as the
+      // path) hands back a token with `ready`; load() waits until the
+      // array data is filled before asking the backend to bind it. A failed fill reads as the
       // sync path's upload failure (no partial pack; a lost normal stays survivable).
       if (albedoTex.ready && !(await albedoTex.ready)) throw new Error("albedo-upload");
       if (normalTex && normalTex.ready && !(await normalTex.ready)) { _freeTexture(normalTex); normalTex = null; }
