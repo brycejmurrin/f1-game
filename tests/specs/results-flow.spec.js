@@ -341,8 +341,11 @@ test.describe("results-flow — desktop cooldown ownership", () => {
       car: window.__apex.carAt(), active: document.activeElement && (document.activeElement.id || document.activeElement.tagName),
       layers: !!(window.UiLayers && window.UiLayers.anyOpen()), state: window.__apex.info().state }));
     const step = (name, wait) => wait.catch(async e => { throw new Error(`${name}: ${e.message}\n${await diag()}`); });
+    const fOwn = await page.evaluate(() => window.__apex.cameraState().renderFrame);   // frames, not wall time (below)
     await step("cooldown hands input to the player", page.waitForFunction(
-      () => window.__apex.ceremony().inputOwner === "player", null, { polling: 100, timeout: 5000 }));
+      (f) => window.__apex.ceremony().inputOwner === "player" || window.__apex.cameraState().renderFrame >= f + 8,
+      fOwn, { polling: 100, timeout: 0 }));
+    expect(await page.evaluate(() => window.__apex.ceremony().inputOwner), "cooldown hands input to the player").toBe("player");
     const before = await page.evaluate(() => window.__apex.carAt());
     // Gate on frames drawn, not wall time: a loaded software-GPU runner can draw no
     // frame at all in 5 s (Pages #5084: 7-8 s a round trip), and dt is clamped to 1/4 s,
