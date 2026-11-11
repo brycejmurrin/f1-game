@@ -147,7 +147,7 @@ args over new `G` façade members. Extract cohesive blocks with
 ## Related reading
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — full module contracts + generated index
-- [BUGS.md](BUGS.md) — verified open/fixed defects (incl. scenery S1–S10)
+- [BUGS.md](BUGS.md) — open defects are GitHub issues labelled `bug`; the page points at the ledger
 - [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) — track/scenery pipeline + accuracy levers
 - [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) — founding bet & lessons
 - [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) — historical open/fixed register
@@ -164,8 +164,8 @@ numbers: the lines move every day, `grep` the name. Behaviour is described, not 
 row below looks wrong, that is a finding for an issue, not an edit to this file.
 
 For player-facing action sequences and the regression checklist, see
-[USAGE-PATHS.md](ARCHITECTURE-MAP.md). Entry routes below were cross-checked against
-`f5381b40efa332211ea3973371c2c6835ae5f8d2` on 2026-10-14.
+[usage paths](#usage-paths-and-journey-checklist) below. The symbols below were
+re-checked against the tree on 2026-11-10.
 
 ### The state machine
 
@@ -239,15 +239,18 @@ back on the test point and goes green: TRY AGAIN and RESTART return to the point
 ### Leaving a session — what is shown at the flag, per mode
 
 `endRace` runs once per session. Classification and championship/career award happen
-there exactly once. Presentation after the award is either **today's instant results
-path** or (when `RaceCeremony` is live — plan
-[`2026-10-27-cooldown-podium.md`](plans/2026-10-27-cooldown-podium.md)) a short
-**ceremony** before the full sheet owns the session.
+there exactly once. Presentation after the award is either the **instant results
+path** or a short **ceremony** (`RaceCeremony`, `js/race/ceremony.js`; plan
+[`2026-10-27-cooldown-podium.md`](plans/2026-10-27-cooldown-podium.md)) before the
+full sheet owns the session. A natural flag arms it (`RaceCeremony.want(true)` in
+`js/game.js`); `RaceCeremony.afterClassify` then starts it when the session is
+eligible, else unhides `#results`.
 
 Pieces that can follow the award:
 
 1. **Ceremony** (eligible solo GP / sprint / season / career only): `cooldown` →
-   `parcFerme` → optional `podium` → `results`. SKIP/CONTINUE advances; Esc = SKIP.
+   `parcFerme` → optional `podium` → `results` (`RaceCeremony.PHASES`; beats
+   `CooldownLap`, `ParcFerme`, `RacePodium` + `PodiumBeat`). SKIP/CONTINUE advances; Esc = SKIP.
    `__apex.finishRace({ ceremony: true })` opts in; bare `finishRace()` keeps the
    instant path for existing harnesses.
 2. **Chequered cut + orbit, with optional HIGHLIGHTS** (`ResultsCam.onFlag`) — the
@@ -260,7 +263,7 @@ Pieces that can follow the award:
 
 | mode | Ceremony | ResultsCam (cheq → orbit → highlights) | TV director on own car | surface |
 |---|---|---|---|---|
-| solo GP / sprint | on when `RaceCeremony` eligible | yes — if `enabled` (see below) | yes, after the player finishes (pre-ceremony wait) | results sheet after ceremony (or instant if ceremony off / skipped) |
+| solo GP / sprint | on (`RaceCeremony.eligible`) | yes — if `enabled` (see below) | yes, after the player finishes (pre-ceremony wait) | results sheet after ceremony (or instant if ceremony off / skipped) |
 | season / career round | as GP | as GP | as GP | results sheet (+ career settlement); settlement stays in `endRace`, sheet show deferred until `results` phase |
 | practice / duel | **off** | yes — if `enabled` | yes, after the player finishes | results sheet |
 | time trial | **off** (`ceremony().eligible === false`) | **no** — `endRace` returns before `onFlag` | yes (the player finishes) | TT results |
@@ -275,7 +278,7 @@ Ceremony phase table (eligible sessions only; see the plan for timers and SKIP):
 |---|---|---|---|
 | `cooldown` | drive (throttle/brake/steer); AI cools or parks | chase / cockpit | thin HUD + SKIP |
 | `parcFerme` | none | ResultsCam park / orbit on pit subject | caption + SKIP |
-| `podium` | none (only if three classified finishers) | ResultsCam on winner | `ResultsStory` podium overlay + CONTINUE |
+| `podium` | none (only with a full podium, `RaceCeremony.podiumCount`) | ResultsCam on winner | `PodiumBeat` (`#ceremony-podium`, the `ResultsStory` podium) + CONTINUE |
 | `results` | sheet buttons | today's cheq → orbit (or resume); HIGHLIGHTS opt-in | `buildResults` + `#results` |
 
 Retired / DSQ player: skip the cooldown drive; no podium unless classified P≤3.
@@ -301,8 +304,8 @@ Two consequences worth knowing before changing any of it:
 | what runs on quit | `quitToMenu` (`js/game.js`) |
 | the async gap before a start | `js/race/session-entry.js`, `startRace` |
 | the pre-race screen | `raceIntro`, `afterGarageOut`, `studioOpen`/`studioDone` |
-| the finish | `endRace`, `RaceCeremony` (when shipped), `js/camera/results-cam.js`, `js/camera/director.js` (`wantOn`) |
-| results sheet and its buttons | `js/ui/results-sheet.js`, `els.resNext.onclick` |
+| the finish | `endRace`, `RaceCeremony` (`js/race/ceremony.js`), `js/camera/results-cam.js`, `js/camera/director.js` (`wantOn`) |
+| results sheet and its buttons | `js/ui/results-sheet.js`, `els.resNext.onclick` (`js/game.js`) |
 | ceremony browser gate | `tests/specs/results-flow.spec.js` |
 | pause menu | `setPaused`, `#pm-restart` / `#pm-quit` handlers |
 
@@ -316,11 +319,11 @@ This map follows the player from an entry point through a session and back out.
 Use it to choose regression journeys, including the full **menu → Race → Garage
 → start → restart → finish with TV cameras → menu** loop.
 
-Source baseline: `f5381b40efa332211ea3973371c2c6835ae5f8d2`, 2026-10-14.
-The routes below were traced through the current handlers and shell. They are
-**source-verified, not a claim that every journey has been played in a browser**.
-The older [UI map](UI-MAP.md) supplies the detailed control inventory;
-[session flow](ARCHITECTURE-MAP.md) explains the engine state and asynchronous entry.
+The routes below were traced through the handlers and shell (doors and settings
+pages re-checked 2026-11-10). They are **source-verified, not a claim that every
+journey has been played in a browser**. The [UI map](UI-MAP.md) supplies the
+detailed control inventory; [session flow](#session-flow-menu--race--results)
+explains the engine state and asynchronous entry.
 
 “All paths” means the distinct entry, forward, back, restart, completion and
 recovery branches. Repeating a restart, switching settings, or doing another
@@ -343,7 +346,7 @@ the results camera. Keep qualifying off for this first journey.
 | 6 | Pause (`#pausemenu`) → **RESTART RACE** (`#pm-restart`) | With Confirm Quit on, press again to confirm. New grid/countdown for the same session; no garage/flyby replay. |
 | 7 | Select **TV**, then drive to the flag | Hold/right-click CAM to open its picker, or cycle with CAM / C. Choose **TV**, not the separate **TV SIDE** rig. Camera choice does not drive the car for you. |
 | 8 | Finish → let the rest of the field finish | Automatic TV spectating follows the remaining runners in eligible solo sessions, with the player as fallback when no runners remain. During the wait, Enter or Pause → **SKIP TO RESULTS** can advance (R11). |
-| 9 | Flag → ceremony (when `RaceCeremony` is live) **or** instant results | Eligible solo GP / sprint / season / career: cooldown lap → parc fermé → optional podium → `#results` (R13). SKIP/CONTINUE advances; bare harness `finishRace()` still opens the sheet immediately. Ineligible modes (TT, quali, practice, duel, friend, WATCH) keep today's surface. |
+| 9 | Flag → ceremony (`RaceCeremony`) **or** instant results | Eligible solo GP / sprint / season / career: cooldown lap → parc fermé → optional podium → `#results` (R13). SKIP/CONTINUE advances; bare harness `finishRace()` still opens the sheet immediately. Ineligible modes (TT, quali, practice, duel, friend, WATCH) go straight to their surface. |
 | 10 | Results (`#results`) | Classification appears once (settled in `endRace`). Eligible GP uses the chequered cut, then orbit; **HIGHLIGHTS** is a separate optional action from the sheet foot. |
 | 11 | **MENU** (`#res-menu`) | Main menu, with the race, replay, pause and loading surfaces torn down. Start a second race to check that no stale state survives. |
 
@@ -392,8 +395,8 @@ and absent; Continue stages a menu/hub, not an in-progress physics snapshot.
 | M06 | CAREER MODES (`#mb-career`) | Slot picker (`#career`) → new Driver/My Team setup or existing career hub. | Title-opened slot picker MAIN MENU → menu; hub-opened slot picker BACK → hub. |
 | M07 | CONTINUE (`#mb-continue`) | Depending on saved hint: career hub, Daily picker, or last free-play circuit/session picker. | Corresponding hub/picker exit. Hidden without a usable hint. |
 | M08 | RACE A FRIEND (`#mb-vs`) | Lazy bundle → lobby (`#vsfriend`) → host/join → agree settings → optional qualifying → online race. | CLOSE/cancel → menu; failed bundle load leaves the title usable with a message. |
-| M09 | WATCH REAL RACES (`#mb-watch`) | Data Hub's Race It tab → load event → WATCH/HIGHLIGHTS. | Hub CLOSE → menu; replay pause/quit or result exit → menu. |
-| M10 | DATA HUB (`#mb-data`) | Data Hub (`#datahub`): schedule, standings, results, live, telemetry, export, Race It. | CLOSE (`#dh-close-btn`) → menu. See D paths. |
+| M09 | WATCH (`#mb-watch`) | Data Hub opened on its WATCH & DRIVE tab (`openDataHub("race")`) → load event → WATCH/HIGHLIGHTS. | Hub CLOSE → menu; replay pause/quit or result exit → menu. |
+| M10 | DATA HUB (`#mb-data`) | Data Hub (`#datahub`): the tabs in `TABS` (`js/data/hub.js`); the developer GPS TRACE EXPORT sits behind its ⋯ menu. | CLOSE (`#dh-close-btn`) → menu. See D paths. |
 | M11 | TRACK DESIGNER (`#mb-designer`) | Designer (`#trackdesigner`) → edit/save/test/race/share. | CLOSE → menu; TEST HERE has a special return to the designer. |
 | M12 | GARAGE (`#mb-garage`) | Garage → team/parts/setup/livery and camera tools. | CLOSE GARAGE / BACK / Escape → menu. |
 | M13 | PHOTO STUDIO (`#mb-photo`) | Home subject → framing/capture/background controls (`#photo-studio`). | DONE / Escape restores Home. Door waits while a required Home track scene is loading. |
@@ -401,6 +404,8 @@ and absent; Continue stages a menu/hub, not an in-progress physics snapshot.
 | M15 | HOW TO PLAY (`#mb-help`) | Help anchors and input instructions (`#howtoplay`). | CLOSE / Escape → menu; closing clears a stale help-section hash. |
 | M16 | STANDINGS (`#mb-standings`) | Standalone championship standings (`#standings`). | CLOSE → menu; shown for an in-progress standalone season. |
 | M17 | USE AS CONTROLLER (`#mb-phonepad`) | `controller.html` → room code / pairing → phone driving controls. | Disconnect/browser return; door is conditional on coarse-pointer input. |
+| M18 | VISUAL STUDIO (`#mb-visual`) | Settings opened straight on its VISUAL STUDIO page (`TitleMenu` `wireShortcuts`). | As M14. |
+| M19 | SAVES & DATA (`#mb-saves`) | Settings opened straight on its SAVES & DATA page (`wireShortcuts`). | As M14. |
 
 Sources: [`index.html`](../index.html), [`title-flow.js`](../js/ui/title-flow.js),
 [`title-menu.js`](../js/ui/title-menu.js), [`experience.js`](../js/ui/experience.js),
@@ -410,7 +415,7 @@ Sources: [`index.html`](../index.html), [`title-flow.js`](../js/ui/title-flow.js
 
 | ID | Route / branch | Expected result |
 |---|---|---|
-| S01 | Picker → filter/search/favourite → circuit detail (`#track-detail`) → close | Same picker and selected circuit; favourite state persists. Include saved custom circuits and EDIT IN DESIGNER. |
+| S01 | Picker → filter/search/favourite → circuit detail (`#track-detail`) → close | Same picker and selected circuit; favourite state persists. Include saved custom circuits and their EDIT chip (`#sel-edit-chip`, opens the designer). |
 | S02 | Picker → YOUR CAR → Garage → BACK | Same picker; selected car changes retained. |
 | S03 | Picker → YOUR CAR → Garage → RACE SETUP → settings BACK | Back reaches the picker, not Garage. |
 | S04 | Garage → team picker (`#teampicker`) → select/close; My Team → customisation (`#customize`) → save/cancel | Return to Garage. Cancel the customisation draft separately from leaving Garage, whose selected parts are already kept. |
@@ -462,7 +467,7 @@ Sources: [`js/game.js`](../js/game.js) (`openQualiBody`, `q-*` handlers,
 |---|---|---|
 | R01 | Driving → Pause → RESUME / Escape | Same solo session resumes; normal player interaction has a short resume countdown. Automation suppresses that countdown. |
 | R02 | Pause → Settings / How to Play / championship Standings → back → resume | Child closes to pause; no settings key/wheel capture remains armed after resume. |
-| R03 | Pause → Strategy / Practice / Session Review → back | Shared Driving settings page opens the relevant panel. Check checkpoint save/retry/rewind enabled and disabled states, then return to driving. |
+| R03 | Pause → STRATEGY / PRACTICE / REVIEW (`#pm-quick-doors`) → back | Each opens its session-scoped Settings page (`SettingsNav` routes `strategy`, `practice`, `review`). Check checkpoint save/retry/rewind enabled and disabled states, then return to driving. |
 | R04 | Pause → RECOVER CAR | Resume and request recovery in the current session, not a new race. |
 | R05 | Pause → RESTART or QUIT | Confirm on: first tap arms, second acts; confirm off: one tap. Restart is disabled during active friend racing or armed friend qualifying. |
 | R06 | Race → pit lane → service box → WORK ON CAR → arrival → Garage → RETURN TO RACE | Same session stays frozen in Garage; changing the car adds work time, a no-change visit does not. Escape during arrival can skip it before the normal Garage Back route applies. |
@@ -472,7 +477,7 @@ Sources: [`js/game.js`](../js/game.js) (`openQualiBody`, `q-*` handlers,
 | R10 | Caution/VSC/safety car → green; red flag → restart countdown → race | Race-control transitions, not the user's RESTART command. Same session continues. |
 | R11 | Player finishes or retires → TV waiting phase → natural results or SKIP TO RESULTS | Settlement happens once; skip only appears during the post-finish wait. Also quit during that wait to exercise settlement-before-teardown. Pre-ceremony field wait; not the cooldown drive. |
 | R12 | GP results → HIGHLIGHTS → orbit/results → RACE AGAIN or MENU | Only when eligible and replay data exists; retry/quit clears results-camera and scrub ownership. |
-| R13 | Eligible GP flag → ceremony (`cooldown` → `parcFerme` → optional `podium`) → `#results` | Requires `RaceCeremony` (#1584 slices 1–4). Actual SKIP / CONTINUE controls advance each beat through to results without soft-lock; `ceremony().eligible === false` for TT/quali/practice/duel/friend/WATCH. Phone 844×390: SKIP ≥ `--tap`. Gate: `tests/specs/results-flow.spec.js`. |
+| R13 | Eligible GP flag → ceremony (`cooldown` → `parcFerme` → optional `podium`) → `#results` | `RaceCeremony` (`js/race/ceremony.js`). Actual SKIP / CONTINUE controls advance each beat through to results without soft-lock; `ceremony().eligible === false` for TT/quali/practice/duel/friend/WATCH. Phone 844×390: SKIP ≥ `--tap`. Gate: `tests/specs/results-flow.spec.js`. |
 
 R13 acceptance crosses the real finish line and observes automatic progression.
 Debug phase seeks and capability-skipped cases are not acceptance evidence.
@@ -487,7 +492,7 @@ podium. Real-race WATCH has a fourth, independent replay director.
 
 | Session / device | Post-finish TV | Ceremony | Results surface and camera | Forward / exit |
 |---|---|---|---|---|
-| Solo GP / sprint | Automatic on finished/retired player (field wait) | cooldown → parc fermé → optional podium when `RaceCeremony` live | GP results after ceremony (or instant); eligible chequered → orbit, optional highlights | RACE AGAIN / MENU |
+| Solo GP / sprint | Automatic on finished/retired player (field wait) | cooldown → parc fermé → optional podium (`RaceCeremony`) | GP results after ceremony (or instant); eligible chequered → orbit, optional highlights | RACE AGAIN / MENU |
 | Solo race-form practice / duel | As solo GP | **off** | GP results; eligible chequered → orbit, optional highlights | RACE AGAIN / MENU |
 | Standalone season | As solo GP | as solo GP | Race results + championship standings (sheet after ceremony) | Next weekend session/round; champion branch at end |
 | Career | As solo GP | as solo GP | Race results + career settlement (award in `endRace`; sheet later) | Career hub / menu |
@@ -500,7 +505,7 @@ podium. Real-race WATCH has a fourth, independent replay director.
 Sources: [`js/game.js`](../js/game.js), [`pause-opts.js`](../js/ui/pause-opts.js),
 [`director.js`](../js/camera/director.js), [`results-cam.js`](../js/camera/results-cam.js),
 [`replay-buf.js`](../js/camera/replay-buf.js), [`experience.js`](../js/ui/experience.js),
-[`FLOW.md`](ARCHITECTURE-MAP.md) §Leaving a session, plan
+[session flow §Leaving a session](#leaving-a-session--what-is-shown-at-the-flag-per-mode), plan
 [`2026-10-27-cooldown-podium.md`](plans/2026-10-27-cooldown-podium.md).
 
 ### 6. Data, online racing, authoring and tools
@@ -508,8 +513,8 @@ Sources: [`js/game.js`](../js/game.js), [`pause-opts.js`](../js/ui/pause-opts.js
 | ID | Journey | Return / exceptional branch |
 |---|---|---|
 | D01 | Data Hub → each browsing tab → event/session/year/driver selection → detail/telemetry playback → close | Remain in Hub until CLOSE; include empty data, loading and provider errors. Export → gather → download is conditional on data. |
-| D02 | Race It → event/seat → START from lap 1 | Race intro → simulated real-event scenario → results/menu. |
-| D03 | Race It → lap → JUMP IN | Card/flyby → rolling start and handover countdown → drive. No outgoing-garage shot for a mid-race entry. |
+| D02 | WATCH & DRIVE → event/seat → START from lap 1 | Race intro → simulated real-event scenario → results/menu. |
+| D03 | WATCH & DRIVE → lap → JUMP IN | Card/flyby → rolling start and handover countdown → drive. No outgoing-garage shot for a mid-race entry. |
 | D04 | WATCH / HIGHLIGHTS → load recorded positions → replay | No player drive-out. Pause/play, speed, timeline seek, previous/next event, driver follow, camera, AUTO/FOLLOW LOCK and PHOTO all return to replay. Finish → WATCH AGAIN or MENU; quit and re-enter to test camera reset. |
 | N01 | Friend lobby → host → code/link/QR/manual offer → peer joins → settings/car → start | Host stages race settings; their settings CTA returns to lobby rather than independently starting a race. Garage returns to the same room. |
 | N02 | Join → enter/scan invite → answer/connect → ready → race | Include rejected/expired code, incompatible build, connection failure and cancellation. Close/reopen while clipboard or connection preparation is pending: old results must not alter the replacement lobby, and fresh retries must still work. |
@@ -520,10 +525,10 @@ Sources: [`js/game.js`](../js/game.js), [`pause-opts.js`](../js/ui/pause-opts.js
 | E02 | Designer → select point → TEST HERE → drive → restart/retry → quit | Solo rolling test starts at selected point; restart/retry repositions there. Quit reopens the same designer selection. This return overrides the ordinary menu destination. |
 | E03 | Designer → share/export/import or library management → continue editing → close | Shared circuit link opens a draft; SAVE keeps it. Include invalid import, unsaved close and delete confirmation branches. |
 | E04 | Home/Garage/paused race/WATCH → Photo Studio → subject/framing/capture → save/download/background → DONE | Restore the actual caller. Home can switch between garage and circuit subjects; photo background can then be selected for Home. |
-| E05 | Settings → Controls / Driving / Display / Appearance / Steering & Assists / Music & Sound | Back follows settings navigation to index/caller. Include Spotify panel (`#spotifypanel`) close and settings import/export/reset. |
-| E06 | Display → Advanced Visuals → Lighting (`#lighting`) / Camera (`#camtune`) / Flyby (`#flyby`) → done | Race-only doors are disabled outside a session. Flyby → Free Camera (`#freecam`, `#photo-controls`) → set shot start/end → done returns to editor. |
-| E07 | Display → Garage Arrival (`#garrival`) → PREVIEW PIT STOP / RACE START / AFTER RACE → finish/skip → DONE | Preview returns to tuner, DONE to Settings. Refused while Garage/drive-out owns the room. |
-| E08 | Appearance → title layout editor (`#tl-editor`) or screen PEEK → done | Layout editor is title-only; PEEK/Escape restores settings without committing a navigation jump. |
+| E05 | Settings → each index door (the routes in `SettingsNav`, `js/ui/settings-tabs.js`; list in the [UI map](UI-MAP.md#settings-pmsettings)) | Back follows settings navigation to index/caller. Include Spotify panel (`#spotifypanel`) close and settings import/export/reset. |
+| E06 | VISUAL STUDIO → Lighting (`#lighting`) / Camera (`#camtune`) / Flyby (`#flyby`) → done | Race-only doors are disabled outside a session. Flyby → Free Camera (`#freecam`, `#photo-controls`) → set shot start/end → done returns to editor. |
+| E07 | VISUAL STUDIO → GARAGE ENTER & LEAVE (`#garrival`) → PREVIEW PIT STOP / RACE START / AFTER RACE → finish/skip → DONE | Preview returns to tuner, DONE to Settings. Refused while Garage/drive-out owns the room. |
+| E08 | Appearance → EDIT MAIN MENU (`#pm-tl-edit`, title layout editor `#tl-editor`) or screen PEEK → done | Layout editor is title-only; PEEK/Escape restores settings without committing a navigation jump. |
 
 Sources: [`real-race-tab.js`](../js/data/real-race-tab.js),
 [`real-race.js`](../js/race/real-race.js), [`watch-transport.js`](../js/ui/watch-transport.js),

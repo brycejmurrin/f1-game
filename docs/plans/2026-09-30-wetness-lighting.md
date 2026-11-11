@@ -1,6 +1,8 @@
 # Wetness and lighting — workstream plan (2026-09-30)
 
-Status: **OPEN** (checked against the code 2026-10-26) — wet-asphalt mirrors shipped; the continuous-wetness contract (slice A1) was not verified, and `grep -c wetness js/lighting/presets.js` is 0 today (the slice-A1 preset pins are not there).
+Status: **SHIPPED** (re-checked against the code 2026-11-10) — continuous road wetness is `trackWetness()` in js/game.js (the 0.25 / 0.72 ladder), the wet-asphalt mirrors shipped, and the tuner's WETNESS knob (js/lighting/knobs.js) is a diagnostic pin only. Kept here, not archived: files owned by other lanes cite this path (audit W27, 2026-11-10).
+
+Earlier status: **OPEN** (checked against the code 2026-10-26) — wet-asphalt mirrors shipped; the continuous-wetness contract (slice A1) was not verified, and `grep -c wetness js/lighting/presets.js` is 0 today (the slice-A1 preset pins are not there).
 
 Status when written: **PLAN** — docs-only first. Implement (a) continuous track wetness in
 ordered slices after this PR lands; implement (b) lighting grids as small
