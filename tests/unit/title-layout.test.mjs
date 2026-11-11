@@ -433,6 +433,28 @@ test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and
   assert.match(block, /#title-car \{[^}]*scale: var\(--tl-art-size, 1\)/);
 });
 
+test("CSS: WIDTH keeps the Home grid centred on its column even when wider than it (#4529 part 3)", () => {
+  const block = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (sel) => {
+    const at = block.indexOf(sel + " {");
+    assert.ok(at > 0, `rule ${sel}`);
+    return block.slice(at, block.indexOf("}", at));
+  };
+  // Portrait, measured 2026-11-11 at 393x852: a centred grid item wider than
+  // its column pinned to the start edge, so WIDTH 100 painted 12..405px. One
+  // width token feeds both the width and a symmetric margin, start-aligned.
+  const base = rule(":root[data-title-btnw] #menu-buttons");
+  assert.match(base, /--_tl-bw: calc\(var\(--tl-btns-w, 100\) \* var\(--vwz\) \/ var\(--tl-btns-size, 1\) \/ var\(--tf, 1\)\)/);
+  assert.match(base, /width: var\(--_tl-bw\)/);
+  assert.match(base, /justify-self: start/);
+  assert.match(base, /margin-inline: calc\(\(100% - var\(--_tl-bw\)\) \/ 2\)/);
+  assert.doesNotMatch(base, /justify-self: center/);
+  // The compact-landscape floor (#5167) moves the TOKEN, so its margin follows its width.
+  const floor = rule(':root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons');
+  assert.match(floor, /--_tl-bw: max\(100%, calc\(/);
+  assert.doesNotMatch(floor, /(^|[^-])width:/);
+});
+
 /* ── APPEARANCE: one TITLE SCREEN fold, UI SIZE under READABILITY ────────── */
 const section = (id) => {
   const a = SHELL.indexOf(`<section id="${id}"`);
