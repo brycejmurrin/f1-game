@@ -7,10 +7,10 @@
  *   #5073 Escape / DECIDE LATER in the compare preview closed the whole sheet;
  *         CANCEL dropped focus to <body>. (The COMMITTED stake funds gate
  *         waits for #5348, which owns career-planning-ui.js.)
- *   #5046 the MY TEAM dialog's SAVE cut "ß" before uppercasing (CODE
- *         "SSSSSS"), halved an emoji into a lone surrogate, and reset an
- *         imported team's tier, engine and second driver. (The same order in
- *         the loader, Teams.sanitizeCustom, waits for #5273.)
+ *   #5046 the MY TEAM dialog's SAVE and the loader (Teams.sanitizeCustom)
+ *         cut "ß" before uppercasing (CODE "SSSSSS") and halved an emoji into
+ *         a lone surrogate; SAVE also reset an imported team's tier, engine
+ *         and second driver.
  *
  * Run: node --test tests/unit/career-hub-spend.test.mjs
  */
@@ -199,13 +199,26 @@ test("#5073 offers: CANCEL in the compare preview keeps focus inside the sheet",
   assert.equal($("career-offers").hidden, false);
 });
 
-/* ── MY TEAM: the dialog's SAVE (CustomTeam) ───────────────────────────── */
+/* ── MY TEAM: the loader (Teams.sanitizeCustom) and the dialog's SAVE ──── */
 
 function loadTeams() {
   const sb = { Math, Object, Array, Number, String, JSON, console };
   run(sb, "js/data/teams.js");
   return sb.Teams;
 }
+const loneSurrogate = (s) => /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(s);
+
+test("#5046 sanitizeCustom (the loader): uppercase before the cut, cut by code point", () => {
+  const Teams = loadTeams();
+  const t = Teams.sanitizeCustom({ short: "ßßßß", name: "a".repeat(21) + "🏎", drivers: [{ code: "ßßß", name: "x" }] });
+  assert.equal(t.short, "SSSS");
+  assert.equal(t.drivers[0].code, "SSS");
+  assert.equal(t.name, "a".repeat(21) + "🏎");
+  const u = Teams.sanitizeCustom({ name: "a".repeat(20) + "🏎🏎🏎" });
+  assert.equal(u.name, "a".repeat(20) + "🏎🏎");
+  assert.equal(loneSurrogate(u.name), false);
+});
+
 function customTeamDialog(stored) {
   const dom = makeDom({ tagFor: (id) => (/^cz-(name|short|color|color2|driver|code|num)$/.test(id) ? "input" : "div") });
   const Teams = loadTeams();
