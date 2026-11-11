@@ -1155,14 +1155,12 @@ test("BUTTON SIZE: MIRROR CONTROLS grows #dock-left on the right side; portrait 
   assert.equal(p.pv("--hud-z-dock-l"), p.pv("--hud-z-dock"), "portrait: the steer dock rides the shared cap");
 });
 
-test("BUTTON SIZE readout names the size the fit paints when the dock is capped", () => {
+function scaleSb() {
   const sb = { window: {}, document: {} };
   vm.runInNewContext(src("js/ui/scale.js") + "\nthis.UiScale = UiScale;", sb, { filename: absSrc("js/ui/scale.js") });
-  const f = sb.UiScale.btnFitLabel;
-  assert.equal(f("245%", 245, "1.175"), "245% · fits 118%");
-  assert.equal(f("100%", 100, ""), "100%", "no cap written: the player's number");
-  assert.equal(f("100%", 100, "1.175"), "100%", "a cap above the value is not a limit");
-  assert.equal(f("118%", 117.5, "1.175"), "118%", "at the cap: nothing to explain");
+  return sb;
+}
+test("the steer dock's zoom is min()ed with BUTTON SIZE, and its labels divide by the same zoom", () => {
   const css = cssRules(readCssSource("css/touch-controls.css"));
   const zoom = decl(css, /^body:not\(\.desktop\) #dock-left,/, "zoom");
   assert.equal(zoom, "min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))", "the steer dock has its own zoom rule, min()ed with the slider like the pedal dock");
@@ -1562,9 +1560,95 @@ test("emergency dock fit keeps small targets usable when a short viewport exhaus
 test("#4483: BUTTON SIZE fit suffix follows the dock cap, syncLayout is rAF-coalesced, results sheet drops its car array on close", () => {
   const scale = src("js/ui/scale.js"), res = src("js/ui/results-sheet.js");
   const missing = [
-    [scale, "function refreshBtnFit()", true], [scale, 'attributeFilter: ["style"]', true],
+    [scale, "function refreshFit()", true], [scale, 'attributeFilter: ["style"]', true],
     [scale, 'addEventListener("resize", syncLayoutSoon', true], [scale, 'visualViewport.addEventListener("resize", syncLayoutSoon', true],
     [scale, 'addEventListener("resize", syncLayout,', false], [res, "if (sheet.hidden) saidFor = null", true],
   ].filter(([text, bit, want]) => text.includes(bit) !== want).map((r) => r[1]);
   assert.deepEqual(missing, []);
+});
+
+/* #5206 — EVERY SIZE SLIDER DOES WHAT IT SAYS. Bryce, on his iPhone: the sliders are "wonky and backwards". Measured
+ * (docs/notes/CONTROL-AUDIT-5206-2026-11-10.md): HUD SIZE painted nothing above 100 % behind an unlabelled fit cap,
+ * BUTTON SIZE was dead under 82 % and above the cap, UI SIZE said 200 % while its own sheet stopped at 125 %.
+ * The rule: a slider's range on this window is the range that paints, its number is the painted size, and the row names
+ * the cap. Table-driven over tests/data/control-registry.json: the pure half is here (UiScale's sizeRow over the caps
+ * the race fit measured at his two phone cells); tests/specs/ui-scale.spec.js drives the same rows in a live page. */
+const REG = JSON.parse(src("tests/data/control-registry.json"));
+const html = src("index.html");
+const { sizeRow, parseCaps } = scaleSb().UiScale;
+
+test("every range input in the shell is in the control registry, and the registry names no ghost", () => {
+  const ids = [...html.matchAll(/<input\b[^>]*type="range"[^>]*>/g)].map((m) => (m[0].match(/\bid="([^"]+)"/) || [])[1]);
+  const known = new Set([...REG.size.map((r) => r.id), ...REG.opacity, ...Object.keys(REG.other)]);
+  assert.deepEqual(ids.filter((id) => !known.has(id)), [], "a new slider: add it to tests/data/control-registry.json (a size control gets a `size` row)");
+  assert.deepEqual([...known].filter((id) => !ids.includes(id)), [], "registry rows with no input in index.html");
+});
+
+test("a size row's shipped min / max / step in the shell is the registry's full range", () => {
+  for (const r of REG.size) {
+    const tag = (html.match(new RegExp(`<input\\b[^>]*id="${r.id}"[^>]*>`)) || [""])[0];
+    const attr = (n) => +(tag.match(new RegExp(`\\b${n}="([^"]+)"`)) || [])[1];
+    assert.deepEqual({ min: attr("min"), max: attr("max"), step: attr("step") }, r.lim, r.id);
+  }
+});
+
+for (const [cell, c] of Object.entries(REG.cells)) for (const r of REG.size) {
+  test(`${r.id} at cell ${cell}: the range is what paints, the value is monotonic, the label is the painted size`, () => {
+    const caps = parseCaps(c.caps);
+    assert.ok(caps, "the cell's measured --hud-cap parses");
+    let prev = -Infinity;
+    for (let wish = r.lim.min; wish <= r.lim.max; wish += 5) {
+      const row = sizeRow(r.key, wish, r.lim, caps, 0);
+      assert.ok(row.min <= row.value && row.value <= row.max, `${wish}: value inside its own range`);
+      assert.ok(row.value >= prev, `${wish}: a bigger wish never paints smaller`);
+      prev = row.value;
+      const lead = `${Math.round(row.value * 10) / 10}`.replace(/\.0$/, "");
+      assert.equal(row.label.slice(0, lead.length), lead, `${wish}: "${row.label}" leads with the painted ${row.value}`);
+      assert.equal(/ · max$/.test(row.label), row.max < r.lim.max && row.value >= row.max, `${wish}: "· max" exactly when the window's cap is reached ("${row.label}")`);
+      if (r.key === "uiScale") {
+        assert.deepEqual([row.min, row.max, row.value], [r.lim.min, r.lim.max, wish], `${wish}: UI SIZE is not clamped off a phone, and never from above (the title paints the whole range)`);
+        const z = Math.round(r.sheetZoom * 100);
+        assert.equal(sizeRow(r.key, wish, r.lim, caps, r.sheetZoom).label, wish > z + 0.5 ? `${wish}% · this menu ${z}%` : `${wish}%`, `${wish}: the row names the zoom the settings sheet paints at`);
+      }
+    }
+    const top = sizeRow(r.key, r.lim.max, r.lim, caps, 0);
+    if (r.key === "hudScale") {
+      assert.equal(top.max, Math.max(Math.ceil(caps.top * 100 - 1e-6), Math.ceil(caps.bot * 100 - 1e-6)), "HUD SIZE stops at the larger band cap");
+      assert.ok(top.max < r.lim.max, "his phone caps HUD SIZE: the dead 100-200 % travel is gone");
+    }
+    if (r.key === "hudBtnScale") {
+      assert.equal(top.min, Math.ceil(caps.floor * 100), "the dock's painted floor (82 %; 92 % at 852x368) is the slider's minimum: no dead travel under it");
+      assert.ok(Math.abs(top.max - caps.steer * 100) < 0.26, "BUTTON SIZE stops where the steer pad stops");
+      assert.equal(top.label.split(" · ")[1], `pedals ${Math.round(caps.dock * 100)}%`, "and the row names the pedal column's smaller cap");
+    }
+    if (r.key === "uiScale") {
+      assert.equal(sizeRow(r.key, 200, r.lim, null, 2).label, "200%", "a sheet painting at the wish adds no note");
+      // #5235 (Bryce 2026-11-10): a phone's UI SIZE stops at 70 %, and the tokens hold text at 12 painted px there.
+      const ph = sizeRow(r.key, 61, r.lim, null, 0, true);
+      assert.deepEqual([ph.min, ph.max, ph.value, ph.label], [r.phoneMin, r.lim.max, r.phoneMin, `${r.phoneMin}%`], "his stored 61 % paints 70 % on a phone");
+      assert.equal(sizeRow(r.key, 61, r.lim, null, 0, false).value, 61, "a desktop keeps 40 %");
+      const tok = src("css/tokens.css");
+      // The tokens' own arithmetic at the phone minimum: max(rung, floor / scale) * scale painted px, per declaration.
+      const z = r.phoneMin / 100, painted = (name) => [...tok.matchAll(new RegExp(`${name}: max\\((\\d+)px, calc\\((\\d+)px / var\\(--ui-scale`, "g"))]
+        .map((m) => Math.round(Math.max(+m[1], +m[2] / z) * z * 100) / 100);
+      assert.deepEqual(painted("--fs-micro"), [12, 12], "menu text (default and LARGE) paints 12 px at the phone minimum, never under");
+      assert.equal(painted("--tap").pop(), 44, "a touch row (the later, body:not(.desktop) rule) paints 44 px at the phone minimum");
+    }
+  });
+}
+
+test("outside a race (no --hud-cap) the race sliders keep their full range and plain label", () => {
+  for (const r of REG.size.filter((x) => x.key !== "uiScale")) {
+    const row = sizeRow(r.key, r.lim.max, r.lim, null, 0);
+    assert.deepEqual([row.min, row.max, row.label], [r.lim.min, r.lim.max, `${r.lim.max}%`]);
+  }
+  assert.equal(parseCaps(""), null);
+  assert.equal(parseCaps("1 1 9 9"), null);
+});
+
+test("BUTTON SIZE never promises room that would shrink a HUD SIZE above 100 %", () => {
+  const lim = REG.size[1].lim;
+  // cell A, HUD SIZE 151, BUTTON SIZE 100: the pad could reach 194 % only by taking the gear cluster back to 100 %.
+  const row = sizeRow("hudBtnScale", 100, lim, parseCaps("0.859 1.516 1.186 1.942 1.224 0.82"), true);
+  assert.equal(row.max, 122.25, "the slider stops at the keep cap, not the steer cap");
 });

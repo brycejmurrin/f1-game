@@ -190,11 +190,11 @@ test("TLX off the direct present path fails a hardware run while the native pin 
   const blit = { backendState: { ...tlx().gfx.backendState, softBlit: true } };
   let r = run({ legs: healthy({ webgpu: tlx(blit) }) });
   assert.equal(r.bad.length, 1, r.bad.join("\n"));
-  assert.match(r.bad[0], /^webgpu: TLX is soft-blitting .* apex26\.wgxCapture=0 pinned/);
+  assert.equal(r.bad[0], "webgpu: TLX is soft-blitting (GPU readback + putImageData every frame) on a hardware adapter with apex26.wgxCapture=0 pinned — the pin is no longer honoured, and every number on this leg timed the readback");
   // Absence is not a pass: a TLX leg that stopped reporting softBlit fails.
   const gone = { backendState: { ...tlx().gfx.backendState, softBlit: undefined } };
   r = run({ legs: healthy({ webgl2: tlx(gone) }) });
-  assert.match(r.bad.join("\n"), /webgl2: NO softBlit reported on a hardware TLX leg/);
+  assert.equal(r.bad.join("\n"), "webgl2: NO softBlit reported on a hardware TLX leg — the present-path check would pass vacuously");
   // A dispatch that overrides the pin asked for the readback: reported, not gated.
   r = run({ legs: healthy({ webgpu: tlx(blit) }), cap: "1" });
   assert.deepEqual(r.bad, []);
@@ -210,7 +210,7 @@ test("WGX off the swapchain fails a hardware run whether or not the UA is headle
   for (const headlessUa of [true, false]) {
     const r = run({ legs: healthy({ wgx: wgx({ wgxSoftPresent: true, headlessUa }) }) });
     assert.equal(r.bad.length, 1, `headlessUa=${headlessUa}: ${r.bad.join("\n")}`);
-    assert.match(r.bad[0], /^wgx: WGX is soft-presenting \(CPU blit\) on a hardware adapter with apex26\.wgxCapture=0 pinned/);
+    assert.equal(r.bad[0], "wgx: WGX is soft-presenting (CPU blit) on a hardware adapter with apex26.wgxCapture=0 pinned — the swapchain path is off, every frame pays a readback + putImageData");
   }
   const r = run({ legs: healthy({ wgx: wgx({ wgxSoftPresent: true }) }), cap: "1" });
   assert.deepEqual(r.bad, [], "an overridden pin is reported, not gated");
@@ -218,7 +218,7 @@ test("WGX off the swapchain fails a hardware run whether or not the UA is headle
   // Not bound wins over soft-present: one root cause, one line.
   const nb = run({ legs: healthy({ wgx: wgx({ wgx: false, wgxSoftPresent: undefined }) }) });
   assert.equal(nb.bad.length, 1);
-  assert.match(nb.bad[0], /WGX did not bind/);
+  assert.equal(nb.bad[0], "wgx: WGX did not bind on a hardware adapter (fell back to GLX, or the surface stopped reporting) — this leg proved nothing about js/render/webgpu/");
 });
 
 test("every pre-existing gate still fails: missing leg, unfinished leg, GPU and shader errors, env faces, softAdapter, unknown census", () => {
@@ -269,7 +269,7 @@ test("the CLI: step env in, rows to the summary and stdout, ::error:: lines and 
     fs.writeFileSync(path.join(dir, "game-wgx-macos-latest.json"), JSON.stringify(wgx({ wgxSoftPresent: true })));
     r = spawnSync(process.execPath, [TOOL], { cwd: dir, encoding: "utf8", env });
     assert.equal(r.status, 1);
-    assert.match(r.stderr, /::error::REAL-GPU GATE: wgx: WGX is soft-presenting/);
+    assert.equal(r.stderr, "::error::REAL-GPU GATE: wgx: WGX is soft-presenting (CPU blit) on a hardware adapter with apex26.wgxCapture=0 pinned — the swapchain path is off, every frame pays a readback + putImageData\n");
     r = spawnSync(process.execPath, [TOOL], { cwd: dir, encoding: "utf8", env: { ...env, CENSUS_LS: "apex26.wgxCapture=1" } });
     assert.equal(r.status, 0, "CENSUS_LS reaches the gate: an overridden pin is not gated");
     // Flags beat env, so the same tool runs by hand on a downloaded artifact.

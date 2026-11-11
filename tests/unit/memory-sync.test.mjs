@@ -24,8 +24,8 @@ function rig() {
   const real = fs.realpathSync(main);
   const live = path.join(cfg, "projects", real.replace(/[^A-Za-z0-9]/g, "-"), "memory");
   const repo = path.join(main, ".claude/memory");
-  const run = (mode, extraEnv = {}) => {
-    const r = spawnSync("bash", [HOOK, mode], { input: "", encoding: "utf8",
+  const run = (mode, extraEnv = {}, input = "") => {
+    const r = spawnSync("bash", [HOOK, mode], { input, encoding: "utf8",
       env: { ...process.env, CLAUDE_PROJECT_DIR: main, CLAUDE_CONFIG_DIR: cfg, APEX_MEMORY_SYNC: "1", CLAUDE_CODE_REMOTE: "", ...extraEnv } });
     assert.equal(r.status, 0, r.stderr);
     return r.stdout;
@@ -47,18 +47,41 @@ test("a fresh container restores every tracked memory into the live dir keyed on
   } finally { r.done(); }
 });
 
-test("the repo wins: a live edit is overwritten on restore and never written back", () => {
+test("the repo fills the live dir; a live edit made after the last restore is kept and named, never written back", () => {
   const r = rig();
   try {
     r.put(r.repo, "a.md", topic("a", "repo"));
+    r.put(r.repo, "b.md", topic("b", "repo"));
     r.run("restore");
+    // a stale live copy (older than the restore stamp) is refreshed; a live edit newer than it is kept
+    const stamp = path.join(r.live, ".restored");
+    const past = new Date(Date.now() - 60_000);
+    r.put(r.live, "b.md", topic("b", "stale"));
+    fs.utimesSync(path.join(r.live, "b.md"), past, past);
+    fs.utimesSync(stamp, new Date(Date.now() - 30_000), new Date(Date.now() - 30_000));
     r.put(r.live, "a.md", topic("a", "live edit"));
     r.put(r.live, "new.md", topic("new", "session-only"));
-    assert.match(r.run("restore"), /memory: 1 in/);
-    assert.equal(r.get(r.live, "a.md"), topic("a", "repo"), "the repo copy replaces the live edit");
+    const out = r.run("restore");
+    assert.equal(out, "memory: 1 in from .claude/memory/ (repo fills the live dir; edit memories there); "
+      + "KEPT live edits newer than the last restore, differing from the repo: a.md (copy into .claude/memory/ and commit to keep them)\n");
+    assert.equal(r.get(r.live, "a.md"), topic("a", "live edit"), "a mid-session memory survives");
+    assert.equal(r.get(r.live, "b.md"), topic("b", "repo"), "an older live copy is refreshed from the repo");
     assert.equal(r.get(r.repo, "new.md"), null, "nothing flows live → repo");
     assert.equal(r.get(r.live, "new.md"), topic("new", "session-only"), "a live-only file is left alone (not deleted)");
     assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: r.main, encoding: "utf8" }).includes("new.md"), false);
+  } finally { r.done(); }
+});
+
+test("only a new session restores: resume, compact, clear and fork leave the live dir alone", () => {
+  const r = rig();
+  try {
+    r.put(r.repo, "a.md", topic("a", "repo"));
+    for (const source of ["resume", "compact", "clear", "fork"]) {
+      assert.equal(r.run("restore", {}, JSON.stringify({ hook_event_name: "SessionStart", source })), "", source);
+      assert.equal(r.get(r.live, "a.md"), null, `${source}: no copy`);
+    }
+    assert.equal(r.run("restore", {}, JSON.stringify({ hook_event_name: "SessionStart", source: "startup" })),
+      "memory: 1 in from .claude/memory/ (repo fills the live dir; edit memories there)\n");
   } finally { r.done(); }
 });
 

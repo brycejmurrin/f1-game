@@ -109,7 +109,7 @@ test("every curated turn inside a re-keyed zone's window dips the road within 60
 // no frame puts a turn inside them either, so there is no corner to move them
 // to. Do not add an entry to make a re-keyed zone pass — re-key it.
 const NO_TURN_NEARBY = new Set([
-  "istanbul:0", "portimao:1", "jacarepagua:1",
+  "istanbul:0", "jacarepagua:1",
 ]);
 
 test("every hwZone narrows within 150 m of a curated turn, or is a reviewed exception", () => {

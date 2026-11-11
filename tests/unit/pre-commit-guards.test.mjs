@@ -295,9 +295,11 @@ test("bash-guard never runs the commit suite, even when guard cache is absent", 
   assert.equal(r.status,0,r.stderr);assert.equal(fs.existsSync(path.join(repo.dir,"artifacts/pre-commit-guards.log")),false);
  }finally{repo.rm();}
 });
-test("shipped pre-commit honours explicit bypass and runs for Claude Code", () => {
+test("shipped pre-commit has no env bypass, classes prose by extension, and runs for Claude Code", () => {
   const src = fs.readFileSync(HOOK, "utf8");
-  assert.match(src, /APEX_SKIP_GUARDS/);
+  assert.doesNotMatch(src, /APEX_SKIP_GUARDS/, "no environment skip");
+  assert.doesNotMatch(src, /bash-guard\.sh refuses a commit when no/, "no claim of a check that does not exist");
+  assert.doesNotMatch(src, /\^\(docs\/\|\\\.claude\/skills\/\|\\\.claude\/agents\/\)/, "prose is not classed by directory");
   assert.doesNotMatch(src, /\[ -n "\$\{CLAUDECODE:-\}" \] && exit 0/);
   assert.ok(/guards-verdict\.mjs check/.test(src));
   assert.ok(/apex\.guardTimeout/.test(src));
@@ -692,13 +694,14 @@ function splitFixture(prefix) {
 test('git hook classifies docs, survey assets, generated docs and code; runs under Claude Code',()=>{
  const r=splitFixture('split-paths-');
  try{
-  for(const rel of ['docs/PHYSICS.md','artifacts/shots/tracks/spa/t1.png','artifacts/shots/gallery/index.html','artifacts/track-survey/spa/report.json']){
+  for(const rel of ['docs/PHYSICS.md','.claude/skills/s/SKILL.md','docs/img/a.png','artifacts/shots/tracks/spa/t1.png','artifacts/shots/gallery/index.html','artifacts/track-survey/spa/report.json']){
    r.put(rel,'changed\n');r.g('add','-f',rel);
    const out=r.run();assert.equal(out.status,0,out.stderr);assert.match(out.stderr,/docs-only commit/);
    assert.equal(fs.existsSync(path.join(r.dir,'calls.log')),false,'docs never run full guards');
    r.g('commit','-qm','docs');
   }
-  for(const rel of ['code.js','tools/README.md','assets/pack/x.png','artifacts/shots/other/x.png','artifacts/track-survey/spa/run.js']){
+  for(const rel of ['code.js','tools/README.md','assets/pack/x.png','artifacts/shots/other/x.png','artifacts/track-survey/spa/run.js',
+    'docs/tools/'+'x.mjs','.claude/skills/s/scripts/run.sh','.claude/agents/x.json']){
    r.put(rel,'changed\n');r.g('add','-f',rel);
    const before=fs.existsSync(path.join(r.dir,'calls.log'))?fs.readFileSync(path.join(r.dir,'calls.log'),'utf8'):'';
    const out=r.run();assert.equal(out.status,0,out.stderr);assert.match(out.stderr,/code commit/);

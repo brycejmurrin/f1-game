@@ -114,7 +114,7 @@ test("before a race is started, the error names the hook that fixes it", () => {
   // Which of the three guards fires is a timing detail; that every one of
   // them is actionable is the contract.
   contains(["NoTrackError", "NoPlayerError", "PlayerNotPlacedError"], r.error);
-  assert.match(r.fix, /__apex\.|race|go|jump|step/);
+  assert.equal(r.fix, "call __apex.race(id) then __apex.go()");
   truthy(r.state.raceState);
 });
 
@@ -181,15 +181,15 @@ test("scene never returns null — a registry, or NoTrackError with no track", (
 test("states the goal, the trade-offs and the constraints, compactly", () => {
   fresh();
   const o = g.apex.objective();
-  assert.match(o.goal, /race|finish/i);
+  assert.equal(o.goal, "Finish the race ahead of the other 21 cars. Race position is by distance covered (prog), so completing laps fastest wins.");
   truthy(o.winCondition);
   gte(o.tradeoffs.length, 3);
   gt(o.constraints.length, 0);
-  assert.match(o.units, /metres/);
+  assert.equal(o.units, "metres, m/s, seconds, degrees where a key says Deg. +x is right of the centreline; +k is a LEFT-hand turn.");
   const t = o.tradeoffs.join(" ");
   assert.match(t, /TRACK LIMITS/);
   assert.match(t, /ERS/);
-  assert.match(o.note, /rollout|act/);
+  assert.equal(o.note, "STATIC facts about the game. How the CAR behaves is not described here on purpose — learn it by calling rollout()/act() and reading world(), which stays true when the physics is retuned.");
   lt(JSON.stringify(o).length, 2000);
 });
 
@@ -277,7 +277,7 @@ test("brief carries the envelope, ego and a one-line summary", async () => {
   isNum(w.ego.speedKph);
   isNum(w.ego.lateralM);
   assert.equal(typeof w.ego.onTrack, "boolean");
-  assert.match(w.ego.grip.state, /grip/);
+  assert.equal(w.ego.grip.state, "neutral — full lateral grip available");
   assert.equal(typeof w.brief, "string");
   gt(w.brief.length, 20);
   // brief must NOT carry the expensive sections
@@ -483,7 +483,7 @@ test("wet weather is called out and matches the grip model", async () => {
   pump(2);
   const r = { a: g.apex.atmosphere(), grip: g.apex.world({ detail: "drive" }).ego.grip };
   assert.equal(r.a.wetRoad, true);
-  assert.match(r.a.brief, /wet|rain/);
+  assert.equal(r.a.brief, "day, overcast-bright, raining, road wet and reflective, sun to your left.");
   lt(r.grip.gripMult, 1);
 });
 
@@ -509,7 +509,7 @@ test("expands a scene() row into everything known about that prop", async () => 
   assert.equal(d.sizeM.length, 3);
   isNum(d.volumeM3);
   isNum(d.s);
-  assert.match(d.nearestCorner.id, /^corner:/);
+  assert.equal(d.nearestCorner.id, "corner:T1");
   lt(JSON.stringify(d).length, 1200);
 });
 
@@ -715,7 +715,7 @@ test("penalties are visible, with the rule that governs them", async () => {
   isNum(p.cuts);
   isNum(p.timePenaltyS);
   assert.equal(p.freeCutsLeft, 3 - p.cuts);
-  assert.match(p.note, /\+5/);
+  assert.equal(p.note, "cuts 1-2 warn, the 3rd is the black-and-white flag; each cut from the 4th adds +5 s to your race time and every cut deletes that lap's time");
 });
 
 test("ERS reports deployment and the overtake window, not just charge", async () => {
@@ -778,7 +778,7 @@ test("a full snapshot carries the seed that reproduces it", async () => {
 test("names a corner ahead with a braking hint", async () => {
   await load();
   const nc = g.apex.world().nextCorner;
-  assert.match(nc.turn, /^T\d+/);
+  assert.equal(nc.turn, "T1");
   gte(nc.distM, 0);
   gte(nc.timeS, 0);
   gte(nc.suggestBrakeM, 0);
@@ -1377,7 +1377,7 @@ test("an unknown what is a typed error with the valid set", async () => {
   const r = g.apex.render({ what: "bogus" });
   assert.equal(r.ok, false);
   assert.equal(r.error, "BadArgumentError");
-  assert.match(r.message, /view.*map.*circuit.*car|view/);
+  assert.equal(r.message, "what must be \"view\", \"map\", \"circuit\" or \"car\"");
 });
 
 // ── scene() ─────────────────────────────────────────────────────────────────

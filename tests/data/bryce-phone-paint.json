@@ -1,0 +1,323 @@
+{
+  "doc": "Owner-phone acceptance ceilings (issue #5262): the EXACT number of painted-size violations per cell (window@UI SIZE) and screen, measured by `node tools/ui/bryce-paint.mjs --write` and asserted by tests/specs/bryce-phone-paint.spec.js. taps = controls painting under 44 px; text = text nodes painting under 12 px; outside = items crossing the safe box; blocked = controls covered at their centre; scroll = the page scrolls. A count may only go DOWN (the spec fails above and below it). A phone stops at UI SIZE 70 % (#5235, landed with #5384), so the cells are 70 (the owner's stored 61 paints at 70) and 109. Never raise a number to get green.",
+  "floors": {
+    "tap": 44,
+    "text": 12
+  },
+  "kinds": [
+    "taps",
+    "text",
+    "outside",
+    "blocked",
+    "scroll"
+  ],
+  "known": {},
+  "cells": {
+    "safari@109": {
+      "title": {
+        "taps": 1,
+        "text": 5,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      }
+    },
+    "safari@70": {
+      "title": {
+        "taps": 1,
+        "text": 5,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 4,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 7,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 13,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      }
+    },
+    "standalone@109": {
+      "title": {
+        "taps": 1,
+        "text": 5,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      }
+    },
+    "standalone@70": {
+      "title": {
+        "taps": 1,
+        "text": 5,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 4,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 7,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 13,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      }
+    },
+    "w844@109": {
+      "title": {
+        "taps": 1,
+        "text": 5,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      }
+    },
+    "w844@70": {
+      "title": {
+        "taps": 1,
+        "text": 5,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 4,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 7,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 13,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      }
+    }
+  }
+}

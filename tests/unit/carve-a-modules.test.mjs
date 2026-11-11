@@ -166,7 +166,7 @@ test("JumpStartPenalty fines throttle at green and a fast launch; auto-throttle 
   assert.equal(player.jumpStartFined, true);
   assert.equal(player.penalty, SportingRegs.JUMP_START_PEN_S);
   assert.ok(Number.isFinite(player.penalty));
-  assert.match(announced[0], /FALSE START/);
+  assert.equal(announced[0], "+5s FALSE START");
   assert.equal(pens.length, 1);
   // Second call is a no-op (already fined).
   js.tickAtGreen(player);
@@ -200,9 +200,9 @@ test("AnnounceBanner holds the floor: a higher card queues instead of replacing 
     radioVoice: () => ({ say() {} }), history: () => null,
   });
   assert.equal(banner.announce("WEAR", 2, "info"), true);
-  assert.match(els.announceText.textContent, /WEAR/);
+  assert.equal(els.announceText.textContent, "WEAR");
   assert.equal(banner.announce("FLAG", 2, "warning"), true);
-  assert.match(els.announceText.textContent, /WEAR/, "the floor keeps the first card up");
+  assert.equal(els.announceText.textContent, "WEAR", "the floor keeps the first card up");
   banner.tick(3);
-  assert.match(els.announceText.textContent, /FLAG/);
+  assert.equal(els.announceText.textContent, "FLAG");
 });

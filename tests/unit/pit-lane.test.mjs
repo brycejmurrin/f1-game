@@ -240,7 +240,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real 
   ] }] };
   // The AI's planner, for think(): the plan fires on its lap and not before.
   ctx.AiDrive = { pitNow: (x) => (x.wrongTread ? "weather" : x.wear >= 1 ? "worn" : x.lapsToStop <= 0 && x.stopsLeft > 0 ? "plan" : ""),
-                  compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6 } };
+                  compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6, FUEL_WEAR: 0.22 } };
   // The garage row order. Real Teams.LIST is 12 entries; the count is what sets
   // how wide the row is, so the stub carries the same number rather than a
   // convenient few — a row that fits at 4 teams and not at 12 is the bug.
@@ -1508,10 +1508,11 @@ test("wetLapsToStop: the wet stint is cut midway between a fresh set reaching th
   assert.deepEqual(run(1, 2), [5, 1], "one lap on the set plans on the fresh life, not the measured rate");
   // Two laps on: the measured 5 laps. round((7 + 13) / 2) − 8 = 2.
   assert.deepEqual(run(2, 5), [2, 1], "two laps on, the measured rate cuts the stint");
-  // 17 × 1.1 ≥ 18: the set reaches the flag (the margin `fits` uses), so no stop is left.
+  // Three laps on, the measured laps are de-fuelled (#5252): mean fuel over laps 5-7 is 0.80, over
+  // 8-25 0.38, so × (1 + 0.22·0.80) / (1 + 0.22·0.38) = 1.085. 17 → 18.45 ≥ 18: no stop is left.
   assert.deepEqual(run(3, 17), [99, 0], "a set that reaches the flag with the 1.1 margin stops no more");
-  // 16 × 1.1 < 18: round((7 + 24) / 2) − 8 = 8.
-  assert.deepEqual(run(3, 16), [8, 1], "16 laps left is short of the flag, so it still stops");
+  // 15 → 16.28, × 1.1 < 18: round((7 + 8 + 16.28) / 2) − 8 = 8.
+  assert.deepEqual(run(3, 15), [8, 1], "15 laps left is short of the flag, so it still stops");
   // No measured tyre hooks: no wet re-cut, no stop.
   delete s.G.tyres.lapsLeft;
   seen.length = 0; s.pits.think(c);
@@ -1536,6 +1537,27 @@ test("wetLapsToStop counts what is LEFT of the lap the car is on, not the whole 
   c.s = 0; seen.length = 0;
   s.pits.think(c);
   assert.equal(seen[0][1], 1, "at the START of that lap the same set is a lap short, and still stops");
+});
+
+test("wetLapsToStop de-fuels the measured rate: a set that reaches the flag on a lighter tank stays out (#5252)", () => {
+  // VM, singapore rain seed 5, 5 laps, wear real: 8 of 21 AI boxed wet-for-wet at the start of lap 3,
+  // wear 0.43, lapsLeft 2.65 — the straight line through two full-tank laps — and the 13 that stayed
+  // out reached the flag at wear 0.92-0.95, because wear runs (1 + 0.22·fuel) and the tank empties.
+  const s = commitSession({ weather: "rain" });
+  const seen = [];
+  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  const c = s.car(0);
+  c.human = false; c.local = false; c.lap = 3; c.pitStops = 0; c.tyreWear = 0.431;
+  c.tyre = { code: "W", tread: 2 };
+  c.pitPlan = { stops: 0, seq: ["soft"], stints: [5], lapsAt: [] };
+  s.G.tyres.lapsOn = () => 2; s.G.tyres.lapsLeft = () => 2.646;
+  c.s = s.G.track.total * 0.004;
+  const run = (laps) => { s.G.lapsTarget = laps; seen.length = 0; s.pits.think(c); return seen[0]; };
+  // 2.996 to run; 2.646 × 1.1 = 2.91 read short. De-fuelled: mean fuel 0.90 over laps run, 0.40 to run,
+  // × 1.198 / 1.088 = 1.101 → 2.91 laps, × 1.1 = 3.21: it reaches the flag.
+  assert.deepEqual(run(5), [99, 0], "the marginal wet set in a 5-lap race goes to the flag");
+  // The same set in an 8-lap race really runs out (2.91 laps for 6 to run) and still stops once.
+  assert.equal(run(8)[1], 1, "a wet set that cannot reach the flag still stops");
 });
 
 test("lossS is the lane's net cost in seconds, and estimate agrees with it off a caution", () => {

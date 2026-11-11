@@ -124,6 +124,37 @@
   #status.bad { color: var(--text); font-weight: 600; }
   #status.bad::before { content: ""; display: inline-block; width: .55em; height: .55em; margin-right: .5em; border-radius: 50%; background: var(--red); vertical-align: .08em; }
   body.linked #pair { display: none; }
+  /* TWO WRAPPERS, ONE COLUMN until the phone lies down: #pair-copy (the
+     heading, the instructions, the camera view) and #pair-act (the controls)
+     dissolve into #pair's column, and `order` keeps the camera view under
+     SCAN as it always was. */
+  #pair-copy, #pair-act { display: contents; }
+  #scan-box, #pair-act > :not(#scan) { order: 1; }
+  /* SHORT LANDSCAPE: SIDE BY SIDE. Reasoned from the rules at 844x390
+     (2026-11-10, no insets, TEXT large): one column was padding 32 + heading
+     ~34 + a 34ch paragraph of ~5 lines ~119 + SCAN ~56 + "or" ~21 + code ~56 +
+     CONNECT ~56 + status 2.8em ~48 + 6 gaps x 8 = ~470 in a 390 box, centred,
+     so the column overflowed BOTH edges and the document grew (417 reported; the
+     overflow under the fold; the half above it was simply unreachable). As two
+     columns the copy is ~34 + 8 + 119 = 161 and the controls ~269, each
+     centred in 358. Scanning hides the instructions so the camera view takes
+     their place under the heading, capped to what the height leaves. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #pair { flex-direction: row; align-items: safe center; gap: 32px; }
+    #pair-copy, #pair-act { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap); min-width: 0; }
+    #pair-copy { flex: 0 1 auto; }
+    #pair-act { flex: none; }
+    #pair-copy:has(#scan-box:not([hidden])) > p { display: none; }
+    #scan-box { width: min(40vw, calc(100dvh - 96px - var(--sat) - var(--sab))); }
+  }
+  /* NOTHING GROWS THE DOCUMENT. html/body are overflow: hidden, which stops a
+     scroll gesture but not the scroll extent: a pairing column taller than the
+     window, or the rim rotated with the phone (its bounding box grows with
+     the angle), still made scrollHeight > innerHeight. Each screen clips its
+     own box; the pairing screen scrolls inside itself (safe-centred, so the
+     top is reachable) if a raised TEXT SIZE still overflows it. */
+  #pair { overflow-y: auto; overscroll-behavior: contain; justify-content: safe center; touch-action: pan-y; }
+  #ctl, #menupad { overflow: hidden; }
 
   /* THE WHEEL — only once linked. Landscape: left grip | face | right grip.
      The rim (an SVG outline) sits behind everything and rotates with the
@@ -334,14 +365,18 @@
 </head>
 <body>
 <section id="pair" class="grain">
+  <div id="pair-copy">
   <h1>APEX 26 <span>·</span> PHONE CONTROLLER</h1>
   <p>Scan the QR code the game shows under Settings › CONTROLS › PHONE AS CONTROLLER, or type its room code and tap CONNECT. Hold the phone sideways like a wheel and tilt it to steer.</p>
-  <button id="scan" class="bigbtn alt" type="button">SCAN QR CODE</button>
   <div id="scan-box" hidden><video id="scan-video" playsinline muted aria-label="Camera view for scanning the game's QR code"></video><i aria-hidden="true"></i></div>
+  </div>
+  <div id="pair-act">
+  <button id="scan" class="bigbtn alt" type="button">SCAN QR CODE</button>
   <div id="pair-or" aria-hidden="true">or type the code</div>
   <input id="code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" aria-label="Room code" placeholder="ABC123">
   <button id="connect" class="bigbtn" type="button">CONNECT</button>
   <p id="status" role="status"></p>
+  </div>
 </section>
 <div id="rotate" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>TURN THE PHONE SIDEWAYS<small>The wheel works in landscape only.</small></div>
 <section id="menupad" class="grain" aria-label="Menu pad">

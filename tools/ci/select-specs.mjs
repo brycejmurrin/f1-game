@@ -1249,6 +1249,9 @@ export const SOURCE_AFFECTED = [
   // A ui/car route never picked them, so #1290 shipped red there (Browser group
   // input 38015514694, Pages 38016755004); real-race owns the JUMP IN card.
   ...["quali", "steering", "real-race"].map((s) => [/^js\/(ui\/loading-screen|garage\/(setup-camera|arrival))\.js$/, `tests/specs/${s}.spec.js`]),
+  // UI SIZE's RANGE (#5383): a phone's minimum moved 40 -> 70 in js/ui/scale.js (#5229) and the two specs that
+  // drive the slider to its low end were not routed, so the merge went red on Pages (run #5057) and was reverted.
+  ...["time-trial", "title-fit"].map((s) => [/^js\/ui\/scale\.js$/, `tests/specs/${s}.spec.js`]),
   // SPEC-LESS DIRS (audit4 D1 / ci-7d C7, 2026-10-26): 13 game merges in 7 d
   // touched these with only boot-guard / logging / smoke routed. The off-thread
   // track build ships ON with a spare core, so a circuit build and a track

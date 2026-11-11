@@ -67,12 +67,12 @@ test("help physState prints that hook and no other", () => {
   const row = JSON.parse(r.stdout);
   assert.equal(row.name, "physState");
   assert.equal(row.group, "read");
-  assert.match(row.signature, /^physState\(/);
+  assert.equal(row.signature, "physState()");
   assert.doesNotMatch(r.stdout, /"apiVersion"/);
   assert.doesNotMatch(r.stdout, /"perceive"/);
   const missing = spawnSync(node, [path.join(ROOT, "tools/shot/agent.mjs"), "help", "notARealHook"], { cwd: ROOT, encoding: "utf8", timeout: 20000 });
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /no hook named/);
+  assert.equal(missing.stderr, "agent: no hook named \"notARealHook\" in docs/agent-index.json\n");
 });
 
 test("index hook rows are a bijection with agentHelp()", async () => {

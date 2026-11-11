@@ -135,6 +135,7 @@ test("Menu customization exposes the existing editor and retains persistence, fo
   studio.undo(); assert.equal(title.current().btns.size, 100);
   const x = dom.byId("pm-tl-btns-x"); x.value = "11";
   dom.dispatch(x, { type: "input", bubbles: true });
+  dom.dispatch(x, { type: "change", bubbles: true });   // the thumb's release stores it (#4933)
   assert.equal(title.current().btns.x, 11);
   await new Promise(resolve => setTimeout(resolve, 360));
   assert.equal(studio.undo(), true, "the adopted fold still records owner input for Undo");
@@ -390,10 +391,10 @@ test("profile apply, reset and Undo disclose session-only restoration when stora
   const descendants = node => [node, ...node.children.flatMap(descendants)];
   const status = descendants(dom.byId("appearance-studio")).find(node => node.dataset.as === "status");
   studio.saveProfile("Night"); studio.applyPreset("sunlight"); studio.loadProfile("profile-1");
-  assert.match(status.textContent, /applied.*for this session; browser storage is unavailable/);
+  assert.equal(status.textContent, "Night applied to all visual settings for this session; browser storage is unavailable.");
   studio.applyPreset("sunlight"); // reset needs something to change: unchanged keys are no longer rewritten
-  studio.reset(); assert.match(status.textContent, /reset for this session; browser storage is unavailable/);
-  studio.undo(); assert.match(status.textContent, /restored for this session; browser storage is unavailable/);
+  studio.reset(); assert.equal(status.textContent, "All visual settings reset for this session; browser storage is unavailable. Undo restores your previous choices.");
+  studio.undo(); assert.equal(status.textContent, "Previous visual settings restored for this session; browser storage is unavailable.");
 });
 
 test("Studio previews independent HUD accent and contrast precedence", () => {
@@ -605,7 +606,7 @@ test("saved photo picker previews only on selection and persists only on explici
   assert.equal(h.preview.src, rows[2].thumb); assert.equal(h.preview.alt, "Preview: Photo 2");
   assert.equal(h.choose.disabled, false); assert.deepEqual(saved, []);
   h.choose.click(); assert.deepEqual(saved, [rows[2].thumb]); assert.equal(h.studio.scene().mode, "photo");
-  assert.match(h.note.textContent, /Photo 2 chosen/);
+  assert.equal(h.note.textContent, "Photo 2 chosen as your menu background.");
   assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "PHOTO STUDIO & MY BACKGROUND"), "import door retained");
   assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "RESET SCOPE"), "reset retained");
 });
@@ -616,11 +617,11 @@ test("saved photo empty, failed load and failed background writes are recoverabl
     if (mode === "failure") throw new Error("Unavailable");
     return mode === "empty" ? [] : [{ id: "safe", title: "Safe", thumb: "data:image/png;base64,AAAA" }, { id: "unsafe", thumb: "https://invalid.test/photo" }];
   }, () => { writes++; return false; });
-  await photoTick(); assert.match(h.note.textContent, /No saved photos/); assert.equal(h.select.disabled, true);
-  mode = "failure"; h.refresh.click(); await photoTick(); assert.match(h.note.textContent, /could not load.*Refresh/); assert.equal(h.choose.disabled, true);
+  await photoTick(); assert.equal(h.note.textContent, "No saved photos yet. Open Photo Studio to import or capture a photo, then save it."); assert.equal(h.select.disabled, true);
+  mode = "failure"; h.refresh.click(); await photoTick(); assert.equal(h.note.textContent, "Saved photos could not load. Try Refresh, or open Photo Studio to import a photo."); assert.equal(h.choose.disabled, true);
   mode = "saved"; h.refresh.click(); await photoTick(); assert.equal(h.select.children.length, 2); assert.equal(h.select.disabled, false);
   h.select.value = "safe"; h.dom.dispatch(h.select, { type: "change" }); h.choose.click();
-  assert.equal(writes, 1); assert.match(h.note.textContent, /could not be saved/); assert.equal(h.studio.scene().mode, "photo");
+  assert.equal(writes, 1); assert.equal(h.note.textContent, "Background could not be saved. Your current background stays in place; try again or import through Photo Studio."); assert.equal(h.studio.scene().mode, "photo");
 });
 
 test("saved photo refresh ignores superseded responses and responses after Appearance closes", async () => {
