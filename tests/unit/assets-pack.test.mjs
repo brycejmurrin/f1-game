@@ -2545,3 +2545,22 @@ test("synth-models MeshBuilder winds box, cylinder and cone counter-clockwise ou
     assert.equal(wrong, 0, `${name}: ${wrong} of ${idx.length / 3} triangles face against their vertex normals`);
   }
 });
+
+// #2501: resizeBilinear gave the first upscaled row/column a negative weight,
+// and the extrapolated value wrapped in the Uint8 buffer.
+test("resizeBilinear clamps to the edge when upscaling: no negative weights, no wrapped bytes", async () => {
+  const { resizeBilinear } = await import(pathToFileURL(path.join(ROOT, "tools", "gen", "assets.mjs")).href);
+  const px = (...v) => Buffer.from(v.flatMap((g) => [g, g, g, 255]));
+  const row = resizeBilinear(px(0, 255), 2, 1, 4, 1);
+  assert.deepEqual([...row].filter((_, i) => i % 4 === 0), [0, 64, 191, 255], "edge pixels clamp to the source edge");
+  const col = resizeBilinear(px(10, 250), 1, 2, 1, 4);
+  assert.deepEqual([...col].filter((_, i) => i % 4 === 0), [10, 70, 190, 250]);
+  // Every output stays inside the source range (a convex blend), at any ratio.
+  const src = px(0, 255, 0, 255, 255, 0, 255, 0, 0);
+  const big = resizeBilinear(src, 3, 3, 7, 7);
+  for (let i = 0; i < big.length; i += 4) assert.ok(big[i] >= 0 && big[i] <= 255 && big[i + 3] === 255);
+  assert.equal(big[0], 0, "the corner is the source corner");
+  assert.equal(big[(7 * 7 - 1) * 4], 0);
+  // Downscaling is unchanged (no sample falls outside the source).
+  assert.deepEqual([...resizeBilinear(px(0, 100, 200, 255), 4, 1, 2, 1)].filter((_, i) => i % 4 === 0), [50, 228]);
+});
