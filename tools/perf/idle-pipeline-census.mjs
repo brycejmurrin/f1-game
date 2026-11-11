@@ -35,34 +35,6 @@ export function hookPipelines() {
   // The twin counters (#4783): bind groups and buffers minted on the GPUDevice itself, with the label of the
   // first few so a culprit is named. WebGL2 has no device: both stay 0 and `gpuDevice` says so.
   P.bindGroups = 0; P.buffers = 0; P.gpuLog = []; P.gpuDevice = false; P.gpuLogOn = false;   // the log opens after warm-up: warm-up alone fills any cap
-  // FIRST DRAWS (#5387). A geometry drawn for the first time gets a new render object, and three binds it inside
-  // Bindings.getForRender: one bindGroup_object plus its uniform buffers. That is content entering view, not churn
-  // (measured on the tip, 8 runs: 5 red, each ONE frame minting 33-48 render objects for never-drawn geometry at
-  // frame 799-957, and nothing in any other window; the 120 warm frames do not cover the lap). So every device
-  // object minted while getForRender binds such a render object is tagged firstDraw and counted apart; a render
-  // object rebuilt for a geometry already drawn (released and minted again) stays untagged and fails the spec.
-  P.bindGroupsFirst = 0; P.buffersFirst = 0; P.firstDrawObjects = 0; P.firstDrawLog = []; P.firstDrawHooked = false;
-  const binds = T.renderer._bindings;
-  let firstNow = false;
-  if (binds && typeof binds.getForRender === "function") {
-    const seenGeo = new WeakSet(), og = binds.getForRender;
-    P.firstDrawHooked = true;
-    binds.getForRender = function (ro) {
-      const geo = ro && ro.geometry, first = !!geo && !seenGeo.has(geo);
-      if (!first) return og.apply(this, arguments);
-      seenGeo.add(geo);
-      if (P.gpuLogOn) {
-        P.firstDrawObjects++;
-        try {
-          const pos = geo.attributes && geo.attributes.position;
-          if (P.firstDrawLog.length < 100) P.firstDrawLog.push({ at: P.frames, obj: ((ro.object && ro.object.type) || "") + ":" + ((ro.object && ro.object.name) || ""),
-            mat: ((ro.material && ro.material.type) || "") + ":" + ((ro.material && ro.material.name) || ""), verts: pos ? pos.count : null });
-        } catch (_) { /* naming is best-effort */ }
-      }
-      firstNow = true;
-      try { return og.apply(this, arguments); } finally { firstNow = false; }
-    };
-  }
   const dev = be.device;
   if (dev && typeof dev.createBindGroup === "function" && typeof dev.createBuffer === "function") {
     P.gpuDevice = true;
@@ -70,8 +42,7 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        if (firstNow) P[key + "First"]++;
-        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, firstDraw: firstNow, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage,
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage,
           from: (new Error().stack || "").split("\n").slice(2, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 600) }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
@@ -91,9 +62,11 @@ export async function frames(page, n) {
 export const WARM_FRAMES = 120;   // driving on the throttle until everything the lap draws has been seen once
 export const WINDOWS = 6;
 export const WINDOW_FRAMES = 60;
+export const REPLAY_MARGIN = 1.5;   // the warm pass drives the counted frames x this, so a slower counted pass stays on warmed road
 
 /** Boot TLX (forceGL selects three's WebGL2 backend), race monza with GAS held through `gas(true|false)`
- *  (the spec passes page.keyboard), warm WARM_FRAMES, then count pipelines in WINDOWS equal windows. */
+ *  (the spec passes page.keyboard), warm WARM_FRAMES, drive the counted stretch once (the warm pass), jump back,
+ *  then count pipelines in WINDOWS equal windows over that same stretch. */
 export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   await page.addInitScript((gl) => {
     try {
@@ -114,22 +87,34 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   await gas(true);
   await frames(page, WARM_FRAMES);
+  // THE COUNTED WINDOWS REPLAY A STRETCH THE WARM-UP ALREADY DREW (#5387). Frames are not distance: 120 warm frames
+  // left the car short of scenery it then reached inside a window, and every geometry, pool wrapper and pass seen
+  // there for the first time minted its render object and bind groups. Measured on the tip, 8 runs: 5 red, each one
+  // frame (799-957) minting 33-48 render objects; under a per-frame CPU burn (the car further per frame) 8 of 8 red,
+  // in up to 4 windows. So: note where the car is, drive the windows' frames again with margin (the warm pass), jump
+  // back to that spot at that speed and count over road whose draws have all been seen. What a window builds then is
+  // churn — "nothing changed" holds by construction — and the run says how far each pass got.
+  const at = () => page.evaluate(() => { const p = window.__apex.physState(); return { s: p.s, speed: p.speed, prog: p.prog }; });
+  const start = await at();
+  const total = await page.evaluate(() => window.__apex.info().total);
+  await frames(page, Math.ceil(WINDOWS * WINDOW_FRAMES * REPLAY_MARGIN));
+  const warmM = (await at()).prog - start.prog;
+  const jumped = await page.evaluate(([f, v]) => { const r = window.__apex.jump(f, v); window.__apex.snapCam(); return r; }, [start.s / total, start.speed]);
+  const prog0 = (await at()).prog;
   const warm = await page.evaluate(() => { window.__bpp.gpuLogOn = true; return window.__bpp.count; });
   const windows = [];
   for (let i = 1; i <= WINDOWS; i++) {
-    const snap = () => page.evaluate(() => { const P = window.__bpp;
-      return { p: P.count, bg: P.bindGroups, b: P.buffers, g: P.gpuLog.length, bgF: P.bindGroupsFirst, bF: P.buffersFirst, fd: P.firstDrawObjects }; });
+    const snap = () => page.evaluate(() => ({ p: window.__bpp.count, bg: window.__bpp.bindGroups, b: window.__bpp.buffers, g: window.__bpp.gpuLog.length }));
     const c0 = await snap();
     await frames(page, WINDOW_FRAMES);
     const c1 = await snap();
     windows.push({ window: i, pipelines: c1.p - c0.p, built: await page.evaluate(([a, b]) => window.__bpp.log.slice(a, b), [c0.p, c1.p]),
-      bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]),
-      firstDrawBindGroups: c1.bgF - c0.bgF, firstDrawBuffers: c1.bF - c0.bF, firstDrawObjects: c1.fd - c0.fd });
+      bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) });
   }
+  const replay = { jumped: !!jumped, warmM: Math.round(warmM), countedM: Math.round((await at()).prog - prog0) };
   await gas(false);
-  const { gpuDevice, firstDrawLog, firstDrawHooked } = await page.evaluate(() => ({ gpuDevice: window.__bpp.gpuDevice,
-    firstDrawLog: window.__bpp.firstDrawLog, firstDrawHooked: window.__bpp.firstDrawHooked }));
-  const out = { hook, forceGL, warm, gpuDevice, firstDrawHooked, firstDrawLog, windows };
+  const gpuDevice = await page.evaluate(() => window.__bpp.gpuDevice);
+  const out = { hook, forceGL, warm, gpuDevice, replay, windows };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/idle-pipeline-churn-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;
