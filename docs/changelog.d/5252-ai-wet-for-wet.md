@@ -1,0 +1,1 @@
+Fixed: in a short rain race with tyre wear on, AI cars no longer pit for a fresh set of wets when their current set would last to the flag; they used to read their tyres as more worn than they were, because they ignored that a lighter fuel load wears tyres more slowly

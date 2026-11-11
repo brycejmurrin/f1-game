@@ -276,6 +276,19 @@ test("Practice Goal native select follows Apex dark chrome", () => {
   assert.equal(decl(rules, "#practice-brief option", "background"), "var(--plate)");
 });
 
+// The phone card's hero section never scrolls, so the practice brief above the
+// still is one row there (title + GOAL) and its description is clipped to
+// assistive tech; the layout itself is held by time-trial.spec.js at 844x390.
+test("Practice brief is one row on the compact phone card", () => {
+  const rules = css("css/select.css");
+  const card = '#sel-inner[data-density="compact"]:not([data-shape="tall"])';
+  assert.equal(decl(rules, `${card} #practice-brief`, "flex-direction"), "row");
+  assert.equal(decl(rules, `${card} #practice-brief`, "flex-wrap"), "nowrap");
+  assert.equal(decl(rules, `${card} #practice-brief[hidden]`, "display"), "none", "the row rule must not un-hide the brief");
+  assert.equal(decl(rules, `${card} #practice-brief > p`, "clip-path"), "inset(50%)");
+  assert.equal(decl(rules, `${card} #practice-brief .set-row`, "flex-wrap"), "nowrap");
+});
+
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
   const h = bootMenus();
   assert.deepEqual(h.chips(), ["all", "season", "classic"], "the shipped filter bar, no FAVOURITES chip");
@@ -2299,9 +2312,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
   assert.match(shell, /id="pm-advanced">ADVANCED INPUT &amp; HANDLING/, "settings door is STEERING & ASSISTS");
   const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
-  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|open-a11y|audio|open-files|open-graphics|open-visual|open-progress))"/g)].map((m) => m[1]),
-    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress"],
-    "Settings home has the ten primary doors in order");
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|open-a11y|audio|open-files|open-graphics|open-visual|open-progress|open-credits))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress", "pm-open-credits"],
+    "Settings home has the eleven primary doors in order");
   const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
   assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
   assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");

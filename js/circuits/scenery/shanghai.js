@@ -449,7 +449,7 @@
 
       (function snailRunoff() {
         // Stepped apron pads outside the decreasing-radius right — spiral read
-        // at speed. Racing-frame T1–T3 (turns 0.037 / 0.088 / 0.129); raw
+        // at speed. Racing-frame T1–T4 (turns 0.038 / 0.088 / 0.102 / 0.129); raw
         // authored 0.05..0.11 sat past T3 after sceneryStartFrac drift.
         const pads = [
           [sl(0.040),  1, 3.5, [22, 0.32, 38]],
@@ -899,7 +899,7 @@
         addBox(out, vadd(a.c, a.u, 9.6), [0.55, 0.28, 0.55], LAMP_GLOW, b);
       });
 
-      // T14 hairpin (built 0.8227, right-hand R13): racing frame through sl().
+      // T14 hairpin (built 0.8227, right-hand, FIA T14 = turns[13]): racing frame through sl().
       // These were raw authored 0.88-0.93 = racing 0.97-1.02, on the start
       // straight; the hairpin itself was bare. Outside of a right-hander = -1.
       grandstandEx(sl(0.800), -1, 34, 30, null, null,

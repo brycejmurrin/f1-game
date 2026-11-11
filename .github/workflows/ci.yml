@@ -2010,14 +2010,21 @@ jobs:
     permissions:
       contents: read
       actions: read
+      checks: read     # the ready flip's reuse step reads the draft run's plan and guards records (annotations)
     timeout-minutes: 10
     outputs:
       shards: ${{ steps.sel.outputs.shards }}
       any: ${{ steps.sel.outputs.any }}
+      # `true` only on a ready flip whose same-sha draft verdict is sound to reuse (tools/ci/reuse-draft-selected.mjs):
+      # the selected legs then skip and selected-verdict reports the reuse.
+      selected_reused: ${{ steps.reuse_selected.outputs.reuse }}
+      selected_reused_run: ${{ steps.reuse_selected.outputs.run }}
       # How many routed specs the plan could NOT run, and why the plan exists at
       # all. poke-train needs both to tell an empty plan from an unaffordable one.
       dropped: ${{ steps.sel.outputs.dropped }}
       reason: ${{ steps.sel.outputs.reason }}
+      # Browser groups the runner fan-out could not represent (select-specs perGroupPlan).
+      unrepresented: ${{ steps.sel.outputs.unrepresented }}
       # The node-slice plan (was unit-plan's).
       slices: ${{ steps.plan.outputs.slices }}
       any_node: ${{ steps.plan.outputs.any_node }}
@@ -2277,6 +2284,24 @@ jobs:
           # 24 with the default 11. A draft mode that names the rest as not-run instead is a follow-up.
           OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '0' || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
+      # THE PLAN RECORD (#5426). Every run's plan, as one `apex-selected` annotation (plan key, dropped count, base
+      # sha), so a later ready flip on the same head can ask what this run's legs proved.
+      - name: Record the selected plan
+        if: ${{ steps.sel.outcome == 'success' }}
+        run: node tools/ci/reuse-draft-selected.mjs --record --sel sel.json
+      # THE READY FLIP REUSES THE DRAFT VERDICT (#5426; review 2026-11-11 P3, decision 2). When the newest run on this
+      # head is green on attempt 1, ran the same plan with nothing dropped, on the same base, and the deploy tip has not
+      # moved since that base, the selected legs skip; everything else on the ready tier runs. Every doubt, and every
+      # event but ready_for_review, is reuse=false. The rules: tools/ci/reuse-draft-selected.mjs.
+      - name: Reuse the same-sha draft verdict?
+        id: reuse_selected
+        if: ${{ steps.sel.outcome == 'success' && github.event_name == 'pull_request' && github.event.action == 'ready_for_review' && inputs.concurrency_key == '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: node tools/ci/reuse-draft-selected.mjs --sel sel.json >> "$GITHUB_OUTPUT"
       # THE TRAIN'S VM TWINS (audit4 D1 / ci-7d C2, 2026-10-26). The plan drops
       # every VM-twinned browser spec (coveredByVmTwin) on the premise that the
       # node job runs its twin, but node-suites skips a Pages call (decision
@@ -2593,7 +2618,9 @@ jobs:
     # A DRAFT runs it too (2026-11-03): its plan is the 5-min budget the select
     # step sets, so a work-in-progress push gets one browser shard instead of
     # none; selected-verdict warns (never reds) a draft on dropped specs.
-    if: ${{ needs.select.outputs.any == 'true' }}
+    # A READY FLIP whose same-sha draft verdict is reused (#5426) runs no leg: select's reuse step proved the
+    # draft's legs ran this exact plan green on this base, and the deploy tip has not moved since.
+    if: ${{ needs.select.outputs.any == 'true' && needs.select.outputs.selected_reused != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2921,8 +2948,11 @@ jobs:
           SELECTED: ${{ needs.selected.result }}
           GUARDS: ${{ needs.guards.result }}
           DROPPED: ${{ needs.select.outputs.dropped }}
+          UNREPRESENTED: ${{ needs.select.outputs.unrepresented }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
+          REUSED: ${{ needs.select.outputs.selected_reused }}
+          REUSED_RUN: ${{ needs.select.outputs.selected_reused_run }}
           DOWNLOAD_FAILED: ${{ steps.dl_junit.outcome == 'failure' || steps.dl_started.outcome == 'failure' }}
         run: |
           set -u
@@ -3149,5 +3179,7 @@ jobs:
           # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow
           # run would otherwise read green). Measured on recent full-tier runs: they never skip there, unlike
           # driving-model / sweeps / the macOS leg, which the change-aware selection skips legitimately.
-          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards-c,guards-d,guards,select,smoke,staged-boot' || '' }}
+          # selected-verdict is required too (#5403 part 1): a ready flip may reuse its draft's legs (#5426), and the
+          # verdict job is what reports that reuse, so a skipped verdict must red `CI`.
+          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards-c,guards-d,guards,select,selected-verdict,smoke,staged-boot' || '' }}
         run: node tools/ci/ci-verdict.mjs

@@ -73,8 +73,8 @@ Continuous dune undulation — short rises and dips throughout, plus two heavily
 ## Outcome
 
 All four researched findings were **already implemented** — the dunes intrude
-everywhere with marram grass, Tarzanbocht and the Arie Luyendykbocht carry real
-18°/19° banking, the crowd is already orange, and the North Sea is on the
+everywhere with marram grass, Hugenholtz and the Arie Luyendykbocht carry real
+18° banking (`bankZones` turn 3 / turn 14; Tarzan carries 4°), the crowd is already orange, and the North Sea is on the
 horizon with a wind-farm silhouette. Zandvoort was the best-covered circuit in
 this batch.
 

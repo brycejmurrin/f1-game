@@ -696,13 +696,6 @@ test("select(): an edited spec runs first, alone in rank 0", () => {
   assert.equal(filesOf(r)[0], spec, "the edited spec leads the selection");
 });
 
-test("select(): a css edit selects the small CSS set, not a whole group", () => {
-  const r = selectFor({ "css/menus.css": "/* fixture edit */\n" });
-  assert.equal(r.reason, "matched");
-  const allowed = new Set(cssSpecs(["css/menus.css"]));
-  assert.ok(r.selected.length > 0 && filesOf(r).every((f) => allowed.has(f)), `got ${filesOf(r)}`);
-});
-
 test("select(): editing the selector itself is infra — narrower than the change, and says so", () => {
   const r = selectFor({ "tools/ci/select-specs.mjs": "// fixture edit\n" });
   assert.equal(r.reason, "infra");
@@ -1983,3 +1976,104 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
   assert.equal(routed.floor, null);
   assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
 });
+
+// ── audit W31 (2026-11-10): when the selector cannot place a change it selects MORE ──
+{
+  const W31 = await import("../../tools/ci/select-specs.mjs");
+  const planned = (r) => [r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file));
+  const sel = (files) => W31.select(undefined, DEFAULT_BUDGET_MIN, { files });
+
+  test("W31 row 1: an infra-only diff runs the boot floor, never an empty plan", () => {
+    for (const files of [["tools/ci/select-specs.mjs"],
+      [".github/workflows/ci.yml", "package-lock.json", "playwright.config.js", "tests/data/flaky-quarantine.json"]]) {
+      const r = sel(files);
+      assert.equal(r.reason, "infra");
+      assert.ok(r.floored, `${files}: the floor is applied`);
+      assert.ok(r.shards.length > 0, `${files}: a job runs`);
+      assert.ok(planned(r).includes("tests/specs/boot-guard.spec.js"), `${files}: boot-guard is planned`);
+    }
+    // logging.spec.js is in test:tiny but TWINNED (ADAPTED, vm-page-a): the floor leaves it out so it forces no node slice.
+    assert.deepEqual(W31.floorSpecs().sort(), ["tests/specs/boot-guard.spec.js", "tests/specs/smoke.spec.js"]);
+  });
+
+  test("W31 row 1: a runner/config diff runs one spec per default-project browser group", () => {
+    const per = W31.perGroupSpecs();
+    assert.ok(per.length >= 10, `only ${per.length} representatives`);
+    const r = sel(["playwright.config.js"]);
+    assert.ok(r.runner);
+    const got = new Set([...planned(r), ...r.coveredByVmTwin.map((x) => x.file)]);
+    for (const f of per) assert.ok(got.has(f), `${f} is planned`);
+    for (const f of ["tools/ci/run-playwright.mjs", "tests/helpers/fixtures.js", "tests/helpers/global-setup.js"]) assert.ok(sel([f]).runner, f);
+  });
+
+  test("W31 row 1: a runner representative never takes over-budget pool room, so it can never displace a routed spec", () => {
+    // #5304's first full-tier run: the single-spec perf/memory groups' only specs declare 600-1200 s per test,
+    // so as representatives they could only sit in the capped over-budget pool, and they pushed out the ROUTED
+    // new-hooks.spec.js (dropped=1, verdict red). Representatives now come only from shardable specs.
+    const plan = W31.perGroupPlan();
+    for (const f of plan.specs) assert.ok(W31.maxDeclaredTimeout(f) < W31.SOLO_OWN_TIMEOUT_SEC * 1000, `${f} is solo-class`);
+    const r = sel(["tests/helpers/fixtures.js", "js/agent/apex.js"]);
+    // capacityFallback rows are ordinary leftovers packed into room left AFTER the pool's own candidates.
+    const pool = new Set([...(r.overBudgetRun || []).filter((x) => !x.capacityFallback), ...r.overBudgetSpecs].map((x) => x.file));
+    assert.deepEqual(plan.specs.filter((f) => pool.has(f)), [], "no representative takes over-budget pool room");
+    assert.deepEqual([...r.overBudgetSpecs, ...r.skipped].map((x) => x.file), [], "nothing routed is dropped");
+    assert.ok(new Set(planned(r)).has("tests/specs/new-hooks.spec.js"), "the routed hooks spec runs");
+    // The groups left without a representative are named, never silently skipped.
+    assert.ok(plan.unrepresented.length > 0 && plan.unrepresented.every((g) => g.startsWith("test:")), String(plan.unrepresented));
+    assert.deepEqual(r.runnerUnrepresented, plan.unrepresented);
+  });
+
+  test("W31 row 1: a diff to a perf spec or its source still routes it; only the runner fan-out changed", () => {
+    for (const [files, spec] of [
+      [["tests/specs/perf-race-entry.spec.js"], "tests/specs/perf-race-entry.spec.js"],
+      [["tests/helpers/perf-race-entry.mjs"], "tests/specs/perf-race-entry.spec.js"],
+      [["sw.js"], "tests/specs/perf-sw-cache-hit.spec.js"],
+    ]) {
+      const r = sel(files);
+      assert.ok(new Set(planned(r)).has(spec), `${files} -> ${spec}`);
+      assert.deepEqual(r.runnerUnrepresented, [], `${files}: not a runner diff`);
+    }
+  });
+
+  test("W31 row 1: an empty plan is a pass only for a docs diff (non-browser code diffs get the floor)", () => {
+    const tools = sel(["tools/check/ratchets.mjs"]);
+    assert.ok(tools.shards.length > 0 && tools.floored, "a tools/ diff with no browser group still runs the floor");
+    const docs = sel(["README.md"]);
+    assert.equal(docs.reason, "docs");
+    assert.equal(docs.shards.length, 0);
+    // The CI step's fail-closed on an empty code plan: selected-gate-verdict.test.mjs runs the step's report.
+  });
+
+  test("W31 row 2: vendor/ and the standalone pages route to real groups; some-unmatched is partial + floor", () => {
+    const all = sel(["vendor/three-0.187.0/three.core.min.js", "overlay.html", "controller.html", "bench.html"]);
+    assert.equal(all.reason, "matched");
+    assert.deepEqual(["test:gfx", "test:modes", "test:input", "test:perf-frametime"].filter((g) => !new Set(all.groups).has(g)), [], `groups: ${all.groups}`);
+    assert.ok(all.shards.length > 0);
+    assert.ok(sel(["cockpit-view.html"]).groups.includes("test:ui"));
+    // A path nothing claims, beside a claimed one: partial, the floor runs, the path is named.
+    const part = sel(["README.md", "nowhere/unclaimed.bin"]);
+    assert.equal(part.reason, "partial");
+    assert.deepEqual(part.unmatched, ["nowhere/unclaimed.bin"]);
+    assert.ok(part.floored && part.shards.length > 0);
+    const mixed = sel(["tools/check/ratchets.mjs", "nowhere/unclaimed.bin"]);
+    assert.equal(mixed.reason, "partial");
+    assert.equal(sel(["nowhere/unclaimed.bin"]).reason, "unmatched", "every path unmatched still fails closed");
+    // Hooks are executable config, not docs: claimed, and the floor runs.
+    const hook = sel([".claude/hooks/bash-guard.sh"]);
+    assert.notEqual(hook.reason, "docs");
+    assert.notEqual(hook.reason, "unmatched");
+    assert.equal(isDocsOnly([".claude/hooks/bash-guard.sh"]), false);
+    assert.equal(isDocsOnly([".claude/settings.json"]), false);
+  });
+
+  test("W31 row 7: every spec pick-tests' extraSpecs names is in select-specs' plan (or a covered bucket)", async () => {
+    const { extraSpecs } = await import("../../tools/ci/pick-tests.mjs");
+    for (const f of ["js/ui/modal.js", "js/ui/dom.js", "js/ui/photo-studio.js", "js/ui/key-binds.js", "css/hud.css", "js/ui/menu-nav.js"]) {
+      const r = sel([f]);
+      const got = new Set([...planned(r), ...[r.coveredByFixedGates, r.coveredByManualOptIn, r.coveredByVmTwin,
+        r.overBudgetSpecs, r.unreachable, r.skipped].flatMap((b) => (b || []).map((x) => x.file))]);
+      for (const x of extraSpecs([f])) assert.ok(got.has(x.spec), `${f}: pick-tests names ${x.spec}, CI never schedules it`);
+    }
+  });
+}
+

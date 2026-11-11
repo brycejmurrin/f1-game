@@ -101,8 +101,12 @@ const DesignerProfile = (function () {
       return best;
     }
     function choose(i, j) {
-      i = Number.isInteger(i) && i >= 0 && i < ticks.length ? i : -1;
-      j = (i >= 0 && Number.isInteger(j) && j >= 0 && j < ticks.length && j !== i) ? j : -1;
+      // The control loop's length, not the built lap's: an unbuildable edit
+      // (setBuilt(null)) empties ticks but keeps the points, and a selection
+      // checked against 0 was wiped (FIX / DELETE POINT / TEST HERE lost it).
+      const n = ticks.length || nodeH.length;
+      i = Number.isInteger(i) && i >= 0 && i < n ? i : -1;
+      j = (i >= 0 && Number.isInteger(j) && j >= 0 && j < n && j !== i) ? j : -1;
       if (i === sel && j === span) return;
       sel = i; span = j;
       tellSelect();
@@ -202,10 +206,12 @@ const DesignerProfile = (function () {
     }
     function onKey(ev) {
       const k = ev.key, n = ticks.length;
-      if (k === "[" || k === "]" || k === "Tab") {
+      // [ ] walk the points; Tab is left to the browser so focus can leave the
+      // strip (a captured Tab cycled points forever: a keyboard trap).
+      if (k === "[" || k === "]") {
         if (!n) return;
         ev.preventDefault();
-        const dir = (k === "[" || (k === "Tab" && ev.shiftKey)) ? -1 : 1;
+        const dir = k === "[" ? -1 : 1;
         const at = sel < 0 ? (dir > 0 ? -1 : 0) : sel;
         choose(((at + dir) % n + n) % n, -1);
         render();

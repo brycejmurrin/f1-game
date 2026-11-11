@@ -1167,11 +1167,11 @@
       "track": "interlagos",
       "name": "Main Tribuna",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.010247,
+      "frac": 0.010301,
       "target": [
-        181.31,
+        314.03,
         1.27,
-        -285.8
+        -320.16
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 68.5,
@@ -2646,11 +2646,11 @@
       "track": "qatar",
       "name": "Pit Slab",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.000013,
+      "frac": 0.000014,
       "target": [
-        475.37,
+        391.32,
         20.24,
-        -377.66
+        -331.28
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 48,
@@ -2663,11 +2663,11 @@
       "track": "qatar",
       "name": "Paddock Media Centre",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.925074,
+      "frac": 0.925058,
       "target": [
-        307.45,
+        167.92,
         7.41,
-        -747.01
+        -668.71
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 80,
@@ -2680,11 +2680,11 @@
       "track": "qatar",
       "name": "Turn 1 VVIP Canopy",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.051924,
+      "frac": 0.129098,
       "target": [
-        617.12,
-        7.75,
-        -136.03
+        533.04,
+        7.77,
+        198.39
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 56,
@@ -2697,15 +2697,15 @@
       "track": "qatar",
       "name": "Lusail Hill",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.067507,
+      "frac": 0.113492,
       "target": [
-        552.03,
-        5.16,
-        -4.79
+        659.66,
+        5.42,
+        241.41
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 64,
-      "viewDistanceM": 64,
+      "nearestRoadDistanceM": 70,
+      "viewDistanceM": 70,
       "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
     },
     {
@@ -2748,11 +2748,11 @@
       "track": "qatar",
       "name": "Hospitality Villas 1",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.954748,
+      "frac": 0.954749,
       "target": [
-        371.43,
+        259.44,
         6.82,
-        -599.06
+        -537.08
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 64,
@@ -3293,15 +3293,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.942662,
       "target": [
-        174.82,
-        7.19,
-        507.15
+        112.13,
+        7.24,
+        494.31
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/spa.js timingTower K(0.985)",
-      "projectedFrac": 0.942429,
-      "nearestRoadDistanceM": 26,
-      "viewDistanceM": 26,
+      "projectedFrac": 0.948431,
+      "nearestRoadDistanceM": 16.6,
+      "viewDistanceM": 38,
       "source": "tests/data/landmarks/spa.json; js/circuits/scenery/spa.js"
     },
     {
@@ -3346,9 +3346,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0,
       "target": [
-        -532.8,
+        -577.93,
         15.68,
-        115.29
+        152.97
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 29.4,

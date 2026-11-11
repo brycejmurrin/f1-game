@@ -1,7 +1,7 @@
 /* Apex 26 — ApexXR: thin façade over XRPlan + XrSession for boot / settings.
  *
- * Owns the cached plan, capability probe → apex26.xrCaps latch, bootPick() for
- * game.js backendPreference(), and noteFallback() for the post-boot ladder.
+ * Owns the cached plan, capability probe → apex26.xrCaps latch, bootPick()
+ * and noteFallback() for the post-boot ladder.
  * Does NOT own the immersive session — that stays XrSession.
  *
  * Storage (all apex26.-prefixed):
@@ -117,7 +117,10 @@ const ApexXR = (function () {
     return resolved;
   }
 
-  /** Sync boot override for backendPreference(). null ⇒ leave 2D pick alone. */
+  /** Sync boot override read by renderer-boot.js storedBackendPreference().
+   *  null ⇒ leave the 2D pick alone. ApexXR is LAZY_XR, so on a real boot it is
+   *  not loaded when that read runs and this never steers one; the ENTER VR
+   *  pin + reload (XrBoot.ensureXrBackend) is what switches the renderer. */
   function bootPick() {
     const p = plan(true);
     if (p.xrMode !== "armed") return null;
@@ -157,31 +160,8 @@ const ApexXR = (function () {
     _plan = null;
   }
 
-  /** True when the live gfx bind matches the armed plan (or VR is off). */
-  function rendererMatchesPlan() {
-    const p = plan();
-    if (p.xrMode !== "armed") return true;
-    let canAttach = false;
-    if (typeof XrBoot !== "undefined" && typeof XrBoot.canAttach === "function") {
-      try { canAttach = !!XrBoot.canAttach(); } catch (_) { canAttach = false; }
-    }
-    // canAttach means TLX+WebGL2 — matches the shippable webgl2 path only.
-    if (p.path === "webgl2") {
-      if (canAttach) return true;
-      let bound = null;
-      try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
-      return bound === "webgl2" || bound === "three";
-    }
-    // Experimental WebGPU XR: a live WebGL2 attach is the wrong backend.
-    if (canAttach) return false;
-    let bound = null;
-    try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
-    return bound == null;
-  }
-
   return {
-    detect, caps, plan, bootPick, fallbacks, noteFallback, stats,
-    invalidate, rendererMatchesPlan,
+    detect, caps, plan, bootPick, fallbacks, noteFallback, stats, invalidate,
   };
 })();
 Object.freeze(ApexXR);

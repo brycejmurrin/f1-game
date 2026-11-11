@@ -1,6 +1,6 @@
 name: Perf census (TLX WebGPU)
 
-# Advisory: runs the pass and render-scale censuses on three's WebGPU backend (Bryce's iPhone path) under
+# Advisory: runs the pass, render-scale and GPU-memory censuses on three's WebGPU backend (Bryce's iPhone path) under
 # Mesa lavapipe, which the other censuses pin away from (apex26.tlxForceGL=1). Dispatch only: it never runs on a
 # push except a PR touching the census tools, so it costs no CI minutes otherwise. Counts are exact for the deterministic jump scenario;
 # software skips batches, so they are NOT hardware numbers. Issue #4783.
@@ -13,7 +13,11 @@ on:
     paths:
       - ".github/workflows/perf-census-webgpu.yml"
       - "tools/gfx/pass-census.mjs"
+      - "tools/gfx/pass-census-lib.mjs"
       - "tools/gfx/res-scale-census.mjs"
+      - "tools/gfx/gpu-mem-census.mjs"
+      - "tools/gfx/gpu-mem-webgpu.mjs"
+      - "tests/data/pass-census-park.json"
   workflow_dispatch:
     inputs:
       track:
@@ -49,6 +53,30 @@ jobs:
         env:
           TRACK: ${{ inputs.track || 'monaco' }}
         run: node tools/gfx/res-scale-census.mjs --track "$TRACK" --webgpu --json artifacts/census/res-scale.json
+      # #4783 row 1: the EXACT cells. A parked, frozen frame per circuit x camera x tier, compared with no tolerance
+      # against tests/data/pass-census-park.json (a cell the file lacks fails; a missing file is reported). Each leg
+      # also fails when three's uniform buffers grow over the parked window (row 4). Every leg runs; the step fails
+      # if any did.
+      - name: Parked baselines, circuit x camera x tier
+        if: ${{ !cancelled() }}
+        run: |
+          fail=0
+          for track in monaco monza; do for cam in chase helmet; do for tier in desktop mobile; do
+            tier_flag=(); if [ "$tier" = mobile ]; then tier_flag=(--mobile); fi
+            node tools/gfx/pass-census.mjs "$track" --webgpu --park --camera "$cam" "${tier_flag[@]}" --frames 60 --warm 60 \
+              --baseline tests/data/pass-census-park.json --json "artifacts/census/park-$track-$cam-$tier.json" || fail=1
+          done; done; done
+          exit $fail
+      # #4783 row 3: requested WebGPU bytes by format (createTexture / createBuffer minus destroy), desktop and phone tier.
+      - name: GPU memory census (WebGPU)
+        if: ${{ !cancelled() }}
+        env:
+          TRACK: ${{ inputs.track || 'monaco' }}
+        run: |
+          fail=0
+          node tools/gfx/gpu-mem-census.mjs "$TRACK" --webgpu --json artifacts/census/gpu-mem-desktop.json || fail=1
+          node tools/gfx/gpu-mem-census.mjs "$TRACK" --webgpu --mobile --json artifacts/census/gpu-mem-mobile.json || fail=1
+          exit $fail
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

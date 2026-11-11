@@ -19,7 +19,7 @@
     terrainOuter: 100,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.94, s1: 0.10 },  // pit straight + Arena
-      { kind: "foliage", s0: 0.56, s1: 0.64 },              // Dunlop-Kehre (T12 .6025) runoff
+      { kind: "foliage", s0: 0.56, s1: 0.64 },              // T10 (.5665) - T11 (.6025) runoff; NOT the Dunlop-Kehre (T7 .373)
     ],
     pal: {
       zenith:        [0.38, 0.48, 0.60],
@@ -41,24 +41,27 @@
     // hasRealElevation(id) nulls any `elevations` key here.
     hwZones: [
       { s0: 0.100, s1: 0.180, hw: 6.2, ease: 0.012 },  // Mercedes-Arena complex
-      { s0: 0.7785, s1: 0.8127, hw: 6.4, ease: 0.012 },  // Dunlop-Kehre (index; arc 0.630-0.690)
-      { s0: 0.910, s1: 0.955, hw: 6.3, ease: 0.012 },  // Veedol chicane
+      { s0: 0.7785, s1: 0.8127, hw: 6.4, ease: 0.012 },  // T11 exit - T12 (index; built arc 0.605-0.688)
+      { s0: 0.910, s1: 0.955, hw: 6.3, ease: 0.012 },  // Veedol exit - Coca-Cola-Kurve T15 (index; built arc 0.793-0.852)
     ],
     bankZones: [
-      { frac: 0.055, angleDeg: 3.5, widthM: 110 },   // Castrol-S
-      { turn: 7, angleDeg: 4.5, widthM: 140 },   // Ford Kurve; re-seated frac 0.3 (was 184 m off any apex)
-      { turn: 11, angleDeg: 3.0, widthM: 120 },   // Bit-Kurve; re-seated frac 0.52 (was 238 m off any apex)
-      { frac: 0.780, angleDeg: 4.0, widthM: 130 },   // Schumacher-S
+      { frac: 0.055, angleDeg: 3.5, widthM: 110 },   // T2, Mercedes-Arena entry (built 0.046-0.064); not the pre-2002 Castrol chicane
+      { turn: 6, angleDeg: 4.5, widthM: 140 },   // T6 Ford-Kurve (same corner as the old 16-entry turn 7)
+      { turn: 10, angleDeg: 3.0, widthM: 120 },   // T10, first corner after the Schumacher-S (Kumho-Kurve); same corner as the old turn 11
+      { frac: 0.780, angleDeg: 4.0, widthM: 130 },   // Veedol-Schikane T13-T14 (built 0.770-0.791); the Schumacher-S is T8-T9 (.450/.4805)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
-    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    // sectors/turns: RACING-LAP fractions (post startFrac/reverse), never fmap'd —
+    // tools/track/rotate-markings.cjs re-seats turns when the start line moves.
+    // turns: one apex (curvature peak of THIS centreline) per corner numbered on the FIA
+    // 2020 Eifel GP "Circuit Map" (Doc 1, 15 corners; fia.com decision-document
+    // "2020 Eifel Grand Prix - Circuit Map.pdf"), in FIA order, turns[0] = T1 Haug-Haken.
+    // Names are NOT on the FIA map (Wikipedia, last resort): T1 Haug-Haken (2002),
+    // T7 Dunlop-Kehre, T8-T9 Schumacher-S (between Dunlop-Kehre and Kumho-Kurve),
+    // T13-T14 Veedol-Schikane; T6 Ford-Kurve / T15 Coca-Cola-Kurve kept from the prior def.
     sectors: [0.346, 0.667],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0250, 0.0555, 0.1075, 0.1145, 0.1325, 0.2580, 0.2640, 0.3730, 0.3825, 0.3890, 0.5665, 0.6025, 0.7800, 0.7860, 0.8385, 0.8490],
+    turns: [0.0250, 0.0555, 0.1150, 0.1325, 0.2255, 0.2645, 0.3730, 0.4500, 0.4805, 0.5665, 0.6025, 0.6895, 0.7810, 0.7865, 0.8490],
     furniture: { tree: "fir",   fol: [0.09, 0.27, 0.14], lamp: "none" },  // dark Eifel spruce, bluer than Spa
     kit: { marshal: "bunker",    rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["darkSteel", "concrete", "alu"],  // cold Eifel steel and poured concrete
