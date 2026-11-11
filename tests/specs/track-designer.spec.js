@@ -42,6 +42,9 @@ test.describe("Touch designer workspace", () => {
       expect(await root.evaluate((e) => Math.min(...[...e.querySelectorAll(".td-stage > canvas")]
         .flatMap((c) => { const r = c.getBoundingClientRect(); return [r.width, r.height]; }))), `${width}x${height}@${scale}: both drawing surfaces retain usable dimensions`).toBeGreaterThanOrEqual(44);
       // The toolbar chips (UI Fit r6): every label fits its own chip (no clipped text) and every chip is a --tap-paint (painted-px) target.
+      // Wait for the mode's toolbar to paint first: a one-shot read right after the tap raced it (#5296 run 42918645081, 1194x834@200
+      // elevation read 0 chips, passed on retry). The wait still fails if no chip ever shows.
+      await expect(root.locator('.td-stage > [data-role="toolbar"] .sel-chip:visible').first(), `${width}x${height}@${scale} ${mode}: toolbar chips appear`).toBeVisible();
       const chips = await root.evaluate((e) => {
         const probe = e.appendChild(document.createElement("div")); probe.style.cssText = "position:absolute;visibility:hidden;height:var(--tap-paint)";
         const tap = probe.getBoundingClientRect().height; probe.remove();
