@@ -7377,8 +7377,7 @@
       ],
       "dropTrackWorld": [
         "tests/unit/game-state-audit-vm.test.mjs",
-        "tests/unit/ghost.test.mjs",
-        "tests/unit/tlx-texture-release.test.mjs"
+        "tests/unit/ghost.test.mjs"
       ],
       "enableTilt": [
         "tests/specs/ui-button-touch.spec.js",

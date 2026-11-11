@@ -18,6 +18,7 @@ import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import vm from "node:vm";
 import { loadCrests } from "../../tools/car/crest-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
@@ -434,7 +435,5 @@ test("flushTexPool disposes every pooled texture now, with its decal materials (
 });
 
 test("dropTrackWorld flushes the gfx texture pool", () => {
-  const g = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const body = slice(g, "function dropTrackWorld()", "// THE BUILD IN STEPS", "dropTrackWorld");
-  assert.match(body, /gfx\.flushTexPool\(\)/);
+  assert.match(symbolSource("function dropTrackWorld() {"), /gfx\.flushTexPool\(\)/);
 });
