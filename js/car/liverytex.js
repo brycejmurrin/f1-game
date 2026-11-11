@@ -975,10 +975,7 @@ const LiveryTex = (function () {
   // halo too — an early `return` from a tinted branch would skip it for
   // exactly the uploads most likely to need it. One source, one set of
   // passes, both cases.
-  // The tinted emblem, painted once per (image, size, tint) and reused (perf P6,
-  // #4546): an uploaded emblem is drawn from up to six atlas sites, and each
-  // call made and filled a fresh offscreen canvas. Keyed on the image object, so
-  // a new upload is a new entry; markChanged (any install or CLEAR) drops all.
+  // Tinted emblem cached per (image, size, tint) (perf P6, #4546); markChanged drops all.
   let _tintCache = new WeakMap();
   const TINT_PER_IMAGE_MAX = 24;
   markReady.push(() => { _tintCache = new WeakMap(); });

@@ -1083,9 +1083,7 @@ const FlybySeq = (function () {
     return _out;
   }
   let _lastIdx = -1, _airCorner = 0;
-  // The OS reduce-motion query, resolved once (perf hunt P6): solve() runs every menu / loading / start-lights
-  // frame and parsed a fresh MediaQueryList each time. A MediaQueryList's .matches is live, so caching the list
-  // (never the boolean) still follows a mid-flyby OS toggle.
+  // Reduce-motion MediaQueryList cached once (perf P6); its .matches stays live.
   let _reduceMq = null;
   function reducedMotion() {
     if (!_reduceMq) {

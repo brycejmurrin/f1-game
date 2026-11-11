@@ -22,12 +22,8 @@ const LiveryCrests = (function () {
     // 384 px and simplified to a few tenths of a percent is already smoother than
     // a curve anyone would fit to it, and a straight-line path needs no curve
     // support here or in the offline rasteriser that measures these.
-    // PARSED ONCE PER `d` (perf P6, #4546). The path data is static, and a
-    // crest traces each layer up to seven times per site (three halo, three
-    // outline, one fill) at ~9 sites per atlas build — the char-by-char parse
-    // was the whole cost. parsePath walks the string exactly as the old inline
-    // parser did and records [op, x, y] triples in path units; tracePath replays
-    // them through f.X/f.Y, so the canvas call sequence is unchanged.
+    // Parsed once per `d` (perf P6, #4546) into [op, x, y]; tracePath replays
+    // them, so the canvas call sequence is unchanged.
     const OP_M = 0, OP_L = 1, OP_Z = 2;
     const _pathCache = new Map(), PATH_CACHE_MAX = 512;
     function parsePath(d) {

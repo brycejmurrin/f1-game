@@ -253,10 +253,7 @@ function pruneScope(scope) {
   if (!Object.keys(entry.modes || {}).length && !Object.keys(entry.comfort || {}).length) delete map[key];
 }
 
-// mergedProf memo (perf hunt P6): apply() runs it once a camera frame, and it built a layers array + an out object
-// every call even with nothing tuned. The merge depends only on the five stores and the resolved track/car keys, so
-// it is cached per mode against _rev (bumped by EVERY store writer below via touch()) and the two keys (the live
-// context can move without a write). The cached object is shared: callers read it, never mutate it.
+// Cached per mode on _rev + track/car keys (perf P6, #4622); shared object: read, never mutate.
 function mergedProf(mode) {
   const ctx = contextShared(), track = ctx.track, car = ctx.car;
   let c = _merged[mode];
