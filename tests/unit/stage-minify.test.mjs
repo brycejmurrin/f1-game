@@ -383,7 +383,7 @@ test("#5050 minifyShellHtml: comments go, the tag list stays, every inline scrip
   const { minify: terserMinify } = await import("terser");
   const minifyScript = async (body) => (await terserMinify(body, { ...MINIFY_OPTIONS, format: { ...MINIFY_OPTIONS.format } })).code;
   const out = await minifyShellHtml(src, { minifyScript });
-  assert.equal(out.includes("<!--"), false, "no HTML comment left");
+  assert.deepEqual(out.match(/<!--/g), null, "no HTML comment left");
   assert.deepEqual(tags(out), tags(src), "every <script>/<link> tag (src, href, media, type) is byte-identical");
   const bodies = inlineScripts(out);
   assert.equal(bodies.length, inlineScripts(src).length, "same inline scripts");
@@ -394,7 +394,7 @@ test("#5050 minifyShellHtml: comments go, the tag list stays, every inline scrip
   assert.equal(out.length < src.length, true);
   const keep = await minifyShellHtml(src, { minifyScript: null });
   assert.deepEqual(inlineScripts(keep), inlineScripts(src), "no terser: bodies and so the CSP are unchanged");
-  assert.equal(keep.includes("<!--"), false);
+  assert.deepEqual(keep.match(/<!--/g), null, "comments go without terser too");
   assert.equal(await minifyShellHtml("<p>a</p>\n  <!-- x -->\n<p>b<!-- y --></p>\n<script>//<!-- kept\n</script>\n"),
     "<p>a</p>\n<p>b</p>\n<script>//<!-- kept\n</script>\n", "a comment's own line goes; script data is never scanned");
 });
