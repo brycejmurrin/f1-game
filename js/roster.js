@@ -784,6 +784,7 @@
   ],
     LAZY_CAM_EDITOR_EDGES: [],
     LAZY_CAREER_UI: [
+    "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js"
   ],

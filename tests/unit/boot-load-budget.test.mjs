@@ -29,11 +29,13 @@ const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 // cannot be lazy without a redesign (Bryce, 2026-10-29: "Raise to 326").
 // 323: #4978 rows 1+4 moved overlay/render.js (OVERLAY_PAGE), three-inspector (LAZY_AGENT) and
 // gfx-debug-overlay (LAZY_DEV) off the wall (326 → 323); the freed slots are not headroom for new eager files.
-const MAX_EAGER_SCRIPTS = 323;
+// 322: #4748 moved career-backup into LAZY_CAREER_UI (tip 320 → 319 tags).
+const MAX_EAGER_SCRIPTS = 322;
 // 8.25 MB: raised from 8.20 MB by Bryce's grant (2026-10-30 ~16:51Z, quoted via the dispatcher: "Raise budget +50 KB").
 // Cause: #4260 grew js/ui/screen-looks.js +8.6 KB (tip 8,209,755); #3981's ERS sector plan adds ~6 KB next.
 // 8.22 MB: lowered by #4978 rows 1+4 (tip 8,228,695 → 8,198,163 raw, −30.5 KB).
-const MAX_EAGER_BYTES = 8_220_000;
+// 8.18 MB: lowered by #4748 career-backup → LAZY_CAREER_UI (tip 8,213,577 → 8,159,200 raw, −54.4 KB).
+const MAX_EAGER_BYTES = 8_180_000;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");

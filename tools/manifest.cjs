@@ -181,7 +181,6 @@ const FULL = [
   "js/core/i18n.js",
   "js/core/dom-apply.js",
   "js/career/restore-points.js",
-  "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
   "js/track/core/geom.js",
@@ -849,9 +848,6 @@ const HARD_EDGES = [
   ["js/career/save-migrate.js", "js/core/save-schema-registry.js"],
   ["js/core/save-schema-registry.js", "js/core/store.js"],
   ["js/career/save-migrate.js", "js/core/store.js"],
-  ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
-  ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
-  ["js/core/native-download.js", "js/career/career-backup.js"], // Capacitor Share download path
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
@@ -1303,11 +1299,14 @@ const LAZY_CAM_EDITOR = [
 ];
 const LAZY_CAM_EDITOR_EDGES = [];
 
-// CAREER screen body (~63 KB). Title buttons call CareerUI.openHub/openSlots
-// (FULL stub in career-ui-boot.js); the sheet itself is unreachable until
-// CAREER opens. Dom / Career / CareerBackup stay FULL; planning cards load
-// before the screen that calls them.
+// CAREER screen body (~63 KB) and the six-slot backup (~55 KB, #4748). Title
+// buttons call CareerUI.openHub/openSlots (FULL stub in career-ui-boot.js); the
+// sheet itself is unreachable until CAREER opens. CareerUI.create kicks this
+// bundle at boot, and SETTINGS > FILES awaits CareerUI.ensureBackup before its
+// CAREER FILE save/load reads CareerBackup. Dom / Career stay FULL; planning
+// cards load before the screen that calls them.
 const LAZY_CAREER_UI = [
+  "js/career/career-backup.js", // CareerBackup: versioned six-slot export/import (reads store / SaveMigrate at call time)
   "js/career/career-planning-ui.js", // read-only planning cards and explicit recovery
   "js/career/career-ui.js",   // CareerScreen
 ];
