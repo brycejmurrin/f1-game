@@ -313,10 +313,16 @@ const WeatherArc = (function () {
     /** game.js trackWetness(): the live road wetness — the LAP MEAN under a
      *  local shower (what tread advice and pit calls read, so a half-wet lap is
      *  a dilemma, not a verdict). No arc → the weather's own value. Cached per
-     *  arc.t (gripMult reads it per car, per step). */
+     *  arc.t (gripMult reads it per car, per step); with no arc, per weather
+     *  enum: a pure function of it, so no setter needs to clear it (#5055). */
+    let _sw = null, _sv = 0;
     function wetness() {
       const a = arc;
-      if (!a) return wetOf(G.raceWeather);
+      if (!a) {
+        const w = G.raceWeather;
+        if (w !== _sw) { _sv = wetOf(w); _sw = w; }   // wetOf's VM fallback = TyreModel's table
+        return _sv;
+      }
       if (typeof a.w0 !== "number") adopt(a);
       if (a._wt !== a.t) {
         a._wt = a.t;

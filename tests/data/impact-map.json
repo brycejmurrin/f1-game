@@ -14445,6 +14445,7 @@
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-plan.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
+        "tests/unit/weather-arc-wetness-memo.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "dryLine": [
@@ -14530,7 +14531,8 @@
         "tests/unit/forecast.test.mjs",
         "tests/unit/rain-cells.test.mjs",
         "tests/unit/storm-weather.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/weather-arc-rain.test.mjs",
+        "tests/unit/weather-arc-wetness-memo.test.mjs"
       ],
       "wetnessAt": [
         "tests/unit/rain-cells.test.mjs",
