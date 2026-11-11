@@ -2245,7 +2245,8 @@
         "tests/unit/light-grid.test.mjs"
       ],
       "persist": [
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "refreshStoredContext": [
         "tests/unit/cam-context-alloc.test.mjs"
