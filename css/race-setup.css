@@ -227,6 +227,7 @@
    (nontext-contrast keeps every accent consumer decorative) and off a new raw
    colour (the rawColor ratchet). */
 .trb-custom { background: color-mix(in oklab, var(--gold) 14%, transparent); color: var(--gold); }
+.trb[data-stale] { background: color-mix(in oklab, var(--red) 16%, transparent); color: var(--red); }
 /* Section header inside the picker list (CURRENT SEASON / CLASSIC CIRCUITS).
    Sticky so the group stays identifiable while the list scrolls under it. */
 .track-group-head {

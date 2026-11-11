@@ -329,7 +329,7 @@ const CustomTracks = (function () {
   }
 
   const isCustom = (def) => !!(def && def.custom);
-  // content id → first RED message or null: this session's validator verdict on a stored design (STALE DESIGNS, below).
+  // content id → first RED message or null (STALE DESIGNS, below).
   const _verdicts = new Map();
 
   /** Rebuild the custom tail of Tracks.LIST from storage. Never mid-race: the
@@ -549,7 +549,7 @@ const CustomTracks = (function () {
   const later = (fn, ms) => { if (typeof setTimeout === "function") setTimeout(fn, ms); else fn(); };
   let _judging = null, _sweepFailed = false;
   const unjudged = () => load().items.filter((it) => !_verdicts.has(it.id));
-  /** The first RED rule a stored design breaks today, else null (null too while unjudged). */
+  /** The first RED rule a stored design breaks today; null when it passes or is unjudged. */
   function stale(id) { return _verdicts.get(id) || null; }
   /** Judge every stored design not yet judged. Resolves the count judged, -1 when the validator did not load. */
   function judgeStored() {
@@ -582,13 +582,21 @@ const CustomTracks = (function () {
     _staleTold.add(id);
     return true;
   }
+  const _asked = new Set();
+  /** The picker's badge: today's RED rule or null. Judges an unjudged circuit once; a RED verdict calls `again`. */
+  function badge(id, again) {
+    const why = stale(id);
+    if (why || _verdicts.has(id) || _asked.has(id) || racing()) return why;
+    _asked.add(id);
+    judgeStored().then(() => { if (stale(id)) { tellStale(id); if (again) again(); } });
+    return null;
+  }
   /** Boot and every menu return: judge only when a custom circuit is selected (it is about to be
    *  raced) or the validator is already resident, so no other player pays for the designer bundle. */
   function staleSweep() {
     const resident = typeof TrackValidate !== "undefined";
     // A sweep whose bundle did not load (offline) is not retried on every menu return.
     if (racing() || !(resident || (selectedId() && !_sweepFailed))) return Promise.resolve(false);
-    // Idle: the first call is game.js's boot, and the bundle is ~20 scripts.
     return new Promise((res) => { if (typeof requestIdleCallback === "function") requestIdleCallback(() => res(), { timeout: 4000 }); else later(res, 800); })
       .then(() => judgeStored()).then((n) => { _sweepFailed = n === -1; return tellStale(); }).catch(() => false);
   }
@@ -717,6 +725,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { COLLECTION_FORMAT, exportCollection, importCollection, preflightCollection, commitCollectionPreflight, cancelCollectionPreflight, LIMITS, KERB_STYLES, stale, judgeStored, tellStale, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
+  return { COLLECTION_FORMAT, exportCollection, importCollection, preflightCollection, commitCollectionPreflight, cancelCollectionPreflight, LIMITS, KERB_STYLES, stale, badge, judgeStored, tellStale, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
 })();
 Object.freeze(CustomTracks);

@@ -6,6 +6,8 @@
 // 2. A `#track=` share link whose designer bundle does not load is stripped
 //    from the URL and announced once, instead of retrying on every menu return;
 //    the TRACK DESIGNER door retries it.
+// 3. The picker's preview panel carries a BREAKS TODAY'S RULES badge for the
+//    selected stale circuit (js/ui/select-screen.js reads `CustomTracks.badge`).
 //
 // The REAL engine, registry and validator in one VM (the page's load order).
 // Run: node --test tests/unit/custom-tracks-stale.test.mjs
@@ -17,6 +19,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -167,4 +170,84 @@ test("the TRACK DESIGNER door retries the lost link once the bundle loads", asyn
   await b.door.onclick(); await settle();
   assert.equal(b.opened.length, 2);
   assert.equal(b.opened[1], null, "the next tap is the ordinary door");
+});
+
+test("badge(): the picker's read judges an unjudged circuit once, then repaints and says the banner", async () => {
+  const b = boot([design(), SHORT]);
+  const [good, short] = b.Tracks.LIST.filter((t) => t.custom).map((t) => t.id);
+  let again = 0;
+  assert.equal(b.C.badge(short, () => again++), null, "unjudged: no badge on a guess");
+  assert.equal(b.C.badge(short, () => again++), null, "and the second paint does not start a second judge");
+  await settle();
+  assert.equal(again, 1, "one repaint when the verdict lands RED");
+  assert.equal(b.C.badge(short, () => again++), "Lap is 1.03 km — at least 2.5 km");
+  assert.deepEqual(b.said, ["SHORT LOOP BREAKS TODAY'S TRACK RULES — FIX IT IN TRACK DESIGNER"]);
+  assert.equal(b.C.badge(good, () => again++), null, "a passing circuit has no badge");
+  await settle();
+  assert.equal(again, 1, "and never repaints");
+  assert.equal(b.loads.length, 1);
+});
+
+test("badge(): a bundle that does not load is asked once per circuit, not on every repaint", async () => {
+  const b = boot([SHORT], { bundle: "missing" });
+  const id = b.Tracks.LIST.find((t) => t.custom).id;
+  for (let i = 0; i < 4; i++) { assert.equal(b.C.badge(id), null); await settle(); }
+  assert.equal(b.loads.length, 1);
+  b.state.inRace = true;
+  const c = boot([SHORT]); c.state.inRace = true;
+  assert.equal(c.C.badge(c.Tracks.LIST.find((t) => t.custom).id), null);
+  await settle();
+  assert.equal(c.loads.length, 0, "never judged from a race");
+});
+
+// The REAL picker over the mini DOM: the preview panel's fact badges for the selected circuit.
+function picker(verdict) {
+  const dom = makeDom();
+  dom.body.insertAdjacentHTML = () => {};
+  const data = new Map();
+  const store = { broken: null, rev: 0, subscribe: () => () => {},
+    get: (k, d) => (data.has(k) ? JSON.parse(data.get(k)) : d), set: (k, v) => { data.set(k, JSON.stringify(v)); return true; }, rawDel: () => true };
+  const LIST = [{ id: "custom-1", name: "Short Loop", country: "Custom", gp: "", custom: true, lengthKm: 1.03, path: { pts: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] } }];
+  const asks = [];
+  const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, Promise, Date, parseFloat, parseInt, isFinite, Infinity,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    document: dom.document, addEventListener() {}, removeEventListener() {}, setTimeout: () => 0, clearTimeout() {}, requestIdleCallback: () => 0, cancelIdleCallback() {},
+    getComputedStyle: () => ({ getPropertyValue: () => "", display: "flex", flexDirection: "row", gridTemplateColumns: "none", paddingTop: "0px", paddingBottom: "0px" }),
+    innerWidth: 844, innerHeight: 390, requestAnimationFrame: () => 0, cancelAnimationFrame() {}, devicePixelRatio: 1,
+    Tracks: { LIST }, Teams: { LIST: [] }, Flags: { svg: () => "" }, SeasonCal: { canRace: () => true, rounds: () => 0 },
+    TrackMaps: { cachedIds: () => [], corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], elevProfile: () => null, aspect: () => 1.5, fitCanvas: () => ({ w: 100, h: 60 }), draw() {} },
+    TrackBuildClient: { enabled: () => false },
+    CustomTracks: { badge: (id, again) => { asks.push({ id, again }); return verdict.why; }, ensureEditor: async () => false, get: () => null } };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/select-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/select-screen.js") });
+  const $ = (id) => dom.byId(id);
+  for (const id of ["sel-preview-name", "sel-preview-gp", "sel-preview-meta", "sel-preview-rec", "sel-preview-map", "sel-hero", "sel-still", "sel-preview-facts"]) {
+    if (!$(id)) { const e = dom.document.createElement(id === "sel-preview-map" ? "canvas" : "div"); e.id = id; dom.document.body.appendChild(e); }
+  }
+  const hero = $("sel-hero");
+  Object.defineProperty(hero, "clientWidth", { get: () => 400 });
+  Object.defineProperty(hero, "clientHeight", { get: () => 240 });
+  hero.closest = () => ({ dataset: { density: "normal" } });
+  const G = { $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {}, getLiveryId: () => "default", getLiveries: () => [],
+    els: { select: dom.document.body, selTracks: dom.document.body, selGo: null, selTitle: null, selTrackSection: null, selCircuitLabel: null,
+      selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"), selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"), selPreviewRec: $("sel-preview-rec"), selTeams: dom.document.body },
+    trackIdx: 0, teamIdx: 0, driverIdx: 0, timeTrial: false, seasonMode: false, netRoom: false, daily: null, soundOn: false, announce() {}, buildSetup() {} };
+  const menus = sb.Menus.create(G);
+  const facts = () => Array.from($("sel-preview-facts").children).map((c) => ({ cls: c.className, text: c.textContent, title: c.title || "", stale: c.dataset.stale || "" }));
+  return { menus, asks, facts };
+}
+
+test("the picker's preview panel badges the selected stale circuit, and repaints when the verdict lands", () => {
+  const verdict = { why: null };
+  const p = picker(verdict);
+  p.menus.updateTrackPreview();
+  assert.deepEqual(p.facts().map((f) => f.text), ["CUSTOM CIRCUIT"], "unjudged: only the custom badge");
+  assert.equal(p.asks[0].id, "custom-1", "the picker asked for the selected circuit's verdict");
+  verdict.why = "Lap is 1.03 km — at least 2.5 km";
+  p.asks[0].again();   // CustomTracks calls this when the judge lands RED
+  const stale = p.facts().find((f) => f.stale);
+  assert.ok(stale, "the repaint carries the badge: " + JSON.stringify(p.facts()));
+  assert.equal(stale.text, "BREAKS TODAY'S RULES");
+  assert.equal(stale.title, verdict.why, "the rule it breaks rides the badge");
+  assert.match(read("css/race-setup.css"), /^\.trb\[data-stale\] \{[^}]*color:/m, "and the badge has a style");
 });

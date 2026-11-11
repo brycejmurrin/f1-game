@@ -1372,10 +1372,13 @@ function updateTrackPreview() {
     if (t.street) kinds.push(["trb trb-street", "STREET CIRCUIT"]);
     if (classicBadge(t, seasonIds())) kinds.push(["trb trb-classic", "CLASSIC"]);
     if (t.custom) kinds.push(["trb trb-custom", "CUSTOM CIRCUIT"]);
+    // #5048: a stored design today's validator marks RED says so here.
+    const why = t.custom && typeof CustomTracks !== "undefined" && CustomTracks.badge(t.id, () => { if (Tracks.LIST[G.trackIdx] === t) updateTrackPreview(); });
+    if (why) kinds.push(["trb", "BREAKS TODAY'S RULES", why]);
     if (t.banked) kinds.push(["trb", "BANKED"]);
     factsEl.textContent = "";
-    for (const [cls, label] of kinds) {
-      const b = document.createElement("span"); b.className = cls; b.textContent = label; factsEl.appendChild(b);
+    for (const [cls, label, why] of kinds) {
+      const b = document.createElement("span"); b.className = cls; b.textContent = label; if (why) b.dataset.stale = b.title = why; factsEl.appendChild(b);
     }
   }
   const detail = document.getElementById("sel-detail-chip");

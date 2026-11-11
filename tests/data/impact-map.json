@@ -6510,6 +6510,9 @@
       "arcToIndexFrac": [
         "tests/unit/custom-tracks.test.mjs"
       ],
+      "badge": [
+        "tests/unit/custom-tracks-stale.test.mjs"
+      ],
       "cancelCollectionPreflight": [
         "tests/unit/custom-tracks.test.mjs"
       ],
@@ -19098,6 +19101,7 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
         "tests/unit/ctx-lost-retry-reload.test.mjs",
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
@@ -19138,6 +19142,7 @@
         "tests/unit/custom-tracks.test.mjs"
       ],
       "updateTrackPreview": [
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/select-preview-defer.test.mjs"
       ],
       "*": [
