@@ -24,8 +24,8 @@
 //             `success` on the PR's current head, newest attempt; a run that went green only on a re-run after a
 //             failed job (`run_attempt` > 1) fails the row
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
-//             name) needs the `config-ok` label, last added by Bryce in person, and newer than the last push that
-//             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
+//             name) needs the `config-ok` label, last added by Bryce in person, and every push after it must leave
+//             the PR's own config diff as he saw it (configPushState: a tip sync keeps it); any other diff passes. A package.json diff that is ONLY the
 //             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
@@ -133,14 +133,48 @@ export function configVerdict(files, labels, events = null, owner = OWNER, push 
   return row(true, `${CONFIG_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
 }
 
+/** The compare API lists at most this many files; a list that long may be truncated. */
+export const COMPARE_FILE_CAP = 300;
+
+/**
+ * The PR's own config-path changes at `ref`: the CONFIG_PATH rows of the three-dot `compare/<base>...<ref>` (only the
+ * PR's side of the merge base, the diff the PR's Files tab shows). `skipPkg` drops a plain (not renamed) package.json
+ * row. → { rows: [{ path, key }] } sorted by path, or { error } when the compare is unreadable, may be truncated, or a
+ * changed config row carries no patch to compare. Side effects only through `request`.
+ */
+export function ownConfigDiff({ base, ref, request, skipPkg = false }) {
+  const at = `${base}...${String(ref).slice(0, 8)}`;
+  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(ref)}`);
+  if (cmp.error) return { error: `compare ${at}: ${cmp.error}` };
+  const files = cmp.json?.files;
+  if (!Array.isArray(files)) return { error: `compare ${at} lists no files` };
+  if (files.length >= COMPARE_FILE_CAP) return { error: `compare ${at} lists ${files.length} files (the API stops at ${COMPARE_FILE_CAP})` };
+  const rows = [];
+  for (const f of files) {
+    if (!configFiles(filePaths([f])).length) continue;
+    if (skipPkg && f.filename === GENERATED_PKG && !f.previous_filename) continue;
+    // The patch pins the base side too: the same head blob over a different base (a resolution that reverts what
+    // the tip changed in that file) is a different change. A pure rename has no patch and no changes.
+    const patch = typeof f.patch === "string" ? f.patch : (Number(f.changes) === 0 ? "" : null);
+    if (patch == null) return { error: `compare ${at}: ${f.filename} has no patch to compare` };
+    rows.push({ path: f.filename, key: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", f.sha || "", patch]) });
+  }
+  return { rows: rows.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) };
+}
+
 /**
  * When did the head get pushed relative to the owner's `config-ok` at `labelAt`? Reads ci.yml's pull_request runs of
  * this PR (server timestamps; a commit date can say anything). The head is covered when the label is newer than the
- * head's first run. Otherwise the head at label time is the head of the newest run created before the label, and the
- * compare from it to the head must touch no CONFIG_PATH.
- * → { state: "covered"|"after"|"unknown", evidence }. Side effects only through `request`.
+ * head's first run. Otherwise the head at label time (`from`) is the head of the newest run created before the label,
+ * and the PR's OWN config-path changes (ownConfigDiff, three-dot against `base`) must be the same at `from` and at
+ * the head: the same files, blob shas and patches. A merge of the deploy tip that leaves them alone keeps the label
+ * (#5432: 24 of 40 re-clicks in 2026-11-09..11 were such syncs); a commit of the PR, or a conflict resolution, that
+ * changes any of them voids it. An unreadable or possibly truncated compare is "unknown" (waits; a fresh click
+ * covers it). `pkgGeneratedAt(ref)` → true when package.json's change at `ref` is only the generated test lists:
+ * package.json is skipped on both sides only when that holds at the head AND at `from`.
+ * → { state: "covered"|"after"|"unknown", evidence }. Side effects only through `request` and `pkgGeneratedAt`.
  */
-export function configPushState({ pr, head, headRef, labelAt, request }) {
+export function configPushState({ pr, head, headRef, labelAt, request, base = DEPLOY, pkgGeneratedAt = null }) {
   const t = (iso) => Date.parse(iso || "") || 0;
   const L = t(labelAt);
   if (!L) return { state: "unknown", evidence: "no config-ok label time" };
@@ -154,14 +188,17 @@ export function configPushState({ pr, head, headRef, labelAt, request }) {
   const before = mine.filter((w) => t(w.created_at) < L).sort((a, b) => t(b.created_at) - t(a.created_at))[0];
   if (!before) return { state: "after", evidence: `no run of PR #${pr} predates the label, so the head ${head.slice(0, 8)} was pushed` };
   const from = String(before.head_sha || "").toLowerCase();
-  const cmp = request(`compare/${encodeURIComponent(from)}...${encodeURIComponent(head)}`);
-  if (cmp.error) return { state: "unknown", evidence: `compare ${from.slice(0, 8)}...${head.slice(0, 8)}: ${cmp.error}` };
-  const files = cmp.json?.files;
-  if (!Array.isArray(files) || files.length >= 300) return { state: "after", evidence: `the compare ${from.slice(0, 8)}...${head.slice(0, 8)} is unreadable or truncated, so a push` };
-  const hit = configFiles(filePaths(files));
-  return hit.length
-    ? { state: "after", evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
-    : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no config path` };
+  const skipPkg = !!(pkgGeneratedAt && pkgGeneratedAt(head) && pkgGeneratedAt(from));
+  const was = ownConfigDiff({ base, ref: from, request, skipPkg });
+  if (was.error) return { state: "unknown", evidence: was.error };
+  const now = ownConfigDiff({ base, ref: head, request, skipPkg });
+  if (now.error) return { state: "unknown", evidence: now.error };
+  const keys = (d) => new Map(d.rows.map((r) => [r.path, r.key]));
+  const a = keys(was), b = keys(now);
+  const differ = [...new Set([...a.keys(), ...b.keys()])].filter((p) => a.get(p) !== b.get(p)).sort();
+  return differ.length
+    ? { state: "after", evidence: `a push changing the PR's own config diff (${differ.slice(0, 3).join(", ")}${differ.length > 3 ? ", …" : ""}; ${from.slice(0, 8)} → ${head.slice(0, 8)}) came` }
+    : { state: "covered", evidence: `the PR's own config diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same blobs and patches)` };
 }
 
 /** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan fails (skill steward
@@ -479,7 +516,8 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   }
   const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
   const needsPush = configFiles(changed).length && cfgLast?.event === "labeled" && byOwner(cfgLast, owner);
-  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
+  const pkgGeneratedAt = generated?.ok ? (ref) => (ref === head ? true : generatedPkgCheck({ head: ref, base, request }).ok) : null;
+  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request, base, pkgGeneratedAt }) : null;
   rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
   if (generated) rows.config = { ...rows.config, evidence: `${rows.config.evidence}; ${generated.ok ? generated.evidence : `package.json counted as a config edit: ${generated.evidence}`}` };
   let tip = "";

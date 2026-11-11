@@ -96,21 +96,54 @@ test("configVerdict: a diff touching a config path needs `config-ok` last added 
   assert.equal(configVerdict(files, ["config-ok"], ok, "brycejmurrin", { state: "unknown", evidence: "x" }).pending, true);
 });
 
-test("configPushState: config-ok binds to the pushes made before it; a later push touching a config path needs a fresh label", () => {
+test("configPushState: config-ok binds to the PR's own config diff at label time; a push that changes it needs a fresh label", () => {
   const H0 = "0".repeat(40), H1 = "1".repeat(40), H2 = "2".repeat(40);
   const run = (sha, at, pr = 7) => ({ head_sha: sha, created_at: at, pull_requests: [{ number: pr }] });
-  const mk = (runs, cmp) => (p) => p.startsWith("actions/workflows/ci.yml/runs?event=pull_request&branch=cursor%2Fx") ? { json: { workflow_runs: runs } }
-    : p.startsWith("compare/") ? (cmp ? { json: { files: cmp } } : { error: "HTTP 404" }) : { error: `unexpected ${p}` };
+  // cmp: { [sha]: files | null } for compare/deploy-x...<sha> (null = unreadable).
+  const mk = (runs, cmp = {}) => (p) => {
+    if (p.startsWith("actions/workflows/ci.yml/runs?event=pull_request&branch=cursor%2Fx")) return { json: { workflow_runs: runs } };
+    const m = /^compare\/deploy-x\.\.\.([0-9a-f]{40})$/.exec(p);
+    if (m) return cmp[m[1]] ? { json: { files: cmp[m[1]] } } : { error: "HTTP 404" };
+    return { error: `unexpected ${p}` };
+  };
   const at = (h) => `2026-11-03T${String(h).padStart(2, "0")}:00:00Z`;
-  const q = (runs, cmp, head = H2) => configPushState({ pr: 7, head, headRef: "cursor/x", labelAt: at(10), request: mk(runs, cmp) }).state;
-  assert.equal(q([run(H0, at(8)), run(H2, at(9))]), "covered", "labelled after the head was pushed");
-  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "js/a.js" }]), "covered", "a later push touching no config path");
-  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "js/a.js", previous_filename: ".claude/hooks/x.sh" }]), "after", "a later rename of a hook");
-  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "tools/ci/merge-gate.mjs" }]), "after");
-  assert.equal(q([run(H0, at(8)), run(H2, at(11))], null), "unknown", "compare unreadable");
-  assert.equal(q([run(H2, at(11))]), "after", "no run before the label");
-  assert.equal(q([run(H0, at(8)), run(H2, at(9), 99)]), "unknown", "another PR's run on the head does not date this PR's push");
-  assert.equal(q([run(H0, at(8)), run(H1, at(9))]), "unknown", "no run on the head yet");
+  const q = (runs, cmp, head = H2, extra = {}) => configPushState({ pr: 7, head, headRef: "cursor/x", labelAt: at(10), request: mk(runs, cmp), base: "deploy-x", ...extra });
+  const s = (...a) => q(...a).state;
+  const hook = { filename: ".claude/hooks/a.sh", status: "modified", sha: "b1", changes: 2, patch: "@@ -1 +1 @@\n-a\n+b" };
+  const js = (sha) => ({ filename: "js/a.js", status: "modified", sha, changes: 1, patch: `@@ -1 +1 @@\n+${sha}` });
+  const later = [run(H0, at(8)), run(H2, at(11))];
+  assert.equal(s([run(H0, at(8)), run(H2, at(9))]), "covered", "labelled after the head was pushed");
+  // Fixture 1: a pure tip merge. The tip's own config files are not in the PR's three-dot diff; the PR's own are byte-identical.
+  assert.equal(s(later, { [H0]: [hook, js("j0")], [H2]: [hook, js("j2")] }), "covered", "a sync merge (or a non-config push) keeps the label");
+  assert.match(q(later, { [H0]: [hook], [H2]: [hook] }).evidence, /own config diff is unchanged since 00000000 \(1 file/);
+  // Fixture 2: the merge's conflict resolution edits the PR's own config file (a new blob).
+  assert.equal(s(later, { [H0]: [hook], [H2]: [{ ...hook, sha: "b2", patch: "@@ -1 +1 @@\n-a\n+c" }] }), "after", "a resolution that changes the PR's config file voids it");
+  // ... or keeps the PR's blob over a tip that changed the same file (a revert of the tip's change: the patch differs).
+  assert.equal(s(later, { [H0]: [hook], [H2]: [{ ...hook, patch: "@@ -1 +1 @@\n-z\n+b" }] }), "after", "the same blob over a different base is a different change");
+  // Fixture 3: a second commit by the PR that touches a config path (a new file, a rename, a deletion).
+  const p3 = q(later, { [H0]: [hook], [H2]: [hook, { filename: "tools/ci/merge-gate.mjs", status: "modified", sha: "m", changes: 1, patch: "+x" }] });
+  assert.equal(p3.state, "after");
+  assert.match(p3.evidence, /tools\/ci\/merge-gate\.mjs/);
+  assert.equal(s(later, { [H0]: [js("j0")], [H2]: [{ filename: "js/a.js", previous_filename: ".claude/hooks/x.sh", status: "renamed", sha: "r", changes: 0 }] }), "after", "a later rename out of a hook");
+  assert.equal(s(later, { [H0]: [hook], [H2]: [] }), "after", "a config change that left the PR's diff is a change too");
+  // Fixture 4: an unreadable compare, on either side, waits.
+  assert.equal(s(later, { [H2]: [hook] }), "unknown", "compare at label time unreadable");
+  assert.equal(s(later, { [H0]: [hook] }), "unknown", "compare at the head unreadable");
+  assert.equal(s(later, { [H0]: [{ ...hook, patch: undefined }], [H2]: [hook] }), "unknown", "a config row with changes and no patch cannot be compared");
+  // Fixture 5: 300+ files may be truncated: unknown, never after (a large tip merge is not a push).
+  const big = Array.from({ length: 300 }, (_, i) => js(`f${i}`));
+  const p5 = q(later, { [H0]: [hook], [H2]: [hook, ...big] });
+  assert.equal(p5.state, "unknown");
+  assert.match(p5.evidence, /301 files \(the API stops at 300\)/);
+  // package.json whose change is only the generated test lists at BOTH heads is skipped; otherwise compared.
+  const pkg = (sha) => ({ filename: "package.json", status: "modified", sha, changes: 3, patch: `+${sha}` });
+  assert.equal(s(later, { [H0]: [hook, pkg("p0")], [H2]: [hook, pkg("p2")] }, H2, { pkgGeneratedAt: () => true }), "covered", "a regenerated test list is not a config change");
+  assert.equal(s(later, { [H0]: [hook, pkg("p0")], [H2]: [hook, pkg("p2")] }, H2, { pkgGeneratedAt: (r) => r === H2 }), "after", "a real package.json change at label time is compared");
+  assert.equal(s(later, { [H0]: [hook, pkg("p0")], [H2]: [hook, pkg("p2")] }), "after");
+  assert.equal(s([run(H2, at(11))]), "after", "no run before the label");
+  assert.equal(s([run(H0, at(8)), run(H2, at(9), 99)]), "unknown", "another PR's run on the head does not date this PR's push");
+  assert.equal(s([run(H0, at(8)), run(H1, at(9))]), "unknown", "no run on the head yet");
+  assert.equal(s([run(H2, at(8)), run(H2, at(11))]), "covered", "a re-run on the labelled head dates it by its first run");
 });
 
 test("planRow: open items refuse, a `land:` item is exempt, no Plan fails except on a fold bot's PR", () => {
@@ -252,8 +285,11 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true, "config-ok by Bryce's own click");
   f.prRuns.push({ head_sha: "c".repeat(40), created_at: "2026-11-03T09:30:00Z", pull_requests: [{ number: 7 }] });
   f.prRuns[0].created_at = "2026-11-03T10:30:00Z";
-  const later = (p) => (p.startsWith("compare/") ? { json: { files: [{ filename: ".github/workflows/land.yml" }] } } : f.deps.request(p));
+  const own = (sha) => [{ filename: ".github/workflows/land.yml", status: "modified", sha, changes: 1, patch: `+${sha}` }];
+  const later = (p) => (p.startsWith("compare/deploy-x...") ? { json: { files: own(p.endsWith("c".repeat(40)) ? "w0" : "w1") } } : f.deps.request(p));
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, request: later }).rows[k].ok), ["config"], "a workflow push after Bryce's config-ok needs a fresh one");
+  const synced = (p) => (p.startsWith("compare/deploy-x...") ? { json: { files: own("w0") } } : f.deps.request(p));
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: synced }).ok, true, "a sync with the tip that leaves the PR's own workflow edit alone keeps Bryce's config-ok (#5432)");
   f.prRuns.pop(); f.prRuns[0].created_at = "2026-11-03T09:00:00Z";
   f.files.push({ filename: "docs/TESTING.md", previous_filename: ".githooks/pre-push" });
   f.pull.labels = []; f.events.length = 0;
@@ -623,8 +659,27 @@ test("land.yml concurrency (WP-L3a, c): noise labels run alone, CI re-gates neve
   assert.equal(group(wr("cursor/x", [{ number: 7 }])), "land-7", "a PR's CI re-gate queues behind that PR's events");
   assert.equal(group(wr(DEPLOY_BRANCH, [])), "land-tip");
   assert.equal(group(wr("fork-branch", [])), "land-sha-abc123", "a CI run naming no PR never shares land-tip");
+  const cfg = (action, labels) => ({ event_name: "pull_request_target", run_id: 99, event: { action, label: { name: "config-ok" }, pull_request: { number: 7, labels: labels.map((name) => ({ name })) } } });
+  assert.equal(group(cfg("labeled", ["land", "config-ok"])), "land-7", "Bryce's config-ok click on a `land` PR re-gates it in the PR's own group (#5432)");
+  assert.equal(group(cfg("unlabeled", ["land"])), "land-7");
+  assert.equal(group(cfg("labeled", ["config-ok"])), "land-noise-99", "without `land` it is noise");
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], prt("labeled", "land")), true);
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], wr("cursor/x", [{ number: 7 }])), false, "a CI or train re-gate never cancels");
+});
+
+test("land.yml resolve (#5432): a config-ok click on a `land` PR reaches resolve, so one gate evaluation runs on the label event", () => {
+  const ifs = (action, label, labels, extra = {}) => !!ghExpr(LAND.jobs.resolve.if, { event_name: "pull_request_target", ref: "refs/pull/7/merge",
+    event: { action, label: label && { name: label }, pull_request: { number: 7, labels: labels.map((name) => ({ name })) }, ...extra } });
+  assert.equal(ifs("labeled", "config-ok", ["land", "config-ok"]), true, "config-ok added on a land PR");
+  assert.equal(ifs("unlabeled", "config-ok", ["land"]), true, "config-ok removed on a land PR (the gate then refuses at once)");
+  assert.equal(ifs("labeled", "config-ok", ["config-ok"]), false, "no `land`: nothing to gate");
+  assert.equal(ifs("labeled", "needs-owner", ["land", "needs-owner"]), false, "any other label stays noise");
+  assert.equal(ifs("labeled", "land", ["land"]), true);
+  assert.equal(ifs("unlabeled", "hold", []), true);
+  // resolve then picks exactly this PR: a pull_request_target event resolves `numbers=("$PR_NUMBER")`, one gate.
+  const pick = LAND.jobs.resolve.steps.find((s) => s.id === "pick");
+  assert.match(pick.run, /if \[ "\$EVENT" = pull_request_target \]; then\n\s+numbers=\("\$PR_NUMBER"\)/);
+  assert.equal(pick.env.PR_NUMBER, "${{ github.event.pull_request.number }}");
 });
 
 test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older status no longer blocks the write", () => {
