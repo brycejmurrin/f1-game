@@ -35,11 +35,11 @@ export const OWNER_PROFILES = Object.freeze({
 export const OWNER_EXPORT = OWNER_PROFILES.live;
 export const LEGACY_EXPORT = OWNER_PROFILES.legacy;
 /**
- * The UI SIZE axis of the owner acceptance layer: what his phone paints, then the touch default. A phone stops at 70 %
- * (js/ui/scale.js UI_PHONE_MIN, #5235 / #5384): his stored 61 is clamped and written back as 70, so 70 is his cell, and
- * the 61 / 51 / 40 cells this axis used to carry cannot be reached on a phone any more.
+ * The UI SIZE axis of the owner acceptance layer: 50, the phone floor (js/ui/scale.js UI_PHONE_MIN, #5452: Bryce
+ * "Down to 50 %"; it was 70 under #5235 / #5384), 70 (his stored value, the floor until #5452), then the touch default.
+ * A value under 50 cannot be reached on a phone: it is raised to 50 on load.
  */
-export const UI_SIZE_AXIS = Object.freeze([70, 109]);
+export const UI_SIZE_AXIS = Object.freeze([50, 70, 109]);
 export const STORE_PREFIX = "apex26.";
 
 /** The windows the acceptance layer runs, from THE record tests/data/phone-windows.json (#5218): `owner` = one of his
