@@ -34,12 +34,13 @@ test("the WebGPU census arm names its adapter and refuses any other (#5450)", as
   const { createRequire } = await import("node:module");
   const L = createRequire(import.meta.url)("../../tools/lib/webgpu-chrome-args.cjs");
   assert.deepEqual({ ...L.WEBGPU_CENSUS_ADAPTER }, { vendor: "google", architecture: "swiftshader" });
-  assert.doesNotMatch(L.WEBGPU_CENSUS_ARM, /lavapipe/i, "the arm is not called lavapipe while Dawn hands it SwiftShader");
+  assert.equal(L.WEBGPU_CENSUS_ARM, "software WebGPU (google/swiftshader adapter)", "the arm is not called lavapipe while Dawn hands it SwiftShader");
   assert.equal(L.adapterMismatch({ vendor: "google", architecture: "swiftshader", device: "", description: "" }), null);
   assert.equal(L.adapterMismatch({ vendor: "Google", architecture: "SwiftShader" }), null, "case is not identity");
-  assert.match(L.adapterMismatch({ vendor: "mesa", architecture: "", description: "llvmpipe (LLVM 19)" }), /mesa\/\?.*not google\/swiftshader/);
-  assert.match(L.adapterMismatch({ vendor: "google", architecture: "" }), /not google\/swiftshader/, "a half match is a mismatch");
-  assert.match(L.adapterMismatch(null), /no WebGPU adapterInfo read/, "no read is a failure, never a pass");
+  assert.equal(L.adapterMismatch({ vendor: "mesa", architecture: "", description: "llvmpipe (LLVM 19)" }),
+    "WebGPU adapter is mesa/? (llvmpipe (LLVM 19)), not google/swiftshader");
+  assert.equal(L.adapterMismatch({ vendor: "google", architecture: "" }), "WebGPU adapter is google/?, not google/swiftshader", "a half match is a mismatch");
+  assert.equal(L.adapterMismatch(null), "no WebGPU adapterInfo read (want google/swiftshader)", "no read is a failure, never a pass");
 });
 
 // Every tool that launches the census arm either checks the adapter or is named here with why not (only shrinks).
@@ -63,5 +64,5 @@ test("a tool on the census WebGPU launch checks the adapter, or is on the shrink
     if (ADAPTER_UNCHECKED.has(f)) assert.ok(!checks, `${f} checks the adapter now: drop it from ADAPTER_UNCHECKED`);
     else assert.ok(checks, `${f} launches the census WebGPU arm without adapterMismatch(): a run on another adapter would be filed under the wrong name`);
   }
-  for (const f of ADAPTER_UNCHECKED.keys()) assert.ok(users.includes(f), `${f} no longer launches the arm: drop it from ADAPTER_UNCHECKED`);
+  assert.deepEqual([...ADAPTER_UNCHECKED.keys()].filter((f) => !users.includes(f)), [], "these no longer launch the arm: drop them from ADAPTER_UNCHECKED");
 });
