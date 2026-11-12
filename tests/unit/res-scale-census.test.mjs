@@ -59,10 +59,9 @@ test("a tool on the census WebGPU launch checks the adapter, or is on the shrink
   const users = walk("tools").filter((f) => !f.startsWith("tools/lib/") &&
     fs.readFileSync(path.join(root, f), "utf8").includes("WEBGPU_LAVAPE_CHROMIUM_ARGS"));
   assert.ok(users.length > ADAPTER_UNCHECKED.size, "premise: the scan finds census tools beyond the unchecked list");
-  for (const f of users) {
-    const checks = /adapterMismatch\(/.test(fs.readFileSync(path.join(root, f), "utf8"));
-    if (ADAPTER_UNCHECKED.has(f)) assert.ok(!checks, `${f} checks the adapter now: drop it from ADAPTER_UNCHECKED`);
-    else assert.ok(checks, `${f} launches the census WebGPU arm without adapterMismatch(): a run on another adapter would be filed under the wrong name`);
-  }
-  assert.deepEqual([...ADAPTER_UNCHECKED.keys()].filter((f) => !users.includes(f)), [], "these no longer launch the arm: drop them from ADAPTER_UNCHECKED");
+  // One equality: the tools that launch the arm WITHOUT adapterMismatch() are exactly the unchecked list. A new
+  // launcher that skips the check, an entry that now checks, and an entry that no longer launches all show up by name.
+  const skips = users.filter((f) => !fs.readFileSync(path.join(root, f), "utf8").includes("adapterMismatch("));
+  assert.deepEqual(skips.sort(), [...ADAPTER_UNCHECKED.keys()].sort(),
+    "a census launched without adapterMismatch() would be filed under the wrong adapter's name; keep ADAPTER_UNCHECKED exact");
 });
