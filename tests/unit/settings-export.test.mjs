@@ -1838,3 +1838,14 @@ test("#4748: CAREER FILE load awaits the lazy CareerBackup before its future-ver
   assert.match(button.textContent, /NEWER-VERSION/, "futureCareerSlot ran with CareerBackup loaded, not 'unavailable'");
   assert.equal(b.reloads(), 0);
 });
+
+test("WHEEL LOCK & ABS (wheelState, wheelAssist) survive settings backup and restore (#4946)", () => {
+  const file = boot({ disk: { "apex26.wheelState": "1", "apex26.wheelAssist": "full" } }).collect("changes");
+  const dst = boot();
+  assert.equal(dst.loadSettings(file).skipped, 0);
+  assert.equal(dst.disk.get("apex26.wheelState"), "1");
+  assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
+  const bad = dst.loadSettings({ format: "apex26-settings-v1", settings: { driving: { wheelAssist: "turbo" } } });
+  assert.equal(bad.skipped, 1);
+  assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
+});

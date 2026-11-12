@@ -285,6 +285,8 @@ const SPEC = [
     // Self-contained (EnergyPlan.POLICIES' three names): settings-export loads without the race modules.
     normalize: (v) => (Array.isArray(v) && v.length === 3 && v.every((p) => p === "manual" || p === "deploy" || p === "save") ? v.slice() : undefined) },
   { k: "damageHandling", lane: "json", group: "driving", def: false, src: "js/race/race-settings.js DAMAGE row → DamageHandling.setEnabled (#1578)" },
+  { k: "wheelState", lane: "raw", group: "driving", def: "0", oneOf: ["0", "1"], src: "js/physics/wheel-state.js" },
+  { k: "wheelAssist", lane: "raw", group: "driving", def: "off", oneOf: ["off", "medium", "full"], src: "js/physics/wheel-state.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },

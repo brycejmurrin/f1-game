@@ -12746,15 +12746,27 @@
       ]
     },
     "js/physics/wheel-state.js": {
+      "assistLevel": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
       "axleStep": [
         "tests/unit/wheel-state.test.mjs"
       ],
       "enabled": [
         "tests/unit/wheel-state.test.mjs"
       ],
+      "mode": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "setAssistLevel": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
       "setEnabled": [
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "setMode": [
         "tests/unit/wheel-state.test.mjs"
       ],
       "stepPlayer": [
