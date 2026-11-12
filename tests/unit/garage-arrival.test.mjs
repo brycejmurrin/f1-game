@@ -2005,7 +2005,7 @@ test('noteResult carries the race to the way home: driver, fastest lap, wet, nig
 });
 
 test('#5066: the ADVANCED VISUALS tools hide and give back VISUAL STUDIO, never the HUD & CAMERA page', () => {
-  for (const file of ['js/garage/arrival.js', 'js/lighting/tuner-panel.js', 'js/camera/flyby-editor.js']) {
+  for (const file of ['js/garage/arrival.js', 'js/lighting/tuner-panel.js', 'js/camera/flyby-editor.js', 'js/camera/tuner-panel.js']) {
     const src = readFileSync(new URL('../../' + file, import.meta.url), 'utf8');
     assert.equal(src.includes('"pm-panel-display"'), false, file + ' touches the HUD & CAMERA page');
     assert.equal(src.includes('$("pm-panel-visual")'), true, file + ' hides and restores VISUAL STUDIO');
