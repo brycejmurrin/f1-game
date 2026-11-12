@@ -158,9 +158,18 @@ function cspBlock(html) {
 // they do not hold LCP, then flip to "all". That was an onload= attribute; an
 // attribute handler needs 'unsafe-inline'/'unsafe-hashes', so it is one hashed
 // script instead. A sheet already loaded when this runs has a .sheet; a
-// still-loading one gets a load listener (listeners are not CSP-governed).
-export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');` +
-  `for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>`;
+// still-loading one gets load/error listeners (listeners are not CSP-governed).
+// #5394: the sheets flip TOGETHER, in one animation frame once every one has
+// settled (loaded, or failed: a 404 must not hold the rest), so the title intro
+// pays one style recalc instead of one per sheet as each arrived. window "load"
+// is the backstop: it fires only after every sheet has settled, so a sheet that
+// failed before this script ran (no .sheet, and its error event already gone)
+// cannot leave the others on print. flip() runs its loop at most once.
+export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]'),n=L.length,d=0;` +
+  `function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}` +
+  `function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}` +
+  `window.addEventListener("load",flip);` +
+  `for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>`;
 
 function preloadBlock() {
   return (MANIFEST.CSS_PRELOAD || []).map((f) =>

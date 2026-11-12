@@ -38,10 +38,15 @@ const MAX_EAGER_SCRIPTS = 314;
 // Cause: #4260 grew js/ui/screen-looks.js +8.6 KB (tip 8,209,755); #3981's ERS sector plan adds ~6 KB next.
 // 8.22 MB: lowered by #4978 rows 1+4 (tip 8,228,695 → 8,198,163 raw, −30.5 KB).
 // 8.18 MB: lowered by #4748 career-backup → LAZY_CAREER_UI (tip 8,213,577 → 8,159,200 raw, −54.4 KB).
-// 8.07 MB: lowered by #4978 row 2 perf rig → LAZY_PERF (8,159,200 → 8,045,152 raw, −114.0 KB).
-// 8.047 MB: lowered by #4978 row 3 METRICS painter → LAZY_PERF metrics-panel.js (8,045,152 → 8,022,367 raw, −22.8 KB).
-// 7.941 MB: lowered by #4978 row 6 real-race family → LAZY_REAL_RACE (8,023,872 → 7,915,806 raw, −108.1 KB).
-const MAX_EAGER_BYTES = 7_941_000;
+// 8.15 MB: the cap came down from 8,220,000 with #5468 (#4748 career-backup → LAZY_CAREER_UI, #4978 row 2 perf rig →
+// LAZY_PERF). 8,150,000 is the owner's decision of 2026-11-11 (issue #5523, brycejmurrin "decision: 8150000",
+// 16:37:17Z), a deliberate exception to the "freed bytes are not headroom" default. Measured after #5468:
+// 314 scripts, 8,048,913 raw bytes (tip 240426c6) → 101,087 B of room.
+// 8,127,215: lowered by #4978 row 3 METRICS painter → LAZY_PERF metrics-panel.js (#5489): tip 7974edf7 8,053,745 →
+// 8,030,960 raw (−22,785), so the room stays the owner's 8,150,000 decision and the freed bytes are not handed out.
+// 8,018,484: lowered by #4978 row 6 real-race family → LAZY_REAL_RACE behind the FULL stub js/race/real-race-boot.js
+// (#5515): tip 2de6f5eb 8,076,221 → 7,967,490 raw (−108,731), so the room stays what the owner's decision left.
+const MAX_EAGER_BYTES = 8_018_484;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");

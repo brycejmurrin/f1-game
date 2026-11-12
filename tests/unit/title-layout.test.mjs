@@ -78,7 +78,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
   /** Run the queued animation frames (raf: true boots only). */
   const tick = () => { const todo = frames.splice(0); for (const fn of todo) if (fn) fn(); };
   const pagehide = () => { for (const fn of winOn.pagehide || []) fn(); };
-  return { dom, M, data, writes, pagehide, panel, titleBody, html: dom.documentElement, timers, rotate, mutated, tick };
+  return { dom, M, ctx, data, writes, pagehide, panel, titleBody, html: dom.documentElement, timers, rotate, mutated, tick };
 }
 
 test("normalize clamps every field and reads junk as shipped", () => {
@@ -433,6 +433,28 @@ test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and
   assert.match(block, /#title-car \{[^}]*scale: var\(--tl-art-size, 1\)/);
 });
 
+test("CSS: WIDTH keeps the Home grid centred on its column even when wider than it (#4529 part 3)", () => {
+  const block = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (sel) => {
+    const at = block.indexOf(sel + " {");
+    assert.ok(at > 0, `rule ${sel}`);
+    return block.slice(at, block.indexOf("}", at));
+  };
+  // Portrait, measured 2026-11-11 at 393x852: a centred grid item wider than
+  // its column pinned to the start edge, so WIDTH 100 painted 12..405px. One
+  // width token feeds both the width and a symmetric margin, start-aligned.
+  const base = rule(":root[data-title-btnw] #menu-buttons");
+  assert.match(base, /--_tl-bw: calc\(var\(--tl-btns-w, 100\) \* var\(--vwz\) \/ var\(--tl-btns-size, 1\) \/ var\(--tf, 1\)\)/);
+  assert.match(base, /width: var\(--_tl-bw\)/);
+  assert.match(base, /justify-self: start/);
+  assert.match(base, /margin-inline: calc\(\(100% - var\(--_tl-bw\)\) \/ 2\)/);
+  assert.doesNotMatch(base, /justify-self: center/);
+  // The compact-landscape floor (#5167) moves the TOKEN, so its margin follows its width.
+  const floor = rule(':root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons');
+  assert.match(floor, /--_tl-bw: max\(100%, calc\(/);
+  assert.doesNotMatch(floor, /(^|[^-])width:/);
+});
+
 /* ── APPEARANCE: one TITLE SCREEN fold, UI SIZE under READABILITY ────────── */
 const section = (id) => {
   const a = SHELL.indexOf(`<section id="${id}"`);
@@ -514,4 +536,22 @@ test("the home-scene motion chip cannot steal HOW TO PLAY at compact 200%", () =
   const css = read("css/experience.css");
   assert.match(css, /#home-motion:disabled\s*\{\s*pointer-events:\s*none/);
   assert.match(css, /#home-motion\s*\{[^}]*zoom:\s*var\(--ui-compact-brand-scale\)/s);
+});
+
+// #5385: the offset clamp reads what PAINTS. The doors are skewX(-6deg), so a door's drawn box overhangs the cluster's
+// layout box by ~2.3 px a side; at UI SIZE 50-61 on his phone (852x393, inset 59) the right column painted to 795.3
+// against the 793 safe edge. The fit pulls the cluster back by the overhang, not by its layout box alone.
+test("the offset clamp keeps the skewed doors' painted edge inside the safe box (#5385)", () => {
+  const { dom, M, ctx } = boot({}, { editor: true });
+  const ov = dom.byId("overlay"), mb = dom.byId("menu-buttons"), door = dom.byId("mb-race");
+  door.className = "bigbtn";
+  const rect = (l, t, w, h) => ({ left: l, top: t, right: l + w, bottom: t + h, width: w, height: h, x: l, y: t });
+  ov.getBoundingClientRect = () => rect(0, 0, 852, 393);
+  mb.getBoundingClientRect = () => rect(327.5, 8, 465.5, 300);   // the layout box ends exactly at 852 - 59
+  Object.defineProperty(mb, "offsetHeight", { value: 300, configurable: true });
+  door.getBoundingClientRect = () => rect(559.7, 8, 235.6, 44);  // its skewed drawn box: right 795.3
+  mb.querySelectorAll = (sel) => (sel === ".bigbtn" ? [door] : []);
+  ctx.getComputedStyle = () => ({ paddingLeft: "59px", paddingRight: "59px", paddingTop: "8px", paddingBottom: "21px", getPropertyValue: () => "" });
+  M.fit();
+  assert.equal(mb.style.getPropertyValue("--tf-dx"), "-2.3px", "pulled in by the 2.3 px the skew overhangs");
 });

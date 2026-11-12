@@ -471,6 +471,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/ci/apt-cached-install.sh": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "GitHub ::error::/::warning:: lines verbatim; the distinct mirror-unreachable text; exit 3 vs 1; populated=1 to GITHUB_OUTPUT"
+    },
     "tools/ci/assert-audit.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -490,6 +495,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Unknown measurement; threshold and advisory semantics"
+    },
+    "tools/ci/bot-pr-body.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "The PR body verbatim: the Plan the merge gate parses, the land item last"
     },
     "tools/ci/branch-audit.mjs": {
       "action": "artifact-first",
@@ -760,6 +770,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Unknown API/base forces no reuse; no stdout prose"
+    },
+    "tools/ci/reuse-draft-selected.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Any lookup doubt or moved tip forces no reuse; stdout is GITHUB_OUTPUT lines only"
     },
     "tools/ci/run-group.mjs": {
       "action": "artifact-first",
@@ -2545,6 +2560,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Explicit network mutation, source provenance and confirmation of write; no extra progress by default."
+    },
+    "tools/track/official-corners.cjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Fetch/read-cache split, fit RMS line and per-turn frac table."
     },
     "tools/track/rotate-markings.cjs": {
       "action": "keep-native",

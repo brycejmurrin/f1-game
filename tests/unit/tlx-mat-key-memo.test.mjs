@@ -42,7 +42,14 @@ function liftMemo() {
   assert.match(body, /function buildMatKey\(/, "buildMatKey is not in the lifted range");
   assert.match(body, /function matKeyFor\(/, "matKeyFor is not in the lifted range");
   // eslint-disable-next-line no-new-func
-  return new Function(`"use strict";${body};return { buildMatKey, matKeyFor };`)();
+  return new Function(`"use strict";${body};
+    let builds = 0;
+    const originalBuild = buildMatKey;
+    // matKeyFor calls buildMatKey through this binding, so the wrapper counts its
+    // builds. Return the ORIGINAL function: callers that read its source (the
+    // field list parsed from buildMatKey.toString()) must see the real builder.
+    buildMatKey = (...args) => { builds++; return originalBuild(...args); };
+    return { buildMatKey: originalBuild, matKeyFor, builds: () => builds };`)();
 }
 
 const { buildMatKey, matKeyFor } = liftMemo();
@@ -122,12 +129,18 @@ test("the chunked and instanced flags are part of the compare, not just the key"
   assert.equal(matKeyFor(o, false, false), plain);
 });
 
-test("a repeated call on unchanged input returns the SAME string instance", () => {
-  // The point of the memo, stated as a test: no rebuild means no new string.
-  // Object.is on the instance is the only way to see that from outside — an
-  // equal-but-fresh string would pass every assertion above and allocate
-  // exactly as much as before.
+test("unchanged input skips the key builder; mutation rebuilds exactly once", () => {
+  // Primitive strings compare by value. Count actual production builder calls,
+  // so an always-rebuild implementation returning equal strings cannot pass.
+  const memo = liftMemo();
   const o = { roughness: 0.4, emissive: 0.2 };
-  const a = matKeyFor(o, false, false);
-  assert.ok(Object.is(a, matKeyFor(o, false, false)), "the key was rebuilt for identical input");
+  const a = memo.matKeyFor(o, false, false);
+  assert.equal(memo.builds(), 1);
+  for (let i = 0; i < 10; i++) assert.equal(memo.matKeyFor(o, false, false), a);
+  assert.equal(memo.builds(), 1, "identical inputs must not rebuild");
+  o.roughness = 0.7;
+  assert.notEqual(memo.matKeyFor(o, false, false), a);
+  assert.equal(memo.builds(), 2, "mutation rebuilds once");
+  memo.matKeyFor(o, false, false);
+  assert.equal(memo.builds(), 2);
 });

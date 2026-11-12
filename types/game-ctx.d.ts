@@ -598,7 +598,8 @@ interface GameCtx {
   /** Arm-then-confirm for destructive buttons (the career DELETE? idiom, shared): first call arms in place and returns false, second runs `action`; disarm = the caller rebuilding the node. */
   readonly armConfirm: (btn: HTMLElement, armedText: string, action: () => void) => boolean;
   readonly getTeamParts: (teamId: string) => PartsSetup;
-  readonly saveTeamParts: (teamId: string, parts: PartsSetup) => void;
+  /** false when a conflicted career save refused it (#5044). */
+  readonly saveTeamParts: (teamId: string, parts: PartsSetup) => boolean;
   /** Re-resolve the player's fitted parts into mods, aero, ERS and the mesh-cache keys — what the garage's DONE and a race boot run; `__apex.garageParts` runs it mid-race. */
   readonly recomputePlayerMods: () => void;
   readonly getLiveryId: (teamId: string) => string;

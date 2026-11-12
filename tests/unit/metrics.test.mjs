@@ -628,8 +628,11 @@ test("METRICS ON before the LAZY_PERF panel lands asks the perf rig once, then p
 test("the METRICS painter ships in LAZY_PERF, not on the eager boot", async () => {
   const { createRequire } = await import("node:module");
   const M = createRequire(import.meta.url)("../../tools/manifest.cjs");
-  assert.ok(M.LAZY_PERF.includes("js/perf/metrics-panel.js"));
-  assert.ok(!M.FULL.includes("js/perf/metrics-panel.js"));
-  assert.ok(M.FULL.includes("js/perf/metrics-overlay.js"), "the rows, keys and picks stay eager");
-  assert.doesNotMatch(SRC, /function snapshot\(\) \{\n  const pg/, "snapshot()'s body moved to the panel");
+  // Manifest membership, read as sets (these are load-order facts, not source pins).
+  const lazy = new Set(M.LAZY_PERF), eager = new Set(M.FULL);
+  assert.equal(lazy.has("js/perf/metrics-panel.js"), true);
+  assert.equal(eager.has("js/perf/metrics-panel.js"), false);
+  assert.equal(eager.has("js/perf/metrics-overlay.js"), true, "the rows, keys and picks stay eager");
+  // That snapshot()'s body left the eager half is pinned by behaviour in the test above:
+  // without the panel, snapshot() answers {on, page} and nothing else.
 });

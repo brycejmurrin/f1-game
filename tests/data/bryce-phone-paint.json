@@ -64,6 +64,57 @@
         "scroll": 0
       }
     },
+    "safari@50": {
+      "title": {
+        "taps": 1,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 4,
+        "text": 2,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 7,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 14,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 2,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      }
+    },
     "safari@70": {
       "title": {
         "taps": 1,
@@ -166,6 +217,57 @@
         "scroll": 0
       }
     },
+    "standalone@50": {
+      "title": {
+        "taps": 1,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 4,
+        "text": 2,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 7,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 14,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 2,
+        "outside": 0,
+        "blocked": 1,
+        "scroll": 0
+      }
+    },
     "standalone@70": {
       "title": {
         "taps": 1,
@@ -265,6 +367,57 @@
         "text": 0,
         "outside": 0,
         "blocked": 0,
+        "scroll": 0
+      }
+    },
+    "w844@50": {
+      "title": {
+        "taps": 1,
+        "text": 0,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "select": {
+        "taps": 4,
+        "text": 2,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "garage": {
+        "taps": 0,
+        "text": 7,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "settings": {
+        "taps": 0,
+        "text": 1,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "hud": {
+        "taps": 0,
+        "text": 0,
+        "outside": 6,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "pause": {
+        "taps": 0,
+        "text": 14,
+        "outside": 0,
+        "blocked": 0,
+        "scroll": 0
+      },
+      "results": {
+        "taps": 0,
+        "text": 2,
+        "outside": 0,
+        "blocked": 1,
         "scroll": 0
       }
     },

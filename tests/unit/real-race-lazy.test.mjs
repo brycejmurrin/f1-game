@@ -23,13 +23,16 @@ const BODY = ["js/ui/watch-transport.js", "js/race/real-replay.js", "js/race/rea
 test("the real-race body is LAZY_REAL_RACE, not on the boot wall; the stub is", () => {
   assert.deepEqual(manifest.LAZY_REAL_RACE, BODY);
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");
+  // Roster membership through a Set and an index map: these read the manifest ARRAY, not source text.
+  const full = new Set(manifest.FULL);
+  const at = new Map(manifest.FULL.map((f, i) => [f, i]));
   const tags = new Set([...html.matchAll(/<script\b[^>]*\bsrc="([^"?#]+)/g)].map((m) => m[1]));
   for (const f of BODY) {
-    assert.ok(!manifest.FULL.includes(f), f + " left FULL");
+    assert.ok(!full.has(f), f + " left FULL");
     assert.ok(!tags.has(f), f + " has no index.html tag");
   }
-  assert.ok(manifest.FULL.includes("js/race/real-race-boot.js") && tags.has("js/race/real-race-boot.js"), "the RealRace stub boots eagerly");
-  assert.ok(manifest.FULL.indexOf("js/race/real-race-boot.js") < manifest.FULL.indexOf(manifest.PATHS.GAME), "the stub evaluates before game.js creates it");
+  assert.ok(full.has("js/race/real-race-boot.js") && tags.has("js/race/real-race-boot.js"), "the RealRace stub boots eagerly");
+  assert.ok(at.get("js/race/real-race-boot.js") < at.get(manifest.PATHS.GAME), "the stub evaluates before game.js creates it");
 });
 
 function stubWorld() {
