@@ -78,9 +78,12 @@ test.describe("COTA shared-foundation migration", () => {
         const u = (d11 * d20 - d01 * d21) / den, v = (d00 * d21 - d01 * d20) / den;
         return u >= -0.02 && v >= -0.02 && u + v <= 1.02 ? { u, v } : null;
       };
-      let propMax = 0;
+      // propMeshes / propPairs count what was measured: a missing props/glass
+      // capture skips the loop and leaves propMax 0, a clean pass over nothing.
+      let propMax = 0, propMeshes = 0, propPairs = 0;
       for (const name of ["props", "glass"]) {
         const mesh = caps[name];
+        if (mesh?.idx?.length) propMeshes++;
         for (let t = 0; mesh && t < mesh.idx.length; t += 3) {
           const ia = mesh.idx[t] * 3, ib = mesh.idx[t + 1] * 3, ic = mesh.idx[t + 2] * 3;
           const ax = mesh.pos[ia], ay = mesh.pos[ia + 1], az = mesh.pos[ia + 2];
@@ -92,12 +95,13 @@ test.describe("COTA shared-foundation migration", () => {
                 sample.z < Math.min(az, bz, cz) - 0.3 || sample.z > Math.max(az, bz, cz) + 0.3) continue;
             const bary = inside(sample.x, sample.z, ax, az, bx, bz, cx, cz);
             if (!bary) continue;
+            propPairs++;
             const over = ay + bary.u * (cy - ay) + bary.v * (by - ay) - sample.y;
             if (over > TOL && over < CEIL) propMax = Math.max(propMax, over);
           }
         }
       }
-      return { range: high - low, peakFrac, probes, propMax };
+      return { range: high - low, peakFrac, probes, propMax, propMeshes, propPairs };
     });
 
     expect(pageErrors).toHaveLength(0);
@@ -108,7 +112,13 @@ test.describe("COTA shared-foundation migration", () => {
     expect(result.range).toBeLessThan(36);
     expect(result.peakFrac).toBeGreaterThan(0.04);
     expect(result.peakFrac).toBeLessThan(0.12);
+    // A missing props/glass capture leaves propMax 0, so count what was scanned
+    // (headless VM, 2026-11-10: see propPairs below); the hit floor is > 0.
+    expect(result.propMeshes).toBeGreaterThanOrEqual(1);
+    expect(result.propPairs).toBeGreaterThan(0);
     expect(result.propMax).toBeLessThanOrEqual(0.20);
+    // A null overRoad passes the loop below; all 60 probes read terrain (headless VM, 2026-11-10).
+    expect(result.probes.filter((probe) => probe.overRoad != null)).toHaveLength(60);
     for (const probe of result.probes) {
       expect(probe.overRoad == null || probe.overRoad <= 0.18,
         `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: overRoad ${probe.overRoad} (gap ${probe.gap})`).toBe(true);

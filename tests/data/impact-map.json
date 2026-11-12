@@ -238,6 +238,7 @@
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/ui-resize.spec.js",
+        "tests/specs/ui-scale.spec.js",
         "tests/unit/capture-tools-regressions.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -2834,6 +2835,7 @@
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "*": [
+        "tests/specs/car-effects.spec.js",
         "tests/specs/quali.spec.js",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -7698,6 +7700,7 @@
         "tests/specs/physics-characterization.spec.js",
         "tests/specs/smoke.spec.js",
         "tests/specs/tlx-probes.spec.js",
+        "tests/specs/ui-button-touch.spec.js",
         "tests/specs/ui-scale.spec.js",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/director.test.mjs",
@@ -7784,6 +7787,7 @@
       ],
       "startRace": [
         "tests/specs/audio-smoke.spec.js",
+        "tests/specs/elevation-tracks.spec.js",
         "tests/specs/multiplayer-room.spec.js",
         "tests/specs/scenery-kits.spec.js",
         "tests/specs/smoke.spec.js",
@@ -8983,6 +8987,7 @@
         "tests/unit/livery-card-density.test.mjs"
       ],
       "openSetup": [
+        "tests/specs/parts-budget.spec.js",
         "tests/specs/parts-setup-ids.spec.js",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
@@ -18586,6 +18591,7 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "flashSector": [
+        "tests/specs/time-trial.spec.js",
         "tests/unit/hud-feel.test.mjs"
       ],
       "gapDecimals": [

@@ -112,6 +112,28 @@ async function forceHudFit(page) {
   });
 }
 
+/**
+ * Re-fit NOW and wait until that fit has published a NEW --hud-fit-stamp. The
+ * race() pages are frozen, and a frozen page's 10 Hz updateHud(false) returns
+ * before fitHud (js/ui/hud.js), so a fixed sleep "for two HUD ticks" waits on
+ * a fit that never comes. invalidateFit voids the stamp, jump → refreshHud(true)
+ * runs fitHud, and a stamp other than the one held before proves it ran.
+ */
+async function refitAndWaitStamp(page, timeout = 10_000) {
+  const prev = await page.evaluate(() => {
+    const st = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+    if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+    return st;
+  });
+  await forceHudFit(page);
+  await page.waitForFunction((before) => {
+    const st = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+    if (/^\d+$/.test(st) && st !== before) return true;
+    try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+    return false;
+  }, prev, { polling: 100, timeout });
+}
+
 /** Touch: fitHud painted clearance + published --hud-fit-stamp before probes. */
 async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
   const o = opts || {};
@@ -652,7 +674,7 @@ test.describe("minimal profile", () => {
       const el = document.getElementById("hud-sectors");
       return !!el && el.getBoundingClientRect().width > 0;
     }, null, { polling: 100, timeout: 10000 });
-    await page.waitForTimeout(400);   // two 10 Hz HUD ticks, so fitHud re-runs
+    await refitAndWaitStamp(page);   // a fit has RUN with the box shown (no sleep)
     const shown = await zoomNow();
     await page.evaluate(() => {
       const el = document.getElementById("hud-sectors");
@@ -1660,9 +1682,9 @@ test.describe("fitHud zoom determinism", () => {
     await race(page, "buttons", false, v);
     await page.evaluate(() => {
       if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(200);
-      if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
     });
-    // Two ~10 Hz HUD ticks + a settled zoom (no transition on the top band).
+    await refitAndWaitStamp(page);   // fit #1 has RUN (new --hud-fit-stamp)
+    // A settled zoom (no transition on the top band).
     await page.waitForFunction(() => {
       const root = document.documentElement;
       const mm = document.getElementById("minimap");
@@ -1686,10 +1708,11 @@ test.describe("fitHud zoom determinism", () => {
       };
     });
     const a = await snap();
-    await page.evaluate(() => {
-      if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
-    });
-    await page.waitForFunction((prev) => {
+    // Fit #2: forced and proven by a NEW stamp. The old predicate ended
+    // `(zTop === prev.zTop || zTop !== undefined)`, always true, so b could be
+    // a snapshot of fit #1 and the comparison below proved nothing.
+    await refitAndWaitStamp(page);
+    await page.waitForFunction(() => {
       const root = document.documentElement;
       const mm = document.getElementById("minimap");
       if (!mm) return false;
@@ -1698,9 +1721,8 @@ test.describe("fitHud zoom determinism", () => {
       const zoom = mm.currentCSSZoom || 1;
       // A re-fit has run (dock inset re-published) and zoom still matches.
       const dockRW = root.style.getPropertyValue("--dock-r-w");
-      return dockRW !== "" && Math.abs(zoom - want) < 1e-3
-        && (zTop === prev.zTop || zTop !== undefined);
-    }, a, { polling: 100, timeout: 10_000 });
+      return dockRW !== "" && Math.abs(zoom - want) < 1e-3;
+    }, null, { polling: 100, timeout: 10_000 });
     const b = await snap();
     expect(b.zTop, "second fit must not flip --hud-z-top " + JSON.stringify({ a, b }))
       .toBe(a.zTop);

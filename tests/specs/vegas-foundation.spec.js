@@ -112,7 +112,9 @@ test.describe("Las Vegas track foundation migration", () => {
     const result = await page.evaluate(() => ({
       walls: window.__apex.wallStats(),
       lights: window.__apex.lightState(),
-      edgeGaps: [-8, 8].map((lat) => window.__apex.groundY(0.35, lat).gap),
+      // lat +-12 m, not +-8: +-8 sits inside the carved road, where gap is null,
+      // so both probes passed the null-tolerant loop below having measured nothing.
+      edgeGaps: [-12, 12].map((lat) => window.__apex.groundY(0.35, lat).gap),
     }));
 
     expect(result.walls.anyNaN).toBe(false);
@@ -121,6 +123,8 @@ test.describe("Las Vegas track foundation migration", () => {
     expect(result.walls.minOverHw).toBeGreaterThan(-1.5);
     expect(result.walls.minOverHw).toBeLessThan(3);
     expect(result.lights.numLights).toBeGreaterThan(0);
+    // Both probes must read terrain: they do (headless VM, 2026-11-10), at -0.88 / -0.90 m.
+    expect(result.edgeGaps.filter((gap) => gap !== null)).toHaveLength(2);
     for (const gap of result.edgeGaps)
       expect(gap === null || gap <= 0.18).toBe(true);
   });

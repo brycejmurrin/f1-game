@@ -7,6 +7,7 @@
 // Grows per milestone: M2 pixel-nonblank, M3+ __tlx shader-dump/?viz= hooks.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { awaitPresentedFrame, screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
+import { frameContent, screenshotPixels } from "../helpers/visual-oracle.js";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -137,7 +138,8 @@ test.describe("TLX — boot", () => {
     // Same heuristic as smoke.spec.js: a rendered scene PNG is tens of KB,
     // a blank/solid canvas < ~2 KB.
     const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
-    expect(shot.bytes).toBeGreaterThan(5000);
+    // Decoded pixels, not PNG size: a byte count tracks compression, not content.
+    expect(frameContent(await screenshotPixels(page, shot.buf)).nonblank, "presented canvas is non-blank").toBe(true);
     expect(errors).toEqual([]);
   });
 
@@ -230,7 +232,8 @@ test.describe("TLX — boot", () => {
     // The chain must still produce a real image on the canvas.
     await stopRendering(page);
     const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
-    expect(shot.bytes).toBeGreaterThan(5000);
+    // Decoded pixels, not PNG size: a byte count tracks compression, not content.
+    expect(frameContent(await screenshotPixels(page, shot.buf)).nonblank, "presented canvas is non-blank").toBe(true);
     expect(errors).toEqual([]);
   });
 
@@ -551,7 +554,8 @@ test.describe("TLX — boot", () => {
     // above, so the six cube faces are already captured.
     await stopRendering(page);
     const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
-    expect(shot.bytes).toBeGreaterThan(5000);
+    // Decoded pixels, not PNG size: a byte count tracks compression, not content.
+    expect(frameContent(await screenshotPixels(page, shot.buf)).nonblank, "presented canvas is non-blank").toBe(true);
     expect(errors).toEqual([]);
   });
 

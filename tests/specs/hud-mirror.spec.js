@@ -228,7 +228,18 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   expect(lens.backend.rect, ld).toEqual(lens.rect);
   const bands = await glassBands(page, lens.glass.screen, lens.backend.rect);
   test.info().annotations.push({ type: "mirror-glass-bands", description: JSON.stringify({ bands, rect: lens.backend.rect, onRect: on.m.rect }) });
+  // ON THE SOFTWARE PATH THE BANDS ARE NOT OPTIONAL, on either backend. Only
+  // GLX used to require them, so a null TLX capture skipped the upside-down
+  // check below entirely — and TLX is the backend whose glass shipped upside
+  // down (2026-10-13, header above). Software path = a readable presented frame:
+  // #game-soft holds pixels, or the backend offers capturePixels().
+  const readable = await page.evaluate(() => {
+    const soft = document.getElementById("game-soft");
+    return !!(soft && soft.width > 0)
+      || (typeof GLX !== "undefined" && typeof GLX.capturePixels === "function");
+  });
   if (requirePixels) expect(bands, "GLX presents through #game-soft").toBeTruthy();
+  if (readable) expect(bands, "a readable presented frame must yield glass bands (software path)").toBeTruthy();
   if (bands) {
     const bd = JSON.stringify(bands);
     let decided = 0;
