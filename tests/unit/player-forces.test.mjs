@@ -356,3 +356,16 @@ test("WheelState front-slip grip loss reaches yaw below the substep boundary", (
       `${speed} m/s: yaw retains ${yawRatio}, front force retains ${forceRatio}`);
   }
 });
+
+test("#5022: the road-follow ease bites on into-corner over-rotation, never on countersteer", () => {
+  const { PlayerForces } = load();
+  const ease = PlayerForces.create({}).assistYawEase;
+  const v = 60, k = 0.01, rNeed = v * k;   // +k = LEFT; a left turn yaws the nose LEFT (r < 0)
+  assert.ok(ease(-1.5 * rNeed, rNeed) < 1, "left corner, over-rotating left: eased");
+  assert.ok(ease(1.5 * rNeed, -rNeed) < 1, "right corner, over-rotating right: eased");
+  assert.equal(ease(-1.5 * rNeed, rNeed), ease(1.5 * rNeed, -rNeed), "mirror-symmetric");
+  assert.equal(ease(1.5 * rNeed, rNeed), 1, "yawing against the corner (countersteer): full assist");
+  assert.equal(ease(-rNeed, rNeed), 1, "steady state: full assist");
+  assert.equal(ease(0.3, 0), 1, "straight");
+  assert.equal(ease(-10 * rNeed, rNeed), 0.3, "floor");
+});
