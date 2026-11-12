@@ -758,6 +758,7 @@
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-flow-5100-vm.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-state-audit-vm.test.mjs",
@@ -864,6 +865,7 @@
         "tests/unit/drift-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-flow-5100-vm.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-state-audit-vm.test.mjs",
@@ -946,6 +948,7 @@
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/curvature-contract-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-flow-5100-vm.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-state-audit-vm.test.mjs",
@@ -1549,11 +1552,13 @@
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
+        "tests/unit/session-records-assists.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
+        "tests/unit/team-parts-conflict.test.mjs",
         "tests/unit/title-fx.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -1591,6 +1596,7 @@
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/settings-search.test.mjs",
@@ -2494,7 +2500,7 @@
     {
       "path": "js/career/career-backup.js",
       "global": "CareerBackup",
-      "roster": "tag"
+      "roster": "LAZY_CAREER_UI"
     },
     {
       "path": "js/career/career-planning-ui.js",
@@ -3804,12 +3810,12 @@
     {
       "path": "js/perf/bench-capture.js",
       "global": "BenchCapture",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/bench-run.js",
       "global": "BenchRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/gfx-debug-overlay.js",
@@ -3829,7 +3835,7 @@
     {
       "path": "js/perf/gpu-test-run.js",
       "global": "GpuTestRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/loop-health.js",
@@ -3854,7 +3860,7 @@
     {
       "path": "js/perf/phone-recorder.js",
       "global": "PhoneRecorder",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/quality-preset.js",
@@ -3879,7 +3885,7 @@
     {
       "path": "js/perf/soak-run.js",
       "global": "SoakRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/spans.js",

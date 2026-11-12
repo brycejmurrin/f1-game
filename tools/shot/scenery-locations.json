@@ -707,16 +707,16 @@
       "track": "donington",
       "name": "Hollywood Stand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.285258,
+      "frac": 0.947614,
       "target": [
-        141.7,
-        4.52,
-        -151.36
+        142.76,
+        5.23,
+        -150.47
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/donington.js sHollywood",
-      "projectedFrac": 0.257273,
-      "nearestRoadDistanceM": 28,
+      "projectedFrac": 0.91932,
+      "nearestRoadDistanceM": 28.9,
       "viewDistanceM": 34,
       "source": "tests/data/landmarks/donington.json; js/circuits/scenery/donington.js"
     },
@@ -726,16 +726,16 @@
       "track": "donington",
       "name": "EMA Airliner",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.737258,
+      "frac": 0.399614,
       "target": [
-        -161.72,
-        -25.12,
-        525.1
+        -160.77,
+        -25.31,
+        524.64
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/donington.js sAir",
-      "projectedFrac": 0.61747,
-      "nearestRoadDistanceM": 339.9,
+      "projectedFrac": 0.279116,
+      "nearestRoadDistanceM": 339,
       "viewDistanceM": 487,
       "source": "tests/data/landmarks/donington.json; js/circuits/scenery/donington.js"
     },
@@ -745,11 +745,11 @@
       "track": "donington",
       "name": "Ratcliffe Power",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.840053,
+      "frac": 0.502008,
       "target": [
-        -3063.96,
-        73.08,
-        1306.73
+        -3063.97,
+        72.9,
+        1306.72
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 2784,
@@ -961,11 +961,11 @@
       "track": "hungaroring",
       "name": "Pit Complex",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0,
+      "frac": 0.000001,
       "target": [
-        373.8,
-        4.34,
-        -341.05
+        310.32,
+        4.37,
+        -261.21
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 51,
@@ -978,11 +978,11 @@
       "track": "hungaroring",
       "name": "Main Tribune",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.999954,
+      "frac": 0.000058,
       "target": [
-        313.7,
+        370.47,
         3.02,
-        -265.77
+        -336.44
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 45.3,
@@ -1525,15 +1525,15 @@
       "track": "jerez",
       "name": "Lorenzo Corner",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.936248,
+      "frac": 0.922876,
       "target": [
-        -94.56,
-        5.78,
-        -140.03
+        -84.47,
+        5.35,
+        -146.21
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 22.9,
-      "viewDistanceM": 22.9,
+      "nearestRoadDistanceM": 20.9,
+      "viewDistanceM": 20.9,
       "source": "tests/data/landmarks/jerez.json; js/circuits/scenery/jerez.js"
     },
     {

@@ -24,7 +24,8 @@
 //             `success` on the PR's current head, newest attempt; a run that went green only on a re-run after a
 //             failed job (`run_attempt` > 1) fails the row
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
-//             name) needs the `config-ok` label, last added by Bryce in person, and newer than the last push that
+//             name) needs the `config-ok` label, last added by Bryce in person (or, for ROUTINE config paths only, by
+//             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and newer than the last push that
 //             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
 //             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
@@ -48,7 +49,7 @@ import { api, DEPLOY } from "./github-api.mjs";
 import { planVerdict } from "./ready-gate.mjs";
 import { renderPkg } from "../gen/gen-test-groups.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
-import { OWNER, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
+import { AGENT_APP_SLUG, OWNER, byAgent, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
@@ -66,13 +67,31 @@ export const CONFIG_LABEL = "config-ok";
 /** The paths whose edit needs CONFIG_LABEL: the hooks, settings, workflows and actions that enforce every other rule,
  *  the CI tools that compute this gate and the dispatcher, the MCP and hook tooling, the generated-path list, the
  *  package scripts, every host's hook and agent config, the tracked memory and the issue templates. */
+/** The gate's import-closure modules (gateClosure in tools/lib/gate-receipt.mjs) that live OUTSIDE tools/ci/ (#5467):
+ *  their top level runs when the gate imports them and gen-test-groups decides generatedPkgVerdict, so each is a
+ *  config path AND a protected one. A test fails on any closure module either list misses. */
+const GATE_MODULE_OUTSIDE_CI = ["tools/gen/gen-test-groups\\.mjs$", "tools/lib/changed-files\\.mjs$", "tools/lib/cli-args\\.mjs$",
+  "tools/lib/gate-receipt\\.mjs$", "tools/lib/work-tree-id\\.mjs$"];
 export const CONFIG_PATH = new RegExp("^(" + [
   "\\.claude/hooks/", "\\.claude/settings(\\.local)?\\.json$", "\\.claude/agents/", "\\.claude/memory/",
   "\\.github/workflows/", "\\.github/actions/", "\\.github/ISSUE_TEMPLATE/", "\\.githooks/", "\\.mcp\\.json$",
   "tools/ci/", "tools/hooks/", "tools/mcp/", "tools/lib/generated-paths\\.mjs$", "package\\.json$",
-  "\\.cursor/hooks", "\\.codex/hooks",
+  "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
+/** The PROTECTED config paths (#5455, Bryce 2026-11-11 "Count it, except the gate and safety hooks"): only his own
+ *  `config-ok` tap covers a diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every
+ *  other CONFIG_PATH). The gate (this module, which defines both lists; provenance; ready-gate; and the rest of the
+ *  gate's import closure, under tools/ci/ and outside it (#5467), because a module's top level runs when the gate imports it — a test pins
+ *  the closure), the land workflow, ci.yml (it decides what green means; Bryce 2026-11-11 "Protect ci.yml"), and every
+ *  host's hooks and settings. */
+export const PROTECTED_CONFIG_PATH = new RegExp("^(" + [
+  "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/ready-gate\\.mjs$",
+  "tools/ci/github-api\\.mjs$", "tools/ci/github-token\\.mjs$", "tools/ci/preflip-probe\\.mjs$", "tools/ci/pick-tests\\.mjs$",
+  "\\.github/workflows/land\\.yml$", "\\.github/workflows/ci\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
+  "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
+].join("|") + ")");
+export const isProtectedConfigPath = (p) => PROTECTED_CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
 export const configFiles = (files) => (files || []).filter(isConfigPath);
 /** The paths a pulls/<n>/files or compare row names: `filename`, and `previous_filename` for a rename. Pure. */
 export const filePaths = (rows) => (rows || []).flatMap((f) => [f?.filename, f?.previous_filename]).filter(Boolean);
@@ -114,23 +133,45 @@ export function holdVerdict(labels, events = null, owner = OWNER) {
   return row(true, lifted ? `no \`${HOLD_LABEL}\` label (last removed by ${describeActor(lifted)})` : `no \`${HOLD_LABEL}\` label`);
 }
 
-/** config: a diff touching a CONFIG_PATH needs the `config-ok` label whose newest `labeled` event is the owner's own
- *  click; a diff touching none passes. `files` are the PR's changed paths (filePaths over pulls/<n>/files). `push`
- *  (configPushState) binds the label to the head: "after" (a CONFIG_PATH push came after the label) fails, "unknown"
- *  waits; null skips the binding (pure callers only). Pure. */
+/** Which kind of `config-ok` labeled event is this: "owner" (his own click, byOwner), "agent" (owner login through the
+ *  Claude app, byAgent) or null (anything else: another app, another login, no app field). Pure. */
+export const configLabelKind = (e, owner = OWNER) => (e?.event !== "labeled" ? null : byOwner(e, owner) ? "owner" : byAgent(e, owner) ? "agent" : null);
+
+/** config: a diff touching a CONFIG_PATH needs `config-ok`, and its newest label event must be a `labeled` one that
+ *  counts. The owner's own click covers any diff. An agent's (configLabelKind "agent") covers a diff of ROUTINE config
+ *  paths only: one PROTECTED path in the diff needs the owner's click for the whole row; and an owner's own `unlabeled`
+ *  voids every later agent re-add until his own `labeled` (#5455). A diff touching none passes. `files` are the PR's
+ *  changed paths (filePaths over pulls/<n>/files). `push` (configPushState) binds the label to the head: "after" (a
+ *  CONFIG_PATH push came after the label) fails, "unknown" waits; null skips the binding (pure callers only). Pure. */
 export function configVerdict(files, labels, events = null, owner = OWNER, push = null) {
   const touched = configFiles(files);
   if (!touched.length) return row(true, `no config path (harness, CI tools, agent config) in the diff (${(files || []).length} file(s))`);
-  const shown = touched.slice(0, 4).join(", ") + (touched.length > 4 ? ", …" : "");
+  const list = (a) => a.slice(0, 4).join(", ") + (a.length > 4 ? ", …" : "");
+  const shown = list(touched);
+  const prot = touched.filter(isProtectedConfigPath);
+  const protNote = prot.length ? `; protected path(s), his own tap only: ${list(prot)}` : "";
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
   const last = newestLabelEvent(events, CONFIG_LABEL);
-  if (!names.includes(CONFIG_LABEL)) return row(false, `needs ${CONFIG_LABEL} from ${owner}: the diff edits ${shown}`);
-  if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
-    return row(false, `needs ${CONFIG_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (the diff edits ${shown})`);
+  if (!names.includes(CONFIG_LABEL)) return row(false, `needs ${CONFIG_LABEL} from ${owner}: the diff edits ${shown}${protNote}`);
+  const kind = configLabelKind(last, owner);
+  if (!kind) {
+    return row(false, `needs ${CONFIG_LABEL} from ${owner}: the label was ${last ? `last ${last.event === "labeled" ? "added" : "removed"} by ${describeActor(last)}` : "found but its label event was not"} — only his own click, or an agent's (${AGENT_APP_SLUG} app) on routine paths, counts (the diff edits ${shown}${protNote})`);
   }
-  if (push?.state === "after") return row(false, `needs a fresh ${CONFIG_LABEL} from ${owner}: ${push.evidence} after his label at ${last.created_at || "?"} (remove and re-add it)`);
-  if (push?.state === "unknown") return { ...row(false, `${CONFIG_LABEL} from ${owner} found, head push not resolved yet: ${push.evidence}`), pending: true };
-  return row(true, `${CONFIG_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
+  if (kind === "agent") {
+    if (prot.length) return row(false, `needs ${CONFIG_LABEL} from ${owner} himself: an agent's label (${describeActor(last)}) covers routine config paths only, and the diff edits protected path(s) ${list(prot)}`);
+    // An owner's own removal vetoes agent re-adds until he adds it himself (walked oldest first, like hold).
+    const at = (e) => Date.parse(e?.created_at || "") || 0;
+    let veto = null;
+    for (const e of labelEvents(events, CONFIG_LABEL).map((e, i) => ({ e, i })).sort((x, y) => at(x.e) - at(y.e) || x.i - y.i).map((x) => x.e)) {
+      if (!byOwner(e, owner)) continue;
+      veto = e.event === "unlabeled" ? e : null;
+    }
+    if (veto) return row(false, `needs ${CONFIG_LABEL} from ${owner}: he removed it himself at ${veto.created_at || "?"}, so an agent's re-add does not count until his own (the diff edits ${shown})`);
+  }
+  const by = kind === "owner" ? `${CONFIG_LABEL} by owner (${owner}` : `${CONFIG_LABEL} by agent (${AGENT_APP_SLUG} app), routine paths only (${describeActor(last)}`;
+  if (push?.state === "after") return row(false, `needs a fresh ${CONFIG_LABEL}: ${push.evidence} after the label at ${last.created_at || "?"} (${by}; remove and re-add it)`);
+  if (push?.state === "unknown") return { ...row(false, `${by}) found, head push not resolved yet: ${push.evidence}`), pending: true };
+  return row(true, `${by}) at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
 }
 
 /**
@@ -478,7 +519,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     if (generated.ok) changed = changed.filter((f) => f !== GENERATED_PKG);
   }
   const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
-  const needsPush = configFiles(changed).length && cfgLast?.event === "labeled" && byOwner(cfgLast, owner);
+  const needsPush = configFiles(changed).length && !!configLabelKind(cfgLast, owner);
   const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
   rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
   if (generated) rows.config = { ...rows.config, evidence: `${rows.config.evidence}; ${generated.ok ? generated.evidence : `package.json counted as a config edit: ${generated.evidence}`}` };

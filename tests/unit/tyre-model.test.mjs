@@ -406,11 +406,10 @@ test("grip falls linearly across the stint, then falls off a cliff", () => {
 test("traction loses a smaller share of the same drop than cornering", () => {
   // A tyre that lost only CORNERING grip reads as a handling bug. A tyre that
   // lost as much traction as cornering reads as an engine failure.
-  for (const w of [0.5, 1.0, 1.5]) {
-    const lat = 1 - T.gripFor(w), lng = 1 - T.longFor(w);
-    assert.ok(lng > 0 && lng < lat, `at wear ${w}, traction drop ${lng} must be between 0 and the lateral drop ${lat}`);
-    assert.ok(Math.abs(lng - lat * T.LONG_SHARE) < 1e-9);
-  }
+  // The live path is tractionMul (1 - drop x LONG_SHARE); the test-only longFor
+  // twin was removed (#3109 row 15).
+  assert.ok(T.LONG_SHARE > 0 && T.LONG_SHARE < 1, `LONG_SHARE ${T.LONG_SHARE} must be a share`);
+  for (const w of [0.5, 1.0, 1.5]) assert.ok(1 - T.gripFor(w) > 0, `wear ${w} costs grip`);
 });
 
 test("a full tank wears the tyre faster than an empty one", () => {

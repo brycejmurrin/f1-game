@@ -24,7 +24,7 @@
  */
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ADAPTED, ADAPTED_PAGE_GROUPS } from "../../tools/ci/twinned-specs.mjs";
@@ -44,19 +44,32 @@ const specs = (groupSpecs || Object.keys(ADAPTED)).filter((f) => !only.length ||
 // runners have two. APEX_VM_PAGE_JOBS overrides.
 const JOBS = Math.max(1, Number.parseInt(process.env.APEX_VM_PAGE_JOBS || "2", 10) || 2);
 
+// ASYNC, so `concurrency: JOBS` is real: a blocking spawnSync held the event
+// loop for the whole child and the runner started the next one only after it.
+function run(spec, env) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, ["--test", "--test-reporter=tap", spec], { cwd: ROOT, env, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "", stderr = "", signal = null;
+    child.stdout.setEncoding("utf8").on("data", (d) => { stdout += d; });
+    child.stderr.setEncoding("utf8").on("data", (d) => { stderr += d; });
+    const kill = setTimeout(() => { signal = "SIGTERM (880 s timeout)"; child.kill("SIGTERM"); }, 880_000);
+    child.on("error", (e) => { stderr += String(e && e.stack || e); });
+    child.on("close", (status, sig) => { clearTimeout(kill); resolve({ stdout, stderr, status, signal: signal || sig }); });
+  });
+}
+
 describe(`browser specs under the vm-page adapter${group ? ` (${group})` : ""}`, { concurrency: JOBS }, () => {
   test("the ADAPTED map is not empty (an empty gate is not a gate)", () => {
     assert.ok(specs.length > 0, only.length ? `APEX_VM_PAGE_ONLY (${only.join(" ")}) leaves partition "${group || "all"}" nothing to run — the node plan asked for this script, so that is a broken plan` : "tools/ci/twinned-specs.mjs ADAPTED names no spec — drop test:vm-page or fill it");
   });
   for (const spec of specs) {
-    test(`${spec}`, { timeout: 900_000 }, () => {
+    test(`${spec}`, { timeout: 900_000 }, async () => {
       const env = { ...process.env, APEX_VM_PAGE: "1" };
       // NODE_TEST_CONTEXT would switch the child to the v8-serialized reporter
       // and the `# pass` summary would be absent (tools/ci/run-playwright.mjs
       // hit exactly this).
       delete env.NODE_TEST_CONTEXT;
-      const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", spec],
-        { cwd: ROOT, encoding: "utf8", env, timeout: 880_000, maxBuffer: 1 << 26 });
+      const r = await run(spec, env);
       const out = `${r.stdout || ""}${r.stderr || ""}`;
       const num = (re) => { const m = re.exec(r.stdout || ""); return m ? +m[1] : null; };
       const passed = num(/^# pass (\d+)$/m), failed = num(/^# fail (\d+)$/m);

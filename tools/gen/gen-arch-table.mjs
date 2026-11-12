@@ -130,6 +130,7 @@ export function rosterOf() {
   add(MANIFEST.LAZY_CAREER_UI || [], "LAZY_CAREER_UI");
   add(MANIFEST.LAZY_UI_PRESETS || [], "LAZY_UI_PRESETS");
   add(MANIFEST.LAZY_RESULTS_SHEET || [], "LAZY_RESULTS_SHEET");
+  add(MANIFEST.LAZY_PERF || [], "LAZY_PERF");
   return out;
 }
 
