@@ -99,7 +99,8 @@ jobs:
           if git diff --quiet -- tests/data && [ -z "$(git ls-files --others --exclude-standard tests/data)" ] && [ -z "$(git ls-files --deleted tests/data)" ]; then
             echo "nothing to fold"; exit 0
           fi
-          node tools/check/ratchets.mjs
+          # Its verdict line rides the PR body as Plan evidence (#5520, open-bot-pr `evidence:`).
+          node tools/check/ratchets.mjs | tee ratchets.log
           # Regenerate on the folded tree so no generated file drifts (run 39277641065
           # failed on docs/agent-index.json's old ratchetLines copy, dropped 2026-10-26).
           npm run -s gen
@@ -113,7 +114,8 @@ jobs:
           $(cat fold.log)"
           git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin "$FOLD_BRANCH"
           PR_BODY="Scheduled fold (#2538): $(cat fold.log). Every effective ceiling is unchanged. Opened by .github/workflows/ratchets-fold.yml on branch \`$FOLD_BRANCH\`."
-          { echo "branch=$FOLD_BRANCH"; echo "body<<APEX_PR_BODY_EOF"; echo "$PR_BODY"; echo "APEX_PR_BODY_EOF"; } >> "$GITHUB_OUTPUT"
+          { echo "branch=$FOLD_BRANCH"; echo "body<<APEX_PR_BODY_EOF"; echo "$PR_BODY"; echo "APEX_PR_BODY_EOF"
+            echo "evidence<<APEX_PR_BODY_EOF"; echo "\`node tools/check/ratchets.mjs\` on the folded tree: $(tail -n 1 ratchets.log)"; echo "APEX_PR_BODY_EOF"; } >> "$GITHUB_OUTPUT"
 
       # The PR opens with LAND_TOKEN, the token land.yml uses for its PR operations: this repository does not let
       # the default token create PRs (issue #5177). Without LAND_TOKEN the default token tries, and a refusal
@@ -125,6 +127,7 @@ jobs:
           branch: ${{ steps.fold.outputs.branch }}
           title: "chore(ratchets): fold ratchets.d fragments"
           body: ${{ steps.fold.outputs.body }}
+          evidence: ${{ steps.fold.outputs.evidence }}
           issue-title: "fold PR needs a hand (bot/ratchets-fold)"
           what: ratchets fold
           pr-token: ${{ secrets.LAND_TOKEN }}

@@ -3345,6 +3345,49 @@ test("the lamp bake light map is freed after ~2 s of bake-off frames (GLX _bakeO
   assert.equal(h.textures.filter(isBake).length, 2, "the same bake re-uploads once it returns");
 });
 
+
+// A failed replacement must preserve the published bake and retire only candidates.
+for (const failure of ["texture-1", "texture-2", "upload-1", "upload-2", "view-1", "view-2", "group-1", "group-2"]) {
+  test(`lamp bake replacement rolls back ${failure} and can retry`, async () => {
+    const h = makeGpuHarness(), gfx = await h.create();
+    const bake = () => ({ x0: 0, z0: 0, cell: 1, T: 32, tilesX: 2, tilesY: 1, atlasW: 34, atlasH: 34,
+      data: new Uint16Array(34 * 34 * 8), indir: new Uint16Array(8) });
+    const old = bake(), next = bake();
+    const frame = lb => ({ lampBake: lb, lampBakeScale: [1, 1, 1] });
+    assert.equal(gfx.begin(frame(old)), true); gfx.present({});
+    const published = h.textures.filter(t => t.desc.format === "rgba16float" &&
+      Array.isArray(t.desc.size) && ((t.desc.size[0] === 34 && t.desc.size[1] === 68) ||
+      (t.desc.size[0] === 2 && t.desc.size[1] === 1)));
+    assert.equal(published.length, 2, "a complete old atlas/indirection pair is live");
+    const before = h.textures.length, [kind, count] = failure.split("-");
+    const offset = Number(count), write = h.device.queue.writeTexture;
+    if (kind === "texture") h.failNextTexture(offset);
+    if (kind === "view") h.failNextView(offset);
+    if (kind === "group") h.failNextBindGroup(offset);
+    if (kind === "upload") {
+      let calls = 0;
+      h.device.queue.writeTexture = (...args) => {
+        if (++calls === offset) throw new Error("injected lamp upload failure");
+        return write(...args);
+      };
+    }
+    assert.equal(gfx.begin(frame(next)), false, "failure follows the existing begin recovery path");
+    const candidates = h.textures.slice(before);
+    assert.equal(candidates.length, kind === "texture" ? offset - 1 : kind === "upload" ? offset : 2);
+    assert.ok(candidates.every(t => t.destroyed), "every uncommitted texture is destroyed");
+    assert.ok(published.every(t => !t.destroyed), "the previous bake survives failure");
+    h.clearFailures(); h.device.queue.writeTexture = write;
+    const afterFailure = h.textures.length;
+    assert.equal(gfx.begin(frame(old)), true); gfx.present({});
+    assert.equal(h.textures.length, afterFailure, "previous source identity and views remain usable without upload");
+    assert.equal(gfx.begin(frame(next)), true, "the same failed source can retry");
+    assert.ok(published.every(t => !t.destroyed), "old textures wait for the replacement frame's submission");
+    gfx.present({});
+    assert.ok(published.every(t => t.destroyed), "successful replacement retires old textures after submit");
+    assert.ok(h.textures.slice(afterFailure).every(t => !t.destroyed), "the committed replacement stays live");
+  });
+}
+
 // createMesh road pieces (hasTrk, > 4095 pulled verts): an allocation failure
 // on piece k used to leak pieces 0..k-1 — `pieces` was scoped inside the
 // branch, so the catch could not see it — and the failing piece's own vertex

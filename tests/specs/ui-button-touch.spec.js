@@ -991,7 +991,9 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
   const sizeLabel = await page.locator("#hud-arrange-name").textContent();
   expect(sizeLabel).toMatch(/^\d+(?:\.\d+)?%$/);
   expect(sizeLabel.length, "the toolbar reports a readable percentage").toBeLessThanOrEqual(8);
-  expect(Math.abs(parseFloat(sizeLabel) - sizeAfter), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(sizeAfter * .0005);
+  // The label is the PAINTED size (#5256): the stored factor times the zoom the map paints under.
+  const painted = sizeAfter * await page.evaluate(() => document.getElementById("minimap").currentCSSZoom || 1);
+  expect(Math.abs(parseFloat(sizeLabel) - painted), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(painted * .0005);
   await page.locator("#hud-arrange-done").click();
   await expect(page.locator("#pmsettings")).toBeVisible();
   await testInfo.attach("console-health", { body: JSON.stringify({ errors }), contentType: "application/json" });

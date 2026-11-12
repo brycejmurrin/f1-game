@@ -223,7 +223,7 @@ export function swOptionalFiles() {
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
     ...(MANIFEST.LAZY_UI_PRESETS || []),
-    ...(MANIFEST.LAZY_RESULTS_SHEET || []),
+    ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []),
   ];
 }
 
@@ -255,6 +255,7 @@ function swOptionalBlock() {
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
     ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
     ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
+    ["LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot", MANIFEST.LAZY_PERF || []],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
@@ -281,6 +282,7 @@ function rosterSource() {
     ["DEFERRED", MANIFEST.DEFERRED], ["DEFERRED_EDGES", MANIFEST.DEFERRED_EDGES],
     ["LAZY_AGENT", MANIFEST.LAZY_AGENT], ["LAZY_EDGES", MANIFEST.LAZY_EDGES],
     ["LAZY_DEV", MANIFEST.LAZY_DEV],
+    ["LAZY_PERF", MANIFEST.LAZY_PERF], ["LAZY_PERF_EDGES", MANIFEST.LAZY_PERF_EDGES],
     ["LAZY_RACE", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION", MANIFEST.LAZY_RACE_SESSION],
     ["LAZY_RACE_SESSION_EDGES", MANIFEST.LAZY_RACE_SESSION_EDGES],

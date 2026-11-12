@@ -107,8 +107,9 @@ const RealReplay = (function () {
   /** raw: Float32Array [t, x, y, …] (t seconds from lights out; x, y feed metres).
    *  Returns {t, prog, x, n, end}: prog is the unwrapped arc length so a lap is
    *  prog/total, x the lateral offset (+right). A car behind the line on the
-   *  grid starts at a negative prog (lap 0, as gridUp lays it). */
-  function trackTrace(track, fit, raw) {
+   *  grid starts at a negative prog (lap 0, as gridUp lays it). lapStart (optional,
+   *  the driver's recorded lap start times) anchors a trace that begins mid-race. */
+  function trackTrace(track, fit, raw, lapStart) {
     const n = raw.length / 3 | 0, total = track.total;
     const t = new Float32Array(n), prog = new Float32Array(n), x = new Float32Array(n);
     const cos = Math.cos(fit.th), sin = Math.sin(fit.th);
@@ -153,7 +154,19 @@ const RealReplay = (function () {
       let i0 = 0;
       while (i0 < n - 1 && t[i0] < 0) i0++;
       const m = ((prog[i0] % total) + total) % total;
-      const shift = prog[i0] - (m > total / 2 ? m - total : m);
+      // A trace that joins mid-race: the arc alone cannot count laps, so take
+      // the lap from the recorded timing and the place in it from the arc —
+      // the wrap nearest where the lap's elapsed time puts the car.
+      let L = -1;
+      if (Array.isArray(lapStart)) for (let k = 1; k < lapStart.length; k++) if (lapStart[k] != null && lapStart[k] <= t[i0]) L = k;
+      let want = m > total / 2 ? m - total : m;
+      if (L >= 1) {
+        const next = lapStart[L + 1], prev = lapStart[L - 1];
+        const dur = next != null && next > lapStart[L] ? next - lapStart[L] : prev != null && lapStart[L] > prev ? lapStart[L] - prev : 0;
+        const guess = L * total + (dur > 0 ? clamp((t[i0] - lapStart[L]) / dur, 0, 1) * total : 0);
+        want = m + total * Math.round((guess - m) / total);
+      }
+      const shift = prog[i0] - want;
       if (shift) for (let i = 0; i < n; i++) prog[i] -= shift;
     }
     return { t, prog, x, n, end: n ? t[n - 1] : 0 };
@@ -253,7 +266,7 @@ const RealReplay = (function () {
       if (!fit) return null;
       Log.info("game", "RealReplay.fit ref=" + ref.code + " pts=" + pts.length + " rms=" + fit.rms.toFixed(2) + "m rot=" + (fit.th * 180 / Math.PI).toFixed(1) + " refl=" + fit.refl);
     }
-    for (const k of Object.keys(traces.cars || {})) out.set(+k, trackTrace(track, fit, traces.cars[k]));
+    for (const k of Object.keys(traces.cars || {})) { const d = (script.drivers || []).find((x) => +x.num === +k); out.set(+k, trackTrace(track, fit, traces.cars[k], d && d.lapStart)); }
     return { fit, byNum: out };
   }
 

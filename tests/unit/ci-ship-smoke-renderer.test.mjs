@@ -405,14 +405,15 @@ test("staged-boot honors the SwiftShader opt-out for renderer env as well as set
 });
 
 
-function runMesaFixture(t, sudoBody, dpkgQueryBody = "return 1") {
+function runMesaFixture(t) {
   const root = fs.mkdtempSync(path.resolve("scratch/mesa-action-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const yml = fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8");
-  const script = yml.split("      run: |\n")[1].split("\n").map(line => line.replace(/^        /, "")).join("\n")
+  // The Xvfb step is the action's LAST run block; the apt install lives in
+  // tools/ci/apt-cached-install.sh since #5519 (tests/unit/apt-cached-install.test.mjs).
+  const script = yml.split("      run: |\n").at(-1).split("\n").map(line => line.replace(/^        /, "")).join("\n")
     .replaceAll("/tmp/.X11-unix/X99", path.join(root, "missing-display"));
-  // dpkg-query is stubbed too: the fixture must not read the host's package database.
-  const prelude = `sudo() { ${sudoBody}; }; dpkg-query() { ${dpkgQueryBody}; }; Xvfb() { return 0; }; seq() { echo 1; }; sleep() { :; };`;
+  const prelude = "Xvfb() { return 0; }; seq() { echo 1; }; sleep() { :; };";
   const r = spawnSync("bash", ["-e", "-c", prelude + "\n" + script], {
     encoding: "utf8", timeout: 2000,
     env: { ...process.env, GITHUB_ENV: path.join(root, "env"), RUNNER_TEMP: root },
@@ -421,43 +422,26 @@ function runMesaFixture(t, sudoBody, dpkgQueryBody = "return 1") {
 }
 
 test("Mesa setup fails before exporting a missing Xvfb display", (t) => {
-  const {r, root} = runMesaFixture(t, "return 0");
+  const {r, root} = runMesaFixture(t);
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stdout.trim().split("\n").at(-1), "::error::mesa-xvfb: Xvfb :99 has no socket after 5 s", r.stdout);
   assert.equal(fs.existsSync(path.join(root, "env")), false);
 });
 
-test("Mesa retries share a total deadline instead of exhausting the caller job", (t) => {
-  const {r} = runMesaFixture(t, "echo APT-CALL; SECONDS=$((SECONDS + 300)); return 1");
-  assert.notEqual(r.status, 0);
-  assert.equal((r.stdout.match(/APT-CALL/g) || []).length, 1, "no retry after setup budget is spent");
-});
-
-test("Mesa setup repairs a dpkg its own cap interrupted instead of failing every retry", (t) => {
-  // Job 129623589272: the 180 s cap killed attempt 1 mid-dpkg, then attempts 2 and 3 died on
-  // "E: dpkg was interrupted" with budget left and no spec ran. The stub models that state:
-  // a killed install leaves `interrupted`; only `dpkg --configure -a` clears it and completes
-  // the packages; an apt call while interrupted fails as the real one does.
-  const sudo = [
-    'case "$*" in',
-    '  *"apt-get update"*) if [ -e "$RUNNER_TEMP/interrupted" ]; then echo "E: dpkg was interrupted"; return 100; fi; return 0 ;;',
-    '  *"apt-get install"*) echo INSTALL-CALL; if [ -e "$RUNNER_TEMP/interrupted" ]; then echo "E: dpkg was interrupted"; return 100; fi; touch "$RUNNER_TEMP/interrupted"; return 124 ;;',
-    '  *"dpkg --configure -a"*) echo CONFIGURE-CALL; rm -f "$RUNNER_TEMP/interrupted"; touch "$RUNNER_TEMP/configured"; return 0 ;;',
-    "esac",
-  ].join("\n");
-  const dpkgQuery = '[ -e "$RUNNER_TEMP/configured" ] && echo "install ok installed"';
-  const {r} = runMesaFixture(t, sudo, dpkgQuery);
-  assert.equal((r.stdout.match(/INSTALL-CALL/g) || []).length, 1, "one install; the repair completes it:\n" + r.stdout + r.stderr);
-  assert.equal((r.stdout.match(/CONFIGURE-CALL/g) || []).length, 1, r.stdout);
-  assert.equal(r.stdout.includes("apt could not install Mesa/Xvfb"), false, r.stdout);
-  // Setup got past apt: the fixture's display is absent by construction, so the script ends on that check.
-  assert.equal(r.stdout.trim().split("\n").at(-1), "::error::mesa-xvfb: Xvfb :99 has no socket after 5 s", r.stdout);
-});
-
-test("Mesa setup still fails when the repair cannot complete the packages", (t) => {
-  const sudo = 'case "$*" in *"dpkg --configure -a"*) echo CONFIGURE-CALL; return 1 ;; *) echo APT-CALL; return 100 ;; esac';
-  const {r} = runMesaFixture(t, sudo);
-  assert.notEqual(r.status, 0);
-  assert.equal(r.stdout.includes("::error::mesa-xvfb: apt could not install Mesa/Xvfb within 300 s and up to 3 attempts"), true, r.stdout);
-  assert.equal((r.stdout.match(/CONFIGURE-CALL/g) || []).length, 3, "a repair after each failed attempt");
+test("Mesa action installs through the cached installer and saves only what apt fetched", () => {
+  const action = parseYaml(fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8"));
+  const steps = action.runs.steps;
+  const byId = Object.fromEntries(steps.filter(s => s.id).map(s => [s.id, s]));
+  assert.match(byId.plan.run, /apt-cached-install\.sh" --label mesa-xvfb --plan \$MESA_PKGS/);
+  assert.match(byId.install.run, /apt-cached-install\.sh" --label mesa-xvfb --cache "\$HOME\/\.cache\/apex-apt-debs\/mesa-xvfb" --budget 300 \$MESA_PKGS/);
+  assert.equal(byId.plan.env.MESA_PKGS, byId.install.env.MESA_PKGS, "plan and install name one package list");
+  assert.equal(byId.plan.env.MESA_PKGS, "mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb");
+  assert.match(byId.restore.uses, /^actions\/cache\/restore@[0-9a-f]{40}$/);
+  const save = steps.find(s => /^actions\/cache\/save@[0-9a-f]{40}$/.test(s.uses || ""));
+  assert.ok(save, "a save step");
+  assert.equal(save.with.key, byId.restore.with.key);
+  assert.equal(save.with.path, byId.restore.with.path);
+  assert.equal(save.if, "steps.install.outputs.populated == '1' && steps.restore.outputs.cache-hit != 'true'");
+  assert.equal(steps.some(s => "continue-on-error" in s), false, "no step may swallow a failed install");
+  assert.ok(steps.indexOf(save) < steps.length - 1 && /Xvfb :99/.test(steps.at(-1).run), "Xvfb starts last");
 });
