@@ -269,8 +269,11 @@ test("freeTexture retires the decal materials bound to the texture when it is di
   // eslint-disable-next-line no-new-func
   const texA = { id: 1 }, texB = { id: 2 }, mirTex = { id: 3 }, glass = { __tlxTex: mirTex };
   // _glassMat: tsl-fx's one cockpit-glass material (mirrorGlassMaterial), keyed on the mirror target's texture.
+  // _decalDrop keeps the per-draw texture -> glow index (decalByTex, #4556) in step with decalCache.
+  const drop = slice(FX, "    const decalByTex = new Map();", "    function _decalDrop(k, v) {", "decalByTex") +
+    slice(FX, "    function _decalDrop(k, v) {", "\n    }\n", "_decalDrop") + "\n    }\n";
   const fx = new Function("decalCache", "_evicted", "_fxMats", "glass",
-    `"use strict";let _glassMat = glass;${body};return { releaseTexture, glass: () => _glassMat };`)(decalCache, _evicted, _fxMats, glass);
+    `"use strict";let _glassMat = glass;${drop}${body};return { releaseTexture, glass: () => _glassMat };`)(decalCache, _evicted, _fxMats, glass);
   const releaseTexture = fx.releaseTexture;
   const mA0 = { map: texA }, mA1 = { map: texA }, mB = { map: texB };
   decalCache.set("1|0", mA0); decalCache.set("1|0.35", mA1); decalCache.set("2|0", mB);
