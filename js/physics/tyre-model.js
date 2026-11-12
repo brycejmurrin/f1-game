@@ -255,6 +255,7 @@ const TyreModel = (function () {
   const LOAD_AI_BASE = 0.92;
   const LOAD_AI_STYLE = 0.45;   // full spread across the consistency axis
   const LOAD_AI_LONG = 0.30;
+  const LOAD_AI_CARE = 0.12;   // tyre care (#1566, AI-only style axis): ±12 % load
   // …AND THE AI NEEDS ITS OWN DIVISOR, for the reason the player has LOAD_REF.
   // The three constants above were authored to read ~1.03 for a mid driver, but
   // that is the base and the style term ALONE: the longitudinal term adds to
@@ -285,7 +286,8 @@ const TyreModel = (function () {
   function aiLoad(c, aTop) {
     const cons = clamp(fin(c.consistency, 0.75), 0, 1);
     const lng = clamp(fin(Math.abs(aiLong(c)) / Math.max(1, aTop), 0), 0, 1);
-    return Math.min(LOAD_MAX_N, clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng,
+    const care = 1 - LOAD_AI_CARE * clamp(fin(c.tyreCare, 0), -1, 1);
+    return Math.min(LOAD_MAX_N, clamp((LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng) * care,
       LOAD_MIN, LOAD_MAX) / LOAD_AI_REF + (c.offroad ? W_OFF_N : 0));
   }
 
