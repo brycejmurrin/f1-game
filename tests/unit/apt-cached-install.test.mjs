@@ -287,11 +287,14 @@ test("apt finishing without the packages is still a failure (post-condition)", (
 
 test("retries share one budget instead of exhausting the caller job", (t) => {
   const { run } = fixture(t, { want: ["libegl1"] });
-  const { r, calls, log } = run(["--budget", "1", "libegl1"], { APT_STALL: "3" });
+  // Budget 2, not 1: bash's $SECONDS is whole seconds, so a tick between `deadline=` and the first
+  // apt call left a 1 s budget at 0 and no apt-get ran at all (job 131440082468). With 2 s the one
+  // call always starts, capped at 2 s or (after a tick) 1 s, and the budget is spent either way.
+  const { r, calls, log } = run(["--budget", "2", "libegl1"], { APT_STALL: "4" });
   assert.equal(r.status, 1, log);
   assert.equal((calls.match(/^apt-get /gm) || []).length, 1, "no retry after the budget is spent:\n" + log);
-  assert.match(r.stdout, /::error::apt: apt could not install libegl1 within 1 s and up to 3 attempts \(runner mirror down\?\)/);
-  assert.match(r.stdout, /apt attempt 1: apt-get update \(cap 1 s\) was killed by its cap/);
+  assert.match(r.stdout, /::error::apt: apt could not install libegl1 within 2 s and up to 3 attempts \(runner mirror down\?\)/);
+  assert.match(r.stdout, /apt attempt 1: apt-get update \(cap [12] s\) was killed by its cap/);
 });
 
 test("repairs a dpkg its own cap interrupted instead of failing every retry", (t) => {
