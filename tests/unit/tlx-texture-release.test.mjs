@@ -18,6 +18,7 @@ import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import vm from "node:vm";
 import { loadCrests } from "../../tools/car/crest-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
@@ -54,7 +55,7 @@ function liftTextures({ mobileTier = false, isMobile = false, initTexture = () =
   // The real backend methods and retired-texture pool, real vendored Texture/dispose dispatcher;
   // only GPU upload is stubbed. `pool`/`stat`/`age` expose the pool for the reuse tests below.
   return new Function("THREE", "releaseTexSource", "texStandIn", "mobileTier", "isMobile", "renderer", "fx", "ImageBitmap",
-    `${pool}return ({${create}${refill}${free} pool: _texPool, stat: _texStat, age: ageTexPool });`)(
+    `${pool}return ({${create}${refill}${free} pool: _texPool, stat: _texStat, age: ageTexPool, flush: flushTexPool });`)(
     THREE, releaseTexSource, texStandIn, mobileTier, isMobile, { initTexture }, fx, Bitmap);
 }
 
@@ -268,8 +269,11 @@ test("freeTexture retires the decal materials bound to the texture when it is di
   // eslint-disable-next-line no-new-func
   const texA = { id: 1 }, texB = { id: 2 }, mirTex = { id: 3 }, glass = { __tlxTex: mirTex };
   // _glassMat: tsl-fx's one cockpit-glass material (mirrorGlassMaterial), keyed on the mirror target's texture.
+  // _decalDrop keeps the per-draw texture -> glow index (decalByTex, #4556) in step with decalCache.
+  const drop = slice(FX, "    const decalByTex = new Map();", "    function _decalDrop(k, v) {", "decalByTex") +
+    slice(FX, "    function _decalDrop(k, v) {", "\n    }\n", "_decalDrop") + "\n    }\n";
   const fx = new Function("decalCache", "_evicted", "_fxMats", "glass",
-    `"use strict";let _glassMat = glass;${body};return { releaseTexture, glass: () => _glassMat };`)(decalCache, _evicted, _fxMats, glass);
+    `"use strict";let _glassMat = glass;${drop}${body};return { releaseTexture, glass: () => _glassMat };`)(decalCache, _evicted, _fxMats, glass);
   const releaseTexture = fx.releaseTexture;
   const mA0 = { map: texA }, mA1 = { map: texA }, mB = { map: texB };
   decalCache.set("1|0", mA0); decalCache.set("1|0.35", mA1); decalCache.set("2|0", mB);
@@ -417,4 +421,22 @@ test("a parked texture drops its CPU source", () => {
   assert.notEqual(t.image, src, "the canvas is not pinned by the pool");
   assert.equal(t.image.width, 1);
   assert.equal(t.onUpdate, null);
+});
+
+test("flushTexPool disposes every pooled texture now, with its decal materials (dropTrackWorld)", () => {
+  const { gfx, released } = poolRig();
+  const hs = [1, 2, 3].map((i) => gfx.createTexture(canvas(64 * i, 64)));
+  const texes = hs.map((h) => h.tex);
+  for (const h of hs) gfx.freeTexture(h);
+  assert.equal(gfx.pool.length, 3);
+  gfx.flush();
+  assert.equal(gfx.pool.length, 0, "pool empty without waiting TEX_POOL_MS");
+  assert.deepEqual(released, texes);
+  assert.equal(gfx.stat.disposed, 3);
+  gfx.flush();   // idempotent
+  assert.equal(gfx.stat.disposed, 3);
+});
+
+test("dropTrackWorld flushes the gfx texture pool", () => {
+  assert.match(symbolSource("function dropTrackWorld() {"), /gfx\.flushTexPool\(\)/);
 });

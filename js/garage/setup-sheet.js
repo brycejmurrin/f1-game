@@ -848,7 +848,7 @@ function buildSetup() {
         return;
       }
       p[activeCat.id] = opt.id;
-      saveTeamParts(team.id, p);
+      if (saveTeamParts(team.id, p) === false) { reject(); return; }   // a conflicted career save refuses the fit: no blip, nothing shown as fitted (#5044)
       if (G.soundOn && !_blipped) GameAudio.uiSelect();
       buildSetup();
       if (CAT_VIEW[activeCat.id]) framePreset(CAT_VIEW[activeCat.id]);   // show the part
@@ -1539,6 +1539,13 @@ function buildLiveryCreator(container, team) {
   // An edited design is never one press from gone: CANCEL (and Escape, below) arms first.
   cancel.onclick = () => { if (designTools && designTools.dirty()) G.armConfirm(cancel, "DISCARD EDITS?", discard); else discard(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
+  const saveStatus = document.createElement("p"); saveStatus.className = "cs-opt-desc"; saveStatus.setAttribute("role", "status"); saveStatus.hidden = true;
+  const retrySave = () => {
+    saveStatus.hidden = false;
+    saveStatus.textContent = "Could not finish saving and fitting. Your draft is still open. Retry SAVE & FIT.";
+    save.textContent = "RETRY SAVE & FIT";
+    if (G.soundOn) GameAudio.uiReject();
+  };
   save.onclick = () => {
     const now = Teams.LIST[G.teamIdx];
     if (team.id !== csLivTeamId || !now || now.id !== csLivTeamId) { discardLivDraft(); buildSetup(); return; }   // the team changed under the editor
@@ -1554,8 +1561,11 @@ function buildLiveryCreator(container, team) {
     // Another tab may already have replaced/deleted the old id. Keep its work
     // and save this draft as a new copy rather than fitting an unstored id.
     const replacing = csLivEditId && existing.some((l) => l.id === csLivEditId);
-    setCustomLiveries(team.id, replacing ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
-    saveLiveryId(team.id, id);
+    const saved = setCustomLiveries(team.id, replacing ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
+    // The session cache can accept a write the disk refused. Retry replaces
+    // that candidate; a wholly rejected career write keeps the original id.
+    if (getCustomLiveries(team.id).some((l) => l.id === id)) csLivEditId = id;
+    if (saved === false || saveLiveryId(team.id, id) === false) { retrySave(); return; }
     csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();
     buildSetup();
@@ -1568,6 +1578,7 @@ function buildLiveryCreator(container, team) {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
     pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id, scrollRoot: container,
   });
+  wrap.insertBefore(saveStatus, btns);
   csLivDirty = designTools ? designTools.dirty : null;
   container.appendChild(wrap);
   applyPreview();

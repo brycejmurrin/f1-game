@@ -54,6 +54,26 @@ let raceSessionHooked = false;
 function raceSessionReady() {
   return RACE_SESSION_FILES.every((f) => raceSessionLoaded.has(f));
 }
+// #4274 item 15: one preload for the wave, then one eval per task in edge order (it was one burst of evals).
+async function loadRaceSessionSerial(opts) {
+  const files = RACE_SESSION_FILES;
+  const preds = new Map(files.map((f) => [f, []]));
+  for (const [a, b] of RACE_SESSION_EDGES) if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
+  const pending = files.filter((f) => !raceSessionLoaded.has(f));
+  if (pending.length > 1 && typeof ScriptLoader !== "undefined" && ScriptLoader.preload) {
+    try { ScriptLoader.preload(pending); } catch (_) { /* a hint: the injects still fetch */ }
+  }
+  let first = true;
+  while (pending.length) {
+    const i = pending.findIndex((f) => preds.get(f).every((p) => raceSessionLoaded.has(p) || !pending.includes(p)));
+    if (i < 0) return loadBackendScripts(pending, RACE_SESSION_EDGES, opts);   // a cycle: the bulk loader decides
+    const src = pending.splice(i, 1)[0];
+    if (!first) await audioYieldToMain("task");
+    first = false;
+    if (!(await loadBackendScripts([src], RACE_SESSION_EDGES, opts))) return false;
+  }
+  return true;
+}
 function ensureRaceSession() {
   if (raceSessionLoad) return raceSessionLoad;
   if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
@@ -63,7 +83,7 @@ function ensureRaceSession() {
     raceSessionLoad = Promise.resolve(true);
     return raceSessionLoad;
   }
-  raceSessionLoad = loadBackendScripts(RACE_SESSION_FILES, RACE_SESSION_EDGES, {
+  raceSessionLoad = loadRaceSessionSerial({
     strict: true, loaded: raceSessionLoaded,
     onSlow: () => { if (typeof LoadingScreen !== "undefined" && LoadingScreen.slowNotice) LoadingScreen.slowNotice(); },   // #2625
     ready: (src) => !RACE_SESSION_READY[src] || RACE_SESSION_READY[src](),
