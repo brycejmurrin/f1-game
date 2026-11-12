@@ -10356,6 +10356,9 @@
       "blockingSeats": [
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
+      "broadcast": [
+        "tests/unit/net-authority.test.mjs"
+      ],
       "cancel": [
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -10513,6 +10516,9 @@
     },
     "js/net/netplay.js": {
       "awaitingResult": [
+        "tests/unit/net-authority.test.mjs"
+      ],
+      "broadcast": [
         "tests/unit/net-authority.test.mjs"
       ],
       "clampWire": [
@@ -11650,13 +11656,21 @@
     },
     "js/physics/ai-band.js": {
       "applyVmax": [
-        "tests/unit/ai-band.test.mjs"
+        "tests/unit/ai-band.test.mjs",
+        "tests/unit/sim-step-alloc.test.mjs"
       ],
       "factor": [
-        "tests/unit/ai-band.test.mjs"
+        "tests/unit/ai-band.test.mjs",
+        "tests/unit/sim-step-alloc.test.mjs"
+      ],
+      "mode": [
+        "tests/unit/sim-step-alloc.test.mjs"
       ],
       "normalize": [
         "tests/unit/ai-band.test.mjs"
+      ],
+      "setMode": [
+        "tests/unit/sim-step-alloc.test.mjs"
       ]
     },
     "js/physics/ai-corridor.js": {
@@ -14512,6 +14526,7 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "createPassWatch": [
+        "tests/unit/sim-step-alloc.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "info": [
@@ -14535,6 +14550,7 @@
       "tick": [
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/sim-step-alloc.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "*": [
