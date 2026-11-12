@@ -17,6 +17,9 @@ const OLD = "c".repeat(40);
 const UI = "tests/specs/ui-scale.spec.js";
 const HOOKS = "tests/specs/new-hooks.spec.js";
 const GROUPS = { ui: [UI, "tests/specs/audio-smoke.spec.js"], hooks: [HOOKS] };
+// The exact refusal texts (whole strings, not patterns: the verdict job prints them as the reason a PR stays red).
+const none = (spec, note = "") => `no green same-head, same-base llvmpipe browser-group run covers ${spec}${note ? ` (run 300: ${note})` : ""}`;
+const tainted = (what) => `${UI}: ${what} — a group run that is not green on attempt 1 refuses it`;
 
 // One green llvmpipe `ui` run on HEAD, attempt 1, PR merge ref on BASE, two shards that together ran ui-scale whole.
 function world(over = {}) {
@@ -47,7 +50,7 @@ test("accept: every dropped spec ran green in a same-head, same-base llvmpipe gr
   const v = decide(world());
   assert.equal(v.accept, true, v.why);
   assert.deepEqual(v.runs, ["300"]);
-  assert.match(v.why, /run\(s\) 300/);
+  assert.equal(v.why, `dropped spec(s) ${UI} ran green in browser-group run(s) 300: same head ${HEAD.slice(0, 12)}, same base ${BASE.slice(0, 12)}, llvmpipe, attempt 1`);
 });
 
 test("accept: a fat spec covered by every piece j/k across shards", () => {
@@ -55,20 +58,20 @@ test("accept: a fat spec covered by every piece j/k across shards", () => {
   assert.equal(v.accept, true, v.why);
   const half = decide(world({ rec1: { units: [`${UI}#1/3`] }, rec2: { units: [`${UI}#2/3`] } }));
   assert.equal(half.accept, false, "pieces 1/3 and 2/3 without 3/3 do not cover the file");
-  assert.match(half.why, /no green same-head/);
+  assert.equal(half.why, none(UI));
 });
 
 test("refuse: no group run at all, or only one on another sha", () => {
   assert.equal(decide(world({ q: { runs: [] } })).accept, false);
   const v = decide(world({ run: { head_sha: OLD } }));
   assert.equal(v.accept, false);
-  assert.match(v.why, /no green same-head/);
+  assert.equal(v.why, none(UI));
 });
 
 test("refuse: a re-run attempt (green only on attempt 2)", () => {
   const v = decide(world({ run: { run_attempt: 2 } }));
   assert.equal(v.accept, false);
-  assert.match(v.why, /attempt 2/);
+  assert.equal(v.why, tainted("run 300 (group ui) is completed/success, attempt 2"));
 });
 
 test("refuse: a failed or cancelled group run, and a still-running one", () => {
@@ -83,7 +86,7 @@ test("refuse: a red group run of the spec beside a green one (a pass after a red
   const red = { id: 299, path: GROUP_WORKFLOW_PATH, event: "workflow_dispatch", head_sha: HEAD, status: "completed", conclusion: "failure", run_attempt: 1, display_title: "browser group ui on cursor/x (llvmpipe)" };
   const v = decide(world({ extraRuns: [red] }));
   assert.equal(v.accept, false);
-  assert.match(v.why, /run 299 \(group ui\) is completed\/failure/);
+  assert.equal(v.why, tainted("run 299 (group ui) is completed/failure, attempt 1"));
   // A red run of a group that does NOT contain the spec does not taint it.
   const other = { ...red, display_title: "browser group hooks on cursor/x (llvmpipe)" };
   assert.equal(decide(world({ extraRuns: [other] })).accept, true);
@@ -97,7 +100,7 @@ test("refuse: a non-green run whose group cannot be read refuses every dropped s
 test("refuse: a flaky (retried) pass — the record must say APEX_FAIL_ON_FLAKY was on", () => {
   const v = decide(world({ rec1: { units: [UI], flaky: false } }));
   assert.equal(v.accept, false);
-  assert.match(v.why, /flaky=off/);
+  assert.equal(v.why, none(UI, "job ui (1/2)'s record is gl=llvmpipe flaky=off group=ui"));
 });
 
 test("refuse: SwiftShader, not the default GL", () => {
@@ -108,10 +111,10 @@ test("refuse: SwiftShader, not the default GL", () => {
 test("refuse: another base (the deploy tip moved between the group run and this run), or a branch-head run", () => {
   const moved = decide(world({ rec1: { units: [UI], base: OLD } }));
   assert.equal(moved.accept, false);
-  assert.match(moved.why, /tested base c{12}/);
+  assert.equal(moved.why, none(UI, `it tested base ${OLD.slice(0, 12)}, this run tests ${BASE.slice(0, 12)}`));
   const branch = decide(world({ rec1: { units: [UI], base: "" } }));
   assert.equal(branch.accept, false);
-  assert.match(branch.why, /branch head, not the PR merge ref/);
+  assert.equal(branch.why, none(UI, "it tested the branch head, not the PR merge ref (dispatch it with remote-group.mjs, which passes the PR)"));
   assert.equal(decide(world({ rec1: { units: [UI], head: OLD } })).accept, false, "a record of another head");
   // Option 2 (orchestrator A, 2026-11-11): same base as THIS run is the rule; the live tip is not read here.
   assert.equal(decide(world({ q: { tip: OLD } })).accept, true, "a tip that moved after both runs is the gate's retest row, not this");
@@ -123,7 +126,7 @@ test("refuse: an unreadable or missing record, a failed shard record, a red job,
   const endOnly = { title: GROUP_RECORD_TITLE, message: groupRecordLine({ head: HEAD, base: BASE, gl: "llvmpipe", flaky: true, group: "ui", ok: true, units: [UI] }) };
   const noPlan = decide(world({ notes: { 1: [endOnly], 2: [] }, jobs: [{ id: 1, name: "ui (1/1)", conclusion: "success" }] }));
   assert.equal(noPlan.accept, false, "an end record without the plan record written before the specs ran");
-  assert.match(noPlan.why, /no readable apex-group-plan record/);
+  assert.equal(noPlan.why, none(UI, "job ui (1/1) left no readable apex-group-plan record (its plan, written before the specs ran)"));
   assert.equal(decide(world({ rec1: { units: [UI], ok: false } })).accept, false);
   assert.equal(decide(world({ jobs: [{ id: 1, name: "ui (1/2)", conclusion: "failure" }] })).accept, false);
   assert.equal(decide(world({ q: { jobsOf: () => null } })).accept, false);
@@ -135,20 +138,20 @@ test("refuse: a second record of either kind (a spec or helper printed one), an 
   const one = [{ id: 1, name: "ui (1/1)", conclusion: "success" }];
   const twoEnd = decide(world({ jobs: one, notes: { 1: [{ title: GROUP_PLAN_TITLE, message: rec() }, { title: GROUP_RECORD_TITLE, message: rec() }, { title: GROUP_RECORD_TITLE, message: rec() }] } }));
   assert.equal(twoEnd.accept, false);
-  assert.match(twoEnd.why, /2 apex-group and 1 apex-group-plan records/);
+  assert.equal(twoEnd.why, none(UI, "job ui (1/1) has 2 apex-group and 1 apex-group-plan records (something besides the shard steps printed one)"));
   const twoPlan = decide(world({ jobs: one, notes: { 1: [{ title: GROUP_PLAN_TITLE, message: rec() }, { title: GROUP_PLAN_TITLE, message: rec() }, { title: GROUP_RECORD_TITLE, message: rec() }] } }));
   assert.equal(twoPlan.accept, false);
   // The orchestrator's case: a run whose end annotation names a spec its plan did not contain.
   const claim = decide(world({ rec1: { units: [UI] }, plan1: { units: ["tests/specs/audio-smoke.spec.js"] } }));
   assert.equal(claim.accept, false);
-  assert.match(claim.why, /claims tests\/specs\/ui-scale\.spec\.js, which its plan did not contain/);
+  assert.equal(claim.why, none(UI, `job ui (1/2)'s end record claims ${UI}, which its plan did not contain`));
   // Review S1's fixture: a green `hooks` run whose records claim ui-scale ran. ui-scale is not in test:hooks.
   const hooks = decide(world({
     run: { display_title: "browser group hooks on cursor/x (llvmpipe)" }, jobs: one,
     notes: { 1: [{ title: GROUP_PLAN_TITLE, message: rec({ group: "hooks" }) }, { title: GROUP_RECORD_TITLE, message: rec({ group: "hooks" }) }] },
   }));
   assert.equal(hooks.accept, false);
-  assert.match(hooks.why, /test:hooks does not contain/);
+  assert.equal(hooks.why, none(UI, `job ui (1/1)'s plan names ${UI}, which test:hooks does not contain`));
 });
 
 test("junit is the evidence: a file passes with a passed case and no failure; skipped-only or failed files do not", () => {
@@ -166,7 +169,7 @@ test("refuse: a run with no run_attempt is not read as attempt 1", () => {
 test("refuse: a dropped spec the group run did not contain", () => {
   const v = decide(world({ q: { dropped: [UI, HOOKS], count: "2" } }));
   assert.equal(v.accept, false);
-  assert.match(v.why, /covers tests\/specs\/new-hooks\.spec\.js/);
+  assert.equal(v.why, none(HOOKS));
 });
 
 test("refuse: dropped names missing or not matching the plan's dropped count; bad shas", () => {
@@ -220,15 +223,19 @@ test("selected verdict: an accepted group run turns a ready drop green and names
   const base = { select: "success", selected: "success", guards: "success", dropped: "1", draft: "false", called: "false" };
   const ok = selectedGateVerdict({ ...base, groupAccept: "true", groupRuns: "300,301" });
   assert.equal(ok.ok, true, ok.reason);
-  assert.match(ok.reason, /browser-group run\(s\) 300, 301/);
+  assert.equal(ok.reason, "selected specs passed; the plan's 1 dropped spec(s) ran green in browser-group run(s) 300, 301 (same head, same base, attempt 1, llvmpipe)");
+  // The whole red message: what counts, the command to run, and the draft-and-back flip.
+  const red = (why = "") => `the plan dropped 1 routed spec(s) it could not afford (named in the 'Select specs for this change' log)${why ? `, and no separate run counts: ${why}` : ""}. `
+    + "What counts: every dropped spec green in ONE browser-group run per group on this head and this base, first attempt, default GL — "
+    + "`node tools/ci/remote-group.mjs <group>` on the pushed branch (it tests the PR's merge ref), BEFORE the ready flip (this job waits at most 7 min for one still running, then reds); "
+    + "after a red like this one, run it, then flip the PR to draft and back to ready (a new ready run on the same head; never a re-run of this one). "
+    + "A failed, cancelled, re-run or branch-head group run does not count, nor does one on another base than this run's (the deploy tip moved between them: run it again). Or split the change.";
   for (const g of [{}, { groupAccept: "false", groupWhy: "no green same-head run covers x" }, { groupAccept: "true", groupRuns: "" }, { groupAccept: "true", groupRuns: "300;x" }]) {
     const v = selectedGateVerdict({ ...base, ...g });
     assert.equal(v.ok, false, JSON.stringify(g));
-    assert.match(v.reason, /What counts: every dropped spec green in ONE browser-group run per group on this head and this base, first attempt, default GL/);
-    assert.match(v.reason, /node tools\/ci\/remote-group\.mjs <group>/);
-    assert.match(v.reason, /flip the PR to draft and back to ready/);
+    assert.equal(v.reason, red(g.groupWhy));
   }
-  assert.match(selectedGateVerdict({ ...base, groupAccept: "false", groupWhy: "why-text" }).reason, /no separate run counts: why-text/);
+  assert.equal(selectedGateVerdict({ ...base, groupAccept: "false", groupWhy: "why-text" }).reason, red("why-text"));
   assert.equal(selectedGateVerdict({ ...base, selected: "failure", groupAccept: "true", groupRuns: "300" }).ok, false, "a red leg is never cured by a group run");
   assert.equal(selectedGateVerdict({ ...base, dropped: "x", groupAccept: "true", groupRuns: "300" }).ok, false, "an unreadable count stays red");
 });
@@ -236,21 +243,20 @@ test("selected verdict: an accepted group run turns a ready drop green and names
 test("ci.yml wires it: select names the drops, the verdict job asks only on a ready PR and can read runs and annotations", () => {
   const wf = parseYAML(ciWorkflow);
   const sel = wf.jobs.select;
-  assert.match(sel.outputs.dropped_specs, /steps\.dropped_names\.outputs\.dropped_specs/);
+  assert.equal(sel.outputs.dropped_specs, "${{ steps.dropped_names.outputs.dropped_specs }}");
   assert.ok(sel.steps.some((s) => s.id === "dropped_names" && /dropped-group-runs\.mjs --names/.test(s.run)));
   const v = wf.jobs["selected-verdict"];
   assert.deepEqual(v.permissions, { contents: "read", actions: "read", checks: "read" });
   const step = v.steps.find((s) => s.id === "group_runs");
   assert.ok(step, "the group-runs step");
-  assert.match(step.if, /!github\.event\.pull_request\.draft/);
-  assert.match(step.if, /needs\.select\.outputs\.dropped != '0'/);
+  assert.equal(step.if, "${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && inputs.concurrency_key == '' && needs.select.outputs.dropped != '0' }}", "a ready PR with a drop, nothing else");
   const verdictStep = v.steps.find((s) => s.name === "One answer for the change-aware gate");
-  assert.match(verdictStep.env.GROUP_ACCEPT, /steps\.group_runs\.outputs\.accept/);
-  assert.match(verdictStep.env.GROUP_RUNS, /steps\.group_runs\.outputs\.runs/);
-  for (const s of v.steps.filter((x) => x.with?.["sparse-checkout"])) assert.match(s.with["sparse-checkout"], /tests\/specs/, "globbed groups need tests/specs");
+  assert.equal(verdictStep.env.GROUP_ACCEPT, "${{ steps.group_runs.outputs.accept }}");
+  assert.equal(verdictStep.env.GROUP_RUNS, "${{ steps.group_runs.outputs.runs }}");
+  for (const s of v.steps.filter((x) => x.with?.["sparse-checkout"])) assert.equal(s.with["sparse-checkout"], "tools/ci\ntools/lib\ntests/specs\n", "globbed groups need tests/specs");
   const bg = parseYAML(fs.readFileSync(".github/workflows/browser-group.yml", "utf8"));
   assert.equal(bg.on.workflow_dispatch.inputs.pr.default, "");
   const steps = bg.jobs.group.steps;
-  assert.match(steps.find((s) => String(s.uses || "").startsWith("actions/checkout")).with.ref, /refs\/pull\/\{0\}\/merge/);
+  assert.equal(steps.find((s) => String(s.uses || "").startsWith("actions/checkout")).with.ref, "${{ inputs.pr != '' && format('refs/pull/{0}/merge', inputs.pr) || '' }}");
   for (const s of steps.filter((x) => /--run-shard/.test(x.run || ""))) assert.equal(s.env.APEX_FAIL_ON_FLAKY, 1);
 });
