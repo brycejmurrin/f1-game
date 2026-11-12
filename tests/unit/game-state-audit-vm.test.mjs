@@ -50,8 +50,14 @@ test("#1 a LEGENDS seat ≥ 2, then a two-seat team set through G.teamIdx: the r
   assert.equal(g.G.driverIdx, 1);
 });
 
-test("#2 grip on the drying line fades when a weather arc settles, it does not step", async () => {
+// `slick`: pin the garage slick as a set that does NOT follow the weather (the
+// line's grip advantage is a slick's). Off: the shipped wear-off player, whose
+// set follows the weather (#5253) — it must not step either: a tyre change
+// at the lap mean's 0.25 switch once cost 2.8 % in one step on a drier line.
+async function dryingLine(slick) {
   const p = await drive(), G = g.G;
+  if (slick) { p.wxFollow = false; p.tread = 0; }
+  assert.equal(slick || p.wxFollow, true, "the fixture runs wear off, so the player's set follows the weather");
   assert.ok(g.apex.weatherArc("dry", "wet", 20), "the arc must arm");
   const gripAt = (x) => { const x0 = p.x; p.x = x; const v = G.gripMult(p); p.x = x0; return v; };
   const groove = () => { let bx = 0, bv = -1; for (let x = -5; x <= 5; x += 0.25) { const v = gripAt(x); if (v > bv) { bv = v; bx = x; } } return bx; };
@@ -66,9 +72,18 @@ test("#2 grip on the drying line fades when a weather arc settles, it does not s
   }
   assert.ok(endedAt > 0, "the arc never settled");
   assert.ok(worst < 0.01, `grip on the line stepped ${(worst * 100).toFixed(2)} % in one step`);
+  return { onLine, prev, gripAt };
+}
+
+test("#2 grip on the drying line fades when a weather arc settles, it does not step", async () => {
+  const { onLine, prev, gripAt } = await dryingLine(true);
   assert.ok(onLine > prev + 0.05, `the groove gave no grip at the arc's end (${onLine} vs settled ${prev}) — nothing to fade`);
   const flat = gripAt(0), off = gripAt(4.5);
   assert.ok(Math.abs(flat - off) < 1e-12, "6 s after the arc a static weather is one even wetness again");
+});
+
+test("#2b a wear-off set that follows the weather (#5253) changes tyre without a grip step", async () => {
+  await dryingLine(false);
 });
 
 test("#4 BOOST pressed on a flat battery does not latch on", async () => {

@@ -996,7 +996,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
   /* 16px, not --fs-2: iOS focused-input auto-zoom floor (see menus.css /
      tuner.css input notes) — this is a typeable livery-name field. */
-  font-size: 16px; font-weight: 600; color: var(--text);
+  font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1)))); font-weight: 600; color: var(--text);
   padding: 6px 9px; border-radius: var(--r-sm);
   background: var(--plate); border: 1px solid var(--card-line);
 }
