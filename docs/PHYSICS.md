@@ -438,13 +438,18 @@ cell is 0.88. Through `weatherGrip`'s lerp the inter/full crossover is wetness
 ~0.68 on grip alone and ~0.79 with the catalog's dry cornering cost (0.94 vs
 0.90), bracketing treadFor's 0.72; slick/inter with that cost crosses at ~0.24.
 `tests/unit/wet-grip-ladder.test.mjs` pins the ordering. The table cannot say
-"a full wet is worse than an inter on a near-dry road" by itself — the dry knot
-is 1 for every tread inside `weatherGrip` — so that half lives in the catalog's
-stat cost. CLOSED (was a KNOWN GAP): `gripMult` once mapped `tread == null`
-(wear-off AI) to the full-wet column, which is not "the right tyre" below
-wetness ~0.68; `js/game.js` `gripMult` now reads
-`c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread`,
-so a tread-less car gets the tyre the conditions call for.
+"a full wet is worse than an inter on a near-dry road" through its `dry` row
+(slick 1, inter 0.92, full wet 0.90; #5289, 2026-11-11). That cost used to live
+in the catalog's stat rows on the player alone; a wet set now costs a human
+what it costs an AI (`TyreModel.applyCompound`), so both pay it here. CLOSED
+(was a KNOWN GAP): `gripMult` once mapped `tread == null` (wear-off AI) to the
+full-wet column, which is not "the right tyre" below wetness ~0.68;
+`js/game.js` `gripMult` now reads `TyreModel.carGrip(c, raceWeather,
+trackWetness(), surface)`: a tread-less car gets the tyre the conditions call
+for (`treadFor` on the lap mean), and a wear-off car on its own garage slick
+(`c.wxFollow`, #5253) is on ONE set, the best tread for the lap-mean road,
+which the session changes as the road wets or dries; a change blends the new
+set's grip in over 3 s (`c.wxMix`), so grip never steps.
 
 ### The three call shapes
 
@@ -1022,6 +1027,16 @@ an AI car's `tread: null` resolves to the right compound for cornering (above),
 so in the rain the field cornered on wets and braked on slicks, and a player on
 full wets out-braked it by the whole ratio (~27 % at full wet) while the
 corner-speed model showed no such gap. Dry pace is untouched by construction.
+
+### Brake temperature and fade (opt-in, #1577)
+
+Rides on the wheel state, default OFF (`WheelState.setThermal(true)` or `apex26.brakeThermal = "1"`;
+session-only `__apex.setPhysics({brakeThermal})`). Each axle's disc heats with the player's own
+brake power (demand x speed), cools with airflow, and past ~650 C the pads lose bite, up to 35% at
+950 C; the lost share goes back into `c.speed` through the lock-up shortfall path. Driver-only: it
+reads the pedal and speed, never track curvature. Six back-to-back 83 m/s stops: 152.2 m cold,
+156.0 m on the sixth (`player-dynamics-vm.test.mjs`). Telemetry: `physState().brakeTemp {f,r}` and
+`brakeFade`. `c.brakeHeat` stays the visual-only glow.
 
 ### Wheel state: torque-balanced lock-up and wheelspin (opt-in, #1628)
 

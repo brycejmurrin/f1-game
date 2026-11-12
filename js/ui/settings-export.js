@@ -165,6 +165,7 @@ const SPEC = [
   { k: "helmetVisorRunoff", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRunoff", oneOf: ["normal", "slow", "fast"] },
   { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
+  { k: "pitEntryShot", lane: "json", group: "camera", def: true, src: "js/camera/extra-rigs.js PIT ENTRY SHOT (feel.js row; #4745)" },
   { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },
   { k: "camTuneGlobal", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js global baseline layered under every mode (same knob ids as camTune)" },
   { k: "camComfort", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
@@ -285,6 +286,8 @@ const SPEC = [
     // Self-contained (EnergyPlan.POLICIES' three names): settings-export loads without the race modules.
     normalize: (v) => (Array.isArray(v) && v.length === 3 && v.every((p) => p === "manual" || p === "deploy" || p === "save") ? v.slice() : undefined) },
   { k: "damageHandling", lane: "json", group: "driving", def: false, src: "js/race/race-settings.js DAMAGE row → DamageHandling.setEnabled (#1578)" },
+  { k: "wheelState", lane: "raw", group: "driving", def: "0", oneOf: ["0", "1"], src: "js/physics/wheel-state.js" },
+  { k: "wheelAssist", lane: "raw", group: "driving", def: "off", oneOf: ["off", "medium", "full"], src: "js/physics/wheel-state.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },

@@ -3,6 +3,19 @@ const GarageArrival = (function () {
   "use strict";
   const DOOR_S = 1.8;
   const ease = GarageCrewDraw.ease;
+  // V8's Math.hypot, minus its per-call array (#5462).
+  function hypot(a, b, c) {
+    const three = c !== undefined;
+    a = Math.abs(a); b = Math.abs(b); c = three ? Math.abs(c) : 0;
+    if (a === Infinity || b === Infinity || c === Infinity) return Infinity;
+    if (a !== a || b !== b || c !== c) return NaN;
+    const max = Math.max(a, b, c);
+    if (max === 0) return 0;
+    let n = a / max, sum = n * n, comp = 0, s, p;
+    n = b / max; s = n * n - comp; p = sum + s; comp = (p - sum) - s; sum = p;
+    if (three) { n = c / max; s = n * n - comp; sum += s; }
+    return Math.sqrt(sum) * max;
+  }
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix",
     shots: Object.freeze(["left", "right", "right"]), height: 0, door: DOOR_S, hold: null, carSpeed: 1, endBeat: 0,
     afterRace: true, homeCrew: "auto", result: "win",
@@ -20,6 +33,7 @@ const GarageArrival = (function () {
    * left-then-right in and left out; CUSTOM reads config.shots. */
   const CAMS = Object.freeze({ left: [-3.8, 2.1, -4.8], right: [4.1, 2.25, -4.9], high: [-4.6, 3.5, -5.7], low: [2.7, 0.45, -3.9], door: [-0.9, 2.2, 5.9] });
   const CAM_IDS = Object.freeze(Object.keys(CAMS));
+  const CAM_SHOTS = Object.freeze(Object.fromEntries(CAM_IDS.map((id) => [id, Object.freeze([id, id, id])])));
   const PRESETS = Object.freeze({
     cut: { in: ["left", "right", "right"], out: ["left", "left", "left"] },
     director: { in: ["door", "left", "high"], out: ["high", "low", "door"] },
@@ -28,7 +42,7 @@ const GarageArrival = (function () {
   function shotsFor(config, dir) {
     const a = config && config.angle;
     if (a === "custom") return config.shots && config.shots.length === 3 ? config.shots : DEFAULT.shots;
-    if (CAMS[a]) return [a, a, a];
+    if (CAMS[a]) return CAM_SHOTS[a];
     return (PRESETS[a] || PRESETS.cut)[dir === "out" ? "out" : "in"];
   }
   /* AFTER THE RACE (the "home" sequence): the arrival's shape, flavoured by how
@@ -57,6 +71,7 @@ const GarageArrival = (function () {
   // the wet (the shipped rule, setup-camera.js), FLASH = the FIA rain light's blink.
   const REAR = Object.freeze(["auto", "on", "off", "flash"]);
   const moodIds = () => typeof GarageScene !== "undefined" && GarageScene.MOODS ? Object.keys(GarageScene.MOODS) : [];
+  const hasMood = (id) => typeof GarageScene !== "undefined" && !!GarageScene.MOODS && Object.prototype.propertyIsEnumerable.call(GarageScene.MOODS, id);
   /* LIGHT CUE: a Blender-keyframed GarageScene cue (scene.js CUES: lights up,
    * photo flashes, amber beacon, pulse, lights out) played over the sequence's
    * lighting from its first second; after the race, BY RESULT picks one. */
@@ -78,7 +93,7 @@ const GarageArrival = (function () {
     const c = config || DEFAULT;
     let v = dir === "home" ? c.homeLight : c.light;
     const raced = RACE_LIGHT[c.race];
-    if (dir === "home" && (!v || v === "auto")) v = raced && moodIds().includes(raced) ? raced : (RESULTS[c.result] || RESULTS.finish).light || "asset";
+    if (dir === "home" && (!v || v === "auto")) v = raced && hasMood(raced) ? raced : (RESULTS[c.result] || RESULTS.finish).light || "asset";
     return v && v !== "asset" && v !== "auto" ? v : null;
   }
   function resultKind(pos, out, sprint) {
@@ -99,20 +114,11 @@ const GarageArrival = (function () {
     if (config.fastest && !out) parts.push("FASTEST LAP");
     return parts.join(" · ");
   }
-  /* STYLE: a whole look in one tap, above the rows (phone UX: 33 rows is a lot
-   * to scroll). Each is a partial settings object laid over the saved one, so
-   * crews, timing and AFTER THE RACE stay the player's; RESET is the shipped look.
-   * BROADCAST: the TV pit-lane coverage — three locked-off cameras, broadcast
-   * light, captions. CINEMA: the Blender crane (no CAMERA MOVE on top: a push
-   * carried the lens into a crew member and the car past the frame edge,
-   * 2026-10-30 844x390 capture), slow-mo at the door, GOLDEN HOUR under bars (the
-   * showroom mood blacked the room out while the car was still in the lane),
-   * no captions. DOCUMENTARY: a heavy handheld
-   * drifting through three cameras under the garage's own light. SHOWCASE: the
-   * Blender orbit circling the car while the SPOTLIGHT cue dims the room and
-   * sweeps a follow-spot onto it, a launch reveal (the garage's own light: the
-   * showroom mood under the cue's dim played black, 2026-11-02 844x390 capture). NIGHT SHIFT: a light handheld on the high corner, drifting,
-   * under the overnight-service mood, the way a 24-hour race's garage looks. */
+  /* STYLE: a whole look in one tap (33 rows is a lot to scroll on a phone), laid over the saved
+   * settings, so crews, timing and AFTER THE RACE stay the player's; RESET is the shipped look.
+   * CINEMA has no CAMERA MOVE (a push carried the lens into a crew member) and GOLDEN HOUR (the
+   * showroom mood blacked the room out mid-lane), 2026-10-30 844x390; SHOWCASE keeps the garage's
+   * light (showroom under the spotlight cue's dim played black, 2026-11-02). */
   const STYLES = Object.freeze({
     broadcast: Object.freeze({ label: "BROADCAST", look: { angle: "director", move: "still", sway: 0, zoom: 0, fov: 54, light: "broadcast", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
     cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "still", sway: 0.5, zoom: 6, fov: 48, light: "goldenhour", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
@@ -170,15 +176,20 @@ const GarageArrival = (function () {
    * first read of a config object decides; the next playback's fresh object
    * adopts whatever has landed by then. */
   const _pinned = new WeakMap();
-  function pinned(config, key, fn) {
-    if (!config || typeof config !== "object") return fn();
-    let m = _pinned.get(config);
-    if (!m) { m = {}; _pinned.set(config, m); }
-    if (!(key in m)) m[key] = fn();
+  const PIN_CREW = Object.freeze({ __proto__: null, in: "crew:in", out: "crew:out", home: "crew:home" });
+  function pinMap(config) { let m = _pinned.get(config); if (!m) { m = {}; _pinned.set(config, m); } return m; }
+  function rigFor(config) {
+    if (!config || typeof config !== "object") return rigData(config.angle) ? config.angle : null;
+    const m = pinMap(config);
+    if (!("rig" in m)) m.rig = rigData(config.angle) ? config.angle : null;
+    return m.rig;
+  }
+  function crewFor(config, dir) {
+    if (!config || typeof config !== "object") return crewNow(config, dir);
+    const m = pinMap(config), key = PIN_CREW[dir] || "crew:" + dir;
+    if (!(key in m)) m[key] = crewNow(config, dir);
     return m[key];
   }
-  const rigFor = (config) => pinned(config, "rig", () => rigData(config.angle) ? config.angle : null);
-  const crewFor = (config, dir) => pinned(config, "crew:" + dir, () => crewNow(config, dir));
   /** A preview re-reading its settings mid-playback (a FOV or speed edit) builds a fresh config: carry
    *  the playback's pins and MIX deal over, so it keeps its camera family, crew, path and timing. The
    *  rig moves only while ANGLE is unchanged, and each crew only while its own pick is unchanged; an
@@ -469,10 +480,11 @@ const GarageArrival = (function () {
    * its garage. side +1 / -1 is the lane direction away from the camera's eye
    * (x and yaw ride the pose; setup-camera.js builds the car matrix from them). */
   const OUT_STRAIGHT = 8, OUT_R = 5, OUT_TURN = Math.PI / 2, OUT_PATH = OUT_STRAIGHT + OUT_R * OUT_TURN;
-  function pathAt(s, side) {
+  function pathAt(s, side, o = {}) {
     const th = Math.min(OUT_TURN, Math.max(0, s - OUT_STRAIGHT) / OUT_R), past = Math.max(0, s - OUT_PATH);
     const z = (s < OUT_STRAIGHT ? Math.max(0, s) : OUT_STRAIGHT + OUT_R * Math.sin(th)) + past * Math.cos(th);
-    return { x: side * (OUT_R * (1 - Math.cos(th)) + past * Math.sin(th)), z, yaw: side * th };
+    o.x = side * (OUT_R * (1 - Math.cos(th)) + past * Math.sin(th)); o.z = z; o.yaw = side * th;
+    return o;
   }
   const EYE_L = CAMS.left, EYE_R = CAMS.right;
   // @blender-rigs-index:start
@@ -504,18 +516,22 @@ const GarageArrival = (function () {
   const RIG_IDS = Object.freeze(Object.keys(RIGS));
   const RIG_LABEL = Object.freeze(Object.fromEntries(RIG_IDS.map((id) => [id, RIGS[id].label])));
   const ALL_ANGLES = Object.freeze(ANGLES.concat(RIG_IDS));   // GARAGE ANGLE: presets, then the Blender rigs
-  function rigSample(id, dir, u, side = 1) {
+  const RIG_V = new Float64Array(7);
+  function rigSample(id, dir, u, side = 1, o = null) {
     const rig = rigData(id);
     if (!rig) return null;
     const s = rig[dir] || rig.in, n = rig.n, f = Math.max(0, Math.min(1, Number.isFinite(u) ? u : 0)) * (n - 1);
-    const i = Math.min(n - 2, Math.floor(f)), k = f - i, m = side < 0 ? -1 : 1, v = [0, 0, 0, 0, 0, 0, 0];
+    const i = Math.min(n - 2, Math.floor(f)), k = f - i, m = side < 0 ? -1 : 1, v = RIG_V;
     const j0 = Math.max(0, i - 1) * 7, j1 = i * 7, j2 = (i + 1) * 7, j3 = Math.min(n - 1, i + 2) * 7;
     for (let c = 0; c < 7; c++) {
       const p0 = s[j0 + c], p1 = s[j1 + c], p2 = s[j2 + c], p3 = s[j3 + c];
       v[c] = p1 + 0.5 * k * (p2 - p0 + k * (2 * p0 - 5 * p1 + 4 * p2 - p3 + k * (3 * (p1 - p2) + p3 - p0)));
     }
-    return { eye: [m * Math.max(-5.2, Math.min(5.2, v[0] / 100)), Math.max(0.3, Math.min(3.6, v[1] / 100)), Math.max(-6.2, Math.min(6.05, v[2] / 100))],
-      aim: [m * v[3] / 100, v[4] / 100, v[5] / 100], fov: v[6] / 10 };
+    if (!o) o = { eye: [0, 0, 0], aim: [0, 0, 0], fov: 0 };
+    const e = o.eye, a = o.aim;
+    e[0] = m * Math.max(-5.2, Math.min(5.2, v[0] / 100)); e[1] = Math.max(0.3, Math.min(3.6, v[1] / 100)); e[2] = Math.max(-6.2, Math.min(6.05, v[2] / 100));
+    a[0] = m * v[3] / 100; a[1] = v[4] / 100; a[2] = v[5] / 100; o.fov = v[6] / 10;
+    return o;
   }
   // HANDHELD: a slow, small sway on both shots, as if someone were filming from
   // the back of the bay. Off when `calm` (reduce motion); timing never changes.
@@ -524,15 +540,20 @@ const GarageArrival = (function () {
   // eye at 4.0-4.3 m (2026-10-30 captures, HIGH CORNER +0.5 m).
   // look = { config, k (0..1 through the shot), last (the final shot) } carries
   // CAMERA MOVE, HANDHELD and FINAL SHOT ZOOM; defaults leave the shipped framing.
-  function shot(out, eye, aim, t, calm, lift = 0, look = null) {
-    out.eye = eye.slice(); out.aim = aim;
+  const _pairs = new WeakMap();
+  function posePair(pose) { let p = _pairs.get(pose); if (!p) { p = { eye: [0, 0, 0], aim: [0, 0, 0] }; _pairs.set(pose, p); } return p; }
+  function shot(out, eye, aim, t, calm, lift = 0, look = null, pair = null) {
+    const e = out.eye = pair ? pair.eye : [0, 0, 0];
+    e[0] = eye[0]; e[1] = eye[1]; e[2] = eye[2];
+    out.aim = pair ? pair.aim : [0, 0, 0];
+    out.aim[0] = aim[0]; out.aim[1] = aim[1]; out.aim[2] = aim[2]; aim = out.aim;
     if (lift) out.eye[1] = Math.max(0.3, Math.min(3.6, out.eye[1] + lift));
     const c = look && look.config, k = look ? Math.max(0, Math.min(1, look.k)) : 0;
     const move = c && c.move !== "still" && !calm ? c.move : null;
     if (move) {
-      const dx = aim[0] - out.eye[0], dy = aim[1] - out.eye[1], dz = aim[2] - out.eye[2], n = Math.hypot(dx, dy, dz) || 1;
+      const dx = aim[0] - out.eye[0], dy = aim[1] - out.eye[1], dz = aim[2] - out.eye[2], n = hypot(dx, dy, dz) || 1;
       if (move === "drift") {
-        const h = Math.hypot(dx, dz) || 1, s = MOVE_M * (ease(k) - 0.5);
+        const h = hypot(dx, dz) || 1, s = MOVE_M * (ease(k) - 0.5);
         out.eye[0] += -dz / h * s; out.eye[2] += dx / h * s;
       } else {
         const s = MOVE_M * (move === "push" ? ease(k) : 1 - ease(k));
@@ -554,10 +575,11 @@ const GarageArrival = (function () {
   }
   // Where a non-shipped camera looks: the shutter while it lifts, then the car
   // (the DOOR eye, a metre off the shutter, watches the crew instead of it).
-  function aimAt(cam, p, opening) {
-    if (cam === "door") return opening ? [0.6, 1.0, -1.5] : [Math.max(-8, Math.min(8, p.x)), 0.55, Math.max(-2, p.z)];
-    if (opening) return [0, cam === "high" ? 1.4 : 1.0, 6.2];
-    return [Math.max(-4, Math.min(4, p.x * 0.85)), cam === "high" ? 0.3 : 0.7, Math.max(-2, Math.min(10, p.z * 0.85))];
+  const set3 = (o, x, y, z) => { o[0] = x; o[1] = y; o[2] = z; return o; };
+  function aimAt(cam, p, opening, o = [0, 0, 0]) {
+    if (cam === "door") return opening ? set3(o, 0.6, 1.0, -1.5) : set3(o, Math.max(-8, Math.min(8, p.x)), 0.55, Math.max(-2, p.z));
+    if (opening) return set3(o, 0, cam === "high" ? 1.4 : 1.0, 6.2);
+    return set3(o, Math.max(-4, Math.min(4, p.x * 0.85)), cam === "high" ? 0.3 : 0.7, Math.max(-2, Math.min(10, p.z * 0.85)));
   }
   // The lane turn goes away from the eye that watches the car go (or come) by.
   const sideFor = (cam) => CAMS[cam][0] < 0 ? 1 : -1;
@@ -571,60 +593,100 @@ const GarageArrival = (function () {
    * the sequence's own), CAR SPEED (the drive's pace, not playback's) and END
    * BEAT; "home" adds its result's flavour. Defaults reproduce the shipped
    * constants exactly (DURATION / OUT_DURATION / OUT_SETTLE). */
-  function timeline(config = DEFAULT, dir = "in") {
+  const holdOf = (c, dflt) => typeof c.hold === "number" ? c.hold : dflt;
+  function timelineInto(o, config, dir) {
     const c = config || DEFAULT, door = Number.isFinite(c.door) ? c.door : DOOR_S;
     const car = Number.isFinite(c.carSpeed) && c.carSpeed > 0 ? c.carSpeed : 1, tail = Number.isFinite(c.endBeat) ? c.endBeat : 0;
-    const hold = (dflt) => typeof c.hold === "number" ? c.hold : dflt;
+    o.dir = dir; o.door = door;
     if (dir === "out") {
       const run = OUT_RUN / car, accel = OUT_ACCEL / car, v = OUT_PATH / (run - accel / 2);
-      const settle = door + hold(OUT_HOLD) + run + OUT_EXIT_M / v;
-      return { dir, door, hold: hold(OUT_HOLD), run, accel, v, settle, base: settle + 0.3 + tail };
+      const settle = door + holdOf(c, OUT_HOLD) + run + OUT_EXIT_M / v;
+      o.hold = holdOf(c, OUT_HOLD); o.run = run; o.accel = accel; o.v = v; o.settle = settle; o.base = settle + 0.3 + tail;
+      return o;
     }
     const r = dir === "home" ? RESULTS[c.result] || RESULTS.finish : null;
-    const lane = IN_LANE * (r ? r.lane : 1) / car, pause = hold(IN_PAUSE) + (r ? r.pause : 0), back = IN_BACK * (r ? r.back : 1) / car;
+    const lane = IN_LANE * (r ? r.lane : 1) / car, pause = holdOf(c, IN_PAUSE) + (r ? r.pause : 0), back = IN_BACK * (r ? r.back : 1) / car;
     const park = door + lane + pause + back;
-    return { dir, door, lane, pause, back, park, base: park + 0.3 + tail + (r ? r.end : 0), result: r };
+    o.lane = lane; o.pause = pause; o.back = back; o.park = park; o.base = park + 0.3 + tail + (r ? r.end : 0); o.result = r;
+    return o;
+  }
+  function timeline(config = DEFAULT, dir = "in") { return timelineInto({}, config, dir); }
+  const T_POSE = { in: {}, out: {} }, T_CLOCK = { in: {}, out: {} };
+  const scratchT = (pair, config, dir) => timelineInto(dir === "out" ? pair.out : pair.in, config, dir);
+  function crewExtra(config, dir) {
+    const crew = crewFor(config, dir), service = crew === "service";
+    return service ? (dir === "out" ? 3 : 6) : typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.extra(crew) : 0;
   }
   function duration(config = DEFAULT, dir = "in") {
-    const crew = crewFor(config, dir), service = crew === "service";
-    const extra = service ? (dir === "out" ? 3 : 6) : typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.extra(crew) : 0;
-    return timeline(config, dir).base + extra;
+    const extra = crewExtra(config, dir);
+    return scratchT(T_CLOCK, config, dir).base + extra;
   }
   const entranceSources = new WeakMap();
-  function poseIn(seconds, config, calm, dir) {
-    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, dir), end = duration(config, dir), r = T.result;
+  // #5462: poseIn / poseOut fill `o` if given (one pose per playback); consumer writes clear per frame.
+  const CONSUMER_KEYS = Object.freeze(["distance", "exteriorUnsupported", "groundY", "groundForward", "groundRight"]);
+  const AUTHORED_KEYS = Object.freeze(["articulated", "wheelDistance", "steer", "bodyPitch", "bodyHeave"]);
+  function clearKeys(o, keys) { for (let i = 0; i < keys.length; i++) if (o[keys[i]] !== undefined) o[keys[i]] = undefined; }
+  const P_IN = {}, P_ENTRANCE = {}, AIM = [0, 0, 0], EYE = [0, 0, 0], LOOK = { config: null, last: false, k: 0 };
+  const SPRINT_ARRIVE = {};
+  const sprintArrive = (r) => SPRINT_ARRIVE[r.arrive] || (SPRINT_ARRIVE[r.arrive] = r.arrive.replace(/^RACE /, "SPRINT "));
+  // The pose fields poseIn and poseOut share, in their key order.
+  function lookOf(o, config, dir) {
+    o.mood = lightFor(config, dir); o.cue = cueFor(config, dir); o.swell = lookNum(config, "swell", 1); o.bars = !!config.bars;
+    o.captions = config.captions !== false; o.rearLight = config.rearLight || "auto"; o.sound = config.sound !== false;
+  }
+  function carOf(o, config, dir, rs, t, T, p) {
+    o.crew = crewFor(config, dir); o.fov = rs ? rs.fov : config.fov; o.door = ease(t / T.door); o.x = p.x; o.z = p.z; o.yaw = p.yaw;
+  }
+  const TITLE_IN = ["result", "pos", "driver", "sprint", "grid", "fastest"], TITLE = { r: null, text: "" };
+  function titleNow(config, r) {
+    let same = TITLE.r === r;
+    for (let i = 0; same && i < 6; i++) same = TITLE[TITLE_IN[i]] === config[TITLE_IN[i]];
+    if (same) return TITLE.text;
+    TITLE.r = r;
+    for (let i = 0; i < 6; i++) TITLE[TITLE_IN[i]] = config[TITLE_IN[i]];
+    return (TITLE.text = homeTitle(config, r));
+  }
+  function poseIn(seconds, config, calm, dir, o) {
+    const pair = o ? posePair(o) : null;
+    if (o) clearKeys(o, CONSUMER_KEYS); else o = {};
+    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = scratchT(T_POSE, config, dir), end = T.base + crewExtra(config, dir), r = T.result;
     const rig = rigFor(config);
     const cams = shotsFor(config, "in"), side = rig ? 1 : sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
     const n = t < T.door ? 0 : t < s2 ? 1 : 2, cam = cams[n];
-    const look = { config, last: n === 2, k: n === 0 ? t / T.door : n === 1 ? (t - T.door) / (s2 - T.door) : (t - s2) / Math.max(1e-6, end - s2) };
+    const look = LOOK;
+    look.config = config; look.last = n === 2; look.k = n === 0 ? t / T.door : n === 1 ? (t - T.door) / (s2 - T.door) : (t - s2) / Math.max(1e-6, end - s2);
     const u = Math.max(0, Math.min(1, (t - T.door) / T.lane));
     const lane = IN_LANE_M * (r && r.pushed ? ease(u) : 1 - (1 - u) * (1 - u));
     const back = ease((t - T.door - T.lane - T.pause) / T.back);
     if (dir === "in" && !entranceSources.has(config)) entranceSources.set(config,
       config._entranceAuthored !== false && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available());
     const authored = dir === "in" && entranceSources.get(config)
-      ? GarageEntranceMotion.pose(t, T, side) : null;
-    const p = authored || (back > 0 ? pathAt(OUT_PATH * (1 - back), side)
-      : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN });
+      ? GarageEntranceMotion.pose(t, T, side, P_ENTRANCE) : null;
+    let p = authored;
+    if (!p && back > 0) p = pathAt(OUT_PATH * (1 - back), side, P_IN);
+    else if (!p) { p = P_IN; p.x = side * (OUT_R + lane - IN_LANE_M); p.z = OUT_STRAIGHT + OUT_R; p.yaw = side * OUT_TURN; }
     const label = t < T.door ? "OPENING GARAGE"
-      : r ? (t < T.door + T.lane + T.pause ? (config.sprint ? r.arrive.replace(/^RACE /, "SPRINT ") : r.arrive) : t < T.park ? r.park
-        : dir === "home" ? homeTitle(config, r) : r.title)
+      : r ? (t < T.door + T.lane + T.pause ? (config.sprint ? sprintArrive(r) : r.arrive) : t < T.park ? r.park
+        : dir === "home" ? titleNow(config, r) : r.title)
       : t < T.park ? "BRINGING CAR IN" : end > T.base && t < end - .5 ? "CREW SERVICING CAR" : "READY FOR WORK";
     // The shipped LEFT / RIGHT eyes keep their own framing; the new ones aim by aimAt.
     const aim = cam === "left" || cam === "right"
-      ? [Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)] : aimAt(cam, p, t < T.door);
+      ? set3(AIM, Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)) : aimAt(cam, p, t < T.door, AIM);
     const rs = rig ? rigOn(rig, dir, t, end, T.door, p, config, side) : null;
-    return shot(Object.assign({ active: t < end, serviceTime: t - T.park, seconds: t, direction: "in", sequence: dir, result: r ? config.result : null,
-      engine: !(r && r.pushed), side, calm, camera: rig || cam, shot: n + 1, mood: lightFor(config, dir), cue: cueFor(config, dir), swell: lookNum(config, "swell", 1),
-      bars: !!config.bars, captions: config.captions !== false, rearLight: config.rearLight || "auto", sound: config.sound !== false, crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: rs ? rs.fov : config.fov,
-      door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw, label }, authored ? {
-        // Channels describe authored motion, not renderer readiness. The ground root
-        // remains y=0; body pitch/heave belong on a separate body-only transform.
-        articulated: true, wheelDistance: authored.wheelDistance, steer: authored.steer,
-        bodyPitch: authored.pitch, bodyHeave: authored.heave } : null),
-      // Interior versions of garage-angles' bay/rear three-quarter framings.
-      // A cut after the shutter opens keeps both eyes behind the threshold.
-      rs ? rs.eye : CAMS[cam], rs ? rs.aim : aim, t, calm, config.height || 0, look);
+    o.active = t < end; o.serviceTime = t - T.park; o.seconds = t; o.direction = "in"; o.sequence = dir; o.result = r ? config.result : null;
+    o.engine = !(r && r.pushed); o.side = side; o.calm = calm; o.camera = rig || cam; o.shot = n + 1; lookOf(o, config, dir);
+    o.crewClear = 1 - ease((t - (T.park - .3)) / .3); carOf(o, config, dir, rs, t, T, p); o.label = label;
+    if (authored) {
+      // Channels describe authored motion, not renderer readiness. The ground root
+      // remains y=0; body pitch/heave belong on a separate body-only transform.
+      o.articulated = true; o.wheelDistance = authored.wheelDistance; o.steer = authored.steer;
+      o.bodyPitch = authored.pitch; o.bodyHeave = authored.heave;
+    } else clearKeys(o, AUTHORED_KEYS);
+    // Interior versions of garage-angles' bay/rear three-quarter framings.
+    // A cut after the shutter opens keeps both eyes behind the threshold.
+    shot(o, rs ? rs.eye : CAMS[cam], rs ? rs.aim : aim, t, calm, config.height || 0, look, pair);
+    look.config = null;
+    return o;
   }
   /* A BLENDER RIG (crane, orbit, dolly, rear track; lane A's generated block)
    * gives the eye and lens over u (rigU: t warped onto the authored beats; the
@@ -632,12 +694,13 @@ const GarageArrival = (function () {
    * timing (crew "current", a win), so past the shutter shot the aim eases onto
    * the car's live position instead and frames it whatever crew or result
    * stretches the sequence. FIELD OF VIEW offsets the rig's lens from 54. */
+  const RIG_S = { eye: [0, 0, 0], aim: [0, 0, 0], fov: 0 };
   function rigOn(id, dir, t, end, door, p, config, side) {
-    const s = rigSample(id, dir, rigU(config, dir, t, end), side);
+    const s = rigSample(id, dir, rigU(config, dir, t, end), side, RIG_S);
     if (!s) return null;
     clearOfCrew(s.eye, crewFor(config, dir), t, side);
-    const w = ease((t - door) / 0.8), car = [Math.max(-8, Math.min(8, p.x)), 0.6, Math.max(-3, Math.min(14, p.z))];
-    for (let i = 0; i < 3; i++) s.aim[i] += (car[i] - s.aim[i]) * w;
+    const w = ease((t - door) / 0.8), a = s.aim;
+    a[0] += (Math.max(-8, Math.min(8, p.x)) - a[0]) * w; a[1] += (0.6 - a[1]) * w; a[2] += (Math.max(-3, Math.min(14, p.z)) - a[2]) * w;
     s.fov = Math.max(30, Math.min(80, s.fov + (Number.isFinite(config.fov) ? config.fov - 54 : 0)));
     return s;
   }
@@ -648,14 +711,19 @@ const GarageArrival = (function () {
    * beat: by u = t / duration the DOLLY reached the bay while the pushed car was
    * still out in the lane (2026-10-30 capture). */
   const KEYED = {};
-  function beatKnots(T, end) { return [0, T.door, T.door + T.lane, T.door + T.lane + T.pause, T.park, end]; }
+  function beatKnots(T, end, o = new Array(6)) {
+    o[0] = 0; o[1] = T.door; o[2] = T.door + T.lane; o[3] = T.door + T.lane + T.pause; o[4] = T.park; o[5] = end;
+    return o;
+  }
+  const KNOTS = new Array(6);
+  function keyedKnots(dir) {
+    const c = settings({ angle: "left", enterCrew: "current", homeCrew: "current", result: "win" });
+    return beatKnots(timeline(c, dir), duration(c, dir));
+  }
   function rigU(config, dir, t, end = duration(config, dir)) {
     if (dir === "out") return end > 0 ? t / end : 0;
-    const A = KEYED[dir] || (KEYED[dir] = (() => {
-      const c = settings({ angle: "left", enterCrew: "current", homeCrew: "current", result: "win" });
-      return beatKnots(timeline(c, dir), duration(c, dir));
-    })());
-    const K = beatKnots(timeline(config, dir), end);
+    const A = KEYED[dir] || (KEYED[dir] = keyedKnots(dir));
+    const K = beatKnots(scratchT(T_CLOCK, config, dir), end, KNOTS);
     let i = 1;
     while (i < K.length - 1 && t > K[i]) i++;
     const span = K[i] - K[i - 1], k = span > 1e-6 ? Math.max(0, Math.min(1, (t - K[i - 1]) / span)) : 1;
@@ -679,7 +747,7 @@ const GarageArrival = (function () {
     // must not jump to 1.8 m the moment someone steps within CREW_R).
     const y0 = eye[1];   // each member's need from the rig's own height; the eye takes the highest
     for (let i = 0; i < n; i++) {
-      const d = Math.hypot(eye[0] - _crewOut[i].x, eye[2] - _crewOut[i].z);
+      const d = hypot(eye[0] - _crewOut[i].x, eye[2] - _crewOut[i].z);
       if (d >= CREW_RAMP) continue;
       // 1.3 m eased over heads inside CREW_R (smooth both ends; keeps >= 0.8 m, the
       // tested floor, at every d: e.g. d 0.5 -> 0.81 m up, d 0.7 -> 0.49 m).
@@ -690,9 +758,9 @@ const GarageArrival = (function () {
     return eye;
   }
   const lookNum = (c, key, dflt) => c && Number.isFinite(c[key]) ? c[key] : dflt;
-  const pose = (seconds, config = DEFAULT, calm = false) => poseIn(seconds, config, calm, "in");
+  const pose = (seconds, config = DEFAULT, calm = false, o = null) => poseIn(seconds, config, calm, "in", o);
   /** AFTER THE RACE: config.result (RESULTS key) and an optional config.pos. */
-  const poseHome = (seconds, config = DEFAULT, calm = false) => poseIn(seconds, config, calm, "home");
+  const poseHome = (seconds, config = DEFAULT, calm = false, o = null) => poseIn(seconds, config, calm, "home", o);
   /* THE DRIVE-OUT: the arrival in reverse, opening every RACE! while the circuit
    * builds (js/game.js studioOpen). The shutter opens first (DOOR_S), the car sits
    * a beat, then rolls out nose first, sweeps across the doorway into the lane
@@ -712,39 +780,45 @@ const GarageArrival = (function () {
   // doorway (HOLD_PUSH m, easing out over ~HOLD_TAU s) keeps it a shot, not a
   // stalled frame; the aim drifts from the jamb back to the lane. Not when calm.
   const HOLD_PUSH = 2.2, HOLD_TAU = 4;
-  function outDistance(tm, T) {
+  function outDistance(tm, accel, v, settle) {
     if (tm <= 0) return 0;
-    if (tm < T.accel) return T.v * tm * tm / (2 * T.accel);
-    return T.v * (Math.min(tm, T.settle) - T.accel / 2);
+    if (tm < accel) return v * tm * tm / (2 * accel);
+    return v * (Math.min(tm, settle) - accel / 2);
   }
-  function poseOut(seconds, config = DEFAULT, calm = false) {
-    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, "out"), end = duration(config, "out");
+  const P_OUT = {};
+  function poseOut(seconds, config = DEFAULT, calm = false, o = null) {
+    const pair = o ? posePair(o) : null;
+    if (o) clearKeys(o, CONSUMER_KEYS); else o = {};
+    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = scratchT(T_POSE, config, "out"), end = T.base + crewExtra(config, "out");
     const delay = end - T.base, settle = T.settle + delay, go = T.door + T.hold + delay;
     const rig = rigFor(config);
     const cams = shotsFor(config, "out"), side = rig ? 1 : sideFor(cams[1]);
     const opening = t < T.door;
-    const d = outDistance(Math.min(t, settle) - go, Object.assign({}, T, { settle: T.run + OUT_EXIT_M / T.v }));
-    const p = pathAt(d, side);
+    const d = outDistance(Math.min(t, settle) - go, T.accel, T.v, T.run + OUT_EXIT_M / T.v);
+    const p = pathAt(d, side, P_OUT);
     // Shot 2 runs from the roll to the doorway (z past 6 m), shot 3 from there.
     const n = t < go ? 0 : d < 6 ? 1 : 2, cam = cams[n], eye = CAMS[cam];
     const atDoor = go + (6 <= T.v * T.accel / 2 ? Math.sqrt(2 * T.accel * 6 / T.v) : 6 / T.v + T.accel / 2);
-    const look = { config, last: n === 2, k: n === 0 ? t / go : n === 1 ? (t - go) / (atDoor - go) : (t - atDoor) / Math.max(1e-6, end - atDoor) };
+    const look = LOOK;
+    look.config = config; look.last = n === 2; look.k = n === 0 ? t / go : n === 1 ? (t - go) / (atDoor - go) : (t - atDoor) / Math.max(1e-6, end - atDoor);
     // The aim follows it round to the jamb and holds on the doorway as it goes.
     const legacy = cam === "left" || cam === "right", cs = legacy ? sideFor(cam) : side;
-    const aim = legacy ? [cs * Math.min(cs * p.x * 0.7, 3.5), 0.8, opening ? 6.2 : Math.min(9, 1.2 + p.z * 0.62)] : aimAt(cam, p, opening);
+    const aim = legacy ? set3(AIM, cs * Math.min(cs * p.x * 0.7, 3.5), 0.8, opening ? 6.2 : Math.min(9, 1.2 + p.z * 0.62)) : aimAt(cam, p, opening, AIM);
     const rs = rig ? rigOn(rig, "out", t, end, go, p, config, side) : null;
     let e = rs ? rs.eye : eye;
     if (rs) for (let i = 0; i < 3; i++) aim[i] = rs.aim[i];
     else if (!calm && t > settle) {
       const k = 1 - Math.exp(-(t - settle) / HOLD_TAU);
-      e = [eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, Math.min(5.9, eye[2] + HOLD_PUSH * k)];
+      e = set3(EYE, eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, Math.min(5.9, eye[2] + HOLD_PUSH * k));
       aim[0] -= cs * 2.2 * k;
     }
-    return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", sequence: "out", engine: true, side, calm, camera: rig || cam,
-      shot: n + 1, mood: lightFor(config, "out"), cue: cueFor(config, "out"), swell: lookNum(config, "swell", 1), bars: !!config.bars, captions: config.captions !== false,
-      rearLight: config.rearLight || "auto", sound: config.sound !== false,
-      crewClear: ease((t - (go - .3)) / .3), crew: crewFor(config, "out"), fov: rs ? rs.fov : config.fov, door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw,
-      label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm, config.height || 0, look);
+    o.active = t < end; o.serviceTime = t; o.seconds = t; o.direction = "out"; o.sequence = "out"; o.engine = true; o.side = side; o.calm = calm; o.camera = rig || cam;
+    o.shot = n + 1; lookOf(o, config, "out");
+    o.crewClear = ease((t - (go - .3)) / .3); carOf(o, config, "out", rs, t, T, p);
+    o.label = delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE";
+    shot(o, e, aim, t, calm, config.height || 0, look, pair);
+    look.config = null;
+    return o;
   }
   /** The pose function of a sequence: "in" (pit stop), "out" (race start), "home" (after the race). */
   const poseFor = (dir) => dir === "out" ? poseOut : dir === "home" ? poseHome : pose;
@@ -754,6 +828,7 @@ const GarageArrival = (function () {
   function wallNow() { try { return performance.now() / 1000; } catch (_) { return 0; } }
   function create($, reducedMotion, readSettings = () => DEFAULT, clock = wallNow) {
     let state = null, time = 0, config = DEFAULT, last = 0, dir = "in", posed = pose;
+    const own = { in: {}, home: {}, out: {} }, into = () => own[dir] || own.in;
     const root = $("carsetup"), panel = $("cs-inner"), controls = $("cs-stack");
     const overlay = $("cs-arrival"), skip = $("cs-arrival-skip"), label = $("cs-arrival-label");
     function chrome(on) {
@@ -764,24 +839,26 @@ const GarageArrival = (function () {
     }
     function finish() {
       if (!state) return;
-      time = duration(config, dir); state = posed(time, config);
+      time = duration(config, dir); state = posed(time, config, false, into());
       chrome(false);
       $("cs-done").focus({ preventScroll: true });
     }
-    /** start() = the pit-stop arrival (WORK ON CAR); start({ home: { result, pos } })
+    /** start() = the pit-stop arrival (WORK ON CAR); start({ out: true, rate }) = its release; start({ home: { result, pos } })
      *  = AFTER THE RACE, the car brought home as the race ended (RESULTS). */
     function start(opts) {
       const home = opts && opts.home;
-      dir = home ? "home" : "in"; posed = poseFor(dir);
+      dir = home ? "home" : opts && opts.out ? "out" : "in"; posed = poseFor(dir);
       config = settings(readSettings());
+      if (opts && opts.rate > 0) config.speed = Math.min(4, config.speed * opts.rate);
       // Freeze source ownership for this run: an idle fetch must never swap paths mid-doorway.
       config._entranceAuthored = (!opts || opts.authored !== false) && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
       if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos,
         driver: typeof home.driver === "string" ? home.driver : "", fastest: !!home.fastest, race: home.wet ? "wet" : home.night ? "night" : "dry",
         grid: Number.isFinite(home.grid) && home.grid > 0 ? home.grid | 0 : null, sprint: !!home.sprint });
-      time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time
+      time = 0; last = 0; state = posed(0, config, false, into());   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
+      skip.textContent = dir === "out" ? "SKIP TO RACE" : "SKIP TO WORK";
       label.hidden = !config.captions;   // CAPTIONS off: SKIP stays, the words go
       chrome(true); skip.focus({ preventScroll: true });
     }
@@ -799,7 +876,7 @@ const GarageArrival = (function () {
         last = now;
         const capped = Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
         time += Math.max(capped, gap > 0 && gap <= wallSeconds(config, dir) / config.speed ? Math.min(gap, MAX_GAP_S) : 0) * config.speed * rate(config, dir, time);
-        state = posed(time, config);
+        state = posed(time, config, false, into());
         if (label.textContent !== state.label) label.textContent = state.label;
         if (!state.active) finish();
       }
@@ -815,28 +892,29 @@ const GarageArrival = (function () {
    * going out, just after the doorway (z 6 m). The steppers multiply their clock
    * by rate(); wallSeconds() is the playback's length at speed 1, for RACE!. */
   const SLOW_S = 1.2;
-  function slowWindow(config, dir) {
+  const T_WIN = { in: {}, out: {} }, WIN = [0, 0, 0];
+  function slowWindow(config, dir, o = null) {
     const f = config && config.slowmo;
     if (!(f > 0 && f < 1)) return null;
     let mid;
     if (dir === "out") {
-      const T = timeline(config, "out"), go = T.door + T.hold + (duration(config, "out") - T.base);
+      const T = scratchT(T_WIN, config, "out"), go = T.door + T.hold + ((T.base + crewExtra(config, "out")) - T.base);
       mid = go + (6 <= T.v * T.accel / 2 ? Math.sqrt(2 * T.accel * 6 / T.v) : 6 / T.v + T.accel / 2) + 0.2;
     } else {
-      const T = timeline(config, dir), target = 1 - 6.4 / OUT_PATH;
+      const T = scratchT(T_WIN, config, dir), target = 1 - 6.4 / OUT_PATH;
       let lo = 0, hi = 1;
       for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (ease(m) < target) lo = m; else hi = m; }
       mid = T.door + T.lane + T.pause + lo * T.back;
     }
-    return [mid - SLOW_S / 2, mid + SLOW_S / 2, f];
+    return set3(o || [0, 0, 0], mid - SLOW_S / 2, mid + SLOW_S / 2, f);
   }
   function rate(config, dir, t) {
-    const w = slowWindow(config, dir);
+    const w = slowWindow(config, dir, WIN);
     return w && t >= w[0] && t < w[1] ? w[2] : 1;
   }
   /** Wall seconds (at speed 1) from show time t to the end; wallSeconds = wallLeft(…, 0). */
   function wallLeft(config, dir, t = 0) {
-    const w = slowWindow(config, dir), d = duration(config, dir), from = Math.max(0, Math.min(d, t));
+    const w = slowWindow(config, dir, WIN), d = duration(config, dir), from = Math.max(0, Math.min(d, t));
     if (!w) return d - from;
     const slow = Math.max(0, Math.min(d, w[1]) - Math.max(from, w[0]));
     return d - from + slow * (1 / w[2] - 1);
