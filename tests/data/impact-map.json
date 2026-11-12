@@ -12562,6 +12562,9 @@
       "ambient": [
         "tests/unit/tyre-model.test.mjs"
       ],
+      "applyCompound": [
+        "tests/unit/tyre-model.test.mjs"
+      ],
       "aquaInto": [
         "tests/unit/tyre-model.test.mjs"
       ],
@@ -12584,7 +12587,8 @@
         "tests/unit/tyre-model.test.mjs"
       ],
       "classForTread": [
-        "tests/unit/ai-strategy.test.mjs"
+        "tests/unit/ai-strategy.test.mjs",
+        "tests/unit/tyre-model.test.mjs"
       ],
       "classRecord": [
         "tests/unit/ai-strategy.test.mjs",
@@ -12715,6 +12719,9 @@
         "tests/unit/tyre-model.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs"
+      ],
+      "treadOf": [
+        "tests/unit/tyre-model.test.mjs"
       ],
       "update": [
         "tests/unit/engineer.test.mjs",
