@@ -603,7 +603,7 @@ function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread) : 0, c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
+function gripMult(c) { return TyreModel.carGrip(c, raceWeather, trackWetness(), c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -9183,7 +9183,7 @@ function leaveGarage() {
    Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
 function garageBack() {
   if (soundOn) GameAudio.uiTick();
-  if (garageReturn === "pit") { closePitWork(); return; }
+  if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
@@ -9197,7 +9197,7 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
-  if (garageReturn === "pit") { closePitWork(); return; }
+  if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each
