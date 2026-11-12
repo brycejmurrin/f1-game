@@ -1356,6 +1356,7 @@
     "tests/unit/water-local-level.test.mjs",
     "tests/unit/weather-arc-plan.test.mjs",
     "tests/unit/weather-arc-rain.test.mjs",
+    "tests/unit/weather-arc-wetness-memo.test.mjs",
     "// A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;",
     "// a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.",
     "tests/unit/weather-blend.test.mjs",

@@ -294,7 +294,6 @@ const PlayerForces = (function () {
         c.speed = braking ? c.speed + back * dt : Math.max(0, c.speed + back * dt);
         c.axEstSm = (c.axEstSm ?? 0) + back * (1 - Math.exp(-10 * dt));
       }
-      c.wheelShort = q;
     }
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
     // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
