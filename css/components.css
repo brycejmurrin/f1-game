@@ -176,6 +176,10 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
      on roomy screens but prevents chrome from reducing the actual content pane
      to zero on a short landscape phone. */
   zoom: var(--sheet-scale, var(--ui-scale));
+  /* THE iOS FOCUS-ZOOM FLOOR IS PAINTED PX (#5236). Safari zooms the page when a focused field is under 16 px; under
+     this zoom a bare 16px painted 11.2 at UI SIZE 70. Every typeable field writes
+     max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1)))), resolved on the field so a fit-capped sheet counts
+     (editor, race-setup, overlays, appearance-studio, carsetup, garage-experience, tuner, select css). */
   /* The compensated viewport tokens must divide by the zoom this subtree
      ACTUALLY paints at: the :root family divides by the requested slider,
      but a --fit-at sheet paints at the capped --sheet-scale — on an 852x393
@@ -255,7 +259,8 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
      Warm Red scarce — rail/tick/P1 only, not headline ink. */
   color: var(--text); margin: 0;
   overflow-wrap: anywhere;
-  font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px);
+  /* The floor is the TEXT SIZE ladder (#5215): 15 px at the default rung as before, never under the body text above it. */
+  font-size: clamp(var(--fs-2), calc(3.6 * var(--vhz)), 24px);
   font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-3);
   text-transform: uppercase;
@@ -317,7 +322,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   gap: calc(var(--gap) * 0.6);
 }
 /* Min 14px: at UI SIZE 90% (.sheet zoom ≈0.9) painted type stays ≥12px. */
-.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(14px, calc(3 * var(--vhz)), 18px); }
+.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(var(--fs-micro), calc(3 * var(--vhz)), 18px); }
 .sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
 .sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
 .sheet-foot .bigbtn {
@@ -325,7 +330,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is
      ~54px of the ~230px the content has to live in.
      Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
-  font-size: clamp(14px, calc(3.6 * var(--vhz)), 20px);
+  font-size: clamp(var(--fs-micro), calc(3.6 * var(--vhz)), 20px);   /* floor on the TEXT SIZE ladder (#5215) */
   /* --vhz like the font-size above — same zoomed element, one line apart.
      Leading-edge +4px so the skewed label stays optically column-centred. */
   padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 14px clamp(7px, calc(1.8 * var(--vhz)), 14px) 18px;
@@ -341,6 +346,23 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   flex: 0 1 auto;
   width: auto;
   margin-inline: auto;
+}
+/* A LONE BACK RIDES IN THE HEAD ON A SHORT WINDOW (#5215, Bryce 2026-11-11 "Move BACK into the header"). A foot that
+   holds one button spent a whole ~62 px row on it (head + foot ~95 px of a 393 px phone). Here the foot takes the head's
+   row, right of the title, and the body gets the row back. Only a plain head / body / foot sheet: a fourth region has
+   its own placement. The head keeps its sheen and rail; the foot drops its plate and hairline. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) {
+    grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
+  }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-head { grid-column: 1; grid-row: 1; }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-body { grid-column: 1 / -1; grid-row: 2; }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-foot {
+    grid-column: 2; grid-row: 1; align-self: stretch;
+    padding: calc(var(--pad) * 0.3) var(--pad) calc(var(--pad) * 0.3) 0;
+    background: none; box-shadow: none;
+  }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-foot::before { content: none; }
 }
 /* ---------- pane: a scroll region ---------- */
 .pane {
