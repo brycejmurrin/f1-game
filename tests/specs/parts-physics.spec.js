@@ -1754,7 +1754,7 @@ test.describe("Wet compounds are a trade, not a penalty", () => {
     }
   });
 
-  test("the grip table ladders by tread class, and is flat in the dry", async ({ page }) => {
+  test("the grip table ladders by tread class, and a tread pays in the dry", async ({ page }) => {
     // NO RACE. The table is a plain global (PhysicsConsts is assigned to window)
     // and so is the catalog, so its shape costs one boot and nothing else.
     // gripMult itself is NOT reachable from here — js/game.js is an async IIFE,
@@ -1771,10 +1771,14 @@ test.describe("Wet compounds are a trade, not a penalty", () => {
     // same fact in two files and have to agree.
     expect(t.tread).toEqual({ medium: 0, intermediate: 1, wet_full: 2 });
 
-    // 1. DRY, OVERCAST and FOG have no row at all — that absence is what makes a
-    //    wet tyre buy nothing when it is not raining, which is what makes its
-    //    four stat penalties a real price rather than a rounding error.
-    expect(Object.keys(t.table).sort()).toEqual(["rain", "wet"]);
+    // 1. Three rows since #5289: the DRY row is a grooved tyre's dry-road cost,
+    //    paid by player and AI alike. A slick on a dry road is exactly 1, and a
+    //    tread loses grip there, the full wet most (values pinned in
+    //    tests/unit/wet-grip-ladder.test.mjs).
+    expect(Object.keys(t.table).sort()).toEqual(["dry", "rain", "wet"]);
+    expect(t.table.dry[0]).toBe(1);
+    expect(t.table.dry[1]).toBeLessThan(1);
+    expect(t.table.dry[2]).toBeLessThan(t.table.dry[1]);
 
     for (const w of ["wet", "rain"]) {
       const [slick, inter, full] = t.table[w];
