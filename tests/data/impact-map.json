@@ -11188,15 +11188,6 @@
       ]
     },
     "js/perf/metrics-overlay.js": {
-      "ensurePanel": [
-        "tests/unit/metrics.test.mjs"
-      ],
-      "fitsWide": [
-        "tests/unit/metrics.test.mjs"
-      ],
-      "fmtTime": [
-        "tests/unit/lap-format-rollover.test.mjs"
-      ],
       "frametimeBenchReset": [
         "tests/unit/metrics.test.mjs"
       ],
@@ -11224,9 +11215,11 @@
       "paintOverlay": [
         "tests/unit/metrics.test.mjs"
       ],
+      "panel": [
+        "tests/unit/ui-improve-pass.test.mjs"
+      ],
       "read": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "resolvePos": [
@@ -11260,9 +11253,6 @@
         "tests/unit/apex-physstate.test.mjs",
         "tests/unit/metrics.test.mjs"
       ],
-      "stallRow": [
-        "tests/unit/metrics.test.mjs"
-      ],
       "toggle": [
         "tests/unit/metrics.test.mjs"
       ],
@@ -11272,6 +11262,30 @@
       "*": [
         "tests/unit/ratchets.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
+      ]
+    },
+    "js/perf/metrics-panel.js": {
+      "create": [
+        "tests/unit/apex-physstate.test.mjs"
+      ],
+      "ensurePanel": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "fitsWide": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "fmtTime": [
+        "tests/unit/lap-format-rollover.test.mjs"
+      ],
+      "paintOverlay": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "snapshot": [
+        "tests/unit/apex-physstate.test.mjs",
+        "tests/unit/metrics.test.mjs"
+      ],
+      "stallRow": [
+        "tests/unit/metrics.test.mjs"
       ]
     },
     "js/perf/phone-recorder.js": {
