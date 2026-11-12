@@ -640,6 +640,19 @@ test("the garage file carries what the player BUILT, and nothing else in the nam
   assert.ok(!/parts|"livery(?:\.[^"]*)?":|setup\.|customTeam/.test(JSON.stringify(collect("all")).replace(/"excluded":"[^"]*"/, "")));
 });
 
+test("#5036: a career's own setup sheet round-trips through the garage file beside the free-play one", () => {
+  const free = { arbF: 9, arbR: 3, rideF: 20, rideR: 70, brakeBias: 58 };
+  const mine = { arbF: 4, arbR: 6, rideF: 25, rideR: 60, brakeBias: 56, seed: 4242 };
+  const out = boot({ disk: { "apex26.setup.mercedes": JSON.stringify(free), "apex26.careerSetup.driver.0.mercedes": JSON.stringify(mine) } }).garage();
+  assert.deepEqual(out.garage["setup.mercedes"], free);
+  assert.deepEqual(out.garage["careerSetup.driver.0.mercedes"], mine);
+  const b = boot();
+  const r = b.loadGarage(out);
+  assert.equal(r.ok, true);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.setup.mercedes")), free, "the free-play choices come back unchanged");
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.careerSetup.driver.0.mercedes")), mine, "the career choices and their seed stamp come back unchanged");
+});
+
 test("an empty or blocked store still produces a valid garage file", () => {
   const f = boot().garage();
   assert.equal(f.format, "apex26-garage-v1");
@@ -1839,4 +1852,15 @@ test("#4748: CAREER FILE load awaits the lazy CareerBackup before its future-ver
   for (let i = 0; i < 8; i++) await new Promise(setImmediate);
   assert.match(button.textContent, /NEWER-VERSION/, "futureCareerSlot ran with CareerBackup loaded, not 'unavailable'");
   assert.equal(b.reloads(), 0);
+});
+
+test("WHEEL LOCK & ABS (wheelState, wheelAssist) survive settings backup and restore (#4946)", () => {
+  const file = boot({ disk: { "apex26.wheelState": "1", "apex26.wheelAssist": "full" } }).collect("changes");
+  const dst = boot();
+  assert.equal(dst.loadSettings(file).skipped, 0);
+  assert.equal(dst.disk.get("apex26.wheelState"), "1");
+  assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
+  const bad = dst.loadSettings({ format: "apex26-settings-v1", settings: { driving: { wheelAssist: "turbo" } } });
+  assert.equal(bad.skipped, 1);
+  assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
 });

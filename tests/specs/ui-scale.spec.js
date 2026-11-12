@@ -1953,12 +1953,14 @@ const widths = (page, sels) => page.evaluate((sels) => sels.map((s) => {
   const el = document.querySelector(s);
   return el ? +el.getBoundingClientRect().width.toFixed(1) : 0;
 }), sels);
-// The audit's method: the slider's own `input` event, then two forced fits a settle period apart (the fit ticks at 10 Hz).
+// The audit's method: the slider's own `input` then `change` (a release; UI SIZE applies on it, #5256), then two
+// forced fits a settle period apart (the fit ticks at 10 Hz).
 async function driveSize(page, id, v) {
   await page.evaluate(async ({ id, v }) => {
     const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
     el.value = String(v);
     el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 2; i++) { GameHud.invalidateFit(); await new Promise((r) => setTimeout(r, 450)); }
   }, { id, v });
 }
@@ -2038,6 +2040,7 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
           const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
           el.value = String(v);
           el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));   // UI SIZE applies on release (#5256)
         }, { id: ui.id, v });
         const z = Math.round(Math.min(v / 100, ui.sheetZoom) * 100);
         await expect.poll(sheetZoom, `${v} %: the sheet paints min(wish, ${ui.sheetZoom})`).toBeCloseTo(z / 100, 2);

@@ -27,6 +27,7 @@ const SettingsSearch = (function () {
     ["hold-gas", "Gas hold / toggle (keyboard / pad)", "a11y", "pm-hold-throttle-sel", "throttle accelerator hold toggle accessibility"],
     ["hold-lookback", "Look back hold / toggle (keyboard / pad)", "a11y", "pm-hold-lookback-sel", "rear view mirror hold toggle accessibility"],
     ["assist", "Steer assist", "driving", "pm-linemode-sel", "steering help racing line"],
+    ["wheel-lock", "Wheel lock & ABS", "driving", "pm-wheelmodel-sel", "abs traction control tc brake lock wheelspin wheel state"],
     ["line", "Steering line bias", "advanced", "pm-line", "steer assist inside outside racing line offset"],
     ["throttle", "Throttle mode", "controls", "pm-throttlemode-sel", "automatic manual pedals"],
     ["handedness", "Left-handed controls", "controls", "pm-mirror-sel", "mirror touch pedals hand"],

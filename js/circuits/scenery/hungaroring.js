@@ -88,7 +88,9 @@
         // Lombardy belt above (#3317) — leave this mid/far akác at gap 54 so
         // coplanar lobe cones stay at baseline 2 (gap 110 grew spots 2→4).
         for (const [sf, side, gap] of [
-          [0.045,  1, 54], [0.180, -1, 68], [0.215,  1, 50],
+          // The 0.045 clump (racing ~0.95, +1) went with the pit flip: +1 there
+          // is the pit building now, and the props-tri ratchet pays for the paddock.
+          [0.180, -1, 68], [0.215,  1, 50],
           [0.355, -1, 60], [0.420,  1, 72], [0.520,  1, 56],
           [0.600, -1, 64], [0.700, -1, 52], [0.775,  1, 58],
           [0.880,  1, 62], [0.940, -1, 56],
@@ -208,21 +210,21 @@
         dome(tx, tz, pyMin, 24 + h * 12, 16 + h * 8, h < 0.45 ? TREE : TREE2, 2);
       }
 
-      billboard(K(sl(0.00)), 1, 38, 22, 6, RED);
-      // T1 / main-straight outside stands (racing side +1 = opposite pit.side -1).
+      // (The S/F red billboard, gap 38, stood inside the main tribune footprint: dropped.)
+      // T1 / main-straight stands, facing the pits (pit.side +1, FIA 2026 Doc 5):
+      // racing side -1, which is also the OUTSIDE of the right-hand T1.
       // oversteer48: Pit Exit 1 closest to T1 (uncovered), Pit Exit 2 between it and
       // the main grandstand, T1 stand adjacent — all on the outside near T1.
       // https://oversteer48.com/hungaroring-pit-exit-1-grandstand/
       // https://oversteer48.com/hungaroring-pit-exit-2-grandstand/
-      // Game framing keeps pit LEFT / main tribune RIGHT (brief: do not flip pit.side);
-      // these T1-area stands therefore sit on the tribune/outside side (+1).
       // Pit Exit 2 omitted as a separate mass (vertex budget); T1 stand covers
-      // the outside braking zone. Pit Exit 1 = uncovered bleacher below.
-      grandstandEx(sl(0.07), 1, 11, 58, SHELL, CROWD[0],
+      // the outside braking zone. Pit Exit 1 = uncovered bleacher below, between
+      // the T1 stand (racing 0.063-0.077) and the 0.10 stand (0.094-0.106).
+      grandstandEx(sl(0.07), -1, 11, 58, SHELL, CROWD[0],
                    { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, pylons: true }); // T1 / Pit Exit cluster
       // Pit Exit 1 — uncovered (oversteer48: no roof), positive rake via bleacher rows.
-      bleacher(sl(0.090), sl(0.098), 1, 10, { rows: 8, rise: 0.78, setback: 1.05, density: 0.5, crowd: CROWD });
-      // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
+      bleacher(sl(0.080), sl(0.088), -1, 10, { rows: 8, rise: 0.78, setback: 1.05, density: 0.5, crowd: CROWD });
+      // Outside Turn 1-2 (racing -1): Apex 1/2 banked stands
       grandstandEx(sl(0.10), -1, 10,  56, SHELL, CROWD[2],
                    { livery: "concrete", tiers: 2, roof: "flat" });
       // Sector grandstands across the back of the circuit
@@ -259,7 +261,7 @@
         addBox(out, vadd(a.c, a.u, 13.35), [0.3, 0.5, len + 2], FASCIA, b);
         addBox(out, vadd(vadd(a.c, a.r, side * 0.35), a.u, 7.7), [0.2, 0.6, len - 2], FASCIA2, b);
       };
-      standAccent(sl(0.07), 1, 11, 58);
+      standAccent(sl(0.07), -1, 11, 58);
       standAccent(sl(0.10), -1, 10, 56);
       standAccent(sl(0.12), -1, 10, 44);
       standAccent(T5, 1, 24, 58);
@@ -270,7 +272,7 @@
 
       // Grandstand lit-window concourse strips
       const gsLit = [
-        { s: sl(0.07), side: 1, gap: 18, len: 54 },
+        { s: sl(0.07), side: -1, gap: 18, len: 54 },
         { s: sl(0.10), side: -1, gap: 15, len: 52 },
         { s: T5, side: 1, gap: 26, len: 54 },
         { s: T67, side: -1, gap: 24, len: 50 },
@@ -293,7 +295,7 @@
       // fir rank opposite the paddock. Skip near forestEdge on 0.88–0.12 (both
       // sides); residual planting is far, pineFrac 0, so the straw-olive bowl
       // and amphitheatre banking stay the first read.
-      forestEdge(0.12, 0.18, 1, 36, { density: 0.28, hMin: 8, hMax: 13,
+      forestEdge(0.145, 0.18, 1, 36, { density: 0.28, hMin: 8, hMax: 13,
                                       col: TREE, col2: TREE2, pineFrac: 0 });
       forestEdge(0.18, 0.50, 1, 8, { density: 0.46, hMin: 7, hMax: 13,
                                       col: TREE2, col2: TREE, pineFrac: 0.06 });
@@ -332,7 +334,9 @@
             lampPost({ pos: headC, k: kk, side, kind: "halogen" });
         }
       });
-      // Extra lamp clusters at key braking zones
+      // Extra lamp clusters at key braking zones. The main-straight one stays on +1:
+      // inside the pit complex (racing 0.925+) the engine supersedes it, so only
+      // the pit-entry approach lamps emit (on -1 all of them did: +150 tris).
       for (const [s0, s1, side] of [[0.95, 0.08, 1], [0.52, 0.62, 1], [0.30, 0.44, -1]]) {
         // Walk a COUNTED number of steps across the window: breaking on
         // kk === kEnd never fires when the stride does not divide the window,
@@ -357,11 +361,11 @@
         }
       }
 
-      guardrail(0.95, 0.20,  1, 8, STEEL);  // main straight + Turn 1
+      guardrail(0.95, 0.20, -1, 8, STEEL);  // main straight + Turn 1 (opposite the pits)
       guardrail(0.30, 0.45, -1, 8, STEEL);  // mid-sector inside
       guardrail(0.52, 0.62,  1, 8, STEEL);  // twisty-sector stands
       // Catch fences in front of busy spectator zones
-      fence(0.95, 0.20,  1, 10, 7, STEEL);   // main straight + Turn 1
+      fence(0.95, 0.20, -1, 10, 7, STEEL);   // main straight + Turn 1 (opposite the pits)
       fence(0.30, 0.45, -1, 10, 7, STEEL);   // mid-sector inside
       fence(0.52, 0.62,  1, 10, 7, STEEL);   // twisty-sector stands
       // Tyre walls at high-risk braking points
@@ -369,7 +373,7 @@
       tyreWall(0.14,  0.17,  -1, 9, [0.95, 0.85, 0.15]);
       tyreWall(0.54,  0.57,   1, 9, [0.20, 0.40, 0.85]);
 
-      for (const [s, side] of [[0.05, 1], [0.12, -1], [0.16, -1], [0.30, -1],
+      for (const [s, side] of [[0.05, -1], [0.12, -1], [0.16, -1], [0.30, -1],
                                 [0.42, 1], [0.55, -1], [0.68, 1], [0.80, -1], [0.92, 1]]) {
         marshalPost(K(s), side, 8);
       }
@@ -383,7 +387,9 @@
         // https://dvmgroup.com/en/references/projects/hungaroring
         // https://ad-c.org/winner/hungaroring-gold-winner-mixed-use-development-design-iada-2026/
         // https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/
-        // Pit stays on side -1 (def.pit.side); do not flip from this pass.
+        // Pit side +1 (def.pit.side, FIA 2026 Doc 5). PS is that side; every lateral
+        // offset below was written for the old -1 build (track face at +r) and is
+        // multiplied by F = -PS, so the glazed face still looks at the road.
         // DVM's completed-2025 project describes a >340 m paddock building.
         // Approximate that lower-bound extent, preserving this stylized footprint
         // and height; the perspective photograph does not establish either.
@@ -395,7 +401,8 @@
         // building is the block BEHIND them: its 22 m wide bounds must clear that
         // footprint outright or the engine supersedes the whole (required) group,
         // which gap 24 and gap 40 both were, so it stands at gap 44.
-        const a = anchor(K(sl(0.00)), -1, 44);
+        const PS = 1, F = -PS;
+        const a = anchor(K(sl(0.00)), PS, 44);
         if (onTrack(a.c[0], a.c[2], 14)) return;
         // Level this long building and its retaining podium on the local
         // paddock slope. This is artistic grading, not a surveyed floor datum.
@@ -431,7 +438,7 @@
           foundation(stage, { center: a.c, size: [11.5, LEN], top: a.c[1], basis: b, col: [0.72, 0.72, 0.74] });
           addBox(stage, vadd(a.c, a.u, STOREY_H * 0.5), [11.5, STOREY_H, LEN], [0.94, 0.95, 0.97], b);
           // Continuous pale glazed band on the track face (behind door reveals).
-          addBox(stage, vadd(vadd(a.c, a.r, 5.85), a.u, STOREY_H * 0.48),
+          addBox(stage, vadd(vadd(a.c, a.r, F * 5.85), a.u, STOREY_H * 0.48),
                  [0.18, STOREY_H * 0.78, LEN - 6], GLAZE, b);
           for (let i = 0; i < DOOR_N; i++) {
             const off = (i - (DOOR_N - 1) / 2) * DOOR_PITCH;
@@ -448,20 +455,20 @@
             const setback = f >= 3 ? 1.0 : 0.3;
             stage._mat = MAT.CONCRETE;
             // Fill the old 0.2 m storey gap downward, preserving every top edge.
-            addBox(stage, vadd(vadd(a.c, a.r, -setback * 0.5), a.u, y0 + STOREY_H * 0.5 - 0.1),
+            addBox(stage, vadd(vadd(a.c, a.r, -F * setback * 0.5), a.u, y0 + STOREY_H * 0.5 - 0.1),
                    [11.5 - setback, STOREY_H, LEN - f * 3], f % 2 ? SLAB : SLAB2, b);
             if (f % 2 === 1) {
-              addBox(stage, vadd(vadd(a.c, a.r, 7.2), a.u, y0 + 0.22),
+              addBox(stage, vadd(vadd(a.c, a.r, F * 7.2), a.u, y0 + 0.22),
                      [1.4, 0.2, LEN - f * 5 - 14], f === 1 ? [0.58, 0.10, 0.17] : GREY, b);
             }
             stage._mat = 0;
             if (f === 1 || f === 3) {
-              addBox(stage, vadd(vadd(a.c, a.r, 5.7 - setback * 0.5), a.u, y0 + STOREY_H * 0.55),
+              addBox(stage, vadd(vadd(a.c, a.r, F * (5.7 - setback * 0.5)), a.u, y0 + STOREY_H * 0.55),
                      [0.16, STOREY_H * 0.5, LEN - f * 5 - 14], f === 1 ? WIN_WARM : WIN_COOL, b);
             }
           }
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(a.c, a.r, 5.4), a.u, STOREY_H + 0.55),
+          addBox(stage, vadd(vadd(a.c, a.r, F * 5.4), a.u, STOREY_H + 0.55),
                  [6.5, 0.3, LEN - 10], [0.80, 0.82, 0.86], b);
           const roofY = totalH + 0.15;
           stage._mat = MAT.CONCRETE;
@@ -480,9 +487,9 @@
             addBox(stage, vadd(vadd(a.c, a.t, off), a.u, PERG_H),
                    [8.5, 0.1, 0.16], PERGOLA, b);
             if (i % 2 === 0)
-              addCyl(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, 3.8), a.u, roofY + 0.14), 0.07, 2.05, PERGOLA, 4, b);   // on the roof slab, up to the beam
+              addCyl(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, F * 3.8), a.u, roofY + 0.14), 0.07, 2.05, PERGOLA, 4, b);   // on the roof slab, up to the beam
           }
-          addBox(stage, vadd(vadd(a.c, a.r, 3.2), a.u, PERG_H + 0.12),
+          addBox(stage, vadd(vadd(a.c, a.r, F * 3.2), a.u, PERG_H + 0.12),
                  [0.12, 0.12, LEN - 32], PERGOLA, b);
           stage._mat = 0;
         };
@@ -493,13 +500,16 @@
           size: [22, boundTop - boundBase, LEN + 8], basis: b,
         }, dressPit, { required: true });
       })();
-      groundPatch(K(sl(0.00)), -1, 70, [130, 1.0, 160], PADDOCK,
+      // The +1 infield behind the pits is narrow: the return leg runs ~121 m off
+      // the S/F centreline (built racing 0.00-0.05), so the apron is 40 m deep,
+      // gap 58-98, not the 130 m it had on the open -1 side.
+      groundPatch(K(sl(0.00)), 1, 58, [40, 1.0, 160], PADDOCK,
                   { id: "hungaroring-paddock", samples: 8 });
       // Rear motorhome row omitted — motorhome() posts buried; seated boxes
       // deferred to keep props-tris within the 0.5 % ratchet of the prior slab.
       // timing/control block dropped this pass — floated unsupported over the
       // paddock apron after the pit mass grew; re-seat in a follow-up if needed.
-      broadcastCompound(K(sl(0.045)), -1, 78, { vans: 4, dishes: 2, mastH: 10 });
+      broadcastCompound(K(sl(0.045)), 1, 78,{ vans: 4, dishes: 2, mastH: 10 });
       // Pit wall, re-keyed to the real pit straight. The engine's own wall owns the
       // pit.keep window (racing 0.93-0.04 at this dist) and supersedes every chord
       // inside it by design. The walk starts on the pit-ENTRY approach (racing
@@ -508,7 +518,7 @@
       const pitWallPoints = [];
       for (let i = 0; i <= 50; i++) {
         const s = (0.9125 + i * 0.0025) % 1;
-        pitWallPoints.push({ k: K(sl(s)), side: -1, dist: 8 });
+        pitWallPoints.push({ k: K(sl(s)), side: 1, dist: 8 });
       }
       groundedSegments({
         id: "hungaroring-pit-wall", points: pitWallPoints,
@@ -519,7 +529,7 @@
         points: pitWallPoints.map((point) => Object.assign({}, point, { dist: 7.5 })),
         width: 0.35, height: 0.3, color: RED,
       });
-      recordBarrier(sl(0.9125), sl(0.0375), -1, 8);
+      recordBarrier(sl(0.9125), sl(0.0375), 1, 8);
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and the
       // shift alone put the span 402 m before the grid. It carries the
@@ -531,13 +541,14 @@
       });
 
       // Covered main tribune — perpendicular to the track (IADA), opposite the
-      // pit building (side +1). Covered ~10k seats; size approximate.
+      // pit building (side -1 since the pit flip; TS below). Covered ~10k seats; size approximate.
       // https://ad-c.org/winner/hungaroring-gold-winner-mixed-use-development-design-iada-2026/
       (function coveredMainTribune() {
         const FACE = 56;
         const DEPTH = 26;
         const gap0 = 28; // clear of road — tighter gaps got footprint-rejected
-        const a0 = anchor(K(sl(0.00)), 1, gap0 + DEPTH * 0.4);
+        const TS = -1;   // tribune side; lateral offsets were authored for +1, so they scale by TS
+        const a0 = anchor(K(sl(0.00)), TS, gap0 + DEPTH * 0.4);
         if (onTrack(a0.c[0], a0.c[2], FACE * 0.35)) return;
         const b0 = [a0.r, a0.u, a0.t];
         modelGroup("hungaroring-main-tribune", {
@@ -545,25 +556,25 @@
           size: [DEPTH * 0.7, 20, FACE + 6], basis: b0,
         }, (stage) => {
           for (let t = 0; t < 4; t++) {
-            const a = anchor(K(sl(0.00)), 1, gap0 + t * 4.8);
+            const a = anchor(K(sl(0.00)), TS, gap0 + t * 4.8);
             const b = [a.r, a.u, a.t];
             const h = 2.2 + t * 2.35;
             const len = FACE - t * 2.5;
             stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(a.c, a.u, h * 0.5), [4.2, h, len], t % 2 ? SHELL : SHELL2, b);
-            addBox(stage, vadd(vadd(a.c, a.r, -1.9), a.u, h + 0.14),
+            addBox(stage, vadd(vadd(a.c, a.r, -1.9 * TS), a.u, h + 0.14),
                    [2.0, 0.2, len - 2], [0.78, 0.79, 0.82], b);
             stage._mat = MAT.FABRIC;
             addBox(stage, vadd(a.c, a.u, h + 0.65), [3.6, 1.05, len - 4], CROWD[t % 4], b);
             stage._mat = 0;
             addBox(stage, vadd(a.c, a.u, h + 1.35), [3.9, 0.2, len - 1], [0.90, 0.88, 0.80], b);
           }
-          const aR = anchor(K(sl(0.00)), 1, gap0 + DEPTH * 0.45);
+          const aR = anchor(K(sl(0.00)), TS, gap0 + DEPTH * 0.45);
           stage._mat = MAT.METAL;
           addBox(stage, vadd(aR.c, aR.u, 16.2), [DEPTH * 0.7, 0.75, FACE + 4], ROOF_DK, [aR.r, aR.u, aR.t]);
-          addBox(stage, vadd(vadd(aR.c, aR.r, -DEPTH * 0.22), aR.u, 15.4),
+          addBox(stage, vadd(vadd(aR.c, aR.r, -DEPTH * 0.22 * TS), aR.u, 15.4),
                  [1.0, 1.4, FACE + 2], [0.32, 0.33, 0.36], [aR.r, aR.u, aR.t]);
-          const aB = anchor(K(sl(0.00)), 1, gap0 + DEPTH * 0.78);
+          const aB = anchor(K(sl(0.00)), TS, gap0 + DEPTH * 0.78);
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(aB.c, aB.u, 9), [3.2, 16, FACE - 6], SHELL2, [aB.r, aB.u, aB.t]);
           stage._mat = 0;
@@ -590,8 +601,8 @@
       // The pit-side mouth sits at the ENTRY end of the complex, ahead of the engine's
       // pit.keep window (14 m at racing 0.97, 30 m from 0.99): on the lane footprint
       // at gap 14 the guard drops it, so it stands back at gap 24 where it clears.
-      tunnelStairhead(sl(0.965), -1, 24);
-      tunnelStairhead(sl(0.022),  1);
+      tunnelStairhead(sl(0.965),  1, 24);
+      tunnelStairhead(sl(0.022), -1);
 
       // T1 basin: grassy amphitheatre floor (no standing water — satellite/OSM
       // show grass banking in the Valley of the Three Springs at Mogyoród).
@@ -599,10 +610,10 @@
                   { id: "hungaroring-basin-grass", samples: 8 });
       tree(K(sl(0.074)), 1, 84, 11, TREE);
       tree(K(sl(0.092)), 1, 70, 10, TREE2);
-      hedge(sl(0.035), sl(0.055), 1, 42, 3, TREE);
+      hedge(sl(0.044), sl(0.064), 1, 42, 3, TREE);   // starts past the pit building (racing 0.961-0.039)
 
       // Hungarian tricolour accent billboards (red/white/green)
-      billboard(K(sl(0.04)),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red accent (green twin dropped for tris)
+      billboard(K(sl(0.04)), -1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red accent (green twin dropped for tris)
 
       for (const [s, side] of [[0.07, 1], [0.12, -1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
         // 0.07 / 0.12 are T1-area racing fractions (re-keyed); ids keep the label
@@ -627,7 +638,11 @@
         // circuit-data lever, at the cost of thinning the wide stretches too.
         const inBowl = sf < 0.12 || (sf > 0.32 && sf < 0.62) || sf > 0.88;
         if (!inBowl) return;
+        // No crowd on the +1 paddock: the pit building, apron and kits fill
+        // racing ~0.93-0.045 there (authored au(0.93)..au(0.045)).
+        const inPaddock = sf > au(0.93) && sf < au(0.045);
         for (const side of [-1, 1]) {
+          if (side > 0 && inPaddock) continue;
           const hh = hash(kk * 23 + side * 5);
           if (hh < 0.5) continue;
           const base = 40 + hh * 18;  // increased from 30 to clear road intrusion at frac ~0.432
@@ -668,7 +683,7 @@
       const HG_RISER = [0.42, 0.43, 0.47];
       const hillHalf = (len) => (len / 2) / (n * ds);   // metres → lap-fraction half-span
       for (const [s, side, gap, len, rows] of [
-        [sl(0.07),  1, 32, 52, 3],   // Turn 1 / Pit Exit hillside
+        [sl(0.07), -1, 32, 52, 3],   // Turn 1 / Pit Exit hillside (behind the -1 stand)
         [sl(0.12), -1, 26, 48, 3],   // inside the slow complex
         [T5 - 0.01, 1, 36, 40, 2],   // grass shoulder around the Turn 5 (Mogyoród) stand
         [0.19, -1, 30, 40, 2],   // inside hillside threading T5 into the chicane
@@ -756,7 +771,7 @@
         addBox(out, vadd(vadd(c, a.r, -0.7), a.u, 12.5), [0.4, 5, 9.5], [0.05, 0.07, 0.12], b); // screen — stays FLAT (video screen)
       })();
 
-      cameraTower(K(sl(0.065)), -1, 42, { h: 16 });
+      cameraTower(K(sl(0.068)),  1, 30, { h: 16 });   // infield side; -1 there is the Pit Exit stand
       cameraTower(K(0.20),  -1, 44, { h: 14 });
       cameraTower(K(0.905),  -1, 40, { h: 14 });
 
@@ -827,13 +842,18 @@
       }
 
       if (circuitKit) {
+        // Paddock kits on the pit side (+1). The return leg is ~121 m off the
+        // centreline at racing 0.00-0.05, so they sit in the 62-ish m band behind
+        // the pit building (its bound ends ~62 m out). Both moved to the
+        // pit-ENTRY end (racing 0.975 / 0.99), where nothing runs behind the
+        // paddock: at racing 0.012 the hospitality canopy met the infield trees.
         circuitKit.hospitality({
-          id: "kit:hungaroring:paddock-hospitality", frac: sl(0.012),
-          side: -1, gap: 92, size: [18, 9, 38], modules: 5,
+          id: "kit:hungaroring:paddock-hospitality", frac: sl(0.990),
+          side: 1, gap: 62, size: [18, 9, 38], modules: 5,
         });
         circuitKit.serviceCompound({
-          id: "kit:hungaroring:paddock-service", frac: sl(0.035),
-          side: -1, gap: 112, size: [26, 6, 34], vehicles: 7,
+          id: "kit:hungaroring:paddock-service", frac: sl(0.975),
+          side: 1, gap: 62, size: [26, 6, 34], vehicles: 7,
         });
         for (const [id, frac, side] of [
           ["t4", 0.285, -1], ["t11", 0.625, 1],

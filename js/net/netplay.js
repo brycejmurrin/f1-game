@@ -183,8 +183,11 @@ const NetPlay = (function () {
     const PEER_ONE = "peer";
     let session = null;
     function broadcast(type, data) {
-      let ok = false;
-      for (const s of sessionList()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
+      let ok = false, dj;
+      // Serialised ONCE for every session (sendEvent's dataJson path writes the same bytes); a payload
+      // JSON.stringify cannot write (a cycle, undefined) takes each session's own path, as before.
+      try { dj = data === undefined ? "null" : JSON.stringify(data); } catch (e) { dj = undefined; }
+      for (const s of sessionList()) { try { ok = s.sendEvent(type, data, dj) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
       return ok;
     }
     const peerCar = new Map();            // peerId -> wireId
