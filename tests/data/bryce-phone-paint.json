@@ -74,21 +74,21 @@
       },
       "select": {
         "taps": 4,
-        "text": 5,
+        "text": 2,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
       "garage": {
         "taps": 0,
-        "text": 8,
+        "text": 7,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
       "settings": {
         "taps": 0,
-        "text": 2,
+        "text": 1,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -109,7 +109,7 @@
       },
       "results": {
         "taps": 0,
-        "text": 4,
+        "text": 2,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -227,21 +227,21 @@
       },
       "select": {
         "taps": 4,
-        "text": 5,
+        "text": 2,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
       "garage": {
         "taps": 0,
-        "text": 8,
+        "text": 7,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
       "settings": {
         "taps": 0,
-        "text": 2,
+        "text": 1,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -262,7 +262,7 @@
       },
       "results": {
         "taps": 0,
-        "text": 4,
+        "text": 2,
         "outside": 0,
         "blocked": 1,
         "scroll": 0
@@ -380,21 +380,21 @@
       },
       "select": {
         "taps": 4,
-        "text": 5,
+        "text": 2,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
       "garage": {
         "taps": 0,
-        "text": 8,
+        "text": 7,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
       "settings": {
         "taps": 0,
-        "text": 2,
+        "text": 1,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -415,7 +415,7 @@
       },
       "results": {
         "taps": 0,
-        "text": 4,
+        "text": 2,
         "outside": 0,
         "blocked": 1,
         "scroll": 0
