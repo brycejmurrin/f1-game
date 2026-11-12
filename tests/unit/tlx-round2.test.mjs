@@ -355,6 +355,7 @@ function decalRunHarness() {
   const dropEnd = TLX.indexOf('      // (geometry, material, OCCURRENCE)', dropStart);
   return new Function('THREE', `
     const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
+    const _instRootOn = false, instRoot = null, _instAdd = (m) => scene.add(m), _instRemove = (m) => scene.remove(m), _instShow = () => {};   // #3104 F3 helpers: the scene.add arm
     const shadowSys = null, BLOB_CAP = 8, window = {}, renderer = {};
     let _warmPending = false, _sceneRenders = 0;
     const skipBatches = () => false, _coDrop = () => {};

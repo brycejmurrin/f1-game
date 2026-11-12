@@ -716,10 +716,12 @@ test('freeing batched decal meshes removes their hidden scene objects', async ({
         const mesh = GLX.createTexMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], uv: [0, 0, 1, 0, 0, 1], idx: [0, 1, 2] });
         const geo = mesh.geo;
         GLX.drawDecal(mesh, model, tex, { batch: true });
-        const run = window.scene.children.find(o => o.isInstancedMesh && o.geometry === geo);
+        // #3104 F3: a hidden run hangs off instRoot, outside the scene walk; the registry lists every live one.
+        const live = () => window.scene.children.concat(window.scene.userData.instRegistry || []);
+        const run = live().find(o => o.isInstancedMesh && o.geometry === geo);
         if (run) { created++; run.addEventListener('dispose', () => disposals++); }
         GLX.freeMesh(mesh); GLX.freeMesh(mesh);
-        if (window.scene.children.some(o => o.geometry === geo)) retained++;
+        if (live().some(o => o.geometry === geo) || (run && run.parent)) retained++;
       }
     } finally { GLX.freeTexture(tex); }
     return { created, retained, disposals };

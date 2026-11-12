@@ -50,7 +50,7 @@ function settled(promise, out) {
 // post-reset snapshots at the same seed, and tests/specs/agent-determinism.spec.js
 // is the guard that keeps it honest.
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
-  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
+  "wheelLock", "brakeTF", "brakeTR", "brakeFade", "_absF", "_tcR", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking", "stallT",
@@ -396,8 +396,7 @@ const api = {
     // harness needs to read a result correctly. `practice` is derived (a Time
     // Trial is always one), so it is NOT the same question as session === "tt".
     practice: G.practice, duel: G.duel,
-    raceQuali: !!G.raceQuali, raceGrid: G.raceGrid,
-    lapsTarget: G.lapsTarget,
+    raceQuali: !!G.raceQuali, raceGrid: G.raceGrid, lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
     // tickBody's holds: while `warming`, real frames charge neither the countdown nor
@@ -594,7 +593,7 @@ const api = {
       maxTilt: Input.maxTilt,          // TILT SENSITIVITY (deg for full lock)
       deadzone: Input.deadzone,        // fixed dead zone (deg) — no longer a slider
       tiltCutoff: Input.minCutoff,     // STEER SMOOTHING (One-Euro min-cutoff, Hz)
-      wheelState: typeof WheelState !== "undefined" && WheelState.enabled(),   // #1628 opt-in torque-balanced wheels
+      wheelState: typeof WheelState !== "undefined" && WheelState.enabled(), brakeThermal: typeof WheelState !== "undefined" && WheelState.thermalEnabled(),   // #1628 torque-balanced wheels; #1577 brake fade (needs it)
     };
   },
   // physState({lite:true}) — the METRICS overlay's 4 Hz read: no coach.status() (driving: undefined).
@@ -619,7 +618,7 @@ const api = {
       // c.slipFactor) — not the whole-car budget above. null before a tick.
       drivenSlip: G.player.slipFactor != null ? +G.player.slipFactor.toFixed(3) : null,
       brakeBias: G.player.brakeBias != null ? +G.player.brakeBias.toFixed(3) : null,   // the SETUP sheet's split (null = BB_REF)
-      aeroX: +(G.player.aeroX || 0).toFixed(3),
+      aeroX: +(G.player.aeroX || 0).toFixed(3), brakeFade: G.player.brakeFade != null ? +G.player.brakeFade.toFixed(3) : null, brakeTemp: G.player.brakeTF != null ? { f: Math.round(G.player.brakeTF), r: Math.round(G.player.brakeTR) } : null,   // #1577 opt-in: °C/axle + kept brake fraction
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
       vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
       towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
@@ -719,10 +718,8 @@ const api = {
   // The manual sector ERS plan (#1580, js/race/energy-plan.js): ["manual"|"deploy"|"save"] × 3.
   // ersPlan() reads it; ersPlan([...]) sets it for this session (not persisted) and returns
   // {plan, ok} — ok false keeps the old plan. MANUAL ×3 is the neutral, shipped plan.
-  ersPlan(p) {
-    const ok = p === undefined ? true : EnergyPlan.setPlan(p);
-    return { plan: EnergyPlan.plan(), ok, neutral: EnergyPlan.isNeutral() };
-  },
+  ersPlan(p) { const ok = p === undefined ? true : EnergyPlan.setPlan(p); return { plan: EnergyPlan.plan(), ok, neutral: EnergyPlan.isNeutral() }; },
+  ersForecast(o) { return EnergyPlan.report(G.player, o); },   // ERS energy forecast (#1629): battery per sector exit + confidence; {override:[dE ×3], reset}
   setPhysics(o) {
     o = o || {};
     // Reject a poisoned patch atomically; existing finite floors remain compatible.
@@ -753,6 +750,7 @@ const api = {
     if (o.tiltCutoff != null) Input.setTiltSmoothing(o.tiltCutoff);
     // #1628: the wheel-state gate for this session only (the player's stored choice is untouched).
     if (o.wheelState != null && typeof WheelState !== "undefined") WheelState.setEnabled(o.wheelState === true, false);
+    if (o.brakeThermal != null && typeof WheelState !== "undefined") WheelState.setThermal(o.brakeThermal === true, false);
     return this.tuning();
   },
 
