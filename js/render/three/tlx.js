@@ -3200,6 +3200,11 @@ const TLX = (function () {
       function ageTexPool(now) {
         while (_texPool.length && now - _texPool[0].at > TEX_POOL_MS) disposePooled(_texPool.shift().t);
       }
+      // A dropped track world: its retired atlases go now, not after TEX_POOL_MS, so the next circuit's build
+      // does not run beside them (iPhone tab budget ~300 MB).
+      function flushTexPool() {
+        while (_texPool.length) disposePooled(_texPool.shift().t);
+      }
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
       // Software / soft-GPU faces clear black and skip the world. envReady
@@ -5363,6 +5368,7 @@ const TLX = (function () {
           }
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
+        flushTexPool,
         // texCensus: GLX-only. Declared ABSENT rather than left off, because
         // game.js installs a backend by descriptor-copy onto GLX and an absent
         // NAME would keep GLX's own function — which would then run against a

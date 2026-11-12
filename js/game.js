@@ -1924,7 +1924,7 @@ const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGo
 function dropTrackWorld() {
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0; _menuFly = null;
   shadowPass.reset(); freeTrackMeshes(track);
-  track = null; builtTrackId = null;
+  track = null; builtTrackId = null; if (gfx && gfx.flushTexPool) gfx.flushTexPool();   // retired atlases go with the world (TLX)
   if (typeof LampBake !== "undefined") LampBake.reset();
 }
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
@@ -4407,7 +4407,7 @@ function quitToMenu() {
   // with everything else rather than borrowing another module's lifetime.
   // Spotter pack is not RadioVoice.current — hiding #announce never pack.stop()s
   // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
-  radioVoice.halt();
+  radioVoice.halt(); radioVoice.flushDecoded();   // decoded PCM goes with the race (#4676)
   GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
