@@ -533,11 +533,10 @@ test("--changed: a tests/data file selects the unit files that pin it; an unpinn
 test("docs-only mode runs the shared docs list, knowledge-retention included, on the real floor (#5461)", () => {
   const sel = selectToolingFastChanged(["docs/notes/" + "BIG-2026-11-11.md"], { pinIndex: new Map() });
   assert.equal(sel.reason, "docs-only");
-  assert.ok(sel.files.includes("tests/unit/knowledge-retention.test.mjs"), "the 40 KB note cap runs on a prose diff");
   assert.deepEqual([...sel.files].sort(), [...DOCS_FAST_TEST_FILES].sort(),
     "every listed docs test is in the floor and selected: a list entry the floor lacks would silently not run");
-  const hook = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../.githooks/pre-commit"), "utf8");
-  assert.match(hook, /node tools\/ci\/docs-fast-tests\.mjs/, "the hook's docs-only branch reads the same list");
+  // That the hook runs this same list, knowledge-retention included, is proven by behaviour in pre-commit-guards
+  // ("a 41 KB note is refused", and the hook's own file count equals the list's length), not by a pin on its text.
 });
 
 test("--changed selector: one case per branch (empty, docs-only, tracked, unmatched, no-pin-match, matched)", () => {

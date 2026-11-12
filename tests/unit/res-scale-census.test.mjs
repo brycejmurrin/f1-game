@@ -58,7 +58,7 @@ test("a tool on the census WebGPU launch checks the adapter, or is on the shrink
     e.isDirectory() ? walk(`${d}/${e.name}`) : /\.(mjs|cjs|js)$/.test(e.name) ? [`${d}/${e.name}`] : []);
   const users = walk("tools").filter((f) => !f.startsWith("tools/lib/") &&
     fs.readFileSync(path.join(root, f), "utf8").includes("WEBGPU_LAVAPE_CHROMIUM_ARGS"));
-  assert.ok(users.includes("tools/gfx/res-scale-census.mjs"), "premise: the scan finds the census tools");
+  assert.ok(users.length > ADAPTER_UNCHECKED.size, "premise: the scan finds census tools beyond the unchecked list");
   for (const f of users) {
     const checks = /adapterMismatch\(/.test(fs.readFileSync(path.join(root, f), "utf8"));
     if (ADAPTER_UNCHECKED.has(f)) assert.ok(!checks, `${f} checks the adapter now: drop it from ADAPTER_UNCHECKED`);
