@@ -15001,6 +15001,9 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "invalidateUniformCache": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
       "present": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
@@ -15009,7 +15012,8 @@
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "readbackLdrPixels": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "setup": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -15143,6 +15147,9 @@
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/select-specs.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "softBlit": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
