@@ -97,7 +97,8 @@ body[data-shape="wide"] #overlay #menu-buttons { grid-column: 2; grid-row: 1; he
 body #overlay #menu-buttons :is(#mb-career, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { grid-row: auto; }
 /* The floating chips (PAUSE BACKGROUND / INSTALL) only reserve floor space while they are shown. */
 body #overlay #menu-buttons { margin-bottom: 0; padding-bottom: var(--gap); scroll-padding-bottom: var(--gap); }
-body:has(:is(#home-motion, #install-chip):not([hidden])) #overlay #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * .5); }
+body:has(> #install-chip:not([hidden])) #overlay #menu-buttons,
+body:has(> :where(#overlay) > #home-motion:not([hidden])) #overlay #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * .5); }
 body #overlay #menu-buttons #menu-create > .bigbtn { font-size: clamp(var(--fs-micro), calc(3.4 * var(--vwz)), calc(var(--fs-4) * .88)); padding-inline: calc(var(--gap) * .2); }
 body #overlay #menu-buttons #mb-career { min-height: calc(var(--hrow) * 1.2); }
 /* Scrolling is the fallback (small phone, UI SIZE 200%): the utility row stays pinned so SETTINGS is never below the fold. */

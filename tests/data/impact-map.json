@@ -18580,6 +18580,9 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
+      "dockButtons": [
+        "tests/unit/hud-dock-btn-cache.test.mjs"
+      ],
       "fitHud": [
         "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-fit-idempotent.test.mjs",
