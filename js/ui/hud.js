@@ -1399,9 +1399,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
           && window.matchMedia("(orientation: portrait)").matches && bottom > 0) {
         let leftEdge = 0, rightEdge = vpW();
         const mid = vpW() / 2;
-        const nodes = dockButtons();   // the cached [dockL…, dockR…] list, not a query per pass (#3108)
-        for (let i = 0; i < nodes.length; i++) {
-          const el = nodes[i];
+        for (const el of dockButtons()) {   // the cached [dockL…, dockR…] list, not a query per pass (#3108)
           if (!el || el.hidden) continue;
           const r = el.getBoundingClientRect();
           if (!(r.width && r.height)) continue;

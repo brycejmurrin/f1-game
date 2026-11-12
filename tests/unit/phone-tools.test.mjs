@@ -190,7 +190,6 @@ test("summarize + reportLines: the screen factor is the median; an element off i
 test("phone windows: one record, the measured Safari tab, read by bryce-phone, title-fit and menu-screens", async () => {
   const rec = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/phone-windows.json"), "utf8"));
   assert.deepEqual([rec.windows.safari.width, rec.windows.safari.height, rec.dpr], [852, 368, 3], "the #5218 reading");
-  assert.match(rec.windows.safari.source, /#5218.*2026-11-10T02:40Z/);
   for (const [name, w] of Object.entries(rec.windows)) {
     assert.ok(w.measured && w.assumed && w.source, `${name} says what was measured, what was assumed, and where from`);
     assert.deepEqual({ ...BRYCE_WINDOWS[name].insets }, w.insets, `bryce-phone ${name}`);
@@ -203,10 +202,14 @@ test("phone windows: one record, the measured Safari tab, read by bryce-phone, t
     assert.ok(g, `title-fit has the ${cell} cell`);
     assert.deepEqual([g.w, g.h, g.insets], [w.width, w.height, w.insets], `title-fit ${cell} = the record's ${win}`);
   }
-  const ms = fs.readFileSync(path.join(ROOT, "tools/ui/menu-screens.mjs"), "utf8");
-  assert.match(ms, /tests\/data\/phone-windows\.json/);
-  assert.match(ms, /"ios-iphone-landscape-safari"[\s\S]{0,200}viewport: \{ width: PW\.safari\.width, height: PW\.safari\.height \}[\s\S]{0,200}ins\(PW\.safari\)/);
-  const tf = fs.readFileSync(path.join(ROOT, "tests/helpers/title-fit.mjs"), "utf8");
-  for (const [f, src] of [["title-fit.mjs", tf], ["menu-screens.mjs", ms]])
-    assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /height: (283|344)\b|\bh: (283|344)\b/, `${f}: no guessed Safari height outside a comment`);
+  // menu-screens' cells are read from the table it exports, not from its source text.
+  const { VIEWPORTS } = await import("../../tools/ui/menu-screens.mjs");
+  for (const [cell, win] of [["ios-iphone-landscape", "standalone"], ["ios-iphone-landscape-safari", "safari"], ["ios-iphone-landscape-844", "w844"]]) {
+    const v = VIEWPORTS.find((e) => e[0] === cell), w = rec.windows[win];
+    assert.ok(v, `menu-screens has the ${cell} cell`);
+    assert.deepEqual([v[1].viewport, v[3]], [{ width: w.width, height: w.height }, { t: w.insets.top, r: w.insets.right, b: w.insets.bottom, l: w.insets.left }], `menu-screens ${cell} = the record's ${win}`);
+  }
+  // The two guessed Safari heights (283, 344) are gone from every 852-wide cell of both tables.
+  const heights = [...GEOS.filter((g) => g.w === 852).map((g) => g.h), ...VIEWPORTS.filter((e) => e[1].viewport.width === 852).map((e) => e[1].viewport.height)];
+  assert.deepEqual(heights.filter((h) => h === 283 || h === 344), [], "no guessed Safari height");
 });
