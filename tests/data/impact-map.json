@@ -5245,6 +5245,7 @@
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
@@ -6561,6 +6562,9 @@
       "arcToIndexFrac": [
         "tests/unit/custom-tracks.test.mjs"
       ],
+      "badge": [
+        "tests/unit/custom-tracks-stale.test.mjs"
+      ],
       "cancelCollectionPreflight": [
         "tests/unit/custom-tracks.test.mjs"
       ],
@@ -6568,9 +6572,11 @@
         "tests/unit/custom-tracks.test.mjs"
       ],
       "consumeTrackHash": [
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs"
       ],
       "create": [
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/load-order.test.mjs"
       ],
@@ -6583,6 +6589,9 @@
       ],
       "importCollection": [
         "tests/unit/custom-tracks.test.mjs"
+      ],
+      "judgeStored": [
+        "tests/unit/custom-tracks-stale.test.mjs"
       ],
       "list": [
         "tests/unit/custom-tracks.test.mjs"
@@ -6608,11 +6617,18 @@
         "tests/unit/track-codec.test.mjs"
       ],
       "select": [
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs"
+      ],
+      "stale": [
+        "tests/unit/custom-tracks-stale.test.mjs"
       ],
       "sync": [
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/load-order.test.mjs"
+      ],
+      "tellStale": [
+        "tests/unit/custom-tracks-stale.test.mjs"
       ],
       "toRaw": [
         "tests/unit/custom-tracks.test.mjs",
@@ -6620,6 +6636,7 @@
         "tests/unit/track-themes-build.test.mjs"
       ],
       "upsert": [
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/track-codec.test.mjs"
       ],
@@ -6998,6 +7015,7 @@
         "tests/unit/track-editor-geometry.test.mjs"
       ],
       "*": [
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
@@ -7017,6 +7035,7 @@
         "tests/unit/track-themes-build.test.mjs"
       ],
       "*": [
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobby-settings.test.mjs"
       ]
@@ -7039,6 +7058,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/geometry-paths-baseline.test.mjs"
       ]
     },
@@ -8259,6 +8279,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/preview-scenery-shift.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
       ]
     },
@@ -17068,6 +17089,9 @@
       "post": [
         "tests/unit/build-client-drop.test.mjs"
       ],
+      "previewMap": [
+        "tests/unit/preview-scenery-shift.test.mjs"
+      ],
       "replay": [
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/build-worker.test.mjs",
@@ -17092,6 +17116,7 @@
       ],
       "*": [
         "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/preview-scenery-shift.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/stage-minify.test.mjs"
@@ -19288,6 +19313,7 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
         "tests/unit/ctx-lost-retry-reload.test.mjs",
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
@@ -19328,6 +19354,7 @@
         "tests/unit/custom-tracks.test.mjs"
       ],
       "updateTrackPreview": [
+        "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/select-preview-defer.test.mjs"
       ],
       "*": [
