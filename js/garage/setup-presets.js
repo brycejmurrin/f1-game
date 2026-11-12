@@ -90,18 +90,18 @@ const SetupPresets = (function () {
     if (!row) return null;
     const current = SetupTune.get(team);
     return { id, tune: row.tune, current, context: row.context, at: row.at, contextChanges: contextDiff(row.context, context), changes: diff(current, row.tune),
-      setupRevision: store.keyRevision ? store.keyRevision("setup." + team) : null,
+      setupRevision: store.keyRevision ? store.keyRevision(SetupTune.keyFor(team)) : null,
       libraryRevision: store.keyRevision ? store.keyRevision(key(team)) : null };
   }
   function apply(store, team, pending) {
     if (!pending) return { ok: false, reason: "missing" };
     const row = list(store, team).find((r) => r.id === pending.id);
     if (!row) return { ok: false, reason: "missing" };
-    if ((store.keyRevision && (pending.setupRevision !== store.keyRevision("setup." + team)
+    if ((store.keyRevision && (pending.setupRevision !== store.keyRevision(SetupTune.keyFor(team))
         || pending.libraryRevision !== store.keyRevision(key(team))))
         || diff(SetupTune.get(team), pending.current).length
         || diff(row.tune, pending.tune).length) return { ok: false, reason: "changed" };
-    const result = store.write ? store.write("setup." + team, row.tune) : { ok: true, durable: store.set("setup." + team, row.tune) !== false };
+    const result = store.write ? store.write(SetupTune.keyFor(team), SetupTune.stamp(team, row.tune)) : { ok: true, durable: store.set(SetupTune.keyFor(team), SetupTune.stamp(team, row.tune)) !== false };
     return { ok: result.ok !== false, durable: result.durable !== false, reason: result.reason || null };
   }
   function mount(host, o) {

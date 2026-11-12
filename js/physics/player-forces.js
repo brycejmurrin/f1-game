@@ -30,7 +30,7 @@ const PlayerForces = (function () {
   function create(g) {
     G = g;
     Log.info("game", "PlayerForces.create");
-    return { step, tyreSat, recoverBlocked };
+    return { step, tyreSat, recoverBlocked, assistYawEase };
   }
 
   // M42 pit-lane guard: RECOVER and the stuck auto-rescue snap the car to x = 0 (the racing
@@ -38,6 +38,14 @@ const PlayerForces = (function () {
   // be thrown across the lane while its pitState stays lane/box. `inLane` comes from pits.inLane.
   function recoverBlocked(c, inLane) {
     return !!inLane || c.pitState === "box";
+  }
+
+  // DRIVING-HELP over-rotation ease (game.js assistDelta): 1 unless the car already yaws INTO the
+  // corner faster than the road needs (rNeed = v·kPath). +k is LEFT and +r is nose RIGHT, so the
+  // into-corner ratio is -r/rNeed (#5022: the unsigned ratio fired on countersteer instead).
+  function assistYawEase(r, rNeed) {
+    const ratio = rNeed !== 0 ? -(r || 0) / rNeed : 0;
+    return ratio > 1 ? Math.min(1, Math.max(0.3, 1 - (ratio - 1) * 0.6)) : 1;
   }
 
   // Combined slip → axle µ → Fy → yaw/vLat/head. Writes force fields on `c`.
@@ -286,7 +294,6 @@ const PlayerForces = (function () {
         c.speed = braking ? c.speed + back * dt : Math.max(0, c.speed + back * dt);
         c.axEstSm = (c.axEstSm ?? 0) + back * (1 - Math.exp(-10 * dt));
       }
-      c.wheelShort = q;
     }
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
     // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
@@ -472,6 +479,6 @@ const PlayerForces = (function () {
     }
   }
 
-  return { create, tyreSat, recoverBlocked };
+  return { create, tyreSat, recoverBlocked, assistYawEase };
 })();
 Object.freeze(PlayerForces);

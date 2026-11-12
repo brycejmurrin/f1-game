@@ -55,8 +55,9 @@ for t in "${TOOLS[@]}"; do
       [[ $t == glslang ]] && { BINNAME=glslangValidator; PKG=glslang-tools; }
       if command -v "$BINNAME" >/dev/null 2>&1; then echo "ok   $BINNAME ($(command -v "$BINNAME"))"; continue; fi
       echo "plan $PKG via apt"; [[ $PLAN == 1 ]] && continue
-      SUDO=""; [[ $(id -u) -ne 0 ]] && SUDO="sudo"
-      { $SUDO apt-get install -y -q "$PKG" || { $SUDO apt-get update -q && $SUDO apt-get install -y -q "$PKG"; }; } >/dev/null || { echo "FAIL $t" >&2; rc=1; } ;;
+      # Through the cached installer (#5519): cached .debs in artifacts/bin/debs (inside CI's
+      # artifacts/bin cache) install offline when the runner mirror is down; else bounded apt.
+      bash "$ROOT/tools/ci/apt-cached-install.sh" --label "lint-bins $PKG" --cache "$BIN/debs" --budget 240 "$PKG" || { echo "FAIL $t" >&2; rc=1; } ;;
     naga)
       have "$BIN/cargo/bin/naga" && { echo "ok   naga ($("$BIN/cargo/bin/naga" --version 2>&1 | head -1))"; continue; }
       echo "plan naga-cli $NAGA_VERSION via cargo --locked"; [[ $PLAN == 1 ]] && continue

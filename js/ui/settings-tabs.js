@@ -70,7 +70,8 @@ const SettingsNav = (function () {
      instead of running in the DOMContentLoaded task. The queue flushes, in
      registration order, on the first Settings page enter, the first pointerdown
      or keydown anywhere (capture, so it precedes the click / key it serves), or
-     idle (4 s cap). A complete document (tests, late loads) runs fn at once. */
+     idle (4 s cap). A complete document (tests, late loads) runs fn at once.
+     Callers queue from a DCL listener: deferred scripts evaluate at "interactive". */
   let lazyQ = null;
   function flushLazy() {
     const q = lazyQ;
@@ -81,7 +82,10 @@ const SettingsNav = (function () {
   }
   function lazy(fn) {
     if (typeof fn !== "function") return;
-    if (typeof document === "undefined" || document.readyState === "complete") { fn(); return; }
+    if (typeof document === "undefined" || document.readyState === "complete") {
+      if (lazyQ) { lazyQ.push(fn); flushLazy(); } else fn();
+      return;
+    }
     if (lazyQ) { lazyQ.push(fn); return; }
     lazyQ = [fn];
     for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, flushLazy, true);
@@ -208,6 +212,7 @@ const SettingsNav = (function () {
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
     function show(want, focus, after, audioTried) {
       stopRestore();
+      flushLazy();
       const request = ++generation;
       const id = Object.hasOwn(routes, want) ? want : "home";
       mark("apex:settings:show");

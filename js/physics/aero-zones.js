@@ -69,15 +69,16 @@ const ZONE_COUNT = {
 // Shanghai). The first version picked the single longest run per pair and
 // needed an occurrence index whenever a kink split a straight.
 //
-// Not curated by W12 (their def.turns belong to another worker or have no 2026
-// source): miami, montreal, mexico (W5 circuits), imola, vegas, abudhabi — their
-// rows are the old geometry-derived pairs, kept until their turns are FIA-numbered.
+// miami, montreal and mexico were FIA-numbered on 2026-11-11 (#5316 leftovers,
+// tools/track/official-corners.cjs: the F1 timing corner markers). Not curated
+// (no 2026 source): imola, vegas, abudhabi — their rows are the old
+// geometry-derived pairs.
 const AERO_ZONE_TURNS = {
   suzuka: [[14, 15], [18, 1]],                                    // FIA 2026 JPN: after T14, T18
   albert_park: [[2, 3], [5, 6], [8, 9], [10, 11], [14, 1]],       // FIA 2026 AUS: after T14, T2, T5, T8, T10
   shanghai: [[4, 6], [10, 11], [13, 14], [16, 1]],                // FIA 2026 CHN: after T16, T4 (through the T5 kink), T10, T13
-  miami: [[11, 12], [17, 18], [19, 1]],
-  montreal: [[8, 9], [11, 12], [13, 14], [14, 1]],
+  miami: [[8, 11], [16, 17], [19, 1]],                            // FIA 2026 MIA: after T19, T8 (through the T9/T10 kinks), T16
+  montreal: [[7, 8], [9, 10], [11, 13], [14, 1]],                // FIA 2026 CAN: after T14, T7, T9, T11 (through the T12 kink)
   catalunya: [[3, 4], [5, 7], [9, 10], [14, 1]],                  // FIA 2026 ESP-BCN: after T14, T3, T5 (through T6), T9
   redbull: [[1, 3], [3, 4], [8, 9], [10, 1]],                     // FIA 2026 AUT: after T10, T1 (through T2), T3, T8
   silverstone: [[5, 6], [7, 9], [14, 15], [18, 1]],               // FIA 2026 GBR: after T18, T5, T7 (through Woodcote), T14
@@ -89,7 +90,7 @@ const AERO_ZONE_TURNS = {
   baku: [[2, 3], [20, 1]],                                        // FIA 2026 AZE: after T20, T2
   singapore: [[5, 7], [9, 10], [13, 14], [15, 16], [19, 1]],      // FIA 2026 SGP: after T19, T5 (through T6), T9, T13, T15
   cota: [[11, 12], [20, 1]],                                      // FIA 2026 USA: after T20, T11
-  mexico: [[3, 4], [11, 12], [17, 1]],
+  mexico: [[3, 4], [11, 12], [17, 1]],                            // FIA 2026 MEX: after T17, T3, T11
   interlagos: [[3, 4], [14, 1]],                                  // FIA 2026 BRA: after T14 (through the T15 kink), T3
   vegas: [[5, 6], [13, 14]],                                      // PROVISIONAL
   qatar: [[16, 1]],                                               // PROVISIONAL: FIA 2025 QAT DRS, after T16

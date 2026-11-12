@@ -295,12 +295,21 @@ test("makeCars keeps aero and ERS on dedicated channels and respects era resolut
   assert.equal(run("cars.find(c=>c.driverId==='ferrari:0').tierV"),run("TIER_V[team.tier]"));
 });
 
-test("makeCars preserves MY TEAM saved-build hire ratio and player tier", () => {
+test("makeCars: the MY TEAM hire's build pace stays on the tier ladder, aero/ERS not counted twice (#5035)", () => {
   const run=makeCarsBoot();
   run(`Teams.LIST.push({...Teams.DEFAULT_CUSTOM});teamIdx=Teams.LIST.findIndex(t=>t.custom);var team=Teams.LIST[teamIdx];
-    var works=Parts.resolveSetup(Parts.getFactorySetup(team),team);
-    saved=Parts.getFactorySetup(Teams.LIST.find(t=>t.id==='ferrari'));
-    var expected=buildPace(Parts.resolveSetup(saved,team),works);tdev=1.02;makeCars()`);
+    var stock=Parts.getFactorySetup(team);saved=stock;tdev=1.02;makeCars();
+    var mate=()=>cars.find(c=>c.team.custom&&!c.isPlayer);var stockV=mate().tierV;
+    saved=Parts.getFactorySetup(Teams.LIST.find(t=>t.id==='ferrari'));makeCars();var ferrariV=mate().tierV;`);
   assert.equal(run("player.tierV"),run("TIER_V[team.tier]*tdev"));
-  assert.equal(run("cars.find(c=>c.team.custom&&!c.isPlayer).tierV"),run("TIER_V[team.tier]*tdev*expected"));
+  assert.equal(run("stockV"),run("TIER_V[team.tier]*tdev"),"a stock build is the team's own tier");
+  // Was 0.9648*1.02*1.747 = 1.72: the hire ran away on every straight.
+  assert.ok(run("ferrariV")<=run("TIER_V[0]*tdev")*(1+1e-12),"a Ferrari works build is at most the fastest tier");
+  assert.ok(run("ferrariV")>run("stockV"),"and still faster than stock");
+  for (const cat of ["aero","ers"]) {
+    const changed=run(`(function(){var o=Parts.CATALOG.find(c=>c.id==='${cat}').options.find(o=>o.id!==stock['${cat}']&&Parts.isOptionAvailable(o,team));
+      if(!o)return null;saved={...stock,['${cat}']:o.id};makeCars();return mate().tierV;})()`);
+    assert.notEqual(changed,null,cat+": a legal alternative part exists");
+    assert.equal(changed,run("stockV"),cat+" alone leaves the hire's tierV unchanged (it rides aeroLoad/ersDeploy)");
+  }
 });
