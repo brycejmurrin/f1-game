@@ -16,7 +16,11 @@
  * as an ordinary toggle, so a replay never needs the plan. Time trial ignores
  * the plan: a TT lap is the player's own run.
  * Reads no track curvature: the only track input is the timing-sector index.
- * #1629 (ERS forecast) builds on `plan()` / POLICIES.
+ *
+ * FORECAST (#1629): learn() folds each completed sector's net battery change
+ * (the player's) into a mean/variance per (sector, boosted); forecast() walks the
+ * plan and predicts each sector exit with a 0..1 confidence; setOverride() pins a
+ * sector. Display/agent only: physics reads none of it.
  */
 const EnergyPlan = (function () {
   "use strict";
@@ -28,6 +32,7 @@ const EnergyPlan = (function () {
   // Per car: the sector the plan last acted on (or found already satisfied),
   // so it fires at most once per entry.
   const seen = new WeakMap();
+  const secE0 = new WeakMap();   // per car: battery at its sector start (#1629)
 
   /** A clean 3-entry plan, or null when `p` is not one. */
   function clean(p) {
@@ -66,6 +71,59 @@ const EnergyPlan = (function () {
     if (flip || pol !== "deploy" || on) seen.set(c, sec);
     return flip;
   }
-  return Object.freeze({ KEY, POLICIES, NEUTRAL, clean, plan, setPlan, fromStore, isNeutral, wantsFlip, toggleFor });
+
+  // ---- forecast (#1629) ---- stats[sec][boosted] = {n, mean, m2} (Welford)
+  let stats, override;
+  function reset() { stats = [[null, null], [null, null], [null, null]]; override = [null, null, null]; }
+  reset();
+  function learn(sec, dE, boosted) {
+    if (!(sec >= 0 && sec < 3) || !Number.isFinite(dE)) return false;
+    const k = boosted ? 1 : 0, s = stats[sec][k] || (stats[sec][k] = { n: 0, mean: 0, m2: 0 });
+    const d = dE - s.mean;
+    s.n++; s.mean += d / s.n; s.m2 += d * (dE - s.mean);
+    return true;
+  }
+  /** null clears the override. */
+  function setOverride(sec, dE) {
+    if (!(sec >= 0 && sec < 3) || (dE != null && !Number.isFinite(dE))) return false;
+    override[sec] = dE == null ? null : dE;
+    return true;
+  }
+  function sectorModel(sec, boosted) {
+    if (override[sec] != null) return { mean: override[sec], conf: 1, n: 0, overridden: true };
+    const s = stats[sec][boosted ? 1 : 0];
+    if (!s) return { mean: 0, conf: 0, n: 0, overridden: false };
+    const sd = s.n > 1 ? Math.sqrt(s.m2 / (s.n - 1)) : 0.1;   // 1 lap ~0.4, 3 tight laps ~0.77
+    return { mean: s.mean, conf: Math.min(1, Math.max(0, (1 - Math.exp(-s.n / 2)) / (1 + 8 * sd))), n: s.n, overridden: false };
+  }
+  /** Battery at each sector exit from `fromSec`: {rows:[{sec,policy,boosted,start,end,conf}], end, conf (weakest)}. */
+  function forecast(energy, fromSec, liveBoost, p) {
+    const pl = clean(p) || current, rows = [];
+    let e = Math.min(1, Math.max(0, +energy || 0)), conf = 1;
+    for (let i = 0; i < 3; i++) {
+      const sec = ((fromSec | 0) + i) % 3, pol = pl[sec];
+      const boosted = pol === "deploy" || (pol !== "save" && !!(liveBoost && i === 0));
+      const m = sectorModel(sec, boosted), start = e;
+      e = Math.min(1, Math.max(0, e + m.mean));
+      conf = Math.min(conf, m.conf);
+      rows.push({ sec, policy: pol, boosted, start, end: e, conf: m.conf });
+    }
+    return { rows, end: e, conf };
+  }
+  /** game.js, the player at a sector change. A WeakMap, not a car field: cars sit at V8's fast-property cap. */
+  function sectorExit(c, fwd, tt) {
+    const e0 = secE0.get(c);
+    if (fwd && !tt && e0 != null) learn(c._secIdx, c.energy - e0, !!c.boostOn);
+    secE0.set(c, c.energy);
+  }
+  /** __apex.ersForecast; `o` = {override, reset}. */
+  function report(c, o) {
+    o = o || {};
+    if (o.reset) reset();
+    if (Array.isArray(o.override)) o.override.forEach((v, i) => setOverride(i, v));
+    return { plan: plan(), energy: c ? c.energy : null, sector: c ? c._secIdx : null, forecast: forecast(c ? c.energy : 0, c && c._secIdx != null ? c._secIdx : 0, c && c.boostOn), learned: learned() };
+  }
+  function learned() { return stats.map((_, sec) => ({ sec, off: sectorModel(sec, false), on: sectorModel(sec, true), override: override[sec] })); }
+  return Object.freeze({ KEY, POLICIES, NEUTRAL, clean, plan, setPlan, fromStore, isNeutral, wantsFlip, toggleFor, learn, setOverride, reset, forecast, learned, sectorExit, report });
 })();
 Object.freeze(EnergyPlan);

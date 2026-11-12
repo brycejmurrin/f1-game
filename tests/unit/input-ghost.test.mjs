@@ -15,6 +15,17 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
+// The stored tape, decoded the way a replay would read it (the in-module
+// replay cursor was test-only and was removed, #3109 row 15).
+function stepAt(IG, i) {
+  const g = IG.envelope();
+  if (!g || !IG.compatible(g) || !g.steer.length) return null;
+  const n = g.steer.length, k = i < 0 ? 0 : (i >= n ? n - 1 : i | 0);
+  const s = IG.decodeStep(g.steer[k], g.flags[k], g.v >= 2 ? g.throttle[k] : undefined, g.v >= 2 ? g.brake[k] : undefined);
+  if (g.v === 3) Object.assign(s, { steer: g.rawSteer[k], throttleLevel: g.rawThrottle[k], brakeLevel: g.rawBrake[k] });
+  return s;
+}
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function createHarness(opts = {}) {
@@ -100,20 +111,15 @@ test("InputGhost drops a lap left open past MAX_LAP_S; a lap under it still reco
   assert.equal(driveLap(IG, 60, 12.3), true, "the next lap records as usual");
 });
 
-test("InputGhost atStep / next replay the quantized open-loop inputs", () => {
+test("the stored tape decodes the quantized open-loop inputs", () => {
   const { InputGhost: IG } = createHarness();
   IG.setTrack("monza");
   driveLap(IG, 40, 8);
-  assert.equal(IG.beginReplay(), true);
-  const a = IG.next();
-  const b = IG.atStep(0);
-  assert.ok(a);
-  assert.equal(a.steer, b.steer);
-  assert.equal(a.throttle, b.throttle);
-  assert.equal(a.brake, b.brake);
+  assert.equal(IG.compatible(IG.envelope()), true);
+  assert.ok(stepAt(IG, 0));
   // Quantization stays inside [-1, 1] and round-trips within 1/127.
   for (let i = 0; i < 40; i++) {
-    const inp = IG.atStep(i);
+    const inp = stepAt(IG, i);
     assert.ok(Math.abs(inp.steer) <= 1 + 1e-9);
     assert.equal(typeof inp.throttle, "boolean");
     assert.equal(typeof inp.brake, "boolean");
@@ -127,7 +133,7 @@ test("InputGhost refuses a replay when physRev or build drifts", () => {
   assert.equal(IG.compatible(IG.envelope()), true);
   sandbox.PhysicsConsts.REVISION = "other-rev";
   assert.equal(IG.compatible(IG.envelope()), false);
-  assert.equal(IG.beginReplay(), false);
+  assert.equal(stepAt(IG, 0), null, "an incompatible tape decodes to nothing");
   sandbox.PhysicsConsts.REVISION = "test-rev-1";
   sandbox.window.__APEX_BUILD = 99;
   assert.equal(IG.compatible(IG.envelope()), false);
@@ -163,13 +169,13 @@ test("an incompatible stored ghost does not block the record test (REVISION flip
   IG.setTrack("monza");
   assert.equal(IG.hasGhost(), true, "the stale entry is still there");
   assert.equal(IG.compatible(IG.envelope()), false);
-  assert.equal(IG.beginReplay(), false);
+  assert.equal(stepAt(IG, 0), null, "an incompatible tape decodes to nothing");
   IG.startLap({ seed: 7, physRev: "rev-2", build: 42, dt: 1 / 60 });
   for (let i = 0; i < 40; i++) IG.record({ steer: 0.1, throttle: true });
   assert.equal(IG.finishLap(10.0), true, "a slower lap on the new revision is the record");
   assert.equal(IG.bestTime(), 10);
   assert.equal(IG.compatible(IG.envelope()), true);
-  assert.equal(IG.beginReplay(), true);
+  assert.ok(stepAt(IG, 0));
   // The compatible record still guards itself.
   assert.equal(driveLap(IG, 40, 11), false);
 });
@@ -252,12 +258,9 @@ test("clear(track) removes all contexts and their pending writes but preserves o
   save("custom-a", "ctx1", 21);
   save("custom-a", "ctx2", 20);
   save("custom-a-long", "ctx1", 19);
-  assert.equal(h.InputGhost.beginReplay(), true);
-  h.InputGhost.next();
 
   h.InputGhost.clear("custom-a");
   assert.equal(h.InputGhost.hasGhost(), true, "the selected prefix-collision track stays active");
-  assert.equal(h.InputGhost.replayIndex(), 1, "unrelated active replay state stays intact");
   h.InputGhost.flush();
 
   const saved = JSON.parse(h.disk.get("apex26.inputGhost.v1"));
@@ -267,7 +270,7 @@ test("clear(track) removes all contexts and their pending writes but preserves o
     "another track and its pending write survive track-wide cleanup");
 });
 
-test("clear supports exact context keys and resets a cleared active replay", () => {
+test("clear supports exact context keys and drops a cleared active ghost", () => {
   const h = createHarness();
   h.InputGhost.setTrack("monza", "wet");
   assert.equal(driveLap(h.InputGhost, 40, 22), true);
@@ -275,30 +278,23 @@ test("clear supports exact context keys and resets a cleared active replay", () 
   h.InputGhost.setTrack("monza", "dry");
   assert.equal(driveLap(h.InputGhost, 40, 20), true);
   h.InputGhost.flush();
-  assert.equal(h.InputGhost.beginReplay(), true);
-  h.InputGhost.next();
 
   h.InputGhost.clear("v2:monza:dry");
   assert.equal(h.InputGhost.hasGhost(), false);
-  assert.equal(h.InputGhost.replayIndex(), 0);
-  assert.equal(h.InputGhost.next(), null);
 
   const saved = JSON.parse(h.disk.get("apex26.inputGhost.v1"));
   assert.equal(saved["v2:monza:dry"], undefined);
   assert.equal(saved["v2:monza:wet"].time, 22);
 });
 
-test("clear() removes every pending input ghost and resets replay state", () => {
+test("clear() removes every pending input ghost", () => {
   const h = createHarness({ deferWrites: true });
   h.InputGhost.setTrack("monza", "dry");
   assert.equal(driveLap(h.InputGhost, 40, 20), true);
-  assert.equal(h.InputGhost.beginReplay(), true);
-  h.InputGhost.next();
 
   h.InputGhost.clear(null);
   h.InputGhost.flush();
   assert.equal(h.InputGhost.hasGhost(), false);
-  assert.equal(h.InputGhost.replayIndex(), 0);
   assert.deepEqual(JSON.parse(h.disk.get("apex26.inputGhost.v1")), {});
 });
 
@@ -335,14 +331,14 @@ test("game.js and session-records wire InputGhost beside pose Ghost", () => {
   IG.finishLap(8);
   const env = IG.envelope();
   assert.equal(env.v, 2);
-  assert.equal(IG.atStep(0).throttleLevel, 64 / 255);
-  assert.equal(IG.atStep(0).brakeLevel, 51 / 255);
+  assert.equal(stepAt(IG, 0).throttleLevel, 64 / 255);
+  assert.equal(stepAt(IG, 0).brakeLevel, 51 / 255);
   assert.equal(IG.valid(JSON.parse(JSON.stringify(IG.snapshot()))), true);
   env.v = 1;
   env.throttle = { 0: NaN }; env.brake = ["invalid"];
   assert.equal(IG.compatible(env), true);
-  assert.equal(IG.atStep(0).throttleLevel, 1);
-  assert.equal(IG.atStep(0).brakeLevel, 1);
+  assert.equal(stepAt(IG, 0).throttleLevel, 1);
+  assert.equal(stepAt(IG, 0).brakeLevel, 1);
   assert.equal(IG.snapshot().throttle, undefined, "legacy extra fields are ignored on export");
   assert.equal(IG.snapshot().brake, undefined);
 });
@@ -372,8 +368,8 @@ test("150-second native v3 tape persists losslessly inside unchanged 256KiB budg
   assert.deepEqual(Array.from(roundTrip.rawThrottle), Array.from(IG.snapshot().rawThrottle));
   assert.deepEqual(Array.from(roundTrip.rawBrake), Array.from(IG.snapshot().rawBrake));
   for (const i of [0, 4512, 8999]) {
-    assert.equal(loaded.atStep(i).steer, Math.sin(i / 17) * 0.017321);
-    assert.equal(loaded.atStep(i).throttleLevel, 0.37123456); assert.equal(loaded.atStep(i).brakeLevel, 0);
+    assert.equal(stepAt(loaded, i).steer, Math.sin(i / 17) * 0.017321);
+    assert.equal(stepAt(loaded, i).throttleLevel, 0.37123456); assert.equal(stepAt(loaded, i).brakeLevel, 0);
   }
   const corrupt = JSON.parse(saved); Object.values(corrupt)[0].packedV3.steer = "AAAA";
   const brokenDisk = new Map([["apex26.inputGhost.v1", JSON.stringify(corrupt)]]);
@@ -427,8 +423,8 @@ test("150-second mixed analog lap keeps all channels exact with sparse braking/c
     ...(i === 0 ? { initialState: { car: { s: 10, x: 0, speed: 55 }, seed: 7, rngState: 7, raceT: 0 } } : {}) });
   assert.equal(IG.finishLap(1), true);
   const signed = createHarness({ store: disk }).InputGhost; signed.setTrack("monza", "signed-zero");
-  assert.ok(Object.is(signed.atStep(0).steer, -0)); assert.ok(Object.is(signed.atStep(30).steer, 0));
-  assert.ok(Object.is(signed.atStep(0).throttleLevel, -0));
+  assert.ok(Object.is(stepAt(signed, 0).steer, -0)); assert.ok(Object.is(stepAt(signed, 30).steer, 0));
+  assert.ok(Object.is(stepAt(signed, 0).throttleLevel, -0));
 });
 
 test("a PB write waits for a long idle slot, and the cap still writes it (#3109)", () => {
@@ -510,13 +506,13 @@ test("twenty unselected 36000-step compact tapes stay packed on load, foreign re
 
   h.InputGhost.setTrack("tape0");
   assert.equal(h.InputGhost.steps(), 36000);
-  assert.equal(h.InputGhost.atStep(35999).steer, -1 / 127);
-  assert.equal(h.InputGhost.atStep(35999).throttleLevel, 123 / 255);
+  assert.equal(stepAt(h.InputGhost, 35999).steer, -1 / 127);
+  assert.equal(stepAt(h.InputGhost, 35999).throttleLevel, 123 / 255);
   assert.equal(lengths.length, 4, "only the selected v2 tape expands its four packed channels");
   h.InputGhost.setTrack("tape1");
   assert.equal(lengths.length, 8, "only the newly selected v3 tape expands its four packed channels");
-  assert.equal(h.InputGhost.atStep(35999).steer, -0.017321);
-  assert.equal(h.InputGhost.atStep(35999).throttleLevel, 0.37123456);
+  assert.equal(stepAt(h.InputGhost, 35999).steer, -0.017321);
+  assert.equal(stepAt(h.InputGhost, 35999).throttleLevel, 0.37123456);
   h.InputGhost.clear("absent");
   const saved = JSON.parse(h.disk.get(key));
   for (const [id, original] of Object.entries(tapes)) {
@@ -525,8 +521,8 @@ test("twenty unselected 36000-step compact tapes stay packed on load, foreign re
   }
   assert.ok(saved.tape1._used > saved.tape0._used, "selected contexts retain LRU promotion");
   const reloaded = createHarness({ store: h.disk }).InputGhost;
-  reloaded.setTrack("tape0"); assert.equal(reloaded.atStep(35999).steer, -1 / 127);
-  reloaded.setTrack("tape1"); assert.equal(reloaded.atStep(35999).throttleLevel, 0.37123456);
+  reloaded.setTrack("tape0"); assert.equal(stepAt(reloaded, 35999).steer, -1 / 127);
+  reloaded.setTrack("tape1"); assert.equal(stepAt(reloaded, 35999).throttleLevel, 0.37123456);
 });
 
 test("compact LRU trimming keeps valid unrelated tapes and enforces the exact byte cap", () => {
@@ -566,7 +562,7 @@ test("foreign compact merges preserve compatible winners, stamps and pending ret
     const loaded = createHarness({ store: h.disk }).InputGhost;
     loaded.setTrack("monza");
     assert.equal(loaded.bestTime(), foreignWins ? 19 : 20);
-    if (foreignWins) assert.equal(loaded.atStep(35999).throttleLevel, 123 / 255);
+    if (foreignWins) assert.equal(stepAt(loaded, 35999).throttleLevel, 123 / 255);
     else assert.deepEqual(JSON.parse(JSON.stringify(loaded.snapshot())), JSON.parse(local));
   }
 });

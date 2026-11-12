@@ -226,10 +226,12 @@ const UiScale = (() => {
       if (prev) prev.onclick = () => { store.set("hudPanelOpacity", null); applyPanelOpacity(); };
     }
     const uiEl = $("pm-uiscale");
-    if (uiEl) uiEl.oninput = (e) => {
-      store.set("uiScale", fromSlider("uiScale", e.target.value));
-      applyUiScale();
-    };
+    // UI SIZE zooms the sheet that holds its own slider: applying on every `input` re-zoomed it under the thumb (#5256).
+    // The number follows the drag; the zoom lands on release (`change`, which a key step also fires).
+    if (uiEl) {
+      uiEl.oninput = (e) => { const out = $("pm-uiscale-v"); if (out) out.textContent = fromSlider("uiScale", e.target.value) + "%"; };
+      uiEl.onchange = (e) => { store.set("uiScale", fromSlider("uiScale", e.target.value)); applyUiScale(); };
+    }
     const hudEl = $("pm-hudscale");
     if (hudEl) hudEl.oninput = (e) => {
       pinPainted("hudBtnScale");

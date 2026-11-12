@@ -250,8 +250,9 @@ const PauseOpts = (function () {
     tag.textContent = build ? ("build " + build) : "build unknown";
   }
 
-  function initUI() {
-    wireRows();
+  function initUI(gate) {
+    // #4798 gate: rows only
+    if (gate) gate(wireRows); else wireRows();
     paintSummary();
     paintBuild();
     const pm = hasDoc ? document.getElementById("pausemenu") : null;
@@ -329,7 +330,7 @@ const PauseOpts = (function () {
   // that is already COMPLETE wires now (same rule as js/ui/title-fx.js).
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => initUI(typeof SettingsNav !== "undefined" ? SettingsNav.lazy : null), { once: true });
   }
 
   return {
