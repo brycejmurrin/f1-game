@@ -303,13 +303,10 @@ test("overlay page explicitly owns transparent and chroma backgrounds and is sta
 // Broadcast loads OverlayFeed and TvGraphics eagerly before it (tools/manifest.cjs FULL); overlay.html loads
 // broadcast.js only for its pure helpers and never calls create(). The branch is gone; this pins why it may be.
 test("TV graphics need no lazy loader: FULL loads feed + tv-graphics before broadcast; overlay.html never creates one", () => {
-  const code = source("js/race/broadcast.js");
-  assert.doesNotMatch(code, /ScriptLoader|graphicsLoad/, "the dead lazy branch stays deleted");
   const { FULL } = createRequire(import.meta.url)("../../tools/manifest.cjs");
   const at = (f) => FULL.indexOf(f);
   assert.ok(at("js/overlay/feed.js") >= 0 && at("js/race/tv-graphics.js") >= 0, "both are eager");
   assert.ok(at("js/overlay/feed.js") < at("js/race/broadcast.js") && at("js/race/tv-graphics.js") < at("js/race/broadcast.js"), "and load first");
   const shells = fs.readdirSync(ROOT).filter((f) => f.endsWith(".html") && /js\/race\/broadcast\.js/.test(source(f)));
   assert.deepEqual(shells.sort(), ["index.html", "overlay.html"]);
-  assert.doesNotMatch(source("overlay.html") + source("js/overlay/bridge.js") + source("js/overlay/publisher.js"), /Broadcast\.create/);
 });

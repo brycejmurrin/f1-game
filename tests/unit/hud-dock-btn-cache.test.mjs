@@ -162,7 +162,7 @@ test("minimap: the measure key is rebuilt only after a watched attribute write, 
   assert.equal(reads - first, 0, "steady ticks rebuilt the key " + (reads - first) + " times");
   assert.equal(obs.length, 1, "one observer");
   const watched = obs[0].targets.map(([t, o]) => (t === body ? "body" : t.id || t.tagName || "root") + ":" + o.attributeFilter.join(","));
-  assert.ok(watched.includes("body:class,data-density") && watched.includes("minimap:style"), watched.join(" "));
+  assert.deepEqual(["body:class,data-density", "minimap:style"].filter((w) => !watched.includes(w)), [], "missing from the watched set: " + watched.join(" "));
   assert.equal(watched.length, 3, "body, <html> and #minimap are watched");
   obs[0].q.push({ type: "attributes" });   // a body class write earlier in this task (takeRecords path)
   h.tick();

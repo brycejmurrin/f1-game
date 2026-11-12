@@ -10806,9 +10806,6 @@
       ],
       "subscribe": [
         "tests/unit/overlay-publisher.test.mjs"
-      ],
-      "*": [
-        "tests/unit/overlay-feed.test.mjs"
       ]
     },
     "js/overlay/feed.js": {
@@ -10834,9 +10831,6 @@
       ]
     },
     "js/overlay/publisher.js": {
-      "boot": [
-        "tests/unit/overlay-feed.test.mjs"
-      ],
       "input": [
         "tests/unit/overlay-publisher.test.mjs"
       ],
@@ -10847,7 +10841,6 @@
         "tests/unit/overlay-publisher.test.mjs"
       ],
       "tick": [
-        "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs"
       ]
     },

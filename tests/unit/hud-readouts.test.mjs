@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -52,10 +53,10 @@ test("energy: MJ of the 4 MJ store, deploy/harvest as words; the glyph is CSS (#
   assert.deepEqual(["idle", "deploy", "harvest"].map((st) => R.energy(0.5, st).text), ["2.0 MJ", "2.0 MJ", "2.0 MJ"]);
   assert.equal(R.energy(0.5, "harvest").label, "Energy 2.0 megajoules, harvesting");
   // The glyph the text lost: one slot in every state, unseen while idle, ▲ only for harvest.
-  const css = read("css/hud.css");
-  assert.match(css, /#hud-energy-n::before \{ content: "▼ "; visibility: hidden; \}/);
-  assert.match(css, /#hud-energy\[data-ers\] #hud-energy-n::before \{ visibility: visible; \}/);
-  assert.match(css, /#hud-energy\[data-ers="harvest"\] #hud-energy-n::before \{ content: "▲ "; \}/);
+  const rules = cssRules(read("css/hud.css")), N = "#hud-energy-n::before";
+  assert.deepEqual([decl(rules, N, "content"), decl(rules, N, "visibility")], ['"▼ "', "hidden"]);
+  assert.equal(decl(rules, "#hud-energy[data-ers] " + N, "visibility"), "visible");
+  assert.equal(decl(rules, '#hud-energy[data-ers="harvest"] ' + N, "content"), '"▲ "');
 });
 
 test("bbText: the set-up sheet's half-percent steps", () => {
