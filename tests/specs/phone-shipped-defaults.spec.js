@@ -9,13 +9,15 @@
 //
 // Measured 2026-11-13 at 852x393 + insets 59/59/21, before -> after, against his export:
 //   title    doors 192x44 -> 193x48 (his 193x48)          select   BACK 235x57 -> 239x44, card text 17.4 -> 11.2 px
-//   race     sheet 734 -> 638 wide, GO 352x57 -> 309x40   garage   panel 447 -> 323 wide, DONE 130x52 -> 307x44 (his 35)
+//   race     sheet 734 -> 638 wide, GO 352x57 -> 309x40   garage   panel 447 -> 294 wide (his 323), DONE 44 tall (his 35)
 //   pause    RESUME 254x57 -> 250x52                      HUD      pedals 85 both; steer pad 90 (his 103)
 // Not compared: his own hudLayout positions, HUD elements he turned off, the sound label (personal choices).
 // Not shipped: his garage BUTTON HEIGHT 80, which paints DONE 35 px tall, under the 44 px tap floor
 // (tests/data/bryce-phone-paint.json holds that count at 0). A clean profile paints DONE 44 px; asserted below.
 // Not shipped: his BUTTON 143.25. In tilt / drag steering it makes fitHud shrink the readouts (minimap 103 -> 90 px)
 // and hud-layout.spec.js stops settling; in his BUTTONS steering it only grows the steer pad 90 -> 103 px.
+// Not shipped: his garage PANEL WIDTH 110, which clips 13 % of UNLIMITED at UI SIZE 50 % (ui-scale.spec.js). A clean
+// garage panel paints 294 px wide against his 323, so the garage compares the tab SIZES only (STAT BARS: HIDE ships).
 //
 // Two contexts on his phone (tools/lib/bryce-phone.mjs: descriptor + CDP env() insets): one clean, one seeded with
 // the export the way a boot reads it. Rects are getBoundingClientRect; a box may differ by 1 px (zoom rounding).
@@ -32,7 +34,7 @@ const MENUS = [
   { id: "race settings", open: async (p) => { await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])"); await p.click("#sel-go"); await p.waitForSelector("#race-settings:not([hidden])"); },
     ids: ["dlg-racesettings", "rs-laps-prev", "rs-laps-sel", "rs-laps-next", "rs-weather-next", "rs-cancel", "rs-go"] },
   { id: "garage", open: async (p) => { await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])"); await p.waitForFunction(() => { const b = document.getElementById("cs-done"); return b && b.getBoundingClientRect().width > 0; }, null, { polling: 100 }); },
-    ids: ["cs-inner", "cs-stack", "cs-unlimited", "cs-tab-team", "cs-tab-engine"] },
+    ids: ["cs-tab-team", "cs-tab-engine"] },   // sizes only are compared for the garage (his PANEL WIDTH 110 is not shipped)
   { id: "designer", open: async (p) => { await p.click("#mb-designer"); await p.waitForSelector("#trackdesigner:not([hidden])"); await p.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen() && !TrackDesigner.state().pending, null, { polling: 100 }); },
     ids: ["td-close", "td-title", "td-tab-design", "td-tab-library", "td-tab-howto"] },
 ];
@@ -113,7 +115,8 @@ test.describe("a clean phone profile paints what the owner's 2026-11-10 export p
         const a = clean[id].rects[k], b = his[id].rects[k];
         expect(b, `${id} #${k} is painted with his export`).not.toBeNull();
         expect(a, `${id} #${k} is painted on a clean profile`).not.toBeNull();
-        const worst = Math.max(...a.map((n, i) => Math.abs(n - b[i])));
+        const from = id === "garage" ? 2 : 0;   // garage: width, height, font (the panel is 29 px narrower than his)
+        const worst = Math.max(...a.slice(from).map((n, i) => Math.abs(n - b[i + from])));
         expect(worst, `${id} #${k}: clean [${a.map((n) => n.toFixed(1))}] vs his [${b.map((n) => n.toFixed(1))}] (left, top, width, height, font px)`).toBeLessThanOrEqual(1);
       }
       expect(clean[id].page, `${id}: the page does not scroll on a clean profile`).toEqual([0, 0]);

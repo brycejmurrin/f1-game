@@ -60,8 +60,9 @@ test("a phone with nothing stored reads the owner's per-screen looks, and stores
   for (const [id, key] of Object.entries(LOOK_KEYS)) {
     const got = M.read(id);
     for (const [k, v] of Object.entries(EXPORT.appearance[key])) {
-      // The one knob NOT taken: garage BUTTON HEIGHT 80 paints DONE 35 px tall, under the 44 px tap floor.
-      if (id === "garage" && k === "btn") assert.equal(got[k], 100, "garage.btn stays at the base");
+      // NOT taken: garage BUTTON HEIGHT 80 (DONE paints 35 px, under the 44 px tap floor) and garage
+      // PANEL WIDTH 110 (clips UNLIMITED at UI SIZE 50 %).
+      if (id === "garage" && (k === "btn" || k === "pw")) assert.equal(got[k], 100, `garage.${k} stays at the base`);
       else assert.equal(got[k], v, `${id}.${k}`);
     }
     assert.equal(M.isShipped(id), true, `${id} is SHIPPED, not CUSTOM`);
@@ -80,12 +81,13 @@ test("the same seeded looks read identically on a phone: his export and a clean 
   const stored = {};
   for (const key of Object.values(LOOK_KEYS)) stored[key] = EXPORT.appearance[key];
   const a = looks("phone"), b = looks("phone", stored);
-  // His picture is the clean one plus his garage BUTTON HEIGHT 80 (not shipped: the tap floor).
+  // His picture is the clean one plus his garage BUTTON HEIGHT 80 and PANEL WIDTH 110 (not shipped).
   a.M.set("garage", "btn", 80);
+  a.M.set("garage", "pw", 110);
   for (const id of Object.keys(LOOK_KEYS)) assert.deepEqual(plain(a.M.read(id)), plain(b.M.read(id)), id);
   assert.deepEqual(plain(a.html.dataset), plain(b.html.dataset));
   assert.deepEqual(plain(a.html.style._decls), plain(b.html.style._decls));
-  assert.deepEqual(plain(a.data), { lookGarage: { btn: 80 } }, "and that one knob is all the clean profile had to store");
+  assert.deepEqual(plain(a.data), { lookGarage: { btn: 80, pw: 110 } }, "and those two knobs are all the clean profile had to store");
   assert.deepEqual(b.data, stored, "his stored looks are left exactly as they were");
 });
 
@@ -107,7 +109,8 @@ test("a stored knob wins over the phone default and is not rewritten; the old ba
   assert.equal(M.read("pause").btn, 100);
   assert.equal(M.read("pause").w, 140);
   assert.equal(M.read("garage").stats, "show");
-  assert.equal(M.read("garage").pw, 110, "an unset knob beside a stored one reads the phone default");
+  assert.equal(M.read("pause").gap, 100, "a knob with no phone value reads the base");
+  assert.equal(M.read("select").tile, 95, "an unset knob of another screen reads the phone default");
   assert.deepEqual(writes, []);
   assert.deepEqual(data, stored);
   assert.equal(html.dataset.lookPauseBtn, undefined, "100 is the CSS base: no stamp");

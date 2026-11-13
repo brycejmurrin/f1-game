@@ -141,10 +141,12 @@ const ScreenLooks = (function () {
       help: "The garage panel: which side it docks on (the car moves over to the other side), its width, how see-through it is, and the stat bars.",
       target: () => byId("carsetup"),
       knobs: Object.freeze([
-        // No phone BUTTON HEIGHT: the owner's 80 paints DONE 35 px tall, under the 44 px tap floor (#5358).
+        // Of the owner's garage look only STAT BARS: HIDE ships on a phone (#5358). His BUTTON HEIGHT 80
+        // paints DONE 35 px tall, under the 44 px tap floor; his PANEL WIDTH 110 clips 13 % of UNLIMITED at
+        // UI SIZE 50 % (tests/specs/ui-scale.spec.js "every main screen fits at 50%").
         ...core(["density", "btn", "corners", "head"]),
         cyc("side", "PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "right"),
-        rng("pw", "PANEL WIDTH", 100, 150, 5, 100, { phone: 110 }),
+        rng("pw", "PANEL WIDTH", 100, 150, 5, 100),
         cyc("glass", "PANEL", [["solid", "SOLID"], ["shipped", "SHIPPED"], ["glass", "GLASS"]], "shipped"),
         cyc("stats", "STAT BARS", SHOWHIDE, "show", { phone: "hide" }),
       ]),
