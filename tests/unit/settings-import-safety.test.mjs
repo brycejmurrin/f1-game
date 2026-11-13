@@ -2,7 +2,7 @@
 //
 //   #5004  a file from an older steering schema runs the STEER_MIGRATIONS ladder before its values are written
 //   #5005  a desktop file on the phone leaves every perDevice row (renderer, quality, resolution) alone
-//          (the all-or-nothing rollback waits on tests/unit/settings-export.test.mjs leaving #5348's diff)
+//          and storage refusing one write puts every key back (all or nothing)
 //   #5032  the METRICS switch is never imported (it loads the agent surface at every boot)
 //   #5023  the GARAGE / CREW / LIGHTING looks round-trip through the settings file
 //
@@ -145,12 +145,20 @@ test("#5023: a chosen garage look is in SAVE SETTINGS (changes) and comes back o
   assert.equal(dst.disk.get("apex26.garageMood"), "night");
 });
 
+test("#5005: storage refusing one write puts back every key the import touched (nothing half-applied)", () => {
+  const seed = { "apex26.sfx": "true", "apex26.volSfx": "0.2", "apex26.portraitOk": "0" };
+  const b = boot({ disk: seed, refuseAt: 2 });
+  const r = b.load({ audio: { sfx: false, volSfx: 0.9, music: false }, display: { portraitOk: "1" } });
+  assert.deepEqual(Object.fromEntries(b.disk), seed);
+  assert.deepEqual(r, { ok: true, applied: 0, skipped: 0, failed: 1, rejectedTtlb: 0, reason: null });
+});
+
 // Bryce's own SAVE ALL SETTINGS from the Home Screen app (2026-11-10): the file that has to come back whole.
 test("Bryce's real phone export loads on a phone with nothing skipped, failed or rewritten", () => {
   const file = JSON.parse(read("tests/data/settings-live-export-2026-11-10.json"));
   assert.equal(file.device.desktop, false);
   // A phone that already holds other choices: the import must replace them, not merge around them.
-  const b = boot({ mobile: true, disk: { "apex26.uiScale": "130", "apex26.hudBtnScale": "80", "apex26.resMode": "low", "apex26.steerSchema": "5", "apex26.resSchema": "2" } });
+  const b = boot({ mobile: true, disk: { "apex26.uiScale": "130", "apex26.hudBtnScale": "80", "apex26.resMode": '"low"', "apex26.steerSchema": "5", "apex26.resSchema": "2" } });
   const r = b.loadFile(file);
   assert.equal(r.ok, true);
   assert.deepEqual({ skipped: r.skipped, failed: r.failed }, { skipped: 0, failed: 0 });
