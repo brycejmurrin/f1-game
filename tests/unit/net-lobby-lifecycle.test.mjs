@@ -1522,7 +1522,7 @@ test("a connection shows its verification code, and only the HOST can remove tha
     for (let i = 0; i < 20 && !Object.keys(h.lobby.verifyCodes()).length; i++) await new Promise((r) => setTimeout(r, 10));
     const codes = h.lobby.verifyCodes();
     assert.deepEqual(Object.values(codes), ["K7QZ"], "one code per direct connection");
-    assert.equal(h.status.textContent, "Connected. Check both screens show code K7QZ.", "and the status line names it");
+    assert.equal(h.status.textContent, "Connected. Check both screens show code K7QZ, then tap CODES MATCH.", "and the status line names it");
     const [id] = Object.keys(codes);
     assert.equal(h.lobby.removeGuest("nobody"), false, "an unknown id is a no-op");
     assert.equal(h.lobby.removeGuest(id), true, "the host removes the guest whose code differs");
@@ -1532,6 +1532,45 @@ test("a connection shows its verification code, and only the HOST can remove tha
     assert.equal(closed, 1, "a silent guest is closed after the grace window");
     assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "and its code goes with it");
   } finally { h.lobby.cancel(); }
+});
+
+// #5313: the code was advisory — READY ignored it. Now READY waits until this
+// player has ticked CODES MATCH for every code shown, and a transport with no
+// code (loopback) is not gated at all.
+test("READY waits for CODES MATCH on every connection that shows a verification code", async () => {
+  const rendezvous = { usingPrivateRelay: () => false, verifyFor: async (pc) => (pc && pc.remoteDescription ? "K7QZ" : null) };
+  const made = [];
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open", rendezvous });
+  h.lobby.setTransportFactory(() => ({ status: "open", pc: { localDescription: { sdp: "l" }, remoteDescription: { sdp: "r" } },
+    onClose() {}, close() {} }));
+  try {
+    h.lobby.wire();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    for (let i = 0; i < 20 && !Object.keys(h.lobby.verifyCodes()).length; i++) await new Promise((r) => setTimeout(r, 10));
+    const [id] = Object.keys(h.lobby.verifyCodes());
+    assert.ok(id, "the connection has a code");
+    assert.equal(h.lobby.unverifiedCodes(), 1);
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().selfReady, false, "READY is refused while the code is unticked");
+    assert.equal(h.status.textContent, "Check that both screens show code K7QZ, then tap CODES MATCH before READY.");
+    assert.equal(h.lobby.confirmCode("nobody"), false, "an unknown connection cannot be ticked");
+    assert.equal(h.lobby.confirmCode(id), true);
+    assert.equal(h.lobby.unverifiedCodes(), 0);
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().selfReady, true, "READY once the codes match");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a direct link blocked with no relay says plainly that this network cannot connect (#5313)", () => {
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS });
+  const msg = h.lobby.failureMsg({ ice: "failed", connection: "failed", turn: false, candidates: { host: 1, srflx: 1 } }, 20);
+  assert.equal(msg, "Could not connect after 20s (failed/failed). Both sides found an address but the direct link was blocked,"
+    + " which means one of these networks needs a relay to get through. This network cannot connect you directly, and there is"
+    + " no relay server to go around it. Put both phones on the same Wi-Fi, or switch one to mobile data, then start a new invite.",
+    "the whole message: plain words, no console instructions for a player");
 });
 
 test("a guest the host evicts sees a dedicated message, not 'host left'", async () => {
@@ -1599,17 +1638,17 @@ test("HOST A RACE (link) closes a room code left open by a code join", () => {
   assert.match(body, /clearTimeout\(codeReopenTimer\)/);
 });
 
-test("private room entry accepts a full shared token and public entry still asks for six characters", () => {
+test("private room entry accepts a full shared token and public entry asks for eight characters", () => {
   for (const privateRelay of [true, false]) {
     const h = harness({ rendezvous: { usingPrivateRelay: () => privateRelay } });
     h.lobby.wire();
     try {
       h.click("vs-code-join");
       const input = h.elements.get("vs-code-in");
-      assert.equal(input.maxLength, privateRelay ? 64 : 8);
+      assert.equal(input.maxLength, privateRelay ? 64 : 12);
       assert.equal(input["aria-label"], privateRelay ? "Private room token" : "Room code");
-      assert.match(h.elements.get("vs-code-hint").textContent, privateRelay ? /32 characters/ : /Six letters/);
-      assert.match(input.placeholder, privateRelay ? /32-character token/ : /ABC234/);
+      assert.match(h.elements.get("vs-code-hint").textContent, privateRelay ? /32 characters/ : /Eight letters/);
+      assert.match(input.placeholder, privateRelay ? /32-character token/ : /ABCD2345/);
     } finally { h.lobby.cancel(); }
   }
 });

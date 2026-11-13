@@ -105,7 +105,7 @@ Cloudflare Durable Object per opaque room id) is an optional upgrade when its UR
 set. On the DEFAULT public path the payload is sealed with AES-GCM under a key
 derived from the room code (`seal()`/`open()`, called by
 `NetNostr.directExchange` on every exchange). Its public routing topic derives
-from the stretched key; recovering a six-character code requires offline
+from the stretched key; recovering an eight-character code (about 39.6 bits; six before #5313) requires offline
 guessing through PBKDF2. The short code is still the only secret, so this public
 mode does not have the private token's entropy guarantee. ENVELOPE v2 (2026-09-10): PBKDF2 runs once per code into a memoised
 HKDF base, every envelope derives its own AES key from a random 16-byte salt
@@ -133,7 +133,7 @@ code's secrecy is all that does.
 The optional private Worker path uses a **32-character private room token**,
 randomly drawn with WebCrypto rejection sampling (>158 bits of entropy). The
 host shares it through COPY/SHARE; both players configure the same Worker URL.
-The public Nostr path still uses six-character spoken codes. The private path
+The public Nostr path mints eight-character codes (#5313) and still accepts a six-character one typed from an older build. The private path
 never accepts those shorter secrets and never falls back to `Math.random`.
 
 The token stays in the peers. HKDF derives a separate 256-bit routing id with

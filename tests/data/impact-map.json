@@ -2647,7 +2647,8 @@
       ],
       "beginDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-draw-decal-sweep.test.mjs"
+        "tests/unit/car-draw-decal-sweep.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ],
       "carDecalNum": [
         "tests/unit/livery-tier.test.mjs"
@@ -2681,7 +2682,8 @@
         "tests/unit/field-lod.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/lazy-race-geom-warm.test.mjs"
+        "tests/unit/lazy-race-geom-warm.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ],
       "decalBytes": [
         "tests/unit/car-draw-decal-sweep.test.mjs"
@@ -2725,7 +2727,8 @@
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-draw-decal-sweep.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
-        "tests/unit/livery-tier.test.mjs"
+        "tests/unit/livery-tier.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ],
       "freeBodyPair": [
         "tests/unit/car-presentation-vm.test.mjs"
@@ -2752,6 +2755,9 @@
       "kick": [
         "tests/unit/livery-tier.test.mjs"
       ],
+      "livOf": [
+        "tests/unit/net-roster.test.mjs"
+      ],
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
@@ -2766,6 +2772,9 @@
       ],
       "narrow": [
         "tests/unit/livery-tex-dispose.test.mjs"
+      ],
+      "paintTeam": [
+        "tests/unit/net-roster.test.mjs"
       ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
@@ -2807,11 +2816,13 @@
       ],
       "teamBodyMesh": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ],
       "teamDecalState": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ],
       "teamMesh": [
         "tests/specs/parts-mesh-cache.spec.js",
@@ -3515,6 +3526,7 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/net-roster.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -10325,11 +10337,30 @@
       ]
     },
     "js/net/lobby-roster.js": {
+      "cleanCodeProfile": [
+        "tests/unit/net-roster.test.mjs"
+      ],
+      "cleanHello": [
+        "tests/unit/net-roster.test.mjs"
+      ],
+      "packLivery": [
+        "tests/unit/net-roster.test.mjs"
+      ],
+      "paintField": [
+        "tests/unit/net-roster.test.mjs"
+      ],
+      "peerPaint": [
+        "tests/unit/net-roster.test.mjs"
+      ],
       "replace": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-roster.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs"
+      ],
+      "withLivery": [
+        "tests/unit/net-roster.test.mjs"
       ],
       "*": [
         "tests/unit/net-authority.test.mjs"
@@ -10520,6 +10551,7 @@
       "wire": [
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-roster.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs"
       ]
     },

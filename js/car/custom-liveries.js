@@ -183,10 +183,23 @@ const CustomLiveries = (function () {
       return liv.wingCarbon === "carbon" ? CarMaterials.CARBON : (liv.wing || liv.c2 || team.color2);
     }
 
+    // The team's FACTORY paint job, resolved as resolveLivery resolves "default",
+    // whatever this phone has fitted (#5037: a friend's car that sent no livery,
+    // and another team's AI car, race in it). Memoised per team on store.rev.
+    const _factoryCache = new Map();
+    function factoryLivery(team) {
+      const c = _factoryCache.get(team.id);
+      if (c && c.rev === store.rev && c.team === team) return c.val;
+      const liv = Liveries.forTeam(team)[0];
+      const val = liv ? pickLivery(migrateLivery(liv)) : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
+      _factoryCache.set(team.id, { val, rev: store.rev, team });
+      return val;
+    }
+
     // migrateLivery stays local: resolveLivery calls it; no caller reads api.migrateLivery.
     return {
       getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
-      getLiveries, resolveLivery, wingColorOf, wingColorOfLivery, pickLivery,
+      getLiveries, resolveLivery, factoryLivery, wingColorOf, wingColorOfLivery, pickLivery,
       get livDraftOverride() { return livDraftOverride; },
       set livDraftOverride(v) { livDraftOverride = v; },
     };
