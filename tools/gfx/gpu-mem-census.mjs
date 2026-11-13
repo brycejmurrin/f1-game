@@ -171,7 +171,10 @@ async function main() {
     await page.waitForFunction(() => window.__apex != null && typeof Tracks !== "undefined", null, { timeout: WAIT_MS, polling: 100 });
     await page.evaluate((t) => { window.__apex.race(t); }, track);
     await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS, polling: 100 });
-    await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); });
+    // #5451: hold the governor's tier and the render scale from the race's first frame, before the warm. Unpinned, a
+    // slow software runner re-sized and shed targets mid-warm (run 42983871455: textures created 45 / destroyed 6
+    // against 40 / 0 in run 42979924558), and two boots of one tree read 39 and 40 live textures.
+    await page.evaluate(() => { const A = window.__apex; A.go(); A.govHold(true); A.renderScale(1); A.jump(0.1, 55, 0); });
     const rendererReady = await page.waitForFunction(() => !!window.renderer, null, { timeout: WAIT_MS, polling: 100 }).then(() => true, () => false);
     if (!rendererReady) throw new Error("window.renderer never appeared: this tool measures TLX (backend three) behind ?three-devtools=1");
     const backend = await page.evaluate(() => { const b = window.renderer.backend, gl = b && b.gl; return { api: gl instanceof WebGL2RenderingContext ? "webgl2" : b && b.isWebGPUBackend ? "webgpu" : "unknown", forceWebGL: gl instanceof WebGL2RenderingContext }; });
@@ -219,7 +222,7 @@ async function main() {
     for (const t of VISITS) {
       await page.evaluate((id) => { window.__apex.race(id); }, t);
       await page.waitForFunction((id) => window.__apex.info().track === id, t, { timeout: WAIT_MS, polling: 100 });
-      await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); });
+      await page.evaluate(() => { const A = window.__apex; A.go(); A.govHold(true); A.renderScale(1); A.jump(0.1, 55, 0); });
       await page.evaluate(async (warm) => { const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r)); for (let i = 0; i < warm; i++) { A.setInput({ throttle: true }); await raf(); } }, WARM);
       const o = await snap();
       out = o;
@@ -240,7 +243,7 @@ async function main() {
     const report = { ...out, ok, measurement: { status: ok ? "pass" : "fail", estimates: out.unknownCount ? "incomplete" : "supported-formats-only", interpretation: "Protocol completion and observed errors only; unknown estimates do not establish a negative leak finding." },
       correctness: WEBGPU ? { status: "unverified", reason: "Counts createTexture/createBuffer descriptors on a software WebGPU adapter (lavapipe); no pixel, hardware or driver-residency validation." } : correctness, presented, track: VISITS.at(-1) || track, initialTrack: track, initial, final: out, visits, backend,
       shaderLinkMode: WEBGPU ? "webgpu" : REAL_LINK ? "native" : "stubbed", errors, pageErrorCount, interpretation: "Observed requested allocations minus explicit deletes, not driver residency. GC, context teardown, implicit resources and unsupported/compressed allocations are not subtracted or fully measured; totals can overcount or undercount actual live storage. Stubbed shader mode does not establish native rendering correctness.",
-      provenance: { tool: "tools/gfx/gpu-mem-census.mjs", warm: WARM, mobile: MOBILE, requestedAPI: WEBGPU ? "webgpu" : "webgl2", renderer: await page.evaluate(() => { const b = window.renderer?.backend, gl = b?.gl; if (gl) return { version: gl.getParameter(gl.VERSION), renderer: gl.getParameter(gl.RENDERER) };
+      provenance: { tool: "tools/gfx/gpu-mem-census.mjs", warm: WARM, mobile: MOBILE, gov: await page.evaluate(() => { try { return window.__apex.govHold(); } catch (_) { return null; } }), requestedAPI: WEBGPU ? "webgpu" : "webgl2", renderer: await page.evaluate(() => { const b = window.renderer?.backend, gl = b?.gl; if (gl) return { version: gl.getParameter(gl.VERSION), renderer: gl.getParameter(gl.RENDERER) };
         const ai = b?.device?.adapterInfo; return ai ? { vendor: ai.vendor, architecture: ai.architecture, device: ai.device, description: ai.description } : null; }) } };
     if (!ok) process.exitCode = 1;
     if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify(report, null, 2)); }

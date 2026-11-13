@@ -193,8 +193,9 @@ test("package.json test lines carry no file list: one stable wrapper per node/br
     if (def.kind === "command") { assert.equal(line, def.cmd, name); continue; }
     if (!(def.files || []).length) { assert.equal(wrapperGroup(line), null, `${name} has no files and keeps its literal line`); continue; }
     assert.equal(wrapperGroup(line), name, `${name}: ${line}`);
-    assert.doesNotMatch(line, /tests\//, `${name} names a test file in package.json — the roster belongs in tests/groups.json`);
-    if (def.kind === "browser") assert.match(line, /run-playwright/, "readers detect browser groups by run-playwright");
+    // The exact line: no test file in package.json (the roster belongs in tests/groups.json), and a browser
+    // line still says run-playwright, which readers use to detect a browser group.
+    assert.equal(line, def.kind === "browser" ? `node tools/ci/run-playwright.mjs --group ${name}` : `node tools/ci/run-group.mjs ${name}`, name);
     assert.equal(expandScript(line), expandedCommand(def), `${name} expands to its full command for string readers`);
   }
   // A new file in every existing group leaves package.json byte-identical.
@@ -235,7 +236,8 @@ test("a browser group's globs resolve to the files npm's shell used to expand", 
     if (def.kind !== "browser" || !(def.files || []).length) continue;
     const files = resolveGroupArgv(["--group", name]).slice((def.flags || []).length);
     assert.ok(files.length >= def.files.length, `${name} resolved to fewer files than it names`);
-    for (const f of files) assert.ok(!f.includes("*") && fs.existsSync(path.join(ROOT, f)), `${name}: ${f}`);
+    // An unexpanded glob is not a file on disk, so existence covers both.
+    assert.deepEqual(files.filter((f) => !fs.existsSync(path.join(ROOT, f))), [], name);
   }
   const collisions = resolveGroupArgv(["--group", "test:collisions"]);
   assert.ok(collisions.length > 1 && collisions.every((f) => /^tests\/specs\/collision[^/]*\.spec\.js$/.test(f)), collisions.join(" "));
@@ -248,9 +250,12 @@ test("run-group.mjs: npm-forwarded options reach every phase; the group must com
   assert.deepEqual(parseRunGroupArgs(["test:x", "--", "--test-reporter=dot"]).extraArgs, ["--test-reporter=dot"]);
   assert.throws(() => parseRunGroupArgs([]), /usage/);
   assert.throws(() => parseRunGroupArgs(["--skip-tf", "test:x"]), /usage/);
-  for (const [args, re] of [[["test:nope"], /not in tests\/groups\.json/], [["test:smoke"], /browser group, not node/], [[], /usage/]]) {
+  const refusals = [[["test:nope"], "run-group: test group test:nope is not in tests/groups.json"],
+    [["test:smoke"], "run-group: test group test:smoke is a browser group, not node"],
+    [[], "usage: node tools/ci/run-group.mjs test:<group> [--skip-tf] [--opt[=value] …]"]];
+  for (const [args, firstLine] of refusals) {
     const r = spawnSync(process.execPath, ["tools/ci/run-group.mjs", ...args], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
     assert.equal(r.status, 2, `${args.join(" ")}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stderr, re);
+    assert.equal(r.stderr.split("\n")[0], firstLine);
   }
 });

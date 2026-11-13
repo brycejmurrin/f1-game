@@ -1,0 +1,1 @@
+New: AI drivers differ a little more — tyre care (how hard they load a set), a qualifying bias (one-lap specialists vs Sunday drivers, ±0.3 % of the quali lap) and an ERS deploy bias (eager vs hoarding). Each is zero-mean across the grid and AI-only.

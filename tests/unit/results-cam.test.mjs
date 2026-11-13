@@ -641,8 +641,8 @@ test("a second highlights() while one is playing is refused and does not rewind 
   assert.equal(api.status().clip, clip, "playback was not rewound to clip 0");
 });
 
-// Ordinary paused Settings still animates the world, but honors RenderRate's
-// selected cadence. Run the real gate so skipped dt and capture waits matter.
+// Ordinary paused Settings still animates the world at RenderRate.settle's 20 Hz
+// cadence. Run the real gate so skipped dt and capture waits matter.
 function pausedSettingsRig({ mode = "30", hz = 60, preview = "" } = {}) {
   const calls = { render: 0, poll: 0, audio: 0, dt: 0, deltas: [] };
   const noop = () => {};
@@ -670,8 +670,10 @@ function pausedSettingsRig({ mode = "30", hz = 60, preview = "" } = {}) {
   return { ctx, frame, calls };
 }
 
-for (const [mode, hz, renders] of [["30", 60, 300], ["45", 60, 450], ["half", 120, 600],
-  ["auto", 120, 600], ["off", 120, 1200], ["auto", 60, 600]]) {
+// #5049: the sheet draws at 20 Hz on the wall clock whatever the tier (a full race frame each on a
+// phone); renderRate "off" never skips.
+for (const [mode, hz, renders] of [["30", 60, 200], ["45", 60, 200], ["half", 120, 200],
+  ["auto", 120, 200], ["off", 120, 1200], ["auto", 60, 200]]) {
   test(`ordinary paused Settings: ${mode} at ${hz} Hz keeps input/audio live and carries render time`, () => {
     const { frame, calls } = pausedSettingsRig({ mode, hz });
     frame(hz * 10);
@@ -695,18 +697,21 @@ for (const preview of ["lighting", "camera", "flyby", "photo", "garage", "scrub"
 
 test("Settings skip then live photo flushes pending time and marks every preview present", () => {
   const { ctx, frame, calls } = pausedSettingsRig({ mode: "half" });
+  do frame(1); while (!ctx.RenderRate.drew());   // on a Settings draw: the 20 Hz phase is known
+  calls.deltas.length = 0;
   frame(1); assert.equal(ctx.RenderRate.drew(), false);
   ctx.photoMode = true;
   frame(1); assert.equal(ctx.RenderRate.drew(), true);
   frame(1); assert.equal(ctx.RenderRate.drew(), true);
   ctx.photoMode = false;
+  frame(1); assert.equal(ctx.RenderRate.drew(), true, "back on the sheet: it draws at once (#5049)");
   frame(1); assert.equal(ctx.RenderRate.drew(), false);
-  frame(1); assert.equal(ctx.RenderRate.drew(), true);
-  assert.deepEqual(calls.deltas.map(dt => Math.round(dt * 6000)), [200, 100, 200]);
+  assert.deepEqual(calls.deltas.map(dt => Math.round(dt * 6000)), [200, 100, 100]);
 });
 
 test("resuming after a forced preview judges the actual preceding draw", () => {
   const { ctx, frame } = pausedSettingsRig({ mode: "half" });
+  do frame(1); while (!ctx.RenderRate.drew());
   frame(1); assert.equal(ctx.RenderRate.drew(), false);
   ctx.photoMode = true; frame(1);
   const judged = [], noop = () => {};
