@@ -224,8 +224,7 @@
       ],
       "settled": [
         "tests/specs/camera-hooks.spec.js",
-        "tests/specs/monaco-foundation.spec.js",
-        "tests/specs/redbull-foundation.spec.js",
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/devicefarm-syslog.test.mjs"
       ],
       "*": [
@@ -255,6 +254,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/track-accuracy-circuits.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
         "tests/unit/wgx-labels.test.mjs"
       ]
@@ -4902,7 +4902,7 @@
     },
     "js/circuits/abudhabi.js": {
       "*": [
-        "tests/specs/abudhabi-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/albert_park.js": {
@@ -4950,7 +4950,7 @@
     "js/circuits/monaco.js": {
       "*": [
         "tests/specs/boot-guard.spec.js",
-        "tests/specs/monaco-foundation.spec.js",
+        "tests/specs/circuit-foundation.spec.js",
         "tests/specs/season.spec.js",
         "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/camera-ride.test.mjs",
@@ -4959,7 +4959,7 @@
     },
     "js/circuits/montreal.js": {
       "*": [
-        "tests/specs/montreal-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/monza.js": {
@@ -4988,7 +4988,7 @@
     },
     "js/circuits/qatar.js": {
       "*": [
-        "tests/specs/qatar-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/scenery/abudhabi.js": {
@@ -5009,7 +5009,8 @@
     },
     "js/circuits/scenery/cota.js": {
       "*": [
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/circuits/scenery/dijon.js": {
@@ -5088,7 +5089,7 @@
     },
     "js/circuits/scenery/montreal.js": {
       "*": [
-        "tests/specs/montreal-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/scenery/monza.js": {
@@ -5123,7 +5124,7 @@
     },
     "js/circuits/scenery/qatar.js": {
       "narrow": [
-        "tests/specs/qatar-foundation.spec.js",
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/floodmast-lamp-register.test.mjs",
         "tests/unit/qatar-day-sf-orbit.test.mjs",
         "tests/unit/scenery-guards.test.mjs"
@@ -5154,7 +5155,7 @@
     "js/circuits/scenery/spa.js": {
       "*": [
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/validation-cli.test.mjs"
+        "tests/unit/validation-cli-sync-pr.test.mjs"
       ]
     },
     "js/circuits/scenery/suzuka.js": {
@@ -5210,7 +5211,7 @@
     },
     "js/circuits/vegas.js": {
       "*": [
-        "tests/specs/vegas-foundation.spec.js"
+        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/core/clipboard.js": {
@@ -6260,7 +6261,7 @@
         "tests/unit/race-control.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
-        "tests/unit/tools-runnable.test.mjs"
+        "tests/unit/tools-runnable-instruments.test.mjs"
       ]
     },
     "js/data/standings.js": {
@@ -7924,7 +7925,6 @@
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/tyre-model.test.mjs",
-        "tests/unit/validation-cli.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "updateCar": [
@@ -8026,8 +8026,9 @@
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tolerance-diff.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
-        "tests/unit/tools-runnable.test.mjs",
+        "tests/unit/tools-runnable-cli.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
+        "tests/unit/validation-cli-sync-pr.test.mjs",
         "tests/unit/vm-filename-lint.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ]
@@ -10044,7 +10045,7 @@
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
-        "tests/unit/validation-cli.test.mjs",
+        "tests/unit/validation-cli-lighting.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ]
     },
@@ -10357,6 +10358,9 @@
       "blockingSeats": [
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
+      "broadcast": [
+        "tests/unit/net-authority.test.mjs"
+      ],
       "cancel": [
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -10514,6 +10518,9 @@
     },
     "js/net/netplay.js": {
       "awaitingResult": [
+        "tests/unit/net-authority.test.mjs"
+      ],
+      "broadcast": [
         "tests/unit/net-authority.test.mjs"
       ],
       "clampWire": [
@@ -11182,15 +11189,6 @@
       ]
     },
     "js/perf/metrics-overlay.js": {
-      "ensurePanel": [
-        "tests/unit/metrics.test.mjs"
-      ],
-      "fitsWide": [
-        "tests/unit/metrics.test.mjs"
-      ],
-      "fmtTime": [
-        "tests/unit/lap-format-rollover.test.mjs"
-      ],
       "frametimeBenchReset": [
         "tests/unit/metrics.test.mjs"
       ],
@@ -11218,9 +11216,11 @@
       "paintOverlay": [
         "tests/unit/metrics.test.mjs"
       ],
+      "panel": [
+        "tests/unit/ui-improve-pass.test.mjs"
+      ],
       "read": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "resolvePos": [
@@ -11254,9 +11254,6 @@
         "tests/unit/apex-physstate.test.mjs",
         "tests/unit/metrics.test.mjs"
       ],
-      "stallRow": [
-        "tests/unit/metrics.test.mjs"
-      ],
       "toggle": [
         "tests/unit/metrics.test.mjs"
       ],
@@ -11266,6 +11263,30 @@
       "*": [
         "tests/unit/ratchets.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
+      ]
+    },
+    "js/perf/metrics-panel.js": {
+      "create": [
+        "tests/unit/apex-physstate.test.mjs"
+      ],
+      "ensurePanel": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "fitsWide": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "fmtTime": [
+        "tests/unit/lap-format-rollover.test.mjs"
+      ],
+      "paintOverlay": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "snapshot": [
+        "tests/unit/apex-physstate.test.mjs",
+        "tests/unit/metrics.test.mjs"
+      ],
+      "stallRow": [
+        "tests/unit/metrics.test.mjs"
       ]
     },
     "js/perf/phone-recorder.js": {
@@ -11651,13 +11672,21 @@
     },
     "js/physics/ai-band.js": {
       "applyVmax": [
-        "tests/unit/ai-band.test.mjs"
+        "tests/unit/ai-band.test.mjs",
+        "tests/unit/sim-step-alloc.test.mjs"
       ],
       "factor": [
-        "tests/unit/ai-band.test.mjs"
+        "tests/unit/ai-band.test.mjs",
+        "tests/unit/sim-step-alloc.test.mjs"
+      ],
+      "mode": [
+        "tests/unit/sim-step-alloc.test.mjs"
       ],
       "normalize": [
         "tests/unit/ai-band.test.mjs"
+      ],
+      "setMode": [
+        "tests/unit/sim-step-alloc.test.mjs"
       ]
     },
     "js/physics/ai-corridor.js": {
@@ -12549,6 +12578,9 @@
       "ambient": [
         "tests/unit/tyre-model.test.mjs"
       ],
+      "applyCompound": [
+        "tests/unit/tyre-model.test.mjs"
+      ],
       "aquaInto": [
         "tests/unit/tyre-model.test.mjs"
       ],
@@ -12571,7 +12603,8 @@
         "tests/unit/tyre-model.test.mjs"
       ],
       "classForTread": [
-        "tests/unit/ai-strategy.test.mjs"
+        "tests/unit/ai-strategy.test.mjs",
+        "tests/unit/tyre-model.test.mjs"
       ],
       "classRecord": [
         "tests/unit/ai-strategy.test.mjs",
@@ -12702,6 +12735,9 @@
         "tests/unit/tyre-model.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs"
+      ],
+      "treadOf": [
+        "tests/unit/tyre-model.test.mjs"
       ],
       "update": [
         "tests/unit/engineer.test.mjs",
@@ -14513,6 +14549,7 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "createPassWatch": [
+        "tests/unit/sim-step-alloc.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "info": [
@@ -14536,6 +14573,7 @@
       "tick": [
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/sim-step-alloc.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "*": [
@@ -15027,7 +15065,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sw-build-meta.test.mjs",
-        "tests/unit/tools-runnable.test.mjs",
+        "tests/unit/tools-runnable-cli.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ]
     },
@@ -17033,7 +17071,7 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/puddles.test.mjs",
-        "tests/unit/validation-cli.test.mjs",
+        "tests/unit/validation-cli-wgx.test.mjs",
         "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
@@ -17600,12 +17638,11 @@
     },
     "js/track/scenery/pits.js": {
       "build": [
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/lazy-track-build.test.mjs"
       ],
       "*": [
-        "tests/specs/bahrain-foundation.spec.js",
         "tests/specs/imola-foundation.spec.js",
-        "tests/specs/montreal-foundation.spec.js",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
@@ -17669,6 +17706,7 @@
     },
     "js/track/tracks.js": {
       "build": [
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/baku-migration.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -17681,6 +17719,7 @@
         "tests/unit/track-def-factory.test.mjs"
       ],
       "buildCenterline": [
+        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/build-steps.test.mjs",
         "tests/unit/circuit-def-fields.test.mjs",
         "tests/unit/track-def-factory.test.mjs"
@@ -17708,7 +17747,6 @@
         "tests/unit/props-over-road.test.mjs"
       ],
       "*": [
-        "tests/specs/monaco-foundation.spec.js",
         "tests/specs/new-hooks.spec.js",
         "tests/specs/season-format.spec.js",
         "tests/unit/agent-scope-hooks.test.mjs",
@@ -18557,6 +18595,9 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
+      "dockButtons": [
+        "tests/unit/hud-dock-btn-cache.test.mjs"
+      ],
       "fitHud": [
         "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-fit-idempotent.test.mjs",
@@ -19275,6 +19316,7 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "*": [
+        "tests/specs/real-profile-dock.spec.js",
         "tests/specs/time-trial.spec.js",
         "tests/specs/title-fit.spec.js",
         "tests/specs/ui-resize.spec.js",
@@ -19555,6 +19597,7 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
+        "tests/specs/real-profile-dock.spec.js",
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/camera-feel.test.mjs",
@@ -19989,6 +20032,9 @@
       "drop": [
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
+      "spawn": [
+        "tests/unit/select-specs.test.mjs"
+      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
@@ -19997,8 +20043,7 @@
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/workers/bitmap-decode-worker.js": {

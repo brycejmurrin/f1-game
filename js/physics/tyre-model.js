@@ -255,6 +255,7 @@ const TyreModel = (function () {
   const LOAD_AI_BASE = 0.92;
   const LOAD_AI_STYLE = 0.45;   // full spread across the consistency axis
   const LOAD_AI_LONG = 0.30;
+  const LOAD_AI_CARE = 0.12;   // tyre care (#1566, AI-only style axis): ±12 % load
   // …AND THE AI NEEDS ITS OWN DIVISOR, for the reason the player has LOAD_REF.
   // The three constants above were authored to read ~1.03 for a mid driver, but
   // that is the base and the style term ALONE: the longitudinal term adds to
@@ -285,7 +286,8 @@ const TyreModel = (function () {
   function aiLoad(c, aTop) {
     const cons = clamp(fin(c.consistency, 0.75), 0, 1);
     const lng = clamp(fin(Math.abs(aiLong(c)) / Math.max(1, aTop), 0), 0, 1);
-    return Math.min(LOAD_MAX_N, clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng,
+    const care = 1 - LOAD_AI_CARE * clamp(fin(c.tyreCare, 0), -1, 1);
+    return Math.min(LOAD_MAX_N, clamp((LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng) * care,
       LOAD_MIN, LOAD_MAX) / LOAD_AI_REF + (c.offroad ? W_OFF_N : 0));
   }
 
@@ -575,10 +577,7 @@ const TyreModel = (function () {
     soft:   { code: "S", life: 0.48, off: 0.004,  tread: 0, colour: [0.92, 0.12, 0.10] },
     medium: { code: "M", life: 0.74, off: 0,      tread: 0, colour: [0.96, 0.80, 0.10] },
     hard:   { code: "H", life: 1.05, off: -0.004, tread: 0, colour: [0.90, 0.90, 0.93] },
-    // A player who owns no weather tyre gets the class fallback. Its dry-stat
-    // cost must travel with it just as a catalog row's does; AI cars have no
-    // tyreBaseMods and continue to use `off` instead, so this is not counted
-    // twice on the field.
+    // `mods` mirror parts.js; a car is fitted at the AI's cost instead (wetModsFor, #5289).
     inter:  { code: "I", life: 1.00, off: -0.010, tread: 1, colour: [0.10, 0.72, 0.24],
               mods: { speed: 0.92, accel: 0.93, cornering: 0.94, braking: 0.98 } },
     wet:    { code: "W", life: 1.10, off: -0.020, tread: 2, colour: [0.10, 0.40, 0.92],
@@ -608,13 +607,30 @@ const TyreModel = (function () {
   function weatherGrip(tread, w) {
     const table = PhysicsConsts.WET_GRIP, t = Number.isInteger(tread) && tread >= 0 && tread <= 2 ? tread : 0;
     w = clamp(w, 0, 1);
-    return w <= 0.5 ? 1 + (table.wet[t] - 1) * w * 2 : table.wet[t] + (table.rain[t] - table.wet[t]) * (w - 0.5) * 2;
+    return w <= 0.5 ? table.dry[t] + (table.wet[t] - table.dry[t]) * w * 2 : table.wet[t] + (table.rain[t] - table.wet[t]) * (w - 0.5) * 2;
   }
   function treadFor(weather, wetness) {
     if (Number.isFinite(wetness)) return wetness >= 0.72 ? 2 : wetness >= 0.25 ? 1 : 0;
     return weather === "rain" || weather === "storm" ? 2 : weather === "wet" ? 1 : 0;
   }
   function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
+  function bestTread(w) {
+    const g0 = weatherGrip(0, w), g1 = weatherGrip(1, w), g2 = weatherGrip(2, w);
+    return g2 > g1 && g2 > g0 ? 2 : g1 > g0 ? 1 : 0;
+  }
+  // A car's grip tread: null = treadFor (the field); c.wxFollow = its one set (#5253).
+  function treadOf(c, weather, wetness) {
+    if (!c) return 0;
+    if (c.wxFollow && c.tyre) return c.tyre.tread || 0;
+    return c.tread == null ? treadFor(weather, wetness) : c.tread;
+  }
+  /** game.js gripMult(c): `mean` lap-mean wetness, `surface` the road under the car. */
+  function carGrip(c, weather, mean, surface) {
+    const g = weatherGrip(treadOf(c, weather, mean), surface);
+    if (!c || !c.wxFollow || !(c.wxMix < 1) || c.wxPrev == null) return g;
+    const g0 = weatherGrip(c.wxPrev, surface), k = clamp(c.wxMix, 0, 1);
+    return g0 + (g - g0) * k;
+  }
 
   // ── AQUAPLANING ───────────────────────────────────────────────────────────
   // Above a speed, a tyre in STANDING water rides up on a water wedge and the
@@ -665,7 +681,7 @@ const TyreModel = (function () {
   // the tread the conditions call for.
   const _aq = { mul: 1, safeV: Infinity };
   function aquaInto(c, speedStd, weather, wetness) {
-    const tread = c && c.tread != null ? c.tread : treadFor(weather, wetness);
+    const tread = treadOf(c, weather, wetness);
     _aq.mul = aquaplane(speedStd, wetness, tread);
     _aq.safeV = aquaplaneSafeV(wetness, tread);
     return _aq;
@@ -695,7 +711,14 @@ const TyreModel = (function () {
   }
 
   const STAT_KEYS = ["speed", "accel", "cornering", "braking"];
-  function applyCompound(c, record) {
+  // A treaded set costs a human what it costs an AI: 1 + off on speed, wear on only (#5289).
+  const _wetMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
+  function wetModsFor(tread, wearOn) {
+    const t = AI_CLASS[classForTread(tread)];
+    _wetMods.speed = wearOn && t ? 1 + t.off : 1;
+    return _wetMods;
+  }
+  function applyCompound(c, record, wearOn) {
     if (!c) return null;
     c.tyre = record || classRecord("medium");
     // `null` is the competent-field sentinel: ordinary AI is assumed to have
@@ -708,7 +731,7 @@ const TyreModel = (function () {
     // Wear off (no plan) keeps the sentinel: that field cannot change tyres.
     if (c.tread !== null || (c.pitPlan && !c.human)) c.tread = c.tyre.tread || 0;
     if (c.tyreBaseMods) {
-      const out = c.mods || (c.mods = {}), tm = c.tyre.mods || null;
+      const out = c.mods || (c.mods = {}), tm = c.tyre.tread > 0 ? wetModsFor(c.tyre.tread, !!wearOn) : c.tyre.mods || null;
       for (const k of STAT_KEYS) out[k] = c.tyreBaseMods[k] * (tm && tm[k] != null ? tm[k] : 1);
     }
     return c.tyre;
@@ -769,7 +792,10 @@ const TyreModel = (function () {
     // and a re-grid cannot disagree about what "fresh" means.
     function fit(c, record) {
       if (!c) return;
-      applyCompound(c, record);
+      applyCompound(c, record, on());
+      // Wear off (no pit lane): a garage slick follows the weather (#5253, followWeather).
+      c.wxFollow = !on() && c.tread !== null && !!c.tyreOpt && !c.tyreOpt.wetTread;
+      c.wxMix = 1; c.wxPrev = null;
       c.tyreWear = 0;
       c.tyreWearF = 0; c.tyreWearR = 0;
       // A FRESH SET COMES OUT OF BLANKETS, not up to temperature. This one line
@@ -882,7 +908,19 @@ const TyreModel = (function () {
     // Integrate one physics tick. Distance-based, not time-based: wear reaches
     // 1.0 after `lifeLaps` laps at load 1.0, which is what makes the constant
     // above mean what its name says regardless of pace, PACE or lap time.
+    // A following car's record (HUD letter) moves to the best tread for the lap mean;
+    // grip blends over WX_CHANGE_S, WX_HYST stops chatter. c.tread/c.mods never move.
+    const WX_CHANGE_S = 3, WX_HYST = 0.002;
+    function followWeather(c, dt) {
+      if (c.wxMix < 1) c.wxMix = Math.min(1, c.wxMix + (dt > 0 ? dt : 0) / WX_CHANGE_S);
+      const w = G.trackWetness ? G.trackWetness() : wetness(G.raceWeather, G.weatherArc);
+      const want = bestTread(w), cur = c.tyre ? c.tyre.tread || 0 : -1;
+      if (cur === want || (cur >= 0 && weatherGrip(want, w) < weatherGrip(cur, w) + WX_HYST)) return;
+      if (cur >= 0) { c.wxPrev = cur; c.wxMix = 0; }
+      c.tyre = want > 0 ? classRecord(classForTread(want)) : optionRecord(c.tyreOpt);
+    }
     function update(c, dt) {
+      if (c && c.wxFollow && !c.retired) followWeather(c, dt);
       if (!on() || !c || c.retired || c.finished) return;
       const track = G.track;
       if (!track || !(track.total > 0) || !(dt > 0)) return;
@@ -1064,7 +1102,7 @@ const TyreModel = (function () {
       stints, closeStints,
       lapsOn, spent, lapsLeft, belowWindow, info, severity, ambient, trackTemp,
       level: () => level, setLevel, on, planLaps,
-      classRecord, optionRecord, applyCompound, startRecord: sessionStartRecord,
+      classRecord, optionRecord, applyCompound: (c, record) => applyCompound(c, record, on()), startRecord: sessionStartRecord,
     };
   }
 
@@ -1090,7 +1128,7 @@ const TyreModel = (function () {
     T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
     HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, classForTread, wetness, weatherGrip,
+    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, bestTread, carGrip, classForTread, wetness, weatherGrip,
     aquaplane, aquaplaneSafeV, aquaInto, AQUA_WET, AQUA_ONSET, AQUA_RAMP, AQUA_LOSS, asRain,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,

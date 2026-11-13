@@ -116,3 +116,24 @@ test("gpu-mem-census offers --webgpu and wires the wrapper in place of the WebGL
   assert.equal(src.includes("if (WEBGPU) await ctx.addInitScript(gpuMemInitSource({ armed: false })); else await ctx.addInitScript(installWrap);"), true);
   assert.equal(src.includes('localStorage.setItem("apex26.tlxForceGL", webgpu ? "0" : "1");'), true);
 });
+
+test("the snapshot lists every live texture, largest first, so two boots can be diffed row by row (#5451)", () => {
+  const { dev, snap } = page({ armed: false });
+  const a = dev.createTexture({ format: "rgba8unorm", size: [256, 320], mipLevelCount: 9, label: "livery" });
+  dev.createTexture({ format: "depth24plus", size: [1024, 1024], label: "TLXSunShadow" });
+  let s = snap();
+  assert.deepEqual(s.textures.map((t) => [t.fmt, t.w, t.h, t.mips, t.label]), [["depth24plus", 1024, 1024, 1, "TLXSunShadow"], ["rgba8unorm", 256, 320, 9, "livery"]]);
+  assert.equal(s.textures.reduce((n, t) => n + t.bytes, 0), s.texBytes);
+  a.destroy();
+  s = snap();
+  assert.deepEqual(s.textures.map((t) => t.label), ["TLXSunShadow"]);
+});
+
+test("both census tools hold the governor and the render scale before the warm, not after it (#5451)", async () => {
+  const fs = await import("node:fs");
+  for (const f of ["tools/gfx/gpu-mem-census.mjs", "tools/gfx/pass-census.mjs"]) {
+    const src = fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
+    const pin = src.indexOf("A.govHold(true); A.renderScale(1);"), warm = src.indexOf("for (let i = 0; i < warm; i++)");
+    assert.ok(pin > 0 && warm > 0 && pin < warm, f + ": the tier/scale pin must come before the first warm loop");
+  }
+});

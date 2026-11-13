@@ -737,7 +737,9 @@ test('git hook docs-only branch runs knowledge-retention: a 41 KB note is refuse
   note('docs/notes/'+'SMALL.md',39);
   const small=r.run();
   assert.equal(small.status,0,small.stderr);
-  assert.match(small.stderr,new RegExp(`docs-only commit — docs test set green \\(${DOCS_FAST_TEST_FILES.length} files`));
+  // The hook reports how many files it ran: that number is the shared list's length, compared as a number.
+  const ran=/docs-only commit — docs test set green \((\d+) files/.exec(small.stderr);
+  assert.equal(ran&&Number(ran[1]),DOCS_FAST_TEST_FILES.length,small.stderr);
  }finally{r.rm();}
 });
 
