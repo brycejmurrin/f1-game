@@ -884,6 +884,7 @@
     "tests/unit/ready-gate.test.mjs",
     "// ready-sweep: the stale-`ready` sweep (tools/ci/ready-sweep.mjs) over fixture issues and a fixture tree: cites, the four verdicts, the launchable count and cap row, finding-verifier rows, GET-only CLI; no network; < 0.2 s.",
     "tests/unit/ready-sweep.test.mjs",
+    "tests/unit/real-race-lazy.test.mjs",
     "// ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the",
     "// centreline, the highlights list, the field as puppets (follow, speed, a car",
     "// whose data ends, the flag) and the exact JUMP IN. Split by concern (frame-fit,",

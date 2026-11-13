@@ -5329,6 +5329,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/three-inspector.test.mjs"
       ],
@@ -5344,7 +5345,8 @@
       "ensureDataHub": [
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs"
       ],
       "ensureGarageData": [
         "tests/unit/data-lazy-loader.test.mjs"
@@ -5367,6 +5369,9 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
       ],
+      "ensureRealRace": [
+        "tests/unit/real-race-lazy.test.mjs"
+      ],
       "ensureScenery": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -5377,7 +5382,8 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "loadAgentSurface": [
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs"
       ],
       "loadBackendScripts": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -5763,6 +5769,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/script-loader-late-eval.test.mjs",
         "tests/unit/script-loader-preload.test.mjs",
         "tests/unit/script-loader-retry-eval.test.mjs",
@@ -6050,6 +6057,7 @@
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -14207,6 +14215,21 @@
         "tests/unit/wet-grip-ladder.test.mjs"
       ]
     },
+    "js/race/real-race-boot.js": {
+      "create": [
+        "tests/unit/boot-load-budget.test.mjs",
+        "tests/unit/data-replay-improvements.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
+        "tests/unit/real-race-script.test.mjs",
+        "tests/unit/real-race.test.mjs"
+      ],
+      "dropSpeed": [
+        "tests/unit/real-race.test.mjs"
+      ],
+      "*": [
+        "tests/unit/curvature-channels.test.mjs"
+      ]
+    },
     "js/race/real-race-pace.js": {
       "cautionsFor": [
         "tests/unit/real-race-script.test.mjs",
@@ -14214,6 +14237,7 @@
       ],
       "cumTable": [
         "tests/unit/data-replay-improvements.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "dnfAtFor": [
@@ -14252,24 +14276,23 @@
         "tests/unit/announcer.test.mjs",
         "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-race.test.mjs"
-      ],
-      "dropSpeed": [
         "tests/unit/real-race.test.mjs"
       ],
       "intro": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "launch": [
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "place": [
         "tests/unit/announcer.test.mjs",
-        "tests/unit/curvature-channels.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/real-race-script.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "stage": [
@@ -14277,15 +14300,18 @@
         "tests/unit/real-race.test.mjs"
       ],
       "status": [
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "stop": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "update": [
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "*": [
@@ -14301,6 +14327,7 @@
         "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-frame-fit.test.mjs",
@@ -14340,6 +14367,7 @@
       ],
       "owns": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "pose": [
@@ -14354,6 +14382,7 @@
       ],
       "seek": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
@@ -14386,6 +14415,7 @@
       ],
       "status": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
@@ -14394,6 +14424,7 @@
       "stop": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
@@ -20002,6 +20033,7 @@
     "js/ui/watch-transport.js": {
       "create": [
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
       ],
@@ -20015,6 +20047,7 @@
         "tests/unit/watch-transport-scrub.test.mjs"
       ],
       "stop": [
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
       ],

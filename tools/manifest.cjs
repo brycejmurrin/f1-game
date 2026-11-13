@@ -366,10 +366,7 @@ const FULL = [
   "js/overlay/bridge.js",      // OverlayBridge: BroadcastChannel game ⇄ overlay.html (overlay.html loads it too)
   "js/overlay/publisher.js",   // OverlayPublisher: 4 Hz __apex sampler + #announce caption tap, only while an overlay listens
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
-  "js/ui/watch-transport.js",
-  "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
-  "js/race/real-race-pace.js", // RealRacePace: pure timing-script helpers RealRace drives (lap maps, tables, pace multiplier)
-  "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
+  "js/race/real-race-boot.js", // RealRace.create(G): the real-race boot stub (answers "no real race" until LAZY_REAL_RACE lands)
   // flying-start / start-lights / marshal-panels → LAZY_RACE_SESSION
   "js/race/rain-cells.js",     // RainCells: pure localized-rain maths (a drifting shower over a window of the lap; WeatherArc reads it)
   "js/race/weather-arc.js",
@@ -698,7 +695,6 @@ const HARD_EDGES = [
   ["js/car/car-shade.js", "js/car/car-body-geom.js"],
   ["js/car/car-shade.js", "js/car/car3d.js"],
   ["js/core/store.js", "js/ui/appearance-studio.js"],
-  ["js/ui/watch-transport.js", "js/race/real-replay.js"],
   ["js/ui/appearance-studio.js", "js/game.js"],
   ["js/ui/photo-studio.js", "js/game.js"],
   ["js/ui/experience.js", "js/game.js"],
@@ -873,17 +869,12 @@ const HARD_EDGES = [
   ["js/render/shared/mirror-pass.js", "js/game.js"],   // game.js calls MirrorPass.create(G, deps) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/sporting-regs.js", "js/game.js"],  // game.js calls SportingRegs.createPassWatch() at eval time
-  ["js/core/mat4.js", "js/race/real-replay.js"],   // RealReplay binds M4.clamp at eval
-  ["js/race/broadcast.js", "js/race/real-replay.js"],   // RealReplay.create(G) calls Broadcast.create (game.js eval time)
-  ["js/race/real-replay.js", "js/race/real-race.js"],   // RealRace.create(G) calls RealReplay.create(G) (game.js eval time)
-  ["js/core/mat4.js", "js/race/real-race-pace.js"], // RealRacePace binds M4.clamp at eval
-  ["js/race/real-race-pace.js", "js/race/real-race.js"], // RealRace destructures RealRacePace at eval
-  ["js/core/mat4.js", "js/race/real-race.js"],   // RealRace binds M4.clamp at eval
+  ["js/core/mat4.js", "js/race/real-race-boot.js"],   // the RealRace stub binds M4.clamp at eval
   ["js/core/hash32.js", "js/race/storm.js"],    // Storm.h01 finalises with Hash32.mix
   ["js/core/hash32.js", "js/race/wind.js"],     // Wind.h01 finalises with Hash32.mix
   ["js/race/rain-cells.js", "js/race/forecast.js"], // Forecast.h01 is RainCells.h01 (the former WxHash.fnv01)
   ["js/race/session-phys.js", "js/race/setup-trial-session.js"], // the trial reads SessionPhys.PHYS at eval
-  ["js/race/real-race.js", "js/game.js"],      // game.js calls RealRace.create(G) at eval time
+  ["js/race/real-race-boot.js", "js/game.js"],      // game.js calls RealRace.create(G) at eval time (the stub)
   ["js/race/session-entry.js", "js/game.js"], // game.js creates the shared start/quali entry coordinator
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
@@ -1074,6 +1065,26 @@ const LAZY_PERF = [
   "js/perf/metrics-panel.js",  // GameMetricsPanel: the METRICS overlay painter; GameMetrics (FULL) asks for it when ON (#4978 row 3)
 ];
 const LAZY_PERF_EDGES = [];
+
+// REAL RACE (#4978 row 6, ~116 KB): the Data Hub's JUMP IN / WATCH / HIGHLIGHTS
+// engine. game.js makes RealRace.create(G) at eval and reads it every frame, so
+// the FULL stub js/race/real-race-boot.js answers "no real race" until this
+// lands; its first call after that creates RealRaceBody once. Only the Data Hub
+// starts a real race, and ensureDataHub awaits ensureRealRace before the hub
+// opens; the agent surface loads it too (pages and specs call RealRace.launch).
+// Broadcast stays FULL: the live director and RIVAL LOCK read Broadcast.battles.
+// Order is the old FULL order; the stub and mat4 / Broadcast are FULL.
+const LAZY_REAL_RACE = [
+  "js/ui/watch-transport.js",  // WatchTransport.create(G, replay): the WATCH transport bar (RealReplay makes one)
+  "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
+  "js/race/real-race-pace.js", // RealRacePace: pure timing-script helpers RealRace drives (lap maps, tables, pace multiplier)
+  "js/race/real-race.js",      // RealRaceBody.create(G): a real Grand Prix replayed from its timing script (the stub creates it)
+];
+const LAZY_REAL_RACE_EDGES = [
+  ["js/ui/watch-transport.js", "js/race/real-replay.js"],
+  ["js/race/real-replay.js", "js/race/real-race.js"],   // RealRaceBody.create(G) calls RealReplay.create(G)
+  ["js/race/real-race-pace.js", "js/race/real-race.js"], // RealRaceBody destructures RealRacePace at eval
+];
 
 // overlay.html (the stream OVERLAY page) loads these by its own tags; the game
 // shell never reads them (#4978 row 1). Listed so FULL ∪ DEFERRED ∪ LAZY_* ∪
@@ -1821,7 +1832,7 @@ module.exports = {
   MOVED,
   SW_LOCALES,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
-  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, LAZY_PERF, LAZY_PERF_EDGES, OVERLAY_PAGE, LAZY_RACE,
+  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, LAZY_PERF, LAZY_PERF_EDGES, LAZY_REAL_RACE, LAZY_REAL_RACE_EDGES, OVERLAY_PAGE, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,
   LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
