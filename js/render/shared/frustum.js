@@ -88,14 +88,13 @@ const Frustum = (function () {
   // at the WIND knob's max of 3 is bend 1.25 * amp 0.96 = 1.2 m downwind, plus
   // 0.15 m of flutter per unit of instance scale (js/lighting/knobs.js). 2 m
   // covers that through scale ~5. The box is then clamped to the origin sphere,
-  // so a cell never grows past the sphere the three backends used to share.
+  // which is a rest-pose bound; animated coverage is not established by that cap.
   const MOTION_PAD = 2;
 
   // Bucket instanced-batch instances into cellSize XZ cells. The cell KEY and
   // the instance order match the GLX / WGX / TLX builders this replaced. The
-  // box is the origin sphere (mesh radius × the largest column scale — a
-  // rotated corner reaches sqrt(3)× the axis half-width, which is how a 2.55 m
-  // Singapore prop used to pop) INTERSECTED with the transformed mesh AABB
+  // box is the axis bounds of the transformed origin sphere INTERSECTED
+  // with the transformed mesh AABB
   // expanded by MOTION_PAD. An explicit radius keeps the sphere alone.
   function bucketInstances(matrices, n, pos, cell, radius) {
     let reach = radius || 0;
@@ -122,13 +121,13 @@ const Frustum = (function () {
       const m0 = matrices[b], m1 = matrices[b + 1], m2 = matrices[b + 2];
       const m4 = matrices[b + 4], m5 = matrices[b + 5], m6 = matrices[b + 6];
       const m8 = matrices[b + 8], m9 = matrices[b + 9], m10 = matrices[b + 10];
-      // Column lengths ARE the per-instance scale (orthonormal basis * scale).
+      // Row lengths give sphere support on each world axis, including shear
+      // from a nonuniformly scaled parent followed by a rotated child.
       const axis = m1 === 0 && m2 === 0 && m4 === 0 && m6 === 0 && m8 === 0 && m9 === 0;
-      const sx = axis ? Math.abs(m0) : Math.hypot(m0, m1, m2);
-      const sy = axis ? Math.abs(m5) : Math.hypot(m4, m5, m6);
-      const sz = axis ? Math.abs(m10) : Math.hypot(m8, m9, m10);
-      const r = reach * Math.max(sx, sy, sz);
-      let x0 = x - r, x1 = x + r, y0 = y - r, y1 = y + r, z0 = z - r, z1 = z + r;
+      const rx = reach * (axis ? Math.abs(m0) : Math.hypot(m0, m4, m8));
+      const ry = reach * (axis ? Math.abs(m5) : Math.hypot(m1, m5, m9));
+      const rz = reach * (axis ? Math.abs(m10) : Math.hypot(m2, m6, m10));
+      let x0 = x - rx, x1 = x + rx, y0 = y - ry, y1 = y + ry, z0 = z - rz, z1 = z + rz;
       if (tight) {
         const wx = m0 * cx + m4 * cy + m8 * cz + x;
         const wy = m1 * cx + m5 * cy + m9 * cz + y;

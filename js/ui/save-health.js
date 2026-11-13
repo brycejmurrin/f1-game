@@ -160,7 +160,8 @@ const SaveHealth = (function () {
     const host = document.getElementById("pm-panel-files"); if (host) mount(host);
   }
   if (typeof document !== "undefined" && document.addEventListener) {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true }); else boot();
+    // #4798 gate (queued before SettingsExport)
+    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(boot) : boot()), { once: true }); else boot();
   }
   // category stays module-local (inspect grouping).
   return { inspect, cleanup, mount };

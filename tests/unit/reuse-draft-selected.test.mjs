@@ -10,7 +10,7 @@ import { ciWorkflow } from "../helpers/ci-workflow.mjs";
 const HEAD = "a".repeat(40);
 const BASE = "b".repeat(40);
 const MOVED = "c".repeat(40);
-const sel = { shards: [{ specs: "tests/specs/audit.spec.js tests/specs/smoke.spec.js", circuits: "" }, { specs: "tests/specs/monaco-foundation.spec.js", circuits: "monza" }], circuits: [] };
+const sel = { shards: [{ specs: "tests/specs/audit.spec.js tests/specs/smoke.spec.js", circuits: "" }, { specs: "tests/specs/cota-foundation.spec.js", circuits: "monza" }], circuits: [] };
 const KEY = planKey(sel);
 
 // One green draft run on HEAD (attempt 1), merged on BASE, that ran the same plan with nothing dropped.
@@ -92,7 +92,7 @@ test("a different base, plan, drop or a failed leg runs everything", () => {
 });
 
 test("the plan key is the specs and circuit filters, not the shard layout or budget", () => {
-  const relaid = { shards: [{ specs: "tests/specs/smoke.spec.js", circuits: "" }, { specs: "tests/specs/audit.spec.js", circuits: "", shard: "1/2" }, { specs: "tests/specs/audit.spec.js", circuits: "", shard: "2/2" }, { specs: "tests/specs/monaco-foundation.spec.js", circuits: "monza" }], circuits: [] };
+  const relaid = { shards: [{ specs: "tests/specs/smoke.spec.js", circuits: "" }, { specs: "tests/specs/audit.spec.js", circuits: "", shard: "1/2" }, { specs: "tests/specs/audit.spec.js", circuits: "", shard: "2/2" }, { specs: "tests/specs/cota-foundation.spec.js", circuits: "monza" }], circuits: [] };
   assert.equal(planKey(relaid), KEY);
   assert.notEqual(planKey({ ...sel, shards: [...sel.shards, { specs: "tests/specs/tracks-walls.spec.js" }] }), KEY);
   assert.notEqual(planKey({ ...sel, shards: [sel.shards[0], { ...sel.shards[1], circuits: "spa" }] }), KEY);
