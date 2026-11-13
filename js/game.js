@@ -3481,7 +3481,7 @@ const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this
 setupTrialSession = SetupTrialSession.create(G);
 let raceRadio = RaceRadio.create(G);   // LAZY_RACE_SESSION — radio
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
-const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
+const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script: the FULL stub (js/race/real-race-boot.js) until LAZY_REAL_RACE lands
 let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) });   // LAZY_RACE_SESSION
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,

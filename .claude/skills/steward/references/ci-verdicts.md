@@ -18,7 +18,7 @@ JOB (a `cancelled` run can hide a FAILED one; the rota covers the specs `select-
 ## Verdicts
 
 - `= ci failed` → triage → fix → push → re-subscribe (never "stale" because the notification SHA ≠ tip).
-- `= ci running` → do **not** claim stale or fixed; stay subscribed (no timer, AGENTS.md rule 13). **"0 failed"
+- `= ci running` → do **not** claim stale or fixed; stay subscribed (no timer while it works, AGENTS.md rule 13). **"0 failed"
   while running is not green.** Ending the turn on mid-run `0 failed` leaves a tip red sitting until a human acts.
 - `= ci none` / `unknown` → no run observed / API evidence unavailable; neither proves a pass.
 - `superseded` → follow the named current head or replacement run before concluding anything about that tree.
