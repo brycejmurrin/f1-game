@@ -25,6 +25,8 @@ function transcript(dir, brief, ctxK) {
   return p;
 }
 
+const SOFT_TAIL = "Over the soft cap: finish the current unit, push, hand off (skill handoff).";
+
 function run(dir, payload, env = {}) {
   const r = spawnSync("python3", [HOOK], {
     input: JSON.stringify(payload), encoding: "utf8",
@@ -48,9 +50,8 @@ test("STOP AT sets the soft cap; the advisory fires once per level", () => {
     const t = transcript(dir, "CONTINUE PR #1. STOP AT: 150k.", 170);
     const ev = { hook_event_name: "UserPromptSubmit", transcript_path: t, session_id: "s2" };
     const first = run(dir, ev);
-    assert.match(first, /context 170k \/ cap 150k \(brief STOP AT; hard 200k\)/);
-    assert.match(first, /skill handoff/);
-    assert.doesNotMatch(first, /WORKERS\.md/, "docs/WORKERS.md is retired");
+    // the whole advisory, exactly: it names the handoff skill and nothing else (docs/WORKERS.md is retired)
+    assert.equal(first, "context-cap: context 170k / cap 150k (brief STOP AT; hard 200k). " + SOFT_TAIL);
     assert.equal(run(dir, ev), "", "the soft advisory is once per session");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -122,7 +123,8 @@ test("STOP AT: start+<N>k is a budget above the first assistant entry's context 
     const under = write([brief, at(100), at(340)]);
     assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: under, session_id: "r1" }), "", "340k is under 100k + 250k");
     const over = write([brief, at(100), at(360)]);
-    assert.match(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: over, session_id: "r2" }), /context 360k \/ cap 350k \(brief STOP AT start 100k\+250k; hard 400k\)/);
+    assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: over, session_id: "r2" }),
+      "context-cap: context 360k / cap 350k (brief STOP AT start 100k+250k; hard 400k). " + SOFT_TAIL);
     const one = write([brief, at(260)]);
     assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: one, session_id: "r3" }), "", "a lone entry is the start: 260k is under 260k + 250k");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
