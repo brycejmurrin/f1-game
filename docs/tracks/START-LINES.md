@@ -160,9 +160,9 @@ on all eleven:
 | okayama | 0.00004 | R | R |
 | korea | 0.00001 | L | L — the lap runs anti-clockwise |
 | jerez | 0.00002 | R | R, Expo '92. Re-surveyed 2026-11-10 (#5078): v0 is NOT the pit straight (it is two corners early), so jerez ships `startFrac: 0.2169` on the real 600 m straight, first apex R at 364 m |
-| donington | 0.00040 | R | R, Redgate — **stale (line now 0.9072): see "Moved 2026-11-10"** |
+| donington | 0.00040 | R | R, Redgate — **stale (line now 0.2551, on the real Wheatcroft straight): see "Moved 2026-11-11"** |
 | anderstorp | 0.00011 | R | R |
-| brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale (line now 0.1226): see "Moved 2026-11-10"** |
+| brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale (line now 0.1226): see "donington, brands_hatch" below** |
 | zolder | 0.00015 | R | R — **stale (line now 0.1226, kept on purpose): see "Zolder: NOT moved"** |
 | dijon | 0.00001 | R | R |
 | buddh | 0.00002 | R | R |
@@ -192,16 +192,30 @@ right, S/F before it); the two readings differ by one corner and both put the
 line before the chicane. Do not move it after the chicane again; a re-survey
 needs a surveyed S/F coordinate, not either reading alone.
 
-**donington, brands_hatch — measured, NOT moved**. The right nodes are known:
-donington **0.2577** (node 25/97, pit straight Goddards → Redgate, grid max |k|
-0.00017, 124 m to Redgate turn-in); brands_hatch **0.2736** (node 29/106, Brabham
-straight, 216 m to the Paddock Hill turn-in). Moving them carries each file's
-`sl()`-keyed frontage onto the real pit straight, into infield scenery authored
-for the old line: donington's clip-audit went 7 → 10 severe (hedge on hedge at
-the new line), brands_hatch 1 → 5 (pits, team offices, retail, tents and the
-Kentagon reach across the ~70-100 m paddock to the Cooper straight's forest edge
-and lock-ups; one house sat on a desire path the old pit complex had
-superseded). Each needs a scenery pass with the move.
+**donington MOVED 2026-11-11; brands_hatch located, NOT moved (#5316 leftovers).**
+Both coordinates are from the driver61 circuit guides' "Start / Finish Line" GPS
+rows, projected with `tools/track/import-circuit-path.mjs` `project()` into the
+committed trace's frame (each OSM ring re-stitched with
+`tools/track/stitch-osm-ring.mjs`; both index-identical to the committed `pts`):
+
+- **brands_hatch** 51°21'37.1"N 0°15'37.2"E ([driver61](https://driver61.com/circuit-guide/brands-hatch-indy))
+  lands 0.9 m from node 29/106 → `startFrac` **0.2736** (the node measured in the
+  earlier pass). NOT shipped: the move was built (frontage re-fitted, every audit at
+  or under baseline) but the turn re-seat command `rotate-markings.cjs --write
+  brands_hatch` was refused by the permission layer, so the change was reverted on
+  the orchestrator's instruction; Bryce's call (PR #5506). The line stays 0.1226.
+  Pit wall on the driver's right; the default `pit.side` +1 already matches.
+- **donington** 52°49'47.3"N 1°22'46.4"W ([driver61](https://driver61.com/circuit-guide/donington/))
+  lands 3.8 m off the 491 m segment 24→25 at t = 0.402, 294 m before node 25 (the
+  earlier candidate 0.2577). One collinear point was added there (`pts[25]`, ≤ 0.01 m
+  off the chord) and `startFrac` 0.9072 → **0.2551** (25/98).
+  **Open:** driver61 puts the pit wall on the driver's LEFT approaching Redgate; the
+  def's default `pit.side` is +1 (right). Not flipped: it is a full re-dress of the
+  frontage, a separate pass.
+
+The scenery stays on its authored frame (`sceneryStartFrac` 0); only the
+line-anchored frontage was re-fitted so no clip, coplanar, ground or props count
+rose (donington: half the garage block, a grass bank, one tree row on steep ground).
 
 **Brands Hatch is over the bar and that is correct.** Its pit straight genuinely
 curves right as it runs to the rim before the track drops into Paddock Hill —

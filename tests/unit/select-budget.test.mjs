@@ -76,8 +76,9 @@ test("declaredTests expands statically resolvable for-of loops (per-circuit spec
     "fleet B bills one test per circuit in the second half");
   // scenery-kits: 1 static + 5 theme rows
   assert.ok(declaredTests("tests/specs/scenery-kits.spec.js") >= 6);
-  // abudhabi-foundation: day + night
-  assert.ok(declaredTests("tests/specs/abudhabi-foundation.spec.js") >= 2);
+  // abudhabi's foundation cases: day + night, and the registry bills its case modules (TK2-17)
+  assert.ok(declaredTests("tests/specs/foundation/abudhabi.js") >= 2);
+  assert.ok(declaredTests("tests/specs/circuit-foundation.spec.js") >= 24);
   // menu-baseline: 2 shapes × 3 screens (the ci.yml comment already says six)
   assert.ok(declaredTests("tests/specs/menu-baseline.spec.js") >= 6);
 });

@@ -1,0 +1,1 @@
+Fixed: on Chrome and Android, going Back to the game restores it instantly again (#5417, re-land of #4324). The VR headset check runs once and is remembered (opening Settings › HUD & CAMERA checks again), so it no longer forces a full reload on every back navigation.

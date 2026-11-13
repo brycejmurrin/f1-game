@@ -42,7 +42,8 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseMirrorChurn, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { gpuMemInitSource, gpuMemSnapshot, createAttribution } from "./gpu-mem-webgpu.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseMirrorChurn, analyseMirrorAllocs, analyseDepthTargets, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
 import { gpuObjectCounter, memCyclesVerdict } from "./mem-cycles-lib.mjs";
 import { WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
@@ -240,6 +241,9 @@ try {
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
   if (memCycles) await page.addInitScript(gpuObjectCounter);
+  // The WebGPU allocation wrapper (tools/gfx/gpu-mem-webgpu.mjs, #4783 row 3 / #4710): requested bytes by format and
+  // an UNSAMPLED label + stack row per createBuffer / createTexture in the armed window. A no-op without a GPUDevice.
+  await page.addInitScript(gpuMemInitSource({ armed: false }));
   await page.addInitScript(([be, p, ls, drainEvery, pick]) => {
     // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
     //
@@ -260,7 +264,9 @@ try {
     const _hCAP = 40000;
     const _hT = new Float64Array(_hCAP), _hD = new Float64Array(_hCAP);
     const _hP = new Int16Array(_hCAP);
-    let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [], _hSub = 0, _hOpsCur = [];
+    let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [], _hSub = 0, _hOpsCur = [], _hDraws = 0;
+    // #4783 row 6: every armed pass with a depth attachment, keyed "depth view | colour attachments" (analyseDepthTargets).
+    const _hDepthT = new Map();
     const _hSig = [], _hOps = [], _hSubs = [];   // store inventory (frame-hitch analysePassOps): first 600 frames
     // THE PASS CENSUS, and the reason it belongs HERE rather than only in the
     // container. tlx-shadow.js sizes its maps by `softwareGL`: SUN_SIZE is 512
@@ -298,10 +304,14 @@ try {
     const _hUpGroup = new Map();
     const _upGroup = (bytes, buf, kind) => {
       if (!_hArmed) return;
-      const l = (buf && buf.label) || "", g = l ? l.replace(/^bindingBuffer\d+_?/, "").replace(/_?\(.*\)$/, "") || l : "(none)";
+      // The id reads "undefined" for a buffer three made outside a bindings group (run 42943667972: 23 rows named
+      // bindingBufferundefined_UniformBuffer_N), so strip that spelling too.
+      const l = (buf && buf.label) || "", g = l ? l.replace(/^bindingBuffer(?:\d+|undefined)_?/, "").replace(/_?\(.*\)$/, "") || l : "(none)";
       const k = kind ? kind + ":" + g : g;
-      const r = _hUpGroup.get(k) || { n: 0, b: 0 };
+      const r = _hUpGroup.get(k) || { n: 0, b: 0, sizes: new Map() };
       r.n++; r.b += bytes;
+      // The write sizes of the group (#4783 row 4: a uniform group writes whole blocks, so its strides are few).
+      if (r.sizes.has(bytes) || r.sizes.size < 8) r.sizes.set(bytes, (r.sizes.get(bytes) || 0) + 1);
       _hUpGroup.set(k, r);
     };
     const _upNote = (kind, kb, buf) => {
@@ -459,6 +469,13 @@ try {
       wrapCall(GCC, "getCurrentTexture", "gpu.getCurrentTexture");
       const GRP = window.GPURenderPassEncoder && window.GPURenderPassEncoder.prototype;
       wrapCall(GRP, "end", "gpu.passEnd");
+      // Draws in the armed window (#4783 row 4: object-group writes are bounded by them). Counted, not timed: a
+      // timer on every draw would cost more than the draw's own encode.
+      for (const dn of ["draw", "drawIndexed", "drawIndirect", "drawIndexedIndirect"]) {
+        if (!GRP || typeof GRP[dn] !== "function") continue;
+        const origD = GRP[dn];
+        GRP[dn] = function () { if (_hArmed) _hDraws++; return origD.apply(this, arguments); };
+      }
       wrapCall(GD, "createBindGroupLayout", "gpu.createBindGroupLayout");
       wrapCall(GD, "createPipelineLayout", "gpu.createPipelineLayout");
       wrapCall(GD, "createSampler", "gpu.createSampler");
@@ -544,8 +561,13 @@ try {
                   const v = ca[i] && (ca[i].view || ca[i].resolveTarget);
                   if (ca[i]) parts.push(((v && v.__sig) || "?") + ":" + ca[i].loadOp + ">" + ca[i].storeOp);
                 }
+                const colourN = parts.length;
                 if (ds) parts.push("d:" + ds.depthLoadOp + ">" + ds.depthStoreOp);
                 _hOpsCur.push(parts.join("+") || "empty");
+                if (ds) {
+                  const dk = ((ds.view && ds.view.__sig) || "?") + " | " + (parts.slice(0, colourN).join("+") || "none");
+                  _hDepthT.set(dk, (_hDepthT.get(dk) || 0) + 1);
+                }
               } catch (_) { _hOpsCur.push("?"); }
             }
           }
@@ -671,11 +693,13 @@ try {
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hUpGroup.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hUpGroup.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null; _hDraws = 0; _hDepthT.clear();
+          try { const gm = window.GPUDevice && window.GPUDevice.prototype.__gmw; if (gm) { gm.sites.clear(); gm.armedCreates = 0; gm.armedBuffers = 0; gm.armedTextures = 0; gm.siteOverflow = 0; gm.armed = true; } } catch (_) { /* no WebGPU on this leg */ }
           _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
         // Close the window where the DRIVING stops, so the A/B phases that
         // follow never enter the per-frame series or the spike analysis.
-        disarm() { if (!_hArmed) return; _hArmed = false; _win.t1 = performance.now(); _win.f1 = _lhFrames(); },
+        disarm() { if (!_hArmed) return; _hArmed = false; _win.t1 = performance.now(); _win.f1 = _lhFrames();
+          try { const gm = window.GPUDevice && window.GPUDevice.prototype.__gmw; if (gm) gm.armed = false; } catch (_) { /* no WebGPU on this leg */ } },
         dump: () => ({ win: Object.assign({}, _win), gameFrameT: Array.from(_gfT.subarray(0, _gfN)),
                        gaps: _gGaps, marks: window.__apexMarks || {}, longTasks: window.__apexLongTasks || [],
                        loaf: window.__apexLoaf || [], loafObserver: window.__apexLoafObserver,
@@ -686,8 +710,9 @@ try {
                        stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30),
                        uploads: [..._hUp.entries()].map(([k, r]) => ({ site: k, n: r.n, kb: +r.kb.toFixed(1) }))
                          .sort((a, b) => b.kb - a.kb || b.n - a.n).slice(0, 60),
-                       uploadGroups: [..._hUpGroup.entries()].map(([g, r]) => ({ group: g, n: r.n, kb: +(r.b / 1024).toFixed(2) }))
-                         .sort((a, b) => b.n - a.n) }),
+                       uploadGroups: [..._hUpGroup.entries()].map(([g, r]) => ({ group: g, n: r.n, kb: +(r.b / 1024).toFixed(2), sizes: [...r.sizes.entries()].sort((a, b) => b[1] - a[1]) }))
+                         .sort((a, b) => b.n - a.n),
+                       draws: _hDraws, depthTargets: [..._hDepthT.entries()] }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
@@ -1204,6 +1229,9 @@ try {
             // whether tlx.js is minting materials (MAT_CACHE_CAP evictions
             // re-mint a material and so a program). The container measured
             // this parked; the driven window is where it can move.
+            // #4710 item 2: the mirror target's allocation count and size at every beat, so a re-allocation has a beat
+            // and a size change beside it (analyseMirrorAllocs).
+            mir: (() => { try { const m = A && A.mirror ? A.mirror() : null, b = (m && m.backend) || null; return b ? { allocs: b.allocs, w: b.w, h: b.h, mips: b.mips, q: m.quality } : null; } catch (_) { return null; } })(),
             mm: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
               return m ? { progs: m.progs, mats: m.mats, pool: m.pool, hit: m.matHit, miss: m.matMiss, evict: m.matEvict, keys: m.matMissKeys || null } : null; } catch (_) { return null; } })(),
             // THE HITCH SIGNATURE. p99 against p50 over the last 2048 frames:
@@ -1306,8 +1334,17 @@ try {
     out.mirrorWindow = analyseMirrorChurn(_mc0, _mc1, out.window && out.window.frames);
     // GPU hunt 3: writeBuffer per frame by buffer group, every call counted (not sampled).
     { const f = out.window && out.window.frames;
-      out.uploadGroups = f > 0 && d.uploadGroups ? d.uploadGroups.map((r) => ({ group: r.group, nPerFrame: +(r.n / f).toFixed(2), kbPerFrame: +(r.kb / f).toFixed(3) }))
-        : { note: "no writeBuffer groups recorded" }; }
+      out.uploadGroups = f > 0 && d.uploadGroups ? d.uploadGroups.map((r) => ({ group: r.group, nPerFrame: +(r.n / f).toFixed(2), kbPerFrame: +(r.kb / f).toFixed(3), sizes: r.sizes }))
+        : { note: "no writeBuffer groups recorded" };
+      // #4783 rows 4 and 6: draws a frame (the bound on object-group writes) and the depth-target inventory.
+      out.draws = f > 0 && d.draws > 0 ? { total: d.draws, perFrame: +(d.draws / f).toFixed(2) } : { note: "no WebGPU draw count on this leg" };
+      out.depthTargets = analyseDepthTargets(d.depthTargets, f);
+      out.mirrorAllocs = analyseMirrorAllocs(out.beats); }
+    // #4783 row 3 / #4710: requested WebGPU bytes by format at the end of the window, and who created what inside it.
+    try {
+      out.gpuMem = await bounded(() => page.evaluate(gpuMemSnapshot, 60), 10000, "gpu-mem-read");
+      out.createAttribution = createAttribution(out.gpuMem, out.window && out.window.frames);
+    } catch (e) { out.gpuMem = null; out.createAttribution = { note: "gpu-mem read failed: " + String((e && e.message) || e).slice(0, 80) }; }
     // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
     // 100 ms (the ones a player feels), and the resource calls those frames
     // made against the rest.
