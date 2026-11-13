@@ -8,7 +8,14 @@
 // Run: node --test tests/unit/livery-swatch-cache.test.mjs   (npm run test:tooling-fast; < 1 s, no browser)
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
 import { loadCrests } from "../../tools/car/crest-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const { LiveryTex: LT, RecCtx } = loadCrests();
 const liv = { c1: [0.8, 0.1, 0.1], c2: [1, 1, 1], stripe: [0.1, 0.1, 0.1] };
@@ -66,4 +73,45 @@ test("a logo change drops the kept card canvases too", () => {
   const before = LT.swatchCanvas("ferrari", { ...liv, c1: [0, 1, 0] }, 112, 80, 20);
   LT.setTeamLogo("ferrari", null);   // markChanged()
   assert.notEqual(LT.swatchCanvas("ferrari", { ...liv, c1: [0, 1, 0] }, 112, 80, 21), before, "repainted after markChanged");
+});
+
+// ── tinted emblem canvas (car atlas perf P6, #4546) ────────────────────────
+// drawLogoImage made a fresh offscreen canvas for a TINTED emblem on every call (up
+// to six sites an atlas). Pinned: three identical calls make one canvas, a different
+// tint/size/image is its own entry, and markChanged (setTeamLogo) drops the cache.
+function loadLiveryTex() {
+  const made = { canvases: 0 };
+  const ctx2d = () => new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
+  const sandbox = {
+    console, Math, Object, Array, String, Number, JSON, Map, Set, isNaN, parseInt, parseFloat,
+    document: { querySelector: () => null,
+      createElement: (tag) => { if (tag === "canvas") made.canvases++; return { getContext: ctx2d, width: 0, height: 0 }; } },
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js",
+                   "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sandbox, { filename: absSrc(f) });
+  return { LT: vm.runInContext("LiveryTex", sandbox), made, ctx2d };
+}
+
+test("a tinted emblem is painted offscreen once per (image, size, tint)", () => {
+  const { LT, made, ctx2d } = loadLiveryTex();
+  const img = { naturalWidth: 200, naturalHeight: 100 };
+  const R = { x: 10, y: 20, w: 120, h: 80 };
+  const sources = [];
+  const dst = () => Object.assign(ctx2d(), { drawImage: (src) => sources.push(src) });
+  const before = made.canvases;
+  for (let i = 0; i < 3; i++) LT.drawLogoImage(dst(), img, R, [0.9, 0.1, 0.1], null, null);
+  assert.equal(made.canvases - before, 1, "three identical calls make one offscreen canvas");
+  assert.equal(new Set(sources).size, 1, "and draw the same one");
+  LT.drawLogoImage(dst(), img, R, [0.1, 0.9, 0.1], null, null);
+  LT.drawLogoImage(dst(), img, { x: 0, y: 0, w: 60, h: 40 }, [0.9, 0.1, 0.1], null, null);
+  LT.drawLogoImage(dst(), { naturalWidth: 200, naturalHeight: 100 }, R, [0.9, 0.1, 0.1], null, null);
+  assert.equal(made.canvases - before, 4, "another tint, size or image is its own entry");
+  LT.drawLogoImage(dst(), img, R, null, null, null);
+  assert.equal(made.canvases - before, 4, "an untinted emblem draws the image itself");
+  LT.setTeamLogo("ferrari", null);   // markChanged()
+  LT.drawLogoImage(dst(), img, R, [0.9, 0.1, 0.1], null, null);
+  assert.equal(made.canvases - before, 5, "a logo change drops the cache");
 });

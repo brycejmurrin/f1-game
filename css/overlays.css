@@ -717,6 +717,17 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   padding: 0 calc(var(--gap) * 2 / 3);
   line-height: 1.2;
 }
+/* CODES MATCH (#5313): READY waits for it; the same chip as Remove, which then sits beside it. */
+#vsfriend .vs-roster .vs-driver [data-verify-confirm] {
+  flex: 0 0 auto;
+  font-size: var(--fs-micro);
+  margin-left: auto;
+  white-space: nowrap;
+  min-height: var(--tap-paint);
+  padding: 0 calc(var(--gap) * 2 / 3);
+  line-height: 1.2;
+}
+#vsfriend .vs-roster .vs-driver [data-verify-confirm] ~ .vs-roster-remove { margin-left: calc(var(--gap) / 3); }
 #vsfriend .vs-roster-dot {
   flex: 0 0 auto;
   width: 10px;

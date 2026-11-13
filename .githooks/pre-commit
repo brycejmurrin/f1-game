@@ -95,14 +95,21 @@ fi
 require_index_worktree_match || exit 1
 if [ "$DOCS_ONLY" = 1 ]; then
   GUARD_TREE=$(git write-tree) || exit 1
-  if ! without_local_git_context node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1; then
-    echo "pre-commit: BLOCKED — docs-integrity is red ($LOG):" >&2
+  # The docs set is tools/ci/docs-fast-tests.mjs, the same list tooling-fast's docs-only mode (the CI guards tier on
+  # a prose PR) runs (#5461: docs-integrity alone let a 43 KB note past knowledge-retention to the deploy tip).
+  # Fail closed: no list, no commit.
+  DOCS_TESTS=$(without_local_git_context node tools/ci/docs-fast-tests.mjs) && [ -n "$DOCS_TESTS" ] || {
+    echo "pre-commit: BLOCKED — tools/ci/docs-fast-tests.mjs printed no docs test list." >&2; exit 1; }
+  # NODE_TEST_CONTEXT dropped: inherited from an outer `node --test`, it makes this run report upward and exit 0.
+  # shellcheck disable=SC2086  # the list is space-separated repo paths
+  if ! without_local_git_context env -u NODE_TEST_CONTEXT node --test $DOCS_TESTS >"$LOG" 2>&1; then
+    echo "pre-commit: BLOCKED — the docs-only test set is red ($LOG):" >&2
     grep -E 'not ok|expected|actual' "$LOG" | tail -15 >&2
     exit 1
   fi
   require_index_worktree_match || exit 1
-  [ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while docs-integrity ran." >&2; exit 1; }
-  echo "pre-commit: docs-only commit — docs-integrity green ($(( $(date +%s) - T0 )) s); no ratchet raise, no test:guards." >&2
+  [ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while the docs-only test set ran." >&2; exit 1; }
+  echo "pre-commit: docs-only commit — docs test set green ($(echo $DOCS_TESTS | wc -w) files, $(( $(date +%s) - T0 )) s); no ratchet raise, no test:guards." >&2
   exit 0
 fi
 # Capture the generator's actual outputs, including new topic fragments and

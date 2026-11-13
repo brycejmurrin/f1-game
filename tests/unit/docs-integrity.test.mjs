@@ -581,8 +581,7 @@ const BARE_JS_ALLOW = new Map([
   // An npm package (steamworks.js), not a file of ours.
   ["steamworks.js", /DESKTOP-TEST-PLAN\.md$/],
 ]);
-test("live docs name only real files in backticked bare `name.js` tokens", () => {
-  if (!TRACKED) return;                         // outside a checkout there is no index to consult
+test("live docs name only real files in backticked bare `name.js` tokens", { skip: !TRACKED && "outside a git checkout: no index to consult" }, () => {
   const built = BUILT_PATHS.filter((f) => fs.existsSync(path.join(ROOT, f)));
   const bases = new Set([...TRACKED.files, ...built].map((f) => path.basename(f)));
   const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
@@ -611,8 +610,7 @@ test("live docs name only real files in backticked bare `name.js` tokens", () =>
 // 7d64f2bdf → e8378538b) sat in the table, unchecked. Same rule as the `name.js` test.
 // CEILING-HISTORY.md is an append-only ledger: it names suites that were later merged away.
 const BARE_TEST_ALLOW = /CEILING-HISTORY\.md$/;
-test("live docs name only real test files in backticked bare `name.test.mjs` / `name.spec.js` tokens", () => {
-  if (!TRACKED) return;
+test("live docs name only real test files in backticked bare `name.test.mjs` / `name.spec.js` tokens", { skip: !TRACKED && "outside a git checkout: no index to consult" }, () => {
   const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
   const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
   const bad = [];
