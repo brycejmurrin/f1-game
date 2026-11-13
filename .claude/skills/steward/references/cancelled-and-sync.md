@@ -22,7 +22,8 @@ A PR that ends `cancelled` twice with zero failures:
 
 When to sync is AGENTS.md §Git branch & deploy. `node tools/ci/needs-sync.mjs <branch>` answers it
 (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `no` (exit 4). A newest run that ended `cancelled`
-after at least one job concluded `failure` counts as red for `stale-red`; with zero failed jobs it stays `no` (rule 8).
+after at least one job concluded `failure`, or green only on `run_attempt` > 1 after an earlier attempt had a red job
+(merge-gate refuses that green), counts as red for `stale-red`; zero failed jobs (a cancel, a cancel-only re-run) stays `no` (rule 8).
 
 Merely behind is never a reason: merge-gate's `distance` row and `land.yml`'s AUTO-SYNC left on 2026-11-03 (gen and
 ratchets run on the real merge result).

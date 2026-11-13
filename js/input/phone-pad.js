@@ -7,7 +7,7 @@
    No phone browser can advertise, act as a GATT peripheral or present itself
    as an HID gamepad — that needs a native app on the phone. So the pairing
    that IS available to a static site is the one VS FRIEND already ships: a
-   WebRTC DataChannel, signalled through a six-letter room code on the public
+   WebRTC DataChannel, signalled through an eight-letter room code on the public
    Nostr relays (js/net/rendezvous.js → js/net/nostr.js). On one Wi-Fi the
    channel goes phone→router→laptop with a few ms of latency; across networks
    it still connects (STUN/TURN, js/net/transport.js). Both ends need internet
@@ -388,7 +388,7 @@ const PhonePad = (function () {
           onFail: (r) => {
             if (!r || r.error === "cancelled" || r.error === "stopped" || !["waiting", "connecting"].includes(phase)) return;
             if (r.advisory) { say(r.message, true); return; }
-            // nostr's expiry copy is VS FRIEND's ("Check the six characters…").
+            // nostr's expiry copy is VS FRIEND's ("Check the letters…").
             failed(r.error === "expired" ? "The code expired — press STEER THIS GAME WITH A PHONE for a new one."
               : r.message || "The room service went away — try again.");
           },

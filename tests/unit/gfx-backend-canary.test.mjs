@@ -4851,13 +4851,13 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
   assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c, true\);/, "same mesh cache keys the draw uses — the CAR, plus the covered-warm hint");
-  assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
+  assert.match(wa, /getCarDecalTexture\(paintTeam\(c\), carDecalNum\(paintTeam\(c\), c\), !!c\.isPlayer\)/, "same atlas key the draw queues (the car's own paint, #5037)");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
   // …and each FULL key (prefix + seat [+ ":P"]) is memoised on that entry, so a hit concatenates nothing.
   assert.match(cd, /const key = decalKeyFor\(team, num, isPlayer\);/, "getCarDecalTexture builds its key from the memoised prefix");
   assert.match(cd, /k = e\.val \+ \(num == null \? "_" : num\) \+ \(isPlayer \? ":P" : ""\)/, "the full key is the prefix + seat (+ :P), as before");
   // A live paint draft swaps the livery id for its own tag (B·H13 hunter finding 3), memoised the same way.
-  assert.match(cd, /if \(c && c\.rev === G\.store\.rev && c\.tag === tag\) return c;[\s\S]{0,200}team\.id \+ ":" \+ \(tag \|\| G\.getLiveryId\(team\.id\)\) \+ ":"/, "decalKeyEntry invalidates on store.rev and on the draft tag");
+  assert.match(cd, /if \(c && c\.rev === G\.store\.rev && c\.tag === tag\) return c;[\s\S]{0,200}team\.id \+ ":" \+ \(tag \|\| livTag\(team\)\) \+ ":"/, "decalKeyEntry invalidates on store.rev and on the draft tag");
 });
 
 test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
@@ -6542,6 +6542,7 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     const cockpitBodyMesh = (t, c, key) => calls.push(["cockpit", c.num, key]);
     const teamBodyMesh = (t, c) => calls.push(["field", c.num]);
     const getCarDecalTexture = (t, num, p) => calls.push(["atlas", num, p]);
+    const paintTeam = (c) => c.team;   // CarDraw's car's-own-paint seam (#5037): no friend or repainted AI here
     // The shadow casters (warmCarAssets' gate): OFF for the cancel matrix, ON below.
     let casters = false;
     const shadowCastersWanted = () => casters;

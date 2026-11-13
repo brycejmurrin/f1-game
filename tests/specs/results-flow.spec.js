@@ -346,18 +346,24 @@ test.describe("results-flow — desktop cooldown ownership", () => {
       (f) => window.__apex.ceremony().inputOwner === "player" || window.__apex.cameraState().renderFrame >= f + 8,
       fOwn, { polling: 100, timeout: 0 }));
     expect(await page.evaluate(() => window.__apex.ceremony().inputOwner), "cooldown hands input to the player").toBe("player");
-    const before = await page.evaluate(() => window.__apex.carAt());
-    // Gate on frames drawn, not wall time: a loaded software-GPU runner can draw no
-    // frame at all in 5 s (Pages #5084: 7-8 s a round trip), and dt is clamped to 1/4 s,
-    // so 8 frames are always enough sim time to move the car past +1 m.
-    const f0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+    // ONE round trip for the baseline and the frame count, so no extra coasting frame lands between them.
+    const [before, f0] = await page.evaluate(() => [window.__apex.carAt(), window.__apex.cameraState().renderFrame]);
+    // THROTTLE, not coasting (#5445). Moving forward proves nothing: the car is still rolling (11.3 m/s in Pages
+    // #5084) and dt is clamped to 1/4 s, so one coasting frame moves it ~2.8 m. Under cooldown ownership the car is
+    // driven by cooldownDrive (js/game.js): +18 m/s² on throttle, -6 coasting, so only throttle can RAISE speed
+    // over the baseline. Each round trip coasts about a frame (-6·dt) before the key lands, and 8 throttled frames
+    // (+18·dt each, the same dt regime) outweigh them. Gate on frames drawn, not wall time: a loaded software-GPU
+    // runner can draw no frame at all in 5 s (Pages #5084: 7-8 s a round trip).
+    // `after` is read while the key is still held: a release first would let coasting frames eat the gain.
+    let after;
     await page.keyboard.down("ArrowUp");
     try {
-      await step("held ArrowUp advances the finished car", page.waitForFunction(
-        ([prog, f]) => window.__apex.carAt().prog > prog + 1 || window.__apex.cameraState().renderFrame >= f + 8,
-        [before.prog, f0], { polling: 100, timeout: 0 }));
+      await step("held ArrowUp accelerates the finished car", page.waitForFunction(
+        ([v, prog, f]) => { const c = window.__apex.carAt(); return (c.speed > v && c.prog > prog + 1) || window.__apex.cameraState().renderFrame >= f + 8; },
+        [before.speed, before.prog, f0], { polling: 100, timeout: 0 }));
+      after = await page.evaluate(() => window.__apex.carAt());
     } finally { await page.keyboard.up("ArrowUp"); }
-    const after = await page.evaluate(() => window.__apex.carAt());
+    expect(after.speed, `held ArrowUp accelerates the finished car (a coasting car only slows): ${before.speed} -> ${after.speed} m/s`).toBeGreaterThan(before.speed);
     expect(after.prog, "held ArrowUp advances the finished car").toBeGreaterThan(before.prog + 1);
     expect(after.finished).toBe(true);
     expect(after.finishT).toBe(before.finishT); expect(after.lap).toBe(before.lap);
