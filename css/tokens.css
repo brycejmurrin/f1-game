@@ -58,7 +58,16 @@
    pseudo-elements aren't part of the normal element cascade. */
 @keyframes apex-vt-fade-out { to { opacity: 0; } }
 @keyframes apex-vt-fade-in { from { opacity: 0; } }
-::view-transition { background-color: var(--bg); }
+::view-transition { background-color: var(--bg); pointer-events: none; }
+/* pointer-events is not inherited, so group, pair, old and new need it too.
+   This covers the fade after the new frame is captured. It does not cover the
+   capture wait: Chrome hit-tests <html> until then even with this rule, which
+   is why a software-GL garage entry skips the transition (js/game.js). */
+:root::view-transition,
+:root::view-transition-group(*),
+:root::view-transition-image-pair(*),
+:root::view-transition-old(*),
+:root::view-transition-new(*) { pointer-events: none; }
 ::view-transition-old(root) {
   animation-name: apex-vt-fade-out;
   animation-duration: 0.10s;

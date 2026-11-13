@@ -1,1 +1,1 @@
-Fixed: CLOSE GARAGE takes a click while the garage is opening. The title-to-garage crossfade had been the thing under the cursor, so the button ignored the press until that fade finished.
+Fixed: CLOSE GARAGE takes a click while the garage is opening. The title-to-garage crossfade stays on a machine that can present it quickly, and the fade no longer sits under the cursor. A software renderer, which held that fade for several seconds, opens the bay directly so the button takes the press.

@@ -52,11 +52,13 @@ test.describe("garage close — one click with loading plate", () => {
   });
 });
 
-// Motion on: the title → garage crossfade used to be the hit target until the
-// new software-GL frame was presented (~14 s at 1280×800, three on WebGL2,
-// webdriver false). Clicks on CLOSE GARAGE landed on <html>; Escape still
-// pressed the door. The project default is reduced motion, which skips
-// startViewTransition, so this describe opts back in and holds the fade.
+// Motion on, webdriver false, three on WebGL2: a root view transition owns hit
+// testing until the new frame is captured (elementFromPoint returns HTML even
+// with pointer-events:none on the snapshot). On software GL that wait is the
+// present, ~14 s at 1280×800. This describe opts out of the suite's reduced
+// motion and holds any crossfade for 30 s, so a regression that starts one
+// here fails the hit check instead of finishing the fade first. Software GL
+// must enter directly; Escape is not the path under test.
 test.describe("garage close — one click during the open crossfade", () => {
   test.use({ viewport: { width: 1280, height: 800 }, reducedMotion: "no-preference" });
   test.setTimeout(BOOT_MS + 90_000);
@@ -97,10 +99,10 @@ test.describe("garage close — one click during the open crossfade", () => {
       const r = done.getBoundingClientRect();
       const x = r.left + r.width / 2, y = r.top + r.height / 2;
       const el = document.elementFromPoint(x, y);
-      return { id: el && (el.id || el.nodeName), x, y, text: done.textContent };
+      return { id: el && (el.id || el.nodeName), x, y, text: done.textContent, active: !!document.activeViewTransition };
     });
     expect(aim.text).toBe("CLOSE GARAGE");
-    expect(aim.id, "the open crossfade must not take the hit from #cs-done").toBe("cs-done");
+    expect(aim.id, "the open crossfade must not take the hit from #cs-done: " + JSON.stringify(aim)).toBe("cs-done");
     await page.mouse.click(aim.x, aim.y);
     await expect(page.locator("#carsetup")).toBeHidden({ timeout: 5000 });
     await expect(page.locator("#overlay")).toBeVisible();

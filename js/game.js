@@ -9102,12 +9102,11 @@ function openGarage(from) {
   // agree on all five fields.
   resetSetupCam();
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
-  // ENTRY FRAME: draw here, reveal only after renderSetupPreview succeeds (not
-  // while warming). No root view transition. Its snapshot is the hit target
-  // until the new frame is presented; on software GL that window was ~14 s at
-  // 1280×800 (three on WebGL2), and every CLOSE GARAGE click in it landed on
-  // <html> while Escape still pressed the door. Pit already enters directly.
-  // resetSetupCam() has already called endHome().
+  // ENTRY FRAME: endHome() hides #game for the Home→garage gap; draw in the vt
+  // callback but reveal only after renderSetupPreview succeeds (not while warming).
+  // Snapshot pseudos are click-through (css/tokens.css). Chrome still hit-tests
+  // <html> until the new frame is captured (~14 s on software GL), so that path
+  // skips vt. resetSetupCam() has already called endHome().
   const revealGarageCanvas = () => {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
@@ -9118,8 +9117,10 @@ function openGarage(from) {
     try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
     try { if (renderSetupPreview(0)) revealGarageCanvas(); } catch (_) { /* mesh/warm may still be settling */ }
   };
+  const presentIsSlow = () => { try { const s = gfx.backendState && gfx.backendState(); return !!(s && (s.softwareGL || s.softAdapter)); } catch (_) { return false; } };
   if (from === "pit") { enterGarage(); setupCam.startArrival(); }
-  else enterGarage();
+  else if (presentIsSlow()) enterGarage();
+  else vt(enterGarage);
 }
 $("mb-garage").onclick = () => openGarage("menu");
 // ── WORK ON CAR, from inside a pit stop ────────────────────────────────────
