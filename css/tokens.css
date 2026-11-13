@@ -749,7 +749,7 @@ body:not(.desktop) {
   /* Fixed touch-control default; HUD SIZE does not move this axis. */
   :root {
     --ui-scale: 1.09; --hud-scale: 1;
-    --hud-btn-mult: 1.4325;
+    --hud-btn-mult: 1.25;
     --hud-btn-scale: var(--hud-btn-mult);
   }
 }

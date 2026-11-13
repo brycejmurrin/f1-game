@@ -99,10 +99,11 @@ const UiScale = (() => {
     // and the two must not disagree. BUTTON SIZE keeps its own fixed default.
     // History: 1.4536, then 1.25 (2026-09-14, when --hud-scale still carried a 1.24 bump and
     // nothing capped the dock; fitHud's caps do that now).
-    // 1.4325 since #5358: the owner's 2026-11-10 phone profile stores BUTTON 143.25 %. fitHud's
-    // height cap still stops the BOOST / OT / AERO and pedal columns where they stopped at 1.25
-    // (85 px at 852x393); what grows is the steer pad, 90 -> 103 px.
-    const BTN_DEFAULT = 1.4325;
+    // NOT moved to the owner's 143.25 % (#5358): in TILT / DRAG steering the bigger BOOST / OT / AERO
+    // column makes fitHud shrink the readouts to pay for it (852x393: minimap 103 -> 90 px, tower
+    // 371 -> 324) and tests/specs/hud-layout.spec.js stops settling. In BUTTONS steering the only
+    // difference is the steer pad: 90 px here, 103 at his stored 143.25.
+    const BTN_DEFAULT = 1.25;
     // A PHONE (touch, short side <= 500 px) ships UI SIZE 70 %, the owner's own setting (#5358):
     // 109 % painted every menu "way too big" there. A tablet keeps 109. Only an UNSET size reads
     // these; a stored one is never rewritten by a new default.

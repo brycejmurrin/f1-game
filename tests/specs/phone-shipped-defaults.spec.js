@@ -3,17 +3,19 @@
 //
 // Bryce, 2026-11-10, attaching his Home Screen app export: "these are the settings I need to set to make it look
 // playable and not way too big like you have it". tests/data/settings-live-export-2026-11-10.json stores UI SIZE 70,
-// BUTTON 143.25 and per-screen looks (pause, select, race settings, garage, designer, title buttons). Those are now
+// BUTTON 143.25 (not shipped, see below) and per-screen looks (pause, select, race settings, garage, designer, title buttons). Those are now
 // what a phone with NOTHING stored reads (js/ui/scale.js, js/ui/screen-looks.js `phone`, js/ui/title-layout.js
 // PHONE_WIDE), so a clean profile and his export must paint the same boxes.
 //
 // Measured 2026-11-13 at 852x393 + insets 59/59/21, before -> after, against his export:
 //   title    doors 192x44 -> 193x48 (his 193x48)          select   BACK 235x57 -> 239x44, card text 17.4 -> 11.2 px
 //   race     sheet 734 -> 638 wide, GO 352x57 -> 309x40   garage   panel 447 -> 323 wide, DONE 130x52 -> 307x44 (his 35)
-//   pause    RESUME 254x57 -> 250x52                      HUD      steer pad 90 -> 103 px, pedals 85 both
+//   pause    RESUME 254x57 -> 250x52                      HUD      pedals 85 both; steer pad 90 (his 103)
 // Not compared: his own hudLayout positions, HUD elements he turned off, the sound label (personal choices).
 // Not shipped: his garage BUTTON HEIGHT 80, which paints DONE 35 px tall, under the 44 px tap floor
 // (tests/data/bryce-phone-paint.json holds that count at 0). A clean profile paints DONE 44 px; asserted below.
+// Not shipped: his BUTTON 143.25. In tilt / drag steering it makes fitHud shrink the readouts (minimap 103 -> 90 px)
+// and hud-layout.spec.js stops settling; in his BUTTONS steering it only grows the steer pad 90 -> 103 px.
 //
 // Two contexts on his phone (tools/lib/bryce-phone.mjs: descriptor + CDP env() insets): one clean, one seeded with
 // the export the way a boot reads it. Rects are getBoundingClientRect; a box may differ by 1 px (zoom rounding).
@@ -34,7 +36,7 @@ const MENUS = [
   { id: "designer", open: async (p) => { await p.click("#mb-designer"); await p.waitForSelector("#trackdesigner:not([hidden])"); await p.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen() && !TrackDesigner.state().pending, null, { polling: 100 }); },
     ids: ["td-close", "td-title", "td-tab-design", "td-tab-library", "td-tab-howto"] },
 ];
-const HUD_IDS = ["btn-steer-left", "btn-steer-right", "btn-throttle", "btn-brake", "btn-aero", "pausebtn"];
+const HUD_IDS = ["btn-throttle", "btn-brake", "btn-aero", "pausebtn"];   // not the steer pad: BUTTON 143.25 is his own
 const PAUSE_IDS = ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-recover", "pm-quit"];
 
 /** In-page: painted box of each id as [left, top, width, height, font px], or null when it is not painted. */
@@ -102,7 +104,7 @@ test.describe("a clean phone profile paints what the owner's 2026-11-10 export p
     const his = await measure(browser, baseURL, storeEntries(ownerStore({ file: EXPORT_FILE }).store));
 
     expect(his.vars, "his export reached the page").toEqual({ ui: "0.7", btn: "1.4325", hud: "1" });
-    expect(clean.vars, "a clean phone ships his sizes").toEqual(his.vars);
+    expect(clean.vars, "a clean phone ships his UI SIZE; BUTTON stays at the touch default").toEqual({ ui: "0.7", btn: "1.25", hud: "1" });
     expect(clean.stored, "and a clean profile stored none of them: they are defaults, not writes").toEqual([]);
 
     const screens = [...MENUS.map((s) => [s.id, s.ids]), ["hud", HUD_IDS], ["pause", PAUSE_IDS]];
