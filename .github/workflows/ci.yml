@@ -2019,6 +2019,9 @@ jobs:
       # the selected legs then skip and selected-verdict reports the reuse.
       selected_reused: ${{ steps.reuse_selected.outputs.reuse }}
       selected_reused_run: ${{ steps.reuse_selected.outputs.run }}
+      # The dropped spec FILES (space-separated), so a ready verdict can ask whether a same-head browser-group run
+      # ran each one green (#5480, tools/ci/dropped-group-runs.mjs). Empty when the plan dropped nothing.
+      dropped_specs: ${{ steps.dropped_names.outputs.dropped_specs }}
       # How many routed specs the plan could NOT run, and why the plan exists at
       # all. poke-train needs both to tell an empty plan from an unaffordable one.
       dropped: ${{ steps.sel.outputs.dropped }}
@@ -2293,6 +2296,10 @@ jobs:
       # head is green on attempt 1, ran the same plan with nothing dropped, on the same base, and the deploy tip has not
       # moved since that base, the selected legs skip; everything else on the ready tier runs. Every doubt, and every
       # event but ready_for_review, is reuse=false. The rules: tools/ci/reuse-draft-selected.mjs.
+      - name: Name the dropped specs
+        id: dropped_names
+        if: ${{ steps.sel.outcome == 'success' }}
+        run: node tools/ci/dropped-group-runs.mjs --names --sel sel.json >> "$GITHUB_OUTPUT"
       - name: Reuse the same-sha draft verdict?
         id: reuse_selected
         if: ${{ steps.sel.outcome == 'success' && github.event_name == 'pull_request' && github.event.action == 'ready_for_review' && inputs.concurrency_key == '' }}
@@ -2858,6 +2865,10 @@ jobs:
     name: Selected specs (verdict)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read    # a dropped spec's browser-group runs on this head (#5480)
+      checks: read     # their shards' apex-group records (annotations)
     needs: [select, selected, guards]
     # `!cancelled()`, not `always()` (2026-09-30): a skipped `selected` is
     # still judged (that is the point of this job), but a CANCELLED run — the
@@ -2880,6 +2891,7 @@ jobs:
           sparse-checkout: |
             tools/ci
             tools/lib
+            tests/specs
       # Sparse checkout for an empty/skipped plan: still need the verdict script
       # (guards/select/dropped rules). Cheap; no junit download.
       - name: Checkout the gate verdict scripts (empty plan)
@@ -2891,6 +2903,7 @@ jobs:
           sparse-checkout: |
             tools/ci
             tools/lib
+            tests/specs
       # https://github.com/actions/download-artifact (v8: pattern + merge-multiple)
       - name: Every shard's junit
         id: dl_junit
@@ -2942,6 +2955,21 @@ jobs:
           if [ "$CALLED" = "true" ]; then echo "::warning::no coverage for: $GAPS"; exit 0; fi
           echo "::error::NO COVERAGE for touched js dir(s): $GAPS — route a module-specific spec (tools/ci/select-specs.mjs SOURCE_AFFECTED) or add a unit test that names the file"
           exit 1
+      # A DROPPED SPEC COUNTS ONLY THROUGH A SEPARATE RUN (#5480; Bryce 2026-11-11: "Count the separate run").
+      # Ready PRs only: every dropped spec file must have run green in a browser-group.yml run on this head and
+      # this base, attempt 1, llvmpipe, from `node tools/ci/remote-group.mjs <group>` (which tests the PR merge
+      # ref). Every doubt is accept=false and the verdict below stays red. Rules: tools/ci/dropped-group-runs.mjs.
+      - name: Did a browser-group run cover the dropped specs?
+        id: group_runs
+        timeout-minutes: 8   # the bounded wait (WAIT_S 420 s) inside the job's own 10-min cap; a timeout is a red
+        if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && inputs.concurrency_key == '' && needs.select.outputs.dropped != '0' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DROPPED: ${{ needs.select.outputs.dropped }}
+          DROPPED_SPECS: ${{ needs.select.outputs.dropped_specs }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node tools/ci/dropped-group-runs.mjs >> "$GITHUB_OUTPUT"
       - name: One answer for the change-aware gate
         env:
           SELECT: ${{ needs.select.result }}
@@ -2949,10 +2977,15 @@ jobs:
           GUARDS: ${{ needs.guards.result }}
           DROPPED: ${{ needs.select.outputs.dropped }}
           UNREPRESENTED: ${{ needs.select.outputs.unrepresented }}
+          # The plan itself (#5403): on a green matrix every spec it names must have a junit testcase.
+          SHARDS: ${{ needs.select.outputs.shards }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
           REUSED: ${{ needs.select.outputs.selected_reused }}
           REUSED_RUN: ${{ needs.select.outputs.selected_reused_run }}
+          GROUP_ACCEPT: ${{ steps.group_runs.outputs.accept }}
+          GROUP_RUNS: ${{ steps.group_runs.outputs.runs }}
+          GROUP_WHY: ${{ steps.group_runs.outputs.why }}
           DOWNLOAD_FAILED: ${{ steps.dl_junit.outcome == 'failure' || steps.dl_started.outcome == 'failure' }}
         run: |
           set -u

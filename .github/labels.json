@@ -10,6 +10,7 @@
   { "name": "base-red", "color": "b60205", "description": "A spec failing first-try on unrelated branches: a red on the base (flake-tally.yml, advisory)" },
   { "name": "land", "color": "0e8a16", "description": "PR: the worker asks GitHub to land it — land.yml runs the gate check and arms auto-merge" },
   { "name": "hold", "color": "b60205", "description": "PR: do not land; only Bryce's own click removes it (merge-gate hold row reads the label event's provenance)" },
+  { "name": "ratchet-raise", "color": "0e8a16", "description": "PR: Bryce's own click lets a diff raising a tree-wide ratchet ceiling land (merge-gate raise row)" },
   { "name": "config-ok", "color": "0e8a16", "description": "PR: Bryce's own click lets a diff touching .claude/hooks, .claude/settings.json, .github/workflows or .githooks land (merge-gate config row)" },
   { "name": "needs-owner", "color": "fbca04", "description": "PR: no live worker (silent 2 h, 6 h for lane:codex, or the cost cap) — the dispatcher relaunches" },
   { "name": "needs-decision", "color": "d93f0b", "description": "Issue or PR: waits on a decision only Bryce can make; the options are in a comment" },

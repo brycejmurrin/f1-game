@@ -120,7 +120,7 @@ test("verify-change --plan on a docs-only change selects no browser batches", ()
   const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
   assert.equal(plan.fast.toolingFast, true, "docs integrity is a real test");
   assert.equal(plan.fast.toolingFastReason, "docs-only");
-  assert.equal(plan.fast.toolingFastFiles, 7, "docs-only edits should run the focused docs integrity set (7 since the audit4 E1 carve moved environment-json to its always-on group; 8 before, when agent-fleet.test.mjs was merged into agent-config.test.mjs)");
+  assert.equal(plan.fast.toolingFastFiles, 11, "docs-only edits run the shared docs set, tools/ci/docs-fast-tests.mjs (11 since #5461 added knowledge-retention, rulebook-guards, skill-descriptions and changelog-fragments; 7 before)");
   assert.ok(plan.fast.toolingFastEstimatedMs > 0, "the plan should expose a measured timing estimate");
   assert.ok(plan.fast.toolingFastCriticalPathMs > 0);
   assert.ok(plan.fast.toolingFastCriticalPathMs <= plan.fast.toolingFastEstimatedMs);
@@ -376,6 +376,26 @@ test("test-honesty --strict: a test NAME is not a reason; bare and reasonless sk
     const s = run(["tools/ci/test-honesty.mjs", "--json", "--strict", "--root", dir, "--baseline", baseline]);
     assert.equal(s.status, 1, s.out);
     assert.deepEqual(JSON.parse(s.out).stale.map((b) => b.file), [["tests", "gone.test.mjs"].join("/")]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("test-honesty --strict (#5014): an early bare return before any assert is unexplained; nested, valued and late returns are not", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts/tmp-test-honesty-"));
+  try {
+    fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
+    const site = (name, body) => fs.writeFileSync(path.join(dir, "tests", `${name}.test.mjs`), body);
+    site("bad-early-one-line", 'test("x", () => { if (!fs.existsSync(p)) return; assert.ok(1) });\n');
+    site("bad-early-after-const", 'test("chrome", async () => {\n  const chrome = process.env.C || "/usr/local/bin/google-chrome";\n  if (!fs.existsSync(chrome)) return;\n  assert.ok(1);\n});\n');
+    site("ok-assert-first", 'test("x", () => {\n  assert.ok(a);\n  if (!b) return;\n  assert.ok(b);\n});\n');
+    site("ok-nested-callback", 'test("x", async () => {\n  const out = await run((url) => {\n    if (!url) return;\n    return 1;\n  });\n  assert.ok(out);\n});\n');
+    site("ok-t-skip", 'test("x", (t) => {\n  if (!row) return t.skip("nothing to triage");\n  assert.ok(row);\n});\n');
+    site("ok-skip-ok", 'test("x", () => {\n  // SKIP-OK: absent store is the passing state\n  if (!fs.existsSync(dir)) return;\n  assert.ok(1);\n});\n');
+    const baseline = path.join(dir, "baseline.json");
+    fs.writeFileSync(baseline, JSON.stringify({ baseline: [] }));
+    const r = run(["tools/ci/test-honesty.mjs", "--json", "--strict", "--root", dir, "--baseline", baseline]);
+    assert.equal(r.status, 1, r.out);
+    const v = JSON.parse(r.out);
+    assert.deepEqual(v.detail.map((f) => [path.basename(f.file, ".test.mjs"), f.line, f.kind]).sort(), [["bad-early-after-const", 3, "early-return"], ["bad-early-one-line", 1, "early-return"]]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

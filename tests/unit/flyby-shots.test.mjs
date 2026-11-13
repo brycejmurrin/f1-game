@@ -329,6 +329,29 @@ test("#1575: a per-shot sway is optional and disabled under reduced motion", () 
   assert.equal(F.swayAt({ sway: 0.4 }, 0.25, true), 0, "reduced motion holds the authored pose");
 });
 
+test("perf P6: presentation() given solve()'s shotAt result is identical to computing its own", () => {
+  const F = loadFlybyRuntime();
+  F.setDuration(20000);
+  const shots = [{ id: "wide", dur: 0.25 }, { id: "turn", dur: 0.25 }, { id: "wide2", dur: 0.5 }];
+  for (const list of [shots, F.DEFAULT, null]) for (let i = 0; i <= 64; i++) for (const r of [false, true]) {
+    const u = i / 64;
+    assert.deepEqual(F.presentation(u, list, r, F.shotAt(u, list)), F.presentation(u, list, r), `u=${u} reduced=${r}`);
+  }
+});
+
+test("perf P6: solve() resolves the reduce-motion media query once, not every frame", async () => {
+  await withTrack("monza", (track, g) => {
+    const sb = g.sandbox, F = sb.FlybySeq, orig = sb.matchMedia;
+    let calls = 0;
+    sb.matchMedia = (q) => { calls++; return orig(q); };
+    try {
+      for (let i = 0; i < 60; i++) F.solve(track, i / 60);
+    } finally { sb.matchMedia = orig; }
+    // At most one: zero when an earlier solve() in this VM already cached the list (fails before: 60).
+    assert.ok(calls <= 1, `60 solve() frames called matchMedia ${calls}x`);
+  });
+});
+
 test("the shipped flyby never puts the eye inside a building", async () => {
   for (const id of CIRCUITS) {
     const bad = await withTrack(id, (track, g) => {

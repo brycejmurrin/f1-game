@@ -688,6 +688,7 @@
         "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/ci-ship-smoke-renderer.test.mjs",
         "tests/unit/ci-workflow-triggers.test.mjs",
+        "tests/unit/comment-citations.test.mjs",
         "tests/unit/component-inventory.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/diagnostics-tools.test.mjs",
@@ -697,9 +698,11 @@
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
+        "tests/unit/knowledge-retention.test.mjs",
         "tests/unit/merge-surveyor.test.mjs",
         "tests/unit/parent-protocol.test.mjs",
         "tests/unit/pre-commit-guards.test.mjs",
+        "tests/unit/rulebook-guards.test.mjs",
         "tests/unit/skill-descriptions.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/skill-routing-eval.test.mjs",
@@ -1505,6 +1508,7 @@
         "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
+        "tests/unit/career-planning-ui-download.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -4187,19 +4191,24 @@
       "roster": "tag"
     },
     {
-      "path": "js/race/real-race-pace.js",
-      "global": "RealRacePace",
-      "roster": "tag"
-    },
-    {
-      "path": "js/race/real-race.js",
+      "path": "js/race/real-race-boot.js",
       "global": "RealRace",
       "roster": "tag"
     },
     {
+      "path": "js/race/real-race-pace.js",
+      "global": "RealRacePace",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
+      "path": "js/race/real-race.js",
+      "global": "RealRaceBody",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
       "path": "js/race/real-replay.js",
       "global": "RealReplay",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/race/reliability.js",
@@ -5054,7 +5063,7 @@
     {
       "path": "js/ui/watch-transport.js",
       "global": "WatchTransport",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/workers/bitmap-decode-client.js",

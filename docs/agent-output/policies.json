@@ -591,6 +591,11 @@
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
     },
+    "tools/ci/docs-fast-tests.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line: the space-separated unit files a docs-only change runs (the pre-commit hook's node --test argv)"
+    },
     "tools/ci/file-verdict-reporter.mjs": {
       "action": "protocol-only",
       "presentation": "native",
@@ -780,6 +785,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Unknown API/base forces no reuse; no stdout prose"
+    },
+    "tools/ci/dropped-group-runs.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Any lookup doubt, other base, re-run or red group run forces accept=false; stdout is GITHUB_OUTPUT lines only"
     },
     "tools/ci/reuse-draft-selected.mjs": {
       "action": "protocol-only",

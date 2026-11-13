@@ -153,3 +153,50 @@ test("needsSync: a jobs read error keeps `no` and says why", () => {
   const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: jobsApi([{ error: "HTTP 502" }]) });
   assert.equal(v.verdict, "no"); assert.match(v.why, /jobs are unreadable \(HTTP 502\)/); assert.match(v.note, /unreadable/);
 });
+
+// A green only on run_attempt > 1 after a red attempt: merge-gate's ci row refuses it, so needs-sync calls it red.
+test("decideSync: retried green after a failed job + tip moved = stale-red, and the why names the attempt", () => {
+  const d = decideSync({ behind: true, conflict: false, ci: "success", attempt: 2, retryFailedJobs: 3, runStartedAt: T0, tipNewestAt: T1 });
+  assert.equal(d.verdict, "stale-red"); assert.equal(d.why, "ci green only on attempt 2 after 3 failed job(s) on the head and the tip has moved since that run started");
+});
+test("decideSync: retried green after a failed job but the tip has not moved = no", () => {
+  const d = decideSync({ behind: true, conflict: false, ci: "success", attempt: 2, retryFailedJobs: 1, runStartedAt: T1, tipNewestAt: T0 });
+  assert.equal(d.verdict, "no"); assert.equal(d.why, "behind with no conflict (ci green only on attempt 2 after 1 failed job(s) but the tip has not moved since): clean-behind is not a reason");
+});
+test("decideSync: retried green after a cancel-only attempt = no", () => {
+  const d = decideSync({ behind: true, conflict: false, ci: "success", attempt: 2, retryFailedJobs: 0, runStartedAt: T0, tipNewestAt: T1 });
+  assert.equal(d.verdict, "no"); assert.equal(d.why, "behind with no conflict (ci success on attempt 2; earlier attempts had no failed job): clean-behind is not a reason");
+});
+test("decideSync: first-attempt green = no (a stray retry count is ignored)", () => {
+  assert.equal(decideSync({ behind: true, conflict: false, ci: "success", attempt: 1, retryFailedJobs: 5, runStartedAt: T0, tipNewestAt: T1 }).verdict, "no");
+});
+
+const retriedRun = { id: 11, path: ".github/workflows/ci.yml", status: "completed", conclusion: "success", run_attempt: 3, run_started_at: "2000-01-01T00:00:00Z" };
+const attemptsApi = (byAttempt, calls = []) => (p) => {
+  if (p.startsWith("actions/workflows/pages.yml/runs")) return { json: { workflow_runs: [] } }; // the deploy tip: no run, not red
+  calls.push(p);
+  if (p.startsWith("actions/workflows/ci.yml/runs")) return { json: { workflow_runs: [retriedRun] } };
+  const m = p.match(/^actions\/runs\/11\/attempts\/(\d+)\/jobs\?per_page=100&page=1$/);
+  assert.ok(m, p);
+  const a = byAttempt[Number(m[1])];
+  return a.error ? a : { json: { jobs: a } };
+};
+test("needsSync: green on attempt 3 after a timed_out job in attempt 1 + newer tip = stale-red", () => {
+  const calls = [];
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])),
+    request: attemptsApi({ 1: [{ conclusion: "timed_out" }, { conclusion: "failure" }], 2: [{ conclusion: "cancelled" }] }, calls) });
+  assert.equal(v.verdict, "stale-red"); assert.equal(v.retryFailedJobs, 2); assert.equal(v.why, "ci green only on attempt 3 after 2 failed job(s) on the head and the tip has moved since that run started");
+  assert.ok(calls.some((p) => p.includes("/attempts/2/")), "every earlier attempt is read");
+});
+test("needsSync: green on attempt 3 after cancel-only attempts = no", () => {
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])),
+    request: attemptsApi({ 1: [{ conclusion: "cancelled" }], 2: [{ conclusion: "cancelled" }, { conclusion: "skipped" }] }) });
+  assert.equal(v.verdict, "no"); assert.equal(v.retryFailedJobs, 0);
+});
+test("needsSync: an unreadable earlier attempt degrades like an unreadable CI read (no + note), never stale-red", () => {
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])),
+    request: attemptsApi({ 1: { error: "HTTP 502" } }) });
+  assert.equal(v.ok, true); assert.equal(v.verdict, "no"); assert.equal(v.retryFailedJobs, null);
+  assert.equal(v.why, "behind with no conflict (ci success on attempt 3; its earlier attempts are unreadable (attempt 1: HTTP 502)): clean-behind is not a reason");
+  assert.equal(v.note, "earlier attempts of run 11 unreadable (attempt 1: HTTP 502): a retried green counts as no");
+});
