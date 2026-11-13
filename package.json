@@ -82,10 +82,10 @@
     "memory:show": "node tools/env/apex-memory.mjs show",
     "memory:retire": "node tools/env/apex-memory.mjs retire",
     "test:agent-output": "node tools/ci/run-group.mjs test:agent-output",
+    "test:offline-precache": "node tools/ci/run-playwright.mjs --group test:offline-precache",
     "test:perf-budget": "node tools/ci/run-playwright.mjs --group test:perf-budget",
     "test:perf-idle-churn": "node tools/ci/run-playwright.mjs --group test:perf-idle-churn",
-    "test:stall-reload-sw": "node tools/ci/run-playwright.mjs --group test:stall-reload-sw",
-    "test:offline-precache": "node tools/ci/run-playwright.mjs --group test:offline-precache"
+    "test:stall-reload-sw": "node tools/ci/run-playwright.mjs --group test:stall-reload-sw"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",

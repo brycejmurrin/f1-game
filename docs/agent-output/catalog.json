@@ -896,6 +896,12 @@
       ]
     },
     {
+      "path": "tools/ci/docs-fast-tests.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/dropped-group-runs.mjs",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"

@@ -69,6 +69,7 @@ import { fileURLToPath } from "node:url";
 import { api as githubApi } from "./github-api.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { OWNER, byOwner, describeActor, isDecisionComment, newestLabelEvent, ownerSet } from "./lib/provenance.mjs";
+import { launchableReady, readyCapRow } from "./ready-sweep.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const CONFIG_FILE = path.join(ROOT, "tools", "ci", "dispatch.json");
@@ -437,7 +438,10 @@ export function renderBoard(state, plan, config, now) {
   return [BOARD_MARKER, `## Board — ${new Date(now).toISOString()}`, "",
     `pause: ${plan.flags.pause} · merge-pause: ${plan.flags.mergePause} · deploy: ${state.deployRed ? "**RED**" : "green"}`,
     `caps: ${caps} · land queue ${plan.landQueue ?? 0}/${config.landQueueMax}`,
-    ...((plan.ignored || []).length ? [`not honoured (not ${config.owner || OWNER}'s own click): ${plan.ignored.join("; ")}`] : []), "",
+    ...((plan.ignored || []).length ? [`not honoured (not ${config.owner || OWNER}'s own click): ${plan.ignored.join("; ")}`] : []),
+    // D16 (#5402): ready-sweep's cap row, read-only; `landed` is null when the merged-PR count could not be read.
+    state.landed == null ? `ready cap: unknown (the merged-PR count for the last ${LANDED_DAYS} d could not be read)`
+      : readyCapRow({ ready: (state.issues || []).filter((i) => has(i, "ready")).length, launchable: launchableReady(state.issues || [], state.prs || [], config.repo).length, landed: state.landed, days: LANDED_DAYS }), "",
     "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
     ...(rows.length ? rows : ["| - | no open PRs | | | | | |"]), "",
     `### Launches this run (${plan.launches.length})`, ...plan.launches.map((l) => `- ${l.address}: ${l.title}`), ...(plan.launches.length ? [] : ["- none"]),
@@ -484,6 +488,17 @@ const pushedAt = (api, sha, fallback) => {
   return (r.json?.workflow_runs || []).map((w) => w.created_at).filter((x) => t(x)).sort((a, b) => t(a) - t(b))[0] || null;
 };
 
+/** The Board's ready-cap window, the same 7 d ready-sweep.mjs defaults to. */
+export const LANDED_DAYS = 7;
+/** PRs merged into the repository in the last LANDED_DAYS (one search GET), or null when it cannot be read: the cap
+ *  row then says "unknown", never a made-up count, and the Board still posts. */
+export function landedCount(api, config, now) {
+  const since = new Date(now - LANDED_DAYS * 864e5).toISOString().slice(0, 10);
+  const r = api(`https://api.github.com/search/issues?q=${encodeURIComponent(`repo:${config.repo} is:pr is:merged merged:>=${since}`)}&per_page=1`);
+  const n = r?.error ? NaN : Number(r?.json?.total_count);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
 export function readState({ api = githubApi, config, now = Date.now() } = {}) {
   const special = (i) => (config.boardIssue ? [config.boardIssue, config.dispatchIssue].includes(i.number) : [config.boardIssueTitle, config.dispatchIssueTitle].includes(String(i.title).trim()));
   const wantsEvents = (x) => labelsOf(x).some((l) => PROVENANCE_LABELS.includes(l));
@@ -517,7 +532,7 @@ export function readState({ api = githubApi, config, now = Date.now() } = {}) {
   // The newest COMPLETED train: an in-progress run has no conclusion, which flapped deploy:red mid-incident.
   const run = get(api, `actions/workflows/pages.yml/runs?branch=${encodeURIComponent(config.deployBranch)}&status=completed&per_page=1`)?.workflow_runs?.[0];
   const deployRed = !!run && ["failure", "timed_out"].includes(run.conclusion);
-  return { issues, prs, deployRed, deployRunId: deployRed ? run.id : null, deployPlatform: deployRed ? platformFailure(api, run.id) : false };
+  return { issues, prs, deployRed, deployRunId: deployRed ? run.id : null, deployPlatform: deployRed ? platformFailure(api, run.id) : false, landed: landedCount(api, config, now) };
 }
 
 // ---- I/O: the worker fire and the GitHub writes ---------------------------------------------------------------

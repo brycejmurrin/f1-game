@@ -61,6 +61,13 @@ test("srcdoc, createContextualFragment and document.write are sinks too", () => 
   assert.deepEqual(keys(`n.toString(); o.constructor(x);`), [], "Object.prototype names are not sinks");
 });
 
+test("#5014: a call passing a sink name as a literal argument is a site (computed setter el[k] = v)", () => {
+  const one = lintSource('const set=(e,k,v)=>{e[k]=v}; set(x,"innerHTML",y)', "f.js").sites;
+  assert.deepEqual(one.map((s) => [s.sink, s.key, s.rhs]), [["innerHTML", 'f.js::set("innerHTML")', rhsHash("y")]]);
+  assert.deepEqual(lintSource('put(el, "outerHTML", a + b); u.set(f, "srcdoc", html)', "f.js").sites.map((s) => s.key), ['f.js::put("outerHTML")', 'f.js::u.set("srcdoc")']);
+  assert.deepEqual(lintSource('set(x, "innerHTML", "<b>ok</b>"); set(x, "textContent", y)', "f.js").sites, [], "constant HTML and a non-sink name are not sites");
+});
+
 test("the constant test is structural, not a regex over the text", () => {
   const parse = (e) => lintSource(`x.innerHTML = ${e};`, "f.js").sites.length === 0;
   assert.equal(parse(`"a" + ("b" + "c")`), true);
