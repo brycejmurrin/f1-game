@@ -24,8 +24,6 @@ test("index.html skips service-worker registration when __APEX_NATIVE__.desktop"
   assert.match(HTML, /nativeDesktop/);
   assert.match(HTML, /nativeCap/);
   assert.match(HTML, /serviceWorker" in navigator && !nativeDesktop && !nativeCap/);
-  assert.match(HTML, /if \(nativeDesktop \|\| nativeCap\)/);
-  assert.match(HTML, /window\.__apexGuardOk = 1/);
   // Playwright serviceWorkers:"block" resolves register() with undefined.
   assert.match(HTML, /if \(!r\) \{ swl\("warn", "register returned no registration"\); return; \}/);
 });

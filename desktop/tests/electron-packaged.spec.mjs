@@ -53,6 +53,39 @@ async function launchPackaged() {
   });
 }
 
+/**
+ * Run `probe` against the SETTLED shell. The boot may reload the page once on its
+ * own (renderer-boot.js reloadOnceIntoGlx: a refused or hung renderer claim reloads
+ * behind a one-shot session latch), and a reload between two probes destroys the
+ * execution context the next `evaluate` needs (macOS Pack smoke, run 43067909592:
+ * "Execution context was destroyed" at the href / __APEX_NATIVE__ reads). So wait
+ * for the bar `main.js --smoke` uses (complete + native flag + app:// href), run the
+ * probes, and start over when a navigation cut them off. Two restarts at most: the
+ * app's own reload is capped at one, and a page that keeps navigating is a failure.
+ * Any other error (an `expect`, a timeout) is rethrown untouched.
+ * @template T
+ * @param {import('playwright').Page} window
+ * @param {() => Promise<T>} probe
+ * @returns {Promise<T>}
+ */
+async function onSettledShell(window, probe) {
+  for (let restarts = 0; ; restarts++) {
+    try {
+      await window.waitForFunction(
+        () => document.readyState === "complete"
+          && window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop === true
+          && /^app:\/\/apex\//.test(String(location.href)),
+        null,
+        { timeout: 60_000, polling: 100 },
+      );
+      return await probe();
+    } catch (e) {
+      const cut = /Execution context was destroyed/.test(String(e && e.message));
+      if (!cut || restarts >= 2) throw e;
+    }
+  }
+}
+
 test.describe.configure({ mode: "serial" });
 
 test("fuses: EnableNodeCliInspectArguments stays on for the build under test", () => {
@@ -78,6 +111,8 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
   const electronApp = await launchPackaged();
   const pageErrors = [];
   const consoleErrors = [];
+  /** Every main-frame URL this launch committed: the evidence for a boot-navigation race. */
+  const navigations = [];
 
   try {
     const packaged = await electronApp.evaluate(async ({ app }) => app.isPackaged);
@@ -99,53 +134,53 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
 
+    window.on("framenavigated", (frame) => {
+      if (frame === window.mainFrame()) navigations.push(frame.url());
+    });
+
     await window.waitForLoadState("domcontentloaded");
-    // Boot can still navigate (gfx claim skip, UpdateCheck parity reload on web).
-    // Wait for the final app:// shell the assertions target — same bar as main.js --smoke.
-    await window.waitForFunction(
-      () => document.readyState === "complete"
-        && window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop === true
-        && /^app:\/\/apex\//.test(String(location.href)),
-      null,
-      { timeout: 60_000, polling: 100 },
-    );
-    const title = await window.title();
-    expect(title.length).toBeGreaterThan(0);
-    expect(title).toMatch(/Apex/i);
 
-    const href = await window.evaluate(() => location.href);
-    expect(href).toMatch(/^app:\/\/apex\//);
+    const glInfo = await onSettledShell(window, async () => {
+      const title = await window.title();
+      expect(title.length).toBeGreaterThan(0);
+      expect(title).toMatch(/Apex/i);
 
-    const native = await window.evaluate(() => window.__APEX_NATIVE__);
-    expect(native && native.desktop).toBe(true);
+      const href = await window.evaluate(() => location.href);
+      expect(href).toMatch(/^app:\/\/apex\//);
 
-    // Canvas present (may be visibility:hidden on the title screen — still in DOM).
-    await expect(window.locator("#game")).toHaveCount(1);
+      const native = await window.evaluate(() => window.__APEX_NATIVE__);
+      expect(native && native.desktop).toBe(true);
 
-    // Observe the game's own tick instrumentation; a separate rAF counter can
-    // advance even when game boot failed or its tick loop stopped.
-    await window.waitForFunction(() => typeof PerfSpans !== "undefined", null, { timeout: 60_000, polling: 100 });
-    await window.evaluate(() => { PerfSpans.reset(); PerfSpans.on(true); });
-    try {
-      await window.waitForFunction(() => (PerfSpans.stats().frame?.n || 0) >= 30, null,
-        { timeout: 60_000, polling: 100 });
-    } finally {
-      await window.evaluate(() => PerfSpans.on(false));
-    }
+      // Canvas present (may be visibility:hidden on the title screen — still in DOM).
+      await expect(window.locator("#game")).toHaveCount(1);
 
-    // Report the software renderer we actually got (evidence, not a pass gate on string).
-    const glInfo = await window.evaluate(() => {
-      const c = document.createElement("canvas");
-      const gl = c.getContext("webgl2") || c.getContext("webgl");
-      if (!gl) return { ok: false, reason: "no-webgl" };
-      const ext = gl.getExtension("WEBGL_debug_renderer_info");
-      const renderer = ext
-        ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
-        : gl.getParameter(gl.RENDERER);
-      const vendor = ext
-        ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL)
-        : gl.getParameter(gl.VENDOR);
-      return { ok: true, renderer: String(renderer), vendor: String(vendor) };
+      // Observe the game's own tick instrumentation; a separate rAF counter can
+      // advance even when game boot failed or its tick loop stopped.
+      await window.waitForFunction(() => typeof PerfSpans !== "undefined", null, { timeout: 60_000, polling: 100 });
+      await window.evaluate(() => { PerfSpans.reset(); PerfSpans.on(true); });
+      try {
+        await window.waitForFunction(() => (PerfSpans.stats().frame?.n || 0) >= 30, null,
+          { timeout: 60_000, polling: 100 });
+      } finally {
+        // After a navigation the fresh page may not have PerfSpans yet; that must
+        // not replace the error onSettledShell reads.
+        await window.evaluate(() => PerfSpans.on(false)).catch(() => {});
+      }
+
+      // Report the software renderer we actually got (evidence, not a pass gate on string).
+      return window.evaluate(() => {
+        const c = document.createElement("canvas");
+        const gl = c.getContext("webgl2") || c.getContext("webgl");
+        if (!gl) return { ok: false, reason: "no-webgl" };
+        const ext = gl.getExtension("WEBGL_debug_renderer_info");
+        const renderer = ext
+          ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+          : gl.getParameter(gl.RENDERER);
+        const vendor = ext
+          ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL)
+          : gl.getParameter(gl.VENDOR);
+        return { ok: true, renderer: String(renderer), vendor: String(vendor) };
+      });
     });
     test.info().annotations.push({
       type: "gl-renderer",
@@ -158,6 +193,7 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
     const serious = pageErrors.filter((e) => !/ResizeObserver|net::ERR_/i.test(e));
     expect(serious, serious.join("\n")).toEqual([]);
   } finally {
+    test.info().annotations.push({ type: "navigations", description: JSON.stringify(navigations) });
     await electronApp.close();
   }
 });
@@ -229,11 +265,13 @@ test("packaged app: offline start still loads the shell (assets bundled)", async
     await ctx.setOffline(true);
     await window.reload();
     await window.waitForLoadState("domcontentloaded");
-    const href = await window.evaluate(() => location.href);
-    expect(href).toMatch(/^app:\/\/apex\//);
-    await expect(window.locator("#game")).toHaveCount(1);
-    const native = await window.evaluate(() => window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop);
-    expect(native).toBe(true);
+    await onSettledShell(window, async () => {
+      const href = await window.evaluate(() => location.href);
+      expect(href).toMatch(/^app:\/\/apex\//);
+      await expect(window.locator("#game")).toHaveCount(1);
+      const native = await window.evaluate(() => window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop);
+      expect(native).toBe(true);
+    });
   } finally {
     await electronApp.close();
   }
