@@ -3,12 +3,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { parse as parseYAML } from "yaml";
 import {
-  decide, droppedSpecs, groupRecordLine, parseGroupRecord, parseRunTitle, covers, passedSpecFiles, GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, GROUP_WORKFLOW_PATH,
+  decide, droppedSpecs, scriptSpecs, groupRecordLine, parseGroupRecord, parseRunTitle, covers, passedSpecFiles, GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, GROUP_WORKFLOW_PATH,
 } from "../../tools/ci/dropped-group-runs.mjs";
 import { runShardArgs, testedPair, prInput } from "../../tools/ci/remote-group.mjs";
 import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
+import { specsOf } from "../../tools/ci/select-specs.mjs";
 import { ciWorkflow } from "../helpers/ci-workflow.mjs";
 
 const HEAD = "a".repeat(40);
@@ -259,4 +263,26 @@ test("ci.yml wires it: select names the drops, the verdict job asks only on a re
   const steps = bg.jobs.group.steps;
   assert.equal(steps.find((s) => String(s.uses || "").startsWith("actions/checkout")).with.ref, "${{ inputs.pr != '' && format('refs/pull/{0}/merge', inputs.pr) || '' }}");
   for (const s of steps.filter((x) => /--run-shard/.test(x.run || ""))) assert.equal(s.env.APEX_FAIL_ON_FLAKY, 1);
+});
+
+test("the verdict job can run it: the file alone, no node_modules, no other repo file (run 43475135417 died on an import)", () => {
+  // The selected-verdict job has no npm install and a sparse checkout. Outside the repo nothing resolves but node:
+  // builtins, so any import this file grows fails here the way it failed there.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dropped-group-runs-"));
+  try {
+    fs.copyFileSync("tools/ci/dropped-group-runs.mjs", path.join(dir, "dropped-group-runs.mjs"));
+    const r = spawnSync(process.execPath, ["dropped-group-runs.mjs"], {
+      cwd: dir, encoding: "utf8",
+      env: { PATH: process.env.PATH, GITHUB_REPOSITORY: "o/r", PR_HEAD_SHA: "not-a-sha", DROPPED: "1", DROPPED_SPECS: UI, CURRENT_BASE: BASE, WAIT_S: "0" },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.split("\n")[0], "accept=false");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("scriptSpecs reads a group's script line exactly as select-specs' specsOf does, for every test:* script", () => {
+  const scripts = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts;
+  const names = Object.keys(scripts).filter((n) => n.startsWith("test:"));
+  assert.deepEqual(names.map((n) => scriptSpecs(scripts[n])), names.map((n) => specsOf([n], scripts)));
+  assert.deepEqual(scriptSpecs(undefined), []);
 });
