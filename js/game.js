@@ -1193,7 +1193,7 @@ function saveTeamParts(teamId, parts) {
 const customLiv = CustomLiveries.create({ store });
 const {
   getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
-  getLiveries, resolveLivery, wingColorOfLivery,
+  getLiveries, resolveLivery, factoryLivery, wingColorOfLivery,
 } = customLiv;
 
 // Draw a car's MOVEABLE wing elements (active aero) at flap blend `blend`
@@ -1209,7 +1209,7 @@ const _flapWorld = new Float32Array(16);
 function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still, viewLivery) {
   // One resolveLivery per car per frame (wingColorOf resolved it a second time): the wing colour always
   // follows the team's own livery, the finish and surface the viewed one.
-  const own = resolveLivery(team), col = wingColorOfLivery(own, team), b = clamp(blend, 0, 1);
+  const own = team.peerLivery || resolveLivery(team), col = wingColorOfLivery(own, team), b = clamp(blend, 0, 1);   // a car's own paint (CarDraw.paintTeam, #5037)
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
@@ -3481,7 +3481,7 @@ const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this
 setupTrialSession = SetupTrialSession.create(G);
 let raceRadio = RaceRadio.create(G);   // LAZY_RACE_SESSION — radio
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
-const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
+const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script: the FULL stub (js/race/real-race-boot.js) until LAZY_REAL_RACE lands
 let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) });   // LAZY_RACE_SESSION
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
@@ -3508,7 +3508,7 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 // wheel spec, decal queue, cockpit rig, planted wheels, warm-ups, GLB body.
 // resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
 // stay here (the garage and the setup preview share them via deps).
-const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
+const carDraw = CarDraw.create(G, { resolveLivery, factoryLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, teamDecalState, carDecalNum,
         drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
         warmCarAssetsAsync, prepareMenuCarAssets } = carDraw;
@@ -8116,20 +8116,21 @@ function render(dt) {
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
+    const pt = carDraw.paintTeam(c);   // the team as this car is painted: a friend's sent paint, an AI's factory one (#5037)
     const sharedBody = FieldLod.on && !c.isPlayer && _lod >= 2;
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
       : (sharedBody ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c)) : teamBodyMesh(c.team, c)));
     if (body) {
       // Only the neutral shared distant bodies share paint and geometry; keep chassis attitude.
       gfx.draw(body, tmpMat, sharedBody ? carDraw.coOpt(paint) : paint);
-      if (_lod < 2) queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
+      if (_lod < 2) queueCarDecals(pt, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // crew + kit, on the ground beside it
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
-      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      queueCarDecals(pt, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
       // A loaded glb is one piece (no separate wheels), but the crew still
       // stands in the box — and without this a glb stop was an empty bay.
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);
@@ -8151,8 +8152,8 @@ function render(dt) {
     // player is never gated — it is the car you are looking at.
     if (!carDraw.modelBuf) {
       const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
-      const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
-      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero, null,
+      const aSt = teamDecalState(pt, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      drawAeroFlaps(pt, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero, null,
         !c.isPlayer && fdx * fdx + fdy * fdy + fdz * fdz >= FieldLod.flapsM() ** 2);
     }
     // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
@@ -8207,9 +8208,9 @@ function render(dt) {
     if (!carDraw.modelBuf && vStd(c.speed) < 5.56) {
       const mdx = tmpP[0] - camEye[0], mdy = tmpP[1] - camEye[1], mdz = tmpP[2] - camEye[2];
       if (c.isPlayer || mdx * mdx + mdy * mdy + mdz * mdz < 40 * 40) {
-        const mSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+        const mSt = teamDecalState(pt, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
         const cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
-        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(Car3D.bodyStyleKey(c.team.id, resolveLivery(c.team).bodyStyle), cm && cm.mirror));
+        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(Car3D.bodyStyleKey(c.team.id, carDraw.livOf(pt).bodyStyle), cm && cm.mirror));
       }
     }
     // The player's ERS strip and every car's throttle-lift after-fire (rivals

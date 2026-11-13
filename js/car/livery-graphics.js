@@ -333,6 +333,7 @@ const LiveryGraphics = (function () {
       } else if (id === "ridge") {
         drawCoverBand(ctx, id, R, acc, ink, colors, coverPaint, T);
       } else if (id === "streaks") {
+        // Crown streaks' ink edge, so pale covers keep the tail (#4651).
         for (let i = 0; i < 4; i++) {
           const tt = (i + 0.85) / 5;
           const x0 = X + W * (tt - 0.028), x1 = X + W * (tt + 0.028);
@@ -341,6 +342,7 @@ const LiveryGraphics = (function () {
           ctx.moveTo(x0 + W * 0.008, Y); ctx.lineTo(x1 + W * 0.008, Y);
           ctx.lineTo(x1 - W * 0.008, Y + H); ctx.lineTo(x0 - W * 0.008, Y + H);
           ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = cssA(ink, T.a(0.45)); ctx.lineWidth = T.lw(Math.max(1.2, W * 0.008), W); ctx.stroke();
         }
 
       } else if (id === "twin") {

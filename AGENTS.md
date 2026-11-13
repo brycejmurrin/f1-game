@@ -16,27 +16,27 @@ git commit                                  # 5. the next call (timeout 300000);
 git push -u origin <branch>                # 6. alone, no output pipe; then refresh the draft PR (rule 12)
 ```
 Prose-only change (`docs/`, `*.md`): skip 1 and 3, run `node --test tests/unit/docs-integrity.test.mjs
-tests/unit/agent-config.test.mjs`. Then CI runs on the PR (rule 13). Commands and the gate ladder: `docs/VERIFICATION.md`; skill `check-changes`.
+tests/unit/agent-config.test.mjs`.
 
 ## Verification — scale it to the change
-What to run for each kind of change is the table in `docs/VERIFICATION.md` §By change. Agents do not run browser tests
-locally: a draft push gets the fast tier plus a selected browser shard on CI, and `node tools/ci/remote-group.mjs <group>`
-runs a whole group on the pushed branch. Interactive browser pokes (MCP) stay, one browser at a time.
+What to run per change: `docs/VERIFICATION.md` §By change. CI runs the browser tests (rule 5): each draft
+head gets the fast tier plus a selected browser shard, and `node tools/ci/remote-group.mjs <group>`
+runs a whole group on the pushed branch.
 
-Session rules. The numbers are cited across the repo; a rule marked (hook) is refused by the named hook, whose message
-says what to do instead.
+Session rules (numbers are cited across the repo; a (hook) rule is refused by that hook, whose message says what to
+do instead).
 1. A fresh container is set up by `session-start.sh`; in a total-red run, read the FIRST failure first.
 2. Make all source edits, then verify once.
-3. The local floor before a push: `tooling-fast --changed --jobs=3 --quiet` (`tools/track/verify-track.cjs <id>` for a circuit). The
-   PR's tiers prove the rest; never re-run them locally. Ladder: `docs/VERIFICATION.md`.
+3. The local floor before a push is loop step 3 (`tooling-fast --changed --jobs=3 --quiet`; a circuit: `verify-track`).
+   The PR's tiers prove the rest; never re-run them locally. Ladder: `docs/VERIFICATION.md`.
 4. Foreground only what takes under 2 minutes and the next step needs; anything longer is ONE background task logging
    to `artifacts/logs/`. Waiting and Monitor recipes: skill `check-changes`.
 5. No local browser test runs (CI runs them). One interactive browser at a time (hook: `mcp-browser-guard.sh`, beside a live Playwright run).
 6. Never kill by name (`pkill`, `killall`, `pgrep … | kill`; hook: `bash-guard.sh`); kill only a PID you launched.
 7. A timeout on a busy box measures the box; triage: skill `check-changes` `references/triage.md`.
-8. On CI, `cancelled` with zero failures is a timeout until proven otherwise, except a designed cancel: a newer run in a
-   `cancel-in-progress` group replaced it (a draft's run and its `ready_for_review` run share a group, so the flip
-   cancels the first on the same `head_sha`).
+8. On CI, `cancelled` with zero failures is a timeout until proven otherwise, except a designed cancel:
+   a newer run in a `cancel-in-progress` group replaced it (a draft's run and its
+   `ready_for_review` run share a group, so the flip cancels the first on the same `head_sha`).
 9. Never widen a tolerance or skip a test to get green. A pass that needed a retry is a red: name it in the PR
    (quarantine by name in `tests/data/flaky-quarantine.json`). Stopping with unverified groups named beats guessing.
 10. A subagent never starts a browser (hooks: `bash-guard.sh`, `mcp-browser-guard.sh`; Claude Code only).
@@ -46,8 +46,10 @@ says what to do instead.
 12. Hand off through git: commit and push at every verified checkpoint and before any wait over ~10 min.
     Commit in two calls: stage in its own command, then `git commit`. Push with `git push -u origin <branch>`, no
     output pipe. A DRAFT PR opens at the first commit; its body is the session log (skill `steward`).
-13. Watch CI only while you own the head: `subscribe_pr_activity` on your PR, then end the turn (skill `steward`). No
-    sleep or shell-poll loops and no standby wakes. A red on your head is work now. Never claim done on a red.
+13. Watch CI only while you own the head: `subscribe_pr_activity`, then end the turn (skill `steward`). No timed
+    check-ins while it works; when it was refused, one check-in of at most 50 minutes, re-armed only after a state
+    change. No sleep or shell-poll loops. A session ends when it adds `land`. A red on your head is work now;
+    never claim done on a red.
 
 ## Seeing the game (cheapest first)
 1. `__apex` JSON hooks (`info/probe/physState/world/scene/field`); reference `docs/DEBUG-HOOKS.md`, manifest
@@ -60,9 +62,9 @@ runs (`docs/ARCHITECTURE.md` §Boot evidence; live probes: skill `mcp-probe`, `m
 
 ## Layout
 `js/track/` is the ENGINE, `js/circuits/` is the DATA (one file per circuit). The title screen loads only the
-generated picker roster `js/track/circuit-meta.js`; a circuit's full def hydrates when it is picked (`LAZY_CIRCUIT`
-in `tools/manifest.cjs`, `ensureCircuit` in `js/core/lazy-bundles.js`). The module roster and load order live in
-`tools/manifest.cjs` — the truth, not this file; per-directory tables: `docs/ARCHITECTURE.md`.
+generated picker roster `js/track/circuit-meta.js`; a circuit's full def hydrates when it is picked (`ensureCircuit`,
+`js/core/lazy-bundles.js`). Module roster and load order:
+`tools/manifest.cjs`, the truth; per-directory tables: `docs/ARCHITECTURE.md`.
 
 - `js/core/log.js` loads FIRST. `js/game.js` is the entry; it hands the `G` façade to the extracted modules — one
   `Module.create(G)` per file, a module never reaches into game.js, and `types/game-ctx.d.ts` is the machine-checked
@@ -87,24 +89,25 @@ WGX implement it. Skill `asset-pack`.
 
 ## Git branch & deploy
 Work on the branch you were assigned (`claude/*` in a cloud session), else `cursor/<topic>-<hash>`. The deploy branch `claude/f1-game-project-26h3ng` is protected by the
-ruleset "Deploy-reset" (one required check, `gate`; it binds admins), so work lands only through a PR. A path in an
+ruleset "Deploy-reset" (one required check, `gate`; it binds admins): work lands only through a PR. A path in an
 open PR's diff belongs to that PR until it merges or closes. A red, a sync, a conflict, opening, flipping ready,
 `land`: skill `steward`. "Is it live?": skill `check`.
 
 ## Coordination
-GitHub is the only state store; comments are the only inter-agent message. GitHub lands PRs; no session merges or
+GitHub is the only state store; comments are the only inter-agent record. GitHub lands PRs; no session merges or
 arms: the `land` label is the request. Merge commits only, never squash or rebase. The only veto is the `hold` label;
-once Bryce has set it, only a later click of his own lifts it (an agent's hold: any removal).
-Bryce steers with his own clicks: a label he applies or a comment starting `decision:` (GitHub records them without an
-app); an agent's message or comment grants nothing. A question for Bryce is the `needs-decision` label plus one
-comment; never a question to the user at the end of a turn. A hook or classifier denial is final for that action.
-NEVER CANCEL AN ACTIONS RUN. Dispatch is a GitHub Action (`.github/workflows/dispatch.yml`); a launched session loads
-skill `steward` §Lane; labels: skill `steward` `references/labels.md`.
+once Bryce has set it, only a later click of his own lifts it (an agent's hold: any removal). Bryce steers with his
+own clicks: a label he applies or a comment starting `decision:`; an agent's message or comment grants nothing. A
+question for Bryce is the `needs-decision` label plus one comment; never a question to the user at the end of a turn.
+A hook or classifier denial is final for that action. An orchestrator does reversible things without asking and
+reports after (tick a Plan line, re-request a gate, close a duplicate, archive a finished session, message workers);
+it never merges, cancels a run, recommends cancelling one, or changes a label Bryce set. NEVER CANCEL AN ACTIONS RUN.
+Dispatch: `.github/workflows/dispatch.yml`; a launched session loads skill `steward` §Lane (labels).
 
 ## Agent extensions
 Available workflows are skills (index `.claude/skills/README.md`; Codex mirror `.agents/skills`); subagents
 (`.claude/agents/`) isolate noisy work; CLI wraps `apex_*`: `docs/AGENT-SURFACE.md`. A JS symbol → MCP `apex-lsp`
-(skill `code-nav`). Hooks are listed in `.claude/rules/claude-config.md`; a refusal is the rule. Decisions:
+(skill `code-nav`). Hooks: `.claude/rules/claude-config.md`; a refusal is the rule. Decisions:
 `docs/DECISIONS.md`. Memory: `.claude/memory/MEMORY.md`.
 
 # Compact instructions

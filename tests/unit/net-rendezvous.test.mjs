@@ -148,7 +148,8 @@ test("codes are drawn without modulo bias", () => {
   try {
     const c = NetRendezvous.makeCode();
     const A = NetRendezvous.ALPHABET;
-    assert.equal(c, A[0] + A[0] + A[0] + A[247 % 31] + A[1] + A[2], "rejected bytes vanish, the rest map in order");
+    // 8 letters from one 16-byte draw: the feed wraps, its rejects vanish again.
+    assert.equal(c, A[0] + A[0] + A[0] + A[247 % 31] + A[1] + A[2] + A[3] + A[0], "rejected bytes vanish, the rest map in order");
   } finally { delete crypto.getRandomValues; assert.equal(typeof orig, "function"); }
 });
 
@@ -166,8 +167,19 @@ test("typing is forgiving about case and spacing, strict about the rest", () => 
   // But a genuinely wrong code stays wrong rather than being coerced into a
   // DIFFERENT valid room, which would silently connect two strangers.
   assert.equal(NetRendezvous.valid("ABC"), false);
-  assert.equal(NetRendezvous.valid("ABCDEFGH"), false);
+  assert.equal(NetRendezvous.valid("ABCDEFG"), false);
+  assert.equal(NetRendezvous.valid("ABCDEFGHJ"), false);
   assert.equal(NetRendezvous.valid(""), false);
+});
+
+test("public codes are eight letters; a six-letter code typed from an older build still joins (#5313)", () => {
+  NetRendezvous.setUrl(null);
+  assert.equal(NetRendezvous.CODE_LEN, 8);
+  assert.equal(NetRendezvous.makeCode().length, 8);
+  assert.equal(NetRendezvous.valid("ABCD2345"), true);
+  assert.equal(NetRendezvous.valid("abcd-2345"), true);
+  assert.equal(NetRendezvous.valid("ABC234"), true, "an older host's six-letter code");
+  assert.equal(NetRendezvous.valid("ABC2345"), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -645,7 +657,7 @@ test("QR relay configuration is validated and scoped to the controller document"
     assert.equal(NetRendezvous.setSessionUrl("http://127.0.0.1:3456/private"), true);
     assert.equal(NetRendezvous.setSessionUrl(null), true);
     assert.equal(NetRendezvous.usingPrivateRelay(), false, "public QR can override a saved private preference");
-    assert.equal(NetRendezvous.makeCode().length, 6);
+    assert.equal(NetRendezvous.makeCode().length, NetRendezvous.CODE_LEN);
     NetRendezvous.setSessionUrl(undefined);
     assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test");
   } finally { NetRendezvous.setSessionUrl(undefined); NetRendezvous.setUrl(null); }
