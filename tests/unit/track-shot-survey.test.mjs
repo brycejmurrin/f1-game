@@ -34,7 +34,7 @@ const TMP_BASE = (() => {
 })();
 
 test("landing validates the scenery catalog in the actual merged checkout", async (t) => {
-  for (const mode of ["matching", "base-moved", "mismatch", "missing", "malformed", "digest-not-hex", "no-digest-fresh", "no-digest-stale", "gen-failure", "validator-error"]) {
+  for (const mode of ["matching", "base-moved", "mismatch", "missing", "missing-build-fails", "malformed", "digest-not-hex", "no-digest-fresh", "no-digest-stale", "gen-failure", "validator-error"]) {
     await t.test(mode, () => {
       const dir = fs.mkdtempSync(path.join(TMP_BASE, "scenery-merge-"));
       const git = (cwd, ...args) => {
@@ -65,7 +65,13 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
         git(cwd, "checkout", "-q", "-b", "pr", "deploy-x");
         write(cwd, "docs/README.md", "PR unrelated to scenery\n");
         if (mode === "mismatch") write(cwd, "js/track/core/geom.js", "// changed input\n");
-        if (mode === "missing") fs.unlinkSync(path.join(cwd, catalog));
+        // Absent (built on demand, #5427): the gate builds it in write mode on the merge and believes the exit code.
+        if (mode.startsWith("missing")) {
+          git(cwd, "rm", "-q", catalog);
+          write(cwd, "tools/shot/gen-scenery-locations.cjs", mode === "missing"
+            ? "if (process.argv.length > 2) process.exit(9);\nconsole.log('OK scenery catalog: 0 emitted locations');\n"
+            : "console.error('Error: bahrain viewpoint pit-exit no longer emits');\nprocess.exit(1);\n");
+        }
         if (mode === "malformed") write(cwd, catalog, "{not JSON");
         if (mode === "digest-not-hex") write(cwd, catalog, "{\"sourceDigest\":5}\n");
         // No fingerprint at all: the gate must run the generator's own --check on the merge, and believe its exit code.
@@ -103,11 +109,18 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
         });
         assert.equal(result.tip, tip, "a catalog refusal retains the actual merge tip");
         assert.equal(result.error, undefined, "generation failures are refusals, not git infrastructure errors");
-        const passes = mode === "matching" || mode === "no-digest-fresh";
+        const passes = mode === "matching" || mode === "no-digest-fresh" || mode === "missing";
         assert.deepEqual(calls, mode === "gen-failure" ? ["npm"] : mode.startsWith("no-digest") ? ["npm", process.execPath, process.execPath] : ["npm", process.execPath]);
         assert.equal(result.ok, passes, result.evidence);
-        if (mode === "no-digest-fresh") assert.match(result.evidence, /scenery catalog rebuild check 0$/);
-        if (mode === "no-digest-stale") assert.match(result.evidence, /scenery catalog fails .*catalog is stale/);
+        // The whole evidence line, exactly: the verdict words and the generator's own first error line both reach the PR.
+        const on = `the merge onto ${tip.slice(0, 8)}`, clean = `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog`;
+        const exact = {
+          "missing": `${clean} build 0`,
+          "missing-build-fails": `scenery catalog fails to build on ${on}: Error: bahrain viewpoint pit-exit no longer emits — node tools/shot/gen-scenery-locations.cjs on the synced branch names the circuit`,
+          "no-digest-fresh": `${clean} rebuild check 0`,
+          "no-digest-stale": `scenery catalog fails on ${on}: scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`,
+        }[mode];
+        if (exact) assert.equal(result.evidence, exact);
         assert.equal(ratchetCalls, passes ? 1 : 0, "catalog/gen refusals stop before ratchets");
         if (!passes) assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);
         assert.equal(fs.existsSync(path.join(cwd, "artifacts", "merge-gate", "wt-17")), false, "all outcomes clean up the merged checkout");
