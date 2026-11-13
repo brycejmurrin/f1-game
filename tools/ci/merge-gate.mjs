@@ -175,8 +175,10 @@ export const COMPARE_FILE_CAP = 300;
 /**
  * The PR's own config-path changes at `ref`: the CONFIG_PATH rows of the three-dot `compare/<base>...<ref>` (only the
  * PR's side of the merge base, the diff the PR's Files tab shows). `skipPkg` drops a plain (not renamed) package.json
- * row. → { rows: [{ path, key }] } sorted by path, or { error } when the compare is unreadable, may be truncated, or a
- * changed config row carries no patch to compare. Side effects only through `request`.
+ * row. Each row's key holds what the compare shows (names, status, blob sha, patch) plus the file's MODE at `ref`
+ * from the recursive tree: the compare never shows a mode, and a `chmod -x` on a hook disables it with the same blob.
+ * → { rows: [{ path, key }] } sorted by path, or { error } when the compare or the tree is unreadable or may be
+ * truncated, or a changed config row carries no patch to compare. Side effects only through `request`.
  */
 export function ownConfigDiff({ base, ref, request, skipPkg = false }) {
   const at = `${base}...${String(ref).slice(0, 8)}`;
@@ -185,15 +187,23 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false }) {
   const files = cmp.json?.files;
   if (!Array.isArray(files)) return { error: `compare ${at} lists no files` };
   if (files.length >= COMPARE_FILE_CAP) return { error: `compare ${at} lists ${files.length} files (the API stops at ${COMPARE_FILE_CAP})` };
+  const own = files.filter((f) => configFiles(filePaths([f])).length && !(skipPkg && f.filename === GENERATED_PKG && !f.previous_filename));
+  let modes = null;
+  if (own.some((f) => f.status !== "removed")) {
+    const tr = request(`git/trees/${encodeURIComponent(ref)}?recursive=1`);
+    if (tr.error) return { error: `tree ${String(ref).slice(0, 8)}: ${tr.error}` };
+    if (!Array.isArray(tr.json?.tree) || tr.json.truncated) return { error: `tree ${String(ref).slice(0, 8)} is unreadable or truncated` };
+    modes = new Map(tr.json.tree.map((e) => [e.path, String(e.mode || "")]));
+  }
   const rows = [];
-  for (const f of files) {
-    if (!configFiles(filePaths([f])).length) continue;
-    if (skipPkg && f.filename === GENERATED_PKG && !f.previous_filename) continue;
+  for (const f of own) {
     // The patch pins the base side too: the same head blob over a different base (a resolution that reverts what
     // the tip changed in that file) is a different change. A pure rename has no patch and no changes.
     const patch = typeof f.patch === "string" ? f.patch : (Number(f.changes) === 0 ? "" : null);
     if (patch == null) return { error: `compare ${at}: ${f.filename} has no patch to compare` };
-    rows.push({ path: f.filename, key: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", f.sha || "", patch]) });
+    const mode = f.status === "removed" ? "" : modes.get(f.filename);
+    if (f.status !== "removed" && !mode) return { error: `tree ${String(ref).slice(0, 8)} has no mode for ${f.filename}` };
+    rows.push({ path: f.filename, key: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", f.sha || "", patch, mode]) });
   }
   return { rows: rows.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) };
 }
@@ -203,7 +213,7 @@ export function ownConfigDiff({ base, ref, request, skipPkg = false }) {
  * this PR (server timestamps; a commit date can say anything). The head is covered when the label is newer than the
  * head's first run. Otherwise the head at label time (`from`) is the head of the newest run created before the label,
  * and the PR's OWN config-path changes (ownConfigDiff, three-dot against `base`) must be the same at `from` and at
- * the head: the same files, blob shas and patches. A merge of the deploy tip that leaves them alone keeps the label
+ * the head: the same files, blob shas, patches and file modes. A merge of the deploy tip that leaves them alone keeps the label
  * (#5432: 24 of 40 re-clicks in 2026-11-09..11 were such syncs); a commit of the PR, or a conflict resolution, that
  * changes any of them voids it. An unreadable or possibly truncated compare is "unknown" (waits; a fresh click
  * covers it). `pkgGeneratedAt(ref)` → true when package.json's change at `ref` is only the generated test lists:
@@ -235,7 +245,7 @@ export function configPushState({ pr, head, headRef, labelAt, request, base = DE
   const differ = [...new Set([...a.keys(), ...b.keys()])].filter((p) => a.get(p) !== b.get(p)).sort();
   return differ.length
     ? { state: "after", from, evidence: `a push changing the PR's own config diff (${differ.slice(0, 3).join(", ")}${differ.length > 3 ? ", …" : ""}; ${from.slice(0, 8)} → ${head.slice(0, 8)}) came` }
-    : { state: "covered", from, evidence: `the PR's own config diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same blobs and patches)` };
+    : { state: "covered", from, evidence: `the PR's own config diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same blobs, patches and modes)` };
 }
 
 /** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan fails (skill steward
