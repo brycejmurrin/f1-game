@@ -78,7 +78,12 @@ spec (its `Structural guards` A–D run the full `tooling-fast`, the check
 skips the `selected` legs when the newest run on the same head passed them on
 its first attempt with the same plan, on a base that is still the deploy tip:
 `tools/ci/reuse-draft-selected.mjs`), and
-`land.yml`'s `gate` check judges the merge result. A worker ends its turn at
+`land.yml`'s `gate` check judges the merge result. A ready plan that DROPS a
+routed spec (the over-budget pool is full) is red unless every dropped spec ran
+green in a `remote-group.mjs <group>` run on the same head and base, first
+attempt, llvmpipe (`tools/ci/dropped-group-runs.mjs`, #5480): run the group
+BEFORE the ready flip (the verdict waits at most 7 min for a running one);
+after the red, run it and flip draft and back. A worker ends its turn at
 `land` (skill `steward` §Land).
 
 ## 4. The gate is a ladder, and the rungs are not the same size

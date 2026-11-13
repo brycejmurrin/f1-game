@@ -60,9 +60,11 @@ test("the workflow reads its matrix from the plan input, has no plan job, and ne
   const runs = YML.split("\n").filter((l) => /^\s+run: /.test(l));
   assert.ok(runs.length >= 2);
   for (const l of runs) assert.ok(!/\$\{\{\s*(inputs|github\.event)\./.test(l), `input interpolated into a shell line: ${l.trim()}`);
-  assert.equal((YML.match(/run: node tools\/ci\/remote-group\.mjs --run-shard$/gm) || []).length, 2, "both GL steps run the one validated entry point");
+  // The entry-point steps in file order: ONE plan-record, then the two GL steps (#5480: the plan is recorded before any spec runs).
+  const entry = runs.map((l) => l.trim().split(" ")).filter((w) => w[2] === "tools/ci/remote-group.mjs").map((w) => w.slice(3).join(" "));
+  assert.deepEqual(entry, ["--plan-record", "--run-shard", "--run-shard"], "one plan-record step first, then both GL steps through the one validated entry point");
   for (const k of ["GROUP", "PLAN", "SHARD", "TOTAL", "WORKERS", "GL"])
-    assert.equal((YML.match(new RegExp(`^\\s+${k}: `, "gm")) || []).length, 2, `${k} reaches both shard steps through env`);
+    assert.equal((YML.match(new RegExp(`^\\s+${k}: `, "gm")) || []).length, 3, `${k} reaches both shard steps and the plan-record step through env`);
   assert.match(YML, /^permissions:\n  contents: read/m, "read-only token");
   assert.match(YML, /cancel-in-progress: true/, "a re-dispatch supersedes the old run");
   // The CLI finds a 204 dispatch's run by its name.
@@ -154,7 +156,7 @@ test("runShardArgs: the plan is untrusted text — every unit is checked against
   assert.equal(piece.args.filter((a) => /\.spec\.js$/.test(a)).length, 1, "…alone");
   // Count mode: no plan lists → npm run test:<group> -- --shard=i/n (the group's own flags ride along).
   const c = runShardArgs({ group: "proj", plan: '{"matrix":[{"shard":1,"total":2},{"shard":2,"total":2}]}', shard: "2", total: "2", workers: "" }, FAKE_SCRIPTS);
-  assert.deepEqual(c, { runs: [{ cmd: "npm", args: ["run", "test:proj", "--", "--timeout=900000", "--shard=2/2"] }], mode: "count" });
+  assert.deepEqual(c, { runs: [{ cmd: "npm", args: ["run", "test:proj", "--", "--timeout=900000", "--shard=2/2"], units: [] }], mode: "count", units: [] }, "a --project group records no units (it never counts for a dropped spec, #5480)");
   assert.equal(runShardArgs({ group: "plain", plan: "", shard: "1", total: "4", workers: "" }, FAKE_SCRIPTS).mode, "count", "an empty plan is a count plan");
   // Refusals: a path outside the group, a shell-ish string, a piece beyond MAX_PIECES, a mismatched matrix, a bad shard, an unknown group, broken JSON.
   const bad = (shards, extra = {}) => runShardArgs({ group: "plain", plan: JSON.stringify({ matrix: [], shards }), shard: "1", total: String(shards.length), workers: "", ...extra }, FAKE_SCRIPTS);
@@ -170,7 +172,7 @@ test("runShardArgs: the plan is untrusted text — every unit is checked against
   assert.ok(runShardArgs({ group: "plain", plan: "", shard: "0", total: "4", workers: "" }, FAKE_SCRIPTS).error);
   assert.ok(runShardArgs({ group: "plain", plan: "", shard: "1", total: "4", workers: "1; id" }, FAKE_SCRIPTS).error);
   assert.ok(runShardArgs({ group: "proj", plan: JSON.stringify({ matrix: [], shards: [[]] }), shard: "1", total: "1", workers: "" }, FAKE_SCRIPTS).error, "a packed plan cannot drive a --project group");
-  assert.deepEqual(bad([[]]), { empty: true, mode: "time" }, "an empty list is a no-op shard, not a red");
+  assert.deepEqual(bad([[]]), { empty: true, mode: "time", units: [] }, "an empty list is a no-op shard, not a red");
 });
 
 test("liveRun: a live run of THIS group on THIS sha is reused, else the newest green one; another sha, group or branch is not", () => {
@@ -194,7 +196,7 @@ test("workers: empty is left empty for parseWorkers; resolveWorkers fills the GL
   assert.deepEqual(resolveWorkers("physics-core", "llvmpipe", "3", SCRIPTS), { workers: "3" });
   assert.match(YML, /^\s+workers:\n/m, "the workflow takes a workers input");
   // Both shard steps hand the raw input to --run-shard through env; it resolves empty → the GL+group default.
-  assert.equal((YML.match(/^\s+WORKERS: \$\{\{ inputs\.workers \}\}/gm) || []).length, 2);
+  assert.equal((YML.match(/^\s+WORKERS: \$\{\{ inputs\.workers \}\}/gm) || []).length, 3, "both shard steps and the plan-record step");
 });
 
 test("pickRun: the newest dispatch of THIS group on THIS branch since the dispatch", () => {
