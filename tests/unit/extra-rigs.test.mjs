@@ -188,3 +188,72 @@ test("ExtraRigs.pickRival reuses its running-car rows and array across calls", (
   assert.equal(seen[1].arr.length, 2);
   assert.equal(seen[1].arr[0].key, a, "rows are re-filled and re-sorted (a leads on prog)");
 });
+
+// #4745 D — the pit-entry shot: a short, drivable tracking cut on the entry road of a called stop.
+function pitEntryRig({ motion = null, now = { t: 0 } } = {}) {
+  const { ExtraRigs, ctx } = loadExtraRigs();
+  ctx.performance = { now: () => now.t };
+  ctx.PitGeom = { inSpan: (a, b, s) => s >= a && s <= b };
+  const calls = [];
+  let mode = 0;
+  const G = {
+    state: "race", paused: false,
+    track: { total: 1000, pit: { sA: 100, sIn: 300, side: 1 } },
+    player: { s: 50, pitArmed: true, brakeDemand: 0, steerCommand: 0, pitState: "none" },
+    get camMode() { return mode; },
+    setCamMode(i, o) { calls.push(o); mode = o && o.release ? 0 : i; },
+    store: { get: (k, d) => (k === "motion" ? motion : d), set() {} },
+  };
+  return { ExtraRigs, G, calls, now, mode: () => mode };
+}
+const PITWALL = CAM_MODE_IDS.indexOf("pitwall");
+
+test("pit-entry shot: cuts on the entry road of a called stop, frames the car from a fixed eye, hands back after 2.2 s", () => {
+  const r = pitEntryRig();
+  r.ExtraRigs.tickPitAuto(r.G);
+  assert.equal(r.mode(), 0, "before the peel: no shot");
+  r.G.player.s = 110; r.ExtraRigs.tickPitAuto(r.G);
+  assert.equal(r.mode(), PITWALL, "on the entry road: the shot is on air");
+  assert.equal(r.calls[0].owner, "pit-entry"); assert.equal(r.calls[0].persist, false, "never saved as the player's camera");
+  assert.ok(r.ExtraRigs.pitEntryShot());
+  const eye = [0, 0, 0], tgt = [0, 0, 0];
+  r.ExtraRigs.solve("pitwall", r.G.track, 110, 0, 40, 0, { carPos: [110, 0] }, eye, tgt);
+  const e1 = eye.slice();
+  r.ExtraRigs.solve("pitwall", r.G.track, 150, 0, 40, 0, { carPos: [150, 0] }, eye, tgt);
+  assert.deepEqual(eye, e1, "the eye stands still");
+  assert.equal(tgt[0], 150, "and turns to follow the car");
+  r.now.t = 2300; r.G.player.s = 160; r.ExtraRigs.tickPitAuto(r.G);
+  assert.equal(r.mode(), 0, "released after PE_S"); assert.equal(r.calls.at(-1).release, true);
+  r.now.t = 2400; r.ExtraRigs.tickPitAuto(r.G);
+  assert.equal(r.mode(), 0, "once per entry");
+});
+
+test("pit-entry shot: a hard brake or a steer ends it early (the lane is driven)", () => {
+  for (const poke of [(p) => { p.brakeDemand = 0.9; }, (p) => { p.steerCommand = 0.6; }]) {
+    const r = pitEntryRig();
+    r.G.player.s = 110; r.ExtraRigs.tickPitAuto(r.G);
+    assert.equal(r.mode(), PITWALL);
+    poke(r.G.player); r.now.t = 100; r.ExtraRigs.tickPitAuto(r.G);
+    assert.equal(r.mode(), 0);
+  }
+});
+
+test("pit-entry shot: reduced motion, an uncalled stop, a paused race and the PIT WALL opt-in skip it", () => {
+  const quiet = pitEntryRig({ motion: "reduce" });
+  quiet.G.player.s = 110; quiet.ExtraRigs.tickPitAuto(quiet.G);
+  assert.equal(quiet.mode(), 0, "MOTION reduce");
+  const uncalled = pitEntryRig();
+  uncalled.G.player.pitArmed = false; uncalled.G.player.s = 110; uncalled.ExtraRigs.tickPitAuto(uncalled.G);
+  assert.equal(uncalled.mode(), 0, "a car only passing the peel");
+  const paused = pitEntryRig();
+  paused.G.paused = true; paused.G.player.s = 110; paused.ExtraRigs.tickPitAuto(paused.G);
+  assert.equal(paused.mode(), 0, "paused");
+  const off = pitEntryRig();
+  off.G.store = { get: (k, d) => (k === "pitEntryShot" ? false : d), set() {} };
+  off.G.player.s = 110; off.ExtraRigs.tickPitAuto(off.G);
+  assert.equal(off.mode(), 0, "PIT ENTRY SHOT off");
+  const optIn = pitEntryRig();
+  optIn.G.store = { get: (k, d) => (k === "pitCamAuto" ? true : d), set() {} };
+  optIn.G.player.s = 110; optIn.ExtraRigs.tickPitAuto(optIn.G);
+  assert.ok(!optIn.ExtraRigs.pitEntryShot(), "PIT WALL auto-cut owns the lane");
+});

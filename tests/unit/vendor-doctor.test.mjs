@@ -73,14 +73,14 @@ test("a signed-in CLI with a working key reports login, the key NAME and 200, ne
 test("a missing CLI names the install step; a signed-out CLI names the sign-in step", async () => {
   const missing = await checkVendor("codex", { env: {}, run: fakeRun({}), fetchImpl: null });
   assert.equal(missing.cli, null);
-  assert.match(missing.next[0], /^install: /);
+  assert.equal(missing.next[0], "install: npm i -g @openai/codex");
   const out = await checkVendor("cursor", {
     env: {}, fetchImpl: null,
     run: fakeRun({ "cursor-agent --version": { code: 0, out: "2026.11.10-731fb78" }, "cursor-agent status": { code: 0, out: "Not logged in" } }),
   });
   assert.equal(out.login, false);
-  assert.match(out.next[0], /^sign in: .*cursor-agent login/);
-  assert.match(out.next.at(-1), /^cloud: .*prepaid credit balance/);
+  assert.equal(out.next[0], "sign in: NO_OPEN_BROWSER=1 cursor-agent login");
+  assert.equal(out.next.at(-1), "cloud: API-key cloud launches need a prepaid credit balance (cursor.com/dashboard); web, app and Automation launches use the weekly pool");
 });
 
 test("the second binary name is tried, and a key that fails is reported by name and host", async () => {
@@ -97,7 +97,7 @@ test("the second binary name is tried, and a key that fails is reported by name 
 });
 
 test("scrub masks e-mails, keys, bearer tokens, account ids and terminal codes", () => {
-  const s = scrub(`\x1b[32m✓\x1b[0m bryce@example.com ${SECRET} Bearer abc.def account 38513877-5eca-419a-81da-62ff971ca45a`);
+  const s = scrub(`\x1b[32m✓\x1b[0m bryce@example.com ${SECRET} Bearer abc.def account 00000000-1111-4222-8333-444444444444`);
   assert.equal(s, "✓ <email> <key> Bearer <key> account <id>");
 });
 
@@ -136,7 +136,7 @@ test("every argv is a read: no launch, send, exec, followup, cancel or delete", 
     for (const argv of [v.version, v.login]) {
       assert.ok(!argv.some((a) => /launch|send|exec|followup|cancel|delete|archive|-p|--print|cloud/.test(a)), `${name}: ${argv.join(" ")}`);
     }
-    if (v.api) assert.match(v.api, /\/v1\/(me|models)$/, `${name}: the API probe is a GET of identity or models`);
+    if (v.api) assert.equal(new Set(["https://api.cursor.com/v1/me", "https://api.openai.com/v1/models", "https://api.x.ai/v1/models"]).has(v.api), true, `${name}: the API probe is a GET of identity or models`);
   }
 });
 
@@ -173,11 +173,11 @@ test("checkSecondClaude runs `claude auth status` as the second account and repo
   assert.ok(!JSON.stringify(ok).includes(SECRET) && !JSON.stringify(ok).includes("b@example.com"));
   const bad = await checkSecondClaude({ env: host, run: async () => ({ code: 1, out: "Not logged in" }) });
   assert.equal(bad.login, false);
-  assert.match(bad.next[0], /^sign in: .*claude setup-token.*APEX_CLAUDE_B_OAUTH_TOKEN/);
+  assert.equal(bad.next[0], "sign in: APEX_CLAUDE_B_OAUTH_TOKEN did not sign in; save a fresh `claude setup-token` token of the second account as APEX_CLAUDE_B_OAUTH_TOKEN");
   let both;
   const bothOk = await checkSecondClaude({ env: { ...host, APEX_CLAUDE_CONFIG_DIR: "/b" }, run: async (_b, _a, o) => { both = o.env; return { code: 1, out: "Not logged in" }; } });
   assert.deepEqual([bothOk.via, both.CLAUDE_CODE_OAUTH_TOKEN, both.CLAUDE_CONFIG_DIR], ["APEX_CLAUDE_CONFIG_DIR", undefined, "/b"], "both set: the config dir wins, no token reaches the child");
-  assert.match(bothOk.next[0], /CLAUDE_CONFIG_DIR="\$APEX_CLAUDE_CONFIG_DIR" claude auth login/);
+  assert.equal(bothOk.next[0], 'sign in: run `CLAUDE_CONFIG_DIR="$APEX_CLAUDE_CONFIG_DIR" claude auth login` once as the second account');
 });
 
 test("the second-account env drops the host session's identity and carries the saved token only to the child", () => {
@@ -236,11 +236,11 @@ test("runVendor builds read-only argv per vendor, scrubs the answer and reports 
   assert.deepEqual([proven.ok, proven.note], [true, NOTE], "a passing verify proves a cancelled run and the note stays");
   const guard = "Never describe a file, symbol or result you have not read in this run. If something the task names does not exist, say so and stop.";
   const rulesOf = (argv) => argv[argv.indexOf("--rules") + 1];
-  assert.ok(rulesOf(seen.find((s) => s[1].includes("--rules"))[1]).startsWith(`${guard}\n\n`), "the guard leads --rules with no AGENTS.md");
+  assert.equal(rulesOf(seen.find((s) => s[1].includes("--rules"))[1]), `${guard}\n\n`, "the guard leads --rules with no AGENTS.md");
   fs.writeFileSync(path.join(cwd, "AGENTS.md"), "RULES-BODY");
   await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl });
   const withAgents = rulesOf(seen.at(-1)[1]);
-  assert.ok(withAgents.startsWith(`${guard}\n\n`) && withAgents.endsWith("RULES-BODY"), "the guard precedes the AGENTS.md text");
+  assert.equal(withAgents, `${guard}\n\nRULES-BODY`, "the guard precedes the AGENTS.md text");
   fs.rmSync(path.join(cwd, "AGENTS.md"));
   const gone = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 127, out: "" }) });
   assert.deepEqual([gone.ok, gone.error], [false, "cli_not_found"]);
@@ -280,7 +280,7 @@ test("runVendor --verify proves a write run itself and counts the changed paths;
   assert.equal((await runVendor("cursor", { cwd, prompt: "q", write: true, env: host, spawnImpl: failedFirst.spawnImpl })).changed, null);
   const same = fake(0, [BEFORE, BEFORE]);
   assert.equal((await runVendor("cursor", { cwd, prompt: "q", write: true, env: host, spawnImpl: same.spawnImpl })).changed, 0, "a file dirty before and after is not counted");
-  assert.match(bad.verify.tail, /# fail 1$/);
+  assert.equal(bad.verify.tail.slice(-8), "# fail 1");
   const bash = red.calls.find((c) => c[0] === "bash");
   assert.deepEqual(bash[1], ["-c", "npm test"]);
   assert.equal(bash[2].env, host, "verify runs with the host env, not the child env");

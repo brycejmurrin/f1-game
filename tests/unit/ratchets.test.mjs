@@ -397,6 +397,30 @@ test("assertPinsAll counts every source-pin SHAPE, loop arrays element by elemen
   await assert.rejects(seedTreeMetric("noSuchMetric", { dryRun: true }), /unknown tree metric/);
 });
 
+test("assertPinsAll counts a pin split over two statements: a bool from includes()/test() that an assert reads (item 9)", async () => {
+  const { countPinsAll, PIN_METRICS } = await import("../../tools/check/ratchets.mjs");
+  // Built from `${A}`/`${C}` (see above) so this file books none of its own fixtures.
+  const A = "assert", C = "const";
+  const n = (s) => countPinsAll(s);
+  // The evasive shapes: each is ONE pin, exactly like `ok(src.includes("x"))`.
+  assert.equal(n(`${C} hasQq = src.includes("x");\n${A}.equal(hasQq, true);`), 1);
+  assert.equal(n(`${C} hasQq = source("a.js").includes("x");\n${A}.ok(hasQq);`), 1);
+  assert.equal(n(`${C} voidQq = /\\bvoid\\s+f\\b/.test(src);\n${A}.equal(voidQq, false, "msg");`), 1);
+  assert.equal(n(`${C} viaQq = IDIOM.test(src);\n${A}(viaQq);`), 1);
+  assert.equal(n(`${C} atQq = src.indexOf("x") >= 0;\n${A}.ok(!atQq);`), 1);
+  assert.equal(n(`${C} aQq = src.includes("x")${","} bQq = src.includes("y");\n${A}.deepEqual([aQq, bQq], [true, true]);`), 2);
+  // One pin per variable, however many asserts read it.
+  assert.equal(n(`${C} hasQq = src.includes("x");\n${A}.ok(hasQq);\n${A}.equal(hasQq, true);`), 1);
+  // Not pins: never asserted, asserted BEFORE it exists, only a member/call of the name,
+  // or an indexOf position that is not compared against -1/0.
+  assert.equal(n(`${C} hasQq = src.includes("x");\nif (hasQq) run();`), 0);
+  assert.equal(n(`${A}.ok(hasQq);\n${C} hasQq = src.includes("x");`), 0);
+  assert.equal(n(`${C} hasQq = src.includes("x");\n${A}.ok(hasQq.length);`), 0);
+  assert.equal(n(`${C} posQq = rows.indexOf("x");\n${A}.equal(posQq, 2);`), 0);
+  // assertPins keeps its definition; the indirect shape is an assertPinsAll term only.
+  assert.equal(PIN_METRICS.assertPins.count(`${C} hasQq = src.includes("x");\n${A}.equal(hasQq, true);`), 0);
+});
+
 test("scopeToBranch: a topic fragment never lowers a loose tree-wide ceiling, but keeps a deliberate tree raise", () => {
   const rows = [
     { tree: true, metric: "assertPins", value: 8119, ceiling: 8173 },        // loose: the deploy branch lowers it, not a topic

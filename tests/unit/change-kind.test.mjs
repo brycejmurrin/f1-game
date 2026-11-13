@@ -17,6 +17,26 @@ test("changeKind classifies docs, css, and code without a pull_request paths fil
   assert.equal(changeKind(["css/hud.css", "js/ui/hud.js"]), "code");
 });
 
+test("executable agent config under .claude/.cursor/.codex is code, not docs; only Markdown there is prose", () => {
+  // Premise: /^\.claude\// once made a hook edit "docs", so docs-only mode
+  // skipped bash-guard-hardening / cross-tool-guards / pre-commit-guards — the
+  // tests that exec the hook. A selector that cannot place a change selects MORE.
+  for (const f of [
+    ".claude/hooks/bash-guard.sh", ".claude/hooks/protect-files.py", ".claude/hooks/README.md",
+    ".claude/settings.json", ".claude/settings.local.json",
+    ".claude/skills/lighting-tuner/scripts/bake.mjs", ".claude/workflows/total-audit.js",
+    ".githooks/pre-commit", ".cursor/hooks/shell-guard.sh", ".cursor/hooks.json", ".cursor/mcp.json",
+    ".cursor/environment.json", ".codex/hooks/shell-guard.sh", ".codex/hooks.json", ".codex/config.toml",
+  ]) assert.equal(changeKind([f]), "code", f);
+  assert.equal(changeKind([".claude/hooks/bash-guard.sh", "AGENTS.md"]), "code");
+  assert.equal(changeKind([".claude/settings.json", "css/hud.css"]), "code");
+  // Prose stays prose.
+  for (const f of [".claude/skills/x/SKILL.md", ".claude/memory/MEMORY.md", ".claude/rules/ci-tools.md",
+    ".cursor/rules/apex-shared.mdc", ".cursor/BUGBOT.md", "docs/TESTING.md"]) {
+    assert.equal(changeKind([f]), "docs", f);
+  }
+});
+
 test("a git mv keeps the rename source so a js/ file leaving for docs/ still classifies as code", () => {
   // Premise (ledger M36): --name-only would list only the destination (docs/),
   // and changeKind would answer "docs" — skipping code steps for a moved

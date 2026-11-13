@@ -38,7 +38,7 @@ const NEXT = Object.freeze({
   claude: { install: "npm i -g @anthropic-ai/claude-code", login: "claude auth login",
     cloud: "a second account launches through its own scheduled task with an API trigger (claude.ai/code/routines); no CLI token starts a cloud session" },
   cursor: { install: "curl -fsSL https://cursor.com/install | bash", login: "NO_OPEN_BROWSER=1 cursor-agent login",
-    cloud: "API-key cloud launches need a prepaid credit balance (grok.com/dashboard/billing); web, app and Automation launches use the weekly pool" },
+    cloud: "API-key cloud launches need a prepaid credit balance (cursor.com/dashboard); web, app and Automation launches use the weekly pool" },
   codex: { install: "npm i -g @openai/codex", login: "codex login --device-auth (enable device code login in ChatGPT Settings > Security first)",
     cloud: "create one cloud environment for the repository in the Codex web settings; `codex cloud exec --env <id>` needs it" },
   grok: { install: "curl -fsSL https://x.ai/cli/install.sh | bash", login: "grok login --device-auth",

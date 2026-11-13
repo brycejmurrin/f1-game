@@ -555,7 +555,8 @@ const AppearanceOpts = (function () {
   applyAll();
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    // #4798 gate
+    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initUI) : initUI()), { once: true });
     else initUI();
     // SYSTEM follows OS changes live.
     try {

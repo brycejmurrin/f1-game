@@ -27,10 +27,11 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { pick, stripSpecOwner } from "./pick-tests.mjs";
-import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
+import { pick, stripSpecOwner, extraSpecs } from "./pick-tests.mjs";
+import { MEASURED, capacity, declaredTests, declaredTestsIn, caseModules, caseModuleIds, scopedCaseModules, specSecPerTest, timings } from "./select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
+import { FAT_UI_SPEC } from "./fat-shard.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
 import { specsAffectedByImpact } from "../lib/impact-map.mjs";
 import { changeKind } from "./change-kind.mjs";
@@ -175,7 +176,7 @@ function constEnv(ast, dir, depth = 0) {
  *  (garage-out-before-card, 285 s) read as 0 while only literals counted. An
  *  argument that is NOT constant (a variable, a call) is unknown, and unknown
  *  is billed as `test.slow()` — over the cap — never as free. */
-export function maxDeclaredTimeout(file) {
+export function maxDeclaredTimeout(file, scope = null) {
   let ast, env;
   try {
     const abs = path.join(ROOT, file);
@@ -213,6 +214,8 @@ export function maxDeclaredTimeout(file) {
     for (const k of Object.keys(x)) if (k !== "loc" && k !== "range") walk(x[k]);
   };
   walk(ast);
+  // A registry spec's test.setTimeout calls live in its case modules (TK2-17).
+  for (const m of scope ? scopedCaseModules(file, scope) : caseModules(file)) max = Math.max(max, maxDeclaredTimeout(m));
   return max;
 }
 
@@ -583,7 +586,7 @@ export function measuredCheap(file, db = timings()) {
  *  p75). `db` pins the timing history (tests pass an empty one). */
 export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS,
   overBudgetShards = MAX_OVER_BUDGET_SHARDS, spillShards = MAX_SPILL_SHARDS, staleFirst = false,
-  includeTwinned = false } = {}) {
+  includeTwinned = false, scope = null } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
@@ -591,7 +594,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
   const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByManualOptIn = [], coveredByVmTwin = [];
   const unreadable = [];
   for (const file of specs) {
-    const tests = declaredTests(file);
+    const tests = scope ? declaredTestsIn(file, scope) : declaredTests(file);
     // A SPEC THIS TOOL CANNOT READ IS NOT A SPEC IT MAY IGNORE. This used to
     // `continue` into no bucket at all, so a path that is missing, renamed or
     // unparseable left the selection with no trace anywhere in the report —
@@ -617,7 +620,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       coveredByVmTwin.push({ file, tests, twin: twinOf(file) });
       continue;
     }
-    const own = maxDeclaredTimeout(file);
+    const own = maxDeclaredTimeout(file, scope);
     // >=, NOT >. A spec that declares EXACTLY the gate's budget is saying it
     // needs all of it, with nothing left for a runner slower than the box that
     // number was measured on — and the gate's runner always is. Under `>` such
@@ -877,7 +880,7 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
     // the one shard megaShardPlan picked. partitionMegaSweepArgs no longer
     // peels a lone spec + --shard (PR #1113), and the config's
     // `fullyParallel: true` shards by test.
-    const fatUi = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/.test(s.file);
+    const fatUi = FAT_UI_SPEC.test(s.file);
     if (fatUi) {
       // ONE WORKER PER PIECE, AT LEAST TWO PIECES (2026-10-15). The two-worker
       // leg put two Chromiums on a 2-vCPU llvmpipe runner: Pages 38695272346
@@ -984,7 +987,7 @@ export const TRACKED = [
   // A path inside a regex literal is invisible to a rename; the lint in
   // tests/unit/select-specs.test.mjs now fails on any member that matches no
   // tracked file, which is what pick-tests.mjs's RULES have had all along.
-  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
+  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|fat-shard\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
   /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
@@ -1015,7 +1018,13 @@ export const CIRCUIT_DEF = /^js\/circuits\/([a-z0-9_]+)\.js$/;
 // fleet specs it could not afford (PR #1015: props-over-road, tracks-walls,
 // parts-physics). Filename IS the circuit id, same as CIRCUIT_FILE.
 export const CIRCUIT_LANDMARK = /^tests\/data\/landmarks\/([a-z0-9_]+)\.json$/;
-export const CIRCUIT_FOUNDATION = /^tests\/specs\/([a-z0-9-]+)-foundation\.spec\.js$/;
+// TK2-17 (#3039): one circuit's foundation cases are either its own ADAPTED
+// `<id>-foundation.spec.js` (albert-park, cota, imola: vm-page runs them) or the
+// case module `tests/specs/foundation/<id>.js` that FOUNDATION_REGISTRY registers.
+// The registry spec itself is NOT here: an edit to it edits the per-circuit loop
+// (CIRCUIT_FILTERED_TESTS), so it runs whole.
+export const FOUNDATION_REGISTRY = "tests/specs/circuit-foundation.spec.js";
+export const CIRCUIT_FOUNDATION = /^tests\/specs\/(?:foundation\/([a-z0-9_]+)\.js|(?!circuit-foundation\.)([a-z0-9-]+)-foundation\.spec\.js)$/;
 // Data files keyed `{ <category>: { <circuit id>: … } }`: a change here is
 // scoped to the ids whose rows differ. Reading them needs the base, so a
 // base git cannot show leaves the file TRACKED, exactly as before.
@@ -1036,6 +1045,9 @@ export const CIRCUIT_FILTERED_TESTS = new Set([
   // 1500 s all-circuits body the selected gate excluded). Honours
   // APEX_CIRCUITS so a circuit-only PR does not bill the whole roster.
   "tests/specs/props-over-road.spec.js",
+  // The circuit foundations, one spec since TK2-17 (#3039): a one-circuit diff
+  // runs only that circuit's cases (tests/helpers/foundation-roster.js).
+  FOUNDATION_REGISTRY,
   "tests/unit/elevation-tracks-vm.test.mjs",
   // The fleet sweeps (2026-09-30): each narrows its roster loop, or the roster
   // floor it holds a scoped audit CLI to (tools/lib/circuit-scope.cjs).
@@ -1066,8 +1078,22 @@ const scopeNeutral = (f) => DOCS_ONLY.some((re) => re.test(f))
   // was meant to keep affordable (PR #1015: props-over-road, tracks-walls,
   // parts-physics).
   || f === "tools/ci/select-specs.mjs";
-export const foundationSpec = (id) => `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
+/** The spec that runs circuit `id`'s foundation cases: its own ADAPTED file when
+ *  one exists, else the registry when it has a case module for `id`, else the
+ *  per-circuit path (absent: the caller's existsSync filter drops it). */
+export const foundationSpec = (id) => {
+  const own = `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
+  if (fs.existsSync(path.join(ROOT, own))) return own;
+  return caseModuleIds(FOUNDATION_REGISTRY).includes(id) ? FOUNDATION_REGISTRY : own;
+};
 const FOUNDATION = /^tests\/specs\/(.+)-foundation\.spec\.js$/;
+/** The specs whose case modules include `f` (tests/specs/<dir>/<x>.js): an edit
+ *  there is an edit to those specs (changedSpecs, rank 0). */
+export function specsRegistering(f, root = ROOT) {
+  if (!/^tests\/specs\/[^/]+\/[^/]+\.js$/.test(f)) return [];
+  return fs.readdirSync(path.join(root, "tests/specs")).filter((n) => n.endsWith(".spec.js"))
+    .map((n) => `tests/specs/${n}`).filter((s) => caseModules(s).includes(f)).sort();
+}
 
 /* WHICH CIRCUITS DOES A SCRIPT BUILD? (2026-09-30) Every game-vm-b twin races
  * a fixed circuit — monza for 30 of 40, a handful on spa, baku, monaco,
@@ -1083,8 +1109,9 @@ const require_cjs = (rel) => createRequire(import.meta.url)(rel);
 const WHOLE_ROSTER = [/manifest\.cjs"\)\.CIRCUITS/, /for\s*\([^)]*\bof\s+[\w.]*Tracks\.LIST\b/, /Tracks\.LIST\.(map|forEach|filter|some|every|reduce|flatMap)\(/,
   /readdirSync\([^)]*circuits/];
 const FOUNDATION_GLOB = /-foundation\.spec\.js/;
-const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith("-foundation.spec.js"))
-  .map((f) => f.replace("-foundation.spec.js", "").replace(/-/g, "_"));
+const foundationIds = () => [...fs.readdirSync(path.join(ROOT, "tests/specs"))
+  .filter((f) => f.endsWith("-foundation.spec.js") && `tests/specs/${f}` !== FOUNDATION_REGISTRY)
+  .map((f) => f.replace("-foundation.spec.js", "").replace(/-/g, "_")), ...caseModuleIds(FOUNDATION_REGISTRY)].sort();
 
 /** The circuit ids one test file can build: a Set, or `null` for the whole roster. */
 export function circuitsOf(file, seen = new Set()) {
@@ -1109,7 +1136,10 @@ export function circuitsOf(file, seen = new Set()) {
   const ids = new Set();
   if (FOUNDATION_GLOB.test(text) && /readdirSync\(/.test(text)) for (const id of foundationIds()) ids.add(id);
   for (const id of CIRCUIT_IDS()) if (new RegExp(`["'\`]${id}["'\`]`).test(text)) ids.add(id);
-  for (const m of text.matchAll(/(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+)["']/g)) {
+  // A spec's case modules (`./foundation/<id>.js`, TK2-17) are followed like its helpers.
+  const caseImport = /^tests\/specs\/[^/]+\.spec\.js$/.test(file)
+    ? /(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+|\.\/[^"']+)["']/g : /(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+)["']/g;
+  for (const m of text.matchAll(caseImport)) {
     const sub = circuitsOf(path.posix.join(path.posix.dirname(file), m[1]), seen);
     if (sub === null) return null;
     for (const id of sub) ids.add(id);
@@ -1187,7 +1217,7 @@ export function circuitsTouched(changed, ref, root = ROOT) {
     const lm = CIRCUIT_LANDMARK.exec(f);
     if (lm) { ids.add(lm[1]); dataResolved.push(f); continue; }
     const fd = CIRCUIT_FOUNDATION.exec(f);
-    if (fd) { ids.add(fd[1].replace(/-/g, "_")); continue; }
+    if (fd) { ids.add((fd[1] || fd[2]).replace(/-/g, "_")); continue; }
     if (PER_CIRCUIT_DATA.has(f)) {
       const d = ref ? dataCircuits(f, ref, root) : null;
       if (d) { d.forEach((id) => ids.add(id)); dataResolved.push(f); continue; }
@@ -1227,8 +1257,11 @@ export function racingCircuitIds(changed) {
 // AGENTS.md-only deploy. This list mirrors ci.yml's paths-ignore deliberately —
 // if one grows, so must the other, and select-specs.test.mjs pins that.
 export const DOCS_ONLY = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//];
+// ...but a path under those trees is prose only when change-kind says so: a
+// hook script or settings.json is executable config (audit W31 row 3), and
+// tooling-fast's docs-only mode reads this same predicate.
 export const isDocsOnly = (changed) =>
-  changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f)));
+  changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f))) && changeKind(changed) === "docs";
 
 // SOURCE → SPEC pins that must run as AFFECTED (rank 2), not merely routed.
 // career.spec.js declares 540 s/test, so the modes-group path rule alone puts
@@ -1255,7 +1288,7 @@ export const SOURCE_AFFECTED = [
   // switch are its browser evidence; bitmap decode feeds the garage livery
   // atlas. js/overlay and js/share are node-covered (overlay-feed, share-card*),
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
-  ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
+  ...["track-switch-release", "circuit-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
   // ROUTED TO SPECS THAT DO NOT EXERCISE THEM (#5241 G4). js/fx/ goes to group `ui`, whose specs run the GLX pin and
   // assert no fx layer; the one spec that asserts one (M6: the skid batch after a driven slide, on the three.js path
@@ -1455,6 +1488,93 @@ export function cssSpecs(changed) {
   return [...specs];
 }
 
+// THE FLOOR (audit W31, 2026-11-10). When the selector cannot place a change
+// it selects MORE, never nothing. Before this, an infra-only diff (this
+// selector, ci.yml, package-lock, playwright.config.js) selected zero specs
+// and the verdict read the empty plan as a pass; so did a code diff whose
+// only browser route was nothing at all (a tools/ file, a vendored library).
+// The floor is the `test:tiny` set (boot-guard, logging, smoke): the cheapest
+// "does the page still boot" evidence. An EMPTY plan is a pass only for a
+// docs-only (or empty) diff. A TWINNED floor spec (logging.spec.js, ADAPTED) is left
+// out, as perGroupSpecs does: the browser plan drops it for its VM twin anyway, and
+// #5241 G3 would then force that twin's node slice (vm-page-a) onto every code diff,
+// which node-plan.mjs rules out ("a plain js/ edit does not run vm-page for logging's
+// twin alone"). boot-guard and smoke are the floor's browser evidence.
+export const FLOOR_GROUP = "test:tiny";
+export function floorSpecs(scripts = pkgScripts()) {
+  return specsOf([FLOOR_GROUP], scripts).filter((f) => fs.existsSync(path.join(ROOT, f)) && !isTwinned(f));
+}
+const pkgScripts = () => JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
+
+// THE RUNNER ITSELF: a change to the Playwright config, the fixture every spec
+// imports, its global setup/reporter, or the runner wrapper can break any
+// browser group in a way only that group sees. So such a diff runs ONE
+// representative spec from EVERY browser group the selected legs can run
+// (the default project: no --project pin, no env prefix), the cheapest by
+// measured time, on top of whatever else it routes.
+export const RUNNER_PATHS = [
+  /^playwright\.config\.js$/,
+  /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,
+  /^tools\/ci\/run-playwright\.mjs$/,
+];
+// A readable spec with at least one declared test (null = unreadable, not "zero").
+const hasTests = (f) => { const n = declaredTests(f); return Number.isFinite(n) && n >= 1; };
+// A REPRESENTATIVE NEVER TAKES OVER-BUDGET POOL ROOM (2026-11-11, #5304's first full-tier run). A spec that
+// declares >= the gate's per-test timeout (and is not measured cheap) can only run in the capped over-budget
+// pool; the single-spec perf/memory
+// groups (perf-race-entry 1200 s, perf-boost-press-pipelines-gl 900 s, perf-session-budgets 720 s,
+// stall-reload-sw 600 s) filled it and pushed out a ROUTED spec (new-hooks.spec.js), which the verdict
+// rightly redded. A representative now comes only from specs the budgeted shards take. A group with none
+// gets no fan-out representative and is NAMED (`unrepresented`): the select summary and the verdict line say
+// "not run on this PR: <groups>, nightly rota covers them". A diff that touches such a spec or its source still
+// routes it as usual; only the runner fan-out case changes, and nothing is exempt from the dropped count.
+export function perGroupPlan(scripts = pkgScripts(), db = timings()) {
+  const out = [], unrepresented = [];
+  for (const [name, cmd] of Object.entries(scripts).sort(([a], [b]) => a.localeCompare(b))) {
+    if (!name.startsWith("test:") || name === "test") continue;
+    if (!/^node tools\/ci\/run-playwright\.mjs\b/.test(cmd) || /--project=/.test(cmd)) continue;
+    const pool = specsOf([name], scripts).filter((f) => fs.existsSync(path.join(ROOT, f))
+      && !FIXED_GATE_SPECS.has(f) && !MANUAL_OPT_IN_SPECS.has(f) && !isTwinned(f) && hasTests(f));
+    if (!pool.length) continue;
+    // The same test the plan uses to send a spec to the over-budget pool (counted[].overBudget, above).
+    const shardable = pool.filter((f) => maxDeclaredTimeout(f) < SELECTED_GATE.perTestTimeoutSec * 1000 || measuredCheap(f, db));
+    if (!shardable.length) { unrepresented.push(name); continue; }
+    const cost = (f) => declaredTests(f) * specSecPerTest(f, db).sec;
+    out.push(shardable.sort((a, b) => cost(a) - cost(b) || a.localeCompare(b))[0]);
+  }
+  return { specs: [...new Set(out)].sort(), unrepresented: unrepresented.sort() };
+}
+export function perGroupSpecs(scripts = pkgScripts(), db = timings()) {
+  return perGroupPlan(scripts, db).specs;
+}
+
+// ROUTES pick-tests' RULES do not name (audit W31 row 2). A vendored library or
+// a standalone page matched no rule, so on its own it failed closed and beside
+// any matched path it silently selected nothing. They belong to real groups.
+// (pick-tests.mjs is the RULES' home; these live here until they can move.)
+export const EXTRA_ROUTES = [
+  [/^vendor\/(three-[^/]+|three-patches)\//, ["tiny", "gfx"], "three.js: the shipped default renderer (TLX) boots on it"],
+  [/^vendor\/rapier-[^/]+\//, ["physics-core", "collisions"], "Rapier: the debris world and the incident takeover"],
+  [/^vendor\/(trystero-[^/]+|jsqr-[^/]+)\//, ["net"], "multiplayer signalling and the QR room-code scan"],
+  [/^vendor\/gpu-capture\//, ["hooks"], "the GPU capture toggle (gpu-capture.spec.js)"],
+  [/^vendor\//, ["tiny"], "a vendored script the page may load"],
+  [/^controller\.html$/, ["tiny", "input"], "the phone-as-controller page"],
+  [/^overlay\.html$/, ["modes"], "the stream overlay page (overlay-live.spec.js)"],
+  [/^cockpit-view\.html$/, ["tiny", "ui"], "the cockpit-view page"],
+  [/^bench\.html$/, ["perf-frametime"], "the benchmark page (perf-frametime.spec.js)"],
+  // Executable agent config (change-kind: not prose): its suites are node
+  // guards, so no browser group; claimed, so the diff is not "unmatched".
+  [/^\.(claude|cursor|codex)\/|^\.githooks\//, ["guards"], "agent hooks and config: the guard suites exec them"],
+];
+export function pickAll(files) {
+  const g = pick(files);
+  for (const f of files) for (const [re, gs, why] of EXTRA_ROUTES) {
+    if (!re.test(f)) continue;
+    for (const n of gs) { if (!g.has(n)) g.set(n, new Set()); g.get(n).add(why); }
+  }
+  return g;
+}
+
 /** Stylesheet -> the browser specs that measure what it lays out, at phone shapes. tokens/responsive/components
  *  feed every surface, so they take all of them. A sheet not listed keeps the smoke only (its row says so in
  *  tests/unit/select-specs.test.mjs, which also checks every css/ file is classified). */
@@ -1475,7 +1595,11 @@ export const CSS_SMOKE_ONLY = /^css\/(a11y-loading|appearance-studio|career-expe
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // opts.files: a hypothetical change ("which specs would an edit to js/ui/hud.js need?") on any tree.
   const changed = opts.files ?? changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
-  const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
+  // `routing` is what the group map, the source pins and the extras see. A css
+  // file does NOT route as its js owner: CSS_LAYOUT_SPECS keeps a css diff
+  // narrow (Bryce, decision on #5304, 2026-11-10: "option 1, tip wins").
+  const routing = changed;
+  const g = pickAll(routing);   // Map: group -> reasons (pick-tests' native shape + EXTRA_ROUTES)
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
   stripSpecOwner(g);
@@ -1494,37 +1618,67 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const lightDiff = docsOnly || kind === "docs";
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
-  const changedSpecs = changed.filter((f) => /^tests\/specs\/.+\.spec\.js$/.test(f)
-    && fs.existsSync(path.join(ROOT, f)));
+  // An edited case module (tests/specs/foundation/<id>.js) is an edit to the spec
+  // that registers it; on a circuit-only diff APEX_CIRCUITS then runs just its cases.
+  const changedSpecs = [...new Set(changed.flatMap((f) => (/^tests\/specs\/.+\.spec\.js$/.test(f) ? [f] : specsRegistering(f))))]
+    .filter((f) => fs.existsSync(path.join(ROOT, f)));
   const imported = specsImporting(changed);
   const failed = (opts.failed || []).filter((f) => fs.existsSync(path.join(ROOT, f)));
   // The touched circuits' own foundation specs are AFFECTED, like an import;
   // on a circuit-scoped diff another circuit's foundation is not a candidate.
-  const ownFoundations = circ.ids.map(foundationSpec).filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const ownFoundations = [...new Set(circ.ids.map(foundationSpec))].filter((f) => fs.existsSync(path.join(ROOT, f)));
   // Source modules whose browser gate is over-budget when merely routed (see
   // SOURCE_AFFECTED) — same rank-2 elevation as an import / own foundation.
-  const sourceAffected = specsAffectedBySource(changed);
+  const sourceAffected = specsAffectedBySource(routing);
   const impactAffected = specsAffectedByImpact(changed);
+  // The specs pick-tests names that its group RULES cannot (a spec loading a
+  // module standalone, the shared UI layer): ONE function, pick-tests'
+  // extraSpecs(), so the local answer and CI's plan cannot disagree (W31 row 7).
+  const extras = extraSpecs(routing).map((r) => r.spec);
+  const standalone = extraSpecs(routing).filter((r) => r.kind === "loads-module-standalone").map((r) => r.spec);
+  // Paths no rule claims. All of them: fail closed ("unmatched"). Some of them:
+  // "partial" — the floor runs and the paths are named (W31 row 2).
+  const unmatched = changed.filter((f) => !pickAll([f]).size && !TRACKED.some((re) => re.test(f))
+    && !DOCS_ONLY.some((re) => re.test(f)));
+  const runner = changed.some((f) => RUNNER_PATHS.some((re) => re.test(f)));
+  const runnerPlan = runner ? perGroupPlan() : { specs: [], unrepresented: [] };
   const otherCircuit = (f) => {
     const m = FOUNDATION.exec(f);
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
   };
   // Specs that race a touched circuit (specsRacing, T2): routed, budgeted.
   const racing = specsRacing(racingCircuitIds(changed));
-  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...impactAffected, ...specs, ...racing])]
+  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...impactAffected,
+    ...standalone, ...extras, ...runnerPlan.specs, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, lightDiff ? [] : routed);
   // Docs-only PRs skip the selected matrix at the plan (required check
   // names still report). Never a pull_request paths filter: those leave
   // required checks pending.
-  const candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
+  let candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
   const reason = !changed.length ? "none"
     : lightDiff ? (kind === "css" ? "css" : "docs")
     : tracked.length ? "infra"
-    : (g.size || candidates.length ? "matched" : "unmatched");
+    : unmatched.length === changed.length ? "unmatched"
+    : unmatched.length ? "partial"
+    : "matched";
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
-    : (imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f) || impactAffected.includes(f)) ? 2 : 3;
-  const cut = fit(candidates, budgetMin, { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst });
+    : (standalone.includes(f) || imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f) || impactAffected.includes(f)) ? 2 : 3;
+  // The plan's APEX_CIRCUITS (circuits, below): a registry spec is billed for the cases it will register.
+  const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst,
+    scope: circ.scoped ? circ.ids : null };
+  let cut = fit(candidates, budgetMin, fitOpts);
+  // THE FLOOR: infra and partial diffs always carry it; any other non-docs diff
+  // whose plan came out with nothing to run gets it too. Never an empty plan
+  // for a code diff ("unmatched" already fails closed in the CI step).
+  const runs = (c) => [c.selected, c.oversize, c.overflow, c.spill, c.overBudgetRun].some((b) => (b || []).length);
+  let floored = false;
+  if (!lightDiff && changed.length && reason !== "unmatched"
+      && (reason === "infra" || reason === "partial" || !runs(cut))) {
+    const add = floorSpecs().filter((f) => !candidates.includes(f));
+    if (add.length) { candidates = [...candidates, ...add]; cut = fit(candidates, budgetMin, fitOpts); }
+    floored = true;
+  }
   // "infra" no longer EMPTIES the selection. A tracked-path change (the shell,
   // a fixture every spec imports, this selector) can affect any spec, which is
   // a reason to distrust the routing, not a reason to run nothing: the specs
@@ -1534,7 +1688,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // `circuits` is set only when EVERY changed path is circuit-scoped: it is
   // what lets a per-circuit loop skip the other 51 circuits, so a diff that
   // also touches the engine must leave it empty (the whole fleet runs).
-  const r = { reason, changed: changed.length, tracked, groups: browserGroups,
+  const r = { reason, changed: changed.length, tracked, unmatched, floored, runner, runnerUnrepresented: runnerPlan.unrepresented, groups: browserGroups,
               circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
@@ -1580,6 +1734,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `any spec; the edited/imported specs below still run, and the fixed GATES own the rest.`);
   if (r.reason === "unmatched") console.error(
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
+  if (r.reason === "partial") console.error(
+    `SELECTION PARTIAL: ${r.unmatched.length} path(s) no rule claims (${r.unmatched.slice(0, 6).join(", ")}${r.unmatched.length > 6 ? ", …" : ""}); the boot floor runs for them — add a route.`);
+  if (r.floored) console.error(`FLOOR: the ${FLOOR_GROUP} specs (boot) are in the plan — a code diff never runs nothing`);
+  if (r.runner) console.error("RUNNER CHANGED: one spec from every browser group is in the plan");
+  if (r.runnerUnrepresented?.length) console.error(
+    `NOT RUN ON THIS PR (runner fan-out; every spec in the group is over budget): ${r.runnerUnrepresented.join(", ")}, nightly rota covers them`);
   if (r.racing?.length) console.error(
     `RACES A TOUCHED CIRCUIT (${r.circuitsTouched.join(", ")}): ${r.racing.length} spec(s) routed, budgeted like a group's`);
   for (const s of r.failedDropped || []) console.error(

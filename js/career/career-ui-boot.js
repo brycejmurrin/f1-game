@@ -124,7 +124,12 @@ function create(G) {
   };
 }
 
-// ensureScreen stays module-local (create / ensure only).
-return { create };
+// CareerBackup rides this bundle (#4748): SETTINGS > FILES awaits it before a
+// CAREER FILE save/load reads it. ensureScreen itself stays module-local.
+function ensureBackup() {
+  if (typeof CareerBackup !== "undefined") return Promise.resolve(true);
+  return ensureScreen().then((ok) => !!ok && typeof CareerBackup !== "undefined");
+}
+return { create, ensureBackup };
 })();
 Object.freeze(CareerUI);

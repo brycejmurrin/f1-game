@@ -10,7 +10,7 @@
  * diagnostics. Successful or genuinely empty plans retain the normal rules.
  *
  *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR] [--junit-in DIR] [--started-in DIR]
- *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT from env
+ *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT / REUSED / REUSED_RUN from env
  *     (DRAFT=true: a dropped spec warns instead of redding — the draft plan is the 5-min budget, 2026-11-03)
  */
 import fs from "node:fs";
@@ -64,6 +64,7 @@ export function shardEvidence(junitIn, startedIn) {
  *   selected: string,
  *   guards: string,
  *   dropped?: string,
+ *   unrepresented?: string,
  *   called?: string,
  *   draft?: string,
  *   failedSpecs?: string[],
@@ -72,6 +73,13 @@ export function shardEvidence(junitIn, startedIn) {
  * @returns {{ ok: boolean, reason: string, infraRetry: boolean, failedSpecs: string[] }}
  */
 export function selectedGateVerdict(input) {
+  const v = selectedGateVerdictCore(input);
+  // Groups the runner fan-out left out (every spec in the group over budget): never silent, never a verdict of their own.
+  const groups = String(input.unrepresented || "").trim().split(/\s+/).filter(Boolean);
+  if (groups.length) v.reason += ` — not run on this PR: ${groups.join(", ")}, nightly rota covers them`;
+  return v;
+}
+function selectedGateVerdictCore(input) {
   // A red `Structural guards` is reported by its own check and keeps `CI` red
   // (ci-verdict needs guards), so this check judges only the change-aware specs
   // and no longer repeats it (2026-10-16 CI jobs review: 9 of 9 guards-red runs
@@ -126,6 +134,18 @@ function judgeSpecs(input) {
       }
     }
     reason = "selected specs passed";
+  } else if (selected === "skipped" && String(input.reused ?? "") === "true") {
+    // THE READY FLIP REUSED THE DRAFT VERDICT (#5426). select's reuse step (tools/ci/reuse-draft-selected.mjs)
+    // proved the newest run on this head ran the same plan green on attempt 1, on the same base, with the deploy
+    // tip unmoved. Only a ready flip may claim it, and it must name the run it reused.
+    const run = String(input.reusedRun ?? "");
+    if (!/^\d+$/.test(run)) {
+      return { ok: false, reason: `the selected legs were skipped as reused, but no reused run id was given (REUSED_RUN=${JSON.stringify(run)}) — failing closed`, infraRetry: false, failedSpecs };
+    }
+    if (draft === "true" || called === "true") {
+      return { ok: false, reason: "the selected legs were skipped as reused on a run that is not a ready pull request — only a ready flip reuses its draft's verdict", infraRetry: false, failedSpecs };
+    }
+    reason = `selected specs reused from run ${run} (same head, same base, deploy tip unmoved, same plan; green on attempt 1)`;
   } else if (selected === "skipped") {
     // A draft runs the selected legs too since 2026-11-03 (one 5-min shard), so
     // a skipped matrix means the same thing on every PR: the plan had no jobs.
@@ -202,8 +222,8 @@ function judgeSpecs(input) {
       failedSpecs,
     };
   }
-  if (selected === "skipped") {
-    reason = "nothing this diff touches has a spec — an empty plan is a pass";
+  if (selected === "skipped" && String(input.reused ?? "") !== "true") {
+    reason = "no selected job ran: an empty plan is a pass only for a docs-only diff (the select step fails closed on an empty plan for a code diff, and select-specs puts the boot floor in every other plan)";
   }
   return { ok: true, reason, infraRetry, failedSpecs };
 }
@@ -231,8 +251,11 @@ function main(argv = process.argv.slice(2)) {
     selected: process.env.SELECTED,
     guards: process.env.GUARDS,
     dropped: process.env.DROPPED,
+    unrepresented: process.env.UNREPRESENTED,
     called: process.env.CALLED,
     draft: process.env.DRAFT,
+    reused: process.env.REUSED,
+    reusedRun: process.env.REUSED_RUN,
     failedSpecs,
     evidence,
   });

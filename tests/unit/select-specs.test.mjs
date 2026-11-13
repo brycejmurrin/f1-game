@@ -24,9 +24,11 @@ import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
+import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
+import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -696,13 +698,6 @@ test("select(): an edited spec runs first, alone in rank 0", () => {
   assert.equal(filesOf(r)[0], spec, "the edited spec leads the selection");
 });
 
-test("select(): a css edit selects the small CSS set, not a whole group", () => {
-  const r = selectFor({ "css/menus.css": "/* fixture edit */\n" });
-  assert.equal(r.reason, "matched");
-  const allowed = new Set(cssSpecs(["css/menus.css"]));
-  assert.ok(r.selected.length > 0 && filesOf(r).every((f) => allowed.has(f)), `got ${filesOf(r)}`);
-});
-
 test("select(): editing the selector itself is infra — narrower than the change, and says so", () => {
   const r = selectFor({ "tools/ci/select-specs.mjs": "// fixture edit\n" });
   assert.equal(r.reason, "infra");
@@ -1064,7 +1059,8 @@ test("the TRACKED infra list names where the selector tools ACTUALLY live", () =
                    "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs",
                    "tools/ci/pick-unit-slices.mjs", "tools/ci/node-plan.mjs",
                    "tools/ci/geometry-paths.mjs", "tools/ci/twinned-specs.mjs",
-                   "tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh"]) {
+                   "tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh",
+                   "tools/ci/fat-shard.mjs"]) {
     assert.ok(hit(f), `${f} is selection machinery and must be TRACKED`);
     assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist — re-point TRACKED, do not pin a ghost`);
   }
@@ -1133,7 +1129,7 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   const props = "tests/specs/props-over-road.spec.js";
   const terrain = "tests/specs/terrain-over-road.spec.js";
   const shimmer = "tests/specs/material-shimmer.spec.js";
-  const qatar = "tests/specs/qatar-foundation.spec.js";
+  const qatar = "tests/specs/circuit-foundation.spec.js";   // qatar's foundation case lives here (TK2-17)
   assert.equal(isMegaSweepSpec(props), false,
     "props-over-road is under the selected gate; peel must not isolate it");
   assert.equal(isMegaSweepSpec(terrain), false,
@@ -1319,10 +1315,10 @@ test("run-playwright keeps native --shard for megas-only oversize jobs (PR #1110
   assert.deepEqual(soloPart.rest, alone);
   assert.deepEqual(playwrightShard(alone), { index: 1, total: 3 });
   // Packed with a sibling: peel stays the packed-group path (megaShardPlan).
-  const packed = ["--shard=2/4", "tests/specs/qatar-foundation.spec.js", tlx];
+  const packed = ["--shard=2/4", "tests/specs/circuit-foundation.spec.js", tlx];
   const p = partitionMegaSweepArgs(packed);
   assert.deepEqual(p.mega, [tlx]);
-  assert.ok(p.rest.some((a) => a.includes("qatar-foundation")), "sibling stays on the shared shard");
+  assert.ok(p.rest.some((a) => a.includes("circuit-foundation")), "sibling stays on the shared shard");
 });
 
 test("mega solos spread across shards longest-first, each on exactly one shard (T1)", () => {
@@ -1596,7 +1592,7 @@ test("a circuit landmark registry + its foundation spec stay circuit-scoped (PR 
   const files = [
     "js/circuits/scenery/monza.js",
     "tests/data/landmarks/monza.json",
-    "tests/specs/monza-foundation.spec.js",
+    "tests/specs/foundation/monza.js",
     "tools/ci/select-specs.mjs",
     "tests/unit/select-specs.test.mjs",
   ];
@@ -1654,6 +1650,51 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\).*impactAffected\.includes\(f\)\) \? 2 : 3/,
     "own foundation specs rank as affected (2)");
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
+});
+
+/* ONE FOUNDATION SPEC (TK2-17, #3039). Thirteen per-circuit foundation specs became
+ * tests/specs/circuit-foundation.spec.js + one case module per circuit
+ * (tests/specs/foundation/<id>.js). The selection must not get worse: a one-circuit
+ * diff still runs only that circuit's cases (APEX_CIRCUITS, billed at its own count),
+ * and anything the routing cannot narrow runs every circuit. */
+test("TK2-17: a circuit's foundation cases route through the registry, scoped to that circuit", () => {
+  const R = "tests/specs/circuit-foundation.spec.js";
+  assert.equal(foundationSpec("monza"), R, "a merged circuit's foundation spec is the registry");
+  assert.equal(foundationSpec("cota"), "tests/specs/cota-foundation.spec.js", "an ADAPTED circuit keeps its own file");
+  assert.ok(!fs.existsSync(path.join(ROOT, foundationSpec("madrid"))), "a circuit with no foundation names a path that is not there");
+  // circuitsTouched: a case module names its circuit; the registry itself is the loop, so not scoped.
+  assert.deepEqual(circuitsTouched(["tests/specs/foundation/spa.js"], null), { ids: ["spa"], scoped: true, dataResolved: [] });
+  assert.equal(circuitsTouched([R], null).scoped, false, "editing the registry edits every circuit's cases");
+  assert.deepEqual(circuitsTouched([R], null).ids, [], "the registry's own name is not a circuit id");
+  assert.equal(circuitsTouched(["tests/helpers/foundation-roster.js"], null).scoped, false);
+  assert.ok(CIRCUIT_FILTERED_TESTS.has(R), "the registry reads APEX_CIRCUITS, so it is a filtered loop");
+  const row = (r) => [...r.selected, ...r.oversize, ...(r.overflow || []), ...(r.spill || []), ...(r.overBudgetRun || [])]
+    .find((x) => x.file === R);
+  const one = (files) => select(undefined, undefined, { files });
+  // A scenery-only edit: the registry runs (affected, rank 2), billed for spa's 5 cases, with APEX_CIRCUITS=spa.
+  const spa = one(["js/circuits/scenery/spa.js"]);
+  assert.deepEqual(spa.circuits, ["spa"]);
+  assert.equal(row(spa)?.rank, 2);
+  assert.equal(row(spa)?.tests, 5, "billed for the cases APEX_CIRCUITS=spa registers, not all 24");
+  assert.ok(spa.shards.filter((s) => s.specs.split(" ").includes(R)).every((s) => s.circuits === "spa"));
+  // An edited case module is an edited spec (rank 0), still scoped to its circuit.
+  const mod = one(["tests/specs/foundation/monza.js"]);
+  assert.deepEqual(mod.changedSpecs, [R]);
+  assert.deepEqual(mod.circuits, ["monza"]);
+  assert.equal(row(mod)?.rank, 0);
+  assert.equal(row(mod)?.tests, 1);
+  // An ADAPTED circuit's diff does not pull the registry in: its own file is VM-covered, as before.
+  const cota = one(["js/circuits/scenery/cota.js"]);
+  assert.equal(row(cota), undefined, "a scoped diff to a circuit the registry lacks drops it (otherCircuit)");
+  assert.ok(cota.coveredByVmTwin.some((x) => x.file === "tests/specs/cota-foundation.spec.js"));
+  // FAIL CLOSED: the registry edited, or a circuit + engine diff, runs EVERY circuit (no APEX_CIRCUITS).
+  const whole = one([R]);
+  assert.deepEqual(whole.circuits, []);
+  assert.equal(row(whole)?.tests, 24, "the loop itself changed: all of it runs");
+  const engine = one(["js/circuits/monza.js", "js/track/tracks.js"]);
+  assert.deepEqual(engine.circuits, [], "not circuit-only: the whole fleet");
+  assert.equal(row(engine)?.rank, 2, "monza's own foundation is still affected");
+  assert.equal(row(engine)?.tests, 24, "…and runs every circuit's cases, more than before, never fewer");
 });
 
 test("a circuit edit routes the specs that RACE that circuit, read from the files (T2)", () => {
@@ -1916,7 +1957,7 @@ test("lanes: a run's legs take distinct lanes from a run-number-rotated start", 
 test("spec-less js dirs route to a module-specific spec, and a dir with no coverage at all is named (ci-7d C7)", async () => {
   const { specsAffectedBySource, jsCoverageGaps, GENERIC_BOOT_SPECS, nodeTestsNaming } = await import("../../tools/ci/select-specs.mjs");
   assert.deepEqual(specsAffectedBySource(["js/track/build-worker.js"]).sort(),
-    ["tests/specs/monza-foundation.spec.js", "tests/specs/track-switch-release.spec.js"]);
+    ["tests/specs/circuit-foundation.spec.js", "tests/specs/track-switch-release.spec.js"]);
   assert.deepEqual(specsAffectedBySource(["js/workers/bitmap-decode-worker.js"]), ["tests/specs/garage-livery-fit.spec.js"]);
   assert.ok(nodeTestsNaming("js/workers/bitmap-decode-worker.js").includes("tests/unit/bitmap-decode-worker.test.mjs"));
   // Real routing: none of the six dirs ci-7d named is uncovered today.
@@ -1982,4 +2023,246 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
   const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
   assert.equal(routed.floor, null);
   assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
+});
+
+// ── audit W31 (2026-11-10): when the selector cannot place a change it selects MORE ──
+{
+  const W31 = await import("../../tools/ci/select-specs.mjs");
+  const planned = (r) => [r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file));
+  const sel = (files) => W31.select(undefined, DEFAULT_BUDGET_MIN, { files });
+
+  test("W31 row 1: an infra-only diff runs the boot floor, never an empty plan", () => {
+    for (const files of [["tools/ci/select-specs.mjs"],
+      [".github/workflows/ci.yml", "package-lock.json", "playwright.config.js", "tests/data/flaky-quarantine.json"]]) {
+      const r = sel(files);
+      assert.equal(r.reason, "infra");
+      assert.ok(r.floored, `${files}: the floor is applied`);
+      assert.ok(r.shards.length > 0, `${files}: a job runs`);
+      assert.ok(planned(r).includes("tests/specs/boot-guard.spec.js"), `${files}: boot-guard is planned`);
+    }
+    // logging.spec.js is in test:tiny but TWINNED (ADAPTED, vm-page-a): the floor leaves it out so it forces no node slice.
+    assert.deepEqual(W31.floorSpecs().sort(), ["tests/specs/boot-guard.spec.js", "tests/specs/smoke.spec.js"]);
+  });
+
+  test("W31 row 1: a runner/config diff runs one spec per default-project browser group", () => {
+    const per = W31.perGroupSpecs();
+    assert.ok(per.length >= 10, `only ${per.length} representatives`);
+    const r = sel(["playwright.config.js"]);
+    assert.ok(r.runner);
+    const got = new Set([...planned(r), ...r.coveredByVmTwin.map((x) => x.file)]);
+    for (const f of per) assert.ok(got.has(f), `${f} is planned`);
+    for (const f of ["tools/ci/run-playwright.mjs", "tests/helpers/fixtures.js", "tests/helpers/global-setup.js"]) assert.ok(sel([f]).runner, f);
+  });
+
+  test("W31 row 1: a runner representative never takes over-budget pool room, so it can never displace a routed spec", () => {
+    // #5304's first full-tier run: the single-spec perf/memory groups' only specs declare 600-1200 s per test,
+    // so as representatives they could only sit in the capped over-budget pool, and they pushed out the ROUTED
+    // new-hooks.spec.js (dropped=1, verdict red). Representatives now come only from shardable specs.
+    const plan = W31.perGroupPlan();
+    for (const f of plan.specs) assert.ok(W31.maxDeclaredTimeout(f) < W31.SOLO_OWN_TIMEOUT_SEC * 1000, `${f} is solo-class`);
+    const r = sel(["tests/helpers/fixtures.js", "js/agent/apex.js"]);
+    // capacityFallback rows are ordinary leftovers packed into room left AFTER the pool's own candidates.
+    const pool = new Set([...(r.overBudgetRun || []).filter((x) => !x.capacityFallback), ...r.overBudgetSpecs].map((x) => x.file));
+    assert.deepEqual(plan.specs.filter((f) => pool.has(f)), [], "no representative takes over-budget pool room");
+    assert.deepEqual([...r.overBudgetSpecs, ...r.skipped].map((x) => x.file), [], "nothing routed is dropped");
+    assert.ok(new Set(planned(r)).has("tests/specs/new-hooks.spec.js"), "the routed hooks spec runs");
+    // The groups left without a representative are named, never silently skipped.
+    assert.ok(plan.unrepresented.length > 0 && plan.unrepresented.every((g) => g.startsWith("test:")), String(plan.unrepresented));
+    assert.deepEqual(r.runnerUnrepresented, plan.unrepresented);
+  });
+
+  test("W31 row 1: a diff to a perf spec or its source still routes it; only the runner fan-out changed", () => {
+    for (const [files, spec] of [
+      [["tests/specs/perf-race-entry.spec.js"], "tests/specs/perf-race-entry.spec.js"],
+      [["tests/helpers/perf-race-entry.mjs"], "tests/specs/perf-race-entry.spec.js"],
+      [["sw.js"], "tests/specs/perf-sw-cache-hit.spec.js"],
+    ]) {
+      const r = sel(files);
+      assert.ok(new Set(planned(r)).has(spec), `${files} -> ${spec}`);
+      assert.deepEqual(r.runnerUnrepresented, [], `${files}: not a runner diff`);
+    }
+  });
+
+  test("W31 row 1: an empty plan is a pass only for a docs diff (non-browser code diffs get the floor)", () => {
+    const tools = sel(["tools/check/ratchets.mjs"]);
+    assert.ok(tools.shards.length > 0 && tools.floored, "a tools/ diff with no browser group still runs the floor");
+    const docs = sel(["README.md"]);
+    assert.equal(docs.reason, "docs");
+    assert.equal(docs.shards.length, 0);
+    // The CI step's fail-closed on an empty code plan: selected-gate-verdict.test.mjs runs the step's report.
+  });
+
+  test("W31 row 2: vendor/ and the standalone pages route to real groups; some-unmatched is partial + floor", () => {
+    const all = sel(["vendor/three-0.187.0/three.core.min.js", "overlay.html", "controller.html", "bench.html"]);
+    assert.equal(all.reason, "matched");
+    assert.deepEqual(["test:gfx", "test:modes", "test:input", "test:perf-frametime"].filter((g) => !new Set(all.groups).has(g)), [], `groups: ${all.groups}`);
+    assert.ok(all.shards.length > 0);
+    assert.ok(sel(["cockpit-view.html"]).groups.includes("test:ui"));
+    // A path nothing claims, beside a claimed one: partial, the floor runs, the path is named.
+    const part = sel(["README.md", "nowhere/unclaimed.bin"]);
+    assert.equal(part.reason, "partial");
+    assert.deepEqual(part.unmatched, ["nowhere/unclaimed.bin"]);
+    assert.ok(part.floored && part.shards.length > 0);
+    const mixed = sel(["tools/check/ratchets.mjs", "nowhere/unclaimed.bin"]);
+    assert.equal(mixed.reason, "partial");
+    assert.equal(sel(["nowhere/unclaimed.bin"]).reason, "unmatched", "every path unmatched still fails closed");
+    // Hooks are executable config, not docs: claimed, and the floor runs.
+    const hook = sel([".claude/hooks/bash-guard.sh"]);
+    assert.notEqual(hook.reason, "docs");
+    assert.notEqual(hook.reason, "unmatched");
+    assert.equal(isDocsOnly([".claude/hooks/bash-guard.sh"]), false);
+    assert.equal(isDocsOnly([".claude/settings.json"]), false);
+  });
+
+  test("W31 row 7: every spec pick-tests' extraSpecs names is in select-specs' plan (or a covered bucket)", async () => {
+    const { extraSpecs } = await import("../../tools/ci/pick-tests.mjs");
+    for (const f of ["js/ui/modal.js", "js/ui/dom.js", "js/ui/photo-studio.js", "js/ui/key-binds.js", "css/hud.css", "js/ui/menu-nav.js"]) {
+      const r = sel([f]);
+      const got = new Set([...planned(r), ...[r.coveredByFixedGates, r.coveredByManualOptIn, r.coveredByVmTwin,
+        r.overBudgetSpecs, r.unreachable, r.skipped].flatMap((b) => (b || []).map((x) => x.file))]);
+      for (const x of extraSpecs([f])) assert.ok(got.has(x.spec), `${f}: pick-tests names ${x.spec}, CI never schedules it`);
+    }
+  });
+}
+
+// DURATION-BALANCED FAT PIECES (P8 #4548 row 6). The count shard split each fat
+// spec into equal TEST COUNTS: hud-layout quarters ran 6.1/8.6/11.8/6.3 min at
+// 14 tests each (run 41606130214). tools/ci/fat-shard.mjs LPT-packs the titles
+// by measured seconds and run-playwright.mjs runs each piece as a --test-list.
+const FAT_SPECS = ["career", "career-season", "career-hub", "hud-layout"].map((f) => `tests/specs/${f}.spec.js`);
+const spread = (secs) => Math.max(...secs) / Math.min(...secs);
+const pieceSecsOf = (costs, pieces) => pieces.map((idx) => idx.reduce((t, k) => t + costs[k], 0));
+const fatPieces = (f) => shards(fit([f], 30, { rank: () => 0, db: EMPTY }), EMPTY, new Set())
+  .filter((j) => j.specs === f).length;
+
+test("fat-shard: every fat spec's pieces cover its full title list exactly once, balanced to <= 1.2 by the committed table", () => {
+  const db = loadDb(path.join(ROOT, TIMINGS_FILE));
+  const worstCount = [];
+  for (const f of FAT_SPECS) {
+    const titles = specTitles(f);
+    assert.ok(titles && titles.length, `${f}: the stub lister read its titles`);
+    // declaredTests() may undercount a loop it cannot size (hud-layout: 54 of
+    // the 56 a CI run reports); the lister runs the loops, so never fewer.
+    assert.ok(titles.length >= declaredTests(f), `${f}: ${titles.length} listed titles under the static count ${declaredTests(f)}`);
+    assert.equal(unlistable(titles), null, `${f}: every title round-trips a --test-list line`);
+    const n = fatPieces(f);
+    assert.ok(n >= 2, `${f} runs as pieces`);
+    const plan = fatShardPlan(f, n, db, FAT_UI_SEC_PER_TEST, titles);
+    assert.ok(plan, `${f}: a plan for ${n} pieces`);
+    const union = plan.pieces.flatMap((p) => p.titles);
+    assert.equal(new Set(union).size, union.length, `${f}: no title in two pieces`);
+    assert.deepEqual([...union].sort(), [...titles].sort(), `${f}: the pieces are exactly the spec's titles`);
+    assert.ok(plan.pieces.every((p) => p.titles.length > 0), `${f}: no empty piece`);
+    const secs = plan.pieces.map((p) => p.sec);
+    assert.ok(spread(secs) <= 1.2, `${f}: planned piece seconds ${secs.map(Math.round).join("/")} spread ${spread(secs).toFixed(2)} > 1.2`);
+    worstCount.push(spread(pieceSecsOf(plan.costs, countSplitPieces(titles.length, n))));
+  }
+  // The check discriminates: Playwright's count shard of the same table is over it.
+  assert.ok(Math.max(...worstCount) > 1.2, `count split spreads ${worstCount.map((x) => x.toFixed(2))}: the balance check would not have caught it`);
+});
+
+test("fat-shard: unknown titles are priced at the spec's rate, never dropped", () => {
+  const f = "tests/specs/hud-layout.spec.js";
+  const db = { specs: { [f]: { t: { "a": [["d", "llvmpipe", 10]], "b": [["d", "llvmpipe", 30]] } } } };
+  assert.deepEqual(titleCosts(f, ["a", "b", "new"], db, 45), [10, 30, 20]);
+  assert.deepEqual(titleCosts(f, ["x", "y"], EMPTY, 45), [45, 45], "no table at all: the fallback rate");
+  // A synthetic 2x skew the count shard keeps and LPT removes.
+  const costs = [60, 60, 60, 60, 20, 20, 20, 20];
+  assert.equal(spread(pieceSecsOf(costs, countSplitPieces(costs.length, 2))), 3);
+  assert.ok(spread(lptPieces(costs, 2).map((p) => p.sec)) <= 1.2);
+});
+
+test("fat-shard: the n rewritten legs select every test exactly once, even one the lister missed", () => {
+  const f = "tests/specs/hud-layout.spec.js";
+  const listed = ["v › one", "v › two", "v › three", "solo", "w › four", "w › five", "w › six"];
+  const real = [...listed, "w › added later"];   // a test the stub could not see
+  const db = { specs: { [f]: { t: Object.fromEntries(listed.map((t, i) => [t, [["d", "llvmpipe", 10 + 7 * i]]])) } } };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-"));
+  const n = 3;
+  const hits = new Map(real.map((t) => [t, 0]));
+  for (let i = 1; i <= n; i++) {
+    const r = fatShardArgs([f, "--retries=0", `--shard=${i}/${n}`], { db, fallbackSec: 45, outDir, titlesOf: () => listed });
+    assert.ok(!r.args.some((a) => a.startsWith("--shard")), "the count shard is replaced");
+    const flag = r.args.find((a) => a.startsWith("--test-list"));
+    assert.ok(flag && r.args.includes(f) && r.args.includes("--retries=0"), `leg ${i}: ${r.args.join(" ")}`);
+    const [name, file] = flag.split("=");
+    assert.equal(name, i === n ? "--test-list-invert" : "--test-list");
+    const lines = fs.readFileSync(file, "utf8").trim().split("\n");
+    // rootDir-relative (#4812): a repo-relative "tests/specs/…" line matches no test.
+    const head = `specs/hud-layout.spec.js › `;
+    assert.ok(lines.every((l) => l.startsWith(head)), `lines name the rootDir-relative file then the title path: ${lines[0]}`);
+    const named = new Set(lines.map((l) => l.slice(head.length)));
+    for (const t of real) if (named.has(t) !== (name === "--test-list-invert")) hits.set(t, hits.get(t) + 1);
+  }
+  fs.rmSync(outDir, { recursive: true, force: true });
+  assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], "every test runs on exactly one leg");
+  // Left alone: no shard, a non-fat spec, a grep, a list it cannot write.
+  const keep = (args, titlesOf = () => listed) => fatShardArgs(args, { db, fallbackSec: 45, outDir, titlesOf }).args;
+  assert.deepEqual(keep([f]), [f]);
+  assert.deepEqual(keep(["tests/specs/smoke.spec.js", "--shard=1/2"]), ["tests/specs/smoke.spec.js", "--shard=1/2"]);
+  assert.deepEqual(keep([f, "--grep=x", "--shard=1/2"]), [f, "--grep=x", "--shard=1/2"]);
+  assert.deepEqual(keep([f, "--shard=1/2"], () => null), [f, "--shard=1/2"], "unlistable spec: Playwright's count shard");
+  assert.deepEqual(keep([f, "--shard=1/2"], () => ["a", "a › b"]), [f, "--shard=1/2"], "a prefix title could claim two tests");
+  // The Playwright the lists are written for still reads them.
+  const program = path.join(ROOT, "node_modules/playwright/lib/program.js");
+  if (fs.existsSync(program)) {
+    const src = fs.readFileSync(program, "utf8");
+    assert.match(src, /--test-list <file>/);
+    assert.match(src, /--test-list-invert <file>/);
+  }
+});
+
+// #4812: the plan above was balanced, yet hud-layout piece 4/4 ran all 56 tests
+// (26-40 min) while 1..3 ran none: the list lines named "tests/specs/…" and
+// Playwright matches them against rootDir-relative paths. Only REAL Playwright
+// can say what a list selects, so this lists each leg with it (no browser:
+// --list loads the config and the spec, ~1 s a call).
+const PW_CLI = path.join(ROOT, "node_modules/@playwright/test/cli.js");
+const pwList = (args) => new Promise((resolve, reject) => {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const kid = spawn(process.execPath, [PW_CLI, "test", ...args, "--list", "--reporter=json"], { cwd: ROOT, env });
+  let out = "", err = "";
+  kid.stdout.on("data", (d) => { out += d; });
+  kid.stderr.on("data", (d) => { err += d; });
+  kid.on("error", reject);
+  kid.on("close", () => {
+    try {
+      const j = JSON.parse(out);
+      const ids = [];
+      const walk = (s, at) => {
+        for (const x of s.suites || []) walk(x, [...at, x.title]);
+        for (const sp of s.specs || []) for (const t of sp.tests || [{}]) ids.push([t.projectName, ...at, sp.title].join(" › "));
+      };
+      for (const s of j.suites || []) walk(s, [s.title]);
+      resolve({ rootDir: j.config.rootDir, ids });
+    } catch (e) { reject(new Error(`playwright --list ${args.join(" ")}: ${e.message}\n${err.slice(-800)}`)); }
+  });
+});
+
+test("#4812 fat-shard: real Playwright runs every fat-spec test on exactly one leg, piece n within 1.5x its share", { skip: !fs.existsSync(PW_CLI) && "no @playwright/test" }, async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-pw-"));
+  try {
+    const db = loadDb(path.join(ROOT, TIMINGS_FILE));
+    await Promise.all(FAT_SPECS.map(async (f) => {
+      const n = fatPieces(f);
+      const all = await pwList([f]);
+      assert.equal(path.relative(ROOT, all.rootDir), PW_ROOT_DIR, "Playwright's rootDir is the one list lines are written against");
+      assert.equal(listFile(f), path.relative(all.rootDir, path.join(ROOT, f)).split(path.sep).join("/"));
+      const legs = await Promise.all(Array.from({ length: n }, (_, k) => {
+        const r = fatShardArgs([f, `--shard=${k + 1}/${n}`], { db, fallbackSec: FAT_UI_SEC_PER_TEST, outDir });
+        assert.ok(r.args.some((a) => a.startsWith("--test-list")), `${f} leg ${k + 1}: ${r.note}`);
+        return pwList(r.args);
+      }));
+      const hits = new Map(all.ids.map((id) => [id, 0]));
+      for (const leg of legs) for (const id of leg.ids) hits.set(id, (hits.get(id) ?? 0) + 1);
+      assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], `${f}: every test on exactly one leg`);
+      const sizes = legs.map((l) => l.ids.length);
+      const share = all.ids.length / n;
+      assert.ok(sizes.every((m) => m > 0), `${f}: no empty leg (${sizes.join("/")})`);
+      assert.ok(sizes[n - 1] <= 1.5 * share, `${f}: piece ${n}/${n} lists ${sizes[n - 1]} of ${all.ids.length} tests (share ${share.toFixed(1)}; legs ${sizes.join("/")})`);
+    }));
+  } finally {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  }
 });

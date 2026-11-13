@@ -8,6 +8,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -924,15 +925,18 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.equal(h({ live: false }).hiddenReason("inputs"), null, "touch INPUTS has a home under the sectors");
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
   assert.doesNotMatch(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
-  assert.match(css, /body:not\(\.desktop\) #hud-strat \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
+  // Bounded to ONE rule (css-rules.mjs): a lazy `[\s\S]*?` after the selector ran past
+  // the rule's `}` and was satisfied by a later rule's declaration.
+  const rules = cssRules(css);
+  assert.equal(decl(rules, "body:not(.desktop) #hud-strat", "top"), "calc(var(--hud-left-h, 152px) + 8px)",
     "touch STRATEGY sits under fitHud's measured left column (--hud-left-h), not a bare 152px");
-  assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\) \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
+  assert.equal(decl(rules, "body:not(.desktop) #hud-rel:not([data-hl-user])", "top"), "calc(var(--hud-left-h, 152px) + 8px)",
     "touch RELATIVE uses the same measured left column");
   assert.match(css, /:root\[data-limits-left\] #hud-strat/,
     "STRATEGY clears the left-mode TRACK LIMITS chip");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
-  assert.match(css, /body:not\(\.desktop\) #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
+  assert.equal(decl(rules, "body:not(.desktop) #hud-sectors", "right"), "calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px))",
     "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane (centred when none is published), not at 10px+sal over TILT's left dock");
@@ -945,7 +949,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "phone sectors clear BOOST via measured --dock-r-w only (#1191 anchor max overshot into #announce)");
   // OVERTAKE / CORNER MODE: cockpit --hl-x must not shove the chips under the
   // right dock when taps/shifts are lit (hud-survey aero×shift-up + Bryce OT/BOOST).
-  assert.match(css, /body:has\(\.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]:not\(\[data-hl-v4\]\)\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
+  // The :has() argument is scoped to the shell's child chain (#3108, css-has-scope.test.mjs): same match.
+  assert.match(css, /body:has\(> :where\(#hud\) > :where\(#hud-dock\) > \.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]:not\(\[data-hl-v4\]\)\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
     "lit docks adjust shipped OVERTAKE / CORNER MODE while preserving explicitly placed chips");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
   for (const id of ["damage", "rel", "strat", "inputs"]) {

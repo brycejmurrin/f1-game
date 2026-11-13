@@ -328,7 +328,12 @@ export function buildImpactMap(specList = testFiles()) {
     row.get(fn).push(spec);
   };
   for (const spec of specList) {
-    const text = readRepo(spec);
+    let text = readRepo(spec);
+    // A registry spec's tests live in its case modules (`import x from "./foundation/<id>.js"`,
+    // TK2-17): read them as the spec's own text, so the map keeps their js/ references.
+    if (spec.startsWith("tests/specs/"))
+      for (const m of [...text.matchAll(/^import\s+\w+\s+from\s+"(\.\/[^"]+\.js)";$/gm)])
+        text += "\n" + readRepo(path.posix.join("tests/specs", m[1]));
     const paths = new Set();
     for (const m of text.matchAll(/\b(js\/[A-Za-z0-9_./-]+\.js)\b/g)) {
       if (fs.existsSync(path.join(ROOT, m[1]))) paths.add(m[1]);

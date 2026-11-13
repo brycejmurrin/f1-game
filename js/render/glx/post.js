@@ -116,14 +116,14 @@ const GLXPost = (function () {
     const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
 
     // POST_VS uUVScale — must be set on every use (WebGL defaults unset to 0).
-    function usePost(prog) {
+    function usePost(prog, exactSize = false) {
       useProg(prog);
       let loc = _uvLocs.get(prog);
       if (loc === undefined) {
         loc = prog ? gl.getUniformLocation(prog, "uUVScale") : null;
         _uvLocs.set(prog, loc);
       }
-      if (loc) gl.uniform2f(loc, _uvScaleX, _uvScaleY);
+      if (loc) gl.uniform2f(loc, exactSize ? 1 : _uvScaleX, exactSize ? 1 : _uvScaleY);
     }
     function setCoverScale(logicalW, logicalH) {
       _uvScaleX = allocW > 0 ? (logicalW / allocW) : 1;
@@ -1153,10 +1153,12 @@ const GLXPost = (function () {
     // Headless soft-present readback from _softReadFB — the buffer the last
     // present() resolved into. SwiftShader resolves asynchronously, so without
     // the finish() the read repeats the previous frame and grade captures go stale.
-    function readbackLdrPixels(buf, w, h) {
+    // `asked`: a caller is waiting to read these pixels (soft.js), so the
+    // software-GL UI defer does not apply (#5380).
+    function readbackLdrPixels(buf, w, h, asked) {
       if (!gl || !buf || w < 1 || h < 1) return false;
       try {
-        if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) return false;
+        if (!asked && typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) return false;
       } catch (_) { /* harness */ }
       try {
         gl.finish();
@@ -1270,7 +1272,7 @@ const GLXPost = (function () {
       gl.viewport(x, y, w, h);
       gl.disable(gl.DEPTH_TEST);
       setBlend(false);
-      usePost(mirProg);
+      usePost(mirProg, true);   // mirrorTarget is exact-size, never the main scene's square cover
       bindVAO(core.skyVAO);   // POST_VS is a gl_VertexID triangle; WebGL2 still wants a VAO
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, mirTex);
