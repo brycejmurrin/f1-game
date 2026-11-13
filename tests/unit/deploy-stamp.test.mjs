@@ -221,6 +221,25 @@ test("every staged root .html page is stamped (overlay.html included) and --chec
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// #5306: bump-cache stamps only a numeric apex-build (META_RE); a page committed with `content="dev"` kept "dev" on
+// every deploy, so its build marker never matched the shell's. Each staged page is stamped with the shell's build.
+test("every staged root .html that carries an apex-build meta commits a number and is stamped with the shell's build", () => {
+  const META = /<meta\s+name="apex-build"\s+content="([^"]*)"/;
+  const pages = STAGE_ROOT_FILES.filter((f) => f.endsWith(".html") && fs.existsSync(path.join(ROOT, f)));
+  const metas = pages.map((p) => [p, (META.exec(fs.readFileSync(path.join(ROOT, p), "utf8")) || [])[1] ?? null]).filter(([, v]) => v !== null);
+  assert.ok(metas.some(([p]) => p === "overlay.html"), "overlay.html carries the marker");
+  assert.deepEqual(metas.filter(([, v]) => !/^[1-9][0-9]*$/.test(v)), [], "a non-numeric apex-build is never stamped");
+  const dir = stageDir("pages-meta-");
+  try {
+    shell(dir);
+    for (const [p] of metas.filter(([p]) => p !== "index.html")) put(dir, p, fs.readFileSync(path.join(ROOT, p), "utf8").replace(/\?v=[^"]*"/g, '"'));
+    assert.equal(runAt(dir, "--apply", "--at", "1700").status, 0);
+    const build = (rel) => (META.exec(fs.readFileSync(path.join(dir, rel), "utf8")) || [])[1];
+    const extra = metas.filter(([p]) => p !== "index.html").map(([p]) => p);
+    assert.deepEqual(["index.html", ...extra].map((p) => [p, build(p)]), ["index.html", ...extra].map((p) => [p, "1700"]));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("the repo check still reads overlay.html (its tags stay ?v=dev in the tree)", () => {
   const r = spawnSync(process.execPath, ["tools/ci/bump-cache.mjs", "--json"], { cwd: ROOT, encoding: "utf8" });
   assert.equal(r.status, 0, r.stdout + r.stderr);

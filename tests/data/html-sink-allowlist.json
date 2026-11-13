@@ -86,6 +86,14 @@
       "rhs": [
         "5445abd5fed4"
       ]
+    },
+    "js/garage/setup-camera.js::set(\"innerHTML\")": {
+      "count": 2,
+      "reason": "CAMERA SEQUENCE preview bar (previewSync): set(el, k, v) writes el[k] = v, so html-sink-lint sees the sink by its literal \"innerHTML\" argument (#5014). Both HTML arguments map previewPhases(p): every id and name is a literal from previewPhases' own table, and every number is a GarageArrival.timeline / previewLen time formatted with toFixed. No player text or URL reaches either string.",
+      "rhs": [
+        "60ad0de87686",
+        "8d921c71aad5"
+      ]
     }
   }
 }
