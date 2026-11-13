@@ -1412,6 +1412,12 @@
       ]
     },
     {
+      "path": "tools/ci/vendor-doctor.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/verification-receipt.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"

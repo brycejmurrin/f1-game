@@ -901,6 +901,11 @@
       "presentation": "shared-levels",
       "preserve": "VM coverage is test-for-test; drift exit remains 1"
     },
+    "tools/ci/vendor-doctor.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One JSON line per vendor: cli, version, login, key NAME, api code, next steps; reads only. Never expose a key, e-mail or account id."
+    },
     "tools/ci/verification-receipt.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
