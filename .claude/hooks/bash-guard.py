@@ -388,11 +388,11 @@ GH_READS = {
 }
 GH_NESTED = {("repo", "autolink"), ("repo", "deploy-key")}   # `gh repo autolink list` reads, the rest write
 MCP_FOR = {
-    "label": "labels: issue_write with the FULL current label list (read it first: gh api repos/<o>/<r>/issues/<n> "
-             "--jq '[.labels[].name]'), then read it back to verify; the list replaces the labels, so never pass a partial one",
+    "label": "labels: issue_write with the live label list (issue_read get_labels) plus or minus ONE name; the list "
+             "replaces the labels and github-mcp-guard refuses any other list (skill steward references/labels.md)",
     "comment": "a comment: add_issue_comment (issue or PR), add_reply_to_pull_request_comment, update_issue_comment",
     "pr": "a PR: create_pull_request / update_pull_request (draft, body, title); a review: pull_request_review_write",
-    "issue": "an issue: issue_write (create / update / close; labels as the full list) or add_issue_comment",
+    "issue": "an issue: issue_write (create / update / close; labels: the live list plus or minus one name) or add_issue_comment",
     "run": "starting, re-running or dispatching a workflow is the owner's call: say so on the PR (needs-decision), never from a shell",
 }
 GH_HOW = ("Write to GitHub through the GitHub MCP tools, which mark the write as the app's; a gh write is recorded as "

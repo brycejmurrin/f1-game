@@ -219,7 +219,7 @@ test("mcp-browser-guard.sh: a subagent never drives a browser; the main session 
   } finally { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } fs.rmSync(bin, { recursive: true, force: true }); }
 });
 
-test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close and a hold drop, allow the rest", () => {
+test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close, labels change by ONE name, allow the rest", () => {
   const gh = (tool_name, tool_input, env = {}) => {
     const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name, tool_input }, env);
     if (r.status === 2) return "exit2";
@@ -239,7 +239,35 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
   assert.equal(gh("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "allow", "the ready flip is the Plan gate's and CI's");
   assert.equal(gh("mcp__github__update_pull_request", { pullNumber: 1, body: "x" }), "allow");
   assert.equal(gh("mcp__github__actions_run_trigger", { method: "run_workflow", workflow_id: "browser-group.yml", ref: "x" }), "allow", "other workflows pass the hook (settings.json asks)");
-  assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["hold", "ready"] }), "allow", "labels that keep hold");
+  // The `labels` field REPLACES the list, so the guard makes it a one-label operation: the list must differ from the
+  // live labels (a fake gh prints them) by exactly ONE name. Owner decision 2026-11-13, option 1A on PR #5524.
+  const fakeGh = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-gh-"));
+  fs.writeFileSync(path.join(fakeGh, "gh"), "#!/bin/sh\ncase \"$*\" in *events*) echo \"$FAKE_HOLD_BY\";; *) printf \"$FAKE_LABELS\";; esac\n"); fs.chmodSync(path.join(fakeGh, "gh"), 0o755);
+  try {
+    const lab = (labels, liveLabels, holdBy = "owner") => gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels },
+      { PATH: `${fakeGh}:${process.env.PATH}`, FAKE_LABELS: liveLabels.join("\\n"), FAKE_HOLD_BY: holdBy });
+    const LIVE = ["config-ok", "hold", "land", "needs-decision", "lane:claude"];
+    const table = [
+      ["the live list itself (a no-op)", LIVE, LIVE, "allow"],
+      ["one name added", [...LIVE, "priority"], LIVE, "allow"],
+      ["one name added, other case and order", ["Priority", ...LIVE.slice().reverse()], LIVE, "allow"],
+      ["needs-decision removed alone", LIVE.filter((x) => x !== "needs-decision"), LIVE, "allow"],
+      ["land removed alone (a re-gate by hand)", LIVE.filter((x) => x !== "land"), LIVE, "allow"],
+      ["the first label on a bare issue", ["claimed"], [], "allow"],
+      ["the last label removed", [], ["needs-owner"], "allow"],
+      ["a partial list (the 2026-11-11 loss of lane:claude)", ["needs-owner"], ["lane:claude"], "deny"],
+      ["one added and one removed", ["lane:claude", "needs-owner"], ["lane:claude", "claimed"], "deny"],
+      ["two added", [...LIVE, "priority", "blocked"], LIVE, "deny"],
+      ["a stale list after an Action labelled", ["lane:claude", "land"], ["lane:claude", "deploy:red"], "deny"],
+      ["config-ok added", ["lane:claude", "config-ok"], ["lane:claude"], "deny"],
+      ["config-ok removed", LIVE.filter((x) => x !== "config-ok"), LIVE, "deny"],
+      ["Bryce's hold removed", LIVE.filter((x) => x !== "hold"), LIVE, "deny"],
+      ["a hold added", ["lane:claude", "hold"], ["lane:claude"], "allow"],
+    ];
+    assert.deepEqual(table.map(([why, labels, live]) => [why, lab(labels, live)]), table.map(([why, , , want]) => [why, want]));
+    assert.equal(lab(LIVE.filter((x) => x !== "hold"), LIVE, "claude"), "allow", "an agent's own hold: any removal");
+    assert.equal(lab(LIVE.filter((x) => x !== "hold"), LIVE, ""), "deny", "who set the hold is unreadable");
+  } finally { fs.rmSync(fakeGh, { recursive: true, force: true }); }
   assert.equal(gh("mcp__github__issue_write", { method: "create", title: "x", labels: ["ready"] }), "allow", "a create has no hold to drop");
   assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, title: "x" }), "allow", "no labels field");
   // labels the hook cannot read (gh fails) → ask; a fake gh at the front of PATH stands in for a logged-out host

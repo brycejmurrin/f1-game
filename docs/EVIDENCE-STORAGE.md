@@ -97,7 +97,8 @@ node tools/shot/publish-evidence.mjs --dir artifacts/track-survey/monza --label 
 # Package locally; tar must be installed. Nothing uploads by default.
 node tools/shot/publish-evidence.mjs --dir artifacts/track-survey/monza --label monza-survey
 
-# Package and upload. Push code first when its source link must be accessible.
+# Package and upload: Bryce's own shell only (APEX_GH_OWNER_WRITE=1; the release is a gh-token write, refused
+# for an agent). Push code first when its source link must be accessible.
 node tools/shot/publish-evidence.mjs --dir artifacts/track-survey/monza --label monza-survey --publish
 ```
 

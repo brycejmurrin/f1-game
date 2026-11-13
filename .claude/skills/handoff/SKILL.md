@@ -10,7 +10,7 @@ A new session starts with no memory and an unfetched branch, so the hand-off
 carries everything it needs. Never write a `HANDOFF` file to the repo root: a
 cold clone cannot see it.
 
-The cap is the brief's `STOP AT` line; `.claude/hooks/context-cap.py` advises on live context against it and refuses
+The cap is the brief's `STOP AT` line (`start+<N>k`: a budget above the first turn's context); `.claude/hooks/context-cap.py` advises on live context against it and refuses
 spawns over the hard cap; a session without a brief has no cap and hands off when the user asks or the context is
 long. Before idling, write the follow-up prompts into the PR's Hand-off block. Model names and messaging routes are
 host-specific; use only exposed host capabilities.
@@ -20,7 +20,7 @@ Two audiences, two endings (steps 1–2 are shared):
 - **Attended** (the user asked, or the context is long; no brief, so no cap advisory): steps 1–3, then output the
   prompt in chat in ONE code block. Add no `needs-owner` unless the user leaves the PR to the fleet.
 - **Unattended owner at its cap or stuck** (skill `steward` §Lane 5; `context-cap.py` advises against the cap in
-  `tools/ci/worker-prompt.md`): steps 1–2, then add `needs-owner` (MCP `issue_write` with the full list, skill `steward` `references/labels.md`)
+  `tools/ci/worker-prompt.md`): steps 1–2, then add `needs-owner` (MCP `issue_write`: the live list plus it, skill `steward` `references/labels.md`)
   and end. No chat prompt: the takeover reads only the Hand-off
   block and the Plan; the dispatch Action launches it once no live owner names the PR.
 
@@ -37,7 +37,7 @@ Two audiences, two endings (steps 1–2 are shared):
 3. **The prompt**, in this order:
    - repo `brycejmurrin/f1-game`, branch, pushed head sha, PR number and URL
    - first: ADOPT the PR (skill `steward` §Lane 3): comment `adopts PR #<n> — <host>:<session id>`,
-     remove `needs-owner` if set (MCP `issue_write` with the full list minus it, skill `steward` `references/labels.md`; a
+     remove `needs-owner` if set (MCP `issue_write`: the live list minus it, skill `steward` `references/labels.md`; a
      dispatch-launched owner skips this, the Action already did), set `owner:` in the Hand-off block
    - Goal in one sentence; Plan: the done / now / next items from the PR body
    - what is not run, unverified or red, with the exact command to reproduce

@@ -6,7 +6,7 @@ description: "Use when you own a PR at any stage: launched on an issue or `CONTI
 # Steward — one PR, from launch to landed
 
 You are one session, one task, one PR. GitHub holds all state: issues are tasks, labels are state, the PR is the work
-and the report, comments are the only messages. GitHub lands the PR; no session merges or arms. Nobody reads your
+and the report, comments are the only record. GitHub lands the PR; no session merges or arms. Nobody reads your
 chat. Everything not here is `AGENTS.md` (rules 3, 4, 8, 9, 12, 13 and §Coordination). Routes: failed-CI triage →
 agent `ci-red-triage`; pre-push validation → skill `check-changes`; live `version.json` or anything on github.io →
 agent `deploy-research`; review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any.
@@ -19,8 +19,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 (`issue_read` / `pull_request_read`); the Plan and the Hand-off block are the whole brief.
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
-   stand down. Labels ONLY through MCP `issue_write` with the FULL list, then read back ([`references/labels.md`](references/labels.md));
-   never `gh`.
+   stand down. Labels ONLY through MCP `issue_write`: the live list plus or minus ONE name ([`references/labels.md`](references/labels.md);
+   `github-mcp-guard.sh` refuses any other list); never `gh`.
 2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: the Action already removed `needs-owner` and posted `adopts PR #<n>`
    (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
@@ -30,8 +30,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    comment, and re-read the head before every push: if someone else moved it, stand down.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
    No PR, no question.
-5. **Cap.** The brief's `STOP AT` (the worker brief `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan
-   and Hand-off, add `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
+5. **Cap.** The brief's `STOP AT` (`start+<N>k` is a budget above your first turn's context; the worker brief
+   `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan and Hand-off, add
+   `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
 6. **Ask = `needs-decision` plus ONE comment** with the options, your pick and the exact line to paste
    (`decision: <option>`), posted when the question is first predictable, not after CI confirms it; then keep working
    on what does not depend on it. No question to the user at the end of a turn, no `AskUserQuestion`. Bryce answers with his own label
@@ -49,7 +50,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `.github/pull_request_template.md`: Goal, Plan (exactly one `**now:**`; the LAST item is the gate-exempt
    `- [ ] land: …` line), Verified / Not run, the Hand-off fence (`head:`, `owner:`, `next:`). Never `deploy.mjs
    --pr`: it opens a READY PR without the template body.
-3. Add `lane:<host>` (the full-list recipe in [`references/labels.md`](references/labels.md); never `gh`). Every
+3. Add `lane:<host>` (the one-label recipe in [`references/labels.md`](references/labels.md); never `gh`). Every
    draft push gets the fast tier plus a selected browser shard on CI; no label starts it.
 
 ## Push
@@ -96,7 +97,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    on a dirty PR starts no CI.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:
-3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the full-list recipe in
+3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in
    [`references/labels.md`](references/labels.md)).
 4. Refresh the Hand-off block; call `subscribe_pr_activity` again (the subscription dies at the flip); end the turn.
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the

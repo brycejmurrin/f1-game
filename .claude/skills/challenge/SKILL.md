@@ -26,5 +26,5 @@ the only writes are the step-4 review and the step-5 label. A forked subagent's 
    approves or merges; if that tool is absent, post nothing and report it: a `gh` write is recorded as Bryce's own act): a table of CLAIM | VERDICT (holds / stale / refuted / unproven) | EVIDENCE (file:line, or
    command and exit) | SEVERITY, ending with the attribution footer from the system prompt.
 5. A `refuted` high-severity row that contradicts a Plan item the author ticked also gets the `needs-decision`
-   label (MCP `issue_write` with the FULL current list plus it, then read back: skill `steward` `references/labels.md`; never `gh`) and nothing else.
+   label (MCP `issue_write`: the live list plus it, skill `steward` `references/labels.md`; never `gh`) and nothing else.
 6. Final message: PR, counts by verdict, review link. The author or skill `steward` acts on it.

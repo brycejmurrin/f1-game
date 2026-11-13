@@ -13,8 +13,9 @@
 #   DENY  actions_run_trigger: any *cancel* / *rerun* method, run_workflow of
 #         pages.yml / ci.yml (the release train is never dual-dispatched)
 #   ASK   update_pull_request with state "closed"
-#   ASK   issue_write whose `labels` would drop `hold` (the list REPLACES the
-#         labels; the live ones come from `gh api`; unknown → ask)
+#   DENY  issue_write whose `labels` (it REPLACES the list) differs from the
+#         live labels by anything but ONE name (live from `gh api`; unknown →
+#         ask), touches `config-ok`, or removes a `hold` Bryce set
 #   ALLOW the rest, draft→ready included: the Plan gate and CI check a flip.
 # Output is the documented PreToolUse JSON; an unreadable payload or a guarded
 # call with a non-object input is a deny (fail closed).
@@ -78,22 +79,29 @@ if op == "issue_write":
     number = next((ti.get(k) for k in ("issue_number", "issueNumber", "number") if ti.get(k) is not None), None)
     if labels is None or number is None or str(ti.get("method") or "update").strip().lower() == "create":
         sys.exit(0)
-    names = [str(x).strip().lower() for x in (labels if isinstance(labels, (list, tuple)) else [labels])]
-    if "hold" in names:
-        sys.exit(0)
-    cur = None
+    names = sorted({str(x).strip().lower() for x in (labels if isinstance(labels, (list, tuple)) else [labels]) if str(x).strip()})
     s = slug()
-    if s:
+    def live(path, jq):
         try:
-            r = subprocess.run(["gh", "api", "repos/%s/issues/%d" % (s, int(number)), "--jq", '[.labels[].name] | join("\\n")'],
-                               capture_output=True, text=True, timeout=6)
-            if r.returncode == 0: cur = [x.strip().lower() for x in r.stdout.splitlines() if x.strip()]
+            r = subprocess.run(["gh", "api", "repos/%s/issues/%d%s" % (s, int(number), path), "--jq", jq], capture_output=True, text=True, timeout=6)
+            return [x.strip().lower() for x in r.stdout.splitlines() if x.strip()] if r.returncode == 0 else None
         except Exception:
-            cur = None
+            return None
+    cur = live("", '[.labels[].name] | join("\\n")') if s else None
+    how = "Read the live labels (`issue_read` method get_labels) and send them plus or minus ONE name (skill `steward` `references/labels.md`); never `gh`."
     if cur is None:
-        emit("ask", "This `labels` list REPLACES the labels and omits `hold`; the current labels could not be read. `hold` is the only veto (whoever set it removes it; Bryce always can) — confirm by hand.")
-    if "hold" in cur:
-        emit("ask", "This `labels` list REPLACES the labels and would REMOVE `hold`, the only veto. Only whoever set it (or Bryce) removes it — confirm by hand.")
+        emit("ask", "This `labels` list REPLACES the labels and the live ones could not be read, so the one-label rule cannot be checked. " + how)
+    add, gone = [x for x in names if x not in cur], [x for x in sorted(set(cur)) if x not in names]
+    if not add and not gone:
+        sys.exit(0)
+    if len(add) + len(gone) != 1:
+        emit("deny", "issue_write labels REPLACES the list, so it may differ from the live labels by exactly ONE name. Live: [" + ", ".join(sorted(set(cur))) + "]; this list would add [" + ", ".join(add) + "] and remove [" + ", ".join(gone) + "]. " + how)
+    if add + gone == ["config-ok"]:
+        emit("deny", "`config-ok` is Bryce's own click (merge-gate reads the label event's actor): an agent never adds or removes it. Ask with `needs-decision` and one comment.")
+    if gone == ["hold"]:    # an agent's hold: any removal; Bryce's: his own click. The last `labeled hold` event's app marker tells.
+        by = live("/events?per_page=100", '[.[] | select(.event == "labeled" and .label.name == "hold")] | last | (.performed_via_github_app.slug // "owner")')
+        if not by or len(by) != 1 or by[0] == "owner":
+            emit("deny", "`hold` is the only veto: Bryce set this one (or who set it could not be read), so only his own click lifts it (AGENTS.md §Coordination).")
 sys.exit(0)
 PY
 rc=$?

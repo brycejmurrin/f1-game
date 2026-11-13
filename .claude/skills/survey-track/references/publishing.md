@@ -3,9 +3,9 @@
 - Brief checklist: every frame incl. storm weather; a "Code & scenery deep-dive"
   section (emitter counts with the verified file and symbol); the source branch/commit and
   published evidence URL.
-- New capture output stays under ignored `artifacts/` or `scratch/`. Publish with
-  `node tools/shot/publish-evidence.mjs --dir artifacts/<capture> --label <slug> --publish`
-  and link the release assets; do not force-add images to a survey branch.
+- New capture output stays under ignored `artifacts/` or `scratch/`. Package with
+  `node tools/shot/publish-evidence.mjs --dir artifacts/<capture> --label <slug>`; publishing is the
+  `archive-evidence.yml` route (`--publish` is Bryce's own opt-in: a gh-token write). Link the release assets; do not force-add images to a survey branch.
   See `docs/EVIDENCE-STORAGE.md` for plan, local packaging, retries and retention.
 - Existing survey PRs keep their `track-survey-assets` base and pinned links.
   Code/scenery fixes use a separate image-free deploy-branch PR.

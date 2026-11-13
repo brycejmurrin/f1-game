@@ -28,7 +28,7 @@
 //             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and newer than the last push that
 //             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
 //             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
-//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
+//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there (an absent catalog is built)
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
 // The `distance` row (merge-base at most N game merges behind the tip) was retired 2026-11-03 (plan §6): gen and
@@ -67,24 +67,29 @@ export const CONFIG_LABEL = "config-ok";
 /** The paths whose edit needs CONFIG_LABEL: the hooks, settings, workflows and actions that enforce every other rule,
  *  the CI tools that compute this gate and the dispatcher, the MCP and hook tooling, the generated-path list, the
  *  package scripts, every host's hook and agent config, the tracked memory and the issue templates. */
+/** The gate's import-closure modules (gateClosure in tools/lib/gate-receipt.mjs) that live OUTSIDE tools/ci/ (#5467):
+ *  their top level runs when the gate imports them and gen-test-groups decides generatedPkgVerdict, so each is a
+ *  config path AND a protected one. A test fails on any closure module either list misses. */
+const GATE_MODULE_OUTSIDE_CI = ["tools/gen/gen-test-groups\\.mjs$", "tools/lib/changed-files\\.mjs$", "tools/lib/cli-args\\.mjs$",
+  "tools/lib/gate-receipt\\.mjs$", "tools/lib/work-tree-id\\.mjs$"];
 export const CONFIG_PATH = new RegExp("^(" + [
   "\\.claude/hooks/", "\\.claude/settings(\\.local)?\\.json$", "\\.claude/agents/", "\\.claude/memory/",
   "\\.github/workflows/", "\\.github/actions/", "\\.github/ISSUE_TEMPLATE/", "\\.githooks/", "\\.mcp\\.json$",
   "tools/ci/", "tools/hooks/", "tools/mcp/", "tools/lib/generated-paths\\.mjs$", "package\\.json$",
-  "\\.cursor/hooks", "\\.codex/hooks",
+  "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
 /** The PROTECTED config paths (#5455, Bryce 2026-11-11 "Count it, except the gate and safety hooks"): only his own
  *  `config-ok` tap covers a diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every
  *  other CONFIG_PATH). The gate (this module, which defines both lists; provenance; ready-gate; and the rest of the
- *  gate's import closure under tools/ci/, because a module's top level runs when the gate imports it — a test pins
+ *  gate's import closure, under tools/ci/ and outside it (#5467), because a module's top level runs when the gate imports it — a test pins
  *  the closure), the land workflow, ci.yml (it decides what green means; Bryce 2026-11-11 "Protect ci.yml"), and every
  *  host's hooks and settings. */
 export const PROTECTED_CONFIG_PATH = new RegExp("^(" + [
   "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/ready-gate\\.mjs$",
   "tools/ci/github-api\\.mjs$", "tools/ci/github-token\\.mjs$", "tools/ci/preflip-probe\\.mjs$", "tools/ci/pick-tests\\.mjs$",
   "\\.github/workflows/land\\.yml$", "\\.github/workflows/ci\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
-  "\\.cursor/hooks", "\\.codex/hooks",
+  "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isProtectedConfigPath = (p) => PROTECTED_CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
 export const configFiles = (files) => (files || []).filter(isConfigPath);
@@ -404,6 +409,20 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
   // line, tooling hunt 2026-11-09 row 2) is not waved through: the child exits NO_DIGEST and the generator's own
   // `--check` rebuilds every circuit on this merge and compares (about a minute). A digest that is present must
   // still be well-formed and equal. Keep PR code in a child with the same stripped environment as gen:check.
+  // An ABSENT catalog (the merge of a branch that builds it on demand, #5427) is built here in write mode, with the
+  // same environment and timeout; the generator's exit code is the verdict. A present catalog takes the path above.
+  const absent = !fs.existsSync(path.join(wt, "tools/shot/scenery-locations.json"));
+  if (absent) {
+    const built = run(process.execPath, ["tools/shot/gen-scenery-locations.cjs"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
+    if (built.error || built.status !== 0) {
+      const detail = built.error?.message || `${built.stdout || ""}\n${built.stderr || ""}`.split("\n")
+        .map((line) => line.trim()).find((line) => /Error:|FAILED/.test(line)) || `exit ${built.status}`;
+      return fail(`scenery catalog fails to build on the merge onto ${tip.slice(0, 8)}: ${detail} — node tools/shot/gen-scenery-locations.cjs on the synced branch names the circuit`);
+    }
+    const rat = ratchets({ cwd: wt, run });
+    cleanup();
+    return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat };
+  }
   let catalog = run(process.execPath, ["-e", [
     "const fs = require('node:fs');",
     "const { scenerySourceDigest } = require('./tools/shot/scenery-source-hash.cjs');",

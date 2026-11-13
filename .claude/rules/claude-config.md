@@ -42,13 +42,14 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
   into a subagent's interpreter commands, and `launchChromium` (`tools/lib/harness.mjs`) refuses under it.
   `mcp-browser-guard.sh` judges an MCP call on its name and input (`apex_eval {vm:true}`, `debugger_node_test`,
   a tree-kind `apex_job_start` are no browser): a subagent never drives one, and the main session opens none beside a
-  live Playwright run. `github-mcp-guard.sh` refuses a session merge or arm and an unparsable guarded call (the
-  draft→ready flip is allowed: the Plan gate and the CI check judge it). `.githooks/pre-commit` owns `test:guards`
-  for every host, with no skip (AGENTS.md rule 12); `.githooks/pre-push` refuses force pushes, branch deletes and
-  deploy-branch pushes.
-- `context-cap.py` (Agent) advises on live context against the brief's first `STOP AT` and refuses spawns over the
-  hard cap, or when a capped session's count cannot be read; `subagent-contract.py` flags a reporter agent's
-  malformed report.
+  live Playwright run. `github-mcp-guard.sh` refuses a session merge or arm, an `issue_write` labels list that
+  differs from the live labels by anything but ONE name or touches `config-ok` or Bryce's `hold`, and an unparsable guarded call (the draft→ready flip
+  is allowed: the Plan gate and the CI check judge it). `.githooks/pre-commit` owns `test:guards` for every host,
+  with no skip (AGENTS.md rule 12); `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch
+  pushes.
+- `context-cap.py` (Agent) advises on live context against the brief's first `STOP AT` (`<N>k`, or `start+<N>k`
+  above the first turn's context) and refuses spawns over the hard cap, or when a capped session's count cannot be
+  read; `subagent-contract.py` flags a reporter agent's malformed report.
 - Advisory: `post-edit.sh` (a `js/` edit that does not parse or staled a generated file), `lsp-hint.py` (the
   apex-lsp call after a bare-symbol code search, not a grep filtering a pipe).
 - Cursor (`.cursor/hooks.json`) and Codex (`.codex/hooks.json`) reach the same scripts through adapters; neither

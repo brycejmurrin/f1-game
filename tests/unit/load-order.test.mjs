@@ -283,6 +283,53 @@ test("deferred stylesheets flip print→all from the hashed script, not an onloa
   assert.ok(html.indexOf(DEFER_CSS_SCRIPT) > html.lastIndexOf('media="print">'), "after the last deferred <link>");
 });
 
+// #5394 row 1: a VM run of the shipped flipper against stub links.
+async function runFlipper(links) {
+  const vm = await import("node:vm");
+  const { DEFER_CSS_SCRIPT } = await import("../../tools/gen/gen-shell.mjs");
+  const body = DEFER_CSS_SCRIPT.replace(/^<script>/, "").replace(/<\/script>$/, "");
+  const frames = [];
+  const raf = (fn) => frames.push(fn);
+  const win = { on: {}, requestAnimationFrame: raf, addEventListener(t, fn) { (this.on[t] = this.on[t] || []).push(fn); } };
+  const ctx = { document: { querySelectorAll: () => links }, requestAnimationFrame: raf, window: win };
+  vm.runInNewContext(body, ctx, { filename: "gen-shell.mjs:DEFER_CSS_SCRIPT" });
+  return { frames, win };
+}
+function stubLink(loaded) {
+  let writes = 0, media = "print";
+  return { sheet: loaded ? {} : null, on: {}, get writes() { return writes; },
+    get media() { return media; }, set media(v) { writes++; media = v; },
+    addEventListener(t, fn) { (this.on[t] = this.on[t] || []).push(fn); } };
+}
+
+test("#5394: the deferred sheets flip together, in one frame, once every one has loaded or failed", async () => {
+  const links = [stubLink(true), stubLink(false), stubLink(false), stubLink(false)];
+  const { frames, win } = await runFlipper(links);
+  const medias = () => links.map((l) => l.media).join();
+  assert.equal(medias(), "print,print,print,print", "an already-loaded sheet waits for the rest");
+  links[1].on.load[0]();
+  links[2].on.error[0]();
+  assert.equal(frames.length, 0, "no frame while one sheet is still loading");
+  assert.equal(medias(), "print,print,print,print");
+  links[3].on.load[0]();
+  assert.equal(frames.length, 1, "exactly one frame is asked for");
+  assert.equal(medias(), "print,print,print,print", "the flip waits for that frame");
+  frames[0]();
+  assert.equal(medias(), "all,all,all,all", "every sheet flips in the one frame (a failed one too)");
+  win.on.load.forEach((fn) => fn());
+  assert.deepEqual(links.map((l) => l.writes), [1, 1, 1, 1], "window load after the frame writes nothing again");
+});
+
+test("#5394: a sheet that failed before the flipper ran cannot hold the rest on print", async () => {
+  // Already errored: no .sheet, and its error event fired before the listener existed.
+  const links = [stubLink(true), stubLink(false)];
+  const { frames, win } = await runFlipper(links);
+  assert.equal(frames.length, 0);
+  assert.equal(win.on.load.length, 1, "window load is the backstop");
+  win.on.load[0]();
+  assert.deepEqual(links.map((l) => l.media), ["all", "all"], "window load (every sheet settled) flips them all");
+});
+
 test("every gen-shell block is byte-identical to a fresh generation", () => {
   const drift = genShellStale();
   assert.deepEqual(drift.map((d) => `${d.rel}\n${d.diff}`), [],
@@ -393,7 +440,7 @@ function lazyFiles() {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -443,7 +490,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
                    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-                   ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || [])]) {
+                   ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -467,7 +514,7 @@ test("sw.js stamps every injected asset it seeds", () => {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
@@ -574,8 +621,13 @@ test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the build files", () => {
   }
   // Race-only scripts that hunt-2 flagged as stay-eager (not LAZY_TRACK_BUILD).
   for (const f of ["js/race/driving-coach.js", "js/race/race-insights.js", "js/race/real-replay.js", "js/camera/flyby-seq.js"]) {
+    assert.ok(!(MANIFEST.LAZY_TRACK_BUILD || []).includes(f), `${f} must not move with track-build`);
+  }
+  // real-replay left FULL with the real-race family (#4978 row 6: LAZY_REAL_RACE behind the RealRace stub).
+  for (const f of ["js/race/driving-coach.js", "js/race/race-insights.js", "js/camera/flyby-seq.js"]) {
     assert.ok(MANIFEST.FULL.includes(f), `${f} must stay FULL (not moved with track-build)`);
   }
+  assert.ok((MANIFEST.LAZY_REAL_RACE || []).includes("js/race/real-replay.js"), "real-replay is LAZY_REAL_RACE");
 });
 
 // hub.js calls Data*.create() at EVAL time, so these pairs are the difference

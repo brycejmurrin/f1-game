@@ -309,3 +309,20 @@ test("seeded smoke, flares and rain keep the same upload bytes", () => {
   // do not move a streak, a flare or a smoke quad.
   assert.equal(hash, 2712992901);
 });
+
+test("armPrime: each blend group with nothing to draw submits one zero-size, zero-alpha particle from its own buffer, once (#5387)", () => {
+  const uploads = [], P = make(uploads);
+  P.armPrime(); P.draw();
+  assert.deepEqual(uploads.map((u) => [u.floats, u.additive, u.dirty]), [[60, false, true], [60, true, true]], "both groups, 6 verts each");
+  for (const u of uploads) assert.ok(u.data.subarray(0, 60).every((v) => v === 0), "size 0, alpha 0: no fragments");
+  const [alphaBuf, addBuf] = uploads.map((u) => u.data);
+  uploads.length = 0;
+  P.draw();
+  assert.equal(uploads.length, 0, "one-shot: the next frame draws nothing again");
+  P.tyreSmoke(0, 0, 0, 1, 0, 1, 4); P.flare(0, 1, 0, 1, 1, 0, 0, 1, true); P.update(0.016); P.draw();
+  assert.ok(uploads.find((u) => !u.additive).data === alphaBuf && uploads.find((u) => u.additive).data === addBuf,
+    "the race's real draws reuse the primed buffers, so TLX keeps the wrapped stream (no new geometry)");
+  uploads.length = 0;
+  P.update(0.016); P.armPrime(); P.draw();
+  assert.deepEqual(uploads.map((u) => [u.additive, u.floats === 60]), [[false, false], [true, true]], "a group already drawing this frame is left alone");
+});

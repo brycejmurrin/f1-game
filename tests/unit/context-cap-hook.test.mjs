@@ -25,6 +25,8 @@ function transcript(dir, brief, ctxK) {
   return p;
 }
 
+const SOFT_TAIL = "Over the soft cap: finish the current unit, push, hand off (skill handoff).";
+
 function run(dir, payload, env = {}) {
   const r = spawnSync("python3", [HOOK], {
     input: JSON.stringify(payload), encoding: "utf8",
@@ -48,9 +50,8 @@ test("STOP AT sets the soft cap; the advisory fires once per level", () => {
     const t = transcript(dir, "CONTINUE PR #1. STOP AT: 150k.", 170);
     const ev = { hook_event_name: "UserPromptSubmit", transcript_path: t, session_id: "s2" };
     const first = run(dir, ev);
-    assert.match(first, /context 170k \/ cap 150k \(brief STOP AT; hard 200k\)/);
-    assert.match(first, /skill handoff/);
-    assert.doesNotMatch(first, /WORKERS\.md/, "docs/WORKERS.md is retired");
+    // the whole advisory, exactly: it names the handoff skill and nothing else (docs/WORKERS.md is retired)
+    assert.equal(first, "context-cap: context 170k / cap 150k (brief STOP AT; hard 200k). " + SOFT_TAIL);
     assert.equal(run(dir, ev), "", "the soft advisory is once per session");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -110,5 +111,21 @@ test("--guard fails closed when the cap is known and the count is not; the FIRST
     assert.equal(g(ev(older)), "none", "the newest non-zero count is used: 10k under the cap");
     const first = transcript(dir, "STOP AT: 100k. (The last session was told STOP AT: 400k.)", 160);
     assert.equal(g(ev(first)), "deny", "160k is over the FIRST cap's hard 150k");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("STOP AT: start+<N>k is a budget above the first assistant entry's context (decision 4, 2026-11-11)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
+  const at = (k) => ({ type: "assistant", message: { usage: { input_tokens: 1000, cache_read_input_tokens: k * 1000 - 1000 } } });
+  const write = (rows) => { const p = path.join(dir, "t.jsonl"); fs.writeFileSync(p, rows.map((r) => JSON.stringify(r)).join("\n") + "\n"); return p; };
+  try {
+    const brief = { type: "user", message: { content: "ISSUE 1. STOP AT: start+250k." } };
+    const under = write([brief, at(100), at(340)]);
+    assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: under, session_id: "r1" }), "", "340k is under 100k + 250k");
+    const over = write([brief, at(100), at(360)]);
+    assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: over, session_id: "r2" }),
+      "context-cap: context 360k / cap 350k (brief STOP AT start 100k+250k; hard 400k). " + SOFT_TAIL);
+    const one = write([brief, at(260)]);
+    assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: one, session_id: "r3" }), "", "a lone entry is the start: 260k is under 260k + 250k");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
