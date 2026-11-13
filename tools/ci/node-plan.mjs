@@ -7,7 +7,7 @@
 //
 // THE FAST TIER'S FLOOR WAS A TREE-ONLY JOB (2026-09-30). A PR run finished in
 // ~6 min unqueued and its critical path was one file, elevation-tracks-vm
-// (40 circuit builds, the `vm-a` slice), run identically on a HUD label change
+// (40 circuit builds then, 52 since TK1-16 on 2026-11-11; the `vm-a` slice), run identically on a HUD label change
 // and on a track-engine change (docs/notes/CI-CAPACITY-2026-09-29.md). The
 // browser half of the gate has been change-aware since select-specs; the node
 // half never was, because the node-suites job has no `needs:` and no base.
