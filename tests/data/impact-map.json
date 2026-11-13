@@ -9169,7 +9169,8 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
-        "tests/unit/player-tools-backup.test.mjs"
+        "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs"
       ]
     },
     "js/input/haptics.js": {
