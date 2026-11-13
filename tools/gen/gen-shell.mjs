@@ -158,9 +158,18 @@ function cspBlock(html) {
 // they do not hold LCP, then flip to "all". That was an onload= attribute; an
 // attribute handler needs 'unsafe-inline'/'unsafe-hashes', so it is one hashed
 // script instead. A sheet already loaded when this runs has a .sheet; a
-// still-loading one gets a load listener (listeners are not CSP-governed).
-export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');` +
-  `for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>`;
+// still-loading one gets load/error listeners (listeners are not CSP-governed).
+// #5394: the sheets flip TOGETHER, in one animation frame once every one has
+// settled (loaded, or failed: a 404 must not hold the rest), so the title intro
+// pays one style recalc instead of one per sheet as each arrived. window "load"
+// is the backstop: it fires only after every sheet has settled, so a sheet that
+// failed before this script ran (no .sheet, and its error event already gone)
+// cannot leave the others on print. flip() runs its loop at most once.
+export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]'),n=L.length,d=0;` +
+  `function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}` +
+  `function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}` +
+  `window.addEventListener("load",flip);` +
+  `for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>`;
 
 function preloadBlock() {
   return (MANIFEST.CSS_PRELOAD || []).map((f) =>
@@ -223,7 +232,7 @@ export function swOptionalFiles() {
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
     ...(MANIFEST.LAZY_UI_PRESETS || []),
-    ...(MANIFEST.LAZY_RESULTS_SHEET || []),
+    ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []),
   ];
 }
 
@@ -255,6 +264,8 @@ function swOptionalBlock() {
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
     ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
     ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
+    ["LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot", MANIFEST.LAZY_PERF || []],
+    ["LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)", MANIFEST.LAZY_REAL_RACE || []],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
@@ -281,6 +292,8 @@ function rosterSource() {
     ["DEFERRED", MANIFEST.DEFERRED], ["DEFERRED_EDGES", MANIFEST.DEFERRED_EDGES],
     ["LAZY_AGENT", MANIFEST.LAZY_AGENT], ["LAZY_EDGES", MANIFEST.LAZY_EDGES],
     ["LAZY_DEV", MANIFEST.LAZY_DEV],
+    ["LAZY_PERF", MANIFEST.LAZY_PERF], ["LAZY_PERF_EDGES", MANIFEST.LAZY_PERF_EDGES],
+    ["LAZY_REAL_RACE", MANIFEST.LAZY_REAL_RACE], ["LAZY_REAL_RACE_EDGES", MANIFEST.LAZY_REAL_RACE_EDGES],
     ["LAZY_RACE", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION", MANIFEST.LAZY_RACE_SESSION],
     ["LAZY_RACE_SESSION_EDGES", MANIFEST.LAZY_RACE_SESSION_EDGES],

@@ -229,7 +229,7 @@ test("mcp-browser-guard.sh: a subagent never drives a browser; the main session 
   } finally { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } fs.rmSync(bin, { recursive: true, force: true }); }
 });
 
-test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close and a hold drop, allow the rest", () => {
+test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close, deny a guarded-label drop, allow the rest", () => {
   const gh = (tool_name, tool_input, env = {}) => {
     const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name, tool_input }, env);
     if (r.status === 2) return "exit2";
@@ -249,7 +249,16 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
   assert.equal(gh("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "allow", "the ready flip is the Plan gate's and CI's");
   assert.equal(gh("mcp__github__update_pull_request", { pullNumber: 1, body: "x" }), "allow");
   assert.equal(gh("mcp__github__actions_run_trigger", { method: "run_workflow", workflow_id: "browser-group.yml", ref: "x" }), "allow", "other workflows pass the hook (settings.json asks)");
-  assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["hold", "ready"] }), "allow", "labels that keep hold");
+  assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "hold", "land", "needs-decision", "x"] }), "allow", "labels that keep every guarded label need no lookup");
+  // a fake gh prints the live labels: a replace-write that drops a guarded one is refused (orchestration review rank 14)
+  const fakeGh = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-gh-"));
+  fs.writeFileSync(path.join(fakeGh, "gh"), "#!/bin/sh\nprintf 'config-ok\\nhold\\nready\\n'\n"); fs.chmodSync(path.join(fakeGh, "gh"), 0o755);
+  try {
+    const live = { PATH: `${fakeGh}:${process.env.PATH}` };
+    assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "hold", "ready", "lane:claude"] }, live), "allow", "labels that keep the live guarded ones");
+    assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["hold", "ready"] }, live), "deny", "drops config-ok");
+    assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "ready"] }, live), "deny", "drops hold");
+  } finally { fs.rmSync(fakeGh, { recursive: true, force: true }); }
   assert.equal(gh("mcp__github__issue_write", { method: "create", title: "x", labels: ["ready"] }), "allow", "a create has no hold to drop");
   assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, title: "x" }), "allow", "no labels field");
   // labels the hook cannot read (gh fails) → ask; a fake gh at the front of PATH stands in for a logged-out host

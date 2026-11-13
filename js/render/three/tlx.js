@@ -1275,7 +1275,8 @@ const TLX = (function () {
         if (fixedActive()) return W !== presentW || H !== presentH;
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
-      function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
+      // `out` (optional) is filled instead of a fresh object: tlx-post's per-present read.
+      function getPresentSize(out) { const o = out || {}; o.width = presentW || W; o.height = presentH || H; return o; }
       // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
       const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
       let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // a phone is ALWAYS mobileTier (glx-facade.js): no setting lifts this 1.5 cap, only the URL lab below (docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F1)
@@ -2175,8 +2176,26 @@ const TLX = (function () {
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
       const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
+      // #5387: a chunked record's merge slot (and its wrapper) was made at its first 2+-chunk view, mid-lap. On a
+      // primeRace frame (gfx.primeChunkMerge) each slotless record gets one from its first two chunks, drawn at a
+      // ZERO matrix. Main pass only; the track pre-build stays on hold (Bryce).
+      let _chunkPrime = false, _chunkPrimeNow = false, _chunkPrimeN = 0;
+      const _chunkPrimeZ = new Float32Array(16);
+      function _primeMergeSlot(rec, order) {
+        const mesh = rec.chunked, mat = rec.mat;
+        if (!mesh || !mesh.chunks || mesh.chunks.length < 2 || (mesh._tlxMv && mesh._tlxMv[0])) return false;
+        if ((mat && (mat.transparent || mat.depthWrite === false)) || rec.al < 1) return false;   // the merge path never takes these
+        const vis = chunkedSys.visList;
+        vis[0] = mesh.chunks[0]; vis[1] = mesh.chunks[1];
+        const g = chunkedSys.mergeVisible(mesh, 2, 0);
+        if (!g) return false;
+        acquireMesh(g, _chunkPrimeZ, mat, rec).renderOrder = order;
+        _chunkPrimeN++;
+        return true;
+      }
       function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
         if (!chunkedSys) return 0;
+        if (_chunkPrimeNow && slot === 0 && _chunkMerge && chunkedSys.mergeVisible) _primeMergeSlot(rec, order);
         const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
         const mat = rec.mat;
         if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
@@ -2249,6 +2268,41 @@ const TLX = (function () {
       // start bumps the stamp (A5: a Set.clear() per pass minted a fresh table).
       let _instStamp = 0;
       const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
+      // F3 (#3104) — THE INSTANCED ROOT, R6's pool root for the registry. Every InstancedMesh (and A2 / R1 /
+      // blob / decal run) used to sit in `scene`, hidden when undrawn, and three's projectObject visited each one
+      // on every renderer.render(scene) — main, mirror and env face alike. They now hang off one plain Object3D
+      // (not a Group: a Group would set groupOrder) whose `children` is rebuilt, in registry order, from the
+      // members visible when a pass settles visibility (_instShow: _hideUndrawnInstanced and the mirror warm
+      // swap). three returns at an invisible object, so the draws are the same; its render-list sort keys are
+      // groupOrder / renderOrder / z / id, never traversal order, so the order is the same; scene's
+      // matrixWorldAutoUpdate is off, so a member's matrixWorld is what tlx.js wrote, whoever its parent is.
+      // `parent` is set by hand (no added/removed events: nothing listens). No storage knob (the writer-less key
+      // list is at its ceiling): false is the scene.add path, kept as the before-arm of tlx-inst-root-3104.test.mjs.
+      const _instRootOn = true;
+      const instRoot = new THREE.Object3D();
+      instRoot.matrixAutoUpdate = false; instRoot.matrixWorldAutoUpdate = false;
+      if (_instRootOn) scene.add(instRoot);
+      scene.userData.instRegistry = _instRegistry;   // tooling (?three-devtools=1 specs, heap census): the members the walk no longer reaches
+      const _instKids = [];
+      function _instAdd(im) {
+        if (!_instRootOn) { scene.add(im); return; }
+        if (im.parent && im.parent !== instRoot) im.parent.remove(im);
+        im.parent = instRoot;
+      }
+      function _instRemove(im) {
+        if (!_instRootOn || im.parent !== instRoot) { scene.remove(im); return; }
+        const k = instRoot.children.indexOf(im);
+        if (k >= 0) instRoot.children.splice(k, 1);
+        im.parent = null;
+      }
+      // What three may walk this pass: exactly the registry members that are visible now.
+      function _instShow() {
+        if (!_instRootOn) return;
+        let n = 0;
+        for (let i = 0; i < _instRegistry.length; i++) { const im = _instRegistry[i]; if (im.visible) _instKids[n++] = im; }
+        if (_instKids.length !== n) _instKids.length = n;
+        instRoot.children = _instKids;
+      }
       // A-H1 (perf hunt 4) — STREAM, NOT DYNAMIC, ON THE PLAIN-MESH INSTANCE-RATE BUFFERS. three r186's
       // Attributes.update uploads when `version < attribute.version || usage === DynamicDrawUsage`, and with an
       // empty updateRanges list (the previous upload cleared it) that upload is the WHOLE array: a Dynamic buffer
@@ -2362,7 +2416,7 @@ const TLX = (function () {
         _instColorAttr(imesh, n);
         _writeInstanceMatrices(imesh, matrices, colors, n);
         imesh.visible = false;
-        scene.add(imesh);
+        _instAdd(imesh);
         _instRegistry.push(imesh);
 
         const batch = {
@@ -2536,7 +2590,7 @@ const TLX = (function () {
           batch._mir = null;
           const ix = _instRegistry.indexOf(mv.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
-          try { scene.remove(mv.imesh); } catch (_) { /* */ }
+          try { _instRemove(mv.imesh); } catch (_) { /* */ }
           disposeInstancedObject(mv.imesh);
           try { mv.imesh.geometry.dispose(); } catch (_) { /* */ }
           mv.imesh = null; mv.cells = null; mv.srcMatrices = mv.srcColors = mv.packMatrices = mv.packColors = null;
@@ -2544,7 +2598,7 @@ const TLX = (function () {
         if (batch.imesh) {
           const ix = _instRegistry.indexOf(batch.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
-          try { scene.remove(batch.imesh); } catch (_) { /* */ }
+          try { _instRemove(batch.imesh); } catch (_) { /* */ }
           disposeInstancedObject(batch.imesh);
           batch.imesh = null;
         }
@@ -2602,7 +2656,7 @@ const TLX = (function () {
         // no cells is never packed — cullInstances returns its full count).
         _writeInstanceMatrices(im, batch.srcMatrices, batch.srcColors, n);
         im.visible = false;
-        scene.add(im);
+        _instAdd(im);
         _instRegistry.push(im);
         return (batch._mir = {
           __tlx: true, geo: batch.geo, instances: batch.instances, visible: batch.instances, imesh: im,
@@ -2629,11 +2683,13 @@ const TLX = (function () {
           v.visible = true; im.visible = false;
           _mirSwapped.push(im, v);
         }
+        _instShow();
       }
       // The draw warm (A-W1) draws the main pass after the mirror's: put the main meshes back.
       const _mirSwapped = [];
       function _mirWarmUnswap() {
         for (let i = 0; i < _mirSwapped.length; i += 2) { _mirSwapped[i].visible = true; _mirSwapped[i + 1].visible = false; }
+        if (_mirSwapped.length) _instShow();
         _mirSwapped.length = 0;
       }
 
@@ -2655,6 +2711,7 @@ const TLX = (function () {
           const im = _instRegistry[i];
           if (im.__tlxShown !== _instStamp) im.visible = false;
         }
+        _instShow();
         _instStamp++;   // the next flush starts clean (pass starts bump it too)
       }
       // the mesh pool is keyed on (geometry, material), NOT on draw order
@@ -2800,7 +2857,7 @@ const TLX = (function () {
           // matrices into the draw buffer once per frame per render object (_instUsageOf).
           im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
           im.visible = false;
-          scene.add(im);
+          _instAdd(im);
           _instRegistry.push(im);
           b = _blob = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 };
         }
@@ -2838,7 +2895,7 @@ const TLX = (function () {
           const im = new THREE.InstancedMesh(geo, mat, (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, BLOB_CAP) : BLOB_CAP);
           im.matrixAutoUpdate = false; im.frustumCulled = false; im.visible = false;
           im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);   // A-H1: InstancedMesh, per-pass rewrites (_instUsageOf)
-          scene.add(im); _instRegistry.push(im);
+          _instAdd(im); _instRegistry.push(im);
           _decalRuns.set(geo, b = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 });
         }
         if (b.rec >= 0 && b.rec < drawList.n && drawList[b.rec].instanced === b) {
@@ -2945,7 +3002,7 @@ const TLX = (function () {
         m.matrixAutoUpdate = false; m.matrixWorldAutoUpdate = false; m.frustumCulled = false;
         if (neg) m.matrixWorld.copy(_coReflect);
         m.visible = false;
-        scene.add(m); _instRegistry.push(m);   // _showInstanced / _hideUndrawnInstanced, like every run
+        _instAdd(m); _instRegistry.push(m);   // _showInstanced / _hideUndrawnInstanced, like every run
         return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
       }
       function _coAppend(geo, w, opts) {
@@ -3005,7 +3062,7 @@ const TLX = (function () {
         ib.setUsage(_instUsage);   // A-H1: uploads only through uploadStream (a dirty producer)
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
-        geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
+        geo.__tlxPin = true;   // a stream idle past PRUNE_IDLE_MS (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
         slot.geo = geo; slot.ib = ib; slot.cap = cap; slot.builds = (slot.builds | 0) + 1;   // memState().churn
         return true;
       }
@@ -3180,6 +3237,11 @@ const TLX = (function () {
       }
       function ageTexPool(now) {
         while (_texPool.length && now - _texPool[0].at > TEX_POOL_MS) disposePooled(_texPool.shift().t);
+      }
+      // A dropped track world: its retired atlases go now, not after TEX_POOL_MS, so the next circuit's build
+      // does not run beside them (iPhone tab budget ~300 MB).
+      function flushTexPool() {
+        while (_texPool.length) disposePooled(_texPool.shift().t);
       }
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
@@ -3509,14 +3571,17 @@ const TLX = (function () {
       // One geometry per vertex layout among the scene's lit meshes: the layouts the casters draw (tlx-shadow probes).
       function casterSources() {
         const seen = new Set(), out = [];
-        scene.traverse((o) => {
+        const visit = (o) => {
           const g = o.isMesh && o.geometry, m = o.material;
           if (!g || !g.attributes || !g.attributes.position || !m || typeof m.customProgramCacheKey !== "function") return;
           if (String(m.customProgramCacheKey()).indexOf("tlx-lit") !== 0) return;
           const sig = Object.keys(g.attributes).sort().join(",") + (g.index ? "|i" : "");
           if (seen.has(sig) || out.length >= 8) return;
           seen.add(sig); out.push(g);
-        });
+        };
+        scene.traverse(visit);
+        // F3: the registry members three is not walking this pass are not under the scene; the walk saw them before.
+        if (_instRootOn) for (let i = 0; i < _instRegistry.length; i++) if (!_instRegistry[i].visible) visit(_instRegistry[i]);
         return out;
       }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
@@ -4040,7 +4105,12 @@ const TLX = (function () {
         for (const p of caches.values()) pinPipe(p);
         return _pinnedPipes.size;
       }
-      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
+      // IDLE = LONGER THAN A LAP (#5387). At 20 s every lap's scenery outlived its wrappers (a lap is 60-130 s), so
+      // each lap dropped and re-minted them: render object, object UBO and bind group per wrapper, up to 49 bind
+      // groups in one frame (lap census, run 42941313887: spa lap 2 minted 286, monaco lap 2 pruned 321). At 600 s
+      // the second lap minted 2. Cost: ~100 more live wrappers at peak, +70-120 KB of UBOs, +0.2-1.0 MB JS heap;
+      // geometry is never the prune's (releaseGeometry frees a track's on its free). Bryce's choice, 2026-11-11.
+      const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 600000;
       function prunePool(now) {
         const pin = typeof pinPipelines === "function" ? pinPipelines : null;   // typeof: sandboxed prunePool bodies
         if (pin && !_pinArmed) pin();   // arm the pin at the first present, before any warm builds a pipeline
@@ -4124,7 +4194,7 @@ const TLX = (function () {
         _dropLater.length = w;
       }
       function dropWrapper(m, ownedGeometry, afterRender) {
-        try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+        try { if (m.parent === instRoot) _instRemove(m); else if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         m.visible = false;
         if (_warmPending && !_ownershipFreeDepth) {
           if (!_dropQueue.some((entry) => entry.mesh === m)) {
@@ -4218,7 +4288,7 @@ const TLX = (function () {
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
-      // pool's 20-second idle sweep keeps a disposed track's BufferGeometry
+      // pool's idle sweep (PRUNE_IDLE_MS) keeps a disposed track's BufferGeometry
       // attributes strongly reachable while the replacement track is built —
       // exactly the synchronous peak game.js frees the old track to avoid.
       function releaseGeometry(geo) {
@@ -4288,7 +4358,7 @@ const TLX = (function () {
         ud.tlxLgRoad = rec && rec.lg ? 1 : 0;   // PER-CHUNK ROAD: the road draw only
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
-        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~20 s resolution)
+        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~seconds resolution)
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
         // will NEVER promote m.matrix → matrixWorld. The renderer uploads
         // matrixWorld as the model matrix: writing only `.matrix` leaves every
@@ -5339,6 +5409,7 @@ const TLX = (function () {
           }
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
+        flushTexPool,
         // texCensus: GLX-only. Declared ABSENT rather than left off, because
         // game.js installs a backend by descriptor-copy onto GLX and an absent
         // NAME would keep GLX's own function — which would then run against a
@@ -6025,7 +6096,8 @@ const TLX = (function () {
         // Callers await this, then cancelWarmRetry(), then free.
         warmSettled() { return _warmPending || Promise.resolve(); },
         cancelWarmRetry() { _warmRequested = false; },
-        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
+        warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },
+        primeChunkMerge() { _chunkPrime = true; return _chunkPrimeN; },   // car-draw primeRace (#5387): the next present's main pass   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
@@ -6396,6 +6468,7 @@ const TLX = (function () {
         present(opts) {
           _poolBatch++;
           _kidsBegin(_kidsMain);
+          _chunkPrimeNow = _chunkPrime; _chunkPrime = false;   // primeChunkMerge: this present's main pass only (#5387)
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
           prunePool(_poolNow);
           flushDropped();
@@ -7058,7 +7131,7 @@ const TLX = (function () {
                   o.rUboKB = inf.memory.uniformBuffersSize != null ? +(inf.memory.uniformBuffersSize / 1024).toFixed(1) : null;
                   // Live RenderObjects (three's _objects cache). The per-object
                   // arm's buffer count is only comparable PER render object:
-                  // prunePool drops a wrapper's render object after 20 s idle
+                  // prunePool drops a wrapper's render object after PRUNE_IDLE_MS idle
                   // (dropWrapper), so the raw count follows how long a sample
                   // took, not the layout.
                   const ro = renderer._objects && renderer._objects._renderObjects;
@@ -7114,7 +7187,7 @@ const TLX = (function () {
             return o;
           },
           async shader(idx = 0) {
-            const meshes = scene.children.concat(poolRoot.children).filter((o) => o.isMesh && o.visible);
+            const meshes = scene.children.concat(poolRoot.children, instRoot.children).filter((o) => o.isMesh && o.visible);
             const target = meshes[idx];
             if (!target) return null;
             const out = await renderer.debug.getShaderAsync(scene, camera, target);

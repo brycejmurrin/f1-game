@@ -254,7 +254,7 @@ mesh carries verge and run-off out to 13 m. Their outermost sample lands OFF
 the racing surface by construction, on whatever boundary structure lives there
 — here, the pit wall a car is meant to stay inside. Baselined at 1.1 in
 `props-over-road.spec.js` (jeddah, mosport, zandvoort, singapore),
-`props-over-road.test.mjs` and `zandvoort-foundation.spec.js`, all citing each
+`props-over-road.test.mjs` and `tests/specs/foundation/zandvoort.js`, all citing each
 other. Scaling by `track.hw` instead would let every one of those baselines go
 back to `TOL`, and is the fix worth making. FIXED 2026-09-23: both
 `props-over-road.spec.js` and `props-over-road.test.mjs` scale the ladder by
@@ -1715,7 +1715,7 @@ Found by the train on `f46cb99` (pages run 35068834342, 2026-09-16 07:35 UTC)
 and on every full-tier run of the deploy tip since `80acf93` (`feat(pit): a
 shorter lane, a signed entry, a walled exit, furnished bays, the stop seen`)
 and its follow-ups (`c48d891` re-baselined floating scenery only; `5710a0c`
-fixed the Abu Dhabi gridshell that `abudhabi-foundation.spec.js` caught).
+fixed the Abu Dhabi gridshell that `tests/specs/foundation/abudhabi.js` caught).
 `tests/unit/coplanar-faces.test.mjs` fails both ways:
 
 | circuit | coplanar spots | baseline (`tools/track/coplanar-baseline.json`) |

@@ -199,12 +199,13 @@ test("pages-reuse-verdict.sh header: merge-commit landings, not squash-only", ()
   assert.match(src, /merge tree == parent 2/);
 });
 
-test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", () => {
+test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", (t) => {
   // A throwaway repo: A -> C on the deploy line; B branches from A; D is B with
   // C merged in. M1 = merge(C, B) has a tree neither parent has (both sides
   // changed). M2 = merge(C, D) has D's tree exactly. A fake `gh` on PATH serves
   // whatever runs FAKE_RUNS names for the head_sha in the URL.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-reuse-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   const write = (f, s) => fs.writeFileSync(path.join(dir, f), s);
   git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
@@ -235,8 +236,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, "gh"),
     '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\nurl="$2"\n' +
-    'case "$url" in */annotations*) id="${url%/annotations*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_ANN||"{}");const v=m[process.argv[1]];console.log(JSON.stringify(v===undefined?[{title:"apex-guards",message:"mode=full base=none"}]:v))\' "$id"; exit 0;;\n' +
-    '  */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit 0;; esac\n' +
+    'case "$url" in */annotations*) id="${url%/annotations*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_ANN||"{}");const v=m[process.argv[1]];console.log(JSON.stringify(v===undefined?[{title:"apex-guards",message:"mode=full base=none"}]:v))\' "$id"; exit "${FAKE_ANN_EXIT:-0}";;\n' +
+    '  */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit "${FAKE_JOBS_EXIT:-0}";; esac\n' +
     'sha="${url#*head_sha=}"; sha="${sha%%&*}"\n' +
     'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:(m[process.argv[1]]||[]).map((r)=>({head_sha:process.argv[1],...r}))}))\' "$sha"\n');
   fs.chmodSync(path.join(bin, "gh"), 0o755);
@@ -271,7 +272,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     // A fast tier whose aggregator has not been created yet (its halves still run).
     22: gateJobs("").filter((j) => j.name !== "Structural guards"),
   };
-  const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
+  const run = (over) => ({ id: 7, run_attempt: 1, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
   const verdict = (sha, runs, env = {}) => Object.fromEntries(cp.execFileSync("bash", [script, sha], {
     cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), ...env },
@@ -329,6 +330,14 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
+  for (const run_attempt of [undefined, null, 0, "garbage"]) {
+    assert.equal(verdict(M2, { [D]: [run({ run_attempt })] }).reuse, "false",
+      `unknown attempt ${run_attempt} cannot prove a first-attempt pass`);
+  }
+  for (const failure of ["FAKE_JOBS_EXIT", "FAKE_ANN_EXIT"]) {
+    assert.equal(verdict(M2, { [D]: [run()] }, { [failure]: "1" }).reuse, "false",
+      `${failure}: valid partial stdout followed by an API failure must run the gate`);
+  }
   // FULL GUARDS, FIRST ATTEMPT (2026-11-10).
   assert.equal(verdict(M2, { [D]: [run({ run_attempt: 2 })] }).reuse, "false",
     "a run that passed only on a re-run failed on this tree once: not a gate (run 42730286157)");

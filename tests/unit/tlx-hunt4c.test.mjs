@@ -291,6 +291,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
     let mirRT = null, mirCam = null, _mirRect = null, _mirUsed = false, _glassProbeGeo = null, _mirDead = false;
     const W = 320, H = 180, presentW = 320, presentH = 180, wantSpatialUpscale = () => false;
     const _instPerPass = true, skipBatches = () => false, _instRegistry = [], _mirOf = () => null;
+    const _instRootOn = false, instRoot = null, _instAdd = (m) => scene.add(m), _instRemove = (m) => scene.remove(m), _instShow = () => {};   // #3104 F3 helpers: the scene.add arm
     const fx = null, vizMat = null, softGpu = () => SOFT, softwareGL = SOFT, softContent = () => false, _warmFx = true;
     const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmFxPrograms = async () => {}, warmLateLit = async () => {};
     const warmPlusOn = () => true, casterWarmOn = warmPlusOn, softOutRT = () => null;

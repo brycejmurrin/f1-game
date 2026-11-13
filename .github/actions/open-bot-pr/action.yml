@@ -16,6 +16,12 @@ inputs:
   body:
     description: PR body
     required: true
+  evidence:
+    description: >-
+      optional proof lines, one per line (a verdict line, a fold count); each becomes a ticked Plan item in the
+      body that tools/ci/bot-pr-body.mjs builds around `body` (#5520: a body without a Plan is refused by the gate)
+    required: false
+    default: ""
   issue-title:
     description: stable title of the fallback issue (no run id in it, so one issue collects every refusal)
     required: true
@@ -39,6 +45,7 @@ runs:
         BRANCH: ${{ inputs.branch }}
         PR_TITLE: ${{ inputs.title }}
         PR_BODY: ${{ inputs.body }}
+        EVIDENCE: ${{ inputs.evidence }}
         ISSUE_TITLE: ${{ inputs.issue-title }}
         WHAT: ${{ inputs.what }}
         PR_TOKEN: ${{ inputs.pr-token }}
@@ -48,6 +55,17 @@ runs:
         err="$RUNNER_TEMP/open-bot-pr.err"
         via=GITHUB_TOKEN; tok="$GH_TOKEN"
         if [ -n "$PR_TOKEN" ]; then via=LAND_TOKEN; tok="$PR_TOKEN"; fi
+        # TEMPLATE BODY (#5520): the gate refused #5518's one-line body ("no ## Plan checklist"); wrap it in the
+        # template's Goal / closed Plan / `land:` item. A body that already carries a Plan passes through.
+        # FAIL SAFE: a wrapper that cannot run (missing on an old checkout, a throw) must not stop the PR, the
+        # fallback issue or the CI dispatch below: open with the plain body and say so.
+        if wrapped="$(BRANCH="$BRANCH" WHAT="$WHAT" HEAD_SHA="$(git rev-parse HEAD)" \
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+          node "$GITHUB_WORKSPACE/tools/ci/bot-pr-body.mjs")" && [ -n "$wrapped" ]; then
+          PR_BODY="$wrapped"
+        else
+          echo "::warning::open-bot-pr: tools/ci/bot-pr-body.mjs failed; opening with the plain body (the gate will want a Plan)"
+        fi
         if GH_TOKEN="$tok" gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng \
           --head "$BRANCH" --title "$PR_TITLE" --body "$PR_BODY" 2> "$err"; then
           PR_OK=1; echo "PR opened with $via"

@@ -88,11 +88,16 @@ test("landing builds the scenery catalog in the actual merged checkout (built on
         assert.deepEqual(calls, mode === "gen-failure" || mode === "tracked" ? ["npm"] : ["npm", process.execPath]);
         assert.equal(result.ok, passes, result.evidence);
         if (passes) {
-          assert.match(result.evidence, /scenery catalog build 0$/);
           assert.deepEqual(argv, ["--quiet", "--with", "tools/shot/scenery-locations.json"], "the gate builds the on-demand catalog, not only BUILT_PATHS");
         }
-        if (mode === "build-fails") assert.match(result.evidence, /scenery catalog fails .*Viewpoint spa-timing-tower no longer emits/);
-        if (mode === "tracked") assert.match(result.evidence, /scenery-locations\.json is tracked; it is built on demand/);
+        // The whole evidence line, exactly: the verdict words and the builder's own first error line both reach the PR.
+        const on = `scenery catalog fails on the merge onto ${tip.slice(0, 8)}`, file = "tools/shot/scenery-locations.json";
+        const exact = {
+          "builds": `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`,
+          "build-fails": `${on}: ensure-built: FAILED — Error: Viewpoint spa-timing-tower no longer emits — node tools/gen/ensure-built.mjs --with ${file} on the synced branch names the circuit`,
+          "tracked": `${on}: ${file} is tracked; it is built on demand — git rm --cached it on the synced branch and push`,
+        }[mode];
+        if (exact) assert.equal(result.evidence, exact);
         if (mode === "validator-error") assert.match(result.evidence, /builder could not start/);
         assert.equal(ratchetCalls, passes ? 1 : 0, "catalog/gen refusals stop before ratchets");
         if (!passes) assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);

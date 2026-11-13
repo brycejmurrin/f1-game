@@ -1,5 +1,5 @@
-/* Apex 26 — REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car steered lap by lap to its real pace and gaps, its real stops and compounds, its retirement lap, the race's safety-car windows and its rain — with the player in one real driver's seat, from the start or dropped into any lap of the race as it stood — or WATCHED: with the real positions loaded the director hands the field to js/race/real-replay.js (every car where it really was, any lap, or the highlights cut together). */
-const RealRace = (function () {
+/* Apex 26 — REAL RACE body (RealRaceBody.create(G), LAZY_REAL_RACE; game.js holds the RealRace boot stub, js/race/real-race-boot.js, which creates this once it lands) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car steered lap by lap to its real pace and gaps, its real stops and compounds, its retirement lap, the race's safety-car windows and its rain — with the player in one real driver's seat, from the start or dropped into any lap of the race as it stood — or WATCHED: with the real positions loaded the director hands the field to js/race/real-replay.js (every car where it really was, any lap, or the highlights cut together). */
+const RealRaceBody = (function () {
   "use strict";
 
   const DNS_AT = 0.002;   // a game seat with no real driver retires on the first metres: "did not start"
@@ -7,14 +7,11 @@ const RealRace = (function () {
   // treats a script DSQ the same way (out of the timed order, last, no points).
   const SCRIPT_DSQ = "real race classification";
   const K_FALLBACK = 1.4;   // sim seconds per real second when no reference lap can be modelled (measured: this box runs ~1.5x real)
-  const LOOK_M = 220;       // m: how far ahead a mid-race drop-in reads the road for the speed it can carry (AiDrive.brakeTarget's budget)
-  const LOOK_STEP = 10;
   const JUMP_MAX_WEAR = 0.9;   // a set older than its life is fitted worn, never past the cliff
   const RAIN_ARC_S = 60;    // s the sky takes to turn when the real race's rain starts or stops
   const FEED_PER_LAP = 4;   // narration lines a lap at most (lap 1 at Baku held 18 passes)
   const HANDOVER_S = 4;     // a mid-race jump-in: the car is driven for you this long at racing speed before the wheel is yours
   const GO_HOLD_S = 1;      // …and the on-screen GO stays up this long once it is
-  const V_DROP_MIN = 0.3;   // of vTop(): the least a car is ever dropped in at (a hairpin), the most is vTop() itself
   const REAL_VMAX = 95;     // m/s: a real top speed; the real trace's speed scales onto vTop() through it
 
   const clamp = M4.clamp;   // js/core/mat4.js — bound at eval (HARD_EDGES pair in tools/manifest.cjs)
@@ -25,36 +22,7 @@ const RealRace = (function () {
     properName, situation, mapField, fieldAt, paceMul, classOf,
   } = RealRacePace;
 
-  /** The wheel changes hands (FlyingStart, RealRace.tickHandover): the AI never advances `c.head` (only the human
-   *  integrator does), so the car would take the wheel facing the heading it was DROPPED with, up to ~90 deg off the
-   *  road after the run-up's bends. Re-seed the pose from the road at the car's CURRENT s/x. */
-  function seatOnRoad(track, c) {
-    const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
-    Tracks.sample(track, c.s, smp);
-    const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;
-    c.px = smp.p[0] + smp.r[0] / rl * c.x; c.pz = smp.p[2] + smp.r[2] / rl * c.x;
-    c.head = Math.atan2(smp.t[0], smp.t[2]);
-    c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevHead = c.head; c.rPrevYawVis = 0;
-    c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0;
-  }
-
-  let live = null;   // the instance game.js created — the hub and the dev hooks reach it through the statics below
-
-  /** The speed the AI would carry at `s` — a mid-race drop-in without a real trace starts at FULL speed
-   *  for that piece of road, not a cruise. AI-ONLY (docs/PHYSICS.md §Curvature channels): the car it
-   *  places is the AI's (the seat car too, until the hand-over), and it is the AI's own corner model,
-   *  entry budget and braking credit (AiDrive.brakeTarget), read once at the drop, never per frame. */
-  function dropSpeed(track, s, vTop, wrapS) {
-    const AD = typeof AiDrive !== "undefined" ? AiDrive : null, PC = typeof PhysicsConsts !== "undefined" ? PhysicsConsts : null;
-    if (!AD || !PC || !track || !Tracks.curvature) return V_DROP_MIN * vTop;
-    let v = vTop;
-    for (let d = 0; d <= LOOK_M; d += LOOK_STEP) {
-      const k = Math.abs(Tracks.curvature(track, wrapS(s + d)));
-      const vC = AD.cornerSpeed(k, PC.LAT_MAX, 1, vTop);
-      v = Math.min(v, Math.sqrt(vC * vC + 2 * PC.BRAKE * 0.85 * d));   // what can still be shed before that node
-    }
-    return clamp(v, V_DROP_MIN * vTop, vTop);
-  }
+  const { dropSpeed, seatOnRoad, V_DROP_MIN } = RealRace;   // the boot stub's (FULL): FlyingStart reads them in every flying start
 
   function create(G) {
     Log.info("game", "RealRace.create");
@@ -630,17 +598,10 @@ const RealRace = (function () {
                watch: !!(active.watch || classifyPublished), reel: !!active.reel, replay: replay ? replay.status() : null, handover: handover ? +handover.t.toFixed(2) : 0 };
     }
 
-    live = { stage, launch, stop, update, status, intro, raceT0: () => raceT0, isActive: () => !!active, isWatch: () => !!active && !!active.watch, current: () => active && active.script,
+    return { stage, launch, stop, update, status, intro, raceT0: () => raceT0, isActive: () => !!active, isWatch: () => !!active && !!active.watch, current: () => active && active.script,
              owns: (c) => !!replay && replay.owns(c), replay };
-    return live;
   }
 
-  // Call-time delegates for code with no G (js/data/real-race-tab.js, page probes).
-  const launch = (script, opts) => (live ? live.launch(script, opts) : null);
-  const status = () => (live ? live.status() : { active: false });
-  const isWatch = () => !!live && live.isWatch();   // hot audio guards need no formatted field snapshot
-  const replay = () => (live ? live.replay : null);   // the replay's controls (follow / setSpeed / seek / skip) for page probes
-
-  return { create, launch, status, isWatch, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, situation, properName, paceMul, dropSpeed, seatOnRoad, KP, MUL_MIN, MUL_MAX };
+  return { create };
 })();
-Object.freeze(RealRace);
+Object.freeze(RealRaceBody);
