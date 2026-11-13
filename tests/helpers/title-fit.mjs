@@ -6,9 +6,9 @@
  * so the cells and the verdict are written ONCE. Everything in-page is a plain
  * function handed to page.evaluate: no closure over this module.
  *
- * GEOS are Bryce's phone as the iOS home-screen app and as Safari (852x393 /
- * 852x283 with 59/21/59 and 67/21/67 insets), the 844x390 house geometry and a
- * Pro Max. Insets land through CDP Emulation.setSafeAreaInsetsOverride, which
+ * GEOS are Bryce's phone as the iOS home-screen app and as a Safari tab (852x393
+ * and the MEASURED 852x368, both 59/21/59; tests/data/phone-windows.json is the one
+ * record, #5218), the 844x390 house geometry and a Pro Max. Insets land through CDP Emulation.setSafeAreaInsetsOverride, which
  * is what env(safe-area-inset-*) reads. PROFILES are what a phone BOOTS with:
  * a fresh profile, Bryce's export (tests/data/settings-defaults-export.json,
  * landscape WIDTH 20) and that export carrying the Nov 4–5 title-layout values
@@ -29,15 +29,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // max(inset, gutter) edge; it was 246) takes the five-row tier by door box, but PRACTICE's label
 // clips four-up (#5378: span 53 px in a 50 px box), so fits() rejects it and the unfloored eight
 // rows zoom down, as before the floor. judgeLabels holds the "every word whole" half.
+// The phone windows come from THE record (#5218): the Safari cell was 852x283 with 67/21/67 here, 852x344 in
+// tools/ui/menu-screens.mjs and 852x283 59/0/59 in the UI contract; his phone read 852x368. At 852x368 the touch
+// boot still composes eight rows with every label whole and misses the 44 px floor (poke 2026-11-11, fresh and
+// export profiles), so the cell keeps ROWS8 / floor false.
+const WIN = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/phone-windows.json"), "utf8")).windows;
+const cell = (name, w) => ({ name, w: w.width, h: w.height, insets: { ...w.insets } });
 const ROWS7 = [3, 2, 2, 2, 2, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 2, 3, 4];
 export const GEOS = [
-  { name: "852x393-standalone", w: 852, h: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS7, floor: true },
-  { name: "852x283-safari", w: 852, h: 283, insets: { top: 0, left: 67, bottom: 21, right: 67 }, rows: ROWS8, floor: false },
-  { name: "844x390", w: 844, h: 390, insets: { top: 0, left: 47, bottom: 21, right: 47 }, rows: ROWS7, floor: true },
+  { ...cell("852x393-standalone", WIN.standalone), rows: ROWS7, floor: true },
+  { ...cell(`${WIN.safari.width}x${WIN.safari.height}-safari`, WIN.safari), rows: ROWS8, floor: false },
+  { ...cell("844x390", WIN.w844), rows: ROWS7, floor: true },
   { name: "932x430", w: 932, h: 430, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS8, floor: true },
 ];
 
-/** No door paints a clipped label (#5378: Safari 852x283's five-row tier fit by door box while
+/** No door paints a clipped label (#5378: the old Safari 852x283 cell's five-row tier fit by door box while
  *  PRACTICE's label span was 53 px in a 50 px box). The rows pin follows from this rule. */
 export function judgeLabels(m) {
   return m.doors.filter((d) => d.clip).map((d) => `door ${d.id} clips its label`);

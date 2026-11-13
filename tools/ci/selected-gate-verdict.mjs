@@ -10,7 +10,8 @@
  * diagnostics. Successful or genuinely empty plans retain the normal rules.
  *
  *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR] [--junit-in DIR] [--started-in DIR]
- *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT from env
+ *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT / REUSED / REUSED_RUN
+ *     / GROUP_ACCEPT / GROUP_RUNS / GROUP_WHY (dropped-group-runs.mjs: a separate run covered the dropped specs, #5480) from env
  *     (DRAFT=true: a dropped spec warns instead of redding — the draft plan is the 5-min budget, 2026-11-03)
  */
 import fs from "node:fs";
@@ -67,6 +68,8 @@ export function shardEvidence(junitIn, startedIn) {
  *   unrepresented?: string,
  *   called?: string,
  *   draft?: string,
+ *   reused?: string, reusedRun?: string,
+ *   groupAccept?: string, groupRuns?: string, groupWhy?: string,
  *   failedSpecs?: string[],
  *   evidence?: { started: string[], junit: string[], downloadFailed?: boolean },
  * }} input
@@ -134,6 +137,18 @@ function judgeSpecs(input) {
       }
     }
     reason = "selected specs passed";
+  } else if (selected === "skipped" && String(input.reused ?? "") === "true") {
+    // THE READY FLIP REUSED THE DRAFT VERDICT (#5426). select's reuse step (tools/ci/reuse-draft-selected.mjs)
+    // proved the newest run on this head ran the same plan green on attempt 1, on the same base, with the deploy
+    // tip unmoved. Only a ready flip may claim it, and it must name the run it reused.
+    const run = String(input.reusedRun ?? "");
+    if (!/^\d+$/.test(run)) {
+      return { ok: false, reason: `the selected legs were skipped as reused, but no reused run id was given (REUSED_RUN=${JSON.stringify(run)}) — failing closed`, infraRetry: false, failedSpecs };
+    }
+    if (draft === "true" || called === "true") {
+      return { ok: false, reason: "the selected legs were skipped as reused on a run that is not a ready pull request — only a ready flip reuses its draft's verdict", infraRetry: false, failedSpecs };
+    }
+    reason = `selected specs reused from run ${run} (same head, same base, deploy tip unmoved, same plan; green on attempt 1)`;
   } else if (selected === "skipped") {
     // A draft runs the selected legs too since 2026-11-03 (one 5-min shard), so
     // a skipped matrix means the same thing on every PR: the plan had no jobs.
@@ -203,14 +218,29 @@ function judgeSpecs(input) {
         failedSpecs,
       };
     }
+    if (!droppedKnown) {
+      return { ok: false, reason: `the plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}, not a number) — failing closed; check the select job's 'dropped' output`, infraRetry: false, failedSpecs };
+    }
+    // THE SEPARATE RUN COUNTS (#5480; Bryce 2026-11-11 "Count the separate run"). The verdict job's group-runs step
+    // (tools/ci/dropped-group-runs.mjs) accepted only if every dropped spec ran green in a browser-group run on this
+    // head and this base, attempt 1, llvmpipe; it names the run(s). Anything else is the red below.
+    const runs = String(input.groupRuns ?? "");
+    if (String(input.groupAccept ?? "") === "true" && /^\d+(,\d+)*$/.test(runs)) {
+      return { ok: true, reason: `${reason}; the plan's ${dropped} dropped spec(s) ran green in browser-group run(s) ${runs.split(",").join(", ")} (same head, same base, attempt 1, llvmpipe)`, infraRetry, failedSpecs };
+    }
+    const why = String(input.groupWhy ?? "").trim();
     return {
       ok: false,
-      reason: !droppedKnown ? `the plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}, not a number) — failing closed; check the select job's 'dropped' output` : `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log) — they ran nowhere. Run their groups with tools/ci/remote-group.mjs, or split the change.`,
+      reason: `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log)${why ? `, and no separate run counts: ${why}` : ""}. `
+        + "What counts: every dropped spec green in ONE browser-group run per group on this head and this base, first attempt, default GL — "
+        + "`node tools/ci/remote-group.mjs <group>` on the pushed branch (it tests the PR's merge ref), BEFORE the ready flip (this job waits at most 7 min for one still running, then reds); "
+        + "after a red like this one, run it, then flip the PR to draft and back to ready (a new ready run on the same head; never a re-run of this one). "
+        + "A failed, cancelled, re-run or branch-head group run does not count, nor does one on another base than this run's (the deploy tip moved between them: run it again). Or split the change.",
       infraRetry: false,
       failedSpecs,
     };
   }
-  if (selected === "skipped") {
+  if (selected === "skipped" && String(input.reused ?? "") !== "true") {
     reason = "no selected job ran: an empty plan is a pass only for a docs-only diff (the select step fails closed on an empty plan for a code diff, and select-specs puts the boot floor in every other plan)";
   }
   return { ok: true, reason, infraRetry, failedSpecs };
@@ -242,6 +272,11 @@ function main(argv = process.argv.slice(2)) {
     unrepresented: process.env.UNREPRESENTED,
     called: process.env.CALLED,
     draft: process.env.DRAFT,
+    reused: process.env.REUSED,
+    reusedRun: process.env.REUSED_RUN,
+    groupAccept: process.env.GROUP_ACCEPT,
+    groupRuns: process.env.GROUP_RUNS,
+    groupWhy: process.env.GROUP_WHY,
     failedSpecs,
     evidence,
   });

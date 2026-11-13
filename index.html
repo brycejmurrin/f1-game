@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-XeiMgVBBIOohpDMAxzjosnyJNSt/NUAkqds6MEH5AnM=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -68,11 +68,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Apex 26">
 <meta name="theme-color" content="#0c0c14">
-<meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 52 real circuits in the browser with career, garage, and live data.">
+<meta name="description" content="Apex 26 — an unofficial racing fan game. Drive 52 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
 <meta name="apex-build" content="1695">
-<title>Apex 26 — F1 Racing &amp; Data</title>
+<title>Apex 26 — unofficial racing fan game</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
@@ -143,7 +143,7 @@
 <link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print">
 <link rel="stylesheet" href="css/player-tools.css?v=dev" media="print">
 <link rel="stylesheet" href="css/helmet-visor.css?v=dev" media="print">
-<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>
+<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]'),n=L.length,d=0;function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}window.addEventListener("load",flip);for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -975,6 +975,7 @@
         <button id="pm-open-graphics" type="button">GRAPHICS&hellip;<small>Renderer, resolution & effects</small></button>
         <button id="pm-open-visual" type="button">VISUAL STUDIO&hellip;<small>Camera, lighting, flyby & garage arrival</small></button>
         <button id="pm-open-progress" type="button">PROGRESS&hellip;<small>Licence badges</small></button>
+        <button id="pm-open-credits" type="button">ABOUT &amp; CREDITS&hellip;<small>Data sources, licences &amp; notices</small></button>
       </nav>
       <div class="pm-groups">
         <section id="pm-panel-progress" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
@@ -983,6 +984,56 @@
             <p id="pm-badges-summary" class="adv-help" data-help="keep">No badges yet.</p>
             <ol id="pm-badges-list"></ol>
           </details>
+        </section>
+
+        <!-- ABOUT & CREDITS: the block between the markers is written by
+             desktop/scripts/notices.mjs from the vendor licence / MANIFEST files and
+             the assets CREDITS files (npm run gen; gen:check fails on drift). -->
+        <section id="pm-panel-credits" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <!-- @gen-notices:credits -->
+          <p class="adv-help" data-help="keep">This game is unofficial and is not associated in any way with the Formula 1 companies. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V.</p>
+          <details open id="credits-data">
+            <summary class="adv-more-btn">LIVE DATA</summary>
+            <ul>
+              <li><a href="https://github.com/jolpica/jolpica-f1" target="_blank" rel="noopener noreferrer">Jolpica F1</a> &middot; CC BY-NC-SA 4.0, non-commercial use only &middot; schedule and standings (the Ergast-compatible API)</li>
+              <li><a href="https://openf1.org" target="_blank" rel="noopener noreferrer">OpenF1</a> &middot; CC BY-NC-SA 4.0, non-commercial use only &middot; results, live timing, telemetry, WATCH replays and team radio captions</li>
+            </ul>
+          </details>
+          <details id="credits-software">
+            <summary class="adv-more-btn">SOFTWARE</summary>
+            <ul>
+              <li><a href="https://threejs.org" target="_blank" rel="noopener noreferrer">three.js</a> 0.187.0 &middot; <a href="vendor/three-0.187.0/LICENSE.txt" target="_blank" rel="noopener">MIT</a> &middot; 3D renderer, including the opt-in Inspector panel</li>
+              <li><a href="https://rapier.rs" target="_blank" rel="noopener noreferrer">Rapier (rapier3d-compat)</a> 0.19.3 &middot; <a href="vendor/rapier-0.19.3/LICENSE" target="_blank" rel="noopener">Apache-2.0</a> &middot; physics engine</li>
+              <li><a href="https://github.com/cozmo/jsQR" target="_blank" rel="noopener noreferrer">jsQR</a> 1.4.0 &middot; <a href="vendor/jsqr-1.4.0/LICENSE" target="_blank" rel="noopener">Apache-2.0</a> &middot; QR code reader (phone controller pairing)</li>
+              <li><a href="https://github.com/dmotz/trystero" target="_blank" rel="noopener noreferrer">Trystero</a> 0.25.4 &middot; <a href="vendor/trystero-0.25.4/LICENSE-trystero" target="_blank" rel="noopener">MIT</a> &middot; peer-to-peer rooms (RACE A FRIEND)</li>
+              <li><a href="https://github.com/paulmillr/noble-secp256k1" target="_blank" rel="noopener noreferrer">noble-secp256k1</a> &middot; <a href="vendor/trystero-0.25.4/LICENSE-noble-secp256k1" target="_blank" rel="noopener">MIT</a> &middot; signing for Trystero's Nostr signalling</li>
+              <li><a href="https://spector.babylonjs.com" target="_blank" rel="noopener noreferrer">Spector.js</a> 0.9.30 &middot; <a href="vendor/gpu-capture/SPECTOR-LICENSE.txt" target="_blank" rel="noopener">MIT</a> &middot; opt-in GPU frame capture (developer tool)</li>
+              <li><a href="https://github.com/greggman/webgl-lint" target="_blank" rel="noopener noreferrer">webgl-lint</a> 1.11.4 &middot; <a href="vendor/gpu-capture/WEBGL-LINT-LICENSE.md" target="_blank" rel="noopener">MIT</a> &middot; opt-in WebGL checker (developer tool)</li>
+              <li><a href="https://github.com/SnapdragonStudios/snapdragon-gsr" target="_blank" rel="noopener noreferrer">Snapdragon Game Super Resolution 1</a> &middot; <a href="vendor/sgsr/LICENSE" target="_blank" rel="noopener">BSD-3-Clause</a> &middot; upscaling shader, adapted</li>
+            </ul>
+          </details>
+          <details id="credits-fonts">
+            <summary class="adv-more-btn">FONTS &amp; ICONS</summary>
+            <ul>
+              <li><a href="https://fonts.google.com/specimen/Titillium+Web" target="_blank" rel="noopener noreferrer">Titillium Web</a> &middot; <a href="assets/fonts/titillium-web-OFL.txt" target="_blank" rel="noopener">OFL-1.1</a> &middot; typeface</li>
+              <li><a href="https://github.com/jpt/barlow" target="_blank" rel="noopener noreferrer">Barlow Condensed</a> &middot; <a href="assets/fonts/barlow-condensed-OFL.txt" target="_blank" rel="noopener">OFL-1.1</a> &middot; typeface</li>
+              <li><a href="https://github.com/Omnibus-Type/Saira" target="_blank" rel="noopener noreferrer">Saira</a> &middot; <a href="assets/fonts/saira-OFL.txt" target="_blank" rel="noopener">OFL-1.1</a> &middot; typeface (subset)</li>
+              <li><a href="https://lucide.dev" target="_blank" rel="noopener noreferrer">Lucide icons</a> &middot; <a href="assets/icons/lucide-LICENSE.txt" target="_blank" rel="noopener">ISC</a> &middot; menu icons</li>
+            </ul>
+          </details>
+          <details id="credits-assets">
+            <summary class="adv-more-btn">SOUND &amp; ART</summary>
+            <ul>
+              <li>Music (6 tracks) &middot; licence not on record &middot; <a href="assets/music/CREDITS.txt" target="_blank" rel="noopener">credits</a></li>
+              <li>Engine sound &middot; licence not on record &middot; <a href="assets/sfx/CREDITS.txt" target="_blank" rel="noopener">credits</a></li>
+              <li>Radio voices &middot; Apache-2.0 &middot; <a href="assets/voice/CREDITS.txt" target="_blank" rel="noopener">credits</a></li>
+              <li>Kenney &middot; CC0 &middot; 22 model items in the asset pack</li>
+              <li>Apex 26 &middot; Apex26-Procedural &middot; 18 env / material items in the asset pack</li>
+              <li>Apex 26 &middot; CC0 &middot; 6 model items in the asset pack</li>
+            </ul>
+          </details>
+          <p class="adv-help" data-help="keep">Full licence texts ship beside each component (the links above) and in THIRD-PARTY-NOTICES in the project&rsquo;s repository.</p>
+          <!-- /@gen-notices:credits -->
         </section>
 
         <section id="pm-panel-review" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
@@ -1380,7 +1431,7 @@
                can only change by quitting to the menu is one you cannot change
                when you discover you want it.
                MANUAL by default: the button IS the mechanic. AUTO exists because
-               inside a zone X-mode is never the wrong choice, so a player who
+               inside a zone straight mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
           <div id="pm-aero" class="set-row" role="group" aria-labelledby="pm-aero-label">
             <span class="tune-label" id="pm-aero-label">ACTIVE AERO</span>
@@ -1509,7 +1560,7 @@
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="70" max="200" step="0.25" value="100" aria-label="HUD size"></label>
-              <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size.</p>
+              <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size. The MIRROR keeps its own size: set it in ARRANGE HUD.</p>
               <!-- Independent touch-control preference. -->
               <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>reset button size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="300" step="0.25" value="100" aria-label="Touch button size"></label>
@@ -2362,7 +2413,12 @@
            text glyph fell back to a host font and the phone title baseline
            flaked on it (tests/data/flaky-quarantine.json). No extra shell node. -->
       <button id="soundbtn" class="minibtn" aria-pressed="true">SOUND ON</button>
-      <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
+      <!-- Never hidden (css/menus.css). One short line: the full trade-mark sentence
+           Formula 1's fan guidelines give (formula1.com/en/toolbar/guidelines.html)
+           ran 8 lines in portrait and pushed Home past one screen (390x844: 556px
+           in a 440px box), so it heads Settings > ABOUT & CREDITS instead
+           (desktop/scripts/notices.mjs TRADEMARK; TITLE_NOTICE is this line). -->
+      <p id="disclaimer">Unofficial fan game, not associated with Formula 1 companies</p>
     </div>
   </div>
   <button id="home-motion" class="minibtn" type="button" hidden>PAUSE BACKGROUND</button>
@@ -2371,7 +2427,7 @@
          so they inherit the button's text colour; sized via .btn-ico in css/menus.css. -->
     <!-- HERO: the long game, on its own and taller than everything under it.
          It used to sit in a flat stack of five identical red buttons, which gave
-         a 24-round career the same weight as a single time trial. #mb-career-sub
+         a 23-round career the same weight as a single time trial. #mb-career-sub
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero" role="group" aria-label="Continue and career">
@@ -3307,7 +3363,7 @@
         <dd>In MANUAL, press your active aero control (keyboard <span data-help-keys="aero">Z</span>, controller <span data-help-pad="aero">D-pad ↑</span>, or AERO on screen) inside an activation zone. STRAIGHT MODE (the flaps open) reduces drag and grip; braking or leaving the zone closes the wings.
           <br>SETTINGS › DRIVING AIDS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
         <dt>OVERTAKE</dt>
-        <dd>Follow within one second to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, the Safety Car or red flag, or low grip in the wet. An allowance you do not use by the next lap is lost. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
+        <dd>Follow within one second at the detection line to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, the Safety Car or red flag, or low grip in the wet. An allowance you do not use by the next lap is lost. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt id="htp-2026rules">2026 RULES &mdash; ENERGY &amp; OVERTAKE</dt>
         <dd><b>Energy harvest.</b> The hybrid recovers energy when you brake or lift. With a <b>full battery</b> (about 4 MJ on the energy bar) there is nowhere to put it: braking and lifting recover nothing more, and you hear the engine note clip while it is full. The car does not slow down, but that energy is wasted. Spend charge with <span class="key">BOOST</span> or <span class="key">OVERTAKE</span> so the pack has room before the next braking zone.
           <br><b>Overtake Mode</b> is separate from BOOST and Active Aero: it is an extra 0.5 MJ allowance earned when you follow within one second at the detection line, then spent at will that lap (see <span class="key">OVERTAKE</span> above). It does not drain the main energy bar.</dd>
@@ -3790,7 +3846,6 @@
 <script defer crossorigin="anonymous" src="js/core/i18n.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/dom-apply.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/restore-points.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/geom.js?v=dev"></script>
@@ -3957,10 +4012,7 @@
 <script defer crossorigin="anonymous" src="js/overlay/bridge.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/overlay/publisher.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/director.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/real-race-pace.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/real-race-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/rain-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/forecast.js?v=dev"></script>
@@ -4014,11 +4066,6 @@
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/post-fx-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/soak-run.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/gpu-test-run.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/phone-recorder.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/bench-capture.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/bench-run.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/fov-fit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage-ride.js?v=dev"></script>

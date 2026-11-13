@@ -1745,6 +1745,32 @@ test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire whe
   net.stop();
 });
 
+test("reordered poses cannot renew ownership of a rival whose newest pose stopped advancing", () => {
+  for (const role of ["host", "guest"]) {
+    const G = poseG(3), net = NetPlay.create(G), s = stateSession();
+    assert.equal(net.start({ role, session: s }).ok, true);
+    const rival = G.cars[1];
+    s.feed(10000, 1, lapPose(100), 10010);
+    G.netNow = 10020; net.tick(10020);
+    assert.equal(net.owns(rival), true);
+    // Unique reordered datagrams still enter the interpolation ring, but none
+    // supplies a pose newer than the one that has already exhausted prediction.
+    for (let i = 1; i <= 5; i++) {
+      const at = 10010 + i * 500;
+      s.feed(9000 + i, 1, lapPose(90), at);
+      G.netNow = at; net.tick(at);
+    }
+    assert.equal(net.owns(rival), false, role + ": stale poses must allow AI fallback");
+    s.feed(9500, 1, lapPose(95), 12600);
+    G.netNow = 12600; net.tick(12600);
+    assert.equal(net.owns(rival), false, role + ": old backlog cannot reclaim the car");
+    s.feed(12700, 1, lapPose(300), 12710);
+    G.netNow = 12720; net.tick(12720);
+    assert.equal(net.owns(rival), true, role + ": a new pose restores wire ownership");
+    net.stop();
+  }
+});
+
 test("temporary fallback cannot finish a connected human or remove it from the result wait", () => {
   const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");
   for (const crossing of [false, true]) {
@@ -1961,4 +1987,25 @@ test("a receiver that arrives late still gets a relayed human's full tyre state,
     "B receives A's fitted set and stint history with its own epoch");
   assert.equal(toB.at(-1).d.fields.tyreWear, 0.3, "…at A's latest wear");
   net.stop();
+});
+
+test("broadcast() serialises an event ONCE for every session, and each session's wire bytes are unchanged", () => {
+  // #4270 §3: broadcast() used to JSON.stringify the same payload once per session (real NetSession.sendEvent
+  // without dataJson). Pinned: one stringify of the payload per broadcast however many guests, and the bytes on
+  // every wire equal the plain per-session encoding, {"t":type,"d":data}.
+  const G = stubG(4);
+  const wires = [[], [], []];
+  const sessions = wires.map((w, i) => ({ id: "g" + i, session: NetSession.create({ transport: { send: (ch, b) => { if (ch === "event") w.push(b); return true; }, onMessage() {}, onClose() {} } }) }));
+  const net = NetPlay.create(G);
+  const r = net.start({ role: "host", session: sessions[0].session, sessions, peers: sessions.map((s) => ({ id: s.id })) });
+  assert.equal(r.ok, true, r.error || "");
+  for (const w of wires) w.length = 0;
+  const data = { lap: 3, code: "D0", driverId: "drv0", fin: 83.25, time: 81.0625, nested: { a: [1, 2.5, null], s: "é\"q" } };
+  const real = JSON.stringify;
+  let payloadStringifies = 0;
+  JSON.stringify = function (v, ...rest) { if (v === data || (v && v.d === data)) payloadStringifies++; return real.call(this, v, ...rest); };
+  try { assert.equal(net.sendEvent(NetPlay.EV.LAP, data), true); } finally { JSON.stringify = real; }
+  assert.equal(payloadStringifies, 1, "the payload must be serialised once, not once per session");
+  const want = JSON.stringify({ t: NetPlay.EV.LAP, d: data });
+  for (const w of wires) assert.deepEqual(w, [want], "each session's wire carries the same bytes as the per-session encoding");
 });

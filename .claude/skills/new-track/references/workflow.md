@@ -136,12 +136,15 @@ Load from the SKILL.md index when the task needs this detail.
    ```
 
 5. **Tests** — `node tools/ci/pick-tests.mjs` names the groups; browser specs never run locally
-   (AGENTS.md rule 5). The `test:circuits` group holds each circuit's `tests/specs/<id>-foundation.spec.js`
-   (hyphenated file names, e.g. `albert-park-`), `f1-track-accuracy.spec.js` and `terrain-over-road.spec.js`;
+   (AGENTS.md rule 5). The `test:circuits` group holds the circuit foundations — one spec,
+   `tests/specs/circuit-foundation.spec.js`, registering a case module per circuit
+   (`tests/specs/foundation/<id>.js`, the file name IS the id; the ADAPTED albert-park, cota and imola keep
+   their own `<id>-foundation.spec.js`) — plus `f1-track-accuracy.spec.js` and `terrain-over-road.spec.js`;
    the PR run covers it, and `node tools/ci/remote-group.mjs circuits` re-runs it on the pushed branch.
-   A NEW `<id>-foundation.spec.js` needs no `tests/groups.json` row: the group globs
-   `tests/specs/*-foundation.spec.js`; only a new non-glob test file needs a groups row + TESTING.md §5
-   row + `npm run gen`. Not every circuit has one (madrid does not).
+   A NEW circuit's foundation is `tests/specs/foundation/<id>.js` (`export default function register()`
+   holding its `test(...)` calls) plus its import and `REGISTER` entry in circuit-foundation.spec.js; no
+   `tests/groups.json` row (the group globs `tests/specs/*-foundation.spec.js`). Not every circuit has one
+   (madrid does not).
 
 ## Editing an existing circuit (no browser)
 
@@ -181,7 +184,7 @@ Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m)
 - **Audits that move** (no browser): `verify-track <id>` (throws); `clip-audit` and `coplanar-audit` (a bridge deck adds overhead faces: `--overhead`); `float-audit` and `props-tris` (pillars, re-seated props); `tests/unit/elevation-smoothness.test.mjs` (grade cap; baked ids only, skips bridge windows); `tests/unit/track-foundation.test.mjs` / `circuit-def-fields.test.mjs` (def shape).
   - Baselines: the `"<id>"` rows of `tools/track/*-baseline.json` (props-tris is a ceiling; float absent = 0).
   - Node-VM twin (heavy: background it, AGENTS.md rule 4): `tests/unit/elevation-tracks-vm.test.mjs`.
-  - Browser-only, in CI group `circuits` (`node tools/ci/remote-group.mjs circuits` on the pushed branch): `terrain-over-road.spec.js`, `elevation-tracks.spec.js`, `<id>-foundation.spec.js`.
+  - Browser-only, in CI group `circuits` (`node tools/ci/remote-group.mjs circuits` on the pushed branch): `terrain-over-road.spec.js`, `elevation-tracks.spec.js`, `circuit-foundation.spec.js` (APEX_CIRCUITS=<id> on a circuit-only PR).
   - `undulate` ripple is added after the bumps, so measure `py` from `Tracks.build(def)`, not the numbers you typed.
 - **Reading heights/curvature with no browser:** `require("tools/lib/track-build-vm.cjs").buildContext().Tracks.buildCenterline(def)` returns `{n,total,py,curv,...}` (`py[k]`, `curv[k]` per point; `__apex.trackProfile()` is the browser twin). Mutating `def.elevations` on the VM's def before the call previews a bump without editing the circuit.
 - **Hand-off note** to leave in the PR: which key, `s`/`halfM`/`rise`, the measured audit counts before and after, and which baseline rows you updated.

@@ -597,11 +597,12 @@ var GameAudio = (function () {
 
   function loadEngineSamples() {
     if (!ctx || samplesReady) return;
+    const owner = ctx;
     // A 404 body is an HTML page, and decodeAudioData on it rejects with an
     // opaque EncodingError; throw on !ok so the degrade path below logs WHY.
     const grab = (url) => fetch(url)
       .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
-      .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
+      .then((ab) => ctx === owner ? new Promise((res, rej) => owner.decodeAudioData(ab, res, rej)) : null);
     // ONE sample. f1_rev.mp3 stays on disk and nothing loads it: the
     // rev-crossfade measures DARKER under load (see the note in the tick), and
     // an inaudible layer fetched inside the Promise.all that gates
@@ -609,12 +610,16 @@ var GameAudio = (function () {
     // to the oscillator fallback.
     grab(SFX_ENGINE)
       .then((e) => {
+        // A fetch/decode can finish after recovery replaced its context. Only
+        // the current load may allocate a loop copy or publish sample state.
+        if (!e || ctx !== owner) return;
         enginePeriod = detectPeriod(e);   // on the full recording, as before
         const w = loopWindow(e);          // the scan runs here, never on a race frame
         engBuf = w.buf; engLoop = w.loop; engWin = w.win; samplesReady = true;
         Log.debug("audio", "engine sample decoded, period=" + enginePeriod + ", kept " + engLoop.end.toFixed(2) + " of " + e.duration.toFixed(2) + " s");
       })
       .catch((err) => {
+        if (ctx !== owner) return;
         Log.warn("audio", "engine sample load/decode failed, using synth voice: " + ((err && err.message) || err));
       });
 
@@ -869,8 +874,8 @@ var GameAudio = (function () {
     rainPending = null;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     soundtrack.resetContext();
-    engBuf = engLoop = engWin = null; samplesReady = false; // ctx-bound; reload for new ctx
-    _irCache.clear();                                       // AudioBuffers are ctx-bound too
+    engBuf = engLoop = engWin = null; samplesReady = false; // reload at the replacement context's sample rate
+    _irCache.clear();                                       // rebuild venue responses for the new graph
     radio.resetContext();
     // Old radioVoice onended/stop never fire on a closed context — drop both
     // holds so a mid-clip rebuild cannot leave the music stuck under a ghost.

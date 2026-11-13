@@ -13,6 +13,8 @@
  * rec.wheels: Car3D.buildWheelLayers calls; rec.freed: meshes an LRU let go;
  * rec.flaps: one { team, blend, m, only, still, viewLivery? } per deps.drawAeroFlaps call.
  * rec.mats: the world matrix (16 numbers, or null) handed to each gfx.draw, parallel to rec.draws.
+ * `carMesh`: { name: value } overrides for the recording CarMesh, read when CarDraw.create
+ *   destructures its getters (e.g. a getSpeedDigit that records the digit it was asked for).
  * Real teams come from js/data/teams.js (11 x 2 seats); `legends: true` appends
  * js/data/legends.js's twelve-seat LEGENDS entry, the menu's widest pick.
  * `career`: null (no career) or { teamId: fitted setup } — Career.aiSetup's
@@ -32,7 +34,7 @@ const CATALOG = ["aero", "floor", "engine", "ers", "gearbox", "suspension", "bra
 
 export const WORKS = Object.freeze(Object.fromEntries(CATALOG.map((c) => [c.id, "w:" + c.id])));
 
-export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" }, career = null, livery = null } = {}) {
+export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" }, career = null, livery = null, carMesh = null } = {}) {
   const rec = { builds: [], wheels: 0, freed: 0, draws: [], flaps: [], mats: [] };
   const stored = { hudMirror: "on" };
   const classes = new Set();
@@ -76,7 +78,9 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       banking: () => null,
     },
     GameCams: { vantage: (_t, _m, s) => ({ eye: [0, 4, s - 12], tgt: [0, 1, s + 20], fov: 40 }) },
-    CarMesh: new Proxy({}, { get: (_o, k) => () => ({ carMesh: String(k) }) }),
+    // An override map (carMesh) wins; getSpeedDigit keeps its digit, so the wheel LCD can be read back (cockpit-wheels.test.mjs).
+    CarMesh: new Proxy({}, { get: (_o, k) => (carMesh && k in carMesh ? carMesh[k]
+      : k === "getSpeedDigit" ? (d) => ({ carMesh: "getSpeedDigit", digit: d }) : () => ({ carMesh: String(k) })) }),
     Car3D: {
       build: (_c1, _c2, o) => {
         const kind = o.silhouette ? "sh" : o.noWheels ? "body" : "whole";

@@ -529,6 +529,7 @@
       "kind": "node",
       "files": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/asset-credits.test.mjs",
         "tests/unit/audio-mix-improvements.test.mjs",
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
@@ -658,7 +659,8 @@
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",
-        "tests/unit/followup-platform.test.mjs"
+        "tests/unit/followup-platform.test.mjs",
+        "tests/unit/notices.test.mjs"
       ],
       "twinned": false
     },
@@ -756,6 +758,7 @@
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-flow-5100-vm.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-state-audit-vm.test.mjs",
@@ -862,6 +865,7 @@
         "tests/unit/drift-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-flow-5100-vm.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-state-audit-vm.test.mjs",
@@ -944,6 +948,7 @@
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/curvature-contract-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-flow-5100-vm.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-state-audit-vm.test.mjs",
@@ -1145,6 +1150,9 @@
         "tests/unit/test-groups-generated.test.mjs",
         "tests/unit/test-groups.test.mjs",
         "tests/unit/title-art.test.mjs",
+        "tests/unit/tools-runnable-cli.test.mjs",
+        "tests/unit/tools-runnable-instruments.test.mjs",
+        "tests/unit/tools-runnable-report.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/twin-fidelity.test.mjs",
         "tests/unit/twinned-specs.test.mjs",
@@ -1547,11 +1555,13 @@
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
+        "tests/unit/session-records-assists.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
+        "tests/unit/team-parts-conflict.test.mjs",
         "tests/unit/title-fx.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -1589,6 +1599,7 @@
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/settings-search.test.mjs",
@@ -1708,6 +1719,7 @@
         "tests/specs/photo-studio.spec.js",
         "tests/specs/picker-edit-button.spec.js",
         "tests/specs/picker-tab-inplace.spec.js",
+        "tests/specs/real-profile-dock.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/title-fit.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
@@ -2492,7 +2504,7 @@
     {
       "path": "js/career/career-backup.js",
       "global": "CareerBackup",
-      "roster": "tag"
+      "roster": "LAZY_CAREER_UI"
     },
     {
       "path": "js/career/career-planning-ui.js",
@@ -3802,12 +3814,12 @@
     {
       "path": "js/perf/bench-capture.js",
       "global": "BenchCapture",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/bench-run.js",
       "global": "BenchRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/gfx-debug-overlay.js",
@@ -3827,7 +3839,7 @@
     {
       "path": "js/perf/gpu-test-run.js",
       "global": "GpuTestRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/loop-health.js",
@@ -3850,9 +3862,14 @@
       "roster": "tag"
     },
     {
+      "path": "js/perf/metrics-panel.js",
+      "global": "GameMetricsPanel",
+      "roster": "LAZY_PERF"
+    },
+    {
       "path": "js/perf/phone-recorder.js",
       "global": "PhoneRecorder",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/quality-preset.js",
@@ -3877,7 +3894,7 @@
     {
       "path": "js/perf/soak-run.js",
       "global": "SoakRun",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/spans.js",
@@ -4170,19 +4187,24 @@
       "roster": "tag"
     },
     {
-      "path": "js/race/real-race-pace.js",
-      "global": "RealRacePace",
-      "roster": "tag"
-    },
-    {
-      "path": "js/race/real-race.js",
+      "path": "js/race/real-race-boot.js",
       "global": "RealRace",
       "roster": "tag"
     },
     {
+      "path": "js/race/real-race-pace.js",
+      "global": "RealRacePace",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
+      "path": "js/race/real-race.js",
+      "global": "RealRaceBody",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
       "path": "js/race/real-replay.js",
       "global": "RealReplay",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/race/reliability.js",
@@ -5037,7 +5059,7 @@
     {
       "path": "js/ui/watch-transport.js",
       "global": "WatchTransport",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/workers/bitmap-decode-client.js",
