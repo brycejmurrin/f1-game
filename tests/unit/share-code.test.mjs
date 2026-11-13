@@ -64,6 +64,7 @@ function harness(opts = {}) {
       plan: (day) => ({ day, trackId: "monza", trackName: "Monza" }),
     },
   };
+  if (opts.SetupTune) sandbox.SetupTune = opts.SetupTune;
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8"), ctx, { filename: absSrc(SRC) });
@@ -171,6 +172,18 @@ test("apply setup writes store and never calls startRace", () => {
   assert.equal(starts, 0);
   assert.equal(garage, 1);
   assert.deepEqual(store.get("setup.mercedes"), decoded.tune);
+});
+
+test("#5036: a setup share code applies to the ACTIVE sheet (SetupTune.keyFor), stamped for a career", () => {
+  const { ShareCode, store } = harness({ SetupTune: {
+    keyFor: (t) => "careerSetup.driver.0." + t,
+    stamp: (_t, v) => Object.assign({}, v, { seed: 7 }),
+  } });
+  const tune = { arbF: 8, arbR: 5, rideF: 20, rideR: 60, brakeBias: 55 };
+  const decoded = ShareCode.decode(ShareCode.encode("setup", { team: "mercedes", tune }).code);
+  assert.equal(ShareCode.apply(decoded, { store, openGarage() {}, selectTeam() {} }).ok, true);
+  assert.deepEqual(store.get("careerSetup.driver.0.mercedes"), Object.assign({}, decoded.tune, { seed: 7 }));
+  assert.equal(store.get("setup.mercedes"), undefined, "the free-play sheet is untouched");
 });
 
 test("hash consumer clears #share= and does not invoke startRace", async () => {

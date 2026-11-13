@@ -170,7 +170,7 @@ const LIV_ROW_HINT = {
   patternRotation: "ROTATION — turn the artwork within its painted area. Wrap sides remain aligned with the crown.",
   patternStretch: "LENGTH STRETCH — compress or extend the artwork along the engine cover.",
   patternWeight: "LINE WEIGHT — thickness of contour, honeycomb, wave, herringbone, circuit and speed-line strokes, and of the keylines on the tartan, bordered-stripe, spearhead, deck-split and keyline-split layouts.",
-  decalNoseTip: "NOSE TIP — the contrast cap on the last 280 mm of the nose.",
+  decalNoseTip: "NOSE TIP — the cap on the last 280 mm of the nose: the NOSE CAP colour when set, else the accent.",
   decalCockpit: "COCKPIT SIDE — the driver's three-letter code beside the cockpit.",
   decalPodTop: "SIDEPOD TOP — the main sponsor along the top of each sidepod.",
   decalHalo: "HALO TOP — a sponsor along the halo's crown bar (not shown under a faired or fenced halo).",
@@ -848,7 +848,7 @@ function buildSetup() {
         return;
       }
       p[activeCat.id] = opt.id;
-      saveTeamParts(team.id, p);
+      if (saveTeamParts(team.id, p) === false) { reject(); return; }   // a conflicted career save refuses the fit: no blip, nothing shown as fitted (#5044)
       if (G.soundOn && !_blipped) GameAudio.uiSelect();
       buildSetup();
       if (CAT_VIEW[activeCat.id]) framePreset(CAT_VIEW[activeCat.id]);   // show the part
@@ -1539,6 +1539,13 @@ function buildLiveryCreator(container, team) {
   // An edited design is never one press from gone: CANCEL (and Escape, below) arms first.
   cancel.onclick = () => { if (designTools && designTools.dirty()) G.armConfirm(cancel, "DISCARD EDITS?", discard); else discard(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
+  const saveStatus = document.createElement("p"); saveStatus.className = "cs-opt-desc"; saveStatus.setAttribute("role", "status"); saveStatus.hidden = true;
+  const retrySave = () => {
+    saveStatus.hidden = false;
+    saveStatus.textContent = "Could not finish saving and fitting. Your draft is still open. Retry SAVE & FIT.";
+    save.textContent = "RETRY SAVE & FIT";
+    if (G.soundOn) GameAudio.uiReject();
+  };
   save.onclick = () => {
     const now = Teams.LIST[G.teamIdx];
     if (team.id !== csLivTeamId || !now || now.id !== csLivTeamId) { discardLivDraft(); buildSetup(); return; }   // the team changed under the editor
@@ -1554,8 +1561,11 @@ function buildLiveryCreator(container, team) {
     // Another tab may already have replaced/deleted the old id. Keep its work
     // and save this draft as a new copy rather than fitting an unstored id.
     const replacing = csLivEditId && existing.some((l) => l.id === csLivEditId);
-    setCustomLiveries(team.id, replacing ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
-    saveLiveryId(team.id, id);
+    const saved = setCustomLiveries(team.id, replacing ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
+    // The session cache can accept a write the disk refused. Retry replaces
+    // that candidate; a wholly rejected career write keeps the original id.
+    if (getCustomLiveries(team.id).some((l) => l.id === id)) csLivEditId = id;
+    if (saved === false || saveLiveryId(team.id, id) === false) { retrySave(); return; }
     csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();
     buildSetup();
@@ -1568,6 +1578,7 @@ function buildLiveryCreator(container, team) {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
     pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id, scrollRoot: container,
   });
+  wrap.insertBefore(saveStatus, btns);
   csLivDirty = designTools ? designTools.dirty : null;
   container.appendChild(wrap);
   applyPreview();
@@ -1724,10 +1735,11 @@ if (typeof MutationObserver === "function") {
 // ESCAPE IS ONE LEVEL. With the paint editor open, Escape pressed the garage's
 // door (data-esc-close="cs-back"): the GARAGE closed and discardLivDraft() threw
 // the unsaved design away. The editor claims the key first, as the camera panel
-// does (setup-camera.js, registered earlier, so an open panel still shuts first):
+// does. This listener registers BEFORE setup-camera.js's (game.js creates SetupUI
+// first), so it stands down while that panel is open: one key, one layer (#5045).
 // Escape is the editor's CANCEL, which arms before discarding edits.
 window.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !csLivCreating || !G.setupPreviewOn
+  if (e.key !== "Escape" || !csLivCreating || !G.setupPreviewOn || ($("cs-cam-panel") && !$("cs-cam-panel").hidden)
       || document.querySelector("dialog[open], dialog.screen:not([hidden])")) return;
   const cancel = document.querySelector("#carsetup .cs-liv-ed-cancel");
   if (!cancel) return;

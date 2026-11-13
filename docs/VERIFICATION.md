@@ -17,7 +17,7 @@ pushed branch. A Bryce-attended session may run ONE named spec locally on his ex
 |---|---|
 | docs or skills only | the docs-only fast path (AGENTS.md §The loop) |
 | tools, tests | `tooling-fast --changed` plus the touched test file; the full suite runs on the PR as `Structural guards` |
-| one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`; that circuit's foundation spec runs on the PR |
+| one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`; that circuit's foundation cases run on the PR (`tests/specs/circuit-foundation.spec.js` under APEX_CIRCUITS=<id>, or its ADAPTED spec) |
 | one subsystem with its own spec | the floor (`tooling-fast --changed`); the spec `select-specs` names runs on the PR, or `remote-group.mjs <group>` on the pushed branch |
 | `js/render/webgpu/` or `js/render/three/` | the path-scoped rule in `.claude/rules/` says what to run; software probes are not evidence about a player's GPU, so dispatch `gpu-census.yml` on `macos-latest` and read its Verdict step |
 | engine / physics / `js/game.js` | the local floor is `tooling-fast --changed`; the groups `pick-tests` names run on the PR; name any left unrun as not-run in the PR |
@@ -78,7 +78,12 @@ spec (its `Structural guards` A–D run the full `tooling-fast`, the check
 skips the `selected` legs when the newest run on the same head passed them on
 its first attempt with the same plan, on a base that is still the deploy tip:
 `tools/ci/reuse-draft-selected.mjs`), and
-`land.yml`'s `gate` check judges the merge result. A worker ends its turn at
+`land.yml`'s `gate` check judges the merge result. A ready plan that DROPS a
+routed spec (the over-budget pool is full) is red unless every dropped spec ran
+green in a `remote-group.mjs <group>` run on the same head and base, first
+attempt, llvmpipe (`tools/ci/dropped-group-runs.mjs`, #5480): run the group
+BEFORE the ready flip (the verdict waits at most 7 min for a running one);
+after the red, run it and flip draft and back. A worker ends its turn at
 `land` (skill `steward` §Land).
 
 ## 4. The gate is a ladder, and the rungs are not the same size

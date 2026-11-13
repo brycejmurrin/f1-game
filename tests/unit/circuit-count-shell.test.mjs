@@ -15,7 +15,7 @@ const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), "utf
 
 const g = await createGame({});
 const counts = JSON.parse(vm.runInContext(
-  "JSON.stringify({ all: Tracks.LIST.length, classic: Tracks.LIST.filter((t) => t.classic).length, season: Tracks.SEASON.length })", g.ctx));
+  "JSON.stringify({ all: Tracks.LIST.length, classic: Tracks.LIST.filter((t) => t.classic).length, season: Tracks.SEASON.length, real2026: SeasonCal.REAL_2026.length })", g.ctx));
 
 test("Tracks.LIST is season rounds plus classics", () => {
   assert.equal(counts.all, counts.season + counts.classic);
@@ -28,7 +28,11 @@ test("index.html meta description states the real circuit count", () => {
   assert.match(m[1], new RegExp(`\\bDrive ${counts.all} real circuits\\b`), `description: ${m[1]}`);
 });
 
-test("manifest.json description states the season and classic counts", () => {
+// #5321: a new season or career defaults to SeasonCal.REAL_2026 (23 rounds), and the
+// picker's SEASON / CLASSICS tabs split on that calendar (select-season-tab.test.mjs),
+// so the copy counts the real 2026 rounds and every other circuit as a classic.
+test("manifest.json description states the 2026 season and classic counts", () => {
   const d = JSON.parse(read("manifest.json")).description;
-  assert.match(d, new RegExp(`\\ba ${counts.season}-round season plus ${counts.classic} classic circuits\\b`), `description: ${d}`);
+  const classics = counts.all - counts.real2026;
+  assert.match(d, new RegExp(`\\ba ${counts.real2026}-round season plus ${classics} classic circuits\\b`), `description: ${d}`);
 });

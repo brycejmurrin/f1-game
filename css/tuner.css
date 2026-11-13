@@ -1268,7 +1268,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
    the iOS zoom floor: Safari zooms the page when a focused control sits under
    it, and the zoom sticks after the keyboard closes. */
 #as-sp-id, #sp-search, #sp-playlist2, #sp-device2 {
-  font: inherit; font-size: 16px;
+  font: inherit; font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
   background: var(--plate-hover); color: var(--text);
   border: 1px solid var(--plate-line); border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
@@ -1560,6 +1560,9 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
   &:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner)[data-editor-view] :is(button, select, summary, input:not([type="hidden"])) { min-height: var(--ew-tap); }
   & > .sheet-foot { background: var(--plate); }
 }
+/* A SHORT workspace drops the "Auto-saved · …" note (#5215): in FLY at 852x283 it took two lines and left #lt-rows one
+   slider row (51 px). Height only, so it stays out of the identical pair of bodies around it. */
+.editor-workspace[data-density="compact"] .ew-note { display: none; }
 @media (max-width: 600px) {
   :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] { overflow: hidden; }
   .editor-workspace .ew-tools { display: block; flex: 0 0 auto; }

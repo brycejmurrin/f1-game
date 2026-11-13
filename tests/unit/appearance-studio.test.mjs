@@ -202,16 +202,24 @@ test("profile restore, Undo and reset repaint mounted title and pause controls w
   studio.applyPreset("classic"); assertControls(true);   // a cosmetic preset never moves the menu layouts (#5058)
 });
 
-test("Studio mounts once the document has passed loading (interactive included)", () => {
-  for (const readyState of ["interactive", "complete", "loading"]) {
-    const lookedUp = [], events = [];
+// #4798: deferred scripts evaluate at "interactive", BEFORE DOMContentLoaded, so
+// only a complete document mounts at once; otherwise DCL hands the mount to the
+// settings-lazy gate (SettingsNav.lazy), which runs it on the first Settings
+// enter / tap / idle. With no router (a tool page) DCL mounts directly.
+test("Studio mounts at once only on a complete document; otherwise at DCL through the settings-lazy gate", () => {
+  for (const [readyState, router] of [["complete", true], ["interactive", true], ["loading", true], ["interactive", false]]) {
+    const lookedUp = [], events = [], gated = [];
+    const SettingsNav = router ? { lazy: (fn) => gated.push(fn) } : undefined;
     load({}, true, false, { readyState, getElementById(id) { lookedUp.push(id); return null; },
-      addEventListener(name, callback) { events.push({ name, callback }); } });
-    if (readyState === "loading") {
-      assert.equal(lookedUp.length, 0); assert.equal(events[0].name, "DOMContentLoaded");
-      events[0].callback();
-    } else assert.equal(events.length, 0);
-    assert.deepEqual(lookedUp, ["pm-panel-appearance"]);
+      addEventListener(name, callback) { events.push({ name, callback }); } }, router ? { SettingsNav } : {});
+    if (readyState === "complete") { assert.equal(events.length, 0); assert.deepEqual(lookedUp, ["pm-panel-appearance"]); continue; }
+    assert.equal(lookedUp.length, 0, readyState + ": nothing at eval"); assert.equal(events[0].name, "DOMContentLoaded");
+    events[0].callback();
+    if (router) {
+      assert.equal(lookedUp.length, 0, readyState + ": nothing in the DCL task");
+      assert.equal(gated.length, 1); gated[0]();
+    }
+    assert.deepEqual(lookedUp, ["pm-panel-appearance"], readyState + (router ? ": mounts at the gate" : ": mounts at DCL"));
   }
 });
 
