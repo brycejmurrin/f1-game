@@ -53,6 +53,18 @@ export function unattributedFailuresFrom(xml) {
   return [...out].sort();
 }
 
+/** Spec paths (tests/specs/...) with at least ONE <testcase> of any outcome (pass, fail, skip): the specs this junit
+ *  shows were collected and run. The selected-gate verdict checks every PLANNED spec is in this set (#5403). */
+export function testedSpecsFrom(xml) {
+  const out = new Set();
+  for (const m of String(xml).matchAll(/<testcase\b[^>]*?\bclassname="([^"]*)"/g)) {
+    let file = m[1].split(" ")[0].replace(/^\.\//, "");
+    if (!file.startsWith("tests/")) file = "tests/" + file;
+    if (/\.spec\.js$/.test(file)) out.add(file);
+  }
+  return [...out].sort();
+}
+
 /** Number of <testcase> elements: a junit with none ran no test body. */
 export function testcaseCount(xml) {
   return (String(xml).match(/<testcase\b/g) || []).length;
