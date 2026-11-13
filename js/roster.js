@@ -212,6 +212,15 @@
     LAZY_DEV: [
     "js/perf/gfx-debug-overlay.js"
   ],
+    LAZY_PERF: [
+    "js/perf/soak-run.js",
+    "js/perf/gpu-test-run.js",
+    "js/perf/phone-recorder.js",
+    "js/perf/bench-capture.js",
+    "js/perf/bench-run.js",
+    "js/perf/metrics-panel.js"
+  ],
+    LAZY_PERF_EDGES: [],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
     "js/garage/entrance-motion.js",
@@ -784,6 +793,7 @@
   ],
     LAZY_CAM_EDITOR_EDGES: [],
     LAZY_CAREER_UI: [
+    "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js"
   ],

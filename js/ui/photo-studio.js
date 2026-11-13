@@ -90,12 +90,13 @@ function create(G, deps) {
   deps = deps || {};
   const root = G.$("photo-studio");
   if (!root) return null;
-  // Prefer deps.ltStore.set (or deps.ltSet) so Photo Studio never trips setLightTune's
-  // renderer-recovery latch clears; fall back only when neither dep is present.
+  // PHOTO LIGHTING writes the live store only (deps.ltStore.set, or deps.ltSet), into the
+  // session's cloned profiles. Never G.setLightTune: its rising edge clears the renderer-recovery
+  // latches (apex26.perChunkOff / envProbeOff), a race setting a photo must not touch (#5040).
+  // Without the dep the sliders do nothing.
   const ltWrite = (id, v) => {
     if (deps.ltStore && typeof deps.ltStore.set === "function") return deps.ltStore.set(id, v);
     if (typeof deps.ltSet === "function") return deps.ltSet(id, v);
-    if (typeof G.setLightTune === "function") return G.setLightTune(id, v);
     return false;
   };
   const ltApply = () => {

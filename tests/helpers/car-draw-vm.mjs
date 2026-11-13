@@ -78,7 +78,9 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       banking: () => null,
     },
     GameCams: { vantage: (_t, _m, s) => ({ eye: [0, 4, s - 12], tgt: [0, 1, s + 20], fov: 40 }) },
-    CarMesh: new Proxy({}, { get: (_o, k) => (carMesh && k in carMesh ? carMesh[k] : () => ({ carMesh: String(k) })) }),
+    // An override map (carMesh) wins; getSpeedDigit keeps its digit, so the wheel LCD can be read back (cockpit-wheels.test.mjs).
+    CarMesh: new Proxy({}, { get: (_o, k) => (carMesh && k in carMesh ? carMesh[k]
+      : k === "getSpeedDigit" ? (d) => ({ carMesh: "getSpeedDigit", digit: d }) : () => ({ carMesh: String(k) })) }),
     Car3D: {
       build: (_c1, _c2, o) => {
         const kind = o.silhouette ? "sh" : o.noWheels ? "body" : "whole";

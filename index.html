@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-XeiMgVBBIOohpDMAxzjosnyJNSt/NUAkqds6MEH5AnM=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -143,7 +143,7 @@
 <link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print">
 <link rel="stylesheet" href="css/player-tools.css?v=dev" media="print">
 <link rel="stylesheet" href="css/helmet-visor.css?v=dev" media="print">
-<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>
+<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]'),n=L.length,d=0;function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}window.addEventListener("load",flip);for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -1431,7 +1431,7 @@
                can only change by quitting to the menu is one you cannot change
                when you discover you want it.
                MANUAL by default: the button IS the mechanic. AUTO exists because
-               inside a zone X-mode is never the wrong choice, so a player who
+               inside a zone straight mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
           <div id="pm-aero" class="set-row" role="group" aria-labelledby="pm-aero-label">
             <span class="tune-label" id="pm-aero-label">ACTIVE AERO</span>
@@ -1560,7 +1560,7 @@
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="70" max="200" step="0.25" value="100" aria-label="HUD size"></label>
-              <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size.</p>
+              <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size. The MIRROR keeps its own size: set it in ARRANGE HUD.</p>
               <!-- Independent touch-control preference. -->
               <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>reset button size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="300" step="0.25" value="100" aria-label="Touch button size"></label>
@@ -2427,7 +2427,7 @@
          so they inherit the button's text colour; sized via .btn-ico in css/menus.css. -->
     <!-- HERO: the long game, on its own and taller than everything under it.
          It used to sit in a flat stack of five identical red buttons, which gave
-         a 24-round career the same weight as a single time trial. #mb-career-sub
+         a 23-round career the same weight as a single time trial. #mb-career-sub
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero" role="group" aria-label="Continue and career">
@@ -3363,7 +3363,7 @@
         <dd>In MANUAL, press your active aero control (keyboard <span data-help-keys="aero">Z</span>, controller <span data-help-pad="aero">D-pad ↑</span>, or AERO on screen) inside an activation zone. STRAIGHT MODE (the flaps open) reduces drag and grip; braking or leaving the zone closes the wings.
           <br>SETTINGS › DRIVING AIDS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
         <dt>OVERTAKE</dt>
-        <dd>Follow within one second to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, the Safety Car or red flag, or low grip in the wet. An allowance you do not use by the next lap is lost. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
+        <dd>Follow within one second at the detection line to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, the Safety Car or red flag, or low grip in the wet. An allowance you do not use by the next lap is lost. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt id="htp-2026rules">2026 RULES &mdash; ENERGY &amp; OVERTAKE</dt>
         <dd><b>Energy harvest.</b> The hybrid recovers energy when you brake or lift. With a <b>full battery</b> (about 4 MJ on the energy bar) there is nowhere to put it: braking and lifting recover nothing more, and you hear the engine note clip while it is full. The car does not slow down, but that energy is wasted. Spend charge with <span class="key">BOOST</span> or <span class="key">OVERTAKE</span> so the pack has room before the next braking zone.
           <br><b>Overtake Mode</b> is separate from BOOST and Active Aero: it is an extra 0.5 MJ allowance earned when you follow within one second at the detection line, then spent at will that lap (see <span class="key">OVERTAKE</span> above). It does not drain the main energy bar.</dd>
@@ -3846,7 +3846,6 @@
 <script defer crossorigin="anonymous" src="js/core/i18n.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/dom-apply.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/restore-points.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/geom.js?v=dev"></script>
@@ -4070,11 +4069,6 @@
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/post-fx-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/soak-run.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/gpu-test-run.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/phone-recorder.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/bench-capture.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/bench-run.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/fov-fit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage-ride.js?v=dev"></script>

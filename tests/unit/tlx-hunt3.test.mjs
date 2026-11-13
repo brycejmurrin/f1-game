@@ -416,6 +416,7 @@ test("hunt 6: 600 particle frames on stable arrays build each stream once; only 
 // churn.poolNew moves only on a new peak; a pruned wrapper is re-minted (a new three RenderObject) when drawn again.
 test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune + re-draw is counted (churn.poolNew/poolPruned)", () => {
   const pruneAt = TLX.indexOf("      const PRUNE_EVERY_MS =");
+  const IDLE = +TLX.slice(pruneAt, TLX.indexOf("\n", pruneAt)).match(/PRUNE_IDLE_MS = (\d+)/)[1], LAST = 600 * 16;   // last draw of the idle three
   const mk = new Function("THREE", `"use strict";
     const meshPool = [], meshByGeo = new Map(), scene = new THREE.Scene(), dropped = [];
     let _poolBatch = 0, _poolNow = 0, _r6 = false, _pruneLast = -Infinity, _pinArmed = true, _kidBatch = -1, _kids = null, _kidN = 0;
@@ -437,12 +438,12 @@ test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune
   }
   assert.equal((P.acquireMesh.n | 0), 5, "600 frames, no new wrapper");
   assert.equal((P.prunePool.n | 0), 0);
-  P.frame(20000, draws.slice(0, 2));   // under 20 s idle: nothing goes
+  P.frame(LAST + IDLE - 10000, draws.slice(0, 2));   // under PRUNE_IDLE_MS idle: nothing goes
   assert.equal((P.prunePool.n | 0), 0);
-  P.frame(31000, draws.slice(0, 2));   // > 20 s on: the three wrappers not drawn since ~9.6 s idle out
+  P.frame(LAST + IDLE + 1400, draws.slice(0, 2));   // past PRUNE_IDLE_MS: the three wrappers not drawn since ~9.6 s idle out
   assert.equal((P.prunePool.n | 0), 3);
   assert.equal(P.dropped.length, 3);
-  P.frame(31016, draws);
+  P.frame(LAST + IDLE + 1416, draws);
   assert.equal((P.acquireMesh.n | 0), 8, "drawn again after a prune: re-minted, and counted");
 });
 // R6: the REAL pool-root functions (_kidsBegin / _poolShow) and acquireMesh's parenting, driven the way
@@ -549,6 +550,7 @@ async function r1Rig(t, ls = {}) {
   assert.match(H1_USAGE, /^      let _instUsage = THREE\.StreamDrawUsage;[\s\S]*const _instUsageOf = /, "the A-H1 knob moved — check this test, not the code");
   const mk = new Function("THREE", "TSL", "scene", "renderer", "camera", "localStorage", "lit", "env", `"use strict";
     const _instRegistry = [], drawList = []; drawList.n = 0;
+    const _instRootOn = false, instRoot = null, _instAdd = (m) => scene.add(m), _instRemove = (m) => scene.remove(m), _instShow = () => {};   // #3104 F3 helpers: the scene.add arm
     const unlitMat = new THREE.MeshBasicNodeMaterial(), _drawMatMode = 0, vizMat = null;
     const skipBatches = () => env.soft, drawEm = (o) => (o && o.emissive !== undefined ? o.emissive : 0);
     function setRange0(attr, count) { attr.updateRanges.length = 0; attr.updateRanges.push({ start: 0, count }); }

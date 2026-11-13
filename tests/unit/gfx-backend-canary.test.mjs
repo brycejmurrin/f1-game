@@ -762,6 +762,10 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const old = { __tlxFrame: 7, dispose() { disposed++; } };
   const decalCache = new Map([["current", current], ["old", old]]);
   const _evicted = [], _fxMats = [current, old], _decalFrame = 8, DECAL_CACHE_CAP = 2;
+  // _decalDrop keeps the texture -> glow index in step (#4556); lifted, not re-implemented.
+  const decalByTex = new Map();
+  const dropAt = fx.indexOf("    function _decalDrop(k, v) {");
+  const _decalDrop = eval("(" + fx.slice(dropAt, fx.indexOf("\n    }\n", dropAt) + 6).trim() + ")");
   eval(evict);
   assert.deepEqual([...decalCache.keys()], ["current"], "eviction skips materials used in this frame");
   assert.deepEqual(_evicted, [old], "disposal is deferred until after presentation");
@@ -4308,14 +4312,20 @@ test("software GL garage path gates readback and stall reload (#3589)", async ()
   assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"') && loop.includes('"race-settings"'));
   const soft = readFile("js/render/glx/soft.js");
   assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
-  // …and the gate is APPLIED: the real soft.js, run. Under the defer a capture
-  // waiter is satisfied with a generation bump and NO framebuffer readback;
-  // without it the same waiter costs exactly one readback.
-  for (const [deferOn, wantReads] of [[true, 0], [false, 1]]) {
+  // …and the gate is APPLIED: the real soft.js, run. Under the defer the PASSIVE
+  // arm (invalidateSoftPresent on garage entry) is consumed with NO readback;
+  // without it the same arm costs one. A capture WAITER reads #game-soft next
+  // (garage PHOTO, garage-angles), so it gets its one readback either way: a
+  // generation bump with nothing drawn was #5380 (blank 300x150 captures).
+  for (const [deferOn, wantArmReads] of [[true, 0], [false, 1]]) {
+    const arm = glxSoftHarness({ defer: () => deferOn });
+    arm.soft.invalidateSoftPresent();
+    arm.soft.blitIfDue();
+    assert.equal(arm.reads(), wantArmReads, `softwareGlUiReadbackDefer() ${deferOn}: passive arm costs ${wantArmReads} readback(s)`);
     const h = glxSoftHarness({ defer: () => deferOn });
     const waiter = h.soft.awaitSoftPresent(1000);
     h.soft.blitIfDue();
-    assert.equal(h.reads(), wantReads, `softwareGlUiReadbackDefer() ${deferOn}: ${wantReads} readback(s)`);
+    assert.equal(h.reads(), 1, `softwareGlUiReadbackDefer() ${deferOn}: a capture waiter gets its readback`);
     await waiter;   // resolves either way: __apex.awaitPresent() must not hang under the defer
   }
   const assets = readFile("js/render/shared/assets.js");
@@ -4573,7 +4583,7 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
 });
 
 test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry sheets are up", () => {
-  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
+  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h, asked) {", "function ", "readbackLdrPixels");
   assert.ok(body.includes("PerfGov.softwareGlUiReadbackDefer") && body.includes("softwareGlUiReadbackDefer()"));
   const gov = read("js/perf/governor.js");
   assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"') && gov.includes("quitReadbackDefer"), "quit MenuTeardown defer must not leak garage mask into readback");
@@ -6483,7 +6493,7 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
-  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
+  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbBs = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
   const buildPendingCockpitBody = eval("(function(){" + fnBody(read("js/car/car-draw.js"), "buildPendingCockpitBody") + "})");
   const cockpitKey = eval("(function(team, car, visualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitKey") + "})");
   const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");

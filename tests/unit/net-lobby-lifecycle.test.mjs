@@ -1555,7 +1555,7 @@ test("READY waits for CODES MATCH on every connection that shows a verification 
     assert.equal(h.lobby.unverifiedCodes(), 1);
     h.lobby.setReady(true);
     assert.equal(h.lobby.roomState().selfReady, false, "READY is refused while the code is unticked");
-    assert.match(h.status.textContent, /code K7QZ, then tap CODES MATCH before READY/);
+    assert.equal(h.status.textContent, "Check that both screens show code K7QZ, then tap CODES MATCH before READY.");
     assert.equal(h.lobby.confirmCode("nobody"), false, "an unknown connection cannot be ticked");
     assert.equal(h.lobby.confirmCode(id), true);
     assert.equal(h.lobby.unverifiedCodes(), 0);
@@ -1567,9 +1567,10 @@ test("READY waits for CODES MATCH on every connection that shows a verification 
 test("a direct link blocked with no relay says plainly that this network cannot connect (#5313)", () => {
   const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS });
   const msg = h.lobby.failureMsg({ ice: "failed", connection: "failed", turn: false, candidates: { host: 1, srflx: 1 } }, 20);
-  assert.match(msg, /This network cannot connect you directly, and there is no relay server/);
-  assert.match(msg, /same Wi-Fi, or switch one to mobile data/);
-  assert.doesNotMatch(msg, /turnApi/, "no console instructions for a player");
+  assert.equal(msg, "Could not connect after 20s (failed/failed). Both sides found an address but the direct link was blocked,"
+    + " which means one of these networks needs a relay to get through. This network cannot connect you directly, and there is"
+    + " no relay server to go around it. Put both phones on the same Wi-Fi, or switch one to mobile data, then start a new invite.",
+    "the whole message: plain words, no console instructions for a player");
 });
 
 test("a guest the host evicts sees a dedicated message, not 'host left'", async () => {

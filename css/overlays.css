@@ -496,7 +496,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
    whose whole job is pasting a code. The readonly boxes keep --fs-micro and
    their height budget; they never focus a keyboard. */
 #vsfriend .vs-code:not([readonly]) {
-  font-size: 16px;
+  font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
   line-height: 1.3;
   /* Codes have no spaces, so without this they force the sheet wide. */
   word-break: break-all;

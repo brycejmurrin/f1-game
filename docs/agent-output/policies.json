@@ -496,6 +496,11 @@
       "presentation": "native",
       "preserve": "Unknown measurement; threshold and advisory semantics"
     },
+    "tools/ci/bot-pr-body.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "The PR body verbatim: the Plan the merge gate parses, the land item last"
+    },
     "tools/ci/branch-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -2555,6 +2560,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Explicit network mutation, source provenance and confirmation of write; no extra progress by default."
+    },
+    "tools/track/official-corners.cjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Fetch/read-cache split, fit RMS line and per-turn frac table."
     },
     "tools/track/rotate-markings.cjs": {
       "action": "keep-native",

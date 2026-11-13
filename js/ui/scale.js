@@ -120,7 +120,7 @@ const UiScale = (() => {
       const t = scaleSnap(pct, k);
       return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
     };
-    // UI SIZE: full top (the row names this sheet's zoom); a phone stops at 70 % (#5235).
+    // UI SIZE: full top (the row names this sheet's zoom); a phone stops at 50 % (#5452; 70 under #5235).
     const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
     const uiSheet = () => $("pm-uiscale")?.closest?.(".sheet") || null;
     const sheetCap = () => { const sh = uiSheet(); return (sh?.getClientRects?.().length && parseFloat(getComputedStyle(sh).zoom)) || 0; };
@@ -226,10 +226,12 @@ const UiScale = (() => {
       if (prev) prev.onclick = () => { store.set("hudPanelOpacity", null); applyPanelOpacity(); };
     }
     const uiEl = $("pm-uiscale");
-    if (uiEl) uiEl.oninput = (e) => {
-      store.set("uiScale", fromSlider("uiScale", e.target.value));
-      applyUiScale();
-    };
+    // UI SIZE zooms the sheet that holds its own slider: applying on every `input` re-zoomed it under the thumb (#5256).
+    // The number follows the drag; the zoom lands on release (`change`, which a key step also fires).
+    if (uiEl) {
+      uiEl.oninput = (e) => { const out = $("pm-uiscale-v"); if (out) out.textContent = fromSlider("uiScale", e.target.value) + "%"; };
+      uiEl.onchange = (e) => { store.set("uiScale", fromSlider("uiScale", e.target.value)); applyUiScale(); };
+    }
     const hudEl = $("pm-hudscale");
     if (hudEl) hudEl.oninput = (e) => {
       pinPainted("hudBtnScale");
@@ -427,6 +429,8 @@ const UiScale = (() => {
     if (key === "uiScale" && sheetCap > 0 && sheetCap * 100 < value - 0.5) part = ` · this menu ${Math.round(sheetCap * 100)}%`;
     return { min, max, value, label: txt(value) + part + (max < lim.max && value >= max ? " · max" : "") };
   }
-  const UI_PHONE_MIN = 70;   // #5235
+  // A phone's UI SIZE FLOOR (#5452, Bryce 2026-11-11: "Down to 50 %"; it was 70 under #5235, which left the slider
+  // stuck at its left end). A stored value under it is raised to it on load; one above it (his 61) is kept.
+  const UI_PHONE_MIN = 50;
   return { create, defaultResMode, migrateResMode, RES_SCHEMA, sizeRow, parseCaps };
 })();
