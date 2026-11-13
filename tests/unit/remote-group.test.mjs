@@ -60,11 +60,11 @@ test("the workflow reads its matrix from the plan input, has no plan job, and ne
   const runs = YML.split("\n").filter((l) => /^\s+run: /.test(l));
   assert.ok(runs.length >= 2);
   for (const l of runs) assert.ok(!/\$\{\{\s*(inputs|github\.event)\./.test(l), `input interpolated into a shell line: ${l.trim()}`);
-  assert.equal((YML.match(/run: node tools\/ci\/remote-group\.mjs --run-shard$/gm) || []).length, 2, "both GL steps run the one validated entry point");
+  // The entry-point steps in file order: ONE plan-record, then the two GL steps (#5480: the plan is recorded before any spec runs).
+  const entry = runs.map((l) => l.trim().split(" ")).filter((w) => w[2] === "tools/ci/remote-group.mjs").map((w) => w.slice(3).join(" "));
+  assert.deepEqual(entry, ["--plan-record", "--run-shard", "--run-shard"], "one plan-record step first, then both GL steps through the one validated entry point");
   for (const k of ["GROUP", "PLAN", "SHARD", "TOTAL", "WORKERS", "GL"])
     assert.equal((YML.match(new RegExp(`^\\s+${k}: `, "gm")) || []).length, 3, `${k} reaches both shard steps and the plan-record step through env`);
-  assert.equal((YML.match(/run: node tools\/ci\/remote-group\.mjs --plan-record$/gm) || []).length, 1, "one plan-record step, before the shard steps (#5480)");
-  assert.ok(YML.indexOf("--plan-record") < YML.indexOf("--run-shard"), "the plan is recorded before any spec runs");
   assert.match(YML, /^permissions:\n  contents: read/m, "read-only token");
   assert.match(YML, /cancel-in-progress: true/, "a re-dispatch supersedes the old run");
   // The CLI finds a 204 dispatch's run by its name.
