@@ -681,3 +681,49 @@ test("a stale confirmPending expires on wall age even without a pause-hidden mut
   assert.ok(h.press(h.restart, { isTrusted: true, detail: 1 }).stopped, "first tap arms, not restarts");
   assert.deepEqual(h.handled, []);
 });
+
+// A fold mounted in front of QUIT (RACE MESSAGES) plus a main-thread stall:
+// the idle timer reverts the label before the queued confirm is dispatched.
+// The click's own timeStamp is still inside the arm window, so it quits once.
+test("arm, insert a fold before #pm-quit, click again quits exactly once", () => {
+  const h = load();
+  const TS0 = 50_000;
+  const parent = { children: [h.quit] };
+  h.quit.parentElement = parent;
+  parent.insertBefore = (node, ref) => {
+    const at = parent.children.indexOf(ref);
+    parent.children.splice(at < 0 ? parent.children.length : at, 0, node);
+  };
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  assert.equal(h.quit.textContent, "TAP AGAIN");
+  const fold = { id: "pm-message-history", tagName: "DETAILS" };
+  parent.insertBefore(fold, h.quit);
+  assert.deepEqual(parent.children.map((n) => n.id), ["pm-message-history", "pm-quit"]);
+  h.advance(6000);
+  h.runTimers();
+  assert.equal(h.quit.textContent, "QUIT TO MENU", "the idle timer reverts the label");
+  assert.ok(!h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 + 400 }).stopped);
+  assert.deepEqual(h.handled, ["pm-quit"]);
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 + 500 });
+  assert.deepEqual(h.handled, ["pm-quit"], "the queued confirm quits exactly once");
+});
+
+test("a trusted click while confirmPending is set quits once, including after the stale expiry", () => {
+  const TS0 = 50_000;
+  const fresh = load();
+  fresh.press(fresh.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  fresh.advance(400);
+  fresh.pointerUp(fresh.quit, { isTrusted: true, timeStamp: TS0 + 400 });
+  assert.ok(!fresh.press(fresh.quit, { isTrusted: true, detail: 1, timeStamp: TS0 + 420 }).stopped);
+  assert.deepEqual(fresh.handled, ["pm-quit"]);
+  const late = load();
+  late.press(late.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  late.advance(400);
+  late.pointerUp(late.quit, { isTrusted: true, timeStamp: TS0 + 400 });
+  assert.deepEqual(late.handled, [], "the synthetic click is not the quit");
+  late.advance(late.M.ARM_MAX_MS + 1);
+  assert.ok(!late.press(late.quit, { isTrusted: true, detail: 1, timeStamp: TS0 + 800 }).stopped);
+  assert.deepEqual(late.handled, ["pm-quit"]);
+  late.press(late.quit, { isTrusted: true, detail: 1, timeStamp: TS0 + 900 });
+  assert.deepEqual(late.handled, ["pm-quit"], "exactly once, even after the wall expiry");
+});
