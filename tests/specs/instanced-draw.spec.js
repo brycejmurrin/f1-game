@@ -123,7 +123,7 @@ test.describe("GLX instanced draw", () => {
     await page.evaluate(() => __apex.race("monza"));
     await page.waitForFunction(() => __apex.info().track === "monza", null, { polling: 100, timeout: 180000 });
     await page.evaluate(() => { __apex.park(0.1); __apex.snapCam(); });
-    await page.waitForTimeout(4000);
+    await page.evaluate(async () => { for (let i = 0; i < 3; i++) await __apex.awaitPresent(120000); });
 
     // The PRESENTED canvas (#game-soft where the backend blits), decoded and
     // read: a page screenshot's byte count counted the HUD and the PNG
