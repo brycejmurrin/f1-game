@@ -341,6 +341,52 @@ process.on("exit", () => fs.writeFileSync(${JSON.stringify(counterFile)}, JSON.s
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
+test("batch importer preserves flat and authored normals across reflected nonuniform nodes", async () => {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const tmp = fs.mkdtempSync(path.join(ROOT, "artifacts", "import-normals-"));
+  const src = path.join(tmp, "src"), out = path.join(tmp, "out");
+  fs.mkdirSync(src); fs.mkdirSync(out);
+  try {
+    const q = 1 / Math.sqrt(2);
+    const p = new Float32Array([0,0,0, 1,0,1, 0,1,0, 0,0,1]);
+    const n = new Float32Array([-q,0,q, -q,0,q, -q,0,q, -q,0,q]);
+    const bin = Buffer.concat([Buffer.from(p.buffer), Buffer.from(n.buffer), Buffer.from(new Uint16Array([0,1,2,0,3,1]).buffer)]);
+    fs.writeFileSync(path.join(src, "mesh.bin"), bin);
+    const gltf = { asset:{version:"2.0"}, scenes:[{nodes:[0]}], nodes:[{scale:[-2,3,0.5],children:[1]},{mesh:0,rotation:[0,0,Math.sin(0.3),Math.cos(0.3)]}],
+      buffers:[{uri:"mesh.bin",byteLength:bin.length}],
+      bufferViews:[{buffer:0,byteLength:48},{buffer:0,byteOffset:48,byteLength:48},{buffer:0,byteOffset:96,byteLength:12}],
+      accessors:[{bufferView:0,componentType:5126,count:4,type:"VEC3"},{bufferView:1,componentType:5126,count:4,type:"VEC3"},
+        {bufferView:2,componentType:5123,count:6,type:"SCALAR"},{bufferView:2,componentType:5123,count:3,type:"SCALAR"}],
+      meshes:[{primitives:[{attributes:{POSITION:0},indices:2},{attributes:{POSITION:0,NORMAL:1},indices:3}]}] };
+    fs.writeFileSync(path.join(src, "normals.gltf"), JSON.stringify(gltf));
+    const r = cp.spawnSync(process.execPath, [path.join(ROOT,"tools/gen/import-models.mjs"),src,"--scale","1"],
+      {env:{...process.env,APEX_PACK_DIR:out},encoding:"utf8"});
+    assert.equal(r.status,0,r.stderr);
+    const mesh = await readAX26(path.join(out,"models/normals.bin"));
+    assert.equal(mesh.pos.length,27,"six flat corners followed by three compact authored vertices");
+    for (let t=0;t<mesh.idx.length;t+=3) {
+      const ids = Array.from(mesh.idx.slice(t,t+3));
+      const a=ids.map(i=>Array.from(mesh.pos.slice(i*3,i*3+3)));
+      const u=a[1].map((v,k)=>v-a[0][k]), v=a[2].map((v,k)=>v-a[0][k]);
+      const face=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+      const len=Math.hypot(...face);
+      for (const i of ids) for (let k=0;k<3;k++)
+        assert.ok(Math.abs(mesh.nrm[i*3+k]-face[k]/len)<1/32767+1e-6,"decoded normal agrees with geometric face within AX26 snorm16 quantization");
+    }
+    assert.ok(mesh.nrm[2]>0,"reflection preserves authored outward orientation");
+    gltf.nodes[0].scale = [0,3,0.5];
+    fs.writeFileSync(path.join(src,"singular.gltf"),JSON.stringify(gltf));
+    const flattened = cp.spawnSync(process.execPath,[path.join(ROOT,"tools/gen/import-models.mjs"),src,"--scale","1"],
+      {env:{...process.env,APEX_PACK_DIR:out},encoding:"utf8"});
+    assert.equal(flattened.status,0,flattened.stderr);
+    const manifest=JSON.parse(fs.readFileSync(path.join(out,"manifest.json"),"utf8"));
+    assert.ok(manifest.models.singular,"zero scale still admits nondegenerate flattened faces");
+    const flat = await readAX26(path.join(out,manifest.models.singular.file));
+    for (const i of [0,1,2,6,7,8])
+      assert.deepEqual(Array.from(flat.nrm.slice(i*3,i*3+3)),[-1,0,0],"flat and authored normals match the surviving YZ plane");
+  } finally { fs.rmSync(tmp,{recursive:true,force:true}); }
+});
+
 // #2501: glTF `normalized` integer accessors map to [0, 1] / [-1, 1] (glTF 2.0
 // §3.11); read raw, a quantized UV of 255 sampled the palette at u = 255.
 test("accessor reads normalized UNSIGNED_BYTE/SHORT and signed BYTE/SHORT as unit floats", async () => {

@@ -121,7 +121,7 @@ test.describe("GLX instanced draw", () => {
     await page.evaluate(() => __apex.race("monza"));
     await page.waitForFunction(() => __apex.info().track === "monza", null, { polling: 100, timeout: 180000 });
     await page.evaluate(() => { __apex.park(0.1); __apex.snapCam(); });
-    await page.waitForTimeout(4000);
+    await page.evaluate(async () => { for (let i = 0; i < 3; i++) await __apex.awaitPresent(120000); });
 
     // page.screenshot(), not locator.screenshot(): the latter waits for element
     // stability, which starves under SwiftShader on a full circuit.

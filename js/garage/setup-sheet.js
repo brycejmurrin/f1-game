@@ -848,7 +848,7 @@ function buildSetup() {
         return;
       }
       p[activeCat.id] = opt.id;
-      saveTeamParts(team.id, p);
+      if (saveTeamParts(team.id, p) === false) { reject(); return; }   // a conflicted career save refuses the fit: no blip, nothing shown as fitted (#5044)
       if (G.soundOn && !_blipped) GameAudio.uiSelect();
       buildSetup();
       if (CAT_VIEW[activeCat.id]) framePreset(CAT_VIEW[activeCat.id]);   // show the part

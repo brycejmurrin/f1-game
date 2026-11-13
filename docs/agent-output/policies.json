@@ -596,6 +596,11 @@
       "presentation": "native",
       "preserve": "A node --test reporter module: one JSON object of per-file event counts to its destination; never a command"
     },
+    "tools/ci/fat-shard.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The per-piece plan vs the count split, one line per piece; an unlistable spec keeps the count shard"
+    },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -770,6 +775,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Unknown API/base forces no reuse; no stdout prose"
+    },
+    "tools/ci/dropped-group-runs.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Any lookup doubt, other base, re-run or red group run forces accept=false; stdout is GITHUB_OUTPUT lines only"
     },
     "tools/ci/reuse-draft-selected.mjs": {
       "action": "protocol-only",

@@ -26,6 +26,8 @@ const PREFIX_WRITES = [
   { prefix: "ttlb.", re: /["']ttlb\.["']\s*\+/ },
   { prefix: "pitPlan.", re: /["']pitPlan\.["']\s*\+/ },
   { prefix: "setup.", re: /\bKEY\s*\+\s*teamId/ },
+  // SetupTune.keyFor(team): setup.<team> in free play, careerSetup.<flavour>.<slot>.<team> in a career (#5036).
+  { prefix: "careerSetup.driver.0.", re: /\bkeyFor\s*\(/ },
 ];
 
 /** Literal keys READ but deliberately unregistered, by file: hand-set dev / A-B flags with no writer
@@ -297,6 +299,18 @@ test("setupPresets.<team> resolves (garage named sheets; review F1)", () => {
   assert.equal(e.lane, "json");
   R.strict = true;
   assert.doesNotThrow(() => R.noteWrite("setupPresets.haas", "json"));
+});
+
+test("careerSetup.<flavour>.<slot>.<team> resolves to SetupTune; a malformed slot does not (#5036)", () => {
+  const R = loadRegistry();
+  for (const k of ["careerSetup.driver.0.mercedes", "careerSetup.myteam.2.custom"]) {
+    const e = R.resolve(k);
+    assert.ok(e, k + " must resolve");
+    assert.equal(e.owner, "js/garage/setup-tune.js");
+  }
+  assert.equal(R.resolve("careerSetup.driver.3.mercedes"), null);
+  R.strict = true;
+  assert.doesNotThrow(() => R.noteWrite("careerSetup.driver.1.haas", "json"));
 });
 
 test("the automatic UI flags (designerCoached, camComfortPref) are registered, typed, and device-local (#2320)", () => {
