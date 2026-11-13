@@ -17,6 +17,24 @@ let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
                               // derived (W,H): 140css@2x and 280css@1x share a
                               // bitmap size but need different path transforms
 let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
+let _mmKeyNow = "", _mmVw = -1, _mmVh = -1, _mmDpr = -1;   // the last built measure key and its viewport/DPR
+// Attribute watch for that key: dirty after a body class / data-density, root style
+// or #minimap style write. takeRecords() makes it synchronous (a write earlier in
+// this same task counts). No MutationObserver (node VM): always dirty, the old path.
+let _mmObs = null, _mmDirty = true;
+function mmWatchDirty() {
+  if (_mmObs === null) {
+    if (typeof MutationObserver !== "function") return true;
+    _mmObs = new MutationObserver(() => { _mmDirty = true; });
+    _mmObs.observe(document.body, { attributes: true, attributeFilter: ["class", "data-density"] });
+    _mmObs.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    _mmObs.observe(els.minimap, { attributes: true, attributeFilter: ["style"] });
+    return true;
+  }
+  const d = _mmDirty || _mmObs.takeRecords().length > 0;
+  _mmDirty = false;
+  return d;
+}
 let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
 let _mmPitP = null, _mmYou = "";   // the "P"'s local px + map node, and the resolved --you; set with the bg
 let minimapBgCues = false;
@@ -44,12 +62,21 @@ function drawMinimap() {
   // Density selects the 96/140px CSS box; DPR can change without a resize.
   // Keep the bounded retry while the fit has no laid-out box, and the track
   // invalidation path (minimapBg null) so a newly visible map measures afresh.
+  // #3108: the key string (body.className + three style reads) was rebuilt every
+  // HUD tick. It is now rebuilt only after a watched attribute changed (body
+  // class / data-density, root style, the map's style) or the viewport/DPR moved;
+  // the key itself, and so when the map re-measures, is unchanged.
   const root = document.documentElement, body = document.body;
   const cbCues = root.dataset.cbCues === "on";
-  const measureKey = vpW() + "x" + vpH() + "|" + body.className
-    + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
-    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
-    + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
+  const vw = vpW(), vh = vpH(), dpr = window.devicePixelRatio || 1;
+  if (mmWatchDirty() || vw !== _mmVw || vh !== _mmVh || dpr !== _mmDpr || _mmKey === null) {
+    _mmVw = vw; _mmVh = vh; _mmDpr = dpr;
+    _mmKeyNow = vw + "x" + vh + "|" + body.className
+      + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
+      + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + dpr
+      + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
+  }
+  const measureKey = _mmKeyNow;
   if (_mmKey !== measureKey || deps.fitKey() === "" || !minimapBg) {
     _mmKey = measureKey;
     _mmCssW = els.minimap.clientWidth || 140;

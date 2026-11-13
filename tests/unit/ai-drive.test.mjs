@@ -1992,3 +1992,13 @@ test("lateralScales / sbsLimits are bit-identical to the single-purpose function
     assert.equal(lim.ease, A.sbsEase(ctx));
   }
 });
+
+test("wantBoost: ERS deploy bias (#1566) moves only the 'rich' threshold, symmetric and AI-only", () => {
+  const ctx = (ersBias, energy) => ({ traits: { craft: 0.75, awareness: 0.7, experience: 0.75, consistency: 0.75, ersBias }, energy, kAhead60: 0.001, otActive: false, towCar: false, chaser: false, speed: 60 });
+  assert.equal(A.wantBoost(ctx(0, 0.52)), false, "neutral: 0.52 is not rich");
+  assert.equal(A.wantBoost(ctx(1, 0.52)), true, "an eager deployer calls 0.52 rich");
+  assert.equal(A.wantBoost(ctx(0, 0.58)), true, "neutral: 0.58 is rich");
+  assert.equal(A.wantBoost(ctx(-1, 0.58)), false, "a hoarder keeps 0.58");
+  assert.equal(A.wantBoost(ctx(0, 0.56)), A.wantBoost({ ...ctx(0, 0.56), traits: { ...ctx(0, 0.56).traits, ersBias: undefined } }), "absent = neutral");
+  assert.equal(A.traits({}).ersBias, 0);
+});

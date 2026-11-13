@@ -1791,7 +1791,7 @@ wider road mesh). Returns `null` if no track is loaded.
 `TrackSpace.sceneryNode`, so `anchor(K(0.45))` in `js/circuits/scenery/` and a
 bare `nodeAt(0.45)` here land on different nodes on any circuit carrying
 `_sceneryShift`. At Montreal that is node 337 against 489 — 152 nodes and about
-600 m apart, which is how `montreal-foundation.spec.js` came to measure
+600 m apart, which is how `tests/specs/foundation/montreal.js` came to measure
 floodlight masts for months and call them the casino footbridge's piers.
 
 Fields:

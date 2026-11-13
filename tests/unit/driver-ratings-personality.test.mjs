@@ -79,7 +79,7 @@ test("pace column frozen vs tip — skill() at roll 0.5 is pace-only and tip-ide
 
 test("style axes present, zero-mean, and excluded from overall/skill", () => {
   const DR = loadDR();
-  assert.equal(DR.STYLE_AXES.join(","), "aggression,optimism,composure");
+  assert.equal(DR.STYLE_AXES.join(","), "aggression,optimism,composure,tyreCare,qualiBias,ersBias");
   const rows = Object.entries(DR.BASE).map(([code, row]) => ({
     code, aggression: row[5], optimism: row[6],
   }));
@@ -101,7 +101,7 @@ test("unrated drivers' style axes are not one-sided (optimism had only 2 bits)",
   const DR = loadDR();
   const codes = [];
   for (let i = 0; i < 200; i++) codes.push("U" + i.toString(36).toUpperCase() + String.fromCharCode(65 + (i * 7) % 26));
-  for (const axis of ["aggression", "optimism", "composure"]) {
+  for (const axis of ["aggression", "optimism", "composure", "tyreCare", "qualiBias", "ersBias"]) {
     const v = codes.map((c) => DR.style01(DR.get(c, 2)[axis]));
     const mean = v.reduce((a, b) => a + b, 0) / v.length;
     assert.ok(Math.abs(mean) <= 0.1, `${axis} mean ${mean.toFixed(3)} should be near zero`);
@@ -109,7 +109,7 @@ test("unrated drivers' style axes are not one-sided (optimism had only 2 bits)",
   }
   // The five quality axes keep their exact old derivation, so only style moved.
   const a = DR.get("XYZ", 2);
-  assert.deepEqual(Object.keys(a), ["pace", "craft", "awareness", "consistency", "experience", "aggression", "optimism", "composure"]);
+  assert.deepEqual(Object.keys(a), ["pace", "craft", "awareness", "consistency", "experience", "aggression", "optimism", "composure", "tyreCare", "qualiBias", "ersBias"]);
   assert.deepEqual(DR.get("XYZ", 2), a, "stable per code");
 });
 

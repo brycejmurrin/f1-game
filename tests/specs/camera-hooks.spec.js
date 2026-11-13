@@ -16,7 +16,7 @@ async function loadMonaco(page) {
   // AWAIT THE RACE. __apex.race() is a thenable (js/agent/apex.js settled());
   // firing it and sleeping 3 s left G.track null, so dolly() returned false
   // and roadside() crashed in checkRetirements on track.total; tourShots()
-  // was 0 vs 16. Same contract as tests/specs/monaco-foundation.spec.js.
+  // was 0 vs 16. Same contract as tests/specs/foundation/monaco.js.
   await page.evaluate(async () => {
     await __apex.race("monaco");
     __apex.go();
