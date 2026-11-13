@@ -6,7 +6,7 @@ description: "Use when you own a PR at any stage: launched on an issue or `CONTI
 # Steward — one PR, from launch to landed
 
 You are one session, one task, one PR. GitHub holds all state: issues are tasks, labels are state, the PR is the work
-and the report, comments are the only messages. GitHub lands the PR; no session merges or arms. Nobody reads your
+and the report, comments are the only record. GitHub lands the PR; no session merges or arms. Nobody reads your
 chat. Everything not here is `AGENTS.md` (rules 3, 4, 8, 9, 12, 13 and §Coordination). Routes: failed-CI triage →
 agent `ci-red-triage`; pre-push validation → skill `check-changes`; live `version.json` or anything on github.io →
 agent `deploy-research`; review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any.
@@ -20,7 +20,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
    stand down. Labels ONLY via `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=claimed'` (`gh api -X
-   DELETE repos/<o>/<r>/issues/<n>/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list.
+   DELETE repos/<o>/<r>/issues/<n>/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list
+   (`github-mcp-guard.sh` refuses one that drops `config-ok`, `hold`, `land` or `needs-decision`).
 2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: the Action already removed `needs-owner` and posted `adopts PR #<n>`
    (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
@@ -30,8 +31,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    comment, and re-read the head before every push: if someone else moved it, stand down.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
    No PR, no question.
-5. **Cap.** The brief's `STOP AT` (the worker brief `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan
-   and Hand-off, add `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
+5. **Cap.** The brief's `STOP AT` (`start+<N>k` is a budget above your first turn's context; the worker brief
+   `tools/ci/worker-prompt.md` §Caps) and $10 soft (cost): finish the unit, push, refresh Plan and Hand-off, add
+   `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
 6. **Ask = `needs-decision` plus ONE comment** with the options, your pick and the exact line to paste
    (`decision: <option>`), posted when the question is first predictable, not after CI confirms it; then keep working
    on what does not depend on it. No question to the user at the end of a turn, no `AskUserQuestion`. Bryce answers with his own label

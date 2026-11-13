@@ -1728,6 +1728,7 @@
         "tests/specs/photo-studio.spec.js",
         "tests/specs/picker-edit-button.spec.js",
         "tests/specs/picker-tab-inplace.spec.js",
+        "tests/specs/real-profile-dock.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/title-fit.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
@@ -3870,6 +3871,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/perf/metrics-panel.js",
+      "global": "GameMetricsPanel",
+      "roster": "LAZY_PERF"
+    },
+    {
       "path": "js/perf/phone-recorder.js",
       "global": "PhoneRecorder",
       "roster": "LAZY_PERF"
@@ -4190,19 +4196,24 @@
       "roster": "tag"
     },
     {
-      "path": "js/race/real-race-pace.js",
-      "global": "RealRacePace",
-      "roster": "tag"
-    },
-    {
-      "path": "js/race/real-race.js",
+      "path": "js/race/real-race-boot.js",
       "global": "RealRace",
       "roster": "tag"
     },
     {
+      "path": "js/race/real-race-pace.js",
+      "global": "RealRacePace",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
+      "path": "js/race/real-race.js",
+      "global": "RealRaceBody",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
       "path": "js/race/real-replay.js",
       "global": "RealReplay",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/race/reliability.js",
@@ -5057,7 +5068,7 @@
     {
       "path": "js/ui/watch-transport.js",
       "global": "WatchTransport",
-      "roster": "tag"
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/workers/bitmap-decode-client.js",

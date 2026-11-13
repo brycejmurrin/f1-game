@@ -694,9 +694,9 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
     const rows = [], helpSettlements = [];
 
     try {
-      // A PHONE'S UI SIZE STOPS AT 70 % (#5235, js/ui/scale.js phoneUi: coarse pointer and a short side <= 500 px);
-      // a tablet and a desktop keep the full 40 %. The slider's own `min` is the contract, so it is asserted.
-      const uiMin = device.touch && Math.min(device.viewport.width, device.viewport.height) <= 500 ? 70 : 40;
+      // A PHONE'S UI SIZE STOPS AT 50 % (#5452; 70 under #5235. js/ui/scale.js phoneUi: coarse pointer and a short side
+      // <= 500 px); a tablet and a desktop keep the full 40 %. The slider's own `min` is the contract, so it is asserted.
+      const uiMin = device.touch && Math.min(device.viewport.width, device.viewport.height) <= 500 ? 50 : 40;
       for (const pct of [uiMin,80,100,130,150,200]) {
         await press('#mb-settings'); await press('#pm-open-appearance');
         await expect(page.locator('#pm-uiscale'), `${device.name}: UI SIZE minimum`).toHaveAttribute('min', String(uiMin));

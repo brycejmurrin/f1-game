@@ -218,10 +218,11 @@ test.describe("title fit at a small UI SIZE 852x393-standalone", () => {
         await page.evaluate(() => { document.getElementById("mb-continue").hidden = false; });
         const { frames, m } = await measure(page);
         expect(frames, "the fit settled").toBeGreaterThan(0);
-        // #5235: a phone's UI SIZE stops at 70 %, and a smaller stored value is raised on load (js/ui/scale.js). So
-        // these stored sizes all boot at 0.7; the title's own floor below is still what holds the doors and labels.
-        expect(m.uiScale, "precondition: a stored UI SIZE under the phone minimum boots at 70 %").toBe("0.7");
-        expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and is raised in storage").toBe(70);
+        // #5452: a phone's UI SIZE stops at 50 % (70 under #5235), and a smaller stored value is raised on load
+        // (js/ui/scale.js). So 40 boots at 0.5 and 51 / 60 boot as stored; the title's own floor below holds the doors.
+        const want = Math.max(ui, 50);
+        expect(m.uiScale, "precondition: a stored UI SIZE boots at itself, or at the 50 % phone minimum").toBe(String(want / 100));
+        expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and storage holds the same").toBe(want);
         const rows = {};
         for (const d of m.doors) (rows[Math.round(d.t)] ||= []).push(d.id);
         expect(Object.values(rows).map((r) => r.length), `rows ${JSON.stringify(rows)}`).toEqual(geo.rows);
@@ -442,7 +443,7 @@ for (const geo of LIVE_GEOS) {
         const { frames, m } = await measure(page);
         const at = `${geo.name}${cont ? " with CONTINUE" : ""}: ${JSON.stringify({ fit: m.fit, mb: m.mb.rect, doors: m.doors.map((d) => `${d.id} ${Math.round(d.h * 10) / 10}/${d.fs}`) })}`;
         expect(frames, "the fit settled").toBeGreaterThan(0);
-        expect(m.uiScale, "precondition: his stored UI SIZE 61 % boots at the phone minimum (#5235)").toBe("0.7");
+        expect(m.uiScale, "precondition: his stored UI SIZE 61 % boots as stored (the phone floor is 50 %, #5452)").toBe("0.61");
         expect(judge(m, { offsets: true }), at).toEqual([]);
         expect(judgeFloor(m), at).toEqual([]);
         expect(m.fit.mb || "1", `the floor is not paid for by the fit ${at}`).toBe("1");
