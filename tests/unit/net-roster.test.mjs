@@ -760,7 +760,8 @@ test("only a friend's car is stamped: sent paint, or factory when none was sent 
   R.paintField(cars, [{ car: friend, profile }]);
   assert.deepEqual(wire(friend.netPaint.livery.c1), GOLD);
   assert.equal(friend.netPaint.livery.stripe, null, "the full shape: unset fields are null");
-  assert.match(friend.netPaint.tag, /^~p[0-9a-z]+$/);
+  assert.equal(friend.netPaint.tag.slice(0, 2), "~p", "a peer tag, never a stored livery id");
+  assert.equal(friend.netPaint.tag, R.peerPaint(profile).tag, "the tag is the paint's hash: the same paint, the same tag");
   assert.deepEqual(cars.filter((c) => c.netPaint), [friend], "no other car is stamped");
   R.paintField(cars, [{ car: friend, profile: R.cleanHello({ team: friend.team.id, driver: 0 }) }]);
   assert.equal(friend.netPaint.factory, true, "no livery sent = factory, not my stored paint");
