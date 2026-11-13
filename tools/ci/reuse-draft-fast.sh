@@ -73,7 +73,7 @@ hit="$(printf '%s' "$json" | node -e '
     const r = runs.find((x) => x.status === "completed" && x.conclusion === "success"
       && String(x.id) !== self && x.path === ".github/workflows/ci.yml"
       && x.event === "pull_request");
-    if (r) process.stdout.write(`${r.id} ${Number(r.run_attempt) || 1}`);
+    if (r) process.stdout.write(`${r.id} ${Number.isInteger(r.run_attempt) && r.run_attempt > 0 ? r.run_attempt : "unknown"}`);
   });')"
 [ -n "$hit" ] || no "no green PR ci.yml run on $HEAD"
 attempt="${hit#* }"; hit="${hit%% *}"
@@ -84,17 +84,21 @@ attempt="${hit#* }"; hit="${hit%% *}"
 # draft that had not opted in, or a label-noise run; still any run cancelled-then-green
 # by a cancelled shard) concludes success while testing nothing. Reuse only a
 # run whose tooling A shard really ran and passed, and whose record names a base.
-# THE DRAFT `selected` SHARD IS NOT REUSED (2026-11-03): a draft runs selected
-# on a 5-min budget, ready on 10, so the two plans differ and the ready run's
-# selected legs run again. Only the tree-only fast-tier STEPS reuse here.
-job="$(gh api "repos/$REPO/actions/runs/$hit/jobs?per_page=100" 2>/dev/null | node -e '
+# THE `selected` LEGS ARE NOT REUSED HERE: a draft runs selected on a 5-min
+# budget, ready on 10, so their shard layouts differ. Only the tree-only
+# fast-tier STEPS reuse here; tools/ci/reuse-draft-selected.mjs (#5426) reuses
+# the legs when the two plans name the same specs, nothing was dropped and the
+# deploy tip has not moved since this same base.
+jobs_json="$(gh api "repos/$REPO/actions/runs/$hit/jobs?per_page=100" 2>/dev/null)" || no "jobs API failed"
+job="$(printf '%s' "$jobs_json" | node -e '
   let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
     let jobs = []; try { jobs = JSON.parse(s).jobs || []; } catch (_) {}
     const a = jobs.filter((j) => j.name === "Structural guards (tooling A)");
     if (a.length === 1 && a[0].conclusion === "success") process.stdout.write(String(a[0].id || ""));
   });')" || job=""
 [ -n "$job" ] || no "ci.yml run $hit concluded success but its tooling A shard did not run and pass (a skip-only run) — run the fast tier"
-record="$(gh api "repos/$REPO/check-runs/$job/annotations?per_page=100" 2>/dev/null | node -e '
+annotations_json="$(gh api "repos/$REPO/check-runs/$job/annotations?per_page=100" 2>/dev/null)" || no "annotations API failed"
+record="$(printf '%s' "$annotations_json" | node -e '
   let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
     let rows = []; try { rows = JSON.parse(s); } catch (_) {}
     const r = (Array.isArray(rows) ? rows : []).find((a) => a && a.title === "apex-guards");

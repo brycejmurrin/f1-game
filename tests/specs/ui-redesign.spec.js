@@ -395,7 +395,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     document.getElementById("sel-back").click();
     document.getElementById("mb-settings").click();
     const scale = /** @type {HTMLInputElement} */ (document.getElementById("pm-uiscale"));
-    scale.value = "200"; scale.dispatchEvent(new Event("input", { bubbles: true }));
+    scale.value = "200"; scale.dispatchEvent(new Event("input", { bubbles: true })); scale.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await page.waitForFunction(() => {
     const sheet = document.getElementById("pmsettings");
@@ -430,6 +430,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
     "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress",
+    "pm-open-credits",
     "pm-claude-link", // #5259: the phone-bridge door, built at boot as the LAST hub tile (not a settings page)
   ]);
   expect(settings.allPainted).toBe(true);

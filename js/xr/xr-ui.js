@@ -4,6 +4,10 @@
  * true. A visible button always either starts VR, switches the renderer to the
  * XR-capable TLX+WebGL2 path (reload once), or shows a clear error — never a
  * silent no-op on GLX / WGX / default TLX-WebGPU.
+ *
+ * A phone (Chromium answers immersive-vr for Cardboard) shows it only once
+ * SETTINGS › VR MODE is ON; ENTER is hidden while a race runs (body.in-race,
+ * css/loading.css) and XrBoot.ensureXrBackend refuses its reload mid-race.
  */
 "use strict";
 
@@ -77,8 +81,31 @@ const XrUi = (function () {
     _btn.setAttribute("aria-pressed", on ? "true" : "false");
   }
 
+  // A handheld (phone / tablet), not a headset browser: Quest, Pico and Wolvic
+  // UAs say so; Android phones and iPhones say Mobile / Android / iPhone.
+  function handheld() {
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    const ua = (nav && nav.userAgent) || "";
+    if (/OculusBrowser|Quest|Pico|Wolvic|VR\b/i.test(ua)) return false;
+    if (nav && nav.userAgentData && nav.userAgentData.mobile === true) return true;
+    return /Android|Mobi|iPhone|iPad/i.test(ua);
+  }
+  function vrModeOn() {
+    if (typeof XROpts !== "undefined" && typeof XROpts.xr === "function") {
+      try { return !!XROpts.xr(); } catch (_) { /* fall through */ }
+    }
+    try { return localStorage.getItem("apex26.xr") === "1"; } catch (_) { return false; }
+  }
+  /** Supported, and on a handheld only when the player armed VR MODE. */
+  function allowed(supported) {
+    if (!supported) return false;
+    if (typeof XrSession !== "undefined" && XrSession.isPresenting && XrSession.isPresenting()) return true;
+    return !handheld() || vrModeOn();
+  }
+
   function show(on) {
     ensureButton();
+    on = allowed(!!on);
     _btn.hidden = !on;
     if (on) syncLabel();
   }
@@ -102,7 +129,9 @@ const XrUi = (function () {
       // Kick the probe; button stays hidden until capability fires true.
       // Visible ⇒ immersive-vr is supported; click path always acts (attach,
       // backend switch+reload, or flashMessage) — never a silent no-op.
-      Promise.resolve(XrSession.probe()).then((ok) => show(!!ok));
+      // A seeded answer (XrBoot, from apex26.xrCaps) must not re-ask navigator.xr (#4324, #5417).
+      if (typeof XrSession.isProbed === "function" && XrSession.isProbed()) show(!!XrSession.isSupported());
+      else Promise.resolve(XrSession.probe()).then((ok) => show(!!ok));
     }
     return _btn;
   }
@@ -115,6 +144,6 @@ const XrUi = (function () {
     _enterPrompt = false;
   }
 
-  return { mount, unmount, show, syncLabel, ensureButton, onClick, flashMessage };
+  return { mount, unmount, show, syncLabel, ensureButton, onClick, flashMessage, allowed };
 })();
 Object.freeze(XrUi);

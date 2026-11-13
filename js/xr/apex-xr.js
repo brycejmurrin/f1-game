@@ -1,7 +1,8 @@
 /* Apex 26 — ApexXR: thin façade over XRPlan + XrSession for boot / settings.
  *
- * Owns the cached plan, capability probe → apex26.xrCaps latch, bootPick() for
- * game.js backendPreference(), and noteFallback() for the post-boot ladder.
+ * Owns the cached plan, capability probe → apex26.xrCaps latch (written through
+ * XrBoot.storeVrCaps, the one writer), bootPick()
+ * and noteFallback() for the post-boot ladder.
  * Does NOT own the immersive session — that stays XrSession.
  *
  * Storage (all apex26.-prefixed):
@@ -36,6 +37,12 @@ const ApexXR = (function () {
     try { sessionStorage.setItem(k, v); return true; } catch (_) { return false; }
   }
 
+  // The one apex26.xrCaps writer is the eager XrBoot.storeVrCaps (it must hold when
+  // no XR bundle loads); this module only reads LS_CAPS.
+  function storeCaps(vr) {
+    if (typeof XrBoot !== "undefined" && XrBoot.storeVrCaps) XrBoot.storeVrCaps(vr);
+  }
+
   function readPrefs() {
     let xr = "0";
     let xrBackend = "webgl2";
@@ -68,8 +75,10 @@ const ApexXR = (function () {
     };
   }
 
-  /** Async capability probe. Writes apex26.xrCaps for the next boot's sync pick. */
-  async function detect() {
+  /** Capability probe. A stored apex26.xrCaps answer is adopted WITHOUT asking navigator.xr
+   *  (#4324 / #5417: the ask bars the bfcache), synchronously, so XrSession is seeded before
+   *  XrUi.mount looks; `force` asks anyway. A live answer is stored for the next boot. */
+  async function detect(force) {
     if (_detecting) return _detecting;
     _detecting = (async () => {
       const caps = syncCapsFromCache();
@@ -79,18 +88,23 @@ const ApexXR = (function () {
       caps.mobileQuest = typeof navigator !== "undefined" && questUa(navigator.userAgent);
       // Only rewrite apex26.xrCaps when the probe settles. A throw must not wipe
       // a positive latch (bootPick / VR rows still need the last good detect).
-      if (caps.xr && navigator.xr && navigator.xr.isSessionSupported) {
+      const stored = lsGet(LS_CAPS);
+      let known = true;
+      if (!force && (stored === "1" || stored === "0")) {
+        caps.vr = stored === "1";
+      } else if (caps.xr && navigator.xr && navigator.xr.isSessionSupported) {
         try {
           const vr = !!(await navigator.xr.isSessionSupported("immersive-vr"));
           caps.vr = vr;
-          lsSet(LS_CAPS, vr ? "1" : "0");
-        } catch (_) { /* keep caps.vr from syncCapsFromCache */ }
+          storeCaps(vr);
+        } catch (_) { known = false; /* keep caps.vr from syncCapsFromCache */ }
       } else {
         caps.vr = false;
-        lsSet(LS_CAPS, "0");
+        storeCaps(false);
       }
       _caps = caps;
       _plan = null; // invalidate so plan() re-resolves
+      if (known && typeof XrSession !== "undefined" && XrSession.seed) XrSession.seed(caps.vr);
       if (typeof XROpts !== "undefined" && XROpts.onCaps) {
         try { XROpts.onCaps(caps); } catch (_) { /* UI optional */ }
       }
@@ -117,7 +131,10 @@ const ApexXR = (function () {
     return resolved;
   }
 
-  /** Sync boot override for backendPreference(). null ⇒ leave 2D pick alone. */
+  /** Sync boot override read by renderer-boot.js storedBackendPreference().
+   *  null ⇒ leave the 2D pick alone. ApexXR is LAZY_XR, so on a real boot it is
+   *  not loaded when that read runs and this never steers one; the ENTER VR
+   *  pin + reload (XrBoot.ensureXrBackend) is what switches the renderer. */
   function bootPick() {
     const p = plan(true);
     if (p.xrMode !== "armed") return null;
@@ -155,33 +172,11 @@ const ApexXR = (function () {
 
   function invalidate() {
     _plan = null;
-  }
-
-  /** True when the live gfx bind matches the armed plan (or VR is off). */
-  function rendererMatchesPlan() {
-    const p = plan();
-    if (p.xrMode !== "armed") return true;
-    let canAttach = false;
-    if (typeof XrBoot !== "undefined" && typeof XrBoot.canAttach === "function") {
-      try { canAttach = !!XrBoot.canAttach(); } catch (_) { canAttach = false; }
-    }
-    // canAttach means TLX+WebGL2 — matches the shippable webgl2 path only.
-    if (p.path === "webgl2") {
-      if (canAttach) return true;
-      let bound = null;
-      try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
-      return bound === "webgl2" || bound === "three";
-    }
-    // Experimental WebGPU XR: a live WebGL2 attach is the wrong backend.
-    if (canAttach) return false;
-    let bound = null;
-    try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
-    return bound == null;
+    _caps = null;   // re-read apex26.xrCaps: XrBoot.recheck may have rewritten it
   }
 
   return {
-    detect, caps, plan, bootPick, fallbacks, noteFallback, stats,
-    invalidate, rendererMatchesPlan,
+    detect, caps, plan, bootPick, fallbacks, noteFallback, stats, invalidate,
   };
 })();
 Object.freeze(ApexXR);

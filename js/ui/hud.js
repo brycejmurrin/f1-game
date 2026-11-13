@@ -471,6 +471,10 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitTrace = "", _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+// A ROTATION RESTARTS THE FIT'S RETRIES (#5237): a portrait race spends all 30 (no dock box), so the paused landscape
+// HUD kept no caps until RESUME. Refit at the flip and once the viewport settles; the paused card's HUD ticks run it.
+const _rotMq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null, refitRot = () => { _fitRetry = 0; _fitKey = ""; _fitWait = 0; _fitPending = true; };
+if (_rotMq && typeof _rotMq.addEventListener === "function") _rotMq.addEventListener("change", () => { refitRot(); setTimeout(refitRot, VP_SETTLE_MS); });
 // THE 3 s BACKSTOP RE-FITS ONLY WHAT RESIZED, seen by a ResizeObserver (no layout read); why and the settle window: docs/notes/LIVE-INPUT-H11-2026-10-20.md.
 const FIT_SETTLE_MS = 400, FIT_SKIP_MAX = 9, _fitSeen = new WeakSet(), _fitSize = new WeakMap();
 let _fitObs = null, _fitObsDirty = true, _fitAt = 0, _fitSkips = 0;
@@ -1343,7 +1347,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   };
   const gL = groups(_dockL), gR = groups(_dockR);
   const dockH = Math.max(gL.h, gR.h);
-  let capDock = Infinity, capDockS = Infinity;
+  let capDock = Infinity, capDockS = Infinity, capKeepS = Infinity;
   const DOCK_MIN_Z = 24 / 48;   // emergency fit floor: narrow-tier taps must still paint 24 CSS px
   const READABLE_Z = 10 / 14;   // 10 CSS px over --fs-micro 14: the gap-chip clamp's and PR #1734's label floor
   if (dockH) {
@@ -1399,18 +1403,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
           && window.matchMedia("(orientation: portrait)").matches && bottom > 0) {
         let leftEdge = 0, rightEdge = vpW();
         const mid = vpW() / 2;
-        for (const dock of [_dockL, _dockR]) {
-          if (!dock) continue;
-          const nodes = dock.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn");
-          for (let i = 0; i < nodes.length; i++) {
-            const el = nodes[i];
-            if (!el || el.hidden) continue;
-            const r = el.getBoundingClientRect();
-            if (!(r.width && r.height)) continue;
-            const cx = (r.left + r.right) / 2;
-            if (cx >= mid) rightEdge = Math.min(rightEdge, r.left);
-            else leftEdge = Math.max(leftEdge, r.right);
-          }
+        for (const el of dockButtons()) {   // the cached [dockL…, dockR…] list, not a query per pass (#3108)
+          if (!el || el.hidden) continue;
+          const r = el.getBoundingClientRect();
+          if (!(r.width && r.height)) continue;
+          const cx = (r.left + r.right) / 2;
+          if (cx >= mid) rightEdge = Math.min(rightEdge, r.left);
+          else leftEdge = Math.max(leftEdge, r.right);
         }
         // `bottom` is zoom-invariant (span / currentCSSZoom); room is screen px.
         const room = rightEdge - leftEdge - 2 * FIT_AIR;
@@ -1430,9 +1429,12 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (vpW() > vpH()) {
       const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
       const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
-      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom * Math.ceil(Math.min(scale, 1) * 100) / 100;   // set() ceils --hud-z-bot
-      capDockS = Math.max(capDock, Math.min(gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity, gS.w ? roomS / gS.w : Infinity));
-    } else capDockS = capDock;
+      // The cluster is budgeted at its SHIPPED size: a smaller HUD SIZE used to GROW the steer pad (#5206).
+      // capKeepS also leaves a HUD SIZE above 100 % its cluster: BUTTON SIZE's slider stops there.
+      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom, hS = gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity;
+      capDockS = Math.max(capDock, Math.min(hS, gS.w ? roomS / gS.w : Infinity));
+      capKeepS = Math.max(capDock, Math.min(hS, gS.w ? (roomS - FIT_AIR - bottom * (Math.max(1, Math.min(scale, capBot)) - 1)) / gS.w : Infinity));
+    } else capDockS = capKeepS = capDock;
     const zS = Math.min(want, Math.max(DOCK_MIN_Z, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
     // Readouts adapt to the stable controls, never the reverse.
@@ -1516,6 +1518,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
+  // What this window can paint: "top bot pedals steer steerKeep btnFloor" zooms, 9 = no limit (UiScale, #5206).
+  hStyle(root, "--hud-cap", [capTop, capBot, capDock, capDockS, capKeepS, btnFloor].map((n) => (n < 9 ? Math.round(n * 1000) / 1000 : 9)).join(" "));
   // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
   // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
   // The paint pass measured it under the zoom the cap pass published, so it is
@@ -2218,7 +2222,7 @@ function updateHud(force, dtMs) {
       hText(_limitsDots, "\u25cf".repeat(shown) + "\u25cb".repeat(4 - shown) + (pen > 0 ? " +" + pen + "s" : ""));
       hToggle(els.hudLimits, "limits-warn", (cw >= 2 || pen > 0) && cw < 3);
       hToggle(els.hudLimits, "limits-hot", cw >= 3);
-    } else if (!els.hudLimits.hidden) {
+    } else if (!els.hudLimits.hidden && !document.body.hasAttribute("data-hud-arrange")) {   // ARRANGE's sample box stays (#5256)
       els.hudLimits.hidden = true;
       hToggle(els.hudLimits, "limits-warn", false);
       hToggle(els.hudLimits, "limits-hot", false);

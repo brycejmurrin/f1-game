@@ -51,7 +51,8 @@ test("MCP adapters deny delegated failures and malformed decisions", () => {
 
 test("Codex shell decisions normalize ask and delegated failures to deny", () => {
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".codex/hooks.json"), "utf8"));
-  assert.equal(cfg.hooks.PreToolUse[0].hooks[0].command, "bash .codex/hooks/shell-guard.sh");
+  assert.equal(cfg.hooks.PreToolUse[0].hooks[0].command, 'bash "$(git rev-parse --show-toplevel)/.codex/hooks/shell-guard.sh"',
+    "Codex runs hooks from the session cwd: resolve the guard from the git root");
   for (const script of ["exit 1", "exit 2", "printf 'not json'", "printf '[]'",
     `printf '%s' '{"hookSpecificOutput":{"permissionDecision":"ask","permissionDecisionReason":"Confirm this action"}}'`]) {
     const r = adapterFixture(".codex/hooks/shell-guard.sh", ".cursor/hooks/shell-guard.sh", script);
@@ -112,7 +113,9 @@ const guard = (payload) => spawnSync("bash", [path.join(ROOT, ".cursor/hooks/she
 test("the shell adapter blocks what bash-guard blocks, from Cursor's and Codex's payload shapes", () => {
   const cursor = guard({ command: "pkill -f chrome", cwd: ROOT });
   assert.equal(cursor.status, 2, "Cursor shape: pkill -f");
-  assert.match(JSON.parse(cursor.stdout).agent_message, /pkill -f matches your own shell/, "Cursor reads WHY");
+  const why = "BLOCKED: pkill kills by name or command line: with -f it matches your own shell (its command line contains the pattern), "
+    + "and either way it takes Playwright's browsers and the parent's run.";
+  assert.equal(JSON.parse(cursor.stdout).agent_message.slice(0, why.length), why, "Cursor reads WHY");
   assert.equal(guard({ tool_name: "Bash", tool_input: { command: "git commit --no-verify -m x" } }).status, 2, "Codex shape: --no-verify");
   assert.equal(guard({ command: "gh pr merge 1", cwd: ROOT }).status, 2, "gh pr merge");
   assert.equal(guard({ command: "ls -la", cwd: ROOT }).status, 0, "an ordinary command passes");
@@ -169,7 +172,7 @@ test("Codex's MCP door guards legacy and hosted GitHub operations: an ask become
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, draft: false }), null, prefix + "the ready flip passes");
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, state: "closed" }), "deny", prefix + "close ask becomes a deny");
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, body: "x" }), null, prefix + "body edit passes");
-    assert.equal(mcp(prefix + "issue_write", { method: "update", issue_number: 1, labels: ["hold", "x"] }), null, prefix + "labels that keep hold pass");
+    assert.equal(mcp(prefix + "issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "hold", "land", "needs-decision", "x"] }), null, prefix + "labels that keep every guarded label pass (no lookup)");
     for (const input of [undefined, null, [], false, 1, "not JSON", "[]"])
       assert.equal(mcp(prefix + "update_pull_request", input), "deny", prefix + "malformed input " + JSON.stringify(input));
     assert.equal(mcp(prefix + "update_pull_request", JSON.stringify({ pullNumber: 1, body: "x" })), null, prefix + "a JSON-object string body edit passes");
@@ -315,4 +318,23 @@ test("a real worktree commit isolates guard fixtures while preserving its branch
       assert.equal(git(linked, "show", "HEAD:" + file), "// changed " + file);
     }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("Cursor's preToolUse routes MCP:<tool> (the cloud-agent spelling) through the GitHub table; Codex guards apply_patch edits", () => {
+  const cur = (payload) => spawnSync("bash", [path.join(ROOT, ".cursor/hooks/edit-guard.sh")], { input: JSON.stringify(payload), encoding: "utf8" });
+  const merge = cur({ tool_name: "MCP:merge_pull_request", tool_input: { pullNumber: 1 } });
+  assert.equal(merge.status, 2); assert.equal(JSON.parse(merge.stdout).permission, "deny");
+  assert.equal(JSON.parse(cur({ tool_name: "MCP:update_pull_request", tool_input: { pullNumber: 1, state: "closed" } }).stdout).permission, "ask");
+  assert.equal(cur({ tool_name: "MCP:pull_request_read", tool_input: {} }).status, 0, "a read passes");
+  const codex = JSON.parse(fs.readFileSync(path.join(ROOT, ".codex/hooks.json"), "utf8")).hooks.PreToolUse;
+  const edit = codex.find((g) => g.matcher === "apply_patch");
+  assert.ok(edit && /\.codex\/hooks\/edit-guard\.sh/.test(edit.hooks[0].command), "Codex wires the edit guard on apply_patch");
+  for (const g of codex) assert.match(g.hooks[0].command, /git rev-parse --show-toplevel/, "no cwd-relative hook command");
+  const patch = (body) => spawnSync("bash", [path.join(ROOT, ".codex/hooks/edit-guard.sh")],
+    { input: JSON.stringify({ tool_name: "apply_patch", tool_input: { command: `*** Begin Patch\n${body}\n*** End Patch\n` } }), encoding: "utf8", cwd: ROOT });
+  assert.equal(patch("*** Update File: version.json\n@@\n-a\n+b").status, 2, "a generated file");
+  assert.equal(patch("*** Update File: index.html\n@@\n-a\n+b").status, 2, "a generated-block file is refused in this host");
+  assert.equal(patch("*** Update File: docs/PHYSICS.md\n@@\n-a\n+b").status, 0, "an authored file");
+  assert.equal(patch("*** Add File: scratch/new-note.md\n+x").status, 0, "a new authored file");
+  assert.equal(spawnSync("bash", [path.join(ROOT, ".codex/hooks/edit-guard.sh")], { input: "junk", encoding: "utf8" }).status, 2, "fail closed");
 });

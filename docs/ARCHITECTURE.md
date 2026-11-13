@@ -3,10 +3,12 @@
 Pure JS/CSS/HTML, **no build step**. The **runtime has zero npm
 dependencies**; every `devDependency` is test- or tooling-only (Playwright the
 harness, jsQR to verify the QR encoder in tests, espree/eslint-scope for the
-source audits, sharp and typescript for tooling — never shipped). Four vendored
-libraries DO ship, under `vendor/`, each loaded only by the feature that needs
-it: three.js r186 (TLX backend), Rapier (`js/physics/debris-world.js`), Trystero (the
-Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
+source audits, sharp and typescript for tooling — never shipped). Vendored
+libraries DO ship, under `vendor/` (each directory name carries its version),
+each loaded only by the feature that needs it: three.js (TLX backend), Rapier
+(`js/physics/debris-world.js`), Trystero (the Nostr room-code rendezvous), jsQR
+(the answer-code camera scan) and the dev-only GPU capture tools
+(`vendor/gpu-capture/`, `js/agent/apex-gpu-capture.js`). Served as
 static files (GitHub Pages). Every project runtime JS file under `js/` is an IIFE that
 assigns ONE global; vendored addons may use their upstream module format.
 
@@ -21,7 +23,7 @@ Modules are grouped by domain directories (there is **no** `js/game/` folder —
 that path was dissolved in the 2026-09 tree restructure; see
 [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md)): `js/render/` (renderers),
 `js/track/` (the track **engine** — shared spline/mesh/scenery code),
-`js/circuits/` (the 52 circuit **data** files), `js/car/` (car geometry,
+`js/circuits/` (one circuit **data** file per `CIRCUITS` entry in `tools/manifest.cjs`), `js/car/` (car geometry,
 liveries, parts), `js/physics/`, `js/race/`, `js/ui/`, `js/audio/`,
 `js/camera/`, `js/career/`, `js/input/`, `js/lighting/`, `js/net/`,
 `js/data/` (API clients + data hub), `js/agent/`, plus `js/core/` and the
@@ -33,20 +35,24 @@ optional precache seed and `js/roster.js` (the lazy rosters `js/game.js`
 injects at runtime, one frozen `ApexRoster` global) are all GENERATED from it
 by `tools/gen/gen-shell.mjs`; `tests/unit/load-order.test.mjs` (run via
 `npm run test:tooling-fast`) asserts every generated block is byte-identical
-to a fresh run. Adding a file means a `FULL` entry, a `DEFERRED` backend entry, a `LAZY_AGENT` entry
-(`apex.js` / `agentview*` — injected when tests / localhost / `?apex=1`), a
-`LAZY_RACE` entry (`js/lighting/presets.js`, fetched before the first race) or a
-`LAZY_SCENERY` entry (`js/circuits/scenery/<id>.js`, fetched per build). The abbreviated sketch below is a subset;
+to a fresh run. Adding a file means an entry in `FULL` (the eager shell) or in one of the
+tagless rosters the manifest exports — `DEFERRED` (the renderer backends), `LAZY_AGENT`
+(`apex.js` / `agentview*` — injected when `wantAgentSurface()` in `js/core/lazy-bundles.js` says so),
+`LAZY_RACE`, `LAZY_SCENERY` (`js/circuits/scenery/<id>.js`, fetched per build) and the other
+`LAZY_*` lists (see `module.exports` in `tools/manifest.cjs`), each with its `*_EDGES` list for
+eval-time dependencies. The abbreviated sketch below is a subset;
 consult the manifest for the full, current order:
 
 ```
 js/core/log.js                -> Log        (levelled logging; loads FIRST)
 js/core/mat4.js               -> M4, V3
-js/render/glx/shaders/*  -> GLXChunks, GLXShaders   (pure data, before glx.js)
-js/render/glx/glx.js + glx/* -> GLX        (explicit WebGL2 renderer + fallback passes)
+js/render/shared/glx-facade.js -> GLX   (the stable GLX identity + eval-time mobile tier)
 js/render/gfx.js         -> Gfx        (renderer selection seam; the GLX, WGX
                                         and TLX backends are DEFERRED — no script
                                         tag, injected at boot for the resolved pick)
+js/render/renderer-boot.js -> RendererBoot (backend selection, boot canary, fallback)
+  DEFERRED.webgl2: js/render/glx/shaders/* -> GLXChunks, GLXShaders (pure data, before glx.js)
+                   js/render/glx/glx.js + glx/* (explicit WebGL2 renderer + fallback passes)
 js/data/teams.js          -> Teams      (2026 grid data + TIER_V pace ladder + the MY TEAM seed)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
 js/circuits/*.js         -> TrackDefs  (one def per circuit; its scenery(api) closure is
@@ -146,13 +152,14 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
-| `soak-run.js` | `SoakRun` | tag | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
-| `gpu-test-run.js` | `GpuTestRun` | tag | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
-| `phone-recorder.js` | `PhoneRecorder` | tag | PhoneRecorder: a phone-only soak recorder (issue #1633). |
-| `bench-capture.js` | `BenchCapture` | tag | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
-| `bench-run.js` | `BenchRun` | tag | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
 | `three-inspector.js` | `ThreeInspector` | LAZY_AGENT | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
 | `gfx-debug-overlay.js` | `GfxDebug` | LAZY_DEV | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
+| `soak-run.js` | `SoakRun` | LAZY_PERF | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
+| `gpu-test-run.js` | `GpuTestRun` | LAZY_PERF | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
+| `phone-recorder.js` | `PhoneRecorder` | LAZY_PERF | PhoneRecorder: a phone-only soak recorder (issue #1633). |
+| `bench-capture.js` | `BenchCapture` | LAZY_PERF | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
+| `bench-run.js` | `BenchRun` | LAZY_PERF | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
+| `metrics-panel.js` | `GameMetricsPanel` | LAZY_PERF | GameMetricsPanel: the METRICS overlay panel (snapshot + painter). |
 
 **`js/render/`**
 
@@ -200,7 +207,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `team-identity.js` | `CareerTeamIdentity` | tag | Per-career MY TEAM appearance. |
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
 | `restore-points.js` | `CareerRestorePoints` | tag | CareerRestorePoints — bounded local history at explicit round/import boundaries. |
-| `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
 | `career-planning.js` | `CareerPlanning` | tag | Career planning: pure projections and bounded choices; never changes Parts legality. |
@@ -211,6 +217,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `career-ui-boot.js` | `CareerUI` | tag | CAREER screen boot stub (FULL). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
+| `career-backup.js` | `CareerBackup` | LAZY_CAREER_UI | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `career-planning-ui.js` | `CareerPlanningUI` | LAZY_CAREER_UI | Read-only Career planning cards and explicit local save recovery actions. |
 | `career-ui.js` | `CareerScreen` | LAZY_CAREER_UI | the CAREER screen (#career), LAZY_CAREER_UI. |
 
@@ -242,7 +249,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
 | `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
-| `watch-transport.js` | `WatchTransport` | tag | Visible controls for the real-race replay. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
@@ -289,6 +295,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `watch-transport.js` | `WatchTransport` | LAZY_REAL_RACE | Visible controls for the real-race replay. |
 
 **`js/track/core/`**
 
@@ -360,9 +367,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `sporting-regs.js` | `SportingRegs` | tag | SPORTING REGULATIONS the player is held to, as pure rules. |
 | `tv-graphics.js` | `TvGraphics` | tag | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
 | `broadcast.js` | `Broadcast` | tag | BROADCAST (Broadcast.create(G, replay)) The TV view of a REAL RACE WATCH / HIGHLIGHTS run: a timing tower down the left (position, team colour, the real… |
-| `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
-| `real-race-pace.js` | `RealRacePace` | tag | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
-| `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
+| `real-race-boot.js` | `RealRace` | tag | REAL RACE boot stub (FULL, #4978 row 6). game.js still makes `RealRace.create(G)` at eval and reads update/owns/isWatch/status/raceT0 every frame; until a… |
 | `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `forecast.js` | `Forecast` | tag | WEATHER FORECAST (Forecast): what the pit wall KNOWS about a dynamic-weather race, as a timed, located-in-laps statement with honest uncertainty. |
@@ -391,6 +396,11 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `parc-ferme.js` | `ParcFerme` | LAZY_RACE_SESSION | PARC FERMÉ beat (ceremony plan slice 3 / #4069). |
 | `cooldown-lap.js` | `CooldownLap` | LAZY_RACE_SESSION | COOLDOWN LAP (CooldownLap): post-flag drive beat for the ceremony flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). |
 | `ceremony.js` | `RaceCeremony` | LAZY_RACE_SESSION | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
+| `stopped-cars.js` | `StoppedCars` | LAZY_RACE_SESSION | STOPPED CARS (StoppedCars): race control's second hazard source (audit W34, 2026-11-10). |
+| `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | RETIRED CARD (RetiredCard). |
+| `real-replay.js` | `RealReplay` | LAZY_REAL_RACE | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
+| `real-race-pace.js` | `RealRacePace` | LAZY_REAL_RACE | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
+| `real-race.js` | `RealRaceBody` | LAZY_REAL_RACE | REAL RACE body (RealRaceBody.create(G), LAZY_REAL_RACE; game.js holds the RealRace boot stub, js/race/real-race-boot.js, which creates this once it lands)… |
 
 **`js/workers/`**
 
@@ -447,7 +457,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
-| `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, and replay them as a ghost car. |
+| `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, so a tape can be replayed… |
 | `cockpit-rig.js` | `CockpitRig` | tag | CockpitRig: the steering wheel, dash, cabin, glass and shift-light builders. |
 | `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
 | `surface-outline.js` | `GarageSurfaceOutline` | tag | A transient contour of the cover pixels controlled by one livery tint. |
@@ -476,7 +486,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `stub.js` | `GameAudio` | tag | audio stub for the title script wall. |
-| `signal.js` | `GameAudioSignal` | LAZY_AUDIO | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the… |
+| `signal.js` | `GameAudioSignal` | LAZY_AUDIO | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, oneShotOk?, now }) uses live service functions; resetContext discards only… |
 | `soundtrack.js` | `GameAudioSoundtrack` | LAZY_AUDIO | GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live… |
 | `race-mix-audition.js` | `RaceMixAudition` | LAZY_AUDIO | Explicit settings gesture: a bounded sample using the existing user buses. |
 | `radio-fx.js` | `GameAudioRadioFx` | LAZY_AUDIO | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
@@ -510,8 +520,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-strategy.js` | `AiStrategy` | tag | AI STRATEGY: tyre-wear pace and the stint planner. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
-| `ai-band.js` | `AiBand` | tag | @ts-check |
-| `ai-corridor.js` | `AiCorridor` | tag | @ts-check |
+| `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
+| `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `drive-tune.js` | `DriveTune` | tag | DriveTune: the live driving-feel lets (PACE, wheelbase, steer, grip). |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
@@ -520,7 +530,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
 | `contact-geometry.js` | `ContactGeometry` | tag | Physical road boundaries and oriented boxes in the local road plane. |
 | `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
-| `wall-end-face.js` | `WallEndFace` | tag | @ts-check |
+| `wall-end-face.js` | `WallEndFace` | tag | WALL END FACE: the one case the lateral wall clamp gets wrong. |
 | `wall-clamp.js` | `WallClamp` | tag | WALL CLAMP: per-side barrier / pit-wall / gantry limits, human slide-along + scrub, lane-side pit clamp, and the conditional road→world writeback when xPinned. |
 
 **`js/lighting/`**
@@ -777,15 +787,21 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   testable/loadable in isolation.
 - **`tools/manifest.cjs`** — the load-order single source of truth, asserted by
   `tests/unit/load-order.test.mjs`. Its `HARD_EDGES` list records **eval-time load
-  dependencies** (B destructures A's global at eval time, so A must precede B —
-  e.g. shaders before glx.js). Its `TRACK_VM` list names the files
+  dependencies** among `FULL` files (B destructures A's global at eval time, so A
+  must precede B — e.g. `js/physics/consts.js` before `js/game.js`); each tagless
+  roster has its own edge list with the same meaning (`DEFERRED_EDGES` orders the
+  shaders before glx.js, `LAZY_EDGES`, …). Its `TRACK_VM` list names the files
   `tools/track/verify-track.cjs` and the VM-based tests load into a bare Node VM, so
   headless guards follow the layout automatically.
-- **`tools/check/extract-module.mjs`** assists further extractions from game.js
-  (moves a block, wires the `create(G)` boilerplate, updates manifest + tags).
+- **`tools/check/extract-module.mjs`** assists further extractions from game.js:
+  it lists a line range's free references and, given the mutable closure `let`s,
+  writes the range rewritten against `G.<name>` plus the façade's getter/setter
+  lines (`--out` / `--g-out`). It writes only those outputs — the manifest entry
+  and `node tools/gen/gen-shell.mjs` are still yours.
 - **Cache busting is the DEPLOY's job** — the committed shell reads `?v=dev` on
-  every tag; `pages.yml` rewrites them to 12-char content hashes and stamps the
-  generation while staging (`bump-cache.mjs --apply --at N --root _site`). There
+  every tag; `pages.yml` rewrites them to content hashes and stamps the
+  generation while staging (`tools/desktop/stage.mjs --stamp`, which runs
+  `tools/ci/bump-cache.mjs --apply` on `_site`). There
   is NO bump after a `js/`/`css/` edit, and `bump-cache --apply` REFUSES on the
   repo (exit 2). The tag blocks themselves are written by
   `tools/gen/gen-shell.mjs`, never by hand.
@@ -802,7 +818,7 @@ state object; the `TUNE_DEFS` hand-mirrors in `glx.js`/`gfx.js`) is tracked in
 case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
 in the suite, because the only way to reach the machine was to stage real
 settled debris in a browser. As a module taking its hazard picture through a
-seam, it gets `tests/unit/race-control.test.mjs` — 55 tests (2026-10-26 count) in milliseconds
+seam, it gets `tests/unit/race-control.test.mjs` — a unit suite that runs in milliseconds
 covering the hysteresis, the time caps and the storage-format migration. None
 of that was reachable before, and nobody had chosen for it not to be.
 
@@ -831,7 +847,7 @@ which `G` carries. That is precisely the review's warning about `G` being a
 accessors has moved the coupling, not removed it. So it went the way this
 section said to take it — on the CAR-DRAWING SEAM `js/car/car-draw.js` and
 `js/render/shared/shadow-pass.js` already use, `Module.create(G, deps)`, with
-`G` unchanged at 265 members. `setupPreviewOn` itself stays in game.js:
+`G` unchanged. `setupPreviewOn` itself stays in game.js:
 `render()`'s gate is game.js's own.
 
 **Splitting the two megafunctions is NOT recommended.** `render()` and
@@ -900,11 +916,13 @@ V3.norm(a)                              -> [x,y,z]
 
 All GLSL sources for the renderer as template-literal strings with no
 interpolation — pure data. `glsl-chunks.js` (`GLXChunks`) holds the shared leaves
-(noise/hash, GGX BRDF trio, tonemap/grade) authored once; `glsl-lit.js`,
+(`hash`, `vnoise`, `surfaceNoise`, `ignoise`, the ACES `tonemap`) authored once
+(the GGX terms `D_GGX` / `V_SmithGGX` live in `glsl-lit.js`); `glsl-lit.js`,
 `glsl-sky.js`, `glsl-fx.js`, and `glsl-post.js` compose them into the program
 sources (LIT/SKY/SHADOW/MARK/DECAL/GLOW, the post chain, SSAO/GODRAY/COMPOSITE/
 FXAA/DEPTH) on the shared `GLXShaders` global. `glx.js` destructures `GLXShaders` at the top of
-its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
+its IIFE, so these files must load first (`DEFERRED_EDGES` pairs in `tools/manifest.cjs`:
+the shader files live in the `DEFERRED.webgl2` group, not in `FULL`).
 
 ## js/render/glx/glx.js (+ js/render/glx/) / js/render/gfx.js — renderers
 
@@ -916,14 +934,15 @@ is the module contract and GLX API sketch.
 
 ### Three backends behind one seam
 
-`js/render/gfx.js` (`Gfx`) is the renderer selection seam. `Gfx.create(canvas)`
-resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
-(or `null` → the caller falls back to GLX). Three backends implement the same
-~40-member contract (documented in the `gfx.js` header block):
+`js/render/gfx.js` (`Gfx`) is the renderer selection seam. `Gfx.create(canvas, opts)`
+builds the backend `opts.backend` names (else the localStorage key `apex26.gfxBackend`)
+and returns it (or `null` → the caller, `RendererBoot.start` in
+`js/render/renderer-boot.js`, falls back to GLX). Three backends implement the same
+contract (documented in the `gfx.js` header block):
 
 | `apex26.gfxBackend` | Backend | Notes |
 |---|---|---|
-| unset / `"three"` | **TLX** | three.js r186 + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
+| unset / `"three"` | **TLX** | three.js (vendored under `vendor/three-<version>/`) + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
 | `"webgl2"` | **GLX** | Explicit WebGL2 pick and fallback backend |
 | `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md) |
 
@@ -936,21 +955,26 @@ does not persist.
 **Every device may select every backend, phones included.** Boot used to refuse
 both alternates whenever `GLX.isMobile` and the RENDERER button hid there, after
 TLX on iOS rendered a flat pale ground with the lower half of the frame black.
-The replacement is a **boot canary**: `js/game.js` writes `apex26.gfxBackendProbe`
-before handing the canvas to an alternate and clears it once that backend is
+The replacement is a **boot canary**: `RendererBoot.start` (`js/render/renderer-boot.js`)
+writes `apex26.gfxBackendProbe` before handing the canvas to an alternate and clears it once that backend is
 *bound* (title SETTINGS never presents a world frame — `render()` returns on
 `!track` until the deferred flyby builds — so waiting for `present()` reverted
-every menu refresh to WEBGL2). The probe is re-armed around the first world
-`present()` so a jetsam on that frame still reverts; a boot that still finds it
-armed resets `apex26.gfxBackend` to `webgl2` unless this tab is already on a
-one-shot `sessionStorage` claim-fail skip. A *live* `Gfx.create()` refusal
+every menu refresh to WEBGL2). game.js's `armBackendProbe()` re-arms it around the
+world `present()` until `PROVE_FRAMES` world frames have presented (and disarms it
+when the tab is hidden or closed), so a jetsam in that window still reverts. A boot
+that still finds it armed (and is not on this tab's one-shot `sessionStorage`
+claim-fail skip) runs a **two-strike ledger**, `apex26.gfxProbeStrikes`
+(`"<backend>:<n>"`, per backend): the first strike attaches GLX for THIS boot only and
+keeps the pick; a second consecutive strike for the same backend writes
+`apex26.gfxBackend = webgl2`. `RendererBoot.proved()` — called once the pick itself
+has presented `PROVE_FRAMES` frames — clears the ledger. A *live* `Gfx.create()` refusal
 (Safari WebGPU self-test, missing adapter) must not write `webgl2` — keep the
 pick, disarm the probe, and retry next boot. A canvas-claim failure sets that
 skip, disarms the probe, and reloads so this tab can attach GLX without
 erasing THREE/WEBGPU. WGX `device.lost` uses the same skip — it must not
 write `webgl2` (Safari often loses the device on the first frame). That covers the failure a visible
 button cannot — an iOS jetsam kill, which takes the tab with no JS error and no
-`webglcontextlost`, and which the `GLX.init`-failure recovery in the same file
+`webglcontextlost`, and which the `GLX.init`-failure recovery in `renderer-boot.js`
 never sees. Everything else is recoverable by hand: the menus are DOM layered
 over the canvas, so they stay legible through a garbage frame and the button
 (owned by `js/perf/renderer-picker.js`, visible in the HTML, wired at
@@ -983,8 +1007,8 @@ function. The 2026-08 parity pass (recipes in
 `import("three/webgpu")` inside `TLX.create()`. The `import` never touches
 `THREE` at script-eval (three doesn't exist until `create()`), so there is no
 deferred-ordering problem — the handshake IS the existing `await Gfx.create` in
-game.js. Vendored three r186 lives OUTSIDE `js/` at top-level
-`vendor/three-0.187.0/` (the load-order test walks `js/**`; an un-versioned
+`RendererBoot.start`. Vendored three lives OUTSIDE `js/` at top-level
+`vendor/three-<version>/` (the directory the `index.html` importmap names; the load-order test walks `js/**`; an un-versioned
 transitive `three.core` import would break the uniform-`?v=` rule otherwise);
 an inline `<script type="importmap">` in `index.html` maps the `three`/`three/*`
 specifiers to that dir (invisible to the load-order regex and the sw.js precache
@@ -998,10 +1022,10 @@ track engine — `Tracks.build(def, { night, gfx })`. `tracks.js` resolves
 builds every mesh through `G` (`createMesh` / `createChunkedMesh` / `mobileTier`)
 instead of reaching the `GLX` global directly. The `GLX` fallback in that line
 serves only the Node-VM build guard (`tools/track/verify-track.cjs`) and the VM tests,
-which install a stub `GLX` rather than injecting `opts.gfx`. On an opt-in, game.js
-still descriptor-copies the backend's methods onto the `GLX` object — that
+which install a stub `GLX` rather than injecting `opts.gfx`. On an opt-in,
+`RendererBoot.start` still descriptor-copies the backend's methods onto the `GLX` object — that
 monkey-patch is retained purely as the **object-identity compatibility contract**
-for the ~8 spec files that patch `GLX.*` and read the page-scope `GLX` global
+for the spec files that patch `GLX.*` and read the page-scope `GLX` global
 directly (webgl-probes, parts-mesh-cache, custom-team, lighting-ab, …). Because
 of the copy, `gfx === GLX` on every path, so injecting `opts.gfx` is
 behaviorally identical to the old direct calls while ending the reliance on the
@@ -1015,7 +1039,7 @@ HDR post chain), `shadow.js` (`GLXShadow`, sun/car shadow maps), `chunked.js`
 (`GLXChunked`, the chunked-mesh path) — each created with a shared `GLXCore`
 context object so the public `GLX` surface is unchanged. WGX is selected
 through the active Gfx seam only when `apex26.gfxBackend=webgpu` opts in and
-WebGPU initializes successfully; otherwise game.js uses GLX. One standard lit
+WebGPU initializes successfully; otherwise `RendererBoot.start` binds GLX. One standard lit
 shader handles everything except the sky on the GLX path. Shader source
 strings live in `js/render/glx/shaders/` (globals `GLXChunks`/`GLXShaders`).
 
@@ -1031,10 +1055,10 @@ GLX.begin(frame)                      // clears color+depth, stores frame unifor
    frame = { viewProj: mat4, eye:[x,y,z], sunDir:[x,y,z] (normalized, TOWARD sun),
              sunColor:[r,g,b], ambientGround:[r,g,b], ambientSky:[r,g,b],
              fogColor:[r,g,b], fogDensity: number,    // exp2 fog
-             lights: [x,y,z, r,g,b, rad, aim…] }      // optional stride-15 point lights (≤48, MAX_LIGHTS)
+             lights: [x,y,z, r,g,b, rad, aim…] }      // optional stride-15 point lights (≤ MAX_LIGHTS = LightBudget.MAX)
 GLX.draw(mesh, modelMat, opts)        // opts optional {emissive:0..1, alpha:0..1}
                                       // lit: hemisphere ambient (mix ground/sky by N.y)
-                                      //      + lambert sun + up to 48 point lights
+                                      //      + lambert sun + up to MAX_LIGHTS point lights
                                       //      (diffuse, quadratic falloff to radius);
                                       //      fog by view distance.
                                       // emissive=1 -> full albedo, no lighting (night glow)
@@ -1079,7 +1103,7 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
                   tier:0,                 // 0 fastest .. 4 slowest
                   drivers:[ {name:"George Russell", code:"RUS", num:63},
                             {name:"Kimi Antonelli", code:"ANT", num:12} ] }, ... ]
-// 11 teams in 2026 spec: Mercedes(t0), Ferrari(t1), McLaren(t1, Norris num:1),
+// the 2026 grid: Mercedes(t0), Ferrari(t1), McLaren(t1, Norris num:1),
 // Red Bull(t2, Verstappen num:3), Alpine(t3), Racing Bulls(t3), Haas(t3),
 // Williams(t3), Audi(t4), Aston Martin(t4), Cadillac(t4, Perez 11 / Bottas 77)
 Teams.TIER_V -> [0.9695, 0.9674, 0.9648, 0.9622, 0.9594]   // ground-speed scale per tier
@@ -1110,33 +1134,38 @@ anything PER-CIRCUIT is a key of the def (below), never an id-keyed table here.
 
 ## js/track/ — the rest of the engine
 
-One concern per file, all loaded before `tracks.js`, under `js/track/core/` (`pit`, `spline`, `mesh`, `space`, `surface`, plus `line` and `hidden-faces`) and `js/track/scenery/` (the rest; the corner maps live in `js/ui/track-maps.js`):
+One concern per file, under `js/track/core/` (`geom`, `pit`, `space`, `surface`, `spline`, `line`, `mesh`, `hidden-faces`, `def`) and `js/track/scenery/` (the rest; the picker outlines live in `js/ui/track-maps.js`). Which roster loads each one (`FULL`, `LAZY_TRACK_BUILD`, `TRACK_VM`) is in `tools/manifest.cjs` and the generated index above:
 
 | File | Global | Owns |
 |---|---|---|
 | `pit.js` | `TrackPit` | the PIT COMPLEX as one model, built once in `Tracks.build` before the terrain profile and the scenery: side, mode (`full` / `narrow` for street circuits), limit, the bands in metres (verge → platform + wall → fast lane ≤ 3.5 m → corridor → working lane → garage line), the per-node easing of the entry road and the exit road, the keep-out the scenery guards read, and the row — one box per team in `Teams.LIST` order plus MY TEAM, at the bay's 11 m pitch. `TrackMesh.buildPitLane` / `buildPitBoxes`, `SceneryPits`, `PitLane` and the GARAGE screen all read it; `tests/unit/pit-complex.test.mjs` asserts paint ≡ stop ≡ door. Design and evidence: `docs/research/PIT-LANE-REDESIGN-2026-09.md` |
 | `spline.js` | `TrackSpline` | closed Catmull-Rom sampling, curvature |
-| `graph.js` | `TrackGraph` | the scenery model library + node graph (HARD_EDGES pair with `tracks.js`) |
-| `mesh.js` | `TrackMesh` | road/terrain mesh extrusion (`buildRoad`/`buildTerrain`) |
-| `space.js` | `TrackSpace` | world↔track (Frenet) projection used by physics |
-| `surface.js` | `TrackSurface` | road-surface build details, per-track tarmac/verge tints |
+| `line.js` | `TrackLine` | the baked racing line: a lateral offset per centreline node, computed once at build |
+| `def.js` | `TrackDef` | the def factory: a raw `js/circuits/<id>.js` def → a `Tracks.LIST` entry (palettes, elevation readers, real-centreline points) |
+| `scenery/graph.js` | `TrackGraph` | the scenery model library + node graph (read by the scenery bands at call time; no eval-time edge) |
+| `mesh.js` | `TrackMesh` | the kerb/banking band + road/terrain/floor mesh builders (`buildRoad`/`buildTerrain`) |
+| `hidden-faces.js` | `TrackHiddenFaces` | build-time strip of prop triangles no camera can see |
+| `space.js` | `TrackSpace` | source-trace ↔ racing-lap fraction transforms (`toRacingFrac` …) |
+| `surface.js` | `TrackSurface` | the shared terrain-ribbon and prop-grounding profile (run-off shelf, rails) |
 | `models.js` | `TrackModels` | composite prop models shared across circuits |
 | `themes.js` | `SceneryThemes` | theme tables for the city generator |
 | `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
 | `js/ui/track-maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine |
 | `nature.js` / `city.js` / `structures.js` / `identity.js` | `Scenery*` | the buildProps split (below) |
-| `scenery/build-props.js` | `TrackBuildProps` | `buildProps` orchestration (guards nested pending a later peel); `Tracks.build` calls `TrackBuildProps.build` |
+| `scenery/build-props.js` | `TrackBuildProps` | `buildProps` orchestration; `Tracks.build` calls `TrackBuildProps.build` |
+| `scenery/guards.js` | `SceneryGuards` | the road / pit-complex guards (`onRoadHit`, `rejBox`, `rejRad`, `onTrack`), peeled out of build-props.js |
+| `scenery/api-wrap.js` | `SceneryApiWrap` | the `scenery(api)` coordinate wrap (origin shift, reverse side, authored-frame `along`/`every`) |
 | `scenery/pits.js` | `SceneryPits` | the pit complex's 3D furniture, last in `buildProps` and every position `track.pit`'s: the signalling platform, wall and barrier swept along the lane, the entry boards and exit lights, and the garages — `GarageScene.buildStatic` (the setup screen's own bay) placed once per team with `TrackGeom.addMesh` under a per-bay roof, hospitality storey and race control. Emits with the RAW emitters; every other prop is kept out of the complex by `onRoadHit` / `onTrack`, and a circuit's superseded pit block is recorded as such rather than as a required failure |
 
-**The buildProps split.** Orchestration (guards + theme dress + API wrap +
-lamps + pits) lives in `scenery/build-props.js` (`TrackBuildProps.build`).
+**The buildProps split.** Orchestration (theme dress + lamps + pits, calling
+`SceneryGuards` and `SceneryApiWrap`) lives in `scenery/build-props.js` (`TrackBuildProps.build`).
 Prop placement is four `Scenery*.create(ctx)` modules — nature (trees/terrain
 furniture), city (the `cityStyle` building generator, neon, glass), structures
 (grandstands, gantries, barriers, floodmasts), identity (per-circuit landmark
 passes) — each instantiated with a ctx of the placement helpers and
-accumulators. Together they serve the **114-member `scenery(api)` contract**,
-frozen by `tests/unit/scenery-api-contract.test.mjs`: a circuit's `scenery(api)`
-callback can destructure any of those 114 names, so removing/renaming one is a
+accumulators. Together they serve the **`scenery(api)` contract**, frozen by
+`tests/unit/scenery-api-contract.test.mjs` (`CONTRACT` / `CONTRACT_SIZE`): a circuit's `scenery(api)`
+callback can destructure any of those names, so removing/renaming one is a
 breaking change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 
 ## js/circuits/<id>.js — `TrackDefs` (circuit data)
@@ -1151,8 +1180,8 @@ here — there are no id-keyed tables in `js/track/` any more, and the engine
 reads every one of them off the BUILT def (`tests/unit/circuit-def-fields.test.mjs`
 pins that they survive the copy).
 The bespoke `scenery(api)` closure lives in `js/circuits/scenery/<id>.js`
-(registered on `window.TrackScenery[id]`, no `<script>` tag: `game.js` fetches
-the one it is about to build, ~41 KiB each on average (2026-10-26: 2,190,521 bytes over 52 files), so a session does not parse all 52).
+(registered on `window.TrackScenery[id]`, no `<script>` tag: `ensureScenery` in
+`js/core/lazy-bundles.js` fetches the one about to be built, so a session does not parse them all).
 Def files carry **no `<script>` tag**: `index.html` loads only the generated picker roster `js/track/circuit-meta.js`
 (`tools/gen/gen-circuit-meta.mjs`), and a circuit's full def hydrates when it is picked (`LAZY_CIRCUIT` in
 `tools/manifest.cjs`, `ensureCircuit` in `js/core/lazy-bundles.js`). **Picker/season order == the `CIRCUITS` array order in
@@ -1186,7 +1215,7 @@ road/terrain meshes through `TrackMesh`/`TrackSurface`, props through
 `Scenery*.create(ctx)` bands.
 
 ```
-Tracks.LIST -> [ trackDef, ... ]   // 52 circuits. LIST order == the `CIRCUITS` order in
+Tracks.LIST -> [ trackDef, ... ]   // one per CIRCUITS entry. LIST order == the `CIRCUITS` order in
                                    // tools/manifest.cjs, as emitted into the generated
                                    // js/track/circuit-meta.js (full defs hydrate lazily
                                    // per pick; no per-circuit <script> tag) — it is NOT
@@ -1248,7 +1277,7 @@ would overhang the tarmac on a curving stretch — not just their inner-face poi
 ## js/car/car3d.js — `Car3D`
 
 ```
-Car3D.build(color, color2) -> meshData   // PLAIN data {pos,nrm,col,idx} for renderer.createMesh
+Car3D.build(color, color2) -> meshData   // PLAIN data {pos,nrm,col,mat,idx} for renderer.createMesh
                                          // (game creates one renderer mesh per team, shared by both cars)
 ```
 Local space: origin at ground under center of gravity, **+Z forward, +Y up**.
@@ -1258,8 +1287,9 @@ wing on endplates, 4 wheel boxes (dark `[0.05,0.05,0.05]`, slightly rounded
 via chamfer prisms ok). color = livery body, color2 = wings/accents. Flat
 shading (duplicated verts, face normals).
 
-`CarGeometry.create(context)` owns mesh emission primitives, foil sections and
-tubes; `CarWheels.create(context)` owns rotating/fixed wheel layers. `Car3D`
+`CarGeometry.create(context)` (`car-geometry.js`) owns mesh emission primitives, foil sections and
+tubes; `CarWheels.create(context)` (`car-wheels.js`) owns rotating/fixed wheel layers; body geometry
+builders live in `car-body-geom.js`, surfaces/finishes/palette in `car-materials.js`. `Car3D`
 retains model assembly, caches and the public build API. Contexts pass shared
 palette/geometry values explicitly, preserving reference identity.
 
@@ -1270,8 +1300,8 @@ palette/geometry values explicitly, preserving reference identity.
 | `liveries.js` | `Liveries` | custom paint jobs — `{id, name, c1, c2, stripe?, noseStripe?, …}` |
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
 | `livery-graphics.js` | `LiveryGraphics` | cover/fin graphic recipes; shared stripe, twin and ridge painters; atlas/cache ownership stays in `LiveryTex` |
-| `driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
-| `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see CAREER.md) |
+| `js/data/driver-ratings.js` (data dir, not `js/car/`) | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
+| `parts.js` | `Parts` | upgrade catalog — the ordered `CATALOG` categories, `getMods`, `getCost`, `statMult`, the `BUDGET` credit cap (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 | `ghost-share.js` | `GhostShare` | APXG1 fragment/file codec plus the in-memory guest rival; `#ghost=` is consumed at boot/hashchange and removed from history without writing the guest to `apex26.ghost.v1` |
 | `input-ghost.js` | `InputGhost` | deterministic local ghost: per-`FIXED_DT` steer/throttle/brake + `seed` + `PhysicsConsts.REVISION` + `__APEX_BUILD`; `apex26.inputGhost.v1`; refuses replay on version mismatch; pose Ghost remains the translucent draw |
@@ -1322,7 +1352,8 @@ resets with the engine.
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.
-Continuous layers over it, all on `sfxBus`: turbo whine (high sine), MGU-K
+Continuous layers use two buses: engine, whine, harvest, rivals and reverb use
+the selective `focusBus`; road feedback stays on `sfxBus`. Layers include turbo whine (high sine), MGU-K
 harvest whirr under deceleration, ERS deploy whine while the battery is
 deploying (level tracks charge, pitch sags under 20%), AIRFLOW (broadband
 bandpass rising with speed², plus kerb/offroad buffeting and wet spray), BRAKES
@@ -1341,12 +1372,12 @@ The player's ENGINE TONE tune (`js/audio/panel.js`) is a second trim over the
 voice. Every field is a constant multiplier, never a function of rev, so the
 pitch invariants (`tools/check/audio-test.cjs`, `tests/unit/audio-tune.test.mjs`)
 hold by construction. The pitch curve is four independent knobs,
-`rate(rev) = (0.25·idle + 0.45·revRange·rev^curve) · pitch`: IDLE the idle end,
+`rate(rev) = (0.17·idle + 0.5115·revRange·rev^curve) · pitch`: IDLE the idle end,
 REV RANGE the span, PITCH a transpose, CURVE the bend (>1 hangs low and climbs
 late). Character: GRAVEL, DETUNE, BRIGHTNESS, SUB. LIMITER: DEPTH, RATE (Hz),
 PITCH SAG (cents in step with the cut). BOOST: LEVEL (ERS whine + whoosh),
 REV LIFT. Layer levels: TURBO (whine + wastegate), HARVEST, WIND, TYRES,
-BRAKES, SHIFT, RIVALS, SPACE, OVERRUN. Twelve layer switches are hard offs. Reach and the reason the curve was split: `docs/DEBUG-HOOKS.md`
+BRAKES, SHIFT, RIVALS, SPACE, OVERRUN. The `LAYER_DEF` switches (`js/audio/tone-model.js`) are hard offs. Reach and the reason the curve was split: `docs/DEBUG-HOOKS.md`
 §`audio()`.
 
 ```
@@ -1451,8 +1482,9 @@ The grab-bag data file went with Phase 2a of
 `tier` field they index), `GEARS`/`GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` and `DIFF`
 in `js/physics/consts.js` (immutable model numbers, already eval-pinned
 before every reader), `CAM_MODES` in `js/camera/mode-switch.js`
-(`CamModes.CAM_MODES`), and the four `PAINT_*` car-paint constants in
-`js/game.js` beside `carPaintMat()`, their only reader.
+(`CamModes.CAM_MODES`), and the `PAINT_*` car-paint presets in
+`js/fx/grade-tint.js` beside `GradeTint.carPaint()`, their only reader (game.js's
+`carPaintMat()` delegates to it).
 
 ## js/lighting/lighting.js — `LightTune` (a façade over three files)
 
@@ -1493,7 +1525,7 @@ gear/speed digits, ERS and pedal bars, and OT lamp, with their memo caches.
 The wheel, dash, cabin, glass and shift lights are `CockpitRig`, re-exported
 here. Only dependency is the renderer handle, injected once at boot:
 `CarMesh.init(gfx)`. State-coupled car drawing (teamMesh, playerBodyMesh,
-cockpitBodyMesh, drawCockpitRig, decal textures) stays in game.js.
+cockpitBodyMesh, drawCockpitRig, decal textures) lives in `CarDraw` (`js/car/car-draw.js`).
 
 ## js/fx/particles.js — `Particles`
 
@@ -1525,28 +1557,28 @@ directory). The generated module index at the top of this file and
 | `js/physics/consts.js` | `PhysicsConsts` | the driving model's immutable numbers (`VMAX`, `LAT_MAX`, `BRAKE`, …, the `GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` gearbox and the `DIFF` difficulty presets), destructured once by game.js at eval time (a `HARD_EDGES` entry in `tools/manifest.cjs`; `hud.js` reads the RPM pair the same way). Values only — anything a slider or `setPhysics` can change stays a `let` in game.js. A plain data global, not a `create(G)` module |
 | `js/core/store.js` | `GameStore` | localStorage persistence (settings, season, parts, records) + the career save and its migration ladder |
 | `js/career/career.js` | `Career` | CAREER rules: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots in separate sets, one live at a time; both earlier layouts migrate in), the credits economy, contracts, driver/team development, R&D ownership, round settlement. Pure data — no DOM, and a plain global (no ctx), because game.js calls it from `makeCars()`/`recomputePlayerMods()`/`endRace()`. Every GAMEPLAY accessor is gated on `inCareer()`, NOT on "a save exists": the save loads at boot so the title button can offer CONTINUE, but its rules must never reach a Grand Prix |
-| `js/career/career-ui.js` | `CareerUI` | the CAREER screen (`#career`) — three states in one sheet: CAREER MODES (both modes, their six slots and their guides — the title button's one door), new-career setup, and the season hub. States rather than screens, so all three inherit the sheet's MenuNav / ScrollFade / AriaState registration instead of needing their own. Replaces `#select` in career, since the calendar owns where you race |
+| `js/career/career-ui.js` | `CareerScreen` | the CAREER screen (`#career`) — three states in one sheet: CAREER MODES (both modes, their six slots and their guides — the title button's one door), new-career setup, and the season hub. States rather than screens, so all three inherit the sheet's MenuNav / ScrollFade / AriaState registration instead of needing their own. Replaces `#select` in career, since the calendar owns where you race |
 | `js/race/quali-model.js` | `Quali` | ONE-LAP QUALIFYING, the MODEL. A `session`, not a game state: the player's flying lap reuses the time-trial path, and the rest of the field is MODELLED — a quasi-steady forward/backward lap simulation off the same `LAT_MAX`/`ACCEL`/`BRAKE` the driving model uses, so a simulated time and a driven one land on one scale. Owns the classification between session and grid and its persist (`season.qualiOrder`); feeds `gridUp()`. No DOM — `rows()` is what the sheet paints |
 | `js/ui/quali-sheet.js` | `QualiSheet` | the QUALIFYING sheet (`#quali`): `build(rows)` / `open(rows)` / `close()` over `quali.rows()` — pure DOM assembly of the model's classification (podium classes, the DRIVEN tag on a rival's real lap, the P-title). No timing, no ordering, no persist |
 | `js/race/reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
 | `js/perf/governor.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
-| `js/camera/vantage.js` | `GameCams` | the 20 player camera modes + the `__apex.view` debug free-cam framing |
-| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 20-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
+| `js/camera/vantage.js` | `GameCams` | the player camera rigs (one per `CAM_MODES` entry) + the `__apex.view` debug free-cam framing |
+| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
 | `js/ui/hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
-| `js/ui/results-sheet.js` | `GameResults` | results + season-end screens, penalties, points |
-| `js/agent/apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
+| `js/ui/results-sheet.js` | `GameResultsSheet` | results + season-end screens, penalties, points |
+| `js/agent/apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `LazyBundles` (`js/core/lazy-bundles.js`) injects it when `wantAgentSurface()` |
 | `js/lighting/atmosphere.js` | `Atmosphere` | `applyRaceSettings` — time-of-day/weather scene state, palettes, flood activation |
-| `js/garage/setup-sheet.js` | `SetupUI` | GARAGE screen — TEAM & DRIVER, 12 part categories + budget, LIVERY |
+| `js/garage/setup-sheet.js` | `SetupUI` | GARAGE screen — TEAM & DRIVER, the `Parts.CATALOG` categories + budget, LIVERY |
 | `js/ui/select-screen.js` | `Menus` | menu/select/pause DOM flows |
 | `js/ui/scroll-fade.js` | `ScrollFade` | edge fade + scroll-position indicator on every menu pane (self-initialising, owns no game state) |
 | `js/ui/menu-nav.js` | `MenuNav` | desktop menu input (self-initialising): wheel/trackpad gestures that land outside a pane are redirected into the open menu's nearest one, and arrow keys / Home / End / PageUp / PageDown move focus through it |
 | `js/camera/photo-cam.js` | `Photomode` | photo mode ONLY — the free-fly camera, its touch sticks / hold buttons and the enter/exit plumbing; the lighting tuner's `lt-*` buttons live in `tuner-panel.js` |
 | `js/lighting/tuner-panel.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel: slider rows from `TUNE_DEFS`, preview chips, COPY TO ALL TRACKS, the help toggle, RESET and the COPY VALUES export (`window.LightEdits`) |
 | `js/input/steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
-| `js/physics/aero-zones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `inAeroZone(c)`/`aeroDfMult()` stay in game.js because they read car state |
-| `js/fx/skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
+| `js/physics/aero-zones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `inAeroZone(c)` (game.js) and `aeroDfMult()` (`PaceMath`, `js/race/pace-math.js`) live with the car state they read |
+| `js/fx/skidmarks.js` | `SkidMarks` | the tyre-mark ring buffer (`MAX_SKID` entries) plus its batched vertex build — one draw call instead of one per mark — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `js/ui/sheet-shape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
-| `js/ui/modal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 18 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheet-shape.js` |
+| `js/ui/modal.js` | `TopModal` | self-initialising: mirrors each `<dialog class="screen">`'s `hidden` onto `showModal()`/`close()` (the browser top layer, no z-index), reads `data-esc-close` / `data-esc`, and isolates the title page under a covering sheet from `UiLayers.LAYER_IDS` |
 | `js/ui/aria-state.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 The table lists modules whose contracts need prose; every other extracted file
@@ -1561,7 +1593,7 @@ Session flow (the four-state machine, how a start is entered, what the flag show
 
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
 `tests/data/ratchets.json`; loop, physics, AI, race logic — the subsystems
-above are extracted). Player + 21 AI.
+above are extracted). The player plus an AI car for every other `Teams.LIST` seat.
 
 The remaining coordinator composes `ScriptLoader`, `LazyBundles`, `RendererBoot`,
 `RaceWakeLock`, `PlatformSession` and `TitleFlow`. Startup helpers use explicit
@@ -1601,18 +1633,18 @@ from the battery and fires on a flat one; the allowance is the only limiter. Gra
 Walls sit at the per-node barrier limit from `Tracks.wallAt`: soft push back.
 Cars collide as ~4.8 × 2.0 m oriented boxes: lateral push + small speed loss.
 AI: follow racing-line offset = -curvatureAhead * k, brake by curvature, tier
-speed + rubber-band by difficulty (EASY/NORMAL/HARD). Start: grid 22 (player P12
-default, tier order), five red lights (1 s apart) then out. Race =
+speed + rubber-band by difficulty (EASY/NORMAL/HARD). Start: the full grid (`gridUp()`; player P12
+by default, tier order), five red lights (1 s apart) then out. Race =
 `GAME_LAPS` (3). HUD (DOM): pos/lap/laptime/best, speed km/h, energy bar, OT
 indicator, gaps, minimap canvas 2D. Penalty: a repeating ladder — three
 warnings, +5 s on the 4th cut (announced in-race), then the warning count
-resets; `cuts` stays the lifetime total for the career `clean` objective. Points per Teams.POINTS; SEASON mode = Tracks.SEASON (the 24
-non-`classic` circuits; the 28 retired ones are playable but never a round)
+resets; `cuts` stays the lifetime total for the career `clean` objective. Points per Teams.POINTS; SEASON mode = Tracks.SEASON (the
+non-`classic` circuits; the `classic` ones are playable but never a round)
 in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.
 
-Camera: 20 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
+Camera: the player modes in `CAM_MODES` (`js/camera/mode-switch.js`, driven by
 `GameCams` + `ExtraRigs`) cycled with the CAM button / C key (persisted) — CHASE (close,
 behind+above), FAR (pulled back/up), DRIFT (swings outside on a slide),
 COCKPIT (onboard eye, player car hidden), HOOD (nose cam), OVERHEAD (top-down
@@ -1651,11 +1683,11 @@ to force-refresh a stale installed PWA.
 
 ## Deploy
 
-`.github/workflows/pages.yml`: on push to `claude/f1-game-project-26h3ng` or
-workflow_dispatch, stage the runtime subset in `_site` (`index.html`,
-`version.json`, `manifest.json`, `sw.js`, `.nojekyll`, `js/`, `css/`, `icons/`,
-`assets/`, and `vendor/` — asserted by `tests/unit/deploy-staging.test.mjs`)
-and deploy that Pages artifact. Tests, tools, docs, and other repository-only
+`.github/workflows/pages.yml` (the release train): on a non-prose push to
+`claude/f1-game-project-26h3ng`, its cron backstop or workflow_dispatch, gate the tip,
+stage the runtime subset in `_site` with `tools/desktop/stage.mjs` — the allow-list is
+`STAGE_ROOT_FILES` / `STAGE_DIRS` / `STAGE_EXCLUDE` in `tools/desktop/stage-files.mjs`,
+asserted by `tests/unit/deploy-staging.test.mjs` — and deploy that Pages artifact. Tests, tools, docs, and other repository-only
 files are not shipped. `manifest.json` defines the PWA. NOT affiliated with
 FIA/F1 — fan project disclaimer in README and menu footer ("Unofficial fan
 project").
@@ -1673,7 +1705,7 @@ boot / pipeline / parity map.
 apex26.gfxBackend (localStorage)
         │
         ▼
-   game.js async boot
+   RendererBoot.start (renderer-boot.js)
         │
    ┌────┼──────────────────────────────┐
    │    │                              │
@@ -1709,12 +1741,14 @@ would keep GLX’s dead closure).
 
 | Backend | Role | Entry | Shaders |
 |---|---|---|---|
-| **GLX** | Explicit/fallback WebGL2 (DEFERRED like the others) | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/glx/shaders/` |
+| **GLX** | Explicit/fallback WebGL2 (DEFERRED like the others) | `js/render/glx/glx.js` + `glx/{shadow,post,chunked,soft}.js` | GLSL strings in `js/render/glx/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
 | **TLX** | Default Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) took three WebGL2 on AUTO 2026-09-03 → 2026-10-23 and now tries WebGPU, with the per-device kill switch `apex26.tlxWebKitGL`; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.187.0/` |
 
-**Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
-`js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
+**Shared always-on** (the `js/render/` entries of `FULL`): `js/render/gfx.js` (`create` only),
+`js/render/renderer-boot.js`, `js/render/shared/glx-facade.js` (the stable `GLX` identity the
+descriptor-copy writes onto), `js/render/shared/gltf.js`, `js/render/shared/assets.js`
+(MAT `TEXTURE_2D_ARRAY`) and the other backend-agnostic `shared/` helpers. Deferred lists live in
 `tools/manifest.cjs` `DEFERRED`, mirrored into `js/roster.js` by `tools/gen/gen-shell.mjs`; no `<script>` tags for
 GLX/WGX/TLX.
 
@@ -1737,7 +1771,8 @@ additive glow follows the sky (`js/render/gfx.js` frame protocol).
 | Key | Role |
 |---|---|
 | `apex26.gfxBackend` | Pick: unset / `three` = TLX default; explicit `webgl2` / `webgpu` still win (picked in `js/perf/renderer-picker.js`) |
-| `apex26.gfxBackendProbe` | Canary armed around claim / first world `present()` |
+| `apex26.gfxBackendProbe` | Canary armed around claim / the first `PROVE_FRAMES` world `present()`s |
+| `apex26.gfxProbeStrikes` | Per-backend strike ledger (`"<backend>:<n>"`): a second consecutive strike retires the pick |
 | `apex26.gfxClaimFail` (session) | Skip opt-in after canvas claim-and-die |
 | `apex26.gfxBound` (session) | Live fallback label while the pick stays |
 | `apex26.gfxWgxLevel` / `gfxWgxLite` / `gfxWgxOk` / `gfxWgxFail` | WGX quality ladder / refuse reason |
@@ -1747,21 +1782,24 @@ additive glow follows the sky (`js/render/gfx.js` frame protocol).
 
 ### VR renderer selection (task 20)
 
-When `apex26.xr=1` **and** the device reports immersive-vr (cached in
-`apex26.xrCaps` for the sync boot read; refreshed by `ApexXR.detect()`),
-`backendPreference()` in `js/game.js` takes a **non-persisted** override from
-`ApexXR.bootPick()` / `XRPlan.resolve`:
+What switches a player onto the XR-capable renderer is the ENTER VR tap:
+`XrBoot.ensureXrBackend()` pins `apex26.gfxBackend=three` +
+`apex26.tlxForceGL=1` for one boot, stashes the player's own pick and reloads
+(never during a race); `mountUi()` puts the pick back after the next boot.
+`XRPlan.resolve` / `ApexXR.plan()` are advisory (`ApexXR.stats()`):
+`storedBackendPreference()` (behind `backendPreference()`) in
+`js/render/renderer-boot.js` asks `ApexXR.bootPick()`, but ApexXR is LAZY_XR and
+is not loaded when that read runs, so a real boot is never steered by it.
 
-| `apex26.xrBackend` | Path | Boot override | Notes |
-|---|---|---|---|
-| unset / `webgl2` | WebGL2 (GLX) | `"webgl2"` | Default shippable Quest path. GLX `getContext("webgl2")` sets `xrCompatible:true` only when `navigator.xr` exists. |
-| `webgpu` | WebGPU experimental (TLX) | `"three"` | Requires `navigator.gpu` **and** `XRGPUBinding`; otherwise falls back to WebGL2 with a reason in `ApexXR.stats().fallbacks`. Session feature negotiation is task 45. |
+| `apex26.xrBackend` | Session | Notes |
+|---|---|---|
+| unset / `webgl2` | WebGL2 (TLX + forceGL, `XRWebGLLayer`) | The shippable Quest path. |
+| `webgpu` | WebGL2 as well | A preference only: the attach builds an `XRWebGLLayer` and nothing creates an `XRGPUBinding`, so `XrSession` does not request the `webgpu` feature (`ATTACH_WEBGPU` in `js/xr/xr-session.js`). A failed request or attach under that preference latches `sessionStorage apex26.xrFallback=webgl2`. |
 
-The override **never writes** `apex26.gfxBackend`. Disarming VR restores the
-player's 2D RENDERER pick. A post-boot WebGPU failure latches
-`sessionStorage apex26.xrFallback=webgl2` (honoured on the next resolve).
-SETTINGS › DISPLAY › VR rows (`XROpts`) stay hidden unless `caps.vr`.
-Stereo presentation is tasks 40/45 — this module only plans the path.
+Nothing here writes the player's `apex26.gfxBackend` for good. SETTINGS ›
+DISPLAY › VR rows (`XROpts`) stay hidden unless `caps.vr`. On a phone
+(Chromium answers immersive-vr for Cardboard) ENTER VR shows only once VR MODE
+is ON, and ENTER hides while a race runs.
 
 Canary + session claim-fail recover from claim-and-die / jetsam by falling
 back to WebGL2 without always wiping the user’s pick. WGX climbs
@@ -1884,7 +1922,7 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   (`light-grid.test.mjs` pins the constants and the plumbing).
 - **SCENE MSAA (2026-10-01; preset-driven on TLX 2026-10-04):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
   the same rule on its desktop WebGL2 backend (`tlx.js` `sceneSamplesFor` passes `sceneSamples` into
-  `tlx-post.js`'s scene target; r186's WebGL backend resolves the depth texture
+  `tlx-post.js`'s scene target; the vendored three's WebGL backend resolves the depth texture
   by blit, so SSAO/SSR/godray read a resolved depth). Neither WebGL2 backend asks
   for canvas MSAA: the canvas only receives the FXAA quad. **TLX-WebGPU and WGX gap**:
   core WebGPU cannot resolve a depth attachment, so the native path stays
@@ -1975,8 +2013,9 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   `-y` and `ENV_FACES` swaps the two Y cameras. A software probe cannot see
   this — read the `gpu-census.yml` macOS verdict before trusting it.
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
-  remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
-  history resolve is sub-pixel shimmer). The sky's cloud deck shades like GLX
+  remaining gap = no TAA: WGX carries no jitter scaffold at all (jitter without a
+  temporal resolve is sub-pixel shimmer; the "No TAA" note in `wgx.js`'s backend
+  surface, #3115). The sky's cloud deck shades like GLX
   SKY_FS since 2026-09-03 (overcast clamp/greys, golden tops, pink bases, day
   contrast, twilight wash, moon silver — before that WGX ignored overcast and
   the deck read flatter and brighter; `gfx-probe --weather overcast` is the
@@ -1996,11 +2035,12 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   (`js/render/shared/lamp-chunks.js`) uploads the full baked track set +
   concatenated index table to storage bindings 15/16, one DrawU slot per
   visible chunk, absolute shadow index in `params10.x` (no slot remap);
-  `gfx.hasPerChunkLights` is the capability read (GLX + WGX; absent TLX).
-  `gfx.updateInstances(batch, matrices, n)` is the second capability of
-  that shape, and unlike per-chunk lights it is now on ALL THREE
-  (`glx.js:1742`, `wgx.js:5069`, `tlx.js:924` — WGX and TLX ported
-  2026-09-02): it hands an existing instanced batch a
+  `gfx.hasPerChunkLights` is the capability read — `true` on all three
+  backends (TLX consumes the same bake through `LampChunks.buildGrid` → tsl-lit
+  `setLampGrid`, with a refused bake falling back to the global set).
+  `gfx.updateInstances(batch, matrices, n, colors)` is the second capability of
+  that shape, also on ALL THREE (`updateInstances` in `glx.js`, `wgx.js` and
+  `tlx.js` — WGX and TLX ported 2026-09-02): it hands an existing instanced batch a
   caller-packed transform set, for a batch whose poses are new every
   frame rather than static geometry narrowed by a frustum. Its one
   consumer is `DebrisWorld.draw`, whose four per-body loops reached 98
@@ -2021,8 +2061,8 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   zenith→horizon mix, not a flat lid. FS `mat` stays a smooth attribute
   (`varying()+FLAT` blanked the garage car on three r185). FLAG wave
   stays per-vertex. Probe-less frames (garage) paint the canvas, not
-  the HDR scene target. MSAA still off + FXAA (three does not
-  expose a resolved depth for the post chain); 8-bit post
+  the HDR scene target. Scene MSAA follows the preset on desktop
+  WebGL2 only (§SCENE MSAA above); the WebGPU path stays single-sample + FXAA; 8-bit post
   stays on when half-float is missing (GLX RGBA8 path), env cube 4× aniso.
   THREE PATH: WEBGPU must not call `getContext("webgl2")` on `#game` after
   `renderer.init()` — three lazy-configures the swapchain on first present,
@@ -2052,7 +2092,7 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   a uniform at draw time. True of every pooled mesh — and the reason the
   replacement exists (593 programs / ~60 s of compile on Monza). False for
   exactly one thing: three compiles the instance-matrix SOURCE BUFFER into the
-  node graph (vendored r185, the `16*count*4 <= getUniformBufferLimit()`
+  node graph (the vendored three, the `16*count*4 <= getUniformBufferLimit()`
   branch — a BufferNode over that attribute's array below the limit, an
   `InstancedInterleavedBuffer` wrapping it above), so a shared program is a
   shared instance buffer. Every TrackGraph prop batch draws with one
@@ -2097,8 +2137,10 @@ recorded as a gap** in §Parity snapshot above and in the defect inventory
    `webgpu/wgsl-*.js`, TSL factories in `three/`, and the CPU plumbing that
    feeds the uniforms — a knob that reaches one shader family and not the
    others is the usual drift.
-3. WGX: `node tools/gfx/wgx-validate.mjs --static` (real Dawn WGSL validation,
-   ~5 s). A live-device Dawn run is parent-session only → `renderer-debug`.
+3. WGX: `node tools/gfx/wgx-validate.mjs --static` — the no-browser gate (parses
+   every `DEFERRED.webgpu` file and checks the source invariants a software Dawn
+   cannot see). The bare command launches Chromium for real Dawn validation and is
+   parent-session only → `renderer-debug`.
 4. Same-scene shots per backend: `node tools/shot/backend-compare.mjs
    <track> …` (one deterministic framing, N backends, numeric pixel diff —
    MAD and %px changed — plus per-backend console errors), or
@@ -2146,8 +2188,9 @@ claimed the canvas. SwiftShader is a validation oracle; for WGX **visible**
 pixels use `tools/gfx/gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for the
 readback oracle use `tools/gfx/wgx-capture.mjs` → `frame.png`. Full trap list:
 `.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
-WGSL validation without a browser: `node tools/gfx/wgx-validate.mjs` (real Dawn,
-~5 s) — never ship "read-verified" WGSL. The live run compiles every module
+Real WGSL validation: `node tools/gfx/wgx-validate.mjs` launches Chromium and runs
+real Dawn on a raced track (~5 s; parent session only — `--static` is the
+no-browser source gate) — never ship "read-verified" WGSL. The live run compiles every module
 at WebKit's ERROR-severity uniformity default (Dawn only warns), so a pass
 here is evidence about an iPhone too; `--lax-uniformity` opts out to bisect.
 
@@ -2164,7 +2207,8 @@ with no player-reachable reset is a product bug (2026-09-03 phone-gate audit):
 | `apex26.perChunkOff` | local | the same losses | either LAMPS chunk knob 0→>0 (tuner note); RESET RENDERER |
 | `apex26.gfxWgxLevel` / `gfxWgxLite` | local | `_wgxEscalate` (device lost, black output) | self-heals after 5 clean sessions; re-picking WEBGPU; RESET RENDERER |
 | `apex26.crashStrikes` (mobile) | local | a race that never finished | one strike per cleanly finished race; any build change wipes it; `__apex.safeMode(false)` |
-| `apex26.gfxBackendProbe` | local | armed around the first world present | consumed at boot — a SURVIVING canary rewrites the pick to WEBGL2 (re-pick restores) |
+| `apex26.gfxBackendProbe` | local | armed around the claim and the first `PROVE_FRAMES` world presents | consumed at boot — a SURVIVING canary attaches GLX for that boot and adds a strike |
+| `apex26.gfxProbeStrikes` | local | a surviving canary (`"<backend>:<n>"`) | `RendererBoot.proved()` after the pick presents `PROVE_FRAMES` frames; the second strike itself (it rewrites the pick to WEBGL2 — re-pick restores); RESET RENDERER |
 | `apex26.gfxClaimFail`, `tlxAutoGL`, `ctxLostReloads`, `wgxHoldPresent` | session | claim-and-die, third loss / 2 error frames, reload budget, soft-present hold | the tab closing; RESET RENDERER |
 
 `RENDERER_LS_KEYS` / `RENDERER_SS_KEYS` in `js/perf/renderer-picker.js` are what
@@ -2198,8 +2242,8 @@ looks fine in the pit lane and shimmers at the far end of a straight.
 #### The trap: you cannot just raise the near plane
 
 The obvious fix — raise `near` — breaks the cockpit. The cockpit rig sits
-**0.44 m from the eye** (`_rigT` in `js/game.js`, against an eye at car-local
-z −0.18). Any near plane above ~0.40 slices the steering wheel and dash out of
+**0.46 m from the eye** (`_rigT` in `js/car/car-draw.js`, against an eye at car-local
+z −0.20, `COCKPIT_EYE_FWD` in `js/camera/vantage.js`). Any near plane above ~0.35 slices the steering wheel and dash out of
 the shot.
 
 An earlier draft of the grounding doc recommended `0.3 → 0.6` globally. That
@@ -2222,12 +2266,13 @@ projected `w` of the rig, not against a screenshot — see
 
 #### What actually works: per-camera near planes
 
-Only `cockpit` and `hood` have geometry within a metre of the eye. Every other
-view — chase, TV, heli, overhead, drift, reverse — has nothing closer than
-several metres, so it can afford a much larger near plane:
+Only the onboard eyes (`cockpit`, `hood`, `visor`, `helmet`) have geometry within a
+metre of the eye. Every other view — chase, TV, heli, overhead, drift, reverse — has
+nothing closer than several metres, so it can afford a much larger near plane
+(`_nearM` in game.js's `render()`):
 
 ```js
-const _nearM = (mode === "cockpit" || mode === "hood") ? 0.3 : 0.9;
+const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor" || _projMode === "helmet") ? 0.3 : 0.9;
 ```
 
 `0.3 → 0.9` is a **3× reduction in depth error** everywhere it is applied, for
@@ -2265,7 +2310,7 @@ temporal or view-dependent.
 | Z-fighting / shimmer | Only visible in motion. Use the **playwright-probe** skill (`references/motion-capture.md`, `tools/shot/motion-capture.mjs`) to record a driven lap headless; a still frame will not show it. |
 | Decal dropout at range | Park at increasing distances from the start line (`__apex.eyeAt`) and compare — dropout is a function of distance, so one framing proves nothing. |
 | Camera inside geometry | Observed repeatedly this session: `orbit`/`trackside` framings landed *inside* tree canopies, producing a full-screen green wash. Worth an `__apex` guard that reports when the eye is inside a prop's bounds. |
-| Near-plane slicing | Cockpit and hood only. Check the wheel/fascia edges after ANY near-plane change — and after any change that moves near geometry, which is the direction that fails silently. A clipped mesh looks washed-out, not clipped: read the projected `w`, per [notes/OCCLUSION-PROBE.md](notes/OCCLUSION-PROBE.md). |
+| Near-plane slicing | The onboard eyes only (cockpit, hood, visor, helmet). Check the wheel/fascia edges after ANY near-plane change — and after any change that moves near geometry, which is the direction that fails silently. A clipped mesh looks washed-out, not clipped: read the projected `w`, per [notes/OCCLUSION-PROBE.md](notes/OCCLUSION-PROBE.md). |
 | One mesh hiding another | Not answerable from a screenshot, and the intuitive suspect is usually innocent (measured: the cockpit tub walls, named twice, contributed 0 of 2722 occluding pixels). Rasterise both into a JS depth buffer off the renderer's own `viewProj` and attribute the loss to a `part()` name — [notes/OCCLUSION-PROBE.md](notes/OCCLUSION-PROBE.md). |
 | Overdraw / depth complexity | Not currently instrumented. A debug shader colouring fragments by depth-test-fail count would localise z-fighting to the exact surfaces, rather than hunting frames. |
 

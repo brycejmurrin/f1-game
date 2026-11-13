@@ -74,6 +74,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api as sharedApi, REPO, DEPLOY } from "./github-api.mjs";
 import { strictFlags } from "../lib/cli-args.mjs";
+import { loadQuarantine, QUARANTINE } from "../../tests/helpers/flaky-policy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export { REPO, DEPLOY };
@@ -252,7 +253,7 @@ export const wantsAnnotations = (job) => job.conclusion === "failure" || job.con
 
 /** Read-only triage lines for a red job (#2665): is it already red on the deploy tip, is it a known flake?
  *  `baseRun`/`baseJobs` are the deploy branch's latest completed run of the same workflow and its jobs (null = unknown);
- *  `annos` the failing annotation lines; `quarantine` tests/data/flaky-quarantine.json's rows. Pure. */
+ *  `annos` the failing annotation lines; `quarantine` the active rows (activeQuarantine). Pure. */
 export function inheritedNotes({ job, annos = [], baseRun = null, baseJobs = null, quarantine = [] }) {
   const out = [];
   const same = Array.isArray(baseJobs) ? baseJobs.find((b) => b.name === job.name) : null;
@@ -281,8 +282,11 @@ export function baseRunFor(workflowId, request = api) {
   baseRunCache.set(workflowId, res);
   return res;
 }
-function readQuarantine() {
-  try { return JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../tests/data/flaky-quarantine.json"), "utf8")).quarantine || []; } catch { return []; }
+/** The quarantine rows that still waive a flake: the ACTIVE policies, filtered by expiry and every policy
+ *  field through the same loader the reporter uses (tests/helpers/flaky-policy.mjs). Raw rows would tell an
+ *  agent "a retry pass is allowed once" for a row that expired and blocks again. */
+export function activeQuarantine(file = QUARANTINE, now = new Date()) {
+  return loadQuarantine(file, now).policies || [];
 }
 
 function annotations(jobId) {
@@ -429,7 +433,7 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
           const annos = annotations(e.job.id);
           for (const a of annos) console.log(a);
           const base = baseRunFor(run.workflow_id, request);
-          for (const n of inheritedNotes({ job: e.job, annos, ...base, quarantine: readQuarantine() })) console.log(n);
+          for (const n of inheritedNotes({ job: e.job, annos, ...base, quarantine: activeQuarantine() })) console.log(n);
         }
       }
     }

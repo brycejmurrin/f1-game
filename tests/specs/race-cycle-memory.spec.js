@@ -61,6 +61,12 @@ async function raceAndDrive(page, id) {
 // the title warm's race prep (js/perf/title-warm.js starts it after 1.2 s of title quiet), the menu program warm
 // and the garage prebuild. One post-warm pair read mid-prep swung ±35 MiB on unchanged heads (A·W56, 2026-10-26).
 // Wait until none runs for QUIET_MS (> the title warm's start delay), then read.
+// THE GARAGE EXTERIOR IS LIVE WORK TOO (#5288). The title prebuild also builds the circuit slice outside the garage
+// (js/garage/exterior.js: one TrackBuildProps step per task, ~3 s on CI), and its suspended scenery iterator holds that
+// build's whole context (~30 MiB: the props output and the pine facet grid). A read that landed inside it was the
+// "high" mode of a bimodal series (tip, 8 runs: ~150-158 or ~182-210 MiB, 1 red at 13.1 MiB/cycle); measured, 24 of 24
+// high readings had exterior status "loading", and every one re-read at 155-158 MiB once it finished.
+// So "loading" counts as busy.
 const QUIET_MS = 3000;
 async function menuQuiet(page) {
   const t0 = Date.now();
@@ -69,7 +75,7 @@ async function menuQuiet(page) {
   expect(hooks, "menuQuiet needs __apex.menuPrep() (a snapshot) and __apex.garagePrebuild()").toEqual({ menuPrep: true, garagePrebuild: true });
   await page.waitForFunction((quietMs) => {
     const A = window.__apex, p = A.menuPrep(), g = A.garagePrebuild();
-    const busy = p.building || p.warming || p.warmFrames > 0 || !!(g && g.running);
+    const busy = p.building || p.warming || p.warmFrames > 0 || !!(g && g.running) || !!(g && g.exterior && g.exterior.status === "loading");
     const now = performance.now(), q = window.__rcmQuiet || (window.__rcmQuiet = { since: now });
     if (busy) q.since = now;
     return !busy && now - q.since >= quietMs;

@@ -78,3 +78,51 @@ test("VM: a neutral plan is byte-identical; DEPLOY in every sector turns BOOST o
   assert.ok(deploy.boosted > 0, "DEPLOY switched BOOST on at a sector entry");
   assert.ok(deploy.energy < base.energy, `and it spent charge (${deploy.energy} < ${base.energy})`);
 });
+
+test("W26 6b: a DEPLOY wish a flat battery blocks at entry is retried in that sector, and fires once", () => {
+  const P = load();
+  P.setPlan(["deploy", "save", "manual"]);
+  const c = { _secIdx: 0, boostOn: false, energy: 0 };
+  assert.equal(P.toggleFor(c, false), false, "entry with a flat battery cannot deploy");
+  c.energy = 0.3;   // harvested back mid-sector
+  assert.equal(P.toggleFor(c, false), true, "the unsatisfied wish acts once there is charge");
+  c.boostOn = true; c.boostOn = false;   // then the player overrides
+  assert.equal(P.toggleFor(c, false), false, "having acted, the plan does not fight the player");
+  // A wish already satisfied at entry is stamped: a later player press is not undone.
+  c._secIdx = 1; c.boostOn = false;
+  assert.equal(P.toggleFor(c, false), false, "SAVE with BOOST already off: satisfied");
+  c.boostOn = true;
+  assert.equal(P.toggleFor(c, false), false, "the player's mid-sector BOOST stands");
+});
+
+test("forecast (#1629): learns per-sector cost from a recorded lap, confidence grows, override wins", () => {
+  const P = load();
+  assert.equal(P.forecast(1, 0, false).conf, 0, "nothing learned → zero confidence, flat forecast");
+  assert.equal(P.forecast(0.8, 0, false).end, 0.8);
+  // A recorded lap, unboosted: S1 -0.10, S2 +0.05, S3 -0.20; S1 boosted costs -0.30.
+  const lap = [[0, -0.10, false], [1, 0.05, false], [2, -0.20, false], [0, -0.30, true]];
+  for (const [s, d, b] of lap) assert.equal(P.learn(s, d, b), true);
+  assert.equal(P.learn(5, 0.1, false), false);
+  assert.equal(P.learn(0, NaN, false), false);
+  let f = P.forecast(1, 0, false);
+  assert.deepEqual([...f.rows.map((r) => r.sec)], [0, 1, 2]);
+  assert.ok(Math.abs(f.rows[0].end - 0.9) < 1e-9 && Math.abs(f.end - 0.75) < 1e-9, JSON.stringify(f));
+  const c1 = f.conf;
+  for (let i = 0; i < 3; i++) for (const [s, d, b] of lap) P.learn(s, d, b);
+  assert.ok(P.forecast(1, 0, false).conf > c1, "more identical laps → higher confidence");
+  P.setPlan(["deploy", "manual", "save"]);
+  f = P.forecast(1, 0, false);
+  assert.equal(f.rows[0].boosted, true, "DEPLOY forecasts the boosted cost");
+  assert.ok(Math.abs(f.rows[0].end - 0.7) < 1e-9);
+  assert.equal(f.rows[2].boosted, false, "SAVE forecasts unboosted");
+  f = P.forecast(0.5, 2, true);   // starts mid-lap in S3, wraps to S1, S2
+  assert.deepEqual([...f.rows.map((r) => r.sec)], [2, 0, 1]);
+  P.setOverride(2, -0.5);
+  f = P.forecast(1, 2, false);
+  assert.equal(f.rows[0].end, 0.5);
+  assert.equal(f.rows[0].conf, 1);
+  assert.equal(P.setOverride(2, null), true);
+  assert.equal(P.setOverride(9, 0.1), false);
+  P.reset();
+  assert.equal(P.forecast(1, 0, false).conf, 0);
+});

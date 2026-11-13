@@ -22,6 +22,7 @@
    arranging and put back exactly as they were on exit. */
 const HudArrange = (() => {
   const STEP = 10;     // toolbar − / + size step, %
+  const TOUCH_CARRIED = ["ot", "aero", "bb"];
   const MIN_CLASH = 3; // px of overlap on BOTH axes before a pair is a clash (touching is not)
   const T = 44;        // every toolbar control's touch target, CSS px — fixed chrome, never scaled (#5198)
   const BAR_H = T + 2 * 2 + 2 * 2;   // the one-row strip: 44 px controls + 2 px padding + 2 px border, each side = 52
@@ -52,6 +53,9 @@ const HudArrange = (() => {
     const next = dir < 0 && s <= STEP ? s / 2 : s + dir * STEP;
     return Number.isFinite(next) && next > 0 ? next : s;
   };
+  /** Pure: the painted size (%) of a widget stored at `s` under CSS zoom `z` (#5256): `--hl-s` is a `scale`, the band
+   *  zoom (fit-capped, or raw HUD SIZE once adopted) multiplies it, so the stored 63.76 at HUD 155 % reads 98.99 %. */
+  const paintedSize = (s, z) => Number((s * (z > 0 && Number.isFinite(z) ? z : 1)).toPrecision(4));   // 4 digits, as the stored readout had; a tiny size stays > 0
   /** Pure: every pair of rects [{id, l, t, r, b}] that overlap by more than `min` px on both axes.
    *  Pairs are [a.id, b.id] in input order; a pair where neither id starts with "#" is two HUD pieces. */
   function clashes(rects, min) {
@@ -229,7 +233,7 @@ const HudArrange = (() => {
       if (!bar) return;
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
-      nameEl.textContent = cur ? Number(cur.s.toPrecision(4)) + "%" : "";
+      nameEl.textContent = cur ? paintedSize(cur.s, elOf(selected)?.currentCSSZoom) + "%" : "";
       nameEl.hidden = !cur;
       const visibility = selected && HudLayout.visibility(selected);
       const off = visibility && visibility.value === "off";
@@ -291,28 +295,33 @@ const HudArrange = (() => {
       // manual anchors, before a drag or size change. The finger never jumps.
       const before = el.getBoundingClientRect();
       if (!(before.width > 0 && before.height > 0)) return orig;
-      HudLayout.set(id, orig, context.set, context.profile);
+      HudLayout.set(id, orig, context.set, context.profile, true);
       let after = el.getBoundingClientRect();
       const size = after.width > 0 ? orig.s * before.width / after.width : orig.s;
       const base = Object.assign({}, orig, { s: Number.isFinite(size) && size > 0 ? size : orig.s });
-      HudLayout.set(id, base, context.set, context.profile);
+      HudLayout.set(id, base, context.set, context.profile, true);
       after = el.getBoundingClientRect();
       const adopted = Object.assign({}, base, {
         x: orig.x + (before.left - after.left) / window.innerWidth * 100,
         y: orig.y + (before.top - after.top) / window.innerHeight * 100,
       });
-      HudLayout.set(id, adopted, context.set, context.profile);
+      HudLayout.set(id, adopted, context.set, context.profile, true);
       return adopted;
     }
-    function flush() {
+    /* A gesture frame paints only (#5031): no storage write, no layout read. The
+       clash marks, the strip's slot and the one save wait for flush() at the end. */
+    function paint() {
       if (raf) {
         if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(raf);
         else clearTimeout(raf);
       }
       raf = 0;
       const p = pending; pending = null;
-      if (p) HudLayout.set(p.id, p.v, p.set, p.profile);
+      if (!p) return;
+      const e = HudLayout.set(p.id, p.v, p.set, p.profile, true);
+      if (nameEl && e && p.id === selected) nameEl.textContent = paintedSize(e.s, elOf(p.id)?.currentCSSZoom) + "%";
     }
+    function flush() { paint(); HudLayout.commit(); }
     /* Bind queued edits to the layout visible when the gesture started. */
     function queue(id, v) {
       if (id === "map" && v.s != null) { const orig = dragOrig(id); v = Object.assign({ x: orig.x, y: orig.y }, v); }
@@ -320,10 +329,7 @@ const HudArrange = (() => {
       pending = { id, set: context.set, profile: context.profile,
         v: Object.assign(pending ? pending.v : {}, v) };
       if (raf) return;
-      raf = (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 16))(() => {
-        flush();
-        if (editing) after();
-      });
+      raf = (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 16))(paint);
     }
     /* HIDDEN PIECES STAY REACHABLE WHILE ARRANGING. body[data-hud-hide] hides a
        piece with display:none, so a piece hidden here (or earlier in SETTINGS)
@@ -382,7 +388,7 @@ const HudArrange = (() => {
       ["announce", [[document.getElementById("announce-num"), "3"], [document.getElementById("announce-who"), "RACE CONTROL"],
         [document.getElementById("announce-text"), "\u201cTRACK LIMITS 2/4\u201d"]]],
       ["flag", [[document.getElementById("hud-flag"), "YELLOW \u00b7 SECTOR 2"]]],
-      ["limits", []],
+      ["limits", [[document.querySelector("#hud-limits .limits-dots"), "\u25cf\u25cf\u25cb\u25cb"]]],   // an empty chip paints no box (#5256)
       ["damage", []],
       ["rel", [], true],
       ["strat", [], true],
@@ -469,9 +475,12 @@ const HudArrange = (() => {
         for (const [, , sel] of ELEMENTS) { const el = document.querySelector(sel); if (el) el.setAttribute("data-hl-arr", ""); }
         document.body.setAttribute("data-hud-arrange", "1");
         ghosts();
-        selected = (ELEMENTS.find(([id]) => visible(elOf(id))) || ELEMENTS.find(([id]) => HudLayout.visibility(id)))?.[0] || null;
+        // OVERTAKE / AERO / BRAKE BIAS are carried by the touch buttons: no box to arrange on touch (#5256).
+        const touch = !!document.body.classList && !document.body.classList.contains("desktop");
+        const rows = ELEMENTS.filter(([id]) => !(touch && TOUCH_CARRIED.includes(id)));
+        selected = (rows.find(([id]) => visible(elOf(id))) || rows.find(([id]) => HudLayout.visibility(id)))?.[0] || null;
         picker.textContent = "";
-        for (const [id, label] of ELEMENTS) {
+        for (const [id, label] of rows) {
           if (!visible(elOf(id)) && !HudLayout.visibility(id)) continue;
           const option = document.createElement("option"); option.value = id; option.textContent = label;
           picker.appendChild(option);
@@ -559,7 +568,7 @@ const HudArrange = (() => {
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
       if (drag && drag.id === id && !pinch) {
         // second finger on the same piece: a pinch
-        flush();
+        paint();
         const p0 = pointers.get(drag.pid);
         pinch = { id, pid: e.pointerId, d0: p0 ? dist(p0, { x: e.clientX, y: e.clientY }) : 0, s0: current(id).s };
         try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
@@ -587,16 +596,19 @@ const HudArrange = (() => {
     }
     function onPointerUp(e) {
       if (!editing) return;
-      flush();
+      paint();
       pointers.delete(e.pointerId);
+      let ended = false;
       if (pinch && drag && (e.pointerId === pinch.pid || e.pointerId === drag.pid)) {
         const pid = e.pointerId === pinch.pid ? drag.pid : pinch.pid;
         const point = pointers.get(pid), id = drag.id;
         pinch = null;
         drag = point ? { id, pid, startX: point.x, startY: point.y, orig: dragOrig(id) } : null;
-        after(); return;
-      }
-      if (drag && e.pointerId === drag.pid) { drag = null; after(); }
+        ended = true;
+      } else if (drag && e.pointerId === drag.pid) { drag = null; ended = true; }
+      // The one save of the gesture: when the last finger on the piece lifts.
+      if (!drag) HudLayout.commit();
+      if (ended) after();
     }
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("pointermove", onPointerMove, true);
@@ -653,6 +665,6 @@ const HudArrange = (() => {
     return Object.freeze({ setEditing, isEditing: () => editing, selected: () => selected });
   }
 
-  return Object.freeze({ STEP, MIN_CLASH, BAR_H, dragTo, placedOrig, pinchTo, stepSize, clashes, barSlot, create });
+  return Object.freeze({ STEP, MIN_CLASH, BAR_H, TOUCH_CARRIED, dragTo, placedOrig, pinchTo, stepSize, paintedSize, clashes, barSlot, create });
 })();
 Object.freeze(HudArrange);

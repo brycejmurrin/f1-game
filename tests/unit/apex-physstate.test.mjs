@@ -67,6 +67,7 @@ function loadOverlay(apex) {
   seedLog(ctx);
   seedStore(ctx);
   vm.runInContext(fs.readFileSync(absSrc("js/perf/metrics-overlay.js"), "utf8"), ctx, { filename: absSrc("js/perf/metrics-overlay.js") });
+  vm.runInContext(fs.readFileSync(absSrc("js/perf/metrics-panel.js"), "utf8"), ctx, { filename: absSrc("js/perf/metrics-panel.js") });   // snapshot() is the LAZY_PERF panel
   return vm.runInContext("GameMetrics", ctx);
 }
 

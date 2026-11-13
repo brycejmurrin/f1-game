@@ -124,6 +124,7 @@ function boot(opts) {
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
+  if (opts && opts.realErs) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/ers-layer.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/ers-layer.js") });
   vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   // The crackle scheduler is TIME-driven: it fires when ctx.currentTime passes
@@ -140,8 +141,8 @@ function boot(opts) {
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
 // it: init + release decodes the fake buffers, then startEngine picks samples.
-async function sampleEngine() {
-  const { GameAudio, release } = boot();
+async function sampleEngine(opts) {
+  const { GameAudio, release } = boot(opts);
   GameAudio.init();
   await release();
   GameAudio.startEngine();
@@ -249,8 +250,8 @@ const TUNE_IDENTITY = Object.freeze({
   limiter: 1, limRate: 1, limPitch: 1, boost: 1, boostPitch: 1,
   whine: 1, harvest: 1, wind: 1, screech: 1, brakes: 1, shift: 1, rivals: 1, reverb: 1, overrun: 1,
 });
-async function neutralEngine() {
-  const A = await sampleEngine();
+async function neutralEngine(opts) {
+  const A = await sampleEngine(opts);
   A.setTune(TUNE_IDENTITY);
   return A;
 }
@@ -403,7 +404,9 @@ test("moving muted layers retain fade-tail pitch, then stop scheduling and re-ai
     for (const key of keys) A.setLayer(key, false);
     ctxTime(0.05); frame(0.3);
     const gains = [...live].filter((n) => n._apexMuteUntil !== undefined);
-    assert.equal(gains.length, samples ? 6 : 5, "the sample sub-layer is absent on the synth core");
+    // "ers" stays in `keys` but owns no engine gain: the MGU-K whine is ErsLayer's
+    // (absent in this harness), not the legacy ersGain chain that rendered at 0 (audit W19).
+    assert.equal(gains.length, samples ? 5 : 4, "the sample sub-layer is absent on the synth core");
     const rows = gains.map((gain) => {
       const direct = [...live].find((n) => n.connections.includes(gain) && n.kind !== "gain");
       const source = [...live].find((n) => n.kind === "osc" && n.connections.includes(direct)) || direct;
@@ -437,7 +440,7 @@ test("moving muted layers retain fade-tail pitch, then stop scheduling and re-ai
     assert.ok(rows.some((r, i) => r.pitch.sets > rapid[i]), "rapid re-mute gets a fresh tail window");
     A.stopEngine(); A.startEngine(); frame(0.2);
     const fresh = [...live].filter((n) => n._apexMuteUntil !== undefined);
-    assert.equal(fresh.length, samples ? 6 : 5);
+    assert.equal(fresh.length, samples ? 5 : 4);
     assert.ok(fresh.every((n) => !gains.includes(n)), "restart creates fresh graph-owned deadlines");
   }
 });
@@ -792,7 +795,8 @@ test("the LIMITER is three knobs: depth that never inverts the gate, a rate, and
 });
 
 test("BOOST is the ERS layers' level and the rev lift under deploy", async () => {
-  const A = await neutralEngine();
+  // ersLevel() reads ErsLayer.deployLevel(): boot the real layer, as the game does (audit W19).
+  const A = await neutralEngine({ realErs: true });
   const deploying = () => A.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
   const coasting = () => A.setEngine(0.7, 0, false, 0.7, 6, {});
   A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
@@ -1165,38 +1169,6 @@ test("an engineer radioVoice clip does not own the duck (radio-voice.js does)", 
   assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, `radio fx must not double-duck from radioVoice, got ${r.music.gain.value}`);
   h.stop();
   for (const fn of pendingTimers.splice(0)) fn();
-});
-
-test("playWatchMedia ducks music and routes media elements through the radio band", async () => {
-  const b = boot({
-    Audio: function AudioMock() {
-      this.crossOrigin = "";
-      this.preload = "";
-      this.src = "";
-      this.volume = 1;
-      this.paused = false;
-      this.ended = false;
-      this.play = () => Promise.resolve();
-      this.pause = () => {};
-    },
-  });
-  const gains = [];
-  const mk = b.ctx.createGain;
-  b.ctx.createGain = () => { const n = mk(); gains.push(n); return n; };
-  b.GameAudio.init();
-  b.GameAudio.startMusic();
-  await b.release();
-  const musicGain = gains.find((g) => Math.abs(g.gain.value - 0.5 * 0.52) < 1e-9);
-  assert.ok(musicGain, "precondition: music gain");
-  const full = musicGain.gain.value;
-  const GameAudioRadioFx = vm.runInContext("GameAudioRadioFx", b.vctx);
-  const h = GameAudioRadioFx.playWatchMedia("https://example.test/radio.mp3", { volume: 0.9 });
-  assert.ok(h && h.chained, "media element path chains into WebAudio");
-  assert.ok(Math.abs(musicGain.gain.value - full * 0.35) < 1e-9, "music ducks for the clip");
-  assert.ok((b.counts.mediaSrc || 0) >= 1, "createMediaElementSource ran");
-  assert.ok((b.counts.biquad || 0) >= 2, "radio band filters are in the graph");
-  h.stop();
-  assert.ok(Math.abs(musicGain.gain.value - full) < 1e-9, "stop releases the duck");
 });
 
 test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
@@ -2838,6 +2810,45 @@ test("audio idle: a resume inside the fade window never unplugs anything", async
   assert.equal(on.pans().reduce((s, p) => s + p.unplugs, 0), 0, "the pass-by pool stays plugged in");
   assert.equal(on.CrowdAudio.inspect().bedGain.unplugs, 0, "the crowd bed stays plugged in");
   assert.ok(on.unplugs() >= u0);
+});
+
+// ── audit W19 (2026-11-09) ──────────────────────────────────────────────────
+// Row 4: the OSCILLATOR FALLBACK (heard before the sample decodes, or when it
+// cannot) pitched by GEAR: the same full rev read 1105 Hz in 1st and 537 Hz in
+// 8th. Pitch is rpm alone on both cores (tools/check/audio-test.cjs asserts it
+// for the sample rate; this pins the synth saws).
+test("the synth fallback's pitch is the same at the same rev in every gear", () => {
+  const A = synthEngine();
+  const saws = () => [...live].filter((n) => n.kind === "osc" && (n.type === "sawtooth" || n.type === "square") && n.stopAt == null);
+  const read = (rev, gear) => {
+    for (let i = 0; i < 4; i++) A.setEngine(rev, 0, false, rev, gear, {});
+    return saws().map((n) => +n.frequency.value.toFixed(3));
+  };
+  for (const rev of [0, 0.5, 1]) {
+    const g1 = read(rev, 1), g8 = read(rev, 8), g4 = read(rev, 4);
+    assert.ok(g1.length >= 3, "precondition: the three synth voices are live");
+    assert.deepEqual(g1, g4, `rev ${rev}: 1st and 4th sing the same note`);
+    assert.deepEqual(g8, g4, `rev ${rev}: 8th and 4th sing the same note`);
+  }
+  const lo = Math.max(...read(0, 3)), hi = Math.max(...read(1, 3));
+  assert.ok(hi > lo * 4, `the note still climbs with rpm (${lo} -> ${hi} Hz)`);
+});
+
+// Row 5: the legacy in-engine ERS whine (ersOsc/ersHp/ersGain) was built,
+// started and torn down every race but rendered at gain 0 behind ErsLayer.
+test("the engine graph builds no legacy ERS whine; ersLevel() is ErsLayer's deploy level", async () => {
+  // Without ErsLayer the engine alone must hold no 720 Hz whine oscillator (ErsLayer's
+  // own deploy voice also starts at 720 Hz, so the check runs where it is absent).
+  const { GameAudio: B, release: relB } = boot();
+  B.init(); await relB(); B.startEngine();
+  B.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
+  const legacy = [...live].filter((n) => n.kind === "osc" && n.type === "sine" && n.frequency.value >= 700 && n.frequency.value <= 1400 && n.stopAt == null);
+  assert.equal(legacy.length, 0, "no legacy ERS sine in the engine graph");
+  assert.equal(B.ersLevel(), 0, "no ErsLayer: a 0, never a throw");
+  const { GameAudio: A, release } = boot({ realErs: true });
+  A.init(); await release(); A.startEngine();
+  A.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
+  assert.ok(A.ersLevel() > 0, "deploying reads the ErsLayer whine");
 });
 
 // #5052: a rival voice's level drifts with distance and revs, and aimGain's absolute 1e-4 floor

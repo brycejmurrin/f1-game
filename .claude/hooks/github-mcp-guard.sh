@@ -13,8 +13,9 @@
 #   DENY  actions_run_trigger: any *cancel* / *rerun* method, run_workflow of
 #         pages.yml / ci.yml (the release train is never dual-dispatched)
 #   ASK   update_pull_request with state "closed"
-#   ASK   issue_write whose `labels` would drop `hold` (the list REPLACES the
-#         labels; the live ones come from `gh api`; unknown → ask)
+#   DENY  issue_write whose `labels` would drop `config-ok`, `hold`, `land` or
+#         `needs-decision` (the list REPLACES the labels; the live ones come
+#         from `gh api`; unknown → ask)
 #   ALLOW the rest, draft→ready included: the Plan gate and CI check a flip.
 # Output is the documented PreToolUse JSON; an unreadable payload or a guarded
 # call with a non-object input is a deny (fail closed).
@@ -31,13 +32,14 @@ try:
 except Exception:
     sys.stderr.write("BLOCKED: github-mcp-guard could not read the hook payload, so this GitHub call is refused (fail closed).\n"); sys.exit(2)
 name = str(d.get("tool_name") or "")
+if name.startswith("MCP:"):
+    name = name[4:]                                    # Cursor's preToolUse spelling in a cloud agent
 if name and "__" not in name:
     name = "mcp__github__" + name                      # Cursor's bare name
-ti = d.get("tool_input")
+ti = d.get("tool_input", {})
 if isinstance(ti, str):
     try: ti = json.loads(ti or "{}")
-    except Exception: ti = None
-if ti is None: ti = {}
+    except Exception: ti = None                         # unparsable: refused below for a guarded tool
 if not name or not GUARDED.search(name):
     sys.exit(0)
 if not isinstance(ti, dict):
@@ -78,7 +80,8 @@ if op == "issue_write":
     if labels is None or number is None or str(ti.get("method") or "update").strip().lower() == "create":
         sys.exit(0)
     names = [str(x).strip().lower() for x in (labels if isinstance(labels, (list, tuple)) else [labels])]
-    if "hold" in names:
+    keep = ("config-ok", "hold", "land", "needs-decision")
+    if all(k in names for k in keep):
         sys.exit(0)
     cur = None
     s = slug()
@@ -90,9 +93,10 @@ if op == "issue_write":
         except Exception:
             cur = None
     if cur is None:
-        emit("ask", "This `labels` list REPLACES the labels and omits `hold`; the current labels could not be read. `hold` is the only veto (whoever set it removes it; Bryce always can) — confirm by hand.")
-    if "hold" in cur:
-        emit("ask", "This `labels` list REPLACES the labels and would REMOVE `hold`, the only veto. Only whoever set it (or Bryce) removes it — confirm by hand.")
+        emit("ask", "This `labels` list REPLACES the labels and omits one of " + ", ".join(k for k in keep if k not in names) + "; the current labels could not be read. Add or remove one label with `gh api` instead, or confirm by hand.")
+    gone = [k for k in keep if k in cur and k not in names]
+    if gone:
+        emit("deny", "issue_write labels REPLACES the list and would remove " + ", ".join("`%s`" % k for k in gone) + ". Add or remove one label with `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=<name>'` (or `-X DELETE .../labels/<name>`); a label Bryce set is his to remove (AGENTS.md §Coordination).")
 sys.exit(0)
 PY
 rc=$?

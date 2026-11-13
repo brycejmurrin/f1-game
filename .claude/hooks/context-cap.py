@@ -8,7 +8,11 @@ input fields), but it carries `transcript_path`, and every assistant entry there
 context = input + cache read + cache write of the newest main-thread entry (the method of
 tools/ci/session-transcript.mjs --ctx and the audit's rows 1/2).
 
-Caps: APEX_CTX_SOFT / APEX_CTX_HARD (k) win; else the brief's last `STOP AT: <N>k`; hard = soft + HARD_DELTA_K.
+Caps: APEX_CTX_SOFT / APEX_CTX_HARD (k) win; else the brief's first `STOP AT: <N>k` (the launch line states it
+first; a later quote of another session's cap is not this session's); hard = soft + HARD_DELTA_K.
+`STOP AT: start+<N>k` is a budget above the session's start (orchestration review 2026-11-11, decision 4: a fresh
+worker starts near 100k, so an absolute cap spends most of itself before the first edit): soft = the first
+main-thread assistant entry's context + N; with no such entry yet, soft = N (the stricter reading).
 A session with no brief (one Bryce opened) has no cap and gets nothing; a worker brief states its own STOP AT
 (.claude/agents/README.md §Parent and child).
 
@@ -17,10 +21,11 @@ A session with no brief (one Bryce opened) has no cap and gets nothing; a worker
   PreToolUse (Agent)             — over the HARD cap, deny a new spawn (permissionDecision "deny",
                                    https://code.claude.com/docs/en/hooks §PreToolUse decision control); the
                                    way out is to push and hand off (skill handoff). settings.json runs this mode as
-                                   `context-cap.py --guard`, which FAILS CLOSED (2026-10-28, the commit-hook
-                                   split's hook pass): an unreadable payload or an internal error on a spawn is a
-                                   block (exit 2, the reason and both overrides on stderr). Without --guard (the
-                                   advisory events, where exit 2 would erase a user's prompt) any error → no output.
+                                   `context-cap.py --guard`, which FAILS CLOSED: an unreadable payload, an internal
+                                   error, or a session WITH a cap whose live count cannot be read (no transcript, a
+                                   zero-usage newest entry, no assistant entry in the tail) is a deny. A session with
+                                   no cap passes. Without --guard (the advisory events, where exit 2 would erase a
+                                   user's prompt) any error → no output.
 APEX_CTX_CAP=off silences every mode; so does the `.claude/allow-context-cap` hatch.
 """
 import json
@@ -42,7 +47,7 @@ def _entries(lines):
 
 
 def context_tokens(path):
-    """Live context of the newest main-thread assistant turn, or None."""
+    """Live context of the newest main-thread assistant turn with a non-zero count, or None."""
     with open(path, "rb") as fh:
         fh.seek(0, os.SEEK_END)
         fh.seek(max(0, fh.tell() - TAIL))
@@ -50,7 +55,24 @@ def context_tokens(path):
     for d in _entries(reversed(lines)):
         u = (d.get("message") or {}).get("usage") if d.get("type") == "assistant" and not d.get("isSidechain") else None
         if u:
-            return int(u.get("input_tokens") or 0) + int(u.get("cache_read_input_tokens") or 0) + int(u.get("cache_creation_input_tokens") or 0)
+            n = int(u.get("input_tokens") or 0) + int(u.get("cache_read_input_tokens") or 0) + int(u.get("cache_creation_input_tokens") or 0)
+            if n > 0:
+                return n
+    return None
+
+
+def start_tokens(path):
+    """Context of the FIRST main-thread assistant entry with a non-zero count (the session's start), or None."""
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for i, line in enumerate(fh):
+            if i > 400:
+                return None
+            for d in _entries([line]):
+                u = (d.get("message") or {}).get("usage") if d.get("type") == "assistant" and not d.get("isSidechain") else None
+                if u:
+                    n = int(u.get("input_tokens") or 0) + int(u.get("cache_read_input_tokens") or 0) + int(u.get("cache_creation_input_tokens") or 0)
+                    if n > 0:
+                        return n
     return None
 
 
@@ -71,15 +93,21 @@ def brief_text(path):
     return ""
 
 
-def caps(root, brief, env):
-    """(soft k, hard k, source) or None when the session has no cap."""
+def caps(root, brief, env, start=None):
+    """(soft k, hard k, source) or None when the session has no cap. `start` (tokens) resolves a start+<N>k cap."""
     soft, src = None, None
     if (env.get("APEX_CTX_SOFT") or "").isdigit():
         soft, src = int(env["APEX_CTX_SOFT"]), "APEX_CTX_SOFT"
     if soft is None:
-        stops = re.findall(r"STOP AT:?\s*(\d+)\s*k", brief, re.I)
+        stops = re.findall(r"STOP AT:?\s*(start\s*\+\s*)?(\d+)\s*k", brief, re.I)
         if stops:
-            soft, src = int(stops[-1]), "brief STOP AT"
+            rel, n = stops[0][0], int(stops[0][1])
+            if not rel:
+                soft, src = n, "brief STOP AT"
+            elif start:
+                soft, src = round(start / 1000) + n, "brief STOP AT start %dk+%dk" % (round(start / 1000), n)
+            else:
+                soft, src = n, "brief STOP AT start+%dk, start unknown" % n
     if soft is None:
         return None
     hard = int(env["APEX_CTX_HARD"]) if (env.get("APEX_CTX_HARD") or "").isdigit() else soft + HARD_DELTA_K
@@ -109,14 +137,27 @@ def decide(data, root, env):
     if os.path.isfile(os.path.join(root, ".claude", "allow-context-cap")):
         return ""
     event, path = data.get("hook_event_name"), data.get("transcript_path")
-    if not path or not os.path.isfile(path):
+    guard = event == "PreToolUse"
+    if guard and data.get("tool_name") not in SPAWNS:
         return ""
-    if event == "PreToolUse" and data.get("tool_name") not in SPAWNS:
+    have = bool(path) and os.path.isfile(path)
+    # Cap first, transcript tail second: context_tokens parses up to 4 MB, so a session with no cap (most of them)
+    # returns before it. An env soft cap makes the brief irrelevant.
+    env_cap = (env.get("APEX_CTX_SOFT") or "").isdigit()
+    brief = "" if env_cap or not have else brief_text(path)
+    rel = re.search(r"STOP AT:?\s*start\s*\+", brief, re.I)
+    cap = caps(root, brief, env, start_tokens(path) if rel else None)
+    if not cap:
         return ""
-    cap = caps(root, brief_text(path), env)
-    n = context_tokens(path)
-    if not cap or n is None:
-        return ""
+    n = context_tokens(path) if have else None
+    if n is None:
+        if not guard:
+            return ""
+        return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+            "permissionDecisionReason": ("context-cap: this session has a cap (%dk, %s) but its live context could not be "
+                "read (%s), so a new spawn is refused (fail closed). Push and hand off, or `touch .claude/allow-context-cap` "
+                "if the user told this session to continue past its cap." % (cap[0], cap[2], "no transcript" if not have
+                else "no assistant entry with a token count in the transcript tail"))}})
     soft, hard, src = cap
     k = round(n / 1000)
     line = "context %dk / cap %dk" % (k, soft)

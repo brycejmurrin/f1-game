@@ -590,80 +590,6 @@ test("the SOUND toggle restarts rain from the live weather, not the grid's raceW
 const sticky = { isActive: true, hasBeenActive: true };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-test("a WATCH clip whose media element errors AND rejects play() falls back once: one fetch, one voice", async () => {
-  // Per the HTML media-failure steps `error` fires and then the pending play()
-  // promise rejects; both handlers used to fetch+decode the clip.
-  const els = [];
-  function Audio() {
-    const el = { preload: "", crossOrigin: "", volume: 1, paused: false, ended: false, onerror: null, onended: null, _src: "", pause() {},
-      play() { return Promise.reject(new Error("NotSupportedError")); } };
-    Object.defineProperty(el, "src", { get: () => el._src, set(v) { el._src = v; Promise.resolve().then(() => { if (el.onerror) el.onerror(); }); } });
-    els.push(el);
-    return el;
-  }
-  const { A, sandbox, fetched } = boot({ Audio, mediaSource: true });
-  A.init(); await flush();
-  const URL_ = "https://example.test/radio.mp3";
-  const h = sandbox.GameAudioRadioFx.playWatchMedia(URL_, { volume: 0.9 });
-  assert.ok(h, "precondition: the clip was accepted");
-  await flush();
-  assert.equal(fetched.filter((u) => u === URL_).length, 1, "one fetch, not one per failure signal");
-  assert.equal(A.radioVoicesLive(), 1, "one voice on air, so stop() can reach it");
-  h.stop();
-  for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 150));
-  assert.equal(A.radioVoicesLive(), 0, "and stop() cuts that one voice");
-});
-
-test("WATCH clip stop aborts the CORS fallback fetch and rejects a late decode (no plainFallback)", async () => {
-  // IMPROVEMENT-CANDIDATES §6: stop() used to leave the fetch running; a late
-  // response decoded and could resurrect audio via plainFallback.
-  const els = [];
-  const pending = [];
-  function Audio() {
-    const el = {
-      preload: "", crossOrigin: "", volume: 1, paused: false, ended: false,
-      onerror: null, onended: null, _src: "",
-      pause() { this.paused = true; },
-      load() {},
-      removeAttribute(name) { if (name === "src") this._src = ""; },
-      play() { return Promise.reject(new Error("NotSupportedError")); },
-    };
-    Object.defineProperty(el, "src", {
-      get: () => el._src,
-      set(v) { el._src = v; Promise.resolve().then(() => { if (el.onerror) el.onerror(); }); },
-    });
-    els.push(el);
-    return el;
-  }
-  const { A, sandbox, decoded } = boot({ Audio, mediaSource: true });
-  sandbox.AbortController = AbortController;
-  // Uncooperative transport: records the signal but still delivers if asked —
-  // production must refuse decode via dead + aborted checks.
-  sandbox.fetch = (url, options) => new Promise((resolve) => {
-    pending.push({ url, signal: options && options.signal, resolve });
-  });
-  A.init(); await flush();
-  const URL_ = "https://example.test/watch-abort.mp3";
-  const beforePending = pending.length;   // soundtrack init may already have fetched
-  const h = sandbox.GameAudioRadioFx.playWatchMedia(URL_, { volume: 0.9 });
-  assert.ok(h, "precondition: clip accepted");
-  await flush();
-  const watchReqs = pending.filter((p) => p.url === URL_);
-  assert.equal(watchReqs.length, 1, "one WATCH fallback fetch is pending (got " + (pending.length - beforePending) + " new)");
-  assert.ok(watchReqs[0].signal, "fetch carries an AbortSignal");
-  const beforeDecodes = decoded.length;
-  const beforeVoices = A.radioVoicesLive();
-  h.stop();
-  assert.equal(watchReqs[0].signal.aborted, true, "stop() aborts the owned fetch");
-  // Deliver a late response anyway (uncooperative transport).
-  watchReqs[0].resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(8), { _url: URL_ })) });
-  await flush();
-  for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 20));
-  assert.equal(decoded.length, beforeDecodes, "late bytes never reach decodeAudioData");
-  assert.equal(A.radioVoicesLive(), beforeVoices, "no resurrected radioVoice after stop");
-  assert.ok(els.every((el) => !el._src || el._src.indexOf("watch-abort") < 0), "teardown retires the WATCH media src");
-});
-
 test("music duck is held per source: a WATCH clip, the engineer and the replay fallback do not release each other", async () => {
   const { A, contexts } = boot();
   const gains = [], mk = (c) => { const f = c.createGain; c.createGain = () => { const n = f(); gains.push(n); return n; }; };
@@ -916,6 +842,78 @@ test("AudioContext constructor throw leaves GameAudio without a context (no over
   assert.doesNotThrow(() => A.init());
   assert.equal(A.context(), null);
   assert.ok(warns.some((w) => /AudioContext unavailable/.test(w)), "warn names the refusal");
+});
+
+// ── audit W19 (2026-11-09): interruption, activation and frozen-clock one-shots ──
+
+// Row 1: "interrupted" while VISIBLE is iOS holding the session (a call, Siri,
+// an alarm) and it ends with a statechange back to "running". A close-and-
+// recreate armed on a 280 ms timer from that statechange dropped the decoded
+// engine/music/voice state for a context about to come back by itself.
+test("a visible interruption never schedules a rebuild; the context resumes in place", async () => {
+  for (const st of ["interrupted", "suspended"]) {
+    const { A, contexts } = boot({ userActivation: sticky });
+    A.init(); await flush();
+    const ctx = contexts[0];
+    ctx.state = st; ctx.onstatechange();
+    await wait(DEVICE_REBUILD_DEBOUNCE_MS + 80); await flush();
+    assert.equal(contexts.length, 1, st + ": no timer rebuild while the interruption lasts");
+    ctx.state = "running"; ctx.onstatechange();
+    await wait(DEVICE_REBUILD_DEBOUNCE_MS + 80); await flush();
+    assert.equal(contexts.length, 1, st + ": the interruption ended and the same context carries on");
+    assert.equal(ctx.state, "running");
+  }
+});
+
+// Row 2: a finger's pointerdown is not activation-triggering (HTML
+// #activation-triggering-input-event); WebKit will not resume inside it. Counting
+// it armed the failed-resume path, so a touch held over 700 ms made its own
+// touchend rebuild a context it could simply have resumed.
+test("a touch pointerdown never arms the failed-resume rebuild; a failed real resume still does", async () => {
+  let now = 10000;
+  const h = boot({ clock: () => now });
+  h.A.init(); await flush();
+  const ctx = h.contexts[0];
+  ctx.state = "interrupted";
+  h.listeners.pointerdown({ type: "pointerdown", pointerType: "touch", isTrusted: true });
+  now += 900;                                         // the finger is held
+  ctx.resume = () => { ctx.state = "running"; return Promise.resolve(); };   // the touchend resume works
+  h.listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
+  assert.equal(h.contexts.length, 1, "the touchend resumed the context instead of rebuilding it");
+  assert.equal(ctx.state, "running");
+  // A resume made inside a REAL gesture that leaves the context stuck is the
+  // one case a later gesture rebuilds.
+  ctx.state = "interrupted"; ctx.resume = () => Promise.resolve();
+  h.listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
+  now += 900;
+  h.listeners.keydown({ type: "keydown", key: "a", isTrusted: true }); await flush();
+  assert.equal(h.contexts.length, 2, "a failed activation-gesture resume rebuilds on the next gesture");
+  // A mouse's pointerdown IS activation (it starts the count like a tap).
+  const m = boot({ clock: () => now });
+  m.A.init(); await flush();
+  m.contexts[0].state = "interrupted";
+  m.listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  now += 900;
+  m.listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  assert.equal(m.contexts.length, 2, "two mouse presses on a stuck context rebuild it");
+});
+
+// Row 3: ctx.currentTime stands still while the context is not running, so every
+// one-shot scheduled then lands on one instant and they all fire on resume.
+test("one-shot SFX are dropped, not stacked, while the context's clock is frozen", async () => {
+  const h = boot();
+  h.A.setUiEnabled(false);
+  h.A.init(); await flush();
+  const ctx = h.contexts[0];
+  ctx.state = "suspended";
+  const nodes0 = h.nodes.length, blips0 = h.blipFires();
+  for (let i = 0; i < 20; i++) { h.A.shift(true); h.A.pitGun(false); h.A.lightsOut(); h.A.deployBoost(); }
+  assert.equal(h.blipFires(), blips0, "no blip queued on a frozen clock");
+  assert.equal(h.nodes.length, nodes0, "no shift crack, rattle or whoosh graph built on a frozen clock");
+  ctx.state = "running";
+  h.A.shift(true); h.A.lightsOut();
+  assert.ok(h.nodes.length > nodes0, "a running context plays the shift crack again");
+  assert.ok(h.blipFires() > blips0, "and the start-light blips");
 });
 
 // #5029: a finger's pointerdown is not activation-triggering, yet the engine's capture listener

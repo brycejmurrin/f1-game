@@ -1,6 +1,6 @@
 # Circuit Gilles Villeneuve — Visual Design Brief
 
-**Theme:** `island_park_day` (green) · **Time:** DAY · **Render:** procedural colored boxes, no textures
+**Theme:** `green` · **Time:** DAY · **Render:** procedural colored boxes, no textures
 
 ## 1. Setting
 A semi-permanent racetrack laid across **Île Notre-Dame**, a man-made island built for Expo 67 in the St. Lawrence River, just off downtown Montreal. The circuit sits inside Parc Jean-Drapeau: leafy parkland, paved cycle paths, the long Olympic rowing basin, and Expo-era pavilions. Water is everywhere — the island is ringed by the river and laced with canals. Walls hug the track tightly with almost no run-off; trees and grass fill the gaps. The Montreal skyline rises across the water to the north.
@@ -138,3 +138,9 @@ interior columns reaching the ground. This is artistic local grading, not a
 claim about the real foundation. The registered bounds include piers and crown.
 The neighbouring-island sight-line and nominal footprint are not GPS placement
 certification; a photograph does not supply a metre profile.
+
+## Turn numbers (2026-11-11, #5316 leftovers)
+
+Source: F1 live-timing circuit corner markers (`https://api.multiviewer.app/api/v1/circuits/23/2026`, the data FastF1 `get_circuit_info()` reads), fitted onto the built centreline by `tools/track/official-corners.cjs` (rms 5.6 m), checked against the FIA 2026 event circuit map (14 turns). Each `turns[k-1]` is the built curvature apex nearest official marker k (corner-frames: 0 turn offenders).
+
+Old list doubled T7 and T9 (0.3113, 0.4793) and missed T5's lobe, T12 (a gentle kink on the Casino straight, r ~1300 m, 0.7369) and the T14 flick (0.9052). L'Épingle is T10. Aero zones now FIA: after T7, T9, T11 (through T12), T14.

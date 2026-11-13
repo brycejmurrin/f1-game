@@ -5,6 +5,11 @@
 import { CliArgError } from "../lib/cli-args.mjs";
 import { createRequire } from "node:module";
 import { pickCircuit } from "./circuit-axis.mjs";
+import { brycePhone, seedStoreInPage } from "../lib/bryce-phone.mjs";
+import fs from "node:fs";
+// The owner's phone windows: ONE record (#5218), read by bryce-phone.mjs and tests/helpers/title-fit.mjs too.
+const PW = JSON.parse(fs.readFileSync(new URL("../../tests/data/phone-windows.json", import.meta.url), "utf8")).windows;
+const ins = (w) => ({ t: w.insets.top, r: w.insets.right, b: w.insets.bottom, l: w.insets.left });
 
 const require = createRequire(import.meta.url);
 const { devices } = require("playwright");
@@ -30,23 +35,31 @@ export const VIEWPORTS = [
   // 59/34 top/bottom upright; on its side the notch moves to the LEADING edge.
   ["ios-iphone-portrait",   { ...devices["iPhone 15 Pro"], viewport: { width: 393, height: 852 }, screen: { width: 393, height: 852 }, deviceScaleFactor: 2 },
     "full-screen portrait geometry; browser toolbar excluded", { t: 59, r: 0, b: 34, l: 0 }],
-  ["ios-iphone-landscape",  { ...devices["iPhone 15 Pro landscape"], viewport: { width: 852, height: 393 }, screen: { width: 852, height: 393 }, deviceScaleFactor: 2 },
+  ["ios-iphone-landscape",  { ...devices["iPhone 15 Pro landscape"], viewport: { width: PW.standalone.width, height: PW.standalone.height }, screen: { width: 852, height: 393 }, deviceScaleFactor: 2 },
     "the shape the game is PLAYED in — 343px of height for everything",
-    { t: 0, r: 59, b: 21, l: 59 }],
-  // The device descriptor's 393px is the FULL-SCREEN/PWA height; landscape
-  // Safari with its collapsed toolbar leaves ~344px, and no cell sat between
-  // 344 and 393 — the matrix hole behind the 2026-08 teampicker arithmetic.
+    ins(PW.standalone)],
+  // The device descriptor's 393px is the FULL-SCREEN/PWA height. The Safari tab is
+  // the window MEASURED on Bryce's iPhone (852x368, #5218; this cell was a guessed
+  // 852x344 "collapsed toolbar" before). Both from tests/data/phone-windows.json.
   ["ios-iphone-landscape-safari", { ...devices["iPhone 15 Pro landscape"],
-      deviceScaleFactor: 2, viewport: { width: 852, height: 344 }, screen: { width: 852, height: 393 } },
-    "landscape Safari with the toolbar collapsed — the shortest real viewport",
-    { t: 0, r: 59, b: 21, l: 59 }],
+      deviceScaleFactor: 2, viewport: { width: PW.safari.width, height: PW.safari.height }, screen: { width: 852, height: 393 } },
+    "landscape Safari tab — the window measured on the owner's iPhone",
+    ins(PW.safari)],
   // iPhone 12-14 and most Android phones in landscape: 844x390 full screen. The
-  // 852x344 / 852x393 cells above straddle it but never land ON it, and a
+  // 852x368 / 852x393 cells above straddle it but never land ON it, and a
   // title-screen overlap (INSTALL APP over ANIMATE BACKGROUND) showed only here
   // (found by hand in Chrome DevTools emulation, 2026-10-05).
-  ["ios-iphone-landscape-844", { ...devices["iPhone 13 landscape"], viewport: { width: 844, height: 390 }, screen: { width: 844, height: 390 } },
+  ["ios-iphone-landscape-844", { ...devices["iPhone 13 landscape"], viewport: { width: PW.w844.width, height: PW.w844.height }, screen: { width: 844, height: 390 } },
     "iPhone 13 full-screen geometry, 844x390 CSS; browser toolbar excluded",
-    { t: 0, r: 47, b: 21, l: 47 }],
+    ins(PW.w844)],
+  // THE OWNER'S PHONE (tools/lib/bryce-phone.mjs, issue #5262). Named `bryce-*` so an `ios-*` glob never picks them
+  // up. The 5th element marks the cell: seedOwnerProfile() then boots it on his live settings export (UI SIZE 61 %),
+  // and layout-audit sets real env() insets and prints the PAINTED sizes (tools/lib/paint-floor.mjs).
+  ...["standalone", "safari"].map((w) => {
+    const p = brycePhone({ window: w, dpr: 2, profile: false });
+    return [p.name, { ...p.contextOptions }, `Bryce's iPhone, ${w === "standalone" ? "Home Screen app" : "Safari tab"} ${p.viewport.width}x${p.viewport.height}, his live settings export — ${p.verified}`,
+      { t: p.insets.top, r: p.insets.right, b: p.insets.bottom, l: p.insets.left }, { bryce: w }];
+  }),
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
   ["ios-ipad-landscape",    { ...devices["iPad Pro 11 landscape"], deviceScaleFactor: 1 },
@@ -139,6 +152,10 @@ export const SCREENS = [
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-progress");
       await p.waitForSelector("#pm-panel-progress:not([hidden])", { timeout: 15000 }); } },
+  { id: "settingscredits", view: "#pm-panel-credits", name: "About & credits", root: "#pmsettings", open: async (p) => {
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-open-credits");
+      await p.waitForSelector("#pm-panel-credits:not([hidden])", { timeout: 15000 }); } },
   { id: "settingsfiles", view: "#pm-panel-files", name: "Saves & Data", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-files");
@@ -635,4 +652,16 @@ export function pickScreens(all, patternArg) {
 
 export function pickViewports(all, patternArg) {
   return pickByName(all, patternArg, ([n]) => n, "--viewports");
+}
+
+/**
+ * Owner cells (`bryce-*`): seed his live settings export before the first script runs, so the cell boots the way his
+ * phone does. A no-op for every other viewport. Call it on the context right after newContext. Returns the preset or null.
+ */
+export async function seedOwnerProfile(ctx, vpEntry) {
+  const mark = vpEntry && vpEntry[4];
+  if (!mark || !mark.bryce) return null;
+  const preset = brycePhone({ window: mark.bryce, dpr: 2 });
+  await ctx.addInitScript(seedStoreInPage, preset.localStorage);
+  return preset;
 }

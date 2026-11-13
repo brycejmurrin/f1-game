@@ -389,6 +389,7 @@ test("game.js hands WallClamp.apply a pooled ctx, not a per-call literal", () =>
   assert.match(game, /WallClamp\.apply\(c, _wallCtx\);/);
   assert.doesNotMatch(game, /WallClamp\.apply\(c, \{/);
   assert.match(game, /const _wallCtx = \{[^\n]*addShake\(d\)/);
+  assert.match(game, /const _wallCtx = \{[^\n]*\bvStd\b/, "#4947: _wallCtx carries vStd");
 });
 
 for (const side of [-1, 1]) {
@@ -410,3 +411,56 @@ for (const side of [-1, 1]) {
     }
   });
 }
+
+// Audit 2026-11-09 W2 #8: shake, vibrate and rumble sat INSIDE the soundOn gate,
+// so with SOUND OFF a street-wall strike gave the player no feel at all. Mute
+// silences the SFX only; the re-arm still paces the feel.
+test("SOUND OFF: a street-wall strike still shakes, vibrates and rumbles, silently", () => {
+  let audioHits = 0, vib = 0, rum = 0, shake = 0;
+  const { WallClamp } = load({ onCollision: () => { audioHits++; }, onVibrate: () => { vib++; }, onRumble: () => { rum++; } });
+  const c = noseInCar();
+  WallClamp.apply(c, baseCtx({ soundOn: false, track: { ...baseCtx().track, street: true }, addShake: () => { shake++; } }));
+  assert.equal(audioHits, 0, "no SFX with sound off");
+  assert.deepEqual({ shake, vib, rum }, { shake: 1, vib: 1, rum: 1 }, "the feel fires once");
+  assert.equal(c.collideT, WALL_SFX_REARM, "the re-arm paces the feel with sound off too");
+});
+
+// #4947: wall-strike severity and wall-align were raw m/s and a literal 60 Hz
+// (xOver * 60 + |speed| * 0.15; |speed| / 8). PACE is a ground-speed scale, so
+// the same hit read harder at OVERALL SPEED 1.338 and softer at 0.84, and a
+// 120 Hz step halved it. Now std-scale through ctx.vStd with xOver / dt.
+function sevAt(pace, dt, latStd = 6, vStdSpeed = 40) {
+  const { ctx: vctx, WallClamp } = load();
+  let sev = null, promoted = null;
+  vctx.DebrisWorld = { active: () => true, wallImpact: () => {}, promoteBarrier: (_c, _side, s) => { promoted = s; } };
+  const c = {
+    s: 10, x: 5 + latStd * pace * dt, human: false, isPlayer: false, speed: vStdSpeed * pace,
+    vLat: 0, head: 0, wasOnWall: false, wallT: 0, wallHits: 0, collideT: 0,
+  };
+  WallClamp.apply(c, baseCtx({ dt, vStd: (v) => v / pace, incidentSim: { notifyWall: (_c, _side, s) => { sev = s; } } }));
+  assert.equal(promoted, sev, "barrier promotion and the incident sim read one severity");
+  return sev;
+}
+
+test("wall severity: the same std-scale hit is the same severity at any PACE and step rate (#4947)", () => {
+  const ref = sevAt(1, 1 / 60);
+  assert.ok(Math.abs(ref - (6 * (1 / 60) * 60 + 40 * 0.15)) < 1e-9, `PACE 1 / 60 Hz keeps the tuned value: ${ref}`);
+  for (const pace of [0.84, 1.338]) {
+    for (const dt of [1 / 60, 1 / 120]) {
+      const s = sevAt(pace, dt);
+      assert.ok(Math.abs(s - ref) < 1e-9, `PACE ${pace} dt ${dt}: sev ${s} vs ${ref}`);
+    }
+  }
+});
+
+test("wall-align: the nose walks onto the tangent at the same rate for the same std speed at any PACE (#4947)", () => {
+  const head = (pace) => {
+    const { WallClamp } = load();
+    const c = noseInCar({ speed: 4 * pace });   // 4 vStd m/s: inside the |v|/8 ramp
+    WallClamp.apply(c, baseCtx({ vStd: (v) => v / pace }));
+    return c.head;
+  };
+  const ref = head(1);
+  assert.ok(ref !== -0.4, "the nose moved");
+  for (const pace of [0.84, 1.338]) assert.ok(Math.abs(head(pace) - ref) < 1e-12, `PACE ${pace}: head ${head(pace)} vs ${ref}`);
+});

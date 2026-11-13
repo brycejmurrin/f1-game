@@ -69,6 +69,11 @@ const XrBoot = (function () {
    */
   function ensureXrBackend() {
     if (canAttach()) return { ok: true };
+    // The pin reloads the page: never mid-race (a phone's Cardboard probe can
+    // show ENTER VR over the touch dock; one stray tap lost the race).
+    if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+      return { ok: false, message: "VR AFTER THE RACE" };
+    }
     try {
       if (localStorage.getItem(LS_XR_PREV) === null) {   // a second click must not stash the pin itself
         const prev = {};
@@ -259,7 +264,14 @@ const XrBoot = (function () {
   // button that could only fail) for every one of them. Ask whether an
   // immersive-vr session can start at all. true / false, or null when that cannot
   // be known (no isSessionSupported, a throw, a hang past the cap).
-  const PROBE_CAP_MS = 1500;
+  // Asking bars Chrome's bfcache (#5417): ask once, store it (the one apex26.xrCaps writer).
+  const PROBE_CAP_MS = 1500, LS_XR_CAPS = "apex26.xrCaps";
+  function cachedVr() {
+    let v = null;
+    try { v = localStorage.getItem(LS_XR_CAPS); } catch (_) { /* blocked */ }
+    return v === "1" || (v === "0" ? false : null);
+  }
+  function storeVrCaps(vr) { try { localStorage.setItem(LS_XR_CAPS, vr ? "1" : "0"); } catch (_) { /* blocked */ } }
   function probeVr() {
     return (async () => {
       try {
@@ -270,6 +282,7 @@ const XrBoot = (function () {
         const cap = new Promise((resolve) => { if (typeof setTimeout === "function") timer = setTimeout(() => resolve(null), PROBE_CAP_MS); });
         try {
           const v = await Promise.race([xr.isSessionSupported("immersive-vr"), cap]);
+          if (v !== null) storeVrCaps(!!v);
           return v === null ? null : !!v;
         } finally { if (timer !== null) clearTimeout(timer); }
       } catch (_) { return null; }
@@ -280,10 +293,20 @@ const XrBoot = (function () {
     try { if (localStorage.getItem("apex26.xr") === "1") return true; } catch (_) { /* blocked */ }
     try { if (localStorage.getItem(LS_XR_PENDING) === "1") return true; } catch (_) { /* blocked */ }
     if (typeof navigator === "undefined" || !navigator.xr) return false;
+    if (cachedVr() !== null) return cachedVr();
     // Only a definite "no headset" skips the fetch; an unknown answer keeps the old one.
     return (await probeVr()) !== false;
   }
 
+  function recheck() {   // Settings › display: a headset added or removed since the stored answer
+    return probeVr().then((vr) => {
+      if (vr) return ensureXr().then((ok) => { if (ok) finish(); return !!ok; });
+      if (vr === false && typeof ApexXR !== "undefined") ApexXR.detect();   // adopts the stored "0"
+      return false;
+    });
+  }
+
+  let finish = () => {};
   function mountUi() {
     restorePinnedBackend();
     if (typeof window !== "undefined") {
@@ -294,7 +317,7 @@ const XrBoot = (function () {
         ensure: ensureXr,
       };
     }
-    const finish = () => {
+    finish = () => {
       // RendererBoot runs before the lazy XR bundle exists. Publish the
       // headset capability now so SETTINGS and the next boot share the probe.
       if (typeof ApexXR !== "undefined" && typeof ApexXR.detect === "function") {
@@ -387,7 +410,7 @@ const XrBoot = (function () {
   }
 
   return {
-    bind, mountUi, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
+    bind, mountUi, recheck, storeVrCaps, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
     ensureXrBackend, restorePinnedBackend, applyEyes, present, afterTick, chainWindowRaf,
     diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
     // Test / UI helpers

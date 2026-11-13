@@ -1,4 +1,4 @@
-/* GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the context-bound noise cache. */
+/* GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, oneShotOk?, now }) uses live service functions; resetContext discards only the context-bound noise cache. */
 "use strict";
 
 var GameAudioSignal = (function () {
@@ -125,8 +125,12 @@ var GameAudioSignal = (function () {
       return v;
     }
 
+    // One-shots also need the context's clock to be moving (engine.js oneShotOk:
+    // a suspended context freezes currentTime, so shots queued then all fire at
+    // once on resume). A host without it (crowd / unit hosts) falls back to sfxOk.
+    const shotOk = () => (host.oneShotOk ? host.oneShotOk() : host.sfxOk());
     function blip(freq, type, peak, attack, decay, slideTo, when) {
-      if (!host.sfxOk()) return;
+      if (!shotOk()) return;
       const t0 = host.now() + (when || 0);
       const dur = attack + decay;
       const v = acquireBlipVoice(t0);
@@ -239,16 +243,16 @@ var GameAudioSignal = (function () {
       src.stop(t0 + decay + 0.1);
     }
     function noise(peak, decay, filterFreq, when) {
-      if (!host.sfxOk()) return;
+      if (!shotOk()) return;
       noiseBurst(peak, decay, NOISE_LOWPASS, filterFreq, null, when);
     }
     // A falling band-passed hiss: a wastegate rounds off as its pressure goes.
     function hiss(peak, decay, f0, f1) {
-      if (!host.sfxOk() || !(peak > 0)) return;
+      if (!shotOk() || !(peak > 0)) return;
       noiseBurst(peak, decay, NOISE_HISS, f0, f1, 0);
     }
     function scrapeNoise(peak, decay) {
-      if (!host.sfxOk()) return;
+      if (!shotOk()) return;
       noiseBurst(peak, decay, NOISE_SCRAPE, 2600, null, 0);
     }
 

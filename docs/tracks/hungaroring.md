@@ -18,13 +18,13 @@ climbs through the middle sector before rolling home.
 
 | s | Side | Distance | Box-model description |
 |------|------|----------|------------------------|
-| 0.00 | L | near | 2024–25 pit / paddock building: approximate 340 m continuous white/glazed mass, five stylized storeys, burgundy terrace fascia and five simplified pergola bays. Local level podium supports the building on the game's slope; footprint, height and grading remain artistic |
-| 0.00 | R | near | Main grandstand opposite the pits: covered, ~10k seats, deep perpendicular terrace stack + dark roof (IADA); size approximate |
+| 0.00 | R | near | 2024–25 pit / paddock building: approximate 340 m continuous white/glazed mass, five stylized storeys, burgundy terrace fascia and five simplified pergola bays. Local level podium supports the building on the game's slope; footprint, height and grading remain artistic |
+| 0.00 | L | near | Main grandstand opposite the pits: covered, ~10k seats, deep perpendicular terrace stack + dark roof (IADA); size approximate |
 | — | — | — | Dynamics 21 m sculpture + separate entrance office: not modelled (appearance/GPS UNSOURCED for a faithful placement) |
 | 0.02 / 0.985 | both | near | Two tunnel stairheads between paddock and main tribune (Motorsport.com) |
-| 0.02 | L | near | Pit wall + garage row: thin white box strip with red kerb trim |
-| 0.07 | R | mid | T1 / Pit Exit cluster — covered cantilever stand on the outside braking zone (oversteer48 Pit Exit 1/2 + T1; Pit Exit 2 not a separate mass — vertex budget) |
-| 0.090–0.098 | R | near | Pit Exit 1 uncovered bleacher (oversteer48: no roof), positive rake |
+| 0.02 | R | near | Pit wall + garage row: thin white box strip with red kerb trim |
+| 0.07 | L | mid | T1 / Pit Exit cluster — covered cantilever stand on the outside braking zone (-1 since the 2026-11-11 pit flip) (oversteer48 Pit Exit 1/2 + T1; Pit Exit 2 not a separate mass — vertex budget) |
+| 0.080–0.088 | L | near | Pit Exit 1 uncovered bleacher (oversteer48: no roof), positive rake |
 | 0.08 | R | far | Dry-grass colour patch (40 x 32 m, 0.14 m skin) on the valley floor below T1 banking; no infield water |
 | 0.12 | L | mid | Grass amphitheatre hill, sun-bleached green, dotted dark tree-cube clumps |
 | 0.18 | R | mid | Low grandstand bleacher: pale tiered box facing the slow complex |
@@ -35,7 +35,7 @@ climbs through the middle sector before rolling home.
 | 0.75 | L | mid | Open grass run-off bank, dry yellow-green slope |
 | 0.90 | R | mid | Approach grandstand: tiered box leading back to the line |
 
-**Pit side note:** `pit.side` stays `-1` (paddock left of the main straight). oversteer48 places the 2025 main grandstand on the outside-left opposite the pit garages (implying pit on the right). That conflicts with the def; flipping pit side is a separate PR (TrackPit / foundation blast radius). This pass keeps the existing left-pit / right-tribune framing.
+**Pit side — FLIPPED 2026-11-11 (#5316 leftovers):** the FIA 2026 Hungarian GP event document (Doc 5, "Circuit Map, Pit Lane Drawing, Emergency Exits Map and Red Zone", [fia.com](https://www.fia.com/system/files/decision-document/2026_hungarian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf)) puts the pit lane and garages on the driver's RIGHT of the main straight (the lane leaves on the inside of the right-hand T14). `pit.side` is now `+1` with `ownPitStraight: true`: the pit building, paddock apron (gap 58, 40 m deep), broadcast compound, pit wall, entry tunnel and camera tower are on +1; the covered main tribune, the T1 / Pit Exit stand and bleacher, guardrail, catch fence and T1 hillside are on -1 (the outside of T1). `forestEdge` starts at authored 0.145; the hospitality/service kits sit at the pit-entry end (racing 0.975-0.99), the only stretch with room behind the paddock. Props sit 1 triangle under the ratchet: any further scenery here needs a cut first. Fitted to measured clearance, not surveyed dimensions.
 
 Sources: [Wikipedia](https://en.wikipedia.org/wiki/Hungaroring), [DVM Group](https://dvmgroup.com/en/references/projects/hungaroring), [IADA 2026](https://ad-c.org/winner/hungaroring-gold-winner-mixed-use-development-design-iada-2026/), [Motorsport.com](https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/), [oversteer48 Pit Exit 1](https://oversteer48.com/hungaroring-pit-exit-1-grandstand/), [TrackTitan](https://www.tracktitan.io/post/hungaroring-track-guide), [F1 Technical](https://www.f1technical.net/news/25005), [Driver61](https://driver61.com/circuit-guide/hungaroring/)
 
@@ -47,7 +47,7 @@ Famously twisty and slow with very few overtaking spots — pole and clean air d
 - Use dry yellow-green grass, not vivid lawn — it reads as hot Hungarian summer.
 - Make Turn 1 dramatic with a clear DOWN drop, tall banking, and dry grass in the basin floor.
 - Cluster dark-green tree cubes along ridge lines for a low forested horizon.
-- Anchor s=0 with the long modern pit slab (L) facing the deep covered grandstand (R).
+- Anchor s=0 with the long modern pit slab (R) facing the deep covered grandstand (L).
 - Keep palette warm and slightly hazy; fade far hills toward the fog tint for depth.
 - Frame debt: `sceneryStartFrac` 0.9825 leaves `_sceneryShift` ≈ 0.90 — leave it alone until a dedicated frame commit (Estoril lesson).
 

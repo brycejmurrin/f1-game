@@ -641,10 +641,14 @@ function applyTrackSearch(value) {
   ScrollFadeRefresh();
 }
 
-function trackInFilter(t, filter, favs) {
+// SEASON / CLASSICS follow SeasonCal.list(), not the `classic` flag (W34; select-season-tab.test.mjs).
+const seasonIds = () => calendarIdSet(typeof SeasonCal !== "undefined" ? SeasonCal : null);
+// The CLASSIC badge: a flagged circuit that this season's calendar does not race.
+const classicBadge = (t, ids) => !!t.classic && calendarGroup(t, ids) === "classic";
+
+function trackInFilter(t, filter, favs, ids) {
   if (!t) return false;
-  if (filter === "season") return !(t.classic || t.custom);
-  if (filter === "classic") return !!t.classic;
+  if (filter === "season" || filter === "classic") return calendarGroup(t, ids === undefined ? seasonIds() : ids) === filter;
   if (filter === "custom") return !!t.custom;
   if (filter === "fav") return (favs || favList()).includes(t.id);
   if (filter === "daily-open") return !!(G.daily && t.id === G.daily.plan().trackId);
@@ -657,10 +661,11 @@ function trackInFilter(t, filter, favs) {
 // chip actually shows.
 function snapTrackToFilter(filter = visibleTrackFilter()) {
   const favs = favList();
+  const ids = seasonIds();
   const cur = Tracks.LIST[G.trackIdx];
   if (keepActiveId && !pinnedActive(cur)) keepActiveId = null;
-  if (trackInFilter(cur, filter, favs) || pinnedActive(cur)) return;
-  const i = Tracks.LIST.findIndex((t) => trackInFilter(t, filter, favs));
+  if (trackInFilter(cur, filter, favs, ids) || pinnedActive(cur)) return;
+  const i = Tracks.LIST.findIndex((t) => trackInFilter(t, filter, favs, ids));
   if (i < 0) return;
   G.trackIdx = i;
   store.set("trackId", Tracks.LIST[i].id);
@@ -786,11 +791,12 @@ function trackFilterBar() {
 // stylesheet; the .trb badges stay in the DOM (hidden in the strip) because the
 // SEASON filter's "no classics shown" contract is asserted on them.
 function trackTile(t, i, opts) {
+  const classic = classicBadge(t, opts && opts.calIds !== undefined ? opts.calIds : seasonIds());
   const row = document.createElement(opts && opts.readOnly ? "div" : "button");
   if (!(opts && opts.readOnly)) row.type = "button";
   row.className = "track-row" + (opts && opts.active ? " active" : "");
   row.dataset.trackIdx = String(i);
-  row.dataset.kind = t.custom ? "custom" : t.classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
+  row.dataset.kind = t.custom ? "custom" : classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
   row.setAttribute("aria-label", t.name);
   // The country is the tooltip: five USA tiles and three Italian ones need
   // it, and the strip has no room for a second line of text under each flag.
@@ -818,7 +824,7 @@ function trackTile(t, i, opts) {
   nm.textContent = t.name;
   if (t.night) { const b = document.createElement("span"); b.className = "trb trb-night"; b.textContent = "NIGHT"; nm.appendChild(b); }
   if (t.street) { const b = document.createElement("span"); b.className = "trb trb-street"; b.textContent = "STREET"; nm.appendChild(b); }
-  if (t.classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
+  if (classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
   if (t.custom) { const b = document.createElement("span"); b.className = "trb trb-custom"; b.textContent = "CUSTOM"; nm.appendChild(b); }
   row.appendChild(nm);
   return row;
@@ -939,14 +945,16 @@ function buildSelect(opts) {
     snapTrackToFilter();
     const favs = favList();
     const filter = visibleTrackFilter();
+    const calIds = seasonIds();
     Tracks.LIST.forEach((t, i) => {
-      if (!trackInFilter(t, filter, favs) && !(i === G.trackIdx && pinnedActive(t))) return;
-      const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
+      if (!trackInFilter(t, filter, favs, calIds) && !(i === G.trackIdx && pinnedActive(t))) return;
+      const grp = calendarGroup(t, calIds);
+      const g = grp === "custom" ? "MY CIRCUITS" : grp === "classic" ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       // Filter chips name the view. A vertical CLASSICS/SEASON divider squeezed
       // the ~500 strip, ate end slack, and clipped the last flag (apex7/11).
-      const row = trackTile(t, i, { active: i === G.trackIdx });
+      const row = trackTile(t, i, { active: i === G.trackIdx, calIds });
       row.dataset.trackGroup = g;
-      row.dataset.search = [t.name, t.country, t.custom ? "custom mine" : t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
+      row.dataset.search = [t.name, t.country, grp === "custom" ? "custom mine" : grp, t.street ? "street" : "", t.night ? "night" : ""]
         .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
       if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
@@ -1050,9 +1058,16 @@ function drawElevProfile(cv, t, showEl) {
   // 2.5x horizontally and 1.0x vertically, smearing the 8px labels wide. Size
   // the buffer to the measured box times the effective zoom x dpr (the house
   // minimap pattern, capped at 3), and keep drawing in CSS px via the
-  // transform. Falls back to the attributes when hidden (zero box).
-  const boxW = cv.clientWidth || cv.width, boxH = cv.clientHeight || cv.height;
-  const ratio = Math.min(3, Math.max(1, (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  // transform. A hidden box (display:none: the compact picker, the modal before
+  // its reveal) is NOT drawn: falling back to the buffer multiplied it by dpr on
+  // every pick (280x36 -> 22680x2916, #5062). The next visible pass draws it.
+  let boxW = cv.clientWidth, boxH = cv.clientHeight;
+  if (!(boxW > 0 && boxH > 0)) {
+    target.hidden = false;   // a self-hidden canvas must be able to measure again
+    boxW = cv.clientWidth; boxH = cv.clientHeight;
+    if (!(boxW > 0 && boxH > 0)) return false;
+  }
+  const ratio = Math.min(3, 4096 / boxW, 4096 / boxH, Math.max(1, (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
   const bw = Math.max(1, Math.round(boxW * ratio)), bh = Math.max(1, Math.round(boxH * ratio));
   if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
   const ew = boxW, eh = boxH;
@@ -1362,12 +1377,14 @@ function updateTrackPreview() {
     const kinds = [];
     if (t.night) kinds.push(["trb trb-night", "NIGHT RACE"]);
     if (t.street) kinds.push(["trb trb-street", "STREET CIRCUIT"]);
-    if (t.classic) kinds.push(["trb trb-classic", "CLASSIC"]);
+    if (classicBadge(t, seasonIds())) kinds.push(["trb trb-classic", "CLASSIC"]);
     if (t.custom) kinds.push(["trb trb-custom", "CUSTOM CIRCUIT"]);
+    const why = t.custom && typeof CustomTracks !== "undefined" && CustomTracks.badge(t.id, () => { if (Tracks.LIST[G.trackIdx] === t) updateTrackPreview(); });
+    if (why) kinds.push(["trb", "BREAKS TODAY'S RULES", why]);
     if (t.banked) kinds.push(["trb", "BANKED"]);
     factsEl.textContent = "";
-    for (const [cls, label] of kinds) {
-      const b = document.createElement("span"); b.className = cls; b.textContent = label; factsEl.appendChild(b);
+    for (const [cls, label, why] of kinds) {
+      const b = document.createElement("span"); b.className = cls; b.textContent = label; if (why) b.dataset.stale = b.title = why; factsEl.appendChild(b);
     }
   }
   const detail = document.getElementById("sel-detail-chip");
@@ -1572,6 +1589,8 @@ function openTrackDetail() {
     // A queued rAF/ResizeObserver delivery may arrive after CLOSE. Never
     // measure and redraw a hidden modal, and never retain its circuit closure.
     if (modal.hidden) return;
+    // The strip was drawn while the modal was display:none (a zero box, so deferred).
+    drawElevProfile(document.getElementById("track-detail-elev"), t, document.getElementById("track-detail-elev-wrap"));
     // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
     // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
     // pixels and re-introduce stretch at UI SIZE ≠ 100%.
@@ -1639,6 +1658,24 @@ return {
 };
 }
 
-return { create };
+/** The season calendar's ids, or null (then the `classic` flag decides). */
+function calendarIdSet(cal) {
+  if (!cal || typeof cal.list !== "function") return null;
+  let l;
+  try { l = cal.list(); } catch (_) { return null; }
+  if (!Array.isArray(l) || !l.length) return null;
+  const ids = new Set();
+  for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
+  return ids.size ? ids : null;
+}
+/** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
+function calendarGroup(t, ids) {
+  if (!t) return null;
+  if (t.custom) return "custom";
+  if (ids) return ids.has(t.id) ? "season" : "classic";
+  return t.classic ? "classic" : "season";
+}
+
+return { create, calendarIdSet, calendarGroup };
 })();
 Object.freeze(Menus);

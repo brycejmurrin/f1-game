@@ -10,6 +10,7 @@ import vm from "node:vm";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { glxSoftHarness } from "../helpers/glx-soft-harness.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -320,6 +321,32 @@ test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
   }
 });
 
+test("GLX soft-present: a timed-out waiter is really removed (the real soft.js, run)", async () => {
+  // The pins above read the TEXT of the timeout path; this runs it. A waiter
+  // left on the list after its timeout keeps blitIfDue() reading back the
+  // framebuffer on every present for a capture nobody is waiting on.
+  const h = glxSoftHarness();
+  await assert.rejects(h.soft.awaitSoftPresent(5), /awaitSoftPresent timeout after 5 ms/);
+  h.soft.blitIfDue();
+  assert.equal(h.blitTries(), 0, "no waiter is left, so a present does not enter the readback path");
+  assert.equal(h.reads(), 0);
+  // …and a live waiter still drives exactly one readback and resolves on it.
+  const live = h.soft.awaitSoftPresent(1000);
+  h.soft.blitIfDue();
+  assert.ok((await live) >= 1, "the waiter resolves on the next blit generation");
+  assert.equal(h.reads(), 1);
+  h.soft.blitIfDue();
+  assert.equal(h.reads(), 1, "a satisfied waiter is gone too");
+  // TLX and WGX share the shape; their timeout must splice the waiter it pushed, guarded on a hit.
+  for (const file of ["js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+    const src = read(file);
+    const at = src.indexOf("awaitSoftPresent(timeoutMs)");
+    assert.match(src.slice(at, at + 1600),
+      /setTimeout\(function \(\) \{\s*const i = _softPresentWaiters\.indexOf\(waiter\);\s*if \(i >= 0\) _softPresentWaiters\.splice\(i, 1\);/,
+      file + ": the timeout splices the waiter it pushed");
+  }
+});
+
 test("GLX/TLX re-queue waiters whose predicate has not fired", () => {
   for (const file of ["js/render/glx/soft.js", "js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
     const src = read(file);
@@ -349,6 +376,69 @@ test("GLX soft-present reads back only for an explicit capture waiter", () => {
   const glx = read("js/render/glx/glx.js");
   const present = glx.slice(glx.indexOf("present: (opts) =>"), glx.indexOf("softPresent: () =>"));
   assert.match(present, /Soft\.blitIfDue\(\)/);
+});
+
+// #5380: the garage-before capture went red on 2026-10-27 with a blank 300x150
+// #game-soft ("the bay never rendered, spread 0"). The software-GL UI readback
+// defer answered a WAITER with a generation bump and no pixels. A waiter is a
+// caller that reads #game-soft next (garage PHOTO, garage-angles): it must get
+// the real blit; only the passive invalidateSoftPresent() arm is deferred.
+function glxSoftDeferHarness({ deferUi }) {
+  const reads = [];
+  const ctx2d = {
+    createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+    putImageData(img) { this.drawn = img; },
+  };
+  const display = { id: "", width: 300, height: 150, style: {}, setAttribute() {}, getContext: () => ctx2d };
+  const game = { parentNode: { insertBefore() {} }, nextSibling: null };
+  const sandbox = {
+    document: { createElement: () => display, body: { appendChild() {} } },
+    Log: { info() {} },
+    PerfGov: { softwareGlUiReadbackDefer: () => deferUi },
+    setTimeout, clearTimeout, Uint8Array, Uint8ClampedArray, Promise,
+  };
+  vm.runInNewContext(read("js/render/glx/soft.js") + ";this.GLXSoft = GLXSoft;", sandbox,
+    { filename: absSrc("js/render/glx/soft.js") });
+  const PST = {
+    // post.js keeps its own copy of the defer; `asked` is the caller's exemption.
+    readbackLdrPixels(buf, w, h, asked) {
+      reads.push({ w, h, asked: !!asked });
+      if (!asked && deferUi) return false;
+      buf.fill(120);
+      return true;
+    },
+    invalidateUniformCache() {},
+  };
+  const gl = { drawingBufferWidth: 4, drawingBufferHeight: 2 };
+  const soft = sandbox.GLXSoft.create({
+    getCanvas: () => game, getGl: () => gl, getPST: () => PST, getOutFBO: () => null,
+    ctxGone: () => false, getWidth: () => 4, getHeight: () => 2,
+  });
+  soft.setEnabled(true);
+  return { soft, reads, display, ctx2d };
+}
+
+test("GLX soft-present gives a waiting capture real pixels in the software-GL garage (#5380)", async () => {
+  const { soft, reads, display, ctx2d } = glxSoftDeferHarness({ deferUi: true });
+  const pending = soft.awaitSoftPresent(1000);
+  soft.blitIfDue();
+  const gen = await pending;
+  assert.equal(gen, 1);
+  assert.deepEqual(reads, [{ w: 4, h: 2, asked: true }], "a waiter must reach readPixels past the UI defer");
+  assert.equal(display.width, 4, "the overlay is sized to the drawing buffer, not left at the 300x150 default");
+  assert.ok(ctx2d.drawn && ctx2d.drawn.data[0] === 120, "the waiter's generation must carry drawn pixels");
+  assert.equal(display.style.opacity, "1");
+});
+
+test("GLX soft-present still defers the passive garage-entry arm on software GL (#3589)", () => {
+  const { soft, reads, ctx2d } = glxSoftDeferHarness({ deferUi: true });
+  soft.invalidateSoftPresent();
+  soft.blitIfDue();
+  assert.deepEqual(reads, [], "no readPixels for an arm nobody waits on");
+  assert.equal(ctx2d.drawn, undefined);
+  assert.equal(soft.gen(), 1, "the arm is consumed with a generation bump");
+  soft.blitIfDue();
+  assert.equal(soft.gen(), 1, "and disarmed: no further blits");
 });
 
 test("GLX links SGSR only after spatial upscaling is requested", () => {

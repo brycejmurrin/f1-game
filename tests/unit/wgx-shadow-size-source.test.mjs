@@ -14,15 +14,17 @@ import fs from "node:fs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-test("wgx.js PCF texel reads SHD.SHADOW_SIZE; no second SHADOW_SIZE const", () => {
+// The PCF texel VALUE (frame float 74 == 1 / the rendered sun map's size) is
+// asserted by running WGX in webgpu-lifecycle.test.mjs ("frame UBO PCF texel
+// (float 74) ..."): an includes() of the statement here stayed green when a
+// later assignment overrode it.
+test("wgx.js keeps no second copy of the shadow-module sizes", () => {
   const src = read("js/render/webgpu/wgx.js");
-  const pcfFromShd = src.includes("d[74] = 1 / SHD.SHADOW_SIZE");
   const localShadow = /\bconst\s+SHADOW_SIZE\s*=/.test(src);
   const localCar = /\bconst\s+CAR_SHADOW_SIZE\s*=/.test(src);
   const localCarAlloc = /\bconst\s+CAR_SHADOW_ALLOC\s*=/.test(src);
   const localLamp = /\bconst\s+LAMP_SHADOW_SIZE\s*=/.test(src);
   const localStride = /\bconst\s+SHADOW_MODEL_STRIDE\s*=/.test(src);
-  assert.equal(pcfFromShd, true, "PCF texel must read SHD.SHADOW_SIZE");
   assert.equal(localShadow, false, "wgx.js must not redeclare SHADOW_SIZE");
   assert.equal(localCar, false, "CAR_SHADOW_SIZE stays in wgx-shadow");
   assert.equal(localCarAlloc, false, "CAR_SHADOW_ALLOC stays in wgx-shadow");

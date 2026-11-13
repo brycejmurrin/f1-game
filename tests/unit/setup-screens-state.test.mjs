@@ -469,7 +469,7 @@ test("career.css: the lines the fixes extend must wrap, not ellipsize", () => {
 
 /* ── SEASON SETUP (#season-setup): SeasonUI in a VM ─────────────────────── */
 
-function loadSeasonUi(trackIds = ["a", "b"], cal = {}) {
+function loadSeasonUi(trackIds = ["a", "b"], cal = {}, list = null) {
   const dom = makeDom({ tagFor: (id) => (/^(ss-back|ss-apply|mb-season)$/.test(id) ? "button" : "div") });
   const G = {
     $: (id) => dom.byId(id), els: {}, soundOn: false, season: null,
@@ -484,12 +484,21 @@ function loadSeasonUi(trackIds = ["a", "b"], cal = {}) {
       canRace: () => true, matchesConfig: () => false, hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, save() {}, trackIndex: () => 0,
       ...cal,
     },
-    Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
+    Tracks: { LIST: list || [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
   });
   vm.runInNewContext(DOM_SOURCE, sb, { filename: absSrc("js/ui/dom.js") });   // Dom.el, over this sandbox's document
   vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: absSrc("js/career/season-ui.js") });
   return { dom, ui: sb.SeasonUI.create(G), $: G.$, G };
 }
+
+test("season setup: the ADD A CIRCUIT shelf never offers a custom circuit (the player's own race solo, v1)", () => {
+  const list = [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }, { id: "old", name: "Old", classic: true },
+    { id: "custom-x", name: "My Loop", custom: true }];
+  const { ui, $ } = loadSeasonUi(["a"], {}, list);
+  ui.open();
+  const offered = $("ss-pool").querySelectorAll(".track-row").map((r) => r.getAttribute("aria-label"));
+  assert.deepEqual(offered, ["Add B to the calendar", "Add C to the calendar", "Add Old to the calendar"], "classics yes, customs no");
+});
 
 test("season setup: unchanged qualifying survives APPLY; changing rules requires a fresh confirmation", () => {
   let calls = 0;

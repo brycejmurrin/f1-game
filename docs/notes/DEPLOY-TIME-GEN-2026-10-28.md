@@ -30,12 +30,13 @@ Class (c) means it cannot move as-is; its replacement plan is in the last column
 | `tools/README.md` | `gen-tools-readme.mjs` (`@doc` headers) | agents, GitHub readers | no | (b) | Rows sorted by path; `deploy.mjs` cures conflicts by regenerating |
 | `docs/agent-index.json`, `docs/AGENT-HOOKS.md`, `tests/data/impact-map.json` | `tools/docs/gen-agent-index.mjs` | `select-specs`/`pick-tests` (impact map), agents | no | (b) | Replace the positional `order` field with a stable key (plan §3 item 5). This is the field that broke the tip on 2026-10-27. |
 | `docs/agent-output/catalog.json` | `gen-output-surface.mjs` | MCP output gateway, agents | no | (b) | Keyed by tool path |
-| `docs/ARCHITECTURE.md`, `docs/DEBUG-HOOKS.md`, `docs/LIGHTING-TUNER-SLIDERS.md`, `docs/TESTING-COVERAGE.md` (generated blocks) | `gen-arch-table`, `gen-flags-table` + `gen-hooks-table`, `gen-slider-doc`, `gen-coverage-table` | readers of the docs; `generated-docs` test | no | (b) | Docs with generated blocks inside hand-written prose cannot be gitignored |
+| `docs/ARCHITECTURE.md`, `docs/DEBUG-HOOKS.md`, `docs/LIGHTING-TUNER-SLIDERS.md` (generated blocks) | `gen-arch-table`, `gen-flags-table` + `gen-hooks-table`, `gen-slider-doc` | readers of the docs; `generated-docs` test | no | (b) | Docs with generated blocks inside hand-written prose cannot be gitignored |
 | `.cursor/rules/*` | `gen-cursor-rules.mjs` | Cursor | no | (b) | Agent configuration must be in the checkout |
 | `CHANGELOG.md` | `gen-changelog.mjs --fold` (from `docs/changelog.d/` fragments) | release notes | no | (b) | Already fragment-based |
 | `tests/data/ratchets.json`, `ratchets.d/*.json` | `tools/check/ratchets.mjs` | the ratchet gate | no | (b) | Already fragment-based |
 | `tools/shot/scenery-locations.json` | `tools/shot/gen-scenery-locations.cjs` (~2 min) | shot tools | no | (b) | Slow; keep it committed |
 | `js/track/circuit-elevations.js`, `assets/pack/*` | `bake-elevation.mjs` (SRTM), `assets.mjs` bakes | game runtime | yes | (c) | Baked from inputs that are not in the repo (or are slow to fetch): keep them committed |
+| `docs/TESTING-COVERAGE.md` | `tools/docs/gen-coverage-table.mjs` | agents (`docs/TESTING.md` §5); `test-groups` test | no | moved out 2026-11-10 | Wholly generated, so it left git: built on demand into `artifacts/TESTING-COVERAGE.md`. The old path is `RETIRED_PATHS` (`tools/lib/generated-paths.mjs`), cured as a deletion. Measured that day: 15 of 16 open PRs carrying it conflicted with the tip, 9 on nothing else; `docs/agent-index.json` 0 of 13 and `tests/data/impact-map.json` 1 of 22, so those two stay committed |
 
 ## 2. Costs and where a build has to happen
 

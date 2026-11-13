@@ -123,8 +123,10 @@ test("bridge: an overlay's hello starts the host, frames reach it, a full frame 
   const pubTimers = timers();
   const apex = { field: () => FIELD, info: () => ({ state: "race", track: "monza" }), sectorState: () => null };
   const pub = Pub.start({ bridge: host, apex: () => apex, document: null, teams: TEAMS, timers: pubTimers });
+  assert.equal(Pub.lastSeq(), 0, "no frame built yet");
   pub.tick(); pub.tick();
   assert.equal(got.length, 2);
+  assert.equal(Pub.lastSeq(), got[1].seq, "lastSeq is the newest frame's seq (overlay-live.spec waits past it)");
   assert.equal(got[0].full, true, "a new overlay gets a full frame first");
   assert.equal(got[0].rows.length, FIELD.positions.length, "the tower rows survive the channel");
   assert.equal(got[1].full, undefined, "then patches");

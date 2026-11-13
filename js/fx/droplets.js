@@ -25,6 +25,9 @@ const Droplets = (function () {
 
   let _cv = null, _ctx = null, _sprite = null, _looked = false;
   let _w = 0, _h = 0, _dpr = 1, _shown = false, _mobile = null;
+  // True while the canvas may hold paint: with rain on and no drop alive, a
+  // full-DPR clearRect every frame cleared an already-clear canvas (#4532 note).
+  let _painted = false;
   let _n = 0, _acc = 0, _spriteReflection = 1, _spriteHelmet = false, _dropScale = 1;
   // Struct-of-arrays, sized for the desktop cap once.
   const _x = new Float32Array(CAP_DESK), _y = new Float32Array(CAP_DESK);    // 0..1 of the viewport
@@ -132,7 +135,7 @@ const Droplets = (function () {
     if (on === _shown) return;
     _shown = on;
     if (_cv) _cv.hidden = !on;
-    if (!on) { _n = 0; _acc = 0; if (_ctx && _w) _ctx.clearRect(0, 0, _w, _h); }
+    if (!on) { _n = 0; _acc = 0; if (_ctx && _w) _ctx.clearRect(0, 0, _w, _h); _painted = false; }
   }
 
   function _spawn(reduced, helmet) {
@@ -188,7 +191,9 @@ const Droplets = (function () {
 
   function _draw(reduced, helmet) {
     const g = _ctx;
+    if (!_n) { if (_painted) { g.clearRect(0, 0, _w, _h); _painted = false; } return; }
     g.clearRect(0, 0, _w, _h);
+    _painted = true;
     const m = Math.min(_w, _h);
     for (let i = 0; i < _n; i++) {
       const t = _age[i] / _life[i];

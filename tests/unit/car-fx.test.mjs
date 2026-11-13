@@ -118,15 +118,15 @@ test("an AI lock-up lays marks on its own cadence — race only, never the playe
   const g = ground();
   const ai = { speed: 50, wheelLock: 1, isPlayer: false };
   const ai2 = { speed: 50, wheelLock: 1, isPlayer: false };
-  for (let i = 0; i < 60; i++) { fx.emit(ai, g, DT, "race"); fx.emit(ai2, g, DT, "race"); }
+  for (let i = 0; i < 60; i++) { fx.marks(ai, g, DT, "race"); fx.marks(ai2, g, DT, "race"); }
   assert.equal(skids.otherCount, 24, "two locking rivals, 12 marks each in a second (own cadence each)");
   const before = skids.count;
   for (let i = 0; i < 30; i++) {
-    fx.emit({ speed: 50, wheelLock: 1, isPlayer: true }, g, DT, "race");       // game.js stamps the player
-    fx.emit({ speed: 50, wheelLock: 1, isPlayer: false }, g, DT, "count");     // not racing
-    fx.emit({ speed: 50, wheelLock: 1, isPlayer: false, offroad: true }, g, DT, "race");
-    fx.emit({ speed: 4, wheelLock: 1, isPlayer: false }, g, DT, "race");       // crawling (vStd floor)
-    fx.emit({ speed: 50, wheelLock: 0.2, isPlayer: false }, g, DT, "race");    // a light lock is no lock
+    fx.marks({ speed: 50, wheelLock: 1, isPlayer: true }, g, DT, "race");       // game.js stamps the player
+    fx.marks({ speed: 50, wheelLock: 1, isPlayer: false }, g, DT, "count");     // not racing
+    fx.marks({ speed: 50, wheelLock: 1, isPlayer: false, offroad: true }, g, DT, "race");
+    fx.marks({ speed: 4, wheelLock: 1, isPlayer: false }, g, DT, "race");       // crawling (vStd floor)
+    fx.marks({ speed: 50, wheelLock: 0.2, isPlayer: false }, g, DT, "race");    // a light lock is no lock
   }
   assert.equal(skids.count, before, "none of those lays a mark");
   assert.deepEqual({ ...fx.status() }, { sparks: 0, marks: 24 });
@@ -250,6 +250,10 @@ test("source guards: game.js emits carFx beside the other emitters, before the c
   const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
   assert.ok(emit > 0 && cockpit > 0 && emit < cockpit, "carFx.emit must run before the cockpit view's continue");
   assert.equal(game.split("carFx.emit(").length - 1, 1, "one emit site");
+  const marks = game.indexOf("carFx.marks(c, _groundMat, dt, state);");
+  const cull = game.indexOf("if (!c.isPlayer && _carCullPlanes) {");
+  assert.equal(game.split("carFx.marks(").length - 1, 1, "one marks site");
+  assert.ok(marks > 0 && cull > 0 && marks < cull, "AI lock-up marks are laid above the side-frustum cull (#4669)");
   assert.match(game, /const carFx = CarFx\.create\(G, \{ skids \}\);/);
 });
 

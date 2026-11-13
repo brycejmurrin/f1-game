@@ -82,7 +82,28 @@ test("manifest keeps career-ui.js in LAZY_CAREER_UI and the boot stub on FULL", 
   const m = createRequire(import.meta.url)("../../tools/manifest.cjs");
   assert.ok(m.FULL.includes("js/career/career-ui-boot.js"));
   assert.ok(!m.FULL.includes("js/career/career-ui.js"));
-  assert.deepEqual(m.LAZY_CAREER_UI, ["js/career/career-planning-ui.js", "js/career/career-ui.js"]);
+  assert.deepEqual(m.LAZY_CAREER_UI, ["js/career/career-backup.js", "js/career/career-planning-ui.js", "js/career/career-ui.js"]);
+  assert.ok(!m.FULL.includes("js/career/career-backup.js"), "#4748: CareerBackup is off the eager boot");
+});
+
+test("#4748: CareerUI.ensureBackup injects the bundle once and resolves when CareerBackup is defined", async () => {
+  const loads = [];
+  const sb = {
+    Promise, Log: { info() {}, warn() {} },
+    ApexRoster: { LAZY_CAREER_UI: ["js/career/career-backup.js", "js/career/career-ui.js"], LAZY_CAREER_UI_EDGES: [] },
+    ScriptLoader: { create: () => ({ load: (files) => {
+      loads.push(files.slice());
+      sb.CareerScreen = { create: () => ({}) };
+      sb.CareerBackup = { FORMAT: "apex26-career-backup-v1" };
+      return Promise.resolve(true);
+    } }) },
+  };
+  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb, { filename: absSrc("js/career/career-ui-boot.js") });
+  const [a, b] = await Promise.all([sb.CareerUI.ensureBackup(), sb.CareerUI.ensureBackup()]);
+  assert.equal(a, true); assert.equal(b, true);
+  assert.equal(loads.length, 1, "one inject for concurrent callers");
+  assert.equal(await sb.CareerUI.ensureBackup(), true);
+  assert.equal(loads.length, 1, "resident: no second inject");
 });
 
 function delayedCareer(writer) {
@@ -127,13 +148,13 @@ for (const failure of ["refused", "rejected"]) {
     await opening;
     assert.equal(h.dom.byId("overlay").hidden, false, "menu returns after the title door hid it");
     assert.equal(h.dom.byId("career").hidden, true);
-    assert.match(h.messages[0], /COULD NOT LOAD.*TRY AGAIN/);
-    assert.match(h.dom.byId("mb-career-sub").textContent, /COULD NOT LOAD.*TRY AGAIN/, "the title button carries the visible notice");
-    assert.match(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load.*Try again/);
+    assert.equal(h.messages[0], "CAREER COULD NOT LOAD — PLEASE TRY AGAIN");
+    assert.equal(h.dom.byId("mb-career-sub").textContent, "COULD NOT LOAD · TRY AGAIN", "the title button carries the visible notice");
+    assert.equal(h.dom.byId("mb-career").getAttribute("aria-label"), "Career modes — could not load. Try again.");
     h.dom.byId("overlay").hidden = true;
     const retry = h.ui.openSlots("title");
     assert.equal(h.dom.byId("mb-career-sub").textContent, "DRIVER CAREER · MY TEAM", "retry restores the career summary");
-    assert.doesNotMatch(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load/);
+    assert.equal(h.dom.byId("mb-career").getAttribute("aria-label"), "Career modes — DRIVER CAREER · MY TEAM");
     assert.equal(h.pending.length, 1, "failed promise is not cached");
     h.complete();
     await retry;

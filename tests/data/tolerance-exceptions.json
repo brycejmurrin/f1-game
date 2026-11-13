@@ -15,6 +15,11 @@
       "file": "tests/unit/css-critical-path.test.mjs",
       "line": "assert.ok(preload < 239000",
       "reason": "Preload set matches TITLE_CRITICAL; same measured 238718 B census and bound as the blocking row on #4179."
+    },
+    {
+      "file": "tests/unit/mix-duck-radio.test.mjs",
+      "line": "n.kind === \"gain\").length >= 5",
+      "reason": "Not a widened tolerance: the count is of real graph nodes, and #5294 (audit W19 row 5) deleted one of them, the legacy ERS whine chain (ersOsc/ersHp/ersGain) whose ersGain fed focus. ErsLayer is always defined (real or stub.js), so the chain was unreachable. The five remaining outputs are engine/sub/whine/harvest/reverb, as the message says; audio-tune's 'the engine graph builds no legacy ERS whine' pins the deletion."
     }
   ]
 }

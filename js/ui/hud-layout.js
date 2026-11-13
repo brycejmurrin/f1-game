@@ -220,7 +220,14 @@ const HudLayout = (function () {
     return out;
   }
   /** The STORED differences per style and camera set. */
-  function stored() { return migrate(store ? store.get(KEY, null) : null); }
+  // ARRANGE's in-gesture layout (#5031): painted by apply(), saved once by commit() when the finger lifts.
+  // A write by anyone else (a settings import) since the draft began wins over it.
+  let draft = null, draftBase = null;
+  function stored() {
+    const raw = store ? store.get(KEY, null) : null;
+    if (draft && raw !== draftBase) draft = null;
+    return migrate(draft || raw);
+  }
   /** The layout a style + set paints: stored, else shipped, for every element. Pure. */
   function effective(st, sn, pn) {
     const out = {};
@@ -232,16 +239,25 @@ const HudLayout = (function () {
     const p = isProf(pn) ? pn : shownProf(), st = stored();
     return Object.fromEntries(SETS.map((sn) => [sn, effective(st, sn, p)]));
   }
-  function save(st) {
-    if (!store) return;
+  function save(st, live) {
     const out = { v: 4 };
     let any = false;
     for (const pn of PROFILES) {
       const p = normProf(st[pn], pn);
       if (!emptyProf(p)) { out[pn] = p; any = true; }
     }
-    store.set(KEY, any ? out : null);
+    draft = live ? out : null;
+    if (live) draftBase = store ? store.get(KEY, null) : null;
+    if (store && !live) store.set(KEY, any ? out : null);
   }
+  /** Save the live edits set(…, live) painted; false when there were none. */
+  function commit() {
+    if (!draft) return false;
+    save(stored());
+    return true;
+  }
+  // Leaving or backgrounding the page mid-gesture keeps what is on screen.
+  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", commit);
   const camSet = (modeId) => LAYOUT_SET(modeId);
   const has = (c) => !!(doc && doc.body && doc.body.classList && doc.body.classList.contains(c));
   /** Is the race HUD up? (#hud carries `hidden` outside a race — js/game.js.) */
@@ -953,8 +969,9 @@ const HudLayout = (function () {
     return v === "off" || v === "on" ? v : "auto";
   }
 
-  /** Write one element's values into set `setName` of style `pn`; returns the stored {x, y, s}. */
-  function set(id, v, setName, pn) {
+  /** Write one element's values into set `setName` of style `pn`; returns the stored {x, y, s}.
+   *  `live`: paint now, keep it out of storage until commit() (a drag frame). */
+  function set(id, v, setName, pn, live) {
     if (IDS.indexOf(id) < 0) return null;
     const sn = setArg(setName), p = profArg(pn);
     const st = stored();
@@ -963,7 +980,7 @@ const HudLayout = (function () {
         || !["x", "y", "s"].some(k => Number.isFinite(num(v[k], k, NaN)))) return previous;
     const e = normEl(Object.assign({}, previous, v || {}), previous);
     st[p][sn][id] = e;
-    save(st);
+    save(st, live);
     apply();
     // A place on MIRROR (data-hl-user) cures the soft hide — same contract as
     // the touch-cockpit chips / SPEED wheel-LCD rule.
@@ -1348,12 +1365,15 @@ const HudLayout = (function () {
     paintAll();
   }
 
-  function init() { apply(); build(); watchPackUnhide(); watchReadoutSizes(); }
+  // #4798 gate: build only
+  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); }
   apply();
   _pub = true;
   if (doc) {
-    if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true });
-    else init();
+    const atGate = (fn) => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(fn) : fn());
+    if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", () => init(atGate), { once: true });
+    else if (doc.readyState === "complete") init();
+    else init((fn) => doc.addEventListener("DOMContentLoaded", () => atGate(fn), { once: true }));
   }
 
   // Public surface: PACK_AIR + packPhoneRects for the unit packer; KEY / LIM /
@@ -1363,7 +1383,7 @@ const HudLayout = (function () {
     ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
     PACK_AIR,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
-    get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
+    get, set, commit, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,
   };

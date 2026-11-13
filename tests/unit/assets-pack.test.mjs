@@ -1263,7 +1263,7 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
     assert.ok(m.materials.layers.length >= 10, "expected the SCALES table layers");
     for (const L of m.materials.layers) {
       assert.equal(L.licence, "Apex26-Procedural", `${L.id} must be procedural`);
-      assert.match(L.source, /^procedural:/);
+      assert.equal(L.source, "procedural:tools/gen/assets.mjs");
     }
     assert.ok(m.models.keep, "bake-synthetic must preserve models");
     assert.ok(m.env["*|day"], "bake-synthetic must preserve env");
@@ -1615,7 +1615,7 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     const verified = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "verify"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8", timeout: 10000 });
     assert.equal(verified.status, 0, verified.stderr || verified.stdout);
-    assert.match(verified.stdout, /verify: OK/);
+    assert.equal(verified.stdout, "pack: 0 KB / 8 MB budget\nverify: OK\n");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -2130,7 +2130,7 @@ test("unknown bake flag is refused before rewriting the pack", () => {
   const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
     { encoding: "utf8" });
   assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
-  assert.match(r.stderr, /unknown flag --dry-run/, `expected unknown-flag error, got:\n${r.stderr}`);
+  assert.equal(r.stderr, "error: unknown flag --dry-run (accepted: --size --models)\n", `expected unknown-flag error, got:\n${r.stderr}`);
 });
 
 test("assets.mjs --help prints usage and exits 0", () => {
@@ -2408,6 +2408,65 @@ test("model admission tail drops decoded payloads across cache generations", asy
   assert.equal(await assets.decodeTail(), null);
 });
 
+
+test("GLTF missing normals preserve hard edges, colours and mirrored winding", () => {
+  const gltf = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF",
+    { ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, Log: { enabled: () => false } }, { filename: absSrc("js/render/shared/gltf.js") });
+  // Two perpendicular triangles share an edge. Smooth normals are observably wrong.
+  const floats = new Float32Array([0,0,0, 1,0,0, 0,1,0, 0,0,1,
+    1,0,0, 0,1,0, 0,0,1, 1,1,0]);
+  const authored = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1]);
+  const bin = Buffer.concat([Buffer.from(floats.buffer), Buffer.from(new Uint16Array([0,1,2, 0,3,1]).buffer), Buffer.from(authored.buffer)]);
+  for (const sx of [1, -2]) {
+    const json = { asset: { version: "2.0" }, buffers: [{ byteLength: bin.length }],
+      bufferViews: [{buffer:0,byteLength:48}, {buffer:0,byteOffset:48,byteLength:48}, {buffer:0,byteOffset:96,byteLength:12}, {buffer:0,byteOffset:108,byteLength:48}],
+      accessors: [{bufferView:0,componentType:5126,count:4,type:"VEC3"}, {bufferView:1,componentType:5126,count:4,type:"VEC3"}, {bufferView:2,componentType:5123,count:6,type:"SCALAR"}, {bufferView:3,componentType:5126,count:4,type:"VEC3"}, {bufferView:2,componentType:5123,count:3,type:"SCALAR"}],
+      meshes: [{ primitives: [{attributes:{POSITION:0,COLOR_0:1},indices:2}, {attributes:{POSITION:0,COLOR_0:1,NORMAL:3},indices:4}] }],
+      nodes: [{mesh:0,scale:[sx,3,0.5]}], scenes: [{nodes:[0]}] };
+    const j = Buffer.from(JSON.stringify(json)), padded = Buffer.concat([j,Buffer.alloc((4-j.length%4)%4,32)]);
+    const out = Buffer.alloc(28+padded.length+bin.length);
+    out.writeUInt32LE(0x46546c67,0); out.writeUInt32LE(2,4); out.writeUInt32LE(out.length,8);
+    out.writeUInt32LE(padded.length,12); out.writeUInt32LE(0x4e4f534a,16); padded.copy(out,20);
+    out.writeUInt32LE(bin.length,20+padded.length); out.writeUInt32LE(0x004e4942,24+padded.length); bin.copy(out,28+padded.length);
+    const mesh = gltf.toMesh(Uint8Array.from(out).buffer);
+    assert.equal(mesh.pos.length,30,"six split corners followed by four authored-normal vertices");
+    assert.deepEqual(Array.from(mesh.idx.slice(6)).sort((a,b) => a-b), [6,7,8], "next primitive starts after emitted corners, not source vertices");
+    assert.ok(mesh.nrm.slice(18).every((n,i) => n === authored[i]), "next primitive retains its supplied normals (signed zero is equivalent)");
+    assert.deepEqual(Array.from(mesh.pos.slice(18)), [0,0,0, sx,0,0, 0,3,0, 0,0,0.5], "next primitive has its own transformed vertices");
+    for (let t=0;t<2;t++) for (let k=0;k<3;k++) {
+      const v=mesh.idx[t*3+k], n=Array.from(mesh.nrm.slice(v*3,v*3+3));
+      assert.ok(n.every((x,a) => Math.abs(x - (t===0?[0,0,1]:[0,1,0])[a]) < 1e-7),"each face has its geometric normal, including a reflected node");
+    }
+    assert.deepEqual(Array.from(mesh.col), [1,0,0, 0,1,0, 0,0,1, 1,0,0, 1,1,0, 0,1,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0], "duplicated corners and following primitive retain source colours");
+  }
+});
+
+test("GLX material ownership preserves reused textures and releases aliases once", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/render/glx/glx.js"), "utf8");
+  const deleted = [], forgotten = [], alive = new Set();
+  const ctx = vm.createContext({
+    _matGen: 0, matAlbedoTex: null, matNormalTex: null, MAT_TEX_LAYERS: 17,
+    matTexScales: new Float32Array(17), _texForget: t => forgotten.push(t),
+    gl: { deleteTexture(t) { assert.ok(alive.delete(t), "texture cannot be deleted twice"); deleted.push(t); } },
+  });
+  ctx.ctxGone = () => false;
+  const bind = vm.runInContext(fnSource(source, "function freeTexture(t)") + "\n" + fnSource(source, "function setMaterialMaps(maps)") + ";setMaterialMaps", ctx, { filename: absSrc("js/render/glx/glx.js") });
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const a = { cycle, kind: "a" }, n = { cycle, kind: "n" };
+    alive.add(a); alive.add(n);
+    bind({ albedo: a, normal: n, scales: [0,2] });
+    bind({ albedo: a, normal: n, scales: [0,5] });
+    assert.ok(alive.has(a) && alive.has(n), "same-token scale update retains live GPU objects");
+    assert.equal(ctx.matTexScales[1], 5);
+    bind({ albedo: n, normal: n, scales: [0,3] });
+    assert.ok(!alive.has(a) && alive.has(n), "moving a texture between slots preserves ownership");
+    bind(null); bind(null);
+    assert.equal(alive.size, 0);
+  }
+  assert.equal(deleted.length, 6);
+  assert.deepEqual(forgotten, deleted, "census forget matches actual retirement once per texture");
+});
+
 // ---------------------------------------------------------------------------
 // Pack hygiene (front half, adjacent to #4028 — does not touch the GPU load
 // path). data/packs/model-index.json classifies every committed model key;
@@ -2517,4 +2576,50 @@ test("pack models/ has no orphan bins outside the manifest index",
   const keyed = new Set(Object.values(manifest.models || {}).map((rec) => path.basename(rec.file)));
   const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".bin") && !keyed.has(f));
   assert.deepEqual(orphans, [], "orphan bins are dead pack weight — drop or register them");
+});
+
+// #2501: MeshBuilder's cylinder and cone were wound inside out (clockwise seen
+// from outside) while its box is counter-clockwise, the renderers' front face.
+test("synth-models MeshBuilder winds box, cylinder and cone counter-clockwise outward", async () => {
+  const { MeshBuilder } = await import(pathToFileURL(path.join(ROOT, "tools", "gen", "synth-models.mjs")).href);
+  const shapes = {
+    box: (M) => M.box(1, 2, 3, 2, 3, 4, [1, 1, 1], 0),
+    cyl: (M) => M.cyl(1, 2, 3, 0.9, 2.2, [1, 1, 1], 0, 8),
+    cone: (M) => M.cone(1, 2, 3, 1.5, 0, 3, [1, 1, 1], 0, 8),
+    frustum: (M) => M.cone(1, 2, 3, 1.5, 0.5, 3, [1, 1, 1], 0, 6),
+  };
+  for (const [name, make] of Object.entries(shapes)) {
+    const M = MeshBuilder(); make(M);
+    const { pos, nrm, idx } = M.toMesh(0);
+    const v = (i) => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]];
+    let wrong = 0;
+    for (let t = 0; t < idx.length; t += 3) {
+      const [a, b, c] = [v(idx[t]), v(idx[t + 1]), v(idx[t + 2])];
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const f = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+      const n = [0, 1, 2].map((k) => nrm[idx[t] * 3 + k] + nrm[idx[t + 1] * 3 + k] + nrm[idx[t + 2] * 3 + k]);
+      if (Math.hypot(...f) < 1e-9) continue;   // a cone's apex triangles have no area and no facing
+      if (f[0] * n[0] + f[1] * n[1] + f[2] * n[2] <= 0) wrong++;
+    }
+    assert.equal(wrong, 0, `${name}: ${wrong} of ${idx.length / 3} triangles face against their vertex normals`);
+  }
+});
+
+// #2501: resizeBilinear gave the first upscaled row/column a negative weight,
+// and the extrapolated value wrapped in the Uint8 buffer.
+test("resizeBilinear clamps to the edge when upscaling: no negative weights, no wrapped bytes", async () => {
+  const { resizeBilinear } = await import(pathToFileURL(path.join(ROOT, "tools", "gen", "assets.mjs")).href);
+  const px = (...v) => Buffer.from(v.flatMap((g) => [g, g, g, 255]));
+  const row = resizeBilinear(px(0, 255), 2, 1, 4, 1);
+  assert.deepEqual([...row].filter((_, i) => i % 4 === 0), [0, 64, 191, 255], "edge pixels clamp to the source edge");
+  const col = resizeBilinear(px(10, 250), 1, 2, 1, 4);
+  assert.deepEqual([...col].filter((_, i) => i % 4 === 0), [10, 70, 190, 250]);
+  // Every output stays inside the source range (a convex blend), at any ratio.
+  const src = px(0, 255, 0, 255, 255, 0, 255, 0, 0);
+  const big = resizeBilinear(src, 3, 3, 7, 7);
+  for (let i = 0; i < big.length; i += 4) assert.ok(big[i] >= 0 && big[i] <= 255 && big[i + 3] === 255);
+  assert.equal(big[0], 0, "the corner is the source corner");
+  assert.equal(big[(7 * 7 - 1) * 4], 0);
+  // Downscaling is unchanged (no sample falls outside the source).
+  assert.deepEqual([...resizeBilinear(px(0, 100, 200, 255), 4, 1, 2, 1)].filter((_, i) => i % 4 === 0), [50, 228]);
 });

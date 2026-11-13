@@ -22,7 +22,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 // `const X = (…)()` is script-scope in a VM: re-declare as var so the sandbox object sees it.
 const src = (f) => read(f).replace(/^const\b/gm, "var");
 
-function harness({ career = false, era = null, unlimited = false, stored = {}, tab = "engine", tdev = 0, team: teamId = "mercedes", tweakTeam, liveries = [] } = {}) {
+function harness({ career = false, era = null, unlimited = false, stored = {}, tab = "engine", tdev = 0, team: teamId = "mercedes", tweakTeam, liveries = [], persistence = {} } = {}) {
   const dom = makeDom();
   dom.document.createTextNode = (t) => { const e = dom.document.createElement("span"); e.textContent = t; return e; };
   const saved = [];
@@ -68,10 +68,53 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
     teamSwatch: () => dom.document.createElement("span"), setTeamPicker() {}, openCustomize() {},
     livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
   };
+  Object.assign(G, persistence);
   vm.runInContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
   const ui = sb.SetupUI.create(G);
   return { dom, ui, G, sb, saved, parts, team };
 }
+
+test("SAVE & FIT keeps a refused draft open and retries without duplicating its paint", () => {
+  for (const failure of ["list-cached", "list-rejected", "fit"]) {
+    // Distinct session and serialized durable state: a cache hit is not a save.
+    let rows = [], disk = "[]", fitted = "default", diskFitted = fitted, fail = true, fitCalls = 0;
+    const h = harness({ tab: "livery", persistence: {
+      getCustomLiveries: () => rows, getLiveries: () => rows, getLiveryId: () => fitted,
+      setCustomLiveries: (_team, next) => {
+        if (fail && failure === "list-rejected") return false;
+        rows = next;
+        if (fail && failure === "list-cached") return false;
+        disk = JSON.stringify(next); return true;
+      },
+      saveLiveryId: (_team, id) => { fitCalls++; fitted = id; if (fail && failure === "fit") return false; diskFitted = id; return true; },
+    } });
+    // Model the browser's replacement semantics for this pane (mini-dom's
+    // textContent setter otherwise leaves retired controls discoverable).
+    const pane = h.dom.byId("cs-options"); let text = "";
+    Object.defineProperty(pane, "textContent", { get: () => text, set(v) { text = v; for (const child of [...pane.children]) pane.removeChild(child); } });
+    h.ui.buildSetup(); pane.querySelector(".cs-liv-create").onclick();
+    const name = pane.querySelector(".cs-liv-ed-name"), save = pane.querySelector(".cs-liv-ed-save");
+    name.value = "Retry paint"; name.oninput();
+    const draft = h.G.livDraftOverride;
+    save.onclick();
+    assert.ok(pane.querySelector(".cs-liv-ed-save") === save, failure + ": same editor retained");
+    assert.ok(h.G.livDraftOverride === draft, "preview retained");
+    assert.equal(name.value, "Retry paint");
+    assert.equal(save.textContent, "RETRY SAVE & FIT");
+    assert.ok(pane.querySelectorAll('[role="status"]').some((el) => !el.hidden && /draft is still open/.test(el.textContent)));
+    assert.equal(diskFitted, "default", "refused fit never became durable");
+    if (failure !== "fit") { assert.equal(disk, "[]"); assert.equal(fitCalls, 0, "do not fit after a refused list write"); }
+    save.onclick();
+    assert.equal(rows.length, failure === "list-rejected" ? 0 : 1, "repeated failure does not accumulate candidates");
+    fail = false; save.onclick();
+    assert.equal(pane.querySelector(".cs-liv-ed-save"), null, "success closes the editor");
+    assert.equal(h.G.livDraftOverride, null);
+    const restored = JSON.parse(disk);
+    assert.equal(restored.length, 1, "fresh load sees exactly one saved paint");
+    assert.equal(restored[0].name, "Retry paint");
+    assert.equal(restored[0].id, diskFitted, "fresh load fits the saved identity");
+  }
+});
 
 test("G2: an era ban never erases a fitted part from the career garage; a permanent lock still remaps", () => {
   const stored = { engine: "hybrid_max", ers: "overcharge", fuel: "custom_formula" };

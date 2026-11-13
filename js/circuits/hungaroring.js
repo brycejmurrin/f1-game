@@ -4,7 +4,14 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "hungaroring",
-    pit: { side: -1 },   // the pit complex (TrackPit): the paddock is on the left of the main straight
+    // FIA 2026 Doc 5 circuit map + pit-lane drawing put the pits on the driver's RIGHT
+    // (infield, the lane leaves on the inside of the right-hand T14). The authored
+    // pit building, paddock, broadcast and kits sit on +1 with it; the covered main
+    // tribune and the T1 / Pit Exit stands face them on -1 (scenery/hungaroring.js).
+    pit: { side: 1 },
+    // Its own covered main tribune faces the pits on -1 (scenery coveredMainTribune);
+    // the generic 7-box -1 pit-straight stand would stand in front of it.
+    ownPitStraight: true,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.7 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -38,13 +45,16 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors/turns: sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.32, 0.68],
-    // FIA 2025 map topology checked against the built racing centreline.
-    // T2/T14 have several curvature peaks but each is ONE physical corner;
-    // retain both chicane corners T6/T7 and the distinct left-hand T10.
+    // turns: one apex per numbered corner T1-T14 of the FIA 2026 event map (Hungarian
+    // GP Doc 5 "Circuit Map, Pit Lane Drawing, Emergency Exits Map and Red Zone",
+    // 23 July 2026), checked against the built racing centreline. The map also labels
+    // two kinks with suffixes, not counted here: T1A, the right-hand kink on the run
+    // from T1 to T2 (racing ~0.12-0.14), and T12A, the left bend into the T13 hairpin
+    // (racing ~0.81). T2/T14 have several curvature peaks but each is ONE corner.
     turns: [0.0898, 0.1989, 0.2502, 0.3602, 0.4225, 0.4922, 0.4995, 0.5408, 0.5710, 0.6159, 0.6627, 0.7544, 0.8240, 0.8818],
     furniture: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true, treeCrown: "columnar" },  // dry straw-olive, dusty bowl
     kit: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },

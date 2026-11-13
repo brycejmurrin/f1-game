@@ -1,6 +1,8 @@
 # Cooldown lap, parc fermé and podium flow — plan (2026-10-27)
 
-Status: **PLAN** — docs-only (#1584). Build is blocked on this note landing; slices
+Status: **SHIPPED** (re-checked against the code 2026-11-10) — the cooldown lap, parc fermé and podium flow are js/race/ceremony.js and js/race/parc-ferme.js. Kept here, not archived: files owned by other lanes cite this path (audit W27, 2026-11-10).
+
+Earlier status: **PLAN** — docs-only (#1584). Build is blocked on this note landing; slices
 below become sub-issues of #1584 / parent #1583. No product code in the plan PR.
 
 Date: 2026-10-27

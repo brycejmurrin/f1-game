@@ -37,6 +37,17 @@ test("every quarantine row names a spec that exists and carries since/owner/why"
   }
 });
 
+test("no quarantine row is past its expiry: an expired row is inert, so it must be deleted, never re-dated", () => {
+  // loadQuarantine drops a row the day after `expires`, silently: on 2026-11-10
+  // eight of ten rows were dead weight that still read as protection (audit W27).
+  // This runs on the REAL clock on purpose, like knowledge-retention: the cure
+  // is to delete the row (the test then blocks on a retry, which is the policy)
+  // or to land fresh failed-run evidence with a new deadline.
+  const today = new Date().toISOString().slice(0, 10);
+  const expired = FILE.quarantine.filter((row) => row.expires < today).map((row) => `${row.spec} › ${row.title} (expired ${row.expires})`);
+  assert.deepEqual(expired, [], "delete the expired rows from tests/data/flaky-quarantine.json (AGENTS.md rule 9: a pass on retry is a red)");
+});
+
 test("every exact quarantine title is collected by the real browser runner", () => {
   // --list starts no browser. It expands dynamic titles and applies the real
   // project/manifest filters; a substring in source proves neither.
@@ -125,9 +136,9 @@ test("the reporter keys a test on its SPEC, not on the file that declared it", a
   assert.equal(own.spec, "tests/specs/smoke.spec.js");
   assert.equal(own.title, "boots");
 
-  const viaHelper = at(["chromium", "manual/tracks-visual.spec.js", "monza", "renders"],
+  const viaHelper = at(["chromium", "specs/terrain-over-road.spec.js", "monza", "renders"],
                        "/repo/tests/helpers/track-helpers.js");
-  assert.equal(viaHelper.spec, "tests/manual/tracks-visual.spec.js",
+  assert.equal(viaHelper.spec, "tests/specs/terrain-over-road.spec.js",
     "the SPEC owns the test, not the helper that declared it");
   assert.equal(viaHelper.title, "monza › renders");
 
@@ -255,11 +266,16 @@ test("invalid quarantine identity or review metadata cannot waive a failure", ()
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "quarantine-policy-"));
   const file = path.join(dir, "ledger.json");
   const row = fixtureRow();
+  // Inside the fixture's validity window: at a date past its expiry every row
+  // blocks, and removing a field would prove nothing (the positive control).
+  const at = new Date("2026-01-15T00:00:00Z");
   try {
+    fs.writeFileSync(file, JSON.stringify({quarantine: [row]}));
+    assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], loadQuarantine(file, at)).fail, false, "the complete row waives (control)");
     for (const key of ["title", "owner", "review", "evidence", "expires"]) {
       const invalid = {...row}; delete invalid[key];
       fs.writeFileSync(file, JSON.stringify({quarantine: [invalid]}));
-      const q = loadQuarantine(file, new Date("2026-10-15T00:00:00Z"));
+      const q = loadQuarantine(file, at);
       assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], q).fail, true, key);
     }
     assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], new Set([row.spec])).fail, true, "spec membership alone cannot waive a test");

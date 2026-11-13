@@ -24,9 +24,11 @@
 //             `success` on the PR's current head, newest attempt; a run that went green only on a re-run after a
 //             failed job (`run_attempt` > 1) fails the row
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
-//             name) needs the `config-ok` label, last added by Bryce in person, and newer than the last push that
-//             touched a CONFIG_PATH (configPushState); any other diff passes. Replaces the hook "ask".
-//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
+//             name) needs the `config-ok` label, last added by Bryce in person (or, for ROUTINE config paths only, by
+//             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and newer than the last push that
+//             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
+//             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
+//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there (an absent catalog is built)
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
 // The `distance` row (merge-base at most N game merges behind the tip) was retired 2026-11-03 (plan §6): gen and
@@ -45,8 +47,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, DEPLOY } from "./github-api.mjs";
 import { planVerdict } from "./ready-gate.mjs";
+import { renderPkg } from "../gen/gen-test-groups.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
-import { OWNER, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
+import { AGENT_APP_SLUG, OWNER, byAgent, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
@@ -64,13 +67,31 @@ export const CONFIG_LABEL = "config-ok";
 /** The paths whose edit needs CONFIG_LABEL: the hooks, settings, workflows and actions that enforce every other rule,
  *  the CI tools that compute this gate and the dispatcher, the MCP and hook tooling, the generated-path list, the
  *  package scripts, every host's hook and agent config, the tracked memory and the issue templates. */
+/** The gate's import-closure modules (gateClosure in tools/lib/gate-receipt.mjs) that live OUTSIDE tools/ci/ (#5467):
+ *  their top level runs when the gate imports them and gen-test-groups decides generatedPkgVerdict, so each is a
+ *  config path AND a protected one. A test fails on any closure module either list misses. */
+const GATE_MODULE_OUTSIDE_CI = ["tools/gen/gen-test-groups\\.mjs$", "tools/lib/changed-files\\.mjs$", "tools/lib/cli-args\\.mjs$",
+  "tools/lib/gate-receipt\\.mjs$", "tools/lib/work-tree-id\\.mjs$"];
 export const CONFIG_PATH = new RegExp("^(" + [
   "\\.claude/hooks/", "\\.claude/settings(\\.local)?\\.json$", "\\.claude/agents/", "\\.claude/memory/",
   "\\.github/workflows/", "\\.github/actions/", "\\.github/ISSUE_TEMPLATE/", "\\.githooks/", "\\.mcp\\.json$",
   "tools/ci/", "tools/hooks/", "tools/mcp/", "tools/lib/generated-paths\\.mjs$", "package\\.json$",
-  "\\.cursor/hooks", "\\.codex/hooks",
+  "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
+/** The PROTECTED config paths (#5455, Bryce 2026-11-11 "Count it, except the gate and safety hooks"): only his own
+ *  `config-ok` tap covers a diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every
+ *  other CONFIG_PATH). The gate (this module, which defines both lists; provenance; ready-gate; and the rest of the
+ *  gate's import closure, under tools/ci/ and outside it (#5467), because a module's top level runs when the gate imports it — a test pins
+ *  the closure), the land workflow, ci.yml (it decides what green means; Bryce 2026-11-11 "Protect ci.yml"), and every
+ *  host's hooks and settings. */
+export const PROTECTED_CONFIG_PATH = new RegExp("^(" + [
+  "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/ready-gate\\.mjs$",
+  "tools/ci/github-api\\.mjs$", "tools/ci/github-token\\.mjs$", "tools/ci/preflip-probe\\.mjs$", "tools/ci/pick-tests\\.mjs$",
+  "\\.github/workflows/land\\.yml$", "\\.github/workflows/ci\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
+  "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
+].join("|") + ")");
+export const isProtectedConfigPath = (p) => PROTECTED_CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
 export const configFiles = (files) => (files || []).filter(isConfigPath);
 /** The paths a pulls/<n>/files or compare row names: `filename`, and `previous_filename` for a rename. Pure. */
 export const filePaths = (rows) => (rows || []).flatMap((f) => [f?.filename, f?.previous_filename]).filter(Boolean);
@@ -112,23 +133,45 @@ export function holdVerdict(labels, events = null, owner = OWNER) {
   return row(true, lifted ? `no \`${HOLD_LABEL}\` label (last removed by ${describeActor(lifted)})` : `no \`${HOLD_LABEL}\` label`);
 }
 
-/** config: a diff touching a CONFIG_PATH needs the `config-ok` label whose newest `labeled` event is the owner's own
- *  click; a diff touching none passes. `files` are the PR's changed paths (filePaths over pulls/<n>/files). `push`
- *  (configPushState) binds the label to the head: "after" (a CONFIG_PATH push came after the label) fails, "unknown"
- *  waits; null skips the binding (pure callers only). Pure. */
+/** Which kind of `config-ok` labeled event is this: "owner" (his own click, byOwner), "agent" (owner login through the
+ *  Claude app, byAgent) or null (anything else: another app, another login, no app field). Pure. */
+export const configLabelKind = (e, owner = OWNER) => (e?.event !== "labeled" ? null : byOwner(e, owner) ? "owner" : byAgent(e, owner) ? "agent" : null);
+
+/** config: a diff touching a CONFIG_PATH needs `config-ok`, and its newest label event must be a `labeled` one that
+ *  counts. The owner's own click covers any diff. An agent's (configLabelKind "agent") covers a diff of ROUTINE config
+ *  paths only: one PROTECTED path in the diff needs the owner's click for the whole row; and an owner's own `unlabeled`
+ *  voids every later agent re-add until his own `labeled` (#5455). A diff touching none passes. `files` are the PR's
+ *  changed paths (filePaths over pulls/<n>/files). `push` (configPushState) binds the label to the head: "after" (a
+ *  CONFIG_PATH push came after the label) fails, "unknown" waits; null skips the binding (pure callers only). Pure. */
 export function configVerdict(files, labels, events = null, owner = OWNER, push = null) {
   const touched = configFiles(files);
   if (!touched.length) return row(true, `no config path (harness, CI tools, agent config) in the diff (${(files || []).length} file(s))`);
-  const shown = touched.slice(0, 4).join(", ") + (touched.length > 4 ? ", …" : "");
+  const list = (a) => a.slice(0, 4).join(", ") + (a.length > 4 ? ", …" : "");
+  const shown = list(touched);
+  const prot = touched.filter(isProtectedConfigPath);
+  const protNote = prot.length ? `; protected path(s), his own tap only: ${list(prot)}` : "";
   const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
   const last = newestLabelEvent(events, CONFIG_LABEL);
-  if (!names.includes(CONFIG_LABEL)) return row(false, `needs ${CONFIG_LABEL} from ${owner}: the diff edits ${shown}`);
-  if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
-    return row(false, `needs ${CONFIG_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (the diff edits ${shown})`);
+  if (!names.includes(CONFIG_LABEL)) return row(false, `needs ${CONFIG_LABEL} from ${owner}: the diff edits ${shown}${protNote}`);
+  const kind = configLabelKind(last, owner);
+  if (!kind) {
+    return row(false, `needs ${CONFIG_LABEL} from ${owner}: the label was ${last ? `last ${last.event === "labeled" ? "added" : "removed"} by ${describeActor(last)}` : "found but its label event was not"} — only his own click, or an agent's (${AGENT_APP_SLUG} app) on routine paths, counts (the diff edits ${shown}${protNote})`);
   }
-  if (push?.state === "after") return row(false, `needs a fresh ${CONFIG_LABEL} from ${owner}: ${push.evidence} after his label at ${last.created_at || "?"} (remove and re-add it)`);
-  if (push?.state === "unknown") return { ...row(false, `${CONFIG_LABEL} from ${owner} found, head push not resolved yet: ${push.evidence}`), pending: true };
-  return row(true, `${CONFIG_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
+  if (kind === "agent") {
+    if (prot.length) return row(false, `needs ${CONFIG_LABEL} from ${owner} himself: an agent's label (${describeActor(last)}) covers routine config paths only, and the diff edits protected path(s) ${list(prot)}`);
+    // An owner's own removal vetoes agent re-adds until he adds it himself (walked oldest first, like hold).
+    const at = (e) => Date.parse(e?.created_at || "") || 0;
+    let veto = null;
+    for (const e of labelEvents(events, CONFIG_LABEL).map((e, i) => ({ e, i })).sort((x, y) => at(x.e) - at(y.e) || x.i - y.i).map((x) => x.e)) {
+      if (!byOwner(e, owner)) continue;
+      veto = e.event === "unlabeled" ? e : null;
+    }
+    if (veto) return row(false, `needs ${CONFIG_LABEL} from ${owner}: he removed it himself at ${veto.created_at || "?"}, so an agent's re-add does not count until his own (the diff edits ${shown})`);
+  }
+  const by = kind === "owner" ? `${CONFIG_LABEL} by owner (${owner}` : `${CONFIG_LABEL} by agent (${AGENT_APP_SLUG} app), routine paths only (${describeActor(last)}`;
+  if (push?.state === "after") return row(false, `needs a fresh ${CONFIG_LABEL}: ${push.evidence} after the label at ${last.created_at || "?"} (${by}; remove and re-add it)`);
+  if (push?.state === "unknown") return { ...row(false, `${by}) found, head push not resolved yet: ${push.evidence}`), pending: true };
+  return row(true, `${by}) at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
 }
 
 /**
@@ -190,6 +233,53 @@ export function ciVerdict(checkRuns, name = REQUIRED_CHECK, app = CI_APP, suites
   if (!best) return { ...row(false, `no ${name} check-run${suites ? ` from ${CI_WORKFLOW}` : ""} on the head yet`), pending: true };
   if (best.status !== "completed") return { ...row(false, `${name} ${best.status}`), pending: true };
   return best.conclusion === "success" ? { ...row(true, `${name} success (check-run ${best.id})`), suite: best.check_suite?.id ?? null } : row(false, `${name} ${best.conclusion}`);
+}
+
+/** The one config path a generator owns in part: package.json's `test:*` scripts (tools/gen/gen-test-groups.mjs). */
+export const GENERATED_PKG = "package.json";
+const GROUP_KINDS = new Set(["node", "browser"]);
+
+/**
+ * Is the package.json diff ONLY the generated `test:*` file lists? Inputs are the texts at the merge base and the
+ * head. Holds when (1) the deploy branch's own generator (renderPkg) run on the head's tests/groups.json and the BASE
+ * package.json reproduces the head package.json byte for byte, so nothing outside the `test:*` scripts changed, and
+ * (2) every changed script belongs to a `node`/`browser` group whose kind and flags equal the base's, so only file
+ * lists moved (a `command` group, a new group, or a flag change stays a config edit). Any parse or generator error
+ * refuses. → { ok, evidence }. Pure.
+ */
+export function generatedPkgVerdict({ basePkg, headPkg, baseGroups, headGroups, render = renderPkg }) {
+  let bp, hp, bg, hg, expected;
+  try { bp = JSON.parse(basePkg); hp = JSON.parse(headPkg); bg = JSON.parse(baseGroups); hg = JSON.parse(headGroups); }
+  catch (e) { return row(false, `package.json / tests/groups.json unreadable: ${e.message}`); }
+  try { expected = render(hg, basePkg); } catch (e) { return row(false, `the test-groups generator refused the head's tests/groups.json: ${e.message}`); }
+  if (expected !== headPkg) return row(false, "package.json carries edits the test-groups generator does not reproduce");
+  const names = [...new Set([...Object.keys(bp.scripts || {}), ...Object.keys(hp.scripts || {})])].filter((k) => bp.scripts?.[k] !== hp.scripts?.[k]);
+  for (const k of names) {
+    const b = bg.groups?.[k], h = hg.groups?.[k];
+    if (!b) return row(false, `script ${k} has no group at the base (a new group is a config edit)`);
+    if (!GROUP_KINDS.has(b.kind) || (h && (h.kind !== b.kind || JSON.stringify(h.flags || []) !== JSON.stringify(b.flags || []))))
+      return row(false, `script ${k}: its group's kind or flags changed (only file lists are generated data)`);
+  }
+  return row(true, `package.json changes only generated test file lists (${names.join(", ") || "none"})`);
+}
+
+/** Read one file at `ref` through the contents API → its text, or null. */
+function fileAt(request, file, ref) {
+  const r = request(`contents/${file}?ref=${encodeURIComponent(ref)}`);
+  if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") return null;
+  return Buffer.from(r.json.content, "base64").toString("utf8");
+}
+
+/** The generated-lists check for PR head `head` (merge base from compare). → { ok, evidence }. */
+export function generatedPkgCheck({ head, base, request }) {
+  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
+  const mb = cmp.json?.merge_base_commit?.sha;
+  if (cmp.error || !mb) return row(false, `merge base of ${head.slice(0, 8)} unreadable${cmp.error ? `: ${cmp.error}` : ""}`);
+  const texts = [["basePkg", "package.json", mb], ["headPkg", "package.json", head], ["baseGroups", "tests/groups.json", mb], ["headGroups", "tests/groups.json", head]]
+    .map(([k, f, ref]) => [k, fileAt(request, f, ref)]);
+  const missing = texts.filter(([, v]) => v == null).map(([k]) => k);
+  if (missing.length) return row(false, `could not read ${missing.join(", ")}`);
+  return generatedPkgVerdict(Object.fromEntries(texts));
 }
 
 /** Job conclusions that make an earlier attempt red (a cancelled or skipped job is not a failure). */
@@ -319,6 +409,20 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
   // line, tooling hunt 2026-11-09 row 2) is not waved through: the child exits NO_DIGEST and the generator's own
   // `--check` rebuilds every circuit on this merge and compares (about a minute). A digest that is present must
   // still be well-formed and equal. Keep PR code in a child with the same stripped environment as gen:check.
+  // An ABSENT catalog (the merge of a branch that builds it on demand, #5427) is built here in write mode, with the
+  // same environment and timeout; the generator's exit code is the verdict. A present catalog takes the path above.
+  const absent = !fs.existsSync(path.join(wt, "tools/shot/scenery-locations.json"));
+  if (absent) {
+    const built = run(process.execPath, ["tools/shot/gen-scenery-locations.cjs"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
+    if (built.error || built.status !== 0) {
+      const detail = built.error?.message || `${built.stdout || ""}\n${built.stderr || ""}`.split("\n")
+        .map((line) => line.trim()).find((line) => /Error:|FAILED/.test(line)) || `exit ${built.status}`;
+      return fail(`scenery catalog fails to build on the merge onto ${tip.slice(0, 8)}: ${detail} — node tools/shot/gen-scenery-locations.cjs on the synced branch names the circuit`);
+    }
+    const rat = ratchets({ cwd: wt, run });
+    cleanup();
+    return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat };
+  }
   let catalog = run(process.execPath, ["-e", [
     "const fs = require('node:fs');",
     "const { scenerySourceDigest } = require('./tools/shot/scenery-source-hash.cjs');",
@@ -421,11 +525,18 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   }
   const files = listAll(`pulls/${pr}/files`, request);
   if (files.error) return { error: `files of PR #${pr}: ${files.error}` };
-  const changed = filePaths(files.rows);
+  let changed = filePaths(files.rows), generated = null;
+  // package.json whose only change is the generated test lists is not a config edit (adding a unit test touches it).
+  const pkgRow = files.rows.find((f) => f?.filename === GENERATED_PKG);
+  if (pkgRow && !pkgRow.previous_filename && configFiles(changed).includes(GENERATED_PKG)) {
+    generated = generatedPkgCheck({ head, base, request });
+    if (generated.ok) changed = changed.filter((f) => f !== GENERATED_PKG);
+  }
   const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
-  const needsPush = configFiles(changed).length && cfgLast?.event === "labeled" && byOwner(cfgLast, owner);
+  const needsPush = configFiles(changed).length && !!configLabelKind(cfgLast, owner);
   const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
   rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
+  if (generated) rows.config = { ...rows.config, evidence: `${rows.config.evidence}; ${generated.ok ? generated.evidence : `package.json counted as a config edit: ${generated.evidence}`}` };
   let tip = "";
   if (!rows.open.ok) {
     for (const k of order.filter((r) => r === "gen" || r === "ratchets")) rows[k] = row(false, "not evaluated: the PR is not open and ready");

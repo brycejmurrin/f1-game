@@ -6,10 +6,13 @@
  * consumes. Renderer binding is injected (`XrBoot` → gfx.attachXrSession →
  * XRWebGLLayer on TLX+forceGL); this module stays free of a THREE import.
  *
- * Default VR path is WebGL2 (forceWebGL / tlxForceGL). Experimental WebGPU
- * XR is opt-in via localStorage apex26.xrBackend=webgpu. Quest Browser can
- * expose `XRGPUBinding` even when WebGPU-in-XR is unsupported (three.js
- * #33497) — decide by requesting the `webgpu` session feature and reading
+ * The VR path is WebGL2 (forceWebGL / tlxForceGL). apex26.xrBackend=webgpu
+ * records a preference only: the renderer attach builds an XRWebGLLayer and
+ * nothing creates an XRGPUBinding, so the `webgpu` session feature is NOT
+ * requested (ATTACH_WEBGPU). A session granted it would hand that WebGL layer
+ * a WebGPU session and every ENTER VR would fail. When an XRGPUBinding attach
+ * lands, flip ATTACH_WEBGPU: Quest Browser can expose `XRGPUBinding` where
+ * WebGPU-in-XR is unsupported (three.js #33497), so decide by the request plus
  * `session.enabledFeatures`, then fall back to WebGL2 when absent.
  */
 "use strict";
@@ -17,6 +20,8 @@
 const XrSession = (function () {
   const MODE = "immersive-vr";
   const LS_XR_BACKEND = "apex26.xrBackend";   // "webgpu" | unset/webgl2
+  // gfx.attachXrSession is WebGL-only (XRWebGLLayer): never ask for "webgpu".
+  const ATTACH_WEBGPU = false;
 
   let _supported = false;
   let _probed = false;
@@ -102,7 +107,17 @@ const XrSession = (function () {
       emit("capability", { supported: false, reason: "isSessionSupported-threw", error: String(e && e.message || e) });
       return false;
     }
+    // Store the answer so the next boot seeds it instead of asking (#4324, #5417).
+    if (typeof XrBoot !== "undefined" && XrBoot.storeVrCaps) XrBoot.storeVrCaps(_supported);
     emit("capability", { supported: _supported });
+    return _supported;
+  }
+
+  /** Adopt a stored capability answer without asking navigator.xr (#4324: bfcache). */
+  function seed(supported) {
+    _probed = true;
+    _supported = !!supported;
+    emit("capability", { supported: _supported, cached: true });
     return _supported;
   }
 
@@ -134,12 +149,20 @@ const XrSession = (function () {
     const optional = ["local-floor", "bounded-floor", "layers"];
     const overlay = typeof document !== "undefined" && document.body;
     if (overlay) optional.push("dom-overlay");
-    if (preferWebgpu) optional.push("webgpu");
+    if (preferWebgpu && ATTACH_WEBGPU) optional.push("webgpu");
     return {
       ...(overlay ? { domOverlay: { root: overlay } } : {}),
       requiredFeatures: [],
       optionalFeatures: optional,
     };
+  }
+
+  function latchWebgl2(reason) {
+    if (typeof ApexXR !== "undefined" && ApexXR.noteFallback) {
+      try { ApexXR.noteFallback("webgpu", "webgl2", reason); } catch (_) { /* */ }
+    } else {
+      try { sessionStorage.setItem("apex26.xrFallback", "webgl2"); } catch (_) { /* */ }
+    }
   }
 
   function start() {
@@ -176,7 +199,7 @@ const XrSession = (function () {
     // (WebXR/WebGPU binding), not the WebGL [-1,1] range TLX applies via Z01
     // only on the WebGPU *backend* today.
     _wantWebgpu = xrBackendPref() === "webgpu";
-    let preferGpu = _wantWebgpu;
+    let preferGpu = _wantWebgpu && ATTACH_WEBGPU;
     // A prior WebGPU requestSession rejection latches webgl2 for the NEXT gesture
     // (chaining a second requestSession in the same tap lacks user activation).
     try {
@@ -191,11 +214,7 @@ const XrSession = (function () {
         try {
           Log.info("xr", "WebGPU XR session request failed; latch WebGL2 for next enter", e && e.message);
         } catch (_) { /* Log optional in harness */ }
-        if (typeof ApexXR !== "undefined" && ApexXR.noteFallback) {
-          try { ApexXR.noteFallback("webgpu", "webgl2", "requestSession rejected"); } catch (_) { /* */ }
-        } else {
-          try { sessionStorage.setItem("apex26.xrFallback", "webgl2"); } catch (_) { /* */ }
-        }
+        latchWebgl2("requestSession rejected");
         _lastError = e;
         emit("error", { error: e, phase: "requestSession-webgpu", retry: "next-gesture-webgl2" });
         return null;
@@ -266,6 +285,9 @@ const XrSession = (function () {
       } catch (e) {
         if (_session !== session || generation !== _generation) return null;
         _lastError = e;
+        // A WebGPU preference that could not attach latches WebGL2 for the next
+        // tap, as a rejected request does (one requestSession per gesture).
+        if (_wantWebgpu) latchWebgl2("attachSession failed");
         await end();
         emit("error", { error: e, phase: "attachSession" });
         return null;
@@ -450,6 +472,7 @@ const XrSession = (function () {
     _recenterPending = false;
     _enabledFeatures = [];
     _running = false;
+    _visible = true;   // no session: nothing hides the page (a hidden end left it false)
     if (typeof Input !== "undefined" && Input.remoteLost) {
       try { Input.remoteLost("xr"); } catch (_) { /* */ }
     }
@@ -481,7 +504,7 @@ const XrSession = (function () {
   }
 
   return {
-    probe, isSupported, isProbed, isPresenting, isVisible,
+    probe, seed, isSupported, isProbed, isPresenting, isVisible,
     start, end, bind, on, recenter, setAnchor, getAnchor, eyeFrames,
     getFrame, getSession, getRefSpace, backend, lastError,
     frameCount, enabledFeatures, featureGranted, sessionInit,

@@ -43,13 +43,14 @@ import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import path from "node:path";
-import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { applyScale, appliedTag, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium, startStaticServer } from "../lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
 import { runDiff, auditCellKey } from "./audit-diff.mjs";
 import { CliArgError } from "../lib/cli-args.mjs";
-import { SCREENS, VIEWPORTS, pickScreens, pickViewports } from "./menu-screens.mjs";
+import { SCREENS, VIEWPORTS, pickScreens, pickViewports, seedOwnerProfile } from "./menu-screens.mjs";
+import { measurePaintInPage, summarisePaint, paintLine, paintInsets } from "../lib/paint-floor.mjs";
 import { resetToTitleState, titleUsable as isTitleUsable } from "./ui-reset.mjs";
 import { ensureTapFloor } from "./tap-floor.mjs";
 import { parseThemes, themeTag, themeInitScript, rowTheme, THEME_KEY } from "./theme-axis.mjs";
@@ -710,13 +711,16 @@ for (const vp of viewports) for (const sc of SCALES) for (const th of THEMES_AXI
 await Promise.all(Array.from({ length: Math.min(JOBS, queue.length) }, () => worker()));
 async function worker() { while (queue.length) { const job = queue.shift(); if (job) await sweepViewport(job[0], job[1], job[2]); } }
 
-async function sweepViewport([baseName, vpOpts, why, insets], scale, theme) {
+async function sweepViewport(vpEntry, scale, theme) {
+  const [baseName, vpOpts, why, insets] = vpEntry;
   const vpName = baseName + scaleTag(scale);
   // Log lines and file names carry the theme; the row keeps `viewport` clean
   // and records `theme` on its own (audit-diff's auditCellKey joins them).
-  const vpLabel = vpName + themeTag(theme);
+  let vpLabel = vpName + themeTag(theme);
   const ctx = await browser.newContext({ ...vpOpts, colorScheme: theme });
   await ctx.addInitScript(themeInitScript, { key: THEME_KEY, theme });
+  // An owner cell (bryce-*) boots on his live settings export; --scale= still overrides its UI SIZE.
+  const owner = await seedOwnerProfile(ctx, vpEntry);
   // The probe's visible() gate is a zero-rect test, and a content-visibility:
   // auto row outside Chrome's render margin has zero rects on every descendant
   // — the livery grid's ~70 cards would shrink to the ~4 on screen and the
@@ -731,9 +735,12 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale, theme) {
     });
   });
   const page = await ctx.newPage();
+  // Real env(safe-area-inset-*) for an owner cell, on top of the injected tokens every notched cell gets below.
+  if (owner) await (await ctx.newCDPSession(page)).send("Emulation.setSafeAreaInsetsOverride", { insets: owner.insets }).catch(() => {});
   let errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 120)));
-  let booted = false;
+  let booted = false, applied = null;
+  const paintBox = paintInsets(vpEntry, owner);
   try {
     // 90s, NOT the 30s default. The three largest desktop viewports
     // (1440x900, 1920x1080, 1920x937) ALL failed `page.goto` at exactly 30000ms
@@ -757,7 +764,9 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale, theme) {
       ).catch(() => {});
     }
     // Persisted to localStorage, so it survives the reload recovery below.
-    await applyScale(page, scale);
+    // The store clamps each slider to its own range (HUD floors at 70 %): the log label names what it applied.
+    applied = await applyScale(page, scale);
+    vpLabel += appliedTag(scale, applied);
     // A cell that cannot be reached should cost seconds, not the 30s default —
     // there are 120 of them and "skipped" is a perfectly good result.
     page.setDefaultTimeout(12000);
@@ -780,6 +789,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale, theme) {
   }
   for (const screen of expanded) {
     const cell = { producer: "layout-audit", root: screen.root, viewport: vpName, theme, why, screen: screen.id, screenName: screen.name };
+    if (applied) cell.scaleApplied = applied;
     errors = [];
     if (!booted) cell.skipped = "boot failed";
     else try {
@@ -866,6 +876,8 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale, theme) {
       }
       await ensureTapFloor(page);
       Object.assign(cell, await page.evaluate(PROBE, screen.root));
+      // PAINTED sizes (what the screen shows after zoom), every cell (#5234): additive, no existing row changes.
+      cell.paint = await page.evaluate(measurePaintInPage, { roots: screen.root, insets: paintBox }).then((raw) => summarisePaint(raw)).catch(() => null);
       cell.environment = await page.evaluate(captureAuditEnvironment, { root: screen.root, source, adjustments: ["content-visibility:visible!important"] }).catch(() => null);
       cell.selectorIndex = await page.evaluate(captureAuditSelectors, { root: screen.root, selectors: auditFindingSelectors(cell) }).catch(() => ({}));
       if (wantShots) {
@@ -884,6 +896,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale, theme) {
     }
     cell.errors = errors;
     rows.push(cell);
+    if (cell.paint) console.log(`${cell.screen.padEnd(13)} ${vpLabel.padEnd(28)} paint: ${paintLine(cell.paint)}`);
     const n = (a) => (a ? a.length : 0);
     console.log(`${cell.screen.padEnd(13)} ${vpLabel.padEnd(28)} ` +
       (cell.skipped ? `SKIPPED: ${cell.skipped}`

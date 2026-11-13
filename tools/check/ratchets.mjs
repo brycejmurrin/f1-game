@@ -134,7 +134,8 @@ const ASSERT_PIN = /assert\.match\b|assert\.ok\(\s*!?\s*[\w$.]+\.includes\(/g;
  * assertPins shapes; doesNotMatch; ok(<re or name>.test(…)); indexOf under
  * ok/equal; equal(x.includes(…), b); (x.match(/…/g) || []).length; ok(x.startsWith
  * / endsWith(…)); and each regex literal of an array a `for (… of [ … ])` loop
- * walks (one pin per element: a loop of 28 patterns is 28 pins, not one). */
+ * walks (one pin per element: a loop of 28 patterns is 28 pins, not one); and the
+ * indirect bool-then-assert shape (indirectPins, below). */
 const RE_LIT = String.raw`\/(?![*/])(?:[^/\\\n\[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+\/[dgimsuyv]*`;
 const PIN_ALL_SHAPES = [
   ASSERT_PIN,
@@ -186,7 +187,31 @@ function arrayRegexes(t, start) {
   }
   return n;
 }
-export const countPinsAll = (t) => PIN_ALL_SHAPES.reduce((a, re) => a + (t.match(re) || []).length, 0) + loopRegexPins(t);
+/* INDIRECT PINS (audit 2026-11-10, item 9): `const b = src.includes("x");
+ * assert.equal(b, true)` is the same source pin as `assert.ok(src.includes("x"))`,
+ * written in two statements so none of the shapes above sees it — and at least
+ * three tests did it on purpose to stay under the ceiling. Counted: a variable
+ * assigned from `<x>.includes(`, `<re or name>.test(` or a `<x>.indexOf(…)` compared
+ * against -1/0, that a LATER assert.* / assert(…) call names as a bare word (not
+ * `b.x`, `b(`, `b[`). One pin per variable, however many asserts read it. A
+ * static scan, not a data-flow analysis: shadowing and reassignment are ignored. */
+const INDIRECT_DECL = new RegExp(String.raw`(?:\b(?:const|let|var)\s+|,\s*)([A-Za-z_$][\w$]*)\s*=\s*!?\s*(?:`
+  + String.raw`(?:${RE_LIT}|[\w$.]+(?:\([^()\n]*\))?)\.(?:includes|test)\(`
+  + String.raw`|[\w$.]+(?:\([^()\n]*\))?\.indexOf\([^\n;]*?\)\s*(?:>=\s*0|>\s*-1|!==?\s*-1))`, "g");
+const ASSERT_CALL = /\bassert(?:\.\w+)?\s*\(/g;
+export function indirectPins(t) {
+  const calls = [...t.matchAll(ASSERT_CALL)].map((m) => {
+    const eol = t.indexOf("\n", m.index);
+    return { at: m.index, text: t.slice(m.index + m[0].length, eol < 0 ? t.length : eol) };
+  });
+  let n = 0;
+  for (const m of t.matchAll(INDIRECT_DECL)) {
+    const word = new RegExp(String.raw`(?<![\w$.])${m[1].replace(/\$/g, "\\$")}(?![\w$])(?!\s*[.(\[])`);
+    if (calls.some((c) => c.at > m.index && word.test(c.text))) n++;
+  }
+  return n;
+}
+export const countPinsAll = (t) => PIN_ALL_SHAPES.reduce((a, re) => a + (t.match(re) || []).length, 0) + loopRegexPins(t) + indirectPins(t);
 
 export const PIN_METRICS = {
   assertPins: { dirs: ["tests/unit"], exempt: ["tests/unit/assert-match-ratchet.test.mjs"],

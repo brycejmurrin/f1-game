@@ -8,8 +8,21 @@ import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-const DOCS = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//, /^\.codex\//];
-const isDocs = (f) => DOCS.some((re) => re.test(f));
+// PROSE, NOT "UNDER AN AGENT DIRECTORY". The agent trees hold executable config
+// as well as prose: .claude/hooks/*.sh, .claude/settings*.json, skill scripts
+// (*.mjs), .codex/config.toml, .cursor/hooks.json, .cursor/mcp.json. A blanket
+// /^\.claude\// classified a hook edit as "docs" and skipped the guard tests
+// that exec it. So under .claude/, .cursor/ and .codex/ only Markdown (.md, and
+// Cursor's .mdc rules) is prose, and hook/git-hook trees are never prose, even
+// a README in them — when unsure, the diff selects MORE.
+const NEVER_DOCS = [/^\.claude\/hooks\//, /^\.claude\/settings[^/]*\.json$/, /^\.githooks\//,
+  /^\.cursor\/hooks/, /^\.codex\/hooks/];
+const AGENT_PROSE = /^\.(claude|cursor|codex)\/.*\.(md|mdc)$/;
+const isDocs = (f) => {
+  if (NEVER_DOCS.some((re) => re.test(f))) return false;
+  if (/^\.(claude|cursor|codex)\//.test(f)) return AGENT_PROSE.test(f);
+  return /^docs\//.test(f) || /\.md$/.test(f);
+};
 const isCss = (f) => /^css\//.test(f);
 
 /** @param {string[]} files */

@@ -29,8 +29,12 @@
 # The table below mirrors each agent's "Return format" section; change both
 # together (tests/unit/subagent-contract-hook.test.mjs pins one good report per
 # agent). Only lines that START with a row prefix are counted, so preamble and
-# evidence bullets are free. A report that says UNREAD (the denial contract in
-# every agent file) skips the required-line checks but not row shape or caps.
+# evidence bullets are free; a report needs at least one row (or `<PREFIX> none`).
+# A report whose line LEADS with UNREAD (or `VERDICT UNREAD`: the denial contract in
+# every agent file) skips the required-line checks but not row shape or caps; a
+# per-row `| UNREAD` mark does not. A worker that is BLOCKED before any commit may
+# write `branch: <name> @ none`. Once a SubagentHandback was judged for an agent,
+# its SubagentStop is not judged again (the closing text is not the report).
 import json, re, sys
 
 C = {
@@ -42,7 +46,7 @@ C = {
     },
     "finding-verifier": {
         "file": "finding-verifier.md", "prefix": "CLAIM", "cap": 15,
-        "row": r"^CLAIM \d+ \| (CONFIRMED|STALE|REFUTED|NEEDS-BROWSER|UNREAD)\b",
+        "row": r"^CLAIM (none\b|\d+ \| (CONFIRMED|STALE|REFUTED|NEEDS-BROWSER|UNREAD)\b)",
         "shape": "CLAIM <n> | CONFIRMED|STALE|REFUTED|NEEDS-BROWSER | evidence: ...",
         "need": [r"^refuted: \d+/\d+ stale: \d+/\d+"],
     },
@@ -54,13 +58,13 @@ C = {
     },
     "surface-reviewer": {
         "file": "surface-reviewer.md", "prefix": "CLAIM", "cap": 60,
-        "row": r"^CLAIM (none\b|\d+ \| \S+:\d+ \| \S.* \| (holds|false|stale|unread) \| .+)",
+        "row": r"^CLAIM (none\b|\d+ \| (\S+:\d+([-–]\d+)?|\S+ ?§\S+) \| \S.* \| (holds|false|stale|unread) \| .+)",
         "shape": "CLAIM <n> | <A file:line> | <B unit> | holds|false|stale|unread | <probe + rc> (or CLAIM none)",
         "need": [r"^VERDICT (OK|FIX|UNREAD)\b.*\| report: \S+", r"^(collisions|cycles): "],
     },
     "physics-contract-auditor": {
         "file": "physics-contract-auditor.md", "prefix": "SITE", "cap": 30,
-        "row": r"^SITE\s+\S+\s+\S+\s+column:(AI-only|assist-gated|broadcast-only|surface|BLOCKER|unverified)\s+in-table:(yes|no)\b",
+        "row": r"^SITE\s+(none\b|\S+\s+\S+\s+column:(AI-only|assist-gated|broadcast-only|surface|BLOCKER|unverified)\s+in-table:(yes|no)\b)",
         "shape": "SITE  file:line  symbol  column:AI-only|assist-gated|broadcast-only|surface|BLOCKER|unverified  in-table:yes|no  why: ...",
         "need": [r"^vstd-invariant: (pass|fail)", r"^curvature-channels: (pass|fail)", r"^covered:"],
     },
@@ -73,7 +77,7 @@ C = {
         "file": "worker.md", "prefix": "WORKER", "cap": 1,
         "row": r"^WORKER \S+: (DONE|PARTIAL|BLOCKED)\b",
         "shape": "WORKER <name>: DONE | PARTIAL | BLOCKED",
-        "need": [r"^WORKER \S+: (DONE|PARTIAL|BLOCKED)\b", r"^branch: \S+ @ [0-9a-f]{7,}", r"^verified: ", r"^next: "],
+        "need": [r"^WORKER \S+: (DONE|PARTIAL|BLOCKED)\b", r"^branch: \S+ @ ([0-9a-f]{7,}|none\b)", r"^verified: ", r"^next: "],
     },
     # bloat-auditor folded into code-hunter (focus: dead-code) and agent-surface-reviewer re-specced as
     # surface-reviewer, 2026-11-03 (plan §4.6); ci-watcher deleted 2026-10-26.
@@ -119,15 +123,32 @@ def check(name, msg):
         if bad:
             return "this %s row does not match the shape in %s: %r. Each row must read: %s." % (
                 p, where, bad[0][:160], c["shape"])
+
     f = c.get("forbid")
     if f and re.search(f[0], msg):
         return "the report breaks a rule of %s: %s." % (where, f[1])
-    if re.search(r"\bUNREAD\b", msg) or (c.get("escape") and re.search(c["escape"], msg)):
+    if any(re.match(r"(VERDICT\s+)?UNREAD\b", s) for s in ls) or (c.get("escape") and re.search(c["escape"], msg)):
         return None
     for need in c["need"]:
         if not any(re.search(need, s) for s in ls):
             return "the report is missing the required line matching /%s/ (%s, Return format)." % (need, where)
+    if p and not rows:
+        return "the report has no %s row (%s, Return format). Emit at least one, or the line `%s none`." % (p, where, p)
     return None
+
+
+def stamp_path(d, suffix=""):
+    import os
+    aid = re.sub(r"[^A-Za-z0-9_.-]", "_", str(d.get("agent_id") or ""))
+    return os.path.join(str(d.get("cwd") or os.getcwd()), "artifacts", "subagent-contract", aid + suffix) if aid else None
+
+
+def mark_handback(d):
+    import os
+    p = stamp_path(d, ".handback")
+    if p:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        open(p, "w").close()
 
 
 def handback_once(d):
@@ -160,7 +181,13 @@ def main():
             if d.get("tool_name") != "SubagentHandback":
                 return
             msg = (d.get("tool_input") or {}).get("message")
+            if name in C:
+                mark_handback(d)
         else:
+            import os
+            p = stamp_path(d, ".handback")
+            if p and os.path.exists(p):
+                return                      # the hand-back carried the report and was judged there
             msg = d.get("last_assistant_message")
         if name not in C or not isinstance(msg, str) or not msg.strip() or schema_json(msg):
             return

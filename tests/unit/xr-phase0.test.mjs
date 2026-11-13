@@ -1,4 +1,5 @@
 /* XR — pure rig math + controller mapping (no WebXR runtime). */
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -181,15 +182,13 @@ test("XrInput.inject feeds Input.remoteSample / remoteEvent", () => {
   assert.deepEqual(events, ["pause"]);
 });
 
-test("XrSession.sessionInit lists webgpu only when preferred; featureGranted reads enabledFeatures", () => {
+test("XrSession.sessionInit never lists webgpu while the attach is WebGL-only; featureGranted reads enabledFeatures", () => {
   // sessionInit is pure — reuse the XR VM (no navigator.xr required).
-  // Feature detection must NOT trust typeof XRGPUBinding alone (three.js #33497).
+  // gfx.attachXrSession builds an XRWebGLLayer and nothing makes an XRGPUBinding:
+  // a granted "webgpu" feature would fail every ENTER VR (audit 2026-11-09 W10 #7).
   const ctx = bootXr();
   vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
-  const a = ctx.XrSession.sessionInit(false);
-  assert.ok(!a.optionalFeatures.includes("webgpu"));
-  const b = ctx.XrSession.sessionInit(true);
-  assert.ok(b.optionalFeatures.includes("webgpu"));
+  for (const prefer of [false, true]) assert.ok(!ctx.XrSession.sessionInit(prefer).optionalFeatures.includes("webgpu"), "prefer " + prefer);
   assert.equal(ctx.XrSession.featureGranted({ enabledFeatures: ["local-floor"] }, "webgpu"), false);
   assert.equal(ctx.XrSession.featureGranted({ enabledFeatures: ["local-floor", "webgpu"] }, "webgpu"), true);
   assert.equal(ctx.XrSession.featureGranted({ enabledFeatures: new Set(["webgpu"]) }, "webgpu"), true);
@@ -305,6 +304,56 @@ test("B3: ensureXrBackend refuses silently only when storage is blocked; else pi
   });
   assert.equal(ctx.XrBoot.canAttach(), true);
   assert.equal(ctx.XrBoot.ensureXrBackend().ok, true);
+});
+
+test("ensureXrBackend refuses the renderer reload while a race runs (W10 #8)", () => {
+  const ctx = bootXr();
+  const store = Object.create(null);
+  ctx.localStorage = { setItem(k, v) { store[k] = String(v); }, getItem(k) { return store[k] == null ? null : store[k]; }, removeItem(k) { delete store[k]; } };
+  let reloaded = 0, racing = true;
+  ctx.location = { reload() { reloaded++; } };
+  ctx.UiLayers = { inRace: () => racing };
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
+  const r = ctx.XrBoot.ensureXrBackend();
+  assert.equal(r.ok, false);
+  assert.equal(r.reloading, undefined);
+  assert.match(r.message, /AFTER THE RACE/);
+  assert.equal(reloaded, 0, "no reload mid-race");
+  assert.equal(store["apex26.gfxBackend"], undefined, "no pin either");
+  racing = false;
+  assert.equal(ctx.XrBoot.ensureXrBackend().reloading, true, "in the menus the pin + reload runs");
+  assert.equal(reloaded, 1);
+});
+
+function xrUiOn({ ua, xr = null, presenting = false } = {}) {
+  const button = { hidden: true, disabled: false, textContent: "", attrs: {}, addEventListener() {}, setAttribute(k, v) { this.attrs[k] = v; } };
+  const ctx = vm.createContext({
+    document: { body: { appendChild(n) { return n; } }, createElement: () => button },
+    navigator: { userAgent: ua },
+    localStorage: { getItem: (k) => (k === "apex26.xr" ? xr : null) },
+    XrSession: { on: () => () => {}, probe: async () => true, isPresenting: () => presenting, isSupported: () => true },
+    setTimeout: () => 1, clearTimeout() {},
+  });
+  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-ui.js") });
+  ctx.XrUi.show(true);
+  return button;
+}
+
+test("ENTER VR on a phone shows only once VR MODE is ON; a headset shows it unarmed (W10 #8)", () => {
+  const android = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36";
+  const quest = "Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/35.0 Chrome/130.0 VR Safari/537.36";
+  assert.equal(xrUiOn({ ua: android }).hidden, true, "Cardboard probe alone: hidden");
+  assert.equal(xrUiOn({ ua: android, xr: "1" }).hidden, false, "VR MODE ON: shown");
+  assert.equal(xrUiOn({ ua: android, presenting: true }).hidden, false, "EXIT VR never hides while presenting");
+  assert.equal(xrUiOn({ ua: quest }).hidden, false, "a headset browser needs no arming");
+  assert.equal(xrUiOn({ ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0" }).hidden, false, "desktop + headset");
+});
+
+test("css: ENTER VR hides during a race; EXIT VR stays (W10 #8)", () => {
+  const rules = cssRules(read("css/loading.css"));
+  assert.equal(decl(rules, 'body.in-race #xr-enter[aria-pressed="false"]', "display"), "none");
+  assert.equal(decl(rules, 'body.in-race #xr-enter[aria-pressed="true"]', "display"), null, "no rule hides EXIT VR");
 });
 
 test("a pending VR entry waits for a fresh tap after renderer reload", async () => {
@@ -814,54 +863,64 @@ test('in-frame recenter with a null pose stays pending and applies on the next v
   await xr.end();
 });
 
-test('WebGPU requestSession rejection latches webgl2 and does not chain a second request', async () => {
-  const ss = new Map();
-  let requests = 0, activation = true;
-  const h = xrHarness({
-    request: () => {
-      requests++;
-      assert.equal(activation, true, 'only the gesture-backed request may run');
-      activation = false;
-      return Promise.reject(new Error('webgpu session unavailable'));
-    },
-  });
-  h.ctx.sessionStorage = {
-    getItem: (k) => (ss.has(k) ? ss.get(k) : null),
-    setItem: (k, v) => ss.set(k, String(v)),
-    removeItem: (k) => ss.delete(k),
+function storages(ss) {
+  return {
+    sessionStorage: { getItem: (k) => (ss.has(k) ? ss.get(k) : null), setItem: (k, v) => ss.set(k, String(v)), removeItem: (k) => ss.delete(k) },
+    localStorage: { getItem: (k) => (k === 'apex26.xrBackend' ? 'webgpu' : null), setItem() {}, removeItem() {} },
   };
-  h.ctx.localStorage = {
-    getItem: (k) => (k === 'apex26.xrBackend' ? 'webgpu' : null),
-    setItem() {}, removeItem() {},
-  };
-  h.ctx.ApexXR = {
-    noteFallback(from, to, reason) {
-      ss.set('apex26.xrFallback', to);
-      return { from, to, reason };
-    },
-  };
-  assert.equal(await h.ctx.XrSession.start(), null);
-  assert.equal(requests, 1, 'must not chain a second requestSession in the same tap');
-  assert.equal(ss.get('apex26.xrFallback'), 'webgl2');
+}
 
-  const h2 = xrHarness();
-  h2.ctx.sessionStorage = {
-    getItem: (k) => (ss.has(k) ? ss.get(k) : null),
-    setItem: (k, v) => ss.set(k, String(v)),
-    removeItem: (k) => ss.delete(k),
-  };
-  h2.ctx.localStorage = h.ctx.localStorage;
-  let sawWebgpu = false;
-  const origReq = h2.ctx.navigator.xr.requestSession.bind(h2.ctx.navigator.xr);
-  h2.ctx.navigator.xr.requestSession = (mode, init) => {
-    if ((init.optionalFeatures || []).includes('webgpu')) sawWebgpu = true;
-    return origReq(mode, init);
-  };
-  assert.ok(await h2.ctx.XrSession.start());
-  assert.equal(sawWebgpu, false, 'xrFallback latch suppresses webgpu on the next enter');
-  await h2.ctx.XrSession.end();
+test('VR RENDERER WEBGPU never requests the webgpu feature, and the session runs on the WebGL path', async () => {
+  const ss = new Map(), inits = [];
+  const h = xrHarness({ request: (make) => Promise.resolve(Object.assign(make(), { enabledFeatures: ['local-floor', 'webgpu'] })) });
+  Object.assign(h.ctx, storages(ss));
+  h.ctx.XRGPUBinding = function XRGPUBinding() {};
+  const req = h.ctx.navigator.xr.requestSession.bind(h.ctx.navigator.xr);
+  h.ctx.navigator.xr.requestSession = (mode, init) => { inits.push(init); return req(mode, init); };
+  assert.ok(await h.ctx.XrSession.start(), 'enters even where the runtime would grant webgpu');
+  assert.equal(inits.length, 1);
+  assert.equal(inits[0].optionalFeatures.includes('webgpu'), false);
+  assert.equal(h.ctx.XrSession.backend(), 'webgl2', 'the XRWebGLLayer attach is the only one');
+  await h.ctx.XrSession.end();
 });
 
+test('an attach failure under the WEBGPU preference latches webgl2 for the next tap', async () => {
+  const ss = new Map(), notes = [];
+  const h = xrHarness({ attach: () => Promise.reject(new Error('layer refused')) });
+  Object.assign(h.ctx, storages(ss));
+  h.ctx.ApexXR = { noteFallback(from, to, reason) { notes.push({ from, to, reason }); ss.set('apex26.xrFallback', to); return {}; } };
+  const errors = [];
+  h.ctx.XrSession.on((ev, d) => { if (ev === 'error') errors.push(d.phase); });
+  assert.equal(await h.ctx.XrSession.start(), null);
+  assert.deepEqual(errors, ['attachSession']);
+  assert.equal(ss.get('apex26.xrFallback'), 'webgl2');
+  assert.deepEqual(notes.map((n) => n.reason), ['attachSession failed']);
+  assert.equal(h.ctx.XrSession.isPresenting(), false);
+});
+
+test('an attach failure with the default WEBGL2 preference latches nothing', async () => {
+  const ss = new Map();
+  const h = xrHarness({ attach: () => Promise.reject(new Error('layer refused')) });
+  Object.assign(h.ctx, storages(ss));
+  h.ctx.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+  assert.equal(await h.ctx.XrSession.start(), null);
+  assert.equal(ss.has('apex26.xrFallback'), false);
+});
+
+test('isVisible resets at session end: a session that ended hidden does not report the page hidden', async () => {
+  let vis = null;
+  const h = xrHarness({ request: (make) => {
+    const sess = make(), add = sess.addEventListener;
+    sess.addEventListener = (name, fn) => { if (name === 'visibilitychange') vis = fn; add.call(sess, name, fn); };
+    return Promise.resolve(sess);
+  } });
+  const xr = h.ctx.XrSession, s = await xr.start();
+  assert.ok(s && vis);
+  s.visibilityState = 'hidden'; vis();
+  assert.equal(xr.isVisible(), false);
+  await xr.end();
+  assert.equal(xr.isVisible(), true, 'no session: nothing hides the page');
+});
 
 test('pinned IWER offset adapter restores standard rigid-transform viewer and stereo poses', () => {
   const ctx = bootXr();
@@ -1019,6 +1078,81 @@ test("XrBoot.mountUi: no navigator.xr fetches nothing; an armed VR mode or a pen
   assert.equal(probed, 0);
 });
 
+
+// #4324 / #5417 (re-land of #4596): any isSessionSupported call marks the page "webxrdevice", which Chrome
+// will not restore from the back/forward cache. Boots after the first read the
+// stored apex26.xrCaps answer; only SETTINGS (XrBoot.recheck) asks again.
+test("XrBoot.mountUi: a stored apex26.xrCaps answer decides the fetch without probing", async () => {
+  let probed = 0;
+  const xr = { isSessionSupported: async () => { probed++; return true; } };
+  assert.deepEqual(await mountWith({ xr, ls: { "apex26.xrCaps": "0" } }), []);
+  assert.equal((await mountWith({ xr, ls: { "apex26.xrCaps": "1" } })).length, 1);
+  assert.equal(probed, 0, "a stored answer never reaches navigator.xr");
+});
+
+function lazyXrBoot(values, xr) {
+  const ctx = bootXr();
+  const element = () => ({ hidden: false, disabled: false, setAttribute() {}, addEventListener() {}, appendChild() {} });
+  ctx.localStorage = { getItem: (k) => values.get(k) ?? null, setItem: (k, v) => values.set(k, v), removeItem: (k) => values.delete(k) };
+  ctx.navigator = { xr };
+  ctx.document = { readyState: "loading", body: element(), addEventListener() {}, createElement: element };
+  ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
+  ctx.ApexRoster = { LAZY_XR: ["plan", "opts", "apex", "session", "ui"], LAZY_XR_EDGES: [] };
+  ctx.ScriptLoader = { create: () => ({ load: async () => {
+    for (const name of ["xr-plan", "xr-opts", "apex-xr", "xr-session", "xr-ui"])
+      vm.runInContext(read(`js/xr/${name}.js`).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(`js/xr/${name}.js`) });
+    return true;
+  } }) };
+  return ctx;
+}
+const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+
+test("a later boot with a stored positive answer shows ENTER VR with zero isSessionSupported calls", async () => {
+  let probed = 0;
+  const values = new Map([["apex26.xrCaps", "1"]]);
+  const ctx = lazyXrBoot(values, { isSessionSupported: async () => { probed++; return true; } });
+  ctx.XrBoot.mountUi();
+  await settle();
+  assert.equal(ctx.XrSession.isSupported(), true);
+  assert.equal(ctx.XrUi.ensureButton().hidden, false, "ENTER VR still appears");
+  assert.equal(ctx.XROpts.capsVr(), true);
+  assert.equal(probed, 0, "boot never asks navigator.xr once the answer is stored");
+});
+
+test("XrBoot.recheck (SETTINGS) re-asks the headset and rewrites the stored answer both ways", async () => {
+  let answer = true, probed = 0;
+  const values = new Map([["apex26.xrCaps", "0"]]);
+  const ctx = lazyXrBoot(values, { isSessionSupported: async () => { probed++; return answer; } });
+  ctx.XrBoot.mountUi();
+  await settle();
+  assert.equal(probed, 0);
+  assert.equal(typeof ctx.XrSession, "undefined", "a stored no fetches nothing at boot");
+  assert.equal(await ctx.XrBoot.recheck(), true, "a headset plugged in since is found from SETTINGS");
+  assert.equal(probed, 1);
+  assert.equal(values.get("apex26.xrCaps"), "1");
+  assert.equal(ctx.XrSession.isSupported(), true);
+  assert.equal(ctx.XrUi.ensureButton().hidden, false);
+  assert.equal(ctx.XROpts.capsVr(), true);
+  answer = false;
+  assert.equal(await ctx.XrBoot.recheck(), false);
+  assert.equal(values.get("apex26.xrCaps"), "0");
+  assert.equal(ctx.XrSession.isSupported(), false);
+  assert.equal(ctx.XrUi.ensureButton().hidden, true, "the button hides again");
+  assert.equal(ctx.XROpts.capsVr(), false);
+});
+
+test("a first visit asks navigator.xr exactly once (boot probe, ApexXR, ENTER VR share the stored answer)", async () => {
+  let probed = 0;
+  const values = new Map();
+  const ctx = lazyXrBoot(values, { isSessionSupported: async () => { probed++; return true; } });
+  ctx.XrBoot.mountUi();
+  await settle();
+  assert.equal(probed, 1, "one isSessionSupported per first visit, none after");
+  assert.equal(values.get("apex26.xrCaps"), "1");
+  assert.equal(ctx.XrSession.isSupported(), true);
+  assert.equal(ctx.XrUi.ensureButton().hidden, false);
+});
 
 test("XrInput prefers only a usable left stick and otherwise accepts the right controller", () => {
   const { XrInput } = bootXr();

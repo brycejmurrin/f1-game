@@ -1,7 +1,7 @@
 // @ts-check
 // PIT LANE — the stop, driven.
 //
-// tests/unit/pit-lane.test.mjs pins the geometry on all 42 circuits without a
+// tests/unit/pit-lane.test.mjs pins the geometry on every circuit in the roster without a
 // browser. This is the half that needs one: that calling a stop actually
 // limits the car, that a stop fits fresh tyres and is held for the box time,
 // that blowing through the box misses it, and that with TYRE WEAR off none of
@@ -317,6 +317,9 @@ test.describe("pit lane", () => {
         A.pit({ car: i, arm: false });
       }
       if (idx < 0) return { error: "no rival found" };
+      // The AI drives the player's car too: a player parked 60 s under green is retired
+      // (W26 row 5, AiDrive.stallSweep), and the race that ends would strand the rival's stop.
+      A.carRole(A.carRoles().findIndex((r) => r.local), { human: false });
       const states = [];
       let laneIn = 0, laneOut = 0, boxTicks = 0, boxOutOfLane = 0, stops = 0;
       for (let k = 0; k < 60 * 240; k++) {

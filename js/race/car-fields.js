@@ -46,7 +46,7 @@ const CarFields = (function () {
     ["curvature, tyre-load telemetry, applied speed band, last along-track delta (_alPrevDp), overtake-armed edge (wasArmed), vmax",
       ["kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "wasArmed", "_vmaxNow"]],
     ["surface/pit flags and the driver's own turn-in/steer state (the steerSm seed MUST stay undefined)",
-      ["onKerb", "inPitLane", "kTurn", "wheelLock", "steerSm", "brakeDemand", "throttleDemand", "steerCommand"]],
+      ["onKerb", "inPitLane", "kTurn", "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand"]],
     ["brake heat, exhaust pop, throttle edge and the last push distance (audio/fx and Collide)",
       ["brakeHeat", "exhaustPop", "wasOnThrottle", "_pushD"]],
     ["sector timing and the pre-collision snapshot Collide restores from",
@@ -54,7 +54,7 @@ const CarFields = (function () {
     ["body attitude springs (js/physics/body-attitude.js seed())",
       ["_ba", "baPitch", "baRoll", "baHeave", "baScrape"]],
     ["render side: LOD tier, wheel spin, wheel visibility",
-      ["_lodTier", "wheelSpin", "wheelSpinF", "_whlVis"]],
+      ["_lodTier", "wheelSpin", "_whlVis"]],
     ["player force model (js/physics/player-forces.js) and its HUD/coach readouts",
       ["vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "_aeroGrip", "slipFactor", "lateralAccel", "slipFront", "slipRear",
         "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear", "frontUtil", "rearUtil", "skidIntensity",
@@ -78,6 +78,12 @@ const CarFields = (function () {
     ["netplay wire id: game.js wireId() caches it on the first G.wireId call, which a host makes for every car on its " +
       "first tick (perf hunt 9: a late add per car per online race)",
       ["_wireId"]],
+    ["stationary-player retirement timer (game.js checkRetirements, AiDrive.stallStep; W26 row 5)",
+      ["stallT"]],
+    ["written only by __apex.reset() (incident-sim release → _incidentOwned, the slip read-out zero → slipDeg): " +
+      "a reset that ADDED them was a late add on every car, and once stallT took one more slot it dropped all 22 " +
+      "cars to dictionary mode (hunt-apex-aiplace-reset-vm)",
+      ["_incidentOwned", "slipDeg"]],
   ];
 
   const KEYS = [];
@@ -103,13 +109,13 @@ const CarFields = (function () {
       "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain"]],
     ["pre-declared undefined (or makeCars null) and later a number: HeapObject -> Tagged",
       ["rank", "_snapProg", "_snapX", "_snapSpeed", "kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "_vmaxNow", "kTurn",
-      "wheelLock", "steerSm", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
+      "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
       "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "skidIntensity", "passSide", "passBest",
       "_lapTimeAtLine", "fxSparkI", "kerbSndT", "kerbHapT", "pitWorked", "_otS", "_otLap", "aiBias", "holdOff",
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
       "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT",
-      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV"]],
+      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV", "stallT"]],
   ];
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
@@ -167,6 +173,7 @@ const CarFields = (function () {
     if (!("kTurn" in c)) c.kTurn = undefined;
     if (!("wheelLock" in c)) c.wheelLock = undefined;
     if (!("steerSm" in c)) c.steerSm = undefined;
+    if (!("aiHeadV" in c)) c.aiHeadV = undefined;
     if (!("brakeDemand" in c)) c.brakeDemand = undefined;
     if (!("throttleDemand" in c)) c.throttleDemand = undefined;
     if (!("steerCommand" in c)) c.steerCommand = undefined;
@@ -188,7 +195,6 @@ const CarFields = (function () {
     if (!("baScrape" in c)) c.baScrape = undefined;
     if (!("_lodTier" in c)) c._lodTier = undefined;
     if (!("wheelSpin" in c)) c.wheelSpin = undefined;
-    if (!("wheelSpinF" in c)) c.wheelSpinF = undefined;
     if (!("_whlVis" in c)) c._whlVis = undefined;
     if (!("vertLoad" in c)) c.vertLoad = undefined;
     if (!("axFrac" in c)) c.axFrac = undefined;
@@ -237,6 +243,9 @@ const CarFields = (function () {
     if (!("_coastHeld" in c)) c._coastHeld = undefined;
     if (!("classified" in c)) c.classified = undefined;
     if (!("_wireId" in c)) c._wireId = undefined;
+    if (!("stallT" in c)) c.stallT = undefined;
+    if (!("_incidentOwned" in c)) c._incidentOwned = undefined;
+    if (!("slipDeg" in c)) c.slipDeg = undefined;
     return c;
   }
 

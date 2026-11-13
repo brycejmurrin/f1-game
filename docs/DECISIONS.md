@@ -7,9 +7,11 @@ quoting him; the quote lives here once (docs/plans/2026-11-03-agent-surface-rese
 old row's `superseded by` names it; rows are never deleted or renumbered.
 `tests/unit/knowledge-retention.test.mjs` checks that every `D-NNN` cited
 anywhere exists here, that ids are unique and sequential, and that each row's
-`cited by` paths exist.
+`related files` exist. A related file is where the decision lands or is enforced;
+it need not quote the id (the column was `cited by` until 2026-11-09, when 23 of
+30 rows listed files that never mention their id).
 
-Columns: `D-NNN | date (PT unless marked Z) | "verbatim words" | scope | via | cited by | superseded by`.
+Columns: `D-NNN | date (PT unless marked Z) | "verbatim words" | scope | via | related files | superseded by`.
 `via` is how the words reached the repo: `session` (Bryce typed it in that
 session), `relay` (a dispatcher quoted him with when and where; retired by
 D-001 §4.3 in favour of provenance), `AskUserQuestion`. "(recorded: …)" marks
@@ -20,7 +22,7 @@ uses them or a `docs/notes/` note with `Re-measure-by:` (docs/notes/AGENT-MEMORY
 listed. Backfilled 2026-11-03 from the inline quotes
 (`grep -rn "Bryce, 20\|Bryce 20\|Bryce (20"`); notes keep their quotes.
 
-| id | date | words | scope | via | cited by | superseded by |
+| id | date | words | scope | via | related files | superseded by |
 |---|---|---|---|---|---|---|
 | D-001 | 2026-11-03 | "Let's fix all and add/edit new skills agents and any changes within one pr" | the agent-surface reset lands as ONE PR: hooks, settings, skills, agents, memory, docs and the retention tool included (docs/plans/2026-11-03-agent-surface-reset.md); 21-day cite-or-archive window; chat preferences stay in auto-memory, decisions get rows here | session | docs/plans/2026-11-03-agent-surface-reset.md, tools/docs/knowledge-gc.mjs, tests/unit/knowledge-retention.test.mjs | — |
 | D-002 | 2026-10-15 | (recorded: branch protection requires `CI` and nothing else; "it was twelve names") | the deploy branch's one required check is `CI` (`ci-verdict`); `gate` reads it | session | .github/workflows/ci.yml, tools/ci/merge-gate.mjs | D-031 |
@@ -53,3 +55,4 @@ listed. Backfilled 2026-11-03 from the inline quotes
 | D-029 | 2026-11-03 | (recorded: issue #4625 — a fix to `gate` cannot pass the `gate` it fixes; Bryce disabled the Deploy-reset ruleset and merged by hand) | the gate-bootstrap path: a PR that fixes `gate`/`merge-gate`/`land.yml` and is itself blocked by the broken `gate` gets `needs-decision` plus ONE comment (the PR, the red `gate` line, "needs Bryce: bootstrap merge"); Bryce alone clicks: disable the Deploy-reset ruleset, merge the PR (merge commit), re-enable the ruleset, and only then the stalled `land` PRs re-gate (`retry`/next train). No agent merges, arms, edits the ruleset or tries other merge routes | session | tests/unit/merge-gate.test.mjs, .github/workflows/land.yml | — |
 | D-030 | 2026-11-06 ~19:05Z | "Things are still broken, let's reconsider from scratch. The title page should not be scrollable." | the landscape title screen never scrolls: every TITLE LAYOUT size, width and offset is a request and the overlay's content box is the law — a piece that would not fit is zoomed down (`--tf`), an offset past an edge is pulled back (`--tf-dx/-dy`), the art is a fixed layer that counts toward no scroll area, `#overlay` is `overflow: hidden` in the wide shape; portrait keeps its scroll fallback | issue #5150, opened under Bryce's own account (author_association OWNER) quoting him with time and place — not a relay (relays were retired by D-001; corrected 2026-11-10) | css/title.css, css/menus.css, css/responsive.css, css/menu-destinations.css, js/ui/title-layout.js, tests/specs/title-fit.spec.js | — |
 | D-031 | 2026-11-10 | (recorded: the live ruleset "Deploy-reset" on the deploy branch, which Bryce configures, requires exactly one check, `gate`, and binds admins; read 2026-11-10) | the deploy branch's one required check is `gate` (land.yml's commit status); `gate`'s `ci` row in turn reads `CI` green on the head | ruleset | AGENTS.md, tools/ci/merge-gate.mjs | — |
+| D-032 | 2026-11-09 | (recorded: the 2026-11-09 project audit, item W13; Bryce delegated its open calls to the coordinating session, which made them) | both live data feeds are CC BY-NC-SA 4.0 and meant for non-commercial use (Jolpica F1; OpenF1, whose site says "non-commercial fan engagement"): while the game uses them it stays non-commercial (no ads, sales or paid tier) unless Bryce first gets other terms; every Data Hub tab and ABOUT & CREDITS credit the feed and its licence; real-race team radio in WATCH is a caption with a link out to the source, the broadcast recording is never fetched or played | relay (audit W13 coordinator) | js/data/hub.js, js/race/real-replay.js, desktop/scripts/notices.mjs, tests/unit/notices.test.mjs | — |

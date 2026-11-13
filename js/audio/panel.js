@@ -643,9 +643,11 @@ var AudioPanel = (() => {
       const sel = document.createElement("select");
       sel.id = "as-v-" + ch;
       sel.setAttribute("aria-labelledby", name.id);
-      // SYSTEM DEFAULT is a real choice, not a placeholder: on iOS getVoices()
-      // returns nothing and the platform picks for itself, so this is the only
-      // entry there and the pitch/rate below are what carry the channel.
+      // SYSTEM DEFAULT is a real choice, not a placeholder: where getVoices()
+      // returns nothing the platform picks for itself, so this is the only entry
+      // and the pitch/rate below carry the channel. iOS returns a partial list
+      // (its preinstalled voices), and DEFAULT there is the channel's own pick
+      // from radio-voice.js VOICE_LADDER.
       const auto = document.createElement("option");
       auto.value = ""; auto.textContent = list.length ? "DEFAULT" : "SYSTEM DEFAULT";
       const recorded = (G.radio && G.radio.recordedVoices) ? G.radio.recordedVoices(ch) : [];

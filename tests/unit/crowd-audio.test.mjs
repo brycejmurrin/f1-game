@@ -24,7 +24,7 @@ function param(v) {
     value: v, targets: [],
     setTargetAtTime(x) { p.value = x; p.targets.push(x); p._apexCrowdTgt = x; },
     setValueAtTime(x) { p.value = x; },
-    linearRampToValueAtTime(x) { p.value = x; p.ramped = true; },
+    linearRampToValueAtTime(x) { p.value = x; p.ramped = true; (p.ramps || (p.ramps = [])).push(x); },
     exponentialRampToValueAtTime(x) { p.value = x; },
     cancelScheduledValues() {},
     cancelAndHoldAtTime(at) { p.holds = (p.holds || 0) + 1; p.heldAt = at; },
@@ -174,7 +174,7 @@ test("silent on countdown, pause, results, and SFX off", () => {
 });
 
 test("P3 overtake and chequered-flag swells are capped", () => {
-  const { CrowdAudio, G, ctx, GameAudio } = boot({ player: { s: 100, pos: 5, finished: false } });
+  const { CrowdAudio, G, ctx, GameAudio, nodes } = boot({ player: { s: 100, pos: 5, finished: false } });
   CrowdAudio._setPos(5);
   G.player.pos = 3;
   ctx.currentTime += 0.05;
@@ -186,10 +186,23 @@ test("P3 overtake and chequered-flag swells are capped", () => {
   CrowdAudio._resetEvents();
   CrowdAudio.silence();
   ctx.currentTime += 3;
+  for (const n of nodes) if (n.gain) n.gain.ramps = [];
+  const bedBefore = (CrowdAudio.update(), CrowdAudio.inspect().bed);
+  assert.equal(CrowdAudio.inspect().swell, 0, "no swell before the flag (the next assertions are the flag's)");
   G.player.finished = true;
   CrowdAudio.update();
   const afterFlag = CrowdAudio.inspect();
-  assert.ok(afterFlag.swell > 0 || afterFlag.bed > 0.01, "chequered swell/bed");
+  // The bed alone is > 0.01 in a live race, so it proves nothing about the flag:
+  // the chequered flag must start a SWELL that lifts the bed, and fire a cheer.
+  assert.ok(afterFlag.swell > 0, `the chequered flag starts a swell (swell=${afterFlag.swell})`);
+  // update() aims the bed before it reads events, so the swell lands on the next tick.
+  ctx.currentTime += 0.05;
+  CrowdAudio.update();
+  const lifted = CrowdAudio.inspect().bed;
+  assert.ok(lifted > bedBefore + 1e-6, `the flag swell lifts the bed (${bedBefore} -> ${lifted})`);
+  assert.ok(lifted <= 0.11 + 1e-6, `flag swell capped while it plays, bed=${lifted}`);
+  const cheered = nodes.filter((n) => n.kind === "gain" && n.gain.ramps && n.gain.ramps.some((x) => x > 0.01));
+  assert.ok(cheered.length >= 1, "the chequered flag fires a cheer voice");
   assert.ok(afterFlag.bed <= 0.11 + 1e-6, `flag swell capped, bed=${afterFlag.bed}`);
 
   GameAudio.finish();
@@ -294,4 +307,36 @@ test("crowd reattaches after an AudioContext rebuild (startEngineGraph bypass)",
   assert.equal(CrowdAudio.inspect().attached, true);
   assert.ok(oldDisc > 0, "old bed source was disconnected");
   assert.ok(b.created() > 0, "a new bed was built on the rebuilt context");
+});
+
+// Audit W19 follow-up (W30 finding, 2026-11-10): the chequered flag's own cheer
+// (fireCheer(CHEER_PEAK, 0.9)) ran after swell()'s cheer had just set the spacing
+// clock, so the gap always refused it; with a cheer in the 0.84 s before the line
+// the flag got NO cheer at all. Ramps to CHEER_PEAK (0.07) mark a cheer that fired.
+test("the chequered flag always fires its own cheer, even right after another cheer", () => {
+  const { CrowdAudio, G, ctx, nodes } = boot({ player: { s: 100, pos: 5, finished: false } });
+  const ramps = [];
+  for (const n of nodes) if (n.gain) { const p = n.gain, lin = p.linearRampToValueAtTime; p.linearRampToValueAtTime = (x, at) => { ramps.push(x); return lin(x, at); }; }
+  CrowdAudio.update();                       // by the pit straight: an ambient grandstand cheer fires
+  assert.ok(ramps.some((x) => x > 0.01 && x < 0.07), `precondition: a cheer just before the line (ramps: ${ramps.join(", ")})`);
+  ramps.length = 0;
+  ctx.currentTime += 0.3;                    // inside CHEER_MIN_GAP * 0.35 (0.84 s)
+  G.player.finished = true;
+  CrowdAudio.update();
+  assert.ok(ramps.some((x) => Math.abs(x - 0.07) < 1e-9), `the flag fires a cheer at CHEER_PEAK (ramps: ${ramps.join(", ")})`);
+  ramps.length = 0;
+  CrowdAudio.update();
+  assert.equal(ramps.length, 0, "and only once: a finished car does not cheer every frame");
+});
+
+test("a clean chequered flag layers the swell's cheer and the flag's own", () => {
+  const { CrowdAudio, G, ctx, nodes } = boot({ player: { s: 100, pos: 5, finished: false } });
+  const ramps = [];
+  for (const n of nodes) if (n.gain) { const p = n.gain, lin = p.linearRampToValueAtTime; p.linearRampToValueAtTime = (x, at) => { ramps.push(x); return lin(x, at); }; }
+  CrowdAudio.update();                       // (an ambient cheer may fire here: not the flag's)
+  ctx.currentTime += 3;                      // well past the spacing gap
+  ramps.length = 0;
+  G.player.finished = true;
+  CrowdAudio.update();
+  assert.equal(ramps.filter((x) => x > 0.01).length, 2, `two cheer voices at the flag (ramps: ${ramps.join(", ")})`);
 });

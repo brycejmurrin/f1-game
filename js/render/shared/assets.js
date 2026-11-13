@@ -327,14 +327,16 @@ const Assets = (function () {
       }
       return _scratchGl;
     }
-    let cv = null;
-    try {
-      cv = (typeof OffscreenCanvas !== "undefined")
-        ? new OffscreenCanvas(size, size)
-        : Object.assign(document.createElement("canvas"), { width: size, height: size });
-    } catch (_) { return null; }
-    const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
-    if (!gl) return null;
+    // DOM canvas if OffscreenCanvas lacks webgl2 (Safari 16.x)
+    const attrs = { premultipliedAlpha: false, antialias: false };
+    const tryCanvas = (make) => {
+      try { const c = make(); const g = c && c.getContext("webgl2", attrs); return g ? { cv: c, gl: g } : null; }
+      catch (_) { return null; }
+    };
+    const got = (typeof OffscreenCanvas !== "undefined" && tryCanvas(() => new OffscreenCanvas(size, size)))
+      || (typeof document !== "undefined" && tryCanvas(() => Object.assign(document.createElement("canvas"), { width: size, height: size })));
+    if (!got) return null;
+    const { cv, gl } = got;
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
@@ -611,7 +613,8 @@ const Assets = (function () {
   }
 
   // Load + upload the baked material arrays. Resolves to true only when the
-  // arrays are actually live on the GPU; false (never a rejection) otherwise.
+  // arrays are prepared and handed to the backend; false (never a rejection)
+  // otherwise. TLX schedules lazy GPU upload, so true is not presentation evidence.
   // Safe to call repeatedly — concurrent calls share one in-flight promise.
   function load(opts) {
     if (_loadPromise) return _loadPromise;
@@ -696,8 +699,8 @@ const Assets = (function () {
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) { quietNormal(); throw new Error("albedo-upload"); }
       // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
-      // path) hands back a token with `ready`; the pack is live — and load()
-      // resolves — only once every array is filled. A failed fill reads as the
+      // path) hands back a token with `ready`; load() waits for that fill
+      // before publication. This does not prove GPU residency or presentation. A failed fill reads as the
       // sync path's upload failure (no partial pack; a lost normal stays survivable).
       if (albedoTex.ready && !(await albedoTex.ready)) { quietNormal(); throw new Error("albedo-upload"); }
       if (normalP) {

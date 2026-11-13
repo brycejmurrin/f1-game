@@ -10,7 +10,9 @@ Summary: The open-defect register and the backlog behind it (was `ARCHITECTURE-R
 > Carved out of `ARCHITECTURE-REVIEW.md` §7-8 on 2026-09-03 (tree
 > restructure Phase 5). The standing assessment — the founding bet, the physics
 > authority, the `G` façade, the renderer seam, the lessons — stays there; this
-> file is the register of what is still open and what is queued behind it.
+> file is the historical record of fixed and closed findings. Open defects are
+> GitHub issues labelled `bug` ([BUGS.md](../BUGS.md)); an "OPEN" below is as of
+> its dated entry, not a claim about the current tree.
 > Everything already fixed is in [`../archive/2026-08-architecture-review-journal.md`](../archive/2026-08-architecture-review-journal.md).
 
 ## 7. Open defects
@@ -22,7 +24,8 @@ journal; this is what remains.
 Each reproduced in the VM or a unit harness first (probes in `scratch/hunt-*`).
 - Classification put every FLAGGED car above every RUNNING one, so a lapped
   car that crossed in the ~2 s before results beat lead-lap cars still on their
-  final lap (`RaceControl.classifyOrder`, `race-control.test.mjs`), and the sheet
+  final lap (`RaceControl.classifyOrder`, since renamed `RaceControl.classify`
+  in `js/race/race-control.js`; `race-control.test.mjs`), and the sheet
   said "+1 LAP" on every lead-lap car still running (`results-sheet.js`).
 - THROTTLE = LATCH dropped on the window `touchend` net after the very tap that
   set it — LATCH was HOLD on every phone (`throttle-latch.test.mjs`). A BOUND
@@ -51,8 +54,10 @@ Each reproduced in the VM or a unit harness first (probes in `scratch/hunt-*`).
   (player |dx| 8.1 m -> < 1.5 m per step).
 - OPEN: The AI brakes by `excess / pace`, so at OVERALL SPEED 1.34 it
   overshoots corners (pinned the other way by ai-drive.test's pace-invariance
-  case — needs a decision). An AI wedged behind a PARKED player is never
-  rescued (`!unstuckActive` gates the rescue timer).
+  case — needs a decision). CLOSED (later): an AI wedged behind a PARKED player
+  was never rescued (`!unstuckActive` gated the rescue timer); the rescue now
+  arms once dig-out has run past its budget (`AiDrive.digOutEscalated`, latched
+  by `AiDrive.digOutHeld`, `js/physics/ai-drive.js`).
 
 **2026-09-22 (bug hunt) — UI, audio, lighting: seven defects. FIXED.**
 - An armed KEY-REBIND slot survived leaving settings (BACK/CLOSE/RESUME): the
@@ -249,7 +254,7 @@ mesh carries verge and run-off out to 13 m. Their outermost sample lands OFF
 the racing surface by construction, on whatever boundary structure lives there
 — here, the pit wall a car is meant to stay inside. Baselined at 1.1 in
 `props-over-road.spec.js` (jeddah, mosport, zandvoort, singapore),
-`props-over-road.test.mjs` and `zandvoort-foundation.spec.js`, all citing each
+`props-over-road.test.mjs` and `tests/specs/foundation/zandvoort.js`, all citing each
 other. Scaling by `track.hw` instead would let every one of those baselines go
 back to `TOL`, and is the fix worth making. FIXED 2026-09-23: both
 `props-over-road.spec.js` and `props-over-road.test.mjs` scale the ladder by
@@ -555,7 +560,9 @@ that same "GUARANTEED not to clip barriers" contract being found "~0.9 m
 optimistic" once before, for broadleaf — and that is its own change with its own
 sweep. Parked in `tests/unit/circuit-vocab.test.mjs`'s `KNOWN_UNHANDLED` with
 these numbers attached, so the guard still fails on a NEW typo and this one
-cannot be quietly forgotten.
+cannot be quietly forgotten. CLOSED (2026-09-24, S2): the defs moved pine→fir
+with `canopyR("fir")` aligned to the mesh; `KNOWN_UNHANDLED` in
+`circuit-vocab.test.mjs` is empty and no def carries `tree: "pine"`.
 
 **The process lesson is the durable half.** `deploy.mjs --gate-only` passed this
 batch 21 suites green, and the regression was caught only by CI's per-circuit
@@ -1708,7 +1715,7 @@ Found by the train on `f46cb99` (pages run 35068834342, 2026-09-16 07:35 UTC)
 and on every full-tier run of the deploy tip since `80acf93` (`feat(pit): a
 shorter lane, a signed entry, a walled exit, furnished bays, the stop seen`)
 and its follow-ups (`c48d891` re-baselined floating scenery only; `5710a0c`
-fixed the Abu Dhabi gridshell that `abudhabi-foundation.spec.js` caught).
+fixed the Abu Dhabi gridshell that `tests/specs/foundation/abudhabi.js` caught).
 `tests/unit/coplanar-faces.test.mjs` fails both ways:
 
 | circuit | coplanar spots | baseline (`tools/track/coplanar-baseline.json`) |
@@ -1787,7 +1794,9 @@ Recorded, not fixed (PLAUSIBLE or a design call):
 - **`sw.js` activate deletes every other cache generation** while the old
   shell is still running: its lazy fetches (scenery, data, net, deferred
   backends) miss the cache; offline after the swap a circuit builds bare.
-  Needs a two-generation repro before changing the sweep.
+  Needs a two-generation repro before changing the sweep. CLOSED (#2194):
+  `activate` and the opportunistic sweep in `sw.js` keep exactly one prior
+  SETTLED generation (`INSTALL_SETTLED_URL` marker) while a window client remains.
 - **Storage quota is shared** by ghost (uncapped, ~40 KB/track), six career
   slots and the API cache; only the API cache evicts, and only its own keys.
 - **Ten direct `localStorage.setItem` sites** bypass `store.write`
@@ -3908,6 +3917,10 @@ moved. Any later frame fix on monza re-blesses the same way.
 - **Start line / grid boxes / pit paint — FIXED.** `_startBias` [-1, -2] was
   weaker than the road's [-8, -16], so the paint sat behind the asphalt beyond
   ~5 m on every circuit. Now [-12, -24]; grid-boxes.test.mjs pins it.
+  (Superseded 2026-09-24: -12 buried the cars on the grid boxes, so the road
+  lost its depthBias and `_startBias` in `js/game.js` is now [-2, -4]; pinned by
+  `gfx-backend-canary.test.mjs` "the startline mesh beats the unbiased road
+  without burying the cars".)
 - **suzuka crossover pillar in the lower road — FIXED.** A RAW (unguarded)
   pillar stood 4 m inside the lower carriageway; pillars whose footprint is
   onTrack are skipped. OPEN: an audit for solids spanning the whole
@@ -3931,6 +3944,11 @@ moved. Any later frame fix on monza re-blesses the same way.
   behind the garages on +1; suzuka's pits are on -1 (grandstand guides), so its
   main stand moved to +1 and race control/hospitality behind the -1 garages —
   which also un-reds suzuka-foundation.spec (its crown was superseded).
+  **SUZUKA REOPENED AND RE-FIXED 2026-11-10 (W12):** the -1 call was wrong. The
+  FIA 2026 Japanese GP event document (circuit map v8 + pit-lane drawing,
+  fia.com 2026_japanese_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_battery_containment_area_and_red_zone.pdf)
+  puts the pit lane and garages on the driver's RIGHT (+1, the Esses side);
+  `pit.side` is now 1 and the scenery mirrored (`PIT = 1, STAND = -PIT`).
 - Baselines: clip lowered on 24 circuits, coplanar on 3; nothing went up.
 - OPEN, next campaign (plan workstream B): props flush on terrain, the coplanar
   FIGHT_MAX 150 -> 300 m window (~520 spots), the road ribbon folding on corner

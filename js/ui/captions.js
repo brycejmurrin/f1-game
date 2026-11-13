@@ -1,7 +1,7 @@
 /* Apex 26 — Captions: on-screen text for radio, spotter, and pre-race announcer.
    Presentation only — no physics, no circuit arc reads. Radio lines keep using #announce;
    non-radio sources use #captions. Speaker labels live here (moved from announce-banner).
-   Plan slice 4: docs/plans/2026-10-04-colourblind-captions.md */
+   Plan slice 4: docs/archive/plans/2026-10-04-colourblind-captions.md */
 const Captions = (function () {
   "use strict";
 
@@ -269,8 +269,9 @@ const Captions = (function () {
 
   applyDom();
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => { initAppearanceRows(); applyDom(); }, { once: true });
+    // #4798 gate
+    if (document.readyState !== "complete") {
+      document.addEventListener("DOMContentLoaded", () => { applyDom(); typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initAppearanceRows) : initAppearanceRows(); }, { once: true });
     } else initAppearanceRows();
   }
 

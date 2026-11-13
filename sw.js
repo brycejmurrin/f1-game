@@ -59,7 +59,7 @@ const offlineRetries = new Map();
 // optional Set for gen-shell lockstep with DEFERRED/LAZY_*, but are skipped at
 // install — explicit opt-in; fetch handler runtime-caches on use.
 // @gen-shell:sw-required-lazy
-const REQUIRED_LAZY = ["js/career/career-planning-ui.js","js/career/career-ui.js"];
+const REQUIRED_LAZY = ["js/career/career-backup.js","js/career/career-planning-ui.js","js/career/career-ui.js"];
 // /@gen-shell:sw-required-lazy
 function isInstallCriticalOptional(u) {
   return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
@@ -84,6 +84,26 @@ function isBackgroundOptional(u) {
   return !isInstallCriticalOptional(u) && !isRuntimeOnlyOptional(u);
 }
 
+// KILL SWITCH. A deploy whose version.json carries `"swKill": true` retires
+// this worker: on the next version.json it sees (the page's boot guard and
+// UpdateCheck read it on every launch and foreground) it unregisters itself and
+// deletes every apex26-* cache, voice included; a fresh install under the flag
+// refuses to install, so the re-registration the shell makes is a no-op. Remove
+// the flag in a later deploy and the next launch installs normally. Only a
+// worker that already has this code can honour it.
+let _killed = false;
+const isKillFlag = (v) => !!(v && v.swKill === true);
+async function killWorker() {
+  if (_killed) return;
+  _killed = true;
+  swLog("warn", "kill switch: version.json asked this worker to retire; unregistering and clearing caches");
+  try { if (self.registration && typeof self.registration.unregister === "function") await self.registration.unregister(); }
+  catch (e) { swLog("warn", "kill switch: unregister failed: " + errMsg(e)); }
+  const names = (await caches.keys()).filter((n) => n.startsWith(CACHE_PREFIX));
+  await Promise.all(names.map((n) => caches.delete(n)));
+  invalidateCacheOrder();
+}
+
 let _cacheNamePromise = null;
 // The RESOLVED name, readable without awaiting: cache matching must never wait
 // on a version.json round trip (offline, that fetch can hang for as long as the
@@ -97,6 +117,7 @@ function currentCacheName() {
       return r.json();
     })
     .then((v) => {
+      if (isKillFlag(v)) throw new Error("Service worker retired by version.json swKill");
       const build = Number(v && v.build);
       if (!Number.isSafeInteger(build) || build <= 0) throw new Error("Invalid deployed build");
       _cacheNameKnown = CACHE_PREFIX + build;
@@ -409,6 +430,8 @@ async function precacheAssetLists() {
     "js/race/parc-ferme.js",
     "js/race/cooldown-lap.js",
     "js/race/ceremony.js",
+    "js/race/stopped-cars.js",
+    "js/race/retired-card.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
@@ -633,6 +656,7 @@ async function precacheAssetLists() {
     "js/camera/tuner-panel.js",
     "js/camera/flyby-editor.js",
     // LAZY_CAREER_UI — CAREER screen behind the title CAREER door
+    "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
     // LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter
@@ -640,6 +664,18 @@ async function precacheAssetLists() {
     "js/ui/layout-presets.js",
     // LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace
     "js/ui/results-sheet.js",
+    // LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot
+    "js/perf/soak-run.js",
+    "js/perf/gpu-test-run.js",
+    "js/perf/phone-recorder.js",
+    "js/perf/bench-capture.js",
+    "js/perf/bench-run.js",
+    "js/perf/metrics-panel.js",
+    // LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)
+    "js/ui/watch-transport.js",
+    "js/race/real-replay.js",
+    "js/race/real-race-pace.js",
+    "js/race/real-race.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
     // /@gen-shell:sw-optional
@@ -938,7 +974,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet)\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/(departure-wheels|entrance-motion|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|results-sheet|watch-transport)\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
@@ -1176,6 +1212,7 @@ self.addEventListener("fetch", (event) => {
   // the guard is here so that stays true if it ever does.
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
   if (url.origin !== self.location.origin) return;   // never touch cross-origin (Jolpica/OpenF1 data hub)
+  if (_killed) return;   // retired: the network answers until this page navigates away
   maybeSweep(event, req.mode === "navigate");
 
   // STREAMED MUSIC ASKS FOR BYTE RANGES (perf-memory M-4b). A phone plays
@@ -1229,6 +1266,12 @@ self.addEventListener("fetch", (event) => {
     // https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
     let cacheWrite = Promise.resolve();
     const network = fetch(req, { cache: isVersion || isShellBust ? "no-store" : "no-cache" }).then((res) => {
+      if (res && res.ok && isVersion) {
+        // The kill switch is read off the version.json the page already asks for.
+        const copy = res.clone();
+        cacheWrite = copy.json().then((v) => { if (isKillFlag(v)) return killWorker(); }, () => {})
+          .catch((e) => swLog("warn", "kill switch failed: " + errMsg(e)));
+      }
       if (res && res.ok && !isVersion && url.search === "") {
         // Clone before the page can consume the body. Maintenance belongs to
         // waitUntil, so generation lookup and slow puts cannot delay navigation.

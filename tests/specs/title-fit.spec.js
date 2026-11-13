@@ -20,6 +20,7 @@
 // does; the band's other candidate — the sticky utility-row scrim #menu-buttons
 // paints only as a scroller (.sf-scroll) — cannot appear once nothing scrolls.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { GEOS, profiles, sweep, settleInPage, measureInPage, judge, judgeStored, judgeFloor, judgeLabels, liveStore, LIVE_TITLE, staleLaunchInPage, firstFlagsInPage } from "../helpers/title-fit.mjs";
 
 const SETTLE_FRAMES = 12;
@@ -157,6 +158,46 @@ test.describe("title fit stale landscape launch 852x393-standalone", () => {
   }
 });
 
+// THE PHONE CONTROLLER PAGE NEVER SCROLLS EITHER. ROW 9 (2026-11-10): it scrolled at 844x390 —
+// document height 417 in a 390 window. html/body are overflow: hidden, which
+// stops the gesture but not the extent, so the pairing column (taller than a
+// lying-down phone) and the rotating rim both grew the document. Each screen
+// now clips or scrolls its own box; the document is exactly the window on the
+// pairing screen, the wheel (?demo) and the menu pad (?demo=menu), both ways up.
+test.describe("Phone controller page — fits without a document scroll", () => {
+  for (const [name, viewport] of [["landscape 844x390", { width: 844, height: 390 }], ["portrait 390x844", { width: 390, height: 844 }]]) {
+    test.describe(name, () => {
+      test.use({ viewport, hasTouch: true, isMobile: true });
+      for (const [screen, url, linked] of [["pairing", "/controller.html", false], ["wheel", "/controller.html?demo", true], ["menu pad", "/controller.html?demo=menu", true]]) {
+        test(`${screen} screen: scrollHeight <= innerHeight`, async ({ page }) => {
+          await page.goto(url);
+          await page.waitForFunction(() => !!window.__apexPad, null, { polling: 100, timeout: BOOT_MS });
+          if (linked) await expect(page.locator("body")).toHaveClass(/\blinked\b/);
+          // Two frames: the demo dash paints on rAF; fonts may re-wrap the copy.
+          await page.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
+          const m = await page.evaluate(() => ({
+            vh: innerHeight, vw: innerWidth,
+            sh: document.documentElement.scrollHeight, sw: document.documentElement.scrollWidth,
+            bodySh: document.body.scrollHeight,
+          }));
+          expect(m.sh, `${screen} ${name}: document height`).toBeLessThanOrEqual(m.vh);
+          expect(m.bodySh, `${screen} ${name}: body height`).toBeLessThanOrEqual(m.vh);
+          expect(m.sw, `${screen} ${name}: document width`).toBeLessThanOrEqual(m.vw);
+          if (!linked) {
+            // The pairing controls are on screen, not just clipped into a box.
+            for (const sel of ["#code", "#connect"]) {
+              const r = await page.locator(sel).boundingBox();
+              expect(r, `${sel} has a box`).not.toBeNull();
+              expect(r.y, `${sel} top`).toBeGreaterThanOrEqual(0);
+              expect(r.y + r.height, `${sel} bottom`).toBeLessThanOrEqual(m.vh);
+            }
+          }
+        });
+      }
+    });
+  }
+});
+
 // UI SIZE DOES NOT PICK THE TITLE (#5199). Bryce's phone showed the 11-row fallback, which a
 // landscape phone only reaches at body[data-density="normal"] (UI SIZE under ~66 % at 393 px), and
 // his pause-sheet screenshots reproduce only near UI SIZE 51 % (#5207) although his export stores
@@ -177,7 +218,11 @@ test.describe("title fit at a small UI SIZE 852x393-standalone", () => {
         await page.evaluate(() => { document.getElementById("mb-continue").hidden = false; });
         const { frames, m } = await measure(page);
         expect(frames, "the fit settled").toBeGreaterThan(0);
-        expect(m.uiScale, "precondition: the stored UI SIZE reached --ui-scale").toBe(String(ui / 100));
+        // #5452: a phone's UI SIZE stops at 50 % (70 under #5235), and a smaller stored value is raised on load
+        // (js/ui/scale.js). So 40 boots at 0.5 and 51 / 60 boot as stored; the title's own floor below holds the doors.
+        const want = Math.max(ui, 50);
+        expect(m.uiScale, "precondition: a stored UI SIZE boots at itself, or at the 50 % phone minimum").toBe(String(want / 100));
+        expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and storage holds the same").toBe(want);
         const rows = {};
         for (const d of m.doors) (rows[Math.round(d.t)] ||= []).push(d.id);
         expect(Object.values(rows).map((r) => r.length), `rows ${JSON.stringify(rows)}`).toEqual(geo.rows);
@@ -306,6 +351,63 @@ test.describe("title layout controls 852x393-standalone", () => {
   }
 });
 
+// W34 row 6 (audit 2026-11-10): a 120 ms double tap on a title door must end on
+// the SAME screen a single tap does — the second tap may not reach whatever the
+// new screen put under the finger (SETTINGS → BACK, SEASON → CIRCUIT DETAIL,
+// TRACK DESIGNER → its RACE button). TopModal's shield exempts automation
+// (navigator.webdriver), so this page reports a player's browser.
+test.describe("Title doors — a fast double tap is one tap", () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
+  const DOORS = ["mb-race", "mb-settings", "mb-vs", "mb-season", "mb-designer"];
+
+  async function openLayers(page) {
+    return page.evaluate(() => window.UiLayers.LAYER_IDS.filter((id) => {
+      const el = document.getElementById(id);
+      return !!el && !el.hidden && (el.tagName !== "DIALOG" || el.open);
+    }).sort().join(","));
+  }
+  async function settle(page) {
+    // Lazy doors (VS FRIEND's net bundle, the designer) swap in late: wait for
+    // the title to give way, then let any second activation play out.
+    await page.waitForFunction(() => { const t = window.UiLayers.top(); return !!t && t.id !== "overlay"; },
+      null, { polling: 100, timeout: BOOT_MS }).catch(() => {});
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 700)));
+  }
+  async function tapDoor(page, id, twice) {
+    await page.addInitScript(() => Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false }));
+    await page.goto("/");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    const box = await page.locator("#" + id).boundingBox();
+    if (!box) throw new Error("door not on screen: " + id);
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    // The taps go out over CDP with explicit input timestamps 120 ms apart and
+    // without waiting between them: a page-side delay (or awaiting the first
+    // tap's handling) only starts once the door's handler frees the main thread,
+    // so on a slow runner the "second tap" really came after the window.
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      const t0 = Date.now() / 1000, pt = [{ x, y }];
+      const send = (type, timestamp, touchPoints) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints, timestamp });
+      const sent = [send("touchStart", t0, pt), send("touchEnd", t0 + 0.03, [])];
+      if (twice) sent.push(send("touchStart", t0 + 0.12, pt), send("touchEnd", t0 + 0.15, []));
+      await Promise.all(sent);
+    } finally { await cdp.detach(); }
+    await settle(page);
+    return openLayers(page);
+  }
+
+  for (const id of DOORS) {
+    test(`#${id}: a 120 ms double tap lands where a single tap does`, async ({ page }) => {
+      const once = await tapDoor(page, id, false);
+      expect(once, "the single tap opened a screen").not.toBe("overlay");
+      const twice = await tapDoor(page, id, true);
+      expect(twice).toBe(once);
+    });
+  }
+});
+
 // THE TOUCH PAINT FLOOR (#5213). With what Bryce's phone stores (UI SIZE 61 %, BUTTONS SIZE 60,
 // WIDTH 49) the eight rows were the right shape and painted 16.8-22.2 px tall with 6.1-8.9 px
 // labels, the whole menu in y 8..175 of 393 (measured 2026-11-10 at all three geometries). Under a
@@ -313,7 +415,7 @@ test.describe("title layout controls 852x393-standalone", () => {
 // storage is not rewritten. BUTTONS SIZE stays honest (#5229's rule: the range is what fits, the
 // number is the painted size): its low end is the floor, it shows the painted 100 % over the
 // stored 60, and from there every stored step paints a bigger door until the box stops the thumb.
-const LIVE_GEOS = [GEOS[0], { name: "852x368", w: 852, h: 368, insets: GEOS[0].insets }, GEOS[2]];
+const LIVE_GEOS = GEOS.slice(0, 3);   // standalone, the measured 852x368 Safari tab, 844x390 (tests/data/phone-windows.json)
 for (const geo of LIVE_GEOS) {
   test.describe(`title touch floor ${geo.name}`, () => {
     test.use({ viewport: { width: geo.w, height: geo.h }, hasTouch: true, isMobile: true });
@@ -341,7 +443,7 @@ for (const geo of LIVE_GEOS) {
         const { frames, m } = await measure(page);
         const at = `${geo.name}${cont ? " with CONTINUE" : ""}: ${JSON.stringify({ fit: m.fit, mb: m.mb.rect, doors: m.doors.map((d) => `${d.id} ${Math.round(d.h * 10) / 10}/${d.fs}`) })}`;
         expect(frames, "the fit settled").toBeGreaterThan(0);
-        expect(m.uiScale, "precondition: the stored UI SIZE reached --ui-scale").toBe("0.61");
+        expect(m.uiScale, "precondition: his stored UI SIZE 61 % boots as stored (the phone floor is 50 %, #5452)").toBe("0.61");
         expect(judge(m, { offsets: true }), at).toEqual([]);
         expect(judgeFloor(m), at).toEqual([]);
         expect(m.fit.mb || "1", `the floor is not paid for by the fit ${at}`).toBe("1");
