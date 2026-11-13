@@ -186,11 +186,11 @@ test("#5404: an open `**now:**` item still refuses the plan row (no exemption), 
   // PR #5368 at f2f03ea: refused on "1 of 10 Plan item(s) open: **now:** ready CI on f2f03ea; the gate re-decides".
   const r = planRow("## Plan\n- [x] a\n- [ ] **now:** ready CI on f2f03ea; the gate re-decides\n- [ ] land: add `land`\n");
   assert.equal(r.ok, false, "option (a): the gate is unchanged, a `now:` item is open");
-  assert.match(r.evidence, /the `\*\*now:\*\*` item counts: at the ready flip tick it with its evidence, or move what is left of it into the `land:` item/);
+  assert.equal(r.evidence.split("; ").at(-1), "the `**now:**` item counts: at the ready flip tick it with its evidence, or move what is left of it into the `land:` item (skill steward §Land)");
   // The cure passes: what is left lives in the gate-exempt land item.
   assert.equal(planRow("## Plan\n- [x] a\n- [ ] land: ready CI on f2f03ea; the gate re-decides, then `land`\n").ok, true);
   // No `now:` among the open items: no hint.
-  assert.doesNotMatch(planRow("## Plan\n- [ ] write the test\n").evidence, /now:/);
+  assert.equal(planRow("## Plan\n- [ ] write the test\n").evidence, '1 of 1 Plan item(s) open: "write the test" — tick each with its evidence or strike it with why');
 });
 
 test("ciVerdict: the required check-run on the head, newest attempt, success only", () => {
@@ -1411,7 +1411,7 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     let tip = git(W, undefined, "rev-parse", "HEAD");
     const quiet = retestOnMerge({ cwd: W, tip, head, ciAt, run, select });
     assert.equal(quiet.ok, true, quiet.evidence);
-    assert.match(quiet.evidence, /^no tip merge since the CI run's base \(created 2026-11-11T01:00:00Z, margin 15 min; no recorded base\)/);
+    assert.equal(quiet.evidence, "no tip merge since the CI run's base (created 2026-11-11T01:00:00Z, margin 15 min; no recorded base): CI tested this combination");
     assert.equal(calls.length, 0, "nothing runs when CI tested this combination");
     // #5392's shape lands AFTER the CI run: it pins the tool's --help as exact text (the test file changes).
     write("tests/unit/tools-runnable.test.mjs", "// v2: exact two-line --help\n"); git(W, at("2026-11-11T01:44:54Z"), "commit", "-q", "-am", "#5392");
@@ -1424,24 +1424,24 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     assert.deepEqual(calls[0].argv, ["tools/ci/tooling-fast.mjs", "--jobs=2", "--quiet", "--file-timeout=180", "tests/unit/tools-runnable.test.mjs"], "the merge result's tooling-fast runs the touched test");
     assert.equal(calls[0].cwd, W);
     assert.equal(calls[0].env.GITHUB_TOKEN, undefined, "the PR's code runs with the stripped environment");
-    assert.match(green.evidence, /1 tip merge\(s\) since the CI run .*1 unit file\(s\) re-tested on the merge result .*tools-runnable\.test\.mjs passed/);
+    assert.equal(green.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); 1 unit file(s) re-tested on the merge result (tooling-fast's --changed selection (matched)): tests/unit/tools-runnable.test.mjs passed`);
     // The crossing itself: the re-test is red on the merge → refused (deploy red #5396 would not have happened).
     const red = retestOnMerge({ cwd: W, tip, head, ciAt, select, run: () => ({ status: 1, stdout: "[tooling-fast] FAIL  1/1 tests/unit/tools-runnable.test.mjs exit=1\n", stderr: "" }) });
     assert.equal(red.ok, false);
-    assert.match(red.evidence, /the re-test of 1 unit file\(s\) on the merge onto \w{8} failed: \[tooling-fast\] FAIL  1\/1 tests\/unit\/tools-runnable\.test\.mjs exit=1 — the PR and the newer tip cross/);
+    assert.equal(red.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test of 1 unit file(s) on the merge onto ${tip.slice(0, 8)} failed: [tooling-fast] FAIL  1/1 tests/unit/tools-runnable.test.mjs exit=1 — the PR and the newer tip cross; sync-pr.mjs, fix, and push (a fresh CI run)`);
     const slow = retestOnMerge({ cwd: W, tip, head, ciAt, select, run: () => ({ status: null, error: Object.assign(new Error("spawnSync node ETIMEDOUT"), { code: "ETIMEDOUT" }) }) });
     assert.equal(slow.ok, false);
-    assert.match(slow.evidence, /failed: timed out after 420 s/);
+    assert.equal(slow.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test of 1 unit file(s) on the merge onto ${tip.slice(0, 8)} failed: timed out after 420 s — the PR and the newer tip cross; sync-pr.mjs, fix, and push (a fresh CI run)`);
     // Un-runnable never passes: no CI time, a selection that cannot run, a git error.
     assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select }).ok, false);
-    assert.match(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select }).evidence, /re-test not runnable: the CI run's creation time is unreadable/);
-    assert.match(retestOnMerge({ cwd: W, tip, head, ciAt, run, select: () => ({ error: "tooling-fast selection failed: boom" }) }).evidence, /^re-test not runnable: tooling-fast selection failed: boom/);
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt: "", run, select }).evidence, 're-test not runnable: the CI run\'s creation time is unreadable ("")');
+    assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select: () => ({ error: "tooling-fast selection failed: boom" }) }).evidence, "re-test not runnable: tooling-fast selection failed: boom");
     assert.equal(retestOnMerge({ cwd: W, tip: "f".repeat(40), head, ciAt, run, select }).ok, false, "an unknown tip refuses");
     // Measured too broad for the cap: refused up front, nothing runs (the cure is a sync and a fresh CI run).
     calls.length = 0;
     const broad = retestOnMerge({ cwd: W, tip, head, ciAt, run, select: (p) => ({ ...select(p), estMs: 400_000 }) });
     assert.equal(broad.ok, false);
-    assert.match(broad.evidence, /measured ~400 s at --jobs=2, over the 420 s cap — too broad to re-test at merge: sync-pr\.mjs and push/);
+    assert.equal(broad.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test would run 1 unit file(s), measured ~400 s at --jobs=2, over the 420 s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
     assert.equal(calls.length, 0);
     assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select: (p) => ({ ...select(p), estMs: 30_000 }) }).ok, true, "a measured-small re-test runs");
     // A merge just BEFORE the CI run's creation (inside the margin) may be missing from its merge ref: re-tested too.
@@ -1480,7 +1480,7 @@ test("#5407 retestPlan: the gate's own selection, kept to files the merge has; a
 
 test("#5407 evaluate: the retest row is local (never --trusted), waits with a pending ci row, and a refused re-test refuses the gate", () => {
   assert.deepEqual(LOCAL_ROWS, ["gen", "ratchets", "retest"]);
-  assert.ok(!TRUSTED_ROWS.includes("retest"), "the re-test runs PR code: not a trusted row");
+  assert.deepEqual(TRUSTED_ROWS.filter((k) => k === "retest"), [], "the re-test runs PR code: not a trusted row");
   const f = fakes();
   const cross = (a) => ({ ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" }, retest: { ok: false, evidence: "the re-test failed" } });
   const v = evaluate({ pr: 7, ...f.deps, localMerge: cross });
@@ -1520,7 +1520,7 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   assert.deepEqual(treeRaises({ a: 1, b: 5 }, { a: 2, b: 4, c: 9 }), [{ metric: "a", from: 1, to: 2 }], "lowered and new ceilings are no raise");
   // Deleting a tree metric removes its ceiling (ratchets.mjs measures only what ratchets.json names): a raise.
   assert.deepEqual(treeRaises({ assertPins: 8223, bareCatches: 29 }, { assertPins: 8223 }), [{ metric: "bareCatches", from: 29, to: null }]);
-  assert.match(raiseVerdict([{ metric: "bareCatches", from: 29, to: null }], [], []).evidence, /raises a tree-wide ceiling \(bareCatches 29→removed\)/);
+  assert.equal(raiseVerdict([{ metric: "bareCatches", from: 29, to: null }], [], []).evidence, "needs ratchet-raise from brycejmurrin: the diff raises a tree-wide ceiling (bareCatches 29→removed) — lower the count instead, or ask him");
   const f = fakes();
   f.files.push({ filename: FRAG("cursor--x") });
   const request = (p) => ghRequest(p) || (p.startsWith("compare/") ? { json: { merge_base_commit: { sha: MB }, files: [{ filename: FRAG("cursor--x") }] } } : f.deps.request(p));
@@ -1533,25 +1533,25 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   f.pull.labels = [{ name: "ratchet-raise" }]; f.events.push(ev("ratchet-raise", "2026-11-03T10:00:00Z", { app: APP }));
   r = rowOf();
   assert.equal(r.ok, false);
-  assert.match(r.evidence, /only his own click counts \(raises assertPins 105→108\)/);
+  assert.equal(r.evidence, "needs ratchet-raise from brycejmurrin: the label was last added by brycejmurrin via app claude — only his own click counts (raises assertPins 105→108)");
   // Bryce's own click after the head was pushed (its first ci.yml run, 09:00): passes.
   f.events.push(ev("ratchet-raise", "2026-11-03T10:30:00Z"));
   r = rowOf();
   assert.equal(r.ok, true, r.evidence);
-  assert.match(r.evidence, /^ratchet-raise added by brycejmurrin at 2026-11-03T10:30:00Z covers assertPins 105→108 \(labelled after the head/);
+  assert.equal(r.evidence, "ratchet-raise added by brycejmurrin at 2026-11-03T10:30:00Z covers assertPins 105→108 (labelled after the head aaaaaaaa was pushed)");
   // A push touching a ratchet file after his label: a fresh label is needed.
   f.prRuns.push({ head_sha: "c".repeat(40), created_at: "2026-11-03T09:30:00Z", pull_requests: [{ number: 7 }] });
   f.prRuns[0].created_at = "2026-11-03T11:00:00Z";
   at["c".repeat(40)] = at[MB]; // the head he labelled raised nothing yet
   r = rowOf();
   assert.equal(r.ok, false);
-  assert.match(r.evidence, /^needs a fresh ratchet-raise from brycejmurrin: a push touching tests\/data\/ratchets\.d\/cursor--x\.json .* after his label at 2026-11-03T10:30:00Z \(remove and re-add it\)/);
+  assert.equal(r.evidence, "needs a fresh ratchet-raise from brycejmurrin: a push touching " + FRAG("cursor--x") + " (cccccccc...aaaaaaaa) came after his label at 2026-11-03T10:30:00Z (remove and re-add it)");
   // …unless the head he labelled raised as much: a sync that only brought other PRs' fragments needs no re-click.
   const C = "c".repeat(40);
   at[C] = at[HEAD];
   r = rowOf();
   assert.equal(r.ok, true, r.evidence);
-  assert.match(r.evidence, /^ratchet-raise added by brycejmurrin .* covers assertPins 105→108 \(the pushes since cccccccc touch a ratchet file but raise nothing beyond what he labelled there\)/);
+  assert.equal(r.evidence, "ratchet-raise added by brycejmurrin at 2026-11-03T10:30:00Z covers assertPins 105→108 (the pushes since cccccccc touch a ratchet file but raise nothing beyond what he labelled there)");
   // A further raise after his click is not covered.
   at[C] = { ...at[HEAD], frags: { ...at[HEAD].frags, [FRAG("cursor--x")]: { tree: { assertPins: 1 } } } };
   assert.equal(rowOf().ok, false, "105→108 now vs 105→106 when he clicked");
@@ -1568,7 +1568,7 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   // Unreadable ceilings are an error (the gate retries), never a pass.
   f.files.push({ filename: "tests/data/ratchets.json" });
   const broken = (p) => (p.startsWith("contents/tests/data/ratchets.json") ? { error: "HTTP 502" } : request(p));
-  assert.match(evaluate({ pr: 7, ...f.deps, request: broken, trusted: true }).error, /tests\/data\/ratchets\.json at m{8}: HTTP 502/);
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: broken, trusted: true }).error, "tests/data/ratchets.json at mmmmmmmm: HTTP 502");
   assert.equal(raiseVerdict([], [], []).ok, true);
 });
 

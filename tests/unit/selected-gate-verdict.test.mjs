@@ -318,7 +318,7 @@ test("#5403: on a green matrix every PLANNED spec needs a junit testcase in some
   // Before #5403 this was green: selected-1 left a testcase (a), so b and c were invisible.
   const miss = selectedGateVerdict({ ...base, evidence: { ...ev, ran: ["tests/specs/boot-guard.spec.js"] } });
   assert.equal(miss.ok, false);
-  assert.match(miss.reason, /2 planned spec\(s\) left no junit testcase in any shard: tests\/specs\/camera\.spec\.js, tests\/specs\/quali\.spec\.js/);
+  assert.equal(miss.reason, "selected specs success, but 2 planned spec(s) left no junit testcase in any shard: tests/specs/camera.spec.js, tests/specs/quali.spec.js — they did not run (or their upload was lost); re-run, never read it as a pass");
   const all = selectedGateVerdict({ ...base, evidence: { ...ev, ran: ["tests/specs/boot-guard.spec.js", "tests/specs/camera.spec.js", "tests/specs/quali.spec.js"] } });
   assert.equal(all.ok, true, all.reason);
   // No plan handed in (a pure caller or an older workflow): the per-shard rules alone, as before.
@@ -328,7 +328,7 @@ test("#5403: on a green matrix every PLANNED spec needs a junit testcase in some
   for (const bad of ["{not json", '{"specs":"x"}', '[{"name":"x"}]']) {
     const v = selectedGateVerdict({ ...base, evidence: { ...ev, planned: plannedSpecs(bad), ran: [] } });
     assert.equal(v.ok, false, bad);
-    assert.match(v.reason, /cannot check each planned spec ran; failing closed/);
+    assert.equal(v.reason.split(" — ")[1], "cannot check each planned spec ran; failing closed", bad);
   }
   // The circuit lane: a per-circuit loop spec may collect zero tests for the scoped circuit, so its row is left out.
   assert.deepEqual(plannedSpecs(JSON.stringify([{ name: "selected-1", specs: "tests/specs/tracks-walls-a.spec.js tests/specs/tracks-walls-b.spec.js", circuits: "monza" }])), { specs: [] });
@@ -361,6 +361,6 @@ test("#5403 CLI: SHARDS names a spec no junit ran -> exit 1; every planned spec 
   assert.equal(run("tests/specs/boot-guard.spec.js tests/specs/camera.spec.js").code, 0);
   const r = run(`tests/specs/boot-guard.spec.js tests/specs/camera.spec.js ${NEVER}`);
   assert.equal(r.code, 1);
-  assert.match(r.err, /1 planned spec\(s\) left no junit testcase in any shard: tests\/specs\/never-planned\.spec\.js/);
+  assert.equal(r.err, "::error::selected specs success, but 1 planned spec(s) left no junit testcase in any shard: " + NEVER + " — they did not run (or their upload was lost); re-run, never read it as a pass\n");
   fs.rmSync(dir, { recursive: true, force: true });
 });

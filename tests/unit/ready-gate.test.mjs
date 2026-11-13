@@ -148,10 +148,10 @@ test("planVerdict on edited bodies (moved from pr-body.test.mjs): a struck or de
 test("#5404 option (a): the template's `**now:**` item is open at ready time, and the refusal says to tick it or fold it into `land:`", () => {
   const v = withPlan(GREEN, body("- [x] a\n- [ ] now: wait for CI\n- [ ] land: x"));
   assert.deepEqual([v.state, v.code, v.plan.open], ["plan-open", 1, ["now: wait for CI"]]);
-  assert.match(v.evidence, /the `\*\*now:\*\*` item counts: at the ready flip tick it with its evidence, or move what is left of it into the `land:` item/);
+  assert.equal(v.evidence.split("; ")[1], "the `**now:**` item counts: at the ready flip tick it with its evidence, or move what is left of it into the `land:` item (skill steward §Land)");
   assert.equal(withPlan(GREEN, body("- [x] a\n- [ ] land: wait for CI, then `land`")).code, 0, "folded into land: the Plan is closed");
   const tpl = fs.readFileSync(path.join(ROOT, ".github/pull_request_template.md"), "utf8");
-  assert.match(tpl, /counts as OPEN for the gate: before the ready flip tick it with its evidence, or\s+move what is left/, "the template says it");
+  assert.equal(tpl.split("\n").map((l) => l.trim()).filter((l) => l === "it counts as OPEN for the gate: before the ready flip tick it with its evidence, or").length, 1, "the template says it");
 });
 
 test("withPlan: an open Plan turns a green tip into plan-open (exit 1); no Plan warns; red and no-PR pass through", () => {
