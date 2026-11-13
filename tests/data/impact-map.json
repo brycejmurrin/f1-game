@@ -19346,6 +19346,7 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "*": [
+        "tests/specs/phone-shipped-defaults.spec.js",
         "tests/specs/real-profile-dock.spec.js",
         "tests/specs/time-trial.spec.js",
         "tests/specs/title-fit.spec.js",
@@ -19374,9 +19375,11 @@
       ],
       "isShipped": [
         "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs"
       ],
       "normalize": [
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -19391,6 +19394,7 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "reset": [
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -19398,6 +19402,7 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "*": [
+        "tests/specs/phone-shipped-defaults.spec.js",
         "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
@@ -19886,6 +19891,7 @@
         "tests/specs/title-fit.spec.js",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "down": [
@@ -19906,6 +19912,7 @@
         "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "normalize": [
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "peek": [
@@ -19913,6 +19920,7 @@
       ],
       "reset": [
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "resetShape": [
@@ -19932,6 +19940,9 @@
       ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
+      ],
+      "*": [
+        "tests/specs/phone-shipped-defaults.spec.js"
       ]
     },
     "js/ui/title-menu.js": {

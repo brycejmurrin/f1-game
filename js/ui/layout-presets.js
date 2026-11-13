@@ -115,7 +115,7 @@ const LayoutPresets = (function () {
     const p = BY_ID[id];
     if (!p) return null;
     const out = {};
-    for (const s of screens()) for (const n of s.knobs) out[s.id + "." + n.k] = n.def;
+    for (const s of screens()) for (const n of s.knobs) out[s.id + "." + n.k] = ScreenLooks.shipDef(s.id, n.k);   // a phone ships its own values (#5358)
     if (has("PauseOpts")) for (const k in PAUSE_KNOBS) out["pauseOpts." + k] = PAUSE_KNOBS[k].def;
     for (const [screen, k, v] of p.set) {
       const ok = legal(screen, k, v);
@@ -176,7 +176,7 @@ const LayoutPresets = (function () {
     for (const id in snap.looks) {
       const s = lookOf(id);
       if (!s) continue;
-      for (const n of s.knobs) if (snap.looks[id][n.k] !== n.def) setKnob(id, n.k, snap.looks[id][n.k]);
+      for (const n of s.knobs) setKnob(id, n.k, snap.looks[id][n.k]);   // setKnob writes only a difference
     }
     for (const k in snap.pause) if (Object.hasOwn(PAUSE_KNOBS, k)) setKnob("pauseOpts", k, snap.pause[k]);
     if (snap.title && has("TitleLayout")) {

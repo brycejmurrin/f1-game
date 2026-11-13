@@ -97,13 +97,18 @@ const UiScale = (() => {
     // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
     // are mirrored here — CSS owns FIRST paint, this owns every write after it,
     // and the two must not disagree. BUTTON SIZE keeps its own fixed default.
-    // 1.25, corrected 2026-09-14 from 1.4536. See the long note on the
-    // `(pointer: coarse)` block in css/tokens.css: 1.24 x 1.4536 put ~34mm
-    // pedals on a phone and the column covered the minimap and the sector strip.
-    // Target size and readout size are separate floors; this ratio carries the
-    // buttons' physical floor, --hud-scale no longer carries a blanket bump.
-    const BTN_DEFAULT = 1.25;
-    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
+    // History: 1.4536, then 1.25 (2026-09-14, when --hud-scale still carried a 1.24 bump and
+    // nothing capped the dock; fitHud's caps do that now).
+    // 1.4325 since #5358: the owner's 2026-11-10 phone profile stores BUTTON 143.25 %. fitHud's
+    // height cap still stops the BOOST / OT / AERO and pedal columns where they stopped at 1.25
+    // (85 px at 852x393); what grows is the steer pad, 90 -> 103 px.
+    const BTN_DEFAULT = 1.4325;
+    // A PHONE (touch, short side <= 500 px) ships UI SIZE 70 %, the owner's own setting (#5358):
+    // 109 % painted every menu "way too big" there. A tablet keeps 109. Only an UNSET size reads
+    // these; a stored one is never rewritten by a new default.
+    const PHONE_UI_DEFAULT = 70;
+    const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
+    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : (phoneUi() ? PHONE_UI_DEFAULT : 109)) : 100);
     const scaleSnap = (v, k) => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
@@ -121,7 +126,6 @@ const UiScale = (() => {
       return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
     };
     // UI SIZE: full top (the row names this sheet's zoom); a phone stops at 50 % (#5452; 70 under #5235).
-    const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
     const uiSheet = () => $("pm-uiscale")?.closest?.(".sheet") || null;
     const sheetCap = () => { const sh = uiSheet(); return (sh?.getClientRects?.().length && parseFloat(getComputedStyle(sh).zoom)) || 0; };
     const fitCaps = () => (document.body?.classList?.contains("in-race") ? parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")) : null);
