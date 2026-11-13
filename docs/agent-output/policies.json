@@ -776,6 +776,11 @@
       "presentation": "native",
       "preserve": "Unknown API/base forces no reuse; no stdout prose"
     },
+    "tools/ci/dropped-group-runs.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Any lookup doubt, other base, re-run or red group run forces accept=false; stdout is GITHUB_OUTPUT lines only"
+    },
     "tools/ci/reuse-draft-selected.mjs": {
       "action": "protocol-only",
       "presentation": "native",

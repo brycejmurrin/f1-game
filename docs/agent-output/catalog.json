@@ -896,6 +896,11 @@
       ]
     },
     {
+      "path": "tools/ci/dropped-group-runs.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/fat-shard.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
