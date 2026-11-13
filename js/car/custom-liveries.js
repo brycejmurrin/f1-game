@@ -27,7 +27,8 @@ const CustomLiveries = (function () {
     const nextSuffix = new Map();
     const remap = new Map();
     let repaired = 0;
-    const liveries = (Array.isArray(rows) ? rows : []).map((liv) => {
+    // Import path too: null / non-object rows must not reach `liv.id` (#4651).
+    const liveries = (Array.isArray(rows) ? rows : []).filter((liv) => liv && typeof liv === "object").map((liv) => {
       const original = liv.id;
       if (!catalogIds.has(original) && !claimed.has(original)) { claimed.add(original); return liv; }
       const stem = ((original || "custom") + "_imported").slice(0, 64);

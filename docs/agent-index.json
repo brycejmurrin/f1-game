@@ -1505,6 +1505,7 @@
         "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
+        "tests/unit/career-planning-ui-download.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
