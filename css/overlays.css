@@ -1167,10 +1167,14 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-now-card { margin: 0; padding: calc(var(--gap) / 4) calc(var(--gap) * 0.7); min-width: 0; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card > div:first-child { flex-direction: row; align-items: baseline; gap: var(--gap); }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card > div:first-child > span:first-child { display: none; }
+/* The song and the glyphs take the type tokens, which carry the 12 px PAINTED floor on a phone (css/tokens.css):
+   the shared card's bare 15 / 16 px paint 7.5-10.5 px at UI SIZE 50-70 (bryce-phone-paint counts them). */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now { font-size: var(--fs-2); }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-src { flex: 0 99 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-now-card button {
   --pm-t: max(41px, calc(44px / var(--ui-scale)));
   width: var(--pm-t); min-width: var(--pm-t); height: var(--pm-t); min-height: var(--pm-t); flex-basis: var(--pm-t);
+  font-size: var(--fs-2);
 }
 /* The doors outside the tray paint the touch comfort floor, not the compact
    one; COMPACT (the layout that spends the least height) takes the chip floor. */
