@@ -112,10 +112,15 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
         const passes = mode === "matching" || mode === "no-digest-fresh" || mode === "missing";
         assert.deepEqual(calls, mode === "gen-failure" ? ["npm"] : mode.startsWith("no-digest") ? ["npm", process.execPath, process.execPath] : ["npm", process.execPath]);
         assert.equal(result.ok, passes, result.evidence);
-        if (mode === "missing") assert.match(result.evidence, /scenery catalog build 0$/);
-        if (mode === "missing-build-fails") assert.match(result.evidence, /scenery catalog fails to build .*pit-exit no longer emits/);
-        if (mode === "no-digest-fresh") assert.match(result.evidence, /scenery catalog rebuild check 0$/);
-        if (mode === "no-digest-stale") assert.match(result.evidence, /scenery catalog fails .*catalog is stale/);
+        // The whole evidence line, exactly: the verdict words and the generator's own first error line both reach the PR.
+        const on = `the merge onto ${tip.slice(0, 8)}`, clean = `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog`;
+        const exact = {
+          "missing": `${clean} build 0`,
+          "missing-build-fails": `scenery catalog fails to build on ${on}: Error: bahrain viewpoint pit-exit no longer emits — node tools/shot/gen-scenery-locations.cjs on the synced branch names the circuit`,
+          "no-digest-fresh": `${clean} rebuild check 0`,
+          "no-digest-stale": `scenery catalog fails on ${on}: scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`,
+        }[mode];
+        if (exact) assert.equal(result.evidence, exact);
         assert.equal(ratchetCalls, passes ? 1 : 0, "catalog/gen refusals stop before ratchets");
         if (!passes) assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);
         assert.equal(fs.existsSync(path.join(cwd, "artifacts", "merge-gate", "wt-17")), false, "all outcomes clean up the merged checkout");
