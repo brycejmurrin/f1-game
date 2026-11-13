@@ -3,11 +3,44 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   distanceBand, classifySource, classifyPass, aggregateRows, tableRows,
   formatBandTable, recommend, parseSummaryLine, perFrame,
   passKeyTotals, passTotalsFromKeys, groupTotals, formatGroups,
 } from "../../tools/perf/mesh-census-lib.mjs";
+
+test("GLX recording reads each WebGL draw signature and preserves zero instances", () => {
+  const source = fs.readFileSync(new URL("../../tools/perf/mesh-census.mjs", import.meta.url), "utf8");
+  const start = source.indexOf("function installGlxWrap(bandM) {");
+  const end = source.indexOf("\nasync function runOne", start);
+  assert.ok(start >= 0 && end > start, "production wrapper was found");
+  const forwarded = [];
+  const gl = { TRIANGLES: 4 };
+  for (const method of ["drawElements", "drawArrays", "drawElementsInstanced", "drawArraysInstanced"]) {
+    gl[method] = (...args) => forwarded.push([method, ...args]);
+  }
+  const document = { getElementById: () => ({ getContext: () => gl }) };
+  const install = new Function("document", source.slice(start, end) + "; return installGlxWrap;")(document);
+  assert.equal(install(150), true);
+  const examples = [
+    ["drawElements", [4, 6, 5123, 128], 2],
+    ["drawArrays", [4, 12, 9], 3],
+    ["drawElementsInstanced", [4, 6, 5125, 128, 10], 20],
+    ["drawArraysInstanced", [4, 12, 9, 4], 12],
+    ["drawElementsInstanced", [4, 6, 5123, 0, 0], 0],
+    ["drawArraysInstanced", [4, 0, 6, 0], 0],
+  ];
+  for (const [method, args, triangles] of examples) {
+    gl.__meshCensus.on = true;
+    gl[method](...args);
+    assert.equal(gl.__meshCensus.rows.at(-1).tris, triangles, method);
+    assert.deepEqual(forwarded.at(-1), [method, ...args], "recording must preserve the real call");
+  }
+  gl.__meshCensus.on = false;
+  gl.drawElements(4, 6, 5123, 0);
+  assert.equal(gl.__meshCensus.rows.length, examples.length, "disabled capture records nothing");
+});
 
 test("distanceBand: 150 m cut", () => {
   assert.equal(distanceBand(0), "near");

@@ -127,7 +127,7 @@
      the customize/tuner input rules applies to every typeable field, and a
      sticky page zoom from tapping the circuit SEARCH box is the worst
      possible trade for one type rung. */
-  font-size: 16px;
+  font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
 }
 #sel-track-search::placeholder { color: var(--dim); opacity: 1; }
 /* Compact: the TODAY chip drops its weather/tod/best span so ALL / SEASON /

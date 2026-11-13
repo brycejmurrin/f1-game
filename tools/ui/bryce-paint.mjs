@@ -31,7 +31,7 @@ const MENU = new Set(["title", "select", "garage", "settings"]);
 export const ACCEPT_ROOTS = Object.freeze({ title: "#overlay", select: "#select", garage: "#carsetup", settings: "#pmsettings", hud: "body", pause: "#pausemenu", results: "#results" });
 export const cellKey = (window, uiScale) => `${window}@${uiScale}`;
 
-export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,safari,w844] [--ui-scale 70,109] [--screens title,select,garage,settings,hud,pause,results]
+export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,safari,w844] [--ui-scale 50,70,109] [--screens title,select,garage,settings,hud,pause,results]
                                      [--profile live|legacy] [--no-profile] [--check | --write] [--json] [--verbose]
   Painted sizes on Bryce's phone (tools/lib/bryce-phone.mjs + tools/lib/paint-floor.mjs): text >= 12 px, taps >= 44 px, nothing outside
   the safe box, no page scroll. --check compares with ${CEILINGS_FILE} (exit 1 on any difference); --write records the counts.

@@ -56,6 +56,8 @@
 "use strict";
 
 (function () {
+  // Knob read with the TUNE_DEFS default, hoisted so present() allocates no closure per frame (#4674).
+  const _gk = (T, id) => PostCommon.knob(T, id);
   const POST_VIZ = ["ssao", "bloom", "shafts", "godray", "composite-off", "scene"];
 
   function postChain(THREE, TSL, ctx) {
@@ -732,9 +734,13 @@
 
     // Output logical size of a pass (phys mode; the shaders' VP.uv reads it).
     function vset(pass, w, h) { if (phys && pass && pass.V) pass.V.set(w, h); }
+    // ONE scratch pair, read at once by every caller (up to once a present on a
+    // fixed phone target): a fresh [w, h] and {width, height} a frame (#5057).
+    const _psOut = { width: 0, height: 0 }, _ps = [0, 0];
     function presentSize() {
-      const ps = ctx.getPresentSize ? ctx.getPresentSize() : null;
-      return [ps && ps.width ? ps.width : PW, ps && ps.height ? ps.height : PH];
+      const ps = ctx.getPresentSize ? ctx.getPresentSize(_psOut) : null;
+      _ps[0] = ps && ps.width ? ps.width : PW; _ps[1] = ps && ps.height ? ps.height : PH;
+      return _ps;
     }
 
     /** Resolve the HDR scene to the canvas — the glx/post.js present() port.
@@ -747,7 +753,6 @@
       const o = opts || {};
       const GT = o.tune || null;
       // Knob read with the TUNE_DEFS default (PostCommon.knob), never a literal.
-      const gk = (id) => PostCommon.knob(GT, id);
       const prevAutoClear = renderer.autoClear;
       renderer.autoClear = false;   // runPass sets it per pass (overwrite clears, UP/mirror load)
       let dest = null;
@@ -789,7 +794,7 @@
         const sv = F.sunVS || [0, 0, -1];
         U.sunVS.value.set(sv[0], sv[1], sv[2]);
         U.strength.value = aoStr;
-        U.radius.value = gk("ssaoRadius");          // AO RADIUS knob
+        U.radius.value = _gk(GT, "ssaoRadius");          // AO RADIUS knob
         const csOn = contactStr > 0 && F.proj && F.sunVS;
         U.contact.value = csOn ? contactStr : 0;
       }
@@ -864,8 +869,8 @@
         U.mist.value = o.mist || 0;
         U.lampShadowVP.value.fromArray(S.lampLightVP);
         U.lampShadowIdx.value = grLampIdx;
-        U.hgAniso.value = gk("godrayAniso");       // GOD-RAY FOCUS knob
-        U.hgFloor.value = gk("godrayFloor");      // GOD-RAY HAZE knob
+        U.hgAniso.value = _gk(GT, "godrayAniso");       // GOD-RAY FOCUS knob
+        U.hgFloor.value = _gk(GT, "godrayFloor");      // GOD-RAY HAZE knob
         U.aoOn.value = aoFold ? 1 : 0;
         vset(P.godray, grW, grH); vset(P.blurGRH, grW, grH); vset(P.blurGRV, grW, grH); vset(P.blurGR, grW, grH);
         runPass(P.godray.mat, godrayRT);
@@ -926,7 +931,7 @@
             runPass(P.down.mat, bloomLv[i].rt);
           }
         }
-        P.spread.value = gk("bloomSpread");           // BLOOM SPREAD knob
+        P.spread.value = _gk(GT, "bloomSpread");           // BLOOM SPREAD knob
         for (let i = useLv - 1; i >= 1; i--) {
           // Intermediates accumulate (ONE,ONE); the FINAL into level 0
           // OVERWRITES — level 0 still holds the sharp bright pass.
@@ -976,7 +981,7 @@
       // (COMPOSITE_FS in js/render/glx/shaders/glsl-post.js). When bloom is off we
       // bind blackTex, so the 8 dependent fetches accumulated vec3(0).
       // GLX zeroes the uniform rather than paying the taps; same here.
-      const _shaftMul = gk("sunShaftMul");
+      const _shaftMul = _gk(GT, "sunShaftMul");
       C.sunShaft.value = haveBloom ? sunShaft * _shaftMul : 0;
       const grade = o.grade;
       const gs = (grade && grade.shadow) || null, gh = (grade && grade.hi) || null;
@@ -984,60 +989,69 @@
       C.gradeHi.value.set(gh ? gh[0] : 1, gh ? gh[1] : 1, gh ? gh[2] : 1);
       C.gradeStr.value = grade && grade.str !== undefined ? grade.str : 0;
       // IMAGE & COLOUR knobs — every default reproduces the shipped grade.
-      C.tone0.value.set(gk("blacks"), gk("shadows"), gk("midtones"), gk("highlights"));
-      C.tone1.value.set(gk("whites"), gk("toe"), gk("shoulder"), 0);
-      C.lift.value.set(gk("liftR"), gk("liftG"), gk("liftB"));
-      C.gamma.value.set(gk("gammaR"), gk("gammaG"), gk("gammaB"));
-      C.gain.value.set(gk("gainR"), gk("gainG"), gk("gainB"));
-      C.contrast.value = gk("contrast");
-      C.vibrance.value = gk("vibrance");
-      C.saturation.value = gk("saturation");
+      C.tone0.value.set(_gk(GT, "blacks"), _gk(GT, "shadows"), _gk(GT, "midtones"), _gk(GT, "highlights"));
+      C.tone1.value.set(_gk(GT, "whites"), _gk(GT, "toe"), _gk(GT, "shoulder"), 0);
+      C.lift.value.set(_gk(GT, "liftR"), _gk(GT, "liftG"), _gk(GT, "liftB"));
+      C.gamma.value.set(_gk(GT, "gammaR"), _gk(GT, "gammaG"), _gk(GT, "gammaB"));
+      C.gain.value.set(_gk(GT, "gainR"), _gk(GT, "gainG"), _gk(GT, "gainB"));
+      C.contrast.value = _gk(GT, "contrast");
+      C.vibrance.value = _gk(GT, "vibrance");
+      C.saturation.value = _gk(GT, "saturation");
       // Skip the whole HDR block when every knob is neutral (js/render/glx/post.js).
       const _hg = PostCommon.hdrGradeOn(GT);
       C.hdrGradeOn.value = _hg ? 1 : 0;
-      C.tint.value = gk("tint");
-      C.vignette.value = gk("vignette");
-      C.vigSoft.value = gk("vignetteSoft");
-      C.bloomKnee.value = gk("bloomKnee");
-      C.carReflect.value = o.carReflect != null ? o.carReflect : gk("carReflect");
-      C.carGloss.value = gk("carGloss");
-      C.chromAb.value = gk("chromAb");
-      C.grain.value = gk("grain");
+      C.tint.value = _gk(GT, "tint");
+      C.vignette.value = _gk(GT, "vignette");
+      C.vigSoft.value = _gk(GT, "vignetteSoft");
+      C.bloomKnee.value = _gk(GT, "bloomKnee");
+      C.carReflect.value = o.carReflect != null ? o.carReflect : _gk(GT, "carReflect");
+      C.carGloss.value = _gk(GT, "carGloss");
+      C.chromAb.value = _gk(GT, "chromAb");
+      C.grain.value = _gk(GT, "grain");
       C.grainTime.value = F.time || 0;
-      C.sharpen.value = gk("sharpen");
+      if (C.dthOff) {   // tsl-post.js: the dither's time step, float32 like the GPU's floor (tsl-sky.js D.dthOff)
+        const step60 = Math.floor(Math.fround(Math.fround(C.grainTime.value) * 60.0));
+        C.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
+      }
+      C.sharpen.value = _gk(GT, "sharpen");
       if (C.sharpenLimit) C.sharpenLimit.value = sharpenLimit;
-      C.blackLift.value = gk("blackLift");
-      C.whitePoint.value = gk("whitePoint");
+      C.blackLift.value = _gk(GT, "blackLift");
+      C.whitePoint.value = _gk(GT, "whitePoint");
       // ACES TONE CURVE knobs (defaults = the shipped Narkowicz coefficients).
-      C.acesA.value = gk("acesA");
-      C.acesB.value = gk("acesB");
-      C.acesC.value = gk("acesC");
-      C.acesD.value = gk("acesD");
-      C.acesE.value = gk("acesE");
+      C.acesA.value = _gk(GT, "acesA");
+      C.acesB.value = _gk(GT, "acesB");
+      C.acesC.value = _gk(GT, "acesC");
+      C.acesD.value = _gk(GT, "acesD");
+      C.acesE.value = _gk(GT, "acesE");
       C.speedBlur.value = o.speedBlur != null ? o.speedBlur : 0.0;
-      C.shaftDecay.value = gk("sunShaftDecay");
+      C.shaftDecay.value = _gk(GT, "sunShaftDecay");
       // Reach scales with SCREEN SUN-SHAFT, sub-linearly so the shipped
       // value (1) keeps the shipped radius (js/render/glx/post.js).
       C.shaftSpread.value = Math.sqrt(Math.max(0.05, _shaftMul));
-      C.flareStreak.value = gk("flareStreak");
-      C.flareStreak2.value = gk("flareStreak2");
+      C.flareStreak.value = _gk(GT, "flareStreak");
+      C.flareStreak2.value = _gk(GT, "flareStreak2");
       // EXHAUST HEAT HAZE plume anchor (opts.haze = {u, v, str} | null).
       const hz = o.haze;
       C.hazeUV.value.set(hz ? hz.u : -9, hz ? hz.v : -9);
       C.hazeStr.value = hz ? hz.str : 0;
       // Read only under hazeStr > 0 (tsl-post.js): a frame-varying write nothing reads is one writeBuffer a frame.
       if (hz) C.hazeTime.value = F.time || 0;
-      C.ssrThick.value = gk("ssrThick");
+      C.ssrThick.value = _gk(GT, "ssrThick");
       // Camera-aware SSR extent (game.js sets these per camera; onboard cams get
       // a raised top cutoff and a pulled-in near fade).
       C.ssrTopUV.value = o.ssrTopUV != null ? o.ssrTopUV : 0.62;
       C.ssrNear.value = o.ssrNear != null ? o.ssrNear : -2.5;
       C.ssrQuality.value = o.ssrQuality >= 2 ? 2 : o.ssrQuality >= 1 ? 1 : 0;
-      C.lensDirt.value = dirtTex ? gk("lensDirt") : 0;
+      C.lensDirt.value = dirtTex ? _gk(GT, "lensDirt") : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
       // SSR samples the full-res scene, so the UV quantum stays 1/W even when
       // the LDR composite runs at a reduced phone post size pW.
       C.reflTexel.value.set(1 / W, 1 / H);
+      if (C.vigAspect) {   // tsl-post.js: the vignette's aspect and corner norm, per frame not per pixel
+        const va = W > 0 && H > 0 ? W / H : 1;
+        C.vigAspect.value = va;
+        C.vigNorm.value = 0.70710678 / Math.hypot(va * 0.5, 0.5);
+      }
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
       const reflStr = o.reflect || 0;

@@ -1,4 +1,4 @@
-# Watching without subscriptions or timers
+# Watching without a subscription
 
 Use when the host lists no PR-subscription tool, no `Monitor`, or no timer.
 
@@ -17,7 +17,7 @@ Use when the host lists no PR-subscription tool, no `Monitor`, or no timer.
 
 `subscribe_pr_activity` answering "Could not subscribe to this PR" is not transient on a PR another account's session
 opened (every `claude/audit-*` PR, 45 of 45 calls on 2026-11-09/10; no other PR failed): do not retry, and do not
-unsubscribe other PRs to "free" it. Use step 1 above and say so in the Hand-off block. Where the host's own notice
-asks for a timed check-in, keep it at 50 minutes or less and re-arm only after a state change: a wake after an hour
+unsubscribe other PRs to "free" it. Use step 1 above and say so in the Hand-off block. Then at most one timed check-in of 50 minutes or less, re-armed
+only after a state change (AGENTS.md rule 13), and none while a subscription works: a wake after an hour
 of idle re-reads the whole context (measured $3–10 a wake, against $0.25–0.60 inside the hour;
 `docs/notes/ORCHESTRATION-REVIEW-2026-11-11.md` rank 9).
