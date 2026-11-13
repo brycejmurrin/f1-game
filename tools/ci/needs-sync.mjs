@@ -18,7 +18,11 @@
  *              `cancelled` counts as failed when at least one of its jobs concluded
  *              `failure` (it was red before the cancel); with zero failed jobs it stays
  *              `no` (AGENTS.md rule 8: a timeout until proven otherwise), and a jobs read
- *              error keeps `no` and names the error.
+ *              error keeps `no` and names the error. A newest run that is green only on
+ *              `run_attempt` > 1 counts as failed when an earlier attempt had a red job
+ *              (failure / timed_out / startup_failure): merge-gate's ci row refuses that
+ *              green (a pass that needed a retry is a red). A re-run after a cancel-only
+ *              attempt stays green; an unreadable attempt keeps `no` and names the error.
  *   no         up to date, or merely behind with no conflict and no stale red: a green
  *              PR merges as it stands, and a clean refresh buys a full tier that repeats
  *              the old verdict. (The `distance` verdict went with merge-gate's distance
@@ -42,9 +46,10 @@ export const VERDICTS = ["conflict", "stale-red", "no"];
 /**
  * The verdict from the facts. Pure.
  * @param {{ behind: boolean, conflict: boolean, ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null,
- *   failedJobs?: number|null, jobsError?: string|null }} f
+ *   failedJobs?: number|null, jobsError?: string|null, attempt?: number, retryFailedJobs?: number|null }} f
  *   tipNewestAt = committer date of the newest commit on the tip that the branch lacks.
  *   failedJobs = jobs of a `cancelled` newest run that concluded `failure` (null: not read); jobsError = why not.
+ *   attempt = the newest run's run_attempt; retryFailedJobs = red jobs across its earlier attempts (green runs only).
  * @returns {{ verdict: "conflict"|"stale-red"|"no", why: string }}
  */
 export function decideSync(f) {
@@ -54,26 +59,37 @@ export function decideSync(f) {
   const moved = !!(ran && tipAt && tipAt > ran);
   const n = f.ci === "cancelled" && Number.isInteger(f.failedJobs) ? f.failedJobs : null;
   const cancelledRed = n !== null && n > 0;
-  const what = cancelledRed ? `ci cancelled after ${n} failed job(s)` : "ci.yml is red";
-  if ((f.ci === "failure" || cancelledRed) && moved) {
+  const attempt = Number(f.attempt) || 1;
+  const m = f.ci === "success" && attempt > 1 && Number.isInteger(f.retryFailedJobs) ? f.retryFailedJobs : null;
+  const retriedRed = m !== null && m > 0;
+  const what = cancelledRed ? `ci cancelled after ${n} failed job(s)`
+    : retriedRed ? `ci green only on attempt ${attempt} after ${m} failed job(s)` : "ci.yml is red";
+  if ((f.ci === "failure" || cancelledRed || retriedRed) && moved) {
     return { verdict: "stale-red", why: `${what} on the head and the tip has moved since that run started` };
   }
-  const red = f.ci === "failure" || cancelledRed ? `${cancelledRed ? what : "ci red"} but the tip has not moved since`
+  const red = f.ci === "failure" || cancelledRed || retriedRed ? `${cancelledRed || retriedRed ? what : "ci red"} but the tip has not moved since`
     : f.ci === "unknown" ? "ci state unknown"
     : f.ci === "cancelled" && f.jobsError ? `ci cancelled; its jobs are unreadable (${f.jobsError})`
     : n === 0 ? "ci cancelled with 0 failed jobs: a timeout until proven otherwise, AGENTS.md rule 8"
+    : f.ci === "success" && attempt > 1 && f.jobsError ? `ci success on attempt ${attempt}; its earlier attempts are unreadable (${f.jobsError})`
+    : m === 0 ? `ci success on attempt ${attempt}; earlier attempts had no failed job`
     : `ci ${f.ci || "none"}`;
   return { verdict: "no", why: `behind with no conflict (${red}): clean-behind is not a reason` };
 }
 
-/** Jobs of one run that concluded `failure`, paged through `request`. @returns {{ failed?: number, error?: string }} */
-export function failedJobCount(request, runId) {
+/** Job conclusions that make an earlier attempt red (as merge-gate's ci row reads them; a cancelled job is not one). */
+const RED_JOB = new Set(["failure", "timed_out", "startup_failure"]);
+
+/** Jobs of one run (or one of its attempts) whose conclusion is in `bad`, paged through `request`.
+ *  @returns {{ failed?: number, error?: string }} */
+export function failedJobCount(request, runId, { attempt = null, bad = new Set(["failure"]) } = {}) {
   let failed = 0;
+  const base = attempt ? `actions/runs/${runId}/attempts/${attempt}/jobs` : `actions/runs/${runId}/jobs`;
   for (let page = 1; page <= 20; page++) {
-    const r = request(`actions/runs/${runId}/jobs?per_page=100&page=${page}`);
+    const r = request(`${base}?per_page=100&page=${page}`);
     if (r?.error) return { error: r.error };
     const batch = r?.json?.jobs || [];
-    failed += batch.filter((j) => j?.conclusion === "failure").length;
+    failed += batch.filter((j) => bad.has(j?.conclusion)).length;
     if (batch.length < 100) return { failed };
   }
   return { error: "more than 20 pages of jobs" };
@@ -106,7 +122,7 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
     if (m.code !== 0 && m.code !== 1) return { ok: false, error: `git merge-tree failed (${m.code}): ${m.err || m.out}` };
     conflict = m.code === 1;
   }
-  let ci = "unknown", runStartedAt = null, note = null, failedJobs = null, jobsError = null;
+  let ci = "unknown", runStartedAt = null, note = null, failedJobs = null, jobsError = null, attempt = 1, retryFailedJobs = null;
   if (behind && !conflict && !offline) {
     const r = request(`actions/workflows/ci.yml/runs?head_sha=${head.out}&per_page=20`);
     snap?.save();
@@ -122,12 +138,22 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
         if (j.error) { jobsError = j.error; note = `jobs of cancelled run ${s.runId} unreadable (${j.error}): a cancelled run counts as no`; }
         else failedJobs = j.failed;
       }
+      attempt = Number(run?.run_attempt) || 1;
+      if (ci === "success" && attempt > 1) {
+        let red = 0;
+        for (let k = 1; k < attempt && !jobsError; k++) {
+          const j = failedJobCount(request, s.runId, { attempt: k, bad: RED_JOB });
+          if (j.error) { jobsError = `attempt ${k}: ${j.error}`; note = `earlier attempts of run ${s.runId} unreadable (${jobsError}): a retried green counts as no`; }
+          else red += j.failed;
+        }
+        if (!jobsError) retryFailedJobs = red;
+      }
       snap?.save();
     }
   } else if (offline) note = "offline: CI state not read, only a conflict can be detected";
   const tipNewestAt = behind ? readGit(["log", "-1", "--format=%cI", `${head.out}..${tip.out}`]).out || null : null;
-  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, failedJobs, jobsError });
-  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, failedJobs, ...d, note };
+  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, failedJobs, jobsError, attempt, retryFailedJobs });
+  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, failedJobs, attempt, retryFailedJobs, ...d, note };
 }
 
 /** The one verdict line. */

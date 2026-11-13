@@ -272,6 +272,15 @@ export function planVerdict(body) {
   return { state: open.length ? "open" : "done", items: items.length, open };
 }
 
+/** A `**now:**` item (the template's step in progress) is an open item like any other (#5404, option a: the gate is
+ *  unchanged, the template and skill steward §Land say what to do with it). The refusal names that cure. Pure. */
+export const NOW_ITEM = /^(\*\*)?now:/i;
+export function nowHint(open) {
+  return (open || []).some((t) => NOW_ITEM.test(String(t).trim()))
+    ? "; the `**now:**` item counts: at the ready flip tick it with its evidence, or move what is left of it into the `land:` item (skill steward §Land)"
+    : "";
+}
+
 /** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan refuses too, as merge-gate.mjs planRow
  *  does (a fold bot's PR, `author` a `*[bot]` login, is exempt there and here). Pure. */
 export function withPlan(v, body, author = "") {
@@ -280,7 +289,7 @@ export function withPlan(v, body, author = "") {
   if (p.state === "open") {
     const shown = p.open.slice(0, 3).map((t) => `"${t}"`).join(", ");
     return { ...v, state: "plan-open", code: 1, plan: p,
-      evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)` };
+      evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)${nowHint(p.open)}` };
   }
   if (p.state === "none") {
     if (/\[bot\]$/.test(String(author || ""))) return { ...v, plan: p };

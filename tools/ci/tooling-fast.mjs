@@ -70,6 +70,7 @@ import { TRACKED, circuitsTouched, isDocsOnly } from "./select-specs.mjs";
 // Cycle-safe: node-plan reads TOOLING_FAST_FILES only inside functions, and this
 // module reads ALWAYS_ON_TOPICAL only inside topicalPool().
 import { ALWAYS_ON_TOPICAL } from "./node-plan.mjs";
+import { DOCS_FAST_TEST_FILES } from "./docs-fast-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
@@ -591,9 +592,10 @@ const TOOLING_FAST_CHANGED_RUN_ALL = [
 
 const PATH_PIN_RE = /["'`]((?:js|css|tools|types|desktop|docs|tests\/|index\.html|AGENTS\.md|CLAUDE\.md|README\.md|\.claude\/|\.cursor\/|sw\.js|version\.json)[^"'`]+)["'`]/g;
 
-// environment-json left this set with the audit4 E1 floor carve (2026-10-26): its always-on topical group runs it
-// on every CI run, and a docs-only change cannot touch .cursor/environment.json.
-const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|comment-citations|agent-surface)\.test\.mjs$/;
+// The docs-only set is tools/ci/docs-fast-tests.mjs, the list the pre-commit hook's docs-only branch also runs (#5461).
+// environment-json left it with the audit4 E1 floor carve (2026-10-26): its always-on topical group runs it on every
+// CI run, and a docs-only change cannot touch .cursor/environment.json.
+const DOCS_FAST_TESTS = new Set(DOCS_FAST_TEST_FILES);
 
 // Relative import specifiers ("../../tools/ci/x.mjs"): resolved against the importing file, indexed by exact path (#3907).
 const REL_PIN_RE = /["'`](\.{1,2}\/[^"'`\s]+)["'`]/g;
@@ -1084,7 +1086,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
   }
 
   if (isDocsOnly(changed)) {
-    const docsTests = allFiles.filter((f) => DOCS_FAST_TESTS.test(f));
+    const docsTests = allFiles.filter((f) => DOCS_FAST_TESTS.has(f));
     const files = docsTests.length ? docsTests : allFiles;
     return { files, reason: "docs-only", shards: shardsCoveringFiles(files, allFiles), changed: changed.length };
   }
