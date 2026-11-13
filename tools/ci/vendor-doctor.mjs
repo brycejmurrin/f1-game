@@ -18,7 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** Select the runner's saved Codex sign-in directory without creating or writing files. */
+/** Select the saved Codex sign-in directory without creating or writing files. */
 export function codexHome(env) {
   return env.APEX_CODEX_HOME || (env.APEX_CODEX_AUTH_JSON_B64 ? path.join(env.HOME || os.homedir(), ".codex-apex") : null);
 }
@@ -109,7 +109,7 @@ export async function checkVendor(name, { run = runBin, fetchImpl = globalThis.f
   return row;
 }
 
-/** Which saved sign-ins the runner (vendor-run.mjs) will find: variable NAMES and booleans only. */
+/** Which saved sign-ins exist in this environment: variable NAMES and booleans only. */
 export function savedSignIns(env = process.env) {
   const has = (k) => Boolean(env[k]);
   return { vendor: "saved", claudeB: has("APEX_CLAUDE_B_OAUTH_TOKEN") ? "APEX_CLAUDE_B_OAUTH_TOKEN" : has("APEX_CLAUDE_CONFIG_DIR") ? "APEX_CLAUDE_CONFIG_DIR" : null,

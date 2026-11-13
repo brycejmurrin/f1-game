@@ -7,34 +7,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { VENDORS, checkVendor, checkSecondClaude, main, scrub, savedSignIns } from "../../tools/ci/vendor-doctor.mjs";
-import { secondAccountEnv, codexEnv, runVendor, main as runMain } from "../../tools/ci/vendor-run.mjs";
+import { VENDORS, checkVendor, checkSecondClaude, main, scrub, savedSignIns, secondAccountEnv } from "../../tools/ci/vendor-doctor.mjs";
 
 const SECRET = "xai-ABCDEFGHIJKLMNOPQRSTUVWX";
 const fakeRun = (table) => async (bin, argv) => table[`${bin} ${argv.join(" ")}`] ?? { code: 127, out: "" };
-
-test("all --parallel starts every vendor together, streams completion order and refuses writes", async () => {
-  const started = [], finished = [], emitted = [];
-  let startedAtFirstFinish;
-  const vendors = ["codex", "cursor", "grok", "claude"];
-  const spawnImpl = async (bin) => {
-    const vendor = bin === "cursor-agent" ? "cursor" : bin;
-    started.push(vendor);
-    await new Promise((resolve) => setTimeout(resolve, (4 - vendors.indexOf(vendor)) * 20));
-    if (!finished.length) startedAtFirstFinish = [...started];
-    finished.push(vendor);
-    return { code: 0, out: JSON.stringify({ result: "DONE" }) };
-  };
-  const argv = ["all", "--parallel", "--cwd", process.cwd(), "--prompt", "q"];
-  const deps = { env: { APEX_CLAUDE_CONFIG_DIR: "/b" }, spawnImpl, onRow: (row) => emitted.push(row.vendor) };
-  const rows = await runMain(argv, deps);
-  assert.deepEqual(startedAtFirstFinish, vendors, "all vendors start before the first finishes");
-  assert.deepEqual(rows.map((row) => row.vendor), vendors);
-  assert.deepEqual(finished, [...vendors].reverse());
-  assert.deepEqual(emitted, finished, "onRow streams each completion immediately");
-  await assert.rejects(runMain([...argv, "--write"], deps), /--parallel cannot be combined with --write/);
-  assert.deepEqual(started, vendors, "the rejected write starts no vendors");
-});
 
 test("Codex checks version and login in the saved home without exposing the saved auth", async () => {
   const b64 = Buffer.from('{"tokens":{"access_token":"saved-secret"}}').toString("base64");
@@ -189,107 +165,4 @@ test("the second-account env drops the host session's identity and carries the s
   assert.equal(byToken.CLAUDE_CONFIG_DIR, path.join("/t", "claude-b-config"));
   const byDir = secondAccountEnv({ ...host, APEX_CLAUDE_CONFIG_DIR: "/b" }, { tmpDir: "/t" });
   assert.deepEqual([byDir.CLAUDE_CONFIG_DIR, byDir.CLAUDE_CODE_OAUTH_TOKEN], ["/b", undefined]);
-});
-
-test("codexEnv seeds auth.json once at 0600 and never passes the saved secrets on", () => {
-  const home = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-")), "codex");
-  const b64 = Buffer.from('{"tokens":{}}').toString("base64");
-  const env = codexEnv({ PATH: "/bin", APEX_CODEX_HOME: home, APEX_CODEX_AUTH_JSON_B64: b64, APEX_CLAUDE_B_OAUTH_TOKEN: SECRET });
-  assert.equal(env.CODEX_HOME, home);
-  assert.equal(env.APEX_CODEX_AUTH_JSON_B64, undefined);
-  assert.equal(env.APEX_CLAUDE_B_OAUTH_TOKEN, undefined);
-  assert.equal(fs.readFileSync(path.join(home, "auth.json"), "utf8"), '{"tokens":{}}');
-  assert.equal(fs.statSync(path.join(home, "auth.json")).mode & 0o777, 0o600);
-  fs.writeFileSync(path.join(home, "auth.json"), "refreshed");
-  codexEnv({ APEX_CODEX_HOME: home, APEX_CODEX_AUTH_JSON_B64: b64 });
-  assert.equal(fs.readFileSync(path.join(home, "auth.json"), "utf8"), "refreshed", "a refreshed sign-in is never overwritten");
-  assert.deepEqual(codexEnv({ PATH: "/bin" }), { PATH: "/bin" });
-  const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-home-"));
-  assert.equal(codexEnv({ HOME: fakeHome, APEX_CODEX_AUTH_JSON_B64: b64 }).CODEX_HOME, path.join(fakeHome, ".codex-apex"), "the saved sign-in alone is enough");
-});
-
-test("runVendor builds read-only argv per vendor, scrubs the answer and reports a missing CLI", async () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-cwd-"));
-  const seen = [];
-  const spawnImpl = async (bin, argv, o) => { seen.push([bin, argv, o.env]);
-    assert.deepEqual(fs.readdirSync(cwd).filter((n) => n.startsWith(".vendor-run-")), [], "no temp entry inside the cwd during the run");
-    return { code: 0, out: JSON.stringify({ result: `hi ${SECRET} someone@example.com` }) }; };
-  const row = await runVendor("claude", { cwd, prompt: "q", env: { PATH: "/bin", CLAUDE_CODE_REMOTE: "1", APEX_CLAUDE_B_OAUTH_TOKEN: SECRET }, spawnImpl });
-  assert.deepEqual([row.ok, row.text], [true, "hi <key> <email>"]);
-  assert.deepEqual(seen[0][1].slice(0, 6), ["-p", "q", "--output-format", "json", "--permission-mode", "plan"]);
-  assert.equal(seen[0][2].CLAUDE_CODE_REMOTE, undefined);
-  const cur = await runVendor("cursor", { cwd, prompt: "q", env: {}, spawnImpl });
-  assert.ok(seen.at(-1)[1].includes("ask") && !seen.at(-1)[1].includes("--force"), "read-only is the default");
-  assert.equal(cur.ok, true);
-  await runVendor("grok", { cwd, prompt: "q", env: { GROK_API_KEY: SECRET }, spawnImpl });
-  assert.equal(seen.at(-1)[2].XAI_API_KEY, SECRET, "the stored GROK_API_KEY reaches Grok Build under the name it reads");
-  await runVendor("grok", { cwd, prompt: "q", write: true, env: {}, spawnImpl });
-  assert.ok(seen.at(-2)[1].join(" ").includes("--permission-mode acceptEdits --allow Edit --allow Write"), "Grok write mode pre-approves edits");
-  const curWrite = await runVendor("cursor", { cwd, prompt: "q", write: true, env: {}, spawnImpl });
-  assert.ok(seen.at(-2)[1].includes("--sandbox") && seen.at(-2)[1].includes("enabled") && !seen.at(-2)[1].includes("--force"), "cursor write uses --sandbox enabled");
-  const cancelled = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 0, out: '{"text":"I will","stopReason":"cancelled"}\npermission required: Edit was not run' }) });
-  const NOTE = "cancelled: a step needed an approval a headless run cannot give";
-  assert.deepEqual([cancelled.ok, cancelled.text, cancelled.note], [false, "I will", NOTE], "a cancelled Grok run without proof is not a pass, but its text is kept");
-  const cancelledOut = '{"text":"I will","stopReason":"cancelled"}\npermission required: Edit was not run';
-  const proven = await runVendor("grok", { cwd, prompt: "q", env: {}, verify: "true",
-    spawnImpl: async (bin) => bin === "bash" ? { code: 0, out: "ok" } : { code: 0, out: cancelledOut } });
-  assert.deepEqual([proven.ok, proven.note], [true, NOTE], "a passing verify proves a cancelled run and the note stays");
-  const guard = "Never describe a file, symbol or result you have not read in this run. If something the task names does not exist, say so and stop.";
-  const rulesOf = (argv) => argv[argv.indexOf("--rules") + 1];
-  assert.equal(rulesOf(seen.find((s) => s[1].includes("--rules"))[1]), `${guard}\n\n`, "the guard leads --rules with no AGENTS.md");
-  fs.writeFileSync(path.join(cwd, "AGENTS.md"), "RULES-BODY");
-  await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl });
-  const withAgents = rulesOf(seen.at(-1)[1]);
-  assert.equal(withAgents, `${guard}\n\nRULES-BODY`, "the guard precedes the AGENTS.md text");
-  fs.rmSync(path.join(cwd, "AGENTS.md"));
-  const gone = await runVendor("grok", { cwd, prompt: "q", env: {}, spawnImpl: async () => ({ code: 127, out: "" }) });
-  assert.deepEqual([gone.ok, gone.error], [false, "cli_not_found"]);
-  await assert.rejects(runVendor("codex", { cwd: "/nope", prompt: "q" }), /existing directory/);
-  assert.equal(fs.readdirSync(cwd).length, 0, "the temp directory is removed");
-});
-
-test("runVendor --verify proves a write run itself and counts the changed paths; a read-only run calls neither", async () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-run-cwd-"));
-  const host = { PATH: "/bin" };
-  const BEFORE = { code: 0, out: " M scratch/dirty.txt\n" };
-  const AFTER = { code: 0, out: " M scratch/dirty.txt\n?? scratch/new.txt\n!! scratch/x.txt\n" };
-  const fake = (verifyCode, git = [BEFORE, AFTER]) => {
-    const calls = [];
-    let g = 0;
-    const spawnImpl = async (bin, argv, o) => {
-      calls.push([bin, argv, o]);
-      if (bin === "git") return git[Math.min(g++, git.length - 1)];
-      if (bin === "bash") return { code: verifyCode, out: verifyCode ? "not ok 1 - lap time\n# fail 1" : "# pass 3" };
-      return { code: 0, out: JSON.stringify({ result: "DONE" }) };
-    };
-    return { calls, spawnImpl };
-  };
-  const red = fake(1);
-  const bad = await runVendor("cursor", { cwd, prompt: "q", write: true, verify: "npm test", env: host, spawnImpl: red.spawnImpl });
-  assert.deepEqual([bad.changed, bad.verify.code, bad.ok], [2, 1, false], "the agent's DONE does not beat a red verify");
-  const gits = red.calls.filter((c) => c[0] === "git");
-  assert.equal(gits.length, 2, "one git call before the turn and one after it");
-  assert.deepEqual(gits[0][1], ["status", "--porcelain", "--ignored=matching", "--untracked-files=all"]);
-  assert.deepEqual([gits[1][2].input, gits[1][2].timeoutMs, gits[1][2].env], [null, 30000, host]);
-  const order = red.calls.map((c) => c[0]);
-  assert.deepEqual([order[0], order[1], order[2]], ["git", "cursor-agent", "git"], "git runs before and after the agent's turn");
-  const failed = fake(0, [BEFORE, { code: 128, out: "" }]);
-  const unknown = await runVendor("cursor", { cwd, prompt: "q", write: true, env: host, spawnImpl: failed.spawnImpl });
-  assert.equal(unknown.changed, null, "a failing second git call gives null");
-  const failedFirst = fake(0, [{ code: 128, out: "" }, AFTER]);
-  assert.equal((await runVendor("cursor", { cwd, prompt: "q", write: true, env: host, spawnImpl: failedFirst.spawnImpl })).changed, null);
-  const same = fake(0, [BEFORE, BEFORE]);
-  assert.equal((await runVendor("cursor", { cwd, prompt: "q", write: true, env: host, spawnImpl: same.spawnImpl })).changed, 0, "a file dirty before and after is not counted");
-  assert.equal(bad.verify.tail.slice(-8), "# fail 1");
-  const bash = red.calls.find((c) => c[0] === "bash");
-  assert.deepEqual(bash[1], ["-c", "npm test"]);
-  assert.equal(bash[2].env, host, "verify runs with the host env, not the child env");
-  assert.equal(bash[2].timeoutMs, 300000);
-  const green = fake(0);
-  const good = await runVendor("cursor", { cwd, prompt: "q", write: true, verify: "npm test", env: host, spawnImpl: green.spawnImpl });
-  assert.deepEqual([good.changed, good.verify.code, good.ok], [2, 0, true]);
-  const ro = fake(1);
-  const read = await runVendor("cursor", { cwd, prompt: "q", env: host, spawnImpl: ro.spawnImpl });
-  assert.ok(!ro.calls.some((c) => c[0] === "git" || c[0] === "bash"), "a read-only run without verify calls neither git nor bash");
-  assert.deepEqual([read.ok, "changed" in read, "verify" in read], [true, false, false]);
 });
