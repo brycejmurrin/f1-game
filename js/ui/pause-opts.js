@@ -35,7 +35,10 @@
    can land in one late batch where the wall gap collapses — event time keeps
    a deliberate second tap from being mis-read as a ghost, and expireIfStale
    will not disarm on wall expiry alone while the confirming event is still
-   within ARM_MAX_MS. Keyboard activation (detail 0) and a script's el.click()
+   within ARM_MAX_MS. The idle timer still reverts the label at ARM_MAX_MS, and
+   confirmPending still expires on the wall clock, but a trusted click whose
+   own timeStamp is inside that window quits once either way (the click was
+   queued behind the stall; it is not a new arm). Keyboard activation (detail 0) and a script's el.click()
    (untrusted) are deliberate and may confirm. pointerup on the armed button
    confirms when past ARM_MIN_MS on both clocks (youngTap).
    A capture-phase click listener on #pausemenu does the gating, so the
@@ -133,9 +136,11 @@ const PauseOpts = (function () {
   // ── CONFIRM QUIT / RESTART ─────────────────────────────────────────────
   let armed = null;   // { btn, text, aria, wallAt, evAt } — wallAt from performance.now()
   let armTimer = 0;
+  let expiredArm = null; // { btn, evAt, wallAt } after the idle timer reverts the label
   let confirmPending = null;   // btn.id while a pointerup-driven el.click() is in flight
   let confirmPendingAt = 0;    // wallNow() when it was set: the trusted click that clears it may never come
-  function clearPending() { confirmPending = null; confirmPendingAt = 0; }
+  let confirmPendingEv = null; // that pointerup's timeStamp
+  function clearPending() { confirmPending = null; confirmPendingAt = 0; confirmPendingEv = null; }
   function wallNow() {
     try { return performance.now(); } catch (_) { return Date.now(); }
   }
@@ -168,11 +173,22 @@ const PauseOpts = (function () {
     if (a.btn.classList) a.btn.classList.remove("armed");
   }
   function disarm() {
+    expiredArm = null;
     if (!armed) return;
     const a = armed;
     armed = null;
     clearArmTimer();
     revertBtn(a);
+  }
+  // The label goes back at ARM_MAX_MS, but the gesture's event time stays so a
+  // confirm already queued behind a long frame is not read as a fresh arm.
+  function expireArmTimer() {
+    armTimer = 0;
+    if (!armed) return;
+    const a = armed;
+    armed = null;
+    revertBtn(a);
+    expiredArm = { btn: a.btn, evAt: a.evAt, wallAt: a.wallAt };
   }
   function arm(btn, e) {
     disarm();
@@ -186,7 +202,7 @@ const PauseOpts = (function () {
     btn.textContent = ARMED_LABEL;
     btn.setAttribute("aria-label", ARIA[btn.id]);
     if (btn.classList) btn.classList.add("armed");
-    armTimer = setTimeout(disarm, ARM_MAX_MS);
+    armTimer = setTimeout(expireArmTimer, ARM_MAX_MS);
   }
   const armAge = (t) => {
     if (!armed) return Infinity;
@@ -204,7 +220,12 @@ const PauseOpts = (function () {
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
     // A pointerup whose native click never arrived (pointercancel, a click
     // retargeted to an ancestor) must not leave a one-tap QUIT for later.
-    if (confirmPending && wallNow() - confirmPendingAt >= ARM_MAX_MS) clearPending();
+    if (confirmPending) {
+      const onPending = !!(btn && confirmPending === btn.id);
+      const ev = (onPending && confirmPendingEv != null && e && e.isTrusted && Number.isFinite(e.timeStamp))
+        ? e.timeStamp - confirmPendingEv : null;
+      if (wallNow() - confirmPendingAt >= ARM_MAX_MS && !(ev != null && ev >= 0 && ev < ARM_MAX_MS)) clearPending();
+    }
     if (confirmPending && btn && confirmPending === btn.id) {
       if (!e.isTrusted) {
         e.stopImmediatePropagation();
@@ -212,10 +233,17 @@ const PauseOpts = (function () {
         return;
       }
       clearPending();
+      expiredArm = null;
       return;
     }
-    if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); return; }
+    if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); else expiredArm = null; return; }
     if (confirmMode() === "off") { disarm(); return; }
+    if (!armed && expiredArm && expiredArm.btn === btn && e && e.isTrusted && e.detail !== 0
+        && expiredArm.evAt != null && Number.isFinite(e.timeStamp)) {
+      const ev = e.timeStamp - expiredArm.evAt;
+      if (ev >= ARM_MIN_MS && ev < ARM_MAX_MS) { expiredArm = null; return; }
+    }
+    if (expiredArm && expiredArm.btn === btn) expiredArm = null;
     const live = !!(armed && armed.btn === btn);
     // Keyboard activation (detail 0) and a script's el.click() (untrusted) are
     // deliberate; only a fast pointer repeat is the accidental double tap.
@@ -235,6 +263,7 @@ const PauseOpts = (function () {
     if (youngTap(e)) return;
     confirmPending = btn.id;
     confirmPendingAt = wallNow();
+    confirmPendingEv = Number.isFinite(e.timeStamp) ? e.timeStamp : null;
     disarm();
     btn.click();
   }
