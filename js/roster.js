@@ -217,7 +217,8 @@
     "js/perf/gpu-test-run.js",
     "js/perf/phone-recorder.js",
     "js/perf/bench-capture.js",
-    "js/perf/bench-run.js"
+    "js/perf/bench-run.js",
+    "js/perf/metrics-panel.js"
   ],
     LAZY_PERF_EDGES: [],
     LAZY_RACE: [

@@ -45,6 +45,8 @@ Bryce's profile is tests/data/settings-defaults-export.json (iPhone, build 14012
 | **C** Safari tab | 852×283, 59/0/59 (toolbar) | 718×267 | 658.7×245.0 | 781.7×259.6 | compact / wide |
 | **D** spec phone | 844×390, 47/21/47 | 734×353 | 673.4×323.9 | 774.3×357.8 | compact / wide |
 | **D′** spec phone, Playwright (no insets) | 844×390 | 828×374 | 759.6×343.1 | 774.3×357.8 | compact / wide |
+
+**Correction (2026-11-11, #5218):** row C is no reading; the Safari tab read 852×368. Record: `tests/data/phone-windows.json`.
 | **Aₛ** A at launch with the stale portrait `inner*` (393×852) | CSS lays out 852×393 | 718×356 | — | 360.6×781.7 | **normal / tall** (wrong) |
 
 What flips to "normal" at 852×393: body at UI SIZE ≤ 65 %; a 480 sheet at ≤ 74 %; a 380 sheet at ≤ 93 %. The

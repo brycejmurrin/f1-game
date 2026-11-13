@@ -765,7 +765,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **track/corner-names/miami.json** | — |
 | **track/corner-names/montreal.json** | — |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |
-| **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/specs/f1-track-accuracy.spec.js`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |
+| **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/helpers/track-accuracy-map.mjs`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |
 | **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/props-tri-ratchet.test.mjs`, `tests/unit/select-specs.test.mjs` |
 | **track/verify-track-baseline.json** | `tests/unit/verify-track-def-checks.test.mjs`, `track/verify-track.cjs` |
 

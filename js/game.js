@@ -603,7 +603,7 @@ function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread) : 0, c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
+function gripMult(c) { return TyreModel.carGrip(c, raceWeather, trackWetness(), c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -1433,6 +1433,7 @@ function driverSkill(team, d, di) {
     craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
     experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
     aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism), composure: DriverRatings.style01(r.composure),
+    tyreCare: DriverRatings.style01(r.tyreCare), ersBias: DriverRatings.style01(r.ersBias),   // #1566
   };
 }
 const buildPace = DriverRatings.buildPace;
@@ -4828,6 +4829,7 @@ const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, in
 // The step's Wind.sync() answer: every car of a step synced with the same (seed, weather, track, raceT), so the
 // first car to reach it pays and the rest share its object — the same one sync's own cache returned (#3109 row 9).
 const _windStep = { st: null };
+const _bandCtx = { leadProg: 0.5, carProg: 0.5, trackTotal: 0.5, raceT: 0.5, launchT0: 0.5, bandAuth: 0.5 }, _bandOut = { vmax: 0.5, bandNow: 0.5 };   // AiBand catch-up scratch (Double fields)
 // C10 far-car AI LOD, an OPT-IN lab read once here (`?lab=aiLod`, a comma list): off, aiLod is null and the sim is untouched (AiDrive.lodLab).
 const aiLod = (() => { try { return new URLSearchParams(location.search).get("lab").split(",").includes("aiLod") ? AiDrive.lodLab() : null; } catch (_) { return null; } })();
 const _ttRec = { native: false, initialState: undefined, boost: undefined, overtake: undefined, aeroToggle: undefined, shiftUp: undefined, shiftDown: undefined, steer: undefined, throttle: undefined, brake: undefined, throttleLevel: undefined, brakeLevel: undefined, aero: undefined };
@@ -4911,11 +4913,9 @@ function updateCar(c, dt, ranked) {
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
-  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both objects
-    const applied = AiBand.applyVmax(vmax, AiBand.factor({
-      leadProg: _leadHuman.prog, carProg: c.prog,
-      trackTotal: track.total, raceT, launchT0, bandAuth: dd.band,
-    }), c.tierV * c.skill * dd.ai, BAND_CEIL);
+  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both
+    const bc = _bandCtx; bc.leadProg = _leadHuman.prog; bc.carProg = c.prog; bc.trackTotal = track.total; bc.raceT = raceT; bc.launchT0 = launchT0; bc.bandAuth = dd.band;
+    const applied = AiBand.applyVmax(vmax, AiBand.factor(bc), c.tierV * c.skill * dd.ai, BAND_CEIL, _bandOut);   // reused: no objects per AI car
     vmax = applied.vmax; c._bandNow = applied.bandNow;
   } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
@@ -9184,7 +9184,7 @@ function leaveGarage() {
    Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
 function garageBack() {
   if (soundOn) GameAudio.uiTick();
-  if (garageReturn === "pit") { closePitWork(); return; }
+  if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
@@ -9198,7 +9198,7 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
-  if (garageReturn === "pit") { closePitWork(); return; }
+  if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each

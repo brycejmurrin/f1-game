@@ -169,11 +169,14 @@ async function main() {
     await page.waitForFunction(() => window.__apex != null && typeof Tracks !== "undefined", null, { timeout: WAIT_MS, polling: 100 });
     await page.evaluate((t) => { window.__apex.race(t); }, track);
     await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS, polling: 100 });
+    // --park also holds the governor's tier and the render scale HERE, before the warm (#5451): pinned only at the park
+    // block below, a governor step during the warm had already been taken (monza helmet mobile: textures 40 vs 39 at
+    // memoryStart on two boots of one tree). The park block's own pin stays as a no-op re-assertion.
     // --park freezes the sim in the SAME task that starts the race and places the car: the field is still on the grid
     // and nothing has stepped. Driving the warm first (as the unparked census does) left the field and the mesh pool
     // wherever that boot's frame times put them, and two boots then disagreed (monza, 2026-11-11: main 143067 vs
     // 143139 triangles, mirror 23 vs 21 calls).
-    await page.evaluate(({ cam, park, at }) => { const A = window.__apex; A.go(); A.jump(park ? at : 0.1, park ? 0 : 55, 0); if (cam && A.camera) A.camera(cam); if (park) A.freeze(true); }, { cam: CAMERA, park: PARK, at: PARK_AT });
+    await page.evaluate(({ cam, park, at }) => { const A = window.__apex; A.go(); if (park) { A.govHold(true); A.renderScale(1); } A.jump(park ? at : 0.1, park ? 0 : 55, 0); if (cam && A.camera) A.camera(cam); if (park) A.freeze(true); }, { cam: CAMERA, park: PARK, at: PARK_AT });
     const ok = await page.waitForFunction(() => !!window.renderer, null, { timeout: WAIT_MS, polling: 100 }).then(() => true, () => false);
     if (!ok) throw new Error("window.renderer never appeared: this tool measures TLX (backend three) behind ?three-devtools=1");
     const backend = await page.evaluate(() => { const b = window.renderer.backend; return { api: b && b.isWebGPUBackend ? "webgpu" : "webgl2", forceWebGL: !(b && b.isWebGPUBackend) }; });
