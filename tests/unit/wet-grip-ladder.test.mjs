@@ -8,10 +8,12 @@
  * change from slick to wet tyres in Formula 1"): inters beat full wets in the
  * damp, full wets win only in heavy standing water.
  *
- * Read through the game's own lerp (TyreModel.weatherGrip) and, for the
- * "effective" checks, times the catalog's dry cornering stat — the price a
- * wet tread carries everywhere (js/car/parts.js), since the table's dry knot
- * is 1 for every tread.
+ * Read through the game's own lerp (TyreModel.weatherGrip). The table is the
+ * WHOLE price of a tread now (#5289): the catalog's dry stat rows used to be
+ * multiplied in here as the player's "effective" grip, but a wet set no longer
+ * carries them on any car (TyreModel.applyCompound fits it at the AI's cost),
+ * and the dry-road cost moved into the table's dry knot, which player and AI
+ * both pay.
  *
  * Run: node --test tests/unit/wet-grip-ladder.test.mjs
  */
@@ -35,12 +37,9 @@ for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
 }
 const T = vm.runInContext("TyreModel", ctx);
 const PC = vm.runInContext("PhysicsConsts", ctx);
-const Parts = vm.runInContext("Parts", ctx);
 
 const grip = (t, w) => T.weatherGrip(t, w);
-const rows = Parts.CATALOG.find((c) => c.id === "tyres").options;
-const corner = [1, ...["intermediate", "wet_full"].map((id) => rows.find((o) => o.id === id).cornering)];
-const eff = (t, w) => grip(t, w) * corner[t];
+const eff = grip;   // no stat cost rides on a wet set any more (#5289): grip IS the effective grip
 
 /** First wetness in (lo, hi] where tread b overtakes tread a under f. */
 function crossover(f, a, b, lo = 0, hi = 1) {
@@ -53,10 +52,14 @@ function crossover(f, a, b, lo = 0, hi = 1) {
   return NaN;
 }
 
-test("the slick column and the dry knot are untouched (dry physics cannot move)", () => {
+test("the slick column is untouched (a dry race on slicks cannot move); a grooved tyre pays on a dry road", () => {
   assert.equal(PC.WET_GRIP.wet[0], 0.82);
   assert.equal(PC.WET_GRIP.rain[0], 0.72);
-  for (const t of [0, 1, 2]) assert.equal(grip(t, 0), 1, `tread ${t} on a dry road`);
+  assert.equal(grip(0, 0), 1, "a slick on a dry road");
+  // Bryce 2026-11-11, "Grooved tyres lose dry grip" (#5289): the cost the catalog's
+  // stat rows carried for the player alone, now in the table both sides read.
+  assert.equal(grip(1, 0), 0.92, "an inter on a dry road");
+  assert.equal(grip(2, 0), 0.90, "a full wet on a dry road");
 });
 
 test("the inter out-grips the full wet on a drizzly road, the full wet wins in rain", () => {
@@ -66,11 +69,13 @@ test("the inter out-grips the full wet on a drizzly road, the full wet wins in r
   assert.ok(grip(1, 0.5) > grip(0, 0.5) && grip(2, 1) > grip(0, 1), "a wet tread always beats a slick in the wet");
 });
 
-test("the inter→full crossover brackets treadFor's 0.72 switch", () => {
+test("the inter→full crossover sits just under treadFor's 0.72 switch", () => {
+  // A "with dry stat cost" bracket ([0.72, 0.85]) stood here: it priced the
+  // player's catalog cornering stat, which no car carries on a wet set since
+  // #5289. The table's wet and rain knots (where this crossover lives) did
+  // not change, so this is the crossover the AI field has always raced on.
   const pure = crossover(grip, 1, 2, 0.3);
-  const withCost = crossover(eff, 1, 2, 0.3);
   assert.ok(pure >= 0.6 && pure <= 0.72, `grip-only crossover ${pure.toFixed(3)} not in [0.60, 0.72]`);
-  assert.ok(withCost >= 0.72 && withCost <= 0.85, `with dry stat cost ${withCost.toFixed(3)} not in [0.72, 0.85]`);
 });
 
 test("slicks win when dry and lose to inters near treadFor's 0.25 switch", () => {

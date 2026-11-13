@@ -8,35 +8,36 @@ const DriverRatings = (function () {
   const AXES = ["pace", "craft", "awareness", "consistency", "experience"];
   // Style axes: signed −30..+30, zero-mean across the authored grid, NEVER in
   // overall()/skill() or the top-speed product. Appended after the quality tuple.
-  const STYLE_AXES = ["aggression", "optimism", "composure"];
+  const STYLE_AXES = ["aggression", "optimism", "composure", "tyreCare", "qualiBias", "ersBias"];
   const STYLE_SCALE = 30;   // authored units → traits −1..+1 via / STYLE_SCALE
 
-  // [pace, craft, awareness, consistency, experience, aggression, optimism, composure].
+  // [pace, craft, awareness, consistency, experience, aggression, optimism, composure,
+  //  tyreCare, qualiBias, ersBias (#1566)].
   // Slice 2: craft/awareness/consistency pairwise |r|<0.5; pace frozen.
   // Slice 3: style columns interleaved by overall rank (sum 0 each).
   const BASE = {
-    VER: [96, 96, 92, 94,  92,  30,  24, 20], // still the pace king
-    LEC: [94, 89, 84, 86,  84,  24,  18, -18], // craft high; awareness soft spot kept
-    NOR: [93, 78, 81, 90,  72, -18, -12, 6], // 2025 champion — craft reshuffled for decorrelation
-    PIA: [91, 74, 71, 90,  62, -10,  -8, 16],
-    RUS: [90, 82, 70, 90,  78,  12,  30, 10], // metronome with optimistic brake markers
-    HAM: [89, 95, 88, 88, 100, -30, -24, 22], // pace has ebbed; racecraft has not
-    SAI: [88, 88, 85, 88,  90, -24, -18, 14],
-    ALO: [86, 96, 76, 88, 100,  18,  12, 24], // craft elite; OT product preserved vs tip
-    GAS: [84, 84, 82, 82,  86, -12, -30, -4],
-    ALB: [84, 84, 81, 84,  78,   8,   6, 8],
-    ANT: [84, 90, 86, 74,  32,  -8,  -6, -22], // quick, raw
-    HUL: [82, 84, 86, 86,  94,  10,   8, 6],
-    OCO: [82, 82, 73, 80,  84,  -6, -10, -6],
-    HAD: [82, 78, 66, 78,  30,   2,   4, -20],
-    PER: [80, 88, 88, 74,  92,   6,  10, -8],
-    BEA: [80, 76, 78, 76,  34,  -2,  -4, -2],
-    LAW: [79, 76, 74, 74,  38,   1,   1, -10],
-    BOT: [79, 82, 76, 84,  96,   4,   2, 12],
-    COL: [78, 88, 85, 70,  30,  -4,  -2, -14],
-    BOR: [77, 72, 70, 73,  24,   0,   0, -12],
-    LIN: [76, 70, 85, 68,  12,   0,   0, -16], // rookie
-    STR: [74, 72, 87, 72,  80,  -1,  -1, -6], // pay seat
+    VER: [96, 96, 92, 94,  92,  30,  24, 20, 2, 18, 20], // still the pace king
+    LEC: [94, 89, 84, 86,  84,  24,  18, -18, -8, 22, 14], // craft high; awareness soft spot kept
+    NOR: [93, 78, 81, 90,  72, -18, -12, 6, 8, 16, 6], // 2025 champion — craft reshuffled for decorrelation
+    PIA: [91, 74, 71, 90,  62, -10,  -8, 16, 16, 14, -4],
+    RUS: [90, 82, 70, 90,  78,  12,  30, 10, -2, 20, -2], // metronome with optimistic brake markers
+    HAM: [89, 95, 88, 88, 100, -30, -24, 22, 20, -18, -22], // pace has ebbed; racecraft has not
+    SAI: [88, 88, 85, 88,  90, -24, -18, 14, 14, -2, -6],
+    ALO: [86, 96, 76, 88, 100,  18,  12, 24, 18, -20, -18], // craft elite; OT product preserved vs tip
+    GAS: [84, 84, 82, 82,  86, -12, -30, -4, -4, 12, 2],
+    ALB: [84, 84, 81, 84,  78,   8,   6, 8, 4, 6, -10],
+    ANT: [84, 90, 86, 74,  32,  -8,  -6, -22, -20, 8, 22], // quick, raw
+    HUL: [82, 84, 86, 86,  94,  10,   8, 6, 6, -8, -12],
+    OCO: [82, 82, 73, 80,  84,  -6, -10, -6, 12, -12, -8],
+    HAD: [82, 78, 66, 78,  30,   2,   4, -20, -18, 10, 18],
+    PER: [80, 88, 88, 74,  92,   6,  10, -8, 22, -22, -20],
+    BEA: [80, 76, 78, 76,  34,  -2,  -4, -2, -10, -10, 10],
+    LAW: [79, 76, 74, 74,  38,   1,   1, -10, -14, 4, 16],
+    BOT: [79, 82, 76, 84,  96,   4,   2, 12, 10, -14, -16],
+    COL: [78, 88, 85, 70,  30,  -4,  -2, -14, -12, 2, 8],
+    BOR: [77, 72, 70, 73,  24,   0,   0, -12, -16, -4, 12],
+    LIN: [76, 70, 85, 68,  12,   0,   0, -16, -22, -6, 4], // rookie
+    STR: [74, 72, 87, 72,  80,  -1,  -1, -6, -6, -16, -14], // pay seat
   };
 
   // The MY TEAM free agents (Career.freeAgents(), js/career/career.js), keyed by
@@ -85,7 +86,7 @@ const DriverRatings = (function () {
     // of unrated codes only (MY TEAM hires, user codes, rivals); BASE/HIRES rows
     // and the five quality axes keep their exact values.
     const h2 = Hash32.mix(h);
-    const spread2 = (n) => ((h2 >>> (n * 5)) & 31) - 15;
+    const spread2 = (n) => ((h2 >>> (n * 5)) & 31) - 15, st = (n) => clamp(spread2(n), -STYLE_SCALE, STYLE_SCALE);
     const anchor = 88 - t * 4;
     return {
       pace:        roundClamp(anchor + spread(0) * 0.35, 60, 96),
@@ -94,9 +95,7 @@ const DriverRatings = (function () {
       consistency: roundClamp(anchor + spread(3) * 0.45, 55, 94),
       experience:  roundClamp(45 + spread(4) * 2.0, 5, 100),
       // Style from the second hash — not zero-mean for unrated codes (only BASE is).
-      aggression:  clamp(spread2(0), -STYLE_SCALE, STYLE_SCALE),
-      optimism:    clamp(spread2(1), -STYLE_SCALE, STYLE_SCALE),
-      composure:   clamp(spread2(2), -STYLE_SCALE, STYLE_SCALE),
+      aggression: st(0), optimism: st(1), composure: st(2), tyreCare: st(3), qualiBias: st(4), ersBias: st(5),
     };
   }
 
@@ -110,6 +109,7 @@ const DriverRatings = (function () {
           aggression: row[5] != null ? row[5] : 0,
           optimism: row[6] != null ? row[6] : 0,
           composure: row[7] != null ? row[7] : 0,
+          tyreCare: row[8] || 0, qualiBias: row[9] || 0, ersBias: row[10] || 0,
         }
       : fromTier(tier, code);
     if (deltas) {

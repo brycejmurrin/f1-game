@@ -40,7 +40,9 @@ const MAX_EAGER_SCRIPTS = 317;
 // LAZY_PERF). 8,150,000 is the owner's decision of 2026-11-11 (issue #5523, brycejmurrin "decision: 8150000",
 // 16:37:17Z), a deliberate exception to the "freed bytes are not headroom" default. Measured after #5468:
 // 314 scripts, 8,048,913 raw bytes (tip 240426c6) → 101,087 B of room.
-const MAX_EAGER_BYTES = 8_150_000;
+// 8,127,215: lowered by #4978 row 3 METRICS painter → LAZY_PERF metrics-panel.js (#5489): tip 7974edf7 8,053,745 →
+// 8,030,960 raw (−22,785), so the room stays the owner's 8,150,000 decision and the freed bytes are not handed out.
+const MAX_EAGER_BYTES = 8_127_215;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");

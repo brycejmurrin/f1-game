@@ -1174,6 +1174,9 @@
         "tests/unit/test-groups-generated.test.mjs",
         "tests/unit/test-groups.test.mjs",
         "tests/unit/title-art.test.mjs",
+        "tests/unit/tools-runnable-cli.test.mjs",
+        "tests/unit/tools-runnable-instruments.test.mjs",
+        "tests/unit/tools-runnable-report.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/twin-fidelity.test.mjs",
         "tests/unit/twinned-specs.test.mjs",
@@ -3882,6 +3885,11 @@
       "path": "js/perf/metrics-overlay.js",
       "global": "GameMetrics",
       "roster": "tag"
+    },
+    {
+      "path": "js/perf/metrics-panel.js",
+      "global": "GameMetricsPanel",
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/phone-recorder.js",

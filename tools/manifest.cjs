@@ -424,7 +424,7 @@ const FULL = [
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/post-fx-opts.js",   // PostFxOpts: GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS (game.js reads them per frame)
-  "js/perf/metrics-overlay.js",
+  "js/perf/metrics-overlay.js", // GameMetrics: METRICS rows, keys, picks; the panel painter is LAZY_PERF (metrics-panel.js)
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage-ride.js", // VantageRide: smoothed ride height / grade / soft floor (before vantage)
@@ -1071,6 +1071,7 @@ const LAZY_PERF = [
   "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633)
   "js/perf/bench-capture.js",  // BenchCapture: BENCHMARK's per-leg profiling record; bench-run.js hooks it
   "js/perf/bench-run.js",      // BenchRun: SETTINGS > GRAPHICS > BENCHMARK (#bench), resumes across reloads
+  "js/perf/metrics-panel.js",  // GameMetricsPanel: the METRICS overlay painter; GameMetrics (FULL) asks for it when ON (#4978 row 3)
 ];
 const LAZY_PERF_EDGES = [];
 
