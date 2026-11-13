@@ -26,8 +26,11 @@
 //   base      the deploy tip is not red on CODE (#5425, Bryce's decision 1 "Gate holds merges, one fixer"): the newest
 //             completed pages.yml run on the base branch, read through its jobs (tools/ci/lib/deploy-tip.mjs). A
 //             failed job other than a Pages-side publish failure (`deploy` with PLATFORM_STEP failed; run 42880431465)
-//             makes the row WAIT (pending, so the next Pages train re-gates); a PR carrying `deploy:red` or `priority`
-//             last added by Bryce in person passes it: that is how the fixer lands. An agent's label does not count.
+//             makes the row WAIT (pending, so the next Pages train re-gates). The fixer is never held, two ways:
+//             (1) proof: the PR carries `deploy:red` (anyone's, the fixer's claim) AND its head CONTAINS the red
+//             run's commit, so the `ci` row's green was earned on top of the red tip; (2) `deploy:red` or `priority`
+//             last added by Bryce in person after the red run started. An agent's label without the proof does not
+//             count. An infrastructure red holds too and clears on a re-run, the pages.yml cron or route (1).
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
 //             name) needs the `config-ok` label, last added by Bryce in person (or, for ROUTINE config paths only, by
 //             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and newer than the last push that
@@ -73,24 +76,29 @@ export const CONFIG_LABEL = "config-ok";
 /** The paths whose edit needs CONFIG_LABEL: the hooks, settings, workflows and actions that enforce every other rule,
  *  the CI tools that compute this gate and the dispatcher, the MCP and hook tooling, the generated-path list, the
  *  package scripts, every host's hook and agent config, the tracked memory and the issue templates. */
+/** The gate's import-closure modules (gateClosure in tools/lib/gate-receipt.mjs) that live OUTSIDE tools/ci/ (#5467):
+ *  their top level runs when the gate imports them and gen-test-groups decides generatedPkgVerdict, so each is a
+ *  config path AND a protected one. A test fails on any closure module either list misses. */
+const GATE_MODULE_OUTSIDE_CI = ["tools/gen/gen-test-groups\\.mjs$", "tools/lib/changed-files\\.mjs$", "tools/lib/cli-args\\.mjs$",
+  "tools/lib/gate-receipt\\.mjs$", "tools/lib/work-tree-id\\.mjs$"];
 export const CONFIG_PATH = new RegExp("^(" + [
   "\\.claude/hooks/", "\\.claude/settings(\\.local)?\\.json$", "\\.claude/agents/", "\\.claude/memory/",
   "\\.github/workflows/", "\\.github/actions/", "\\.github/ISSUE_TEMPLATE/", "\\.githooks/", "\\.mcp\\.json$",
   "tools/ci/", "tools/hooks/", "tools/mcp/", "tools/lib/generated-paths\\.mjs$", "package\\.json$",
-  "\\.cursor/hooks", "\\.codex/hooks",
+  "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
 /** The PROTECTED config paths (#5455, Bryce 2026-11-11 "Count it, except the gate and safety hooks"): only his own
  *  `config-ok` tap covers a diff that touches one; an agent's `config-ok` covers ROUTINE config paths only (every
  *  other CONFIG_PATH). The gate (this module, which defines both lists; provenance; ready-gate; and the rest of the
- *  gate's import closure under tools/ci/, because a module's top level runs when the gate imports it — a test pins
+ *  gate's import closure, under tools/ci/ and outside it (#5467), because a module's top level runs when the gate imports it — a test pins
  *  the closure), the land workflow, ci.yml (it decides what green means; Bryce 2026-11-11 "Protect ci.yml"), and every
  *  host's hooks and settings. */
 export const PROTECTED_CONFIG_PATH = new RegExp("^(" + [
   "tools/ci/merge-gate\\.mjs$", "tools/ci/lib/provenance\\.mjs$", "tools/ci/lib/deploy-tip\\.mjs$", "tools/ci/ready-gate\\.mjs$",
   "tools/ci/github-api\\.mjs$", "tools/ci/github-token\\.mjs$", "tools/ci/preflip-probe\\.mjs$", "tools/ci/pick-tests\\.mjs$",
   "\\.github/workflows/land\\.yml$", "\\.github/workflows/ci\\.yml$", "\\.claude/hooks/", "\\.claude/settings[^/]*\\.json$", "tools/hooks/", "\\.githooks/",
-  "\\.cursor/hooks", "\\.codex/hooks",
+  "\\.cursor/hooks", "\\.codex/hooks", ...GATE_MODULE_OUTSIDE_CI,
 ].join("|") + ")");
 export const isProtectedConfigPath = (p) => PROTECTED_CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
 export const configFiles = (files) => (files || []).filter(isConfigPath);
@@ -137,13 +145,35 @@ export function holdVerdict(labels, events = null, owner = OWNER) {
 /** The labels that let a PR land over a code-red deploy tip, counted only when Bryce added them in person (#5425). */
 export const BASE_ESCAPE_LABELS = Object.freeze(["deploy:red", "priority"]);
 
-/** base: `tip` is tipState() from tools/ci/lib/deploy-tip.mjs. A code red WAITS (pending) unless one of
- *  BASE_ESCAPE_LABELS is on the PR, its newest event is his own `labeled` (ownerSet: performed_via_github_app
- *  null, actor the owner), AND that click is newer than the red run's start (`tip.runAt`): a label he set for an
- *  earlier red, or `priority` set for scheduling, does not wave through a later red. Any other state passes.
- *  `events` null honours no escape. Pure. */
-export function baseVerdict(tip, labels, events = null, owner = OWNER) {
+/** The label a fixer's PR carries; with the proof (below) it passes `base` whoever set it. */
+export const FIXER_LABEL = "deploy:red";
+
+/** Does `head` contain the red run's commit `redSha`? One compare read: "ahead" or "identical" means every commit of
+ *  the red tip is in the head, so the head's own CI ran on top of the red. → { contains, redSha } | { error }. */
+export function fixerProof({ redSha, head, request }) {
+  if (!redSha || !head) return { contains: false, redSha: redSha || null };
+  const c = request(`compare/${encodeURIComponent(redSha)}...${encodeURIComponent(head)}`);
+  if (c.error) return { error: `compare ${redSha.slice(0, 8)}...${head.slice(0, 8)}: ${c.error}` };
+  const status = c.json?.status;
+  if (typeof status !== "string") return { error: `compare ${redSha.slice(0, 8)}...${head.slice(0, 8)}: no status in the response` };
+  return { contains: status === "ahead" || status === "identical", redSha };
+}
+
+/** base: `tip` is tipState() from tools/ci/lib/deploy-tip.mjs. A code red WAITS (pending) unless this PR is the fixer:
+ *  (1) proof: FIXER_LABEL is on the PR (set by anyone) and `proof.contains` (fixerProof: the head contains the red
+ *  run's commit), so the head's CI ran on top of the red and the `ci` row is the evidence that it is fixed; a later
+ *  red has another commit, so the proof never carries over; or
+ *  (2) one of BASE_ESCAPE_LABELS is on the PR, its newest event is Bryce's own `labeled` (ownerSet:
+ *  performed_via_github_app null, actor the owner), AND that click is newer than the red run's start (`tip.runAt`):
+ *  a label he set for an earlier red, or `priority` set for scheduling, does not wave through a later red.
+ *  Any other state passes. `events` null honours no owner escape; `proof` null honours no proof. Pure. */
+export function baseVerdict(tip, labels, events = null, owner = OWNER, proof = null) {
   if (tip?.state !== "code-red") return row(true, tip?.evidence || "deploy tip state not given");
+  const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name));
+  const sha8 = String(tip.sha || "").slice(0, 8) || "?";
+  if (names.includes(FIXER_LABEL) && proof?.contains === true) {
+    return row(true, `${tip.evidence}; \`${FIXER_LABEL}\` is set and this head contains the red commit ${sha8}: its CI ran on top of the red tip, so the ci row is the proof (the fixer)`);
+  }
   const redAt = Date.parse(tip.runAt || "");
   const after = (l) => { const t = Date.parse(newestLabelEvent(events, l)?.created_at || ""); return !!t && !!redAt && t > redAt; };
   const mine = BASE_ESCAPE_LABELS.filter((l) => ownerSet(labels, events, l, owner) && after(l));
@@ -151,10 +181,9 @@ export function baseVerdict(tip, labels, events = null, owner = OWNER) {
     const e = newestLabelEvent(events, mine[0]);
     return row(true, `${tip.evidence}; \`${mine[0]}\` added by ${owner} in person at ${e?.created_at || "?"}: this PR may land over the red tip (the fixer)`);
   }
-  const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name));
   const notHis = BASE_ESCAPE_LABELS.filter((l) => names.includes(l));
-  const why = notHis.length ? `; \`${notHis.join("`, `")}\` is set but not added by ${owner} in person after this red run started (${tip.runAt || "?"}), so it does not count` : "";
-  return { ...row(false, `${tip.evidence}: merges wait until the tip is green${why}; the fixer's PR lands once ${owner} adds \`deploy:red\` to it himself`), pending: true };
+  const why = notHis.length ? `; \`${notHis.join("`, `")}\` is set but not added by ${owner} in person after this red run started (${tip.runAt || "?"}), with no proof that this head contains the red commit ${sha8}, so it does not count` : "";
+  return { ...row(false, `${tip.evidence}: merges wait until the tip is green${why}; the fixer's PR lands with \`${FIXER_LABEL}\` once its head contains ${sha8} (sync-pr --onto-red-tip) and its CI is green, or once ${owner} adds \`${FIXER_LABEL}\` to it himself`), pending: true };
 }
 
 /** Which kind of `config-ok` labeled event is this: "owner" (his own click, byOwner), "agent" (owner login through the
@@ -535,7 +564,13 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   }
   const deployTip = readDeployTip(base, request);
   if (deployTip.error) return { error: deployTip.error };
-  rows.base = baseVerdict(deployTip, pull.labels, ev.rows, owner);
+  // The fixer's proof: one compare read, only on a code red and only for a PR that claims to be the fixer.
+  let proof = null;
+  if (deployTip.state === "code-red" && (pull.labels || []).some((l) => (typeof l === "string" ? l : l?.name) === FIXER_LABEL)) {
+    proof = fixerProof({ redSha: deployTip.sha, head, request });
+    if (proof.error) return { error: proof.error };
+  }
+  rows.base = baseVerdict(deployTip, pull.labels, ev.rows, owner, proof);
   const files = listAll(`pulls/${pr}/files`, request);
   if (files.error) return { error: `files of PR #${pr}: ${files.error}` };
   let changed = filePaths(files.rows), generated = null;
@@ -589,7 +624,7 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
     open (open, not a draft, head = --sha when given), hold (no \`hold\` label; a hold ${OWNER} set in person is lifted
     only by a later click of his own, an agent's hold by anyone), plan (Plan present and closed; \`land:\` items exempt), ci (\`CI\` success on
     the head), base (the deploy tip's newest completed pages.yml run is not red on code; waits otherwise, unless
-    \`deploy:red\` or \`priority\` was added by ${OWNER} in person), config (a diff touching a config path — harness, CI tools, agent config; see CONFIG_PATH — needs
+    the PR is the fixer: \`deploy:red\` on a head that contains the red commit, or \`deploy:red\` / \`priority\` added by ${OWNER} in person), config (a diff touching a config path — harness, CI tools, agent config; see CONFIG_PATH — needs
     \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), gen (clean merge onto the current base tip + gen:check), ratchets (on
     that merge result).
   --trusted: only the rows that run no PR code (open, hold, plan, ci, base, config); land.yml's trusted-rows job.

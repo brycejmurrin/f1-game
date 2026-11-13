@@ -14,7 +14,11 @@
  *   stale-red  the newest ci.yml run on the branch head failed AND the deploy tip gained
  *              a commit after that run started: a re-run re-tests the stale merge ref,
  *              only a new head can clear it. A heuristic (a flake looks the same): name
- *              the failing job in the PR, and never re-run twice.
+ *              the failing job in the PR, and never re-run twice. A newest run that ended
+ *              `cancelled` counts as failed when at least one of its jobs concluded
+ *              `failure` (it was red before the cancel); with zero failed jobs it stays
+ *              `no` (AGENTS.md rule 8: a timeout until proven otherwise), and a jobs read
+ *              error keeps `no` and names the error.
  *   tip-red    the branch is behind, but the deploy tip is red on CODE (the newest completed pages.yml run failed
  *              in a job other than a Pages-side publish failure; tools/ci/lib/deploy-tip.mjs, #5425): syncing
  *              would import the red. Wait for the fix to land; sync-pr refuses (only the fixer's own branch may
@@ -43,9 +47,10 @@ export const VERDICTS = ["conflict", "stale-red", "tip-red", "no"];
 /**
  * The verdict from the facts. Pure.
  * @param {{ behind: boolean, conflict: boolean, ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null,
- *   tip?: { state: string, evidence: string }|null }} f
+ *   failedJobs?: number|null, jobsError?: string|null, tip?: { state: string, evidence: string }|null }} f
  *   tipNewestAt = committer date of the newest commit on the tip that the branch lacks; tip = tipState() of the deploy
  *   branch's newest completed pages.yml run (null: not read).
+ *   failedJobs = jobs of a `cancelled` newest run that concluded `failure` (null: not read); jobsError = why not.
  * @returns {{ verdict: "conflict"|"stale-red"|"tip-red"|"no", why: string }}
  */
 export function decideSync(f) {
@@ -53,11 +58,32 @@ export function decideSync(f) {
   if (f.tip?.state === "code-red") return { verdict: "tip-red", why: `${f.tip.evidence}: do not sync onto a red tip; wait for the fix to land` };
   if (f.conflict) return { verdict: "conflict", why: "merging the deploy tip conflicts" };
   const ran = Date.parse(f.runStartedAt || ""), tipAt = Date.parse(f.tipNewestAt || "");
-  if (f.ci === "failure" && ran && tipAt && tipAt > ran) {
-    return { verdict: "stale-red", why: "ci.yml is red on the head and the tip has moved since that run started" };
+  const moved = !!(ran && tipAt && tipAt > ran);
+  const n = f.ci === "cancelled" && Number.isInteger(f.failedJobs) ? f.failedJobs : null;
+  const cancelledRed = n !== null && n > 0;
+  const what = cancelledRed ? `ci cancelled after ${n} failed job(s)` : "ci.yml is red";
+  if ((f.ci === "failure" || cancelledRed) && moved) {
+    return { verdict: "stale-red", why: `${what} on the head and the tip has moved since that run started` };
   }
-  const red = f.ci === "failure" ? "ci red but the tip has not moved since" : f.ci === "unknown" ? "ci state unknown" : `ci ${f.ci || "none"}`;
+  const red = f.ci === "failure" || cancelledRed ? `${cancelledRed ? what : "ci red"} but the tip has not moved since`
+    : f.ci === "unknown" ? "ci state unknown"
+    : f.ci === "cancelled" && f.jobsError ? `ci cancelled; its jobs are unreadable (${f.jobsError})`
+    : n === 0 ? "ci cancelled with 0 failed jobs: a timeout until proven otherwise, AGENTS.md rule 8"
+    : `ci ${f.ci || "none"}`;
   return { verdict: "no", why: `behind with no conflict (${red}): clean-behind is not a reason` };
+}
+
+/** Jobs of one run that concluded `failure`, paged through `request`. @returns {{ failed?: number, error?: string }} */
+export function failedJobCount(request, runId) {
+  let failed = 0;
+  for (let page = 1; page <= 20; page++) {
+    const r = request(`actions/runs/${runId}/jobs?per_page=100&page=${page}`);
+    if (r?.error) return { error: r.error };
+    const batch = r?.json?.jobs || [];
+    failed += batch.filter((j) => j?.conclusion === "failure").length;
+    if (batch.length < 100) return { failed };
+  }
+  return { error: "more than 20 pages of jobs" };
 }
 
 // The {code,out,err} git helper is tools/lib/git-run.mjs (audit3 T11).
@@ -87,28 +113,35 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
     if (m.code !== 0 && m.code !== 1) return { ok: false, error: `git merge-tree failed (${m.code}): ${m.err || m.out}` };
     conflict = m.code === 1;
   }
-  let ci = "unknown", runStartedAt = null, note = null, deployTip = null;
+  let ci = "unknown", runStartedAt = null, note = null, failedJobs = null, jobsError = null, deployTip = null;
+  const addNote = (t) => { note = note ? `${note}; ${t}` : t; };
   if (behind && !offline) {
     const t = readDeployTip(DEPLOY, request);
     snap?.save();
-    if (t.error) note = `deploy tip state unreadable (${t.error}): tip-red cannot be detected`;
+    if (t.error) addNote(`deploy tip state unreadable (${t.error}): tip-red cannot be detected`);
     else deployTip = t;
   }
   if (behind && !conflict && !offline) {
     const r = request(`actions/workflows/ci.yml/runs?head_sha=${head.out}&per_page=20`);
     snap?.save();
-    if (r.error) note = `CI state unreadable (${r.error}): only a conflict can be detected`;
+    if (r.error) addNote(`CI state unreadable (${r.error}): only a conflict can be detected`);
     else {
       const runs = r.json?.workflow_runs || [];
       const s = ciState(runs);
       ci = s.state;
       const run = runs.find((x) => x.id === s.runId);
       runStartedAt = run?.run_started_at || run?.created_at || null;
+      if (ci === "cancelled" && s.runId != null) {
+        const j = failedJobCount(request, s.runId);
+        if (j.error) { jobsError = j.error; addNote(`jobs of cancelled run ${s.runId} unreadable (${j.error}): a cancelled run counts as no`); }
+        else failedJobs = j.failed;
+      }
+      snap?.save();
     }
-  } else if (offline) note = "offline: CI state not read, only a conflict can be detected";
+  } else if (offline) addNote("offline: CI state not read, only a conflict can be detected");
   const tipNewestAt = behind ? readGit(["log", "-1", "--format=%cI", `${head.out}..${tip.out}`]).out || null : null;
-  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, tip: deployTip });
-  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, deployTip, ...d, note };
+  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, failedJobs, jobsError, tip: deployTip });
+  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, failedJobs, deployTip, ...d, note };
 }
 
 /** The one verdict line. */

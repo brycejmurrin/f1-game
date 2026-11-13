@@ -77,8 +77,7 @@ test("needsSync: a green clean-behind head reads only the ci.yml runs and the de
   const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request });
   assert.equal(v.verdict, "no");
   assert.equal(v.distance, undefined, "no distance fact is reported");
-  assert.ok(calls.some((p) => p.startsWith("actions/workflows/ci.yml/runs")), calls.join(" "));
-  assert.ok(calls.every((p) => p.startsWith("actions/workflows/ci.yml/runs") || p.startsWith("actions/workflows/pages.yml/runs?branch=")), calls.join(" "));
+  assert.deepEqual([...new Set(calls.map((p) => p.split("/runs?")[0]))].sort(), ["actions/workflows/ci.yml", "actions/workflows/pages.yml"], calls.join(" "));
 });
 test("needsSync: red head + newer tip commit = stale-red via the injected API", () => {
   const request = () => ({ json: { workflow_runs: [{ id: 7, path: ".github/workflows/ci.yml", status: "completed", conclusion: "failure", run_started_at: "2000-01-01T00:00:00Z" }] } });
@@ -95,19 +94,62 @@ test("decideSync: a code-red tip is tip-red, over conflict and stale-red; not be
   assert.equal(decideSync({ behind: true, conflict: false, ci: "success", tip }).verdict, "tip-red");
   assert.equal(decideSync({ behind: true, conflict: true, tip }).verdict, "tip-red", "a conflict sync would import the red too");
   assert.equal(decideSync({ behind: true, conflict: false, ci: "failure", runStartedAt: "2026-11-10T00:00:00Z", tipNewestAt: "2026-11-11T00:00:00Z", tip }).verdict, "tip-red");
-  assert.match(decideSync({ behind: true, conflict: false, tip }).why, /run 9/);
+  assert.equal(decideSync({ behind: true, conflict: false, tip }).why, tip.evidence + ": do not sync onto a red tip; wait for the fix to land");
   assert.equal(decideSync({ behind: false, conflict: false, tip }).verdict, "no");
   for (const state of ["green", "platform", "none"]) assert.equal(decideSync({ behind: true, conflict: false, ci: "success", tip: { state, evidence: "x" } }).verdict, "no", state);
 });
 test("needsSync: the deploy tip red in a spec leg = tip-red; a publish-only (platform) failure = no", () => {
   const rg = () => alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"]));
   const spec = needsSync("pr", { fetch: false, readGit: rg(), request: tipApi(pagesRun(9, "failure"), [{ name: "ci / Selected specs (change-aware gate) (selected-1)", conclusion: "failure" }, { name: "deploy", conclusion: "skipped" }]) });
-  assert.equal(spec.verdict, "tip-red"); assert.match(spec.why, /Selected specs/);
+  assert.equal(spec.verdict, "tip-red");
+  assert.equal(spec.why, "pages.yml run 9 on 1421575a concluded failure on code: failed job(s) `ci / Selected specs (change-aware gate) (selected-1)`: do not sync onto a red tip; wait for the fix to land");
   assert.equal(exitCode(spec), 1);
   const platform = needsSync("pr", { fetch: false, readGit: rg(), request: tipApi(pagesRun(42880431465, "failure"), [{ name: "ci / CI", conclusion: "success" },
     { name: "deploy", conclusion: "failure", steps: [{ name: "Publish to Pages (retry)", conclusion: "failure" }, { name: "Pages publish failed (platform)", conclusion: "failure" }, { name: "Deploy verdict", conclusion: "failure" }] }]) });
   assert.equal(platform.verdict, "no", "run 42880431465 failed only in publish");
   const unread = needsSync("pr", { fetch: false, readGit: rg(), request: (p) => p.startsWith("actions/workflows/pages.yml") ? { error: "HTTP 502" } : { json: { workflow_runs: [] } } });
-  assert.equal(unread.verdict, "no"); assert.match(unread.note, /deploy tip state unreadable/);
+  assert.equal(unread.verdict, "no");
+  assert.equal(unread.note, "deploy tip state unreadable (pages.yml runs on " + DEPLOY + ": HTTP 502): tip-red cannot be detected");
   assert.equal(needsSync("pr", { fetch: false, offline: true, readGit: rg() }).deployTip, null, "offline reads no API");
+});
+// A `cancelled` newest run that already had a failed job was red before the cancel (2026-11-11 mirror outage).
+test("decideSync: cancelled + 1 failed job + tip moved = stale-red, and the why names the case", () => {
+  const d = decideSync({ behind: true, conflict: false, ci: "cancelled", failedJobs: 1, runStartedAt: T0, tipNewestAt: T1 });
+  assert.equal(d.verdict, "stale-red"); assert.match(d.why, /ci cancelled after 1 failed job\(s\)/);
+});
+test("decideSync: cancelled + 0 failed jobs = no (rule 8: a timeout until proven otherwise)", () => {
+  const d = decideSync({ behind: true, conflict: false, ci: "cancelled", failedJobs: 0, runStartedAt: T0, tipNewestAt: T1 });
+  assert.equal(d.verdict, "no"); assert.match(d.why, /0 failed jobs: a timeout until proven otherwise/);
+});
+test("decideSync: cancelled + failed job but the tip has not moved = no", () => {
+  const d = decideSync({ behind: true, conflict: false, ci: "cancelled", failedJobs: 2, runStartedAt: T1, tipNewestAt: T0 });
+  assert.equal(d.verdict, "no"); assert.match(d.why, /ci cancelled after 2 failed job\(s\) but the tip has not moved/);
+});
+test("decideSync: a failed-job count on a non-cancelled run changes nothing", () => {
+  assert.equal(decideSync({ behind: true, conflict: false, ci: "success", failedJobs: 3, runStartedAt: T0, tipNewestAt: T1 }).verdict, "no");
+  const d = decideSync({ behind: true, conflict: false, ci: "failure", runStartedAt: T0, tipNewestAt: T1 });
+  assert.equal(d.verdict, "stale-red"); assert.match(d.why, /^ci\.yml is red/);
+});
+
+const cancelledRun = { id: 9, path: ".github/workflows/ci.yml", status: "completed", conclusion: "cancelled", run_started_at: "2000-01-01T00:00:00Z" };
+const jobsApi = (pages) => (p) => {
+  if (p.startsWith("actions/workflows/ci.yml/runs")) return { json: { workflow_runs: [cancelledRun] } };
+  if (p.startsWith("actions/workflows/pages.yml/runs")) return { json: { workflow_runs: [] } }; // the deploy tip: no run, not red
+  const m = p.match(/^actions\/runs\/9\/jobs\?per_page=100&page=(\d+)$/);
+  assert.ok(m, p);
+  const page = pages[Number(m[1]) - 1];
+  return page.error ? page : { json: { jobs: page } };
+};
+test("needsSync: cancelled head with a failed job (second page) + newer tip = stale-red", () => {
+  const full = Array.from({ length: 100 }, (_, i) => ({ id: i, conclusion: "cancelled" }));
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: jobsApi([full, [{ conclusion: "failure" }, { conclusion: "success" }]]) });
+  assert.equal(v.verdict, "stale-red"); assert.equal(v.failedJobs, 1); assert.match(v.why, /cancelled after 1 failed job/);
+});
+test("needsSync: cancelled head with zero failed jobs = no", () => {
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: jobsApi([[{ conclusion: "cancelled" }, { conclusion: "success" }]]) });
+  assert.equal(v.verdict, "no"); assert.equal(v.failedJobs, 0); assert.match(v.why, /rule 8/);
+});
+test("needsSync: a jobs read error keeps `no` and says why", () => {
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: jobsApi([{ error: "HTTP 502" }]) });
+  assert.equal(v.verdict, "no"); assert.match(v.why, /jobs are unreadable \(HTTP 502\)/); assert.match(v.note, /unreadable/);
 });

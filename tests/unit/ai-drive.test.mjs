@@ -1128,6 +1128,13 @@ test("startCalm: full while launching, fades out by calmUntil, never for a car t
   assert.equal(A.attackOK({ ...zone, attackQ: 1, calm: 1 }), true, "a prime one is still on");
 });
 
+test("mistakeChance: composure only matters under pressure (AI-only, signed)", () => {
+  const cool = { consistency: 0.75, composure: 1 }, rattled = { consistency: 0.75, composure: -1 }, mid = { consistency: 0.75 };
+  assert.equal(A.mistakeChance(cool, 0), A.mistakeChance(rattled, 0), "unpressured: no effect");
+  assert.ok(A.mistakeChance(cool, 1) < A.mistakeChance(mid, 1));
+  assert.ok(A.mistakeChance(mid, 1) < A.mistakeChance(rattled, 1));
+});
+
 test("mistakeChance: rarer with consistency, commoner under pressure", () => {
   const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
   // W26 row 2: NORMAL (errMul 1.8) keeps the rate it had before the factor
@@ -1740,8 +1747,8 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const calls = { weather: 0, tyre: 0, air: 0, lateral: 0, yaw: 0 };
     const deps = { K, clamp, damp, aiT: mid,
       AiDrive: { ...A,
-        yawScale(...args) { calls.yaw++; return A.yawScale(...args); },
-        lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },
+        lateralScales(...args) { calls.yaw++; calls.lateral++; return A.lateralScales(...args); },   // normal controller: yaw + lateral from one call
+        lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },   // recovery modes
       gripMult() { calls.weather++; return weatherGrip; },
       tyres: { gripMul() { calls.tyre++; return tyreGrip; } },
       // X-mode's downforce cost reaches the AI's lateral envelope (verify-physics #11), never the yaw budget.
@@ -1967,4 +1974,31 @@ test("row 5: stallStep counts stationary live seconds and resets on motion or a 
   assert.equal(A.STALL_RETIRE_S, 60);
   assert.equal(A.stallStep(t, 15, 1 / 60, true), 0, "moving resets it");
   assert.equal(A.stallStep(30, 0, 1 / 60, false), 0, "a caution, the pits or a finished race resets it");
+});
+
+test("lateralScales / sbsLimits are bit-identical to the single-purpose functions (#4668)", () => {
+  const A = load();
+  const out = { yaw: 0, lat: 0 };
+  for (const speed of [0, 3, 40, 71.9, 90, -20]) for (const load of [0, 0.5, 0.9]) for (const grip of [0, 0.4, 1.1])
+    for (const aero of [0, 0.6, 1]) {
+      A.lateralScales(speed, load, grip, 0.98, 72, aero, out);
+      assert.ok(Object.is(out.yaw, A.yawScale(speed, load, grip, 0.98, 72)));
+      assert.ok(Object.is(out.lat, A.lateralScale(speed, load, grip, 0.98, 72, aero)));
+    }
+  const lim = { commitT: 0, ease: 0 };
+  for (const ctx of [null, { street: true }]) {
+    A.sbsLimits(ctx, lim);
+    assert.equal(lim.commitT, A.sbsCommitT(ctx));
+    assert.equal(lim.ease, A.sbsEase(ctx));
+  }
+});
+
+test("wantBoost: ERS deploy bias (#1566) moves only the 'rich' threshold, symmetric and AI-only", () => {
+  const ctx = (ersBias, energy) => ({ traits: { craft: 0.75, awareness: 0.7, experience: 0.75, consistency: 0.75, ersBias }, energy, kAhead60: 0.001, otActive: false, towCar: false, chaser: false, speed: 60 });
+  assert.equal(A.wantBoost(ctx(0, 0.52)), false, "neutral: 0.52 is not rich");
+  assert.equal(A.wantBoost(ctx(1, 0.52)), true, "an eager deployer calls 0.52 rich");
+  assert.equal(A.wantBoost(ctx(0, 0.58)), true, "neutral: 0.58 is rich");
+  assert.equal(A.wantBoost(ctx(-1, 0.58)), false, "a hoarder keeps 0.58");
+  assert.equal(A.wantBoost(ctx(0, 0.56)), A.wantBoost({ ...ctx(0, 0.56), traits: { ...ctx(0, 0.56).traits, ersBias: undefined } }), "absent = neutral");
+  assert.equal(A.traits({}).ersBias, 0);
 });

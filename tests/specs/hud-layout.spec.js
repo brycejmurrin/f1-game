@@ -1854,7 +1854,11 @@ test.describe("unrestricted manual widgets", () => {
     await page.locator("#pm-open-display").click(); await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     const ids = await page.locator("#hud-arrange-element option").evaluateAll(es => es.map(e => e.value));
-    expect(ids).toHaveLength(19);
+    // 19 widgets; on touch the three the buttons carry (OVERTAKE / AERO / BRAKE BIAS) have no box and are not offered (#5256).
+    const offered = await page.evaluate(() => ({ all: HudLayout.ELEMENTS.length,
+      want: HudLayout.ELEMENTS.length - (document.body.classList.contains("desktop") ? 0 : HudArrange.TOUCH_CARRIED.length) }));
+    expect(offered.all).toBe(19);
+    expect(ids).toHaveLength(offered.want);
     for (const id of ids) {
       await page.locator("#hud-arrange-element").selectOption(id);
       await page.locator("#hud-arrange-move").focus();

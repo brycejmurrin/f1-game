@@ -55,10 +55,45 @@ export function summariseFrameMs(samples) {
   };
 }
 
-/** @returns {{ regressions: string[], report: object }} */
-export function compareToBaseline(measured, baseline) {
+/** What a frame time depends on beyond the scenario: two runs that differ in
+ *  any of these measure different machines, so a ratio between them is noise. */
+export const ENV_KEYS = ["renderer", "api", "adapter", "browser", "viewport"];
+
+/** The run's environment in the compared shape: browser by name and major
+ *  version, viewport as "WxH@dpr"; a field the page could not read is null. */
+export function envOf(raw) {
+  const r = raw || {};
+  const str = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const m = str(r.browserVersion) && /^(\d+)/.exec(r.browserVersion);
+  const vp = r.viewport && r.viewport.width > 0 && r.viewport.height > 0
+    ? `${r.viewport.width}x${r.viewport.height}@${r.viewport.dpr || 1}` : str(r.viewport);
+  return {
+    renderer: str(r.renderer), api: str(r.api), adapter: str(r.adapter),
+    browser: str(r.browser) ? str(r.browser) + (m ? " " + m[1] : "") : null, viewport: vp,
+  };
+}
+
+/** Field-by-field mismatches between this run's env and the baseline's; a
+ *  field missing on either side is a mismatch (unknown is not "the same"). */
+export function envMismatches(env, baselineEnv) {
+  const out = [];
+  for (const k of ENV_KEYS) {
+    const a = env && env[k], b = baselineEnv && baselineEnv[k];
+    if (a == null) out.push(`${k}: this run records none`);
+    else if (b == null) out.push(`${k}: the baseline records none`);
+    else if (a !== b) out.push(`${k}: ${a} vs baseline ${b}`);
+  }
+  return out;
+}
+
+/** outcome: "pass" | "regressed" | "not-comparable" (a different renderer,
+ *  adapter, browser or viewport — or one side unrecorded — compares nothing).
+ *  @returns {{ outcome: string, mismatches: string[], regressions: string[], deltas: object }} */
+export function compareToBaseline(measured, baseline, env) {
   const regressions = [];
-  const report = { scenario: SCENARIO, measured, baseline: baseline.metrics, deltas: {} };
+  const mismatches = envMismatches(env, baseline.env);
+  const report = { scenario: SCENARIO, measured, baseline: baseline.metrics, env: env || null, baselineEnv: baseline.env || null, deltas: {}, mismatches };
+  if (mismatches.length) { report.outcome = "not-comparable"; report.regressions = regressions; return report; }
 
   const ratio = (key) => {
     const b = baseline.metrics[key];
@@ -93,6 +128,7 @@ export function compareToBaseline(measured, baseline) {
   }
 
   report.regressions = regressions;
+  report.outcome = regressions.length ? "regressed" : "pass";
   return report;
 }
 

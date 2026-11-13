@@ -23,7 +23,15 @@ A PR that ends `cancelled` twice with zero failures:
 When to sync is AGENTS.md §Git branch & deploy. `node tools/ci/needs-sync.mjs <branch>` answers it
 (`= sync needed: conflict | stale-red | tip-red | no`) and `sync-pr` refuses `no` (exit 4) and `tip-red` (exit 5:
 the deploy tip is red on code, so a sync would import the red; the gate's `base` row holds merges until the fix lands,
-#5425). Only the `deploy:red` fixer's own branch syncs onto a red tip, with `--onto-red-tip`.
+#5425). Only the `deploy:red` fixer's own branch syncs onto a red tip, with `--onto-red-tip`. A newest run that
+ended `cancelled` after at least one job concluded `failure` counts as red for `stale-red`; with zero failed jobs it
+stays `no` (rule 8).
+
+The fixer is never held, and needs no click from Bryce: branch from the red tip (or `sync-pr --onto-red-tip`) so the
+head CONTAINS the red commit, add `deploy:red` to the PR, then flip ready and add `land` in that order. `base` passes
+on the label plus that ancestry, and the PR's own green CI on top of the red is the proof. An infrastructure red (a
+runner, mirror or setup failure) holds the same way and clears on a re-run of the train, on the 6-hourly `pages.yml`
+cron, or through that same route with any PR whose CI is green on the tip.
 
 Merely behind is never a reason: merge-gate's `distance` row and `land.yml`'s AUTO-SYNC left on 2026-11-03 (gen and
 ratchets run on the real merge result).

@@ -96,10 +96,11 @@ async function rig(t, ls = {}) {
     ${SRC.streams}
     return { createInstancedBatch, updateInstances, _writeInstanceMatrices, _mirOf, _coAppend, _coRuns, ensureStream, wrapStream, uploadStream,
       materialFor, resetRecs, drawList, usage: _instUsage, usageOf: _instUsageOf, aiOn: _aiInst,
-      _coDrop, _dropQueue, flushDropped, warm: (p) => { _warmPending = p; } };`);
+      _coDrop, _dropQueue, flushDropped, warm: (p) => { _warmPending = p; }, instShow: _instShow };`);
   const R = mk(THREE, TSL, scene, renderer, camera, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, globalThis);
   const bytes = (fn) => { fg.reset(); fn(); return fg.bytes.bufferSubData; };
-  const render = () => renderer.render(scene, camera);
+  // #3104 F3: tlx.js lists the visible registry members under instRoot at every visibility settle; so does this render.
+  const render = () => { R.instShow(); renderer.render(scene, camera); };
   return { fg, renderer, scene, camera, R, lit, bytes, render };
 }
 

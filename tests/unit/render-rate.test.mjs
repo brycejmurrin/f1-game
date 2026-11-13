@@ -154,13 +154,14 @@ test("physics is untouched: the fixed-step loop runs before the gate and the gat
   const step = body.indexOf("update(PHYS_DT)");
   const paused = body.indexOf("if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active())");
   const pausedEnd = body.indexOf("  replayBuf.onTick(", paused);
-  const pausedGate = body.indexOf("RenderRate.gate(");
-  const gate = body.indexOf("RenderRate.gate(", pausedGate + 1);
+  const pausedGate = body.indexOf("RenderRate.settle(");   // #5049: paused SETTINGS has its own 20 Hz cadence
+  const gate = body.indexOf("RenderRate.gate(");
   assert.ok(paused >= 0 && pausedGate > paused && pausedGate < pausedEnd && pausedEnd < step,
     "the early gate is isolated inside the solo paused branch, which returns before physics");
   assert.match(body.slice(pausedGate, pausedEnd), /return;[^\n]*\n  }/);
   assert.ok(step > 0 && gate > step, "update(PHYS_DT) precedes the racing render gate");
-  assert.equal(g.split("RenderRate.gate(").length - 1, 2, "only paused Settings and racing render gates");
+  assert.equal(g.split("RenderRate.gate(").length - 1, 1, "only the racing render gate");
+  assert.equal(g.split("RenderRate.settle(").length - 1, 1, "only the paused Settings cadence");
   const block = body.slice(gate, body.indexOf("\n}\n", gate));
   assert.ok(!/update\(|physAcc|stepPhys/.test(block), "gated block holds no physics");
   assert.match(block, /render\(/);
@@ -191,4 +192,24 @@ test("force draws a live preview, flushes skipped time and restarts half-frame p
   assert.equal(R.gate(1 / 60, 1000 / 60, false, true), true);
   assert.equal(R.dt(), 2 / 60); assert.equal(R.ms(), 2000 / 60);
   assert.equal(R.state().drawn, 3); assert.equal(R.state().skipped, 2);
+});
+
+test("#5049: paused SETTINGS draws at 20 Hz on a 60 Hz phone, first frame at once, no time lost", () => {
+  const R = load({ mobile: true });
+  let draws = 0, paid = 0;
+  for (let i = 0; i < 120; i++) {
+    if (R.settle(1 / 60, 1000 / 60, false)) { draws++; paid += R.dt(); }
+    if (i === 0) assert.equal(draws, 1, "opening the sheet draws at once");
+  }
+  assert.ok(draws <= 41 && draws >= 39, "two seconds at 20 Hz, got " + draws);
+  // Everything after the last drawn frame is still banked; up to there every dt was paid.
+  assert.ok(Math.abs(paid - 2) < 3 / 60, "skipped dt is carried into the drawn frames: " + paid);
+  const R2 = load({ mobile: true });
+  for (let i = 0; i < 10; i++) assert.equal(R2.settle(1 / 60, 1000 / 60, true), true, "an XR session is never gated");
+  const R3 = load({ mobile: true, store: { "apex26.renderRate": "off" } });
+  for (let i = 0; i < 10; i++) assert.equal(R3.settle(1 / 60, 1000 / 60, false), true, "renderRate off never skips");
+  const R4 = load({ mobile: true });
+  R4.settle(1 / 60, 1000 / 60, false); assert.equal(R4.settle(1 / 60, 1000 / 60, false), false);
+  R4.force(1 / 60, 1000 / 60);
+  assert.equal(R4.settle(1 / 60, 1000 / 60, false), true, "back from a tuner (force), the sheet draws at once");
 });

@@ -60,6 +60,11 @@ const FORMAT = "apex26-settings-v1";
 // went red and the release train never fired) — and each time the question was
 // asked at the wrong moment. Asked at the ROW, it is asked when the key is
 // added.
+//
+// perDevice = the value belongs to the device: an UNSET key exports as null (collect), and a file
+// saved on the other kind of device (file.device.desktop) never writes it (applySettings, #5005).
+// deviceBound = the renderer pins (backend, forced GL, XR backend): only that second half of perDevice.
+// noImport = exported for context, never written back by LOAD SETTINGS (#5032).
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
   { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
@@ -129,13 +134,13 @@ const SPEC = [
   { k: "gfxGodrays", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js GOD-RAYS (only \"0\" is off; game.js zeroes po.godray + po.lampVol)", oneOf: ["0", "1"] },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
-  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/render/renderer-boot.js (unset = TLX when a GPU adapter resolves, else GLX — skips three.webgpu)" },
-  { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)" },
+  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/render/renderer-boot.js (unset = TLX when a GPU adapter resolves, else GLX — skips three.webgpu)", deviceBound: true },
+  { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)", deviceBound: true },
   { k: "tlxMaterialDetail", lane: "raw", group: "display", def: "4", src: "js/render/three/tlx.js (manual reload)", oneOf: ["4", "8"] },
   { k: "tlxSharpenLimit", lane: "raw", group: "display", def: "0", src: "js/render/three/tlx-post.js (prototype)", oneOf: ["0", "1"] },
   { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   { k: "xr", lane: "raw", group: "display", def: "0", src: "js/xr/xr-opts.js", oneOf: ["0", "1"] },
-  { k: "xrBackend", lane: "raw", group: "display", def: "webgl2", src: "js/xr/xr-opts.js", oneOf: ["webgl2", "webgpu"] },
+  { k: "xrBackend", lane: "raw", group: "display", def: "webgl2", src: "js/xr/xr-opts.js", oneOf: ["webgl2", "webgpu"], deviceBound: true },
   { k: "xrInput", lane: "raw", group: "display", def: "controllers", src: "js/xr/xr-opts.js", oneOf: ["controllers", "existing"] },
   // HUD (js/game.js)
   { k: "hudProfile", lane: "json", group: "hud", def: "standard", oneOf: ["minimal", "standard", "broadcast"], src: "js/game.js" },
@@ -160,6 +165,7 @@ const SPEC = [
   { k: "helmetVisorRunoff", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRunoff", oneOf: ["normal", "slow", "fast"] },
   { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
+  { k: "pitEntryShot", lane: "json", group: "camera", def: true, src: "js/camera/extra-rigs.js PIT ENTRY SHOT (feel.js row; #4745)" },
   { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },
   { k: "camTuneGlobal", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js global baseline layered under every mode (same knob ids as camTune)" },
   { k: "camComfort", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
@@ -258,6 +264,11 @@ const SPEC = [
   { k: "homeScene", lane: "json", group: "appearance", def: "photo", src: "js/ui/appearance-studio.js", oneOf: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"] },
   { k: "backgroundMotion", lane: "json", group: "appearance", def: "ambient", src: "js/ui/appearance-studio.js", oneOf: ["still", "ambient"] },
   { k: "homeCamera", lane: "json", group: "appearance", def: "side", src: "js/ui/appearance-studio.js", oneOf: ["auto", "hero", "front", "side", "rear"] },
+  // GARAGE › GARAGE / CREW / LIGHTING looks (#5023). The readers validate on load too; oneOf mirrors
+  // GaragePrims LOOKS, GarageCrew.LOOKS and GarageScene.MOODS (garage bundle is lazy, so the lists are pinned by test).
+  { k: "garageLook", lane: "raw", group: "appearance", def: "stock", src: "js/garage/scene-prims.js setLook (GARAGE row)", oneOf: ["stock", "studio", "carbon", "flood", "workshop", "porcelain", "heritage", "endurance", "rainready", "qualify"] },
+  { k: "crewLook", lane: "raw", group: "appearance", def: "classic", src: "js/garage/scene-crew.js setLook (CREW row)", oneOf: ["classic", "sculpted", "pitstop", "workshop", "welcome"] },
+  { k: "garageMood", lane: "raw", group: "appearance", def: "shipped", src: "js/garage/scene.js setMood (LIGHTING row)", oneOf: ["shipped", "broadcast", "night", "showroom", "daylight", "inspection", "goldenhour", "endurance", "podium", "rain", "neon"] },
   { k: "appearanceProfiles", lane: "json", group: "appearance", def: [], src: "js/ui/appearance-studio.js", normalize: (v) => Array.isArray(v) ? (!v.length ? [] : typeof AppearanceStudio !== "undefined" ? AppearanceStudio.normalizeProfiles(v) : undefined) : undefined },
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
@@ -275,6 +286,8 @@ const SPEC = [
     // Self-contained (EnergyPlan.POLICIES' three names): settings-export loads without the race modules.
     normalize: (v) => (Array.isArray(v) && v.length === 3 && v.every((p) => p === "manual" || p === "deploy" || p === "save") ? v.slice() : undefined) },
   { k: "damageHandling", lane: "json", group: "driving", def: false, src: "js/race/race-settings.js DAMAGE row → DamageHandling.setEnabled (#1578)" },
+  { k: "wheelState", lane: "raw", group: "driving", def: "0", oneOf: ["0", "1"], src: "js/physics/wheel-state.js" },
+  { k: "wheelAssist", lane: "raw", group: "driving", def: "off", oneOf: ["off", "medium", "full"], src: "js/physics/wheel-state.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
@@ -316,7 +329,9 @@ const SPEC = [
   { k: "keys", lane: "json", group: "controls", def: null, src: "js/input/input.js KEY_ACTIONS", changed: () => !(typeof Input !== "undefined" && Input.keysAreDefault && Input.keysAreDefault()) },
   { k: "pad", lane: "json", group: "controls", def: null, src: "js/input/input.js PAD_ACTIONS", changed: () => !(typeof Input !== "undefined" && Input.padsAreDefault && Input.padsAreDefault()) },
   // METRICS PANEL (js/perf/metrics-overlay.js)
-  { k: "metrics", lane: "raw", group: "metrics", def: null, src: "js/perf/metrics-overlay.js (null = off)" },
+  // noImport: a per-device diagnostic. ON loads the whole agent surface at every boot (#5032), so a
+  // friend's file must not switch it on; it is exported for context and never written back.
+  { k: "metrics", lane: "raw", group: "metrics", def: null, src: "js/perf/metrics-overlay.js (null = off)", noImport: true },
   { k: "metricsPage", lane: "raw", group: "metrics", def: "gov", src: "js/perf/metrics-overlay.js" },
   { k: "metricsPos", lane: "raw", group: "metrics", def: "left", src: "js/perf/metrics-overlay.js" },
   { k: "metricsSize", lane: "raw", group: "metrics", def: "s", src: "js/perf/metrics-overlay.js" },
@@ -528,7 +543,9 @@ function applyTtlb(bag) {
 // holds career saves, lap records and OAuth tokens under the same namespace,
 // and nothing outside these five shapes is ever read.
 const GARAGE_FORMAT = "apex26-garage-v1";
-const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets."];   // + ".custom." under livery
+// careerSetup.<flavour>.<slot>.<team> is a career's own setup sheet (#5036, SetupTune.keyFor):
+// it travels with the garage, and only applies where the slot holds the career whose seed it carries.
+const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets.", "careerSetup."];   // + ".custom." under livery
 const GARAGE_SINGLES = ["customTeam", "customLogo", "team", "driver"];
 const GARAGE_EXCLUDED = "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts";
 // A key is a garage key if it is one of the four singles or begins with a
@@ -560,31 +577,53 @@ function typeOk(v, def) {
   if (typeof def === "object") return v !== null && typeof v === "object";
   return typeof v === typeof def;
 }
+// Which kind of device this page runs on, read the way collect() writes file.device.desktop.
+function thisDesktop(G) {
+  try { if (document.body.classList) return document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
+  return G && G.gfx && typeof G.gfx.isMobile === "boolean" ? !G.gfx.isMobile : null;
+}
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
   // A file is player input: a non-object `settings` or group is "nothing here",
   // never a value to assign into (strict mode throws on a primitive, #2191).
   const isPlain = (o) => o !== null && typeof o === "object" && !Array.isArray(o);
-  const groups = isPlain(file.settings) ? file.settings : {};
+  const groups = isPlain(file.settings) ? Object.assign({}, file.settings) : {};
   // Legacy: REDUCE MOTION lived under appearance before ACCESSIBILITY.
   if (isPlain(groups.appearance) && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
       && (groups.a11y == null || isPlain(groups.a11y))
       && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
-    (groups.a11y ||= {}).motion = groups.appearance.motion;
+    groups.a11y = Object.assign({}, groups.a11y, { motion: groups.appearance.motion });
   }
-  let applied = 0, skipped = 0, failed = 0;
+  // A STEERING SHEET FROM AN OLDER SCHEMA (#5004): the boot migration never runs over imported values (this
+  // device is already at STEER_SCHEMA), so the file's own version runs the same ladder here first: a v2 PACE 3
+  // is 0.750 of ground speed there and would read as 0.527 on today's grid.
+  if (isPlain(groups.steering) && typeof SteerTuning !== "undefined" && SteerTuning.migrateValues) {
+    groups.steering = SteerTuning.migrateValues(groups.steering.steerSchema, groups.steering);
+  }
+  // A FILE FROM THE OTHER KIND OF DEVICE (#5005): a desktop's renderer, quality and resolution pinned on the
+  // phone boot desktop graphics. Every perDevice row stays this device's own; the receipt counts them skipped.
+  const here = thisDesktop(G), there = isPlain(file.device) ? file.device.desktop : null;
+  const crossDevice = typeof here === "boolean" && typeof there === "boolean" && here !== there;
+  const writes = [];
+  let skipped = 0;
   for (const row of SPEC) {
     // A migration VERSION is context in the file and must never be written
     // back: an older number would re-run migrations that have already run.
     if (row.info) continue;
     const g = groups[row.group];
     if (!isPlain(g) || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
+    // An unset (null) value is nothing to keep out, so it is not a skip either.
+    if (row.noImport || (crossDevice && (row.perDevice || row.deviceBound))) { if (g[row.k] !== null) skipped++; continue; }
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
     if ((!row.freeShape && !typeOk(v, def)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
+    writes.push([row, v]);
+  }
+  let applied = 0, failed = 0;
+  for (const [row, v] of writes) {
     try {
       // A write storage refused (full quota, private mode) is not APPLIED:
       // counting it reloaded the page into the values it had lost.
@@ -720,7 +759,7 @@ function garageValue(k, v) {
     }
     return out;
   }
-  if (k.indexOf("setup.") === 0) {
+  if (k.indexOf("setup.") === 0 || k.indexOf("careerSetup.") === 0) {
     // SetupTune clamps each field on read; here only the size is bounded.
     return v && typeof v === "object" && !Array.isArray(v) && JSON.stringify(v).length <= 4096 ? v : undefined;
   }
@@ -900,6 +939,15 @@ function collectCareer() {
   return { format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
            excluded: CAREER_EXCLUDED, count: n, careers: out };
 }
+// CareerBackup is lazy (LAZY_CAREER_UI, #4748): the CAREER FILE buttons await
+// it so futureCareerSlot / poisonedCareerMoney never run without their gate.
+function careerReady() {
+  if (typeof CareerBackup !== "undefined") return Promise.resolve(true);
+  return typeof CareerUI !== "undefined" && CareerUI.ensureBackup ? CareerUI.ensureBackup() : Promise.resolve(false);
+}
+// A snapshot armed before the bundle landed holds no revisions: take it at apply time.
+const loadCareer = (file, revisions) => careerReady().then(() => applyCareer(file,
+  revisions && Object.keys(revisions.expectedRevisions).length ? revisions : undefined));
 // Freeze all possible destinations before opening the asynchronous picker.
 function careerRevisions() {
   const expectedRevisions = {};
@@ -1033,7 +1081,8 @@ function create(G) {
       b.textContent = `${label} — SAVING…`;
       try {
         tick();
-        const file = make();
+        let file = make();
+        if (file && typeof file.then === "function") file = await file;   // CAREER FILE waits for CareerBackup
         await download(file, name(file));
         const n = file.changed ? `${file.changed.length} changed` : `${file.count} keys`;
         flash(b, label, `SAVED (${n})`);
@@ -1094,6 +1143,7 @@ function create(G) {
   function mount() {
     const host = document.getElementById("pm-panel-files");
     if (!host || document.getElementById("pm-settings-file")) return;
+    careerReady();   // warm CareerBackup before the first CAREER FILE tap
     if (!leaveSubscribed && typeof SettingsNav !== "undefined" && SettingsNav.onLeave) {
       SettingsNav.onLeave((page) => { if (page === "files") { disarm(); ++pickVersion; } });
       leaveSubscribed = true;
@@ -1207,7 +1257,7 @@ function create(G) {
         collectGarage, () => `apex26-garage-${stamp()}.json`),
       groupHead("CAREER FILE"),
       saveBtn("pm-career-save", "SAVE CAREER FILE", "All six career slots and the active slot. Settings and garage builds are excluded.",
-        collectCareer, () => `apex26-career-${stamp()}.json`));
+        () => careerReady().then(collectCareer), () => `apex26-career-${stamp()}.json`));
     const restoreHelp = document.createElement("p");
     restoreHelp.className = "adv-help";
     restoreHelp.setAttribute("data-help", "keep");
@@ -1221,7 +1271,7 @@ function create(G) {
         applyGarage, "THE GARAGE", null, GARAGE_MAX_BYTES),
       groupHead("CAREER FILE"),
       loadBtn("pm-career-load", "LOAD CAREER FILE", "Replace career slots only, with protection against changes made after confirmation.",
-        applyCareer, "CAREER SAVES", careerRevisions,
+        loadCareer, "CAREER SAVES", careerRevisions,
         typeof CareerBackup !== "undefined" ? CareerBackup.MAX_BYTES : 5 * 1024 * 1024));
     sections[2].append(shareNote, shareIn, shareBtn, shareStatus);
     const scope = document.createElement("details");
@@ -1342,7 +1392,8 @@ function create(G) {
     return wrap;
   }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+  // #4798 gate (after SaveHealth's)
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(mount) : mount()), { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");
   _ui = { collect: (mode) => collect(mode, G), collectGarage, collectCareer,

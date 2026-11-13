@@ -36,22 +36,27 @@ export function codeRedJobs(jobs) {
  * @param {object[]|null} jobs that run's jobs (latest attempt); null when not read (a green run needs none)
  * A failed run is "platform" ONLY when the marker step failed and no other job is red; a failed run with no red job
  * at all (a startup_failure with no jobs — a pages.yml syntax error — or every job cancelled) is a code red: the
- * row fails closed. `runAt` is the run's created_at, so an escape label can be bound to this red (merge-gate base).
- * @returns {{ state: "green"|"code-red"|"platform"|"none", runId: number|null, runAt: string|null, jobs: string[], evidence: string }}
+ * row fails closed. `runAt` is the run's created_at, so an escape label can be bound to this red (merge-gate base);
+ * `sha` is the commit the run tested, so a fixer's head can be shown to contain it (merge-gate base, the proof route).
+ * An INFRASTRUCTURE red (a runner, mirror or setup failure) is not told apart from a code red: the jobs API names a
+ * failed step, not its cause, and a broken lockfile fails the same setup step. It holds like any red and clears three
+ * ways without a code change: a re-run of the train (the latest attempt is what is read), the 6-hourly pages.yml
+ * cron (a tip that never published is "new" to it), or a fixer-labelled PR whose CI is green on top of the tip.
+ * @returns {{ state: "green"|"code-red"|"platform"|"none", runId: number|null, sha: string|null, runAt: string|null, jobs: string[], evidence: string }}
  */
 export function tipState(run, jobs = null) {
-  if (!run) return { state: "none", runId: null, runAt: null, jobs: [], evidence: "no completed pages.yml run on the deploy branch" };
-  const id = run.id ?? null, sha = String(run.head_sha || "").slice(0, 8), runAt = run.created_at || null;
+  if (!run) return { state: "none", runId: null, sha: null, runAt: null, jobs: [], evidence: "no completed pages.yml run on the deploy branch" };
+  const id = run.id ?? null, full = String(run.head_sha || "").toLowerCase() || null, sha = (full || "").slice(0, 8), runAt = run.created_at || null;
   const at = `pages.yml run ${id} on ${sha || "?"}`;
-  if (!RED_RUN.has(run.conclusion)) return { state: "green", runId: id, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion || "?"}` };
+  if (!RED_RUN.has(run.conclusion)) return { state: "green", runId: id, sha: full, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion || "?"}` };
   const red = codeRedJobs(jobs);
   if (!red.length && platformStepFailed(jobs)) {
-    return { state: "platform", runId: id, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion}, not on code: only job \`${DEPLOY_JOB}\` failed, at step "${PLATFORM_STEP}" (Pages side)` };
+    return { state: "platform", runId: id, sha: full, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion}, not on code: only job \`${DEPLOY_JOB}\` failed, at step "${PLATFORM_STEP}" (Pages side)` };
   }
-  if (!red.length) return { state: "code-red", runId: id, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion} with no job red and no Pages-side marker (${(jobs || []).length} job(s) listed): counted as code` };
+  if (!red.length) return { state: "code-red", runId: id, sha: full, runAt, jobs: [], evidence: `${at} concluded ${run.conclusion} with no job red and no Pages-side marker (${(jobs || []).length} job(s) listed): counted as code` };
   const names = red.map((j) => j.name);
   const shown = names.slice(0, 3).map((n) => `\`${n}\``).join(", ") + (names.length > 3 ? ` and ${names.length - 3} more` : "");
-  return { state: "code-red", runId: id, runAt, jobs: names, evidence: `${at} concluded ${run.conclusion} on code: failed job(s) ${shown}` };
+  return { state: "code-red", runId: id, sha: full, runAt, jobs: names, evidence: `${at} concluded ${run.conclusion} on code: failed job(s) ${shown}` };
 }
 
 /** Run conclusions that say nothing about the tip (a cancelled or skipped train): the read looks past them. */

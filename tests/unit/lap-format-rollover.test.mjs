@@ -45,7 +45,7 @@ test("telemetry signed() takes the sign from the rounded value", () => {
 });
 
 test("the metrics overlay clock rounds before it splits", () => {
-  const fmtTime = evalFn(fnSource(read("js/perf/metrics-overlay.js"), "function fmtTime(t)"));
+  const fmtTime = evalFn(fnSource(read("js/perf/metrics-panel.js"), "function fmtTime(t)"));
   assert.equal(fmtTime(119.9996), "2:00.000");
   assert.equal(fmtTime(59.9996), "1:00.000");
   assert.equal(fmtTime(83.456), "1:23.456");

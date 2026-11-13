@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
   configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict,
-  baseVerdict, BASE_ESCAPE_LABELS,
+  baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
 import { PLATFORM_STEP as DISPATCH_PLATFORM_STEP, platformFailure } from "../../tools/ci/dispatch.mjs";
@@ -77,8 +77,8 @@ test("configVerdict: a diff touching a config path needs `config-ok` last added 
   assert.equal(CONFIG_LABEL, "config-ok");
   for (const p of [".claude/hooks/bash-guard.sh", ".claude/settings.json", ".github/workflows/dispatch.yml", ".githooks/pre-commit", "./.claude/hooks/x.py",
     ".claude/settings.local.json", "tools/ci/merge-gate.mjs", "tools/ci/lib/provenance.mjs", ".github/actions/setup/action.yml", ".mcp.json", "tools/hooks/readonly-bash.sh", "tools/mcp/apex-extras.mjs",
-    "tools/lib/generated-paths.mjs", "package.json", ".cursor/hooks.json", ".codex/hooks.json", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".github/ISSUE_TEMPLATE/task.yml"]) assert.equal(isConfigPath(p), true, p);
-  for (const p of [".claude/skills/steward/SKILL.md", ".github/labels.json", "js/game.js", ".claude/rules/claude-config.md", "desktop/package.json", "tools/lib/cli-args.mjs"]) assert.equal(isConfigPath(p), false, p);
+    "tools/lib/generated-paths.mjs", "package.json", ".cursor/hooks.json", ".codex/hooks.json", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".github/ISSUE_TEMPLATE/task.yml", "tools/lib/cli-args.mjs", "tools/gen/gen-test-groups.mjs"]) assert.equal(isConfigPath(p), true, p);
+  for (const p of [".claude/skills/steward/SKILL.md", ".github/labels.json", "js/game.js", ".claude/rules/claude-config.md", "desktop/package.json", "tools/lib/git-run.mjs"]) assert.equal(isConfigPath(p), false, p);
   assert.deepEqual(filePaths([{ filename: "docs/TESTING.md", previous_filename: ".claude/hooks/bash-guard.sh" }, { filename: "js/a.js" }]), ["docs/TESTING.md", ".claude/hooks/bash-guard.sh", "js/a.js"], "a rename counts by both names");
   assert.deepEqual(configFiles(["docs/a.md", ".githooks/pre-push", "js/a.js"]), [".githooks/pre-push"]);
   const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z";
@@ -149,13 +149,17 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   assert.deepEqual([configLabelKind(ev("config-ok", T1)), configLabelKind(agent(T1)), configLabelKind(agent(T1, { event: "unlabeled" })), configLabelKind(noField)], ["owner", "agent", null, null]);
 });
 
-test("PROTECTED_CONFIG_PATH covers every tools/ci module the gate loads (a module's top level runs at import)", () => {
+test("PROTECTED_CONFIG_PATH covers every module in the gate's import closure, inside tools/ci/ and outside it (#5467; a module's top level runs at import)", () => {
   const seen = new Set(gateClosure(ROOT));   // the same walk the gate receipt hashes (tools/lib/gate-receipt.mjs)
   assert.ok(seen.has("tools/ci/lib/provenance.mjs"), "provenance is in the closure");
-  const gaps = [...seen].filter((f) => isConfigPath(f) && !isProtectedConfigPath(f));
-  assert.deepEqual(gaps, [], "a gate module an agent's config-ok could approve");
   assert.ok(seen.has("tools/ci/github-api.mjs") && seen.size >= 8, [...seen].join(", "));
+  for (const f of ["tools/gen/gen-test-groups.mjs", "tools/lib/cli-args.mjs", "tools/lib/gate-receipt.mjs"]) assert.ok(seen.has(f), `${f} is in the closure`);
+  const notConfig = [...seen].filter((f) => !isConfigPath(f));
+  assert.deepEqual(notConfig, [], "a gate module a PR could change with no config-ok at all");
+  const notProtected = [...seen].filter((f) => !isProtectedConfigPath(f));
+  assert.deepEqual(notProtected, [], "a gate module an agent's config-ok could approve");
   for (const f of seen) if (isProtectedConfigPath(f)) assert.equal(isConfigPath(f), true, `${f}: protected implies config`);
+  assert.equal(isConfigPath("tools/lib/cli-args.mjs.bak"), false, "anchored: a sibling file is not swept in");
 });
 
 test("configPushState: config-ok binds to the pushes made before it; a later push touching a config path needs a fresh label", () => {
@@ -280,10 +284,13 @@ function fakes() {
   const calls = [];
   // The deploy tip's newest completed pages.yml run (the base row, #5425): green unless a case says otherwise.
   const pages = { runs: [{ id: 800, head_sha: TIP, status: "completed", conclusion: "success" }], jobs: [] };
+  // The fixer's proof (compare <red commit>...<head>): the head does not contain the red commit unless a case says so.
+  const compare = { status: "diverged", error: null }, compared = [];
   const request = (p) => {
     if (p === "pulls/7") return { json: pull };
     if (p.startsWith("actions/workflows/pages.yml/runs?branch=deploy-x&status=completed")) return { json: { workflow_runs: pages.runs } };
     if (p.startsWith(`actions/runs/${pages.runs[0]?.id}/jobs?filter=latest`)) return { json: { jobs: pages.jobs } };
+    if (p === `compare/${pages.runs[0]?.head_sha}...${HEAD}`) { compared.push(p); return compare.error ? { error: compare.error } : { json: { status: compare.status } }; }
     if (p.startsWith("issues/7/events")) return { json: events };
     if (p.startsWith("pulls/7/files")) return { json: files };
     if (p === "branches/deploy-x") return { json: { commit: { sha: TIP } } };
@@ -293,7 +300,7 @@ function fakes() {
     return { error: `unexpected ${p}` };
   };
   const localMerge = (a) => { calls.push(a); return { ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" } }; };
-  return { pull, checks, runs, prRuns, events, files, calls, pages, deps: { request, root: "/nowhere", localMerge } };
+  return { pull, checks, runs, prRuns, events, files, calls, pages, compare, compared, deps: { request, root: "/nowhere", localMerge } };
 }
 
 test("evaluate: all rows in order; each failing row refuses on its own; the local rows wait for an open PR; API errors are errors, not rows", () => {
@@ -1388,6 +1395,7 @@ const JOBS_42880431465 = [
     { name: "Pages publish failed (platform)", conclusion: "failure" }, { name: "Deploy verdict", conclusion: "failure" }] },
   { name: "Live shell matches the published commit and build", conclusion: "skipped" },
 ];
+const RED_EVIDENCE = "pages.yml run 9 on 1421575a concluded failure on code: failed job(s) `ci / Selected specs (change-aware gate) (packed-2, tests/specs/lighting-ab.spec.js)`, `ci / CI`";
 const SPEC_RED = [{ name: "ci / Selected specs (change-aware gate) (packed-2, tests/specs/lighting-ab.spec.js)", conclusion: "failure" },
   { name: "ci / CI", conclusion: "failure" }, { name: "deploy", conclusion: "skipped", steps: [] }];
 
@@ -1398,11 +1406,12 @@ test("deploy tip (#5425): a spec-leg red is code; run 42880431465 (publish only)
   assert.equal(platformStepFailed(JOBS_42880431465), true);
   const real = tipState(RUN_42880431465, JOBS_42880431465);
   assert.equal(real.state, "platform", real.evidence);
-  assert.match(real.evidence, /pages\.yml run 42880431465 on 1421575a concluded failure, not on code: only job `deploy` failed, at step "Pages publish failed \(platform\)"/);
+  assert.equal(real.evidence, 'pages.yml run 42880431465 on 1421575a concluded failure, not on code: only job `deploy` failed, at step "Pages publish failed (platform)" (Pages side)');
   const spec = tipState({ ...RUN_42880431465, id: 9 }, SPEC_RED);
   assert.equal(spec.state, "code-red");
   assert.deepEqual(spec.jobs, [SPEC_RED[0].name, "ci / CI"]);
-  assert.match(spec.evidence, /pages\.yml run 9 on 1421575a concluded failure on code: failed job\(s\) `ci \/ Selected specs/);
+  assert.equal(spec.evidence, RED_EVIDENCE);
+  assert.equal(spec.sha, RUN_42880431465.head_sha, "the commit the red run tested: what a fixer's head must contain");
   const refusal = [{ name: "deploy", conclusion: "failure", steps: [{ name: TIP_PLATFORM_STEP, conclusion: "skipped" }, { name: "Confirm this commit may still be published (under the Pages lock)", conclusion: "failure" }] }];
   assert.equal(tipState(RUN_42880431465, refusal).state, "code-red", "a refusal is a fixer's job, as dispatch treats it");
   assert.equal(pf(refusal), false);
@@ -1414,7 +1423,7 @@ test("deploy tip (#5425): a spec-leg red is code; run 42880431465 (publish only)
   assert.equal(tipState({ ...RUN_42880431465, conclusion: "startup_failure" }, []).state, "code-red", "a startup_failure with no jobs (a pages.yml syntax error) is code");
   const cancelledJobs = tipState(RUN_42880431465, [{ name: "ci / CI", conclusion: "cancelled" }, { name: "deploy", conclusion: "cancelled", steps: [] }]);
   assert.equal(cancelledJobs.state, "code-red", "a failed run whose jobs were all cancelled: " + cancelledJobs.evidence);
-  assert.match(cancelledJobs.evidence, /no job red and no Pages-side marker \(2 job\(s\) listed\)/);
+  assert.equal(cancelledJobs.evidence, "pages.yml run 42880431465 on 1421575a concluded failure with no job red and no Pages-side marker (2 job(s) listed): counted as code");
   assert.equal(real.runAt, "2026-11-10T18:57:40Z");
   assert.equal(tipState(null).state, "none");
 });
@@ -1433,25 +1442,31 @@ test("readDeployTip: the newest COMPLETED pages.yml run, its latest-attempt jobs
   assert.equal(readDeployTip("deploy-x", req([], [])).state, "none");
   assert.equal(readDeployTip("deploy-x", req([{ id: 6, conclusion: "cancelled" }, { id: 5, conclusion: "skipped" }, { ...RUN_42880431465, id: 4 }], [SPEC_RED])).state, "code-red",
     "a cancelled or skipped newest run says nothing: the read looks past it to the red one");
-  assert.match(readDeployTip("deploy-x", () => ({ json: {} })).error, /no workflow_runs array/, "a runs response without its array is an error, never `none`");
-  assert.match(readDeployTip("deploy-x", (p) => (p.includes("/jobs") ? { json: {} } : { json: { workflow_runs: [RUN_42880431465] } })).error, /no jobs array/, "a jobs response without its array is an error, never `platform`");
-  assert.match(readDeployTip("deploy-x", () => ({ error: "HTTP 502" })).error, /pages\.yml runs on deploy-x: HTTP 502/);
-  assert.match(readDeployTip("deploy-x", (p) => (p.includes("/jobs") ? { error: "HTTP 403" } : { json: { workflow_runs: [RUN_42880431465] } })).error, /jobs of pages\.yml run 42880431465: HTTP 403/);
+  const jobsAnswer = (a) => (p) => (/\/jobs\?/.exec(p) ? a : { json: { workflow_runs: [RUN_42880431465] } });
+  assert.deepEqual(readDeployTip("deploy-x", () => ({ json: {} })), { error: "pages.yml runs on deploy-x: no workflow_runs array in the response" }, "a runs response without its array is an error, never `none`");
+  assert.deepEqual(readDeployTip("deploy-x", jobsAnswer({ json: {} })), { error: "jobs of pages.yml run 42880431465: no jobs array in the response" }, "a jobs response without its array is an error, never `platform`");
+  assert.deepEqual(readDeployTip("deploy-x", () => ({ error: "HTTP 502" })), { error: "pages.yml runs on deploy-x: HTTP 502" });
+  assert.deepEqual(readDeployTip("deploy-x", jobsAnswer({ error: "HTTP 403" })), { error: "jobs of pages.yml run 42880431465: HTTP 403" });
 });
 
-test("baseVerdict (#5425): a code-red tip WAITS; only Bryce's own `deploy:red` or `priority` lets a PR land over it", () => {
+const HELD = RED_EVIDENCE + ": merges wait until the tip is green";
+const HOW = "; the fixer's PR lands with `deploy:red` once its head contains 1421575a (sync-pr --onto-red-tip) and its CI is green, or once brycejmurrin adds `deploy:red` to it himself";
+const notHis = (label) => `; \`${label}\` is set but not added by brycejmurrin in person after this red run started (2026-11-10T18:57:40Z), with no proof that this head contains the red commit 1421575a, so it does not count`;
+
+test("baseVerdict (#5425): a code-red tip WAITS; Bryce's own `deploy:red` or `priority` lets a PR land over it, an agent's label alone does not", () => {
   assert.deepEqual([...BASE_ESCAPE_LABELS], ["deploy:red", "priority"]);
   const red = tipState({ ...RUN_42880431465, id: 9 }, SPEC_RED);
   const held = baseVerdict(red, [], []);
   assert.equal(held.ok, false); assert.equal(held.pending, true, "pending, so the next Pages train re-gates (land.yml skips a `gate` failure)");
-  assert.match(held.evidence, /run 9 .*merges wait until the tip is green; the fixer's PR lands once brycejmurrin adds `deploy:red` to it himself/);
+  assert.equal(held.evidence, HELD + HOW);
   assert.equal(baseVerdict(tipState(RUN_42880431465, JOBS_42880431465), [], []).ok, true, "run 42880431465: a publish-only failure does not hold");
   for (const label of BASE_ESCAPE_LABELS) {
     const own = baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z")]);
-    assert.equal(own.ok, true, label); assert.match(own.evidence, new RegExp(`\`${label}\` added by brycejmurrin in person at 2026-11-11T08:00:00Z`));
+    assert.equal(own.ok, true, label);
+    assert.equal(own.evidence, `${RED_EVIDENCE}; \`${label}\` added by brycejmurrin in person at 2026-11-11T08:00:00Z: this PR may land over the red tip (the fixer)`);
     const agent = baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z", { app: APP })]);
-    assert.equal(agent.ok, false, `${label} added through the Claude app does not lift the hold`); assert.equal(agent.pending, true);
-    assert.match(agent.evidence, new RegExp(`\`${label}\` is set but not added by brycejmurrin in person after this red run started`));
+    assert.equal(agent.ok, false, `${label} added through the Claude app, with no proof, does not lift the hold`); assert.equal(agent.pending, true);
+    assert.equal(agent.evidence, HELD + notHis(label) + HOW);
     assert.equal(baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z"), ev(label, "2026-11-11T08:05:00Z", { app: APP })]).ok, false, `${label}: an agent's re-add after his click is the newest event`);
     assert.equal(baseVerdict(red, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z", { actor: "someone-else" })]).ok, false, `${label} by another login`);
     assert.equal(baseVerdict(red, [{ name: label }], null).ok, false, `${label} with no events read: provenance unknown is no grant`);
@@ -1462,10 +1477,60 @@ test("baseVerdict (#5425): a code-red tip WAITS; only Bryce's own `deploy:red` o
   for (const label of BASE_ESCAPE_LABELS) {
     const old = baseVerdict(red, [{ name: label }], [ev(label, "2026-11-10T18:00:00Z")]);
     assert.equal(old.ok, false, `${label} clicked at 18:00Z, before the red run started at 18:57:40Z`);
-    assert.match(old.evidence, /not added by brycejmurrin in person after this red run started \(2026-11-10T18:57:40Z\)/);
+    assert.equal(old.evidence, HELD + notHis(label) + HOW);
     assert.equal(baseVerdict(red, [{ name: label }], [ev(label, "2026-11-10T18:58:00Z")]).ok, true, `${label} clicked after the run started`);
     assert.equal(baseVerdict({ ...red, runAt: null }, [{ name: label }], [ev(label, "2026-11-11T08:00:00Z")]).ok, false, `${label}: a red run with no start time binds nothing`);
   }
+});
+
+// The opposite failure: a row that holds merges must never hold the PR that FIXES the tip. 2026-11-12: the tip went
+// red at 19:10Z (#5456) and the fix (#5538) landed at 20:54Z with nobody at the phone; an owner-only escape would
+// have held it until Bryce woke.
+test("baseVerdict (#5425): the fixer lands with no click from Bryce: `deploy:red` plus a head that contains the red commit", () => {
+  assert.equal(FIXER_LABEL, "deploy:red");
+  const red = tipState({ ...RUN_42880431465, id: 9 }, SPEC_RED);
+  const agentLabel = [ev("deploy:red", "2026-11-11T08:00:00Z", { app: APP })];
+  const proven = baseVerdict(red, [{ name: "deploy:red" }], agentLabel, undefined, { contains: true });
+  assert.equal(proven.ok, true, "an agent's label counts WITH the proof");
+  assert.equal(proven.evidence, RED_EVIDENCE + "; `deploy:red` is set and this head contains the red commit 1421575a: its CI ran on top of the red tip, so the ci row is the proof (the fixer)");
+  assert.equal(baseVerdict(red, [{ name: "deploy:red" }], null, undefined, { contains: true }).ok, true, "the proof needs no label provenance");
+  assert.equal(baseVerdict(red, [{ name: "deploy:red" }], agentLabel, undefined, { contains: false }).ok, false, "labelled, but cut before the red commit: its CI never saw the red");
+  assert.equal(baseVerdict(red, [{ name: "deploy:red" }], agentLabel, undefined, null).ok, false, "no proof read is no proof");
+  assert.equal(baseVerdict(red, [{ name: "deploy:red" }], agentLabel, undefined, { contains: "yes" }).ok, false, "only a boolean true is a proof");
+  assert.equal(baseVerdict(red, [], [], undefined, { contains: true }).ok, false, "a head on the red tip WITHOUT the label is not the fixer: one fixer, by claim");
+  assert.equal(baseVerdict(red, [{ name: "priority" }], [ev("priority", "2026-11-11T08:00:00Z", { app: APP })], undefined, { contains: true }).ok, false, "`priority` is Bryce's word only; it is no fixer claim");
+});
+
+test("fixerProof: one compare read; ahead or identical contains the red commit, behind or diverged does not, unreadable is an error", () => {
+  const seen = [];
+  const cmp = (answer) => (p) => { seen.push(p); return answer; };
+  const args = { redSha: RUN_42880431465.head_sha, head: HEAD };
+  for (const [status, contains] of [["ahead", true], ["identical", true], ["behind", false], ["diverged", false]]) {
+    assert.deepEqual(fixerProof({ ...args, request: cmp({ json: { status } }) }), { contains, redSha: args.redSha }, status);
+  }
+  assert.deepEqual([...new Set(seen)], [`compare/${args.redSha}...${HEAD}`]);
+  assert.deepEqual(fixerProof({ ...args, request: cmp({ error: "HTTP 502" }) }), { error: `compare 1421575a...${HEAD.slice(0, 8)}: HTTP 502` });
+  assert.deepEqual(fixerProof({ ...args, request: cmp({ json: {} }) }), { error: `compare 1421575a...${HEAD.slice(0, 8)}: no status in the response` }, "a response without a status is an error, never a proof");
+  assert.deepEqual(fixerProof({ redSha: null, head: HEAD, request: () => assert.fail("no read without a red commit") }), { contains: false, redSha: null });
+});
+
+// An infrastructure-only red (a mirror outage in setup, 2026-11-11) cannot be told from a broken lockfile through the
+// jobs API, so it holds like code; what matters is that it never holds FOREVER and never needs a code change.
+const INFRA_RED = [{ name: "ci / Structural guards", conclusion: "failure", steps: [{ name: "Set up job", conclusion: "success" }, { name: "Run ./.github/actions/setup-apex", conclusion: "failure" }, { name: "Guards", conclusion: "skipped" }] },
+  { name: "ci / CI", conclusion: "failure" }, { name: "deploy", conclusion: "skipped", steps: [] }];
+test("base row: a tip red on infrastructure only WAITS (never a FAIL) and clears on a train re-run or through the fixer route", () => {
+  const f = fakes();
+  f.pages.runs[0] = { ...RUN_42880431465, id: 9 }; f.pages.jobs = INFRA_RED;
+  const v = evaluate({ pr: 7, ...f.deps });
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["base"]);
+  assert.deepEqual([v.waiting, v.rows.base.pending], [true, true], "pending: the next train's workflow_run re-gates it; a FAIL would stick");
+  // (a) the train is re-run (or the pages.yml cron re-gates the unpublished tip): the same run id, latest attempt green.
+  f.pages.runs[0] = { ...RUN_42880431465, id: 9, conclusion: "success", run_attempt: 2 }; f.pages.jobs = [];
+  assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true, "a green latest attempt lifts the hold with no push and no click");
+  // (b) no re-run: a PR whose head contains the red commit and whose CI is green there lands as the fixer.
+  f.pages.runs[0] = { ...RUN_42880431465, id: 9 }; f.pages.jobs = INFRA_RED;
+  f.pull.labels = [{ name: "deploy:red" }]; f.events.push(ev("deploy:red", "2026-11-11T08:00:00Z", { app: APP })); f.compare.status = "ahead";
+  assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true);
 });
 
 test("evaluate: the base row reads the PR's base branch; a code-red tip waits (exit 3) with every other row ok, and the fixer lands on Bryce's own `deploy:red`", () => {
@@ -1478,7 +1543,7 @@ test("evaluate: the base row reads the PR's base branch; a code-red tip waits (e
   assert.equal(main(["--pr", "7", "--sha", HEAD], { ...f.deps, log: () => {} }), 3, "exit 3: land.yml writes `gate` pending");
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 3, "the trusted leg holds too");
-  assert.ok(logs.some((l) => l.startsWith("= gate base: WAIT pages.yml run 9 on 1421575a concluded failure on code")), logs.join("\n"));
+  assert.deepEqual(logs.filter((l) => /^= gate base:/.exec(l)), ["= gate base: WAIT " + HELD + HOW]);
   f.checks[1].conclusion = "failure";
   assert.equal(evaluate({ pr: 7, ...f.deps }).waiting, false, "a failed row besides base is a refusal");
   f.checks[1].conclusion = "success";
@@ -1487,8 +1552,21 @@ test("evaluate: the base row reads the PR's base branch; a code-red tip waits (e
   f.pull.labels = [{ name: "deploy:red" }]; f.events.push(ev("deploy:red", "2026-11-11T08:10:00Z"));
   const fixer = evaluate({ pr: 7, ...f.deps });
   assert.equal(fixer.ok, true, "the fixer's PR lands on Bryce's own `deploy:red`: " + fixer.rows.base.evidence);
+  assert.deepEqual(f.compared, [`compare/${RUN_42880431465.head_sha}...${HEAD}`], "the proof is read once, and only for a `deploy:red` PR on a code red");
+  // The fixer with nobody at the phone (2026-11-12, #5538): the worker's own `deploy:red` on a head that contains the red commit.
+  f.events.length = 0; f.events.push(ev("deploy:red", "2026-11-11T08:10:00Z", { app: APP }));
+  assert.equal(evaluate({ pr: 7, ...f.deps }).rows.base.ok, false, "the worker's label on a head cut before the red: held");
+  f.compare.status = "ahead";
+  const proven = evaluate({ pr: 7, ...f.deps });
+  assert.equal(proven.ok, true, "the fix lands without Bryce: " + proven.rows.base.evidence);
+  f.checks[1].conclusion = "failure";
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"], "the proof is the ci row: a fixer whose CI is red on top of the red tip does not land");
+  f.checks[1].conclusion = "success";
+  f.compare.error = "HTTP 502";
+  assert.deepEqual(evaluate({ pr: 7, ...f.deps }), { error: `compare 1421575a...${HEAD.slice(0, 8)}: HTTP 502` }, "an unreadable proof is an error (will retry), never a pass or a refusal");
+  f.compare.error = null; f.compare.status = "diverged";
   f.pages.runs[0] = RUN_42880431465; f.pages.jobs = JOBS_42880431465; f.pull.labels = []; f.events.length = 0;
   assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true, "run 42880431465 (platform) holds nothing");
-  const noPages = (p) => (p.startsWith("actions/workflows/pages.yml") ? { error: "HTTP 502" } : f.deps.request(p));
-  assert.match(evaluate({ pr: 7, ...f.deps, request: noPages }).error, /pages\.yml runs on deploy-x: HTTP 502/, "unreadable tip: an error (will retry), never a pass");
+  const noPages = (p) => (/^actions\/workflows\/pages\.yml/.exec(p) ? { error: "HTTP 502" } : f.deps.request(p));
+  assert.deepEqual(evaluate({ pr: 7, ...f.deps, request: noPages }), { error: "pages.yml runs on deploy-x: HTTP 502" }, "unreadable tip: an error (will retry), never a pass");
 });

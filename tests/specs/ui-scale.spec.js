@@ -1953,12 +1953,14 @@ const widths = (page, sels) => page.evaluate((sels) => sels.map((s) => {
   const el = document.querySelector(s);
   return el ? +el.getBoundingClientRect().width.toFixed(1) : 0;
 }), sels);
-// The audit's method: the slider's own `input` event, then two forced fits a settle period apart (the fit ticks at 10 Hz).
+// The audit's method: the slider's own `input` then `change` (a release; UI SIZE applies on it, #5256), then two
+// forced fits a settle period apart (the fit ticks at 10 Hz).
 async function driveSize(page, id, v) {
   await page.evaluate(async ({ id, v }) => {
     const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
     el.value = String(v);
     el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 2; i++) { GameHud.invalidateFit(); await new Promise((r) => setTimeout(r, 450)); }
   }, { id, v });
 }
@@ -2009,16 +2011,16 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
         for (let m = 0; m < row.moves.length; m++) expect(Math.abs(back[m] - seen[0].moves[m]), `${row.moves[m]} has no hysteresis`).toBeLessThan(1);
       });
     }
-    // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 70 % on a phone (#5235).
-    test("pm-uiscale (every menu): a phone stops at 70 % with 12 px text and 44 px rows, and the row names the zoom its own sheet paints at", async ({ page }) => {
+    // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 50 % on a phone (#5452; 70 under #5235).
+    test("pm-uiscale (every menu): a phone stops at 50 % with 12 px text and 44 px rows, and the row names the zoom its own sheet paints at", async ({ page }) => {
       const ui = CONTROL_REG.size.find((r) => r.key === "uiScale");
-      await bootOwnerCell(page, cell, { race: false, store: { uiScale: 51 } });
+      await bootOwnerCell(page, cell, { race: false, store: { uiScale: 40 } });
       await page.locator("#mb-settings").click();
       await page.locator("#pm-open-appearance").click();
       await expect(page.locator("#" + ui.id)).toBeVisible();
       const sheetZoom = () => page.evaluate((id) => +getComputedStyle(document.getElementById(id).closest(".sheet")).zoom, ui.id);
       expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.phoneMin, max: ui.lim.max, value: ui.phoneMin, label: `${ui.phoneMin}%` });
-      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 51 % paints the minimum").toBe(String(ui.phoneMin / 100));
+      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 40 % paints the minimum").toBe(String(ui.phoneMin / 100));
       expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and is raised in storage on load").toBe(ui.phoneMin);
       // At the minimum: the open panel's token-sized text paints >= 12 px and its controls >= 44 px.
       const floor = await page.evaluate(() => {
@@ -2038,6 +2040,7 @@ for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
           const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
           el.value = String(v);
           el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));   // UI SIZE applies on release (#5256)
         }, { id: ui.id, v });
         const z = Math.round(Math.min(v / 100, ui.sheetZoom) * 100);
         await expect.poll(sheetZoom, `${v} %: the sheet paints min(wish, ${ui.sheetZoom})`).toBeCloseTo(z / 100, 2);

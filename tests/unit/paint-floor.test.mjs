@@ -2,7 +2,9 @@
 // tools/ui/bryce-paint.mjs, tests/data/bryce-phone-paint.json). Pure: no browser.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PAINT_KINDS, judgePaint, paintCounts, paintLine, summarisePaint } from "../../tools/lib/paint-floor.mjs";
+import { PAINT_KINDS, judgePaint, paintCounts, paintInsets, paintLine, summarisePaint } from "../../tools/lib/paint-floor.mjs";
+import { appliedTag } from "../../tools/ui/ui-scale-axis.mjs";
+import fs from "node:fs";
 import { ACCEPT_ROOTS, ACCEPT_SCREENS, CEILINGS_FILE, ceilingsFrom, cellKey, judgeCells, planRun, readCeilings } from "../../tools/ui/bryce-paint.mjs";
 import { BRYCE_WINDOWS, UI_SIZE_AXIS } from "../../tools/lib/bryce-phone.mjs";
 
@@ -55,7 +57,7 @@ test("judgeCells: an unopened screen, a screen with no control and an unrecorded
 test("planRun: the default plan is every window × the UI SIZE axis × the seven screens; bad values throw", () => {
   const plan = planRun(flags({}));
   assert.deepEqual(plan.windows, ["standalone", "safari", "w844"]);
-  assert.deepEqual(plan.scales, [70, 109]);
+  assert.deepEqual(plan.scales, [50, 70, 109]);
   assert.deepEqual(plan.screens, ["title", "select", "garage", "settings", "hud", "pause", "results"]);
   assert.equal(plan.profile, true);
   assert.deepEqual(planRun(flags({ "--screens": "results,title", "--ui-scale": "61", "--window": "safari", "--profile": "legacy" })),
@@ -88,4 +90,33 @@ test(`${CEILINGS_FILE} records every acceptance cell and screen, with whole non-
       for (const [k, n] of Object.entries(counts)) assert.ok(Number.isInteger(n) && n >= 0, `${cell} ${screen} ${k} = ${n}`);
     }
   }
+});
+
+test("#5234: the paint block carries the sheet zoom — own 102x48 at zoom 0.51 is the painted 52x24.5 the block reports", () => {
+  const p = summarisePaint({ ...RAW, zoom: 0.51 });
+  assert.equal(p.zoom, 0.51);
+  assert.equal(+(102 * p.zoom).toFixed(1), p.taps.smallest.w, "own width x zoom = the painted width");
+  assert.equal(+(48 * p.zoom).toFixed(1), p.taps.smallest.h, "own height x zoom = the painted height");
+  assert.ok(paintLine(p).startsWith("zoom 0.51; taps under 44px 1/3"), paintLine(p));
+  assert.equal(summarisePaint(RAW).zoom, null, "no measured zoom stays null, and the log line keeps its old shape");
+});
+
+test("#5234: every layout-audit cell is painted — insets come from the viewport entry, not only an owner preset", () => {
+  const notched = ["ios-iphone-landscape-844", {}, "why", { t: 0, r: 47, b: 21, l: 47 }];
+  assert.deepEqual(paintInsets(notched), { top: 0, right: 47, bottom: 21, left: 47 });
+  assert.equal(paintInsets(["desktop-1280x800", {}, "why"]), null, "a desktop cell has no safe-area box");
+  const owner = { insets: { top: 0, right: 62, bottom: 21, left: 62 } };
+  assert.deepEqual(paintInsets(notched, owner), owner.insets, "an owner preset's real insets win");
+  const src = fs.readFileSync(new URL("../../tools/ui/layout-audit.mjs", import.meta.url), "utf8");
+  const line = src.split("\n").find((l) => l.includes("page.evaluate(measurePaintInPage"));
+  assert.ok(line, "layout-audit measures paint");
+  assert.match(line, /^\s*cell\.paint = /, "no gate in front of the paint measure (it was `if (owner)`)");
+  assert.match(line, /\{ roots: screen\.root, insets: paintBox \}/, "the cell's insets come from paintInsets(vpEntry, owner)");
+});
+
+test("#5234: appliedTag names a slider that clamped the requested scale; the cell key never changes", () => {
+  assert.equal(appliedTag(51, { ui: 51, hud: 70 }), " hud@70", "HUD floors at 70 %: a @51 cell says so");
+  assert.equal(appliedTag(130, { ui: 130, hud: 130 }), "", "taken as asked: no suffix");
+  assert.equal(appliedTag(null, { ui: 61, hud: 100 }), "", "the device default has nothing to clamp");
+  assert.equal(appliedTag(40, null), "");
 });
