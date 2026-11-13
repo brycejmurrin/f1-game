@@ -38,7 +38,20 @@ test.beforeEach(async ({ page }) => {
 
 async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null && !!window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForFunction(() => window.__apex != null && !!window.__apex.race, null, { polling: 100, timeout: BOOT_MS })
+    .catch(async (e) => {
+      // Same wait, same BOOT_MS: this only names what the boot was doing when it ran out. CI run 43478086963
+      // (job 132069209092) timed out here with the title DOM built and __apex.race missing, and recorded nothing else.
+      const s = await page.evaluate(() => {
+        const gfx = (st) => { const o = {}; try { for (let i = 0; i < st.length; i++) { const k = st.key(i); if (k && k.startsWith("apex26.gfx")) o[k] = st.getItem(k); } } catch (_) { o.unreadable = true; } return o; };
+        return {
+          apex: typeof window.__apex, race: !!(window.__apex && window.__apex.race),
+          backend: typeof GLX !== "undefined" ? (GLX.backend || "glx") : "no GLX global",
+          readyState: document.readyState, session: gfx(sessionStorage), local: gfx(localStorage),
+        };
+      }).catch((x) => ({ evaluateFailed: String(x && x.message) }));
+      throw new Error(`${e && e.message} | boot state at the timeout: ${JSON.stringify(s)}`, { cause: e });
+    });
 }
 
 /** Wait for a race started any way (UI or hook) to reach its grid. */
