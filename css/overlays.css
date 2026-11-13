@@ -1163,12 +1163,12 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
 /* NOW PLAYING on the phone card (#5543; hidden outright since #5200): ONE line in an implicit last row, which only
    exists while panel.js shows the card, so a silent pause keeps the three-row box. Title, source, then the transport
-   at the tray tile's floor (44 painted). 844x390 at UI 70 %: card 171 -> 224 px of 390; 852x283 at 109 %: 210 -> 257. */
+   (ids and structure, never the shared now-playing classes, whose one home is the tuner sheet) at the tray tile's floor (44 painted). 844x390 at UI 70 %: card 171 -> 224 px of 390; 852x283 at 109 %: 210 -> 257. */
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-now-card { margin: 0; padding: calc(var(--gap) / 4) calc(var(--gap) * 0.7); min-width: 0; }
-body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card .as-now-meta { flex-direction: row; align-items: baseline; gap: var(--gap); }
-body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card .as-now-cap { display: none; }
-body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card .as-now-sub { flex: 0 99 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-now-card .as-tbtn {
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card > div:first-child { flex-direction: row; align-items: baseline; gap: var(--gap); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-card > div:first-child > span:first-child { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-now-src { flex: 0 99 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-now-card button {
   --pm-t: max(41px, calc(44px / var(--ui-scale)));
   width: var(--pm-t); min-width: var(--pm-t); height: var(--pm-t); min-height: var(--pm-t); flex-basis: var(--pm-t);
 }
