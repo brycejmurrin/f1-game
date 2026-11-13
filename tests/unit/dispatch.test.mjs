@@ -487,5 +487,6 @@ test("rule 3: a Pages-side publish failure (pages.yml's marker step failed) laun
 test("worker-prompt.md: the saved prompt's Ending carries the D17 reporting line (#5402), word for word", () => {
   const text = fs.readFileSync(new URL("../../tools/ci/worker-prompt.md", import.meta.url), "utf8");
   const ending = text.slice(text.indexOf("Ending:"), text.indexOf("Nobody reads this chat.")).replace(/\s+/g, " ");
-  assert.ok(ending.includes("Report by send_message to the session that launched you, when one did: at start (your reading of the task), at every push (head sha, PR number), at CI green or red, and at any refusal or blocker."), ending);
+  const line = "Report by send_message to the session that launched you, when one did: at start (your reading of the task), at every push (head sha, PR number), at CI green or red, and at any refusal or blocker.";
+  assert.equal(ending.trim().slice(-line.length), line, "the reporting line closes the Ending paragraph: " + ending);
 });

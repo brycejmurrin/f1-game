@@ -37,7 +37,7 @@ test("verifyLive checks secondary HTML, service worker, and every lazy integrity
     const result = await verifyLive({ baseUrl: base, root, files: ["index.html", "version.json", "sw.js", "controller.html"] });
     assert.equal(result.ok, true, result.errors.join("\n"));
     assert.deepEqual(result.errors, []);
-    assert.ok(result.checked.includes("js/core/lazy-bundles.js"));
+    assert.deepEqual(result.checked.filter((f) => f === "js/core/lazy-bundles.js"), ["js/core/lazy-bundles.js"]);
   } finally { server.close(); }
 });
 
@@ -56,7 +56,7 @@ test("#5306: the default list is every staged root page plus version.json and sw
     assert.equal(result.ok, false);
     assert.deepEqual(result.errors.filter((e) => !/overlay\.html/.test(e)), [], result.errors.join("\n"));
     assert.equal(result.errors.length, 1);
-    assert.ok(result.checked.includes("bench.html"));
+    assert.deepEqual(["bench.html", "overlay.html"].filter((f) => !result.checked.includes(f)), [], "both new pages were fetched");
   } finally { server.close(); }
 });
 
@@ -72,8 +72,7 @@ test("verifyLive reports a stale lazy response with exact hashes", async () => {
     const result = await verifyLive({ baseUrl: base, root, files: ["index.html"] });
     assert.equal(result.ok, false);
     const msg = result.errors.find((error) => error.includes("does not match shell")) || "";
-    assert.ok(msg.includes(sri(stale)), `live hash named: ${msg}`);
-    assert.ok(msg.includes(sri(expected)), `shell hash named: ${msg}`);
+    assert.deepEqual([sri(stale), sri(expected)].filter((hash) => !msg.includes(hash)), [], `live and shell hash named: ${msg}`);
   } finally { server.close(); }
 });
 
