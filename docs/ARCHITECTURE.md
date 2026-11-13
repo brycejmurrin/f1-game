@@ -159,6 +159,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `phone-recorder.js` | `PhoneRecorder` | LAZY_PERF | PhoneRecorder: a phone-only soak recorder (issue #1633). |
 | `bench-capture.js` | `BenchCapture` | LAZY_PERF | BenchCapture: the profiling record BENCHMARK (js/perf/bench-run.js) writes beside its frame stats. |
 | `bench-run.js` | `BenchRun` | LAZY_PERF | BenchRun: SETTINGS > GRAPHICS > BENCHMARK, a hands-free device benchmark with a results file. |
+| `metrics-panel.js` | `GameMetricsPanel` | LAZY_PERF | GameMetricsPanel: the METRICS overlay panel (snapshot + painter). |
 
 **`js/render/`**
 
@@ -248,7 +249,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
 | `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
-| `watch-transport.js` | `WatchTransport` | tag | Visible controls for the real-race replay. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
@@ -295,6 +295,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `watch-transport.js` | `WatchTransport` | LAZY_REAL_RACE | Visible controls for the real-race replay. |
 
 **`js/track/core/`**
 
@@ -366,9 +367,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `sporting-regs.js` | `SportingRegs` | tag | SPORTING REGULATIONS the player is held to, as pure rules. |
 | `tv-graphics.js` | `TvGraphics` | tag | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
 | `broadcast.js` | `Broadcast` | tag | BROADCAST (Broadcast.create(G, replay)) The TV view of a REAL RACE WATCH / HIGHLIGHTS run: a timing tower down the left (position, team colour, the real… |
-| `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
-| `real-race-pace.js` | `RealRacePace` | tag | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
-| `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
+| `real-race-boot.js` | `RealRace` | tag | REAL RACE boot stub (FULL, #4978 row 6). game.js still makes `RealRace.create(G)` at eval and reads update/owns/isWatch/status/raceT0 every frame; until a… |
 | `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `forecast.js` | `Forecast` | tag | WEATHER FORECAST (Forecast): what the pit wall KNOWS about a dynamic-weather race, as a timed, located-in-laps statement with honest uncertainty. |
@@ -399,6 +398,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `ceremony.js` | `RaceCeremony` | LAZY_RACE_SESSION | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
 | `stopped-cars.js` | `StoppedCars` | LAZY_RACE_SESSION | STOPPED CARS (StoppedCars): race control's second hazard source (audit W34, 2026-11-10). |
 | `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | RETIRED CARD (RetiredCard). |
+| `real-replay.js` | `RealReplay` | LAZY_REAL_RACE | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
+| `real-race-pace.js` | `RealRacePace` | LAZY_REAL_RACE | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
+| `real-race.js` | `RealRaceBody` | LAZY_REAL_RACE | REAL RACE body (RealRaceBody.create(G), LAZY_REAL_RACE; game.js holds the RealRace boot stub, js/race/real-race-boot.js, which creates this once it lands)… |
 
 **`js/workers/`**
 
@@ -455,7 +457,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
-| `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, and replay them as a ghost car. |
+| `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, so a tape can be replayed… |
 | `cockpit-rig.js` | `CockpitRig` | tag | CockpitRig: the steering wheel, dash, cabin, glass and shift-light builders. |
 | `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
 | `surface-outline.js` | `GarageSurfaceOutline` | tag | A transient contour of the cover pixels controlled by one livery tint. |

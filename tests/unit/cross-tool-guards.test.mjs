@@ -172,7 +172,7 @@ test("Codex's MCP door guards legacy and hosted GitHub operations: an ask become
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, draft: false }), null, prefix + "the ready flip passes");
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, state: "closed" }), "deny", prefix + "close ask becomes a deny");
     assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, body: "x" }), null, prefix + "body edit passes");
-    assert.equal(mcp(prefix + "issue_write", { method: "update", issue_number: 1, labels: ["hold", "x"] }), null, prefix + "labels that keep hold pass");
+    assert.equal(mcp(prefix + "issue_write", { method: "update", issue_number: 1, labels: ["config-ok", "hold", "land", "needs-decision", "x"] }), null, prefix + "labels that keep every guarded label pass (no lookup)");
     for (const input of [undefined, null, [], false, 1, "not JSON", "[]"])
       assert.equal(mcp(prefix + "update_pull_request", input), "deny", prefix + "malformed input " + JSON.stringify(input));
     assert.equal(mcp(prefix + "update_pull_request", JSON.stringify({ pullNumber: 1, body: "x" })), null, prefix + "a JSON-object string body edit passes");
@@ -296,6 +296,7 @@ test("a real worktree commit isolates guard fixtures while preserving its branch
     write("tools/check/ratchets.mjs", "// Read-only fixture of the ratchet stage.\n");
     const verify = `import assert from 'node:assert/strict';\nimport {execFileSync} from 'node:child_process';\nconst actual=execFileSync('git',['rev-parse','--show-toplevel'],{cwd:process.env.APEX_OTHER_REPO,encoding:'utf8'}).trim();\nassert.equal(actual,process.env.APEX_OTHER_REPO,'fixture Git must use its own repository');\nassert.equal(process.env.GIT_DIR,undefined);\nassert.equal(process.env.GIT_INDEX_FILE,undefined);\n`;
     write("tests/unit/docs-integrity.test.mjs", verify);
+    write("tools/ci/docs-fast-tests.mjs", 'console.log("tests/unit/docs-integrity.test.mjs");\n');   // the hook's docs list (#5461)
     write("guard-fixture.mjs", verify);
     write("bin/npm", '#!/usr/bin/env bash\nexec "' + process.execPath + '" guard-fixture.mjs\n');
     fs.chmodSync(path.join(base, "bin/npm"), 0o755);

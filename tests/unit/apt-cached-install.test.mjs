@@ -31,6 +31,7 @@ const STUBS = {
     'echo "$1" >> "$STATE/resolves"',
     '[ -e "$STATE/dns-down" ] && exit 2',
     'if [ -e "$STATE/dns-flaky" ]; then n=$(grep -c "^$1$" "$STATE/resolves"); [ $((n % 3)) -eq 1 ] || exit 2; fi',
+    '[ -n "${RESOLVE_SLEEP:-}" ] && { echo "start $1" >> "$STATE/timeline"; sleep "$RESOLVE_SLEEP"; echo "end $1" >> "$STATE/timeline"; }',
     'echo 10.0.0.7',
   ].join("\n"),
   doh: 'echo "$1" >> "$STATE/doh"; [ -e "$STATE/doh-ok" ] && echo "203.0.113.9 https://cloudflare-dns.com/dns-query" && exit 0; exit 1',
@@ -85,10 +86,10 @@ function fixture(t, { installed = [], want = [], cached = [], flags = [], source
     const calls = fs.existsSync(path.join(state, "calls")) ? fs.readFileSync(path.join(state, "calls"), "utf8") : "";
     const output = fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "";
     const read = f => fs.existsSync(path.join(state, f)) ? fs.readFileSync(path.join(state, f), "utf8") : "";
-    const hosts = read("hosts"), doh = read("doh");
+    const hosts = read("hosts"), doh = read("doh"), timeline = read("timeline");
     const probes = fs.existsSync(path.join(state, "probes")) ? fs.readFileSync(path.join(state, "probes"), "utf8") : "";
     const has = p => fs.existsSync(path.join(state, "db", p));
-    return { r, calls, output, has, probes, hosts, doh, log: r.stdout + r.stderr + "\ncalls:\n" + calls };
+    return { r, calls, output, has, probes, hosts, doh, timeline, log: r.stdout + r.stderr + "\ncalls:\n" + calls };
   };
   return { run, cache };
 }
@@ -218,6 +219,46 @@ test("an existing hosts entry is matched as a whole name, not a regex", (t) => {
   assert.match(hosts, /^203\.0\.113\.9 security\.ubuntu\.com$/m);
 });
 
+test("the mirror hosts are looked up in parallel, and pinned in mirror order", (t) => {
+  // In series each failing host cost 15 s (3 x 5 s) of every Mesa step (run 43054966213).
+  const { run } = fixture(t, { want: ["libegl1"], flags: ["dns-flaky"] });
+  const { r, hosts, timeline, log } = run(["libegl1"], { RESOLVE_SLEEP: "0.3" });
+  assert.equal(r.status, 0, log);
+  const ev = timeline.trim().split("\n");
+  const firstEnd = ev.findIndex((e) => e.startsWith("end "));
+  const starters = new Set(ev.slice(0, firstEnd).map((e) => e.split(" ")[1]));
+  assert.ok(starters.size >= 2, "a second host's lookup starts before the first lookup ends:\n" + timeline);
+  const pins = hosts.trim().split("\n").slice(1).map((l) => l.split(" ")[1]);
+  assert.deepEqual(pins, ["azure.archive.ubuntu.com", "security.ubuntu.com"], "written in mirror order");
+});
+
+test("apt downloads into the cache dir as root on purpose (no `_apt` sandbox warning)", (t) => {
+  const { run, cache } = fixture(t, { want: ["libegl1"] });
+  const { r, calls, log } = run(["--cache", cache, "libegl1"]);
+  assert.equal(r.status, 0, log);
+  assert.match(calls, /^apt-get install .*-o APT::Sandbox::User=root/m);
+});
+
+test("no workflow or action installs apt packages around the cached installer", () => {
+  // Every apt package install in .github goes through tools/ci/apt-cached-install.sh. Playwright's own
+  // `--with-deps` (its dependency list, cold cache or the webkit group only) is the named exception.
+  const bare = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.ya?ml$/.test(e.name)) {
+        fs.readFileSync(p, "utf8").split("\n").forEach((line, i) => {
+          if (/^\s*#/.test(line)) return;
+          if (/\bapt(-get)?\s+(install|update)\b/.test(line)) bare.push(`${p}:${i + 1}: ${line.trim()}`);
+        });
+      }
+    }
+  };
+  walk(".github");
+  assert.deepEqual(bare, []);
+});
+
 test("a broken cached set is removed and apt installs instead", (t) => {
   const { run, cache } = fixture(t, { cached: ["libegl1"], want: ["libegl1"], flags: ["dpkg-broken"] });
   const { r, calls, has, log } = run(["--cache", cache, "libegl1"]);
@@ -246,11 +287,14 @@ test("apt finishing without the packages is still a failure (post-condition)", (
 
 test("retries share one budget instead of exhausting the caller job", (t) => {
   const { run } = fixture(t, { want: ["libegl1"] });
-  const { r, calls, log } = run(["--budget", "1", "libegl1"], { APT_STALL: "3" });
+  // Budget 2, not 1: bash's $SECONDS is whole seconds, so a tick between `deadline=` and the first
+  // apt call left a 1 s budget at 0 and no apt-get ran at all (job 131440082468). With 2 s the one
+  // call always starts, capped at 2 s or (after a tick) 1 s, and the budget is spent either way.
+  const { r, calls, log } = run(["--budget", "2", "libegl1"], { APT_STALL: "4" });
   assert.equal(r.status, 1, log);
   assert.equal((calls.match(/^apt-get /gm) || []).length, 1, "no retry after the budget is spent:\n" + log);
-  assert.match(r.stdout, /::error::apt: apt could not install libegl1 within 1 s and up to 3 attempts \(runner mirror down\?\)/);
-  assert.match(r.stdout, /apt attempt 1: apt-get update \(cap 1 s\) was killed by its cap/);
+  assert.match(r.stdout, /::error::apt: apt could not install libegl1 within 2 s and up to 3 attempts \(runner mirror down\?\)/);
+  assert.match(r.stdout, /apt attempt 1: apt-get update \(cap [12] s\) was killed by its cap/);
 });
 
 test("repairs a dpkg its own cap interrupted instead of failing every retry", (t) => {

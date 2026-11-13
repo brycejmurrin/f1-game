@@ -496,7 +496,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
    whose whole job is pasting a code. The readonly boxes keep --fs-micro and
    their height budget; they never focus a keyboard. */
 #vsfriend .vs-code:not([readonly]) {
-  font-size: 16px;
+  font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
   line-height: 1.3;
   /* Codes have no spaces, so without this they force the sheet wide. */
   word-break: break-all;
@@ -717,6 +717,17 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   padding: 0 calc(var(--gap) * 2 / 3);
   line-height: 1.2;
 }
+/* CODES MATCH (#5313): READY waits for it; the same chip as Remove, which then sits beside it. */
+#vsfriend .vs-roster .vs-driver [data-verify-confirm] {
+  flex: 0 0 auto;
+  font-size: var(--fs-micro);
+  margin-left: auto;
+  white-space: nowrap;
+  min-height: var(--tap-paint);
+  padding: 0 calc(var(--gap) * 2 / 3);
+  line-height: 1.2;
+}
+#vsfriend .vs-roster .vs-driver [data-verify-confirm] ~ .vs-roster-remove { margin-left: calc(var(--gap) / 3); }
 #vsfriend .vs-roster-dot {
   flex: 0 0 auto;
   width: 10px;

@@ -134,6 +134,8 @@ const PauseOpts = (function () {
   let armed = null;   // { btn, text, aria, wallAt, evAt } — wallAt from performance.now()
   let armTimer = 0;
   let confirmPending = null;   // btn.id while a pointerup-driven el.click() is in flight
+  let confirmPendingAt = 0;    // wallNow() when it was set: the trusted click that clears it may never come
+  function clearPending() { confirmPending = null; confirmPendingAt = 0; }
   function wallNow() {
     try { return performance.now(); } catch (_) { return Date.now(); }
   }
@@ -200,13 +202,16 @@ const PauseOpts = (function () {
     expireIfStale(e);
     const t = e && e.target;
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
+    // A pointerup whose native click never arrived (pointercancel, a click
+    // retargeted to an ancestor) must not leave a one-tap QUIT for later.
+    if (confirmPending && wallNow() - confirmPendingAt >= ARM_MAX_MS) clearPending();
     if (confirmPending && btn && confirmPending === btn.id) {
       if (!e.isTrusted) {
         e.stopImmediatePropagation();
         if (e.preventDefault) e.preventDefault();
         return;
       }
-      confirmPending = null;
+      clearPending();
       return;
     }
     if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); return; }
@@ -229,6 +234,7 @@ const PauseOpts = (function () {
     if (!armed || armed.btn !== btn || !e.isTrusted) return;
     if (youngTap(e)) return;
     confirmPending = btn.id;
+    confirmPendingAt = wallNow();
     disarm();
     btn.click();
   }
@@ -250,8 +256,9 @@ const PauseOpts = (function () {
     tag.textContent = build ? ("build " + build) : "build unknown";
   }
 
-  function initUI() {
-    wireRows();
+  function initUI(gate) {
+    // #4798 gate: rows only
+    if (gate) gate(wireRows); else wireRows();
     paintSummary();
     paintBuild();
     const pm = hasDoc ? document.getElementById("pausemenu") : null;
@@ -284,7 +291,7 @@ const PauseOpts = (function () {
     pm.addEventListener("pointerup", onPausePointerUp, true);
     document.addEventListener("keydown", onPauseKey, true);
     if (typeof MutationObserver !== "undefined") {
-      const mo = new MutationObserver(() => { if (pm.hidden) disarm(); });
+      const mo = new MutationObserver(() => { if (pm.hidden) { disarm(); clearPending(); } });
       mo.observe(pm, { attributes: true, attributeFilter: ["hidden"] });
     }
   }
@@ -329,7 +336,7 @@ const PauseOpts = (function () {
   // that is already COMPLETE wires now (same rule as js/ui/title-fx.js).
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => initUI(typeof SettingsNav !== "undefined" ? SettingsNav.lazy : null), { once: true });
   }
 
   return {

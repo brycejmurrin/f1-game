@@ -7,8 +7,8 @@
   "spreadRatio": 4,
   "benches": {
     "step": { "iters": 80, "msPerCall": 1.663 },
-    "physState": { "iters": 200, "msPerCall": 0.011 },
-    "nodeAt": { "iters": 2000, "msPerCall": 0.002 }
+    "physState": { "iters": 2800, "msPerCall": 0.011 },
+    "nodeAt": { "iters": 20000, "msPerCall": 0.002 }
   },
   "measured": "2026-10-29",
   "runs": {

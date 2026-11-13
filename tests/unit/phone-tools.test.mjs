@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BRYCE_WINDOWS, LEGACY_EXPORT, OWNER_EXPORT, UI_SIZE_AXIS, brycePhone, classifyShot, mismatches, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
@@ -30,7 +31,7 @@ test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/
   assert.equal(JSON.parse(p.localStorage["apex26.hudElements"]).speed, "off");
   assert.equal(brycePhone({ uiScale: 51 }).localStorage["apex26.uiScale"], "51", "--ui-scale overrides the export, in percent");
   assert.deepEqual(brycePhone({ profile: false }).localStorage, {});
-  assert.deepEqual(UI_SIZE_AXIS, [70, 109]);
+  assert.deepEqual(UI_SIZE_AXIS, [50, 70, 109]);
   const legacy = brycePhone({ profile: "legacy" });
   assert.equal(legacy.profile.file, LEGACY_EXPORT);
   assert.equal(legacy.localStorage["apex26.hudBtnScale"], "245", "the October export: BUTTON SIZE 245 % is a raw-lane string");
@@ -181,4 +182,34 @@ test("summarize + reportLines: the screen factor is the median; an element off i
   assert.match(text, /button#big: live 100x40 → phone 94x38 \(0\.94x, 1\.979x the screen factor, score 0\.85\)/);
   assert.match(text, /= phone-shot-diff: screen 0\.475x, 1 element\(s\) differ, 2 unmatched$/);
   assert.match(reportLines(summarize([rows[5]]), { shot: "s.png", window: "standalone", pxPerCss: 2 }).join("\n"), /no confident match/);
+});
+
+// #5218: three Safari-tab cells disagreed (title-fit 852x283 67/21/67, menu-screens 852x344 59/21/59, the UI
+// contract 852x283 59/0/59). His phone read 852x368; tests/data/phone-windows.json is the one record and every
+// emulator of his phone reads it.
+test("phone windows: one record, the measured Safari tab, read by bryce-phone, title-fit and menu-screens", async () => {
+  const rec = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/phone-windows.json"), "utf8"));
+  assert.deepEqual([rec.windows.safari.width, rec.windows.safari.height, rec.dpr], [852, 368, 3], "the #5218 reading");
+  for (const [name, w] of Object.entries(rec.windows)) {
+    assert.ok(w.measured && w.assumed && w.source, `${name} says what was measured, what was assumed, and where from`);
+    assert.deepEqual({ ...BRYCE_WINDOWS[name].insets }, w.insets, `bryce-phone ${name}`);
+    assert.deepEqual([BRYCE_WINDOWS[name].width, BRYCE_WINDOWS[name].height], [w.width, w.height], `bryce-phone ${name}`);
+  }
+  const { GEOS } = await import("../helpers/title-fit.mjs");
+  const geo = (n) => GEOS.find((g) => g.name === n);
+  for (const [cell, win] of [["852x393-standalone", "standalone"], ["852x368-safari", "safari"], ["844x390", "w844"]]) {
+    const g = geo(cell), w = rec.windows[win];
+    assert.ok(g, `title-fit has the ${cell} cell`);
+    assert.deepEqual([g.w, g.h, g.insets], [w.width, w.height, w.insets], `title-fit ${cell} = the record's ${win}`);
+  }
+  // menu-screens' cells are read from the table it exports, not from its source text.
+  const { VIEWPORTS } = await import("../../tools/ui/menu-screens.mjs");
+  for (const [cell, win] of [["ios-iphone-landscape", "standalone"], ["ios-iphone-landscape-safari", "safari"], ["ios-iphone-landscape-844", "w844"]]) {
+    const v = VIEWPORTS.find((e) => e[0] === cell), w = rec.windows[win];
+    assert.ok(v, `menu-screens has the ${cell} cell`);
+    assert.deepEqual([v[1].viewport, v[3]], [{ width: w.width, height: w.height }, { t: w.insets.top, r: w.insets.right, b: w.insets.bottom, l: w.insets.left }], `menu-screens ${cell} = the record's ${win}`);
+  }
+  // The two guessed Safari heights (283, 344) are gone from every 852-wide cell of both tables.
+  const heights = [...GEOS.filter((g) => g.w === 852).map((g) => g.h), ...VIEWPORTS.filter((e) => e[1].viewport.width === 852).map((e) => e[1].viewport.height)];
+  assert.deepEqual(heights.filter((h) => h === 283 || h === 344), [], "no guessed Safari height");
 });

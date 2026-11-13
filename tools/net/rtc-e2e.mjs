@@ -122,7 +122,7 @@ async function connect(rehost = false) {
 // Seed non-default readiness on BOTH sides before teardown: otherwise the
 // replacement-room check could pass even if it leaked the old false values.
 async function readyBoth() {
-  await Promise.all([A, B].map((p) => p.evaluate(() => window.__apex.lobbyReady(true))));
+  await Promise.all([A, B].map((p) => p.evaluate(() => window.__apex.lobbyReady(true, true))));
   for (const p of [A, B]) {
     await p.waitForFunction(() => {
       const r = window.__apex.lobbyRoom();
@@ -151,7 +151,7 @@ await connect();
 await assertUnready();
 log(el(), "disconnect and fresh room re-entry passed");
 // A connected room only becomes a race after both READY packets arrive.
-await Promise.all([A, B].map((p) => p.evaluate(() => window.__apex.lobbyReady(true))));
+await Promise.all([A, B].map((p) => p.evaluate(() => window.__apex.lobbyReady(true, true))));
 let readyAll = false;
 for (let i = 0; i < 20 && !readyAll; i++) {
   const r = await A.evaluate(() => window.__apex.lobbyRoom());

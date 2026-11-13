@@ -54,6 +54,26 @@ let raceSessionHooked = false;
 function raceSessionReady() {
   return RACE_SESSION_FILES.every((f) => raceSessionLoaded.has(f));
 }
+// #4274 item 15: one preload for the wave, then one eval per task in edge order (it was one burst of evals).
+async function loadRaceSessionSerial(opts) {
+  const files = RACE_SESSION_FILES;
+  const preds = new Map(files.map((f) => [f, []]));
+  for (const [a, b] of RACE_SESSION_EDGES) if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
+  const pending = files.filter((f) => !raceSessionLoaded.has(f));
+  if (pending.length > 1 && typeof ScriptLoader !== "undefined" && ScriptLoader.preload) {
+    try { ScriptLoader.preload(pending); } catch (_) { /* a hint: the injects still fetch */ }
+  }
+  let first = true;
+  while (pending.length) {
+    const i = pending.findIndex((f) => preds.get(f).every((p) => raceSessionLoaded.has(p) || !pending.includes(p)));
+    if (i < 0) return loadBackendScripts(pending, RACE_SESSION_EDGES, opts);   // a cycle: the bulk loader decides
+    const src = pending.splice(i, 1)[0];
+    if (!first) await audioYieldToMain("task");
+    first = false;
+    if (!(await loadBackendScripts([src], RACE_SESSION_EDGES, opts))) return false;
+  }
+  return true;
+}
 function ensureRaceSession() {
   if (raceSessionLoad) return raceSessionLoad;
   if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
@@ -63,7 +83,7 @@ function ensureRaceSession() {
     raceSessionLoad = Promise.resolve(true);
     return raceSessionLoad;
   }
-  raceSessionLoad = loadBackendScripts(RACE_SESSION_FILES, RACE_SESSION_EDGES, {
+  raceSessionLoad = loadRaceSessionSerial({
     strict: true, loaded: raceSessionLoaded,
     onSlow: () => { if (typeof LoadingScreen !== "undefined" && LoadingScreen.slowNotice) LoadingScreen.slowNotice(); },   // #2625
     ready: (src) => !RACE_SESSION_READY[src] || RACE_SESSION_READY[src](),
@@ -303,6 +323,46 @@ const DATA_READY = {
   "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };
+// REAL RACE (LAZY_REAL_RACE, #4978 row 6): the Data Hub's JUMP IN / WATCH /
+// HIGHLIGHTS engine. game.js holds the FULL RealRace stub; the first call after
+// this lands creates RealRaceBody once. The hub (the only player door to a real
+// race) awaits it before it opens; the agent surface loads it for pages/specs.
+const REAL_RACE_FILES = ApexRoster.LAZY_REAL_RACE || [];
+const REAL_RACE_EDGES = ApexRoster.LAZY_REAL_RACE_EDGES || [];
+const REAL_RACE_READY = {
+  "js/ui/watch-transport.js": () => typeof WatchTransport !== "undefined",
+  "js/race/real-replay.js": () => typeof RealReplay !== "undefined",
+  "js/race/real-race-pace.js": () => typeof RealRacePace !== "undefined",
+  "js/race/real-race.js": () => typeof RealRaceBody !== "undefined",
+};
+const realRaceLoaded = new Set();
+let realRaceLoad = null;
+function ensureRealRace() {
+  if (realRaceLoad) return realRaceLoad;
+  if (!REAL_RACE_FILES.length) return Promise.resolve(true);   // nothing to load in this build: never holds the hub
+  // Real before THIS loader ran anything (a shell or harness that evaluated it): nothing to fetch.
+  if (!realRaceLoaded.size && REAL_RACE_FILES.every((f) => REAL_RACE_READY[f] && REAL_RACE_READY[f]())) {
+    realRaceLoad = Promise.resolve(true);
+    return realRaceLoad;
+  }
+  realRaceLoad = loadBackendScripts(REAL_RACE_FILES, REAL_RACE_EDGES, {
+    strict: true, loaded: realRaceLoaded,
+    ready: (src) => !REAL_RACE_READY[src] || REAL_RACE_READY[src](),
+  }).then((ok) => {
+    if (!ok || typeof RealRaceBody === "undefined") {
+      Log.warn("data", "the real-race bundle did not load");
+      realRaceLoad = null;
+      return false;
+    }
+    return true;
+  }).catch((e) => {
+    Log.warn("data", "the real-race bundle did not load: " + (e && e.message));
+    realRaceLoad = null;
+    return false;
+  });
+  return realRaceLoad;
+}
+
 // Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
 // inject the bundle twice, and the second tap has to await the first load
 // rather than call DataHub.open() while hub.js is still in flight.
@@ -319,12 +379,13 @@ function ensureDataHub() {
     const maxAttempts = DATA_HUB_RETRY_MS.length + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) await dataHubRetryDelay(attempt);
-      const complete = await loadBackendScripts(DATA_FILES, DATA_EDGES, {
+      // WATCH & DRIVE launches RealRace: its engine lands with the hub, never after a tap.
+      const [complete, realOk] = await Promise.all([loadBackendScripts(DATA_FILES, DATA_EDGES, {
         strict: true, loaded: dataScriptsLoaded,
         ready: (src) => DATA_READY[src] && DATA_READY[src](),
         cacheBust: attempt > 0 ? attempt : 0,
-      });
-      if (!complete) {
+      }), ensureRealRace()]);
+      if (!complete || !realOk) {
         if (attempt < maxAttempts - 1) continue;
         Log.warn("data", "the data hub bundle did not load — DATA stays closed");
         dataHubLoad = null;
@@ -736,6 +797,8 @@ function loadAgentSurface() {
     // instead of on anything this change is about. Awaited BEFORE apex.js so
     // ApexApi.create(G) sees the real objects through the G getters.
     const netOk = await ensureNet();
+    // Pages and specs launch real races through RealRace directly (no hub tap).
+    const realOk = await ensureRealRace();
     const agentOk = await loadBackendScripts(AGENT_FILES, AGENT_EDGES, { loaded: agentScriptsLoaded });
     // FAIL SOFT. A refused file (SRI: a stale shell's ?v= key answered with a newer
     // deploy's bytes, 2026-11-02) still lets later files evaluate, so ApexApi.create
@@ -747,7 +810,7 @@ function loadAgentSurface() {
     catch (e) { bound = false; Log.warn("game", "agent surface bind failed: " + (e && e.message)); }
     // Memoised on the promise, but a FAILED load must not latch for the session:
     // METRICS / the flyby panel ask again on their next open.
-    if (netOk === false || !agentOk || !bound) {
+    if (netOk === false || realOk === false || !agentOk || !bound) {
       Log.warn("game", "the agent surface did not fully load — a later ask retries");
       _agentLoad = null;
     }
@@ -1007,7 +1070,7 @@ function bootDesktopAudio() {
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

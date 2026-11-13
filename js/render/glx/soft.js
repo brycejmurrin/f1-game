@@ -76,11 +76,17 @@ const GLXSoft = (function () {
       // Software GL + menu/race-entry sheets: skip full-frame readback (post.js
       // readPixels) while PerfGov.softwareGlUiReadbackDefer() — garage, race
       // settings flyby, loading cover (#3589; live race-entry on SwiftShader).
-      // Tests and __apex.awaitPresent() still need a generation bump: satisfy
-      // waiters without touching the GPU (same contract as a successful blit).
+      // ONLY THE PASSIVE ARM IS DEFERRED. invalidateSoftPresent() on garage entry
+      // arms a blit nobody is waiting for; that one is dropped. A waiter is a
+      // caller that reads #game-soft next (garage PHOTO, SAVE SCREENSHOT,
+      // garage-angles), so it gets real pixels: a generation bump with nothing
+      // drawn hands it a blank 300x150 canvas. That fake shipped dead (the gate
+      // threw on an unbound getElementById) until 7d21d6700 bound it, and the
+      // scheduled garage-before capture went red the next day (#5380).
+      const asked = _softPresentWaiters.length > 0;
       try {
-        if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
-          if (_softPresentWaiters.length || _softCaptureDue) {
+        if (!asked && typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
+          if (_softCaptureDue) {
             _softCaptureDue = false;
             softBlitNotify();
           }
@@ -101,7 +107,7 @@ const GLXSoft = (function () {
       const n = w * h * 4;
       if (!_softBuf || _softBuf.length !== n) _softBuf = new Uint8Array(n);
       try {
-        if (!(PST && PST.readbackLdrPixels && PST.readbackLdrPixels(_softBuf, w, h))) return;
+        if (!(PST && PST.readbackLdrPixels && PST.readbackLdrPixels(_softBuf, w, h, asked))) return;
       } catch (_) { return; }
       if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
         _softImg = _displayCtx.createImageData(w, h);

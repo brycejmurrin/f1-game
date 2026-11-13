@@ -27,6 +27,7 @@ const SettingsSearch = (function () {
     ["hold-gas", "Gas hold / toggle (keyboard / pad)", "a11y", "pm-hold-throttle-sel", "throttle accelerator hold toggle accessibility"],
     ["hold-lookback", "Look back hold / toggle (keyboard / pad)", "a11y", "pm-hold-lookback-sel", "rear view mirror hold toggle accessibility"],
     ["assist", "Steer assist", "driving", "pm-linemode-sel", "steering help racing line"],
+    ["wheel-lock", "Wheel lock & ABS", "driving", "pm-wheelmodel-sel", "abs traction control tc brake lock wheelspin wheel state"],
     ["line", "Steering line bias", "advanced", "pm-line", "steer assist inside outside racing line offset"],
     ["throttle", "Throttle mode", "controls", "pm-throttlemode-sel", "automatic manual pedals"],
     ["handedness", "Left-handed controls", "controls", "pm-mirror-sel", "mirror touch pedals hand"],
@@ -79,11 +80,10 @@ const SettingsSearch = (function () {
     ["boost-pitch", "Boost pitch / rev lift", "audio", "as-t-boostlift", "ers deploy engine tone high ringy"],
     ["radio", "Team radio", "audio", "as-radio-sel", "voice engineer speech"],
   ].map((r) => Object.freeze({ id: r[0], label: r[1], page: r[2], target: r[3], aliases: r[4] })));
-  // Owners register descriptors without loading their controls. Re-registration
-  // replaces only that owner's rows; disposing an old registration is harmless.
+  // Owners register descriptors only; re-registering replaces that owner's rows.
   const owners = new Map(), subscribers = new Set();
   const PAGES = new Set(["controls", "driving", "display", "appearance", "a11y", "advanced", "audio", "files"]);
-  // Catalog concat and option-label walks were repeated on every keystroke.
+  // Cached: concat and option walks ran per keystroke.
   let rowCache = null;
   const optionText = new Map();
   function allRows() {
@@ -108,11 +108,7 @@ const SettingsSearch = (function () {
     return () => { if (owners.get(owner) === rows) { owners.delete(owner); rowCache = null; for (const fn of subscribers) fn(); } };
   }
   function optionsOf(row) {
-    // Read labels only. Never select an option, dispatch change, or ensure a
-    // lazy bundle merely to answer a query. A select's joined option text is
-    // cached until its SettingRow key or child count changes, so the next
-    // keystroke does not walk those labels again. A missing id is looked up
-    // again so a control mounted later can still match.
+    // Labels only (no select/change/lazy load); cached per row.
     const extra = typeof row.options === "function" ? String(row.options() || "") : String(row.options || "");
     const hit = optionText.get(row.target);
     if (hit && hit.el && hit.el.isConnected !== false && optionSig(hit.el) === hit.sig) return hit.labels + " " + extra;
@@ -143,15 +139,19 @@ const SettingsSearch = (function () {
     const control = /^(BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(target.tagName) ? target
       : target.querySelector("button:not([disabled]),input:not([disabled]),select:not([disabled]),summary");
     if (!control || control.disabled || control.closest("[hidden]")) return false;
-    // Device-only controls can be hidden by CSS without [hidden] (desktop
-    // STEERING INPUT). focus() silently refuses them, so verify both visibility
-    // and the actual focus result before suppressing SettingsNav's fallback.
+    // Device-only rows may be CSS-hidden: check focus landed.
     if (control.checkVisibility && !control.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true })) return false;
     if (control.getClientRects && control.getClientRects().length === 0) return false;
     control.focus({ preventScroll: true });
     if (document.activeElement !== control) return false;
     control.scrollIntoView({ block: "nearest" });
     return true;
+  }
+  function depBlock(t) {
+    const r = t && (t.closest("[data-dep-off]") || t.querySelector("[data-dep-off]"));
+    const w = r && r.querySelector("[data-dep-reason]"), x = w && w.textContent.trim();
+    if (x) { r.tabIndex = -1; r.focus({ preventScroll: true }); r.scrollIntoView({ block: "nearest" }); }
+    return x;
   }
   function create(o) {
     const host = o.host;
@@ -201,12 +201,12 @@ const SettingsSearch = (function () {
       if (slot.button.textContent !== label) slot.button.textContent = label;
       slot.button.onclick = () => {
         clearFeedback();
-        // Navigation ownership is committed only after the destination won
-        // the lazy generation race. A cancelled audio request owns no BACK.
+        // Own navigation only once the lazy race is won.
         const arrived = () => {
           last = row.id; fromSearch = true;
           if (o.onSelect) o.onSelect(row.page);
-          const placed = reveal(document.querySelector("#" + row.target));
+          const el = document.querySelector("#" + row.target), placed = reveal(el), why = !placed && depBlock(el);
+          if (why) { clearFeedback(); note.textContent = row.label + " is off: " + why; return true; }
           if (!placed) unavailable(row);
           return placed;
         };
@@ -218,8 +218,7 @@ const SettingsSearch = (function () {
       const matches = find(input.value);
       const caption = input.value.trim() ? matches.length + " matching settings" : "Search names or everyday terms. Your settings stay as they are.";
       if (note.textContent !== caption) note.textContent = caption;
-      // Reuse the row nodes. replaceChildren() on every input dropped and
-      // reallocated a button per match (often dozens for a one-letter query).
+      // Reuse row nodes (no per-keystroke realloc).
       const keep = [];
       for (const row of matches) {
         const slot = slotFor(row);
@@ -248,8 +247,7 @@ const SettingsSearch = (function () {
         return document.activeElement === target;
       },
       cancel() { fromSearch = false; clearFeedback(); },
-      // A fresh Settings session starts unfiltered (UI hunt 2026-10-29 #5);
-      // restore() still brings a result page BACK to the query within one.
+      // Fresh sessions start unfiltered.
       reset() { fromSearch = false; clearFeedback(); if (input.value) { input.value = ""; paint(); } },
       dispose() { subscribers.delete(paint); clearFeedback(); box.remove(); },
       input,

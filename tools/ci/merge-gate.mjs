@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // merge-gate.mjs — the landing gate: the CI check named `gate` (.github/workflows/land.yml), runnable locally.
-// @doc Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok for harness edits, gen + ratchets.
+// @doc Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge.
 // @section runner
 // @skill steward
 //
@@ -28,13 +28,25 @@
 //             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and newer than the last push that
 //             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
 //             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
-//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
+//   raise     a diff that RAISES a tree-wide ceiling (tests/data/ratchets.json `tree`, plus the tests/data/ratchets.d
+//             deltas, compared head vs merge base; a lowered, unchanged or new ceiling is no raise) needs the
+//             `ratchet-raise` label, last added by Bryce in person and newer than the last push touching a ratchet file.
+//             Per-file ceilings (`files`, the commit hook's --auto-raise) are not this row's. Bryce's pick, 2026-11-11
+//             ~09:10Z: "Build the check (Recommended)" (#5405 option b; .claude/rules/game-code.md).
+//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there (an absent catalog is built)
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
+//   retest    the CI run tested a merge ref as of ITS creation, so a PR merged onto the tip since then is untested in
+//             combination (#5407: #5300 × #5392 → deploy red #5396). On the same merge result, the unit tests that the
+//             newer tip merges and the PR select (tooling-fast's own --changed selection; the touched tests/unit files
+//             when that widens to the whole floor) run once; a failing, timed-out or un-runnable re-test refuses.
+//             Bryce's pick, 2026-11-11 ~09:02Z: "Quick re-test at merge (Recommended)" (#5407 option b).
+//             It catches ACCIDENTAL crossings: the merge result's own scripts (gen:check, the ratchets) ran before it
+//             as the same user and could steer it, the same trust the gen and ratchets rows already have.
 // The `distance` row (merge-base at most N game merges behind the tip) was retired 2026-11-03 (plan §6): gen and
 // ratchets already run on the real merge result, which is what catches composition reds; the row only bought syncs.
 //
-// `--trusted` evaluates only the rows that run no code from the PR (open, hold, plan, ci, config): GitHub reads only,
+// `--trusted` evaluates only the rows that run no code from the PR (open, hold, plan, ci, config, raise): GitHub reads only,
 // nothing checked out or run. land.yml's `trusted-rows` job runs it, so `post` never takes those rows from the
 // artifact of the leg that ran the PR's scripts (WP-L2).
 //
@@ -46,7 +58,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, DEPLOY } from "./github-api.mjs";
-import { planVerdict } from "./ready-gate.mjs";
+import { planVerdict, nowHint } from "./ready-gate.mjs";
 import { renderPkg } from "../gen/gen-test-groups.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { AGENT_APP_SLUG, OWNER, byAgent, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
@@ -62,6 +74,11 @@ export const CI_APP = "github-actions";
 export const CI_WORKFLOW = "ci.yml";
 /** The label that vetoes a landing (plan §4.1); since 2026-11-03 only Bryce's own click lifts it (the hold row). */
 export const HOLD_LABEL = "hold";
+/** The label Bryce adds in person to let a PR that raises a tree-wide ratchet ceiling land (the raise row, #5405). */
+export const RAISE_LABEL = "ratchet-raise";
+/** The ratchet ceiling files: the base table and the per-branch delta fragments (tools/check/ratchets.mjs). */
+export const RATCHET_FILE = /^tests\/data\/(ratchets\.json|ratchets\.d\/[^/]+\.json)$/;
+export const ratchetFiles = (files) => (files || []).filter((f) => RATCHET_FILE.test(String(f || "").replace(/^\.\//, "")));
 /** The label Bryce adds in person to let a PR that edits the agent harness land (the config row). */
 export const CONFIG_LABEL = "config-ok";
 /** The paths whose edit needs CONFIG_LABEL: the hooks, settings, workflows and actions that enforce every other rule,
@@ -96,9 +113,11 @@ export const configFiles = (files) => (files || []).filter(isConfigPath);
 /** The paths a pulls/<n>/files or compare row names: `filename`, and `previous_filename` for a rename. Pure. */
 export const filePaths = (rows) => (rows || []).flatMap((f) => [f?.filename, f?.previous_filename]).filter(Boolean);
 /** Row order, which is also print order. */
-export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "gen", "ratchets"]);
+export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "raise", "gen", "ratchets", "retest"]);
+/** The rows that need the throw-away merge (git + the merge result's code); `--trusted` evaluates none of them. */
+export const LOCAL_ROWS = Object.freeze(["gen", "ratchets", "retest"]);
 /** The rows `--trusted` evaluates: none of them runs code from the PR. */
-export const TRUSTED_ROWS = Object.freeze(ROWS.filter((k) => k !== "gen" && k !== "ratchets"));
+export const TRUSTED_ROWS = Object.freeze(ROWS.filter((k) => !LOCAL_ROWS.includes(k)));
 
 const row = (ok, evidence) => ({ ok: !!ok, evidence });
 const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, encoding: "utf8", timeout: 120_000, ...extra });
@@ -181,7 +200,7 @@ export function configVerdict(files, labels, events = null, owner = OWNER, push 
  * compare from it to the head must touch no CONFIG_PATH.
  * → { state: "covered"|"after"|"unknown", evidence }. Side effects only through `request`.
  */
-export function configPushState({ pr, head, headRef, labelAt, request }) {
+export function configPushState({ pr, head, headRef, labelAt, request, touches = configFiles, what = "config path" }) {
   const t = (iso) => Date.parse(iso || "") || 0;
   const L = t(labelAt);
   if (!L) return { state: "unknown", evidence: "no config-ok label time" };
@@ -199,10 +218,112 @@ export function configPushState({ pr, head, headRef, labelAt, request }) {
   if (cmp.error) return { state: "unknown", evidence: `compare ${from.slice(0, 8)}...${head.slice(0, 8)}: ${cmp.error}` };
   const files = cmp.json?.files;
   if (!Array.isArray(files) || files.length >= 300) return { state: "after", evidence: `the compare ${from.slice(0, 8)}...${head.slice(0, 8)} is unreadable or truncated, so a push` };
-  const hit = configFiles(filePaths(files));
+  const hit = touches(filePaths(files));
   return hit.length
-    ? { state: "after", evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
-    : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no config path` };
+    ? { state: "after", from, evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
+    : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no ${what}` };
+}
+
+/**
+ * The effective tree-wide ceilings at `ref`: ratchets.json `tree` plus every ratchets.d delta's `tree` part, with
+ * tools/check/ratchets.mjs applyFragments' rule (a delta for a metric the table does not carry moves nothing). Kept
+ * here, not imported: the gate must not change when a non-config file does. GitHub reads only.
+ * → { tree: { metric: ceiling } } | { error }.
+ */
+export function treeCeilingsAt(ref, request) {
+  const read = (file) => {
+    const r = request(`contents/${file}?ref=${encodeURIComponent(ref)}`);
+    if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") return { error: `${file} at ${String(ref).slice(0, 8)}: ${r.error || "unreadable"}` };
+    try { return { json: JSON.parse(Buffer.from(r.json.content, "base64").toString("utf8")) }; } catch (e) { return { error: `${file} at ${String(ref).slice(0, 8)}: ${e.message}` }; }
+  };
+  const base = read("tests/data/ratchets.json");
+  if (base.error) return base;
+  const tree = {};
+  for (const [m, v] of Object.entries(base.json?.tree || {})) {
+    const c = typeof v === "number" ? v : v?.ceiling;
+    if (typeof c === "number" && Number.isFinite(c)) tree[m] = c;
+  }
+  const dir = request(`contents/tests/data/ratchets.d?ref=${encodeURIComponent(ref)}`);
+  if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `tests/data/ratchets.d at ${String(ref).slice(0, 8)}: ${dir.error}` };
+  const frags = dir.error ? [] : (Array.isArray(dir.json) ? dir.json : []).filter((e) => e?.type === "file" && /\.json$/.test(e.name || "")).map((e) => e.path);
+  for (const f of frags.sort()) {
+    const r = read(f);
+    if (r.error) return r;
+    for (const [m, d] of Object.entries(r.json?.tree || {})) {
+      if (!Object.hasOwn(tree, m)) continue;
+      if (typeof d !== "number" || !Number.isFinite(d)) return { error: `${f}: tree delta ${m} is not a number` };
+      tree[m] += d;
+    }
+  }
+  return { tree };
+}
+
+/** The tree metrics whose ceiling is higher at `after` than at `before`, and those `before` carries that `after` does
+ *  not: ratchets.mjs measures only the metrics ratchets.json names, so deleting one removes its ceiling, the widest
+ *  raise there is (`to: null`, shown as "removed"). A metric only `after` carries is a new ceiling, no raise. Pure. */
+export function treeRaises(before, after) {
+  const b = before || {}, a = after || {};
+  return Object.keys(b).filter((m) => !Object.hasOwn(a, m) || a[m] > b[m]).sort()
+    .map((m) => ({ metric: m, from: b[m], to: Object.hasOwn(a, m) ? a[m] : null }));
+}
+
+/**
+ * raise: no tree-wide ceiling rises, or Bryce's own newest `ratchet-raise` covers the head (`push` from
+ * configPushState over the ratchet files). An agent's label never counts. Pure.
+ */
+export function raiseVerdict(raises, labels, events = null, owner = OWNER, push = null) {
+  if (!raises?.length) return row(true, "no tree-wide ratchet ceiling rises or is removed in the diff (per-file ceilings are the commit hook's --auto-raise, not this row's)");
+  const shown = raises.slice(0, 4).map((r) => `${r.metric} ${r.from}→${r.to === null ? "removed" : r.to}`).join(", ") + (raises.length > 4 ? ", …" : "");
+  const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
+  const last = newestLabelEvent(events, RAISE_LABEL);
+  if (!names.includes(RAISE_LABEL)) return row(false, `needs ${RAISE_LABEL} from ${owner}: the diff raises a tree-wide ceiling (${shown}) — lower the count instead, or ask him`);
+  if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
+    return row(false, `needs ${RAISE_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (raises ${shown})`);
+  }
+  if (push?.state === "after") return row(false, `needs a fresh ${RAISE_LABEL} from ${owner}: ${push.evidence} after his label at ${last.created_at || "?"} (remove and re-add it)`);
+  if (push?.state === "unknown") return { ...row(false, `${RAISE_LABEL} from ${owner} found, head push not resolved yet: ${push.evidence}`), pending: true };
+  return row(true, `${RAISE_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
+}
+
+/** The PR's own tree raises at `sha`: its ceilings vs those at its merge base with `base` (so a sync, which moves the
+ *  merge base, brings other PRs' fragments into both sides and they cancel). → { raises } | { error }. */
+export function prRaisesAt(sha, base, request) {
+  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(sha)}`);
+  const mb = cmp.json?.merge_base_commit?.sha;
+  if (cmp.error || !mb) return { error: `merge base of ${String(sha).slice(0, 8)}: ${cmp.error || "unreadable"}` };
+  const before = treeCeilingsAt(mb, request);
+  if (before.error) return before;
+  const after = treeCeilingsAt(sha, request);
+  if (after.error) return after;
+  return { raises: treeRaises(before.tree, after.tree) };
+}
+
+/** Does `now` raise nothing beyond `then` (the raises Bryce saw when he clicked)? Every metric raised now was raised
+ *  then by at least as much; a removal is covered only by a removal. Pure. */
+export function raisesCovered(now, then) {
+  const amt = (r) => (r.to === null ? Infinity : r.to - r.from);
+  const was = new Map((then || []).map((r) => [r.metric, amt(r)]));
+  return (now || []).every((r) => was.has(r.metric) && amt(r) <= was.get(r.metric));
+}
+
+/** The raise row for PR `pr` (GitHub reads only: compare for the merge base, the ceilings at it and at the head).
+ *  Bound to what Bryce labelled: a push after his click that touches a ratchet file still counts as covered when the
+ *  PR's own raise at the head is no wider than its own raise at the head he labelled, so a sync that brings in other
+ *  PRs' ratchets.d fragments does not need a fresh click, and any further raise does. */
+export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request }) {
+  if (!ratchetFiles(changed).length) return row(true, "no ratchet ceiling file in the diff");
+  const now = prRaisesAt(head, base, request);
+  if (now.error) return { error: now.error };
+  const raises = now.raises;
+  const last = newestLabelEvent(events, RAISE_LABEL);
+  let push = raises.length && last?.event === "labeled" && byOwner(last, owner)
+    ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, touches: ratchetFiles, what: "ratchet file" }) : null;
+  if (push?.state === "after" && push.from) {
+    const then = prRaisesAt(push.from, base, request);
+    if (then.error) return { error: then.error };
+    if (raisesCovered(raises, then.raises)) push = { state: "covered", evidence: `the pushes since ${push.from.slice(0, 8)} touch a ratchet file but raise nothing beyond what he labelled there` };
+  }
+  return raiseVerdict(raises, labels, events, owner, push);
 }
 
 /** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan fails (skill steward
@@ -212,7 +333,7 @@ export function planRow(body, author = "") {
   if (p.state === "none" && !/\[bot\]$/.test(String(author || ""))) return row(false, "no ## Plan checklist in the body (skill steward §Open) — add the template's Plan and close it");
   if (p.state === "open") {
     const shown = p.open.slice(0, 3).map((t) => `"${t}"`).join(", ");
-    return row(false, `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why`);
+    return row(false, `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why${nowHint(p.open)}`);
   }
   return row(true, p.state === "none" ? "no ## Plan checklist in the body (a fold bot's PR)" : `Plan closed (${p.items} items)`);
 }
@@ -356,6 +477,135 @@ export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
     : { ok: true, evidence: "ratchets.mjs and the whole-tree count tests hold on the merge result" };
 }
 
+// ---- retest: the merge's newer half -------------------------------------------------------------------------
+
+/** How far before the CI run's creation a tip merge still counts as "maybe not in its merge ref": GitHub builds
+ *  refs/pull/<n>/merge when the event fires, a little before the run is created, so a merge just before it may be
+ *  missing. A wider window only re-tests more (stricter), never less. */
+export const RETEST_MARGIN_MIN = 15;
+/** Cap on one re-test (the land-gate job is 20 min with gen:check and the ratchets): a timeout refuses. */
+export const RETEST_TIMEOUT_MS = 420_000;
+const UNIT_TEST = /^tests\/unit\/.+\.test\.mjs$/;
+/** Workers for the re-test (a land-gate runner has 4 vCPU, gen:check and the ratchets already ran). */
+export const RETEST_JOBS = 2;
+/** tooling-fast's per-file bound for the re-test, inside RETEST_TIMEOUT_MS. */
+export const RETEST_FILE_TIMEOUT_S = 180;
+
+/**
+ * The first-parent commits on `tip` that are not in `head` and are newer than `ciAt` − RETEST_MARGIN_MIN, and the
+ * paths each changed against its first parent, plus the PR's own paths (merge-base..head). Git only, in `cwd` (the
+ * throw-away worktree). → { commits, newer, pr } | { error }.
+ */
+export function newerTipPaths({ cwd, tip, head, ciAt, ciBase = "", gitRun = git }) {
+  const at = Date.parse(String(ciAt || ""));
+  if (!Number.isFinite(at)) return { error: `the CI run's creation time is unreadable (${JSON.stringify(ciAt ?? null)})` };
+  const since = new Date(at - RETEST_MARGIN_MIN * 60_000).toISOString();
+  const lines = (r) => String(r.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const list = gitRun(["rev-list", "--first-parent", `--since=${since}`, tip, `^${head}`], cwd);
+  if (list.status !== 0) return { error: `git rev-list on ${String(tip).slice(0, 8)}: ${(list.stderr || "").trim().split("\n")[0]}` };
+  // A date is not a commit (reuse-draft-fast.sh, 2026-11-10): when the run recorded the base its merge ref sat on
+  // (the `apex-guards` annotation), every first-parent tip commit after THAT base is re-tested too. Union only: the
+  // record can widen the window, never narrow it; an unreadable or unknown base leaves the time window alone.
+  const recorded = /^[0-9a-f]{40}$/.test(String(ciBase || "")) && gitRun(["cat-file", "-e", `${ciBase}^{commit}`], cwd).status === 0;
+  let byBase = [];
+  if (recorded) {
+    const r = gitRun(["rev-list", "--first-parent", tip, `^${head}`, `^${ciBase}`], cwd);
+    if (r.status !== 0) return { error: `git rev-list ${String(tip).slice(0, 8)} since base ${ciBase.slice(0, 8)}: ${(r.stderr || "").trim().split("\n")[0]}` };
+    byBase = lines(r);
+  }
+  const commits = [...new Set([...lines(list), ...byBase])], newer = new Set();
+  for (const c of commits) {
+    const d = gitRun(["diff", "--name-only", `${c}^1`, c], cwd);
+    if (d.status !== 0) return { error: `git diff of tip commit ${c.slice(0, 8)}: ${(d.stderr || "").trim().split("\n")[0]}` };
+    for (const f of lines(d)) newer.add(f);
+  }
+  let pr = [];
+  if (commits.length) {
+    const mb = gitRun(["merge-base", tip, head], cwd);
+    const d = mb.status === 0 ? gitRun(["diff", "--name-only", mb.stdout.trim(), head], cwd) : mb;
+    if (d.status !== 0) return { error: `the PR's own paths (merge-base..head): ${(d.stderr || "").trim().split("\n")[0]}` };
+    pr = lines(d);
+  }
+  return { commits, newer: [...newer].sort(), pr, base: recorded ? ciBase : "" };
+}
+
+/** The base SHA the green CI run's merge ref sat on, from its tooling A `apex-guards` annotation
+ *  (`mode=<m> base=<sha>`, tools/ci/reuse-draft-fast.sh THE RECORD) → sha, or "" when unreadable. GitHub reads only. */
+export function ciRecordedBase(run, request) {
+  if (!run?.id) return "";
+  const jobs = listAll(`actions/runs/${run.id}/jobs`, request, (j) => j?.jobs, 5);
+  if (jobs.error) return "";
+  const a = jobs.rows.find((j) => String(j?.name || "").replace(/^ci \/ /, "") === "Structural guards (tooling A)");
+  if (!a?.id) return "";
+  const ann = request(`check-runs/${a.id}/annotations?per_page=100`);
+  const rec = (Array.isArray(ann.json) ? ann.json : []).find((x) => x?.title === "apex-guards");
+  return /\bbase=([0-9a-f]{40})\b/.exec(String(rec?.message || ""))?.[1] || "";
+}
+
+/** The gate checkout's own tooling-fast `--changed` selection for `paths` (never the PR's copy: a PR must not choose
+ *  what re-tests it). A child process, because tooling-fast needs node_modules, which only the land-gate leg has. */
+export function gateSelection(paths, { root = ROOT, run = spawnSync } = {}) {
+  const src = `import(${JSON.stringify(path.join(root, "tools/ci/tooling-fast.mjs"))}).then((m) => { const s = m.selectToolingFastChanged(JSON.parse(process.argv[1])); let estMs = null; try { estMs = m.estimateToolingFast(s.files, m.loadTimings(), ${RETEST_JOBS}).criticalPathMs; } catch {} process.stdout.write(JSON.stringify({ files: s.files, reason: s.reason, widened: s.widened || "", estMs })); })`;
+  const r = run(process.execPath, ["--input-type=module", "-e", src, JSON.stringify(paths)], { cwd: root, encoding: "utf8", timeout: 60_000, maxBuffer: 16 << 20 });
+  if (r.error || r.status !== 0) return { error: `tooling-fast selection failed: ${r.error?.message || String(r.stderr || "").trim().split("\n").slice(-1)[0] || "exit " + r.status}` };
+  try { return JSON.parse(r.stdout); } catch (e) { return { error: `tooling-fast selection unreadable: ${e.message}` }; }
+}
+
+/**
+ * Which unit files the re-test runs: the selection for (newer tip paths ∪ the PR's paths), kept to files that exist in
+ * the merge result; when the selection widens to the whole floor (an infra path), the touched tests/unit files of
+ * either side instead, and the evidence says so. Pure. → { files, how }.
+ */
+export function retestPlan({ newer = [], pr = [], selection, exists = () => true }) {
+  const touched = [...new Set([...newer, ...pr])].sort();
+  const literal = touched.filter((f) => UNIT_TEST.test(f) && exists(f));
+  if (!selection || selection.widened) {
+    return { files: literal, how: `the touched tests/unit files${selection?.widened ? ` (the selection widened: ${selection.widened})` : ""}` };
+  }
+  const files = [...new Set([...(selection.files || []), ...literal])].filter((f) => exists(f)).sort();
+  return { files, how: `tooling-fast's --changed selection (${selection.reason || "matched"})` };
+}
+
+/**
+ * retest row, on the merge result in `cwd`: no tip merge since the CI run (less the margin) → ok without running
+ * anything; otherwise run the planned unit files with the merge result's tooling-fast, stripped environment, once.
+ * Every failure to read, select or run refuses (never a silent pass). → { ok, evidence }.
+ */
+export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", run = spawnSync, gitRun = git, select = gateSelection } = {}) {
+  const t = newerTipPaths({ cwd, tip, head, ciAt, ciBase, gitRun });
+  if (t.error) return row(false, `re-test not runnable: ${t.error}`);
+  if (!t.commits.length) return row(true, `no tip merge since the CI run's base (created ${ciAt}, margin ${RETEST_MARGIN_MIN} min${t.base ? `; recorded base ${t.base.slice(0, 8)}` : "; no recorded base"}): CI tested this combination`);
+  const sel = select([...new Set([...t.newer, ...t.pr])].sort());
+  if (sel?.error) return row(false, `re-test not runnable: ${sel.error}`);
+  const plan = retestPlan({ newer: t.newer, pr: t.pr, selection: sel, exists: (f) => fs.existsSync(path.join(cwd, f)) });
+  const since = `${t.commits.length} tip merge(s) since the CI run (${t.commits.slice(0, 3).map((c) => c.slice(0, 8)).join(", ")}${t.commits.length > 3 ? ", …" : ""})`;
+  if (!plan.files.length) return row(true, `${since}: ${plan.how} names no unit test — nothing to re-test`);
+  // Too broad to finish inside the cap (tooling-fast's measured timings): refuse now instead of burning the runner
+  // into the same refusal. The cure is the one a timeout gets: sync, push, and the fresh CI run tests the combination.
+  if (!sel?.widened && Number.isFinite(sel?.estMs) && sel.estMs > RETEST_TIMEOUT_MS * 0.8) {
+    return row(false, `${since}; the re-test would run ${plan.files.length} unit file(s), measured ~${Math.round(sel.estMs / 1000)} s at --jobs=${RETEST_JOBS}, over the ${RETEST_TIMEOUT_MS / 1000} s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
+  }
+  const env = untrustedEnv();
+  delete env.NODE_TEST_CONTEXT;
+  // Output to a file, not a pipe: spawnSync's timeout kills only the direct child, and a test grandchild still
+  // holding the pipe would keep the gate waiting until the job cap. A per-file bound inside the cap as well.
+  const log = path.join(cwd, "artifacts", "merge-gate-retest.log");
+  let fd = null;
+  try { fs.mkdirSync(path.dirname(log), { recursive: true }); fd = fs.openSync(log, "w"); } catch (e) { return row(false, `re-test not runnable: its log ${log}: ${e.message}`); }
+  let r;
+  try {
+    r = run(process.execPath, ["tools/ci/tooling-fast.mjs", `--jobs=${RETEST_JOBS}`, "--quiet", `--file-timeout=${RETEST_FILE_TIMEOUT_S}`, ...plan.files], { cwd, env, stdio: ["ignore", fd, fd], timeout: RETEST_TIMEOUT_MS });
+  } finally { try { fs.closeSync(fd); } catch { /* closed */ } }
+  if (r && r.stdout == null) { let text = ""; try { text = fs.readFileSync(log, "utf8"); } catch { /* no log */ } r = { ...r, stdout: text, stderr: "" }; }
+  const shown = plan.files.slice(0, 4).join(", ") + (plan.files.length > 4 ? ` (+${plan.files.length - 4})` : "");
+  if (r.error || r.status !== 0) {
+    const fails = `${r.stdout || ""}\n${r.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => /\bFAIL\b/.test(l)).slice(0, 3).join(" | ");
+    const why = r.error ? (r.error.code === "ETIMEDOUT" ? `timed out after ${RETEST_TIMEOUT_MS / 1000} s` : r.error.message) : fails || `exit ${r.status}`;
+    return row(false, `${since}; the re-test of ${plan.files.length} unit file(s) on the merge onto ${String(tip).slice(0, 8)} failed: ${why} — the PR and the newer tip cross; sync-pr.mjs, fix, and push (a fresh CI run)`);
+  }
+  return row(true, `${since}; ${plan.files.length} unit file(s) re-tested on the merge result (${plan.how}): ${shown} passed`);
+}
+
 /**
  * Fetch the base and the head branch, merge `head` onto the base tip in a throw-away worktree, run gen:check
  * and the scenery catalog digest there, then the ratchets. Returns { ok, evidence, tip, ratchets?, error? }: `error` marks a git failure the gate
@@ -379,7 +629,7 @@ export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = 
 
 /** The catalog child's exit code for "no sourceDigest field": the gate then runs the generator's full `--check`. */
 const NO_DIGEST = 3;
-export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge } = {}) {
+export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge, ciAt = null, ciBase = "", retest = retestOnMerge } = {}) {
   const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
   const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
   const fetched = fetchForGate({ pr, head, headRef, cwd, base });
@@ -409,6 +659,20 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
   // line, tooling hunt 2026-11-09 row 2) is not waved through: the child exits NO_DIGEST and the generator's own
   // `--check` rebuilds every circuit on this merge and compares (about a minute). A digest that is present must
   // still be well-formed and equal. Keep PR code in a child with the same stripped environment as gen:check.
+  // An ABSENT catalog (the merge of a branch that builds it on demand, #5427) is built here in write mode, with the
+  // same environment and timeout; the generator's exit code is the verdict. A present catalog takes the path above.
+  const absent = !fs.existsSync(path.join(wt, "tools/shot/scenery-locations.json"));
+  if (absent) {
+    const built = run(process.execPath, ["tools/shot/gen-scenery-locations.cjs"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
+    if (built.error || built.status !== 0) {
+      const detail = built.error?.message || `${built.stdout || ""}\n${built.stderr || ""}`.split("\n")
+        .map((line) => line.trim()).find((line) => /Error:|FAILED/.test(line)) || `exit ${built.status}`;
+      return fail(`scenery catalog fails to build on the merge onto ${tip.slice(0, 8)}: ${detail} — node tools/shot/gen-scenery-locations.cjs on the synced branch names the circuit`);
+    }
+    const rat = ratchets({ cwd: wt, run });
+    cleanup();
+    return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat };
+  }
   let catalog = run(process.execPath, ["-e", [
     "const fs = require('node:fs');",
     "const { scenerySourceDigest } = require('./tools/shot/scenery-source-hash.cjs');",
@@ -425,8 +689,10 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
     return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${detail} — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`);
   }
   const rat = ratchets({ cwd: wt, run });
+  // `ciAt` null: the ci row has no green run to compare against, so the re-test waits for it (evaluate says so).
+  const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, ciBase, run });
   cleanup();
-  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog ${rebuilt ? "rebuild check" : "digest"} 0`, tip, ratchets: rat };
+  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog ${rebuilt ? "rebuild check" : "digest"} 0`, tip, ratchets: rat, retest: re };
 }
 
 // ---- evaluator and CLI --------------------------------------------------------------------------------------
@@ -504,6 +770,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const ci = ciSuitesFor(head, request);
   if (ci.error) return { error: `${CI_WORKFLOW} runs on ${head.slice(0, 8)}: ${ci.error}` };
   rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
+  const ciRun = rows.ci.ok ? ci.runs?.get(rows.ci.suite) : undefined;
   if (rows.ci.ok) {
     const retry = ciRetryVerdict(ci.runs?.get(rows.ci.suite), request);
     if (retry.error) return { error: retry.error };
@@ -522,10 +789,14 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   const needsPush = configFiles(changed).length && !!configLabelKind(cfgLast, owner);
   const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
   rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
+  // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
+  const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request });
+  if (raise.error) return { error: raise.error };
+  rows.raise = raise;
   if (generated) rows.config = { ...rows.config, evidence: `${rows.config.evidence}; ${generated.ok ? generated.evidence : `package.json counted as a config edit: ${generated.evidence}`}` };
   let tip = "";
   if (!rows.open.ok) {
-    for (const k of order.filter((r) => r === "gen" || r === "ratchets")) rows[k] = row(false, "not evaluated: the PR is not open and ready");
+    for (const k of order.filter((r) => LOCAL_ROWS.includes(r))) rows[k] = row(false, "not evaluated: the PR is not open and ready");
   } else if (trusted) {
     // GitHub only (no git, no PR code): land.yml post requires this tip to equal the land-gate leg's (#4592).
     const b = request(`branches/${encodeURIComponent(base)}`);
@@ -533,11 +804,17 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     tip = String(b.json?.commit?.sha || "").toLowerCase();
     if (!tip) return { error: `branch ${base}: no tip sha` };
   } else {
-    const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
+    // The re-test compares against the green CI run's creation (the merge ref it tested is that old or newer).
+    const ciAt = rows.ci.ok ? String(ciRun?.created_at || "") : null;
+    const ciBase = rows.ci.ok ? ciRecordedBase(ciRun, request) : "";
+    const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base, ciAt, ciBase });
     if (g.error) return { error: g.evidence };
     tip = g.tip || "";
     rows.gen = row(g.ok, g.evidence);
     rows.ratchets = g.ratchets ? row(g.ratchets.ok, g.ratchets.evidence) : row(false, "not evaluated: the merge or gen:check refused first");
+    rows.retest = !rows.ci.ok
+      ? { ...row(false, "not evaluated: waits for a green ci row (the CI run's base is what it compares against)"), ...(rows.ci.pending ? { pending: true } : {}) }
+      : g.retest ? row(g.retest.ok, g.retest.evidence) : row(false, "not evaluated: the merge or gen:check refused first");
   }
   const ordered = {};
   for (const k of order) ordered[k] = rows[k];
@@ -562,9 +839,10 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
     open (open, not a draft, head = --sha when given), hold (no \`hold\` label; a hold ${OWNER} set in person is lifted
     only by a later click of his own, an agent's hold by anyone), plan (Plan present and closed; \`land:\` items exempt), ci (\`CI\` success on
     the head), config (a diff touching a config path — harness, CI tools, agent config; see CONFIG_PATH — needs
-    \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), gen (clean merge onto the current base tip + gen:check), ratchets (on
-    that merge result).
-  --trusted: only the rows that run no PR code (open, hold, plan, ci, config); land.yml's trusted-rows job.
+    \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), raise (a tree-wide ratchet ceiling
+    rises only with \`${RAISE_LABEL}\` added by ${OWNER} in person after the last push touching a ratchet file), gen (clean merge onto the current base tip + gen:check), ratchets (on
+    that merge result), retest (the unit tests the tip merges since the CI run select, re-run on that merge result).
+  --trusted: only the rows that run no PR code (open, hold, plan, ci, config, raise); land.yml's trusted-rows job.
   A row still waiting on CI prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other row ok, CI not
   finished), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
 

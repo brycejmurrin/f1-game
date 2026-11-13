@@ -183,8 +183,11 @@ const NetPlay = (function () {
     const PEER_ONE = "peer";
     let session = null;
     function broadcast(type, data) {
-      let ok = false;
-      for (const s of sessionList()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
+      let ok = false, dj;
+      // Serialised ONCE for every session (sendEvent's dataJson path writes the same bytes); a payload
+      // JSON.stringify cannot write (a cycle, undefined) takes each session's own path, as before.
+      try { dj = data === undefined ? "null" : JSON.stringify(data); } catch (e) { dj = undefined; }
+      for (const s of sessionList()) { try { ok = s.sendEvent(type, data, dj) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
       return ok;
     }
     const peerCar = new Map();            // peerId -> wireId
@@ -842,6 +845,9 @@ const NetPlay = (function () {
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
       }
+      // Each friend's paint for this race (#5037), stamped on its car as car.netPaint
+      // for the car draw (CarDraw.paintTeam): what they sent, never this phone's store.
+      if (remotes.size && typeof LobbyRoster !== "undefined") LobbyRoster.paintField(G.cars || [], remoteList());
       if ((role !== SpectatePolicy.SPECTATOR && (!localCar || (!remotes.size && !(role === "host" && hasSpectator))))
           || (role === SpectatePolicy.SPECTATOR && !(G.cars || []).length)) {
         // start() adopts the lobby's sessions, but a failed adoption must not

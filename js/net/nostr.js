@@ -4,7 +4,7 @@
 const NetNostr = (function () {
   // Guest join of a fake/missing code must fail in the lobby in ~8–15 s, not
   // sit on "Looking for that room…" for two minutes (#1061). The HOST keeps
-  // the code advertised longer — a friend typing a six-letter code off another
+  // the code advertised longer — a friend typing an eight-letter code off another
   // screen takes tens of seconds, and lobby.js / INVITE ANOTHER reopen assume
   // ~120 s (HOST_TIMEOUT_MS). Sharing JOIN_TIMEOUT for both roles made live
   // hosts show "Nobody answered…" at 12 s while a late guest still joined
@@ -422,7 +422,7 @@ const NetNostr = (function () {
         // codeJoin already surfaces why.message; keep this actionable.
         // A relay that refused us for our timestamp knows better than the code.
         message: clockRefused ? CLOCK_MESSAGE
-          : "Nobody answered that code. Check the six characters, or ask "
+          : "Nobody answered that code. Check the letters, or ask "
                + "your friend for a fresh one — if it keeps happening, both "
                + "reload the game and try a new code." });
       // Session start (unix s). Offers with created_at before this − slack are

@@ -233,12 +233,12 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   const lod = g.indexOf("if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2));");
   assert.ok(legacy > 0 && cull > legacy && lod > cull, "legacy push before the frustum test, the LOD push after it");
   assert.match(g, /const body = carDraw\.modelBuf \? null/, "every procedural rival keeps its body mesh (no whole-car swap)");
-  assert.match(g, /if \(_lod < 2\) queueCarDecals\(c\.team, tmpMat/, "and no decal for a rival past 120 m");
+  assert.match(g, /if \(_lod < 2\) queueCarDecals\(pt, tmpMat/, "and no decal for a rival past 120 m");
   // Past FieldLod.flapsM() the flaps go STILL (the static set), they are never skipped.
-  assert.match(g, /drawAeroFlaps\(c\.team, aSt\.val, c\.aeroX \|\| 0, tmpMat, paint, aSt\.aero, null,\s*!c\.isPlayer && fdx \* fdx \+ fdy \* fdy \+ fdz \* fdz >= FieldLod\.flapsM\(\) \*\* 2\);/,
+  assert.match(g, /drawAeroFlaps\(pt, aSt\.val, c\.aeroX \|\| 0, tmpMat, paint, aSt\.aero, null,\s*!c\.isPlayer && fdx \* fdx \+ fdy \* fdy \+ fdz \* fdz >= FieldLod\.flapsM\(\) \*\* 2\);/,
     "flaps gate from the table: past it `still`, the player never");
   assert.doesNotMatch(g, /\bdrawFlaps\b/, "no flag that skips the flap draw");
-  assert.equal(g.split("drawAeroFlaps(c.team, aSt.val").length - 1, 1, "one race call site");
+  assert.equal(g.split("drawAeroFlaps(pt, aSt.val").length - 1, 1, "one race call site");
   assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
   // BARE (the mirror / PiP, drawMirrorCar) is lite at any distance.

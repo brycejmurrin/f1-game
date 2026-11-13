@@ -438,13 +438,18 @@ cell is 0.88. Through `weatherGrip`'s lerp the inter/full crossover is wetness
 ~0.68 on grip alone and ~0.79 with the catalog's dry cornering cost (0.94 vs
 0.90), bracketing treadFor's 0.72; slick/inter with that cost crosses at ~0.24.
 `tests/unit/wet-grip-ladder.test.mjs` pins the ordering. The table cannot say
-"a full wet is worse than an inter on a near-dry road" by itself — the dry knot
-is 1 for every tread inside `weatherGrip` — so that half lives in the catalog's
-stat cost. CLOSED (was a KNOWN GAP): `gripMult` once mapped `tread == null`
-(wear-off AI) to the full-wet column, which is not "the right tyre" below
-wetness ~0.68; `js/game.js` `gripMult` now reads
-`c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread`,
-so a tread-less car gets the tyre the conditions call for.
+"a full wet is worse than an inter on a near-dry road" through its `dry` row
+(slick 1, inter 0.92, full wet 0.90; #5289, 2026-11-11). That cost used to live
+in the catalog's stat rows on the player alone; a wet set now costs a human
+what it costs an AI (`TyreModel.applyCompound`), so both pay it here. CLOSED
+(was a KNOWN GAP): `gripMult` once mapped `tread == null` (wear-off AI) to the
+full-wet column, which is not "the right tyre" below wetness ~0.68;
+`js/game.js` `gripMult` now reads `TyreModel.carGrip(c, raceWeather,
+trackWetness(), surface)`: a tread-less car gets the tyre the conditions call
+for (`treadFor` on the lap mean), and a wear-off car on its own garage slick
+(`c.wxFollow`, #5253) is on ONE set, the best tread for the lap-mean road,
+which the session changes as the road wets or dries; a change blends the new
+set's grip in over 3 s (`c.wxMix`), so grip never steps.
 
 ### The three call shapes
 
@@ -1023,6 +1028,16 @@ so in the rain the field cornered on wets and braked on slicks, and a player on
 full wets out-braked it by the whole ratio (~27 % at full wet) while the
 corner-speed model showed no such gap. Dry pace is untouched by construction.
 
+### Brake temperature and fade (opt-in, #1577)
+
+Rides on the wheel state, default OFF (`WheelState.setThermal(true)` or `apex26.brakeThermal = "1"`;
+session-only `__apex.setPhysics({brakeThermal})`). Each axle's disc heats with the player's own
+brake power (demand x speed), cools with airflow, and past ~650 C the pads lose bite, up to 35% at
+950 C; the lost share goes back into `c.speed` through the lock-up shortfall path. Driver-only: it
+reads the pedal and speed, never track curvature. Six back-to-back 83 m/s stops: 152.2 m cold,
+156.0 m on the sixth (`player-dynamics-vm.test.mjs`). Telemetry: `physState().brakeTemp {f,r}` and
+`brakeFade`. `c.brakeHeat` stays the visual-only glow.
+
 ### Wheel state: torque-balanced lock-up and wheelspin (opt-in, #1628)
 
 `js/physics/wheel-state.js` gives the player's axles a rim speed (`vwF`/`vwR`)
@@ -1057,6 +1072,13 @@ VM bench, Monza start straight (`tests/unit/player-dynamics-vm.test.mjs`):
 
 Not yet: ABS/TC levels and the default-ON decision (a characterization
 re-baseline). Detail: `docs/notes/WHEEL-STATE-2026-10-19.md`.
+
+**Record keys (#5024, Bryce 2026-11-11: "Yes, separate key").** WheelState ON (no assist,
+but a different tyre model) and GRIP STEER above OFF each give a lap its own leaderboard
+and ghost class: `SessionPhys.controls` adds `wheelState: "on"` / `gripSteer: <level>` to
+`recordControls()` only when not OFF, so every key recorded before them stays valid. A
+STANDARD daily runs with both OFF (`prepareDaily`, session-only, restored after) and
+`accept()` refuses a lap if either is turned back on.
 
 ### Wear, and the stop
 
@@ -1222,7 +1244,7 @@ grip or racing-line read, 2026-11-10).
 | `js/render/shared/driving-line.js` | ribbon `build`/`speedAt`, plus `cue()` | **assist-gated** | the ribbon itself is surface; `cue()` turns the LUT's cornering speed into a brake-urgency ramp that `js/game.js` hands to `GameAudio.brakeCue` — AUDIBLE TO THE PLAYER, but gated by `DrivingLineOpts.brakeCue()` and audio-only: no force, torque or steer path. Escaped this table until 2026-09-22 because it reads an INJECTED `api.curvature(s)`, which the guard's alias test could not see |
 | `js/garage/exterior-geometry.js` | `TrackSpline.curvature(track, s)` passed to detached pit scenery | **surface** | build-time placement of static garage-exterior geometry; owned mesh slice only, never read by a car or physics |
 | `js/track/scenery/pits.js` | `ctx.curvature(box.s)` at the pit-box rows | **surface** | static dressing: each box's yaw follows the pit-lane arc, resolved once per circuit at build time and never read back by a car |
-| `js/race/real-race.js` | `dropSpeed()` at a mid-race JUMP IN | **AI-only** | the speed a car is DROPPED IN at without a real trace: the AI's own corner model and entry budget (`AiDrive.cornerSpeed`, `BRAKE`) over the next 220 m, read once at the drop for cars the AI drives — the seat car is handed to the AI (`setCarRole(me, false)`) BEFORE the drop and stays its for the 4 s hand-over, so no player-driven car ever takes the value; with the positions loaded the speed is the real car's instead |
+| `js/race/real-race-boot.js` | `dropSpeed()` at a mid-race JUMP IN (the eager RealRace stub; the body reads it) | **AI-only** | the speed a car is DROPPED IN at without a real trace: the AI's own corner model and entry budget (`AiDrive.cornerSpeed`, `BRAKE`) over the next 220 m, read once at the drop for cars the AI drives — the seat car is handed to the AI (`setCarRole(me, false)`) BEFORE the drop and stays its for the 4 s hand-over, so no player-driven car ever takes the value; with the positions loaded the speed is the real car's instead |
 | `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
 | `js/race/pit-geom.js` | `entryRunM` (now the fallback for a track built without the engine's window; `js/track/core/pit.js` `straightRun`, same `PIT_K`, owns it) | **surface** | where the pit lane OPENS, walked back from the start/finish line once per circuit to find where the last corner lets go. The aero-zones row below is the precedent and this is the same shape: a fixed zone computed from the static arc, gating a driver-INITIATED action (calling a stop) identically for every car, no force path, nothing read per frame. Replaced a flat 320 m that landed Monza's entry inside Parabolica — where the commit gesture (hold the pit side) asks a driver to hold a line mid-corner. Threshold 0.0035 (r ~= 285 m) is deliberately looser than a DRS zone's 0.0014: an entry needs "not actively cornering", not a proper straight |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |

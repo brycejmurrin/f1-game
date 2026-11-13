@@ -131,6 +131,7 @@ export function rosterOf() {
   add(MANIFEST.LAZY_UI_PRESETS || [], "LAZY_UI_PRESETS");
   add(MANIFEST.LAZY_RESULTS_SHEET || [], "LAZY_RESULTS_SHEET");
   add(MANIFEST.LAZY_PERF || [], "LAZY_PERF");
+  add(MANIFEST.LAZY_REAL_RACE || [], "LAZY_REAL_RACE");
   return out;
 }
 

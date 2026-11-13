@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { strictFlags } from "../lib/cli-args.mjs";
+import { STAGE_ROOT_FILES } from "../desktop/stage-files.mjs";
 
 const timeoutMs = 15_000;
 /** GitHub Pages / Fastly occasionally answers 502/503 for one lazy path while
@@ -106,6 +107,15 @@ function jsonBlock(html, id) {
   catch { throw new Error(`index.html: invalid JSON in ${id}`); }
 }
 
+/** The root files verified by default, DERIVED from the stage allow-list (#5306: a hand-kept list missed
+ *  overlay.html and bench.html): every staged root page, plus version.json and sw.js. */
+export const DEFAULT_LIVE_FILES = Object.freeze([
+  "index.html",
+  ...STAGE_ROOT_FILES.filter((f) => f.endsWith(".html") && f !== "index.html"),
+  "version.json",
+  "sw.js",
+]);
+
 /**
  * Verify a stamped runtime tree against a live Pages base URL.
  * @param {{baseUrl:string, root:string, files?:string[]}} options
@@ -113,7 +123,7 @@ function jsonBlock(html, id) {
 export async function verifyLive({
   baseUrl,
   root,
-  files = ["index.html", "version.json", "sw.js", "controller.html", "cockpit-view.html"],
+  files = DEFAULT_LIVE_FILES,
   fetchOpts = {},
 } = {}) {
   const cacheBust = `__verify=${Date.now()}`;
