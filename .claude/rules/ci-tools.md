@@ -15,8 +15,9 @@ paths:
   passed them first try with the same plan and the deploy tip has not moved
   (`tools/ci/reuse-draft-selected.mjs`). No label or body line opts in. `= ci none` after a push means no open PR carries the sha (not
   pushed, or no PR yet). A whole browser group: `node tools/ci/remote-group.mjs
-  <group>` on the pushed branch; agents never run a browser test locally
-  (AGENTS.md rule 5). A manual `ci.yml` dispatch is a hook "ask" (a deny on Codex).
+  <group>` dispatches on the pushed branch only with Bryce's opt-in (`APEX_GH_OWNER_WRITE=1`, his alone: a dispatch
+  on the gh token is recorded as his act); an agent asks with `needs-decision`. Agents never run a browser test
+  locally (AGENTS.md rule 5), and `bash-guard.sh` refuses `gh workflow run` and every other gh write.
 - Sync via `node tools/ci/sync-pr.mjs <branch>` (merge origin, no force); never
   `update_pull_request_branch` from an agent (nothing calls update-branch since
   AUTO-SYNC left on 2026-11-03).

@@ -328,6 +328,21 @@ export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N]
        node tools/ci/remote-group.mjs --watch <run-id>
        node tools/ci/remote-group.mjs --help
   --interval <s> poll period (min 10, default 30). An unknown flag prints this usage and exits 2, before any dispatch.`;
+/**
+ * The dispatch is a GitHub WRITE made with the gh token, which GitHub records as the repository owner's own act (no
+ * app marker), so an agent's dispatch cannot be told from Bryce's. Owner decision 2026-11-11: agents do not write to
+ * GitHub with that token; whether this tool dispatches at all is Bryce's open call (named on the PR that added this).
+ * Until then it dispatches only when APEX_GH_OWNER_WRITE=1 is in the environment, set by Bryce himself; the Bash
+ * guard refuses an agent that sets it. Reusing a live or green run (a read) needs no opt-in.
+ */
+export const OWNER_OPT_IN = "APEX_GH_OWNER_WRITE";
+export function ownerWriteGate(env = process.env) {
+  const ok = env[OWNER_OPT_IN] === "1";
+  const lines = [`this dispatch is a GitHub write made with the gh token, recorded as the repository owner's own act (no app marker).`];
+  if (!ok) lines.push(`refused: only the owner opts in (${OWNER_OPT_IN}=1 in his own environment; an agent never sets it). An agent asks on its PR with needs-decision, and the PR's own CI runs the browser shard.`);
+  return { ok, lines };
+}
+
 export const KNOWN_FLAGS = ["--shards", "--gl", "--workers", "--ref", "--no-wait", "--force", "--timeout", "--interval", "--plan", "--run-shard", "--plan-record", "--watch"];
 
 /** The open PR whose head is `branch`, as the dispatch's `pr` input: "" when there is none, the lookup fails, or
@@ -469,6 +484,9 @@ async function main() {
     }
     if (have?.kind === "green" && !pr) { say(`= group passed — ${p.group} on ${branch} @${sha.slice(0, 9)} is already green: ${have.run.html_url} (--force to re-run)`); return 0; }
   }
+  const gate = ownerWriteGate();
+  for (const l of gate.lines) say(l);
+  if (!gate.ok) return 3;
   const since = Date.now();
   const plan = JSON.stringify({ matrix: p.matrix, ...(p.shards ? { shards: p.shards } : {}) });
   const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {

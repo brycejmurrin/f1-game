@@ -48,5 +48,5 @@ answer arrives as a comment starting `decision:` or as a label change, which wak
 only he removes it.
 
 Caps: stop at your session's start + 250k context (`STOP AT: start+250k`; the start is your first turn's context)
-or when stuck — push, refresh the Plan and handoff block (`next:` names the blocker), add `needs-owner`, end. A CONTINUE worker will pick the PR up. Never merge, arm auto-merge, force-push, cancel an Actions
+or when stuck — push, refresh the Plan and handoff block (`next:` names the blocker), add `needs-owner`, end. A CONTINUE worker will pick the PR up. Write to GitHub (comments, labels, the PR body) only through the GitHub MCP tools, never `gh`. Never merge, arm auto-merge, force-push, cancel an Actions
 run, or push to the deploy branch; every hook refusal is final for that action.

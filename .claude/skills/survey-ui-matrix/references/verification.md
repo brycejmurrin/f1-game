@@ -54,7 +54,7 @@ Shape: one parent, at most two reviewers. The parent runs the survey as ONE back
 run. Reviewers return defect tables with screenshot paths and missing cells; the parent applies fixes via
 `css-play` or `ui-menu-a11y`.
 
-Publish the selected captures with
-`node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug> --publish`
-(`docs/EVIDENCE-STORAGE.md`); the PR body links the release assets, lists unmeasured cells as not run,
+Package the selected captures with
+`node tools/shot/publish-evidence.mjs --dir artifacts/layout-audit --label <slug>` and publish through
+`archive-evidence.yml` (`docs/EVIDENCE-STORAGE.md`; `--publish` is Bryce's own opt-in, a gh-token write); the PR body links the release assets, lists unmeasured cells as not run,
 and records the `= diff` line when proving no regression.
