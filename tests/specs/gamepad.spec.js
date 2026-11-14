@@ -423,11 +423,10 @@ test.describe("Gamepad menu navigation", () => {
       return row.textContent.trim().replace(/\s+/g, " ").slice(0, 20);
     });
     await poll(page, { buttons: { 0: 1 } }, () => true);   // A
-    await page.waitForTimeout(400);
-    const active = await page.evaluate(() =>
+    // The click lands the pick: wait for the active row to become the focused one.
+    await expect.poll(() => page.evaluate(() =>
       (document.querySelector("#sel-tracks .track-row.active") || {}).textContent
-        ?.trim().replace(/\s+/g, " ").slice(0, 20));
-    expect(active).toBe(picked);
+        ?.trim().replace(/\s+/g, " ").slice(0, 20)), { timeout: 5000 }).toBe(picked);
   });
 
   test("A seeds focus rather than clicking when nothing is focused yet", async ({ page }) => {
@@ -443,7 +442,8 @@ test.describe("Gamepad menu navigation", () => {
   test("B closes a plain-div screen via its data-esc-close control", async ({ page }) => {
     await openSelectForPad(page);
     await poll(page, { buttons: { 1: 1 } }, () => true);   // B
-    await page.waitForTimeout(250);
+    // The close runs through vt() (view transition or its fallback): wait for it.
+    await expect(page.locator("#select")).toBeHidden();
     expect(await page.evaluate(() => document.getElementById("select").hidden)).toBe(true);
     expect(await page.evaluate(() => document.getElementById("overlay").hidden)).toBe(false);
   });
@@ -466,13 +466,14 @@ test.describe("Gamepad menu navigation", () => {
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
       document.getElementById("pausemenu").hidden = false;
     });
-    await page.waitForTimeout(250);
-    expect(await page.evaluate(() => document.getElementById("pausemenu").matches(":modal"))).toBe(true);
+    // TopModal mirrors the `hidden` write into showModal() from a MutationObserver.
+    await expect.poll(() => page.evaluate(() => document.getElementById("pausemenu").matches(":modal")),
+      { timeout: 5000 }).toBe(true);
     await page.evaluate(() => Input.reset());
 
     await poll(page, { buttons: { 1: 1 } }, () => true);   // B
-    await page.waitForTimeout(250);
-    expect(await page.evaluate(() => document.getElementById("pausemenu").hidden)).toBe(true);
+    await expect.poll(() => page.evaluate(() => document.getElementById("pausemenu").hidden),
+      { timeout: 5000 }).toBe(true);
   });
 
   test("bumpers page the menu instead of shifting gears", async ({ page }) => {
@@ -509,7 +510,9 @@ test.describe("Gamepad menu navigation", () => {
       try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
     }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); Input.reset(); });
-    await page.waitForTimeout(200);
+    // Racing, and the title/menu layers have come down.
+    await page.waitForFunction(() => window.__apex.info().state === "race" && !window.UiLayers.anyOpen(),
+      null, { polling: 100, timeout: 10000 });
     expect(await page.evaluate(() => window.UiLayers.anyOpen())).toBe(false);
 
     const r = await poll(page, { axisX: -1, buttons: { 7: 1 } }, () => ({
@@ -554,8 +557,9 @@ test.describe("Gamepad menu navigation", () => {
 
     // Held past the initial delay, a repeat fires. The frame loop keeps
     // polling the held pad, so repeats may already have run (130 ms apart):
-    // wait for focus to leave the seed rather than sampling once.
-    await page.waitForTimeout(600);
+    // wait for focus to leave the seed rather than sampling once. The poll keeps
+    // the direction held, so it also covers the 450 ms initial delay (the old
+    // fixed 600 ms sleep before it).
     await expect.poll(async () => {
       await poll(page, { buttons: { 13: 1 } }, () => true);
       return page.evaluate(() => document.activeElement.textContent);

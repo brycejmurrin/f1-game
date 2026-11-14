@@ -135,11 +135,11 @@ const LoopHealth = (() => {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
     } catch (_) { /* harness */ }
     try {
-      const g = typeof document !== "undefined" && document.getElementById;
-      if (!g) return false;
-      const cs = g("carsetup");
+      // Bound: an unbound getElementById throws "Illegal invocation" in a browser.
+      if (typeof document === "undefined" || !document.getElementById) return false;
+      const cs = document.getElementById("carsetup");
       if (cs && !cs.hidden) return true;
-      const rs = g("race-settings");
+      const rs = document.getElementById("race-settings");
       return !!(rs && !rs.hidden);
     } catch (_) { return false; }
   }

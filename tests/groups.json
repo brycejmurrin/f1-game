@@ -2385,7 +2385,8 @@
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/team-parts-conflict.test.mjs",
         "tests/unit/title-fx.test.mjs",
-        "tests/unit/title-layout.test.mjs"
+        "tests/unit/title-layout.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "kind": "node"
     },
@@ -2393,6 +2394,7 @@
       "files": [
         "tests/unit/brake-cue.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/css-zoom.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/driving-cues.test.mjs",

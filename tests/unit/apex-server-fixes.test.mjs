@@ -282,7 +282,7 @@ test("durable cleanup excludes reused PIDs and keeps unknown live identities occ
     const observer = f.make();
     const dir = path.join(f.root, "artifacts/logs/apex-jobs");
     fs.mkdirSync(dir, { recursive: true });
-    const id = "stale_birth_fixture";
+    const id = "survey_track-mabc123-1-0000000000a1"; // the id shape jobStart mints
     const markerPath = path.join(dir, `${id}.cancelled`);
     fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, state: "cancelled", browser: true,
       pid: unrelated.pid, kind: "survey_track", started: Date.now(), ended: Date.now(), argv: [],
@@ -325,7 +325,7 @@ test("portable cleanup identities survive timezone changes and retain legacy amb
   try {
     const dir = path.join(f.root, "artifacts/logs/apex-jobs");
     fs.mkdirSync(dir, { recursive: true });
-    const id = "portable_birth_fixture", markerPath = path.join(dir, `${id}.cancelled`);
+    const id = "survey_track-mabc123-1-0000000000a2", markerPath = path.join(dir, `${id}.cancelled`);
     fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, state: "running", browser: true,
       pid: child.pid, kind: "survey_track", started: Date.now(), argv: [],
       log: "artifacts/fixture.log", stderr: "artifacts/fixture.err" }));
@@ -335,6 +335,10 @@ test("portable cleanup identities survive timezone changes and retain legacy amb
       return read.call(this, file, ...args);
     };
     process.env.TZ = "UTC0"; process.env.LC_ALL = "C";
+    // jobStart records the root's launch identity; cancel signals only a root that still matches it.
+    const { processBirth } = await import("../../tools/mcp/job-admission.mjs");
+    const manifestPath = path.join(dir, `${id}.json`);
+    fs.writeFileSync(manifestPath, JSON.stringify({ ...JSON.parse(fs.readFileSync(manifestPath, "utf8")), birth: processBirth(child.pid) }));
     const legacyBirth = `ps:${execFileSync("ps", ["-p", String(child.pid), "-o", "lstart="], { encoding: "utf8" }).trim()}`;
     const signalled = [];
     const observer = f.make({ killJobTree: async (pids) => { signalled.push(...pids); return { survivors: pids }; } });
@@ -372,4 +376,137 @@ test("portable cleanup identities survive timezone changes and retain legacy amb
     await killTreeAndWait([child.pid], { graceMs: 0 });
     f.cleanup();
   }
+});
+
+// ── apex_job_* id, path and launch-identity checks (W25). Node processes only; no browser. ──
+import { spawn as spawnNode } from "node:child_process";
+import { processBirth, compareBirth } from "../../tools/mcp/job-admission.mjs";
+import { alive as pidAlive, killTreeAndWait as killPids } from "../../tools/lib/process-tree.mjs";
+const sleeper = () => spawnNode(process.execPath, ["-e", "setInterval(()=>{},1000)"], { detached: true, stdio: "ignore" });
+
+async function jobSafetyFixture() {
+  const root = fs.mkdtempSync(path.join(ROOT, "artifacts", "mcp-job-safety-"));
+  const dir = path.join(root, "artifacts/logs/apex-jobs");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(path.join(root, "scratch"), { recursive: true });
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const listeners = new Set();
+  const signalled = [];
+  const make = (over = {}) => {
+    const before = new Set(process.listeners("exit"));
+    const x = createExtras({ ROOT: root, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+      assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false,
+      killJobTree: async (pids) => { signalled.push(...pids); return { survivors: [] }; }, ...over });
+    for (const l of process.listeners("exit")) if (!before.has(l)) listeners.add(l);
+    return x.handlers;
+  };
+  const cleanup = () => { for (const l of listeners) process.removeListener("exit", l); fs.rmSync(root, { recursive: true, force: true }); };
+  return { root, dir, make, signalled, cleanup };
+}
+
+test("job ids outside jobStart's exact shape are refused by status, wait and cancel", async () => {
+  const f = await jobSafetyFixture();
+  const victim = sleeper();
+  try {
+    fs.writeFileSync(path.join(f.root, "secret.txt"), "SECRET-LINE\n");
+    fs.mkdirSync(path.join(f.root, "elsewhere"));
+    fs.writeFileSync(path.join(f.root, "elsewhere/evil.json"), JSON.stringify({ id: "x", kind: "frame_fleet", state: "running",
+      pid: victim.pid, browser: false, started: Date.now(), argv: [], log: "secret.txt", stderr: "secret.txt" }));
+    const h = f.make();
+    for (const jobId of ["../../../elsewhere/evil", "frame_fleet-abc-1-0123456789ab/../../x", "nope_kind-abc-1-0123456789ab",
+      "frame_fleet-abc-0-0123456789ab", "frame_fleet-abc-1-0123456789AB", ""]) {
+      const s = body(h.apex_job_status({ jobId: jobId || "_" }));
+      assert.equal(s.error, "bad_args", `status ${jobId}`);
+      assert.equal(JSON.stringify(s).includes("SECRET"), false, "no file content in a refusal");
+      assert.equal(body(await h.apex_job_status({ jobId: jobId || "_", wait: 1 })).error, "bad_args", `wait ${jobId}`);
+      assert.equal(body(await h.apex_job_cancel({ jobId })).error, "bad_args", `cancel ${jobId}`);
+    }
+    assert.deepEqual(f.signalled, [], "nothing signalled");
+    assert.equal(pidAlive(victim.pid), true);
+  } finally { await killPids([victim.pid], { graceMs: 0 }); f.cleanup(); }
+});
+
+test("a manifest's log paths are read and pruned only under artifacts/ or scratch/", async () => {
+  const f = await jobSafetyFixture();
+  try {
+    const outside = path.join(f.root, "outside.txt");
+    fs.writeFileSync(outside, "OUTSIDE-CONTENT\n");
+    const id = "frame_fleet-mabc123-1-00000000000b";
+    fs.writeFileSync(path.join(f.dir, `${id}.json`), JSON.stringify({ id, kind: "frame_fleet", state: "done", exit: 0, pid: null,
+      browser: false, started: 1, ended: 2, argv: [], log: "outside.txt", stderr: "../outside.txt" }));
+    const h = f.make();
+    const s = body(h.apex_job_status({ jobId: id }));
+    assert.equal(s.state, "done");
+    assert.equal(JSON.stringify(s).includes("OUTSIDE-CONTENT"), false, "tail/out never read outside the tree");
+    body(h.apex_job_status({}));   // prune: ended long ago
+    assert.equal(fs.existsSync(outside), true, "prune never removes a file outside artifacts/ or scratch/");
+    // A manifest whose id field differs from its file name is not a job.
+    const other = "frame_fleet-mabc123-1-00000000000c";
+    fs.writeFileSync(path.join(f.dir, `${other}.json`), JSON.stringify({ id: "frame_fleet-mabc123-1-00000000000d", state: "done" }));
+    assert.equal(body(h.apex_job_status({ jobId: other })).error, "unknown_job");
+  } finally { f.cleanup(); }
+});
+
+test("cancel refuses an unproven root and never signals a reused PID", async () => {
+  const f = await jobSafetyFixture();
+  const victim = sleeper();
+  try {
+    const h = f.make();
+    const noBirth = "frame_fleet-mabc123-1-0000000000e1";
+    fs.writeFileSync(path.join(f.dir, `${noBirth}.json`), JSON.stringify({ id: noBirth, kind: "frame_fleet", state: "running", exit: null,
+      pid: victim.pid, browser: false, started: Date.now(), argv: [], log: `artifacts/logs/apex-jobs/${noBirth}.log` }));
+    const r = body(await h.apex_job_cancel({ jobId: noBirth }));
+    assert.equal(r.error, "job_identity_unknown");
+    assert.equal(fs.existsSync(path.join(f.dir, `${noBirth}.cancelled`)), false, "no marker written");
+
+    const reused = "frame_fleet-mabc123-1-0000000000e2";
+    const current = processBirth(victim.pid);
+    const stale = current.replace(/[^:]+$/, "1");   // same scheme, another start: the launched process is gone
+    assert.equal(compareBirth(stale, current), "different");
+    fs.writeFileSync(path.join(f.dir, `${reused}.json`), JSON.stringify({ id: reused, kind: "frame_fleet", state: "running", exit: null,
+      pid: victim.pid, birth: stale, browser: false, started: Date.now(), argv: [], log: `artifacts/logs/apex-jobs/${reused}.log` }));
+    const s = body(h.apex_job_status({ jobId: reused }));
+    assert.notEqual(s.state, "running", "a reused PID does not keep a job running");
+    await h.apex_job_cancel({ jobId: reused });
+    assert.deepEqual(f.signalled, []);
+    assert.equal(pidAlive(victim.pid), true);
+  } finally { await killPids([victim.pid], { graceMs: 0 }); f.cleanup(); }
+});
+
+test("jobStart records the launch identity and cancel signals that process", async () => {
+  const f = await jobSafetyFixture();
+  let pid;
+  try {
+    const h = f.make({ spawnJob: (_c, _a, options) => spawnNode(process.execPath, ["-e", "setInterval(()=>{},1000)"], options),
+      killJobTree: undefined });
+    const job = body(h.apex_job_start({ kind: "survey_track", track: "monza" }));
+    assert.equal(job.ok, true);
+    const m = JSON.parse(fs.readFileSync(path.join(f.dir, `${job.jobId}.json`), "utf8"));
+    pid = m.pid;
+    assert.equal(typeof m.birth, "string");
+    assert.equal(m.birth, processBirth(pid));
+    const c = body(await h.apex_job_cancel({ jobId: job.jobId }));
+    assert.equal(c.state, "cancelled");
+    assert.equal(c.survivors, 0);
+    assert.equal(pidAlive(pid), false);
+  } finally { if (pid) await killPids([pid], { graceMs: 0 }); f.cleanup(); }
+});
+
+test("designs must live under artifacts/ or scratch/ and a parse error does not quote the file", async () => {
+  const f = await jobSafetyFixture();
+  try {
+    const h = f.make();
+    fs.writeFileSync(path.join(f.root, "designs.json"), "{}");
+    const out = body(h.apex_job_start({ kind: "shot_survey", track: "monza", designs: "designs.json", dryRun: true }));
+    assert.equal(out.error, "path_escaped");
+    fs.writeFileSync(path.join(f.root, "scratch/bad.json"), "PRIVATE=value not json");
+    for (const call of [() => h.apex_job_start({ kind: "shot_survey", track: "monza", designs: "scratch/bad.json", dryRun: true }),
+      () => h.apex_shot_survey({ track: "monza", designs: "scratch/bad.json", dryRun: true })]) {
+      const r = body(await call());
+      assert.equal(r.ok, false);
+      assert.equal(r.message, "designs file is not valid JSON");
+      assert.equal(JSON.stringify(r).includes("PRIVATE"), false, "no file content echoed");
+    }
+  } finally { f.cleanup(); }
 });

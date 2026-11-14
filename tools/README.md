@@ -43,6 +43,7 @@ Root — the load-order truth and the car studio page; every consumer hardcodes 
 | **carview.html** | Standalone isolated car photo studio (no track, no game.js): Car3D + LiveryTex via GLX; headless API `window.CARVIEW`. | playwright-probe |
 | **garage-angles-fetch.mjs** | Download garage-before-<sha> for a SHA (default merge-base with ship); nearest ancestor + compare staleness. | garage-parts-livery |
 | **manifest.cjs** | Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match. | check-changes |
+| **serve.mjs** | Local static server for the working tree on 127.0.0.1:3456 (replaces `npx serve`): no-store, no fd leak, pinned in-repo. | check-changes |
 
 ### `tools/agent/`
 
@@ -252,7 +253,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-circuit-meta.mjs** | Builds js/track/circuit-meta.js (circuit picker metadata; a gitignored build product, LAZY_CIRCUIT hydrates). | check-changes |
 | **gen/gen-cursor-rules.mjs** | Emit `.cursor/rules/*.mdc` from `.claude/rules` (`paths`→`globs`, else `alwaysApply`); `--check`. | agent-config |
 | **gen/gen-flags-table.mjs** | Regenerates the DevFlags table in `docs/DEBUG-HOOKS.md` from `js/core/dev-flags.js`; `--check`. | check-changes |
-| **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
+| **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index in `docs/DEBUG-HOOKS.md` from the live `__apex` keys (VM boot) + source; `--check`. | agent-view |
 | **gen/gen-ladder-figures.mjs** | Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing. | check-changes |
 | **gen/gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
 | **gen/gen-locales.mjs** | Regenerate locales/en.json and manifest hashes from I18n.t / data-i18n call sites. | — |

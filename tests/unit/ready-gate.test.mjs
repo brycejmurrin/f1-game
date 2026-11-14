@@ -159,7 +159,8 @@ test("withPlan: an open Plan turns a green tip into plan-open (exit 1); no Plan 
   assert.deepEqual([v.state, v.code], ["plan-open", 1]);
   assert.ok(v.evidence.startsWith('4 of 4 Plan item(s) open: "one", "two", "three", ...'), v.evidence);
   assert.equal(withPlan(GREEN, body("- [x] one")).code, 0);
-  assert.ok(withPlan(GREEN, "## Goal\nx").planWarning);
+  assert.equal(withPlan(GREEN, "## Goal\nx").state, "plan-missing");
+  assert.equal(withPlan(GREEN, "## Goal\nx", "fold-bot[bot]").code, 0);
   assert.equal(withPlan({ ...GREEN, state: "failed", code: 1 }, body("- [ ] x")).state, "failed");
   assert.equal(withPlan(GREEN, null), GREEN);
 });
@@ -251,12 +252,23 @@ test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label ca
   let [rc, text] = go(["--pr", "7"], 0);
   assert.equal(rc, 0);
   assert.deepEqual(seen.at(-1), ["--pr", "7"]);
-  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "10 min", "re-run ready-gate", "gh api -X POST repos/brycejmurrin/f1-game/issues/7/labels -f 'labels[]=land'"];
-  assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls and the receipt-age note are printed");
+  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "a later push: re-run ship-pr", "gh api -X POST repos/brycejmurrin/f1-game/issues/7/labels -f 'labels[]=land'"];
+  assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls and the re-run note are printed");
   [rc, text] = go(["--pr", "7"], 1);
   assert.equal(rc, 1);
   assert.deepEqual(parts.filter((x) => text.includes(x)), [], "a refusal prints neither call");
   [rc] = go(["--pr", "x; rm"], 0);
   assert.equal(rc, 1, "a non-numeric PR is a usage error");
   assert.equal(nextCalls(9, "o/r").length, 3);
+});
+
+test("a body with no ## Plan: ready-gate and the merge gate agree (both refuse; a bot's PR passes both)", async () => {
+  // merge-gate.mjs planRow refuses a Plan-less body (except a *[bot] author) and ready-gate used to pass it with a
+  // warning, so a PR cleared ready-gate and then failed the merge gate. This pins the two to the same answer.
+  const { planRow } = await import("../../tools/ci/merge-gate.mjs");
+  const body = "## Goal\nx";
+  for (const author of ["someone", "fold-bot[bot]"]) {
+    const gate = planRow(body, author), ready = withPlan(GREEN, body, author);
+    assert.equal(ready.code === 0, gate.ok, `${author}: ready-gate code ${ready.code} vs merge-gate plan row ok=${gate.ok}`);
+  }
 });

@@ -38,10 +38,23 @@ window.CssZoom = (function () {
     return (typeof z === "number" && z > 0) ? z : 1;
   }
 
+  // Product of ancestors' computed `zoom`: local-rect engines (WebKit < 26.4) lack currentCSSZoom (MDN BCD).
+  function computedZoom(el) {
+    let z = 1;
+    try {
+      for (let n = el; n && n.nodeType !== 9; n = n.parentElement) {
+        const v = parseFloat(getComputedStyle(n).zoom);
+        if (v > 0 && Number.isFinite(v)) z *= v;
+      }
+    } catch (_) { /* detached or no computed style: unzoomed */ }
+    return z;
+  }
+
   function viewportRect(el) {
     const r = el.getBoundingClientRect();
-    const z = of(el);
-    if (rectsAreVisual() || z === 1) return r;
+    if (rectsAreVisual()) return r;
+    const z = el.currentCSSZoom > 0 ? el.currentCSSZoom : computedZoom(el);
+    if (z === 1) return r;
     return new DOMRect(r.x * z, r.y * z, r.width * z, r.height * z);
   }
 

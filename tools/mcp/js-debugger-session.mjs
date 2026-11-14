@@ -186,12 +186,13 @@ export class DebugSession {
   }
   async listTargets(endpoint, kind = "default") {
     endpoint = this.resolveEndpoint(endpoint);
+    const rows = await this.discover(endpoint, kind);
+    // Remember the endpoint only once it answered: a rejected or unreachable one must not become the default.
     this.lastEndpoint = endpoint;
-    return { targets: (await this.discover(endpoint, kind)).map(({ webSocketDebuggerUrl, ...t }) => t) };
+    return { targets: rows.map(({ webSocketDebuggerUrl, ...t }) => t) };
   }
   async attach(endpoint, targetId) {
     endpoint = this.resolveEndpoint(endpoint);
-    this.lastEndpoint = endpoint;
     if (this.connecting || this.cdp) throw Error("Already attached or attaching; detach first");
     const attachGeneration = ++this.attachGeneration;
     const current = () => {
@@ -211,6 +212,7 @@ export class DebugSession {
       const ws = localUrl(target.webSocketDebuggerUrl, true), origin = localUrl(endpoint);
       if (ws.host !== origin.host) throw Error("Target WebSocket must use the discovery host and port");
       client = await this.open(ws.href); current(); this.cdp = client;
+      this.lastEndpoint = endpoint;   // stored only after a successful connect
       this.lost = null; this.target = { id: target.id, type: target.type, url: clip(target.url, 1000), title: clip(target.title, 200) };
       this.generation = randomUUID(); this.operations.clear(); this.scripts.clear(); this.logpointRings.clear();
       client.on("Debugger.scriptParsed", s => {

@@ -256,24 +256,29 @@ const RaceEntryProfile = (() => {
     menuEntrySession = false;
   }
 
+  // G / loadingScreen are game.js IIFE-locals: game.js binds {state(), loadingPhase()}.
+  let game = null;
+  function bindGame(probe) { game = probe || null; }
+  function gameState() {
+    try { return game && game.state ? game.state() : ""; } catch (_) { return ""; }   // mid-boot
+  }
+
+  /** The entry window, the countdown and the loading phases: the software-GL readback defer's cover
+   *  (PerfGov.softwareGlUiReadbackDefer). Not the live-race intro leg below: a capture in the first 45 s of a
+   *  software-GL race must read real pixels (camera / hud-mirror specs read #game-soft there). */
+  function readbackCover() {
+    if (armed) return true;
+    if (gameState() === "count") return true;
+    try {
+      const ph = game && game.loadingPhase ? game.loadingPhase() : "";
+      if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
+    } catch (_) { /* loading screen mid-build */ }
+    return false;
+  }
+
   /** True while race-entry handoff should use the stall watchdog's relaxed cover (#3510). */
   function stallHandoffCover() {
-    if (armed) return true;
-    try {
-      if (typeof G !== "undefined" && G.state === "count") return true;
-    } catch (_) { /* harness */ }
-    try {
-      if (typeof loadingScreen !== "undefined" && loadingScreen.phase) {
-        const ph = loadingScreen.phase();
-        if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
-      }
-    } catch (_) { /* harness */ }
-    if (softwareRaster()) {
-      try {
-        if (typeof G !== "undefined" && G.state === "race" && introBudgetLeft() > 0) return true;
-      } catch (_) { /* harness */ }
-    }
-    return false;
+    return readbackCover() || (softwareRaster() && gameState() === "race" && introBudgetLeft() > 0);
   }
 
   /** Yield so #loading can paint before ensure* / intro sync work.
@@ -447,7 +452,7 @@ const RaceEntryProfile = (() => {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, noteWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
-    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover,
+    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover, readbackCover, bindGame,
     legs: () => legs.slice(),
     warmHistory: () => warmHistory.slice(),
     menuEntrySession: () => menuEntrySession,

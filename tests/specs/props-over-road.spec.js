@@ -112,18 +112,23 @@ async function measurePropsOverRoad(page, trk) {
     // the tarmac), so a mesh-scaled rung sampled the pit wall at the edge.
     const tps = []; for (let i = 0; i < M; i++) for (const s of [-0.9, -0.45, 0, 0.45, 0.9]) tps.push({ x: px[i] + rx[i] * s * hw[i], z: pz[i] + rz[i] * s * hw[i], y: py[i], frac: i / M });
     const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 0.01) return null; /* dn = 4*area^2 of the XZ projection: near-vertical faces of long diagonal boxes project to slivers that pass a 1e-9 guard and report u=v=0 "inside" with the box-top height at ANY distance (measured: two 15m-clear grandstands read as 4.65m over road); 0.01 = 5x5cm projected area */ const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
-    const merged = {}; let max = 0, worst = null;
+    // meshes / tris / pairs count what was actually measured: a missing or
+    // stub props+glass capture skips the loop and leaves max 0, a clean pass.
+    const merged = {}; let max = 0, worst = null, meshes = 0, tris = 0, pairs = 0;
     for (const name of ["props", "glass"]) {
       const cap = caps[name]; if (!cap || !cap.pos || !cap.idx || cap.pos.length / 3 < 30) continue;
+      meshes++;
       const pos = cap.pos, idx = cap.idx;
       for (let t = 0; t < idx.length; t += 3) {
         const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
         const ax = pos[a], ay = pos[a + 1], az = pos[a + 2], bx = pos[b], by = pos[b + 1], bz = pos[b + 2], cx = pos[c], cy = pos[c + 1], cz = pos[c + 2];
         if (Math.min(ay, by, cy) > CEIL + 30) continue;
+        tris++;
         const mnx = Math.min(ax, bx, cx), mxx = Math.max(ax, bx, cx), mnz = Math.min(az, bz, cz), mxz = Math.max(az, bz, cz);
         for (const tp of tps) {
           if (tp.x < mnx - 0.3 || tp.x > mxx + 0.3 || tp.z < mnz - 0.3 || tp.z > mxz + 0.3) continue;
           const bc = pit(tp.x, tp.z, ax, az, bx, bz, cx, cz); if (!bc) continue;
+          pairs++;
           const yf = ay + bc.u * (cy - ay) + bc.vv * (by - ay);
           const over = yf - tp.y;
           const yMin = Math.min(ay, by, cy), yMax = Math.max(ay, by, cy);
@@ -163,7 +168,7 @@ async function measurePropsOverRoad(page, trk) {
       }
     }
     const top = Object.entries(merged).map(([f, o]) => ({ f: +f, o })).sort((a, b) => b.o - a.o).slice(0, 6);
-    return { max: +max.toFixed(2), top, worst };
+    return { max: +max.toFixed(2), top, worst, meshes, tris, pairs };
   }, { CEIL, TOL });
 }
 
@@ -188,6 +193,13 @@ test.describe("Apex 26 — props over road", () => {
       await ensureGeometry(page);
       const r = await measurePropsOverRoad(page, trk);
       expect(r.err, `${trk}: ${r.err}`).toBeUndefined();
+      // A missing props/glass capture skips the scan and reports max 0, a clean
+      // pass over nothing. Every circuit measured captures props (and most
+      // glass), with 57k+ triangles under the ceiling (headless VM, 2026-11-10,
+      // 40 of 52 circuits, abudhabi..qatar); 1000 is the floor. Triangle/sample hits are NOT floored: dijon reads 0 with nothing
+      // near the line, which is a real clean result.
+      expect(r.meshes, `${trk}: props/glass meshes scanned`).toBeGreaterThanOrEqual(1);
+      expect(r.tris, `${trk}: triangles scanned (${r.pairs} sample hits)`).toBeGreaterThanOrEqual(1000);
       if (trk === "shanghai") {
         expect(r.max, "Shanghai track-owned props remain at the shared clean tolerance").toBeLessThanOrEqual(TOL);
       }

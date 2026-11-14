@@ -32,6 +32,13 @@
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 
+// --help answers BEFORE the static server or Chromium starts (W25 row 13: it had none, so `--help` ran the whole
+// three-browser handshake). Same shape as rtc-e2e.mjs.
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("usage: node tools/net/rtc-e2e-3p.mjs\n  THREE peers over real WebRTC in one room (host + two guests; boots Chromium on port 4468, takes minutes).\n  Exit 0 = all three sessions up and each guest sees the other through the host relay. Takes no flags.");
+  process.exit(0);
+}
+
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PORT = 4468;                       // separate port; browser runs stay serialized
 const alive = async () => {

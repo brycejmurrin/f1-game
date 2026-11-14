@@ -19,6 +19,7 @@ const raceOrder = (cars) => AgentView.raceOrder(cars);
 const finiteOrNil = (v) => v === undefined || v === null || (typeof v === "number" && isFinite(v));
 // update(NaN) wrote NaN into every car, and an infinite n never returned.
 const stepArgs = (dt, n) => [Number.isFinite(dt) && dt >= 0 ? dt : 1 / 60, Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1];
+const simArgs = (dt, n) => ApexLobby.simSteps(...stepArgs(dt, n));   // whole 1/60 steps (apex-lobby.js)
 // The three UI scales take a PERCENT. A fraction (1.6) or junk used to be
 // snapped and SAVED: uiScale(1.6) stored 40 %, uiScale("abc") the default.
 // null still resets; undefined reads.
@@ -107,16 +108,18 @@ function apiHook(base, path, fix) {
   return F1API.request(base + path, 0, { cache: false });
 }
 
-const noAudio = () => (typeof GameAudio === "undefined"
-  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
+// The eager title stub (js/audio/stub.js, `_stub: true`) counts as not loaded: it has no
+// profiles()/voices()/tune(), so a hook reading them threw at the title.
+const noAudio = () => (typeof GameAudio === "undefined" || GameAudio._stub
+  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded (title stub)", fix: "start a race, or open a menu that loads audio" }
   : null);
 // Stable bindings (functions + consts) from the game.js closure.
 const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
-        applyRaceSettings, camVantage, endRace, gridUp, gripMult, isErsDeploying,
+        applyRaceSettings, camVantage, gridUp, gripMult, isErsDeploying,
         copyLightTune, loadCarModel, loadTrack, persistLightTune, refreshLightTunePanel,
         restoreLightTune,
         rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
-        startRace, startWeatherArc, update, wrapS } = G;
+        startRace, startWeatherArc, wrapS } = G;
 // Deferred: openCareer is declared below the G literal in game.js, so it arrives
 // as an arrow and must be read through G rather than destructured here.
 const openCareer = (...a) => G.openCareer(...a);
@@ -238,9 +241,12 @@ function placeFromTrack(car, sampled) {
   car.head = Math.atan2(sampled.t[0], sampled.t[2]);
 }
 
+let apexSeed = null;   // the last seed an agent set through seed(n) / reset(…, seed)
+const simTick = (d) => ApexLobby.tick(G, d);   // one step()/act() tick (apex-lobby.js)
 const api = {
-  // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
-  jump(frac, speed, lateral) {
+  // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m). DELETES the lap in
+  // progress (60 m before the line then across it set a 2.97 s best); {keepLap:true} for fixtures.
+  jump(frac, speed, lateral, opts) {
     if (!G.player || !G.track) return false;
     // A non-finite argument would write NaN into prog/s/speed, and the whole field
     // sort and every later physState read goes with it: refuse before touching state.
@@ -266,6 +272,7 @@ const api = {
     // new spot and fires a surprise auto-rescue mid-drive (measured).
     G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
     G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
+    if (!(opts && opts.keepLap)) G.player.incidentInvalidLap = true;
     // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of
     // renderAlpha — the WORLD pair too: playerAnchor()/renderPosOf() draw the
     // HUMAN car from those, so without them it stays lerp'd toward the
@@ -370,7 +377,7 @@ const api = {
     // The player's world position is derived from s/x, so re-anchor through the
     // same path park() uses rather than trusting stale px/pz.
     const me = (o.cars || []).find((r) => r.me);
-    if (me && G.track.total) this.jump(me.s / G.track.total, me.speed, me.x);
+    if (me && G.track.total) this.jump(me.s / G.track.total, me.speed, me.x, { keepLap: true });   // a re-anchor, not a teleport
     if (G.player) { G.frozen = true; snapGameCam(); }
     return { restored: true, cars: placed, skipped, cam: o.cam && o.cam.mode,
              teamMatches: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer);
@@ -696,10 +703,11 @@ const api = {
     const c = o.car != null ? (G.cars || [])[o.car] : G.player;
     return G.tyres.info(c);
   },
-  // DISPLAY-ONLY damage readout (js/race/damage.js) for car `i` (default: the
-  // player): {fwL, fwR, rw, floor, knock, hits, worst, shown}. `hit` books a
-  // synthetic impact {long, lat, sev} in the car's frame (+long nose, +lat right);
-  // "reset" repairs. Nothing in physics reads it — a screenshot/test door only.
+  // Damage readout (js/race/damage.js) for car `i` (default: the player):
+  // {fwL, fwR, rw, floor, knock, hits, worst, shown}. `hit` books a synthetic
+  // impact {long, lat, sev} in the car's frame (+long nose, +lat right); "reset"
+  // repairs. Visual by default; with RACE SETTINGS DAMAGE = HANDLING
+  // (apex26.damageHandling) it reaches the local car's handling via DamageHandling.forCar.
   damage(i, hit) {
     const c = i != null ? (G.cars || [])[i] : G.player;
     if (!c || typeof Damage === "undefined") return null;
@@ -752,7 +760,7 @@ const api = {
     return { speed: G.player.speed };
   },
 
-  // spin(deg) — add a heading offset to the player (degrees, +CW viewed from above).
+  // spin(deg) — add a heading offset to the player (degrees, + = nose LEFT, CCW viewed from above).
   // Simulates a snap-oversteer or a scripted orientation change. Zeroes lateral
   // velocity and yaw rate after rotating so the car doesn't immediately un-spin.
   // Use spin(180) to face the wrong way, spin(-45) for a 45° drift setup.
@@ -929,7 +937,8 @@ const api = {
   // diff that matters.
   carState: () => G.cars.map((c) => {
     const o = {};
-    for (const k in c) { const v = c[k]; if (typeof v === "number" || typeof v === "boolean") o[k] = v; }
+    // A non-finite number (best = Infinity before a lap is set) is null: JSON would turn it into null anyway.
+    for (const k in c) { const v = c[k]; if (typeof v === "boolean") o[k] = v; else if (typeof v === "number") o[k] = Number.isFinite(v) ? v : null; }
     return o;
   }),
   cars: () => G.cars.map((c, i) => ({
@@ -1257,14 +1266,8 @@ const api = {
   },
   clearInput() { G._testInput = null; },
   step(dt, n) {
-    const [d, count] = stepArgs(dt, n);
-    for (let i = 0; i < count; i++) {
-      // Keep the render-interpolation anchors in sync: the render-driven loop
-      // snapshots them before each step, so a manual pump must too or a frozen
-      // render afterwards lerps toward a stale pre-teleport pose.
-      AgentView.syncRenderAnchors(G.cars);
-      update(d);
-    }
+    const [d, count] = simArgs(dt, n);
+    for (let i = 0; i < count; i++) simTick(d);
   },
   // Deterministic tilt emulation for the autopilot harness. `step(deg, dt)` runs a
   // raw tilt angle (deg) through the real tilt pipeline (One-Euro filter + dead
@@ -1293,7 +1296,8 @@ const api = {
   // A retirement never crosses the line (finishThrough); finishT only when raceT > 0.5.
   finishRace(opts) {
     if (!G.track || G.state === "results" || G.state === "menu") return false;
-    return RaceCeremony.finishThrough(G, endRace, raceOrder, opts);
+    // G.endRace at CALL time, not the boot capture: RealRace wraps G.endRace (a script DSQ must survive).
+    return RaceCeremony.finishThrough(G, (o) => G.endRace(o), raceOrder, opts);
   },
   // RaceCeremony status / seek / skip (Esc = SKIP once the host UI wires it).
   ceremony(arg) { return RaceCeremony.apexCall(arg); },
@@ -1462,7 +1466,6 @@ const api = {
       perChunkHeld: (() => {
         if (!(+LT.perChunkLights > 0)) return null;          // player has it off
         if (G.frame.perChunkLights > 0) return null;         // actually running
-        if (gfx && gfx.hasPerChunkLights === false) return "backend";
         try { if (localStorage.getItem("apex26.perChunkOff") === "1") return "latch"; } catch (_) { /* no storage */ }
         if (typeof PerfGov !== "undefined" && PerfGov.autoShed && PerfGov.autoShed() >= 2) return "tier";
         return "day";   // the flood branch never ran: daylight with no daytime lamps
@@ -1587,7 +1590,9 @@ const api = {
   //   caution(true|false) or caution({enabled}) → switch the whole layer, the
   //     SAME door the CAUTIONS race setting uses (so the chips cannot go stale
   //     against it). Turning it off drops any flag already flying.
+  //   caution({force: 0-3, cause}) → fly that flag by script (RaceControl.hold); force:0 releases.
   caution(arg) {
+    if (arg && typeof arg === "object" && arg.force !== undefined && G.holdCaution) G.holdCaution(arg.force | 0, arg.cause);
     if (typeof arg === "boolean") G.setCautionEnabled(arg);
     else if (arg && typeof arg === "object" && arg.enabled !== undefined)
       G.setCautionEnabled(!!arg.enabled);
@@ -1856,11 +1861,8 @@ const api = {
       G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     }
     if (input !== undefined) G._testInput = input || null;
-    const [d, count] = stepArgs(dt, n);
-    for (let i = 0; i < count; i++) {
-      AgentView.syncRenderAnchors(G.cars);   // all six, exactly as step() does
-      update(d);
-    }
+    const [d, count] = simArgs(dt, n);
+    for (let i = 0; i < count; i++) simTick(d);
     return this.obs();
   },
 
@@ -2081,14 +2083,17 @@ const api = {
     return out;
   },
 
-  seed(n, stream) { if (stream === true) return G.simSeed(undefined, true); if (n !== undefined && Number.isFinite(n)) G.seed = n; return G.seed; },   // stream true: read the sim RNG position, no draw (R3-01)
+  seed(n, stream) { if (stream === true) return G.simSeed(undefined, true); if (n !== undefined && Number.isFinite(n)) { G.seed = n; apexSeed = n; } return G.seed; },   // stream true: read the sim RNG position, no draw (R3-01)
 
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
     // NaN into prog/s/speed/x survives every later tick (the field sort reads prog): refuse first.
     if (![frac, speed, x, seed].every(finiteOrNil)) return false;
     G.resetEpisodeOwners();   // clear takeovers, held flags and debris before reusing car indexes
-    if (seed !== undefined) G.seed = seed;
+    // A seedless reset() replays the last seed an agent SET (seed(n) / reset(...,seed)): the setter
+    // rewinds the stream. Never seeded through __apex: the stream continues, as before.
+    if (seed !== undefined) apexSeed = seed;
+    if (apexSeed !== null) G.seed = apexSeed;
     gridUp();   // also clears finPos / retired / dnf / dnfAt / dnfWhy
     // RE-ARM retirements exactly as startRaceBody does, minus its raceIndex++:
     // the round stays put, so the (seed, round, driver) hash replans the SAME
@@ -2245,6 +2250,15 @@ const api = {
   //   __apex.audioTune({ pitch: 1.1 })        // clamped into range, returns the tune
   //   __apex.audioProfile("cockpit")          // returns the profile actually set
   //   __apex.audioLayer("wind", false)        // returns the layer map
+  // hudSecFlash() — the HUD's sector-flash state (js/ui/hud.js GameHud.secFlash(): the _secFlash timers, the
+  // last flashed sector and raceT), read-only. Tells "flashSector() never ran" from "ran but never painted".
+  // { ok:false, error:"no_seam" } until GameHud exposes it.
+  hudSecFlash() {
+    if (typeof GameHud === "undefined" || typeof GameHud.secFlash !== "function") {
+      return { ok: false, error: "no_seam", message: "GameHud.secFlash() is not in this build" };
+    }
+    return GameHud.secFlash();
+  },
   audio() {
     return noAudio() || { ok: true, profile: GameAudio.profile(), profiles: GameAudio.profiles(),
       voice: GameAudio.voiceName(), voices: GameAudio.voices(),

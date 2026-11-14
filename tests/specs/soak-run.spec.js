@@ -14,7 +14,12 @@ test.describe("auto soak — hands-free recorded race", () => {
       null, { polling: 200, timeout: BOOT_MS });
 
     expect(await page.evaluate(() => SoakRun.active())).toBe(false);
-    expect(await page.evaluate(() => SoakRun.start({ minutes: 0.2 }))).toBe(true);
+    // SoakRun is defined as soon as soak-run.js evaluates, but start() refuses (false, no side effect) until
+    // lazy-bundles' bindPerfRig() has run SoakRun.create(G), and that waits for the whole LAZY_PERF bundle.
+    // A start() landing in that gap read false 2.9 s into the test (CI run 43457456147, job 131995588989).
+    // Ask again until the rig is bound; a start that keeps refusing still fails here.
+    await expect.poll(() => page.evaluate(() => SoakRun.active() || SoakRun.start({ minutes: 0.2 })),
+      { timeout: BOOT_MS + RACE_BUILD_MS, intervals: [250] }).toBe(true);
 
     await page.waitForFunction(() => SoakRun.status().state === "racing", null, { polling: 500, timeout: RACE_BUILD_MS });
     const early = await page.evaluate(() => ({ s: window.__apex.obs().s, wx: window.__apex.weather(), cam: window.__apex.camera().mode }));

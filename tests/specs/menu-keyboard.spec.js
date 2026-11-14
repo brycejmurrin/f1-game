@@ -199,12 +199,14 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     // dispatch these same keys.
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
+    // Every scale could `continue` and the old wait swallowed its own timeout, so the test
+    // passed having measured nothing. Count the scales measured; the wait now fails loudly.
+    let measured = 0;
     for (const pct of [100, 150, 200]) {
       await page.evaluate((p) => window.__apex.uiScale(p), pct);
-      await page.waitForFunction((p) => {
-        try { return Math.round((window.__apex.uiScale?.() ?? p)) === p || document.documentElement.style.getPropertyValue("--ui-scale") !== ""; }
-        catch (_) { return true; }
-      }, pct, { polling: 100, timeout: 2_000 }).catch(() => {});
+      // applyScale writes the clamped pct / 100 to --ui-scale on <html> (js/ui/scale.js).
+      await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")),
+        { message: `--ui-scale lands at ${pct}%`, timeout: 2_000 }).toBe(String(pct / 100));
       const r = await page.evaluate(() => {
         const list = document.getElementById("sel-tracks");
         list.scrollLeft = 0;
@@ -215,9 +217,11 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
                  max: list.scrollWidth - list.clientWidth };
       });
       if (r.max < r.pane) continue; // not enough content to measure a full page at this scale
+      measured++;
       expect(r.moved / r.pane, `travel at ${pct}% is ~0.9 strip-widths`).toBeGreaterThan(0.7);
       expect(r.moved / r.pane, `travel at ${pct}% is not a double page`).toBeLessThan(1.05);
     }
+    expect(measured, "at least one UI scale had a full page of tracks to measure").toBeGreaterThan(0);
     await page.evaluate(() => window.__apex.uiScale(null));
   });
 

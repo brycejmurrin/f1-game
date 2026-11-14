@@ -10,6 +10,9 @@ const Onboard = (function () {
   // memory, so RACES_MAX "two races and the player has seen enough" restarted
   // at every page load and an unseen mark could still appear a month in.
   const RACES_KEY = "onboardRaces";
+  // races at REPEAT CONTROL REMINDERS: re-armed marks get RACES_MAX more
+  const RACES_BASE_KEY = "onboardRaceBase";
+  const CONTROLS = 7;           // brake | ot | aero
   const MARKS = ["brake", "ot", "aero", "harvest"];
   const BIT = { brake: 1, ot: 2, aero: 4, harvest: 8 };
   const ALL = 15;
@@ -100,6 +103,7 @@ const Onboard = (function () {
     let shown = 0;          // bitmask, loaded lazily so a fresh store is not read at eval
     let loaded = false;
     let races = 0;
+    let raceBase = 0;       // races at the last REPEAT CONTROL REMINDERS
     let cool = 0;           // s until the next mark may show
     let lastState = "";
 
@@ -110,10 +114,12 @@ const Onboard = (function () {
       shown = Number.isInteger(v) ? v : 0;
       const r = store.get(RACES_KEY, 0);
       races = Number.isInteger(r) && r > 0 ? r : 0;
+      const b = store.get(RACES_BASE_KEY, 0);
+      raceBase = Number.isInteger(b) && b > 0 && b <= races ? b : 0;
     }
     function done() {
       load();
-      return shown >= ALL || races > RACES_MAX;
+      return shown >= ALL || races - raceBase > RACES_MAX;
     }
 
     function fire(key) {
@@ -175,16 +181,27 @@ const Onboard = (function () {
       shown = 0;
       races = 0;
       cool = 0;
+      raceBase = 0;
       loaded = true;
       store.set(KEY, 0);
       store.set(RACES_KEY, 0);
+      store.set(RACES_BASE_KEY, 0);
+    }
+    /** REPEAT CONTROL REMINDERS: re-arm brake/ot/aero only; keep harvest and races. */
+    function resetControls() {
+      load();
+      shown &= ~CONTROLS;
+      raceBase = races;
+      cool = 0;
+      store.set(KEY, shown);
+      store.set(RACES_BASE_KEY, raceBase);
     }
     function state() {
       load();
       return { shown, races, done: done() };
     }
-    refresher = reset;
-    return { tick, reset, state, MARKS };
+    refresher = resetControls;
+    return { tick, reset, resetControls, state, MARKS };
   }
 
   return { create, resetControlsRefresher, harvestClipCue, MARKS, BIT, ALL };

@@ -220,24 +220,42 @@ test("10-car pack reaches >10 m/s average speed within 5 s", async () => {
 
 // ── AI banking grip (elevation audit Bug #1) ─────────────────────────────────
 
-test("AI carry banked-corner speed comparable to a flat straight (banking grip applies to AI)", async () => {
+test("AI carry banked-corner speed and banking grip steers the AI (bank vs flat-stubbed bank)", async () => {
+  // Twin of the spec: ONE AI car placed by aiPlace ON the bank (Zandvoort
+  // ~0.19 and ~0.885; 0.65 is flat), the rest parked, then the same placement
+  // replayed with Tracks.banking stubbed flat. With the player-only bankMu bug
+  // the two AI paths are identical.
   await loadRace("zandvoort");
-  const A = g.apex;
-  const runAvg = (frac) => {
+  const A = g.apex, T = g.ctx.Tracks, orig = T.banking;
+  const run = (frac, v, flat) => {
     A.headless(true);
-    A.reset(frac, 20, 0);
-    for (let i = 0; i < 480; i++) A.act({ steer: 0, throttle: true, brake: false }, 1 / 60, 1);
-    A.headless(false);
-    const ai = A.cars().filter((c) => !c.p);
-    return {
-      avg: ai.reduce((s, c) => s + c.speed, 0) / (ai.length || 1),
-      finite: A.cars().every((c) => isFinite(c.x) && isFinite(c.speed)),
-    };
+    A.reset(0.5, 0, 0);
+    const ai = A.cars().filter((c) => !c.p).map((c) => c.id);
+    ai.forEach((id, j) => A.aiPlace(id, 0.4 + j * 0.003, 0, 0));
+    const id = ai[0];
+    A.aiPlace(id, frac, v, 0);
+    if (flat) T.banking = () => null;
+    const xs = []; let sum = 0, finite = true;
+    try {
+      for (let i = 0; i < 120; i++) {
+        A.act({ steer: 0, throttle: false, brake: true }, 1 / 60, 1);
+        const c = A.cars().find((k) => k.id === id);
+        xs.push(c.x); sum += c.speed;
+        finite = finite && isFinite(c.x) && isFinite(c.speed);
+      }
+    } finally { T.banking = orig; A.headless(false); }
+    return { xs, avg: sum / 120, finite };
   };
-  const flat = runAvg(0.0);      // start/finish straight — the grip reference
-  const banked = runAvg(0.65);   // Arie Luyendijk banked turn (~0.65–0.75)
-  assert.equal(flat.finite && banked.finite, true);
-  gt(banked.avg, flat.avg * 0.5);
+  const straight = run(0.0, 50, false);
+  assert.equal(straight.finite, true);
+  let maxDx = 0;
+  for (const frac of [0.19, 0.885]) {
+    const bank = run(frac, 50, false), flat = run(frac, 50, true);
+    assert.equal(bank.finite && flat.finite, true);
+    maxDx = Math.max(maxDx, ...bank.xs.map((x, i) => Math.abs(x - flat.xs[i])));
+    gt(bank.avg, straight.avg * 0.55);
+  }
+  gt(maxDx, 0.05);
 });
 
 test("player with racing-line assist stays on banked Zandvoort section", async () => {

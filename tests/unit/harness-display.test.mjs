@@ -7,7 +7,7 @@
 import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { execFileSync } from "node:child_process";
 import vm from "node:vm";
@@ -319,4 +319,35 @@ test("graceful Browser close closes the supported process owner too", async () =
   await browser.close({ reason: "finished" });
   await shutdown();
   assert.deepEqual(calls, ["finished", "owner"]);
+});
+
+// tools/serve.mjs replaces `npx serve -l 3456 .`, which leaked one open file per 304 and died
+// with EMFILE after ~20k conditional requests in a long browser session (2026-11 live-play audit).
+test("tools/serve.mjs: 500 conditional GETs leave the open-file count flat; argv is strict", async () => {
+  const { serve, parseServeArgs } = await import("../../tools/serve.mjs");
+  assert.deepEqual(parseServeArgs([]), { port: 3456, host: "127.0.0.1", help: false });
+  assert.equal(parseServeArgs(["--port", "0"]).port, 0);
+  assert.equal(parseServeArgs(["-l", "3456"]).error, "unknown argument -l");
+  assert.equal(parseServeArgs(["--port", "x"]).error, "--port must be 0-65535, got x");
+  const help = execFileSync(process.execPath, ["tools/serve.mjs", "--help"], { encoding: "utf8" });
+  assert.equal(help.trim(), "usage: node tools/serve.mjs [--port 3456] [--host 127.0.0.1]");
+  const fds = () => readdirSync("/proc/self/fd").length;
+  const srv = await serve({ port: 0 });
+  try {
+    const first = await fetch(srv.url + "index.html");
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get("content-type"), "text/html; charset=utf-8");
+    await first.arrayBuffer();
+    const js = await fetch(srv.url + "js/core/log.js");
+    assert.equal(js.headers.get("content-type"), "application/javascript; charset=utf-8");
+    await js.arrayBuffer();
+    const before = fds();
+    for (let i = 0; i < 500; i++) {
+      const r = await fetch(srv.url + (i % 2 ? "index.html" : "js/core/log.js"), {
+        headers: { "If-None-Match": '"x"', "If-Modified-Since": new Date().toUTCString() } });
+      await r.arrayBuffer();
+    }
+    const after = fds();
+    assert.ok(after - before < 20, `open files grew ${before} -> ${after} over 500 conditional requests`);
+  } finally { await srv.close(); }
 });

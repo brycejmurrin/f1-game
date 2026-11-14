@@ -12,6 +12,8 @@
  *   * a real track's batches() payload survives the trip into GL buffers.
  */
 import { test, expect } from "../helpers/fixtures.js";
+import { frameContent, screenshotPixels } from "../helpers/visual-oracle.js";
+import { screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
 
 // The scene-renders test boots (up to 24.6 s measured idle), builds monza,
 // settles 4 s and then takes a full-page capture with its own 120 s budget —
@@ -123,10 +125,11 @@ test.describe("GLX instanced draw", () => {
     await page.evaluate(() => { __apex.park(0.1); __apex.snapCam(); });
     await page.evaluate(async () => { for (let i = 0; i < 3; i++) await __apex.awaitPresent(120000); });
 
-    // page.screenshot(), not locator.screenshot(): the latter waits for element
-    // stability, which starves under SwiftShader on a full circuit.
-    const png = await page.screenshot({ timeout: 120000 });
-    // A blank/black frame compresses to a few KB; a real 3D frame is tens of KB.
-    expect(png.length, "the scene went black — instancing state leaked into normal draws").toBeGreaterThan(20000);
+    // The PRESENTED canvas (#game-soft where the backend blits), decoded and
+    // read: a page screenshot's byte count counted the HUD and the PNG
+    // compressor, not whether the 3-D scene drew.
+    const shot = await screenshotPresentedCanvas(page);
+    expect(frameContent(await screenshotPixels(page, shot.buf)).nonblank,
+      "the scene went black — instancing state leaked into normal draws").toBe(true);
   });
 });

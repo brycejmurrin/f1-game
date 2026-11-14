@@ -58,37 +58,31 @@ test("playerCanDrive refuses retired / DSQ", () => {
   assert.equal(C.playerCanDrive(null), false);
 });
 
-test("exitReason: skip, pit, lap, time — live only", () => {
+test("exitReason: skip, lap, time — live only", () => {
   const C = boot();
   assert.equal(C.exitReason({ live: false, age: 99 }, {}), null);
   assert.equal(C.exitReason({ live: true, age: 1, skipRequested: true }, {}), "skip");
-  assert.equal(C.exitReason({ live: true, age: 1 }, { inPitLane: true }), "pit");
-  assert.equal(C.exitReason({ live: true, age: 1 }, { atBox: true }), "pit");
   assert.equal(C.exitReason({ live: true, age: 1, lapBudget: 1 }, { progDelta: 1 }), "lap");
   assert.equal(C.exitReason({ live: true, age: 1, lapBudget: 1 }, { progDelta: 0.5 }), null);
   assert.equal(C.exitReason({ live: true, age: 45, wallBudget: 45 }, { progDelta: 0 }), "time");
   assert.equal(C.exitReason({ live: true, age: 10, wallBudget: 45 }, { progDelta: 0 }), null);
 });
 
-test("aiPolicy: never attack; cool vs park", () => {
+// The "pit" exit could not fire for the driven player: Tracks.inPitLane needs |x| beyond the
+// road edge and game.js cooldownDrive clamps x to ±0.9·hw. aiPolicy / COOL_SPEED_FRAC had no
+// caller in js/, and PARK_SPEED compared a raw m/s outside the PACE scale (docs/PHYSICS.md).
+// All of it is gone: a pit-lane sample is not an exit, and none of those names is exported.
+test("no dead pit exit or uncalled AI policy: a pit-lane sample does not end the beat", () => {
   const C = boot();
-  const cool = C.aiPolicy({}, { vRef: 100 });
-  assert.equal(cool.mode, "cool");
-  assert.equal(cool.attack, false);
-  assert.ok(cool.targetSpeed > 0 && cool.targetSpeed < 100);
-  const park = C.aiPolicy({}, { inPitLane: true, speed: 1, vRef: 100 });
-  assert.equal(park.mode, "park");
-  assert.equal(park.attack, false);
-  assert.equal(park.targetSpeed, 0);
-  const near = C.aiPolicy({}, { nearPit: true, vRef: 80 });
-  assert.equal(near.mode, "park");
-  assert.equal(near.attack, false);
+  assert.equal(C.exitReason({ live: true, age: 1 }, { inPitLane: true }), null);
+  assert.equal(C.exitReason({ live: true, age: 1 }, { atBox: true }), null);
+  for (const k of ["aiPolicy", "COOL_SPEED_FRAC", "PARK_SPEED"]) assert.equal(k in C, false, `${k} is not exported`);
 });
 
-test("create: start → tick time/lap/pit/skip exits; camera stays chase", () => {
+test("create: start → tick time/lap/skip exits; camera stays chase", () => {
   const C = boot();
   const G = raceG({ player: { prog: 0.2, s: 1000, speed: 40 } });
-  const api = C.create(G, { inPitLane: () => false, atBox: () => false });
+  const api = C.create(G);
   assert.equal(api.start(), true);
   assert.equal(api.status().phase, "cooldown");
   assert.equal(api.cameraOwner(), "chase");
@@ -107,14 +101,9 @@ test("create: start → tick time/lap/pit/skip exits; camera stays chase", () =>
   assert.equal(api.start({ lapBudget: 0.5, wallS: 99, force: true }), true);
   assert.equal(api.tick(0.016, { progDelta: 0.5 }), "lap");
 
-  // Pit exit.
-  const pitApi = C.create(G, { inPitLane: () => true, atBox: () => false });
-  assert.equal(pitApi.start({ wallS: 99, force: true }), true);
-  assert.equal(pitApi.tick(0.016), "pit");
-
   // Prog wiring: startProg captured at start; crossing lapBudget ends the beat.
   const G2 = raceG({ player: { prog: 0 } });
-  const progApi = C.create(G2, { inPitLane: () => false, atBox: () => false });
+  const progApi = C.create(G2);
   assert.equal(progApi.start({ lapBudget: 0.25, wallS: 99, force: true }), true);
   G2.player.prog = 0.25 * G2.track.total;   // c.prog is cumulative metres
   assert.equal(progApi.tick(0.016), "lap");

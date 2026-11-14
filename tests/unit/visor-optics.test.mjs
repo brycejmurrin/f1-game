@@ -29,7 +29,7 @@ function ctx2d(calls) {
   };
 }
 
-function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "", G = undefined } = {}) {
+function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
   const calls = { clear: 0, stroke: 0, arc: 0, gradients: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
   const live = { visor, helmet };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
@@ -56,7 +56,6 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
     CockpitOpts: { visor: () => live.visor, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
     ...(picker ? { RendererPicker: picker } : {}),
-    ...(G ? { G } : {}),
   });
   seedLog(ctx);
   const V = vm.runInContext(read("js/fx/visor-optics.js") + ";VisorOptics", ctx, { filename: absSrc("js/fx/visor-optics.js") });
@@ -315,7 +314,13 @@ test("visor tick: a Pages build WITHOUT the dev API (__apex null) still paints t
   // inject) set visorScene — so a player's build never painted the helmet visor glint (0 paints in 30 ticks).
   const G = { camEye: DAY.eye, camTgt: DAY.tgt, camFov: DAY.fov, _lastFloodEmit: 0,
     frame: { sunDir: DAY.sunDir, sunColor: DAY.sunColor, exposure: 1, ambientSky: DAY.ambientSky, lights: null, tailStart: 0 } };
-  const { V, calls } = load({ apex: null, G });
+  // game.js's `const G` lives inside its async IIFE: the page has NO global G, so this VM must not
+  // inject one (it did, and the bare `typeof G` read passed here while the deployed build painted nothing).
+  const { V, calls, ctx } = load({ apex: null });
+  assert.equal(typeof ctx.G, "undefined", "no global G, as on the page");
+  for (let i = 0; i < 30; i++) V.tick(1 / 60, true, 0, false);
+  assert.equal(V.stats().paints, 0, "nothing bound, no __apex: nothing to paint");
+  V.bindScene(G);   // what js/game.js does once its G exists
   for (let i = 0; i < 30; i++) V.tick(1 / 60, true, 0, false);
   const st = V.stats();
   assert.ok(st.paints > 0, `paints from G with no __apex (${st.paints})`);

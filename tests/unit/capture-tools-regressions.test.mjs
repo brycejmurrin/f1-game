@@ -963,3 +963,32 @@ test('timed-out native presentation cannot later start a readback or pause its o
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(reads, 0); assert.equal(paused, false);
 });
+
+test('agent --vm passes --seed to createGame and runs car (JSON) instead of refusing it', async () => {
+  const source = readFileSync(resolve(ROOT, 'tools/shot/agent.mjs'), 'utf8')
+    .replace(/^#!.*$/m, '').replace(/^import .*;$/gm, '')
+    .replace(/^const ROOT = .*;$/m, 'const ROOT = "/fixture";');
+  for (const [argv, expect] of [
+    [['help', '--vm', '--seed', '7'], { search: '?seed=7' }],
+    [['car', '--vm', '--seed', '3'], { search: '?seed=3', track: true }],
+  ]) {
+    const created = []; let exitCode = null; let done;
+    const finished = new Promise((r) => { done = r; });
+    const apex = new Proxy({}, { get: (_t, k) => (k === 'then' ? undefined : () => ({ ok: true, k: String(k) })) });
+    const processStub = { argv: ['node', 'agent.mjs', ...argv], exitCode: 0,
+      exit: (code) => { if (exitCode == null) exitCode = code; done(); } };
+    const createRequire = () => () => ({ createGame: async (o) => { created.push(o); return { apex, close() {} }; } });
+    vm.runInNewContext(source, {
+      process: processStub, console: { log() {}, error() {} }, createRequire,
+      startStaticServer: async () => { throw new Error('browser route taken'); },
+      launchChromium: async () => { throw new Error('browser route taken'); },
+      installProbeInit: async () => {}, chromiumArgsForBackend: () => [], sleep: async () => {}, parseFlags: () => ({}),
+      shutdown: async () => {}, setTimeout, clearTimeout,
+    }, { filename: resolve(ROOT, 'tools/shot/agent.mjs') });
+    await finished;
+    assert.notEqual(exitCode, 2, `${argv[0]} --vm was refused`);
+    assert.equal(created.length, 1, `${argv[0]} --vm reached createGame`);
+    assert.equal(created[0].search, expect.search);
+    if (expect.track) assert.ok(created[0].track);
+  }
+});

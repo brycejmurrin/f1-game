@@ -381,6 +381,13 @@ export function generatedPkgVerdict({ basePkg, headPkg, baseGroups, headGroups, 
     if (!GROUP_KINDS.has(b.kind) || (h && (h.kind !== b.kind || JSON.stringify(h.flags || []) !== JSON.stringify(b.flags || []))))
       return row(false, `script ${k}: its group's kind or flags changed (only file lists are generated data)`);
   }
+  // A node group's script is `run-node-group.mjs <name> <files> --`, and the wrapper reads the group's flags from
+  // tests/groups.json at run time: a flags-only change leaves the script text alone, so compare every group too.
+  for (const k of Object.keys(hg.groups || {})) {
+    const b = bg.groups?.[k], h = hg.groups[k];
+    if (b && (h.kind !== b.kind || JSON.stringify(h.flags || []) !== JSON.stringify(b.flags || [])))
+      return row(false, `group ${k}: its kind or flags changed (only file lists are generated data)`);
+  }
   return row(true, `package.json changes only generated test file lists (${names.join(", ") || "none"})`);
 }
 

@@ -584,3 +584,36 @@ test("ended duration stays fixed and a new window resets its terminal clock", ()
   P.begin("next"); t += 20; assert.equal(P.snapshot().windowMs, 20);
   P.end(); t += 1000; assert.equal(P.snapshot().windowMs, 20);
 });
+
+// game.js's G and loadingScreen live inside its async IIFE: another script can never read them
+// by name, so stallHandoffCover's countdown / loading-phase / software-GL legs were dead in the
+// browser while a VM that injected a global G passed. This sandbox injects NO G or loadingScreen.
+test("stallHandoffCover reads game state and loading phase through bindGame, never a bare global", () => {
+  let state = "menu", phase = "", soft = false;
+  const P = load({ PerfGov: { softwareRaster: () => soft } });
+  assert.equal(P.stallHandoffCover(), false, "nothing bound, nothing armed: no cover");
+  P.bindGame({ state: () => state, loadingPhase: () => phase });
+  state = "count";
+  assert.equal(P.stallHandoffCover(), true, "the countdown is a handoff cover");
+  state = "menu";
+  for (const ph of ["handoff", "busy", "build", "garage", "prep"]) {
+    phase = ph;
+    assert.equal(P.stallHandoffCover(), true, `loading phase ${ph} is a cover`);
+  }
+  phase = "idle";
+  assert.equal(P.stallHandoffCover(), false);
+  // Software GL: the race's intro budget is a cover while it lasts.
+  soft = true; state = "race";
+  assert.ok(P.introBudgetLeft() > 0, "the software intro budget is open");
+  assert.equal(P.stallHandoffCover(), true, "software GL race inside the intro budget");
+  // The readback defer must NOT take that leg: a software-GL capture in the race's first 45 s read an
+  // unread #game-soft (camera.spec "chase presented meaningful pixels", hud-mirror GLX glass bands 0; #5296).
+  assert.equal(P.readbackCover(), false, "a live software-GL race is no readback cover");
+  state = "count";
+  assert.equal(P.readbackCover(), true, "the countdown still defers readback");
+  state = "race";
+  soft = false;
+  assert.equal(P.stallHandoffCover(), false, "hardware GL race: no cover");
+  P.bindGame({ state: () => { throw new Error("mid-boot"); } });
+  assert.equal(P.stallHandoffCover(), false, "a probe that throws is no cover");
+});

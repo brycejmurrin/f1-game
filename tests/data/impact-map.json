@@ -155,8 +155,12 @@
       ]
     },
     "js/agent/apex-cam.js": {
+      "clearShot": [
+        "tests/unit/hooks-documented.test.mjs"
+      ],
       "hooks": [
-        "tests/unit/apex-cam-fallback.test.mjs"
+        "tests/unit/apex-cam-fallback.test.mjs",
+        "tests/unit/hooks-documented.test.mjs"
       ],
       "*": [
         "tests/unit/camera-defaults.test.mjs",
@@ -184,9 +188,11 @@
       ]
     },
     "js/agent/apex-lobby.js": {
-      "*": [
-        "tests/unit/car-presentation-canary.test.mjs",
+      "tick": [
         "tests/unit/overlay-publisher.test.mjs"
+      ],
+      "*": [
+        "tests/unit/car-presentation-canary.test.mjs"
       ]
     },
     "js/agent/apex-net.js": {
@@ -215,6 +221,7 @@
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/hooks-documented.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -237,6 +244,7 @@
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/ui-resize.spec.js",
+        "tests/specs/ui-scale.spec.js",
         "tests/unit/capture-tools-regressions.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -247,6 +255,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
+        "tests/unit/js-debugger-trace.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
@@ -2885,6 +2894,7 @@
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "*": [
+        "tests/specs/car-effects.spec.js",
         "tests/specs/quali.spec.js",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -5498,6 +5508,7 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "emit": [
+        "tests/unit/harness-display.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
@@ -7399,6 +7410,9 @@
       ]
     },
     "js/fx/visor-optics.js": {
+      "bindScene": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "blendMode": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -7424,7 +7438,6 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "sceneFromG": [
-        "tests/unit/global-registry.test.mjs",
         "tests/unit/visor-optics.test.mjs"
       ],
       "stats": [
@@ -7800,6 +7813,7 @@
         "tests/specs/physics-characterization.spec.js",
         "tests/specs/smoke.spec.js",
         "tests/specs/tlx-probes.spec.js",
+        "tests/specs/ui-button-touch.spec.js",
         "tests/specs/ui-scale.spec.js",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/director.test.mjs",
@@ -7820,7 +7834,8 @@
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/session-transcript.test.mjs",
         "tests/unit/source-integrity.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ],
       "renderPosOf": [
         "tests/unit/field-lod.test.mjs"
@@ -7973,6 +7988,7 @@
         "tests/unit/title-warm.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs",
+        "tests/unit/visor-optics.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
@@ -9100,6 +9116,7 @@
         "tests/unit/livery-card-density.test.mjs"
       ],
       "openSetup": [
+        "tests/specs/parts-budget.spec.js",
         "tests/specs/parts-setup-ids.spec.js",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
@@ -11062,7 +11079,8 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "*": [
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/select-specs.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ]
     },
     "js/overlay/publisher.js": {
@@ -11543,6 +11561,9 @@
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
+      "bindGame": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
       "clearMenuEntrySession": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
@@ -11567,6 +11588,9 @@
       ],
       "raiseHandoff": [
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
+      "readbackCover": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "requestWarm": [
@@ -11600,6 +11624,9 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "stagesFromSnapshot": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
+      "stallHandoffCover": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "tickFrame": [
@@ -13014,7 +13041,8 @@
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-render.test.mjs",
         "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "fmtGap": [
         "tests/unit/hud-gap-decimals.test.mjs",
@@ -13043,7 +13071,8 @@
       ],
       "start": [
         "tests/unit/overlay-publisher.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "status": [
         "tests/unit/director.test.mjs",
@@ -13052,13 +13081,15 @@
       "stop": [
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "tick": [
         "tests/unit/director.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "towerAt": [
         "tests/unit/real-replay-broadcast.test.mjs"
@@ -13128,9 +13159,6 @@
       ]
     },
     "js/race/cooldown-lap.js": {
-      "aiPolicy": [
-        "tests/unit/cooldown-lap.test.mjs"
-      ],
       "create": [
         "tests/unit/cooldown-lap.test.mjs"
       ],
@@ -13163,9 +13191,6 @@
       ],
       "tick": [
         "tests/unit/cooldown-lap.test.mjs"
-      ],
-      "*": [
-        "tests/unit/vstd-invariant.test.mjs"
       ]
     },
     "js/race/daily-challenge.js": {
@@ -14200,6 +14225,9 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-duration.test.mjs"
       ],
+      "offer": [
+        "tests/unit/race-radio.test.mjs"
+      ],
       "replayEvent": [
         "tests/unit/race-radio.test.mjs"
       ],
@@ -14728,6 +14756,7 @@
       "info": [
         "tests/specs/jump-start.spec.js",
         "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
@@ -14740,11 +14769,13 @@
       ],
       "reset": [
         "tests/unit/damage.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "tick": [
         "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/sim-step-alloc.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
@@ -14828,13 +14859,19 @@
     },
     "js/race/tv-graphics.js": {
       "create": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "diff": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
+      ],
+      "stop": [
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "tick": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ]
     },
     "js/race/weather-arc.js": {
@@ -16700,7 +16737,8 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/vm-debug-preload.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {
@@ -18153,6 +18191,9 @@
       ]
     },
     "js/ui/css-zoom.js": {
+      "viewportRect": [
+        "tests/unit/css-zoom.test.mjs"
+      ],
       "*": [
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
@@ -18780,6 +18821,7 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "flashSector": [
+        "tests/specs/time-trial.spec.js",
         "tests/unit/hud-feel.test.mjs"
       ],
       "gapDecimals": [
@@ -18881,6 +18923,9 @@
       ]
     },
     "js/ui/key-binds.js": {
+      "create": [
+        "tests/unit/onboard.test.mjs"
+      ],
       "section": [
         "tests/unit/store-registry.test.mjs"
       ],
@@ -19201,6 +19246,9 @@
       "reset": [
         "tests/unit/onboard.test.mjs"
       ],
+      "resetControlsRefresher": [
+        "tests/unit/onboard.test.mjs"
+      ],
       "state": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/onboard.test.mjs"
@@ -19494,6 +19542,7 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "*": [
+        "tests/specs/menu-keyboard.spec.js",
         "tests/specs/real-profile-dock.spec.js",
         "tests/specs/time-trial.spec.js",
         "tests/specs/title-fit.spec.js",

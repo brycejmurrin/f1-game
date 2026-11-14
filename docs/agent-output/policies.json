@@ -2171,6 +2171,11 @@
       "presentation": "native",
       "preserve": "Per-reading counts (meshes, textures, batches, listeners by scope, intervals, timers), every LEAK row, the `= vm-leak-census clean|LEAK` line, exit status and the --json artifact."
     },
+    "tools/serve.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Server URL line"
+    },
     "tools/shot/ab-gallery.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",

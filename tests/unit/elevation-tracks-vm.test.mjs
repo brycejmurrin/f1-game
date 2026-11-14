@@ -266,7 +266,8 @@ for (const id of GRADE_RUNS) {
     gt(r.flatSteps, 30,
       `reference run at frac ${r.flatAt} left the road immediately — no usable reference`);
     gte(r.flatMax, FLAT_LAUNCH, "flat-out reference run was blocked — it lost ground from the launch");
-    lt(r.maxV, r.flatMax * 1.35);                 // no descent runaway past flat top speed
+    gt(r.vTop, FLAT_LAUNCH);                      // the descent starts AT top speed (vmaxNow)
+    assert.ok(r.maxV <= r.vmaxPeak * 1.06 + 1e-3, `descent overspeed ${r.maxV} past vmax*1.06 (vmax ${r.vmaxPeak})`);
     gt(r.climbEnd, CLIMB_LAUNCH * 0.5, "gravity stopped the car dead on the climb");
     lt(r.widest, r.hw + 8);                       // road-following keeps it broadly on the road
   });

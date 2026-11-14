@@ -247,11 +247,13 @@ const SportingRegs = (function () {
   }
 
   /** The lapping car the blue flag is shown for, or null. `o.total` is lap
-   *  length, `o.vRef` the envelope (vTop). Time gap, never a literal m/s. */
-  function blueFlagCar(p, field, o) {
-    if (!p || !o || !(o.total > 0) || !(o.vRef > 0)) return null;
+   *  length, `o.vRef` the envelope (vTop) or `o.vFloor` the floor. Time gap,
+   *  never m/s. Shared with HudReadouts.blueFlag; `held` keeps to `holdS`. */
+  function blueFlagCar(p, field, o, held, holdS) {
+    const floor = o && o.vFloor > 0 ? o.vFloor : o && o.vRef > 0 ? o.vRef * BLUE_VFLOOR : 0;
+    if (!p || !o || !(o.total > 0) || !(floor > 0)) return null;
     if (p.finished || p.retired || inPit(p)) return null;
-    const L = o.total, floor = o.vRef * BLUE_VFLOOR;
+    const L = o.total, keep = holdS > BLUE_GAP_S ? holdS : BLUE_GAP_S;
     let best = null, bestD = Infinity;
     for (const c of field || []) {
       if (!c || c === p || c.retired || c.finished || inPit(c)) continue;
@@ -259,7 +261,7 @@ const SportingRegs = (function () {
       if (!(up > L * 0.5)) continue;
       const back = (((p.prog || 0) - (c.prog || 0)) % L + L) % L;
       if (!(back > 0) || back >= bestD) continue;
-      if (back / Math.max(c.speed || 0, floor) <= BLUE_GAP_S) { best = c; bestD = back; }
+      if (back / Math.max(c.speed || 0, floor) <= (c === held ? keep : BLUE_GAP_S)) { best = c; bestD = back; }
     }
     return best;
   }
@@ -304,12 +306,12 @@ const SportingRegs = (function () {
   }
 
   // Compound / caution / blue-flag scalars stay module-local. compoundsRun,
-  // compoundVerdict, passPenaltyS and blueFlagCar stay module-local too: the
-  // short/apply/watch APIs own them; only unit tests used to call them directly.
+  // compoundVerdict and passPenaltyS stay module-local too: the short/apply/watch
+  // APIs own them.
   return Object.freeze({
     compoundShort, applyCompoundRule,
     exempt, createPassWatch, champOrder,
-    createBlueFlagWatch,
+    createBlueFlagWatch, blueFlagCar,
     jumpStartEarlyThrottle, jumpStartFastLaunch,
     JUMP_START_THROTTLE, JUMP_START_REACT_S, JUMP_START_SPEED_VREF,
     JUMP_START_PEN_S, JUMP_START_WHY,
