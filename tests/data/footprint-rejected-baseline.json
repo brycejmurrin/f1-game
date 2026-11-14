@@ -1,0 +1,24 @@
+{
+  "_why": "Shrink-only: non-pit \"footprint rejected\" modelGroups per circuit (tools/track/footprint-rejected.cjs). A new id fails; a landed id must be removed (--all --update). Measured 2026-11-10. 2026-11-11: interlagos's four rows removed \u2014 the tip's Interlagos fix lands arq-senna, favela-17, crowd-905 and crowd-921.",
+  "jeddah": [
+    "kit:jeddah:pit-building"
+  ],
+  "madrid": [
+    "madrid-monumental-r-3",
+    "madrid-skyline-midrise-7"
+  ],
+  "qatar": [
+    "qatar-green-verge-260-1",
+    "qatar-green-verge-908--1"
+  ],
+  "sepang": [
+    "sepang-shade-walk-t1"
+  ],
+  "zandvoort": [
+    "north-sea-1",
+    "north-sea-2",
+    "north-sea-5",
+    "zandvoort-beach-terrace-0",
+    "zandvoort-surf-1"
+  ]
+}

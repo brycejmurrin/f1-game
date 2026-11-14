@@ -2526,6 +2526,11 @@
       "presentation": "native",
       "preserve": "@c7"
     },
+    "tools/track/footprint-rejected.cjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Every NEW and STALE row with its circuit and modelGroup id, and the exact --json baseline map."
+    },
     "tools/track/footprint-support.cjs": {
       "action": "no-direct-output",
       "presentation": "native",

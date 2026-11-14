@@ -15,8 +15,9 @@ lives in `js/track/`. Never put an id-keyed table in the engine
 
 | File | Role | Load |
 |---|---|---|
-| `js/circuits/<id>.js` | Def: `path`, elevations, palette, theme, `furniture` / `kit` / `barrier` / `standSet` / `cityStyle`, `hwZones`, `bankZones`, sectors/turns, flags | Tagged `<script>` — order == `Tracks.LIST` |
-| `js/circuits/scenery/<id>.js` | Bespoke `scenery(api)` closure | **Lazy** (`LAZY_SCENERY` in `tools/manifest.cjs`) — fetched once per session before `Tracks.build` |
+| `js/circuits/<id>.js` | Def: `path`, elevations, palette, theme, `furniture` / `kit` / `barrier` / `standSet` / `cityStyle`, `hwZones`, `bankZones`, sectors/turns, flags | **Lazy** (`LAZY_CIRCUIT`) — fetched when the circuit is picked or raced (`ensureCircuit`, `js/core/lazy-bundles.js`) and hydrated into its `Tracks.LIST` entry in place |
+| `js/circuits/scenery/<id>.js` | Bespoke `scenery(api)` closure | **Lazy** (`LAZY_SCENERY`) — fetched beside the def on first visit (`ensureScenery`) |
+| `js/track/circuit-meta.js` | GENERATED picker roster (name, flag, length…) for every circuit | Eager — the only circuit data the title screen loads; `CIRCUITS` order in `tools/manifest.cjs` == `Tracks.LIST` == picker order |
 
 A few harnesses still put `scenery` inline on the def; production circuits use
 the split. Resolution at build time:
@@ -32,14 +33,17 @@ Missing scenery → warn + **bare** build (generic theme dressing only).
 ## 2. Pipeline (what runs, in order)
 
 ```
-Boot: each circuits/<id>.js pushes into TrackDefs
-      tracks.js copies metadata into Tracks.LIST (points = lazy getter)
+Boot: circuit-meta.js (generated) gives Tracks.LIST one meta stub per circuit
+      (no path yet) — the picker renders from it
 
-Menu / startRace:
-  ensureScenery(idx)     // await fetch js/circuits/scenery/<id>.js
-  loadTrack → Tracks.build(def, opts)
+Pick / startRace (js/core/lazy-bundles.js):
+  ensureScenery(idx)
+    ├ ensureTrackBuild()   // LAZY_TRACK_BUILD: the build toolkit, beside the fetches
+    ├ fetchScenery(id)     // js/circuits/scenery/<id>.js, in parallel with ↓
+    └ ensureCircuit(idx)   // js/circuits/<id>.js → TrackDefs → Tracks.hydrate(raw)
+  loadTrackStepped(idx)    // js/game.js — see "Where the build runs" below
 
-Tracks.build (js/track/tracks.js):
+Tracks.buildSteps (js/track/tracks.js — every driver below runs these):
   1. buildCenterline(def)     // Catmull–Rom → arc nodes; _sceneryShift; elev/bridges; banking
   2. TrackPit.build           // pit complex BEFORE terrain/props
   3. TrackSurface.profile     // ribbon rails + heightAt (ground carve)
@@ -50,8 +54,24 @@ Tracks.build (js/track/tracks.js):
   8. Graph batches, glass, water, gate, startline, pit signs
 ```
 
-`Tracks.build` is **synchronous**. Scenery must already be on
-`window.TrackScenery[id]` (game.js awaits `ensureScenery` first).
+### Where the build runs
+
+The steps above are one generator, `Tracks.buildSteps(def, opts)`. Three
+drivers run it; all need the def hydrated and the closure on
+`window.TrackScenery[id]` first (game.js awaits `ensureScenery`):
+
+- **Paced, main thread** — `Tracks.buildPaced` (via `loadTrackStepped`): ~8 ms
+  slices with a paint between them (under the race cover it keeps one frame in
+  `rafEvery`). This is the cold race entry from the menu and every fallback.
+- **Worker** — `TrackBuildClient.build` (`js/track/build-client.js` →
+  `js/track/build-worker.js`) for an IN-SESSION track switch (state race/count),
+  default ON on a multi-core device (`apex26.buildWorker` "1"/"0" forces it).
+  The worker posts back its recorded uploads and `replay()` makes the real gfx
+  calls on the main thread. Any failure (no worker, a timeout, a missing model,
+  a replay that throws) answers null and the paced build runs instead.
+- **Synchronous** — `Tracks.build(def, opts)` drains the same generator in one
+  call: `loadTrack` when the built world already fits, the VM harnesses
+  (`tools/track/verify-track.cjs`), and tests.
 
 ### `buildCenterline` highlights
 
@@ -84,7 +104,7 @@ not ride the flyover.
 ## 3. `buildProps` — two layers of dressing
 
 `buildProps(track)` (`js/track/scenery/build-props.js`, via `TrackBuildProps.build`) fills one shared props buffer (`out`)
-from `Tracks.build`.
+from `Tracks.buildSteps` (as `TrackBuildProps.buildSteps` when stepped).
 plus glass/water. Order matters:
 
 ### A. Setup

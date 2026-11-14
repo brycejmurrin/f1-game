@@ -296,7 +296,9 @@ const PlayerForces = (function () {
       }
     }
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
-    // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
+    // already-computed combined-slip signals READ-ONLY. Shedding changes no
+    // grip here; the one way back is DebrisWorld.marbleGrip() (settled marbles
+    // near the car, bounded, `apex26.marbleGrip`), folded in at muBase.
     if (typeof DebrisWorld !== "undefined" && DebrisWorld.active()) {
       // Prefer live c.axFrac (κ-based when WheelState is ON; legacy otherwise).
       _marbleArg.lock = c.axFrac != null ? c.axFrac : axFrac;

@@ -485,7 +485,10 @@ function buildWorld(track, cars) {
   }
   // A2: marble sub-pool — created AFTER the debris pool (fixed insertion order →
   // determinism). Tiny high-friction, low-restitution cuboids: they settle and
-  // linger off-line. Cosmetic only; the sim never reads them back into grip.
+  // linger off-line. One bounded read-back: settled marbles near the player
+  // shave grip through marbleGrip() below (floored at MARBLE_GRIP_MIN, B3;
+  // off with `apex26.marbleGrip` = "0"); nothing else in the sim reads them.
+  // They are road state, never curvature (docs/PHYSICS.md §Curvature channels).
   _marbleCap = marbleCapFor();
   _marbles = [];
   for (let i = 0; i < _marbleCap; i++) {

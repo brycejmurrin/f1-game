@@ -17489,6 +17489,7 @@
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/track-shot-survey.test.mjs"
       ]
     },
@@ -17727,6 +17728,7 @@
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
@@ -17777,6 +17779,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
@@ -17787,11 +17790,13 @@
         "tests/unit/scenery-kits.test.mjs"
       ],
       "overheadSpan": [
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
       "scratch": [
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "sealGeometry": [
@@ -17803,6 +17808,7 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/scenery-engine-order.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
