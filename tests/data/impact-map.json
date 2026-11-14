@@ -16543,6 +16543,7 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",

@@ -123,10 +123,21 @@ const OPENF1_STUB = JSON.stringify([]);
 // specs navigate to "/" themselves and would drop a query string.
 const LOG_SPEC = process.env.APEX_LOG || "";
 
-async function installMocks(context) {
-  await context.addInitScript((spec) => {
+// SHIPPED DEFAULTS, the one opt-out of the three pins below and of the
+// factory-seat pin in loadTrack. A test tagged with it (`{ tag:
+// SHIPPED_DEFAULTS_TAG }`, tests/specs/shipped-defaults.spec.js) boots exactly
+// what a player gets: the shipped renderer (TLX), TYRE WEAR and WIND as shipped,
+// and the GarageDefaults seat. Everything else here (mocks, console capture,
+// __TEST_MODE) is unchanged. Keyed on the TAG, not a project, so the spec runs
+// once in default discovery and needs no playwright.config.js entry.
+export const SHIPPED_DEFAULTS_TAG = "@shipped-defaults";
+const shippedDefaults = (testInfo) => !!(testInfo && (testInfo.tags || []).includes(SHIPPED_DEFAULTS_TAG));
+
+async function installMocks(context, shipped = false) {
+  await context.addInitScript(({ spec, shipped }) => {
     window.__TEST_MODE = true;
     if (spec) { try { localStorage.setItem("apex26.logLevel", spec); } catch (_) {} }
+    if (shipped) return;
     // Shared CI coverage is native GLX: it is cheaper under SwiftShader and
     // keeps webgl-probes on the implementation they name. TLX product coverage
     // lives in tlx-probes, including an explicit unset shipped-default smoke.
@@ -144,7 +155,7 @@ async function installMocks(context) {
     // WIND (js/race/wind.js) the same way: a seeded per-race wind would move every
     // top speed and lateral trace; "off" is a true no-op (tests/unit/wind.test.mjs).
     try { localStorage.setItem("apex26.wind", JSON.stringify("off")); } catch (_) {}
-  }, LOG_SPEC);
+  }, { spec: LOG_SPEC, shipped });
   await context.route("https://api.jolpi.ca/**", (route) =>
     route.fulfill({
       status: 200,
@@ -180,8 +191,8 @@ function captureConsole(page) {
 }
 
 const pwTest = base.extend({
-  context: async ({ context }, use) => {
-    await installMocks(context);
+  context: async ({ context }, use, testInfo) => {
+    await installMocks(context, shippedDefaults(testInfo));
     context.on("page", captureConsole);
     for (const p of context.pages()) captureConsole(p);
     if (COVERAGE) {
@@ -240,7 +251,8 @@ const pwTest = base.extend({
    *   const { test, expect } = require('./fixtures.js');
    *   test('...', async ({ loadTrack, page }) => { await loadTrack('monza'); ... });
    */
-  loadTrack: async ({ page }, use) => {
+  loadTrack: async ({ page }, use, testInfo) => {
+    const shipped = shippedDefaults(testInfo);
     await use(async (id = "monza", tod = "day", wx = "dry", opts = {}) => {
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
@@ -253,7 +265,7 @@ const pwTest = base.extend({
       // (physics-hotpath, run 2048, twice). Opt-in, because ~54 callers include
       // the ones whose subject IS the frame.
       if (opts.headless) await page.evaluate(() => window.__apex.headless(true));
-      await syncFactoryMcLarenSeat(page);
+      if (!shipped) await syncFactoryMcLarenSeat(page);
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
       await awaitTrackBuild(page);
       await page.evaluate(() => window.__apex.go());
