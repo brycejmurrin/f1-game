@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { expandScripts } from "../../tools/gen/gen-test-groups.mjs";
 import { RULES } from "../../tools/ci/pick-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -100,7 +101,8 @@ test("the topical browser groups are a DISJOINT partition of the specs", () => {
   };
   const owner = new Map();
   const dups = [];
-  for (const [name, cmd] of Object.entries(pkg.scripts)) {
+  // Wrapper lines (#5427) read as their tests/groups.json flags + files.
+  for (const [name, cmd] of Object.entries(expandScripts(pkg.scripts))) {
     if (!name.startsWith("test:") || !/run-playwright/.test(cmd) || /--project=|--update-snapshots/.test(cmd)) continue;
     const g = name.slice(5);
     if (BOOT.has(g)) continue;

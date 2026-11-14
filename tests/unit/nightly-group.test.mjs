@@ -97,7 +97,10 @@ test("the two un-ratcheted audit aliases still point at a suite that DOES gate t
   // The reason test:float and test:clip may sit unscheduled is that the same
   // audit runs, ratcheted, inside test:sweeps. If that stopped being true the
   // reason would be false and the group really would be uncovered.
-  const sweeps = String(PKG.scripts["test:sweeps"] || "");
+  // The roster is tests/groups.json's (package.json's line is a wrapper since #5427); the
+  // script must still be that group's runner.
+  assert.equal(PKG.scripts["test:sweeps"], "node tools/ci/run-group.mjs test:sweeps");
+  const sweeps = GROUPS["test:sweeps"].files;
   for (const [group, suite] of [["test:float", "tests/unit/scenery-grounding.test.mjs"],
                                 ["test:clip", "tests/unit/prop-clipping.test.mjs"]]) {
     assert.ok(group in UNSCHEDULED, `${group} left UNSCHEDULED — re-check this pair`);

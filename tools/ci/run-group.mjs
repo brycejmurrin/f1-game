@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // run-group.mjs — run one tests/groups.json script's files (optionally minus what Structural guards ran).
-// @doc PR-only topical runner: `--skip-tf` drops exactly the files the guards shards ran for this diff (no double run).
+// @doc Runs every node `npm run test:<group>` from tests/groups.json; `--skip-tf` drops what the guards shards ran.
 //
 //   node tools/ci/run-group.mjs test:steering-unit           # every file in the group
 //   node tools/ci/run-group.mjs test:steering-unit --skip-tf # omit tooling-fast overlap
+//   npm run test:steering-unit -- --test-name-pattern=brake  # forwarded --opt / --opt=value reach every phase
 //
-// ci.yml's vm-a1 / vm-a2 / slow arms call this when the node-plan sets NODE_PLAN_SKIP_TF=1
-// (pull_request matched plans only). Deploy / Pages / nightly keep
-// `npm run test:<x>` unchanged. Empty after filter → exit 0 with SKIPPED.
+// package.json's node `test:*` lines are `node tools/ci/run-group.mjs test:<x>` (#5427 item 4), so
+// adding a test file edits tests/groups.json alone. An unknown group, a non-node group or an empty
+// file list exits non-zero with a message: it never runs zero tests and passes.
+// ci.yml's vm-a1 / vm-a2 / slow arms add --skip-tf when the node-plan sets NODE_PLAN_SKIP_TF=1
+// (pull_request matched plans only). Empty AFTER that filter → exit 0 with SKIPPED.
 //
 // WHAT --skip-tf SUBTRACTS (audit W6, 2026-11-10). It used to drop EVERY
 // tooling-fast member. On a pull request whose diff is only js/ or css/ the
@@ -22,7 +25,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TOOLING_FAST_FILES, changedVsDeploy, guardsRanFiles, syncMergePaths } from "./tooling-fast.mjs";
-import { loadGroups } from "../gen/gen-test-groups.mjs";
+import { groupDef, loadGroups } from "../gen/gen-test-groups.mjs";
 import { checkPhase, nodeGroupPhases, phaseFiles, verdictPath, withFileVerdict } from "./run-node-group.mjs";
 
 const require = createRequire(import.meta.url);
@@ -33,9 +36,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 /** `ran`: the files Structural guards ran (guardsRanFiles().files). Omitted, it
  *  is the whole floor — the full-mode answer, kept for pure callers. */
 export function filesFor(script, { skipTf = false, doc = loadGroups(), ran = null } = {}) {
-  const groups = doc.groups;
-  const entry = groups[script];
-  if (!entry?.files?.length) throw new Error(`run-group: unknown or empty group ${script}`);
+  let entry;
+  try { entry = groupDef(script, doc, "node"); } catch (e) { throw new Error(`run-group: ${e.message}`); }
   if (!skipTf) return [...entry.files];
   const drop = new Set(ran || TOOLING_FAST_FILES);
   return entry.files.filter((f) => !drop.has(f));
@@ -57,11 +59,11 @@ export function liveGuardsRan(env = process.env) {
 /** Filtering changes membership only: generated flags and exclusive phases
  * still apply to every remaining file. Empty selections never discover tests. */
 export function runGroup(script, { skipTf = false, doc = loadGroups(), execute = spawnSync,
-  env = process.env, cwd = ROOT, announce = console.log, ran = null, ranWhy = "", fileVerdict = true } = {}) {
+  env = process.env, cwd = ROOT, announce = console.log, ran = null, ranWhy = "", fileVerdict = true, extraArgs = [] } = {}) {
   const files = filesFor(script, { skipTf, doc, ran });
   if (!files.length) { announce(`SKIPPED ${script} (Structural guards already ran every file${ranWhy ? `; ${ranWhy}` : ""})`); return 0; }
   if (skipTf) announce(`run-group ${script}: ${files.length} to run (skipped ${doc.groups[script].files.length - files.length} Structural guards ran${ranWhy ? `; ${ranWhy}` : ""})`);
-  const phases = nodeGroupPhases({ ...doc.groups[script], files }, doc.isolatedFiles);
+  const phases = nodeGroupPhases({ ...doc.groups[script], files }, doc.isolatedFiles, extraArgs);
   const childEnv = { ...env, ...augmentNodeCompileCache(env, cwd) };
   delete childEnv.NODE_TEST_CONTEXT;
   // Exit 0 is checked per file (run-node-group.mjs fileVerdicts): a file that
@@ -76,15 +78,31 @@ export function runGroup(script, { skipTf = false, doc = loadGroups(), execute =
   return 0;
 }
 
+/** argv → { script, skipTf, extraArgs }. The group comes first; `--skip-tf` is ours; a bare `--` is
+ * dropped (npm already strips the first); everything else is forwarded to every phase, where
+ * nodeGroupPhases refuses a path or a separate option value. */
+export function parseRunGroupArgs(argv) {
+  const [script, ...rest] = argv;
+  if (!script || !/^test(:[\w-]+)?$/.test(script)) throw new Error("usage: node tools/ci/run-group.mjs test:<group> [--skip-tf] [--opt[=value] …]");
+  return { script, skipTf: rest.includes("--skip-tf"), extraArgs: rest.filter((a) => a !== "--skip-tf" && a !== "--") };
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const argv = process.argv.slice(2);
-  const script = argv.find((a) => a.startsWith("test:"));
-  if (!script) {
-    console.error("usage: node tools/ci/run-group.mjs test:<group> [--skip-tf]");
-    process.exit(2);
+  let code;
+  try {
+    const { script, skipTf, extraArgs } = parseRunGroupArgs(process.argv.slice(2));
+    filesFor(script);   // an unknown / empty / non-node group fails here, before the guards lookup
+    const g = skipTf ? liveGuardsRan() : null;
+    // Behaviour-neutral with the old generated lines (#5427): the per-file verdict ran for an isolated group
+    // (run-node-group.mjs) and for a --skip-tf PR arm; a plain `node --test` group did not, so a deploy or nightly
+    // run of one gains no new way to fail here. Widening it is its own change.
+    const doc = loadGroups();
+    const fileVerdict = skipTf || (doc.groups[script].files || []).some((f) => (doc.isolatedFiles || []).includes(f));
+    code = runGroup(script, { skipTf, extraArgs, doc, fileVerdict, ran: g ? g.files : null,
+      ranWhy: g ? `guards mode=${g.mode}${g.selection ? ` selection=${g.selection}` : ""}: ${g.reason}` : "" });
+  } catch (e) {
+    console.error(String(e && e.message || e));
+    code = 2;
   }
-  const skipTf = argv.includes("--skip-tf");
-  const g = skipTf ? liveGuardsRan() : null;
-  process.exit(runGroup(script, { skipTf, ran: g ? g.files : null,
-    ranWhy: g ? `guards mode=${g.mode}${g.selection ? ` selection=${g.selection}` : ""}: ${g.reason}` : "" }));
+  process.exit(code);
 }

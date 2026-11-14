@@ -40,8 +40,9 @@ test("every measured timing key names a suite test:sweeps still runs", () => {
   const block = src.slice(src.indexOf("SWEEP_TIMINGS_SEC = Object.freeze({"), src.indexOf("});", src.indexOf("SWEEP_TIMINGS_SEC")));
   const keys = [...block.matchAll(/"(tests\/unit\/[^"]+)":/g)].map((m) => m[1]);
   assert.ok(keys.length > 10, "timing table parsed");
-  const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
-  const sweeps = pkg.scripts["test:sweeps"].match(/tests\/unit\/[^\s]+/g);
+  const groups = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8"));
+  const sweeps = groups.groups["test:sweeps"].files;   // the roster (package.json's line is a wrapper since #5427)
+  assert.ok(sweeps.length > 10, "test:sweeps roster read");
   const stale = keys.filter((k) => !sweeps.includes(k));
   assert.deepEqual(stale, [], "a timing key for a suite that left test:sweeps is dead weight");
 });
