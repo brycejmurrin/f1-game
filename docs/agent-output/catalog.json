@@ -3428,11 +3428,6 @@
       ]
     },
     {
-      "path": "tools/shot/scenery-locations.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
       "path": "tools/shot/scenery-source-hash.cjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"

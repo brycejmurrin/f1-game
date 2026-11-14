@@ -19,7 +19,6 @@ export const GENERATED_PATHS = Object.freeze([
   "docs/AGENT-HOOKS.md",
   "tests/data/impact-map.json",
   "tests/data/ratchets.json",
-  "tools/shot/scenery-locations.json",
 ]);
 
 /** Is `p` (repo-relative, forward slashes) a generator's output? Pure. */
@@ -37,10 +36,21 @@ export const BUILT_PATHS = Object.freeze([
   "js/track/circuit-meta.js",
 ]);
 
+// BUILT ON DEMAND, NOT COMMITTED (2026-11-11; issue #5427, review decision 3 "Build them, stop committing").
+// Generator outputs only tools read (never served, so never staged) whose build is too slow for every checkout:
+// `tools/shot/scenery-locations.json` rebuilds every circuit (~47 s). tools/gen/ensure-built.mjs builds one when a
+// reader asks (`ensureOnDemand`, `--with <path>`, `--all`), from a receipt under artifacts/cache it answers in
+// ~50 ms when inputs and bytes are unchanged; a missing, stale or hand-edited copy is rebuilt, and a generator
+// that throws fails the reader. Each entry is gitignored and untracked (tests/unit/deploy-staging.test.mjs), and
+// a modify/delete conflict in one cures by taking the deletion, exactly as a BUILT path (deploy.mjs).
+export const ON_DEMAND_PATHS = Object.freeze([
+  "tools/shot/scenery-locations.json",
+]);
+
 /** Is `p` (repo-relative, forward slashes) a build product that git must not track? Pure. */
 export function isBuilt(p) {
   const s = String(p || "").replace(/^\.\//, "");
-  return BUILT_PATHS.includes(s);
+  return BUILT_PATHS.includes(s) || ON_DEMAND_PATHS.includes(s);
 }
 
 // RETIRED, NOT COMMITTED (2026-11-10). A generator output that left git for artifacts/ and is not a site

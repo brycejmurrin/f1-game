@@ -55,6 +55,9 @@ assets/pack/src/
 # deploy; the list is BUILT_PATHS in tools/lib/generated-paths.mjs
 # (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
 /js/track/circuit-meta.js
+# Built on demand, not committed (ON_DEMAND_PATHS, same file; issue #5427): tools-only outputs a
+# reader builds through tools/gen/ensure-built.mjs ensureOnDemand / --with.
+/tools/shot/scenery-locations.json
 # Retired generator outputs (RETIRED_PATHS, same file): built into artifacts/ on demand.
 /docs/TESTING-COVERAGE.md
 

@@ -6,7 +6,6 @@ import zlib from "node:zlib";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { localMergeGenCheck } from "../../tools/ci/merge-gate.mjs";
-import sceneryHash from "../../tools/shot/scenery-source-hash.cjs";
 import {
   buildTrackShotSurveyPlan,
   buildSurveyPlans,
@@ -33,8 +32,8 @@ const TMP_BASE = (() => {
   return d;
 })();
 
-test("landing validates the scenery catalog in the actual merged checkout", async (t) => {
-  for (const mode of ["matching", "base-moved", "mismatch", "missing", "missing-build-fails", "malformed", "digest-not-hex", "no-digest-fresh", "no-digest-stale", "gen-failure", "validator-error"]) {
+test("landing builds the scenery catalog in the actual merged checkout (built on demand, never tracked)", async (t) => {
+  for (const mode of ["builds", "build-fails", "tracked", "gen-failure", "validator-error"]) {
     await t.test(mode, () => {
       const dir = fs.mkdtempSync(path.join(TMP_BASE, "scenery-merge-"));
       const git = (cwd, ...args) => {
@@ -52,78 +51,57 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
         git(dir, "clone", "-q", remote, cwd);
         git(cwd, "checkout", "-q", "-b", "deploy-x");
         write(cwd, "package.json", JSON.stringify({ scripts: { "gen:check": "node -e \"process.exit(0)\"" } }));
-        write(cwd, "tools/manifest.cjs", "module.exports = { TRACK_VM: ['js/track/core/geom.js', '@circuits'] };\n");
-        write(cwd, "tools/shot/scenery-source-hash.cjs", fs.readFileSync(new URL("../../tools/shot/scenery-source-hash.cjs", import.meta.url)));
-        for (const file of ["tools/shot/gen-scenery-locations.cjs", "tools/lib/track-build-vm.cjs", "tools/lib/pack-assets.cjs",
-          "js/track/core/geom.js", "js/circuits/bahrain.js", "js/circuits/scenery/bahrain.js"]) write(cwd, file, "// fixture input\n");
-        write(cwd, "assets/pack/manifest.json", "{}\n");
-        write(cwd, "tests/data/landmarks/bahrain.json", "{\"ids\":[]}\n");
-        const catalog = "tools/shot/scenery-locations.json";
-        write(cwd, catalog, JSON.stringify({ sourceDigest: sceneryHash.scenerySourceDigest(cwd), locations: [] }));
-        git(cwd, "add", "-A"); git(cwd, "commit", "-q", "-m", "matching base catalog");
+        // The gate runs the merged checkout's own ensure-built; the fixture stands in for it and records its argv.
+        write(cwd, "tools/gen/ensure-built.mjs", "import fs from 'node:fs';\nfs.writeFileSync('argv.json', JSON.stringify(process.argv.slice(2)));\n");
+        write(cwd, ".gitignore", "/tools/shot/scenery-locations.json\nargv.json\n");
+        git(cwd, "add", "-A"); git(cwd, "commit", "-q", "-m", "base: the catalog is built on demand");
         git(cwd, "push", "-q", "origin", "deploy-x");
         git(cwd, "checkout", "-q", "-b", "pr", "deploy-x");
         write(cwd, "docs/README.md", "PR unrelated to scenery\n");
-        if (mode === "mismatch") write(cwd, "js/track/core/geom.js", "// changed input\n");
-        // Absent (built on demand, #5427): the gate builds it in write mode on the merge and believes the exit code.
-        if (mode.startsWith("missing")) {
-          git(cwd, "rm", "-q", catalog);
-          write(cwd, "tools/shot/gen-scenery-locations.cjs", mode === "missing"
-            ? "if (process.argv.length > 2) process.exit(9);\nconsole.log('OK scenery catalog: 0 emitted locations');\n"
-            : "console.error('Error: bahrain viewpoint pit-exit no longer emits');\nprocess.exit(1);\n");
-        }
-        if (mode === "malformed") write(cwd, catalog, "{not JSON");
-        if (mode === "digest-not-hex") write(cwd, catalog, "{\"sourceDigest\":5}\n");
-        // No fingerprint at all: the gate must run the generator's own --check on the merge, and believe its exit code.
-        if (mode.startsWith("no-digest")) {
-          write(cwd, catalog, "{\"locations\":[]}\n");
-          write(cwd, "tools/shot/gen-scenery-locations.cjs", mode === "no-digest-fresh"
-            ? "if (!process.argv.includes('--check')) process.exit(9);\nconsole.log('OK scenery catalog: 0 emitted locations');\n"
-            : "console.error('scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs');\nprocess.exit(1);\n");
-        }
+        // A generator that throws on the merge (a viewpoint that no longer emits) must refuse, never pass silently.
+        if (mode === "build-fails") write(cwd, "tools/gen/ensure-built.mjs", "console.error('ensure-built: FAILED — Error: Viewpoint spa-timing-tower no longer emits');\nprocess.exit(1);\n");
+        // An old branch that re-adds the committed copy: the merge must not track it.
+        if (mode === "tracked") { write(cwd, "tools/shot/scenery-locations.json", "{\"locations\":[]}\n"); git(cwd, "add", "-f", "tools/shot/scenery-locations.json"); }
         if (mode === "gen-failure") write(cwd, "package.json", JSON.stringify({ scripts: { "gen:check": "node -e \"process.exit(7)\"" } }));
         git(cwd, "add", "-A"); git(cwd, "commit", "-q", "-m", `PR ${mode}`);
         git(cwd, "push", "-q", "origin", "pr");
         const head = git(cwd, "rev-parse", "pr");
-        if (mode === "base-moved") {
-          git(cwd, "checkout", "-q", "deploy-x");
-          write(cwd, "js/track/core/geom.js", "// new base input, stale catalog\n");
-          git(cwd, "add", "-A"); git(cwd, "commit", "-q", "-m", "base moves after head CI");
-          git(cwd, "push", "-q", "origin", "deploy-x");
-          git(cwd, "checkout", "-q", "pr");
-          assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, catalog))).sourceDigest, sceneryHash.scenerySourceDigest(cwd),
-            "the caller/PR checkout is fresh; only the combined merge is stale");
-        }
         const tip = git(cwd, "rev-parse", "deploy-x"), calls = [];
-        let ratchetCalls = 0;
+        const wt = path.join(cwd, "artifacts", "merge-gate", "wt-17");
+        let ratchetCalls = 0, argv = null;
         const result = localMergeGenCheck({ pr: 17, head, headRef: "pr", cwd, base: "deploy-x",
-          run: (cmd, argv, options) => {
+          run: (cmd, args, options) => {
             calls.push(cmd);
-            assert.equal(options.cwd, path.join(cwd, "artifacts", "merge-gate", "wt-17"));
+            assert.equal(options.cwd, wt);
             assert.equal(Object.keys(options.env).some((key) => /TOKEN|SECRET|^GH_|^ACTIONS_|^GITHUB_(OUTPUT|ENV|PATH|STATE|STEP_SUMMARY)$/.test(key)), false,
-              "both generation and catalog validation keep the untrusted environment boundary");
-            if (mode === "validator-error" && cmd === process.execPath) return { status: null, error: new Error("validator could not start") };
-            return spawnSync(cmd, argv, options);
+              "both generation and the catalog build keep the untrusted environment boundary");
+            if (mode === "validator-error" && cmd === process.execPath) return { status: null, error: new Error("builder could not start") };
+            const r = spawnSync(cmd, args, options);
+            if (cmd === process.execPath && fs.existsSync(path.join(wt, "argv.json"))) argv = JSON.parse(fs.readFileSync(path.join(wt, "argv.json"), "utf8"));
+            return r;
           },
           ratchets: () => { ratchetCalls++; return { ok: true, evidence: "fixture ratchets hold" }; },
         });
         assert.equal(result.tip, tip, "a catalog refusal retains the actual merge tip");
         assert.equal(result.error, undefined, "generation failures are refusals, not git infrastructure errors");
-        const passes = mode === "matching" || mode === "no-digest-fresh" || mode === "missing";
-        assert.deepEqual(calls, mode === "gen-failure" ? ["npm"] : mode.startsWith("no-digest") ? ["npm", process.execPath, process.execPath] : ["npm", process.execPath]);
+        const passes = mode === "builds";
+        assert.deepEqual(calls, mode === "gen-failure" || mode === "tracked" ? ["npm"] : ["npm", process.execPath]);
         assert.equal(result.ok, passes, result.evidence);
-        // The whole evidence line, exactly: the verdict words and the generator's own first error line both reach the PR.
-        const on = `the merge onto ${tip.slice(0, 8)}`, clean = `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog`;
+        if (passes) {
+          assert.deepEqual(argv, ["--quiet", "--with", "tools/shot/scenery-locations.json"], "the gate builds the on-demand catalog, not only BUILT_PATHS");
+        }
+        // The whole evidence line, exactly: the verdict words and the builder's own first error line both reach the PR.
+        const on = `scenery catalog fails on the merge onto ${tip.slice(0, 8)}`, file = "tools/shot/scenery-locations.json";
         const exact = {
-          "missing": `${clean} build 0`,
-          "missing-build-fails": `scenery catalog fails to build on ${on}: Error: bahrain viewpoint pit-exit no longer emits — node tools/shot/gen-scenery-locations.cjs on the synced branch names the circuit`,
-          "no-digest-fresh": `${clean} rebuild check 0`,
-          "no-digest-stale": `scenery catalog fails on ${on}: scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`,
+          "builds": `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`,
+          "build-fails": `${on}: ensure-built: FAILED — Error: Viewpoint spa-timing-tower no longer emits — node tools/gen/ensure-built.mjs --with ${file} on the synced branch names the circuit`,
+          "tracked": `${on}: ${file} is tracked; it is built on demand — git rm --cached it on the synced branch and push`,
         }[mode];
         if (exact) assert.equal(result.evidence, exact);
+        if (mode === "validator-error") assert.match(result.evidence, /builder could not start/);
         assert.equal(ratchetCalls, passes ? 1 : 0, "catalog/gen refusals stop before ratchets");
         if (!passes) assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);
-        assert.equal(fs.existsSync(path.join(cwd, "artifacts", "merge-gate", "wt-17")), false, "all outcomes clean up the merged checkout");
+        assert.equal(fs.existsSync(wt), false, "all outcomes clean up the merged checkout");
       } finally { fs.rmSync(dir, { recursive: true, force: true }); }
     });
   }
@@ -430,12 +408,22 @@ test('every circuit exposes authored turn locations usable by named shot plans',
 });
 test('named scenery catalog accounts for every registered hero and targets emitted geometry', async () => {
  const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
+ // Built on demand, never committed (ON_DEMAND_PATHS, issue #5427): ensure-built rebuilds a missing, stale or
+ // hand-edited copy (about 47 s) or answers at once from its receipt under artifacts/ when inputs and bytes match.
+ const built = spawnSync(process.execPath,['tools/gen/ensure-built.mjs','--quiet','--with','tools/shot/scenery-locations.json'],{encoding:'utf8',timeout:480_000});
+ assert.equal(built.status,0,`the scenery catalog must build from this checkout: ${built.error?.message||built.stderr||built.stdout}`);
  const catalog = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8'));
- // No committed input digest (it made every garage/scenery PR conflict on one line): the generator rebuilds and
- // compares (about a minute), or answers at once from its receipt under artifacts/ when inputs and bytes are unchanged.
- assert.equal(catalog.sourceDigest,undefined,'the catalog carries no input fingerprint; staleness is gen-scenery-locations.cjs --check');
- const fresh = spawnSync(process.execPath,['tools/shot/gen-scenery-locations.cjs','--check','--cached'],{encoding:'utf8',timeout:480_000});
- assert.equal(fresh.status,0,`catalog must be regenerated after scenery or projection source changes: ${fresh.error?.message||fresh.stderr||fresh.stdout}`);
+ assert.equal(catalog.sourceDigest,undefined,'the catalog carries no input fingerprint; staleness is the receipt');
+ {
+   // A hand-edited copy no longer matches its receipt, so the next reader rebuilds it instead of trusting it.
+   const { createRequire } = await import('node:module');
+   const gen = createRequire(import.meta.url)('../../tools/shot/gen-scenery-locations.cjs');
+   const file = 'tools/shot/scenery-locations.json', bytes = fs.readFileSync(file, 'utf8');
+   assert.equal(gen.receiptHolds(), true, 'a fresh build records its receipt');
+   try { fs.writeFileSync(file, bytes.replace('"locations"', '"locations" ')); assert.equal(gen.receiptHolds(), false, 'a hand edit voids the receipt'); }
+   finally { fs.writeFileSync(file, bytes); }
+   assert.equal(gen.receiptHolds(), true);
+ }
  const registryDir = 'tests/data/landmarks';
  const registryFiles = fs.readdirSync(registryDir).filter(f=>f.endsWith('.json'));
  const { createRequire } = await import('node:module');

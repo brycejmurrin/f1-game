@@ -33,7 +33,7 @@
 //             `ratchet-raise` label, last added by Bryce in person and newer than the last push touching a ratchet file.
 //             Per-file ceilings (`files`, the commit hook's --auto-raise) are not this row's. Bryce's pick, 2026-11-11
 //             ~09:10Z: "Build the check (Recommended)" (#5405 option b; .claude/rules/game-code.md).
-//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there (an absent catalog is built)
+//   gen       clean merge onto the current base tip; `gen:check` passes and the scenery catalog builds there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
 //   retest    the CI run tested a merge ref as of ITS creation, so a PR merged onto the tip since then is untested in
@@ -608,7 +608,7 @@ export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", run = spawnSy
 
 /**
  * Fetch the base and the head branch, merge `head` onto the base tip in a throw-away worktree, run gen:check
- * and the scenery catalog digest there, then the ratchets. Returns { ok, evidence, tip, ratchets?, error? }: `error` marks a git failure the gate
+ * and build the scenery catalog there, then the ratchets. Returns { ok, evidence, tip, ratchets?, error? }: `error` marks a git failure the gate
  * reports as exit 1 (not a row); `ratchets` is absent when the merge or gen:check already refused.
  */
 /**
@@ -627,8 +627,8 @@ export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = 
   return { tip: git(["rev-parse", `refs/remotes/origin/${base}`], cwd).stdout.trim() };
 }
 
-/** The catalog child's exit code for "no sourceDigest field": the gate then runs the generator's full `--check`. */
-const NO_DIGEST = 3;
+/** Built on demand, never tracked (ON_DEMAND_PATHS): the gate builds it on the merge. */
+const SCENERY_CATALOG = "tools/shot/scenery-locations.json";
 export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge, ciAt = null, ciBase = "", retest = retestOnMerge } = {}) {
   const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
   const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
@@ -652,47 +652,24 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
     const first = `${gen.stdout || ""}\n${gen.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => l && !/^>|^npm /.test(l)).slice(-3).join(" | ");
     return fail(`gen:check fails on the merge onto ${tip.slice(0, 8)}: ${first || "see output"} — sync-pr.mjs (it runs npm run gen) and push`);
   }
-  // The full scenery generator builds every circuit (~2 min), so gen:check
-  // deliberately omits it. Its cheap input fingerprint must still hold on THIS
-  // merge: a green head can inherit a stale catalog from a changed base (#4160).
-  // A catalog with NO sourceDigest field (the committed fingerprint made every garage/scenery PR conflict on one
-  // line, tooling hunt 2026-11-09 row 2) is not waved through: the child exits NO_DIGEST and the generator's own
-  // `--check` rebuilds every circuit on this merge and compares (about a minute). A digest that is present must
-  // still be well-formed and equal. Keep PR code in a child with the same stripped environment as gen:check.
-  // An ABSENT catalog (the merge of a branch that builds it on demand, #5427) is built here in write mode, with the
-  // same environment and timeout; the generator's exit code is the verdict. A present catalog takes the path above.
-  const absent = !fs.existsSync(path.join(wt, "tools/shot/scenery-locations.json"));
-  if (absent) {
-    const built = run(process.execPath, ["tools/shot/gen-scenery-locations.cjs"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
-    if (built.error || built.status !== 0) {
-      const detail = built.error?.message || `${built.stdout || ""}\n${built.stderr || ""}`.split("\n")
-        .map((line) => line.trim()).find((line) => /Error:|FAILED/.test(line)) || `exit ${built.status}`;
-      return fail(`scenery catalog fails to build on the merge onto ${tip.slice(0, 8)}: ${detail} — node tools/shot/gen-scenery-locations.cjs on the synced branch names the circuit`);
-    }
-    const rat = ratchets({ cwd: wt, run });
-    cleanup();
-    return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat };
-  }
-  let catalog = run(process.execPath, ["-e", [
-    "const fs = require('node:fs');",
-    "const { scenerySourceDigest } = require('./tools/shot/scenery-source-hash.cjs');",
-    "const stored = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8')).sourceDigest;",
-    `if (stored === undefined) process.exit(${NO_DIGEST});`,
-    "if (typeof stored !== 'string' || !/^[a-f0-9]{64}$/.test(stored)) throw new Error('catalog sourceDigest is missing or malformed');",
-    "if (stored !== scenerySourceDigest(process.cwd())) throw new Error('catalog sourceDigest does not match scenery inputs');",
-  ].join("\n")], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 60_000, maxBuffer: 1 << 20 });
-  const rebuilt = !catalog.error && catalog.status === NO_DIGEST;
-  if (rebuilt) catalog = run(process.execPath, ["tools/shot/gen-scenery-locations.cjs", "--check"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
+  // The scenery catalog is BUILT ON DEMAND, not committed (ON_DEMAND_PATHS, issue #5427): two circuit PRs no longer
+  // conflict in it. gen:check omits it (it builds every circuit, ~47 s), so the gate builds it on THIS merge: a
+  // generator that throws (a viewpoint that no longer emits, a duplicate id) refuses, as a stale committed copy
+  // used to (#4160). A merge that still TRACKS the file (an old branch re-added it) refuses too: it must stay out.
+  // PR code runs in a child with the same stripped environment as gen:check.
+  const tracked = git(["ls-files", "--", SCENERY_CATALOG], wt).stdout.trim();
+  if (tracked) return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${SCENERY_CATALOG} is tracked; it is built on demand — git rm --cached it on the synced branch and push`);
+  const catalog = run(process.execPath, ["tools/gen/ensure-built.mjs", "--quiet", "--with", SCENERY_CATALOG], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
   if (catalog.error || catalog.status !== 0) {
     const detail = catalog.error?.message || `${catalog.stdout || ""}\n${catalog.stderr || ""}`.split("\n")
-      .map((line) => line.trim()).find((line) => /Error:|catalog is stale/.test(line)) || `exit ${catalog.status}`;
-    return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${detail} — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`);
+      .map((line) => line.trim()).find((line) => /Error:|FAILED/.test(line)) || `exit ${catalog.status}`;
+    return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${detail} — node tools/gen/ensure-built.mjs --with ${SCENERY_CATALOG} on the synced branch names the circuit`);
   }
   const rat = ratchets({ cwd: wt, run });
   // `ciAt` null: the ci row has no green run to compare against, so the re-test waits for it (evaluate says so).
   const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, ciBase, run });
   cleanup();
-  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog ${rebuilt ? "rebuild check" : "digest"} 0`, tip, ratchets: rat, retest: re };
+  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat, retest: re };
 }
 
 // ---- evaluator and CLI --------------------------------------------------------------------------------------

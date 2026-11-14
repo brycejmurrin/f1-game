@@ -362,7 +362,6 @@ const DERIVED_DOCS = ["docs/agent-index.json", "tests/data/impact-map.json", "do
 // in 7 days; system audit 2026-10-26 §7); now only two PRs that move the same
 // rows conflict. Its generator takes ~2 min, so it is not in `npm run gen`: the
 // cure path alone runs it.
-const SCENERY_LOCATIONS = "tools/shot/scenery-locations.json";
 /* Every number in ratchets.json, flattened to `scope/name` -> value, so the
    three sides of a conflict can be compared metric by metric. */
 export function ratchetMetrics(json) {
@@ -462,10 +461,8 @@ export function cureableConflicts(conflicted) {
   // (gen-agent-index.mjs) are rewritten from the tree; 7 days of merges showed 13/16/6 real conflicts
   // in them that forced hand merges. Same cure: take a side, regenerate.
   const derivedF = conflicted.filter((f) => DERIVED_DOCS.includes(f));
-  // tools/shot/scenery-locations.json (gen-scenery-locations.cjs): same cure,
-  // take ours and regenerate from the merged TRACK_VM sources.
-  const sceneryF = conflicted.filter((f) => f === SCENERY_LOCATIONS);
-  // A BUILT path (gitignored since 2026-10-28; tools/lib/generated-paths.mjs BUILT_PATHS)
+  // A BUILT path (gitignored since 2026-10-28; tools/lib/generated-paths.mjs BUILT_PATHS, and the
+  // ON_DEMAND_PATHS such as tools/shot/scenery-locations.json since 2026-11-11)
   // conflicts only as modify/delete: the tip deleted the committed copy, an older
   // branch regenerated it. Cure: take the deletion (`git rm --cached`); ensure-built
   // rebuilds the local copy from the merged sources. A RETIRED path (RETIRED_PATHS, e.g.
@@ -476,9 +473,9 @@ export function cureableConflicts(conflicted) {
   // there is nothing left to conflict.)
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length
       + builtF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, builtF };
+  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, builtF };
 }
 
 /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
@@ -558,11 +555,11 @@ export async function mergeDeployTip() {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, builtF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, builtF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f) && !builtF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !builtF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -624,12 +621,6 @@ export async function mergeDeployTip() {
     await run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index, hook page and impact map from the merged tree");
     must(git(["add", ...derivedF]), "add");
     did.push("derived docs regenerated");
-  }
-  if (sceneryF.length) {
-    must(git(["checkout", "--ours", "--", SCENERY_LOCATIONS]), `checkout --ours ${SCENERY_LOCATIONS}`);
-    await run("node", ["tools/shot/gen-scenery-locations.cjs"], "regenerate the scenery survey locations from the merged circuits (~2 min)");
-    must(git(["add", SCENERY_LOCATIONS]), "add");
-    did.push("scenery locations regenerated");
   }
   if (builtF.length) {
     must(git(["rm", "-q", "--cached", "--", ...builtF]), "untrack the built files (they stay gitignored)");

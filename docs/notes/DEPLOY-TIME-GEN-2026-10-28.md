@@ -34,7 +34,7 @@ Class (c) means it cannot move as-is; its replacement plan is in the last column
 | `.cursor/rules/*` | `gen-cursor-rules.mjs` | Cursor | no | (b) | Agent configuration must be in the checkout |
 | `CHANGELOG.md` | `gen-changelog.mjs --fold` (from `docs/changelog.d/` fragments) | release notes | no | (b) | Already fragment-based |
 | `tests/data/ratchets.json`, `ratchets.d/*.json` | `tools/check/ratchets.mjs` | the ratchet gate | no | (b) | Already fragment-based |
-| `tools/shot/scenery-locations.json` | `tools/shot/gen-scenery-locations.cjs` (~2 min) | shot tools | no | (b) | Slow; keep it committed |
+| `tools/shot/scenery-locations.json` | `tools/shot/gen-scenery-locations.cjs` (~2 min) | shot tools | no | (b) | Slow; kept committed until 2026-11-11, then built on demand by its readers (`ON_DEMAND_PATHS`, #5427) |
 | `js/track/circuit-elevations.js`, `assets/pack/*` | `bake-elevation.mjs` (SRTM), `assets.mjs` bakes | game runtime | yes | (c) | Baked from inputs that are not in the repo (or are slow to fetch): keep them committed |
 | `docs/TESTING-COVERAGE.md` | `tools/docs/gen-coverage-table.mjs` | agents (`docs/TESTING.md` §5); `test-groups` test | no | moved out 2026-11-10 | Wholly generated, so it left git: built on demand into `artifacts/TESTING-COVERAGE.md`. The old path is `RETIRED_PATHS` (`tools/lib/generated-paths.mjs`), cured as a deletion. Measured that day: 15 of 16 open PRs carrying it conflicted with the tip, 9 on nothing else; `docs/agent-index.json` 0 of 13 and `tests/data/impact-map.json` 1 of 22, so those two stay committed |
 
