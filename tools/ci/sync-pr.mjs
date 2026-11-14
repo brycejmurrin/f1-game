@@ -8,6 +8,7 @@
 //   node tools/ci/sync-pr.mjs <branch> --push   # same, then push to origin/<branch>
 //   node tools/ci/sync-pr.mjs <branch> --verify=none|fast|full   # default fast = tooling-fast --changed; full = the whole floor
 //   node tools/ci/sync-pr.mjs <branch> --force-clean-behind     # sync although needs-sync.mjs says `no`
+//   node tools/ci/sync-pr.mjs <branch> --onto-red-tip           # sync although needs-sync says `tip-red` (the deploy:red fixer only, #5425)
 //   node tools/ci/sync-pr.mjs <branch> --resume --from=<stage>   # re-verify the kept sync-pr-<branch>
 //   node tools/ci/sync-pr.mjs <branch> --stop                    # stop that branch's running sync (whole process tree; no pkill -f)
 //   --wait-load=<min>  wait up to N min (default 9, max 590 s) for loadavg < 2.8 (0 = refuse at once)
@@ -81,6 +82,16 @@ export function loadWaitMinutes(value = null) {
   return minutes;
 }
 
+/** Whether needs-sync's verdict `v` refuses this sync → { code, why } | null. `tip-red` (#5425: the deploy tip is red
+ *  on code) refuses even with --force-clean-behind: a sync would import the red; only the fixer's own branch passes
+ *  --onto-red-tip. `no` refuses unless --force-clean-behind. An undecided verdict (`v.ok` false) refuses nothing. Pure. */
+export function syncRefusal(v, { forceCleanBehind = false, ontoRedTip = false } = {}) {
+  if (!v?.ok) return null;
+  if (v.verdict === "tip-red" && !ontoRedTip) return { code: 5, why: "the deploy tip is red on code; wait for the fix to land (the fixer's own branch: --onto-red-tip) (exit 5)" };
+  if (v.verdict === "no" && !forceCleanBehind) return { code: 4, why: "no sync needed; --force-clean-behind overrides (exit 4)" };
+  return null;
+}
+
 /** No fetch or verification may follow a waiter that failed, was refused, or timed out. */
 export function waitForLoad(waitMin, { load = () => os.loadavg()[0], run = spawnSync, report = log } = {}) {
   const current = load();
@@ -151,7 +162,7 @@ export function runStages(stages, { from = null, run = runStage } = {}) {
   return { ok: true };
 }
 
-export const KNOWN_FLAGS = ["--plan", "--push", "--resume", "--force-clean-behind", "--stop", "--verify", "--from", "--wait-load"];
+export const KNOWN_FLAGS = ["--plan", "--push", "--resume", "--force-clean-behind", "--onto-red-tip", "--stop", "--verify", "--from", "--wait-load"];
 function usage() { console.log(USAGE); }
 export const USAGE = [
     "usage: node tools/ci/sync-pr.mjs <branch> [--plan] [--push] [--verify=none|fast|full] [--resume [--from=<stage>]]",
@@ -163,6 +174,7 @@ export const USAGE = [
     "            (changed on both sides, regenerated or hand-resolved); the branch's whole diff when HEAD is not a sync merge;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
+    "  --onto-red-tip  sync although needs-sync.mjs says `tip-red` (the deploy tip is red on code): the fixer's own branch only (exit 5 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
     "  --stop    stop a live sync of <branch> (its registered run); --wait-load=<min> waits up to <min> (default 9, max 590 s) for loadavg < 2.8, 0 refuses at once",
     "  An unknown --flag prints this usage and exits 2, before any fetch.",
@@ -223,7 +235,7 @@ export function returnTo(startedOn, keptBranch, readGit = git, { keepMerge = fal
 export async function main() {
   if (flag("--help") || flag("-h")) { usage(); return 0; }
   if (!branch) { usage(); return 1; }
-  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind", "--stop"].includes(a) && !/^--(verify|from|wait-load)=/.test(a));
+  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind", "--onto-red-tip", "--stop"].includes(a) && !/^--(verify|from|wait-load)=/.test(a));
   if (unknown || argv.filter((a) => !a.startsWith("-")).length !== 1) throw new Error(`Invalid arguments${unknown ? ": " + unknown : ""}`);
   if (flag("--plan") && flag("--push")) throw new Error("--plan cannot be combined with --push");
   let verify = opt("--verify") ?? "fast";
@@ -247,13 +259,13 @@ export async function main() {
 
   let resume = flag("--resume");
   if (!resume) must(git(["fetch", "--no-tags", REMOTE, branch, DEPLOY_BRANCH]), "fetch");
-  if (!resume && !flag("--force-clean-behind")) {
+  if (!resume) {
     // AGENTS.md "sync only when you must": ask the predicate before any merge or push.
     const v = needsSync(branch, { fetch: false });
-    if (v.ok) {
-      log(`${verdictLine(v)} (${v.why})`);
-      if (v.verdict === "no") { log("REFUSED: no sync needed; --force-clean-behind overrides (exit 4)"); return 4; }
-    } else log(`needs-sync could not decide (${v.error}); continuing`);
+    const refusal = syncRefusal(v, { forceCleanBehind: flag("--force-clean-behind"), ontoRedTip: flag("--onto-red-tip") });
+    if (v.ok) log(`${verdictLine(v)} (${v.why})`);
+    else log(`needs-sync could not decide (${v.error}); continuing`);
+    if (refusal) { log(`REFUSED: ${refusal.why}`); return refusal.code; }
   }
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }

@@ -86,7 +86,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    land: merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)),
    so push a fresh commit instead. Only a run cancelled with zero failed jobs is re-run once (`tools/ci/ci-rerun.mjs`).
 5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
-   and only when `needs-sync` says so (`conflict | stale-red`); never to
+   and only when `needs-sync` says so (`conflict | stale-red`; `tip-red` waits for the fix to land); never to
    "refresh" a cancelled run and never for clean-behind. Red AND conflicting: a `stale-red` syncs first, any other red
    is fixed first, then sync once and ONE push. A PR whose Plan waits on an unmerged PR does not sync on each
    conflict; it syncs once, after that PR merges. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
