@@ -554,8 +554,8 @@ test("a modes-only import keeps the global baseline and COMFORT knobs", () => {
   assert.equal(CamTune.bob(), 1, "and without comfort resets it");
 });
 
-// persist() writes localStorage. The sliders fire it on every input event, so it
-// takes the store that changed and leaves the other two alone.
+// persist() writes localStorage. A slider release fires it, so it takes the store
+// that changed and leaves the other two alone.
 test("persist(which) writes only the named CamTune store", () => {
   const disk = new Map();
   const writes = [];
@@ -582,10 +582,7 @@ test("persist(which) writes only the named CamTune store", () => {
   assert.deepEqual(writes.slice().sort(), [CamTune.KEY, CamTune.KEY_COMFORT, CamTune.KEY_GLOBAL].sort(),
     "no argument = all three (presets, import, reset)");
 
-  // The panel's slider handlers name the store they changed.
-  const panel = fs.readFileSync(path.join(root, "js/camera/tuner-panel.js"), "utf8");
-  assert.match(panel, /CamTune\.persist\("comfort"\)/);
-  assert.match(panel, /CamTune\.persist\(_scope === "global" \? "global" : "modes"\)/);
+  // That the panel's sliders name the store they changed, once per drag: camera-tuner-a11y.test.mjs drives them (#5042).
 });
 
 test("CamTune comfort knobs are independent of reduce-motion and default to shipped", () => {

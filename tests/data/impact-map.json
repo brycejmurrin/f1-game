@@ -2190,6 +2190,9 @@
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
+      "comfortGetScoped": [
+        "tests/unit/camera-tuner-a11y.test.mjs"
+      ],
       "comfortSet": [
         "tests/unit/camera-defaults.test.mjs"
       ],
