@@ -1,0 +1,14 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": -5,
+      "lines": -3
+    },
+    "js/ui/hud.js": {
+      "codeLines": -2
+    }
+  },
+  "tree": {
+    "assertPinsAll": 1
+  }
+}
