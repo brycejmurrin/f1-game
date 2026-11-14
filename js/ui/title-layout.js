@@ -57,6 +57,16 @@ const TitleLayout = (function () {
     art: Object.freeze({ x: 0, y: 0, size: 100 }),
     layout: "grid", side: "auto",
   });
+  // A PHONE in landscape (touch, short side <= 500 px) ships bigger doors, nudged in from the edge
+  // (#5358: the owner's 2026-11-10 profile at UI SIZE 70 %). DEFAULT stays the CSS base — the layout
+  // that writes nothing; shipped(sh) is what an UNSET shape reads on this device. index.html's inline
+  // boot carries the same numbers for first paint.
+  const PHONE_WIDE = Object.freeze({
+    btns: Object.freeze({ x: 2, y: 1, size: 123, width: 0 }),
+    title: DEFAULT.title, art: DEFAULT.art, layout: "grid", side: "auto",
+  });
+  const phone = () => { try { return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
+  const shipped = (sh) => (sh === "wide" && phone() ? PHONE_WIDE : DEFAULT);
   const SHAPES = ["wide", "tall"];
   const SHAPE_NAMES = { wide: "LANDSCAPE", tall: "PORTRAIT" };
   const store = GameStore.store;
@@ -71,8 +81,8 @@ const TitleLayout = (function () {
     return Math.max(lo, Math.min(hi, n));
   };
   /** Any stored value -> a complete, clamped layout. Junk reads as shipped. */
-  function normalize(v) {
-    const o = v && typeof v === "object" ? v : {};
+  function normalize(v, sh) {
+    const o = v && typeof v === "object" ? v : (sh ? shipped(sh) : {});   // an unset SHAPE reads what this device ships
     const out = {};
     for (const p of PARTS) {
       const src = o[p] && typeof o[p] === "object" ? o[p] : {};
@@ -85,7 +95,8 @@ const TitleLayout = (function () {
   }
   function isDefault(v) { return JSON.stringify(normalize(v)) === JSON.stringify(normalize(null)); }
   /** Both shapes shipped — what the TITLE LAYOUT summary calls SHIPPED. */
-  function layoutShipped() { const a = all(); return isDefault(a.wide) && isDefault(a.tall); }
+  const isShipped = (v, sh) => JSON.stringify(normalize(v)) === JSON.stringify(normalize(null, sh));
+  function layoutShipped() { const a = all(); return isShipped(a.wide, "wide") && isShipped(a.tall, "tall"); }
 
   /** The tokens a layout writes — the SAME arithmetic index.html's inline boot
    *  does. X is vw, Y is vh, SIZE and WIDTH are plain numbers. */
@@ -114,13 +125,13 @@ const TitleLayout = (function () {
   function all() {
     const raw = store.get(KEY, null);
     if (draft && raw !== draftBase) draft = null;
-    if (draft) return { wide: normalize(draft.wide), tall: normalize(draft.tall) };
-    if (raw && typeof raw === "object" && raw.v === 2) return { wide: normalize(raw.wide), tall: normalize(raw.tall) };
-    return { wide: normalize(raw), tall: normalize(raw) };
+    if (draft) return { wide: normalize(draft.wide, "wide"), tall: normalize(draft.tall, "tall") };
+    if (raw && typeof raw === "object" && raw.v === 2) return { wide: normalize(raw.wide, "wide"), tall: normalize(raw.tall, "tall") };
+    return { wide: normalize(raw, "wide"), tall: normalize(raw, "tall") };
   }
   function save(a) {
     const out = { v: 2 };
-    for (const s of SHAPES) if (!isDefault(a[s])) out[s] = normalize(a[s]);   // a missing shape is shipped
+    for (const s of SHAPES) if (!isShipped(a[s], s)) out[s] = normalize(a[s]);   // a missing shape is shipped
     store.set(KEY, out.wide || out.tall ? out : null);
   }
   function current(sh) { return all()[isShape(sh) ? sh : shape()]; }
@@ -292,7 +303,7 @@ const TitleLayout = (function () {
   function set(v, sh, live) {
     const s = isShape(sh) ? sh : shape();
     const a = all();
-    a[s] = normalize(v);
+    a[s] = normalize(v, s);
     if (live) { draft = a; draftBase = store.get(KEY, null); } else { draft = null; save(a); }
     if (s === shape()) apply(a[s]);
     return a[s];
@@ -343,7 +354,7 @@ const TitleLayout = (function () {
   }
   function resetShape(sh) { return set(null, sh); }
   /** RESET ALL: both shapes back to shipped. */
-  function reset() { draft = null; store.set(KEY, null); apply(null); return normalize(null); }
+  function reset() { draft = null; store.set(KEY, null); apply(); return current(); }
   /** COPY TO `to`: the OTHER shape's layout becomes `to`'s too. */
   function copyTo(to) {
     const s = to === "tall" ? "tall" : "wide";
@@ -677,7 +688,7 @@ const TitleLayout = (function () {
   function resetPiece() {
     if (!ed.on) return;
     const l = current();
-    l[ed.sel] = Object.assign({}, DEFAULT[ed.sel]);
+    l[ed.sel] = Object.assign({}, shipped(shape())[ed.sel]);
     set(l);
     paintEd();
   }

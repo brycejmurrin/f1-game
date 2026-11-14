@@ -71,12 +71,24 @@ test("css/tokens.css and js/ui/scale.js agree on the touch defaults", () => {
   assert.ok(jsRatio, "independent button default exists");
   assert.equal(Number(ratio[1]), Number(jsRatio[1]));
 
-  const jsDefaults = scaleJs.match(/scaleDefault = \(k\) => \(coarseUi\(\) \? \(k === "hudScale" \? (\d+) : (\d+)\) : 100\)/);
+  const jsDefaults = scaleJs.match(/scaleDefault = \(k\) => \(coarseUi\(\) \? \(k === "hudScale" \? (\d+) : \(phoneUi\(\) \? PHONE_UI_DEFAULT : (\d+)\)\) : 100\)/);
   assert.ok(jsDefaults, "js/ui/scale.js must declare the coarse scaleDefault pair");
   assert.equal(Number(jsDefaults[1]) / 100, Number(css["--hud-scale"]),
     "--hud-scale and scale.js's hudScale default must agree");
   assert.equal(Number(jsDefaults[2]) / 100, Number(css["--ui-scale"]),
     "--ui-scale and scale.js's ui default must agree");
+});
+
+test("a phone's first-paint UI SIZE and scale.js's phone default agree (#5358)", () => {
+  // The block right after the coarse one: touch AND a short side of at most 500 px, either orientation.
+  const m = tokens.match(/@media \(pointer: coarse\) and \(max-height: (\d+)px\), \(pointer: coarse\) and \(max-width: (\d+)px\)\s*\{\s*:root\s*\{\s*--ui-scale:\s*([\d.]+);\s*\}/);
+  assert.ok(m, "css/tokens.css must declare the phone :root block");
+  const js = scaleJs.match(/const PHONE_UI_DEFAULT = (\d+);/);
+  assert.ok(js, "js/ui/scale.js must declare PHONE_UI_DEFAULT");
+  assert.equal(Number(m[3]), Number(js[1]) / 100, "the CSS mirror and the JS default are one number");
+  const side = scaleJs.match(/const phoneUi = \(\) => coarseUi\(\) && Math\.min\(window\.innerWidth, window\.innerHeight\) <= (\d+);/);
+  assert.ok(side, "phoneUi() is touch and a short side");
+  assert.deepEqual([Number(m[1]), Number(m[2])], [Number(side[1]), Number(side[1])], "the media query and phoneUi() test the same short side");
 });
 
 test("the touch default puts every driving control over the physical floor", () => {

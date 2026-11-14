@@ -13,8 +13,11 @@
      - a range knob off its default         → inline --look-<screen>-<k> on :root
        (v / 100 unitless, or "<v>%" for token:"pct") AND a presence attribute
        data-look-<screen>-<k>, so a rule matches only while it is custom.
-   At its default a knob writes NOTHING, so the shipped screen is the absence
-   of every attribute and token. Nothing here paints on first frame (only the
+   At its CSS base (`def`) a knob writes NOTHING, so the desktop's shipped
+   screen is the absence of every attribute and token. A PHONE (touch, short
+   side <= 500 px) ships its own value for the knobs that carry `phone`
+   (#5358, the owner's 2026-11-10 profile at UI SIZE 70 %): shipDef() is what
+   an unset knob reads there, and apply() stamps it like any value off `def`. Nothing here paints on first frame (only the
    title screen does, and TitleLayout / TitleFx own it), so there is no boot
    copy in index.html: apply() runs at eval, before js/game.js can open any of
    these screens.
@@ -77,8 +80,8 @@ const ScreenLooks = (function () {
       help: "BUTTON HEIGHT, CARD WIDTH and BUTTON GAP size the pause card's buttons. CORNERS, BUTTON STYLE and TEXT ALIGN change how they look; VERTICAL POSITION moves the card up or down; MUSIC CARD and BUILD TAG hide those two lines.",
       target: () => byId("pausemenu"),
       knobs: Object.freeze([
-        rng("btn", "BUTTON HEIGHT", 80, 150, 5, 100),
-        rng("w", "CARD WIDTH", 70, 200, 5, 100),
+        rng("btn", "BUTTON HEIGHT", 80, 150, 5, 100, { phone: 115 }),
+        rng("w", "CARD WIDTH", 70, 200, 5, 100, { phone: 115 }),
         rng("gap", "BUTTON GAP", 0, 200, 10, 100),
         ...core(["corners"]),
         cyc("style", "BUTTON STYLE", [["filled", "FILLED"], ["outline", "OUTLINE"]], "filled"),
@@ -104,8 +107,8 @@ const ScreenLooks = (function () {
       help: "The circuit picker: card width and density, the size of the circuit tiles, how many rows the strip uses, and whether it sits above or below the circuit.",
       target: () => byId("select"),
       knobs: Object.freeze([
-        ...core(["w", "density", "btn", "corners", "dim", "head"]),
-        rng("tile", "TILE SIZE", 70, 160, 5, 100),
+        ...core(["w", "density", "btn", "corners", "dim", "head"], { w: { phone: 125 } }),
+        rng("tile", "TILE SIZE", 70, 160, 5, 100, { phone: 95 }),
         cyc("rows", "STRIP ROWS", [["1", "1"], ["2", "2"], ["3", "3"]], "1"),
         cyc("names", "TILE NAMES", SHOWHIDE, "show"),
         cyc("strip", "STRIP POSITION", [["top", "TOP"], ["bottom", "BOTTOM"]], "top"),
@@ -116,7 +119,7 @@ const ScreenLooks = (function () {
       help: "The pre-race settings sheet: width, density, columns, and how the preset buttons show.",
       target: () => byId("race-settings"),
       knobs: Object.freeze([
-        ...core(["w", "density", "btn", "corners", "dim", "head"]),
+        ...core(["w", "density", "btn", "corners", "dim", "head"], { w: { phone: 120 }, btn: { phone: 90 } }),
         cyc("cols", "COLUMNS", [["auto", "AUTO"], ["one", "ONE"], ["two", "TWO"]], "auto", { reflow: true }),
         cyc("presets", "PRESETS", [["cards", "CARDS"], ["compact", "COMPACT"], ["hide", "HIDE"]], "cards"),
       ]),
@@ -138,11 +141,14 @@ const ScreenLooks = (function () {
       help: "The garage panel: which side it docks on (the car moves over to the other side), its width, how see-through it is, and the stat bars.",
       target: () => byId("carsetup"),
       knobs: Object.freeze([
+        // Of the owner's garage look only STAT BARS: HIDE ships on a phone (#5358). His BUTTON HEIGHT 80
+        // paints DONE 35 px tall, under the 44 px tap floor; his PANEL WIDTH 110 clips 13 % of UNLIMITED at
+        // UI SIZE 50 % (tests/specs/ui-scale.spec.js "every main screen fits at 50%").
         ...core(["density", "btn", "corners", "head"]),
         cyc("side", "PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "right"),
         rng("pw", "PANEL WIDTH", 100, 150, 5, 100),
         cyc("glass", "PANEL", [["solid", "SOLID"], ["shipped", "SHIPPED"], ["glass", "GLASS"]], "shipped"),
-        cyc("stats", "STAT BARS", SHOWHIDE, "show"),
+        cyc("stats", "STAT BARS", SHOWHIDE, "show", { phone: "hide" }),
       ]),
     }),
     Object.freeze({
@@ -150,7 +156,7 @@ const ScreenLooks = (function () {
       help: "The in-game circuit designer. DESIGNER SIZE scales the whole screen; MAP WIDTH is how much of the width the map gets against the controls panel (side-by-side layouts); TEXT SIZE and PROFILE HEIGHT (the elevation strip) tune the rest. Tap targets never drop below their floor.",
       target: () => byId("trackdesigner"),
       knobs: Object.freeze([
-        rng("size", "DESIGNER SIZE", 70, 200, 5, 100),
+        rng("size", "DESIGNER SIZE", 70, 200, 5, 100, { phone: 75 }),
         rng("split", "MAP WIDTH", 40, 70, 1, 55, { token: "pct" }),
         cyc("text", "TEXT SIZE", [["small", "SMALL"], ["medium", "MEDIUM"], ["large", "LARGE"]], "medium"),
         cyc("profile", "PROFILE HEIGHT", [["short", "SHORT"], ["normal", "NORMAL"], ["tall", "TALL"]], "normal"),
@@ -181,12 +187,16 @@ const ScreenLooks = (function () {
   const knobOf = (s, k) => { for (const n of s.knobs) if (n.k === k) return n; return null; };
 
   // ── store ───────────────────────────────────────────────────────────────
+  // The same test as js/ui/scale.js phoneUi(), asked on every read (a rotation keeps the short side).
+  const phone = () => { try { return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
+  /** What an UNSET knob reads on this device: `phone` on a phone, else `def`. */
+  const shipDef = (n) => (n.phone !== undefined && phone() ? n.phone : n.def);
   function clampKnob(n, v) {
     if (n.kind === "cycle") {
       for (const [id] of n.values) if (id === v) return v;
-      return n.def;
+      return shipDef(n);
     }
-    const x = typeof v === "number" && isFinite(v) ? v : n.def;
+    const x = typeof v === "number" && isFinite(v) ? v : shipDef(n);
     const snapped = n.min + Math.round((x - n.min) / n.step) * n.step;
     return Math.max(n.min, Math.min(n.max, Math.round(snapped * 100) / 100));
   }
@@ -196,7 +206,7 @@ const ScreenLooks = (function () {
     if (!s) return {};
     const src = o && typeof o === "object" ? o : {};
     const out = {};
-    for (const n of s.knobs) out[n.k] = clampKnob(n, src[n.k] === undefined ? n.def : src[n.k]);
+    for (const n of s.knobs) out[n.k] = clampKnob(n, src[n.k] === undefined ? shipDef(n) : src[n.k]);
     return out;
   }
   const read = (id) => normalize(id, store.get(screen(id) ? screen(id).key : "", null));
@@ -204,14 +214,14 @@ const ScreenLooks = (function () {
     const s = screen(id);
     const diff = {};
     let any = false;
-    for (const n of s.knobs) if (look[n.k] !== n.def) { diff[n.k] = look[n.k]; any = true; }
+    for (const n of s.knobs) if (look[n.k] !== shipDef(n)) { diff[n.k] = look[n.k]; any = true; }
     store.set(s.key, any ? diff : null);
   }
   function isShipped(id) {
     const s = screen(id);
     if (!s) return true;
     const l = read(id);
-    for (const n of s.knobs) if (l[n.k] !== n.def) return false;
+    for (const n of s.knobs) if (l[n.k] !== shipDef(n)) return false;
     return true;
   }
 
@@ -613,6 +623,7 @@ const ScreenLooks = (function () {
     SCREENS, PEEK_ONLY, CORE, PEEK_MS, refreshAvail,
     read, set, reset, apply, normalize, isShipped, onChange,
     peek, endPeek, holdPeek, build, refresh, mountPeekButton,
+    shipDef: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? shipDef(n) : undefined; },
     dataKey: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? dataKey(s, n) : null; },
     token: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? tokenOf(s, n) : null; },
     get peeking() { return pk.id; },
