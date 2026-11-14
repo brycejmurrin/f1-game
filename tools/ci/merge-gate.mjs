@@ -25,9 +25,9 @@
 //             failed job (`run_attempt` > 1) fails the row
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
 //             name) needs the `config-ok` label, last added by Bryce in person (or, for ROUTINE config paths only, by
-//             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and newer than the last push that
-//             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
-//             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
+//             an agent through the Claude app: PROTECTED_CONFIG_PATH, #5455), and every push after it must leave the
+//             PR's own config diff as the label saw it (configPushState: a tip sync keeps it, #5432); any other diff
+//             passes. A package.json diff that is ONLY the generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   raise     a diff that RAISES a tree-wide ceiling (tests/data/ratchets.json `tree`, plus the tests/data/ratchets.d
 //             deltas, compared head vs merge base; a lowered, unchanged or new ceiling is no raise) needs the
 //             `ratchet-raise` label, last added by Bryce in person and newer than the last push touching a ratchet file.
@@ -193,14 +193,60 @@ export function configVerdict(files, labels, events = null, owner = OWNER, push 
   return row(true, `${by}) at ${last.created_at || "?"} covers ${shown}${push?.evidence ? ` (${push.evidence})` : ""}`);
 }
 
+/** The compare API lists at most this many files; a list that long may be truncated. */
+export const COMPARE_FILE_CAP = 300;
+
+/**
+ * The PR's own config-path changes at `ref`: the CONFIG_PATH rows of the three-dot `compare/<base>...<ref>` (only the
+ * PR's side of the merge base, the diff the PR's Files tab shows). `skipPkg` drops a plain (not renamed) package.json
+ * row; `touches` picks the paths (CONFIG_PATH by default). Each row's key holds what the compare shows (names, status, blob sha, patch) plus the file's MODE at `ref`
+ * from the recursive tree: the compare never shows a mode, and a `chmod -x` on a hook disables it with the same blob.
+ * → { rows: [{ path, key }] } sorted by path, or { error } when the compare or the tree is unreadable or may be
+ * truncated, or a changed config row carries no patch to compare. Side effects only through `request`.
+ */
+export function ownConfigDiff({ base, ref, request, skipPkg = false, touches = configFiles }) {
+  const at = `${base}...${String(ref).slice(0, 8)}`;
+  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(ref)}`);
+  if (cmp.error) return { error: `compare ${at}: ${cmp.error}` };
+  const files = cmp.json?.files;
+  if (!Array.isArray(files)) return { error: `compare ${at} lists no files` };
+  if (files.length >= COMPARE_FILE_CAP) return { error: `compare ${at} lists ${files.length} files (the API stops at ${COMPARE_FILE_CAP})` };
+  const own = files.filter((f) => touches(filePaths([f])).length && !(skipPkg && f.filename === GENERATED_PKG && !f.previous_filename));
+  let modes = null;
+  if (own.some((f) => f.status !== "removed")) {
+    const tr = request(`git/trees/${encodeURIComponent(ref)}?recursive=1`);
+    if (tr.error) return { error: `tree ${String(ref).slice(0, 8)}: ${tr.error}` };
+    if (!Array.isArray(tr.json?.tree) || tr.json.truncated) return { error: `tree ${String(ref).slice(0, 8)} is unreadable or truncated` };
+    modes = new Map(tr.json.tree.map((e) => [e.path, String(e.mode || "")]));
+  }
+  const rows = [];
+  for (const f of own) {
+    // The patch pins the base side too: the same head blob over a different base (a resolution that reverts what
+    // the tip changed in that file) is a different change. A pure rename has no patch and no changes.
+    const patch = typeof f.patch === "string" ? f.patch : (Number(f.changes) === 0 ? "" : null);
+    if (patch == null) return { error: `compare ${at}: ${f.filename} has no patch to compare` };
+    const mode = f.status === "removed" ? "" : modes.get(f.filename);
+    if (f.status !== "removed" && !mode) return { error: `tree ${String(ref).slice(0, 8)} has no mode for ${f.filename}` };
+    rows.push({ path: f.filename, key: JSON.stringify([f.filename, f.previous_filename || "", f.status || "", f.sha || "", patch, mode]) });
+  }
+  return { rows: rows.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) };
+}
+
 /**
  * When did the head get pushed relative to the owner's `config-ok` at `labelAt`? Reads ci.yml's pull_request runs of
  * this PR (server timestamps; a commit date can say anything). The head is covered when the label is newer than the
- * head's first run. Otherwise the head at label time is the head of the newest run created before the label, and the
- * compare from it to the head must touch no CONFIG_PATH.
- * → { state: "covered"|"after"|"unknown", evidence }. Side effects only through `request`.
+ * head's first run. Otherwise the head at label time (`from`) is the head of the newest run created before the label,
+ * and the PR's OWN config-path changes (ownConfigDiff, three-dot against `base`) must be the same at `from` and at
+ * the head: the same files, blob shas, patches and file modes. A merge of the deploy tip that leaves them alone keeps the label
+ * (#5432: 24 of 40 re-clicks in 2026-11-09..11 were such syncs); a commit of the PR, or a conflict resolution, that
+ * changes any of them voids it. An unreadable or possibly truncated compare is "unknown" (waits; a fresh click
+ * covers it). `pkgGeneratedAt(ref)` → true when package.json's change at `ref` is only the generated test lists:
+ * package.json is skipped on both sides only when that holds at the head AND at `from`.
+ * → { state: "covered"|"after"|"unknown", evidence, from? } (`from`: the head at label time, once known; the
+ * ratchet-raise row reads it). `touches` picks the paths compared (the raise row passes ratchetFiles) and `what`
+ * names them. Side effects only through `request` and `pkgGeneratedAt`.
  */
-export function configPushState({ pr, head, headRef, labelAt, request, touches = configFiles, what = "config path" }) {
+export function configPushState({ pr, head, headRef, labelAt, request, base = DEPLOY, pkgGeneratedAt = null, touches = configFiles, what = "config path" }) {
   const t = (iso) => Date.parse(iso || "") || 0;
   const L = t(labelAt);
   if (!L) return { state: "unknown", evidence: "no config-ok label time" };
@@ -214,14 +260,17 @@ export function configPushState({ pr, head, headRef, labelAt, request, touches =
   const before = mine.filter((w) => t(w.created_at) < L).sort((a, b) => t(b.created_at) - t(a.created_at))[0];
   if (!before) return { state: "after", evidence: `no run of PR #${pr} predates the label, so the head ${head.slice(0, 8)} was pushed` };
   const from = String(before.head_sha || "").toLowerCase();
-  const cmp = request(`compare/${encodeURIComponent(from)}...${encodeURIComponent(head)}`);
-  if (cmp.error) return { state: "unknown", evidence: `compare ${from.slice(0, 8)}...${head.slice(0, 8)}: ${cmp.error}` };
-  const files = cmp.json?.files;
-  if (!Array.isArray(files) || files.length >= 300) return { state: "after", evidence: `the compare ${from.slice(0, 8)}...${head.slice(0, 8)} is unreadable or truncated, so a push` };
-  const hit = touches(filePaths(files));
-  return hit.length
-    ? { state: "after", from, evidence: `a push touching ${hit.slice(0, 3).join(", ")} (${from.slice(0, 8)}...${head.slice(0, 8)}) came` }
-    : { state: "covered", evidence: `the pushes since ${from.slice(0, 8)} touch no ${what}` };
+  const skipPkg = !!(pkgGeneratedAt && pkgGeneratedAt(head) && pkgGeneratedAt(from));
+  const was = ownConfigDiff({ base, ref: from, request, skipPkg, touches });
+  if (was.error) return { state: "unknown", evidence: was.error };
+  const now = ownConfigDiff({ base, ref: head, request, skipPkg, touches });
+  if (now.error) return { state: "unknown", evidence: now.error };
+  const keys = (d) => new Map(d.rows.map((r) => [r.path, r.key]));
+  const a = keys(was), b = keys(now);
+  const differ = [...new Set([...a.keys(), ...b.keys()])].filter((p) => a.get(p) !== b.get(p)).sort();
+  return differ.length
+    ? { state: "after", from, evidence: `a push changing the PR's own ${what} diff (${differ.slice(0, 3).join(", ")}${differ.length > 3 ? ", …" : ""}; ${from.slice(0, 8)} → ${head.slice(0, 8)}) came` }
+    : { state: "covered", from, evidence: `the PR's own ${what} diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same blobs, patches and modes)` };
 }
 
 /**
@@ -317,7 +366,7 @@ export function raiseRow({ pr, head, headRef, base, changed, labels, events, own
   const raises = now.raises;
   const last = newestLabelEvent(events, RAISE_LABEL);
   let push = raises.length && last?.event === "labeled" && byOwner(last, owner)
-    ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, touches: ratchetFiles, what: "ratchet file" }) : null;
+    ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file" }) : null;
   if (push?.state === "after" && push.from) {
     const then = prRaisesAt(push.from, base, request);
     if (then.error) return { error: then.error };
@@ -787,7 +836,8 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   }
   const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
   const needsPush = configFiles(changed).length && !!configLabelKind(cfgLast, owner);
-  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
+  const pkgGeneratedAt = generated?.ok ? (ref) => (ref === head ? true : generatedPkgCheck({ head: ref, base, request }).ok) : null;
+  const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request, base, pkgGeneratedAt }) : null;
   rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
   // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
   const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request });

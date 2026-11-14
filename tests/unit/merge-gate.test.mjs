@@ -159,21 +159,134 @@ test("PROTECTED_CONFIG_PATH covers every module in the gate's import closure, in
   assert.equal(isConfigPath("tools/lib/cli-args.mjs.bak"), false, "anchored: a sibling file is not swept in");
 });
 
-test("configPushState: config-ok binds to the pushes made before it; a later push touching a config path needs a fresh label", () => {
+test("configPushState: config-ok binds to the PR's own config diff at label time; a push that changes it needs a fresh label", () => {
   const H0 = "0".repeat(40), H1 = "1".repeat(40), H2 = "2".repeat(40);
   const run = (sha, at, pr = 7) => ({ head_sha: sha, created_at: at, pull_requests: [{ number: pr }] });
-  const mk = (runs, cmp) => (p) => p.startsWith("actions/workflows/ci.yml/runs?event=pull_request&branch=cursor%2Fx") ? { json: { workflow_runs: runs } }
-    : p.startsWith("compare/") ? (cmp ? { json: { files: cmp } } : { error: "HTTP 404" }) : { error: `unexpected ${p}` };
+  // cmp: { [sha]: files | null } for compare/deploy-x...<sha> (null = unreadable).
+  const mk = (runs, cmp = {}, noTree = []) => (p) => {
+    if (p.startsWith("actions/workflows/ci.yml/runs?event=pull_request&branch=cursor%2Fx")) return { json: { workflow_runs: runs } };
+    const m = /^compare\/deploy-x\.\.\.([0-9a-f]{40})$/.exec(p);
+    if (m) return cmp[m[1]] ? { json: { files: cmp[m[1]] } } : { error: "HTTP 404" };
+    // The recursive tree gives each file's mode (the compare shows none): 100644 unless the fixture row says otherwise.
+    const t = /^git\/trees\/([0-9a-f]{40})\?recursive=1$/.exec(p);
+    if (t) return cmp[t[1]] && !noTree.includes(t[1]) ? { json: { tree: cmp[t[1]].filter((f) => f.status !== "removed").map((f) => ({ path: f.filename, mode: f.mode || "100644" })) } } : { error: "HTTP 404" };
+    return { error: `unexpected ${p}` };
+  };
   const at = (h) => `2026-11-03T${String(h).padStart(2, "0")}:00:00Z`;
-  const q = (runs, cmp, head = H2) => configPushState({ pr: 7, head, headRef: "cursor/x", labelAt: at(10), request: mk(runs, cmp) }).state;
-  assert.equal(q([run(H0, at(8)), run(H2, at(9))]), "covered", "labelled after the head was pushed");
-  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "js/a.js" }]), "covered", "a later push touching no config path");
-  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "js/a.js", previous_filename: ".claude/hooks/x.sh" }]), "after", "a later rename of a hook");
-  assert.equal(q([run(H0, at(8)), run(H2, at(11))], [{ filename: "tools/ci/merge-gate.mjs" }]), "after");
-  assert.equal(q([run(H0, at(8)), run(H2, at(11))], null), "unknown", "compare unreadable");
-  assert.equal(q([run(H2, at(11))]), "after", "no run before the label");
-  assert.equal(q([run(H0, at(8)), run(H2, at(9), 99)]), "unknown", "another PR's run on the head does not date this PR's push");
-  assert.equal(q([run(H0, at(8)), run(H1, at(9))]), "unknown", "no run on the head yet");
+  const q = (runs, cmp, head = H2, extra = {}) => configPushState({ pr: 7, head, headRef: "cursor/x", labelAt: at(10), request: mk(runs, cmp, extra.noTree), base: "deploy-x", ...extra });
+  const s = (...a) => q(...a).state;
+  const hook = { filename: ".claude/hooks/a.sh", status: "modified", sha: "b1", changes: 2, patch: "@@ -1 +1 @@\n-a\n+b" };
+  const js = (sha) => ({ filename: "js/a.js", status: "modified", sha, changes: 1, patch: `@@ -1 +1 @@\n+${sha}` });
+  const later = [run(H0, at(8)), run(H2, at(11))];
+  assert.equal(s([run(H0, at(8)), run(H2, at(9))]), "covered", "labelled after the head was pushed");
+  // Fixture 1: a pure tip merge. The tip's own config files are not in the PR's three-dot diff; the PR's own are byte-identical.
+  assert.equal(s(later, { [H0]: [hook, js("j0")], [H2]: [hook, js("j2")] }), "covered", "a sync merge (or a non-config push) keeps the label");
+  assert.equal(q(later, { [H0]: [hook], [H2]: [hook] }).evidence, "the PR's own config path diff is unchanged since 00000000 (1 file(s), same blobs, patches and modes)");
+  assert.equal(q(later, { [H0]: [hook], [H2]: [hook] }).from, H0, "covered names the head at label time");
+  // Fixture 2: the merge's conflict resolution edits the PR's own config file (a new blob).
+  assert.equal(s(later, { [H0]: [hook], [H2]: [{ ...hook, sha: "b2", patch: "@@ -1 +1 @@\n-a\n+c" }] }), "after", "a resolution that changes the PR's config file voids it");
+  // ... or keeps the PR's blob over a tip that changed the same file (a revert of the tip's change: the patch differs).
+  assert.equal(s(later, { [H0]: [hook], [H2]: [{ ...hook, patch: "@@ -1 +1 @@\n-z\n+b" }] }), "after", "the same blob over a different base is a different change");
+  // Fixture 3: a second commit by the PR that touches a config path (a new file, a rename, a deletion).
+  const p3 = q(later, { [H0]: [hook], [H2]: [hook, { filename: "tools/ci/merge-gate.mjs", status: "modified", sha: "m", changes: 1, patch: "+x" }] });
+  assert.equal(p3.state, "after");
+  assert.equal(p3.from, H0, "after names the head at label time (the ratchet-raise row reads it)");
+  assert.equal(p3.evidence, "a push changing the PR's own config path diff (tools/ci/merge-gate.mjs; 00000000 → 22222222) came");
+  assert.equal(s(later, { [H0]: [js("j0")], [H2]: [{ filename: "js/a.js", previous_filename: ".claude/hooks/x.sh", status: "renamed", sha: "r", changes: 0 }] }), "after", "a later rename out of a hook");
+  assert.equal(s(later, { [H0]: [hook], [H2]: [] }), "after", "a config change that left the PR's diff is a change too");
+  // Fixture 4: an unreadable compare, on either side, waits.
+  assert.equal(s(later, { [H2]: [hook] }), "unknown", "compare at label time unreadable");
+  assert.equal(s(later, { [H0]: [hook] }), "unknown", "compare at the head unreadable");
+  assert.equal(s(later, { [H0]: [{ ...hook, patch: undefined }], [H2]: [hook] }), "unknown", "a config row with changes and no patch cannot be compared");
+  // Fixture 5: 300+ files may be truncated: unknown, never after (a large tip merge is not a push).
+  const big = Array.from({ length: 300 }, (_, i) => js(`f${i}`));
+  const p5 = q(later, { [H0]: [hook], [H2]: [hook, ...big] });
+  assert.equal(p5.state, "unknown");
+  assert.equal(p5.evidence, "compare deploy-x...22222222 lists 301 files (the API stops at 300)");
+  // A mode flip on a file the label already covered (chmod -x disables a hook): same blob and patch, a different change.
+  assert.equal(s(later, { [H0]: [hook], [H2]: [{ ...hook, mode: "100755" }] }), "after", "a chmod on the PR's own config file voids it");
+  assert.equal(s(later, { [H0]: [hook], [H2]: [hook] }, H2, { noTree: [H2] }), "unknown", "no tree, no modes: waits");
+  const gone = { ...hook, status: "removed", patch: "@@ -1 +0,0 @@\n-a" };
+  assert.equal(s(later, { [H0]: [gone], [H2]: [gone] }, H2, { noTree: [H0, H2] }), "covered", "a deletion has no mode to read");
+  // package.json whose change is only the generated test lists at BOTH heads is skipped; otherwise compared.
+  const pkg = (sha) => ({ filename: "package.json", status: "modified", sha, changes: 3, patch: `+${sha}` });
+  assert.equal(s(later, { [H0]: [hook, pkg("p0")], [H2]: [hook, pkg("p2")] }, H2, { pkgGeneratedAt: () => true }), "covered", "a regenerated test list is not a config change");
+  assert.equal(s(later, { [H0]: [hook, pkg("p0")], [H2]: [hook, pkg("p2")] }, H2, { pkgGeneratedAt: (r) => r === H2 }), "after", "a real package.json change at label time is compared");
+  assert.equal(s(later, { [H0]: [hook, pkg("p0")], [H2]: [hook, pkg("p2")] }), "after");
+  assert.equal(s([run(H2, at(11))]), "after", "no run before the label");
+  assert.equal(s([run(H0, at(8)), run(H2, at(9), 99)]), "unknown", "another PR's run on the head does not date this PR's push");
+  assert.equal(s([run(H0, at(8)), run(H1, at(9))]), "unknown", "no run on the head yet");
+  assert.equal(s([run(H2, at(8)), run(H2, at(11))]), "covered", "a re-run on the labelled head dates it by its first run");
+});
+
+test("configPushState on real git (#5432): only a merge that adds nothing but the tip's own commits keeps the click", () => {
+  // The fake API answers compare/<base>...<sha> and git/trees/<sha> from a real repository, shaped like GitHub's
+  // (three-dot: merge base → sha; files with status, blob sha, patch), so each case is a real merge topology.
+  const T = scratch("cfg-sync-");
+  const git = (...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "core.fileMode=true", ...a], { cwd: T, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.replace(/\n$/, ""); };
+  const put = (file, text) => { fs.mkdirSync(path.dirname(path.join(T, file)), { recursive: true }); fs.writeFileSync(path.join(T, file), text); };
+  const body = (tag) => Array.from({ length: 30 }, (_, i) => `${tag} line ${i}\n`).join("");
+  const edit = (file, line, text) => { const l = fs.readFileSync(path.join(T, file), "utf8").split("\n"); l[line] = text; put(file, l.join("\n")); };
+  const commit = (msg) => { git("add", "-A"); git("commit", "-q", "-m", msg); return git("rev-parse", "HEAD"); };
+  try {
+    git("init", "-q", "-b", "deploy-x");
+    for (const f of [".github/workflows/land.yml", "tools/ci/merge-gate.mjs", "tools/ci/ready-gate.mjs", ".githooks/pre-push", "docs/PHYSICS.md"]) put(f, body(f));
+    fs.chmodSync(path.join(T, ".githooks/pre-push"), 0o755);
+    commit("base");
+    // The PR: its own edits to a gate module and a git hook. H0 is the head Bryce's click saw.
+    git("checkout", "-q", "-b", "pr");
+    edit("tools/ci/merge-gate.mjs", 3, "the PR's change"); edit(".githooks/pre-push", 3, "the PR's hook change");
+    const H0 = commit("pr: own config edits");
+    // The tip moves: T1 changes protected files the PR does not touch; T2 (later) changes the PR's own file elsewhere.
+    git("checkout", "-q", "deploy-x");
+    edit("tools/ci/ready-gate.mjs", 5, "tip T1"); edit(".github/workflows/land.yml", 5, "tip T1"); edit("docs/PHYSICS.md", 5, "tip T1");
+    const T1 = commit("tip T1");
+    edit("tools/ci/merge-gate.mjs", 25, "tip T2"); edit("tools/ci/ready-gate.mjs", 9, "tip T2");
+    const T2 = commit("tip T2");
+    /** A head built from H0: merge `tip` (unless null), let `hand` change the tree inside the merge commit, then `after`. */
+    const head = (name, tip, hand = null, after = null) => {
+      git("checkout", "-q", "-b", name, H0);
+      if (tip) { git("merge", "-q", "--no-ff", "--no-commit", tip); if (hand) hand(); commit(`sync ${name}`); }
+      if (after) { after(); commit(`later ${name}`); }
+      return git("rev-parse", "HEAD");
+    };
+    const request = (runsHead) => (p) => {
+      if (p.startsWith("actions/workflows/ci.yml/runs?")) return { json: { workflow_runs: [
+        { head_sha: H0, created_at: "2026-11-03T08:00:00Z", pull_requests: [{ number: 7 }] },
+        { head_sha: runsHead, created_at: "2026-11-03T11:00:00Z", pull_requests: [{ number: 7 }] }] } };
+      const c = /^compare\/deploy-x\.\.\.([0-9a-f]{40})$/.exec(p);
+      if (c) {
+        const mb = git("merge-base", "deploy-x", c[1]);
+        const files = git("diff", "--no-renames", "--name-status", mb, c[1]).split("\n").filter(Boolean).map((l) => {
+          const [st, filename] = l.split("\t");
+          const raw = git("diff", "--no-renames", mb, c[1], "--", filename);
+          const patch = raw.includes("\n@@") ? raw.slice(raw.indexOf("\n@@") + 1) : undefined;
+          return { filename, status: { A: "added", M: "modified", D: "removed" }[st], sha: st === "D" ? git("rev-parse", `${mb}:${filename}`) : git("rev-parse", `${c[1]}:${filename}`),
+            changes: patch ? patch.split("\n").filter((x) => (x[0] === "+" || x[0] === "-")).length : 0, patch };
+        });
+        return { json: { merge_base_commit: { sha: mb }, files } };
+      }
+      const t = /^git\/trees\/([0-9a-f]{40})\?recursive=1$/.exec(p);
+      if (t) return { json: { truncated: false, tree: git("ls-tree", "-r", t[1]).split("\n").map((l) => { const [meta, file] = l.split("\t"); return { path: file, mode: meta.split(" ")[0] }; }) } };
+      return { error: `unexpected ${p}` };
+    };
+    const state = (h) => { const r = configPushState({ pr: 7, head: h, headRef: "pr", labelAt: "2026-11-03T10:00:00Z", request: request(h), base: "deploy-x" }); return r.state === "after" ? `after: ${r.evidence.slice(r.evidence.indexOf("(") + 1, r.evidence.indexOf(";"))}` : r.state; };
+    // KEPT: nothing but the tip's own commits reached the config paths (the tip has since moved on to T2).
+    assert.equal(state(head("pure", T1)), "covered", "a pure sync brings the tip's land.yml and ready-gate.mjs and keeps the click");
+    assert.equal(state(head("js-only", T1, null, () => edit("docs/PHYSICS.md", 9, "pr later"))), "covered", "a sync plus a non-config commit keeps it");
+    // VOIDED: the same sync merge, with one more thing in it.
+    assert.equal(state(head("hand-tip-file", T1, () => edit(".github/workflows/land.yml", 12, "by hand"))), "after: .github/workflows/land.yml", "a hand edit inside the merge, to a protected file the tip also changed");
+    assert.equal(state(head("hand-new-file", T1, () => put(".claude/hooks/new.sh", "exit 0\n"))), "after: .claude/hooks/new.sh", "a protected file added inside the merge");
+    assert.equal(state(head("hand-own-file", T1, () => edit("tools/ci/merge-gate.mjs", 12, "by hand"))), "after: tools/ci/merge-gate.mjs", "a hand edit inside the merge, to the PR's own config file");
+    assert.equal(state(head("drop-tip", T1, () => git("checkout", H0, "--", "tools/ci/ready-gate.mjs"))), "after: tools/ci/ready-gate.mjs", "a merge that drops the tip's change to a protected file");
+    assert.equal(state(head("hand-delete", T1, () => fs.rmSync(path.join(T, ".github/workflows/land.yml")))), "after: .github/workflows/land.yml", "a protected file deleted inside the merge");
+    assert.equal(state(head("chmod", T1, null, () => fs.chmodSync(path.join(T, ".githooks/pre-push"), 0o644))), "after: .githooks/pre-push", "a later chmod -x on the PR's own hook (same blob, same patch)");
+    assert.equal(state(head("later-config", T1, null, () => edit("tools/ci/ready-gate.mjs", 20, "pr later"))), "after: tools/ci/ready-gate.mjs", "a later commit of the PR to a config path");
+    assert.equal(state(head("no-sync-config", null, null, () => edit("tools/ci/merge-gate.mjs", 12, "pr later"))), "after: tools/ci/merge-gate.mjs", "the same without any sync");
+    // Conservative: the tip changed the PR's own config file (T2, another region, a clean auto-merge). The file the click
+    // read is no longer the file that lands, so the click is asked again.
+    assert.equal(state(head("tip-in-own-file", T2)), "after: tools/ci/merge-gate.mjs", "a sync that changes the PR's own config file needs a fresh click");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
 test("planRow: open items refuse, a `land:` item is exempt, no Plan fails except on a fold bot's PR", () => {
@@ -333,8 +446,12 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   f.events.pop(); f.files[f.files.length - 1] = { filename: ".github/workflows/land.yml" };
   f.prRuns.push({ head_sha: "c".repeat(40), created_at: "2026-11-03T09:30:00Z", pull_requests: [{ number: 7 }] });
   f.prRuns[0].created_at = "2026-11-03T10:30:00Z";
-  const later = (p) => (p.startsWith("compare/") ? { json: { files: [{ filename: ".github/workflows/land.yml" }] } } : f.deps.request(p));
+  const own = (sha) => [{ filename: ".github/workflows/land.yml", status: "modified", sha, changes: 1, patch: `+${sha}` }];
+  const tree = (p) => (p.startsWith("git/trees/") ? { json: { tree: [{ path: ".github/workflows/land.yml", mode: "100644" }] } } : f.deps.request(p));
+  const later = (p) => (p.startsWith("compare/deploy-x...") ? { json: { files: own(p.endsWith("c".repeat(40)) ? "w0" : "w1") } } : tree(p));
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, request: later }).rows[k].ok), ["config"], "a workflow push after Bryce's config-ok needs a fresh one");
+  const synced = (p) => (p.startsWith("compare/deploy-x...") ? { json: { files: own("w0") } } : tree(p));
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: synced }).ok, true, "a sync with the tip that leaves the PR's own workflow edit alone keeps Bryce's config-ok (#5432)");
   f.prRuns.pop(); f.prRuns[0].created_at = "2026-11-03T09:00:00Z";
   f.files.push({ filename: "docs/TESTING.md", previous_filename: ".githooks/pre-push" });
   f.pull.labels = []; f.events.length = 0;
@@ -704,8 +821,34 @@ test("land.yml concurrency (WP-L3a, c): noise labels run alone, CI re-gates neve
   assert.equal(group(wr("cursor/x", [{ number: 7 }])), "land-7", "a PR's CI re-gate queues behind that PR's events");
   assert.equal(group(wr(DEPLOY_BRANCH, [])), "land-tip");
   assert.equal(group(wr("fork-branch", [])), "land-sha-abc123", "a CI run naming no PR never shares land-tip");
+  const cfg = (action, labels) => ({ event_name: "pull_request_target", run_id: 99, event: { action, label: { name: "config-ok" }, pull_request: { number: 7, labels: labels.map((name) => ({ name })) } } });
+  assert.equal(group(cfg("labeled", ["land", "config-ok"])), "land-7", "Bryce's config-ok click on a `land` PR re-gates it in the PR's own group (#5432)");
+  assert.equal(group(cfg("unlabeled", ["land"])), "land-7");
+  assert.equal(group(cfg("labeled", ["config-ok"])), "land-noise-99", "without `land` it is noise");
+  const rr = (action, labels) => ({ ...cfg(action, labels), event: { ...cfg(action, labels).event, label: { name: "ratchet-raise" } } });
+  assert.equal(group(rr("labeled", ["land", "ratchet-raise"])), "land-7", "ratchet-raise (#5405) re-gates like config-ok");
+  assert.equal(group(rr("labeled", ["ratchet-raise"])), "land-noise-99");
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], prt("labeled", "land")), true);
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], wr("cursor/x", [{ number: 7 }])), false, "a CI or train re-gate never cancels");
+});
+
+test("land.yml resolve (#5432): a config-ok click on a `land` PR reaches resolve, so one gate evaluation runs on the label event", () => {
+  const ifs = (action, label, labels, extra = {}) => !!ghExpr(LAND.jobs.resolve.if, { event_name: "pull_request_target", ref: "refs/pull/7/merge",
+    event: { action, label: label && { name: label }, pull_request: { number: 7, labels: labels.map((name) => ({ name })) }, ...extra } });
+  assert.equal(ifs("labeled", "config-ok", ["land", "config-ok"]), true, "config-ok added on a land PR");
+  assert.equal(ifs("unlabeled", "config-ok", ["land"]), true, "config-ok removed on a land PR (the gate then refuses at once)");
+  assert.equal(ifs("labeled", "config-ok", ["config-ok"]), false, "no `land`: nothing to gate");
+  assert.equal(ifs("labeled", "needs-owner", ["land", "needs-owner"]), false, "any other label stays noise");
+  assert.equal(ifs("labeled", "ratchet-raise", ["land", "ratchet-raise"]), true, "ratchet-raise on a land PR re-gates (#5405)");
+  assert.equal(ifs("unlabeled", "ratchet-raise", ["land"]), true);
+  assert.equal(ifs("labeled", "ratchet-raise", ["ratchet-raise"]), false);
+  assert.equal(ifs("labeled", "land", ["land"]), true);
+  assert.equal(ifs("unlabeled", "hold", []), true);
+  // resolve then picks exactly this PR: a pull_request_target event resolves `numbers=("$PR_NUMBER")`, one gate.
+  const pick = LAND.jobs.resolve.steps.find((s) => s.id === "pick");
+  const lines = pick.run.split("\n").map((l) => l.trim());
+  assert.equal(lines[lines.indexOf('if [ "$EVENT" = pull_request_target ]; then') + 1], 'numbers=("$PR_NUMBER")');
+  assert.equal(pick.env.PR_NUMBER, "${{ github.event.pull_request.number }}");
 });
 
 test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older status no longer blocks the write", () => {
@@ -1527,7 +1670,11 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   assert.equal(raiseVerdict([{ metric: "bareCatches", from: 29, to: null }], [], []).evidence, "needs ratchet-raise from brycejmurrin: the diff raises a tree-wide ceiling (bareCatches 29→removed) — lower the count instead, or ask him");
   const f = fakes();
   f.files.push({ filename: FRAG("cursor--x") });
-  const request = (p) => ghRequest(p) || (p.startsWith("compare/") ? { json: { merge_base_commit: { sha: MB }, files: [{ filename: FRAG("cursor--x") }] } } : f.deps.request(p));
+  // The PR's own ratchet-file diff (three-dot against the base) per head: the fragment's blob at C differs from the head's.
+  const C = "c".repeat(40);
+  const frag = (sha) => ({ filename: FRAG("cursor--x"), status: "added", sha, changes: 1, patch: `+${sha}` });
+  const request = (p) => ghRequest(p) || (p.startsWith("compare/") ? { json: { merge_base_commit: { sha: MB }, files: [frag(p.endsWith(C) ? "f0" : "f1")] } }
+    : p.startsWith("git/trees/") ? { json: { tree: [{ path: FRAG("cursor--x"), mode: "100644" }] } } : f.deps.request(p));
   const rowOf = () => { const v = evaluate({ pr: 7, ...f.deps, request, trusted: true }); assert.ok(v.rows, v.error); return v.rows.raise; };
   // Raise without the label: refused, naming the metric.
   let r = rowOf();
@@ -1543,15 +1690,14 @@ test("#5405 raise: a tree-wide ceiling raise needs Bryce's own ratchet-raise, bo
   r = rowOf();
   assert.equal(r.ok, true, r.evidence);
   assert.equal(r.evidence, "ratchet-raise added by brycejmurrin at 2026-11-03T10:30:00Z covers assertPins 105→108 (labelled after the head aaaaaaaa was pushed)");
-  // A push touching a ratchet file after his label: a fresh label is needed.
+  // A push that changes the PR's own ratchet-file diff after his label: a fresh label is needed.
   f.prRuns.push({ head_sha: "c".repeat(40), created_at: "2026-11-03T09:30:00Z", pull_requests: [{ number: 7 }] });
   f.prRuns[0].created_at = "2026-11-03T11:00:00Z";
   at["c".repeat(40)] = at[MB]; // the head he labelled raised nothing yet
   r = rowOf();
   assert.equal(r.ok, false);
-  assert.equal(r.evidence, "needs a fresh ratchet-raise from brycejmurrin: a push touching " + FRAG("cursor--x") + " (cccccccc...aaaaaaaa) came after his label at 2026-11-03T10:30:00Z (remove and re-add it)");
+  assert.equal(r.evidence, "needs a fresh ratchet-raise from brycejmurrin: a push changing the PR's own ratchet file diff (" + FRAG("cursor--x") + "; cccccccc → aaaaaaaa) came after his label at 2026-11-03T10:30:00Z (remove and re-add it)");
   // …unless the head he labelled raised as much: a sync that only brought other PRs' fragments needs no re-click.
-  const C = "c".repeat(40);
   at[C] = at[HEAD];
   r = rowOf();
   assert.equal(r.ok, true, r.evidence);
