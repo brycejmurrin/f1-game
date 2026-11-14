@@ -1,0 +1,1 @@
+Fixed: LOAD SETTINGS on a phone with full storage no longer leaves half the file applied. If any setting cannot be saved, every setting goes back to what it was and the button reads STORAGE FULL, NOTHING CHANGED.

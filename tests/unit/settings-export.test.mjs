@@ -26,7 +26,7 @@ function boot(opts = {}) {
   const full = (k) => (k.startsWith("apex26.") ? k : "apex26." + k);
   const store = {
     get(k, d) { const v = disk.get("apex26." + k); return v === undefined ? d : JSON.parse(v); },
-    set(k, v) { disk.set("apex26." + k, JSON.stringify(v)); },
+    set(k, v) { if (v === undefined) disk.delete("apex26." + k); else disk.set("apex26." + k, JSON.stringify(v)); },   // undefined removes, as the real store does
     raw(k) { const v = disk.get(full(k)); return v === undefined ? null : v; },
     rawSet(k, v) { disk.set(full(k), String(v)); return true; },
     rawDel(k) { disk.delete(full(k)); return true; },
@@ -768,16 +768,34 @@ test("restoring default motion restores OS preference following", () => {
   assert.equal(legacy.disk.get("apex26.motion"), '"reduce"');
 });
 
-test("a refused raw reset is a storage failure, not an applied setting", () => {
+test("a refused raw reset is a storage failure that leaves nothing applied", () => {
   const target = boot({ disk: { "apex26.gfxBackend": "glx" }, store: { rawDel: () => false } });
   const result = target.loadSettings({ format: "apex26-settings-v1", settings: {
     display: { gfxBackend: null }, audio: { volMusic: 0.4 },
   } });
   assert.equal(result.failed, 1, "the UI must stay open instead of reloading");
-  assert.equal(result.applied, 1, "only the successful volume write counts");
+  assert.equal(result.applied, 0, "one refusal undoes the whole import (#5005): nothing is half-applied");
   assert.equal(result.skipped, 0);
   assert.equal(target.disk.get("apex26.gfxBackend"), "glx");
-  assert.equal(target.disk.get("apex26.volMusic"), "0.4");
+  assert.equal(target.disk.has("apex26.volMusic"), false, "the volume write that did land is put back");
+});
+
+test("#5005: on the real store one refused write undoes the import in memory and on disk, and unset keys stay unset", () => {
+  const seed = { "apex26.volSfx": "0.2", "apex26.gfxBackend": "glx" };
+  const target = boot({ realStore: true, disk: seed });
+  const ls = target.sb.localStorage, setItem = ls.setItem;
+  ls.setItem = (k, v) => { if (k === "apex26.volMusic") throw Object.assign(new Error("quota refused"), { name: "QuotaExceededError" }); setItem(k, v); };
+  const result = target.loadSettings({ format: "apex26-settings-v1", settings: {
+    audio: { sfx: false, volSfx: 0.9, volMusic: 0.4 }, display: { gfxBackend: "tlx" },
+  } });
+  assert.equal(result.applied, 0);
+  assert.ok(result.failed >= 1);
+  assert.deepEqual(Object.fromEntries(target.disk), seed);
+  const s = target.GameStore.store;
+  assert.equal(s.get("volSfx", 1), 0.2);
+  assert.equal(s.raw("apex26.gfxBackend"), "glx");
+  assert.equal(s.getStored("sfx"), undefined, "never set before the import, so not written out as a default after it");
+  assert.equal(s.getStored("volMusic"), undefined, "the refused value does not live on in memory either");
 });
 
 test("throwing storage is reported as failed for settings and garage imports", () => {
