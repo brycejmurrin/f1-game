@@ -316,22 +316,25 @@ var AudioPanel = (() => {
       // reads whatever local set was picked before, so NOW PLAYING said "All
       // music" over a Spotify track. The SOURCE row beside it already paints
       // from the live value — this line was the one that did not.
-      const srcText = musicLive ? (SRC_LABEL[srcOn()] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
+      const srcText = musicLive ? (SRC_LABEL[srcOn()] || "") : G.soundOn ? "" : "Master sound is off — \u25b6 turns it on";
       // Two copies of the NOW PLAYING card: the MUSIC page's (as-*) and the
-      // pause menu's (pm-*), which is only shown while music is live.
+      // pause menu's (pm-*), shown while MUSIC is on (#5543). With the master off
+      // it reads "Sound off" and its play button lifts the master: the phone
+      // card has no other audio control. Paused from the card, it stays up
+      // until the menu closes, so the same button brings the music back.
       for (const p of (pauseOnly ? ["pm"] : ["as", "pm"])) {
         const now = $(p + "-now"), src = $(p + "-now-src"), play = $(p + "-play");
         if (!now || !play) continue;
         setText(now, nowText);
         if (now.title !== nowText) now.title = nowText;
         setText(src, srcText);
-        setText(play, G.musicEnabled ? "\u275a\u275a" : "\u25b6");
-        setAttr(play, "aria-label", G.musicEnabled ? "Pause music" : "Play music");
+        setText(play, musicLive ? "\u275a\u275a" : "\u25b6");
+        setAttr(play, "aria-label", musicLive ? "Pause music" : G.soundOn ? "Play music" : "Turn sound on and play music");
         for (const id of [p + "-prev", p + "-skip"]) setDisabled($(id), !musicLive);
-        setDisabled(play, !G.soundOn);
       }
-      const pmCard = $("pm-now-card");
-      if (pmCard && pmCard.hidden !== !musicLive) pmCard.hidden = !musicLive;
+      const pmCard = $("pm-now-card"), pm = $("pausemenu");
+      const show = G.musicEnabled || !!(pmCard && pm && !pmCard.hidden && !pm.hidden);
+      if (pmCard && pmCard.hidden === show) pmCard.hidden = !show;
     }
 
     function syncAudioPanel() {
@@ -989,7 +992,7 @@ var AudioPanel = (() => {
       const skip = $(p + "-skip"), prev = $(p + "-prev"), play = $(p + "-play");
       if (skip) skip.onclick = () => audioTransport(() => GameAudio.skipTrack());
       if (prev) prev.onclick = () => audioTransport(() => GameAudio.prevTrack());
-      if (play) play.onclick = () => { setMusic(!G.musicEnabled); if (G.soundOn) GameAudio.uiTick(); };
+      if (play) play.onclick = () => { setMusic(!(G.musicEnabled && G.soundOn)); if (G.soundOn) GameAudio.uiTick(); };
     }
     // The pause card must read the track that is playing WHEN THE MENU OPENS,
     // and a track that ends while the menu is up advances underneath it — so
@@ -999,7 +1002,7 @@ var AudioPanel = (() => {
     if (pauseMenu && typeof MutationObserver !== "undefined" && typeof setInterval === "function") {
       let tick = 0;
       const follow = () => {
-        if (pauseMenu.hidden) { if (tick) { clearInterval(tick); tick = 0; } return; }
+        if (pauseMenu.hidden) { if (tick) { clearInterval(tick); tick = 0; } syncNowPlaying(true); return; }
         syncNowPlaying(true);
         if (!tick) tick = setInterval(() => syncNowPlaying(true), 1000);
       };

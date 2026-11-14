@@ -837,6 +837,8 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
     await waitReady(page);
     const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
     expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    // #5543: music is live in every cell, so the NOW PLAYING line is part of the card the questions below measure.
+    await page.evaluate(() => { localStorage.setItem("apex26.sound", "true"); localStorage.setItem("apex26.music", "true"); });
     await page.reload();
     await waitReady(page);
     await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
@@ -861,7 +863,10 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
           const all = doors.map(rect);
           const resume = document.getElementById("pm-resume"), rr = resume.getBoundingClientRect();
           const hit = document.elementFromPoint(rr.x + rr.width / 2, rr.y + rr.height / 2);
-          return { short: document.body.hasAttribute("data-pause-short"), density: document.body.dataset.density, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+          const card = document.getElementById("pm-now-card"), cr = card.getBoundingClientRect(), title = document.getElementById("pm-now").getBoundingClientRect();
+          return { now: { shown: shown(card), inSheet: cr.top >= sr.top - 0.5 && cr.bottom <= sr.bottom + 0.5 && cr.left >= sr.left - 0.5 && cr.right <= sr.right + 0.5, titleW: Math.round(title.width),
+              transport: ["pm-prev", "pm-play", "pm-skip"].filter((id) => { const el = document.getElementById(id), r = el.getBoundingClientRect(); return shown(el) && !el.disabled && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el; }) },
+            short: document.body.hasAttribute("data-pause-short"), density: document.body.dataset.density, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
             bodyScroll: sb.scrollHeight - sb.clientHeight, sheetScroll: sheet.scrollHeight - sheet.clientHeight,
             sheet: { x: Math.round(sr.x), y: Math.round(sr.y), w: Math.round(sr.width), h: Math.round(sr.height), inScreen: sr.top >= 0 && sr.left >= 0 && sr.bottom <= document.documentElement.clientHeight + 0.5 && sr.right <= document.documentElement.clientWidth + 0.5 },
             firstDoor: all[0].id, focus: document.activeElement && document.activeElement.id, hit: hit && hit.id, resumePosition: getComputedStyle(resume).position,
@@ -881,6 +886,8 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
         expect(cell.resume.area, tag + "no door on the card is larger than RESUME (QUIT may tie it; RESUME alone carries the primary fill)").toBeGreaterThanOrEqual(cell.maxOther * 0.99);
         expect(cell.outside, tag + "every door ends inside the sheet").toEqual([]);
         expect(cell.small, tag + "every door paints the 44 px floor").toEqual([]);
+        expect(cell.now, tag + "NOW PLAYING is on the card with its title and a tappable prev / play / next (#5543)").toMatchObject({ shown: true, inSheet: true, transport: ["pm-prev", "pm-play", "pm-skip"] });
+        expect(cell.now.titleW, tag + "the song title is painted").toBeGreaterThan(0);
         expect(cell.sheet.w, tag + "the card uses the width (the 420 card was 214 px here)").toBeGreaterThanOrEqual(600);
         await page.evaluate(() => document.getElementById("pm-resume").click());
         await page.waitForFunction(() => document.getElementById("pausemenu").hidden, null, { polling: 50, timeout: 8_000 });

@@ -647,13 +647,43 @@ test("pause music timer updates the visible card without syncing hidden audio se
   assert.equal(h.dom.byId("as-now").textContent, "Song B", "opening MUSIC performs a full sync");
   assert.ok(h.counts.tuneReads > 0);
   h.G.musicEnabled = false; [...h.timers.values()].forEach((fn) => fn());
-  assert.equal(now.textContent, "Music off"); assert.equal(card.hidden, true); assert.equal(next.disabled, true);
+  assert.equal(now.textContent, "Music off"); assert.equal(next.disabled, true);
+  assert.equal(card.hidden, false, "music stopped while the menu is up: the card stays so its play button can bring it back (#5543)");
   h.G.musicEnabled = true; h.G.soundOn = false; [...h.timers.values()].forEach((fn) => fn());
-  assert.equal(now.textContent, "Sound off"); assert.equal(play.disabled, true);
+  assert.equal(now.textContent, "Sound off"); assert.equal(!!play.disabled, false, "play lifts the master, so it is never disabled");
   h.G.soundOn = true; [...h.timers.values()].forEach((fn) => fn());
   assert.equal(card.hidden, false); assert.equal(next.disabled, false); assert.equal(play.disabled, false);
   pause.hidden = true; observer.fn();
   assert.equal(h.timers.size, 0, "closing pause stops polling");
+});
+
+// #5543: Bryce's export has MUSIC on under a master SOUND off, and the phone pause card has no other audio control.
+test("pause NOW PLAYING shows while MUSIC is on, its play button lifts a shut master, and it outlives a pause from the card", () => {
+  const h = bootAudio({ soundOn: false, musicEnabled: true, followPause: true });
+  h.api.init();
+  const pause = h.dom.byId("pausemenu"), card = h.dom.byId("pm-now-card"), play = h.dom.byId("pm-play");
+  const observer = h.observers.find((o) => o.root === pause);
+  pause.hidden = false; observer.fn();
+  assert.equal(card.hidden, false, "music on, master off: the card is up and says why nothing plays");
+  assert.equal(h.dom.byId("pm-now").textContent, "Sound off");
+  assert.equal(play.textContent, "\u25b6");
+  assert.equal(play.getAttribute("aria-label"), "Turn sound on and play music");
+  assert.equal(!!play.disabled, false);
+  assert.equal(h.dom.byId("pm-skip").disabled, true, "nothing to skip until the master is lifted");
+  play.onclick();
+  assert.equal(h.G.soundOn, true, "play lifted the master");
+  assert.equal(h.G.musicEnabled, true, "and left MUSIC on rather than toggling it off");
+  assert.equal(h.dom.byId("pm-now").textContent, "Song A");
+  assert.equal(play.textContent, "\u275a\u275a");
+  assert.equal(h.dom.byId("pm-skip").disabled, false);
+  play.onclick();
+  assert.equal(h.G.musicEnabled, false);
+  assert.equal(card.hidden, false, "paused from the card: it stays until the menu closes");
+  assert.equal(play.getAttribute("aria-label"), "Play music");
+  pause.hidden = true; observer.fn();
+  assert.equal(card.hidden, true, "closing the menu drops a card whose music is off");
+  pause.hidden = false; observer.fn();
+  assert.equal(card.hidden, true, "and a pause with MUSIC off opens without it");
 });
 
 test("engine tone sync skips unchanged readouts and layer ARIA while retaining immediate edits", () => {
