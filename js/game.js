@@ -9102,12 +9102,11 @@ function openGarage(from) {
   // agree on all five fields.
   resetSetupCam();
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
-  // vt at the CALL site: SetupUI.create runs before Menus.create at boot, so
-  // the module cannot hold the helper itself. The build runs inside the
-  // transition callback — vt's 60 ms drop-safety applies it directly if the
-  // page is not compositing.
   // ENTRY FRAME: endHome() hides #game for the Home→garage gap; draw in the vt
   // callback but reveal only after renderSetupPreview succeeds (not while warming).
+  // Snapshot pseudos are click-through (css/tokens.css). Chrome still hit-tests
+  // <html> until the new frame is captured (~14 s on software GL), so that path
+  // skips vt. resetSetupCam() has already called endHome().
   const revealGarageCanvas = () => {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
@@ -9118,7 +9117,9 @@ function openGarage(from) {
     try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
     try { if (renderSetupPreview(0)) revealGarageCanvas(); } catch (_) { /* mesh/warm may still be settling */ }
   };
+  const presentIsSlow = () => { try { const s = gfx.backendState && gfx.backendState(); return !!(s && (s.softwareGL || s.softAdapter)); } catch (_) { return false; } };
   if (from === "pit") { enterGarage(); setupCam.startArrival(); }
+  else if (presentIsSlow()) enterGarage();
   else vt(enterGarage);
 }
 $("mb-garage").onclick = () => openGarage("menu");
