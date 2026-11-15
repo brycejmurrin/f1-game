@@ -1160,6 +1160,9 @@ test("compact VS Friend CLOSE keeps its skewed corners inside the head-parked fo
   await page.waitForFunction(() => [...document.querySelectorAll('link[rel="stylesheet"]')]
     .filter(l => /\/(overlays|dialogs)\.css/.test(l.href)).every(l => l.media !== "print" && l.sheet),
     null, { polling: 100, timeout: 15_000 });
+  // The COMPACT foot is the subject. A phone ships UI SIZE 70 % (#5358), where 390 / 0.7 own px is the normal
+  // sheet; 100 % is the size that paints the compact one on this screen.
+  await page.evaluate(() => window.__apex.uiScale(100));
   await page.evaluate(() => document.getElementById("mb-vs").click());
   await page.waitForFunction(() => !document.getElementById("vsfriend").hidden, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.SheetShape?.reclassify());

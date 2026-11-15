@@ -20040,6 +20040,7 @@
       ],
       "current": [
         "tests/specs/title-fit.spec.js",
+        "tests/specs/ui-scale.spec.js",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/phone-shipped-defaults.test.mjs",

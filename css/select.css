@@ -61,6 +61,12 @@
      and a content-sized sheet would collapse it to its min-height. */
   height: 100%;
 }
+/* A SHORT TOUCH SCREEN IS ALWAYS THE PHONE CARD (#5358), keyed on the layout viewport like the phone Home
+   (#5199). A phone ships UI SIZE 70 %: 390 / 0.7 = 557 own px is over --compact-at, so the picker fell back to
+   the scrolling desktop section and the Practice still and numbers sat under the foot (UI contract §4.5). */
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #sel-inner { --compact-at: 99999px; }
+}
 @media (min-width: 1680px) {
   #sel-inner { --sheet-w: min(var(--menu-fit-sheet, 1180px), calc(100vw - 64px)); }
 }

@@ -784,7 +784,7 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
       null, { polling: 50, timeout: 8_000 });
     const body = await page.evaluate(() => ({ density: document.body.dataset.density, shape: document.body.dataset.shape,
       ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize }));
-    expect(body, "the owner's window is a compact wide body at the export's knobs").toMatchObject({ density: "compact", shape: "wide", ui: "1.09", text: "large" });
+    expect(body, "the owner's window is a compact wide body at the export's knobs").toMatchObject({ density: "compact", shape: "wide", ui: "0.7", text: "large" });   // that export stores no UI SIZE: a phone ships 70 % (#5358)
     const seen = {};
     for (const [layout, side] of [["grid", null], ["list", null], ["compact", null], ["wide", null], ["sidebar", null], ["grid", "right"], ["sidebar", "right"]]) {
       await page.evaluate(([l, s]) => {

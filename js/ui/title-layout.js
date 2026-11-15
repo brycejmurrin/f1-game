@@ -346,8 +346,19 @@ const TitleLayout = (function () {
       }
       v = Math.max(v, sizeMin(part));   // the floor is an edge too
     }
-    else if (k === "x") v += pull(g("--tf-dx"), root.clientWidth);
-    else v += pull(g("--tf-dy"), root.clientHeight);
+    else {
+      // The edge is the furthest value the fit does not hold, asked of the fit itself: one pull lands a step
+      // short or long (--tf-dx is own px through a rounded zoom), so a far request stored 1 where a near one
+      // stored 0 and the slider ran backwards at the edge (#5358, UI SIZE 70 %).
+      const tok = k === "x" ? "--tf-dx" : "--tf-dy", d = g(tok), dir = d > 0 ? 1 : -1;
+      const heldAt = (n) => { p[k] = num(n, k); apply(l); fit(); return !!g(tok); };
+      if (d) {
+        v += pull(d, k === "x" ? root.clientWidth : root.clientHeight);
+        for (let i = 0; i < 3 && v !== p[k] && heldAt(v); i++) v += dir;
+        for (let i = 0; i < 3 && !heldAt(v - dir); i++) v -= dir;
+        p[k] = NaN;   // the probes painted: always re-apply below
+      }
+    }
     if (num(v, k) === p[k]) return l;
     p[k] = num(v, k);
     return set(l, undefined, live);
