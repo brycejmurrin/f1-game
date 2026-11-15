@@ -988,6 +988,30 @@ const AiDrive = (function () {
     return frac < HAZARD_V_FRAC;
   }
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
+  // THE GAP ROUND A STATIC BODY (#5539): a street's minLatGap (2.2 m at Monaco) leaves 0.2 m to a
+  // 2.0 m car. Fine beside a moving neighbour, who gives; a parked retirement or a stopped car
+  // does not, and the lane change onto that aim overshoots it (measured 0.35 m at 59 m/s): a
+  // dead stop from full speed and a queue behind. A hazard gets the permanent-circuit lane.
+  const HAZARD_CLEAR_M = 2.8;
+  function hazardClear(clear) { return clear > HAZARD_CLEAR_M ? clear : HAZARD_CLEAR_M; }
+  // ...AND THE HEADING STOPS AT THAT GAP, the edgeHead rule with the hazard's clear line as the
+  // edge: the racing line's own slope (tanT) carried a car 0.85 m past a clamped aim. The side
+  // is game.js's (pass on the centre side of the hazard). An aim beyond the line (the pit lane,
+  // a rub yield: something later overrode the clamp) is left alone. Pure, no allocation.
+  function hazardHead(want, x, hz, clear, desiredX, v, yawMax) {
+    if (!hz || !(v > 1) || !(yawMax > 0)) return want;
+    const k = 2 * EDGE_YAW_SHARE * yawMax / v;
+    if (hz.x > 0) {
+      const lim = hz.x - clear;
+      if (desiredX > lim + 0.01) return want;
+      const hi = Math.sqrt(k * Math.max(0, lim - x));
+      return want > hi ? hi : want;
+    }
+    const lim = hz.x + clear;
+    if (desiredX < lim - 0.01) return want;
+    const lo = 0 - Math.sqrt(k * Math.max(0, x - lim));   // 0 - x: never -0
+    return want < lo ? lo : want;
+  }
   // A PARKED PLAYER IS RETIRED (W26): stationary seconds while the race is live; the
   // race-end owner retires the car at STALL_RETIRE_S.
   const STALL_RETIRE_S = 60, STALL_V = 1.0;
@@ -1683,7 +1707,7 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

@@ -5933,7 +5933,8 @@ function updateCarLateral(c, dt, ranked, S) {
     } else c.holdOff = null;
     const pk = parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null;   // a car parked on the road (#2162): pass it a lane clear
     const hz = pk || (blocker && blockerGap < AiDrive.hazardReach(c.speed) && AiDrive.stoppedHazard(blocker, vT) ? blocker : null);   // a STOPPED car ahead is a hazard too (AiDrive.stoppedHazard)
-    if (hz && Math.abs(desiredX - hz.x) < CLEAR) desiredX = clamp(hz.x > 0 ? hz.x - CLEAR : hz.x + CLEAR, -(hw - 0.5), hw - 0.5);
+    const hzClear = AiDrive.hazardClear(CLEAR);   // wider than a moving neighbour's gap: a static body does not give (#5539)
+    if (hz && Math.abs(desiredX - hz.x) < hzClear) desiredX = clamp(hz.x > 0 ? hz.x - hzClear : hz.x + hzClear, -(hw - 0.5), hw - 0.5);
     // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
     // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
     // anything under 0.3 m, while the shared racing line pulls the outer car up
@@ -6025,7 +6026,7 @@ function updateCarLateral(c, dt, ranked, S) {
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
       const ls = AiDrive.lateralScales(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // yaw and lateral from one q/prefix (X-mode costs the AI its wings only in .lat)
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * ls.yaw / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
-      const headWant = AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax);   // stop before the edge (AiDrive.edgeHead)
+      const headWant = AiDrive.hazardHead(AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax), c.x, hz, hzClear, desiredX, vAbs, yawMax);   // stop before the edge (AiDrive.edgeHead) and before a hazard's gap (hazardHead)
       const head0 = c.aiHeadV != null && vStd(Math.abs(vAbs - c.aiHeadV)) > AI_HEAD_JUMP ? 0 : c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt); c.aiHeadV = vAbs;
       gripScale = ls.lat;   // X-mode costs the AI its wings too
