@@ -1717,7 +1717,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
   const clamp = (x, lo, hi) => x < lo ? lo : x > hi ? hi : x;
   const damp = (a, b, rate, dt) => a + (b - a) * (1 - Math.exp(-rate * dt));
   const control = new Function("v", "deps", `
-    const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer, hw } = v;
+    const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer, hw, hz, hzClear } = v;
     const { AiDrive, gripMult, tyres, dirtyAirMul, aeroDfMult, clamp, damp, K, aiT } = deps;
     const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
     const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
@@ -1949,6 +1949,31 @@ test("row 5: a stopped car is a hazard, a moving or retired or pitting one is no
   assert.equal(A.stoppedHazard({ speed: 0, finished: true }, vT), false);
   assert.equal(A.stoppedHazard(null, vT), false);
   assert.ok(A.hazardReach(50) > 30 + 1.5 * 50, "reacts from further back than the parked-car reach");
+});
+
+test("#5539: a static hazard gets a full lane, and the heading stops at its clear line", () => {
+  // The gap: a street's 2.2 m beside a moving neighbour is 0.2 m off a 2.0 m body that cannot give.
+  const street = A.minLatGap(5, true);
+  assert.ok(street < 2.3, "the street gap this widens: " + street);
+  assert.equal(A.hazardClear(street), 2.8);
+  assert.equal(A.hazardClear(A.minLatGap(8, false)), 2.8, "a permanent circuit already keeps it");
+  assert.equal(A.hazardClear(3.1), 3.1, "never narrower than the caller's gap");
+  // The heading: hazard on the LEFT at x -4.5, clear line at -1.75 (exact in binary), the aim clamped onto it.
+  const hz = { x: -4.5 }, clear = 2.75, v = 60, yaw = 0.2;
+  assert.equal(A.hazardHead(-0.13, 3, null, clear, -1.75, v, yaw), -0.13, "no hazard, no cap");
+  assert.equal(A.hazardHead(-0.13, -1.75, hz, clear, -1.75, v, yaw), 0, "on the line: no heading toward the hazard");
+  assert.equal(A.hazardHead(-0.13, -2.4, hz, clear, -1.75, v, yaw), 0, "inside the gap: none either");
+  assert.equal(A.hazardHead(0.1, -2.4, hz, clear, -1.75, v, yaw), 0.1, "steering AWAY is never capped");
+  const cap = A.hazardHead(-0.13, -1.25, hz, clear, -1.75, v, yaw);
+  // Unwinding heading h at yaw Y takes v*h^2/(2Y) of road: the capped heading fits in the 0.5 m left.
+  assert.ok(cap < 0 && cap > -0.13, "half a metre out the heading is cut: " + cap);
+  assert.ok(v * cap * cap / (2 * yaw) <= 0.5, "and unwinds inside the room left");
+  assert.equal(A.hazardHead(-0.02, 3, hz, clear, -1.75, v, yaw), -0.02, "far from the line a small heading passes");
+  assert.equal(A.hazardHead(-0.13, -1.25, hz, clear, -6, v, yaw), -0.13, "an aim beyond the line (pit lane) is left alone");
+  assert.equal(A.hazardHead(-0.13, -1.25, hz, clear, -1.75, 0.5, yaw), -0.13, "no cap at a crawl");
+  // Mirrored for a hazard on the right.
+  assert.equal(A.hazardHead(0.13, 1.25, { x: 4.5 }, clear, 1.75, v, yaw), -cap);
+  assert.equal(A.hazardHead(-0.1, 2.4, { x: 4.5 }, clear, 1.75, v, yaw), -0.1);
 });
 
 test("row 5: stallSweep counts only a LOCAL, running car on the road under green, and retires it once at 60 s", () => {

@@ -4,6 +4,7 @@
 // (docs/notes/TESTING-FIELD-NOTES.md 2026-09-30).
 import os from "node:os";
 import { readFileSync, existsSync } from "node:fs";
+import { expandScript } from "../gen/gen-test-groups.mjs";
 
 /** Affinity and container quota, rather than the host's logical CPU count. */
 export function captureCpuBudget({ parallelism = os.availableParallelism(), read = readFileSync } = {}) {
@@ -110,7 +111,8 @@ export function defaultCaptureWorkers({
 
 /** True when a package.json test:* script will run RENDER_SPECS work. */
 export function scriptIsRenderHeavy(script, group = "") {
-  const s = String(script || "");
+  // A wrapper line (`run-playwright.mjs --group test:x`, #5427) is read as its groups.json flags + files.
+  const s = String(expandScript(String(script || "")));
   const g = String(group || "").trim();
   if (g === "render" || /--project=render\b/.test(s)) return true;
   for (const id of RENDER_HEAVY_SPEC_IDS) {

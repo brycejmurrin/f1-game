@@ -1512,6 +1512,17 @@ test("settlement persists once and saveStatus only reads the last result", () =>
   assert.equal(writes, 1);
 });
 
+test("stakeShort() is the funds gate chooseStake(true) applies (#5073)", () => {
+  const Career = hub(); const p = Career.planning();
+  assert.equal(p.stakeShort(), false);
+  Career.data().money = 49;
+  assert.equal(p.stakeShort(), true);
+  assert.equal(p.chooseStake(true), false); assert.equal(p.stake(Career.round()), 0);
+  assert.equal(p.chooseStake(false), true);
+  Career.data().money = 50;
+  assert.equal(p.stakeShort(), false); assert.equal(p.chooseStake(true), true);
+});
+
 test("Committed brief escrows only 50 credits once, locks at weekend start, settles once", () => {
   const Career = hub(); const p = Career.planning();
   assert.equal(p.chooseStake(true), true);

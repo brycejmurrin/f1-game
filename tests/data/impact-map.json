@@ -4066,7 +4066,8 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "stake": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs"
       ],
       "transition": [
         "tests/unit/career-regulations.test.mjs"
@@ -7967,6 +7968,7 @@
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-race.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
@@ -9279,7 +9281,8 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
-        "tests/unit/player-tools-backup.test.mjs"
+        "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs"
       ]
     },
     "js/input/haptics.js": {
@@ -11935,6 +11938,12 @@
         "tests/unit/ai-strategy.test.mjs"
       ],
       "followTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardClear": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardHead": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "hazardReach": [
