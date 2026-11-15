@@ -977,6 +977,11 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/lib/deploy-tip.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/ci/lib/provenance.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
@@ -1427,6 +1432,12 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/ci/vendor-doctor.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
     },
     {
       "path": "tools/ci/verification-receipt.mjs",
