@@ -1,6 +1,6 @@
 # A `cancelled` run, and syncing with the base
 
-Read when `ci-watch` says `cancelled`, or `needs-sync` says `conflict` or `stale-red`.
+Read when `ci-watch` says `cancelled`, or `needs-sync` says `conflict`, `stale-red` or `retest-refused`.
 
 ## `cancelled`: read the jobs, not the conclusion
 
@@ -21,8 +21,23 @@ A PR that ends `cancelled` twice with zero failures:
 ## When to sync
 
 When to sync is AGENTS.md §Git branch & deploy. `node tools/ci/needs-sync.mjs <branch>` answers it
-(`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `no` (exit 4). A newest run that ended `cancelled`
-after at least one job concluded `failure` counts as red for `stale-red`; with zero failed jobs it stays `no` (rule 8).
+(`= sync needed: conflict | stale-red | retest-refused | tip-red | no`) and `sync-pr` refuses `no` (exit 4) and `tip-red` (exit 5:
+the deploy tip is red on code, so a sync would import the red; the gate's `base` row holds merges until the fix lands,
+#5425). Only the `deploy:red` fixer's own branch syncs onto a red tip, with `--onto-red-tip`. A newest run that ended `cancelled`
+after at least one job concluded `failure`, or green only on `run_attempt` > 1 after an earlier attempt had a red job
+(merge-gate refuses that green), counts as red for `stale-red`; zero failed jobs (a cancel, a cancel-only re-run) stays `no` (rule 8).
+
+`retest-refused` (#5554): the head is green, its newest `gate` status is a refusal with `ci=ok gen=ok retest=FAIL`,
+and merge-gate's own retest window still names a tip merge the head lacks. The row's evidence says "sync-pr.mjs and
+push", and `sync-pr` now runs for it without `--force-clean-behind`. It stays `no` when that status sits on an older
+head, when a newer re-gate replaced it (a `plan` or `hold` refusal from the trusted rows hides the retest row: fix
+that row first), or when no tip merge is left in the window (a sync cannot help).
+
+The fixer is never held, and needs no click from Bryce: branch from the red tip (or `sync-pr --onto-red-tip`) so the
+head CONTAINS the red commit, add `deploy:red` to the PR, then flip ready and add `land` in that order. `base` passes
+on the label plus that ancestry, and the PR's own green CI on top of the red is the proof. An infrastructure red (a
+runner, mirror or setup failure) holds the same way and clears on a re-run of the train, on the 6-hourly `pages.yml`
+cron, or through that same route with any PR whose CI is green on the tip.
 
 Merely behind is never a reason: merge-gate's `distance` row and `land.yml`'s AUTO-SYNC left on 2026-11-03 (gen and
 ratchets run on the real merge result).

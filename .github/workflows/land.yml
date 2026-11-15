@@ -20,7 +20,7 @@ name: Land
 # merge-gate, which executes the merge result's own scripts (gen:check, the ratchet tests); its verdict leaves the leg
 # only as an artifact, and "artifacts resulting from untrusted PR data are themselves untrusted"
 # (https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/, read 2026-10-27), so post takes
-# only gen and ratchets from it and a pass needs trusted-rows to pass on the same tip. post (statuses: write, NO
+# only gen, ratchets and retest from it and a pass needs trusted-rows to pass on the same tip. post (statuses: write, NO
 # checkout, trusted inline shell only) writes `gate`, re-reading the head, the labels and ci.yml's `CI` check
 # before it posts a pass. The next step in that same no-checkout job re-reads every veto and the deploy tip, then
 # arms, without a second runner queue. Its LAND_TOKEN remains scoped to that step. No job that holds a write
@@ -46,6 +46,11 @@ name: Land
 # NOISE. Job-level `if:` on `resolve` (no runner at all): a label other than `land`/`hold`, an event on a PR without
 # `land`, and a cancelled or skipped run exit at once.
 # Such a label event also gets its own concurrency group, so it never cancels or replaces a PR's re-gate.
+# CONFIG-OK. Bryce's `config-ok` click (added or removed) on a PR that carries `land` is not noise: it re-gates that PR
+# in its own `land-<n>` group like a land/hold flip, so a stale `config=FAIL` does not wait for the next push, CI or
+# train (#5432: #5282 sat 216 min, #5265 about 97). The click is only a trigger: the config row still reads who added
+# the label (merge-gate configVerdict), so an agent's `config-ok` re-gates to the same refusal. Without `land` it is noise.
+# `ratchet-raise` (Bryce's other per-head approval, #5405) is treated the same way.
 #
 # THE STATUS NAMED `gate`. A commit status, context `gate`, on the PR head (https://docs.github.com/en/rest/commits/statuses;
 # `statuses: write`); the newest status per context is the one GitHub reads. NOT a check run: a Checks API run created
@@ -176,8 +181,9 @@ env:
 # CI run that names no PR (a fork) gets `land-sha-<head>`, never the train's group (GitHub keeps one pending run per
 # group, so a shared group drops one PR's re-gate for another's). A relevant PR event (land/hold label, draft flip,
 # push) cancels the PR's in-flight evaluation, so a `hold` stops a gate already running, and re-evaluates everything
-# itself; a CI or train re-gate never cancels, it queues. A label that is not land/hold is noise and runs alone in
-# `land-noise-<run id>` (its resolve is skipped): before, it cancelled an in-flight CI re-gate and left `gate` pending
+# itself; a CI or train re-gate never cancels, it queues. A label that is not land/hold (nor config-ok / ratchet-raise
+# on a `land` PR) is noise and runs alone in `land-noise-<run id>` (its resolve is skipped): before, it cancelled an
+# in-flight CI re-gate and left `gate` pending
 # on a green PR (WP-L3a). The train run and a PR run can still overlap: AT and arm's re-read of every veto cover that.
 # A dispatched re-gate joins its PR's `land-<n>` group and never cancels (cancel-in-progress is true only for
 # pull_request_target): it queues behind the run that dispatched it. "At most one … workflow run can be pending in the
@@ -186,7 +192,8 @@ env:
 # a pending CI re-gate and a pending dispatch of one PR do the same work, since resolve reads the PR's live state.
 concurrency:
   group: >-
-    ${{ (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold')
+    ${{ (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold'
+        && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise') && contains(github.event.pull_request.labels.*.name, 'land')))
     || (github.event.action == 'edited' && !github.event.changes.body)))
     && format('land-noise-{0}', github.run_id)
     || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event.inputs.stale == 'true') && 'stale-sweep') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
@@ -201,6 +208,7 @@ jobs:
     if: >-
       (github.event_name == 'pull_request_target' && (
         ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && (github.event.label.name == 'land' || github.event.label.name == 'hold'))
+        || ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && (github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise') && contains(github.event.pull_request.labels.*.name, 'land'))
         || github.event.action == 'converted_to_draft'
         || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land')
             && (github.event.action != 'edited' || github.event.changes.body))))
@@ -576,7 +584,7 @@ jobs:
             else
               code=1; line=""; tip=""; out="no verdict artifact: the land-gate leg for #$n failed before merge-gate finished"
             fi
-            # The artifact came from the leg that ran PR code, so only its gen and ratchets rows count: open, hold,
+            # The artifact came from the leg that ran PR code, so only its gen, ratchets and retest rows count: open, hold,
             # plan, ci and config come from trusted-rows (no PR code), and a pass needs both on the same tip.
             t=$(jq -c --argjson n "$n" '[.[] | select(.number == $n)] | first // {}' <<<"$TRUSTED")
             tcode=$(jq -r '.code // 1' <<<"$t"); tline=$(jq -r '.line // ""' <<<"$t"); ttip=$(jq -r '.tip // ""' <<<"$t")
@@ -584,7 +592,7 @@ jobs:
             if [ "$tcode" = 2 ]; then
               code=2; line="$tline"; out="trusted rows (no PR code): $tline"$'\n\n'"land-gate leg: $out"
             elif [ "$code" = 2 ]; then
-              :   # the land-gate leg refused (gen, ratchets): a refusal is never a way in
+              :   # the land-gate leg refused (gen, ratchets, retest): a refusal is never a way in
             elif [ "$tcode" != 0 ] && [ "$tcode" != 3 ]; then
               code=1; line="trusted rows: ${tline:-exit $tcode}"
               # No row for this head (trusted-rows timed out or failed): make "will retry" true (`retry`, RETRY_MAX per head).
@@ -602,7 +610,7 @@ jobs:
               # Both halves passed on different tips: re-gate this PR at once (the `retry` job), not on the next train.
               want_retry "$n" "$head"
             elif [ "$code" = 0 ]; then
-              line="$tline (gen, ratchets: land-gate)"
+              line="$tline (gen, ratchets, retest: land-gate)"
             fi
             if [ "$code" = 0 ]; then
               # The verdict came from a job that ran PR code: re-read what GitHub itself can say before posting a pass.

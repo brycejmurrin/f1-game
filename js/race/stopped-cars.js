@@ -35,14 +35,24 @@ var StoppedCars = (function () {
   // flies nothing), a VSC once one has stood STOP_VSC s, and nothing for a car
   // past STOP_RECOVER s: the marshals have had it, and a retirement that cannot
   // be pushed clear (a street circuit's walls) must not neutralise the race forever.
-  const STOP_DWELL = 3, STOP_VSC = 15, STOP_RECOVER = 60;
+  // A car counts only once it has left where the last reset found it (MOVED_M of
+  // arc) or retired: a standing grid, first start or red-flag restart, is not a hazard (#5557).
+  const STOP_DWELL = 3, STOP_VSC = 15, STOP_RECOVER = 60, MOVED_M = 2;
   function create() {
-    const stopT = new Map(), rows = [];
+    const stopT = new Map(), rows = [], from = new Map(), moved = new Set();
     function picture(cars, track, step) {
       scan(cars, track, rows);
+      for (let i = 0; cars && i < cars.length; i++) {
+        const c = cars[i];
+        if (!c || !Number.isFinite(c.s)) continue;
+        const id = c.num != null ? c.num : i;
+        if (!from.has(id)) from.set(id, c.s);
+        if (c.retired || Math.abs(c.s - from.get(id)) > MOVED_M) moved.add(id);
+      }
       const seen = new Set();
       let yellow = null, vsc = 0, n = 0;
       for (const r of rows) {
+        if (!moved.has(r.id)) continue;
         seen.add(r.id);
         const t = (stopT.get(r.id) || 0) + step;
         stopT.set(r.id, t);
@@ -56,7 +66,7 @@ var StoppedCars = (function () {
       return vsc ? { level: 2, sector: -1, frac: 0, cause: "VSC", n }
         : { level: 1, sector: yellow.sector, frac: yellow.frac, cause: "YELLOW", n };
     }
-    return { picture, reset: () => stopT.clear() };
+    return { picture, reset: () => { stopT.clear(); from.clear(); moved.clear(); } };
   }
   return { scan, create, STOP_V, STOP_DWELL, STOP_VSC, STOP_RECOVER };
 })();

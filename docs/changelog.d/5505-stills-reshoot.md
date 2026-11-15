@@ -1,0 +1,1 @@
+Improved: The track picker shows a new, sharp picture for Imola, Estoril, Watkins Glen, Baku and Zolder, so all 52 circuits now have the 1600-pixel picture on phone screens; Baku's is in daylight to match its day race (#5342, #5343).

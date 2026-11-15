@@ -185,9 +185,10 @@ function panel() {
 }
 function panelEl() { return _impl ? _impl.el() : null; }
 function askPanel() {
-  if (_panelAsked || typeof LazyBundles === "undefined" || !LazyBundles.ensurePerfRig) return;
+  const lb = typeof LazyBundles !== "undefined" && LazyBundles.live ? LazyBundles.live() : null;
+  if (_panelAsked || !lb) return;
   _panelAsked = true;
-  Promise.resolve(LazyBundles.ensurePerfRig()).then(() => { if (on()) paintOverlay(); }, () => { /* offline: no panel */ });
+  Promise.resolve(lb.ensurePerfRig()).then(() => { if (on()) paintOverlay(); }, () => { /* offline: no panel */ });
 }
 function paintOverlay() {
   const p = panel();

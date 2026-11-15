@@ -13,7 +13,9 @@ A PR that changes `.claude/memory/` adds, under this line, `memory-change: <reas
      moment an item changes, not only at a push:
        - [x] done — append the evidence: commit sha, verdict line, file
        - [ ] todo — one verifiable step each; add work you discover as you go
-       - [ ] **now:** the step in progress (exactly one), so a pickup knows where you stopped
+       - [ ] **now:** the step in progress (exactly one), so a pickup knows where you stopped;
+             it counts as OPEN for the gate: before the ready flip tick it with its evidence, or
+             move what is left (e.g. "ready CI on <sha>") into the `land:` item
        - [ ] ~~dropped~~ — strike it and say why; never delete an item
        - [~] deferred — work moved to a follow-up issue (or start the text with `Deferred:`); counts as closed
      Tick an item only with its evidence; "should work" is a [ ]. Never add a "merge"
