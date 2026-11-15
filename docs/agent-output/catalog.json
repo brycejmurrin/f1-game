@@ -4398,7 +4398,7 @@
     },
     {
       "name": "test:shipped-defaults",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/shipped-defaults.spec.js"
+      "command": "node tools/ci/run-playwright.mjs --group test:shipped-defaults"
     },
     {
       "name": "test:smoke",
