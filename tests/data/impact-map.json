@@ -5414,6 +5414,7 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/metrics.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -11420,7 +11421,8 @@
     },
     "js/perf/metrics-panel.js": {
       "create": [
-        "tests/unit/apex-physstate.test.mjs"
+        "tests/unit/apex-physstate.test.mjs",
+        "tests/unit/metrics.test.mjs"
       ],
       "ensurePanel": [
         "tests/unit/metrics.test.mjs"
