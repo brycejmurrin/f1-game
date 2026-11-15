@@ -320,7 +320,9 @@ test("the renderer job is path-filtered on a cheap runner and joins the deploy g
   for (const p of ["js/render/", "js/lighting/"]) {
     assert.ok(rendererFilter.includes(p), `renderer filter does not route ${p}`);
   }
-  assert.match(rendererFilter, /scripts\["test:gfx"\]/);
+  // The spec half is read from test:gfx's roster in tests/groups.json (#5427), never retyped, and an
+  // unreadable list runs everything.
+  assert.match(rendererFilter, /node tools\/gen\/gen-test-groups\.mjs --files test:gfx > "\$SPECS_FILE" \\\n\s*\|\| run_all "/);
   assert.match(rendererFilter, /run_all "git diff failed"/);
   assert.match(rendererFilter, /run_all "before-sha \$BEFORE unreachable/);
   assert.doesNotMatch(rendererFilter, /renderer=false"[^\n]*\n[^\n]*exit 0/, "an unresolvable diff must RUN, never skip");
