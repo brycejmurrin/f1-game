@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { decideSync, needsSync, exitCode, verdictLine, VERDICTS } from "../../tools/ci/needs-sync.mjs";
+import { decideSync, needsSync, exitCode, verdictLine, VERDICTS, gateRetestRefusal } from "../../tools/ci/needs-sync.mjs";
 
 const T0 = "2026-10-16T08:00:00Z", T1 = "2026-10-16T09:00:00Z";
 
@@ -32,7 +32,8 @@ test("decideSync: a stray `distance` fact changes nothing (the verdict went with
   assert.equal(decideSync({ behind: true, conflict: true, ci: "success", distance: true }).verdict, "conflict");
 });
 test("exit codes and verdict line", () => {
-  assert.deepEqual(VERDICTS, ["conflict", "stale-red", "tip-red", "no"]);
+  assert.deepEqual(VERDICTS, ["conflict", "stale-red", "retest-refused", "tip-red", "no"]);
+  assert.equal(exitCode({ ok: true, verdict: "retest-refused" }), 0, "retest-refused is a sync");
   assert.equal(exitCode({ ok: true, verdict: "tip-red" }), 1, "tip-red is not a sync");
   assert.equal(exitCode({ ok: true, verdict: "conflict" }), 0);
   assert.equal(exitCode({ ok: true, verdict: "stale-red" }), 0);
@@ -174,6 +175,7 @@ test("decideSync: first-attempt green = no (a stray retry count is ignored)", ()
 const retriedRun = { id: 11, path: ".github/workflows/ci.yml", status: "completed", conclusion: "success", run_attempt: 3, run_started_at: "2000-01-01T00:00:00Z" };
 const attemptsApi = (byAttempt, calls = []) => (p) => {
   if (p.startsWith("actions/workflows/pages.yml/runs")) return { json: { workflow_runs: [] } }; // the deploy tip: no run, not red
+  if (p.startsWith("commits/")) return { json: [] }; // the head's statuses: no `gate` status (#5554)
   calls.push(p);
   if (p.startsWith("actions/workflows/ci.yml/runs")) return { json: { workflow_runs: [retriedRun] } };
   const m = p.match(/^actions\/runs\/11\/attempts\/(\d+)\/jobs\?per_page=100&page=1$/);
@@ -199,4 +201,78 @@ test("needsSync: an unreadable earlier attempt degrades like an unreadable CI re
   assert.equal(v.ok, true); assert.equal(v.verdict, "no"); assert.equal(v.retryFailedJobs, null);
   assert.equal(v.why, "behind with no conflict (ci success on attempt 3; its earlier attempts are unreadable (attempt 1: HTTP 502)): clean-behind is not a reason");
   assert.equal(v.note, "earlier attempts of run 11 unreadable (attempt 1: HTTP 502): a retried green counts as no");
+});
+
+// #5554: the gate's retest row refuses a green head and names a sync as the cure; needs-sync must agree.
+// The description is the live one on #5546 head 0cbc46d1 (land.yml cuts the summary line at 140 chars).
+const REFUSED = "= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=ok raise=ok gen=ok ratchets=ok retest=FAIL pr=#5546 sha=0cbc46d14aced8e4a7bd6971";
+const gate = (description, more = {}) => ({ context: "gate", state: "failure", description, creator: { login: "github-actions[bot]" }, ...more });
+test("gateRetestRefusal: only the newest gate status, a bot-posted refusal whose retest row was really evaluated", () => {
+  assert.deepEqual(gateRetestRefusal([gate(REFUSED)]), { refused: true, evidence: REFUSED });
+  assert.equal(gateRetestRefusal([{ context: "other", state: "failure", description: REFUSED }, gate(REFUSED)]).refused, true, "other contexts are skipped");
+  const waiting = "= merge-gate waiting — open=ok hold=ok plan=ok ci=WAIT config=ok raise=ok pr=#5546 sha=0cbc46d1 tip=fffc8268";
+  assert.equal(gateRetestRefusal([gate(waiting, { state: "pending" }), gate(REFUSED)]).refused, false, "a newer re-gate supersedes the refusal");
+  assert.equal(gateRetestRefusal([gate(REFUSED.replace("ci=ok", "ci=FAIL"))]).refused, false, "a red ci row leaves retest not evaluated");
+  assert.equal(gateRetestRefusal([gate(REFUSED.replace("gen=ok", "gen=FAIL"))]).refused, false, "a red gen row leaves retest not evaluated");
+  assert.equal(gateRetestRefusal([gate(REFUSED.replace("retest=FAIL", "retest=ok").replace("refused", "passed"), { state: "success" })]).refused, false);
+  assert.equal(gateRetestRefusal([gate(REFUSED, { creator: { login: "someone" } })]).refused, false, "not the Actions bot");
+  assert.equal(gateRetestRefusal([gate(REFUSED, { state: "pending" })]).refused, false);
+  for (const none of [[], null, undefined, { workflow_runs: [] }]) assert.deepEqual(gateRetestRefusal(none), { refused: false, evidence: "" });
+});
+test("decideSync: a retest refusal with tip merges left = retest-refused; none left, not behind, a conflict or a red tip keep their verdicts", () => {
+  const base = { behind: true, conflict: false, ci: "success", runStartedAt: T0, tipNewestAt: T1 };
+  const d = decideSync({ ...base, retest: { refused: true, tipMerges: 2, commits: ["fffc8268aaaaaaaa", "0123456789abcdef"] } });
+  assert.deepEqual(d, { verdict: "retest-refused", why: "the gate's retest row refused this head and 2 tip merge(s) since its CI run remain (fffc8268, 01234567): sync and push, so a fresh CI run tests this combination" });
+  assert.deepEqual(decideSync({ ...base, retest: { refused: true, tipMerges: 0, commits: [] } }),
+    { verdict: "no", why: "behind with no conflict (the gate's retest row refused this head, but no tip merge since its CI run remains: a sync cannot help): clean-behind is not a reason" });
+  assert.equal(decideSync({ ...base, retest: { refused: false, evidence: "" } }).why, "behind with no conflict (ci success): clean-behind is not a reason");
+  assert.equal(decideSync({ ...base, retest: null }).verdict, "no");
+  const refused = { refused: true, tipMerges: 1, commits: ["fffc8268"] };
+  assert.equal(decideSync({ ...base, behind: false, retest: refused }).verdict, "no");
+  assert.equal(decideSync({ ...base, conflict: true, retest: refused }).verdict, "conflict");
+  assert.equal(decideSync({ ...base, tip: { state: "code-red", evidence: "x" }, retest: refused }).verdict, "tip-red");
+});
+// One green ci.yml run on the head, created at `createdAt`; the `gate` statuses come from `statusesOf(sha)`.
+const greenApi = (createdAt, statusesOf, calls = []) => (p) => {
+  calls.push(p);
+  if (p.startsWith("actions/workflows/ci.yml/runs")) return { json: { workflow_runs: [{ id: 7, path: ".github/workflows/ci.yml", status: "completed", conclusion: "success", run_attempt: 1, created_at: createdAt, run_started_at: createdAt }] } };
+  const m = /^commits\/([0-9a-f]{40})\/statuses/.exec(p);
+  if (m) return { json: statusesOf(m[1]) };
+  return { json: { workflow_runs: [], jobs: [] } };
+};
+test("needsSync (a): retest FAIL on the current head, the tip merged after its CI run = retest-refused, exit 0", () => {
+  const calls = [];
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: greenApi("2000-01-01T00:00:00Z", () => [gate(REFUSED)], calls) });
+  assert.equal(v.verdict, "retest-refused");
+  assert.equal(v.why, `the gate's retest row refused this head and 1 tip merge(s) since its CI run remain (${v.tip.slice(0, 8)}): sync and push, so a fresh CI run tests this combination`);
+  assert.deepEqual(v.retest, { refused: true, evidence: REFUSED, tipMerges: 1, commits: [v.tip] });
+  assert.equal(exitCode(v), 0);
+  assert.equal(verdictLine(v), "= sync needed: retest-refused");
+  assert.equal(calls.filter((p) => p === `commits/${v.head}/statuses?per_page=100`).length, 1, "the status read is on the current head");
+});
+test("needsSync (b): retest FAIL recorded on an OLDER head only = no", () => {
+  const old = "0cbc46d14aced8e4a7bd6971f6fd2b344f668e0d";
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: greenApi("2000-01-01T00:00:00Z", (sha) => (sha === old ? [gate(REFUSED)] : [])) });
+  assert.notEqual(v.head, old);
+  assert.equal(v.verdict, "no");
+  assert.equal(v.why, "behind with no conflict (ci success): clean-behind is not a reason");
+  assert.deepEqual(v.retest, { refused: false, evidence: "" });
+});
+test("needsSync (c): retest FAIL but the tip has not moved since the head's CI run = no (a sync cannot help)", () => {
+  const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: greenApi("2100-01-01T00:00:00Z", () => [gate(REFUSED)]) });
+  assert.equal(v.verdict, "no");
+  assert.equal(v.why, "behind with no conflict (the gate's retest row refused this head, but no tip merge since its CI run remains: a sync cannot help): clean-behind is not a reason");
+  assert.deepEqual(v.retest, { refused: true, evidence: REFUSED, tipMerges: 0, commits: [] });
+  assert.equal(exitCode(v), 1);
+});
+test("needsSync: an unreadable gate status is a note, never a sync; a head that is not green reads no status", () => {
+  const rg = () => alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"]));
+  const api = greenApi("2000-01-01T00:00:00Z", () => [gate(REFUSED)]);
+  const v = needsSync("pr", { fetch: false, readGit: rg(), request: (p) => (p.startsWith("commits/") ? { error: "HTTP 502" } : api(p)) });
+  assert.equal(v.verdict, "no");
+  assert.equal(v.note, "gate status unreadable (HTTP 502): retest-refused cannot be detected");
+  const calls = [];
+  const red = needsSync("pr", { fetch: false, readGit: rg(), request: (p) => { calls.push(p); return p.startsWith("commits/") ? { json: [gate(REFUSED)] } : { json: { workflow_runs: [] } }; } });
+  assert.equal(red.verdict, "no");
+  assert.equal(calls.filter((p) => p.startsWith("commits/")).length, 0);
 });
