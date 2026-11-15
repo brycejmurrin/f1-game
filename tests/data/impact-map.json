@@ -11937,6 +11937,12 @@
       "followTime": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "hazardClear": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardHead": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "hazardReach": [
         "tests/unit/ai-drive.test.mjs"
       ],
