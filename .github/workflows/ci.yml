@@ -2878,7 +2878,7 @@ jobs:
     #
     # A failed/cancelled selected matrix is red, including setup failures before
     # its marker. Clean sibling JUnit cannot prove every planned test ran.
-    if: ${{ (!cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '')) }}
+    if: ${{ (!cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || inputs.concurrency_key != '')) }}
     steps:
       # Collect JUnit before the verdict for diagnostics and carry-forward.
       # Missing execution evidence never authorizes a failed selected matrix.
