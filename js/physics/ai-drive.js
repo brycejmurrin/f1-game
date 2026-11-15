@@ -1636,6 +1636,14 @@ const AiDrive = (function () {
     const pull = lerp(0.9, 1.5, t.experience);
     return street ? pull * 0.5 : pull;
   }
+  // Which side a blue-flagged car steps to: AWAY from the lapper (dx = our x
+  // minus its x) when that side has the room the caller gates on, else the
+  // roomier side. Room alone stepped INTO a lapper beyond the room scan (#5557).
+  function letPassSide(roomL, roomR, dx) {
+    const away = dx >= 0.3 ? 1 : dx <= -0.3 ? -1 : 0;
+    if (away && (away > 0 ? roomR : roomL) > 1.6) return away;
+    return roomR >= roomL ? 1 : -1;
+  }
   function letPassEase(t) {
     return lerp(0.965, 0.99, t.experience);
   }
@@ -1705,7 +1713,7 @@ const AiDrive = (function () {
     PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL, PULL_EDGE, PULL_EDGE_FULL, PULL_REACH,
     defendPull, mirrorReach, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
-    letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
+    letPassCase, letPassDelay, letPassPull, letPassSide, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
     edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,

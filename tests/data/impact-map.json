@@ -5414,6 +5414,7 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/metrics.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -7968,6 +7969,7 @@
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-race.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
@@ -11419,7 +11421,8 @@
     },
     "js/perf/metrics-panel.js": {
       "create": [
-        "tests/unit/apex-physstate.test.mjs"
+        "tests/unit/apex-physstate.test.mjs",
+        "tests/unit/metrics.test.mjs"
       ],
       "ensurePanel": [
         "tests/unit/metrics.test.mjs"

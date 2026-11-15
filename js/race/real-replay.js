@@ -346,6 +346,7 @@ const RealReplay = (function () {
       // (docs/DECISIONS.md D-032): nothing of the broadcast audio is fetched or played.
       if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching({
         nameOf: (c) => { const f = run && run.cars.get(c); return f && f.d && typeof RadioLines !== "undefined" ? RadioLines.surname(f.d) : null; },
+        paused: () => !!(run && run.paused),
       });
       run.onKey = (e) => onKey(e);
       try { window.addEventListener("keydown", run.onKey, true); } catch (e) { /* no window: a VM */ }
