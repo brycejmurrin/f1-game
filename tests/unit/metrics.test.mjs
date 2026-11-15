@@ -615,7 +615,8 @@ test("METRICS ON before the LAZY_PERF panel lands asks the perf rig once, then p
   assert.equal(appended.length, 0, "no panel before its bundle");
   assert.equal(JSON.stringify(M.snapshot()), JSON.stringify({ on: true, page: "gov" }), "the eager half answers snapshot() before the panel lands");
   const vmctx = ctx.ctx;
-  vmctx.LazyBundles = { ensurePerfRig: () => { asks++; return rig; } };
+  // The page's shape (#5555): the global is the factory, the loaders live on the instance behind live().
+  vmctx.LazyBundles = { create() {}, live: () => ({ ensurePerfRig: () => { asks++; return rig; } }) };
   M.setPage("car"); M.setPage("gov");   // two paints while the bundle is in flight
   assert.equal(asks, 1, "one ask per ON, not one per paint");
   vm.runInContext(PANEL, vmctx, { filename: absSrc("js/perf/metrics-panel.js") });
