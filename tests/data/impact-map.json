@@ -4066,7 +4066,8 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "stake": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs"
       ],
       "transition": [
         "tests/unit/career-regulations.test.mjs"
@@ -9279,7 +9280,8 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "*": [
-        "tests/unit/player-tools-backup.test.mjs"
+        "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/settings-import-safety.test.mjs"
       ]
     },
     "js/input/haptics.js": {
@@ -11935,6 +11937,12 @@
         "tests/unit/ai-strategy.test.mjs"
       ],
       "followTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardClear": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardHead": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "hazardReach": [

@@ -33,7 +33,8 @@ JOB (a `cancelled` run can hide a FAILED one; the rota covers the specs `select-
 
 `gate` is a COMMIT STATUS posted by `land.yml`, not a workflow run, so ci-watch never shows it. Read it with
 `gh api repos/<owner>/<repo>/commits/<sha>/statuses` (the newest `context: gate`; its description and the linked
-run's summary name the failing merge-gate row).
+run's summary name the failing merge-gate row). `retest=FAIL` beside `ci=ok gen=ok` on the current head is the one
+gate refusal a sync cures: `needs-sync` then answers `retest-refused` and `sync-pr` runs (#5554).
 
 ## "Live" is an ancestry test
 

@@ -162,7 +162,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/release-provenance.mjs** | Proves the deployed revision by combining local git ancestry with live shell SHA/build metadata. | — |
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
-| **ci/run-group.mjs** | PR-only topical runner: `--skip-tf` drops exactly the files the guards shards ran for this diff (no double run). | — |
+| **ci/run-group.mjs** | Runs every node `npm run test:<group>` from tests/groups.json; `--skip-tf` drops what the guards shards ran. | — |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, verdicts, live run); `--pr` adds live PR state. | check-changes |
 | **ci/session-transcript.mjs** | Digest saved `list_events` pages into a timeline: prompts, replies, commands, MCP calls, subagents, errors. | steward |
 | **ci/ship-pr.mjs** | Runs ready-gate on a draft PR; on a pass prints the two calls that land it (MCP draft:false flip, `land` label). | ship |
@@ -711,7 +711,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/lib/deploy-tip.mjs** | Is the deploy tip red on code? Newest completed pages.yml run + its jobs; a Pages-side publish failure is not. |
 | **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (owner, no app), byAgent, decision: comments, label events. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge. |
-| **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| tip-red \| no (sync only when you must). |
+| **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| retest-refused \| tip-red \| no. |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
