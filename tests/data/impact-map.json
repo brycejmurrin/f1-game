@@ -4066,7 +4066,8 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "stake": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs"
       ],
       "transition": [
         "tests/unit/career-regulations.test.mjs"
