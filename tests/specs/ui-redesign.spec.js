@@ -187,7 +187,9 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => {
     const root = document.documentElement.style;
     root.removeProperty("--sal"); root.removeProperty("--sar"); root.removeProperty("--sab");
-    if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(null);
+    // 109, not null: a phone's default is 70 % now (#5358), where 393 / 0.7 = 561 own px is a NORMAL-density garage;
+    // the compact cells below are the 109 % ones this test has always measured.
+    if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(109);
   });
   const searched = await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));

@@ -73,8 +73,8 @@
         "scroll": 0
       },
       "select": {
-        "taps": 4,
-        "text": 2,
+        "taps": 0,
+        "text": 1,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -124,8 +124,8 @@
         "scroll": 0
       },
       "select": {
-        "taps": 4,
-        "text": 1,
+        "taps": 0,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -226,8 +226,8 @@
         "scroll": 0
       },
       "select": {
-        "taps": 4,
-        "text": 2,
+        "taps": 0,
+        "text": 1,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -277,8 +277,8 @@
         "scroll": 0
       },
       "select": {
-        "taps": 4,
-        "text": 1,
+        "taps": 0,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -379,8 +379,8 @@
         "scroll": 0
       },
       "select": {
-        "taps": 4,
-        "text": 2,
+        "taps": 0,
+        "text": 1,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -430,8 +430,8 @@
         "scroll": 0
       },
       "select": {
-        "taps": 4,
-        "text": 1,
+        "taps": 0,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0

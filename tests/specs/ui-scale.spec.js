@@ -1838,11 +1838,14 @@ test.describe("Factory Home on touch", () => {
         const race = await page.locator("#mb-race").boundingBox();
         const timeTrial = await page.locator("#mb-tt").boundingBox();
         expect(Math.abs(race.y - timeTrial.y), "normal landscape keeps paired play destinations").toBeLessThanOrEqual(1);
-        expect(race.x + race.width).toBeLessThanOrEqual(timeTrial.x + 1);
+        // A phone's shipped look shears the doors (#5358): a sheared door's bounding box is wider than the door by
+        // height × tan(skew), so neighbours' boxes cross while the doors keep their gap. Compare the doors themselves.
+        const shear = await page.locator("#mb-race").evaluate(el => Math.abs(new DOMMatrix(getComputedStyle(el).transform).c) * el.getBoundingClientRect().height);
+        expect(race.x + race.width - shear).toBeLessThanOrEqual(timeTrial.x + 1);
         const practice = await page.locator("#mb-practice").boundingBox();
         const garage = await page.locator("#mb-garage").boundingBox();
         expect(Math.abs(practice.y - garage.y), "Practice and Garage share the final play row").toBeLessThanOrEqual(1);
-        expect(practice.x + practice.width).toBeLessThanOrEqual(garage.x + 1);
+        expect(practice.x + practice.width - shear).toBeLessThanOrEqual(garage.x + 1);
         const settings = await page.locator("#mb-settings").boundingBox();
         const help = await page.locator("#mb-help").boundingBox();
         expect(Math.abs(settings.y - help.y), "normal landscape keeps utilities in a compact strip").toBeLessThanOrEqual(1);
