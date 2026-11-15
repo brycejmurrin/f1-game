@@ -1199,7 +1199,7 @@ jobs:
     # spec shard was done by ~529 s — ~11 min of train idle on this job alone.
     # Suites stay --test-concurrency=1 inside each shard (the 5.4 GB peak that
     # forced serialisation is per process); the matrix is separate VMs, so the
-    # peak is not reintroduced. Contiguous slices of package.json's test:sweeps
+    # peak is not reintroduced. Contiguous slices of tests/groups.json's test:sweeps
     # (same list the filter derives), fail-fast: false, like oversize-*-1of3.
     # sweeps-roll-up below keeps the un-suffixed check name Pages reuse wants.
     strategy:
@@ -1260,9 +1260,10 @@ jobs:
           const shards = +process.env.SHARDS;
           const pkgPath = "package.json";
           const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-          const all = String(pkg.scripts["test:sweeps"] || "").match(/tests\/unit\/[^\s]+/g) || [];
+          // The roster is tests/groups.json's (package.json's line is a wrapper since #5427).
+          const all = (JSON.parse(fs.readFileSync("tests/groups.json", "utf8")).groups["test:sweeps"] || {}).files || [];
           if (!all.length) {
-            console.error("package.json test:sweeps names ZERO suites");
+            console.error("tests/groups.json test:sweeps names ZERO suites");
             process.exit(1);
           }
           const { execFileSync } = require("child_process");
@@ -2109,17 +2110,17 @@ jobs:
           git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable (force push?)"
           CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
           echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
-          # The suite half of the filter is DERIVED from package.json's
+          # The suite half of the filter is DERIVED from tests/groups.json's
           # test:sweeps, not retyped here. The hand-written alternation had
           # already drifted: scenery-grounding is one of the five suites this
           # job runs and was missing from it, so a diff touching only that
           # suite's own file skipped the very sweep it belongs to — a fail-open
           # in the one filter whose comment above forbids exactly that. A list
           # that must be edited in two places to stay true will drift again;
-          # reading it from the script that defines it cannot.
+          # reading it from the group that defines it cannot.
           SUITES_FILE="${RUNNER_TEMP:-.}/sweep-suites.txt"
-          node -e 'const s=require("./package.json").scripts["test:sweeps"]||"";const m=s.match(/tests\/unit\/[^\s]+/g)||[];if(!m.length)process.exit(1);process.stdout.write(m.join("\n")+"\n")' > "$SUITES_FILE" \
-            || run_all "could not read the sweep suite list out of package.json"
+          node tools/gen/gen-test-groups.mjs --files test:sweeps > "$SUITES_FILE" \
+            || run_all "could not read the sweep suite list out of tests/groups.json"
           echo "--- sweep suites ---"; cat "$SUITES_FILE"; echo "--------------------"
           # The path half is DERIVED too, from tools/ci/geometry-paths.mjs — the
           # same module tools/ci/deploy.mjs imports for its local sweeps gate.
@@ -2527,11 +2528,11 @@ jobs:
           git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable (force push?)"
           CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
           echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
-          # The spec half is DERIVED from package.json's test:gfx, as the sweeps
+          # The spec half is DERIVED from tests/groups.json's test:gfx, as the sweeps
           # filter derives its suite list — a retyped list drifts.
           SPECS_FILE="${RUNNER_TEMP:-.}/gfx-specs.txt"
-          node -e 'const s=require("./package.json").scripts["test:gfx"]||"";const m=s.match(/tests\/specs\/[^\s]+/g)||[];if(!m.length)process.exit(1);process.stdout.write(m.join("\n")+"\n")' > "$SPECS_FILE" \
-            || run_all "could not read the gfx spec list out of package.json"
+          node tools/gen/gen-test-groups.mjs --files test:gfx > "$SPECS_FILE" \
+            || run_all "could not read the gfx spec list out of tests/groups.json"
           echo "--- gfx specs ---"; cat "$SPECS_FILE"; echo "-----------------"
           # js/render/** is every backend (GLX, WGX, TLX, gltf, assets); the
           # js/lighting/ files are the lighting/atmosphere/tuner modules whose

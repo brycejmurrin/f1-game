@@ -10,6 +10,7 @@ import { createServer } from "node:http";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { extname, join, resolve as resolvePath, sep } from "node:path";
 import { partitionArgs } from "./twinned-specs.mjs";
+import { resolveGroupArgv } from "../gen/gen-test-groups.mjs";
 import {
   partitionMegaSweepArgs,
   megasForThisShard,
@@ -117,7 +118,18 @@ async function main() {
   // A spec with a VM twin does not run here unless asked (--with-twinned /
   // APEX_WITH_TWINNED=1): tools/ci/twinned-specs.mjs partitionArgs, the local
   // half of the substitution the selected gate has made since the twins landed.
-  const { args, dropped, nothingToRun } = partitionArgs(process.argv.slice(2));
+  // `--group test:x` FIRST (package.json's browser lines since #5427 item 4): the group's flags and
+  // files come from tests/groups.json at run time, then whatever npm forwarded. An unknown, empty or
+  // non-browser group exits 2 here, before a port binds. `--print-argv` prints the resolved argv and
+  // exits: what a group would run, with no browser.
+  let rawArgs;
+  try { rawArgs = resolveGroupArgv(process.argv.slice(2)); }
+  catch (e) { console.error(`[playwright] ${e.message}`); process.exit(2); }
+  if (rawArgs.includes("--print-argv")) {
+    console.log(JSON.stringify(rawArgs.filter((a) => a !== "--print-argv")));
+    process.exit(0);
+  }
+  const { args, dropped, nothingToRun } = partitionArgs(rawArgs);
   for (const d of dropped) console.error(`[playwright] COVERED BY VM TWIN: ${d.spec} → ${d.twin}`);
 
   // THE TWIN RUNS HERE, IN NODE. The first cut merely NAMED it and skipped it,
@@ -181,7 +193,8 @@ async function main() {
 
   // --help answers before the static server binds a port or a twin runs.
   if (args.includes("--help") || args.includes("-h")) {
-    console.log("usage: node tools/ci/run-playwright.mjs [playwright test options] [spec …]\n"
+    console.log("usage: node tools/ci/run-playwright.mjs [--group test:<name>] [playwright test options] [spec …]\n"
+      + "  --group test:<name> (first): that browser group's flags + files from tests/groups.json.  --print-argv: print the resolved argv, run nothing.\n"
       + "  Launches `playwright test` on a free port with port-suffixed report paths (the engine behind npm run test:*).\n"
       + "  Specs with a VM twin run in node unless --with-twinned / APEX_WITH_TWINNED=1.  --help: this text; no server starts.");
     process.exit(0);
