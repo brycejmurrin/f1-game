@@ -23,6 +23,7 @@
 // the export the way a boot reads it. Rects are getBoundingClientRect; a box may differ by 1 px (zoom rounding).
 import { test, expect } from "@playwright/test";
 import { openBrycePhone, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
+import { settleInPage } from "../helpers/title-fit.mjs";
 
 const EXPORT_FILE = "tests/data/settings-live-export-2026-11-10.json";
 const BOOT = 60000;
@@ -79,6 +80,9 @@ async function measure(browser, baseURL, entries) {
       await load();
       await s.open(page);
       await page.waitForTimeout(500);
+      // The title's row tier reads label widths, so it is only final once the web fonts are in and the fit is quiet
+      // (CI run 43764591144 read a clean cold boot mid-load: 5 rows, 264 px, against his warm 7 rows, 362 px).
+      if (s.id === "title") { await page.waitForFunction(() => document.fonts.status === "loaded", null, { polling: 100, timeout: BOOT }); await page.evaluate(settleInPage, 12); }
       out[s.id] = await page.evaluate(rectsInPage, s.ids);
       if (s.id === "garage") out.done = await page.evaluate(() => document.getElementById("cs-done").getBoundingClientRect().height);
     }

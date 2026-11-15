@@ -297,6 +297,8 @@ const TitleLayout = (function () {
     if (mb && typeof MutationObserver !== "undefined") {
       new MutationObserver(scheduleFit).observe(mb, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
     }
+    // The row tier reads label widths (floorTier): a web font landing changes them without resizing any box (#5358).
+    try { doc.fonts.addEventListener("loadingdone", scheduleFit); } catch (_) { /* no FontFaceSet */ }
   }
   /** Store `v` as one shape's layout (default: the current shape). `live`:
    *  paint it now and keep it out of the store until commit(). */
