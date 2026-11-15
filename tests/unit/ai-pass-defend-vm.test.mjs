@@ -55,3 +55,41 @@ test("control: with no latch the same chaser IS covered against (the probe can s
   const r = await run(false);
   assert.ok(r.anyCover > 0, "defend never fired without a latch: the scenario does not exercise defendPull");
 });
+
+// ── #5557 finding 5: a blue-flagged AI steps AWAY from the car lapping it ────
+// game.js picked the yield side from room alone. A lapper 6 m back is outside
+// the lapped car's room scan, so with equal room the tie went right — into a
+// lapper sitting 2.5 m to the right. L mid-road, the lapper C 6 m behind and a
+// lap ahead in progress; the mirror case pins that the lapper's side decides.
+async function yieldBias(dx) {
+  const A = g.apex;
+  await g.race("monza");
+  A.jump(0.1, 40, 0);
+  A.headless(true);
+  A.reset(0.3, 0, 0);
+  const sp = 60;
+  A.rivals([{ dProg: -400, dx: 0, speed: sp }, { dProg: -406, dx, speed: sp }]);   // matched speed: the gap HOLDS at 6 m, outside L's room scan
+  const [L, C] = g.G.cars.filter((c) => !c.isPlayer);
+  C.prog += g.G.track.total;   // a lap ahead in progress: the blue-flag case
+  let yielding = 0;
+  for (let i = 0; i < 12; i++) {
+    L.letPassT = 10;   // past any driver's letPassDelay: the yield is live
+    A.act({ steer: 0, throttle: false, brake: true }, 1 / 60, 1);
+    if (L.letPassT > 5) yielding++;
+    L.speed = sp; C.speed = sp;
+  }
+  A.headless(false);
+  return { bias: L.aiBias, yielding, gap: L.s - C.s };
+}
+
+test("a lapped car yields left when the lapper is on its right", async () => {
+  const r = await yieldBias(2.5);
+  assert.ok(r.yielding > 0, "the let-pass case held for the probe");
+  assert.ok(r.gap > 5.5, `gap ${r.gap}: the lapper drifted inside the room scan, which hides the bug`);
+  assert.ok(r.bias < 0, `bias ${r.bias}: stepped toward the lapper`);
+});
+
+test("and right when the lapper is on its left", async () => {
+  const r = await yieldBias(-2.5);
+  assert.ok(r.bias > 0, `bias ${r.bias}: stepped toward the lapper`);
+});

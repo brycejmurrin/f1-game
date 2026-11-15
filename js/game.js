@@ -5877,7 +5877,7 @@ function updateCarLateral(c, dt, ranked, S) {
     // stops the AI covering a line it has already decided to concede.
     let yieldPull = 0;
     if (letPass) {
-      const freeSide = c._trYT ? c._trYS : roomR >= roomL ? 1 : -1;
+      const freeSide = c._trYT ? c._trYS : AiDrive.letPassSide(roomL, roomR, chaser ? c.x - chaser._snapX : 0);
       const freeRoom = freeSide > 0 ? roomR : roomL;
       if (freeRoom > 1.6) yieldPull = freeSide * AiDrive.letPassPull(aiT, !!track.street) * clamp(freeRoom / 2.4, 0, 1);
     }

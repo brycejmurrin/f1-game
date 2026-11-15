@@ -257,7 +257,7 @@ const RealRaceBody = (function () {
         const seats = new Map();
         for (const [c2, f2] of field) seats.set(c2, f2.d);
         const ok = replay.start({ script, traces: active.traces, seats, startLap: active.startLap, follow: active.seatCode, camera: active.camera, reel: active.reel, onTimeline: watchTimeline });
-        if (!ok) { active.watch = false; Log.warn("game", "RealRace.arm: the replay did not start — racing it instead"); }
+        if (!ok) { active.watch = false; active.reel = false; installEndRacePreserve(); Log.warn("game", "RealRace.arm: the replay did not start — racing it instead"); }
         else placed = true;
       }
       if (G.announce) G.announce((active.watch ? (active.reel ? "HIGHLIGHTS · " : "REAL REPLAY · ") : "REAL RACE · ") + String(script.name || script.circuit || "").toUpperCase() + (active.startLap > 1 && !active.reel ? " · LAP " + active.startLap : ""), 2.5, "info");
