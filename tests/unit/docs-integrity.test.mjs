@@ -19,6 +19,7 @@ import path from "node:path";
 import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { BUILT_PATHS } from "../../tools/lib/generated-paths.mjs";
+import { expandScripts } from "../../tools/gen/gen-test-groups.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -796,7 +797,8 @@ test("every npm test:* group names specs that exist", () => {
   // this repo's groups name well over a hundred files, so a pattern that finds
   // none of them is broken by definition.
   let seen = 0;
-  for (const [name, cmd] of Object.entries(pkg.scripts)) {
+  // Wrapper lines (#5427) read as their tests/groups.json rosters: the paths live there now.
+  for (const [name, cmd] of Object.entries(expandScripts(pkg.scripts))) {
     if (!name.startsWith("test:")) continue;
     for (const m of cmd.matchAll(/tests\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_*-]+\.(?:spec\.js|test\.(?:mjs|cjs))/g)) {
       const ref = m[0];
