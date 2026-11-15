@@ -109,7 +109,7 @@ as in OSM.
 Source for `def.turns`: F1 live-timing corner markers
 (`https://api.multiviewer.app/api/v1/circuits/149/2026`), fitted by
 `tools/track/official-corners.cjs` (rms 4.7 m), each snapped to the nearest
-built curvature peak (all within 20 m).
+built curvature peak (within 25 m; T5 40 m; T18 and T20, long sweeps, 60 and 72 m).
 
 Not done: `AERO_ZONE_TURNS` has no jeddah row (no FIA 2026 zone document, the
 event is not a 2026 round); the rest of the dressing was authored against the

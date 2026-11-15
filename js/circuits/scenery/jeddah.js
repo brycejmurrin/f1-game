@@ -636,7 +636,7 @@
         grandstand(0.475, 1, 22, 52, [0.12, 0.13, 0.17], [0.66, 0.38, 0.42]);
         grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
       }
-      tyreWall(0.485, 0.515,  1, 4.5, MAGENTA);   // T14 is a LEFT: outside is +1 (was -1, inside); gap 4.5 clears the +1 marshal post (flatCoplanar)
+      tyreWall(0.485, 0.515,  1, 4.5, MAGENTA);   // T13 (the banked left) is a LEFT: outside is +1 (was -1, inside); gap 4.5 clears the +1 marshal post (flatCoplanar)
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
       building(K(0.69), -1, 70, 22, 22, 18, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 5 });

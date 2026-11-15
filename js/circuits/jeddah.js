@@ -48,7 +48,9 @@
       { frac: 0.2662, angleDeg: 3.0, widthM: 160 },
       { frac: 0.3188, angleDeg: 3.0, widthM: 160 },
       { frac: 0.4792, angleDeg: 7.0, widthM: 240 },   // banked left onto the north loop
-      { frac: 0.5552, angleDeg: 6.0, widthM: 200 },   // banked sweeper
+      // The sweeper after the banked left, by turn index: the old { frac: 0.5552 }
+      // built 80 m past the T14 apex, inside this row's own 200 m width.
+      { turn: 14, angleDeg: 6.0, widthM: 200 },       // banked sweeper
       { frac: 0.6110, angleDeg: 3.0, widthM: 120 },
       // The final hairpin by turn index (the authored { frac: 0.9981 } spot).
       { turn: 27, angleDeg: 6.0, widthM: 120 },       // banked final corner
@@ -63,11 +65,13 @@
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors: idealised thirds from the line, never rotated (START-LINES.md §6).
     // turns[]: the FIA numbering (27 turns; F1 live-timing corner markers fitted
-    // onto this centreline, rms 4.7 m), one built |k| peak per number, each within
-    // 20 m of its marker: T1-T2 the left-right chicane, T13 the banked left,
-    // T22-T24 the last esses, T27 the final hairpin (r ~ 29 m). RACING fracs.
+    // onto this centreline, rms 4.7 m), one built |k| peak per number
+    // (tools/track/corner-frames.cjs), within 25 m of its marker except T5 (40 m,
+    // the tighter of two rights) and the long sweeps T18 (60 m) and T20 (72 m).
+    // T1-T2 the left-right chicane, T13 the banked left, T22-T24 the last esses,
+    // T27 the final hairpin (r ~ 29 m). RACING fracs.
     sectors: [0.28, 0.62],
-    turns: [0.0403, 0.0494, 0.0727, 0.1240, 0.1403, 0.1682, 0.1831, 0.1955, 0.2208, 0.2370, 0.2532, 0.2721, 0.3539, 0.4097, 0.4383, 0.4623, 0.4799, 0.5143, 0.5481, 0.5818, 0.6162, 0.6545, 0.6714, 0.6942, 0.7429, 0.7994, 0.8656],
+    turns: [0.0403, 0.0494, 0.0727, 0.1240, 0.1338, 0.1682, 0.1870, 0.1955, 0.2208, 0.2370, 0.2532, 0.2721, 0.3539, 0.4097, 0.4455, 0.4623, 0.4799, 0.5058, 0.5481, 0.5708, 0.6162, 0.6545, 0.6714, 0.6942, 0.7429, 0.7994, 0.8656],
     // Jeddah night: pale grey concrete rail (not solid green) + green/gold day accents
     barrier: { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.42, 0.44, 0.48], tyre: [0.05, 0.52, 0.28] },
     furniture: { tree: "none",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },

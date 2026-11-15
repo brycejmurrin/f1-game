@@ -293,8 +293,9 @@ shortens the spline tangent into T1: the road moves ≤ 1.1 m over 150 m of
 T1's approach and T1's minimum radius goes 6.8 → 9.0 m. A re-import of the
 trace drops the point — re-add it and re-derive both fractions.
 
-`turns` is now the FIA numbering (27, one built |k| peak within 20 m of each
-marker); `bankZones { turn: 27 }` is the real final hairpin again; sectors
+`turns` is now the FIA numbering (27, one built |k| peak per marker, within
+25 m except T5, 40 m, and the long sweeps T18 and T20, 60 and 72 m); the sweeper's bank row
+is `{ turn: 14 }` (its frac built 80 m past that apex); `bankZones { turn: 27 }` is the real final hairpin again; sectors
 untouched (§6). In `scenery/jeddah.js` everything that belongs to the line
 goes through `sl()`: pit building, hospitality, S/F stands, both gantries and
 the pit-side canyon gap; the +1 `waterBand` now starts at T1 (it put the sea
