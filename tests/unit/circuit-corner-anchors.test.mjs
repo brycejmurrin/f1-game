@@ -119,7 +119,7 @@ test("Jeddah starts on the pit straight after T27 and numbers its turns as the F
   assert.ok(bend < 0.0035, `the grid and launch run bend (max |k| ${bend.toFixed(4)})`);
   // Turn 1 is the tight LEFT of the first chicane, Turn 2 its right, 40-80 m on.
   const t1 = corner(1), t2 = corner(2), t1m = t1.fraction * L;
-  assert.ok(t1m > 200 && t1m < 300, `Turn 1 apex ${t1m.toFixed(0)} m after the line, want ~250`);
+  assert.ok(t1m > 240 && t1m < 260, `Turn 1 apex ${t1m.toFixed(0)} m after the line, want ~250`);
   assert.ok(t1.curvature > 0.02 && Math.hypot(t1.x + 92, t1.z + 462) < 30, `Turn 1 is the left at the chicane (k ${t1.curvature.toFixed(4)})`);
   const gap12 = (t2.fraction - t1.fraction) * L;
   assert.ok(t2.curvature < -0.02 && gap12 > 40 && gap12 < 80, `Turn 2 is the right ${gap12.toFixed(0)} m later (k ${t2.curvature.toFixed(4)})`);
