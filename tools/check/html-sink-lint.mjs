@@ -17,8 +17,10 @@
 //
 // WHAT IS A SITE. An assignment (`=` or `+=`) to `.innerHTML` / `.outerHTML` /
 // `.srcdoc` (dotted or `["innerHTML"]`), or an `insertAdjacentHTML(pos, html)`,
-// `createContextualFragment(html)` or `document.write(ln)(html)` call,
-// whose HTML is not CONSTANT. Constant means: a string literal, a template
+// `createContextualFragment(html)` or `document.write(ln)(html)` call, or any
+// call that passes `"innerHTML"` / `"outerHTML"` / `"srcdoc"` as a literal
+// argument (a computed setter, `set(el, "innerHTML", html)`; its HTML is the
+// next argument), whose HTML is not CONSTANT. Constant means: a string literal, a template
 // with no substitutions, `+` of constants, or a ternary whose two arms are
 // constants (the test may be anything — it only picks between literals).
 // Everything else is a site and must be in tests/data/html-sink-allowlist.json
@@ -100,6 +102,15 @@ export function lintSource(src, file = "<src>") {
       if (!p || !SINK_PROPS.has(p) || isConstantHtml(n.right)) return;
       sites.push({ line: n.loc.start.line, sink: p, key: `${file}::${text(n.left.object)}.${p}`, rhs: rhs(n.right) });
     } else if (n.type === "CallExpression") {
+      // A computed-property setter: `set(el, "innerHTML", html)` with `el[k] = v` inside is invisible to the
+      // assignment rule (#5014), so a call passing a sink name as a literal argument is a site; its HTML is the
+      // argument after the name. Key: `<file>::<callee>("<sink>")`.
+      const at = n.arguments.findIndex((a) => a.type === "Literal" && SINK_PROPS.has(a.value));
+      if (at >= 0) {
+        const sink = n.arguments[at].value, html = n.arguments[at + 1];
+        if (!isConstantHtml(html)) sites.push({ line: n.loc.start.line, sink, key: `${file}::${text(n.callee)}("${sink}")`, rhs: rhs(html || n) });
+        return;
+      }
       const p = propName(n.callee);
       const arg = CALL_SINKS.get(p);
       if (arg === undefined || isConstantHtml(n.arguments[arg])) return;

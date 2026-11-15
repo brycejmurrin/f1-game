@@ -16,7 +16,8 @@
 //
 // ADVISORY: ready-gate.mjs prints the receipt (artifacts/preflip/<pr>.json) as a line and never blocks on it.
 // A merge that conflicts reports `conflict` (sync with node tools/ci/sync-pr.mjs); the probe pushes nothing.
-// Exit: 0 every step green, 1 a step red, 2 usage / conflict, 3 could not set up.
+// A step that hits its own cap with no FAIL line reads `timeout`, not `failed` (#5401); it is still not a pass.
+// Exit: 0 every step green, 1 a step red or capped, 2 usage / conflict, 3 could not set up.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -37,13 +38,33 @@ export function probeSteps({ skipUnits = false } = {}) {
   return steps;
 }
 
+/** A failing test's own line in a step's output (node:test, tooling-fast and Playwright print one of these). */
+const FAIL_LINE_RE = /^\s*(?:not ok\b|FAIL\b|✖|✘)/m;
+
+/**
+ * A step that hit its own `timeoutS` cap with no FAIL line before the cap is `timedOut`: it measured the box, not
+ * the code (AGENTS.md rule 7, #5401). A capped step that did print a FAIL line stays a plain red.
+ */
+export function stepTimedOut(r, output = "") {
+  const capped = r.error?.code === "ETIMEDOUT" || (r.status == null && r.signal === "SIGTERM");
+  return capped && !FAIL_LINE_RE.test(output);
+}
+
+/** The receipt state for the step records: any real red is `failed`; a red that is only caps is `timeout`. */
+export function probeState(steps) {
+  if (steps.every((s) => s.ok)) return "passed";
+  return steps.some((s) => !s.ok && !s.timedOut) ? "failed" : "timeout";
+}
+
 /** One line a human or ready-gate reads: `= preflip <state> …`. */
 export function probeVerdictLine(r) {
   if (r.state === "conflict") return `= preflip conflict - ${DEPLOY_BRANCH} does not merge into ${String(r.head).slice(0, 8)}: ${r.conflicts.join(", ") || "see git merge"}; sync first (node tools/ci/sync-pr.mjs <branch>)`;
-  const red = r.steps.filter((s) => !s.ok).map((s) => s.name);
-  return red.length
-    ? `= preflip failed - ${red.join(", ")} red on the merge with tip ${String(r.tip).slice(0, 8)} (head ${String(r.head).slice(0, 8)})`
-    : `= preflip passed - ${r.steps.length} step(s) green on the merge with tip ${String(r.tip).slice(0, 8)} (head ${String(r.head).slice(0, 8)})`;
+  const at = `on the merge with tip ${String(r.tip).slice(0, 8)} (head ${String(r.head).slice(0, 8)})`;
+  const red = r.steps.filter((s) => !s.ok && !s.timedOut).map((s) => s.name);
+  const capped = r.steps.filter((s) => !s.ok && s.timedOut).map((s) => `${s.name} (${s.capS ?? "?"} s)`);
+  if (red.length) return `= preflip failed - ${red.join(", ")} red ${at}${capped.length ? `; also hit the cap with no FAIL line: ${capped.join(", ")}` : ""}`;
+  if (capped.length) return `= preflip timeout - ${capped.join(", ")} hit the probe's cap with no FAIL line ${at}; not a verdict on the code, the ready tier runs the full gate`;
+  return `= preflip passed - ${r.steps.length} step(s) green ${at}`;
 }
 
 /** The ready-gate advisory for a receipt (or its absence). Never a block. */
@@ -100,11 +121,13 @@ export function runProbe({ pr = null, head = "", skipUnits = false, keep = false
       log(`[preflip] ${s.name} ...`);
       const r = exec(s.cmd[0], s.cmd.slice(1), { cwd: wt, timeout: s.timeoutS * 1000 });
       const ok = r.status === 0;
-      base.steps.push({ name: s.name, ok, seconds: Math.round((Date.now() - t0) / 100) / 10,
-        tail: ok ? "" : `${r.stdout || ""}${r.stderr || ""}`.trim().split("\n").slice(-25).join("\n") });
+      const output = `${r.stdout || ""}${r.stderr || ""}`;
+      const timedOut = !ok && stepTimedOut(r, output);
+      base.steps.push({ name: s.name, ok, ...(timedOut ? { timedOut, capS: s.timeoutS } : {}), seconds: Math.round((Date.now() - t0) / 100) / 10,
+        tail: ok ? "" : output.trim().split("\n").slice(-25).join("\n") });
     }
-    const ok = base.steps.every((s) => s.ok);
-    return { ...base, ok, state: ok ? "passed" : "failed" };
+    const state = probeState(base.steps);
+    return { ...base, ok: state === "passed", state };
   } finally {
     if (!keep) {
       exec("git", ["worktree", "remove", "--force", wt], { cwd: root });
@@ -138,7 +161,7 @@ function main(argv) {
   if (argv.includes("--json")) console.log(JSON.stringify(r, null, 2));
   else {
     for (const s of r.steps) {
-      console.log(`  ${s.ok ? "ok  " : "RED "} ${s.name} (${s.seconds}s)`);
+      console.log(`  ${s.ok ? "ok  " : s.timedOut ? "CAP " : "RED "} ${s.name} (${s.seconds}s)`);
       if (!s.ok) console.log(s.tail.split("\n").map((l) => `      | ${l}`).join("\n"));
     }
     console.log(probeVerdictLine(r));

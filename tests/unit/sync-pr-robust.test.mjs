@@ -8,7 +8,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { runProbe } from "../../tools/ci/preflip-probe.mjs";
 import { DEPLOY_BRANCH } from "../../tools/ci/pick-tests.mjs";
-import { staleSyncBranch, remoteMoved, loadWaitMinutes, waitForLoad } from "../../tools/ci/sync-pr.mjs";
+import { staleSyncBranch, remoteMoved, loadWaitMinutes, waitForLoad, syncRefusal, KNOWN_FLAGS } from "../../tools/ci/sync-pr.mjs";
 import { capForeground, FOREGROUND_CAP_SEC, parseArgs } from "../../tools/ci/wait-for.mjs";
 import { parseToolingFastArgv } from "../../tools/ci/tooling-fast.mjs";
 import { register, stop } from "../../tools/lib/run-pid.mjs";
@@ -186,4 +186,16 @@ test("runProbe keeps shared config and caller identity while assigning the merge
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("syncRefusal (#5425): tip-red refuses even with --force-clean-behind; only --onto-red-tip (the fixer) passes", () => {
+  const tipRed = { ok: true, verdict: "tip-red", why: "pages.yml run 9 … failed on code" };
+  assert.equal(syncRefusal(tipRed)?.code, 5);
+  assert.equal(syncRefusal(tipRed, { forceCleanBehind: true })?.code, 5, "clean-behind override does not cover a red tip");
+  assert.equal(syncRefusal(tipRed, { ontoRedTip: true }), null);
+  assert.equal(syncRefusal({ ok: true, verdict: "no" })?.code, 4);
+  assert.equal(syncRefusal({ ok: true, verdict: "no" }, { forceCleanBehind: true }), null);
+  for (const verdict of ["conflict", "stale-red"]) assert.equal(syncRefusal({ ok: true, verdict }), null, verdict);
+  assert.equal(syncRefusal({ ok: false, error: "fetch failed" }), null, "undecided: continue as before");
+  assert.equal(KNOWN_FLAGS.filter((f) => f === "--onto-red-tip").length, 1);
 });

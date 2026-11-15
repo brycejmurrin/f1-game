@@ -139,6 +139,8 @@ test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming 
   assert.ok(m, "REQUIRE_SUCCESS must be set only when the run is a non-draft pull_request");
   const needs = body.split("needs:")[1].split("if:")[0];
   for (const j of m[1].split(",")) assert.match(needs, new RegExp(`- ${j}\\b`), `required job ${j} must be in ci-verdict's needs`);
+  // #5403 part 1: a skipped selected-verdict (the selected gate's own verdict) must red a full-tier run.
+  assert.deepEqual(m[1].split(","), ["guards-a", "guards-b", "guards-c", "guards-d", "guards", "select", "selected-verdict", "smoke", "staged-boot"]);
   assert.match(body, /'CI \(draft fast tier\)' \|\| 'CI' \}\}/, "a draft run's success must not carry the required name");
 });
 

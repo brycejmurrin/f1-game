@@ -81,9 +81,9 @@ test("pass-census documents the parked flags in its usage line and refuses a lap
   assert.equal(bad.status !== 0 && bad.stderr.includes("--park-at must be a lap fraction from 0 to 1"), true);
 });
 
-test("the committed baseline, when present, was built by --collect from a cited run", () => {
+test("the committed baseline, when present, was built by --collect from a cited run", (t) => {
   const file = path.join(ROOT, "tests/data", "pass-census-park.json");
-  if (!fs.existsSync(file)) return;   // the first push has no run to cite yet (#4783 row 1)
+  if (!fs.existsSync(file)) return t.skip("no committed baseline yet: the first push has no run to cite (#4783 row 1)");
   const b = JSON.parse(fs.readFileSync(file, "utf8"));
   assert.equal(typeof b.source.run === "string" && b.source.run.length > 0 && typeof b.source.sha === "string" && b.source.sha.length >= 7, true);
   for (const [key, cell] of Object.entries(b.cells)) assert.deepEqual(compareParkBaseline(b, key, cell), { status: "ok", diffs: [] });

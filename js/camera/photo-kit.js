@@ -14,6 +14,13 @@ const PhotoKit = (function () {
   const fin = (v) => typeof v === "number" && isFinite(v);
   const clamp = M4.clamp;   // js/core/mat4.js — the shared one
 
+  // Three finite coords or null: a NaN mark poisoned FreeCam.place (#4648).
+  function vec3(v) {
+    if (!v || v.length < 3) return null;
+    const x = +v[0], y = +v[1], z = +v[2];
+    return fin(x) && fin(y) && fin(z) ? [x, y, z] : null;
+  }
+
   function loadAll(store) {
     if (!store || typeof store.get !== "function") return {};
     const raw = store.get(MARK_KEY, null);
@@ -23,18 +30,22 @@ const PhotoKit = (function () {
   function marksFor(store, trackId) {
     const all = loadAll(store);
     const list = all[trackId];
-    return Array.isArray(list) ? list : [];
+    if (!Array.isArray(list)) return [];
+    // Drop corrupt stored rows (saveMark refuses them now).
+    return list.filter((m) => m && vec3(m.eye) && vec3(m.target));
   }
 
   /** Save a bookmark. Returns the new list for that track, or null on failure. */
   function saveMark(store, trackId, mark) {
-    if (!store || !trackId || !mark || !mark.eye || !mark.target) return null;
+    if (!store || !trackId || !mark) return null;
+    const eye = vec3(mark.eye), target = vec3(mark.target);
+    if (!eye || !target) return null;
     const all = loadAll(store);
     const list = Array.isArray(all[trackId]) ? all[trackId].slice() : [];
     const entry = {
       name: String(mark.name || ("Mark " + (list.length + 1))).slice(0, 40),
-      eye: [+mark.eye[0], +mark.eye[1], +mark.eye[2]],
-      target: [+mark.target[0], +mark.target[1], +mark.target[2]],
+      eye: eye,
+      target: target,
       fov: clamp(fin(+mark.fov) ? +mark.fov : 60, 20, 110),
       roll: clamp(fin(+mark.roll) ? +mark.roll : 0, -45, 45),
       t: Date.now(),
