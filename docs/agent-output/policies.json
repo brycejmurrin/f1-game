@@ -651,6 +651,11 @@
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
     },
+    "tools/ci/lib/deploy-tip.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: tipState / codeRedJobs / platformStepFailed verdicts with run id and failed job names, and the paginated pages.yml run + jobs reader; no CLI output"
+    },
     "tools/ci/lib/provenance.mjs": {
       "action": "keep-native",
       "presentation": "native",

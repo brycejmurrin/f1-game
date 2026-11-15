@@ -977,6 +977,11 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/lib/deploy-tip.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/ci/lib/provenance.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
