@@ -94,9 +94,13 @@ const EditorWorkspace = (function () {
       }
       setPreview(on);
     };
-    const media = doc.defaultView && doc.defaultView.matchMedia("(max-height: 620px), (max-width: 600px)");
-    const fit = () => { if (tools) tools.open = !media || !media.matches; };
+    // Fold the tools only where css/tuner.css shows their summary: the sheet's OWN density (UI SIZE moves it; a
+    // window-height query closed them at UI SIZE 50-62 on a 390 px phone with no summary to reopen, #5562) or a narrow window.
+    const media = doc.defaultView && doc.defaultView.matchMedia("(max-width: 600px)");
+    const fit = () => { if (tools) tools.open = !(sheet.dataset.density === "compact" || (media && media.matches)); };
     if (media && media.addEventListener) media.addEventListener("change", fit);
+    const Shape = doc.defaultView && doc.defaultView.MutationObserver;
+    if (Shape && tools) new Shape(fit).observe(sheet, { attributes: true, attributeFilter: ["data-density"] });
     fit(); setPreview(false);
     // Capture before a domain opener hides Settings (and may move focus).
     // A direct garage/context entry has no Settings origin to restore.
