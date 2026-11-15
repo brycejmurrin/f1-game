@@ -674,6 +674,28 @@ test("arm marks a DSQ finisher with c.dsq; the wrapped endRace call reads publis
   assert.equal(during.watch, false, "after stop the wrap is gone: endRace no longer forces the watch path");
 });
 
+// #5557: a WATCH whose replay refuses to start is raced instead; that driven
+// race needs the same #3287 wrap, and it is no longer a highlights reel.
+test("a replay that does not start falls back to a driven race that still preserves the script DSQ", () => {
+  const { R, script, Teams, ctx } = load();
+  ctx.RealReplay = { create: () => ({ start: () => false, stop() {}, tick() {}, status: () => null, owns: () => false }) };
+  const odd = host(script);
+  const rus = odd.drivers.find((d) => d.num === 63);
+  rus.dnf = true; rus.dsq = true; rus.dns = false; rus.pos = null; rus.lapsDone = odd.laps;
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G } = makeG(Teams, cars);
+  let during = null, rr = null;
+  G.endRace = function () { during = !!rr.status().watch; };
+  rr = R.create(G);
+  assert.ok(rr.stage(odd, { seat: "LEC", watch: true, reel: true, traces: {} }), "staged as a WATCH");
+  G.state = "count"; rr.update(1 / 60);
+  assert.equal(rr.status().watch, false, "the replay refused: it is a driven race");
+  assert.equal(rr.status().reel, false, "and not a reel");
+  assert.equal(cars.find((c) => c.code === "RUS").dsq, "real race classification");
+  G.endRace();
+  assert.equal(during, true, "endRace reads the published classification, so the DSQ survives");
+});
+
 // THE REAL endRace (js/game.js) in a DRIVEN (non-watch) real race on the real
 // Baku build: the script's DSQ survives classification and is placed last.
 async function drivenDsqRace() {

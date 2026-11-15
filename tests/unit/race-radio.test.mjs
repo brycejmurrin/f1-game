@@ -918,6 +918,19 @@ function watch(opts = {}) {
 }
 const comm = (r) => r.said.filter((s) => s.kind === "comm");
 
+test("#5557: a paused replay holds the queued line; it is spoken on resume", () => {
+  const r = watch();
+  r.hooks.paused = () => r.hooks.held;
+  r.step(0.05, 20);
+  r.hooks.held = true;
+  assert.equal(r.radio.replayEvent({ kind: "pass", pos: 3 }, r.cars[1], r.cars[0]), true);
+  r.step(0.05, 80);
+  assert.equal(comm(r).length, 0, "nothing is spoken over the frozen cars");
+  r.hooks.held = false;
+  r.step(0.05, 80);
+  assert.equal(comm(r).filter((s) => /REALBBB/.test(s.msg)).length, 1);
+});
+
 test("a WATCH speaks the replay's highlights through the commentator, on any camera, by the REAL names", () => {
   const r = watch();
   r.step(0.05, 20);
