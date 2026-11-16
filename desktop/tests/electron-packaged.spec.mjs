@@ -27,12 +27,19 @@ const DESKTOP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const { resolveSiteDir } = createRequire(import.meta.url)("../lib/site.cjs");
 const { switchArgs } = createRequire(import.meta.url)("../lib/debug-flags.cjs");
 
-/** Launch env: soft GL + explicit no-sandbox for CI/xvfb (turned into argv); never inherit ELECTRON_RUN_AS_NODE. */
+/** Launch env: soft GL (not on macOS) + explicit no-sandbox for CI/xvfb (turned into argv); never inherit ELECTRON_RUN_AS_NODE. */
 function launchEnv() {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.NODE_OPTIONS;
   env.APEX_DESKTOP_SOFT_GL = env.APEX_DESKTOP_SOFT_GL || "1";
+  // macOS: the SwiftShader ANGLE switches leave the packaged app with NO WebGL2 and a
+  // WebGPU adapter that cannot make a context ("Failed to create WebGPU Context
+  // Provider"), so no renderer binds and the game loop never ticks (desktop.yml run
+  // 43950525465, boot-diagnostics: webgl2 false, frame null). The macOS runner has a
+  // real Metal GPU and needs no xvfb, so it runs on the GPU like a player's Mac,
+  // whatever the workflow's env asks for.
+  if (process.platform === "darwin") env.APEX_DESKTOP_SOFT_GL = "0";
   env.APEX_DESKTOP_NO_SANDBOX = env.APEX_DESKTOP_NO_SANDBOX || "1";
   return env;
 }
@@ -206,7 +213,7 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
         await window.evaluate(() => PerfSpans.on(false)).catch(() => {});
       }
 
-      // Report the software renderer we actually got (evidence, not a pass gate on string).
+      // Report the renderer we actually got: SwiftShader, or Metal on macOS (evidence, not a pass gate on string).
       return window.evaluate(() => {
         const c = document.createElement("canvas");
         const gl = c.getContext("webgl2") || c.getContext("webgl");
