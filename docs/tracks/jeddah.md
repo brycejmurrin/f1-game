@@ -94,3 +94,23 @@ a separate agent):
    billboards + storefront neon cubes.
 6. **`tests/data/landmarks/jeddah.json`** — registers fountain, mosque, blue
    sail, golden twins, hotel, flagpole.
+
+## Start line and turn numbers (2026-11-15, #5507)
+
+The grid is on the pit straight AFTER the T27 hairpin, 248 m before the T1
+apex; before this it sat 288 m before T27 and every turn number was one corner
+late. Evidence and method: `docs/tracks/START-LINES.md` §jeddah. The scenery
+table above is in the AUTHORED frame, whose s = 0 is the T27 hairpin, not the
+line: the real pit straight is authored 0.05 – 0.17 and the line is ~0.132.
+The pit building, S/F grandstands and gantries are seated on the line with
+`sl()`; the pit lane is on the left (−1), the main stand on the right (+1),
+as in OSM.
+
+Source for `def.turns`: F1 live-timing corner markers
+(`https://api.multiviewer.app/api/v1/circuits/149/2026`), fitted by
+`tools/track/official-corners.cjs` (rms 4.7 m), each snapped to the nearest
+built curvature peak (within 25 m; T5 40 m; T18 and T20, long sweeps, 60 and 72 m).
+
+Not done: `AERO_ZONE_TURNS` has no jeddah row (no FIA 2026 zone document, the
+event is not a 2026 round); the rest of the dressing was authored against the
+old origin and still treats +1 as "seaward" on the first third of the lap.
