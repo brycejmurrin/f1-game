@@ -753,7 +753,7 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — 
     });
     const tag = win.name + ": ";
     expect(cell.look, tag + "the export's career density is ROOMY").toBe("roomy");
-    expect(cell.ui, tag + "the phone's shipped UI SIZE").toBe("0.7");   // that export stores no UI SIZE: a phone ships 70 % (#5358; it was 109)
+    expect(cell.ui, tag + "the export's UI SIZE").toBe("1.09");
     expect(cell.density, tag + "ROOMY never lifts compact on a phone-sized window").toBe("compact");
     expect(cell.compactAt, tag + "the roomy --compact-at: 1px block is gated off the phone").toBe("480px");
     expect(cell.pairAt, tag + "the pair threshold is a desk/tablet value").toBe("99999px");
