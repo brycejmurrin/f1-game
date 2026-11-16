@@ -83,7 +83,7 @@ if op == "issue_write":
     s = slug()
     def live(path, jq):
         try:
-            r = subprocess.run(["gh", "api", "repos/%s/issues/%d%s" % (s, int(number), path), "--jq", jq], capture_output=True, text=True, timeout=6)
+            r = subprocess.run(["gh", "api", "--paginate", "repos/%s/issues/%d%s" % (s, int(number), path), "--jq", jq], capture_output=True, text=True, timeout=12)
             return [x.strip().lower() for x in r.stdout.splitlines() if x.strip()] if r.returncode == 0 else None
         except Exception:
             return None
@@ -98,9 +98,9 @@ if op == "issue_write":
         emit("deny", "issue_write labels REPLACES the list, so it may differ from the live labels by exactly ONE name. Live: [" + ", ".join(sorted(set(cur))) + "]; this list would add [" + ", ".join(add) + "] and remove [" + ", ".join(gone) + "]. " + how)
     if add + gone == ["config-ok"]:
         emit("deny", "`config-ok` is Bryce's own click (merge-gate reads the label event's actor): an agent never adds or removes it. Ask with `needs-decision` and one comment.")
-    if gone == ["hold"]:    # an agent's hold: any removal; Bryce's: his own click. The last `labeled hold` event's app marker tells.
-        by = live("/events?per_page=100", '[.[] | select(.event == "labeled" and .label.name == "hold")] | last | (.performed_via_github_app.slug // "owner")')
-        if not by or len(by) != 1 or by[0] == "owner":
+    if gone == ["hold"]:    # an agent's hold: any removal; Bryce's: his own click. The LAST `labeled hold` event's app marker tells (every page, oldest first).
+        by = live("/events?per_page=100", '.[] | select(.event == "labeled" and .label.name == "hold") | (.performed_via_github_app.slug // "owner")')
+        if not by or by[-1] == "owner":
             emit("deny", "`hold` is the only veto: Bryce set this one (or who set it could not be read), so only his own click lifts it (AGENTS.md §Coordination).")
 sys.exit(0)
 PY

@@ -267,6 +267,9 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
     assert.deepEqual(table.map(([why, labels, live]) => [why, lab(labels, live)]), table.map(([why, , , want]) => [why, want]));
     assert.equal(lab(LIVE.filter((x) => x !== "hold"), LIVE, "claude"), "allow", "an agent's own hold: any removal");
     assert.equal(lab(LIVE.filter((x) => x !== "hold"), LIVE, ""), "deny", "who set the hold is unreadable");
+    // one line per `labeled hold` event across every page, oldest first: the LAST one decides (a PR past 100 events)
+    assert.equal(lab(LIVE.filter((x) => x !== "hold"), LIVE, "claude\nowner"), "deny", "Bryce's hold after an agent's, on a later page");
+    assert.equal(lab(LIVE.filter((x) => x !== "hold"), LIVE, "owner\nclaude"), "allow", "an agent's hold after Bryce lifted his");
   } finally { fs.rmSync(fakeGh, { recursive: true, force: true }); }
   assert.equal(gh("mcp__github__issue_write", { method: "create", title: "x", labels: ["ready"] }), "allow", "a create has no hold to drop");
   assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, title: "x" }), "allow", "no labels field");
