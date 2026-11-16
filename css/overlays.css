@@ -1580,6 +1580,14 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"].you:not(.p1) { top: var(--rr-h); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"]:is(.p1, .p2, .p3):not(.you) { position: static; }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"].you { top: 0; }
+/* YOU never bottom-sticks over the rows above it (#5580): its margin box must stay inside the list, so a top margin of
+   --you-clear rows (taken back by the row before it; results-sheet.js fitPins writes the pane's whole rows less one)
+   keeps it out until the list fills the pane, so it never lands on a row that is only entering. At
+   UI SIZE 70 % the list opens 55 px into the pane and YOU sat under P1 (844x390: P1 at y 278, YOU at 287). */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:not(.p1, .p2, .p3) { margin-top: calc(var(--you-clear, 3) * var(--rr-h)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"]:has(+ .you:not(.p1, .p2, .p3)) { margin-bottom: calc(-1 * var(--you-clear, 3) * var(--rr-h)); }
+/* The story podium's driver code keeps 12 PAINTED px: TEXT LARGE's --fs-4 is a bare 20px (10 painted at UI SIZE 50 %), --fs-micro carries the floor. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) #results-table [data-results-part="podium"] > li > strong { font-size: max(var(--fs-4), var(--fs-micro)); }
 
 /* ---------- section label ---------- */
 .sel-label {
