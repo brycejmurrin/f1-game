@@ -515,18 +515,18 @@ const Tracks = (function () {
   const building = () => _pacing > 0;   // a paced build is in flight (its caller's world is null till it lands)
   function free(t, gfx) {   // every GPU resource build() uploaded; null-safe (a partial track too)
     const m = t && t.meshes, ck = !!gfx.freeChunkedMesh;
-    if (!m) return;
+    if (!m) return; if (ck && gfx.beginChunkedOwnership) gfx.beginChunkedOwnership();   // plain meshes share the chunk flush: a depth-0 free only queues until the next present, and a draw warm holds that present
     for (const h of [m.floor, m.road, m.terrain, m.gate, m.startline]) gfx.freeMesh(h);
     if (ck) {
       gfx.freeChunkedMesh(m.props);
       if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked);
       if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked);
       if (m.glass) gfx.freeChunkedMesh(m.glass);
-      if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership();
     } else gfx.freeMesh(m.props);
     if (m.glass && !ck) { gfx.freeMesh(m.glass); }
     if (m.water) gfx.freeMesh(m.water);
     if (m.propBatches && gfx.freeInstancedBatch) { for (const b of m.propBatches) gfx.freeInstancedBatch(b); m.propBatches = null; }
+    if (ck && gfx.flushChunkedOwnership) gfx.flushChunkedOwnership();
   }
 
   function buildMap(px, pz, n) {

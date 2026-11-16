@@ -3838,6 +3838,14 @@ const TLX = (function () {
         const useTag = usePost && (!post.tagOn || post.tagOn());   // R3: present()'s MRT rule
         // r185 reads renderer target/MRT again AFTER awaits while building nodes.
         // Keep all render state owned by this task until compilation settles.
+        // Before the hold. present() returns while this promise is set, so its
+        // end-of-frame flushDropLater never runs, and a track free that queued
+        // wrappers (the road's split slots sit there until the next present)
+        // is still in renderer._objects when the next race samples. Metal's
+        // draw warm then waits on the GPU for seconds (session-quit-memory,
+        // 78 chunk geometries). A blanket drain inside flushOwnershipRelease
+        // is a different call: that one stripped the next circuit's ribbons.
+        if (typeof flushDropLater === "function") { flushDropLater(true); flushDropped(true); }
         _warmPending = (async () => {
           try {
             if (noEnvGarage) {
@@ -3880,6 +3888,7 @@ const TLX = (function () {
         const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
         const useTag = usePost && (!post.tagOn || post.tagOn());
         _warmStages.mirrorLazy = null;
+        if (typeof flushDropLater === "function") { flushDropLater(true); flushDropped(true); }   // same hold as the program warm
         _warmPending = (async () => {
           let drawn = 0, ok = false;
           try {
@@ -5379,9 +5388,22 @@ const TLX = (function () {
           if (mobileTier || isMobile || !t.__tlxUp) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
           return true;
         },
-        freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
+        freeMesh(m) {
+          if (m && m.geo) {
+            if (_ownershipFreeBatch) _ownershipFreeBatch.add(m.geo);
+            disposeGeometry(m.geo); m.geo = null;
+          }
+        },
         // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
         pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
+        // Tracks.free raises this BEFORE the plain meshes (road, floor, the
+        // road's split slots). Those used to drop at depth 0, so dropWrapper
+        // queued them for the next present — and a draw warm holds that
+        // present, so the previous circuit's chunk draws were still in the
+        // render-object set when the next race started.
+        beginChunkedOwnership() {
+          if (!_ownershipFreeBatch) { _ownershipFreeBatch = new Set(); _ownershipFreeDepth = 1; }
+        },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) {
             if (!_ownershipFreeBatch) { _ownershipFreeBatch = new Set(); _ownershipFreeDepth = 1; }
