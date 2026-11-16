@@ -641,14 +641,7 @@ function applySettings(file, G) {
       } else {
         // An unset row exports as null; storing it wrote the literal "null",
         // so readers got null instead of their own default. undefined removes.
-        let json = v;
-        // #5358 gave phones a shipped UI SIZE 70 %, but an ALL export from before that (or any file whose
-        // `display.uiScale` is null and not in `changed`) recorded "following the coarse default", which was
-        // 109 % — not "unset". Materialise that on import so Bryce's legacy profile and UI-contract cells keep
-        // painting 1.09 after reload. A file that pins UI SIZE (e.g. his 2026-11-10 export) still wins via `changed`.
-        if (row.k === "uiScale" && v === null && here === false
-            && !(Array.isArray(file.changed) && file.changed.includes("display.uiScale"))) json = 109;
-        stored = GameStore.store.set(row.k, json === null ? undefined : json) !== false;
+        stored = GameStore.store.set(row.k, v === null ? undefined : v) !== false;
       }
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
