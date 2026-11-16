@@ -96,8 +96,8 @@ const SPEC = [
   // the `(pointer: coarse)` block of css/tokens.css owns the touch numbers so a
   // phone is right on its FIRST paint, and js/ui/scale.js mirrors them. null is
   // the honest default to report — a stored number is the change.
-  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch)" },
-  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
+  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; 109% on touch, 70% on a phone)" },
+  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, 70 ui on a phone, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },

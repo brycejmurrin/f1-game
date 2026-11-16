@@ -5,7 +5,7 @@
 // commands can run concurrently without sharing a web server or artifact paths.
 
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, createReadStream, mkdirSync, statSync } from "node:fs";
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { extname, join, resolve as resolvePath, sep } from "node:path";
@@ -112,6 +112,26 @@ export function twinVerdict(r, { nothingToRun = false } = {}) {
   // last-match-wins rule report the twins' result as the group's.
   lines.push(`[playwright] VM twin(s) passed (${passed}) — the browser half follows`);
   return { exit: null, lines };
+}
+
+// ONE JUNIT PER PROCESS (#5560). Every Playwright process of one invocation shares this port, so each rewrites
+// artifacts/test-results-<port>/junit.xml and only the LAST process's results survived (job 132124379574: 42/42,
+// 45/45 and 20/20 green, the end record claimed quali alone). Before the next process starts, the finished one's
+// junit MOVES to a sibling artifacts/test-results-<port>-p<n>/ (outside the outputDir Playwright owns), where every
+// reader of `test-results-*/junit.xml` finds it. A move, never a copy: a process that writes no junit inherits none.
+export function stashJunit(artifactsDir, port, n) {
+  const from = join(artifactsDir, `test-results-${port}`, "junit.xml");
+  if (!existsSync(from)) return null;
+  const dir = join(artifactsDir, `test-results-${port}-p${n}`);
+  mkdirSync(dir, { recursive: true });
+  renameSync(from, join(dir, "junit.xml"));
+  return dir;
+}
+/** Drop this port's stashes from an EARLIER invocation, so a re-used port never lends this run an old pass. */
+export function clearJunitStash(artifactsDir, port) {
+  let ents = [];
+  try { ents = readdirSync(artifactsDir); } catch { return; }
+  for (const d of ents) if (d.startsWith(`test-results-${port}-p`)) rmSync(join(artifactsDir, d), { recursive: true, force: true });
 }
 
 async function main() {
@@ -310,7 +330,11 @@ async function main() {
   }
 
   let exitCode = 0;
+  const artifactsDir = join(ROOT, "artifacts");
+  let processes = 0;
+  clearJunitStash(artifactsDir, port);
   if (hasSpecTarget(mainArgs) || !peeled) {
+    processes++;
     exitCode = await runOnce(mainArgs, peeled ? "shared-shard" : "main");
   } else {
     console.error(`[playwright] shared shard has no remaining specs after peel — mega solos only`);
@@ -321,6 +345,7 @@ async function main() {
     for (const spec of megaHere) {
       if (stopping) break;
       console.error(`[playwright] mega-sweep solo (fresh Chromium): ${spec}`);
+      if (processes++ > 0) stashJunit(artifactsDir, port, processes - 1);
       const code = await runOnce([...flags, spec], `mega:${spec}`);
       if (code) exitCode = code;
     }
