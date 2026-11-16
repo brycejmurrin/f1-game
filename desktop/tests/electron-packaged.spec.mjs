@@ -86,6 +86,37 @@ async function onSettledShell(window, probe) {
   }
 }
 
+/**
+ * What the shell looks like from inside when a probe failed. Evidence only: every
+ * read is guarded, and a page that cannot answer returns the error instead of throwing.
+ * @param {import('playwright').Page} window
+ * @returns {Promise<object>}
+ */
+async function bootDiagnostics(window) {
+  try {
+    return await window.evaluate(() => {
+      const safe = (fn) => { try { return fn(); } catch (e) { return "threw: " + String(e && e.message); } };
+      const shown = (el) => !!el && getComputedStyle(el).display !== "none" && getComputedStyle(el).visibility !== "hidden";
+      return {
+        href: String(location.href),
+        hidden: document.hidden,
+        visibility: document.visibilityState,
+        focused: safe(() => document.hasFocus()),
+        frame: safe(() => (typeof PerfSpans === "undefined" ? "no PerfSpans" : PerfSpans.stats().frame || null)),
+        webgl2: safe(() => !!document.createElement("canvas").getContext("webgl2")),
+        gpu: typeof navigator.gpu !== "undefined",
+        claimFail: safe(() => sessionStorage.getItem("apex26.gfxClaimFail")),
+        backendProbe: safe(() => localStorage.getItem("apex26.gfxBackendProbe")),
+        info: safe(() => (typeof __apex !== "undefined" && __apex.info ? JSON.stringify(__apex.info()).slice(0, 1500) : "no __apex.info")),
+        screens: safe(() => Array.from(document.querySelectorAll(".screen, dialog, [role=dialog], [role=alertdialog]"))
+          .filter(shown).map((el) => el.id || el.className).slice(0, 12)),
+      };
+    });
+  } catch (e) {
+    return { error: String(e && e.message) };
+  }
+}
+
 test.describe.configure({ mode: "serial" });
 
 test("fuses: EnableNodeCliInspectArguments stays on for the build under test", () => {
@@ -113,6 +144,11 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
   const consoleErrors = [];
   /** Every main-frame URL this launch committed: the evidence for a boot-navigation race. */
   const navigations = [];
+  /** The last console lines of any level: read only when the test fails. */
+  const consoleTail = [];
+  /** @type {import('playwright').Page | null} */
+  let shell = null;
+  let passed = false;
 
   try {
     const packaged = await electronApp.evaluate(async ({ app }) => app.isPackaged);
@@ -130,8 +166,11 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
 
     const window = await electronApp.firstWindow();
     window.on("pageerror", (err) => pageErrors.push(String(err)));
+    shell = window;
     window.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
+      consoleTail.push(`${msg.type()}: ${msg.text().slice(0, 300)}`);
+      if (consoleTail.length > 40) consoleTail.shift();
     });
 
     window.on("framenavigated", (frame) => {
@@ -192,8 +231,18 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
     // Filter known Chromium noise under xvfb/soft-GL (dbus, GPU process exits).
     const serious = pageErrors.filter((e) => !/ResizeObserver|net::ERR_/i.test(e));
     expect(serious, serious.join("\n")).toEqual([]);
+    passed = true;
   } finally {
     test.info().annotations.push({ type: "navigations", description: JSON.stringify(navigations) });
+    if (!passed) {
+      // A red here has no screen to look at (macOS Pack smoke runs only on schedule or
+      // dispatch), so say what the shell was doing: hidden window, no WebGL, no ticks.
+      const state = shell ? await bootDiagnostics(shell) : { error: "no window" };
+      test.info().annotations.push({
+        type: "boot-diagnostics",
+        description: JSON.stringify({ state, pageErrors, consoleTail }).slice(0, 12_000),
+      });
+    }
     await electronApp.close();
   }
 });
