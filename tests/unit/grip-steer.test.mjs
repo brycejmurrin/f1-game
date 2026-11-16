@@ -202,3 +202,20 @@ test("the cap aims at the FRONT curve's own peak slip (CURVE_PEAK_X_F), not the 
   assert.ok(x <= TM.CURVE_PEAK_X_F, `the capped slip stays on the rising side of the front's peak (x=${x}, peak ${TM.CURVE_PEAK_X_F})`);
   assert.ok(Math.abs(TM.lateralCurve(x, TM.CURVE_FLOOR, TM.CURVE_FALL_W)) > 0.99, "...and still delivers ~all of the front's grip");
 });
+
+test("first frame seeds the cap filter at the target cap (no crush from 0)", () => {
+  const muF = 22, cs = 130;
+  const alphaPk = (Math.PI / 2) * muF / cs * GS.TARGET;
+  const st = { speed: 45, vLat: 0, yawRate: 0, muF, csFront: cs, af: 1.3, ar: 1.5, braking: false, shaped: 1, dt: 1 / 60 };
+  const first = GS.apply(0.7, { ...st, capSm: 0 }, 1).capSm;
+  assert.ok(first > 0.9 * alphaPk, `first-frame capSm ${first} should start near alphaPk ${alphaPk}`);
+});
+
+test("apply returns one pooled bag (no per-tick allocation)", () => {
+  const st = { speed: 45, vLat: 0, yawRate: 0, muF: 22, csFront: 130, af: 1.3, ar: 1.5, shaped: 1, capSm: 0.1, dt: 1 / 60 };
+  const a = GS.apply(0.7, st, 1);
+  const b = GS.apply(0.7, st, 0);
+  const c = GS.apply(0.7, null, 1);
+  assert.equal(a, b);
+  assert.equal(b, c);
+});

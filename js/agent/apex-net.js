@@ -221,8 +221,10 @@ const ApexNet = (function () {
         if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
         return G.netLobby.inviteAnother();
       },
-      lobbyReady(v) {
+      // codesMatch: tick CODES MATCH for every shown code first (#5313: READY waits for it).
+      lobbyReady(v, codesMatch) {
         if (!G.netLobby) return false;
+        if (codesMatch === true) for (const id of Object.keys(G.netLobby.verifyCodes())) G.netLobby.confirmCode(id);
         G.netLobby.setReady(v !== false);
         return true;
       },

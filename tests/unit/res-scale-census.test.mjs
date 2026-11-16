@@ -27,3 +27,41 @@ test("res-scale-census verdict: the settle gate (#4783)", () => {
   const got = [ok, { ...ok, maxSettleFrames: 3 }, { ...ok, unsettledSteps: 2 }, { ...ok, texturesEnd: 29 }, { ...ok, fixedTargets: true, unsettledSteps: 5, maxSettleFrames: 9 }].map(verdict);
   assert.deepEqual(got, ["ok", "FAIL: settle took 3 presented frames (> 2)", "FAIL: 2 step(s) never reached the scaled post-target size", "FAIL: textures 27 -> 29 after the sweep", "ok"]);
 });
+
+// #5450: the "Lavapipe" WebGPU arm ran on the SwiftShader fallback adapter (run 42979924558; reproduced locally
+// 2026-11-11). The arm is named for the adapter it gets, and a census FAILS on any other adapter or on no read.
+test("the WebGPU census arm names its adapter and refuses any other (#5450)", async () => {
+  const { createRequire } = await import("node:module");
+  const L = createRequire(import.meta.url)("../../tools/lib/webgpu-chrome-args.cjs");
+  assert.deepEqual({ ...L.WEBGPU_CENSUS_ADAPTER }, { vendor: "google", architecture: "swiftshader" });
+  assert.equal(L.WEBGPU_CENSUS_ARM, "software WebGPU (google/swiftshader adapter)", "the arm is not called lavapipe while Dawn hands it SwiftShader");
+  assert.equal(L.adapterMismatch({ vendor: "google", architecture: "swiftshader", device: "", description: "" }), null);
+  assert.equal(L.adapterMismatch({ vendor: "Google", architecture: "SwiftShader" }), null, "case is not identity");
+  assert.equal(L.adapterMismatch({ vendor: "mesa", architecture: "", description: "llvmpipe (LLVM 19)" }),
+    "WebGPU adapter is mesa/? (llvmpipe (LLVM 19)), not google/swiftshader");
+  assert.equal(L.adapterMismatch({ vendor: "google", architecture: "" }), "WebGPU adapter is google/?, not google/swiftshader", "a half match is a mismatch");
+  assert.equal(L.adapterMismatch(null), "no WebGPU adapterInfo read (want google/swiftshader)", "no read is a failure, never a pass");
+});
+
+// Every tool that launches the census arm either checks the adapter or is named here with why not (only shrinks).
+const ADAPTER_UNCHECKED = new Map([
+  ["tools/gfx/gfx-probe.mjs", "a probe that prints the adapter, not a census filed under a label (#5450 'not checked here')"],
+  ["tools/gfx/gpu-game-check.mjs", "a GPU smoke check, not a census filed under a label (#5450 'not checked here')"],
+  ["tools/perf/first-race-census.mjs", "#5450 'not checked here': needs its own adapterInfo read"],
+  ["tools/perf/lit-wgsl-census.mjs", "#5450 'not checked here': needs its own adapterInfo read"],
+]);
+test("a tool on the census WebGPU launch checks the adapter, or is on the shrinking unchecked list (#5450)", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  const walk = (d) => fs.readdirSync(path.join(root, d), { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(`${d}/${e.name}`) : /\.(mjs|cjs|js)$/.test(e.name) ? [`${d}/${e.name}`] : []);
+  const users = walk("tools").filter((f) => !f.startsWith("tools/lib/") &&
+    fs.readFileSync(path.join(root, f), "utf8").includes("WEBGPU_LAVAPE_CHROMIUM_ARGS"));
+  assert.ok(users.length > ADAPTER_UNCHECKED.size, "premise: the scan finds census tools beyond the unchecked list");
+  // One equality: the tools that launch the arm WITHOUT adapterMismatch() are exactly the unchecked list. A new
+  // launcher that skips the check, an entry that now checks, and an entry that no longer launches all show up by name.
+  const skips = users.filter((f) => !fs.readFileSync(path.join(root, f), "utf8").includes("adapterMismatch("));
+  assert.deepEqual(skips.sort(), [...ADAPTER_UNCHECKED.keys()].sort(),
+    "a census launched without adapterMismatch() would be filed under the wrong adapter's name; keep ADAPTER_UNCHECKED exact");
+});

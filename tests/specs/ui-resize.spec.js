@@ -784,7 +784,7 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
       null, { polling: 50, timeout: 8_000 });
     const body = await page.evaluate(() => ({ density: document.body.dataset.density, shape: document.body.dataset.shape,
       ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize }));
-    expect(body, "the owner's window is a compact wide body at the export's knobs").toMatchObject({ density: "compact", shape: "wide", ui: "1.09", text: "large" });
+    expect(body, "the owner's window is a compact wide body at the export's knobs").toMatchObject({ density: "compact", shape: "wide", ui: "0.7", text: "large" });   // that export stores no UI SIZE: a phone ships 70 % (#5358)
     const seen = {};
     for (const [layout, side] of [["grid", null], ["list", null], ["compact", null], ["wide", null], ["sidebar", null], ["grid", "right"], ["sidebar", "right"]]) {
       await page.evaluate(([l, s]) => {
@@ -925,7 +925,8 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract select + race cells 
         goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - ir.bottom).toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5 };
     });
     const tag = win.name + " select: ";
-    expect(sel, tag + "a compact wide picker at the export's UI SIZE").toMatchObject({ density: "compact", shape: "wide", ui: "1.09" });
+    // That export stores no UI SIZE, so a phone reads its shipped 70 % (#5358; it was 109).
+    expect(sel, tag + "a compact wide picker at the phone's UI SIZE").toMatchObject({ density: "compact", shape: "wide", ui: "0.7" });
     expect(sel.sectionScroll, tag + "the hero section never scrolls").toBeLessThanOrEqual(1);
     expect(sel.verticalScrollers, tag + "no vertical scroller anywhere in the picker").toEqual([]);
     expect(sel.heroOwnH, tag + "the still keeps a real slot (C gets what 283 px leave)").toBeGreaterThanOrEqual(60);
@@ -949,7 +950,11 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract select + race cells 
         goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - sr.bottom).toFixed(1), goPaintedH: +gr.height.toFixed(1), sheetInScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 };
     });
     const rtag = win.name + " race settings: ";
-    expect(rs, rtag + "compact like its siblings, the sheet grid kept").toMatchObject({ density: "compact", shape: "wide", compactAt: "480px", display: "grid" });
+    // The sheet decides density in its OWN px (window / UI SIZE against --compact-at): at 70 % the two 390-tall
+    // windows are 557-561 own px, a normal sheet; the 283-tall Safari window (404) stays compact. The contract
+    // below (one scroller, two columns, START RACE fixed and 44 px) holds in both.
+    const rsDensity = win.viewport.height / 0.7 < 480 ? "compact" : "normal";
+    expect(rs, rtag + "the density its own height asks for, the sheet grid kept").toMatchObject({ density: rsDensity, shape: "wide", compactAt: "480px", display: "grid" });
     expect(rs.sheetScroll, rtag + "the sheet itself never scrolls").toBeLessThanOrEqual(1);
     expect(rs.scrollers, rtag + "#rs-body is the ONE scroller").toEqual(["rs-body"]);
     expect(rs.columns, rtag + "two columns on a phone").toBe(2);

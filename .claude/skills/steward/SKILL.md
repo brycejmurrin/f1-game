@@ -86,15 +86,16 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    land: merge-gate refuses a green whose earlier attempt had a red job ([`references/land.md`](references/land.md)),
    so push a fresh commit instead. Only a run cancelled with zero failed jobs is re-run once (`tools/ci/ci-rerun.mjs`).
 5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
-   and only when `needs-sync` says so (`conflict | stale-red`); never to
-   "refresh" a cancelled run and never for clean-behind. Red AND conflicting: a `stale-red` syncs first, any other red
+   and only when `needs-sync` says so (`conflict | stale-red | retest-refused`; `tip-red` waits for the fix to land);
+   never to "refresh" a cancelled run and never for clean-behind. `retest-refused` is the gate's `retest` row
+   refusing this head: the sync is that row's cure, no force flag. Red AND conflicting: a `stale-red` syncs first, any other red
    is fixed first, then sync once and ONE push. A PR whose Plan waits on an unmerged PR does not sync on each
    conflict; it syncs once, after that PR merges. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
 
 ## Land
 
 1. Tick or strike every Plan item except `- [ ] land: …`, the `**now:**` item included (an open `now:` fails the
-   gate's plan row). An item that needs Bryce's device is his: never strike it; ask (§Lane 6). A CONFLICTING/DIRTY PR syncs first (§Red 5): a ready flip
+   gate's plan row): tick it with its evidence, or move what is left of it into the `land:` item. An item that needs Bryce's device is his: never strike it; ask (§Lane 6). A CONFLICTING/DIRTY PR syncs first (§Red 5): a ready flip
    on a dirty PR starts no CI.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:

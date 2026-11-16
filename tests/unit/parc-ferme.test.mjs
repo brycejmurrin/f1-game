@@ -120,3 +120,20 @@ test("parkAnchor falls back to car world pose without a track", () => {
   assert.equal(a.z, 9);
   assert.equal(a.car, c);
 });
+
+// #5557: nothing moves the car to its box before parc fermé, so the anchor is
+// the pit box only for a subject inside the pit window. Tracks: a straight road
+// along +x (p = [s, 0, 0], right = +z); the pit window is s 900..1000, box 950.
+test("parkAnchor frames the car where it stands; the pit box only when the car is in the pit window", () => {
+  const sb = { Math, Object, Number, Log: { info() {}, debug() {} }, PerfGov: { tier: () => 0 }, document: undefined,
+    Tracks: { sample: (_t, s, o) => { o.p[0] = s; o.p[1] = 0; o.p[2] = 0; o.r[0] = 0; o.r[2] = 1; } },
+    PitGeom: { zoneOf: () => ({ sIn: 900, sOut: 1000, sBox: 950 }), inWindow: (z, s) => s >= z.sIn && s <= z.sOut } };
+  const ctx = vm.createContext(sb);
+  vm.runInContext(src("js/race/parc-ferme.js"), ctx, { filename: absSrc("js/race/parc-ferme.js") });
+  const PF = vm.runInContext("ParcFerme", ctx);
+  const G = { track: { total: 3000 } };
+  const mid = PF.parkAnchor(G, car({ s: 2000, x: 3 }));
+  assert.equal(mid.x, 2000, "mid-circuit: the orbit is on the car, not 1050 m away at the box");
+  assert.equal(mid.z, 3);
+  assert.equal(PF.parkAnchor(G, car({ s: 920, x: 3 })).x, 950, "in the pit window: the box");
+});

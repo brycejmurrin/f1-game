@@ -3,12 +3,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { parse as parseYAML } from "yaml";
 import {
-  decide, droppedSpecs, groupRecordLine, parseGroupRecord, parseRunTitle, covers, passedSpecFiles, GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, GROUP_WORKFLOW_PATH,
+  decide, droppedSpecs, scriptSpecs, groupLine, groupRecordLine, parseGroupRecord, parseRunTitle, covers, passedSpecFiles, GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, GROUP_WORKFLOW_PATH,
 } from "../../tools/ci/dropped-group-runs.mjs";
 import { runShardArgs, testedPair, prInput } from "../../tools/ci/remote-group.mjs";
 import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
+import { specsOf } from "../../tools/ci/select-specs.mjs";
 import { ciWorkflow } from "../helpers/ci-workflow.mjs";
 
 const HEAD = "a".repeat(40);
@@ -259,4 +263,56 @@ test("ci.yml wires it: select names the drops, the verdict job asks only on a re
   const steps = bg.jobs.group.steps;
   assert.equal(steps.find((s) => String(s.uses || "").startsWith("actions/checkout")).with.ref, "${{ inputs.pr != '' && format('refs/pull/{0}/merge', inputs.pr) || '' }}");
   for (const s of steps.filter((x) => /--run-shard/.test(x.run || ""))) assert.equal(s.env.APEX_FAIL_ON_FLAKY, 1);
+});
+
+test("the verdict job can run it: the file alone, no node_modules, no other repo file (run 43475135417 died on an import)", () => {
+  // The selected-verdict job has no npm install and a sparse checkout. Outside the repo nothing resolves but node:
+  // builtins, so any import this file grows fails here the way it failed there.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dropped-group-runs-"));
+  try {
+    fs.copyFileSync("tools/ci/dropped-group-runs.mjs", path.join(dir, "dropped-group-runs.mjs"));
+    const r = spawnSync(process.execPath, ["dropped-group-runs.mjs"], {
+      cwd: dir, encoding: "utf8",
+      env: { PATH: process.env.PATH, GITHUB_REPOSITORY: "o/r", PR_HEAD_SHA: "not-a-sha", DROPPED: "1", DROPPED_SPECS: UI, CURRENT_BASE: BASE, WAIT_S: "0" },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.split("\n")[0], "accept=false");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("scriptSpecs + groupLine read a group exactly as select-specs' specsOf does, for every test:* script", () => {
+  const scripts = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts;
+  const doc = JSON.parse(fs.readFileSync("tests/groups.json", "utf8"));
+  const names = Object.keys(scripts).filter((n) => n.startsWith("test:"));
+  assert.deepEqual(names.map((n) => scriptSpecs(groupLine(scripts[n], doc))), names.map((n) => specsOf([n], scripts)));
+  assert.deepEqual(scriptSpecs(undefined), []);
+  // #5427 moved the rosters out of package.json: a wrapper line is read through tests/groups.json, and one that
+  // cannot be (no file, unknown group, a node group) throws, so main() answers "unknown contents", never "empty".
+  const line = "node tools/ci/run-playwright.mjs --group test:ui";
+  assert.equal(scripts["test:ui"], line);
+  assert.equal(scriptSpecs(groupLine(line, doc)).includes(UI), true);
+  assert.equal(groupLine("node --test a.test.mjs", doc), "node --test a.test.mjs");
+  assert.equal(groupLine(line, { groups: { "test:ui": { kind: "browser", files: [UI, HOOKS] } } }), `${UI} ${HOOKS}`);
+  for (const bad of [null, {}, { groups: {} }, { groups: { "test:ui": { kind: "node", files: ["x"] } } }, { groups: { "test:ui": { kind: "browser", files: [] } } }]) {
+    assert.throws(() => groupLine(line, bad), { message: "no browser group test:ui in tests/groups.json" });
+  }
+});
+
+// The job's real layout (ci.yml sparse-checkout, cone mode: the listed directories plus the files directly under
+// their parents, so package.json and tests/groups.json are there; tools/gen, tests/helpers and node_modules are not).
+test("in the verdict job's sparse layout every browser group resolves to the specs the selector reads (#5549)", () => {
+  const scripts = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts;
+  const names = Object.keys(scripts).filter((n) => n.startsWith("test:") && specsOf([n], scripts).length > 0);
+  assert.equal(names.includes("test:ui"), true);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "verdict-sparse-"));
+  try {
+    for (const d of ["tools/ci", "tools/lib", "tests/specs"]) fs.cpSync(d, path.join(dir, d), { recursive: true });
+    for (const f of ["package.json", "tests/groups.json"]) fs.copyFileSync(f, path.join(dir, f));
+    const code = `import fs from "node:fs"; import { scriptSpecs, groupLine } from "./tools/ci/dropped-group-runs.mjs";
+      const s = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts, d = JSON.parse(fs.readFileSync("tests/groups.json", "utf8"));
+      console.log(JSON.stringify(${JSON.stringify(names)}.map((n) => scriptSpecs(groupLine(s[n], d)))));`;
+    const r = spawnSync(process.execPath, ["--input-type=module", "-e", code], { cwd: dir, encoding: "utf8", env: { PATH: process.env.PATH } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), names.map((n) => specsOf([n], scripts)));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

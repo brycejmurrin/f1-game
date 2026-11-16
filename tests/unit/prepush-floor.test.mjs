@@ -14,7 +14,7 @@ import {
 import {
   NEW_MODULE_CHECKLIST, addedGlobals, extraSpecs, newModuleTriggers, sharedUiSpecs, standaloneSpecs,
 } from "../../tools/ci/pick-tests.mjs";
-import { preflipAdvisory, probeSteps, probeVerdictLine, runProbe } from "../../tools/ci/preflip-probe.mjs";
+import { preflipAdvisory, probeState, probeSteps, probeVerdictLine, runProbe, stepTimedOut } from "../../tools/ci/preflip-probe.mjs";
 
 // Fixture paths built at runtime: docs-integrity scans string literals for files that must exist.
 const fake = (...p) => p.join("/");
@@ -232,6 +232,34 @@ test("runProbe: merges the tip, runs every step, reports red steps and a conflic
   assert.equal(conflict.state, "conflict");
   assert.deepEqual(conflict.conflicts, [fake("js", "other.js")]);
   matches(probeVerdictLine(conflict), /^= preflip conflict/);
+});
+
+test("preflip: a step at its own cap with no FAIL line reads timeout, not failed (#5401); a FAIL line keeps it red", () => {
+  const capped = { status: null, signal: "SIGTERM", error: Object.assign(new Error("spawnSync node ETIMEDOUT"), { code: "ETIMEDOUT" }) };
+  assert.equal(stepTimedOut(capped, "START 1/756 a.test.mjs\nPASS  1/756 a.test.mjs"), true);
+  assert.equal(stepTimedOut(capped, "FAIL  3/756 some-suite duration=2s"), false, "a FAIL line before the cap is a real red");
+  assert.equal(stepTimedOut({ status: 1, signal: null }, ""), false, "an exit 1 is a red, not a cap");
+  const tip = "t1234567890", head = "h1234567890";
+  const timeout = { tip, head, state: probeState([{ name: "ratchets", ok: true }, { name: "units", ok: false, timedOut: true, capS: 900 }]),
+    steps: [{ name: "ratchets", ok: true }, { name: "units", ok: false, timedOut: true, capS: 900 }] };
+  assert.equal(timeout.state, "timeout");
+  assert.equal(probeVerdictLine(timeout), "= preflip timeout - units (900 s) hit the probe's cap with no FAIL line on the merge with tip t1234567 (head h1234567); not a verdict on the code, the ready tier runs the full gate");
+  const both = [{ name: "ratchets", ok: false }, { name: "units", ok: false, timedOut: true, capS: 900 }];
+  assert.equal(probeState(both), "failed", "a real red outranks a cap");
+  assert.equal(probeVerdictLine({ tip, head, state: "failed", steps: both }), "= preflip failed - ratchets red on the merge with tip t1234567 (head h1234567); also hit the cap with no FAIL line: units (900 s)");
+  assert.equal(probeState([{ name: "ratchets", ok: true }]), "passed");
+  const calls = [];
+  const exec = (cmd, args) => {
+    calls.push(cmd);
+    if (cmd === "git" && args[0] === "rev-parse") return { status: 0, stdout: `${args[1].includes("origin") ? "t" : "h"}1234567890\n`, stderr: "" };
+    if (cmd === "node" && args.includes("tools/ci/tooling-fast.mjs")) return { ...capped, stdout: "PASS  1/756 a.test.mjs\n", stderr: "" };
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  const r = runProbe({ head: "hhh", exec, root: fs.mkdtempSync(path.join(os.tmpdir(), "probe-")) });
+  assert.equal(r.state, "timeout");
+  assert.equal(r.ok, false, "a capped step is never a pass");
+  assert.equal(r.steps.at(-1).timedOut, true);
+  assert.equal(r.steps.at(-1).capS, 900);
 });
 
 test("preflipAdvisory: absent, stale and current receipts are one advisory line each, never an error", () => {

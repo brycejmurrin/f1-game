@@ -11,9 +11,13 @@ const CareerPlanningUI = (function () {
       b.onclick = action; n.appendChild(b); return b;
     };
     function download(text, name) {
-      const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      const blob = new Blob([text], { type: "application/json" });
+      // Native path first (plain Safari lacks the click rescue); a native failure stays a failure.
+      if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable()
+          && typeof NativeDownload.saveBlob === "function") { NativeDownload.saveBlob(blob, name).catch(() => {}); return; }
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = name;
-      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
     const protection = p.protection();
     if (protection || Career.conflicted()) {
@@ -62,8 +66,10 @@ const CareerPlanningUI = (function () {
     if (objective) {
       const committed = p.stake(Career.round()) > 0;
       note(objective, "Standard: +150 cr when met. Committed: lock 50 game credits at weekend start; success pays 250 cr, failure loses only that 50. Reputation and race prizes follow the usual rules.");
-      for (const [value, label] of [[false, "Standard"], [true, "Committed · 50 cr stake"]]) {
-        const b = button(objective, label, () => { if (p.chooseStake(value)) rebuild(); }, Career.objectiveLocked());
+      // A stake the balance cannot cover is refused by chooseStake(): say so on the button, never a dead tap.
+      const short = p.stakeShort();
+      for (const [value, label] of [[false, "Standard"], [true, short ? "Committed · need 50 cr" : "Committed · 50 cr stake"]]) {
+        const b = button(objective, label, () => { if (p.chooseStake(value)) rebuild(); }, Career.objectiveLocked() || (value && short));
         b.setAttribute("aria-pressed", String(value === committed));
       }
     }

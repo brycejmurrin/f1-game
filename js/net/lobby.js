@@ -119,10 +119,10 @@ const NetLobby = (function () {
       return {
         team: team.id,
         driver: G.driverIdx || 0,
-        parts: setup,   // no livery: no peer ever read it, and a custom one cannot be built from an id
+        parts: setup,   // no livery here: this is also what an invite CODE carries (helloProfile adds it)
       };
     }
-
+    const helloProfile = () => LobbyRoster.withLivery(localProfile(), G);   // HELLO alone carries the paint job (#5037)
 
     // Turn a peer's declared ids into multipliers, locally. Falls back to the
     // team's factory numbers if anything about the setup does not resolve —
@@ -240,7 +240,7 @@ const NetLobby = (function () {
         const s = sessions.get(id);
         if (s) { try { s.close(); } catch (e) { /* already gone */ } }
         sessions.delete(id);
-        _peers.delete(id); _ready.delete(id); _verify.delete(id);
+        _peers.delete(id); _ready.delete(id); _verify.delete(id); _verified.delete(id);
         clashDrop(id);
         // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
@@ -271,7 +271,7 @@ const NetLobby = (function () {
             // waiting room, free the seat, and rotate the room code so the
             // evicted player cannot walk back in on the old one.
             selfReady = false;
-            _verify.delete(id);
+            _verify.delete(id); _verified.delete(id);
             if (G.setNetRoom) G.setNetRoom(true);
             // Only a CODE room rotates: a link/QR room never advertised one, and
             // minting it here left a public code up to expire later (H3-7).
@@ -374,7 +374,7 @@ const NetLobby = (function () {
       sessions.clear();
       session = null;
       for (const t of transports.values()) { try { t.close(); } catch (e) { /* already gone */ } }
-      transports.clear(); _verify.clear();
+      transports.clear(); _verify.clear(); _verified.clear();
       if (transport) { try { transport.close(); } catch (e) { /* already gone */ } }
       transport = null;
       pendingId = null;
@@ -419,8 +419,10 @@ const NetLobby = (function () {
             + " in the console to see which relay answered — if none did, set"
             + " apex26.turnApi to a credentials URL of your own. Racing over"
             + " the same Wi-Fi works meanwhile."
-          : " No relay is configured at all. Race over the same Wi-Fi, or set"
-            + " apex26.turnApi to a credentials URL.");
+          // No relay, by Bryce's decision (#5313, 2026-11-11): say so plainly.
+          : " This network cannot connect you directly, and there is no relay"
+            + " server to go around it. Put both phones on the same Wi-Fi, or"
+            + " switch one to mobile data, then start a new invite.");
     }
 
     function waitForOpen() {
@@ -558,7 +560,10 @@ const NetLobby = (function () {
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
       if (typeof NetRendezvous !== "undefined" && NetRendezvous.verifyFor) NetRendezvous.verifyFor(t.pc).then((v) => {
-        if (v && transports.get(id) === t) { _verify.set(id, v); say("Connected. Check both screens show code " + v + "."); renderRoom(); }
+        if (!v || transports.get(id) !== t) return;
+        _verify.set(id, v); _verified.delete(id);   // unticked: READY waits for CODES MATCH (#5313)
+        say("Connected. Check both screens show code " + v + ", then tap CODES MATCH.");
+        if (selfReady) setReady(false); else renderRoom();
       });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
       reopenRoom(transports.size < MAX_GUESTS);
@@ -767,7 +772,7 @@ const NetLobby = (function () {
         }
         say("A player left qualifying — their time is set to none.");
       });
-      made.sendEvent(NetPlay.EV.HELLO, Object.assign(localProfile(), role === "host" ? { rank: joinRank(id) } : null));
+      made.sendEvent(NetPlay.EV.HELLO, Object.assign(helloProfile(), role === "host" ? { rank: joinRank(id) } : null));
       if (role === "host") {
         publishSettings();
         // Existing READY before this connection opened (host + earlier guests).
@@ -793,6 +798,10 @@ const NetLobby = (function () {
     const _peers = new Map();
     const _ready = new Map();
     const _verify = new Map();   // connection id -> 4-letter code from both DTLS fingerprints
+    // Ids whose code this player ticked CODES MATCH for: READY waits for every one (#5313).
+    const _verified = new Set();
+    const unverified = () => [..._verify.keys()].filter((id) => !_verified.has(id));
+    const confirmCode = (id) => _verify.has(id) && (_verified.add(id), renderRoom(), true);
     const firstPeer = () => (_peers.size ? [..._peers.values()][0] : null);
     const peerIds = () => new Set([..._peers.keys(), ..._ready.keys()]);
     // Everyone has to be ready, and there has to BE somebody: an empty room
@@ -977,7 +986,7 @@ const NetLobby = (function () {
       // the garage, and what goes on the wire should be the seat you end up in
       // rather than the one you are about to be moved out of. When it fires it
       // sends the hello itself, so this must not send a second.
-      if (what === "car") { if (!resolveSeatClash()) broadcast(NetPlay.EV.HELLO, localProfile()); }
+      if (what === "car") { if (!resolveSeatClash()) broadcast(NetPlay.EV.HELLO, helloProfile()); }
       else publishSettings();
       if (selfReady) setReady(false);
       renderRoom();
@@ -989,6 +998,8 @@ const NetLobby = (function () {
       if (role === "guest" && !settingsAccepted) {
         selfReady = false; if (v) say("Waiting for the host’s complete race settings before READY.", true);
       }
+      const unticked = selfReady && unverified()[0];
+      if (unticked) { selfReady = false; say("Check that both screens show code " + _verify.get(unticked) + ", then tap CODES MATCH before READY.", true); }
       if (selfReady) settingsNeedsReady = false;
       if (sessions.size) broadcast(NetPlay.EV.READY, { ready: selfReady, revision: settingsRevision });
       renderRoom();
@@ -1098,7 +1109,7 @@ const NetLobby = (function () {
       const seatTxt = now.driver + (now.team ? " (" + now.team + ")" : "");
       say(onCustom ? (mineTeam.legends ? "LEGENDS" : "MY TEAM") + " cars only exist on your own screen — you're driving " + seatTxt + " for this race."
                    : was.driver + " was taken — you're driving " + seatTxt + ".");
-      broadcast(NetPlay.EV.HELLO, localProfile());
+      broadcast(NetPlay.EV.HELLO, helloProfile());
       if (selfReady) setReady(false);
       const garage = $("carsetup");
       if (garage && !garage.hidden && G.buildSetup) G.buildSetup();
@@ -1257,10 +1268,11 @@ const NetLobby = (function () {
     function verifyRow(el, id) {
       const v = _verify.get(id);
       if (!v) return el;
-      const tag = span("", v);
+      const ok = _verified.has(id), tag = span("", ok ? v + " ✓" : v);
       tag.dataset.verify = v;
       tag.title = "Verification code: it must match the code on their screen";
       el.appendChild(tag);
+      if (!ok) el.appendChild(LobbyRoster.verifyButton(id, v, confirmCode));
       // The host's Remove button is hostRemoveRow's — one per row, which also
       // covers "their screen shows a different code" (a middleman).
       return el;
@@ -1664,14 +1676,14 @@ const NetLobby = (function () {
       if (e.codeInputWrap) e.codeInputWrap.hidden = mode !== "input";
       const privateRelay = NetRendezvous.usingPrivateRelay();
       if (e.codeIn) {
-        e.codeIn.maxLength = privateRelay ? 64 : 8;
-        e.codeIn.placeholder = privateRelay ? "Paste their 32-character token" : "ABC234";
+        e.codeIn.maxLength = privateRelay ? 64 : 12;   // 8 letters plus the spaces or dashes a reader types
+        e.codeIn.placeholder = privateRelay ? "Paste their 32-character token" : "ABCD2345";
         e.codeIn.setAttribute("aria-label", privateRelay ? "Private room token" : "Room code");
       }
       if (e.codeValue) e.codeValue.setAttribute("data-private", String(privateRelay));
     }
 
-    // Paint the six-letter (or private) code into #vs-code-value and arm
+    // Paint the eight-letter (or private) code into #vs-code-value and arm
     // SHARE/COPY only when the invite is live on the relay. A code shown
     // earlier during createInvite left guests burning JOIN_TIMEOUT on an
     // empty topic while the host still said "Preparing…".
@@ -1758,7 +1770,7 @@ const NetLobby = (function () {
             // onConnected() reopens the code for the next arrival; its expiry
             // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
             // A quiet room is the waiting room (rotated after a remove): host copy,
-            // never nostr's guest "Check the six characters…" (H3-7; closed PR #3535).
+            // never nostr's guest "Check the letters…" (H3-7; closed PR #3535).
             if (r.error === "expired" && (sessions.size || watcherArmed || opts.quiet)) {
               const msg = "The room code has expired — INVITE ANOTHER makes a new one.";
               tagFailReason("expired", msg);
@@ -1766,7 +1778,7 @@ const NetLobby = (function () {
               return;
             }
             // Nobody in, nothing watching: take the dead code down, in host copy
-            // (nostr's is the GUEST's "Check the six characters…") (#2200).
+            // (nostr's is the GUEST's "Check the letters…") (#2200).
             if (r.error === "expired" && !opts.quiet) {
               const msg = "The room code expired — tap NEW CODE for another.";
               paintHostCode(""); tagFailReason("expired", msg); say(msg, true);
@@ -1904,7 +1916,7 @@ const NetLobby = (function () {
       if (!NetRendezvous.valid(code)) {
         say(NetRendezvous.usingPrivateRelay()
           ? "Private rooms need a new 32-character token. Ask the host to share a new token, or use the invite link."
-          : "That is not a room code — six letters and numbers.", true);
+          : "That is not a room code — eight letters and numbers (six from an older version).", true);
         return { ok: false, error: "bad_code" };
       }
       await readyIce();
@@ -2195,7 +2207,7 @@ const NetLobby = (function () {
         invalidateOperations();
         const privateRelay = NetRendezvous.usingPrivateRelay();
         showCodeStep("input", privateRelay ? "Paste their private room token" : "Enter their code",
-          privateRelay ? "Paste all 32 characters shared by your friend. Both players need the same private relay configured." : "Six letters and numbers.");
+          privateRelay ? "Paste all 32 characters shared by your friend. Both players need the same private relay configured." : "Eight letters and numbers (six from an older version).");
         const box = $("vs-code-in");
         if (box) { box.value = ""; box.focus(); }
       });
@@ -2314,6 +2326,7 @@ const NetLobby = (function () {
       watchForOpen: waitForOpen,
       roomChanged, setReady, startFromRoom, removeGuest,
       verifyCodes: () => Object.fromEntries(_verify),
+      confirmCode, unverifiedCodes: () => unverified().length,
       // Mint a further invite without disturbing the room. Host only, capped.
       inviteAnother,
       peerSeats,

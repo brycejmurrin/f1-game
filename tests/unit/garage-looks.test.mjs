@@ -97,9 +97,8 @@ test("each look changes the room (no silent fallback to stock)", () => {
 test("trackside bays (buildStatic) ignore the look", () => {
   const a = harness(), b = harness();
   b.GaragePrims.setLook("flood");
-  const sa = a.GarageScene.buildStatic ? a.GarageScene.buildStatic(LIV) : null;
-  const sb = b.GarageScene.buildStatic ? b.GarageScene.buildStatic(LIV) : null;
-  if (!sa) return;   // buildStatic not exported in this tree
+  assert.equal(typeof a.GarageScene.buildStatic, "function", "GarageScene exports buildStatic");
+  const sa = a.GarageScene.buildStatic(LIV), sb = b.GarageScene.buildStatic(LIV);
   assert.deepEqual(Array.from(sb.col), Array.from(sa.col), "pit rows keep the shipped room");
 });
 
