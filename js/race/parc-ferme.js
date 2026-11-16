@@ -47,8 +47,8 @@ var ParcFerme = (function () {
   }
 
   /**
-   * Pure: world anchor for the park orbit. Prefers an explicit pit/box sample
-   * when Tracks + a pit zone exist; otherwise the subject's world pose.
+   * Pure: world anchor for the park orbit. The pit-box sample for a subject in
+   * the pit window; otherwise where the subject stands.
    */
   function parkAnchor(G, car) {
     const c = car || pitSubject(G);
@@ -59,10 +59,11 @@ var ParcFerme = (function () {
     if (track && typeof Tracks !== "undefined" && Tracks.sample) {
       let s = c.s;
       const L = track.total;
-      // Prefer the player's pit-box arc when PitGeom can name the window.
-      if (L > 0 && typeof PitGeom !== "undefined" && PitGeom.zoneOf) {
+      // The pit-box arc only for a car that IS in the pit window: nothing moves
+      // the car there, so mid-circuit the orbit framed an empty box (#5557).
+      if (L > 0 && s != null && typeof PitGeom !== "undefined" && PitGeom.zoneOf) {
         const zz = PitGeom.zoneOf(track);
-        if (zz && zz.sBox != null) s = zz.sBox;
+        if (zz && zz.sBox != null && PitGeom.inWindow(zz, s, L)) s = zz.sBox;
       }
       if (s != null) {
         Tracks.sample(track, s, anchor);

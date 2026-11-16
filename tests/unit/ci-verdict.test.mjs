@@ -158,6 +158,31 @@ test("summary lists executed vs skipped jobs and names the required set", () => 
 
 // ---- #5241 G5 ----
 import { rerunVerdict } from "../../tools/ci/ci-verdict.mjs";
+test("nightly schedule NEEDS: a successful select with selected-verdict judging the plan passes ci-verdict", () => {
+  const nightly = {
+    guards: { result: "success" },
+    select: { result: "success", outputs: { any: "true", reason: "infra", plan_reason: "all" } },
+    selected: { result: "success" },
+    "selected-verdict": { result: "success" },
+    smoke: { result: "skipped" },
+  };
+  const v = verdict(nightly);
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.bad, []);
+});
+
+test("push and pull_request: skipped selected-verdict after a successful select still fails closed (#5459)", () => {
+  const needs = {
+    guards: { result: "success" },
+    select: { result: "success", outputs: { any: "true", reason: "infra" } },
+    selected: { result: "success" },
+    "selected-verdict": { result: "skipped" },
+  };
+  const v = verdict(needs);
+  assert.equal(v.ok, false);
+  assert.ok(v.bad.some((b) => /selected-verdict: skipped after a successful selection/.test(b)));
+});
+
 test("#5241 G5: a plan that said run and a job that skipped is not green", () => {
   const ok = { guards: { result: "success" }, select: { result: "success", outputs: { any: "true", any_node: "true" } },
     selected: { result: "success" }, "selected-verdict": { result: "success" }, "node-suites": { result: "success" } };

@@ -575,6 +575,11 @@
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
+/* #5358: under 100 % UI the sheet zoom paints --chip-h (48) below 44 (33.6 px at the phone's 70 %). Re-floor
+   the touch folds on the PAINTED 44, as #3334 did for the garage chips; 100 %+ is unchanged. */
+body:not(.desktop) :is(#pmsettings-inner .pm-group, #rs-body) details > summary {
+  min-height: max(var(--chip-h), calc(45px / var(--ui-scale)));
+}
 #advanced-inner > .pm-group-h {
   display: flex;
   justify-content: space-between;
