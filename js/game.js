@@ -9104,9 +9104,8 @@ function openGarage(from) {
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   // ENTRY FRAME: endHome() hides #game for the Home→garage gap; draw in the vt
   // callback but reveal only after renderSetupPreview succeeds (not while warming).
-  // Snapshot pseudos are click-through (css/tokens.css). Chrome still hit-tests
-  // <html> until the new frame is captured (~14 s on software GL), so that path
-  // skips vt. resetSetupCam() has already called endHome().
+  // Snapshot pseudos are click-through (css/tokens.css), but Chrome hit-tests <html>
+  // until the new frame is captured (seconds on software GL): that path skips vt.
   const revealGarageCanvas = () => {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");

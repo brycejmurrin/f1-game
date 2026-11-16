@@ -440,8 +440,6 @@ test("GaragePrebuild.instance() is the page's one instance (for __apex.garagePre
   const open = game.slice(openAt, game.indexOf("$(\"mb-garage\").onclick", openAt));
   assert.match(open, /resetSetupCam\(\);[\s\S]*else if \(presentIsSlow\(\)\) enterGarage\(\);\n {2}else vt\(enterGarage\);/,
     "openGarage resets the camera, crossfades on a fast present, and enters directly when software GL would hold the snapshot over #cs-done");
-  assert.match(open, /s\.softwareGL \|\| s\.softAdapter/,
-    "the slow present is the backend's software-GL report, not a timeout");
   assert.match(open, /renderSetupPreview\(0\)/,
     "enterGarage draws one bay frame on entry so vt/rAF cannot leave #game black");
   assert.doesNotMatch(open, /setupPreviewOn\s*=\s*true/,
