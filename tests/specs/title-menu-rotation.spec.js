@@ -286,6 +286,9 @@ test("a mismatched mid-rotation --kb clears when sizes land after the events", a
     test.setTimeout(120_000);
     await page.goto("/");
     await waitTitle(page);
+    // The density flip is the witness that the settle re-classified. At the phone's shipped UI SIZE 70 %
+    // (#5358) 430 / 0.7 = 614 own px is "normal" both before and after, so hold the size the flip needs.
+    await page.evaluate(() => window.__apex.uiScale(109));
 
     // Controllable visualViewport + silent layout settle (the #427/#472 hole).
     await page.evaluate(() => {

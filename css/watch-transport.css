@@ -11,6 +11,11 @@
   box-shadow: var(--edge), var(--lift-2); font: 600 var(--fs-micro) var(--font-ui);
   font-variant-numeric: tabular-nums; pointer-events: auto;
 }
+/* The bar is HUD chrome: it is NOT inside `zoom: var(--ui-scale)`, so the
+   tokens' `44.2px / --ui-scale` floor is real px here. At a phone's shipped
+   70 % that was 63 px a button, and the one-row bar broke into two (#5358). */
+.watch-transport { --tap: 44px; }
+@media (pointer: coarse) { .watch-transport { --tap: 52px; --tap-paint: 52px; } }   /* --tap-paint: the touch select / range / summary floor (components.css), 74 px there */
 .watch-transport [data-wt="controls"] { display: flex; align-items: end; gap: calc(var(--gap) * 2 / 3); }
 /* --tap, the house comfort floor (44 px, 52 on touch): a fixed 42 px sat under
    it on every device, and the WATCH bar is a touch surface too. */

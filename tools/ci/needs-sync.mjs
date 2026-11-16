@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Verdict line: does a PR branch need a deploy-tip sync? conflict | stale-red | tip-red | no (sync only when you must).
+ * @doc Verdict line: does a PR branch need a deploy-tip sync? conflict | stale-red | retest-refused | tip-red | no.
  * @section runner
  * @skill steward
  *
@@ -23,6 +23,13 @@
  *              (failure / timed_out / startup_failure): merge-gate's ci row refuses that
  *              green (a pass that needed a retry is a red). A re-run after a cancel-only
  *              attempt stays green; an unreadable attempt keeps `no` and names the error.
+ *   retest-refused  the newest `gate` status on the branch head (land.yml, by the Actions bot) is a refusal whose
+ *              `retest` row failed after the ci and gen rows passed, AND merge-gate's own window (newerTipPaths:
+ *              first-parent tip commits the head lacks, newer than the CI run less its margin or past the run's
+ *              recorded base) still names at least one tip merge. The row's cure is a sync and a push, so a fresh
+ *              CI run tests the combination (#5554). A status on an older head is never read (statuses are per
+ *              sha); a refusal with no tip merge in the window stays `no` (a sync cannot help); read only when
+ *              the head's ci.yml run is green.
  *   tip-red    the branch is behind, but the deploy tip is red on CODE (the newest completed pages.yml run failed
  *              in a job other than a Pages-side publish failure; tools/ci/lib/deploy-tip.mjs, #5425): syncing
  *              would import the red. Wait for the fix to land; sync-pr refuses (only the fixer's own branch may
@@ -31,7 +38,7 @@
  *              PR merges as it stands, and a clean refresh buys a full tier that repeats
  *              the old verdict. (The `distance` verdict went with merge-gate's distance
  *              row on 2026-11-03: gen and ratchets run on the real merge result.)
- * Exit: 0 sync needed (conflict | stale-red), 1 no sync needed (no | tip-red), 2 bad args, 3 could not
+ * Exit: 0 sync needed (conflict | stale-red | retest-refused), 1 no sync needed (no | tip-red), 2 bad args, 3 could not
  * decide (fetch / git / merge-tree failed). The API half degrades: no token or an API
  * error leaves ci "unknown", so only `conflict` can fire (the line says so).
  * Needs the merge base: a shallow clone must be deep enough for `git merge-tree`.
@@ -44,20 +51,23 @@ import { DEPLOY } from "./github-api.mjs";
 import { createSnapshot } from "../lib/pr-snapshot.mjs";
 import { ciState } from "./pr-board.mjs";
 import { readDeployTip } from "./lib/deploy-tip.mjs";
+import { ciRecordedBase, newerTipPaths } from "./merge-gate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const VERDICTS = ["conflict", "stale-red", "tip-red", "no"];
+export const VERDICTS = ["conflict", "stale-red", "retest-refused", "tip-red", "no"];
 
 /**
  * The verdict from the facts. Pure.
  * @param {{ behind: boolean, conflict: boolean, ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null,
  *   failedJobs?: number|null, jobsError?: string|null, attempt?: number, retryFailedJobs?: number|null,
- *   tip?: { state: string, evidence: string }|null }} f
+ *   tip?: { state: string, evidence: string }|null, retest?: { refused: boolean, tipMerges?: number, commits?: string[] }|null }} f
  *   tipNewestAt = committer date of the newest commit on the tip that the branch lacks; tip = tipState() of the deploy
  *   branch's newest completed pages.yml run (null: not read).
  *   failedJobs = jobs of a `cancelled` newest run that concluded `failure` (null: not read); jobsError = why not.
  *   attempt = the newest run's run_attempt; retryFailedJobs = red jobs across its earlier attempts (green runs only).
- * @returns {{ verdict: "conflict"|"stale-red"|"tip-red"|"no", why: string }}
+ *   retest = gateRetestRefusal() of the head's newest `gate` status, plus tipMerges / commits: the tip merges
+ *   merge-gate's retest window still names for this head (null: not read).
+ * @returns {{ verdict: "conflict"|"stale-red"|"retest-refused"|"tip-red"|"no", why: string }}
  */
 export function decideSync(f) {
   if (!f.behind) return { verdict: "no", why: "the branch already contains the deploy tip" };
@@ -75,6 +85,11 @@ export function decideSync(f) {
   if ((f.ci === "failure" || cancelledRed || retriedRed) && moved) {
     return { verdict: "stale-red", why: `${what} on the head and the tip has moved since that run started` };
   }
+  if (f.retest?.refused && f.retest.tipMerges > 0) {
+    const shown = (f.retest.commits || []).slice(0, 3).map((c) => String(c).slice(0, 8)).join(", ");
+    return { verdict: "retest-refused", why: `the gate's retest row refused this head and ${f.retest.tipMerges} tip merge(s) since its CI run remain${shown ? ` (${shown})` : ""}: sync and push, so a fresh CI run tests this combination` };
+  }
+  if (f.retest?.refused) return { verdict: "no", why: "behind with no conflict (the gate's retest row refused this head, but no tip merge since its CI run remains: a sync cannot help): clean-behind is not a reason" };
   const red = f.ci === "failure" || cancelledRed || retriedRed ? `${cancelledRed || retriedRed ? what : "ci red"} but the tip has not moved since`
     : f.ci === "unknown" ? "ci state unknown"
     : f.ci === "cancelled" && f.jobsError ? `ci cancelled; its jobs are unreadable (${f.jobsError})`
@@ -83,6 +98,22 @@ export function decideSync(f) {
     : m === 0 ? `ci success on attempt ${attempt}; earlier attempts had no failed job`
     : `ci ${f.ci || "none"}`;
   return { verdict: "no", why: `behind with no conflict (${red}): clean-behind is not a reason` };
+}
+
+/**
+ * Whether the newest `gate` commit status of a head (the statuses list, newest first) is a merge-gate refusal on the
+ * `retest` row that the row really evaluated: state `failure`, posted by the Actions bot, its description the
+ * `= merge-gate refused — …` summary line (merge-gate.mjs rowLines) with `ci=ok`, `gen=ok` and `retest=FAIL` (a red
+ * ci or gen row leaves retest "not evaluated", which is not this refusal). Pure.
+ * @returns {{ refused: boolean, evidence: string }}
+ */
+export function gateRetestRefusal(statuses) {
+  const g = (Array.isArray(statuses) ? statuses : []).find((s) => s?.context === "gate");
+  const d = String(g?.description || "");
+  const rows = new Set(d.split(" "));
+  const refused = g?.state === "failure" && g?.creator?.login === "github-actions[bot]" && d.startsWith("= merge-gate refused — ")
+    && rows.has("ci=ok") && rows.has("gen=ok") && rows.has("retest=FAIL");
+  return { refused, evidence: d };
 }
 
 /** Job conclusions that make an earlier attempt red (as merge-gate's ci row reads them; a cancelled job is not one). */
@@ -130,7 +161,7 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
     if (m.code !== 0 && m.code !== 1) return { ok: false, error: `git merge-tree failed (${m.code}): ${m.err || m.out}` };
     conflict = m.code === 1;
   }
-  let ci = "unknown", runStartedAt = null, note = null, failedJobs = null, jobsError = null, attempt = 1, retryFailedJobs = null, deployTip = null;
+  let ci = "unknown", runStartedAt = null, note = null, failedJobs = null, jobsError = null, attempt = 1, retryFailedJobs = null, deployTip = null, retest = null;
   const addNote = (t) => { note = note ? `${note}; ${t}` : t; };
   if (behind && !offline) {
     const t = readDeployTip(DEPLOY, request);
@@ -163,12 +194,24 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
         }
         if (!jobsError) retryFailedJobs = red;
       }
+      // #5554: a green head the gate refused on its retest row. The tip merges are counted with merge-gate's own
+      // window (the same git reads, the same recorded base), so this verdict and that row cannot disagree.
+      if (ci === "success") {
+        const st = request(`commits/${head.out}/statuses?per_page=100`);
+        if (st.error) addNote(`gate status unreadable (${st.error}): retest-refused cannot be detected`);
+        else if ((retest = gateRetestRefusal(st.json)).refused) {
+          const asGate = (args) => { const g = readGit(args); return { status: g.code, stdout: g.out, stderr: g.err }; };
+          const t = newerTipPaths({ cwd: ROOT, tip: tip.out, head: head.out, ciAt: run?.created_at || runStartedAt, ciBase: ciRecordedBase(run, request), gitRun: asGate });
+          if (t.error) addNote(`the retest window is unreadable (${t.error}): retest-refused cannot be confirmed`);
+          retest = { ...retest, tipMerges: t.error ? 0 : t.commits.length, commits: t.error ? [] : t.commits };
+        }
+      }
       snap?.save();
     }
   } else if (offline) addNote("offline: CI state not read, only a conflict can be detected");
   const tipNewestAt = behind ? readGit(["log", "-1", "--format=%cI", `${head.out}..${tip.out}`]).out || null : null;
-  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, failedJobs, jobsError, attempt, retryFailedJobs, tip: deployTip });
-  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, failedJobs, attempt, retryFailedJobs, deployTip, ...d, note };
+  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, failedJobs, jobsError, attempt, retryFailedJobs, tip: deployTip, retest });
+  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, failedJobs, attempt, retryFailedJobs, deployTip, retest, ...d, note };
 }
 
 /** The one verdict line. */
@@ -182,7 +225,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (argv.includes("--help") || !branch || bad || argv.filter((a) => !a.startsWith("--")).length !== 1) {
     console.error(`usage: node tools/ci/needs-sync.mjs <branch> [--json] [--offline]${bad ? `\nunknown arg: ${bad}` : ""}
 verdict line: ${VERDICTS.map((v) => `= sync needed: ${v}`).join(" | ")}
-exit: 0 sync needed (conflict|stale-red), 1 no (no|tip-red), 2 bad args, 3 could not decide`);
+exit: 0 sync needed (conflict|stale-red|retest-refused), 1 no (no|tip-red), 2 bad args, 3 could not decide`);
     process.exit(argv.includes("--help") ? 0 : 2);
   }
   const v = needsSync(branch, { offline: argv.includes("--offline") });

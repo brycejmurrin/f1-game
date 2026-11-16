@@ -76,6 +76,8 @@ body #overlay #menu-buttons {
   --hg: calc(var(--gap) * .4); --hrow: clamp(44px, 6.4svh, 64px);
   display: grid; grid-template-columns: repeat(auto-fit, minmax(max(7.5rem, calc(50% - var(--hg))), 1fr)); grid-auto-rows: max-content; gap: var(--hg); align-content: start; align-items: stretch;
 }
+/* #5358: a phone ships UI SIZE 70 %, which painted these rows 38 px tall in portrait. A finger gets the PAINTED 44. */
+body:not(.desktop) #overlay #menu-buttons { --hrow: max(clamp(44px, 6.4svh, 64px), calc(44.2px / var(--ui-scale))); }
 body #overlay #menu-buttons :is(#menu-hero, #menu-primary, #menu-garage) { display: contents; }
 body #overlay #menu-buttons :is(#mb-career, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { grid-column: 1 / -1; }
 body #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) { display: flex; flex-wrap: wrap; gap: var(--hg); width: 100%; }
