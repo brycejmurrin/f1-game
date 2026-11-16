@@ -1,1 +1,0 @@
-Fixed: nightly scheduled CI on the deploy branch no longer reds the aggregate `CI` job when every test job passed.
