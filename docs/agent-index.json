@@ -1472,6 +1472,15 @@
       "twinned": false
     },
     {
+      "id": "shipped-defaults",
+      "script": "test:shipped-defaults",
+      "kind": "browser",
+      "files": [
+        "tests/specs/shipped-defaults.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "smoke",
       "script": "test:smoke",
       "kind": "browser",
