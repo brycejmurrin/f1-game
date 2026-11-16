@@ -7,16 +7,5 @@
     "Missing or invalid policy fields fail closed. The spec still gets an isolated retrying shard while its exact-test policy is active.",
     "signature (optional; required on rows since 2026-10-26): a case-sensitive regex source starting with ^, matched against the retried attempt's first error line with ANSI codes and a leading 'Error: ' removed (flaky-policy.mjs errorLine). The row then exempts only that failure; the same test failing with any other message still blocks. Several rows may name one spec, one per exact title."
   ],
-  "quarantine": [
-    {
-      "spec": "tests/specs/hud-mirror.spec.js",
-      "since": "2026-10-02",
-      "owner": "brycejmurrin",
-      "why": "Cold TLX prepareRace may give up after 30 s: run 37238728678 observed state:count, preparing:false, prepared:false, renders:0. Only the TLX preparation test is exempt; GLX and other TLX mirror tests remain blocking.",
-      "title": "HUD rear-view mirror \u203a TLX \u203a TLX prepares an enabled mirror before the countdown advances and reuses its target in the race",
-      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/37238728678",
-      "expires": "2026-11-15",
-      "review": "By 2026-11-15, fix the cold TLX preparation deadline and remove this row after the exact test passes without retry on three cold CI runs. Any extension needs fresh failed-run evidence and an explicit new deadline."
-    }
-  ]
+  "quarantine": []
 }
