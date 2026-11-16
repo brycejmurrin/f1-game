@@ -650,7 +650,27 @@ const Assets = (function () {
     return true;
   }
 
+  // The tier FOLLOWS the GRAPHICS preset after boot (#5561): GfxQuality calls
+  // this on a preset change, and only off track (menu or pause card), so the
+  // re-upload never lands on a driven frame. Drops the material arrays, then
+  // loads the tier the preset now wants; models and the manifest stay. False
+  // when nothing is up, the tier already matches, or the tier was forced (the
+  // slow-link retry, __apex.assetLoad(tier)): a forced tier is not undone here.
+  let _pinned = false;
+  function followQuality() {
+    if (!_uploaded || _pinned || (_tier !== "low" && _tier !== "high")) return false;
+    const mats = _manifest && _manifest.materials;
+    const want = (_phoneLowPreset() || _lowDataLink()) && mats && mats.low ? "low" : "high";
+    if (want === _tier) return false;
+    Log.info("assets", "pack tier " + _tier + " -> " + want);
+    if (_gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
+    _uploaded = false; _tier = null; _bytes = 0; _loadPromise = null;
+    load();
+    return true;
+  }
+
   async function _load(opts, generation) {
+    _pinned = !!opts.tier;
     if (!supported()) { _err = "backend"; _tier = "off"; return false; }
     const m = await manifest();
     if (generation !== _loadGeneration) return false;
@@ -1082,7 +1102,7 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, retry, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
+  return { init, supported, manifest, load, retry, followQuality, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
            model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 

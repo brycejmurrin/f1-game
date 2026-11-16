@@ -1,0 +1,1 @@
+Fixed: on a phone, changing GRAPHICS between LOW and MEDIUM or HIGH now switches the road and grass textures to the matching sharpness without restarting the app; the switch happens in a menu or on the pause screen, never while you are driving
