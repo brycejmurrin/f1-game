@@ -85,7 +85,7 @@ for (const geo of GEOS) {
           const withContinue = await measure(page);
           const rows = {};
           for (const d of withContinue.m.doors) (rows[Math.round(d.t)] ||= []).push(d.id);
-          expect(Object.values(rows).map((r) => r.length), `${geo.name} ${prof.name} rows ${JSON.stringify(rows)}`).toEqual(geo.rows);
+          expect(Object.values(rows).map((r) => r.length), `${geo.name} ${prof.name} rows ${JSON.stringify(rows)}`).toEqual(prof.name === "fresh" ? geo.freshRows : geo.rows);
           expect(judge(withContinue.m, { offsets: prof.offsets }), `${geo.name} ${prof.name} with CONTINUE`).toEqual([]);
           expect(judgeLabels(withContinue.m), `${geo.name} ${prof.name} with CONTINUE: no clipped label (#5378)`).toEqual([]);
           if (geo.floor) expect(judgeFloor(withContinue.m), `${geo.name} ${prof.name} with CONTINUE: the touch paint floor`).toEqual([]);

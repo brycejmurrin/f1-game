@@ -1,0 +1,1 @@
+Improved: a phone now ships smaller menus: UI SIZE 70 % (was 109 %) with pause, track select, race settings, garage, track designer and title buttons sized to match. Sizes you have already set are kept
