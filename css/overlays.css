@@ -1243,6 +1243,13 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root[data-look-career-density="tight"] #cr-inner,
 :root[data-look-garage-density="tight"] #cs-inner { --compact-at: 99999px; }
 :root[data-look-popups-density="tight"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 99999px; }
+/* ...AND AT EVERY UI SIZE (#5580), the picker's #5358 gate (css/select.css): a phone ships UI SIZE 70 %, where 393 / 0.7
+   hands the career hub 520 own px (over its 480) and the results sheet 515 (over 380), so both went normal on the
+   owner's 852x393 and 844x390: results rows two lines and 74 painted px (3.8 in the pane, no pinned podium) where
+   compact paints 44; the hub head 85 painted where compact paints 62. */
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #career #cr-inner, #results > .sheet { --compact-at: 99999px; }
+}
 
 /* BUTTON HEIGHT — the tap tokens, scaled from their shipped values
    (--tap-0 / --chip-h-0, css/tokens.css), so the touch floor scales too. */
