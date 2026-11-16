@@ -4179,6 +4179,9 @@
       "armedRevision": [
         "tests/unit/career-backup.test.mjs"
       ],
+      "blocked": [
+        "tests/unit/career-cross-tab.test.mjs"
+      ],
       "budget": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -4571,6 +4574,7 @@
         "tests/unit/season-calendar-default.test.mjs"
       ],
       "upgradeBudget": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "upgradeFacility": [

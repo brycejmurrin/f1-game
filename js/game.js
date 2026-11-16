@@ -3256,7 +3256,7 @@ const G = {
     paintThrottleMode();
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
-    announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
+    if (autoThrottleOpt) announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
   },
   get musicEnabled() { return musicEnabled; }, set musicEnabled(v) { musicEnabled = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
