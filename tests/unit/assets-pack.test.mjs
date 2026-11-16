@@ -1934,6 +1934,47 @@ function assetRequestClock() {
   };
 }
 
+// #5555 finding 1: REQUEST_MS is a whole-transfer deadline, so on a slow link the 256 px strip times out and the
+// one same-tier retry timed out again: procedural tarmac for the session. A timed-out load retries at 128 px.
+test("#5555: a pack load that ran out its transfer deadline retries on the low tier; a dropped request keeps its tier", async () => {
+  const manifest = { materials: { size: 4, albedo: "hi.png", layers: [{ mat: 1, scale: 1 }],
+    low: { size: 2, albedo: "lo.png", layers: [{ mat: 1, scale: 1 }] } } };
+  const world = (strip) => {
+    const clock = assetRequestClock(), urls = [], sizes = [];
+    const assets = assetLoader({ ...clock, AbortController,
+      async fetch(url) {
+        if (url.endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+        urls.push(String(url).replace(/^.*\/|\?.*$/g, ""));
+        return strip(urls.length);
+      },
+      async createImageBitmap() { return { close() {} }; },
+    });
+    assets.init({ createTextureArray: (size) => { sizes.push(size); return {}; }, setMaterialMaps() {} });
+    return { assets, clock, urls, sizes };
+  };
+  const good = { ok: true, blob: async () => ({ size: 1 }) };
+
+  const slow = world((n) => (n === 1 ? new Promise(() => {}) : good));   // the first strip never finishes
+  const boot = slow.assets.load();
+  for (let i = 0; i < 20 && !slow.urls.length; i++) await new Promise((r) => setImmediate(r));
+  assert.deepEqual(slow.urls, ["hi.png"], "boot asks for the 256 px strip");
+  slow.clock.fire(15000);
+  assert.equal(await boot, false);
+  assert.match(slow.assets.state().error, /^asset request timed out: .*hi\.png/);
+  assert.equal(slow.assets.retry(), true);
+  assert.equal(await slow.assets.load(), true, "the retry lands");
+  assert.deepEqual(slow.urls, ["hi.png", "lo.png"], "the retry asks for the 128 px strip, not the one that timed out");
+  assert.equal(slow.assets.state().tier, "low");
+  assert.deepEqual(slow.sizes, [2]);
+
+  const flaky = world((n) => { if (n === 1) throw new TypeError("Failed to fetch"); return good; });
+  assert.equal(await flaky.assets.load(), false);
+  assert.equal(flaky.assets.retry(), true);
+  assert.equal(await flaky.assets.load(), true);
+  assert.deepEqual(flaky.urls, ["hi.png", "hi.png"], "a dropped request is not a slow link: same tier");
+  assert.equal(flaky.assets.state().tier, "high");
+});
+
 test("shared model fetch and body deadlines settle stalled work and permit both readiness routes to retry", async () => {
   for (const phase of ["fetch", "body"]) for (const source of [undefined, 'bakedModel("box")']) {
     const clock = assetRequestClock(), stalled = deferredAssetDownload();

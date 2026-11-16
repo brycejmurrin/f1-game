@@ -26,8 +26,9 @@ const SurveyHud = (function () {
   // `&APEX_SURVEY_HUD=1` reached players' phones. Same gate as the agent surface (test mode,
   // localhost, ?apex=1); a bare fixture object with no hostname is a unit test, not a page.
   function devOrigin(loc) {
-    if (typeof LazyBundles !== "undefined" && LazyBundles.wantAgentSurface) {
-      try { return !!LazyBundles.wantAgentSurface(); } catch (_) { return false; }
+    const lb = typeof LazyBundles !== "undefined" && LazyBundles.live ? LazyBundles.live() : null;
+    if (lb) {
+      try { return !!lb.wantAgentSurface(); } catch (_) { return false; }
     }
     const h = loc && loc.hostname;
     if (typeof h !== "string") return true;

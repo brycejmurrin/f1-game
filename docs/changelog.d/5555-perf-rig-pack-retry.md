@@ -1,0 +1,1 @@
+Fixed: one dropped download no longer leaves BENCHMARK, PHONE TEST and the METRICS panel missing until a reload, METRICS saved ON shows its panel at once, and on a slow connection the road and grass textures retry at the smaller size instead of staying plain for the session

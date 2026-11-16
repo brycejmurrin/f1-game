@@ -705,7 +705,8 @@
    the `desktop` class on <body>. */
 body:not(.desktop) {
   /* 44 PAINTED px under 85 % (#5235): the floor term was 24, which let a 70 % phone paint 36 px rows. */
-  --tap: max(52px, calc(44px / var(--ui-scale)));
+  /* 44.2, not 44 (#5358): 44 / 0.7 lays out at 62.83 own px and paints 43.98, a hair under the floor it names. */
+  --tap: max(52px, calc(44.2px / var(--ui-scale)));
   /* Why: docs/notes/TOKENS-RATIONALE.md §R5. */
   --chip-h: max(48px, min(calc(52px / var(--ui-scale)), calc(52px * var(--ui-scale))), calc(24px / var(--ui-scale)));
   --tap-sm: max(36px, calc(24px / var(--ui-scale)));
@@ -752,6 +753,11 @@ body:not(.desktop) {
     --hud-btn-mult: 1.25;
     --hud-btn-scale: var(--hud-btn-mult);
   }
+}
+/* A PHONE (touch, short side <= 500 px) ships UI SIZE 70 % (#5358, the owner's 2026-11-10 profile).
+   The mirror of PHONE_UI_DEFAULT / phoneUi() in js/ui/scale.js: CSS owns first paint. */
+@media (pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 500px) {
+  :root { --ui-scale: 0.7; }
 }
 
 /* Why: docs/notes/TOKENS-RATIONALE.md §R8. */

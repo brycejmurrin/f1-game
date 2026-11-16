@@ -32,9 +32,10 @@ const CareerPlanning = (function () {
       const p = c() && c().briefStake;
       return p && p.year === c().year && p.round === r && p.committed ? STAKE : 0;
     }
+    const stakeShort = () => !api().freeMoney() && c().money < STAKE;
     function chooseStake(committed) {
       if (!c() || ctx.blocked() || api().objectiveLocked() || api().seasonDone()) return false;
-      if (committed && !api().freeMoney() && c().money < STAKE) return false;
+      if (committed && stakeShort()) return false;
       c().briefStake = { year: c().year, round: c().season.round, committed: !!committed, escrow: 0 };
       ctx.save(); return api().saveStatus().ok;
     }
@@ -154,7 +155,7 @@ const CareerPlanning = (function () {
       return sp && sp.end === c().season.round - 1 && (c().paidSponsors || []).includes(sp.idx) ? sp : null;
     }
     return { protection: ctx.protection, adopt: ctx.adopt, comparison, factory, cash, transition,
-      stake, chooseStake, escrow, sponsorOffers, chooseSponsor, lastSponsor };
+      stake, stakeShort, chooseStake, escrow, sponsorOffers, chooseSponsor, lastSponsor };
   }
   // STAKE stays module-local (remapWeekend / create stake helpers).
   return { create, protect, missing, remapWeekend };

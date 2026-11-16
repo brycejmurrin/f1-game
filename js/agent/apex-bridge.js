@@ -382,11 +382,22 @@ const ApexBridge = (function () {
     return { value: JSON.parse(s) };
   }
 
+  // bench / gpuTest / recorder / a path pin read LAZY_PERF globals, which land at idle (or never, after a dropped
+  // fetch): ask the game's LazyBundles instance for the rig first, so the command waits instead of "unavailable".
+  const PERF_CMDS = new Set(["bench", "gpuTest", "recorder", "path"]);
+  async function perfRig() {
+    try {
+      const lb = typeof LazyBundles !== "undefined" && LazyBundles.live ? LazyBundles.live() : null;
+      if (lb) await lb.ensurePerfRig();
+    } catch (_) { /* the command reports what is missing */ }
+  }
+
   async function handle(msg) {
     const fn = msg && Object.prototype.hasOwnProperty.call(CMDS, msg.cmd) ? CMDS[msg.cmd] : null;
     if (!fn) return { ok: false, error: "unknown cmd: " + (msg && msg.cmd) };
     const t0 = performance.now();
     try {
+      if (PERF_CMDS.has(msg.cmd)) await perfRig();
       const out = safeJson(await fn(msg.args || {}));
       return Object.assign({ ok: true, ms: r2(performance.now() - t0) }, out);
     } catch (e) {

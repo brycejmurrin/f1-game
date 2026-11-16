@@ -197,6 +197,19 @@ test('coasting and X-mode tips read the pedals, the flaps and the cornering load
   tick(.3); assert.equal(announcements.length, 1); assert.equal(coach.feedback().latest.id, 'coasting');
 });
 
+// #5557: in a real-race WATCH G.player is the followed replay puppet (zero pedal demands at trace speed).
+test('a replay puppet is not coached: no coasting tip, no tip count, and the coach reads ready', () => {
+  const { coach, G, tick, enable, announcements } = fixture(); enable();
+  G.realRace = { owns: car => car === G.player };
+  tick(3, { throttleDemand: 0 });
+  assert.equal(announcements.length, 0);
+  assert.equal(coach.feedback().latest, null);
+  assert.equal(coach.feedback().state, 'ready');
+  G.realRace = { owns: () => false };
+  tick(1.5);
+  assert.equal(announcements.length, 1, 'the driven car is coached again');
+});
+
 test('a tip the banner never showed is not recorded as advice given', () => {
   // The cinematic cameras silence "coach" so a film shot is not captioned. The
   // coach's own log, its 30 s repeat block and the post-session feedback all
