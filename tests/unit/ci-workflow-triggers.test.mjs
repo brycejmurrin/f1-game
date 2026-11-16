@@ -328,10 +328,10 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   assert.ok(job.length > 0, "the selected-verdict job is gone");
   assert.match(job, /^    name: Selected specs \(verdict\)$/m, "the required-check name; branch protection names it");
   assert.match(job, /^    needs: \[select, selected, guards\]$/m);
-  // Every event that runs `select` — push, pull_request, the Pages call — gets
-  // the verdict (no merge_group since 2026-10-14; no smoke_only either).
-  assert.match(job, /^    if: \$\{\{ .*!cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\).*\}\}$/m,
-    "the required name reports on every push, PR and Pages call");
+  // Every event that runs `select` — push, pull_request, schedule, workflow_dispatch,
+  // the Pages call — gets the verdict (no merge_group since 2026-10-14; no smoke_only either).
+  assert.match(job, /^    if: \$\{\{ .*!cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| inputs\.concurrency_key != ''\).*\}\}$/m,
+    "the required name reports on every push, PR, nightly schedule, manual dispatch, and Pages call");
   assert.doesNotMatch(job, /^    if: \$\{\{ always\(\)/m, "always() turned a superseded run's cancelled `selected` into a red verdict");
   // The reading: select must pass; selected passes or is skipped; and (since
   // 2026-10-04) ANY dropped routed spec is a red off the train, whether or not

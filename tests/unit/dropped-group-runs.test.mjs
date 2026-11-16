@@ -8,7 +8,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { parse as parseYAML } from "yaml";
 import {
-  decide, droppedSpecs, scriptSpecs, groupRecordLine, parseGroupRecord, parseRunTitle, covers, passedSpecFiles, GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, GROUP_WORKFLOW_PATH,
+  decide, droppedSpecs, scriptSpecs, groupLine, groupRecordLine, parseGroupRecord, parseRunTitle, covers, passedSpecFiles, GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, GROUP_WORKFLOW_PATH,
 } from "../../tools/ci/dropped-group-runs.mjs";
 import { runShardArgs, testedPair, prInput } from "../../tools/ci/remote-group.mjs";
 import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
@@ -280,9 +280,39 @@ test("the verdict job can run it: the file alone, no node_modules, no other repo
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("scriptSpecs reads a group's script line exactly as select-specs' specsOf does, for every test:* script", () => {
+test("scriptSpecs + groupLine read a group exactly as select-specs' specsOf does, for every test:* script", () => {
   const scripts = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts;
+  const doc = JSON.parse(fs.readFileSync("tests/groups.json", "utf8"));
   const names = Object.keys(scripts).filter((n) => n.startsWith("test:"));
-  assert.deepEqual(names.map((n) => scriptSpecs(scripts[n])), names.map((n) => specsOf([n], scripts)));
+  assert.deepEqual(names.map((n) => scriptSpecs(groupLine(scripts[n], doc))), names.map((n) => specsOf([n], scripts)));
   assert.deepEqual(scriptSpecs(undefined), []);
+  // #5427 moved the rosters out of package.json: a wrapper line is read through tests/groups.json, and one that
+  // cannot be (no file, unknown group, a node group) throws, so main() answers "unknown contents", never "empty".
+  const line = "node tools/ci/run-playwright.mjs --group test:ui";
+  assert.equal(scripts["test:ui"], line);
+  assert.equal(scriptSpecs(groupLine(line, doc)).includes(UI), true);
+  assert.equal(groupLine("node --test a.test.mjs", doc), "node --test a.test.mjs");
+  assert.equal(groupLine(line, { groups: { "test:ui": { kind: "browser", files: [UI, HOOKS] } } }), `${UI} ${HOOKS}`);
+  for (const bad of [null, {}, { groups: {} }, { groups: { "test:ui": { kind: "node", files: ["x"] } } }, { groups: { "test:ui": { kind: "browser", files: [] } } }]) {
+    assert.throws(() => groupLine(line, bad), { message: "no browser group test:ui in tests/groups.json" });
+  }
+});
+
+// The job's real layout (ci.yml sparse-checkout, cone mode: the listed directories plus the files directly under
+// their parents, so package.json and tests/groups.json are there; tools/gen, tests/helpers and node_modules are not).
+test("in the verdict job's sparse layout every browser group resolves to the specs the selector reads (#5549)", () => {
+  const scripts = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts;
+  const names = Object.keys(scripts).filter((n) => n.startsWith("test:") && specsOf([n], scripts).length > 0);
+  assert.equal(names.includes("test:ui"), true);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "verdict-sparse-"));
+  try {
+    for (const d of ["tools/ci", "tools/lib", "tests/specs"]) fs.cpSync(d, path.join(dir, d), { recursive: true });
+    for (const f of ["package.json", "tests/groups.json"]) fs.copyFileSync(f, path.join(dir, f));
+    const code = `import fs from "node:fs"; import { scriptSpecs, groupLine } from "./tools/ci/dropped-group-runs.mjs";
+      const s = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts, d = JSON.parse(fs.readFileSync("tests/groups.json", "utf8"));
+      console.log(JSON.stringify(${JSON.stringify(names)}.map((n) => scriptSpecs(groupLine(s[n], d)))));`;
+    const r = spawnSync(process.execPath, ["--input-type=module", "-e", code], { cwd: dir, encoding: "utf8", env: { PATH: process.env.PATH } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), names.map((n) => specsOf([n], scripts)));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

@@ -219,6 +219,20 @@ export function scriptSpecs(cmd, dir = path.join("tests", "specs")) {
   return [...out].sort();
 }
 
+/** A script line with a browser group's wrapper (`node tools/ci/run-playwright.mjs --group test:x`, #5427: the
+ *  roster lives in tests/groups.json, not in package.json) replaced by that group's file list; any other line comes
+ *  back as it is. The same reading as gen-test-groups.mjs expandScript, kept here for the reason scriptSpecs is: the
+ *  verdict job's sparse checkout has no tools/gen (it does have tests/groups.json: cone mode checks out the files
+ *  directly under a listed directory's parents). A wrapper whose group is not a browser group with files throws,
+ *  which the caller reads as unknown contents (#5549). */
+export function groupLine(cmd, doc) {
+  const m = /^node tools\/ci\/run-playwright\.mjs --group (test(?::[\w-]+)?)$/.exec(String(cmd || "").trim());
+  if (!m) return String(cmd || "");
+  const def = doc && doc.groups ? doc.groups[m[1]] : null;
+  if (!def || def.kind !== "browser" || !Array.isArray(def.files) || !def.files.length) throw new Error(`no browser group ${m[1]} in tests/groups.json`);
+  return def.files.join(" ");
+}
+
 function gh(args) {
   const r = spawnSync("gh", ["api", ...args], { encoding: "utf8", maxBuffer: 64 << 20 });
   return r.status === 0 ? r.stdout : null;
@@ -255,6 +269,8 @@ async function main(argv = process.argv.slice(2)) {
   const head = env.PR_HEAD_SHA || "";
   let scripts = null;
   try { scripts = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts || null; } catch { /* below */ }
+  let groups = null;
+  try { groups = JSON.parse(fs.readFileSync(path.join("tests", "groups.json"), "utf8")); } catch { /* a wrapper line then throws: unknown */ }
   const runs = SHA.test(head) ? pages(gh([`repos/${repo}/actions/workflows/browser-group.yml/runs?head_sha=${head}&per_page=100`, "--paginate"]), "workflow_runs") : null;
   // THE BOUNDED WAIT (orchestrator A, 2026-11-11): a group run dispatched at the ready flip may still be running when
   // this job starts. While a run of a dropped spec's group is queued or in progress, poll until WAIT_S (default 420 s:
@@ -265,7 +281,7 @@ async function main(argv = process.argv.slice(2)) {
     dropped: String(env.DROPPED_SPECS || "").split(/\s+/), count: env.DROPPED, head,
     base: env.CURRENT_BASE || currentBase(), runs: rs,
     // A glob needs tests/specs on disk; a throw reads as unknown contents (refuses every dropped spec).
-    groupSpecs: (g) => { try { return scripts && scripts[`test:${g}`] ? scriptSpecs(scripts[`test:${g}`]) : null; } catch { return null; } },
+    groupSpecs: (g) => { try { return scripts && scripts[`test:${g}`] ? scriptSpecs(groupLine(scripts[`test:${g}`], groups)) : null; } catch { return null; } },
     jobsOf: (id) => pages(gh([`repos/${repo}/actions/runs/${id}/jobs?per_page=100`, "--paginate"]), "jobs"),
     annotationsOf: (jobId) => json(gh([`repos/${repo}/check-runs/${jobId}/annotations?per_page=100`])),
   });

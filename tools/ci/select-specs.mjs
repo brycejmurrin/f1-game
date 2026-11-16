@@ -35,6 +35,7 @@ import { FAT_UI_SPEC } from "./fat-shard.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
 import { specsAffectedByImpact } from "../lib/impact-map.mjs";
 import { changeKind } from "./change-kind.mjs";
+import { expandScript } from "../gen/gen-test-groups.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import { loadQuarantine } from "../../tests/helpers/flaky-policy.mjs";
 import * as espree from "espree";
@@ -219,11 +220,13 @@ export function maxDeclaredTimeout(file, scope = null) {
   return max;
 }
 
-/** tests/specs/*.spec.js named by the given npm scripts (globs expanded). */
+/** tests/specs/*.spec.js named by the given npm scripts (globs expanded). A wrapper line
+ *  (`run-playwright.mjs --group test:x`, #5427) is read through expandScript, so its files
+ *  are tests/groups.json's. */
 export function specsOf(scriptNames, scripts) {
   const out = new Set();
   for (const name of scriptNames) {
-    const cmd = scripts[name];
+    const cmd = expandScript(scripts[name]);
     if (!cmd) continue;
     for (const m of cmd.match(/tests\/specs\/[^\s"']+\.spec\.js/g) || []) {
       if (!m.includes("*")) { out.add(m); continue; }
@@ -1530,8 +1533,9 @@ const hasTests = (f) => { const n = declaredTests(f); return Number.isFinite(n) 
 // routes it as usual; only the runner fan-out case changes, and nothing is exempt from the dropped count.
 export function perGroupPlan(scripts = pkgScripts(), db = timings()) {
   const out = [], unrepresented = [];
-  for (const [name, cmd] of Object.entries(scripts).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [name, line] of Object.entries(scripts).sort(([a], [b]) => a.localeCompare(b))) {
     if (!name.startsWith("test:") || name === "test") continue;
+    const cmd = expandScript(line);   // a wrapper's flags (--project=…) live in tests/groups.json
     if (!/^node tools\/ci\/run-playwright\.mjs\b/.test(cmd) || /--project=/.test(cmd)) continue;
     const pool = specsOf([name], scripts).filter((f) => fs.existsSync(path.join(ROOT, f))
       && !FIXED_GATE_SPECS.has(f) && !MANUAL_OPT_IN_SPECS.has(f) && !isTwinned(f) && hasTests(f));

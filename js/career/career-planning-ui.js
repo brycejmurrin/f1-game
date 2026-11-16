@@ -66,8 +66,10 @@ const CareerPlanningUI = (function () {
     if (objective) {
       const committed = p.stake(Career.round()) > 0;
       note(objective, "Standard: +150 cr when met. Committed: lock 50 game credits at weekend start; success pays 250 cr, failure loses only that 50. Reputation and race prizes follow the usual rules.");
-      for (const [value, label] of [[false, "Standard"], [true, "Committed · 50 cr stake"]]) {
-        const b = button(objective, label, () => { if (p.chooseStake(value)) rebuild(); }, Career.objectiveLocked());
+      // A stake the balance cannot cover is refused by chooseStake(): say so on the button, never a dead tap.
+      const short = p.stakeShort();
+      for (const [value, label] of [[false, "Standard"], [true, short ? "Committed · need 50 cr" : "Committed · 50 cr stake"]]) {
+        const b = button(objective, label, () => { if (p.chooseStake(value)) rebuild(); }, Career.objectiveLocked() || (value && short));
         b.setAttribute("aria-pressed", String(value === committed));
       }
     }

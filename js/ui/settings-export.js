@@ -96,8 +96,8 @@ const SPEC = [
   // the `(pointer: coarse)` block of css/tokens.css owns the touch numbers so a
   // phone is right on its FIRST paint, and js/ui/scale.js mirrors them. null is
   // the honest default to report — a stored number is the change.
-  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch)" },
-  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
+  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; 109% on touch, 70% on a phone)" },
+  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, 70 ui on a phone, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
@@ -622,6 +622,13 @@ function applySettings(file, G) {
     if ((!row.freeShape && !typeOk(v, def)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
     writes.push([row, v]);
   }
+  // ALL OR NOTHING (#5005). A write storage refuses (a nearly full phone) used to leave the keys before and
+  // after it written: half old, half new after the next launch. Snapshot every key first; any refusal puts
+  // them all back and the time-trial merge below never starts.
+  // Read through the store, so a value it holds only in memory (an earlier refused write) is what comes back;
+  // getStored, never get: a key the player never set must go back to unset, not to a written-out default.
+  const stored = (k) => (GameStore.store.getStored ? GameStore.store.getStored(k) : GameStore.store.get(k, undefined));
+  const before = writes.map(([row]) => [row, row.lane === "raw" ? GameStore.store.raw(`apex26.${row.k}`) : stored(row.k)]);
   let applied = 0, failed = 0;
   for (const [row, v] of writes) {
     try {
@@ -638,6 +645,16 @@ function applySettings(file, G) {
       }
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
+  }
+  if (failed) {
+    for (const [row, prev] of before) {
+      try {
+        if (row.lane !== "raw") GameStore.store.set(row.k, prev);   // undefined removes the key
+        else if (prev === null || prev === undefined) GameStore.store.rawDel(`apex26.${row.k}`);
+        else GameStore.store.rawSet(`apex26.${row.k}`, prev);
+      } catch (_) { /* storage is refusing: the key keeps whatever it could */ }
+    }
+    return { ok: true, applied: 0, skipped, failed, rejectedTtlb: 0, reason: null };
   }
   const ttlb = applyTtlb(file.ttlb);
   applied += ttlb.applied;
@@ -1115,7 +1132,7 @@ function create(G) {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
-        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
+        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED${r.applied ? "" : ", NOTHING CHANGED"}`, 3200); return; }
         if (!r.applied) { flash(b, label, "NOTHING TO LOAD", 2200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first

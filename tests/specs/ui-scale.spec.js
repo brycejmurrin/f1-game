@@ -650,6 +650,8 @@ test.describe("UI scale", () => {
           raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
           scrollY: menu.scrollHeight - menu.clientHeight, scrollX: menu.scrollWidth - menu.clientWidth,
           doors: doors.length, off,
+          // BUTTONS SIZE multiplies the cap (css/menu-destinations.css `max(1, --tl-btns-size)`); a phone ships 123 (#5358).
+          doorSize: document.body.dataset.shape === "wide" ? Math.max(1, TitleLayout.current("wide").btns.size / 100) : 1,
         };
       });
       scale.racePainted = scale.raceFont * +scale.geometry;
@@ -659,8 +661,8 @@ test.describe("UI scale", () => {
       expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
       expect(scale.doors, `${name}: destinations are measured ${scaleDump}`).toBeGreaterThan(5);
       if (contract === "fit") {
-        expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.fit, 2);
-        expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 + 0.001);
+        expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.doorSize * scale.fit, 2);
+        expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 * scale.doorSize + 0.001);
         // Both readings here are the compact layout (a phone-sized box is
         // compact at 100% too), so this compares like with like and holds with
         // room: CI run 42303256107 read 18.7 vs 15.5 at 734x343 and 27.7 vs
@@ -1792,7 +1794,7 @@ test.describe("Factory Home on touch", () => {
       desktop: document.body.classList.contains("desktop"),
       custom: localStorage.getItem("apex26.titleLayout"),
       scale: Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")),
-    }))).toEqual({ coarse: true, desktop: false, custom: null, scale: 1.09 });
+    }))).toEqual({ coarse: true, desktop: false, custom: null, scale: 0.7 });   // 852x393 is a phone: it ships UI SIZE 70 % (#5358)
 
     const cells = [
       { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
@@ -1852,11 +1854,14 @@ test.describe("Factory Home on touch", () => {
         const race = await page.locator("#mb-race").boundingBox();
         const timeTrial = await page.locator("#mb-tt").boundingBox();
         expect(Math.abs(race.y - timeTrial.y), "normal landscape keeps paired play destinations").toBeLessThanOrEqual(1);
-        expect(race.x + race.width).toBeLessThanOrEqual(timeTrial.x + 1);
+        // A phone's shipped look shears the doors (#5358): a sheared door's bounding box is wider than the door by
+        // height × tan(skew), so neighbours' boxes cross while the doors keep their gap. Compare the doors themselves.
+        const shear = await page.locator("#mb-race").evaluate(el => Math.abs(new DOMMatrix(getComputedStyle(el).transform).c) * el.getBoundingClientRect().height);
+        expect(race.x + race.width - shear).toBeLessThanOrEqual(timeTrial.x + 1);
         const practice = await page.locator("#mb-practice").boundingBox();
         const garage = await page.locator("#mb-garage").boundingBox();
         expect(Math.abs(practice.y - garage.y), "Practice and Garage share the final play row").toBeLessThanOrEqual(1);
-        expect(practice.x + practice.width).toBeLessThanOrEqual(garage.x + 1);
+        expect(practice.x + practice.width - shear).toBeLessThanOrEqual(garage.x + 1);
         const settings = await page.locator("#mb-settings").boundingBox();
         const help = await page.locator("#mb-help").boundingBox();
         expect(Math.abs(settings.y - help.y), "normal landscape keeps utilities in a compact strip").toBeLessThanOrEqual(1);

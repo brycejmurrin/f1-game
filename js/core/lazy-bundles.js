@@ -872,6 +872,7 @@ function bootDevPanels() {
 // the bundle lands at idle (its settings doors mount on their own timers), or
 // at once when BenchRun's multi-reload plan is waiting to resume.
 let _perfLoad = null, _perfBind = null;
+const perfLoaded = new Set();
 function perfResumePending() {
   try {
     const s = typeof GameStore !== "undefined" && GameStore.store;
@@ -882,8 +883,9 @@ function ensurePerfRig() {
   if (_perfLoad) return _perfLoad;
   const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_PERF) || [];
   if (!files.length) return Promise.resolve(false);
-  _perfLoad = loadBackendScripts(files, ApexRoster.LAZY_PERF_EDGES || [], { strict: true }).then((ok) => {
+  _perfLoad = loadBackendScripts(files, ApexRoster.LAZY_PERF_EDGES || [], { strict: true, loaded: perfLoaded }).then((ok) => {
     bindPerfRig();
+    if (ok === false) _perfLoad = null;   // #5555: a dropped fetch is retried by the next ask, not latched
     return ok !== false;
   }).catch((e) => {
     Log.warn("game", "perf rig failed to load: " + (e && e.message));
@@ -1072,6 +1074,8 @@ bootDevPanels();
 mountBridgeLinkDoor();
 return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
-  return { create };
+  // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
+  let live = null;
+  return { create: (deps) => (live = create(deps)), live: () => live };
 })();
 Object.freeze(LazyBundles);
