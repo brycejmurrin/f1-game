@@ -975,6 +975,13 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
 }
 #install-chip[hidden] { display: none; }
 #update-chip[hidden] { display: none; }
+/* THE TITLE MAKES ROOM FOR IT. The chip is fixed bottom-right at z 9000 and the
+   title grid fills the window, so on a landscape phone it sat ON the last menu
+   row: SAVES & DATA fully and HOW TO PLAY half at 844x390 (SETTINGS too under the
+   longer "RELOAD TO CONTINUE" text), for as long as the update was pending, and
+   a tap meant for one of them reloaded the game. While it shows, #overlay ends
+   one chip row (+ a gap of air) higher; the grid reflows inside what is left. */
+body:has(> #update-chip:not([hidden])) #overlay { padding-bottom: calc(var(--sab) + var(--tap) + var(--gap) * 2); }
 /* NOT UNDER A MODAL DIALOG. showModal() puts dialog.screen (RESULTS after
    every race, SETTINGS, STANDINGS, DATA HUB…) in the top layer, which no
    z-index outranks, and makes everything outside it inert — the chip sat under
