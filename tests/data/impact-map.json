@@ -8076,6 +8076,7 @@
         "tests/specs/steering.spec.js",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
+        "tests/unit/boost-press-census.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
