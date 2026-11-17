@@ -56,6 +56,7 @@ import { gitTry } from "../lib/git-run.mjs";
 import { defaultRemoteWorkers } from "../lib/browser-workers.mjs";
 import { CI_BUCKETS, MIN_SAMPLES, declaredTests, specSecPerTest } from "./select-budget.mjs";
 import { specsOf } from "./select-specs.mjs";
+import { expandScript } from "../gen/gen-test-groups.mjs";
 import { GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, groupRecordLine, passedSpecFiles } from "./dropped-group-runs.mjs";
 import { inBuckets, loadDb, median, TIMINGS_FILE } from "./spec-timings.mjs";
 
@@ -110,7 +111,8 @@ export const MIN_PIECE_SEC = 120;
  *  expanded) — what a packed plan can split; null when it is not: `--project=…`,
  *  an env prefix, no files, and the count shard (`--shard=i/n`) must stay. */
 export function groupFiles(group, scripts) {
-  const cmd = String((scripts || {})[`test:${group}`] || "");
+  // A wrapper line (#5427) is read as its tests/groups.json flags + files.
+  const cmd = String(expandScript((scripts || {})[`test:${group}`] || ""));
   const toks = cmd.split(/\s+/).filter(Boolean);
   if (toks[0] !== "node" || toks[1] !== "tools/ci/run-playwright.mjs") return null;
   const files = toks.slice(2);
@@ -339,8 +341,8 @@ export function prInput(branch, { get = (q) => api("GET", q), show = (ref) => gi
   return Number.isInteger(n) && n > 0 ? String(n) : "";
 }
 
-/** Every artifacts/test-results-* /junit.xml as one string ("" when none). */
-function readJunits(dir) {
+/** Every artifacts/test-results-* /junit.xml as one string ("" when none): one per Playwright process (#5560). */
+export function readJunits(dir) {
   let out = "";
   let ents = [];
   try { ents = fs.readdirSync(dir); } catch { return ""; }
@@ -349,6 +351,14 @@ function readJunits(dir) {
     try { out += fs.readFileSync(path.join(dir, d, "junit.xml"), "utf8"); } catch { /* none */ }
   }
   return out;
+}
+
+/** The units one run-playwright invocation may claim: none unless it exited 0, then those whose file the junit
+ *  shows with a passed test and no failure (a spec that failed, or that no process ran, is never claimed). */
+export function claimedUnits(units, status, xml) {
+  if (status !== 0) return [];
+  const ok = passedSpecFiles(xml);
+  return (units || []).filter((unit) => ok.has(unit.split("#")[0]));
 }
 
 /** The commit pair this shard tested: on a PR merge ref (APEX_PR_MERGE=1, browser-group.yml's `pr` input) the
@@ -406,12 +416,9 @@ async function main() {
       const run = spawnSync(u.cmd, u.args, { cwd: ROOT, stdio: "inherit", env: process.env });
       const st = run.status == null ? 1 : run.status;
       if (st !== 0 && code === 0) code = st;
-      // JUNIT IS THE EVIDENCE: a unit is claimed only when this invocation's junit shows its file with a passed test
-      // and no failure (each invocation rewrites the same junit, so it is read here, before the next one).
-      if (st === 0) {
-        const ok = passedSpecFiles(readJunits(path.join(ROOT, "artifacts")));
-        for (const unit of u.units || []) if (ok.has(unit.split("#")[0])) passed.push(unit);
-      }
+      // JUNIT IS THE EVIDENCE: a unit is claimed only when a junit shows its file with a passed test and no failure.
+      // run-playwright leaves one junit per Playwright process (#5560), so every process of the invocation counts.
+      passed.push(...claimedUnits(u.units, st, readJunits(path.join(ROOT, "artifacts"))));
     }
     shardRecord(GROUP_RECORD_TITLE, gl, passed, code);
     return code;

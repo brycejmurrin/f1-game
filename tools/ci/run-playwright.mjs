@@ -5,11 +5,12 @@
 // commands can run concurrently without sharing a web server or artifact paths.
 
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, createReadStream, mkdirSync, statSync } from "node:fs";
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { extname, join, resolve as resolvePath, sep } from "node:path";
 import { partitionArgs } from "./twinned-specs.mjs";
+import { resolveGroupArgv } from "../gen/gen-test-groups.mjs";
 import {
   partitionMegaSweepArgs,
   megasForThisShard,
@@ -113,11 +114,42 @@ export function twinVerdict(r, { nothingToRun = false } = {}) {
   return { exit: null, lines };
 }
 
+// ONE JUNIT PER PROCESS (#5560). Every Playwright process of one invocation shares this port, so each rewrites
+// artifacts/test-results-<port>/junit.xml and only the LAST process's results survived (job 132124379574: 42/42,
+// 45/45 and 20/20 green, the end record claimed quali alone). Before the next process starts, the finished one's
+// junit MOVES to a sibling artifacts/test-results-<port>-p<n>/ (outside the outputDir Playwright owns), where every
+// reader of `test-results-*/junit.xml` finds it. A move, never a copy: a process that writes no junit inherits none.
+export function stashJunit(artifactsDir, port, n) {
+  const from = join(artifactsDir, `test-results-${port}`, "junit.xml");
+  if (!existsSync(from)) return null;
+  const dir = join(artifactsDir, `test-results-${port}-p${n}`);
+  mkdirSync(dir, { recursive: true });
+  renameSync(from, join(dir, "junit.xml"));
+  return dir;
+}
+/** Drop this port's stashes from an EARLIER invocation, so a re-used port never lends this run an old pass. */
+export function clearJunitStash(artifactsDir, port) {
+  let ents = [];
+  try { ents = readdirSync(artifactsDir); } catch { return; }
+  for (const d of ents) if (d.startsWith(`test-results-${port}-p`)) rmSync(join(artifactsDir, d), { recursive: true, force: true });
+}
+
 async function main() {
   // A spec with a VM twin does not run here unless asked (--with-twinned /
   // APEX_WITH_TWINNED=1): tools/ci/twinned-specs.mjs partitionArgs, the local
   // half of the substitution the selected gate has made since the twins landed.
-  const { args, dropped, nothingToRun } = partitionArgs(process.argv.slice(2));
+  // `--group test:x` FIRST (package.json's browser lines since #5427 item 4): the group's flags and
+  // files come from tests/groups.json at run time, then whatever npm forwarded. An unknown, empty or
+  // non-browser group exits 2 here, before a port binds. `--print-argv` prints the resolved argv and
+  // exits: what a group would run, with no browser.
+  let rawArgs;
+  try { rawArgs = resolveGroupArgv(process.argv.slice(2)); }
+  catch (e) { console.error(`[playwright] ${e.message}`); process.exit(2); }
+  if (rawArgs.includes("--print-argv")) {
+    console.log(JSON.stringify(rawArgs.filter((a) => a !== "--print-argv")));
+    process.exit(0);
+  }
+  const { args, dropped, nothingToRun } = partitionArgs(rawArgs);
   for (const d of dropped) console.error(`[playwright] COVERED BY VM TWIN: ${d.spec} → ${d.twin}`);
 
   // THE TWIN RUNS HERE, IN NODE. The first cut merely NAMED it and skipped it,
@@ -181,7 +213,8 @@ async function main() {
 
   // --help answers before the static server binds a port or a twin runs.
   if (args.includes("--help") || args.includes("-h")) {
-    console.log("usage: node tools/ci/run-playwright.mjs [playwright test options] [spec …]\n"
+    console.log("usage: node tools/ci/run-playwright.mjs [--group test:<name>] [playwright test options] [spec …]\n"
+      + "  --group test:<name> (first): that browser group's flags + files from tests/groups.json.  --print-argv: print the resolved argv, run nothing.\n"
       + "  Launches `playwright test` on a free port with port-suffixed report paths (the engine behind npm run test:*).\n"
       + "  Specs with a VM twin run in node unless --with-twinned / APEX_WITH_TWINNED=1.  --help: this text; no server starts.");
     process.exit(0);
@@ -297,7 +330,11 @@ async function main() {
   }
 
   let exitCode = 0;
+  const artifactsDir = join(ROOT, "artifacts");
+  let processes = 0;
+  clearJunitStash(artifactsDir, port);
   if (hasSpecTarget(mainArgs) || !peeled) {
+    processes++;
     exitCode = await runOnce(mainArgs, peeled ? "shared-shard" : "main");
   } else {
     console.error(`[playwright] shared shard has no remaining specs after peel — mega solos only`);
@@ -308,6 +345,7 @@ async function main() {
     for (const spec of megaHere) {
       if (stopping) break;
       console.error(`[playwright] mega-sweep solo (fresh Chromium): ${spec}`);
+      if (processes++ > 0) stashJunit(artifactsDir, port, processes - 1);
       const code = await runOnce([...flags, spec], `mega:${spec}`);
       if (code) exitCode = code;
     }

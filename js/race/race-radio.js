@@ -634,6 +634,7 @@ var RaceRadio = (function () {
       // A VS FRIEND race keeps running under the pause menu; the radio waits.
       if (G.paused) return;
       if (watch && watch.radioBusy && watch.radioBusy()) return;   // never over a real team radio clip
+      if (watch && watch.paused && watch.paused()) return;   // the replay's own pause is not G.paused (#5557)
       const traffic = spotter && spotter.occupied();
       const e = best("eng");
       if (e) {

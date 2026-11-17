@@ -367,7 +367,7 @@ Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 the legacy fleet-status report on pre-2026-10-27 PRs, the lane:<host> label (LANE)
 and the Hand-off block's owner (OWNER), and a SUGGESTION (LAND READY SYNC FIX FOREIGN-ARM WAIT NONE); STATE shows +land, SUGGEST (HOLD) for the hold label.
-Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
+Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|tip-red|no; git fetch, no writes).
 --alarm prints only the stall alarm: PRs ready > ${ALARM_HOURS} h, green, no hold label, no push
 (\`= alarm none|<n> stalled\`; exit 1 when any). Requests go through tools/lib/pr-snapshot.mjs (ETag cache).
 Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
