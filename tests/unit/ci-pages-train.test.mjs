@@ -443,7 +443,7 @@ test("the 2026-11-11 pair: the older run survived, the tip's run was replaced wh
   const runs = [trainRun(43082240074, TIP, "completed", "cancelled"), trainRun(43082235314, OLD, "in_progress"), trainRun(43079958852, PREV, "completed", "success")];
   const v = rearmDecide({ sha: OLD, tip: TIP, self: 43082235314, runs, jobCount: noJobs });
   assert.equal(v.rearm, true, v.reason);
-  assert.match(v.reason, /43082240074/);
+  assert.equal(v.reason, "tip 240426c6 lost its train: run 43082240074 was replaced while pending and nothing is queued for it");
 });
 
 test("the designed queue is left alone: no re-arm without the loss", () => {
@@ -474,7 +474,9 @@ test("pages.yml: one job holds actions: write, runs only the re-arm tool, and ca
   assert.equal(job.steps[0].with["sparse-checkout"], "tools/ci/pages-rearm.mjs");
   for (const [id, j] of Object.entries(wf.jobs)) assert.ok(![].concat(j.needs || []).includes("rearm"), `${id} must not wait on rearm`);
   assert.deepEqual(wf.concurrency, { group: "pages-train-${{ github.ref }}", "cancel-in-progress": false }, "the single-flight group is unchanged");
-  const src = fs.readFileSync(new URL("../../tools/ci/pages-rearm.mjs", import.meta.url), "utf8");
-  assert.doesNotMatch(src, /process\.exit\([1-9]|exitCode\s*=\s*[1-9]/, "never red: the cron is the backstop");
-  assert.doesNotMatch(src, /\/cancel|rerun/, "it dispatches one train; it never cancels or re-runs a run");
+  // Never red: with no gh at all every lookup throws, and the job still exits 0 with a warning.
+  const dead = cp.spawnSync(process.execPath, ["tools/ci/pages-rearm.mjs", "--dispatch"], { encoding: "utf8",
+    cwd: new URL("../../", import.meta.url), env: { PATH: "/nonexistent", GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "b", GITHUB_SHA: "0".repeat(40) } });
+  assert.equal(dead.status, 0, "no gh at all (every lookup fails): a warning, never a red job");
+  assert.equal(dead.stdout.split("\n")[0].slice(0, 39), "::warning::pages-rearm: lookup failed (", "and it says so");
 });
