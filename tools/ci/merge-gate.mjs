@@ -45,9 +45,14 @@
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
 //   retest    the CI run tested a merge ref as of ITS creation, so a PR merged onto the tip since then is untested in
-//             combination (#5407: #5300 × #5392 → deploy red #5396). On the same merge result, the unit tests that the
-//             newer tip merges and the PR select (tooling-fast's own --changed selection; the touched tests/unit files
-//             when that widens to the whole floor) run once; a failing, timed-out or un-runnable re-test refuses.
+//             combination (#5407: #5300 × #5392 → deploy red #5396). On the same merge result, the unit tests that
+//             BOTH the newer tip merges and the PR select (tooling-fast's own --changed selection, once per side) plus
+//             the touched tests/unit files of either side run once (only the touched files when the selection widens
+//             to the whole floor); a failing, timed-out, too-broad or un-runnable re-test refuses. Both sides, not
+//             either (#5597): a test only the PR selects reads nothing the tip merges changed, so the PR's CI run is
+//             still its verdict, and a test only the tip selects was green on the tip. This trusts the selection per
+//             side, as ci.yml's --changed guard shards do: a test that reads a path its side's selection does not pin
+//             it to is not re-tested.
 //             Bryce's pick, 2026-11-11 ~09:02Z: "Quick re-test at merge (Recommended)" (#5407 option b).
 //             It catches ACCIDENTAL crossings: the merge result's own scripts (gen:check, the ratchets) ran before it
 //             as the same user and could steer it, the same trust the gen and ratchets rows already have.
@@ -588,10 +593,15 @@ export const RETEST_MARGIN_MIN = 15;
 /** Cap on one re-test (the land-gate job is 20 min with gen:check and the ratchets): a timeout refuses. */
 export const RETEST_TIMEOUT_MS = 420_000;
 const UNIT_TEST = /^tests\/unit\/.+\.test\.mjs$/;
-/** Workers for the re-test (a land-gate runner has 4 vCPU, gen:check and the ratchets already ran). */
-export const RETEST_JOBS = 2;
-/** tooling-fast's per-file bound for the re-test, inside RETEST_TIMEOUT_MS. */
-export const RETEST_FILE_TIMEOUT_S = 180;
+/** Workers for the re-test (a land-gate runner has 4 vCPU, gen:check and the ratchets already ran; the committed
+ *  timings the estimate reads were recorded at 4 workers). 2 until #5597: the 56 files both sides of #5568 × #5566
+ *  selected measured 339 s at 2 and 226 s at 3, against the 336 s refusal line. */
+export const RETEST_JOBS = 3;
+/** tooling-fast's per-file bound for the re-test, inside RETEST_TIMEOUT_MS: it only stops a hung file's grandchildren
+ *  (ci.yml's own bound is tooling-fast's 600 s default). 180 until #5597: the files every js/ change selects run
+ *  longer than that on a runner (apex-tools-mcp.test.mjs 226.8 s, select-specs.test.mjs 188.2 s in ci.yml run
+ *  43939091964), so the bound would have failed a green file as a crossing. */
+export const RETEST_FILE_TIMEOUT_S = 300;
 
 /**
  * The first-parent commits on `tip` that are not in `head` and are newer than `ciAt` − RETEST_MARGIN_MIN, and the
@@ -647,45 +657,67 @@ export function ciRecordedBase(run, request) {
 /** The gate checkout's own tooling-fast `--changed` selection for `paths` (never the PR's copy: a PR must not choose
  *  what re-tests it). A child process, because tooling-fast needs node_modules, which only the land-gate leg has. */
 export function gateSelection(paths, { root = ROOT, run = spawnSync } = {}) {
-  const src = `import(${JSON.stringify(path.join(root, "tools/ci/tooling-fast.mjs"))}).then((m) => { const s = m.selectToolingFastChanged(JSON.parse(process.argv[1])); let estMs = null; try { estMs = m.estimateToolingFast(s.files, m.loadTimings(), ${RETEST_JOBS}).criticalPathMs; } catch {} process.stdout.write(JSON.stringify({ files: s.files, reason: s.reason, widened: s.widened || "", estMs })); })`;
+  const src = `import(${JSON.stringify(path.join(root, "tools/ci/tooling-fast.mjs"))}).then((m) => { const s = m.selectToolingFastChanged(JSON.parse(process.argv[1])); process.stdout.write(JSON.stringify({ files: s.files, reason: s.reason, widened: s.widened || "" })); })`;
   const r = run(process.execPath, ["--input-type=module", "-e", src, JSON.stringify(paths)], { cwd: root, encoding: "utf8", timeout: 60_000, maxBuffer: 16 << 20 });
   if (r.error || r.status !== 0) return { error: `tooling-fast selection failed: ${r.error?.message || String(r.stderr || "").trim().split("\n").slice(-1)[0] || "exit " + r.status}` };
   try { return JSON.parse(r.stdout); } catch (e) { return { error: `tooling-fast selection unreadable: ${e.message}` }; }
 }
 
+/** The gate checkout's measured wall time for `files` at RETEST_JOBS workers (tooling-fast's committed timings) → ms,
+ *  or null when it cannot be read (the re-test then runs against its timeout, which refuses the same way). */
+export function gateEstimate(files, { root = ROOT, run = spawnSync } = {}) {
+  const src = `import(${JSON.stringify(path.join(root, "tools/ci/tooling-fast.mjs"))}).then((m) => { process.stdout.write(JSON.stringify(m.estimateToolingFast(JSON.parse(process.argv[1]), m.loadTimings(), ${RETEST_JOBS}).criticalPathMs)); })`;
+  const r = run(process.execPath, ["--input-type=module", "-e", src, JSON.stringify(files)], { cwd: root, encoding: "utf8", timeout: 60_000, maxBuffer: 16 << 20 });
+  if (r.error || r.status !== 0) return null;
+  try { const ms = JSON.parse(r.stdout); return Number.isFinite(ms) ? ms : null; } catch { return null; }
+}
+
 /**
- * Which unit files the re-test runs: the selection for (newer tip paths ∪ the PR's paths), kept to files that exist in
- * the merge result; when the selection widens to the whole floor (an infra path), the touched tests/unit files of
- * either side instead, and the evidence says so. Pure. → { files, how }.
+ * Which unit files the re-test runs (#5597). `selection` is the gate's selection for (newer tip paths ∪ the PR's
+ * paths): when it widens to the whole floor (an infra path), the touched tests/unit files of either side, and the
+ * evidence says so. Otherwise the files BOTH `sides` select — `sides.newer` for the tip paths alone, `sides.pr` for the
+ * PR's alone; a side that widens on its own reaches everything, so the other side's files stand, and two widened sides
+ * leave `selection`'s — plus the touched tests/unit files, kept to files that exist in the merge result. A missing side
+ * is read as the union selection (never fewer files than it). Pure. → { files, how }.
  */
-export function retestPlan({ newer = [], pr = [], selection, exists = () => true }) {
+export function retestPlan({ newer = [], pr = [], selection, sides = {}, exists = () => true }) {
   const touched = [...new Set([...newer, ...pr])].sort();
   const literal = touched.filter((f) => UNIT_TEST.test(f) && exists(f));
   if (!selection || selection.widened) {
     return { files: literal, how: `the touched tests/unit files${selection?.widened ? ` (the selection widened: ${selection.widened})` : ""}` };
   }
-  const files = [...new Set([...(selection.files || []), ...literal])].filter((f) => exists(f)).sort();
-  return { files, how: `tooling-fast's --changed selection (${selection.reason || "matched"})` };
+  const all = (side) => !side || !!side.widened;
+  const n = sides.newer, p = sides.pr;
+  const pSet = new Set(p?.files || []);
+  const shared = all(n) && all(p) ? (selection.files || []) : all(n) ? p.files || [] : all(p) ? n.files || [] : (n.files || []).filter((f) => pSet.has(f));
+  const files = [...new Set([...shared, ...literal])].filter((f) => exists(f)).sort();
+  const count = (side) => (all(side) ? "every file" : `${(side.files || []).length}`);
+  return { files, how: `the unit files both sides select (tooling-fast's --changed selection: newer tip ${count(n)}, the PR ${count(p)}) and the touched tests/unit files` };
 }
 
 /**
  * retest row, on the merge result in `cwd`: no tip merge since the CI run (less the margin) → ok without running
- * anything; otherwise run the planned unit files with the merge result's tooling-fast, stripped environment, once.
+ * anything; otherwise run the planned unit files (retestPlan) with the merge result's tooling-fast, stripped environment, once.
  * Every failure to read, select or run refuses (never a silent pass). → { ok, evidence }.
  */
-export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", run = spawnSync, gitRun = git, select = gateSelection } = {}) {
+export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", run = spawnSync, gitRun = git, select = gateSelection, estimate = gateEstimate } = {}) {
   const t = newerTipPaths({ cwd, tip, head, ciAt, ciBase, gitRun });
   if (t.error) return row(false, `re-test not runnable: ${t.error}`);
   if (!t.commits.length) return row(true, `no tip merge since the CI run's base (created ${ciAt}, margin ${RETEST_MARGIN_MIN} min${t.base ? `; recorded base ${t.base.slice(0, 8)}` : "; no recorded base"}): CI tested this combination`);
   const sel = select([...new Set([...t.newer, ...t.pr])].sort());
   if (sel?.error) return row(false, `re-test not runnable: ${sel.error}`);
-  const plan = retestPlan({ newer: t.newer, pr: t.pr, selection: sel, exists: (f) => fs.existsSync(path.join(cwd, f)) });
+  // Once per side (#5597): only a test both sides select can cross. A widened union keeps the touched-files plan.
+  const sides = sel?.widened ? {} : { newer: select(t.newer), pr: select(t.pr) };
+  const sideError = sides.newer?.error || sides.pr?.error;
+  if (sideError) return row(false, `re-test not runnable: ${sideError}`);
+  const plan = retestPlan({ newer: t.newer, pr: t.pr, selection: sel, sides, exists: (f) => fs.existsSync(path.join(cwd, f)) });
   const since = `${t.commits.length} tip merge(s) since the CI run (${t.commits.slice(0, 3).map((c) => c.slice(0, 8)).join(", ")}${t.commits.length > 3 ? ", …" : ""})`;
   if (!plan.files.length) return row(true, `${since}: ${plan.how} names no unit test — nothing to re-test`);
   // Too broad to finish inside the cap (tooling-fast's measured timings): refuse now instead of burning the runner
   // into the same refusal. The cure is the one a timeout gets: sync, push, and the fresh CI run tests the combination.
-  if (!sel?.widened && Number.isFinite(sel?.estMs) && sel.estMs > RETEST_TIMEOUT_MS * 0.8) {
-    return row(false, `${since}; the re-test would run ${plan.files.length} unit file(s), measured ~${Math.round(sel.estMs / 1000)} s at --jobs=${RETEST_JOBS}, over the ${RETEST_TIMEOUT_MS / 1000} s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
+  const estMs = sel?.widened ? null : estimate(plan.files);
+  if (Number.isFinite(estMs) && estMs > RETEST_TIMEOUT_MS * 0.8) {
+    return row(false, `${since}; the re-test would run ${plan.files.length} unit file(s) (${plan.how}), measured ~${Math.round(estMs / 1000)} s at --jobs=${RETEST_JOBS}, over the ${RETEST_TIMEOUT_MS / 1000} s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
   }
   const env = untrustedEnv();
   delete env.NODE_TEST_CONTEXT;
@@ -956,7 +988,7 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
     the PR is the fixer: \`deploy:red\` on a head that contains the red commit, or \`deploy:red\` / \`priority\` added by ${OWNER} in person), config (a diff touching a config path — harness, CI tools, agent config; see CONFIG_PATH — needs
     \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), raise (a tree-wide ratchet ceiling
     rises only with \`${RAISE_LABEL}\` added by ${OWNER} in person after the last push touching a ratchet file), gen (clean merge onto the current base tip + gen:check), ratchets (on
-    that merge result), retest (the unit tests the tip merges since the CI run select, re-run on that merge result).
+    that merge result), retest (the unit tests both the tip merges since the CI run and the PR select, re-run on that merge result).
   --trusted: only the rows that run no PR code (open, hold, plan, ci, base, config, raise); land.yml's trusted-rows job.
   A row still waiting (CI, a red deploy tip) prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other
   row ok, CI not finished or the tip red on code), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
