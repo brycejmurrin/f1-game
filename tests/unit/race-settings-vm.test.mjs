@@ -426,6 +426,30 @@ test("the medal ladder is monotone and the reference pole slows with the pace sl
   } finally { g.G.PACE = pace; }
 });
 
+// #5585 finding 3 — the reference pole is driven on the WEATHER'S tyre, like every car in a wet session. On the slick
+// column (a bare G.gripMult()) the rain reference at Monza was 137.26 s against a dry 129.48 s: 6 % of lap that no
+// car in the field gives away (its pole in that rain: 132.70 s), so wet medals were soft by the difference.
+test("the reference pole runs the weather's tyre: the field's grip in wet and rain, the same lap as before in the dry (#5585)", async () => {
+  const G = g.G, sb = g.sandbox, T = sb.TyreModel, WET = sb.PhysicsConsts.WET_GRIP;
+  const top = { tierV: sb.Teams.TIER_V[0], skill: 1 };
+  const ref = {};
+  for (const wx of ["dry", "wet", "rain"]) {
+    await g.race("monza", "day", wx);
+    const quali = sb.Quali.create(G), w = G.trackWetness(), tread = T.treadFor(G.raceWeather, w);
+    assert.equal(tread, { dry: 0, wet: 1, rain: 2 }[wx], wx + ": the tread the weather calls for");
+    const grip = T.weatherGrip(tread, w);
+    assert.equal(grip, WET[wx][tread], wx + ": that tyre's cell of WET_GRIP");
+    ref[wx] = G.referencePole();
+    assert.equal(ref[wx], quali.carLap(top, G.track, grip), wx + ": the top car's flying lap on the weather's tyre");
+    if (wx === "dry") assert.equal(ref.dry, quali.carLap(top, G.track, G.gripMult()), "dry: the slick column is the same lap");
+    else assert.ok(ref[wx] < quali.carLap(top, G.track, G.gripMult()), wx + ": faster than the slick-column lap no car drives");
+  }
+  assert.ok(ref.wet > ref.dry && ref.rain > ref.dry, "a wet road still costs time");
+  assert.ok(ref.wet < ref.dry * 1.02 && ref.rain < ref.dry * 1.02,
+    `…but the right tyre keeps it within 2 % of the dry lap (dry ${ref.dry.toFixed(2)}, wet ${ref.wet.toFixed(2)}, rain ${ref.rain.toFixed(2)})`);
+  await g.race("monza", "day", "dry");
+});
+
 // ── CHANGEABLE (MIXED) conditions ─────────────────────────────────────────────
 // The chip is a RaceSettings row; the arc it arms lives in js/race/weather-arc.js
 // (WeatherArc.create(G, deps)), reached here only through G — raceChangeable,

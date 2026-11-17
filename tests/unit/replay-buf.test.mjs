@@ -820,7 +820,7 @@ test("ring byte accounting includes Float64 timestamps and separates fixed typed
   const R = boot(undefined, { Float32Array: tracked(Float32Array), Float64Array: tracked(Float64Array), Uint8Array: tracked(Uint8Array) });
   const G = { cars: cars(24), raceTime: 0 };
   const r = R.create(G); r.reset(G.cars);
-  assert.equal(R.frameBytes(24), 8 + 24 * (9 * 4 + 4 + 1) + 1, "timestamp + 9 floats + 4 cue bytes + status per car + break");
+  assert.equal(R.frameBytes(24), 8 + 24 * (9 * 4 + 5 + 1) + 1, "timestamp + 9 floats + 4 cue bytes + the stop byte + status per car + break");
   assert.ok(R.capacityFor(24) === R.MAX_FRAMES, "the cue lane must not shorten the 24-car window (#5030)");
   const info = r.window();
   const capacity = R.capacityFor(24);
@@ -914,4 +914,59 @@ test("#5030 flaps, disc glow and pedals are recorded and replayed, then the paus
   api.endScrub();
   assert.deepEqual(field[0], paused, "the live cue state is restored bit-exactly");
   assert.deepEqual(field[1], rival);
+});
+
+// #5585 finding 2 — the replay draws the RECORDED pit stop, never the live one. The draw sites (car-draw.js
+// drawWheels / drawPitCrew, game.js body lift, pit-crew.js) all read `c.pitState === "box"` and PitLane.stopAnim(c),
+// so those two reads are what is pinned, in the real game with the real ring and the real pit lane.
+test("a scrub shows a car's recorded pit stop: on its wheels where it was driving, mid-stop where it was mid-stop (#5585)", async () => {
+  let rb = null;
+  const trapCreate = (sb) => {
+    let mod;
+    Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
+      set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
+  };
+  const g = await createGame({ track: "monza", carMeshes: false, onSandbox: trapCreate });
+  try {
+    const G = g.G, sb = g.sandbox;
+    const R_HZ = sb.ReplayBuf.HZ;
+    await g.race("monza", "day", "dry");
+    g.apex.headless(true); g.apex.go();
+    g.apex.setInput({ throttle: true, steer: 0 });
+    const t0 = sb.performance.now();
+    for (let i = 1; i <= 240; i++) g.pumpFrame(t0 + i * 1000 / 60);
+    const pits = G.pits, boxS = pits.zoneOf().boxS;
+    const c = G.cars.filter((x) => !x.isPlayer).at(-1);
+    assert.notEqual(c.pitState, "box", "driving before the stop");
+    const tHold = rb.window().t1, tDrive = tHold - 1;        // the hold starts at tHold; a second earlier it was on the road
+    // Held in its box for the first half of the stop, sampled at the ring's own cadence (the live pit logic only
+    // holds a car that drove in, so the hold's clock is advanced here; stopAnim reads nothing else).
+    c.pitState = "box"; c.pitFitted = true;
+    let t = tHold;
+    for (let k = 1; k <= Math.round(boxS * 0.5 * R_HZ); k++) { t = tHold + k / R_HZ; c.pitT = boxS - (t - tHold); assert.equal(rb.sample(t, G.cars), true); }
+    G.raceT = t;
+    const live = { ...pits.stopAnim(c) };
+    assert.ok(live.u > 0.4 && live.u < 0.6 && live.lift > 0.2 && live.off > 0.5, `live: mid-stop, on the jacks, wheels off (${JSON.stringify(live)})`);
+    assert.equal(sb.ReplayBuf.boxU(c), -1, "no replayed stop outside a scrub");
+
+    assert.equal(rb.beginScrub(false), true);
+    assert.equal(rb.apply(tDrive), true);
+    assert.notEqual(c.pitState, "box", "the replayed car is not in its box where it was driving");
+    const drive = pits.stopAnim(c);
+    assert.equal(drive.lift, 0, "no jacks at its replayed on-track position");
+    assert.equal(drive.off, 0, "wheels on");
+    assert.equal(drive.u, -1, "no stop step: the pit crew clip has nothing to play");
+
+    assert.equal(rb.apply(tHold + boxS * 0.1), true);
+    assert.equal(c.pitState, "box", "…and in its box where the recording has it there");
+    const early = { ...pits.stopAnim(c) };
+    assert.ok(early.u > 0.03 && early.u < 0.2, `the recorded step of the stop, not the live one (u ${early.u} vs live ${live.u})`);
+    assert.ok(early.off < 0.05, "wheels still on at that recorded moment");
+
+    assert.equal(rb.endScrub(), true);
+    assert.equal(c.pitState, "box", "the live stop is back after the scrub");
+    const back = pits.stopAnim(c);
+    assert.ok(Math.abs(back.u - live.u) < 1e-9 && Math.abs(back.lift - live.lift) < 1e-9, "and runs on its own clock again");
+    assert.equal(sb.ReplayBuf.boxU(c), -1);
+  } finally { g.close(); }
 });
