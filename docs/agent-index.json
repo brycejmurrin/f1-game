@@ -656,6 +656,7 @@
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/desktop-notices.test.mjs",
         "tests/unit/desktop-pack-dry-run.test.mjs",
+        "tests/unit/desktop-read-fuses.test.mjs",
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",
@@ -1469,6 +1470,15 @@
       "script": "test:shimmer",
       "kind": "command",
       "files": [],
+      "twinned": false
+    },
+    {
+      "id": "shipped-defaults",
+      "script": "test:shipped-defaults",
+      "kind": "browser",
+      "files": [
+        "tests/specs/shipped-defaults.spec.js"
+      ],
       "twinned": false
     },
     {
