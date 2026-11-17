@@ -28,6 +28,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -682,4 +684,130 @@ test("a receiver with frozen physics validates and stamps the guest finish again
     assert.equal(r.finishT, 210, "foreground resume cannot change the latched timestamp");
     net.stop("local");
   }
+});
+
+// ── A FRIEND'S PAINT (#5037) ────────────────────────────────────────────────
+// A friend's car used to wear MY stored paint for their team (no net payload
+// carried a livery), and my custom livery for any team painted that team's AI.
+// Four seams, each failing on the base:
+//   1. the wire: LobbyRoster.packLivery -> HELLO `liv` -> cleanHello (a peer's
+//      word: colours clamped, any violation refuses the whole livery; never in
+//      an invite code);
+//   2. the stamp: LobbyRoster.paintField marks the friends' cars and no other;
+//   3. the draw: the REAL js/car/car-draw.js, driven as game.js's race loop
+//      drives it (paintTeam(c) to the team-only entries), builds the friend's
+//      body from the sent colours while the same team's other car keeps mine;
+//   4. the AI policy: another team's AI car races in factory paint.
+function liveryVm() {
+  const v = carDrawVm({});
+  for (const rel of ["js/car/liveries.js", "js/net/lobby-roster.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var"), v.ctx, { filename: absSrc(rel) });
+  return v;
+}
+const wire = (o) => JSON.parse(JSON.stringify(o));
+const GOLD = [0.9, 0.7, 0.1], TEAL = [0.1, 0.6, 0.6];
+
+test("HELLO carries a custom livery sparse; the factory one sends nothing (#5037)", () => {
+  const { ctx } = liveryVm(), R = ctx.LobbyRoster;
+  assert.equal(R.packLivery({ id: "default", c1: GOLD, c2: TEAL }), null, "factory paint is not sent");
+  const sent = wire(R.packLivery({ id: "cust-1", name: "Mine", c1: [0.123456, 0.5, 1], c2: TEAL, stripe: GOLD, halo: null, wing: undefined }));
+  assert.deepEqual(sent, { c1: [0.123, 0.5, 1], c2: TEAL, stripe: GOLD }, "set fields only, colours to 3 decimals, no id or name");
+  const G = { teamIdx: 0, getLiveryId: () => "cust-1", getLiveries: () => [{ id: "default", c1: TEAL, c2: TEAL }, null, { id: "cust-1", c1: GOLD, c2: TEAL }] };
+  assert.deepEqual(wire(R.withLivery({ team: "t" }, G)), { team: "t", liv: { c1: GOLD, c2: TEAL } });
+  assert.deepEqual(wire(R.withLivery({ team: "t" }, Object.assign(G, { getLiveryId: () => "default" }))), { team: "t" });
+  assert.deepEqual(wire(R.withLivery({ team: "t" }, Object.assign(G, { getLiveryId: () => "gone" }))), { team: "t" }, "a dangling id sends nothing");
+  const all = { id: "x", c1: GOLD, c2: TEAL };
+  for (const k of ctx.Liveries.FIELDS) all[k] = [0.333, 0.666, 0.999];
+  assert.ok(JSON.stringify(R.packLivery(all)).length < 4096, "every field set still fits in 4 KB");
+});
+
+test("a peer's livery is checked whole on receipt and refused whole on any violation (#5037)", () => {
+  const { ctx } = liveryVm(), R = ctx.LobbyRoster;
+  const hello = (liv) => R.cleanHello(wire({ team: "ferrari", driver: 0, parts: null, liv }));
+  assert.deepEqual(wire(hello({ c1: [7, -3, 0.5], c2: TEAL, stripe: [2, 2, 2], pod: GOLD }).liv),
+    { c1: [1, 0, 0.5], c2: TEAL, stripe: [1, 1, 1], pod: GOLD }, "every colour is clamped to 0..1");
+  const ok = { c1: GOLD, c2: TEAL };
+  const bad = {
+    "no base colours": { c1: "red", c2: TEAL },
+    "a non-finite colour": { c1: [1e999, 0, 0], c2: TEAL },
+    "a four-number colour": { c1: [1, 0, 0, 1], c2: TEAL },
+    "an unknown key": { ...ok, evil: "x" },
+    "an id (the receiver names it)": { ...ok, id: "mine" },
+    "a constructor key": { ...ok, constructor: "y" },
+    "a prototype-member enum value": { ...ok, finShape: "constructor" },
+    "a string over 64 chars": { ...ok, halo: "h".repeat(65) },
+    "an object in a field": { ...ok, nose: { r: 1 } },
+    "a mixed-type colour": { ...ok, wing: [1, "a", 0] },
+    "a number in a field": { ...ok, pod: 7 },
+  };
+  for (const [why, liv] of Object.entries(bad)) assert.equal(hello(liv).liv, undefined, `${why}: the whole livery is refused`);
+  assert.equal(R.cleanHello(JSON.parse('{"team":"ferrari","driver":0,"liv":{"c1":[1,0,0],"c2":[0,0,1],"__proto__":{"stripe":[1,1,1]}}}')).liv,
+    undefined, "a __proto__ key: refused");
+  assert.equal(hello([GOLD, TEAL]).liv, undefined, "an array is not a livery");
+  const fat = { ...ok };
+  for (let i = 0; i < 400; i++) fat["k" + i] = GOLD;
+  assert.equal(hello(fat).liv, undefined, "more keys than a livery has: refused");
+  assert.equal(hello(undefined).team, "ferrari", "a HELLO with no livery is still a HELLO");
+  assert.equal(R.cleanCodeProfile({ team: "ferrari", driver: 0, liv: ok }).liv, undefined, "an invite code never carries paint");
+  assert.equal(R.peerPaint({ team: "ferrari", liv: { ...ok, evil: 1 } }).factory, true, "a refused livery races in factory paint");
+});
+
+test("only a friend's car is stamped: sent paint, or factory when none was sent (#5037)", () => {
+  const v = liveryVm(), R = v.ctx.LobbyRoster;
+  const cars = v.field((_c, i) => i * 10), me = v.G.player;
+  const friend = cars.find((c) => c.team !== me.team), mate = cars.find((c) => c.team === friend.team && c !== friend);
+  const profile = R.cleanHello(wire({ team: friend.team.id, driver: 0, parts: null, liv: R.packLivery({ id: "c", c1: GOLD, c2: TEAL }) }));
+  R.paintField(cars, [{ car: friend, profile }]);
+  assert.deepEqual(wire(friend.netPaint.livery.c1), GOLD);
+  assert.equal(friend.netPaint.livery.stripe, null, "the full shape: unset fields are null");
+  assert.equal(friend.netPaint.tag.slice(0, 2), "~p", "a peer tag, never a stored livery id");
+  assert.equal(friend.netPaint.tag, R.peerPaint(profile).tag, "the tag is the paint's hash: the same paint, the same tag");
+  assert.deepEqual(cars.filter((c) => c.netPaint), [friend], "no other car is stamped");
+  R.paintField(cars, [{ car: friend, profile: R.cleanHello({ team: friend.team.id, driver: 0 }) }]);
+  assert.equal(friend.netPaint.factory, true, "no livery sent = factory, not my stored paint");
+  mate.netPaint = { stale: true };
+  R.paintField(cars, [{ car: friend, profile: null }]);
+  assert.equal(friend.netPaint, undefined, "no profile yet: left alone");
+  assert.equal(mate.netPaint, undefined, "a new race clears old stamps");
+});
+
+test("car-draw builds the friend's car from the sent paint, and only that car (#5037)", () => {
+  const v = liveryVm(), R = v.ctx.LobbyRoster, cd = v.carDraw;
+  const seen = [], build = v.ctx.Car3D.build;
+  v.ctx.Car3D.build = (c1, c2, o) => { seen.push({ num: o.num, team: o.teamId, c1: Array.from(c1), id: o.livery && o.livery.id }); return build(c1, c2, o); };
+  const cars = v.field((_c, i) => i * 10), me = v.G.player;
+  const friend = cars.find((c) => c.team !== me.team), mate = cars.find((c) => c.team === friend.team && c !== friend);
+  const profile = R.cleanHello(wire({ team: friend.team.id, driver: 0, parts: null, liv: R.packLivery({ id: "c", c1: GOLD, c2: TEAL }) }));
+  R.paintField(cars, [{ car: friend, profile }]);
+  // game.js's loop: the body entry takes the car; the team-only entries get paintTeam(c).
+  cd.beginDecals();
+  const bodyF = cd.teamBodyMesh(friend.team, friend), stF = cd.teamDecalState(cd.paintTeam(friend), false);
+  const bodyM = cd.teamBodyMesh(mate.team, mate), stM = cd.teamDecalState(cd.paintTeam(mate), false);
+  const of = (c) => seen.filter((b) => b.num === c.num && b.team === c.team.id);
+  assert.deepEqual(of(friend).map((b) => b.c1), [GOLD], "the friend's body is built once, in the sent colour");
+  assert.equal(of(friend)[0].id, "peer");
+  assert.deepEqual(of(mate).map((b) => b.c1), [[1, 0, 0]], "the same team's other car keeps the local paint");
+  assert.notEqual(bodyF, bodyM);
+  assert.notEqual(stF, stM, "the friend's paint has its own decal-state row");
+  assert.equal(cd.paintTeam(mate), mate.team, "an unstamped car is drawn through its real team");
+  assert.equal(cd.paintTeam(friend), cd.paintTeam(friend), "the stand-in is stable frame to frame");
+  assert.deepEqual(Array.from(cd.livOf(cd.paintTeam(friend)).c1), GOLD);
+  assert.equal(cd.teamBodyMesh(friend.team, friend), bodyF, "a second frame is a cache hit");
+  assert.equal(seen.length, 2);
+  cd.flushDecals(false);
+});
+
+test("another team's AI car races in factory paint, not my custom livery for that team (#5037)", () => {
+  const v = liveryVm(), cd = v.carDraw;
+  const cars = v.field((_c, i) => i * 10), me = v.G.player;
+  const ai = cars.find((c) => c.team !== me.team && !c.isPlayer), mate = cars.find((c) => c.team === me.team && !c.isPlayer);
+  assert.equal(cd.paintTeam(ai), ai.team, "control: with factory paint everywhere nothing changes");
+  v.G.getLiveryId = () => "cust-1";   // this phone holds a custom livery for every team
+  v.G.store.rev++;
+  const pt = cd.paintTeam(ai);
+  assert.notEqual(pt, ai.team, "the AI car is drawn through a factory stand-in");
+  assert.equal(pt.id, ai.team.id);
+  assert.deepEqual(Array.from(cd.livOf(pt).c1), Array.from(ai.team.color), "in the team's own colours");
+  assert.equal(cd.paintTeam(me), me.team, "my car keeps my paint");
+  if (mate) assert.equal(cd.paintTeam(mate), mate.team, "so does my teammate");
 });

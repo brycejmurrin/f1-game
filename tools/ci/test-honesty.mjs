@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // test-honesty.mjs — find tests that pass by not testing.
-// @doc Finds tests that pass by not testing: bare `test.skip`/`fixme`/`todo` without a `SKIP-OK:` reason, and empty bodies.
+// @doc Finds tests that pass by not testing: unexplained skip/fixme/todo, empty bodies, an early bare return before any assert.
 // @section runner
 //
 // A skipped suite that reports green is worse than a red one
@@ -85,6 +85,45 @@ export function optionKind(value) {
   return "condition";
 }
 
+const ASSERTS = /\b(?:assert|expect|t\.(?:assert|plan|skip|todo))\b|\bthrow\b/;
+/**
+ * The first top-level `if (…) return;` (a BARE return: no value) in the body of the test that starts at
+ * lines[i][col], when it comes before any assertion; `{line}` (0-based) or null. Only the body's own top level
+ * counts (a `return` inside a nested callback returns from that callback), strings and comments are skipped, and
+ * the scan stops at the first assert / expect / t.skip / throw or after 60 lines.
+ */
+export function earlyReturn(lines, i, col) {
+  let depth = 0, body = -1, q = null, stmt = "", stmtLine = i;
+  for (let li = i; li < Math.min(lines.length, i + 60); li++) {
+    const L = lines[li];
+    for (let k = li === i ? col : 0; k < L.length; k++) {
+      const c = L[k];
+      if (q) { if (c === "\\") k++; else if (c === q) q = null; if (depth === body) stmt += " "; continue; }
+      if (c === "/" && L[k + 1] === "/") break;
+      if (c === '"' || c === "'" || c === "`") { q = c; continue; }
+      if (c === "{" || c === "(" || c === "[") {
+        depth++;
+        if (body < 0 && c === "{" && /=>\s*$|\)\s*$/.test(L.slice(0, k))) { body = depth; stmt = ""; stmtLine = li; continue; }
+      } else if (c === "}" || c === ")" || c === "]") {
+        depth--;
+        if (body >= 0 && depth < body) return null;
+      }
+      if (body < 0) continue;
+      if (depth === body && c === ";") {
+        if (/^\s*if\s*\(.*\)\s*return\s*$/.test(stmt)) return { line: stmtLine };
+        if (ASSERTS.test(stmt)) return null;
+        stmt = ""; stmtLine = li; continue;
+      }
+      if (depth >= body) { if (!stmt.trim()) stmtLine = li; stmt += c; }
+    }
+    if (body >= 0) {
+      if (ASSERTS.test(stmt) && !/^\s*if\s*\(/.test(stmt)) return null;
+      stmt += " ";
+    }
+  }
+  return null;
+}
+
 const files = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -145,7 +184,17 @@ for (const file of files) {
       if (inString(i, m.index, line)) return;
       findings.push({ file: rel, line: i + 1, kind: "empty-body", explained: false, text: line.trim().slice(0, 120) });
     };
-    check(); option(); empty();
+    const early = () => {
+      // An early bare `return` at the top of a test body, before any assertion (#5014): the test passes without
+      // testing (`if (!fs.existsSync(chrome)) return;` hid the only real-browser Home prepaint check in CI).
+      const m = line.match(/\b(test|it)\s*\(\s*["'`]/);
+      if (!m || inString(i, m.index, line) || line.slice(0, m.index).includes("//")) return;
+      const site = earlyReturn(lines, i, m.index);
+      if (!site) return;
+      const skipOk = lines.slice(Math.max(0, site.line - 3), site.line + 1).some((l) => /SKIP-OK:/.test(l));
+      findings.push({ file: rel, line: site.line + 1, kind: "early-return", explained: skipOk, text: lines[site.line].trim().slice(0, 120) });
+    };
+    check(); option(); empty(); early();
     ticks += (line.match(/`/g) || []).length;
   });
 }
@@ -169,7 +218,7 @@ const out = {
 };
 if (argv.includes("--json")) console.log(JSON.stringify(out, null, 2));
 else {
-  console.log(`scanned ${out.scanned} test files: ${out.findings} skip/fixme/todo/empty site(s), ${out.unexplained} unexplained, ${out.baselined} baselined, ${stale.length} stale baseline row(s)`);
+  console.log(`scanned ${out.scanned} test files: ${out.findings} skip/fixme/todo/empty/early-return site(s), ${out.unexplained} unexplained, ${out.baselined} baselined, ${stale.length} stale baseline row(s)`);
   for (const f of unexplained.slice(0, 30)) console.log(`  ${f.file}:${f.line}  [${f.kind}]  ${f.text}`);
   if (unexplained.length > 30) console.log(`  … and ${unexplained.length - 30} more`);
   for (const b of stale) console.log(`  STALE baseline row ${b.file} ${JSON.stringify(b.text)}: matches no site (delete it; the baseline only shrinks)`);

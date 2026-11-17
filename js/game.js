@@ -1193,7 +1193,7 @@ function saveTeamParts(teamId, parts) {
 const customLiv = CustomLiveries.create({ store });
 const {
   getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
-  getLiveries, resolveLivery, wingColorOfLivery,
+  getLiveries, resolveLivery, factoryLivery, wingColorOfLivery,
 } = customLiv;
 
 // Draw a car's MOVEABLE wing elements (active aero) at flap blend `blend`
@@ -1209,7 +1209,7 @@ const _flapWorld = new Float32Array(16);
 function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still, viewLivery) {
   // One resolveLivery per car per frame (wingColorOf resolved it a second time): the wing colour always
   // follows the team's own livery, the finish and surface the viewed one.
-  const own = resolveLivery(team), col = wingColorOfLivery(own, team), b = clamp(blend, 0, 1);
+  const own = team.peerLivery || resolveLivery(team), col = wingColorOfLivery(own, team), b = clamp(blend, 0, 1);   // a car's own paint (CarDraw.paintTeam, #5037)
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
@@ -3508,7 +3508,7 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 // wheel spec, decal queue, cockpit rig, planted wheels, warm-ups, GLB body.
 // resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
 // stay here (the garage and the setup preview share them via deps).
-const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
+const carDraw = CarDraw.create(G, { resolveLivery, factoryLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, teamDecalState, carDecalNum,
         drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
         warmCarAssetsAsync, prepareMenuCarAssets } = carDraw;
@@ -5877,7 +5877,7 @@ function updateCarLateral(c, dt, ranked, S) {
     // stops the AI covering a line it has already decided to concede.
     let yieldPull = 0;
     if (letPass) {
-      const freeSide = c._trYT ? c._trYS : roomR >= roomL ? 1 : -1;
+      const freeSide = c._trYT ? c._trYS : AiDrive.letPassSide(roomL, roomR, chaser ? c.x - chaser._snapX : 0);
       const freeRoom = freeSide > 0 ? roomR : roomL;
       if (freeRoom > 1.6) yieldPull = freeSide * AiDrive.letPassPull(aiT, !!track.street) * clamp(freeRoom / 2.4, 0, 1);
     }
@@ -5933,7 +5933,8 @@ function updateCarLateral(c, dt, ranked, S) {
     } else c.holdOff = null;
     const pk = parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null;   // a car parked on the road (#2162): pass it a lane clear
     const hz = pk || (blocker && blockerGap < AiDrive.hazardReach(c.speed) && AiDrive.stoppedHazard(blocker, vT) ? blocker : null);   // a STOPPED car ahead is a hazard too (AiDrive.stoppedHazard)
-    if (hz && Math.abs(desiredX - hz.x) < CLEAR) desiredX = clamp(hz.x > 0 ? hz.x - CLEAR : hz.x + CLEAR, -(hw - 0.5), hw - 0.5);
+    const hzClear = AiDrive.hazardClear(CLEAR);   // wider than a moving neighbour's gap: a static body does not give (#5539)
+    if (hz && Math.abs(desiredX - hz.x) < hzClear) desiredX = clamp(hz.x > 0 ? hz.x - hzClear : hz.x + hzClear, -(hw - 0.5), hw - 0.5);
     // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
     // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
     // anything under 0.3 m, while the shared racing line pulls the outer car up
@@ -6025,7 +6026,7 @@ function updateCarLateral(c, dt, ranked, S) {
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
       const ls = AiDrive.lateralScales(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // yaw and lateral from one q/prefix (X-mode costs the AI its wings only in .lat)
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * ls.yaw / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
-      const headWant = AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax);   // stop before the edge (AiDrive.edgeHead)
+      const headWant = AiDrive.hazardHead(AiDrive.edgeHead(clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), c.x, hw, desiredX, vAbs, yawMax), c.x, hz, hzClear, desiredX, vAbs, yawMax);   // stop before the edge (AiDrive.edgeHead) and before a hazard's gap (hazardHead)
       const head0 = c.aiHeadV != null && vStd(Math.abs(vAbs - c.aiHeadV)) > AI_HEAD_JUMP ? 0 : c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt); c.aiHeadV = vAbs;
       gripScale = ls.lat;   // X-mode costs the AI its wings too
@@ -8116,20 +8117,21 @@ function render(dt) {
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
+    const pt = carDraw.paintTeam(c);   // the team as this car is painted: a friend's sent paint, an AI's factory one (#5037)
     const sharedBody = FieldLod.on && !c.isPlayer && _lod >= 2;
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
       : (sharedBody ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c)) : teamBodyMesh(c.team, c)));
     if (body) {
       // Only the neutral shared distant bodies share paint and geometry; keep chassis attitude.
       gfx.draw(body, tmpMat, sharedBody ? carDraw.coOpt(paint) : paint);
-      if (_lod < 2) queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
+      if (_lod < 2) queueCarDecals(pt, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // crew + kit, on the ground beside it
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
-      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      queueCarDecals(pt, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
       // A loaded glb is one piece (no separate wheels), but the crew still
       // stands in the box — and without this a glb stop was an empty bay.
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);
@@ -8151,8 +8153,8 @@ function render(dt) {
     // player is never gated — it is the car you are looking at.
     if (!carDraw.modelBuf) {
       const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
-      const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
-      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero, null,
+      const aSt = teamDecalState(pt, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      drawAeroFlaps(pt, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero, null,
         !c.isPlayer && fdx * fdx + fdy * fdy + fdz * fdz >= FieldLod.flapsM() ** 2);
     }
     // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
@@ -8207,9 +8209,9 @@ function render(dt) {
     if (!carDraw.modelBuf && vStd(c.speed) < 5.56) {
       const mdx = tmpP[0] - camEye[0], mdy = tmpP[1] - camEye[1], mdz = tmpP[2] - camEye[2];
       if (c.isPlayer || mdx * mdx + mdy * mdy + mdz * mdz < 40 * 40) {
-        const mSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+        const mSt = teamDecalState(pt, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
         const cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
-        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(Car3D.bodyStyleKey(c.team.id, resolveLivery(c.team).bodyStyle), cm && cm.mirror));
+        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(Car3D.bodyStyleKey(c.team.id, carDraw.livOf(pt).bodyStyle), cm && cm.mirror));
       }
     }
     // The player's ERS strip and every car's throttle-lift after-fire (rivals

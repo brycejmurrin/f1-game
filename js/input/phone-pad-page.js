@@ -91,8 +91,8 @@ const PhonePadPage = (function () {
     function paintCodeInput() {
       if (!dom.codeIn) return;
       const privateCode = pairing ? !!pairing.relay : deps.privateRelay();
-      dom.codeIn.maxLength = privateCode ? 32 : 8;
-      dom.codeIn.placeholder = privateCode ? "PRIVATE ROOM TOKEN" : "ABC123";
+      dom.codeIn.maxLength = privateCode ? 32 : 12;
+      dom.codeIn.placeholder = privateCode ? "PRIVATE ROOM TOKEN" : "ABCD2345";
     }
     paintCodeInput();
     const say = (t, bad) => {
@@ -468,7 +468,7 @@ const PhonePadPage = (function () {
         return { ok: false, error: "bad_relay" };
       }
       const code = deps.normalise(codeIn);
-      if (!deps.valid(code)) { say(deps.privateRelay() ? "That is not a private room token — copy the full 32-character token." : "That is not a room code — six letters and numbers.", true); return { ok: false, error: "bad_code" }; }
+      if (!deps.valid(code)) { say(deps.privateRelay() ? "That is not a private room token — copy the full 32-character token." : "That is not a room code — eight letters and numbers (six from an older version).", true); return { ok: false, error: "bad_code" }; }
       connecting = true;
       const owner = attempt = { cancelled: false, transport: null };
       if (dom.connect) dom.connect.disabled = true;

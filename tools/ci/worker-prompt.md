@@ -38,6 +38,8 @@ label) wakes you; act on it, refresh the handoff block, and end again. No timed 
 works; if it was refused, one check-in of at most 50 minutes, re-armed only after a state change (AGENTS.md rule 13).
 Your run ends for good at `land`: call `unsubscribe_pr_activity`, then stop. Do not wait out CI in the foreground,
 never poll, never sleep.
+Report by send_message to the session that launched you, when one did: at start (your reading of the task), at every
+push (head sha, PR number), at CI green or red, and at any refusal or blocker.
 
 Nobody reads this chat. Never ask a human anything here and never end a turn with a question: decide and record the
 decision in the PR body, or, when only Bryce can decide, add the `needs-decision` label with ONE comment that states the

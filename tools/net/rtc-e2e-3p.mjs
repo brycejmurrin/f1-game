@@ -167,7 +167,7 @@ if ((await guests()) < 2) await die(`only ${await guests()} guest(s) connected, 
 log(el(), `\n*** THREE PEERS IN ONE ROOM at ${el()} ***`);
 
 // ---- race ----------------------------------------------------------------
-await Promise.all([A, B, C].map((p) => p.evaluate(() => window.__apex.lobbyReady(true))));
+await Promise.all([A, B, C].map((p) => p.evaluate(() => window.__apex.lobbyReady(true, true))));
 // WAIT for readiness to arrive before pressing start. startFromRoom() refuses
 // unless every peer's READY has actually landed, and these are real
 // connections — saying "ready" and the host KNOWING it are separated by a real
