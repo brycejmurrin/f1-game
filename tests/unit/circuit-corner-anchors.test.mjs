@@ -102,44 +102,34 @@ test("Monaco bank zones peak on Massenet and Mirabeau, not Ste Devote", () => {
 });
 
 
-test("Jeddah apexes follow the start line by the scenery arc shift", () => {
-  // 2026-10-18 moved startFrac 0.9625 → 0.9160. The pre-move table matched the
-  // curvature peaks. rotate-markings adds _sceneryShift (~0.0479 of a lap) and
-  // re-sorts. The shipped table added 0.1916 instead: Turn 1 sat on the straight
-  // (k ≈ 0 at 108 m) and the mean miss to a peak was 134 m.
-  const { def, track } = circuit("jeddah");
+test("Jeddah starts on the pit straight after T27 and numbers its turns as the FIA does", () => {
+  // #5507: startFrac 0.9160 put the grid 288 m BEFORE the final hairpin (the
+  // 2026-10-18 move read T27, also a left, as Turn 1), so every def.turns entry
+  // was one corner late. The line now sits on the T27 -> T1 straight, ~250 m
+  // before the T1 apex (F1: 168 m pole to the T1 braking point; FIA: 220 m grid
+  // to Turn 1). Positions are OSM trace coordinates (def.path frame, metres).
+  const { def, track, corner } = circuit("jeddah");
+  const n = track.n, L = track.total, ds = L / n;
   assert.equal(def.turns.length, 27);
   for (let i = 1; i < def.turns.length; i++) assert.ok(def.turns[i] > def.turns[i - 1]);
-  const n = track.n, L = track.total, sm = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    let s = 0;
-    for (let j = -2; j <= 2; j++) s += Math.abs(track.curv[(i + j + n) % n]);
-    sm[i] = s / 5;
-  }
-  const peaks = [];
-  for (let i = 0; i < n; i++) {
-    const a = (i - 1 + n) % n, b = (i + 1) % n;
-    if (sm[i] >= sm[a] && sm[i] > sm[b] && sm[i] > 0.004) peaks.push(i / n);
-  }
-  const used = new Set();
-  const far = [];
-  for (const t of def.turns) {
-    let bi = -1, bd = 1;
-    for (let i = 0; i < peaks.length; i++) {
-      if (used.has(i)) continue;
-      let d = Math.abs(peaks[i] - t);
-      if (d > 0.5) d = 1 - d;
-      if (d < bd) { bd = d; bi = i; }
-    }
-    used.add(bi);
-    const metres = bd * L;
-    if (metres > 15) far.push(`${t.toFixed(4)} is ${metres.toFixed(0)} m from the nearest free peak`);
-  }
-  assert.deepEqual(far, []);
-  const t1 = Math.round(def.turns[0] * n) % n;
-  const t1m = def.turns[0] * L;
-  assert.ok(t1m > 240 && t1m < 340, `Turn 1 at ${t1m.toFixed(0)} m, want the left after the straight (~280 m)`);
-  assert.ok(track.curv[t1] > 0.02, `Turn 1 is a left (k ${track.curv[t1].toFixed(4)})`);
+  // The line: on the chord between the hairpin exit and T1, dead straight for the grid and the launch.
+  assert.ok(Math.hypot(track.px[0] + 180, track.pz[0] + 695) < 6, `line at ${track.px[0].toFixed(1)}, ${track.pz[0].toFixed(1)}`);
+  let bend = 0;
+  for (let m = -200; m <= 150; m += ds) bend = Math.max(bend, Math.abs(track.curv[(Math.round(m / ds) + n) % n]));
+  assert.ok(bend < 0.0035, `the grid and launch run bend (max |k| ${bend.toFixed(4)})`);
+  // Turn 1 is the tight LEFT of the first chicane, Turn 2 its right, 40-80 m on.
+  const t1 = corner(1), t2 = corner(2), t1m = t1.fraction * L;
+  assert.ok(t1m > 240 && t1m < 260, `Turn 1 apex ${t1m.toFixed(0)} m after the line, want ~250`);
+  assert.ok(t1.curvature > 0.02 && Math.hypot(t1.x + 92, t1.z + 462) < 30, `Turn 1 is the left at the chicane (k ${t1.curvature.toFixed(4)})`);
+  const gap12 = (t2.fraction - t1.fraction) * L;
+  assert.ok(t2.curvature < -0.02 && gap12 > 40 && gap12 < 80, `Turn 2 is the right ${gap12.toFixed(0)} m later (k ${t2.curvature.toFixed(4)})`);
+  // Turn 27 is the final hairpin, BEHIND the line by the length of the pit straight.
+  const t27 = corner(27), back = (1 - t27.fraction) * L;
+  assert.ok(t27.curvature > 0.02 && Math.hypot(t27.x + 385, t27.z + 1495) < 40, `Turn 27 is the hairpin (k ${t27.curvature.toFixed(4)})`);
+  assert.ok(back > 700 && back < 900, `the hairpin is ${back.toFixed(0)} m before the line`);
+  // The other corners everyone can name: T4 left, T13 the banked left, T22 left.
+  for (const t of [4, 13, 22]) assert.ok(corner(t).curvature > 0.01, `Turn ${t} is a left (k ${corner(t).curvature.toFixed(4)})`);
+  assert.equal(def.pit.side, -1, "the pit lane is on the left of the straight (OSM way 1121870473)");
 });
 
 test("Bahrain scenery landmarks track the current arc-length origin", () => {
