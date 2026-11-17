@@ -116,6 +116,21 @@ test('releaseGeometry holds its wrappers until a scene render, bounded by DROP_L
   const own = wrap('g'); c.dropWrapper(own, { dispose() { events.push('geo'); } }, true);
   assert.deepEqual(events.slice(-2), ['g', 'geo'], 'an owned geometry is never held');
 });
+// The window session-quit-memory.spec.js waits out (waitDropsSettled): a held wrapper whose flush lands under a warm
+// moves to _dropQueue and keeps its render object until the first flushDropped() after the warm settles.
+test('a held wrapper flushed under a warm in flight is released only once the warm settles', () => {
+  const events = [];
+  const m = { geometry: {}, material: {}, parent: null, dispatchEvent() { events.push('dispose'); } };
+  const c = ctx({ _warmPending: null, _ownershipFreeDepth: 0, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 64, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 } },
+    fn(tlx, 'flushDropLater') + fn(tlx, 'dropWrapper') + fn(tlx, 'flushDropped'));
+  c.dropWrapper(m, null, true);
+  c._warmPending = {}; c._sceneRenders++; c.flushDropLater(false);
+  assert.deepEqual([events.length, c._dropLater.length, c._dropQueue.length, !!m.geometry], [0, 0, 1, true], 'queued, not dropped: dropLater reads 0 while warming');
+  c._sceneRenders += 5; c.flushDropped();
+  assert.deepEqual([events.length, c._dropQueue.length], [0, 1], 'further presents under the warm release nothing');
+  c._warmPending = null; c.flushDropped();
+  assert.deepEqual([events, c._dropQueue.length, m.geometry], [['dispose'], 0, null], 'the first present after the warm drops it');
+});
 test('releaseGeometry holds the coalesced run too (the instanced lit program\'s last holder); a direct _coDrop does not', () => {
   const events = [];
   const run = (id) => ({ imesh: { id, geometry: { dispose() { events.push(id + ':view'); } }, material: {}, parent: null, dispatchEvent() { events.push(id); } } });
