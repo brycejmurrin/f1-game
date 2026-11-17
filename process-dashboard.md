@@ -1,73 +1,68 @@
 # Process dashboard
 
-Generated 2026-11-16T13:14Z. ci.yml runs in the window: 60 (2026-11-12T00:21Z → 2026-11-16T12:58Z).
+Generated 2026-11-17T13:58Z. ci.yml runs in the window: 60 (2026-11-13T18:21Z → 2026-11-17T08:30Z).
 Job percentiles use runs that finished success or failure. Cancelled jobs are counted and left out of the percentile. A family row is the slowest matrix cell of that family in each run; a bare rollup counts only when no cell ran. Tier walls are workflow updated_at minus run_started_at (queue plus jobs). A run that only printed the draft-skip notice is in neither tier.
 
 ## Jobs
 
 | Job | n | p50 | p90 | max | fail | cancelled |
 |---|---:|---:|---:|---:|---:|---:|
-| CI | 35 | 0.2 min | 0.3 min | 0.3 min | 8 | 0 |
-| CI (draft fast tier) | 23 | 0.2 min | 0.3 min | 0.3 min | 4 | 1 |
-| Driving model (characterization traces) | 21 | 2.3 min | 3.8 min | 3.9 min | 0 | 0 |
-| Emulated VR (IWER / xr-emulated) | 6 | 2.1 min | 3.1 min | 3.1 min | 0 | 0 |
-| Golden menus on a runner (nightly) | 3 | 1.5 min | 2.1 min | 2.1 min | 0 | 0 |
-| Parts option-resolution census | 60 | 0.3 min | 0.4 min | 2.2 min | 0 | 0 |
-| Per-circuit geometry sweeps | 56 | 0.1 min | 0.1 min | 0.1 min | 0 | 0 |
-| Per-circuit geometry sweeps (1of4) | 11 | 4.3 min | 5.6 min | 5.7 min | 0 | 0 |
-| Per-circuit geometry sweeps (2of4) | 11 | 4.3 min | 6.6 min | 6.6 min | 0 | 0 |
-| Per-circuit geometry sweeps (3of4) | 11 | 4.9 min | 6.7 min | 6.9 min | 0 | 0 |
-| Per-circuit geometry sweeps (4of4) | 11 | 5.3 min | 7.8 min | 7.9 min | 0 | 0 |
-| Pure-node unit suites (page-a) | 27 | 0.9 min | 1.2 min | 1.3 min | 0 | 0 |
-| Pure-node unit suites (page-b) | 20 | 1.2 min | 1.5 min | 1.5 min | 0 | 0 |
-| Pure-node unit suites (slow) | 26 | 7.9 min | 9.9 min | 10.1 min | 0 | 0 |
-| Pure-node unit suites (vm-a1) | 27 | 3.8 min | 4.6 min | 4.8 min | 0 | 0 |
-| Pure-node unit suites (vm-a2) | 19 | 2.3 min | 2.9 min | 3.0 min | 0 | 0 |
-| Pure-node unit suites (vm-b1) | 27 | 5.5 min | 7.2 min | 7.3 min | 0 | 0 |
-| Pure-node unit suites (vm-b2) | 27 | 4.5 min | 6.2 min | 6.3 min | 0 | 0 |
-| Renderer specs on a real GPU (macos-latest, Metal) | 14 | 19.1 min | 21.0 min | 22.4 min | 0 | 0 |
-| Select specs for this change | 60 | 0.5 min | 0.6 min | 0.8 min | 0 | 0 |
-| Selected specs (verdict) | 57 | 0.2 min | 0.3 min | 6.8 min | 8 | 1 |
-| Smoke (page boots, __apex responds) (1) | 35 | 2.8 min | 4.6 min | 5.5 min | 0 | 0 |
-| Smoke (page boots, __apex responds) (2) | 3 | 0.4 min | 0.5 min | 0.5 min | 0 | 0 |
-| Smoke (page boots, __apex responds) (3) | 3 | 0.8 min | 0.8 min | 0.8 min | 0 | 0 |
-| Smoke (page boots, __apex responds) (4) | 3 | 0.5 min | 0.6 min | 0.6 min | 0 | 0 |
-| Staged build boots (minified _site, as Pages ships it) | 35 | 3.9 min | 5.1 min | 5.3 min | 0 | 0 |
-| Structural guards | 60 | 0.1 min | 0.1 min | 0.1 min | 5 | 0 |
-| Structural guards (tooling A) | 60 | 3.7 min | 5.7 min | 5.8 min | 0 | 0 |
-| Structural guards (tooling B) | 60 | 2.8 min | 3.8 min | 4.3 min | 2 | 0 |
-| Structural guards (tooling C) | 60 | 3.9 min | 5.5 min | 5.8 min | 0 | 0 |
-| Structural guards (tooling D) | 60 | 3.4 min | 5.3 min | 5.5 min | 4 | 0 |
+| CI | 32 | 0.2 min | 0.3 min | 0.4 min | 8 | 0 |
+| CI (draft fast tier) | 26 | 0.2 min | 0.2 min | 0.3 min | 5 | 0 |
+| Driving model (characterization traces) | 22 | 1.5 min | 3.6 min | 3.9 min | 0 | 0 |
+| Emulated VR (IWER / xr-emulated) | 2 | 2.5 min | 3.1 min | 3.1 min | 0 | 0 |
+| Parts option-resolution census | 60 | 0.3 min | 0.4 min | 2.1 min | 0 | 0 |
+| Per-circuit geometry sweeps | 58 | 0.1 min | 0.1 min | 0.7 min | 0 | 0 |
+| Per-circuit geometry sweeps (1of4) | 3 | 4.3 min | 4.3 min | 4.3 min | 0 | 0 |
+| Per-circuit geometry sweeps (2of4) | 3 | 6.5 min | 6.7 min | 6.7 min | 0 | 0 |
+| Per-circuit geometry sweeps (3of4) | 3 | 5.1 min | 6.7 min | 6.7 min | 0 | 0 |
+| Per-circuit geometry sweeps (4of4) | 3 | 7.7 min | 7.8 min | 7.8 min | 0 | 0 |
+| Pure-node unit suites (page-a) | 26 | 0.9 min | 1.2 min | 1.3 min | 0 | 0 |
+| Pure-node unit suites (page-b) | 18 | 1.1 min | 1.4 min | 1.4 min | 0 | 0 |
+| Pure-node unit suites (slow) | 24 | 7.4 min | 9.9 min | 10.6 min | 0 | 0 |
+| Pure-node unit suites (vm-a1) | 20 | 3.4 min | 3.9 min | 4.6 min | 0 | 0 |
+| Pure-node unit suites (vm-a2) | 13 | 2.3 min | 2.9 min | 3.0 min | 0 | 0 |
+| Pure-node unit suites (vm-b1) | 24 | 5.3 min | 7.4 min | 7.7 min | 0 | 0 |
+| Pure-node unit suites (vm-b2) | 27 | 4.5 min | 6.2 min | 6.2 min | 0 | 0 |
+| Renderer specs on a real GPU (macos-latest, Metal) | 7 | 18.1 min | 21.7 min | 21.7 min | 0 | 0 |
+| Select specs for this change | 59 | 0.5 min | 0.7 min | 0.7 min | 0 | 1 |
+| Selected specs (verdict) | 58 | 0.2 min | 0.4 min | 0.5 min | 12 | 2 |
+| Smoke (page boots, __apex responds) (1) | 31 | 3.4 min | 5.0 min | 5.1 min | 0 | 0 |
+| Staged build boots (minified _site, as Pages ships it) | 32 | 3.7 min | 5.2 min | 5.4 min | 0 | 0 |
+| Structural guards | 60 | 0.1 min | 0.1 min | 0.1 min | 3 | 0 |
+| Structural guards (tooling A) | 60 | 3.9 min | 5.6 min | 6.0 min | 1 | 0 |
+| Structural guards (tooling B) | 60 | 2.8 min | 3.7 min | 4.4 min | 0 | 0 |
+| Structural guards (tooling C) | 60 | 4.0 min | 5.5 min | 6.1 min | 0 | 0 |
+| Structural guards (tooling D) | 60 | 3.5 min | 5.3 min | 5.9 min | 2 | 0 |
 | Workflow and shader lints | 60 | 0.5 min | 0.7 min | 0.9 min | 0 | 0 |
 
 ## Families
 
 | Family | n | p50 | p90 | max |
 |---|---:|---:|---:|---:|
-| CI | 35 | 0.2 min | 0.3 min | 0.3 min |
-| CI (draft fast tier) | 23 | 0.2 min | 0.3 min | 0.3 min |
-| Driving model (characterization traces) | 21 | 2.3 min | 3.8 min | 3.9 min |
-| Emulated VR (IWER / xr-emulated) | 6 | 2.1 min | 3.1 min | 3.1 min |
-| Golden menus on a runner (nightly) | 3 | 1.5 min | 2.1 min | 2.1 min |
-| Parts option-resolution census | 60 | 0.3 min | 0.4 min | 2.2 min |
-| Per-circuit geometry sweeps | 11 | 6.7 min | 7.8 min | 7.9 min |
-| Pure-node unit suites | 27 | 7.9 min | 9.9 min | 10.1 min |
-| Renderer specs on a real GPU (macos-latest, Metal) | 14 | 19.1 min | 21.0 min | 22.4 min |
-| Select specs for this change | 60 | 0.5 min | 0.6 min | 0.8 min |
-| Selected specs (change-aware gate) | 55 | 8.5 min | 11.8 min | 12.3 min |
-| Selected specs (verdict) | 57 | 0.2 min | 0.3 min | 6.8 min |
-| Smoke (page boots, __apex responds) | 35 | 2.8 min | 4.6 min | 5.5 min |
-| Staged build boots (minified _site, as Pages ships it) | 35 | 3.9 min | 5.1 min | 5.3 min |
-| Structural guards | 60 | 5.1 min | 5.7 min | 5.8 min |
+| CI | 32 | 0.2 min | 0.3 min | 0.4 min |
+| CI (draft fast tier) | 26 | 0.2 min | 0.2 min | 0.3 min |
+| Driving model (characterization traces) | 22 | 1.5 min | 3.6 min | 3.9 min |
+| Emulated VR (IWER / xr-emulated) | 2 | 2.5 min | 3.1 min | 3.1 min |
+| Parts option-resolution census | 60 | 0.3 min | 0.4 min | 2.1 min |
+| Per-circuit geometry sweeps | 3 | 7.7 min | 7.8 min | 7.8 min |
+| Pure-node unit suites | 27 | 7.3 min | 9.9 min | 10.6 min |
+| Renderer specs on a real GPU (macos-latest, Metal) | 7 | 18.1 min | 21.7 min | 21.7 min |
+| Select specs for this change | 59 | 0.5 min | 0.7 min | 0.7 min |
+| Selected specs (change-aware gate) | 56 | 8.0 min | 11.5 min | 12.6 min |
+| Selected specs (verdict) | 58 | 0.2 min | 0.4 min | 0.5 min |
+| Smoke (page boots, __apex responds) | 31 | 3.4 min | 5.0 min | 5.1 min |
+| Staged build boots (minified _site, as Pages ships it) | 32 | 3.7 min | 5.2 min | 5.4 min |
+| Structural guards | 60 | 4.4 min | 5.7 min | 6.1 min |
 | Workflow and shader lints | 60 | 0.5 min | 0.7 min | 0.9 min |
 
 ## Runs and deploy
 
-- ci.yml runs: 60; cancelled 3.3%; re-gated SHAs 16 (16 extra runs).
-- Fast tier (no smoke, geometry sweep, or selected-specs job ran): n=0, p50 n/a, p90 n/a.
-- Full tier: n=58, p50 14.6 min, p90 34.5 min.
-- Deploy push→live (successful pages.yml on claude/f1-game-project-26h3ng): n=40, p50 15.7 min, p90 32.3 min; superseded (cancelled) 15.
-- DORA: deploy freq 8.8/day, lead time p50 15.7 min, change-fail 11.1%, MTTR p50 20.9 min.
+- ci.yml runs: 60; cancelled 3.3%; re-gated SHAs 15 (15 extra runs).
+- Fast tier (no smoke, geometry sweep, or selected-specs job ran): n=2, p50 1.4 min, p90 14.9 min.
+- Full tier: n=56, p50 38.7 min, p90 87.4 min.
+- Deploy push→live (successful pages.yml on claude/f1-game-project-26h3ng): n=43, p50 11.1 min, p90 32.3 min; superseded (cancelled) 11.
+- DORA: deploy freq 12/day, lead time p50 11.1 min, change-fail 12.2%, MTTR p50 53.9 min.
 
 ## Compared with 2026-09-16
 
@@ -76,12 +71,12 @@ The ci.yml sample is the newest 60 completed runs on every branch. The pages.yml
 
 | Step | 2026-09-16 | This window |
 |---|---|---|
-| CI node-suites | 11.3 min median (40/40 runs, one serial job) | slowest slice per run p50 7.9 min (n=27) |
-| CI smoke, slowest shard | slowest shard median 7.4 min, p90 14.5 min | p50 2.8 min, p90 4.6 min (n=35) |
-| CI selected, slowest shard | agent-view 22–40 min; wake-lock 18.6 min | p50 8.5 min, p90 11.8 min (n=55) |
-| Full tier wall | median 14.3 min, p90 19.3 (23 runs) | p50 14.6 min, p90 34.5 min (n=58) |
-| Push → live | median ≈ 14 min, p90 28–44 min; target after the speed-ups ≈ 8 min | p50 15.7 min, p90 32.3 min (n=40) |
-| Same-SHA re-gate | 12 of 60 runs (20%) | 16 of 60 runs (26.7%), 16 SHAs |
+| CI node-suites | 11.3 min median (40/40 runs, one serial job) | slowest slice per run p50 7.3 min (n=27) |
+| CI smoke, slowest shard | slowest shard median 7.4 min, p90 14.5 min | p50 3.4 min, p90 5.0 min (n=31) |
+| CI selected, slowest shard | agent-view 22–40 min; wake-lock 18.6 min | p50 8.0 min, p90 11.5 min (n=56) |
+| Full tier wall | median 14.3 min, p90 19.3 (23 runs) | p50 38.7 min, p90 87.4 min (n=56) |
+| Push → live | median ≈ 14 min, p90 28–44 min; target after the speed-ups ≈ 8 min | p50 11.1 min, p90 32.3 min (n=43) |
+| Same-SHA re-gate | 12 of 60 runs (20%) | 15 of 60 runs (25%), 15 SHAs |
 | Cancelled ci.yml runs | 9 of 59 (15%) | 3.3% of 60 |
 
 cancelled runs may hide a real failure — a killed job runs no always() step
