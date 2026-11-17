@@ -34,9 +34,14 @@ export function hookPipelines() {
   return "ok " + (api || (be.isWebGPUBackend ? "webgpu" : "webgl2"));
 }
 
+// A window is n LIVE ticks (__apex.info().liveTicks: race frames past every tickBody hold), not n animation frames.
+// While TLX warms or the mirror pass prepares, rAF keeps firing and physics does not run, so a window counted in
+// raw frames can pass entirely inside a hold: Pages run 43963742824 spent 60 + 3 such frames in 1.1 s, read
+// ersDeploy before one physics tick had seen the press, and failed "press 1 never deployed ERS" (#5592).
+// __bpp.frames stays the raw-frame stamp on each logged pipeline. Same signal as results-flow.spec.js (#4253).
 export async function frames(page, n) {
-  const f0 = await page.evaluate(() => window.__bpp.frames);
-  await page.waitForFunction(([f, k]) => window.__bpp.frames >= f + k, [f0, n], { polling: 100, timeout: 180000 });
+  const f0 = await page.evaluate(() => window.__apex.info().liveTicks);
+  await page.waitForFunction(([f, k]) => window.__apex.info().liveTicks >= f + k, [f0, n], { polling: 100, timeout: 180000 });
 }
 
 /** Boot TLX (forceGL selects three's WebGL2 backend), race monza with GAS held, and press BOOST PRESSES
