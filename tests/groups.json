@@ -1575,6 +1575,7 @@
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/desktop-notices.test.mjs",
         "tests/unit/desktop-pack-dry-run.test.mjs",
+        "tests/unit/desktop-read-fuses.test.mjs",
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",

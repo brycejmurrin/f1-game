@@ -457,6 +457,10 @@ set's grip in over 3 s (`c.wxMix`), so grip never steps.
   question. Every readout wants this and every one of them is unchanged:
   `physState()`, agentview's `surface`/`gripMult` pair, `quali.lapTime`, the
   debug HUD line.
+  NOT the reference pole: `Quali.referencePole()` (time-trial and daily medals, the planner's pit loss in
+  laps, a real-race jump-in's clock) is a lap a car drives, so it takes the weather's tyre as the field does
+  (`weatherGrip(treadFor(weather, wetness), wetness)`, #5585). On the slick column it was 137.26 s in the rain
+  at Monza against the field's 132.70 s pole.
 - **`gripMult(c)`** — what that car actually has. The physics seams only:
   `muBase`, the friction-ellipse budget `axFrac`, the AI steer term and
   `_aiBr.grip`.

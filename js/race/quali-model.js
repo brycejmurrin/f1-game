@@ -212,10 +212,19 @@ const Quali = (function () {
     // driver (skill 1) in the tier-0 car on a flying lap — the same model
     // capFor()/lapTime() grid a field with (both flying laps) — at the
     // current pace, difficulty and weather grip. 0 with no track loaded.
+    // The grip is the WEATHER'S TYRE on today's road, which is what every car in the session runs
+    // (TyreModel.treadOf: no fitted tread => treadFor). A bare G.gripMult() is the slick column — in the wet
+    // a lap no car drives, 0.4 % (wet) to 3.4 % (rain) slower than the field's own pole at Monza (#5585).
+    // Dry is the same number either way.
+    function referenceGrip() {
+      const w = G.trackWetness ? G.trackWetness() : NaN;
+      if (typeof TyreModel === "undefined" || !Number.isFinite(w)) return G.gripMult();
+      return TyreModel.weatherGrip(TyreModel.treadFor(G.raceWeather, w), w);
+    }
     function referencePole() {
       const track = G.track;
       if (!track || !track.n) return 0;
-      return paceLap(track, freeFor(Teams.TIER_V[0], 1), G.gripMult());
+      return paceLap(track, freeFor(Teams.TIER_V[0], 1), referenceGrip());
     }
 
     // One car's qualifying lap. Deterministic for a given (seed, round, car).

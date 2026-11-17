@@ -1678,12 +1678,15 @@ var PitLane = (function () {
     function stopAnim(c) {
       const zz = z();
       _anim.lift = 0; _anim.off = 0; _anim.u = -1;
-      if (!c || c.pitState !== "box" || !zz || !(zz.boxS > 0)) return _anim;
+      if (!c || c.pitState !== "box") return _anim;
+      // An instant-replay scrub shows the RECORDED stop (ReplayBuf.boxU), never the live pitT.
+      const ru = typeof ReplayBuf !== "undefined" && ReplayBuf.boxU ? ReplayBuf.boxU(c) : -1;
+      if (!(ru >= 0) && (!zz || !(zz.boxS > 0))) return _anim;
       // pitWorked extends the hold past boxS; the visual is keyed on the
       // service half only so a garage visit does not freeze the jacks mid-air.
-      const span = zz.boxS;
+      const span = ru >= 0 ? 1 : zz.boxS;
       const remain = Math.min(span, Math.max(0, (c.pitT || 0) - (c.pitWorked || 0)));
-      const u = Math.min(1, Math.max(0, 1 - remain / span));
+      const u = ru >= 0 ? ru : Math.min(1, Math.max(0, 1 - remain / span));
       _anim.u = u;
       _anim.lift = 0.22 * (u < 0.5 ? ease(u / 0.12) : ease((1 - u) / 0.12));
       _anim.off = 0.55 * (u < 0.5 ? ease((u - 0.15) / 0.12) : ease((0.80 - u) / 0.12));
