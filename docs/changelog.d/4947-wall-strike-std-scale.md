@@ -1,1 +1,0 @@
-Fixed: a barrier hit reads the same at any OVERALL SPEED: knocked-loose barrier panels, the airborne launch and the nose straightening along the wall no longer get harsher above the default speed and softer below it
