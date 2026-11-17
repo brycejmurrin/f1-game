@@ -31,6 +31,16 @@ function setFraming(d, mode, value) {
   if (_scope === "track" || _scope === "car") return CamTune.setScoped(_scope, mode, d.id, value);
   return CamTune.set(mode, d.id, value);
 }
+function scoped() { return _scope === "track" || _scope === "car"; }
+// RESET at THIS TRACK / THIS CAR: this camera's framing AND the scope's comfort overrides (a scoped comfort value
+// has no other way back to "inherit"); the scope's other camera modes are put back as they were (#5042).
+function resetScopedCam() {
+  const pack = CamTune.exportPack(), key = CamTune.context()[_scope], mode = curMode();
+  const entry = ((_scope === "track" ? pack.tracks : pack.cars) || {})[key];
+  CamTune.resetScoped(_scope);
+  const modes = entry && entry.modes || {};
+  for (const m of Object.keys(modes)) if (m !== mode) for (const id of Object.keys(modes[m])) CamTune.setScoped(_scope, m, id, modes[m][id]);
+}
 function comfortValue(d) {
   return _scope === "track" || _scope === "car"
     ? CamTune.comfortGetScoped(_scope, d.id) : CamTune.comfortGetGlobal(d.id);
@@ -225,13 +235,13 @@ function buildTools(host) {
     inp.type = "range"; inp.min = d.min; inp.max = d.max; inp.step = d.step;
     inp.id = "ct-cin-" + d.id;
     inp.setAttribute("aria-label", d.label);
-    inp.oninput = () => {
+    inp.oninput = () => {   // live apply per tick; the save waits for the release (#5042)
       setComfort(d, parseFloat(inp.value));
-      if (_scope === "track" || _scope === "car") CamTune.persist(_scope);
-      else CamTune.persist("comfort");
       b.textContent = fmtCt(d, comfortValue(d));
+      updateCtProfileLabel();
       applyLive();
     };
+    inp.onchange = () => CamTune.persist(scoped() ? _scope : "comfort");
     lab.appendChild(span); lab.appendChild(inp);
     item.appendChild(lab);
     if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
@@ -295,13 +305,12 @@ function buildCamTunePanel() {
       inp.oninput = () => {
         if (_scope === "mode") CamTune.set(curMode(), d.id, parseFloat(inp.value));
         else setFraming(d, curMode(), parseFloat(inp.value));
-        if (_scope === "track" || _scope === "car") CamTune.persist(_scope);
-        else CamTune.persist(_scope === "global" ? "global" : "modes");
         const v = framingValue(d, curMode());
         b.textContent = fmtCt(d, v);
         updateCtProfileLabel();
         applyLive();
       };
+      inp.onchange = () => CamTune.persist(scoped() ? _scope : _scope === "global" ? "global" : "modes");
       lab.appendChild(span); lab.appendChild(inp);
       item.appendChild(lab);
       if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
@@ -323,7 +332,8 @@ function buildCamTunePanel() {
     imp.onclick = () => {
       const ta = $("ct-json");
       ta.hidden = false;
-      ta.readOnly = false;
+      if (ta.readOnly) ta.value = "";   // the box held a COPY export: empty it for the paste
+      ta.readOnly = false;              // typing is IMPORT's alone; open and COPY keep the keyboard down (#5042)
       ta.placeholder = "Paste JSON, CameraEdits = {...}, or APXC1.… then IMPORT";
       const raw = (ta.value || "").trim();
       if (!raw) { ta.focus(); return; }
@@ -343,7 +353,7 @@ function buildCamTunePanel() {
     };
   }
   const ta = $("ct-json");
-  if (ta) { ta.readOnly = false; ta.setAttribute("aria-label", "Camera tuning export / import"); }
+  if (ta) { ta.readOnly = true; ta.setAttribute("aria-label", "Camera tuning export / import"); }
   document.getElementById("camtune-inner").classList.toggle("lt-show-help", $("ct-help-on").checked);
   refreshCamTunePanel();
 }
@@ -354,7 +364,7 @@ function updateCtProfileLabel() {
     host.textContent = "ALL CAMERAS" + (n ? "  (" + n + " baseline)" : "  (no baseline)");
   } else if (_scope === "track" || _scope === "car") {
     const ctx = CamTune.context(), key = ctx[_scope] || "unavailable";
-    const n = CamTune.countScoped(_scope, curMode());
+    const n = CamTune.countScoped(_scope, curMode()) + CamTune.countScoped(_scope);   // framing + comfort
     host.textContent = (_scope === "track" ? "TRACK " : "CAR ") + String(key).toUpperCase()
       + (n ? "  (" + n + " overrides)" : "  (no overrides)");
   } else {
@@ -443,9 +453,9 @@ $("pm-camtune").onclick = openCamTuner;
 $("ct-close").onclick = () => closeCamTuner(true);
 $("ct-reset").onclick = () => {
   if (_scope === "global") CamTune.resetGlobal();
-  else if (_scope === "track" || _scope === "car") CamTune.resetScoped(_scope, curMode());
+  else if (scoped()) resetScopedCam();
   else CamTune.reset(curMode());
-  CamTune.persist(_scope === "track" || _scope === "car" ? _scope : undefined); applyLive(); refreshCamTunePanel();
+  CamTune.persist(scoped() ? _scope : undefined); applyLive(); refreshCamTunePanel();
 };
 $("ct-reset-all").onclick = () => {
   CamTune.resetAll(); CamTune.persist(); CamTune.persist("track"); CamTune.persist("car");
@@ -501,7 +511,7 @@ $("ct-copy").onclick = () => {
   lines.push(CamTune.encodeShare(pack));
   const json = lines.join("\n");
   const ta = $("ct-json");
-  ta.readOnly = false;
+  ta.readOnly = true;   // keeps iOS from raising the keyboard; setSelectionRange still selects a readonly field
   ta.value = json; ta.hidden = false;
   ta.focus(); ta.setSelectionRange(0, json.length);
   const flash = (good) => {
