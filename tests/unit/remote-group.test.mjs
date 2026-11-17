@@ -268,14 +268,12 @@ test("--ref still refreshes origin/<branch>: the sha, the green lookup and the w
 
 test("the dispatch is an owner write: it says so and refuses unless the owner's opt-in is set (decision 2026-11-11)", () => {
   assert.equal(OWNER_OPT_IN, "APEX_GH_OWNER_WRITE");
+  const what = "this dispatch is a GitHub write made with the gh token, recorded as the repository owner's own act (no app marker).";
   for (const env of [{}, { APEX_GH_OWNER_WRITE: "" }, { APEX_GH_OWNER_WRITE: "0" }, { APEX_GH_OWNER_WRITE: "yes" }]) {
     const g = ownerWriteGate(env);
-    assert.equal(g.ok, false, JSON.stringify(env));
-    assert.match(g.lines.join("\n"), /GitHub write .*owner's own act[\s\S]*refused/);
+    assert.deepEqual([g.ok, g.lines.length, g.lines[0], g.lines[1].slice(0, 8)], [false, 2, what, "refused:"], JSON.stringify(env));
   }
-  const g = ownerWriteGate({ APEX_GH_OWNER_WRITE: "1" });
-  assert.equal(g.ok, true);
-  assert.match(g.lines[0], /GitHub write/, "the opt-in still prints what the dispatch is");
+  assert.deepEqual(ownerWriteGate({ APEX_GH_OWNER_WRITE: "1" }), { ok: true, lines: [what] }, "the opt-in still prints what the dispatch is");
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/remote-group.mjs"), "utf8");
   assert.ok(src.indexOf("ownerWriteGate()") < src.indexOf('api("POST"'), "the gate runs before the dispatch POST");
 });
