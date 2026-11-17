@@ -1,1 +1,0 @@
-Fixed: opening the Home Screen app in landscape could leave every menu and dialog squashed against the top of the screen by a phantom keyboard band; the band is now measured against the real screen height
