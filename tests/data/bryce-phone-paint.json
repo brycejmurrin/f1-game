@@ -264,7 +264,7 @@
         "taps": 0,
         "text": 2,
         "outside": 0,
-        "blocked": 1,
+        "blocked": 0,
         "scroll": 0
       }
     },
@@ -417,7 +417,7 @@
         "taps": 0,
         "text": 2,
         "outside": 0,
-        "blocked": 1,
+        "blocked": 0,
         "scroll": 0
       }
     },
