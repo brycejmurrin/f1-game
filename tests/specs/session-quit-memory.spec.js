@@ -55,6 +55,25 @@ async function quitToMenu(page) {
   await waitFrames(page, 4);
 }
 
+// The disposal signal. A freed geometry's wrappers are dropped on a later present by design: releaseGeometry
+// holds them for one scene render (tlx.js _dropLater), and a drop that lands while a program warm is in
+// flight is queued until the first present after it settles (_dropQueue; three's compileAsync re-fetches
+// the wrappers it collected). A race entry starts warms of its own (the entry warm, the deferred mirror
+// stage), so a reading taken a fixed number of frames after "race" can still see the previous circuit's
+// held wrappers: 4 of them on Metal, a split ribbon's SPLIT_SLOTS, on a cold first attempt only (Pages run
+// 43969212945). Settled = no warm in flight and nothing held, across two further presents (the first
+// flushes _dropQueue, whose length memState does not report). A wrapper still there after this is a leak.
+async function waitDropsSettled(page) {
+  await page.evaluate(() => { window.__sqmSettle = -1; });
+  await page.waitForFunction(() => {
+    const t = typeof GLX !== "undefined" ? GLX.__tlx : null, m = t && t.memState ? t.memState() : null;
+    if (!m || !m.dropLater) return false;
+    if (GLX.warming() || m.dropLater.now > 0) { window.__sqmSettle = -1; return false; }
+    if (window.__sqmSettle < 0) window.__sqmSettle = m.presents;
+    return m.presents >= window.__sqmSettle + 2;
+  }, null, { polling: 100, timeout: 120000 });
+}
+
 function ribbonIds() {
   const set = window.renderer && window.renderer._objects && window.renderer._objects._renderObjects;
   const ids = [];
@@ -93,6 +112,7 @@ test("quit to menu then another track drops the previous circuit's chunk draws",
   for (const id of CIRCUITS) {
     if (previous.length) await quitToMenu(page);
     await raceTrack(page, id);
+    await waitDropsSettled(page);
     const census = await censusAfterGc(page, cdp);
     const ribbons = await page.evaluate(ribbonIds);
     const still = previous.length ? await page.evaluate((ids) => {
@@ -140,7 +160,9 @@ test("quit to menu then another track drops the previous circuit's chunk draws",
       // carSh: the shadow silhouette, one mesh per body, recast on every race.
       // Anything else at this size is a track draw (a merged chunk, a ribbon, a prop).
       const leaked = still.filter((h) => h.kind !== "carSh");
-      expect(leaked, `${id}: previous circuit chunk geometries are still in the render-object set`).toEqual([]);
+      // The rows ride in the message: the CI log keeps the first error lines, not the diff.
+      const rows = leaked.map((h) => `${h.otype}/${h.kind || "-"} verts ${h.verts} idx ${h.idx} split ${h.split} vis ${h.vis} same ${h.same} parent ${h.parent || "-"} mat ${h.mat}`).join("; ");
+      expect(leaked, `${id}: previous circuit chunk geometries are still in the render-object set (${leaked.length}: ${rows})`).toEqual([]);
     }
     previous = ribbons;
   }
