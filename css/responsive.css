@@ -173,12 +173,13 @@
 }
 /* …BUT NEVER ON GEOMETRY THE TITLE FIT MEASURES (#5150). Under the rule above an element's initial
    `transition-property: all` gets the 0.01ms, and a transition returns the PREVIOUS value (rectangle, var(),
-   inherited font-size) until the next frame. fit() read #menu-brand where the last layout left it (TITLE Y +50 %
-   at 852x393: top 436 in a 393 box); inside the pieces (#5578) a door's label measured its size from before TEXT
-   SIZE landed, the five-row tier passed, the label then grew in an unchanged box and nothing refitted: a 264 px
-   title, PRACTICE clipped. Paint keeps its 0.01ms, geometry is instant (css/hud.css: fitHud). */
-:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons),
-:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) *,
+   inherited font-size) until the next frame. fit() read #menu-brand where the last layout left it (top 436 in a
+   393 box); inside the pieces (#5578) a door's label measured its size from before TEXT SIZE landed, the five-row
+   tier passed, the label grew in an unchanged box and nothing refitted: 264 px, PRACTICE clipped. Paint keeps
+   its 0.01ms; geometry is instant. */
+:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons, #menu-brand *, #menu-buttons *) {
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
+}
 :root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) *::before,
 :root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) *::after {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
