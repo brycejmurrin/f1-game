@@ -486,6 +486,8 @@
     "tests/unit/garage-crew-choreo.test.mjs",
     "// The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.",
     "tests/unit/garage-crew.test.mjs",
+    "// GarageDepartureWheels.samplePose: authored path for every angle (Night Shift high), not only CUT.",
+    "tests/unit/garage-departure-wheels.test.mjs",
     "tests/unit/garage-entrance-motion.test.mjs",
     "tests/unit/garage-finish-remap.test.mjs",
     "// #5462: the stepped arrival pose and the crew rigs' draw streams pinned bit for bit, and zero objects a frame (interpreter-only census child, ~9 s).",
@@ -547,6 +549,8 @@
     "// #4783 row 3 / #4710: the WebGPU allocation wrapper (tools/gfx/gpu-mem-webgpu.mjs) on a fake device; < 1 s.",
     "tests/unit/gpu-mem-webgpu.test.mjs",
     "tests/unit/gpu-test-run.test.mjs",
+    "// #5560: one junit per Playwright process (run-playwright stashJunit), so a group shard's end record claims every green process's specs. Temp files, instant.",
+    "tests/unit/group-junit-per-process.test.mjs",
     "tests/unit/harness-display.test.mjs",
     "// #5223: the circuit picker hero ships a 1600 px still beside the 800 px one and asks for it by srcset.",
     "tests/unit/hero-still-density.test.mjs",
@@ -789,6 +793,7 @@
     "tests/unit/perf-spans.test.mjs",
     "tests/unit/perf-try.test.mjs",
     "tests/unit/phone-recorder.test.mjs",
+    "tests/unit/phone-shipped-defaults.test.mjs",
     "// The shared Bryce-phone preset, issue screenshots and the screenshot size matcher. Pure, ~1 s.",
     "tests/unit/phone-tools.test.mjs",
     "tests/unit/phone-touch-surface.test.mjs",
@@ -1348,6 +1353,8 @@
     "tests/unit/vegas-day-strip.test.mjs",
     "// Vehicle tick scratch: grip and wheel bags are reused, and the player step matches the fresh-literal path.",
     "tests/unit/vehicle-tick-alloc.test.mjs",
+    "// Vendor doctor (reads only): CLI / sign-in / key state per vendor, no key or e-mail in the row. ~0.1 s.",
+    "tests/unit/vendor-doctor.test.mjs",
     "// Vendored licence files: every vendor/ package has one and a declared SPDX licence matches its text (#3092). < 0.1 s.",
     "tests/unit/vendor-licences.test.mjs",
     "tests/unit/verify-live.test.mjs",
@@ -1568,6 +1575,7 @@
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/desktop-notices.test.mjs",
         "tests/unit/desktop-pack-dry-run.test.mjs",
+        "tests/unit/desktop-read-fuses.test.mjs",
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",
@@ -1597,6 +1605,7 @@
         "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/ci-ship-smoke-renderer.test.mjs",
         "tests/unit/ci-workflow-triggers.test.mjs",
+        "tests/unit/comment-citations.test.mjs",
         "tests/unit/component-inventory.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/diagnostics-tools.test.mjs",
@@ -1606,9 +1615,11 @@
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
+        "tests/unit/knowledge-retention.test.mjs",
         "tests/unit/merge-surveyor.test.mjs",
         "tests/unit/parent-protocol.test.mjs",
         "tests/unit/pre-commit-guards.test.mjs",
+        "tests/unit/rulebook-guards.test.mjs",
         "tests/unit/skill-descriptions.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/skill-routing-eval.test.mjs",
@@ -2291,6 +2302,12 @@
       "cmd": "APEX_SHIMMER=1 node tools/ci/run-playwright.mjs tests/specs/material-shimmer.spec.js",
       "kind": "command"
     },
+    "test:shipped-defaults": {
+      "files": [
+        "tests/specs/shipped-defaults.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:smoke": {
       "files": [
         "tests/specs/smoke.spec.js"
@@ -2319,6 +2336,7 @@
         "tests/unit/career-hub-spend.test.mjs",
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
+        "tests/unit/career-planning-ui-download.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -2504,6 +2522,7 @@
         "tests/specs/music-library.spec.js",
         "tests/specs/named-controls.spec.js",
         "tests/specs/persistence.spec.js",
+        "tests/specs/phone-shipped-defaults.spec.js",
         "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
         "tests/specs/picker-edit-button.spec.js",

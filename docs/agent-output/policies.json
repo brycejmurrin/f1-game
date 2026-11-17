@@ -591,6 +591,11 @@
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
     },
+    "tools/ci/docs-fast-tests.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line: the space-separated unit files a docs-only change runs (the pre-commit hook's node --test argv)"
+    },
     "tools/ci/file-verdict-reporter.mjs": {
       "action": "protocol-only",
       "presentation": "native",
@@ -645,6 +650,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
+    },
+    "tools/ci/lib/deploy-tip.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: tipState / codeRedJobs / platformStepFailed verdicts with run id and failed job names, and the paginated pages.yml run + jobs reader; no CLI output"
     },
     "tools/ci/lib/provenance.mjs": {
       "action": "keep-native",
@@ -895,6 +905,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "VM coverage is test-for-test; drift exit remains 1"
+    },
+    "tools/ci/vendor-doctor.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One JSON line per vendor: cli, version, login, key NAME, api code, next steps; reads only. Never expose a key, e-mail or account id."
     },
     "tools/ci/verification-receipt.mjs": {
       "action": "no-direct-output",

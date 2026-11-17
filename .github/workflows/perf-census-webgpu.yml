@@ -1,7 +1,9 @@
 name: Perf census (TLX WebGPU)
 
-# Advisory: runs the pass, render-scale and GPU-memory censuses on three's WebGPU backend (Bryce's iPhone path) under
-# Mesa lavapipe, which the other censuses pin away from (apex26.tlxForceGL=1). Dispatch only: it never runs on a
+# Advisory: runs the pass, render-scale and GPU-memory censuses on three's WebGPU backend (Bryce's iPhone path) on
+# SOFTWARE WebGPU, which the other censuses pin away from (apex26.tlxForceGL=1). The launch asks for Mesa lavapipe, but
+# Dawn hands it the google/swiftshader fallback adapter (#5450, run 42979924558); every tool records the adapter and
+# exits 1 on any other (adapterMismatch in tools/lib/webgpu-chrome-args.cjs). Dispatch only: it never runs on a
 # push except a PR touching the census tools, so it costs no CI minutes otherwise. Counts are exact for the deterministic jump scenario;
 # software skips batches, so they are NOT hardware numbers. Issue #4783.
 on:
@@ -41,7 +43,7 @@ jobs:
       - uses: ./.github/actions/playwright-chromium
       # Through the cached installer (#5519): no apt when the image has it, a flaky mirror
       # name pinned for the job, a fast "runner package mirror unreachable" when none answers.
-      - name: Install the lavapipe Vulkan driver
+      - name: Install the Mesa Vulkan drivers (the launch asks for lavapipe; WebGPU runs on SwiftShader, #5450)
         run: bash tools/ci/apt-cached-install.sh --label lavapipe --budget 300 mesa-vulkan-drivers
       - name: Pass census, chase and helmet
         env:

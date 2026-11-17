@@ -1069,7 +1069,7 @@ const FlybySeq = (function () {
     // number by now), or 0. The loading card marks it on its map (airCorner).
     const k = shotCorner(shot);
     _out.corner = _airCorner = typeof k === "number" && k > 0 ? k : 0;
-    const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = reducedMotion();
     if (_out.corner) driveHero(track, cornerS(track, _out.corner), t, dur / total * _flyS);
     else if (shot.roll === "pitexit" && track.pit && !reduced) rollHero(track, t);   // reduced motion: the car waits on its box
     else restoreHero();
@@ -1078,10 +1078,20 @@ const FlybySeq = (function () {
       let dx = _tgt[0] - _eye[0], dz = _tgt[2] - _eye[2], dl = Math.hypot(dx, dz) || 1;
       dx /= dl; dz /= dl; _eye[0] -= dz * sway; _eye[2] += dx * sway;
     }
-    syncPresentation(presentation(u, list, reduced), _out.cut);
+    syncPresentation(presentation(u, list, reduced, on), _out.cut);
     return _out;
   }
   let _lastIdx = -1, _airCorner = 0;
+  // Reduce-motion MediaQueryList cached once (perf P6); its .matches stays live.
+  let _reduceMq = null;
+  function reducedMotion() {
+    if (!_reduceMq) {
+      if (typeof matchMedia === "undefined") return false;
+      _reduceMq = matchMedia("(prefers-reduced-motion: reduce)");
+      if (!_reduceMq) return false;
+    }
+    return !!_reduceMq.matches;
+  }
   /** The turn number the last solve() filmed, 0 for none (a grid, landmark or
    *  whole-circuit shot). Read by js/ui/loading-screen.js: shotAt() knows the
    *  shot's name but not its corner, which only exists once bindCorners() has
@@ -1349,8 +1359,10 @@ const FlybySeq = (function () {
     return out;
   }
   const DIP_MS = 150, REDUCED_DIP_MS = 300;
-  function presentation(u, shots, reduced) {
-    const on = shotAt(u, shots), cuts = boundaries(shots);
+  // `on` (optional): the caller's shotAt(u, shots).
+  function presentation(u, shots, reduced, on) {
+    if (!on) on = shotAt(u, shots);
+    const cuts = boundaries(shots);
     let near = Infinity;
     for (const cut of cuts) near = Math.min(near, Math.abs((+u || 0) - cut) * _flyS * 1000);
     const dipMs = reduced ? REDUCED_DIP_MS : DIP_MS;

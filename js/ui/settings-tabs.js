@@ -140,7 +140,7 @@ const SettingsNav = (function () {
       return true;
     };
     let stopRestore = () => {};
-    const restoreFocus = (el) => {
+    const restoreFocus = (el, scroll) => {
       stopRestore();
       const placed = (typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(el)) || quietFocus(el);
       if (placed && typeof ResizeObserver === "function") {
@@ -149,6 +149,8 @@ const SettingsNav = (function () {
         // Follow those size changes only until the player's next interaction.
         const observer = new ResizeObserver(() => {
           if (request !== generation || document.activeElement !== el || !visible(el)) { stopRestore(); return; }
+          // The sheet can change WIDTH between pages (a phone at 70 %): the saved offset only fits the settled one (#5358).
+          if (scroll != null) document.getElementById("pm-settings-body").scrollTop = scroll;
           el.scrollIntoView({ block: "nearest" });
         });
         const events = ["pointerdown", "keydown", "wheel", "touchstart"];
@@ -312,7 +314,7 @@ const SettingsNav = (function () {
         if (body) body.scrollTop = parent.scroll;
         // A rotation or scale change can move the launcher beyond its saved
         // offset. Keep the returning control visible in the current layout.
-        restoreFocus(parent.door) || focusPage(parent.page);
+        restoreFocus(parent.door, parent.scroll) || focusPage(parent.page);
         return false;
       }
       show("home", false);
