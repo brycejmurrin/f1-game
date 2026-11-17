@@ -148,8 +148,14 @@ const SettingsSearch = (function () {
     return true;
   }
   function depBlock(t) {
-    const r = t && (t.closest("[data-dep-off]") || t.querySelector("[data-dep-off]"));
-    const w = r && r.querySelector("[data-dep-reason]"), x = w && w.textContent.trim();
+    let r = t && (t.closest("[data-dep-off]") || t.querySelector("[data-dep-off]")), w = r && r.querySelector("[data-dep-reason]");
+    // An owner-greyed control (SettingDeps EXPLAIN) has no data-dep-off row: its reason is the shown line it is described by (#5562).
+    if (!w && t) {
+      const ids = [t, ...t.querySelectorAll("[aria-describedby]")].flatMap((c) => (c.getAttribute("aria-describedby") || "").split(/\s+/)).filter(Boolean);
+      w = [...document.querySelectorAll("[data-dep-reason]")].find((e) => !e.hidden && ids.includes(e.id) && e.textContent.trim());
+      r = w && (w.getAttribute("aria-hidden") === "true" ? w.parentElement : w);   // never focus an aria-hidden label
+    }
+    const x = w && w.textContent.trim();
     if (x) { r.tabIndex = -1; r.focus({ preventScroll: true }); r.scrollIntoView({ block: "nearest" }); }
     return x;
   }
