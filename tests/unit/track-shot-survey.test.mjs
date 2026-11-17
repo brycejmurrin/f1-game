@@ -96,6 +96,7 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
         }
         const tip = git(cwd, "rev-parse", "deploy-x"), calls = [];
         let ratchetCalls = 0;
+        const RETEST = { ok: true, evidence: "fixture re-test holds" };
         const result = localMergeGenCheck({ pr: 17, head, headRef: "pr", cwd, base: "deploy-x",
           run: (cmd, argv, options) => {
             calls.push(cmd);
@@ -106,6 +107,7 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
             return spawnSync(cmd, argv, options);
           },
           ratchets: () => { ratchetCalls++; return { ok: true, evidence: "fixture ratchets hold" }; },
+          ciAt: "2026-11-15T18:00:00Z", retest: () => RETEST,
         });
         assert.equal(result.tip, tip, "a catalog refusal retains the actual merge tip");
         assert.equal(result.error, undefined, "generation failures are refusals, not git infrastructure errors");
@@ -121,7 +123,8 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
           "no-digest-stale": `scenery catalog fails on ${on}: scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`,
         }[mode];
         if (exact) assert.equal(result.evidence, exact);
-        assert.equal(ratchetCalls, passes ? 1 : 0, "catalog/gen refusals stop before ratchets");
+        // Every passing path returns the re-test's row, the absent-catalog one included (#5570).
+        assert.deepEqual([ratchetCalls, result.retest], passes ? [1, RETEST] : [0, undefined], "catalog/gen refusals stop before ratchets and the re-test");
         if (!passes) assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);
         assert.equal(fs.existsSync(path.join(cwd, "artifacts", "merge-gate", "wt-17")), false, "all outcomes clean up the merged checkout");
       } finally { fs.rmSync(dir, { recursive: true, force: true }); }
