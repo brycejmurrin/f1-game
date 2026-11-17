@@ -1,1 +1,0 @@
-Improved: eight Settings-only row initialisers (camera feel, cockpit finishes, driving line, accessibility, debris, post-FX, build worker, VR) now wire on the first Settings visit, tap or idle moment instead of during page load, trimming work before the title appears.
