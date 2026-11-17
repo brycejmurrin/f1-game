@@ -42,6 +42,13 @@ window.CamModes = (function () {
       for (const entry of cameraOwners.values()) if (!top || entry.priority >= top.priority) top = entry;
       return top;
     }
+    // A SHOT (opts.transient: the pit-entry cut) is a few seconds the game chose, not a view the player is in.
+    // The player's own camera control ends it and never steps from it: its index must not reach the saved choice.
+    function endShots() {
+      let n = 0;
+      for (const [key, entry] of cameraOwners) if (entry.transient) { cameraOwners.delete(key); n++; }
+      return n;
+    }
 
     // A REAL RACE WATCH (js/race/real-replay.js): its TV director is one more
     // "camera" — AUTO — in the picker and the C / CAM cycle. Never a CAM_MODES
@@ -107,13 +114,15 @@ window.CamModes = (function () {
           }
           const entry = cameraOwners.get(owner);
           if (entry) entry.idx = idx;
-          else cameraOwners.set(owner, { idx, priority: Number(opts.priority) || 0 });
+          else cameraOwners.set(owner, { idx, priority: Number(opts.priority) || 0, transient: !!opts.transient });
         }
         const top = pictureOwner();
         idx = top ? top.idx : baseCamera;
       } else {
         // Explicit controls remain usable during a temporary view. A WATCH
         // selection belongs to that view and never replaces the driving base.
+        // An explicit pick during a shot ends the shot and is the player's choice.
+        endShots();
         const top = pictureOwner();
         if (top) top.idx = idx;
       }
@@ -157,6 +166,8 @@ window.CamModes = (function () {
     // In a WATCH the cycle runs the shots and then AUTO (where it would wrap);
     // from AUTO the next press is the next shot, the viewer's.
     function cycleCam() {
+      // CAM / C during a shot dismisses it and is spent: back on the camera the player chose, nothing saved (#5585).
+      if (endShots()) { const top = pictureOwner(); return setCamMode(top ? top.idx : baseCamera, { persist: false }); }
       const r = watchReplay();
       if (r && !r.autoOn() && G.camMode === CAM_MODES.length - 1) return toAuto();
       return r ? pickCam(G.camMode + 1) : setCamMode(G.camMode + 1);
