@@ -357,7 +357,7 @@ const ExtraRigs = (function () {
     _peEye[1] = _smpA.p[1] + PIT_EYE_UP;
     _peTap = false;
     _pe = { at: performance.now(), steer: c.steerCommand || 0 }; _peG = G;
-    G.setCamMode(_pitIdx, { persist: false, owner: PE_OWNER, priority: 5 });
+    G.setCamMode(_pitIdx, { persist: false, owner: PE_OWNER, priority: 5, transient: true });
   }
   function peFrame(track, s, x, extra, eye, tgt) {
     eye[0] = _peEye[0]; eye[1] = _peEye[1]; eye[2] = _peEye[2];

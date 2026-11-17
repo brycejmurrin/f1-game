@@ -1486,6 +1486,7 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
@@ -2139,12 +2140,14 @@
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "cycleCam": [
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "refreshCamBtn": [
@@ -2155,6 +2158,7 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
@@ -2273,6 +2277,7 @@
       "load": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/light-grid.test.mjs"
       ],
       "loadCar": [
@@ -2404,6 +2409,9 @@
       "beginScrub": [
         "tests/unit/replay-buf.test.mjs",
         "tests/unit/rival-audio.test.mjs"
+      ],
+      "boxU": [
+        "tests/unit/replay-buf.test.mjs"
       ],
       "breakTimeline": [
         "tests/unit/replay-buf.test.mjs"
@@ -13022,6 +13030,7 @@
       ],
       "create": [
         "tests/unit/director.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-render.test.mjs",
         "tests/unit/real-race-script.test.mjs",
@@ -13039,6 +13048,9 @@
       ],
       "pipPick": [
         "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "refresh": [
+        "tests/unit/extra-rigs.test.mjs"
       ],
       "resetTiming": [
         "tests/unit/real-replay-broadcast.test.mjs"
@@ -13067,6 +13079,7 @@
       ],
       "tick": [
         "tests/unit/director.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
@@ -16554,6 +16567,7 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
