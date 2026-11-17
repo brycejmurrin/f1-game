@@ -772,8 +772,10 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
       return fail(`scenery catalog fails to build on the merge onto ${tip.slice(0, 8)}: ${detail} — node tools/shot/gen-scenery-locations.cjs on the synced branch names the circuit`);
     }
     const rat = ratchets({ cwd: wt, run });
+    // The re-test runs here too (#5570): a result without it reads as a refusal, so this merge could never pass.
+    const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, ciBase, run });
     cleanup();
-    return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat };
+    return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat, retest: re };
   }
   let catalog = run(process.execPath, ["-e", [
     "const fs = require('node:fs');",
