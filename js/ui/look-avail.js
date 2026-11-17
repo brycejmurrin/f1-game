@@ -134,9 +134,12 @@ const LookAvail = (function () {
     return { w: (vw - GUT) / z, h: (vh - GUT) / z, shortLandscape: vw > vh && vh <= 500, phone: !finePointer && Math.min(vw, vh) < 600 };
   }
   const PHONE_KEEPS = "A phone-sized window keeps the compact layout.";
+  /* #5580: a short touch landscape window holds the CAREER hub compact at every UI SIZE (css/overlays.css). */
+  const heldCompact = (id, e) => id === "career" && e.phone && e.shortLandscape;
   function compactNow(id, look, e) {
     const f = FIT[id];
     if (!f || !f.compactAt) return false;
+    if (heldCompact(id, e)) return true;
     if (look.density === "roomy" && !e.phone) return false;
     if (look.density === "tight") return true;
     return e.h < f.compactAt;
@@ -153,7 +156,7 @@ const LookAvail = (function () {
   function why(id, k, v, look, e) {
     const f = FIT[id];
     if (k === "density" && f && f.compactAt) {
-      const auto = e.h < f.compactAt;
+      const auto = e.h < f.compactAt || heldCompact(id, e);
       if (v === "tight" && auto) return "Already tight on this screen size.";
       if (v === "roomy" && !auto) return "Already roomy on this screen size.";
       if (v === "roomy" && e.phone) return PHONE_KEEPS;

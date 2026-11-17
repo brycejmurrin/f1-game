@@ -170,6 +170,8 @@ test("desktop player hi-res atlas upload is deferred off boot and garage-open", 
 function decalRig(opts = {}) {
   const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   const body = src.slice(src.indexOf("    // ── decals ──"), src.indexOf("    function carDecalNum("));
+  // The car's-own-paint one-liners the decal section reads (#5037), from the same source.
+  const paintHelpers = ["PEER_TAG", "livOf", "kid", "livTag"].map((n) => src.match(new RegExp("    (?:const " + n + " =|function " + n + "\\().*\\n"))[0]).join("");
   const built = [], freed = [], idle = [], hiLiveries = [];
   const live = { id: "std" };   // the livery the garage has selected NOW
   const G = { photoMode: false, camEye: [0, 0, 0], store: { rev: 1 }, getLiveryId: () => live.id,
@@ -187,6 +189,7 @@ function decalRig(opts = {}) {
     const DECAL_TEX_CACHE_MAX = 36;
     const _decalTeams = [], _decalNums = [], _decalMats = [], _decalSetup = [];
     let _decalCount = 0;
+    ${paintHelpers}
     ${body}
     return {
       frame(cars) {            // cars: [{ team, num, at: [x,y,z], player }]

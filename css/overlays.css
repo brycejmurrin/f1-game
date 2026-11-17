@@ -717,6 +717,17 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   padding: 0 calc(var(--gap) * 2 / 3);
   line-height: 1.2;
 }
+/* CODES MATCH (#5313): READY waits for it; the same chip as Remove, which then sits beside it. */
+#vsfriend .vs-roster .vs-driver [data-verify-confirm] {
+  flex: 0 0 auto;
+  font-size: var(--fs-micro);
+  margin-left: auto;
+  white-space: nowrap;
+  min-height: var(--tap-paint);
+  padding: 0 calc(var(--gap) * 2 / 3);
+  line-height: 1.2;
+}
+#vsfriend .vs-roster .vs-driver [data-verify-confirm] ~ .vs-roster-remove { margin-left: calc(var(--gap) / 3); }
 #vsfriend .vs-roster-dot {
   flex: 0 0 auto;
   width: 10px;
@@ -1247,12 +1258,21 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root[data-look-career-density="tight"] #cr-inner,
 :root[data-look-garage-density="tight"] #cs-inner { --compact-at: 99999px; }
 :root[data-look-popups-density="tight"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 99999px; }
+/* ...AND AT EVERY UI SIZE (#5580), the picker's #5358 gate (css/select.css): a phone ships UI SIZE 70 %, where 393 / 0.7
+   hands the career hub 520 own px (over its 480) and the results sheet 515 (over 380), so both went normal on the
+   owner's 852x393 and 844x390: results rows two lines and 74 painted px (3.8 in the pane, no pinned podium) where
+   compact paints 44; the hub head 85 painted where compact paints 62. */
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  #career #cr-inner, #results > .sheet { --compact-at: 99999px; }
+}
 
 /* BUTTON HEIGHT — the tap tokens, scaled from their shipped values
    (--tap-0 / --chip-h-0, css/tokens.css), so the touch floor scales too. */
 :root[data-look-datahub-btn] #datahub { --tap: calc(var(--tap-0) * var(--look-datahub-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-datahub-btn, 1)); }
 :root[data-look-select-btn] #select { --tap: calc(var(--tap-0) * var(--look-select-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-select-btn, 1)); }
 :root[data-look-race-btn] #race-settings { --tap: calc(var(--tap-0) * var(--look-race-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-race-btn, 1)); }
+/* Under a finger the scaled height keeps 44 PAINTED px: a phone ships BUTTON HEIGHT 90 at UI SIZE 70 %, which painted START RACE 39.8 px (#5358). */
+@media (pointer: coarse) { :root[data-look-race-btn] #race-settings { --tap: max(calc(var(--tap-0) * var(--look-race-btn, 1)), calc(44.2px / var(--ui-scale))); } }
 :root[data-look-career-btn] #career { --tap: calc(var(--tap-0) * var(--look-career-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-career-btn, 1)); }
 :root[data-look-garage-btn] #carsetup { --tap: calc(var(--tap-0) * var(--look-garage-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-garage-btn, 1)); }
 :root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
@@ -1575,6 +1595,14 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"].you:not(.p1) { top: var(--rr-h); }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"]:is(.p1, .p2, .p3):not(.you) { position: static; }
 :where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"].you { top: 0; }
+/* YOU never bottom-sticks over the rows above it (#5580): its margin box must stay inside the list, so a top margin of
+   --you-clear rows (taken back by the row before it; results-sheet.js fitPins writes the pane's whole rows less one)
+   keeps it out until the list fills the pane, so it never lands on a row that is only entering. At
+   UI SIZE 70 % the list opens 55 px into the pane and YOU sat under P1 (844x390: P1 at y 278, YOU at 287). */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:not(.p1, .p2, .p3) { margin-top: calc(var(--you-clear, 3) * var(--rr-h)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"]:has(+ .you:not(.p1, .p2, .p3)) { margin-bottom: calc(-1 * var(--you-clear, 3) * var(--rr-h)); }
+/* The story podium's driver code keeps 12 PAINTED px: TEXT LARGE's --fs-4 is a bare 20px (10 painted at UI SIZE 50 %), --fs-micro carries the floor. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) #results-table [data-results-part="podium"] > li > strong { font-size: max(var(--fs-4), var(--fs-micro)); }
 
 /* ---------- section label ---------- */
 .sel-label {

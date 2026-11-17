@@ -726,7 +726,7 @@ test("calendar adoption carries current paid escrow and weekend lock to the rema
 
 // Execute the actual planning UI with a small DOM; source-text references alone
 // cannot prove that recovery actions download the right snapshot or require consent.
-function planningUiFixture({ protectedSave = false, conflict = false, locked = false, emptyCatalog = false } = {}) {
+function planningUiFixture({ protectedSave = false, conflict = false, locked = false, emptyCatalog = false, short = false } = {}) {
   class Node {
     constructor(tag, cls = "", text = "") { this.tag = tag; this.className = cls; this.textContent = text; this.children = []; this.attrs = {}; }
     appendChild(n) { n.parentNode = this; this.children.push(n); return n; }
@@ -750,7 +750,7 @@ function planningUiFixture({ protectedSave = false, conflict = false, locked = f
     sponsorOffers: () => [{ i: 0, chosen: true, label: "Clean 4 rounds", pay: 400 }, { i: 1, chosen: false, label: "Score 3 points", pay: 450 }],
     chooseSponsor: (i) => { calls.sponsor.push(i); return true; },
     lastSponsor: () => ({ met: false, label: "Clean 4 rounds", done: 3, need: 4, pay: 400 }),
-    stake: () => 0, chooseStake: (v) => { calls.stake.push(v); return true; },
+    stake: () => 0, stakeShort: () => short, chooseStake: (v) => { calls.stake.push(v); return !(v && short); },
     factory: () => ({ savings: emptyCatalog ? 0 : 21, count: emptyCatalog ? 0 : 2 }),
     cash: (price, wages) => { calls.cash.push([price, wages]); return { afterPurchase: 1000 - price, wages: wages ?? 95, low: Math.max(0, 905 - price), high: 2800 - price }; },
   };
@@ -1134,4 +1134,20 @@ test("a rollover whose save is refused mid-way restores the career in place", ()
   assert.equal(JSON.stringify(career), before);
   assert.equal(career.season, alias);
   assert.equal(Career.conflicted(), true);
+});
+
+// #5073 part 2: under 50 cr the COMMITTED tap was refused by chooseStake() with no feedback at all.
+test("a COMMITTED stake the balance cannot cover is a disabled, labelled button; Standard still works", () => {
+  const f = planningUiFixture({ short: true });
+  assert.equal(f.button("Committed · 50 cr stake", f.objective), undefined);
+  const b = f.button("Committed · need 50 cr", f.objective);
+  assert.equal(b.disabled, true);
+  b.click();
+  assert.deepEqual(f.calls.stake, []); assert.equal(f.calls.rebuild, 0);
+  const std = f.button("Standard", f.objective);
+  assert.equal(std.disabled, false);
+  std.click();
+  assert.deepEqual(f.calls.stake, [false]); assert.equal(f.calls.rebuild, 1);
+  const funded = planningUiFixture();
+  assert.equal(funded.button("Committed · 50 cr stake", funded.objective).disabled, false);
 });

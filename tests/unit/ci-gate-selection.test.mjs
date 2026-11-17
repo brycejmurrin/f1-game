@@ -11,6 +11,7 @@ import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
 import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep } from "../helpers/ci-workflow.mjs";
+import { DOCS_FAST_TEST_FILES } from "../../tools/ci/docs-fast-tests.mjs";
 
 test("every path a ci.yml change filter names still exists", () => {
   // The job filters are `grep -qE` alternations over the changed-file list, and
@@ -199,8 +200,9 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   // guards job covers a prose PR with no second workflow.
   const groups = JSON.parse(fs.readFileSync(new URL("../groups.json", import.meta.url), "utf8"));
   const files = groups.groups["test:docs-guards"]?.files || [];
-  for (const must of ["docs-integrity", "generated-docs", "agent-config", "skill-progressive", "hooks-documented"]) {
-    assert.ok(files.includes(`tests/unit/${must}.test.mjs`), `test:docs-guards must run ${must}`);
+  // It covers at least the shared docs-only list (tools/ci/docs-fast-tests.mjs, #5461).
+  for (const must of DOCS_FAST_TEST_FILES) {
+    assert.ok(files.includes(must), `test:docs-guards must run ${must}`);
   }
   const fast = new Set(groups.toolingFast.filter((f) => !f.startsWith("//")));
   const notFast = files.filter((f) => !fast.has(f) && f !== "tests/unit/environment-json.test.mjs");
@@ -269,6 +271,8 @@ test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once
     "junit download/stage/carry may never decide the verdict by throwing");
   const decideStep = job.steps.find((st) => st.name === "One answer for the change-aware gate");
   assert.ok(decideStep && decideStep["continue-on-error"] !== true, "the verdict step decides");
+  // #5403: the verdict is handed the plan, so a planned spec with no junit testcase reds a green matrix.
+  assert.equal(decideStep.env?.SHARDS, "${{ needs.select.outputs.shards }}", "selected-verdict must read the select job's plan");
   // …and no `selected` shard saves it any more (one key per run, one writer).
   const selected = parseYAML(ciWorkflow).jobs.selected;
   assert.ok(!selected.steps.some((st) => /cache\/save/.test(st.uses || "")), "a shard must not race for the carry-forward key");

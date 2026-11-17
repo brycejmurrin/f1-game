@@ -176,7 +176,7 @@ test("HOST_TIMEOUT_MS is ~120 s so a typed room code still works (#1061 guest st
 test("Nostr expired copy is actionable (no false 'couple of minutes' claim)", () => {
   const src = read("js/net/nostr.js");
   assert.match(src, /Nobody answered that code/);
-  assert.match(src, /Check the six characters/);
+  assert.match(src, /Check the letters/);
   assert.match(src, /fresh one/);
   assert.doesNotMatch(src, /Codes only last a couple of minutes/);
 });

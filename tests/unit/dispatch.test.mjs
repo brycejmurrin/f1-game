@@ -8,14 +8,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   planDispatch, batchMembers, batchLandsAfter, DEFAULT_CONFIG, parseHandoff, liveLaunch, activityAt, applyPlan, loadConfig, BOARD_MARKER, LAUNCH_RE, NUDGE_RE,
-  DIGEST_MARKER, ANTHROPIC_VERSION, readState, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment,
-  addressOf, closingIssues, isDispatchComment, PROVENANCE_LABELS, PLATFORM_STEP, platformFailure,
+  DIGEST_MARKER, ANTHROPIC_VERSION, readState, landedCount, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment,
+  addressOf, closingIssues, isDispatchComment, PROVENANCE_LABELS, PLATFORM_STEP, platformFailure, liveAdoption, ciGreen,
 } from "../../tools/ci/dispatch.mjs";
 
 const NOW = Date.parse("2026-11-03T12:00:00Z");
 const ISO = "2026-11-03T12:00:00.000Z";
 const ago = (h) => new Date(NOW - h * 3.6e6).toISOString();
-const cfg = (on = {}) => ({ ...DEFAULT_CONFIG, boardIssue: 1, dispatchIssue: 2, ...on });
+/** The fixtures' own caps (4 launches a run, stale after 2 h), whatever dispatch.json ships: the shipped values have their own test. */
+const cfg = (on = {}) => ({ ...DEFAULT_CONFIG, maxLaunchesPerRun: 4, staleHours: { default: 2, codex: 6 }, boardIssue: 1, dispatchIssue: 2, ...on });
 const APP = { id: 1236329, slug: "claude" };
 /** A label event: Bryce's own click unless `app` names the app that performed it. */
 const ev = (name, h, { app = null, event = "labeled", actor = "brycejmurrin" } = {}) => ({ event, label: { name }, actor: { login: actor }, created_at: ago(h), performed_via_github_app: app });
@@ -234,12 +235,21 @@ test("needs-decision: a Bryce `decision:` comment newer than the label clears it
 test("board: the markdown carries the marker, one row per open PR (owner from the handoff block), launches by address, caps and the land queue", () => {
   const body = "```handoff\nowner: claude:session_01ABCDEFGHIJKLMNOP\n```";
   const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(70, { labels: ["area:tooling", "lane:claude"], body, draft: false }), pr(71)] }), cfg(), NOW);
-  assert.deepEqual(p.board.split("\n").slice(0, 13), [BOARD_MARKER, `## Board — ${ISO}`, "",
-    "pause: false · merge-pause: false · deploy: green", "caps: launches/run 4; launches/day 0/24; live claims 1/8; cost cap $10 · land queue 0/15", "",
+  assert.deepEqual(p.board.split("\n").slice(0, 14), [BOARD_MARKER, `## Board — ${ISO}`, "",
+    "pause: false · merge-pause: false · deploy: green", "caps: launches/run 4; launches/day 0/24; live claims 1/8; cost cap $10 · land queue 0/15",
+    "ready cap: unknown (the merged-PR count for the last 7 d could not be read)", "",
     "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
     "| #70 | PR 70 | ready | 30h | claude:session_01ABCDEFGHIJKLMNOP | 30m ago | area:tooling, lane:claude |", "| #71 | PR 71 | draft | 30h | - | 30m ago | - |", "",
     "### Launches this run (1)", "- ISSUE 10: [Worker] #10 Task 10"]);
   assert.equal(p.boardIssue, 1);
+  // D16 (#5402): the Board carries ready-sweep's cap row; #11 is claimed, so 1 launchable of 2 ready.
+  const capped = planDispatch(state({ issues: [board(), issue(10, ["ready"]), issue(11, ["ready", "claimed"])], landed: 0 }), cfg(), NOW);
+  assert.equal(capped.board.split("\n")[5], "ready over cap: 1 launchable of 2 ready vs 0 PRs landed in 7 d");
+  assert.equal(planDispatch(state({ issues: [board(), issue(10, ["ready"])], landed: 3 }), cfg(), NOW).board.split("\n")[5], "ready within cap: 1 launchable of 1 ready vs 3 PRs landed in 7 d");
+  const q = [];
+  assert.equal(landedCount((u) => { q.push(u); return { json: { total_count: 12 } }; }, DEFAULT_CONFIG, Date.parse("2026-11-11T12:00:00Z")), 12);
+  assert.equal(q[0], `https://api.github.com/search/issues?q=${encodeURIComponent("repo:brycejmurrin/f1-game is:pr is:merged merged:>=2026-11-04")}&per_page=1`);
+  assert.equal(landedCount(() => ({ error: "HTTP 403" }), DEFAULT_CONFIG, NOW), null, "an unreadable count is unknown, never 0");
   const landing = (n) => Array.from({ length: n }, (_, k) => pr(200 + k, { labels: ["land"], draft: false }));
   const full = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: landing(15) }), cfg(), NOW);
   assert.deepEqual([full.launches.length, full.landQueue, skips(full)], [0, 15, ["issue launches paused: 15 PRs waiting to land (max 15) — land before starting more"]]);
@@ -400,10 +410,12 @@ test("main: --plan prints the plan lines, the Board and a summary; --apply --fir
 
 test("config: loadConfig merges the file over the defaults; dispatch.json carries the Action-era keys and none of the retired ones", () => {
   const c = loadConfig("x.json", () => JSON.stringify({ maxLaunchesPerRun: 1, staleHours: { codex: 9 } }));
-  assert.deepEqual([c.maxLaunchesPerRun, c.staleHours, c.owner, c.maxLaunchesPerDay], [1, { default: 2, codex: 9 }, "brycejmurrin", 24]);
-  assert.equal(loadConfig("missing.json", () => { throw Object.assign(new Error("x"), { code: "ENOENT" }); }).maxLaunchesPerRun, 4);
+  assert.deepEqual([c.maxLaunchesPerRun, c.staleHours, c.owner, c.maxLaunchesPerDay], [1, { default: 6, codex: 9 }, "brycejmurrin", 24]);
+  assert.equal(loadConfig("missing.json", () => { throw Object.assign(new Error("x"), { code: "ENOENT" }); }).maxLaunchesPerRun, 2);
   const file = JSON.parse(fs.readFileSync(new URL("../../tools/ci/dispatch.json", import.meta.url), "utf8"));
   assert.deepEqual([file.owner, file.maxLaunchesPerDay, file.maxLiveWorkers], ["brycejmurrin", 24, 8]);
+  assert.deepEqual([file.maxLaunchesPerRun, file.staleHours], [2, { default: 6, codex: 6 }], "the calmer first cycle (#5420 F2; were 4 and 2 h)");
+  assert.deepEqual([DEFAULT_CONFIG.maxLaunchesPerRun, DEFAULT_CONFIG.staleHours], [file.maxLaunchesPerRun, file.staleHours], "the fallback matches the file");
   for (const gone of ["lockHours", "archiveAfterMinutes", "hosts", "recentClosedHours", "nudgeIdleMinutes", "model", "mergePause", "baseBehindMax", "triggerId"]) {
     assert.equal(gone in file, false, gone);
     assert.equal(gone in DEFAULT_CONFIG, false, gone);
@@ -473,4 +485,80 @@ test("rule 3: a Pages-side publish failure (pages.yml's marker step failed) laun
   assert.equal(planDispatch(state({ deployRed: true, deployRunId: 777, deployPlatform: false }), cfg(), NOW).launches[0].address, "DEPLOY-RED 777");
   const pages = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
   assert.equal(pages.includes(`- name: ${PLATFORM_STEP}\n`), true, "the marker step pages.yml writes");
+});
+
+test("worker-prompt.md: the saved prompt's Ending carries the D17 reporting line (#5402), word for word", () => {
+  const text = fs.readFileSync(new URL("../../tools/ci/worker-prompt.md", import.meta.url), "utf8");
+  const ending = text.slice(text.indexOf("Ending:"), text.indexOf("Nobody reads this chat.")).replace(/\s+/g, " ");
+  const line = "Report by send_message to the session that launched you, when one did: at start (your reading of the task), at every push (head sha, PR number), at CI green or red, and at any refusal or blocker.";
+  assert.equal(ending.trim().slice(-line.length), line, "the reporting line closes the Ending paragraph: " + ending);
+});
+
+// ---- #5420: the readiness report's fixes ---------------------------------------------------------------------------
+const SHIPPED = { ...DEFAULT_CONFIG, boardIssue: 1, dispatchIssue: 2 };
+const adopts = (n, h, on = {}) => ({ author: "brycejmurrin", body: `adopts PR #${n} — claude:${SID} (head abc1234)`, created_at: ago(h), ...on });
+
+test("#5420 F1: a newer train queued or running → no deploy:red fixer; an open deploy:red PR → no fixer; neither → one fixer", () => {
+  const red = { deployRed: true, deployRunId: 43939091964, deployRunSha: "13b37ee4" + "0".repeat(32) };
+  const next = { id: 43961222770, sha: "d7ac23d3" + "0".repeat(32), status: "in_progress" };
+  const waiting = planDispatch(state({ ...red, deployNext: next }), SHIPPED, NOW);
+  assert.deepEqual([waiting.launches, waiting.labels, skips(waiting)], [[], [{ number: 1, add: ["deploy:red"], remove: [] }],
+    ["deploy:red fixer: pages.yml run 43961222770 on d7ac23d3 is in_progress, newer than the failed run 43939091964 on 13b37ee4: that tip is untested, wait for its train"]]);
+  const claimed = planDispatch(state({ ...red, prs: [pr(40, { labels: ["deploy:red"], draft: false })] }), SHIPPED, NOW);
+  assert.deepEqual([claimed.launches, claimed.nudges, skips(claimed)], [[], [], ["deploy:red fixer: PR #40 carries deploy:red"]]);
+  assert.deepEqual(planDispatch(state(red), SHIPPED, NOW).launches,
+    [{ kind: "deploy-red", number: 0, title: "[Worker] deploy:red fixer", on: 1, runId: 43939091964, address: "DEPLOY-RED 43939091964" }]);
+});
+
+test("#5420 F1: readState reports the failed run's sha and a newer unfinished train; a completed newest run or the same run is none", () => {
+  const branch = encodeURIComponent(DEFAULT_CONFIG.deployBranch);
+  const read = (newest) => readState({ config: SHIPPED, now: NOW, api: (p) => {
+    if (p === `actions/workflows/pages.yml/runs?branch=${branch}&status=completed&per_page=1`) return { json: { workflow_runs: [{ id: 7, conclusion: "failure", head_sha: "aaa" }] } };
+    if (p === `actions/workflows/pages.yml/runs?branch=${branch}&per_page=1`) return { json: { workflow_runs: [newest] } };
+    return { json: [] };
+  } });
+  const pick = (s) => [s.deployRed, s.deployRunId, s.deployRunSha, s.deployNext];
+  assert.deepEqual(pick(read({ id: 8, status: "queued", head_sha: "bbb" })), [true, 7, "aaa", { id: 8, sha: "bbb", status: "queued" }]);
+  assert.deepEqual(pick(read({ id: 7, status: "completed", head_sha: "aaa" })), [true, 7, "aaa", null]);
+  assert.deepEqual(pick(read({ id: 7, status: "in_progress", head_sha: "aaa" })), [true, 7, "aaa", null], "a re-run of the failed run itself is not a newer train");
+});
+
+test("#5420: a fresh `adopts PR #<n>` comment by the owner's account → no CONTINUE, even with needs-owner; an old, foreign or other-PR one does not count", () => {
+  const stale = (n, on = {}) => pr(n, { updated_at: ago(7), ...on });
+  const fresh = planDispatch(state({ prs: [stale(50, { labels: ["needs-owner"], comments: [adopts(50, 1.9)] })] }), SHIPPED, NOW);
+  assert.deepEqual([fresh.launches, fresh.labels, fresh.nudges, skips(fresh)], [[], [], [], [`PR #50: adopted by claude:${SID} 2h ago (a live owner): no takeover`]]);
+  const old = planDispatch(state({ prs: [stale(51, { labels: ["needs-owner"], comments: [adopts(51, 2.1)] })] }), SHIPPED, NOW);
+  assert.deepEqual(old.launches.map((l) => l.address), ["CONTINUE PR 51"], "past launchClaimHours the adoption is no longer a live owner");
+  const foreign = planDispatch(state({ prs: [stale(52, { labels: ["needs-owner"], comments: [adopts(52, 1, { author: "someone-else" })] }),
+    stale(53, { labels: ["needs-owner"], comments: [adopts(99, 1)] })] }), SHIPPED, NOW);
+  assert.deepEqual(foreign.launches.map((l) => l.address), ["CONTINUE PR 52", "CONTINUE PR 53"]);
+  assert.deepEqual(liveAdoption([adopts(50, 3), adopts(50, 1), { author: "github-actions[bot]", body: "adopts PR #50 — claude:session_x (posted by the dispatcher when it launched the takeover)", created_at: ago(0.5) }], 50, NOW, 2),
+    { who: "claude:session_x", at: ago(0.5) }, "the newest wins; the Action's own adoption counts");
+  assert.equal(liveAdoption([adopts(50, -1)], 50, NOW, 2), null, "a future stamp is never live");
+});
+
+test("#5420 F2: the shipped caps: a PR silent 5 h is nudged, not taken over; 6 h is; at most 2 launches a run, the rest are skip lines", () => {
+  const five = planDispatch(state({ prs: [pr(60, { updated_at: ago(5) })] }), SHIPPED, NOW);
+  assert.deepEqual([five.launches, five.labels, five.nudges.map((n) => n.on)], [[], [], [60]]);
+  assert.equal(five.nudges[0].body.split("\n")[2], "Silence for 6 h hands the PR to a CONTINUE worker.");
+  const many = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(61, { updated_at: ago(9) }), pr(62, { updated_at: ago(8) }), pr(63, { updated_at: ago(7) })] }), SHIPPED, NOW);
+  assert.deepEqual(many.launches.map((l) => l.address), ["CONTINUE PR 61", "CONTINUE PR 62"]);
+  assert.deepEqual(skips(many), ["continue [Worker] CONTINUE PR #63 PR 63: maxLaunchesPerRun 2 reached", "issue [Worker] #10 Task 10: maxLaunchesPerRun 2 reached"]);
+});
+
+test("#5420 F3: a DRAFT deploy:red PR whose CI is green is nudged at once (once per nudgeEveryMinutes); red, running, unread, ready or held ones are not", () => {
+  const ok = [{ id: 2, name: "fast", status: "completed", conclusion: "success" }, { id: 1, name: "fast", status: "completed", conclusion: "failure" }, { id: 3, name: "docs", status: "completed", conclusion: "skipped" }];
+  const fixer = (n, on = {}) => pr(n, { labels: ["deploy:red"], updated_at: ago(0.1), head_sha: "d7ac23d3" + "0".repeat(32), checks: ok, ...on });
+  const p = planDispatch(state({ prs: [fixer(80)] }), SHIPPED, NOW);
+  assert.deepEqual(p.nudges, [{ on: 80, body: [`dispatch: nudge at ${ISO} — PR #80 carries deploy:red, its CI is green on d7ac23d3 and it is still a draft.`,
+    "Next: `node tools/ci/ship-pr.mjs --pr 80`, flip ready and add `land` now. The deploy branch stays red until this lands.",
+    "Silence for 6 h hands the PR to a CONTINUE worker."].join("\n") }]);
+  assert.equal(NUDGE_RE.exec(p.nudges[0].body)[1], ISO);
+  const nudged = { author: "github-actions[bot]", body: p.nudges[0].body, created_at: ISO };
+  const again = planDispatch(state({ prs: [fixer(80, { comments: [nudged] })] }), SHIPPED, NOW + 10 * 6e4);
+  assert.deepEqual([again.nudges, skips(again)], [[], ["nudge PR #80: nudged 10m ago (rule: one per 60 min)"]]);
+  const quiet = planDispatch(state({ prs: [fixer(81, { checks: [{ id: 1, name: "fast", status: "completed", conclusion: "failure" }] }), fixer(82, { checks: [{ id: 1, name: "fast", status: "in_progress", conclusion: null }] }),
+    fixer(83, { checks: undefined }), fixer(84, { draft: false }), fixer(85, { labels: ["deploy:red", "hold"] }), pr(86, { updated_at: ago(0.1), checks: ok })] }), SHIPPED, NOW);
+  assert.deepEqual([quiet.nudges, quiet.launches], [[], []]);
+  assert.deepEqual([ciGreen({ checks: ok }), ciGreen({ checks: [] }), ciGreen({}), ciGreen({ checks: [{ id: 1, name: "a", status: "completed", conclusion: "cancelled" }] })], [true, false, false, false]);
 });
