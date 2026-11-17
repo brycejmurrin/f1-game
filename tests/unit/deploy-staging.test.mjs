@@ -287,7 +287,7 @@ test("every ON_DEMAND_PATHS file is gitignored, untracked, not a site file, and 
     assert.equal(BUILT_PATHS.includes(p) || GENERATED_PATHS.includes(p), false, `${p} is in one list only`);
     assert.equal(isBuilt(p), true, `${p}: deploy.mjs cures its modify/delete conflict as a built path`);
   }
-  assert.throws(() => ensureOnDemand("tools/README.md"), /not in ON_DEMAND_PATHS/, "an unknown target fails loudly, never a silent skip");
+  assert.throws(() => ensureOnDemand("tools/README.md"), { message: `ensure-built: tools/README.md is not in ON_DEMAND_PATHS (${ON_DEMAND_PATHS.join(", ")})` }, "an unknown target fails loudly, never a silent skip");
 });
 
 // BUILT, NOT COMMITTED (2026-10-28; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): a served generator output that

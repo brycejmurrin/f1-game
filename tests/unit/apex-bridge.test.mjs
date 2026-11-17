@@ -224,6 +224,34 @@ test("path pins the BENCHMARK three.js path and reloads; AUTO clears the pin", a
   assert.equal((await b.api.handle({ cmd: "path", args: { to: "vulkan" } })).error, "path.to must be one of webgpu, webgl2, auto");
 });
 
+// #5555 finding 5: LAZY_PERF lands at idle, so a command sent right after a reload used to answer
+// "BenchRun unavailable". The perf commands ask the game's LazyBundles instance for the rig first.
+test("#5555: bench, a path pin, gpuTest and recorder wait for the lazy perf rig instead of throwing", async () => {
+  let asks = 0;
+  const b = load({ search: "", extra: { LazyBundles: { create() {}, live: () => ({ ensurePerfRig }) } } });
+  async function ensurePerfRig() {
+    asks++;
+    b.ctx.BenchRun = fakeBench();
+    b.ctx.GpuTestRun = { status: () => "idle" };
+    b.ctx.PhoneRecorder = { isOn: () => false };
+    return true;
+  }
+  assert.deepEqual((await b.api.handle({ cmd: "bench", args: { op: "start", test: "quick" } })).value, { started: "quick" });
+  assert.equal(asks, 1);
+  assert.equal((await b.api.handle({ cmd: "gpuTest", args: { op: "status" } })).value, "idle");
+  assert.equal((await b.api.handle({ cmd: "recorder", args: { op: "isOn" } })).value, false);
+  assert.equal((await b.api.handle({ cmd: "path", args: { to: "webgl2", reload: false } })).ok, true);
+  assert.equal(asks, 4, "each perf command asks; the instance memoises");
+  await b.api.handle({ cmd: "ping" });
+  assert.equal(asks, 4, "a non-perf command never pulls the rig");
+
+  // The rig could not load: the command still answers what is missing, and a rejecting loader is not a crash.
+  const dead = load({ search: "", extra: { LazyBundles: { create() {}, live: () => ({ ensurePerfRig: async () => { throw new Error("offline"); } }) } } });
+  assert.equal((await dead.api.handle({ cmd: "bench", args: { op: "tests" } })).error, "BenchRun unavailable");
+  // No instance yet (a harness, or before game.js made it): unchanged.
+  assert.equal((await load({ search: "" }).api.handle({ cmd: "bench", args: { op: "tests" } })).error, "BenchRun unavailable");
+});
+
 test("bench starts a known BenchRun test and reads its plan back", async () => {
   const bench = fakeBench();
   const b = load({ search: "", extra: { BenchRun: bench } });

@@ -69,6 +69,7 @@ test("landing builds the scenery catalog in the actual merged checkout (built on
         const tip = git(cwd, "rev-parse", "deploy-x"), calls = [];
         const wt = path.join(cwd, "artifacts", "merge-gate", "wt-17");
         let ratchetCalls = 0, argv = null;
+        const RETEST = { ok: true, evidence: "fixture re-test holds" };
         const result = localMergeGenCheck({ pr: 17, head, headRef: "pr", cwd, base: "deploy-x",
           run: (cmd, args, options) => {
             calls.push(cmd);
@@ -81,6 +82,7 @@ test("landing builds the scenery catalog in the actual merged checkout (built on
             return r;
           },
           ratchets: () => { ratchetCalls++; return { ok: true, evidence: "fixture ratchets hold" }; },
+          ciAt: "2026-11-15T18:00:00Z", retest: () => RETEST,
         });
         assert.equal(result.tip, tip, "a catalog refusal retains the actual merge tip");
         assert.equal(result.error, undefined, "generation failures are refusals, not git infrastructure errors");
@@ -96,10 +98,11 @@ test("landing builds the scenery catalog in the actual merged checkout (built on
           "builds": `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`,
           "build-fails": `${on}: ensure-built: FAILED — Error: Viewpoint spa-timing-tower no longer emits — node tools/gen/ensure-built.mjs --with ${file} on the synced branch names the circuit`,
           "tracked": `${on}: ${file} is tracked; it is built on demand — git rm --cached it on the synced branch and push`,
+          "validator-error": `${on}: builder could not start — node tools/gen/ensure-built.mjs --with ${file} on the synced branch names the circuit`,
         }[mode];
         if (exact) assert.equal(result.evidence, exact);
-        if (mode === "validator-error") assert.match(result.evidence, /builder could not start/);
-        assert.equal(ratchetCalls, passes ? 1 : 0, "catalog/gen refusals stop before ratchets");
+        // The passing path returns the re-test's row (#5570); a refusal stops before the ratchets and the re-test.
+        assert.deepEqual([ratchetCalls, result.retest], passes ? [1, RETEST] : [0, undefined], "catalog/gen refusals stop before ratchets and the re-test");
         if (!passes) assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);
         assert.equal(fs.existsSync(wt), false, "all outcomes clean up the merged checkout");
       } finally { fs.rmSync(dir, { recursive: true, force: true }); }

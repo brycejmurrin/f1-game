@@ -4066,7 +4066,8 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "stake": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs"
       ],
       "transition": [
         "tests/unit/career-regulations.test.mjs"
@@ -5407,6 +5408,7 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/metrics.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -7961,6 +7963,7 @@
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/real-race.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
@@ -11412,7 +11415,8 @@
     },
     "js/perf/metrics-panel.js": {
       "create": [
-        "tests/unit/apex-physstate.test.mjs"
+        "tests/unit/apex-physstate.test.mjs",
+        "tests/unit/metrics.test.mjs"
       ],
       "ensurePanel": [
         "tests/unit/metrics.test.mjs"
@@ -11930,6 +11934,12 @@
         "tests/unit/ai-strategy.test.mjs"
       ],
       "followTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardClear": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardHead": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "hazardReach": [
@@ -16538,6 +16548,7 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
@@ -19488,6 +19499,7 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "*": [
+        "tests/specs/phone-shipped-defaults.spec.js",
         "tests/specs/real-profile-dock.spec.js",
         "tests/specs/time-trial.spec.js",
         "tests/specs/title-fit.spec.js",
@@ -19516,9 +19528,11 @@
       ],
       "isShipped": [
         "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs"
       ],
       "normalize": [
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -19533,6 +19547,7 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "reset": [
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -19540,6 +19555,7 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "*": [
+        "tests/specs/phone-shipped-defaults.spec.js",
         "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
@@ -20029,8 +20045,10 @@
       ],
       "current": [
         "tests/specs/title-fit.spec.js",
+        "tests/specs/ui-scale.spec.js",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "down": [
@@ -20051,6 +20069,7 @@
         "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "normalize": [
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "peek": [
@@ -20058,6 +20077,7 @@
       ],
       "reset": [
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "resetShape": [
@@ -20077,6 +20097,9 @@
       ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
+      ],
+      "*": [
+        "tests/specs/phone-shipped-defaults.spec.js"
       ]
     },
     "js/ui/title-menu.js": {

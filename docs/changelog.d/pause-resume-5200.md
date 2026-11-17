@@ -1,1 +1,0 @@
-Fixed: the pause menu always shows RESUME first — on a landscape phone at a small UI SIZE the card had no RESUME, scrolled and was 215 px wide; it is now one wide card with every button on screen and nothing to scroll.

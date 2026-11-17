@@ -154,10 +154,13 @@ const DrivingCoach = (function () {
       }
       return bestD <= TURN_WINDOW_M ? best : null;
     }
+    // A real-race WATCH follows a replay puppet: its pedals read 0, not the player's driving (#5557).
+    const puppet = () => !!(G.realRace && G.realRace.owns && G.realRace.owns(G.player));
     function coachState() {
       if (!enabled) return "off";
       if (!G.player || G.state !== "race") return "ready";
       if (G.player.finished || G.player.retired) return "complete";
+      if (puppet()) return "ready";
       if (G.paused) return "paused";
       if (G.player.pitState && G.player.pitState !== "none") return "pit";
       if ((G.raceRadio && G.raceRadio.trafficBusy && G.raceRadio.trafficBusy()) || G.announceBusy || G.cautionLevel() > 0 || G.player.contactT > 0) return "waiting";
@@ -301,7 +304,7 @@ const DrivingCoach = (function () {
     function update(dt) {
       const stamp = G._s8Stamp;
       if (stamp != null && stamp === _s8Done) return;
-      if (!Number.isFinite(dt) || dt <= 0 || G.paused) return;
+      if (!Number.isFinite(dt) || dt <= 0 || G.paused || puppet()) return;
       if (stamp != null) _s8Done = stamp;
       // A suspended frame is not sustained driving evidence.
       const step = Math.min(dt, 0.1);
