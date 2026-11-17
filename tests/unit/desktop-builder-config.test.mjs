@@ -13,6 +13,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const require = createRequire(import.meta.url);
 const identity = require("../../desktop/lib/identity.cjs");
 const cfg = require("../../desktop/electron-builder.config.cjs");
+/** An exact, stable electron-builder 26 version: no range operator, no prerelease tag. */
+const EXACT_BUILDER_26 = /^26\.\d+\.\d+$/;
 
 test("appId and productName match frozen identity (do not change — saves)", () => {
   assert.equal(cfg.appId, identity.appId);
@@ -88,7 +90,10 @@ test("builder files include the protocol handler and lib/; pack:test still flips
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "desktop/package.json"), "utf8"));
   assert.match(pkg.scripts["pack:test"], /enableNodeCliInspectArguments=true/);
   assert.match(pkg.scripts.pack, /electron-builder\.config\.cjs/);
-  assert.equal(pkg.devDependencies["electron-builder"], "26.15.3");
+  // The pin is the FORM, not the number: one exact stable release of major 26 (this
+  // config is the v26 schema). A patch or minor bump passes untouched; a range, a
+  // prerelease or another major fails.
+  assert.match(pkg.devDependencies["electron-builder"], EXACT_BUILDER_26);
   assert.doesNotMatch(pkg.devDependencies["electron-builder"], /alpha|27\./);
   assert.match(pkg.homepage || "", /github\.com\/brycejmurrin\/f1-game/);
   // linux.homepage is not in electron-builder 26 LinuxConfiguration schema
@@ -99,4 +104,11 @@ test("committed placeholder icons exist (512 png set; 1024 labelled placeholder)
   assert.ok(fs.existsSync(path.join(ROOT, "desktop/build/icon.png")));
   assert.ok(fs.existsSync(path.join(ROOT, "desktop/build/icons/512x512.png")));
   assert.ok(fs.existsSync(path.join(ROOT, "desktop/build/icon-1024-PLACEHOLDER.png")));
+});
+
+test("electron-builder pin form: any exact stable 26.x.y, never a range, prerelease or other major", () => {
+  for (const ok of ["26.15.3", "26.18.0", "26.0.0"]) assert.match(ok, EXACT_BUILDER_26);
+  for (const bad of ["^26.15.3", "~26.18.0", ">=26.15.3", "26", "26.18", "26.x", "26.18.0-alpha.1", "27.0.0", "27.0.0-alpha.2", "126.1.0", "latest", ""]) {
+    assert.doesNotMatch(bad, EXACT_BUILDER_26);
+  }
 });
