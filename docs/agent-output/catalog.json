@@ -1042,6 +1042,12 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/pages-rearm.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/pages-reuse-verdict.sh",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only",
