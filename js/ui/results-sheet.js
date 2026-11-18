@@ -203,6 +203,20 @@ if (typeof ResizeObserver === "function" && G.els && G.els.resultsTable
     && typeof G.els.resultsTable.getBoundingClientRect === "function") {
   new ResizeObserver(fitPins).observe(G.els.resultsTable);
 }
+// #5603: LAY OUT BEFORE REVEAL. On a slow box the first 2-3 painted frames after #results un-hid showed the sheet
+// unclassified (D) or compact on a stale pane (A), and YOU lay on the row entering the pane. Whoever un-hides it
+// (ceremony, podium beat, game.js), classify the sheets and fit the pins in the same task, after TopModal's own
+// observer has opened the dialog (a queued microtask runs after every observer callback, still before the paint).
+if (typeof MutationObserver === "function" && typeof queueMicrotask === "function" && G.els && G.els.results) {
+  new MutationObserver(() => {
+    if (G.els.results.hidden) return;
+    queueMicrotask(() => {
+      if (G.els.results.hidden) return;
+      if (typeof SheetShape !== "undefined" && SheetShape.reclassify) SheetShape.reclassify();
+      fitPins();
+    });
+  }).observe(G.els.results, { attributes: true, attributeFilter: ["hidden"] });
+}
 // LICENCE BADGES toast through the one banner (js/career/badges.js owns the rules).
 if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
   G.announce && G.announce((labels.length > 1 ? tr("results.badgesUnlocked", null, "BADGES UNLOCKED") : tr("results.badgeUnlocked", null, "BADGE UNLOCKED")) + " — " + labels.join(" · "), 3, "race"));
