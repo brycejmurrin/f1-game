@@ -1643,6 +1643,9 @@
         const NoV = max(dot(N, V), 1e-4).toVar();
         const NoH = max(dot(N, H), 0.0).toVar();
         const VoH = max(dot(V, H), 0.0).toVar();
+        // Sun-specular copies: the rain-ripple branch re-dots them against the
+        // tilted N (GLX keySpecNoL/NoV/NoH); the diffuse keeps NoL.
+        const kNoL = NoL.toVar(), kNoV = NoV.toVar(), kNoH = NoH.toVar();
 
         const albedo = vec3(albedoIn).toVar();
 
@@ -1849,6 +1852,7 @@
             };
             const rg = ring(1.7, 0.0, 0.0, 0.8).add(ring(2.9, 7.3, 19.0, 1.3)).toVar();
             N.assign(normalize(N.add(vec3(rg.x, 0.0, rg.y).mul(U.rain.mul(puddle).mul(0.10)))));
+            kNoL.assign(max(dot(N, L), 0.0)); kNoV.assign(max(dot(N, V), 1e-4)); kNoH.assign(max(dot(N, H), 0.0));
           });
           // Porous as a FRACTION of the road result — mirrors js/render/glx/shaders/glsl-lit.js.
           // The two coefficients were transposed here as they were in GLX: mix(a,b,t)
@@ -1892,7 +1896,7 @@
         // thrown away on back-faces (litNoL *= NoL) except clearcoat, which
         // shades on Ngeo. Skip the taps when the result cannot contribute.
         const shadow = float(1.0).toVar();
-        If(NoL.greaterThan(0.0).or(clearcoat.greaterThan(0.001)), () => {
+        If(NoL.greaterThan(0.0).or(kNoL.greaterThan(0.0)).or(clearcoat.greaterThan(0.001)), () => {
           if (!sampleShadow) { shadow.assign(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()); return; }
           // S1 exact-zero gate: sunSh (>= 0) == 0 makes the product 0 whatever the cloud FBM returns.
           shadow.assign(sampleShadow(wp, Nvary));
@@ -2131,11 +2135,12 @@
         color.assign(max(color, vec3(0.0)));
 
         // sun Cook-Torrance specular, soft-clipped (js/render/glx/shaders/glsl-lit.js)
-        If(NoL.greaterThan(0.0), () => {
-          const D = D_GGX(NoH, a);
-          const Vis = V_SmithGGX(NoV, NoL, a, smithViewRoot(NoV, a));
+        // Reads the k* copies: the glint moves with the rain ripples (GLX).
+        If(kNoL.greaterThan(0.0), () => {
+          const D = D_GGX(kNoH, a);
+          const Vis = V_SmithGGX(kNoV, kNoL, a, smithViewRoot(kNoV, a));
           const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
-          const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
+          const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(kNoL.mul(shadow).mul(U.keyMul)).toVar();
           // soft knee, asymptote U.specKnee (def 4): sun glints can reach bloom (GLX)
           specCol.assign(specCol.div(specCol.div(U.specKnee).add(1.0)));
           color.addAssign(specCol);

@@ -364,10 +364,10 @@ test("sun GGX and clearcoat skip backfaces on all three backends", () => {
   assert.match(lit, /if\s*\(\s*keySpecNoL\s*>\s*0\.0\s*\)\s*\{\s*float\s+keySpecNoH\s*=\s*max\(dot\(N, H\), 0\.0\);[\s\S]{0,120}?float\s+D\s*=\s*D_GGX/);
   assert.match(lit, /NoLg\s*=\s*max\(\s*dot\(\s*Ngeo\s*,\s*L\s*\)\s*,\s*0\.0\s*\);[\s\S]{0,300}?if\s*\(\s*NoLg\s*>\s*0\.0\s*\)/);
   const chunks = shader("js/render/webgpu/wgsl-chunks.js");
-  assert.match(chunks, /if\s*\(\s*NoL\s*>\s*0\.0\s*\)\s*\{\s*let\s+Dg\s*=\s*D_GGX/);
+  assert.match(chunks, /if\s*\(\s*kNoL\s*>\s*0\.0\s*\)\s*\{\s*let\s+Dg\s*=\s*D_GGX/);   // kNoL: the rain-rippled copy of NoL (#5777 row 1)
   assert.match(chunks, /NoLg\s*=\s*max\(\s*dot\(\s*Ngeo\s*,\s*L\s*\)\s*,\s*0\.0\s*\);[\s\S]{0,300}?if\s*\(\s*NoLg\s*>\s*0\.0\s*\)/);
   const tsl = shader("js/render/three/tsl-lit.js");
-  assert.match(tsl, /If\(\s*NoL\.greaterThan\(\s*0\.0\s*\)\s*,/);
+  assert.match(tsl, /If\(\s*kNoL\.greaterThan\(\s*0\.0\s*\)\s*,/);
   assert.match(tsl, /If\(\s*NoLg\.greaterThan\(\s*0\.0\s*\)\s*,/);
 });
 

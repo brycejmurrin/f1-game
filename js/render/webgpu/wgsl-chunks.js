@@ -1278,6 +1278,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let NoV = max(dot(N, V), 1e-4);
   let NoH = max(dot(N, H), 0.0);
   let VoH = max(dot(V, H), 0.0);
+  // Sun-specular copies: the rain-ripple branch re-dots them against the tilted
+  // N (GLX keySpecNoL/NoV/NoH); the diffuse keeps NoL.
+  var kNoL = NoL; var kNoV = NoV; var kNoH = NoH;
 
   var albedo    = in.col;
   var emissive  = D.mat0.x;
@@ -1520,6 +1523,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         rg += cos(ph) * (cf / r) * amp;
       }
       N = normalize(N + vec3<f32>(rg.x, 0.0, rg.y) * (0.10 * F.params4.z * puddle));
+      kNoL = max(dot(N, L), 0.0); kNoV = max(dot(N, V), 1e-4); kNoH = max(dot(N, H), 0.0);
     }
     // POROUS MUST BE DARKER THAN THE ROAD, not lighter. Two independently
     // clamped coefficients transpose the order: 0.42 fades SLOWER than 0.58, so
@@ -1580,7 +1584,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   //   * NoL / clearcoat gate — back-faces throw the result away (litNoL *= NoL)
   //     except clearcoat on Ngeo, so skip the taps when they cannot contribute.
   var shadow = 1.0;
-  if (NoL > 0.0 || clearcoat > 0.001) {
+  if (NoL > 0.0 || kNoL > 0.0 || clearcoat > 0.001) {
     if (F.params2.x > 0.5 && F.params2.y > 0.0) {
       let sc = F.lightVP * vec4<f32>(in.wpos, 1.0);
       let ndc = sc.xyz / sc.w;
@@ -1767,11 +1771,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
 
   // Cook-Torrance sun specular, soft-clipped so highlights sheen not clip.
   // specCol is * litNoL; a backface paid two GGX evals for 0.
-  if (NoL > 0.0) {
-    let Dg = D_GGX(NoH, a);
-    let Vg = V_SmithGGX(NoV, NoL, a);
+  // Reads the k* copies: the glint moves with the rain ripples (GLX).
+  if (kNoL > 0.0) {
+    let Dg = D_GGX(kNoH, a);
+    let Vg = V_SmithGGX(kNoV, kNoL, a);
     let Fg = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
-    var specCol = (Dg * Vg) * Fg * F.sunColor.xyz * litNoL;
+    var specCol = (Dg * Vg) * Fg * F.sunColor.xyz * (kNoL * keyMul * shadow);
     // soft knee, asymptote params4.w (SUN GLINT RANGE, def 4): sun glints can reach bloom (GLX uSpecKnee)
     specCol = specCol / (1.0 + specCol / max(F.params4.w, 0.5));
     color = color + specCol;
