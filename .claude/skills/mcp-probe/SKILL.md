@@ -42,7 +42,7 @@ python3 tools/mcp/probe-mcp.py chrome-stop           # stop a daemon started wit
 node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 
-HUD/menu glitch repro: serve `npx serve -l 3456 .`, `chrome-start`, navigate
+HUD/menu glitch repro: serve `python3 -m http.server -b 127.0.0.1 3456` (AGENTS.md §The loop), `chrome-start`, navigate
 `http://127.0.0.1:3456/`, `await __apex.race(id); __apex.go()` (`id` from `__apex.tracks()`) ([references/chrome.md](references/chrome.md)
 §Setup: `race()` is a promise, and `go()` before it settles finds no grid), then
 `take_snapshot` (DOM/a11y text, cheap) before any screenshot; the HUD is DOM, so
