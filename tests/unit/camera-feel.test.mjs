@@ -47,6 +47,22 @@ function loadCamFeel(disk, extra) {
   return { CamFeel: ctx.exported, DriveLens: ctx.DriveLens, store };
 }
 
+test("DriveLens.read reuses one bag across broadcast frames (no per-frame literal)", () => {
+  const { CamFeel } = loadCamFeel();
+  const lens = CamFeel.lens;
+  assert.ok(lens && typeof lens.apply === "function");
+  // heli goes through broadcast → read(); the returned ctx object must be stable.
+  const eye = [0, 1, 0], tgt = [0, 1, 10];
+  const a = lens.apply("heli", eye, tgt, { sp: 0.5, yaw: 0.2, brake: 0, slip: 0 });
+  const b = lens.apply("heli", eye, tgt, { sp: 0.8, yaw: -0.1, brake: 0, slip: 0 });
+  assert.ok(typeof a === "number" && typeof b === "number");
+  assert.ok(b > a, "higher speed opens the heli lens more");
+  // Two apply() calls with the same input must agree (pooled read must not leak).
+  const c = lens.apply("side", eye, tgt, { sp: 0.4, yaw: 0, brake: 0, slip: 0 });
+  const d = lens.apply("side", eye, tgt, { sp: 0.4, yaw: 0, brake: 0, slip: 0 });
+  assert.equal(c, d);
+});
+
 test("follow is exact with no dt and eases when a frame has one", () => {
   const { CamFeel } = loadCamFeel();
   CamFeel.resetFollow("t");

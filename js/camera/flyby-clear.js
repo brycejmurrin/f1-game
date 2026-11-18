@@ -121,11 +121,12 @@ const FlybyClear = (function () {
    *  rises into the floor smoothly instead of popping up onto it. */
   const FLOOR = 1.5;
   const _fl = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  const _pr = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
   function groundAt(track, x, z, y) {
     let g = Tracks.terrainY ? Tracks.terrainY(track, x, z) : null;
     if (g == null || !isFinite(g)) g = -Infinity;
-    const pr = Tracks.project(track, x, z, null, y);
-    if (pr) {
+    const pr = Tracks.project(track, x, z, null, y, _pr);
+    if (pr && isFinite(pr.s)) {
       Tracks.sample(track, pr.s, _fl);
       if (Math.abs(pr.lat) <= (_fl.hw || 10) + 2 && _fl.p[1] > g) g = _fl.p[1];
     }

@@ -1668,6 +1668,9 @@
       ]
     },
     "js/camera/extra-rigs.js": {
+      "localBattles": [
+        "tests/unit/extra-rigs.test.mjs"
+      ],
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
       ],
@@ -1724,6 +1727,7 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "read": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [

@@ -87,6 +87,9 @@ const VantageRide = (function () {
   }
   function centreY(track, s) {
     const n = track.n, L = track.total, py = track.py;
+    // Match TrackSpline.sample: a non-finite arc or empty centreline must not
+    // feed NaN into the chase ride (vantage holds the last good pose instead).
+    if (!(n > 0) || !(L > 0) || !py || !isFinite(s)) return 0;
     let v = s % L; if (v < 0) v += L;
     const fi = v / L * n;
     const i = Math.floor(fi) % n, f = fi - Math.floor(fi);
