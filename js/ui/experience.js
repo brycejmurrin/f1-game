@@ -113,6 +113,9 @@ const UiExperience = (function () {
   // so a stale completion cannot be mistaken for an owned preparation failure.
   const cancelledPhotoSwaps = new WeakSet();
   function openPhoto(G, deps) {
+    // Already open: a second open would close the first without its restore (paused, pause card hidden) (#5743 P4).
+    const ps = deps.photoStudio;
+    if (ps && typeof ps.state === "function" && ps.state().open) return true;
     let source = deps.source;
     if (source === "home" && deps.trackHome) {
       if (deps.trackReady === false) { if (deps.onWaiting) deps.onWaiting(); return false; }

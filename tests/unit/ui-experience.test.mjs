@@ -581,3 +581,18 @@ test('pause LINE tile cycles the DRIVING LINE in-race, saves it like the RACE SE
   const shell = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   assert.doesNotMatch(shell, /id="pm-drivingline"/, 'the runtime tile id must not collide with a shell id');
 });
+
+test('#5743 P4: a second openPhoto while the studio is open keeps the first restore (race stays restorable)', () => {
+  const pause={hidden:false};
+  const G={paused:false,teamIdx:0,player:{lap:2},track:{def:{name:'Monza'}},$:id=>({pausemenu:pause})[id]};
+  ctx.Teams={LIST:[{name:'McLaren'}]};
+  let open=false, opens=0, closes=0, back=null; const paused=[];
+  const studio={state:()=>({open}),open:(o)=>{if(open)closes++;opens++;open=true;back=o.back;return true;},close:()=>{open=false;closes++;}};
+  const deps={source:'race',photoStudio:studio,setPaused:(v,why)=>{paused.push([v,why]);G.paused=v;}};
+  assert.equal(ctx.api.openPhoto(G,deps),true);
+  assert.equal(ctx.api.openPhoto(G,deps),true,'already open: answered, not reopened');
+  assert.equal(opens,1); assert.equal(closes,0);
+  assert.deepEqual(paused,[[true,'photo-studio']],'paused once, by the first open');
+  open=false; back();
+  assert.deepEqual(paused.at(-1),[false,'photo-done'],'the one restore unpauses to what the race had');
+});

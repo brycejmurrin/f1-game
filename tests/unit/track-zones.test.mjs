@@ -83,3 +83,42 @@ test("remapHeights: a new point blends the heights either side; a brand-new star
   assert.equal(held.bankZones, d.bankZones);
   assert.ok(Array.isArray(held.heights) && held.heights.length === 3);
 });
+
+// Hunt #5743 D1: tapping the road to INSERT a point used to map every point
+// zone on the split segment to null — bridges, elevations, banks and props gone.
+test("remapZones: an insert mid-segment keeps every point zone on that segment, in place", () => {
+  const { Z } = load();
+  const old = [[0, 0], [400, 0], [400, 400], [0, 400]];            // 1600 m square
+  const neu = [[0, 0], [200, 0], [400, 0], [400, 400], [0, 400]];  // insert at (200, 0)
+  const d = {
+    bridges: [{ s: 0.0625 }], elevations: [{ s: 0.1, h: 4 }],
+    props: [{ s: 0.05, side: 1, kind: "tree" }], bankZones: [{ frac: 0.11, angleDeg: 5, widthM: 40 }],
+    hwZones: [{ s0: 0.02, s1: 0.2, hw: 6 }],
+  };
+  const r = Z.remapZones(d, old, neu);
+  // The new point is ON the old segment, so the arc is unchanged: s stays exact.
+  assert.equal(r.bridges.length, 1); assert.ok(Math.abs(r.bridges[0].s - 0.0625) < 1e-12);
+  assert.equal(r.elevations.length, 1); assert.ok(Math.abs(r.elevations[0].s - 0.1) < 1e-12);
+  assert.equal(r.elevations[0].h, 4);
+  assert.equal(r.props.length, 1); assert.ok(Math.abs(r.props[0].s - 0.05) < 1e-12);
+  assert.equal(r.bankZones.length, 1); assert.ok(Math.abs(r.bankZones[0].frac - 0.11) < 1e-12);
+  assert.ok(Math.abs(r.hwZones[0].s0 - 0.02) < 1e-12 && Math.abs(r.hwZones[0].s1 - 0.2) < 1e-12);
+});
+
+test("remapZones: an off-line insert splits by the point's foot; the closing segment too", () => {
+  const { Z } = load();
+  const old = [[0, 0], [400, 0], [400, 400], [0, 400]];
+  // (100, 300): foot at t = 0.25 of 0→1. New lap: 316.23 + 360.56 + 400 + 400 + 400.
+  const neu = [[0, 0], [100, 300], [400, 0], [400, 400], [0, 400]];
+  const r = Z.remapZones({ bridges: [{ s: 0.03125 }, { s: 0.125 }] }, old, neu);   // t = 0.125 and 0.5
+  const a = Math.hypot(100, 300), b = Math.hypot(300, 300), L = a + b + 1200;
+  assert.ok(Math.abs(r.bridges[0].s - (0.5 * a) / L) < 1e-9, String(r.bridges[0].s));
+  assert.ok(Math.abs(r.bridges[1].s - (a + b / 3) / L) < 1e-9, String(r.bridges[1].s));
+  // Closing segment (0,400)→(0,0): an insert appended at the end of the list.
+  const c = Z.remapZones({ props: [{ s: 0.9, side: 1 }] }, old, old.concat([[0, 200]]));
+  assert.equal(c.props.length, 1);
+  assert.ok(Math.abs(c.props[0].s - 0.9) < 1e-12);
+  // A delete still drops what sat on the removed stretch.
+  const del = Z.remapZones({ bridges: [{ s: 0.3 }] }, old, [[0, 0], [400, 0], [0, 400]]);
+  assert.equal(del.bridges.length, 0);
+});
