@@ -204,6 +204,65 @@ const TLX = (function () {
   }
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
+  // three r185.1+ WebGPUAttributeUtils creates every GPUBuffer with mappedAtCreation:true, then
+  // getMappedRange()+unmap(). Dawn's client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
+  // upload exhausts it and EVERY later createBuffer (even 24 B) throws (mcp-probe 2026-08-18; same class as
+  // WGX _mkBuffer / PlayCanvas #6676). The shim rewrites those creates to unmapped + queue.writeBuffer;
+  // readback (mapAsync) is unchanged — those buffers are not mappedAtCreation. It costs a JS
+  // `new ArrayBuffer(size)` staging copy per buffer (a heap peak at track load), so it is EAGER only on a
+  // software adapter or a headless run; a real GPU (the iPhone) keeps the native mapped path and the shim
+  // latches on for that device only once a native mapped create throws. Returns the mode it set:
+  // "shim" (eager), "native" (armed, not yet latched) or the device's existing mode.
+  function installMappedShim(dev, eager) {
+    if (!dev || typeof dev.createBuffer !== "function") return null;
+    if (dev.__apexWriteBuf) return dev.__apexWriteBuf;
+    const origCreate = dev.createBuffer.bind(dev);
+    const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
+      ? GPUBufferUsage.COPY_DST : 0x0008;
+    let on = !!eager;
+    function shimmed(desc) {
+      const size = desc.size | 0;
+      const buf = origCreate({
+        size,
+        usage: (desc.usage | COPY_DST),
+        label: desc.label,
+      });
+      let staging = new ArrayBuffer(size);
+      const parts = [];
+      buf.getMappedRange = function (offset, mapSize) {
+        const o = offset | 0;
+        const n = mapSize == null ? (size - o) : (mapSize | 0);
+        if (o === 0 && n === size) return staging;
+        const part = new ArrayBuffer(n);
+        parts.push({ o, part });
+        return part;
+      };
+      buf.unmap = function () {
+        try {
+          for (let i = 0; i < parts.length; i++) {
+            const p = parts[i];
+            new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
+          }
+          if (staging && size) dev.queue.writeBuffer(buf, 0, staging);
+        } catch (_) { /* one failed upload must not take down present() */ }
+        staging = null;
+        parts.length = 0;
+      };
+      return buf;
+    }
+    dev.createBuffer = function (desc) {
+      if (!desc || !desc.mappedAtCreation) return origCreate(desc);
+      if (on) return shimmed(desc);
+      try { return origCreate(desc); } catch (_) {
+        on = true;                       // the mapping pool is gone: every later mapped create takes the shim
+        dev.__apexWriteBuf = "latched";
+        return shimmed(desc);
+      }
+    };
+    dev.__apexWriteBuf = on ? "shim" : "native";
+    return dev.__apexWriteBuf;
+  }
+
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
     // three renderer before the GLX fallback: same page when #game was never
@@ -622,52 +681,12 @@ const TLX = (function () {
           try { disposeKeepingContext(renderer); } catch (_) { /* best-effort */ }
           throw e;
         }
-        // three r185.1 WebGPUAttributeUtils creates every GPUBuffer with
-        // mappedAtCreation:true, then getMappedRange()+unmap(). Dawn's
-        // client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
-        // upload exhausts it and EVERY later createBuffer (even 24 B) throws
-        // (mcp-probe 2026-08-18; same class as WGX _mkBuffer / PlayCanvas #6676).
-        // Rewrite those creates to unmapped + queue.writeBuffer. Readback
-        // (mapAsync) is unchanged — those buffers are not mappedAtCreation.
+        // mappedAtCreation shim (installMappedShim, above create): eager only where it was needed — a
+        // software adapter or a headless run. A real GPU keeps three's native mapped path until a mapped
+        // create throws (hunt 2026-11-18 (2) row 1: the iPhone paid a full JS staging copy per buffer).
         if (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) {
           const _dev = renderer.backend.device;
-          if (!_dev.__apexWriteBuf && typeof _dev.createBuffer === "function") {
-            const _origCreate = _dev.createBuffer.bind(_dev);
-            const COPY_DST = (typeof GPUBufferUsage !== "undefined" && GPUBufferUsage.COPY_DST)
-              ? GPUBufferUsage.COPY_DST : 0x0008;
-            _dev.createBuffer = function (desc) {
-              if (!desc || !desc.mappedAtCreation) return _origCreate(desc);
-              const size = desc.size | 0;
-              const buf = _origCreate({
-                size,
-                usage: (desc.usage | COPY_DST),
-                label: desc.label,
-              });
-              let staging = new ArrayBuffer(size);
-              const parts = [];
-              buf.getMappedRange = function (offset, mapSize) {
-                const o = offset | 0;
-                const n = mapSize == null ? (size - o) : (mapSize | 0);
-                if (o === 0 && n === size) return staging;
-                const part = new ArrayBuffer(n);
-                parts.push({ o, part });
-                return part;
-              };
-              buf.unmap = function () {
-                try {
-                  for (let i = 0; i < parts.length; i++) {
-                    const p = parts[i];
-                    new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
-                  }
-                  if (staging && size) _dev.queue.writeBuffer(buf, 0, staging);
-                } catch (_) { /* one failed upload must not take down present() */ }
-                staging = null;
-                parts.length = 0;
-              };
-              return buf;
-            };
-            _dev.__apexWriteBuf = true;
-          }
+          installMappedShim(_dev, _softAdapter || _headless);
           // GPU ERROR CAPTURE — the instrument this backend never had. WGX has
           // hooked onuncapturederror since it shipped; TLX hooked nothing, so
           // Dawn could reject work on every frame and say it to nobody. That is
@@ -1444,6 +1463,7 @@ const TLX = (function () {
       // post chain; white fallback would polish porous verges again. Retain it
       // through temporary overload shedding to avoid render-target churn.
       // The old tlxTagLess A/B override is incompatible with this requirement.
+      // _wantTag is the rule's one seam (tlx-hunt3 R3 drives it); it answers true today.
       function _wantTag() {
         return true;
       }
@@ -4704,7 +4724,7 @@ const TLX = (function () {
         for (let i = 0; i < n; i++) {
           if (!images[i] || have.has(i)) continue;
           const r = fill2dLayer(c2d, size, images[i], i, data);
-          if (r < 0) return filled;
+          if (r < 0) return 0;          // no 2d context: a partial pack is no pack (see below) — Assets retries
           filled += r;
         }
         // A partially readable pack is not a usable pack.  Returning a
@@ -5753,23 +5773,33 @@ const TLX = (function () {
             _restoreEnvFrame();
             return;
           }
+          // A throw while pooling the face (acquireMesh) must not leave _envActive latched: mirrorBegin refuses
+          // while it is set, so the mirror stayed dark until a later clean envFaceEnd (hunt 2026-11-18 (2) row 11).
           _poolBatch++;
           _kidsBegin(_kidsEnv);
-          _instStamp++;
-          for (let i = 0; i < drawList.n; i++) {
-            const rec = drawList[i];
-            if (rec.instanced) continue;   // city batches: sub-pixel on a 64px cube
-            if (rec.chunked) {
-              // A 64px blurred cube cannot resolve the city. Hardware now
-              // skips chunked/city on probe faces the way software already
-              // did (survey 2026-10-06: 312 k indices/cube on vegas at 300 m).
-              if (softContent("chunked") || !chunkedSys) continue;
-              continue;
+          try {
+            _instStamp++;
+            for (let i = 0; i < drawList.n; i++) {
+              const rec = drawList[i];
+              if (rec.instanced) continue;   // city batches: sub-pixel on a 64px cube
+              if (rec.chunked) {
+                // A 64px blurred cube cannot resolve the city. Hardware now
+                // skips chunked/city on probe faces the way software already
+                // did (survey 2026-10-06: 312 k indices/cube on vegas at 300 m).
+                // Both arms skip today; the softContent("chunked") arm stays as the
+                // tlxForceHw=chunked override seam (gfx-backend-canary pins it).
+                if (softContent("chunked") || !chunkedSys) continue;
+                continue;
+              }
+              acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
-            acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
+            _poolShow();
+            _hideUndrawnInstanced();
+          } catch (e) {
+            _envActive = false;
+            _restoreEnvFrame();
+            throw e;
           }
-          _poolShow();
-          _hideUndrawnInstanced();
           // Baseline at the first face of each probe pass.
           if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
           // Per-FACE window. The old cycle-wide compare (face 0 .. face 5 is

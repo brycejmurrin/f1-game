@@ -2469,7 +2469,6 @@
               color.assign(vec3(0.010, 0.010, 0.011).mul(bLit.mul(0.6).add(1.0)).add(vec3(U.ambSky).mul(pvG.mul(0.010))));
             });
           }).ElseIf(finishId.greaterThanEqual(71.0), () => {
-            const aL = pvA;
             const lit = pvLit;
             If(finishId.equal(71.0), () => {   // truematte
               const tmAlb = (mix(vec3(pvA), albedo, 0.55)).toVar();

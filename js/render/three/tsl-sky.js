@@ -167,9 +167,9 @@
       bankThresh: uniform(0.0), bankK: uniform(0.0),
       topK: uniform(0.0), topTint: v3(), topWarm: uniform(0.0), cloudBot: v3(),
       silverK: uniform(0.0), silverCol: v3(), washCol: v3(),
-      mieDamp: uniform(0.0), mieK: uniform(0.0),
+      mieK: uniform(0.0),
       sunHLen: uniform(0.0), sunHn: v2(), hGlowCol: v3(),
-      coronaDamp: uniform(0.0), golden: uniform(0.0), sunWarm: v3(), aurExp: uniform(0.0),
+      coronaDamp: uniform(0.0), sunWarm: v3(), aurExp: uniform(0.0),
       aurCol: v3(), squash: uniform(0.0), discOut: uniform(0.0), discIn: uniform(0.0),
       discCore: v3(), starThresh: uniform(0.0), dthOff: uniform(0.0),
       // E1 cache lookup: on/off and the per-channel cp offset since the bake.
@@ -235,7 +235,6 @@
       const sunBright = Math.max(sc.x, Math.max(sc.y, sc.z));
       const eff = lerp(sunBright, Math.min(sunBright, 0.55), overcast);
       const golden = 1 - sstep(0.0, 0.45, sunE);   // goldenC == golden (the same expression)
-      D.golden.value = golden;
       D.topK.value = eff * 0.62 + 0.38;
       const tk = lerp(1.45, 2.6, golden);
       set3(D.topTint, sc.x * tk, sc.y * tk, sc.z * tk);
@@ -253,7 +252,6 @@
       // Mie + the horizon glow in the sun's compass direction.
       // sunDir is the moon key at night: solar lobes must not follow it.
       const mieDamp = (1 - overcast * 0.85) * (1 - night);
-      D.mieDamp.value = mieDamp;
       D.mieK.value = 0.22 * mieDamp * U.mieScatter.value;
       const hLen = Math.hypot(sd.x, sd.z);
       D.sunHLen.value = hLen;

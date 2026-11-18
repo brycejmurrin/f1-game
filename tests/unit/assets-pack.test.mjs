@@ -308,6 +308,36 @@ test("a normal decode failure keeps the albedo upload and closes its bitmaps", a
   assert.equal(maps[0].normal, null);
 });
 
+// Hunt 2026-11-18 (2) row 9 (#5699): the albedo upload fails while the normal strip is still decoding. Its bitmaps
+// land after the catch ran _discardLoad(albedo, normal = null): they must still be closed.
+test("an albedo upload failure closes the normal strip's bitmaps when they land", async () => {
+  const bitmaps = [];
+  let releaseNormal;
+  const normalGate = new Promise((r) => { releaseNormal = r; });
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) }
+        : { ok: true, blob: async () => ({ size: 16, normal: url.endsWith("n.png") }) };
+    },
+    async createImageBitmap(blob) {
+      if (blob.normal) await normalGate;
+      const b = { normal: !!blob.normal, closed: 0, close() { this.closed++; } };
+      bitmaps.push(b);
+      return b;
+    },
+  });
+  assets.init({ createTextureArray() { return null; }, setMaterialMaps() {} });
+  assert.equal(await assets.load(), false);
+  assert.equal(assets.state().error, "albedo-upload");
+  releaseNormal();
+  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+  const normals = bitmaps.filter((b) => b.normal);
+  assert.ok(normals.length > 0, "the normal strip decoded after the failure");
+  assert.deepEqual(normals.map((b) => b.closed), normals.map(() => 1), "every late normal bitmap closed exactly once");
+  assert.deepEqual(bitmaps.filter((b) => !b.normal).map((b) => b.closed), [1], "albedo closed by _discardLoad");
+});
+
 test("unload during parallel downloads rejects the stale generation before any decode", async () => {
   const downloads = { "a.png": deferredAssetDownload(), "n.png": deferredAssetDownload() };
   let decodes = 0, uploads = 0;
