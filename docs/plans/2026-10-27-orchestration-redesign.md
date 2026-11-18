@@ -5,7 +5,7 @@ Status: **SHIPPED** in #3895 on 2026-10-27. Not yet moved to the plans archive: 
 Proposal, 2026-10-27. Bryce's ask, typed in this session: "I feel like we need to re design our orchestration system,
 read full project and assume everyone is changeable and nothing is hard rules and all was created by parallel agents",
 then "Go deeper, read agent transcripts, look at codex transcripts". Status: SHIPPED in #3895 on 2026-10-27, with the §7 decisions ("Decided 2026-10-27"; the $15 hard-cap archive is still a follow-up).
-Evidence: eight read-only reviews in [`docs/notes/orchestration-redesign-2026-10-27/`](../notes/orchestration-redesign-2026-10-27/README.md)
+Evidence: eight read-only reviews in `docs/notes/orchestration-redesign-2026-10-27/` (`README.md`, archived)
 (bus history, tooling, rulebook, measured outcomes, current platform docs, Claude session transcripts, Cursor agent
 transcripts, Codex transcripts), plus the audits they cite.
 
