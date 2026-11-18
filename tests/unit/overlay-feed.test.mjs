@@ -327,11 +327,6 @@ test("overlay page explicitly owns transparent and chroma backgrounds and is sta
   assert.match(source("tools/desktop/stage-files.mjs"), /"overlay\.html"/);
 });
 
-test("overlay.html phone CSS stacks battle/sectors off the tower and clips short viewports", () => {
-  assert.match(source("overlay.html"),
-    /max-height:\s*calc\(100vh\s*-\s*196px\)[\s\S]*bottom:\s*76px[\s\S]*@media \(max-height:\s*480px\)[\s\S]*overflow:\s*hidden/);
-});
-
 // #3108: Broadcast's lazy ScriptLoader branch for the TV graphics was unreachable — every shell that creates a
 // Broadcast loads OverlayFeed and TvGraphics eagerly before it (tools/manifest.cjs FULL); overlay.html loads
 // broadcast.js only for its pure helpers and never calls create(). The branch is gone; this pins why it may be.

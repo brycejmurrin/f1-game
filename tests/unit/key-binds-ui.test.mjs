@@ -18,16 +18,26 @@ test("a phone hides both tables behind one hint until a key or a pad is seen", (
 });
 
 // hunt2 ui-menus: desktop create shows KEYBOARD without a keydown; rerender
-// must unhook the one-shot reveal listener (source pin — counting window
-// listeners forced a helpers edit that widens tooling-fast to the full suite).
+// must unhook the one-shot reveal listener. Behavioural: `pre` wraps the rig's
+// window listener table and records which keydown handlers the module removes.
+function bootKeydownLog(desktop) {
+  const log = { added: [], removed: [] };
+  const ui = bootUi(desktop, {}, null, (sb) => {
+    const add = sb.addEventListener, del = sb.removeEventListener;
+    sb.addEventListener = (t, f, o) => { if (t === "keydown") log.added.push(f); return add(t, f, o); };
+    sb.removeEventListener = (t, f, o) => { if (t === "keydown") log.removed.push(f); return del(t, f, o); };
+  });
+  return { ui, log };
+}
 test("desktop create shows KEYBOARD and rerender unhooks the reveal keydown", () => {
-  const phone = bootUi(false);
-  assert.equal(phone.$("pm-keys-section").hidden, true, "phone waits for a key");
-  const desk = bootUi(true);
-  assert.equal(desk.$("pm-keys-section").hidden, false, "desktop shows KEYBOARD at create");
-  const src = read("js/ui/key-binds.js");
-  assert.match(src, /if \(reveal && keys && !keys\.hidden\(\)\) window\.removeEventListener\("keydown", reveal\)/,
-    "rerender drops the reveal listener once the table is visible");
+  const phone = bootKeydownLog(false);
+  assert.equal(phone.ui.$("pm-keys-section").hidden, true, "phone waits for a key");
+  assert.deepEqual(phone.log.removed, [], "the phone keeps its reveal listener armed");
+  const desk = bootKeydownLog(true);
+  assert.equal(desk.ui.$("pm-keys-section").hidden, false, "desktop shows KEYBOARD at create");
+  assert.equal(desk.log.removed.length, 1, "rerender drops exactly one keydown listener");
+  assert.equal(desk.log.added.filter((f) => f === desk.log.removed[0]).length, 1,
+    "the dropped listener is one the module added (the reveal)");
 });
 
 test("an armed slot left behind (BACK / CLOSE / RESUME) never captures the next key in the race", () => {
