@@ -803,7 +803,7 @@ test("land.yml: no job holding a write permission or a secret checks out or runs
   assert.deepEqual(jobsWhere(writes), ["post", "retry", "sweep"]);
   assert.deepEqual(jobsWhere(usesSecret), ["post", "train"], "LAND_TOKEN lives in post and the merge train (the sync job left with AUTO-SYNC, 2026-11-03)");
   assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate", "train"], "only the read-only legs and the train check out or run code");
-  // The train (D-0xx) holds LAND_TOKEN, so it runs only the DEPLOY branch's gate closure (protected paths): no PR
+  // The merge train holds LAND_TOKEN, so it runs only the DEPLOY branch's gate closure (protected paths): no PR
   // checkout, no install, one node script. Car heads are fetched as git objects and folded with merge-tree.
   const train = LAND.jobs.train;
   assert.deepEqual(train.permissions, { contents: "read", issues: "read" }, "the train writes only through LAND_TOKEN");

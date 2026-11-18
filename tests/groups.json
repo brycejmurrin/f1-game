@@ -706,7 +706,7 @@
     "tests/unit/merge-gate.test.mjs",
     "tests/unit/merge-hygiene.test.mjs",
     "tests/unit/merge-surveyor.test.mjs",
-    "// merge-train: car picking, bisect cap, the git fold and the purity proof a train/ PR's gate reads (D-0xx).",
+    "// merge-train: car picking, bisect cap, the git fold and the purity proof a train/ PR's gate reads.",
     "tests/unit/merge-train.test.mjs",
     "// tools/perf/mesh-census-lib.mjs: pass/source/distance banding + #2657/#2631 recommend (no browser). ~0.1 s.",
     "tests/unit/mesh-census.test.mjs",

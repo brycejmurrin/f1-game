@@ -1,4 +1,4 @@
-// merge-train: manifest, car picking, bisect history, the git fold and the purity proof the gate reads for a train/ PR (D-0xx).
+// merge-train: manifest, car picking, bisect history, the git fold and the purity proof the gate reads for a train/ PR (docs/notes/MERGE-TRAIN-2026-11-18.md).
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
