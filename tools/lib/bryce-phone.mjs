@@ -14,11 +14,11 @@
 // insets 47/21/47) is NOT his phone: it is the cell most reports and specs were written against, kept so a finding
 // can be compared across the two. `display-mode: standalone` cannot be emulated through CDP; no CSS rule keys on it.
 //
-// THE PROFILE. `live` is tests/data/settings-live-export-2026-11-10.json (UI SIZE 70 %, BUTTON SIZE 143.25 %, his
-// current Home Screen export). `previous` is tests/data/settings-live-export-2026-11-09.json (UI SIZE 61 %, BUTTON
-// unset). `legacy` is the 2026-10-05 export (tests/data/settings-defaults-export.json: HUD SIZE 155, BUTTON SIZE 245)
-// that ~59 tests pin to; it no longer describes his phone. `uiScale` (a percent, as the store keeps it) overrides
-// the profile's UI SIZE.
+// THE PROFILE. `live` is tests/data/settings-live-export-2026-11-09.json, exported from his installed Home Screen app
+// (UI SIZE 61 %, HUD SIZE / BUTTON SIZE / button opacity unset = the defaults, resMode high, textSize large, custom
+// title and HUD layouts, HUD speed / gear / energy / ot / aero off). `legacy` is the 2026-10-05 export
+// (tests/data/settings-defaults-export.json: HUD SIZE 155, BUTTON SIZE 245) that ~59 tests pin to; it no longer
+// describes his phone. `uiScale` (a percent, as the store keeps it) overrides the profile's UI SIZE.
 //
 //   import { brycePhone, openBrycePhone } from "../lib/bryce-phone.mjs";
 //   const { context, page, preset } = await openBrycePhone(browser, { window: "standalone" });   // then page.goto(...)
@@ -29,8 +29,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 /** His settings exports by name. `live` is what his phone runs today; `legacy` is the October file older tests pin to. */
 export const OWNER_PROFILES = Object.freeze({
-  live: "tests/data/settings-live-export-2026-11-10.json",
-  previous: "tests/data/settings-live-export-2026-11-09.json",
+  live: "tests/data/settings-live-export-2026-11-09.json",
   legacy: "tests/data/settings-defaults-export.json",
 });
 export const OWNER_EXPORT = OWNER_PROFILES.live;
@@ -75,7 +74,7 @@ export function storeEntries(store) {
 
 /**
  * The preset. Pure apart from reading the export.
- * @param {{ window?: "standalone"|"safari"|"w844", dpr?: number, profile?: boolean|"live"|"previous"|"legacy", uiScale?: number|null, root?: string }} [o]
+ * @param {{ window?: "standalone"|"safari"|"w844", dpr?: number, profile?: boolean|"live"|"legacy", uiScale?: number|null, root?: string }} [o]
  *   `dpr` below 3 is for a software-GL box (at DPR 3 the 10 Hz HUD tick starves here: measure HUD fit at 1 or under
  *   `__apex.headless(true)`); CSS geometry does not depend on it. `profile` true = `live`; false = a fresh boot.
  *   `uiScale` (percent, the unit the store keeps) overrides the profile's UI SIZE.
