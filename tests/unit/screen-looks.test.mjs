@@ -477,7 +477,9 @@ test("availability: the pure checks answer the measured phone no-ops, and only t
       [P, id, "density", "roomy", null, "phone-sized window keeps the compact"], [Mo, id, "density", "roomy", null, ""], [D, id, "density", "tight", null, ""]]),
     // #5580: at the shipped 70 % the phone has (390 - 24) / 0.7 = 523 own px, over 480, and the hub is still held compact.
     [A.env(844, 390, 0.7), "career", "density", "tight", null, "Already tight"], [A.env(844, 390, 0.7), "career", "density", "roomy", null, "phone-sized window keeps the compact"],
-    [A.env(844, 390, 0.7), "race", "density", "tight", null, ""],
+    // #5632: RACE SETTINGS is held the same way (534 own px at 0.7); a desk window at 0.7 is not.
+    [A.env(844, 390, 0.7), "race", "density", "tight", null, "Already tight"], [A.env(844, 390, 0.7), "race", "density", "roomy", null, "phone-sized window keeps the compact"],
+    [A.env(844, 390, 0.7, true), "race", "density", "tight", null, ""],
     [P, "pause", "music", "hide", null, "Short landscape"], [P, "pause", "build", "hide", null, "Short landscape"],
     [D, "pause", "music", "hide", null, ""],
     [P, "select", "names", "hide", null, "flags only"], [P, "select", "names", "hide", { density: "roomy" }, "flags only"], [Mo, "select", "names", "hide", { density: "roomy" }, ""],
