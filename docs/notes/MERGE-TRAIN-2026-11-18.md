@@ -4,7 +4,7 @@ Kind: design · Re-measure-by: 2026-12-18
 
 Decision: Bryce, orchestrator chat 2026-11-18 ~10:15Z (relayed in its brief with the time), asked "How do we still have so many open PRs can we somehow merge them" and then picked "Merge train (Recommended)". He tapped `config-ok` on #5731 in person at 11:18:45Z. Its docs/DECISIONS.md row follows in a separate PR, because the D-number queue is held by #5691 and #5736.
 
-Summary: 91 open PRs and 23 at `land` (10:12Z) drained at 4–6 merges an hour: each merge moves the tip and every other `land` PR re-gates or retests. A merge train lands about 5 green `land` PRs with one CI run and one `gate`. Native merge queue: not available here. Custom train: `tools/ci/merge-train.mjs` and land.yml's `train` job. It needs no ruleset or settings change. Re-measure: merges per hour and train red rate after a week of trains.
+Summary: 91 open PRs and 23 at `land` (10:12Z) drained at 4–6 merges an hour: each merge moves the tip and every other `land` PR re-gates or retests. A merge train lands up to 10 green `land` PRs with one CI run and one `gate`. Native merge queue: not available here. Custom train: `tools/ci/merge-train.mjs` and land.yml's `train` job. It needs no ruleset or settings change. Re-measure: merges per hour and train red rate after a week of trains.
 
 ## The two options
 
@@ -55,7 +55,8 @@ that is not a clean merge of the named heads onto a deploy-branch commit refuses
 - One train is open at a time. The builder closes a train when a car moved (`stale`: rebuilt from the current state)
   or when its CI or `gate` failed (`red`).
 - Bisect: a red train of n cars caps the next at floor(n/2). A car alone in a red train is left out until its head
-  changes. A merged train resets the cap to 5. The window is 24 h of closed trains.
+  changes. A merged train resets the cap to `TRAIN_MAX`, 10 (5 until Bryce's 2026-11-18 ~19:50Z "Bigger trains 5→10"): a red
+  train of 10 bisects to 5, 2, then 1. The window is 24 h of closed trains.
 
 ## Residual risks (accepted)
 

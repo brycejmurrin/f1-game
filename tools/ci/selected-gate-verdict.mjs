@@ -16,13 +16,26 @@
  *     verdict inherits that check: reuse-draft-selected.mjs requires the draft run's own verdict job, which applied it to
  *     the same plan, to have passed)
  *     (DRAFT=true: a dropped spec warns instead of redding — the draft plan is the 5-min budget, 2026-11-03)
+ *   node tools/ci/selected-gate-verdict.mjs --tally <leg> [--junit-in DIR]
+ *     a selected shard's own last step: prints ONE `apex-selected-tally` notice (its testcase count and tested specs)
+ *
+ * LOST FILE ≠ RAN NOTHING (#5802). A shard whose JOB concluded success but whose junit artifact is missing or 404s
+ * is an infrastructure miss: the workflow retries the download once, then this file reads the shard's own tally
+ * annotation (check-run annotations of this run attempt's jobs, GITHUB_TOKEN). Only a green job with EXACTLY one tally
+ * of at least one testcase stands in for its junit (recoverLostJunit); a tally of 0 tests is the shard that ran
+ * nothing (#5334) and stays red, as does a shard with no tally, two tallies, or a job that did not succeed.
  */
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { failedSpecsUnder, unattributedFailuresFrom, testcaseCount, testedSpecsFrom } from "./junit-failed.mjs";
 
 const JUNIT_PREFIX = "spec-timings-junit-selected-";
+/** The shard tally annotation's title (one per selected job, written by its last step from its own junit). */
+export const TALLY_TITLE = "apex-selected-tally";
+/** The `selected` matrix job's name; its jobs are "<this> (<matrix values>)", prefixed "<caller> / " when called. */
+export const SELECTED_JOB = "Selected specs (change-aware gate)";
 const STARTED_PREFIX = "selected-started-";
 
 /** Shard evidence from the two downloaded artifact roots (download-artifact
@@ -99,6 +112,85 @@ export function ranSpecsUnder(root) {
     }
   }
   return [...out].sort();
+}
+
+/** A shard's own tally from its reporter folders (root/test-results-N/junit.xml): testcases and tested specs. */
+export function tallyUnder(root) {
+  let tests = 0;
+  const specs = new Set();
+  let dirs = [];
+  try { dirs = fs.readdirSync(root).filter((d) => d.startsWith("test-results-")); } catch { /* none */ }
+  for (const d of dirs) {
+    let xml = "";
+    try { xml = fs.readFileSync(path.join(root, d, "junit.xml"), "utf8"); } catch { continue; }
+    tests += testcaseCount(xml);
+    for (const s of testedSpecsFrom(xml)) specs.add(s);
+  }
+  return { tests, specs: [...specs].sort() };
+}
+
+/** The workflow command a shard prints: `::notice title=apex-selected-tally::{json}` (% CR LF escaped). Pure. */
+export function tallyLine(leg, { tests, specs }) {
+  const msg = JSON.stringify({ leg: String(leg), tests, specs });
+  return `::notice title=${TALLY_TITLE}::${msg.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`;
+}
+
+/** An annotation message back to { leg, tests, specs }; null when it is not a well-formed tally. Pure. */
+export function parseTally(message) {
+  let j;
+  try { j = JSON.parse(String(message || "")); } catch { return null; }
+  if (!j || typeof j.leg !== "string" || !j.leg || !Number.isInteger(j.tests) || j.tests < 0 || !Array.isArray(j.specs)) return null;
+  if (!j.specs.every((x) => typeof x === "string")) return null;
+  return { leg: j.leg, tests: j.tests, specs: j.specs };
+}
+
+/** Does a green matrix's evidence have a gap a lost artifact could explain (download failed, a started shard with no
+ *  junit, no marker at all, or a planned spec with no testcase)? Pure. */
+export function evidenceGap(ev) {
+  if (!ev) return false;
+  if (ev.downloadFailed || ev.started.length === 0 || ev.started.some((n) => !ev.junit.includes(n))) return true;
+  if (ev.planned && !ev.planned.error) {
+    const ran = new Set(ev.ran || []);
+    return (ev.planned.specs || []).some((x) => !ran.has(x));
+  }
+  return false;
+}
+
+/**
+ * THE SHARD'S OWN WORD FOR A LOST FILE (#5802). Pure. `jobs`: this run attempt's jobs as
+ * [{ name, conclusion, notes: [{ title, message }] | null }] (null = the lookup failed: nothing is recovered);
+ * `planRows`: the plan's shard count, or null when unknown.
+ * A selected job counts only if it concluded `success` and carries EXACTLY one well-formed tally with tests > 0 and a
+ * named spec; that tally then stands in for its leg's lost marker, junit and ran specs. A failed download is cleared
+ * only when every planned shard is such a job (job count === planRows). Every other check in judgeSpecs still runs
+ * on the result, so a zero-test shard (its tally says 0), an untallied one and a missing planned spec stay red.
+ * @returns {{ evidence: object, recovered: string[], zero: string[] }}
+ */
+export function recoverLostJunit(ev, jobs, { planRows = null } = {}) {
+  if (!ev || !Array.isArray(jobs)) return { evidence: ev, recovered: [], zero: [] };
+  const shardJobs = jobs.filter((j) => String(j?.name || "").includes(SELECTED_JOB));
+  const usable = new Map();
+  const zero = [];
+  for (const j of shardJobs) {
+    const tallies = (j.notes || []).filter((n) => n && n.title === TALLY_TITLE).map((n) => parseTally(n.message));
+    if (j.conclusion !== "success" || tallies.length !== 1 || !tallies[0]) continue;
+    const t = tallies[0];
+    if (t.tests > 0 && t.specs.length > 0) usable.set(t.leg, t);
+    else zero.push(t.leg);
+  }
+  const all = Number.isInteger(planRows) && planRows > 0 && shardJobs.length === planRows && usable.size === planRows;
+  if (ev.downloadFailed && !all) return { evidence: ev, recovered: [], zero };
+  const started = new Set(ev.started), junit = new Set(ev.junit), ran = new Set(ev.ran || []);
+  const recovered = [];
+  for (const [leg, t] of usable) {
+    if (!junit.has(leg) || !started.has(leg) || t.specs.some((x) => !ran.has(x))) recovered.push(leg);
+    started.add(leg); junit.add(leg);
+    for (const x of t.specs) ran.add(x);
+  }
+  return {
+    evidence: { ...ev, downloadFailed: false, started: [...started].sort(), junit: [...junit].sort(), ran: [...ran].sort(), recovered: recovered.sort() },
+    recovered: recovered.sort(), zero,
+  };
 }
 
 /**
@@ -194,6 +286,7 @@ function judgeSpecs(input) {
       }
     }
     reason = "selected specs passed";
+    if (ev?.recovered?.length) reason += ` (the junit of ${ev.recovered.join(", ")} was lost; each shard's job concluded success and its own tally annotation names its tests, #5802)`;
   } else if (selected === "skipped" && String(input.reused ?? "") === "true") {
     // THE READY FLIP REUSED THE DRAFT VERDICT (#5426). select's reuse step (tools/ci/reuse-draft-selected.mjs)
     // proved the newest run on this head ran the same plan green on attempt 1, on the same base, with the deploy
@@ -303,7 +396,47 @@ function judgeSpecs(input) {
   return { ok: true, reason, infraRetry, failedSpecs };
 }
 
+function gh(args) {
+  const r = spawnSync("gh", ["api", ...args], { encoding: "utf8", maxBuffer: 64 << 20 });
+  return r.status === 0 ? r.stdout : null;
+}
+const parseJson = (t) => { try { return t == null ? null : JSON.parse(t); } catch { return null; } };
+function jobPages(text) {
+  if (text == null) return null;
+  try {
+    const out = [];
+    for (const page of text.split(/(?=\{"total_count")/)) if (page.trim()) out.push(...(JSON.parse(page).jobs || []));
+    return out;
+  } catch { return null; }
+}
+
+/** This run attempt's selected jobs with their annotations (GITHUB_TOKEN, actions: read + checks: read); null on any
+ *  lookup failure. Only called on a green matrix whose evidence has a gap. */
+function liveShardJobs(env = process.env) {
+  const repo = env.GITHUB_REPOSITORY, run = env.GITHUB_RUN_ID, attempt = env.GITHUB_RUN_ATTEMPT || "1";
+  if (!repo || !/^\d+$/.test(String(run || ""))) return null;
+  const jobs = jobPages(gh([`repos/${repo}/actions/runs/${run}/attempts/${attempt}/jobs?per_page=100`, "--paginate"]));
+  if (!jobs) return null;
+  const out = [];
+  for (const j of jobs) {
+    if (!String(j?.name || "").includes(SELECTED_JOB)) continue;
+    const notes = j.conclusion === "success" ? parseJson(gh([`repos/${repo}/check-runs/${j.id}/annotations?per_page=100`])) : [];
+    out.push({ name: j.name, conclusion: j.conclusion, notes: Array.isArray(notes) ? notes : null });
+  }
+  return out;
+}
+
+function planRowCount(shardsJson) {
+  try { const rows = JSON.parse(String(shardsJson ?? "")); return Array.isArray(rows) ? rows.length : null; } catch { return null; }
+}
+
 function main(argv = process.argv.slice(2)) {
+  const t = argv.indexOf("--tally");
+  if (t >= 0) {
+    const j = argv.indexOf("--junit-in");
+    console.log(tallyLine(argv[t + 1] || "", tallyUnder(j >= 0 ? argv[j + 1] || "" : "artifacts")));
+    return;
+  }
   let junitRoot = "";
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--junit-root") junitRoot = argv[++i] || "";
@@ -319,8 +452,15 @@ function main(argv = process.argv.slice(2)) {
     // error has no classname) — both are a red.
     failedSpecs = [...failedSpecsUnder(junitRoot), ...failedSpecsUnder(junitRoot, unattributedFailuresFrom)];
   }
-  const evidence = { ...shardEvidence(junitIn, startedIn), downloadFailed: process.env.DOWNLOAD_FAILED === "true",
+  let evidence = { ...shardEvidence(junitIn, startedIn), downloadFailed: process.env.DOWNLOAD_FAILED === "true",
     planned: plannedSpecs(process.env.SHARDS), ran: ranSpecsUnder(junitIn) };
+  // SHARD_TALLIES=1 is set by ci.yml's verdict step only: a local or unit-test run never calls the API.
+  if (process.env.SHARD_TALLIES === "1" && process.env.SELECTED === "success" && evidenceGap(evidence)) {
+    const jobs = liveShardJobs();
+    const r = recoverLostJunit(evidence, jobs, { planRows: planRowCount(process.env.SHARDS) });
+    console.log(jobs ? `shard tallies: ${jobs.length} selected job(s); recovered ${r.recovered.join(", ") || "none"}${r.zero.length ? `; ran nothing by their own tally: ${r.zero.join(", ")}` : ""}` : "shard tallies: the jobs/annotations lookup failed; nothing recovered");
+    evidence = r.evidence;
+  }
 
   const v = selectedGateVerdict({
     select: process.env.SELECT,

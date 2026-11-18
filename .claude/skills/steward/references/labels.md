@@ -22,7 +22,7 @@ issue), ONE label per call:
 | `needs-decision` | issue, PR | waits on Bryce; the options are in a comment; his own label click or `decision:` comment answers |
 | `priority` | issue, PR | Bryce's one steering word: launched or landed first; his own click, newer than the red run, also lets a PR land over a red deploy tip (`base` row, #5425) |
 | `land` | PR | the owner asks GitHub to land it: `land.yml` posts the `gate` status, then arms auto-merge (`references/land.md`) |
-| `train` | PR | a merge train (`tools/ci/merge-train.mjs`, docs/notes/MERGE-TRAIN-2026-11-18.md): land.yml's `train` job folds up to 5 green `land` PRs onto the tip and opens this PR with `land`; nobody pushes to it or adopts it; it closes itself red or stale and the cars stay at `land` |
+| `train` | PR | a merge train (`tools/ci/merge-train.mjs`, docs/notes/MERGE-TRAIN-2026-11-18.md): land.yml's `train` job folds up to 10 green `land` PRs onto the tip and opens this PR with `land`; nobody pushes to it or adopts it; it closes itself red or stale and the cars stay at `land` |
 | `hold` | PR | the only veto: do not land; once Bryce has set it, only a later click of his own lifts it, whatever anyone does in between (merge-gate's hold row walks the label events in order); a hold only an agent set is lifted by any removal; adding it turns an existing `gate` red and disables auto-merge |
 | `needs-owner` | PR | no live owner (silent past its window, or the cap); the dispatch Action launches a takeover |
 | `lane:claude` / `lane:cursor` / `lane:codex` | PR | which host owns it (`references/vendors.md`) |

@@ -37,8 +37,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const TRAIN_PREFIX = "train/";
 /** The label the builder adds to a train PR (with `land`), so boards and the dispatcher can tell it apart. */
 export const TRAIN_LABEL = "train";
-/** Cars per train (Bryce: "about 5 PRs at a time"). */
-export const TRAIN_MAX = 5;
+/** Cars per train (Bryce: "about 5 PRs at a time"; 2026-11-18 ~19:50Z "Bigger trains 5→10"). */
+export const TRAIN_MAX = 10;
 /** How far back closed trains count for the bisect (hours). */
 export const HISTORY_H = 24;
 /** The manifest in a train PR body: one JSON object, `{"base":sha,"cars":[{"pr":n,"head":sha,"ref":branch}]}`. */
