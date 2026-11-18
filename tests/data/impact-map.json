@@ -15497,6 +15497,9 @@
       ]
     },
     "js/render/shared/assets.js": {
+      "_discardLoad": [
+        "tests/unit/assets-pack.test.mjs"
+      ],
       "_ensureScratchGl": [
         "tests/unit/assets-scratch-gl-fallback.test.mjs",
         "tests/unit/pack-png-bytes.test.mjs"
@@ -15944,6 +15947,9 @@
       ]
     },
     "js/render/three/tlx-chunked.js": {
+      "_zeros": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
+      ],
       "build": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
@@ -15982,6 +15988,7 @@
       ],
       "packAttr": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "prepareChunks": [
@@ -16163,6 +16170,9 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
+      "copyRows16": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
+      ],
       "flushDropped": [
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
@@ -16288,6 +16298,7 @@
       ],
       "_kidsBegin": [
         "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "_mirMrtArm": [
@@ -16320,6 +16331,9 @@
       "_resolveWarmWhere": [
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
+      "_restoreEnvFrame": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
+      ],
       "_showInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -16337,10 +16351,6 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
-      "_wantTag": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
-      ],
       "_writeInstanceMatrices": [
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
@@ -16348,6 +16358,7 @@
       "acquireMesh": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "applyResize": [
@@ -16459,6 +16470,9 @@
       "fallbackMat": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "fill2dLayer": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
+      ],
       "flushDropLater": [
         "tests/unit/render-final-contracts.test.mjs"
       ],
@@ -16481,6 +16495,9 @@
       ],
       "hideSkyMesh": [
         "tests/unit/render-final-contracts.test.mjs"
+      ],
+      "installMappedShim": [
+        "tests/unit/tlx-hunt-5699.test.mjs"
       ],
       "isNullMirrorError": [
         "tests/unit/tlx-r187-contracts.test.mjs"
@@ -16597,7 +16614,8 @@
       ],
       "readbackTextureLayers": [
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs"
       ],
       "recordGfxBudgetExhausted": [
         "tests/unit/ctx-lost-notice.test.mjs",
@@ -16662,7 +16680,8 @@
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "softContent": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-hunt-5699.test.mjs"
       ],
       "softGpu": [
         "tests/unit/gfx-backend-canary.test.mjs"
