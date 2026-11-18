@@ -208,7 +208,7 @@ if (typeof ResizeObserver === "function" && G.els && G.els.resultsTable
 // (ceremony, podium beat, game.js), classify the sheets and fit the pins in the same task, after TopModal's own
 // observer has opened the dialog (a queued microtask runs after every observer callback, still before the paint).
 // Then HOLD the sheet transparent (data-reveal-hold, css/overlays.css; opacity only, so focus and layout stand)
-// until a pre-paint check finds YOU on no other row: CI still painted frame 0 compact with --you-clear 5 but YOU's
+// until two painted frames find YOU on no other row: CI still painted frame 0 compact with --you-clear 5 but YOU's
 // margin-top 0px (the story and pane on their unclassified sizes too), so the check reads the real boxes, not flags.
 // HOLD_MS caps it: the sheet always shows.
 const HOLD_MS = 600;
@@ -230,18 +230,25 @@ function youOnRow() {
 function holdUntilLaidOut() {
   const res = G.els.results, t0 = performance.now();
   res.setAttribute("data-reveal-hold", "");
-  const step = () => {
+  // Read each frame AFTER it painted (a message posted from rAF): a rAF read comes before that frame's
+  // ResizeObservers, and on CI they moved YOU onto P1 after a rAF check had already passed (3392c37a). Two clean
+  // painted frames in a row release the hold.
+  const ch = typeof MessageChannel === "function" ? new MessageChannel() : null;
+  let clean = 0;
+  const check = () => {
     if (res.hidden) { res.removeAttribute("data-reveal-hold"); return; }
     fitPins();
     const late = performance.now() - t0 >= HOLD_MS;
-    if (!youOnRow() || late) {
-      if (late) Log.warn("ui", "results: revealed after " + HOLD_MS + " ms with YOU still on a row");
+    clean = youOnRow() ? 0 : clean + 1;
+    if (clean >= 2 || late || !ch) {
+      if (late && clean < 2) Log.warn("ui", "results: revealed after " + HOLD_MS + " ms with YOU still on a row");
       res.removeAttribute("data-reveal-hold");
       return;
     }
-    requestAnimationFrame(step);
+    requestAnimationFrame(() => ch.port2.postMessage(0));
   };
-  requestAnimationFrame(step);
+  if (ch) ch.port1.onmessage = check;
+  requestAnimationFrame(() => (ch ? ch.port2.postMessage(0) : check()));
 }
 if (typeof MutationObserver === "function" && typeof queueMicrotask === "function" && typeof requestAnimationFrame === "function"
     && G.els && G.els.results && G.els.resultsTable && typeof G.els.resultsTable.querySelectorAll === "function") {
