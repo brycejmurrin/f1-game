@@ -1284,6 +1284,9 @@ const TLX = (function () {
       // phone picture costs per frame can be measured on the phone itself and by tools/gfx/live-frame-census.mjs --sweep
       // (docs/notes/PHONE-PERF-MEASURE-2026-11-10.md). No lab: the tier's cap, unchanged.
       if (!_lite) DPR_CAP = labDprCap(DPR_CAP);
+      // ?lab=postSubmit (URL only, one boot, no storage key: D-027): the post chain submits its passes' command buffers
+      // in one call (tlx-post.js SUBMIT HOLD, vendor PATCHES.md §21). OFF until a phone A/B; __tlx.postSubmit(on) flips it for the session.
+      let _postSubmitOn = labOn("postSubmit");
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present: the
@@ -1470,6 +1473,7 @@ const TLX = (function () {
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
+              postSubmitHold: function () { return _postSubmitOn; },
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
               // GRAPHICS preset exactly like glx/post.js (4x on ULTRA, 2x
               // below, clamped to what the HDR format supports). The WebGL
@@ -6897,6 +6901,7 @@ const TLX = (function () {
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
+          postSubmit(on) { if (on !== undefined) _postSubmitOn = !!on; return _postSubmitOn; },   // the ?lab=postSubmit arm, live, this session only
           roadSplit(on) {   // persists: a reload keeps the A/B arm (apex26.tlxRoadSplit)
             if (on !== undefined) {
               _roadSplitOn = !!on;

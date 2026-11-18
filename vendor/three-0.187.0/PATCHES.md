@@ -419,3 +419,24 @@ partial writes go through `writeBufferAligned`. `tlx-chunked.js` still sets the 
 `tests/unit/webgpu-uint16-index.test.mjs` now pins the upstream contract on the generated
 vendor methods and mapped/writeBuffer bytes. Alignment reference:
 https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/writeBuffer.
+
+## 21. Submit hold: an application may collect command buffers and submit them in one call
+
+Every render context ends in its own `queue.submit` (`WebGPUBackend.finishRender`, through the
+module's `submit( device, command )` helper, which every other submit in the bundle also uses).
+A post chain of ten full-screen passes is therefore ten submits a frame, and WebKit does not
+coalesce command buffers (WebKit bug 311598, an Apple engineer: "Recommended practice is 1
+command buffer").
+
+While `device.apexSubmitHold` is an array, `submit()` appends the finished command buffer to it
+and returns. The caller clears the member and calls `device.queue.submit( array )` itself.
+Because every submit goes through the helper, command-buffer ORDER is preserved. What the
+caller must guarantee is the queue timeline: a `queue.writeBuffer` / `writeTexture` issued
+between two held buffers lands before EITHER executes, so nothing the earlier buffer reads may
+be rewritten while it is held, and no resource a held buffer names may be destroyed before the
+submit. `tlx-post.js` (SUBMIT HOLD) holds only its own chain, submits before a material is
+drawn a second time, and submits before it sheds a target. Default off
+(`?lab=postSubmit`, `__tlx.postSubmit`).
+
+Upstream: no issue or PR for batching submits found on `dev` as of 2026-11-18. Canary:
+`gfx-backend-canary.test.mjs` "submit() parks a command buffer on device.apexSubmitHold".

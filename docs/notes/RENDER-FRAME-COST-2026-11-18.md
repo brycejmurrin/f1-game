@@ -96,3 +96,33 @@ desktop) instead of at the edge of the 3×3-cell block that crossed it. Cars, th
 untouched. Not measured: GPU time, the JS time of the mirror pass after the change, and no before/after picture was
 taken (software adapter). Gate: `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, plain and with
 `apex26.tlxForceHw=chunked`: PASS, `gpuErrors` 0.
+
+## Lab arm: one submit for runs of post passes (`?lab=postSubmit`, default off)
+
+three r187 ends every render context in its own `queue.submit`, so the phone post chain is ten submits a frame.
+Sources: WebKit bug 311598 (Apple: "Recommended practice is 1 command buffer", "We don't coalesce command
+buffers"), Apple's Metal Best Practices ("only one or two command buffers per frame"), three.js issue 33821 (no
+way to share a submit across render calls). The WebGPU spec runs the buffers of one `submit` in array order, and a
+`queue.writeBuffer` issued between two held buffers lands before either runs.
+
+Vendor patch 21 lets `submit()` park a finished command buffer on `device.apexSubmitHold`; `tlx-post.js` holds its
+chain and submits before a material repeats, before the target size changes (three's `screenSize` is one shared
+buffer rewritten per render) and before a target is shed. Counted on the software adapter, Monaco, phone tier
+(`__tlx.postState().submitHold`): 10 command buffers held, **6 submits instead of 10**.
+
+Not shown: any frame-time gain (needs the phone: open the game with `?lab=postSubmit`, BENCHMARK each way), and
+pixel identity. The software A/B (40 px block means, parked frame) sits inside its own capture-to-capture noise
+with the arm on (max block 1.5-1.8 vs 1.2-2.4 off-vs-off) and equally with the size-change submit removed, so it
+does not discriminate; the size rule rests on the three source and the spec.
+
+## Found for other owners (2026-11-18, relayed to the coordinating session)
+
+- **Governor floor sag** (`js/perf/governor.js`, in PR #5675's diff): the derived floor follows short intervals at
+  0.3 and recovers at 0.02 with no lower bound, so jitter around 16.67 ms holds it near 15.4; one 33 ms frame on
+  an evaluation tick then cuts 0.75 to 0.65 and the restore threshold sits below a steady 60 Hz EMA. Replayed
+  through the real `tick()`: 60 of 200 simulated 60 s races end at 0.65; snapping the floor up to a refresh
+  quantum where the thresholds are formed gives 14 of 200.
+- **Race-entry warm** (code-traced): the warm is skipped only on an exact `menuKey` match; its "draw" stage is
+  unconditional and includes a wait for the whole GPU queue; its "mirror" timer also covers the sky-cache warm.
+- **`js/fx/droplets.js:126`** reads `documentElement.clientWidth` every frame while the rain lens overlay shows
+  (in PR #5617's diff), beside the visor-optics read above.
