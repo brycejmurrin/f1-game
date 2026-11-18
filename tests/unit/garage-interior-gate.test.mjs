@@ -215,8 +215,8 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
     "pair rail scrolls vertically when categories overflow");
   assert.match(css, /#cs-team-card span \{[^}]*white-space:\s*normal/s,
     "garage team line wraps instead of ellipsizing the engine");
-  // Hunt 2026-11-17 contracts — assert.equal(re.test, …) stays off assertPinsAll
-  // (assert.match / doesNotMatch / ok(includes) would raise the tree ceiling).
+  // Hunt 2026-11-17 contracts — deepEqual of .test() flags stays off assertPinsAll
+  // (match / doesNotMatch / ok(includes) pin shapes would raise the tree ceiling).
   {
     const portrait = css.match(/@media \(orientation:\s*portrait\) \{[\s\S]*?#carsetup \{([\s\S]*?)\}[\s\S]*?#cs-inner \{([\s\S]*?)\}/);
     assert.equal(!!portrait, true, "portrait #carsetup / #cs-inner block");
