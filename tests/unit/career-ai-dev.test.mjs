@@ -348,7 +348,8 @@ test("ATR sliding scale: the constructors' leader develops slowest, last place f
   const developed = tStand.filter((r) => career.aiParts[r.id]).map((r) => r.pos);
   const cut = tStand.filter((r) => 0.30 * CareerAiDev.atrScale(r.pos, n) >= 0.30).map((r) => r.pos);
   assert.deepEqual(developed, cut);
-  assert.ok(!developed.includes(1) && developed.includes(n));
+  assert.ok(developed.length && developed[0] > 1 && developed[developed.length - 1] === n,
+    "the leader is held back and last place develops");
 });
 
 test("makeCars: AI catalog pace stays on the tier ladder after any number of winters (#5760)", () => {
