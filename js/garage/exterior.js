@@ -119,6 +119,7 @@ const GarageExterior = (function () {
   }
   const geometryKey = s => JSON.stringify([s.trackId, s.teamId, s.night]);
   const selectionKey = s => geometryKey(s) + "|" + s.weather + "|" + s.tod;
+  const SLICE_MS = 6;
   function create(deps) {
     const { gfx, load } = deps;
     const now = () => typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
@@ -206,9 +207,12 @@ const GarageExterior = (function () {
           let maxSliceMs = 0, uploadMs = 0;
           iterator = GarageExteriorGeometry.buildSteps(def, { teamId: s.teamId, night: s.night });
           let step;
+          // Steps share a ~6 ms slice (#5660): one step per yield ran at one step per FRAME under a
+          // drive-out's garage draw, 38 s at 4x CPU, and the shutter opened before the circuit existed.
           do {
             await wait(yieldTask()); if (!current()) return false;
-            const at = now(); step = iterator.next();
+            const at = now();
+            do step = iterator.next(); while (!step.done && now() - at < SLICE_MS);
             maxSliceMs = Math.max(maxSliceMs, now() - at);
           } while (!step.done);
           const data = step.value;

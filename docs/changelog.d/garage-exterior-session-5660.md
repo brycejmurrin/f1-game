@@ -1,0 +1,1 @@
+Fixed: the garage drive-out and drive-in now always show the session's own circuit, weather and time of day through the open garage door — the race-start cover lifts, and an arrival starts moving, only once that view is ready (#5660).

@@ -188,7 +188,7 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   assert.ok(!/_introSkip === _introRun\) \{ _introSkip = 0; go\(\); return; \}/.test(game), 'no garage skip jumps past the flyby to the race');
   assert.match(game, /\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/, 'the studio shows through the build card');
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
-  assert.match(cam, /const arriving = home\.active \? null : driveOut \? stepDriveOut\(holdDriveOut\) : preview \? stepPreview\(dt\) : arrival\.step\(dt\);/, 'the wall clock, not the 1\/20 s capped render dt; the PREVIEW between the two');
+  assert.match(cam, /const arriving = home\.active \? null : driveOut \? stepDriveOut\(holdDriveOut\) : preview \? stepPreview\(dt\) : arrival\.step\(dt, arrivalHeld\(\)\);/, 'the wall clock, not the 1\/20 s capped render dt; the PREVIEW between the two');
   assert.ok(!/OUT_REDUCE_SPEED/.test(cam), 'reduce-motion plays the drive-out at the tuned pace, never a sped-up cut');
   assert.match(game, /function studioClose\(n\) \{\n  if \(!_studio \|\| _studio\.n !== n\) return;/, 'only the intro run that opened it closes it');
   assert.match(game, /function afterGarageOut\(n, key, go, prepared, live, stage\)/, 'every intro path awaits garage-out then shows the card through one handoff');

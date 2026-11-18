@@ -862,7 +862,9 @@ const GarageArrival = (function () {
       label.hidden = !config.captions;   // CAPTIONS off: SKIP stays, the words go
       chrome(true); skip.focus({ preventScroll: true });
     }
-    function step(dt) {
+    /** `hold`: the circuit outside the door is not ready yet (#5660): the show waits on its first pose. */
+    function step(dt, hold) {
+      if (state && state.active && hold) { last = clock(); return state; }
       if (state && state.active) {
         // WALL clock, not only the render dt (capped at 0.1 s per frame): on a
         // GPU drawing a frame every 2 s that cap played the arrival — and kept
