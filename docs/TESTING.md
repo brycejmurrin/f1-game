@@ -967,8 +967,9 @@ full-suite stamp). There is no cap on ready PRs. GitHub bounds the LEGS
 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
 field of every matrix row, `tools/ci/select-specs.mjs` LANES, its start
 rotated by run number), so at most LANES selected legs run across every
-PR at once and the rest wait FIFO without holding a runner or being
-cancelled; the train, the nightly and a dispatch get a group of their own
+PR at once and the rest wait without holding a runner or being
+cancelled (in no guaranteed order: the docs' own words); the train, the nightly, a dispatch and every leg of a PR plan of
+at most two legs (`SMALL_RUN_LEGS`, lane -1; #5536, `docs/notes/CI-LANE-WAIT-2026-11-18.md`) get a group of their own
 per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
 2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
 smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync only as skill `steward` says (CONFLICTING/DIRTY, via `node tools/ci/sync-pr.mjs <branch>`);
