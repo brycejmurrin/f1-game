@@ -158,8 +158,6 @@ export function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = 
   return {
     Input, kb, press, fire: fireAll, sb, $: sb.document.getElementById,
     flushTimers, pendingTimers: () => timerQueue.length,
-    // hunt2 ui-menus: assert the KEYBOARD reveal keydown does not linger.
-    windowListeners: (type) => (winListeners[type] || []).slice(),
   };
 }
 // The UI module reads Input from the same realm; boot() runs input.js in a

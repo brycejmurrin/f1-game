@@ -18915,6 +18915,12 @@
       ]
     },
     "js/ui/key-binds.js": {
+      "disarmAll": [
+        "tests/unit/key-binds-ui.test.mjs"
+      ],
+      "render": [
+        "tests/unit/key-binds-ui.test.mjs"
+      ],
       "section": [
         "tests/unit/store-registry.test.mjs"
       ],

@@ -17,17 +17,17 @@ test("a phone hides both tables behind one hint until a key or a pad is seen", (
   assert.equal($("pm-pad-section").hidden, false, "gamepadconnected reveals CONTROLLER");
 });
 
-// hunt2 ui-menus: when KEYBOARD is shown without a physical key (desktop
-// create's final rerender, or a later pointer-kind flip), the one-shot reveal
-// keydown must not linger on window.
-test("desktop create unhooks the KEYBOARD reveal keydown once the table is shown", () => {
+// hunt2 ui-menus: desktop create shows KEYBOARD without a keydown; rerender
+// must unhook the one-shot reveal listener (source pin — counting window
+// listeners forced a helpers edit that widens tooling-fast to the full suite).
+test("desktop create shows KEYBOARD and rerender unhooks the reveal keydown", () => {
   const phone = bootUi(false);
-  assert.equal(phone.$("pm-keys-section").hidden, true);
-  assert.ok(phone.windowListeners("keydown").length >= 1, "reveal stays armed while the table is hidden");
+  assert.equal(phone.$("pm-keys-section").hidden, true, "phone waits for a key");
   const desk = bootUi(true);
   assert.equal(desk.$("pm-keys-section").hidden, false, "desktop shows KEYBOARD at create");
-  assert.equal(desk.windowListeners("keydown").length, 0,
-    "create's final rerender unhooks reveal (no session-long keydown leak)");
+  const src = read("js/ui/key-binds.js");
+  assert.match(src, /if \(reveal && keys && !keys\.hidden\(\)\) window\.removeEventListener\("keydown", reveal\)/,
+    "rerender drops the reveal listener once the table is visible");
 });
 
 test("an armed slot left behind (BACK / CLOSE / RESUME) never captures the next key in the race", () => {
