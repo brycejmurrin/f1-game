@@ -73,8 +73,10 @@ Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
 The full tiers run on the PR: every draft push gets the fast tier plus the
 `selected` legs under a 5-min budget with no overflow — one leg for a typical
 diff; a wide diff still fans out, because `select-specs` never drops a routed
-spec (its `Structural guards` A–D run the full `tooling-fast`, the check
-`ready-gate` reads), the full tier runs once the PR is ready (a ready flip
+spec (its `Structural guards` A–D run `tooling-fast`, the check `ready-gate`
+reads: the whole floor, except on a PR whose diff touches none of `tools/`,
+`tests/`, `.github/` or `package.json`, where they run `--changed`; guardsScope
+in `tools/ci/tooling-fast.mjs`, ci.yml "Guards scope"), the full tier runs once the PR is ready (a ready flip
 skips the `selected` legs when the newest run on the same head passed them on
 its first attempt with the same plan, on a base that is still the deploy tip:
 `tools/ci/reuse-draft-selected.mjs`), and

@@ -1,0 +1,14 @@
+{
+  "files": {
+    "css/hud.css": {
+      "codeLines": 6,
+      "lines": 7
+    },
+    "js/game.js": {
+      "codeLines": -2
+    },
+    "js/ui/hud.js": {
+      "lines": 3
+    }
+  }
+}
