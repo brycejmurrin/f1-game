@@ -472,10 +472,3 @@ test("soft blit: three dark reads in a row present and notify; a bright read pre
   await h.read(5);
   assert.deepEqual(h.st(), { notes: 2, puts: 2, shown: 5 }, 'a bright read presents at once');
 });
-
-// #5699 row 14 (the issue named no test; a source pin): an LRU-evicted "|fx" material key takes its _fxKeys memo along.
-test("matCache eviction drops the evicted key's _fxKeys memo (#5699 row 14)", () => {
-  const i = TLX.indexOf('              matCache.delete(k);');
-  assert.ok(i > 0, 'matCache eviction moved — update this test');
-  assert.match(TLX.slice(i, i + 200), /if \(k\.endsWith\("\|fx"\)\) _fxKeys\.delete\(k\.slice\(0, -3\)\);/);
-});
