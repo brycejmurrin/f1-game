@@ -9,8 +9,10 @@ const Quali = (function () {
   // A quasi-steady model drives the theoretical friction limit and the AI does not:
   // it carries margin, brakes early and does not take the optimal line. A ratio near
   // 0.97 (model lap / the same car's driven lap) is the target: the simulated pole
-  // sits just inside the best lap the AI actually manages, so a player matching AI
-  // pace qualifies mid-field and pole is achievable but has to be earned. Above 1.0
+  // sits just inside the best lap the AI actually manages and pole has to be earned.
+  // It does NOT put a player at AI pace mid-field today: the sheet is about a second
+  // wide (see SPREAD below), so at 0.97 a lap at the AI's own pace is slower than
+  // P22 almost everywhere (docs/notes/QUALI-REFIT-2026-11-18.md; #5786). Above 1.0
   // would hand out free poles — and that is what this file shipped until the refit.
   //
   // HISTORY. A straight-line trim (0.75 of the car's cap) was fitted at PACE 1 and
@@ -31,7 +33,7 @@ const Quali = (function () {
   // downforce and kerb use); an explicit aero term, and brake or accel scales,
   // fitted no better.
   //
-  // FITTED (VM, scratch/quali-refit/ on the refit branch): every circuit of the
+  // FITTED (VM; tables in docs/notes/QUALI-REFIT-2026-11-18.md): every circuit of the
   // calendar at easy / normal / hard, PACE 0.8396, each AI car's BEST of three laps
   // in clear air (thinned field), QUALI_TRIM solved so the median circuit sits on
   // 0.97. Per-circuit median model/driven, 52 circuits x 3 levels:
@@ -46,13 +48,14 @@ const Quali = (function () {
   // tests/unit/quali-absolute-parity-vm.test.mjs holds the band at the shipped PACE;
   // tests/unit/quali-pace-parity-vm.test.mjs holds 0.44 / 1.34 against PACE 1.
   //
-  // Re-measure whenever the driving model changes: scratch/quali-refit/measure.cjs
-  // and fit.cjs on the refit branch, or the absolute parity test's diagnostics.
+  // Re-measure whenever the driving model changes: the absolute parity test's
+  // diagnostics, or the calendar script in docs/notes/QUALI-REFIT-2026-11-18.md.
   //
   // The sheet's P1-P22 SPREAD is NOT this fit's: the driven field splits by the
-  // ERS deploy setting and racecraft axes as much as by tierV·skill (Gasly and Ocon,
-  // same car and skill, 3.8 s apart alone at Monza), and the model reads only
-  // tierV·skill.
+  // team's wing level as much as by tierV·skill (AiDrive scales lateral grip by
+  // 1 + (aeroLoad - 0.5)·0.16: Gasly and Ocon, same car tier and skill, 3.8 s apart
+  // alone at Monza, and swapping aeroLoad swaps their laps), and the model reads
+  // only tierV·skill.
   const QUALI_TRIM = 0.92;
   const PACE_CORNER = 1.15;
 

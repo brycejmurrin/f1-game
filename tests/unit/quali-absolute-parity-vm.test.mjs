@@ -24,7 +24,7 @@ const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const TARGET = 0.97;
-const LO = 0.93, HI = 0.99;     // 0.97 −0.04 / +0.02: above 1 is a free pole, so the top edge is the tight one (fit: scratch/quali-refit/TABLES.md on the refit branch)
+const LO = 0.93, HI = 0.99;     // 0.97 −0.04 / +0.02: above 1 is a free pole, so the top edge is the tight one (fit: docs/notes/QUALI-REFIT-2026-11-18.md)
 const LAPS = 3;                 // timed laps per car; the first includes the standing start
 const KEEP = (i) => i % 4 === 0;
 
