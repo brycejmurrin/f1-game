@@ -811,12 +811,15 @@
       guardrail(0.05, 0.18, -1, 6, [0.75, 0.77, 0.80]);
       guardrail(0.32, 0.42, 1, 6, [0.75, 0.77, 0.80]);
       guardrail(0.90, 0.99, -1, 6, [0.75, 0.77, 0.80]);
-      // Tyre-wall stacks at the tight corner exits (hairpin + final chicane)
-      tyreWall(sl(HP - 0.02), sl(HP + 0.02), 1, 5, LED_TEAL);
+      // Tyre-wall stacks at the tight corner exits, keyed off def.turns[] (racing frame, via sl()).
+      // +k is a LEFT turn, whose outside is the right (+1).
+      const TW_T34 = (api.def.turns[2] + api.def.turns[3]) / 2;   // north hairpin T3-T4 (left)
+      const TW_T16 = api.def.turns[15];                           // final corner T16 (right)
+      tyreWall(sl(TW_T34 - 0.02), sl(TW_T34 + 0.02), 1, 5, LED_TEAL);   // T3-T4 is a left: the outside is +1
       // inside of the curve: caps overlap at R_in ~34 m, so only the straights either side
-      tyreWall(sl(HP - 0.028), sl(HP - 0.015), -1, 5, LED_AMBER);
-      tyreWall(sl(HP + 0.015), sl(HP + 0.028), -1, 5, LED_AMBER);
-      tyreWall(sl(0.935), sl(0.968), -1, 5, LED_MAG);   // T16 is a right: the outside is -1
+      tyreWall(sl(TW_T34 - 0.028), sl(TW_T34 - 0.015), -1, 5, LED_AMBER);
+      tyreWall(sl(TW_T34 + 0.015), sl(TW_T34 + 0.028), -1, 5, LED_AMBER);
+      tyreWall(sl(TW_T16 - 0.011), sl(TW_T16 + 0.022), -1, 5, LED_MAG);   // T16 is a right: the outside is -1
       tyreWall(sl(0.05), sl(0.085), -1, 5, LED_TEAL);
       // Marshal posts (orange roof + flag pole) spaced around the lap.
       // Skip 0.60–0.72 (marina camera corridor) — a post at gap 7 filled f67.

@@ -298,8 +298,10 @@ function measure(Tracks, id) {
       if (lift) {
         const half = Math.round(((z.widthM || 120) / 2) / (L / n));
         const k0 = Math.round(centre * n);
+        // Nearest first, so a tie between this zone and an equal neighbour's
+        // peak (Mexico T8/T9: both 3.0 deg, 87 m apart) resolves to this zone.
         let best = -1;
-        for (let j = -half * 3; j <= half * 3; j++) { const k = ((k0 + j) % n + n) % n; if (lift[k] > best) { best = lift[k]; at = k / n; } }
+        for (let a = 0; a <= half * 3; a++) for (const j of a ? [a, -a] : [0]) { const k = ((k0 + j) % n + n) % n; if (lift[k] > best) { best = lift[k]; at = k / n; } }
       }
       const near = nearestTurn(at);
       let m, bad, detail;

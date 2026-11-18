@@ -70,7 +70,7 @@
       { frac: 0.150, angleDeg: 4.0, widthM: 130 },   // San Donato (T1 0.1447-0.16)
       { frac: 0.470, angleDeg: 5.0, widthM: 150 },   // Arrabbiata 1 (T8)
       { frac: 0.520, angleDeg: 5.0, widthM: 140 },   // Arrabbiata 2 (T9)
-      { frac: 0.880, angleDeg: 4.5, widthM: 140 },   // Bucine (T15)
+      { turn: 15, angleDeg: 4.5, widthM: 140 },     // Bucine (T15 0.8572; was frac 0.880 = 119 m past the apex)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
@@ -82,13 +82,13 @@
     // T1 San Donato, T2 Luco, T3 Poggio Secco, T4 Materassi, T5 Borgo San Lorenzo,
     // T6 Casanova, T7 Savelli, T8 Arrabbiata 1, T9 Arrabbiata 2, T10 Scarperia,
     // T11 Palagio, T12 Correntaio, T13 Biondetti 1, T14 Biondetti 2, T15 Bucine.
-    // Apexes are this centreline's curvature peaks; Arrabbiata 1/2 (0.476/0.521) are wide
+    // Apexes are this centreline's curvature peaks; Arrabbiata 1/2 (0.476/0.518) are wide
     // R~85-97 m double-peaked sweeps, picked by hand between their peaks.
     // sectors: FIA map "S1 60m before Turn 6", "S2 140m before Turn 12", measured back from
     // the T6/T12 apexes on the built 5226 m lap (the map does not say which point of the
     // corner it measures from: +/-0.01).
     sectors: [0.374, 0.671],
-    turns: [0.1447, 0.1967, 0.2187, 0.3002, 0.3187, 0.3857, 0.4109, 0.476, 0.521, 0.5927, 0.6162, 0.6982, 0.7552, 0.7732, 0.8572],
+    turns: [0.1447, 0.1967, 0.2187, 0.3002, 0.3187, 0.3857, 0.4109, 0.476, 0.518, 0.5927, 0.6162, 0.6982, 0.7552, 0.7732, 0.8572],
     furniture: { tree: "cypress", fol: [0.20, 0.44, 0.20], lamp: "none" },  // Tuscan broadleaf behind the cypress ranks
     kit: { marshal: "cabin",     rail: "armco",       fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["crimson", "terracotta", "concrete"],  // Ferrari red over Tuscan clay

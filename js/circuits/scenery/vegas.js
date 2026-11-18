@@ -427,7 +427,8 @@
 
       const BOH_WALL = [0.16, 0.17, 0.20];   // flat concrete-grey, no warm cast
       const BOH_WIN  = [0.30, 0.38, 0.48];   // cool dim office glass, not neon
-      // Prominent hotel towers either side of the PIT straight / T1-T2 (RACING 0.096 / 0.136 via sl(); nudged ~25 m so the generic city rows do not take the footprint first; docs/tracks/vegas.md §4
+      // Prominent hotel towers either side of the track around T5 (RACING 0.096 / 0.136 via sl(), ~80 m before and ~165 m past
+      // the T5 apex at 0.1093; nudged ~25 m so the generic city rows do not take the footprint first; docs/tracks/vegas.md §4
       // puts the tall towers at the pit, neon billboards on the final straight). Bare K(0.10) had drifted ~0.16 lap
       // onto the Harmon approach when startFrac moved (7a173519); the S/F approach keeps its billboards, grandstand and low rows.
       building(K(sl(0.096)), -1, 58, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
@@ -471,8 +472,9 @@
       }
 
       {
-        // MSG Sphere — inside the T5–T9 loop (Wikipedia circuit map; RaceFans
-        // track walk). Re-keyed 2026-10-05: bare K(0.30)/side -1 sat on Koval
+        // MSG Sphere — inside the loop the circuit wraps around the venue
+        // (Wikipedia circuit map; RaceFans track walk); a landmark set ~125 m
+        // off the edge, not a corner kit. Re-keyed 2026-10-05: bare K(0.30)/side -1 sat on Koval
         // (~racing 0.14). Loop centroid is ~racing 0.28, RIGHT, ~125 m past
         // the edge (track-build node scan); side -1 / dist 132 there rejected
         // the footprint against the far side of the loop.
