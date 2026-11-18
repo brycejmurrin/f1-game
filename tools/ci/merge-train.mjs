@@ -4,7 +4,7 @@
 // @section runner
 // @skill steward
 //
-// Why (D-0xx, Bryce 2026-11-18 ~10:15Z "Merge train (Recommended)"): 91 open PRs, 23 at `land`, about 20 concurrent
+// Why (docs/notes/MERGE-TRAIN-2026-11-18.md, Bryce 2026-11-18 ~10:15Z "Merge train (Recommended)"): 91 open PRs, 23 at `land`, about 20 concurrent
 // free runners, and every merge moves the tip, so each other `land` PR re-gates: 4–6 merges an hour. A train merges
 // its cars onto the tip with merge commits (`Merge pull request #n …`, a clean merge each, a conflicting car is left
 // out), opens that branch as an ordinary PR with `land`, and lets the EXISTING route land it: CI on the train head,
@@ -86,7 +86,7 @@ export function trainResult(body) {
 export function trainBody({ base, cars, dropped = [] }) {
   const lines = [
     "## Goal", "",
-    `Merge train (D-0xx): ${cars.length} green \`land\` PR${cars.length === 1 ? "" : "s"} merged onto the deploy tip \`${base.slice(0, 12)}\` with merge commits, so one CI run and one \`gate\` land them all. Each car's own rows (hold, plan, ci, config, raise) are re-read by the gate.`, "",
+    `Merge train (docs/notes/MERGE-TRAIN-2026-11-18.md): ${cars.length} green \`land\` PR${cars.length === 1 ? "" : "s"} merged onto the deploy tip \`${base.slice(0, 12)}\` with merge commits, so one CI run and one \`gate\` land them all. Each car's own rows (hold, plan, ci, config, raise) are re-read by the gate.`, "",
     "## Plan", "",
     ...cars.map((c) => `- [x] #${c.pr} \`${c.head.slice(0, 12)}\` merged clean`),
     "- [ ] land: CI green on this head, then `gate` (each car's own rows) arms it", "",

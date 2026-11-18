@@ -56,8 +56,8 @@
 //             Bryce's pick, 2026-11-11 ~09:02Z: "Quick re-test at merge (Recommended)" (#5407 option b).
 //             It catches ACCIDENTAL crossings: the merge result's own scripts (gen:check, the ratchets) ran before it
 //             as the same user and could steer it, the same trust the gen and ratchets rows already have.
-// A MERGE TRAIN (a head branch starting `train/`, built by tools/ci/merge-train.mjs, D-0xx) has the same rows, but
-// its config and raise rows are its CARS' rows: the head must be exactly the clean fold of the manifest's car heads
+// A MERGE TRAIN (a head branch starting `train/`, built by tools/ci/merge-train.mjs; docs/notes/MERGE-TRAIN-2026-11-18.md)
+// has the same rows, but its config and raise rows are its CARS' rows: the head must be exactly the clean fold of the manifest's car heads
 // onto a deploy-branch commit (git objects only: rev-list, merge-tree), and each car must be open at that head, carry
 // `land` and pass its own open, hold, plan, ci, config and raise rows (evaluate --trusted per car). Its own diff is
 // never read. So Bryce's per-PR labels stay per PR, and a `hold` on any car refuses the train.
@@ -915,8 +915,8 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     if (proof.error) return { error: proof.error };
   }
   rows.base = baseVerdict(deployTip, pull.labels, ev.rows, owner, proof);
-  // A merge train (tools/ci/merge-train.mjs, D-0xx): its config and raise rows are its cars' own rows, read per car,
-  // after proving the head is exactly the clean fold of those car heads onto a deploy-branch commit.
+  // A merge train (tools/ci/merge-train.mjs; docs/notes/MERGE-TRAIN-2026-11-18.md): its config and raise rows are
+  // its cars' own rows, read per car, after proving the head is exactly the clean fold of those car heads onto a deploy-branch commit.
   const isTrain = String(pull.head?.ref || "").startsWith(TRAIN_PREFIX);
   if (isTrain) {
     const t = trainCheck({ pr, pull, head, base, request, root, owner });
