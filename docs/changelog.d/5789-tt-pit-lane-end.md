@@ -1,0 +1,1 @@
+New: Time Trial: the pit lane works in a Time Trial — the limiter, the lane speed cap and the HUD lane cue, as in a race (a lap run through it is not a flying lap). Stop in your box and END TIME TRIAL is offered for a few seconds (the WORK ON CAR slot, touch-sized): it plays the pit drive-in and ends the session on the Time Trial results; drive on and the run continues (#5789).

@@ -858,7 +858,7 @@ const GarageArrival = (function () {
       time = 0; last = 0; state = posed(0, config, false, into());   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
-      skip.textContent = dir === "out" ? "SKIP TO RACE" : "SKIP TO WORK";
+      skip.textContent = (opts && opts.skip) || (dir === "out" ? "SKIP TO RACE" : "SKIP TO WORK");
       label.hidden = !config.captions;   // CAPTIONS off: SKIP stays, the words go
       chrome(true); skip.focus({ preventScroll: true });
     }
