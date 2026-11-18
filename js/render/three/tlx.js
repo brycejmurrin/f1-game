@@ -3781,6 +3781,7 @@ const TLX = (function () {
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
         if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
+        _warmStages.sky = Math.round(performance.now() - _tStage); _tStage = performance.now();   // its own row: it was counted inside "mirror"
         _warmStages.mirror = null;
         if (wantMirrorWarm()) {
           await warmMirrorStage(usePost, useTag);
@@ -3871,7 +3872,7 @@ const TLX = (function () {
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             const _warmRec = { where: (typeof _warmWhere !== "undefined" ? _warmWhere : "menu"), at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
+              sky: _warmStages.sky, mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
             _warmHistory.push(_warmRec);
             if (_warmHistory.length > 6) _warmHistory.shift();
             try { if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.noteWarm) RaceEntryProfile.noteWarm(_warmRec); } catch (_) { /* optional */ }
