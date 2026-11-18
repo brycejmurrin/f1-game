@@ -930,3 +930,27 @@ test("under a crown that moves the side design, the cover's trim moves with it",
     `the cover's trim reaches z ${front.toFixed(3)}, forward of the read strip's aft end at `
     + `${zSeen.toFixed(3)} — it is standing in the band the wrap's design is read in`);
 });
+
+// Lettering on the flank stops at FLANK_SEEN on EVERY crown, not only under
+// the wrap. The bare-flank wordmark and duo boxes once ran to u 0.94/0.96, and
+// McLaren's shipped spineSide "wordmark" (crown panel) was 24 % behind the
+// rear tyre from the garage side camera, duo 36 % (#5712). The left flank's
+// canvas x runs front→rear, so a text op's aft edge in flank u is exact.
+test("no crown lets flank lettering run behind the rear tyre", () => {
+  const LT = A.LT, RL = R.spineSideL;
+  const LETTERING = ["number", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title"];
+  const aftU = (ops) => Math.max(-Infinity, ...opsIn(ops, RL).filter((op) => op.kind === "text")
+    .flatMap((op) => op.pts.flat().map(([x]) => (x - RL.x) / RL.w)));
+  let worst = { u: -Infinity };
+  for (const spineLogo of LT.SPINE_LOGO_IDS) {
+    for (const spineSide of LETTERING) {
+      const u = aftU(A.paint("mclaren", { ...BASE, spineLogo, spineSide }));
+      if (u > worst.u) worst = { u, spineLogo, spineSide };
+    }
+  }
+  assert.ok(worst.u <= LT.FLANK_SEEN + 1e-9,
+    `${worst.spineLogo}+${worst.spineSide} letters reach flank u ${worst.u.toFixed(3)}, past FLANK_SEEN ${LT.FLANK_SEEN}`);
+  // The shipped McLaren pair, exactly: the wordmark box ends at u 0.60.
+  const shipped = aftU(A.paint("mclaren", { ...BASE, spineLogo: "panel", spineSide: "wordmark" }));
+  assert.ok(shipped > 0.3 && shipped <= 0.60 + 1e-9, `McLaren's wordmark aft edge at u ${shipped.toFixed(3)}`);
+});

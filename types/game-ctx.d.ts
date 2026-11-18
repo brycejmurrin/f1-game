@@ -322,6 +322,8 @@ interface PitSession {
   info(c?: CarState): Record<string, unknown> | null;
   setNext(c: CarState, record: unknown): void;
   estimate(c: CarState): { lossS: number; gapS: number | null } | null;
+  /** The lane's net cost in seconds at racing speed (the STRATEGY row's figure). */
+  lossS(): number;
   choices(c: CarState): Array<{ id: string; code: string }>;
   selectNext(c: CarState, id: string): boolean;
   serviceCar(c: CarState): void;
@@ -416,6 +418,8 @@ interface GameCtx {
   raceDirtyAir: "off" | "classic" | "cfd";
   readonly tyres: TyreSession;
   readonly pits: PitSession;
+  /** Game-feel state (screen shake, hit-stop, camera roll); __apex reads it, never writes. */
+  readonly feel: { shake: number; camRoll: number; hitStop: number; startHold: number; restartPending: boolean };
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
   readonly pitCrewDrawn: () => number;
   /** Continuous track wetness 0..1 (look=drive). Local roadWetness() in game.js aliases this. */

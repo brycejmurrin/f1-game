@@ -1,0 +1,1 @@
+Fixed: McLaren-style flank sponsor names (the wordmark and duo side designs on every crown but the wrap) stay in front of the rear tyre instead of running a quarter to a third of the name behind it from the side (#5712).
