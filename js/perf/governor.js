@@ -463,6 +463,7 @@ function tick(dtMs, drawn) {
   if (ev <= degradeAt) _degradeArm = 0;
   else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
   if (ev > degradeAt + boundOver) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
+    if (_shedDprBoost()) { _degradeArm = 0; return; }
     // Why: docs/GOVERNOR-RATIONALE.md §gov-29.
     let stepped = false;
     if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
@@ -536,8 +537,20 @@ function driftRenderRate() {
   if (!st.mobile || st.mode !== "auto") return false;
   return RenderRate.setMode("45");
 }
+// RESOLUTION MAX's DPR boost (#5222; gfx.setDprBoost, TLX only) is what a missed frame budget or a thermal drift
+// takes back first, ahead of the scale and feature rungs (a drift's 45 Hz rate cap still comes before it): one step
+// down to the tier's DPR cap. Never
+// restored by the governor: it stays off until the player picks a RESOLUTION again or reloads (UiScale re-applies it).
+function _shedDprBoost() {
+  if (!_gfx || typeof _gfx.getDprBoost !== "function" || !(_gfx.getDprBoost() > 0)) return false;
+  if (!_gfx.setDprBoost(0)) return false;
+  _govCool = 30; _downHold = _chargeCut();
+  Log.warn("gfx", "RESOLUTION MAX: frame budget missed, DPR boost off (back to the tier's cap)");
+  return true;
+}
 function driftStep() {
   if (_pendingVerify || _govCoolMs > 0 || _govCool > 0) return false;   // mid-verify or cooling: ask again next window
+  if (_shedDprBoost()) return true;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
   if (_autoRes && cur > 0.5 && !_scaleFutile && _gfx.setRenderScale(cur - 0.1)) {
     _scaleCap = cur; _armCapProbe(); _govCool = 30; _downHold = _chargeCut(); _scaleMoves++;

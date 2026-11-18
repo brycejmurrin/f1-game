@@ -15,8 +15,44 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (p) => fs.readFileSync(absSrc(p), "utf8");
 
+// The real tlx.js under a stubbed `location` (three cannot boot in the node VM): TLX.dprCapFor is the pure cap rule
+// create() runs (#5222), and the two create() lines that declare the cap are lifted verbatim.
+function tlxCtx(search = "") {
+  const ctx = vm.createContext({ location: { search }, URLSearchParams, WeakSet, WeakMap, Math, Object, Number, String,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} } });
+  ctx.window = ctx;
+  vm.runInContext(read("js/render/three/tlx.js"), ctx, { filename: absSrc("js/render/three/tlx.js") });
+  return ctx;
+}
+const tlxLine = (head) => { const src = read("js/render/three/tlx.js"), at = src.indexOf(head); return at < 0 ? "" : src.slice(at, src.indexOf("\n", at)); };
+
+test("TLX's cap rule at boot is the tier's: 1.5 on mobileTier, 2 elsewhere, lite 1.25 (create()'s own lines)", () => {
+  const capAt = (mobileTier, lite = null) => {
+    const ctx = tlxCtx();
+    Object.assign(ctx, { dprCapFor: ctx.TLX.dprCapFor, mobileTier, _lite: lite });
+    return vm.runInContext(tlxLine("let _dprBoost = 0, _dprCeil = 0;") + "\n" + tlxLine("let DPR_CAP = ") + "\nDPR_CAP;", ctx, { filename: "vm-page:evaluate" });
+  };
+  assert.deepEqual([capAt(true), capAt(false), capAt(true, { dprCap: 1.25 })], [1.5, 2, 1.25]);
+});
+
+test("RESOLUTION MAX's boost raises TLX's cap to at most 3, never lowers it; the lab replaces; capDpr's ceiling wins (#5222)", () => {
+  const f = tlxCtx().TLX.dprCapFor, lite = { dprCap: 1.25 };
+  // [lite, mobileTier, boost, ceil] -> cap
+  const rows = [
+    [[null, true, 0, 0], 1.5], [[null, false, 0, 0], 2],      // no boost: today's caps
+    [[null, true, 3, 0], 3], [[null, false, 3, 0], 3],        // MAX: the device's own DPR, up to 3
+    [[null, true, 2, 0], 2], [[null, true, 9, 0], 3],         // a boost is clamped to 3
+    [[null, false, 1.5, 0], 2], [[null, true, 1, 0], 1.5],    // a boost under the tier's cap changes nothing
+    [[null, true, 3, 1], 1], [[null, true, 0, 1], 1],         // the crash sentinel's capDpr(1) wins over MAX
+    [[null, true, 3, 2.5], 2.5], [[null, false, 0, 2], 2],    // a ceiling only lowers
+    [[lite, true, 3, 0], 1.25], [[lite, true, 3, 1], 1],      // ?lab=tlxLite keeps its own cap; MAX does not lift it
+  ];
+  assert.deepEqual(rows.map(([a]) => f(...a)), rows.map(([, v]) => v));
+  const lab = (search, boost) => tlxCtx(search).TLX.dprCapFor(null, true, boost, 0);
+  assert.deepEqual([lab("?lab=dpr2", 0), lab("?lab=dpr2", 3), lab("?lab=dpr3", 0), lab("?lab=dpr3", 1)], [2, 2, 3, 3], "the URL lab is the measurement: it replaces MAX too");
+});
+
 test("every backend caps the device pixel ratio at 1.5 on mobileTier and 2 elsewhere", () => {
-  assert.match(read("js/render/three/tlx.js"), /let DPR_CAP = _lite \? _lite\.dprCap : \(mobileTier \? 1\.5 : 2\);/);
   assert.match(read("js/render/glx/glx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, MOBILE_TIER \? 1\.5 : 2\)/);
   assert.match(read("js/render/webgpu/wgx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, WGX_MINIMAL \? 1 : \(WGX_LITE \? 1\.5 : 2\)\)/);
   assert.match(read("docs/GFX-CONTRACT.md"), /capped 1\.5 mobile \/ 2/);   // the seam's contract doc
@@ -32,12 +68,15 @@ test("each backend's resize() sizes the present buffer from the CAPPED dpr (eval
     return m[1];
   };
   const evalAt = (expr, flags) => vm.runInNewContext(expr, { window: { devicePixelRatio: 3 }, ...flags }, { filename: "vm-page:evaluate" });
-  const tlx = read("js/render/three/tlx.js");
-  const capDecl = tlx.match(/let DPR_CAP = ([^;]+);/)[1];
+  const capFor = tlxCtx().TLX.dprCapFor;
   const tlxDpr = resizeDpr("js/render/three/tlx.js");
-  const tlxAt = (mobileTier) => evalAt(tlxDpr, { DPR_CAP: evalAt(capDecl, { _lite: null, mobileTier }) });
+  const tlxAt = (mobileTier, boost = 0, dpr = 3) => vm.runInNewContext(tlxDpr, { window: { devicePixelRatio: dpr }, DPR_CAP: capFor(null, mobileTier, boost, 0) }, { filename: "vm-page:evaluate" });
   assert.equal(tlxAt(true), 1.5, "TLX phone at DPR 3");
   assert.equal(tlxAt(false), 2, "TLX desktop at DPR 3");
+  // RESOLUTION MAX (#5222): Bryce's 852×368 CSS at DPR 3 presents 2556×1104 instead of 1278×552; a DPR-2 phone gets its own 2.
+  assert.deepEqual([tlxAt(true, 3), tlxAt(true, 3, 2), tlxAt(false, 3, 1)], [3, 2, 1], "MAX = the device's own DPR, never above it");
+  assert.deepEqual([852, 368].map((c) => Math.round(c * tlxAt(true, 3))), [2556, 1104]);
+  assert.deepEqual([852, 368].map((c) => Math.round(c * tlxAt(true))), [1278, 552]);
   const glx = resizeDpr("js/render/glx/glx.js");
   assert.equal(evalAt(glx, { MOBILE_TIER: true }), 1.5, "GLX phone at DPR 3");
   assert.equal(evalAt(glx, { MOBILE_TIER: false }), 2, "GLX desktop at DPR 3");

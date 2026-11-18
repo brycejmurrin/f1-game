@@ -248,7 +248,7 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
 // resolution stage ON under a 0.75 ceiling, a stored choice wins over the default, and a pointer device
 // is unchanged (AUTO, ceiling 1). `scale0` is the backend's scale when the boot reaches applyResMode.
 function bootRes({ coarse, stored = {}, scale0 = 1 }) {
-  const calls = { scale: [], autoRes: [], painted: [], ceil: [] };
+  const calls = { scale: [], autoRes: [], painted: [], ceil: [], dpr: [] };
   let live = scale0;
   const ctx = vm.createContext({
     Math, Number, String, JSON, isFinite, Object, Array,
@@ -263,7 +263,7 @@ function bootRes({ coarse, stored = {}, scale0 = 1 }) {
   const el = (id) => ({ id, value: "", textContent: "", hidden: true, classList: { toggle() {}, contains: () => false }, closest: () => null });
   // GameStore semantics: set(k, undefined) REMOVES the key (null would be stored as JSON null).
   const store = { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { if (v === undefined) delete stored[k]; else stored[k] = v; }, raw: () => null, rawSet() {} };
-  vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: { setRenderScale: (v) => { live = v; calls.scale.push(v); }, getRenderScale: () => live }, updateTrackPreview() {} });
+  vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: { setRenderScale: (v) => { live = v; calls.scale.push(v); }, getRenderScale: () => live, setDprBoost: (n) => { calls.dpr.push(n); return false; } }, updateTrackPreview() {} });
   calls.stored = stored;
   return calls;
 }
@@ -295,6 +295,19 @@ test("RESOLUTION: a stored choice wins over the touch default", () => {
   assert.deepEqual(auto.autoRes, [true], "AUTO hands the scale to the governor");
   const high = bootRes({ coarse: true, stored: { resMode: "high", resSchema: 2 } });
   assert.deepEqual([high.scale, high.autoRes, high.ceil], [[1.0], [false], []], "a pinned HIGH is untouched by the AUTO ceiling");
+});
+
+// #5222: MAX is the only RESOLUTION that asks the renderer for the device's own DPR (3); every other mode, the
+// shipped AUTO default and Bryce's stored HIGH included, asks for none, so their pictures are today's.
+test("RESOLUTION MAX boosts the DPR to 3 at scale 1.0; AUTO, LOW, MED and HIGH ask for no boost (#5222)", () => {
+  const max = bootRes({ coarse: true, stored: { resMode: "max", resSchema: 2 } });
+  assert.deepEqual([max.painted, max.scale, max.autoRes, max.ceil, max.dpr], [["max"], [1.0], [false], [], [3]]);
+  for (const mode of ["auto", "low", "med", "high"]) {
+    assert.deepEqual(bootRes({ coarse: true, stored: { resMode: mode, resSchema: 2 } }).dpr, [0], mode);
+  }
+  assert.deepEqual(bootRes({ coarse: true }).dpr, [0], "nothing stored: the default asks for no boost");
+  const exp = JSON.parse(read("tests/data/settings-live-export-2026-11-10.json"));
+  assert.deepEqual(bootRes({ coarse: true, stored: { resMode: exp.settings.display.resMode, resSchema: 2 } }).dpr, [0], "Bryce's current export (HIGH)");
 });
 
 // Bryce's live export (2026-11-09) stores RESOLUTION HIGH: the #5227 default must not move him.

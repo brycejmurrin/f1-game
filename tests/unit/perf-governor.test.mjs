@@ -642,10 +642,26 @@ test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desk
   assert.deepEqual(boot(2, false), [], "a desktop never enters safe mode");
 });
 
-test("TLX capDpr only ever lowers the cap and re-sizes (#1641)", () => {
+test("TLX capDpr only ever lowers the cap and re-sizes; RESOLUTION MAX's boost cannot lift it back (#1641, #5222)", () => {
+  // create()'s cap state, reCapDpr and the facade's capDpr / setDprBoost / getDprBoost, lifted verbatim and run.
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
-  assert.match(tlx, /let DPR_CAP = _lite \? _lite\.dprCap : \(mobileTier \? 1\.5 : 2\);/, "the cap is mutable (B8: the ?lab=tlxLite tier seeds it lower)");
-  assert.match(tlx, /capDpr\(n\) \{\s*if \(!\(n >= 1\) \|\| n >= DPR_CAP\) return false;\s*DPR_CAP = n; resizeNow\(\); return true;/);
+  const slice = (from, to) => { const a = tlx.indexOf(from); return tlx.slice(a, tlx.indexOf(to, a) + to.length); };
+  const ctx = vm.createContext({ Math, Object, Number, String, URLSearchParams, WeakSet, WeakMap, location: { search: "" },
+    mobileTier: true, _lite: null, resized: 0 });
+  vm.runInContext(tlx.replace(/^const TLX = /m, "var TLX = "), ctx, { filename: absSrc("js/render/three/tlx.js") });
+  ctx.dprCapFor = ctx.TLX.dprCapFor;
+  vm.runInContext("function resizeNow() { resized++; }\n" + slice("let _dprBoost = 0, _dprCeil = 0;", "\n") +
+    slice("let DPR_CAP = ", "\n") + slice("function reCapDpr() {", "\n      }") +
+    "\nvar f = {" + slice("capDpr(n) {", "getDprBoost() { return _dprBoost; },") + "};", ctx, { filename: absSrc("js/render/three/tlx.js") });
+  const cap = () => vm.runInContext("DPR_CAP", ctx);
+  const rows = [
+    ["capDpr(2)", false, 1.5], ["capDpr(0.5)", false, 1.5],   // never raises, never below 1
+    ["setDprBoost(3)", true, 3], ["setDprBoost(3)", false, 3], // MAX lifts the phone's 1.5 to 3; a repeat is a no-op
+    ["capDpr(1)", true, 1], ["setDprBoost(0)", false, 1],      // the sentinel's ceiling wins, with or without MAX
+    ["setDprBoost(3)", false, 1], ["getDprBoost()", 3, 1],
+  ];
+  assert.deepEqual(rows.map(([c]) => { const r = vm.runInContext("f." + c, ctx, { filename: "vm-page:evaluate" }); return [c, r, cap()]; }), rows);
+  assert.equal(ctx.resized, 2, "one re-size per cap that moved (1.5 -> 3 -> 1)");
 });
 
 // ── The GRAPHICS preset's user tier (js/perf/quality-preset.js) ────────────────
@@ -1739,6 +1755,47 @@ test("without RenderRate the drift response is the governor rung, unchanged", ()
   assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
   assert.ok(scale() < 1 || PerfGov.autoShed() > 0, "driftStep's rung moved, exactly the pre-wiring behaviour");
   delete globalThis.RenderRate; delete globalThis.ThermalDrift;
+});
+
+// RESOLUTION MAX (#5222): the DPR boost is a pinned choice (autoRes off) that the frame budget can still take back.
+function makeGovMax({ thermal = false } = {}) {
+  const mem = thermal ? { "apex26.thermalDrift": "1" } : {};
+  globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+  globalThis.window = { __APEX_BUILD: 1 };
+  if (thermal) globalThis.ThermalDrift = eval(TD_SRC + ";ThermalDrift");
+  delete globalThis.RenderRate;
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1, boost = 3;
+  const calls = [];
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale,
+    setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (s === scale) return false; scale = s; return true; },
+    getDprBoost: () => boost, setDprBoost: (n) => { calls.push(n); if (n === boost) return false; boost = n; return true; } });
+  PerfGov.setAutoRes(false);   // MAX pins the scale at 1.0, like HIGH
+  return { PerfGov, scale: () => scale, boost: () => boost, calls };
+}
+
+test("RESOLUTION MAX: a phone that holds its budget keeps the DPR boost for the whole race", () => {
+  const { PerfGov, boost, calls } = makeGovMax();
+  feed(PerfGov, () => 16.7, 6000);
+  assert.deepEqual([boost(), calls, PerfGov.tier()], [3, [], 0]);
+});
+
+test("RESOLUTION MAX: a missed budget sheds the DPR boost first, once, before any feature rung", () => {
+  const { PerfGov, scale, boost, calls } = makeGovMax();
+  feed(PerfGov, () => 16.7, 600);
+  let i = 0;
+  while (i < 3000 && boost() > 0) { PerfGov.tick(26); i++; }
+  assert.deepEqual([boost(), calls, scale(), PerfGov.tier(), PerfGov.autoShed()], [0, [0], 1, 0, 0], `shed after ${i} slow frames`);
+  feed(PerfGov, () => 16.7, 6000);
+  assert.deepEqual([boost(), calls], [0, [0]], "never restored by the governor: the player re-picks MAX");
+});
+
+test("RESOLUTION MAX: a thermal drift step takes the DPR boost back before resolution or features", () => {
+  const { PerfGov, scale, boost, calls } = makeGovMax({ thermal: true });
+  const used = feedUntilDriftStep(PerfGov, 20, 6000);
+  assert.ok(PerfGov.thermalDrift().steps > 0, `a drift step must land (ticks used: ${used})`);
+  assert.deepEqual([boost(), calls, scale(), PerfGov.tier()], [0, [0], 1, 0]);
+  delete globalThis.ThermalDrift;
 });
 
 test("software garage preview sheds render scale on SwiftShader and restores", () => {
