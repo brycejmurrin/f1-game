@@ -1012,6 +1012,32 @@ export class Lsp {
   // Whole-head aliases also accept the guarded forms agents write for window globals:
   // `typeof H !== "undefined" ? H : {}`, `(typeof H !== "undefined" && H) || {}`,
   // and `H || {}` / `window.H || {}` (e.g. `const PC = …` then `PC.VMAX`).
+  /** The note a semantic zero gets when text still finds `.name` accesses: [] when it finds none. */
+  zeroUseNote(a, p) {
+    const name = a.symbol ? a.symbol.split(".").at(-1) : /^[\w$]+/.exec((this.textLines(p.file)[p.line0] || "").slice(p.col0))?.[0];
+    const hits = this.memberTextHits(name);
+    if (!hits.length) return [];
+    const at = hits.slice(0, 6).map(h => `${h.file}:${h.line0 + 1}`).join(", ");
+    return [`0 semantic uses, but ${hits.length} text match${hits.length === 1 ? "" : "es"} of .${name} (a member on an object the checker cannot type, e.g. a factory's return; verify each): ${at}${hits.length > 6 ? ", …" : ""}`];
+  }
+
+  /** `.name` member accesses in code (not comments or strings) across the tree: the bounded text cross-check that
+   *  keeps a semantic zero from reading as "unused" when the member sits on an object the checker cannot type,
+   *  e.g. one a factory returns (`chunkedSys.mergeVisible(`, #5674). Rows: { file, line0, col0 }. */
+  memberTextHits(name) {
+    if (!/^[A-Za-z_$][\w$]*$/.test(name || "")) return [];
+    const re = new RegExp(`\\.${name.replace(/\$/g, "\\$")}(?![\\w$])`, "g"), out = [];
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
+      const { text } = this.textOf(f);
+      if (!text.includes(name)) continue;
+      for (const m of text.matchAll(re)) {
+        const { line0, col0 } = this.posOf(f, m.index + 1);
+        if (!this.nonCode(f, line0, col0)) out.push({ file: f, line0, col0 });
+      }
+    }
+    return out;
+  }
+
   async textRefs(parts, def, includeDeclaration = true) {
     const name = parts.at(-1), head = parts.slice(0, -1).join("."), esc = x => x.replace(/[$.]/g, "\\$&");
     const fallbackOwner = head && (this.windowDecl(head) || this.repeatedIifeDecl(head));
@@ -1291,6 +1317,7 @@ export async function callTool(lsp, name, a = {}) {
           seen.add(key); return true;
         });
         locs.length = 0; locs.push(...uses);
+        if (!locs.length) notes.push(...lsp.zeroUseNote(a, p));
         const unfiltered = locs.length;
         if (scope) {
           const scopedLocs = locs.filter(l => inScope(lsp.rel(l.uri), scope));
@@ -1329,6 +1356,7 @@ export async function callTool(lsp, name, a = {}) {
           const ln = lsp.textLines(p.file)[p.line0] || "", w = /[\w$]+/.exec(ln.slice(p.col0))?.[0];
           notes.push(/^[\w$]/.test(ln[p.col0] || "") ? `nothing resolvable at ${pos(p)} ("${w}")` : `${pos(p)} is not on a name (column ${p.col0 + 1} of "${ln.trim().slice(0, 60)}"); point the column at the symbol`);
         }
+        if (!isDef && p && !r.tags.includes("use")) notes.push(...lsp.zeroUseNote(a, p));
         const viaAlias = r.list.filter(l => l.via).length;
         if (viaAlias) notes.push(`${viaAlias} of them through a destructure or alias (\`const { x } = Head\`, \`const K = Head\`) — grep would not count those`);
         const extraRows = isDef ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;
