@@ -1224,6 +1224,7 @@
       ],
       "startMusic": [
         "tests/unit/audio-recovery.test.mjs",
+        "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs"
