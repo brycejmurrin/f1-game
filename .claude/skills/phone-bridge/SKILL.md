@@ -29,6 +29,8 @@ comments and answers each with an ` ```apex-result ` comment. Routes ruled out, 
   whose fenced JSON has `re` = your command's id (ignore other authors). `{ok:false,error}` is the answer: no resend.
 - A long command (`frames`, `wait`, a race build) answers late; read again after its duration, never a shell
   sleep loop. Nothing after a minute: the page is hidden or reloaded; ask Bryce.
+- Before quoting a number, read [`references/commands.md`](references/commands.md) §Cannot measure: a
+  backgrounded run still says `hidden: false`, and long tasks, heap and GPU memory read 0 or null on iOS.
 - After `reload`, `path` or `bench start` the page reloads and posts a NEW hello; commands sent before it are
   never replayed (the hello's time is the cutoff), so wait for it. The reloading command's own reply can be lost
   (`bench start` reloads before posting; `path`/`reload` race it): the new hello is the answer, so read what you need
