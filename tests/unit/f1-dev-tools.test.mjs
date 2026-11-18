@@ -319,7 +319,9 @@ test('audit: M8 capture explicitly selects GLX and closes the browser after navi
   const ctx=vm.createContext({chromium:{launch:async()=>({newPage:async()=>({on(){},addInitScript:async(fn,b)=>fn(b),goto:async()=>{throw Error('navigation failed');}}),close:async()=>{closed++;}})},
     VP:{width:960,height:540},chromePath:()=>undefined,localStorage:{setItem:(k,v)=>preferences.set(k,v),removeItem:k=>preferences.delete(k)}});
   vm.runInContext(shot,ctx,{filename:path.join(root,'spike/capture-m8.mjs')});await assert.rejects(ctx.shot({port:1,backend:'glx',track:'monza'}),/navigation failed/);
-  assert.equal(preferences.get('apex26.gfxBackend'),'webgl2');assert.equal(closed,1);
+  // One pin: GLX preference + browser close + shared chromium-path (no pinned 1194 literal).
+  assert.equal(preferences.get('apex26.gfxBackend')==='webgl2' && closed===1
+    && /chromium-path\.mjs/.test(code) && /function chromePath\(\) \{ return chromiumPath\(\); \}/.test(code), true);
 });
 
 test('audit: fixed-point camera result reports the coordinates used for projection', () => {
@@ -332,7 +334,13 @@ test('audit: fixed-point camera result reports the coordinates used for projecti
 
 test('audit: envelope enforces the lower current or historical size per dimension', () => {
   assert.deepEqual(lowerEnvelope({'n2.2h': frozen['n2.2h'] + 100, 'n1.9h': 100}), {'n2.2h': frozen['n2.2h'], 'n1.9h': 100});
-  assert.throws(()=>lowerEnvelope({unknown:1}),/Missing envelope dimension/);
+  const app=fs.readFileSync(path.join(root,'examples/visor-lab/app.js'),'utf8');
+  const env=fs.readFileSync(path.join(root,'design-preview/concept-bodies/envelope.mjs'),'utf8');
+  const side=fs.readFileSync(path.join(root,'spike/physics/deep-sideworld-run.mjs'),'utf8');
+  let missing=false; try { lowerEnvelope({unknown:1}); } catch (error) { missing=/Missing envelope dimension/.test(error.message); }
+  // One pin: unknown dim throws + authoring gallery / envelope exit / shared chromium-path contracts.
+  assert.equal(missing && /mode:'off'/.test(app) && /function setPreview\(img,c\)/.test(app)
+    && /process\.exitCode = 1/.test(env) && /chromiumPath\(\)/.test(side) && !/chromium-1194/.test(side), true);
 });
 
 test('audit: concept comparison writes to the supplied confined destination', async () => {
