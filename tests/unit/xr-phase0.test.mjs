@@ -1404,3 +1404,16 @@ test("XrUi.flashMessage disables the button for 3.5 s then restores the label; o
   await ctx.XrUi.onClick();
   assert.equal(el.textContent, "SWITCHING…");
 });
+
+test("XrSession.probe keeps a seeded supported answer until isSessionSupported resolves (#4354)", async () => {
+  const ctx = bootXr();
+  let answer;
+  ctx.navigator = { xr: { isSessionSupported: () => new Promise((r) => { answer = r; }) } };
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
+  assert.equal(ctx.XrSession.seed(true), true);
+  const pending = ctx.XrSession.probe();
+  assert.equal(ctx.XrSession.isSupported(), true, "a stored yes stays yes while the probe is in flight");
+  answer(false);
+  assert.equal(await pending, false);
+  assert.equal(ctx.XrSession.isSupported(), false, "the resolved answer wins");
+});
