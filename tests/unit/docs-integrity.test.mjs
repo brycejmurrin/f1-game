@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { BUILT_PATHS } from "../../tools/lib/generated-paths.mjs";
+import { BUILT_PATHS, ON_DEMAND_PATHS } from "../../tools/lib/generated-paths.mjs";
 import { expandScripts } from "../../tools/gen/gen-test-groups.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -169,6 +169,8 @@ function brokenPathsIn(file, re = PATH_RE) {
   if (file === "tools/manifest.cjs") text = stripMovedBlock(text);
   for (const m of new Set(text.match(re) || [])) {
     if (PLACEHOLDERS.has(m) || m.includes("<") || m.includes("*")) continue;
+    // An ON_DEMAND_PATHS file is real but gitignored; its reader builds it, so a fresh checkout lacks it until then.
+    if (ON_DEMAND_PATHS.includes(m)) continue;
     if (!fs.existsSync(path.join(ROOT, m))) bad.push(m);
   }
   return bad;

@@ -294,6 +294,7 @@ function save(options) {
   return career;
 }
 function saveStatus() { return Object.assign({}, lastSave); }
+const saveKept = () => lastSave.ok !== false && lastSave.durable !== false;
 // Wipes the LIVE slot only. The other five are untouched — deleting one career
 // must never be a way to lose the others.
 function clear() {
@@ -971,7 +972,12 @@ function research(opt) {
   career.money -= cost;
   career.owned.push(key);
   save();
-  return true;
+  // A refused or non-durable write must not leave a purchase the save does not hold (#5575).
+  if (saveKept()) return true;
+  career.money += cost;
+  const at = career.owned.lastIndexOf(key);
+  if (at >= 0) career.owned.splice(at, 1);
+  return false;
 }
 // Raise the fitted-cost cap one rung of BUDGET_MULT (the RAISE THE CAP card).
 // Deliberately a different sink from the factory: the factory cuts what FUTURE
@@ -983,7 +989,10 @@ function upgradeBudget() {
   career.money -= cost;
   career.budgetLvl++;
   save();
-  return true;
+  if (saveKept()) return true;
+  career.money += cost;
+  career.budgetLvl--;
+  return false;
 }
 
 const SPONSOR_KINDS = [

@@ -145,6 +145,13 @@ function load({ stored = {}, readyState = "complete", looks = null, secondary = 
     if (!stopped && !btn.disabled) handled.push(btn.id);
     return { stopped, prevented };
   }
+  function pointerDown(btn, extra = {}) {
+    const ev = {
+      type: "pointerdown", target: btn, pointerType: "touch", button: 0, isTrusted: true,
+      timeStamp: now, ...extra,
+    };
+    for (const l of listeners) if (l.type === "pointerdown" && l.capture) l.fn(ev);
+  }
   function pointerUp(btn, extra = {}) {
     const ev = {
       type: "pointerup", target: btn, pointerType: "touch", button: 0, isTrusted: true, ...extra,
@@ -155,7 +162,7 @@ function load({ stored = {}, readyState = "complete", looks = null, secondary = 
     M: vm.runInContext("PauseOpts", ctx),
     html, written, wired, painted, observers, timers, listeners, document, pausemenu, summary,
     pauseBody, bodyKids, built,
-    quit, restart, resume, press, pointerUp, handled,
+    quit, restart, resume, press, pointerDown, pointerUp, handled,
     advance: (ms) => { now += ms; },
     runTimers: () => { for (const t of [...timers.values()]) t.fn(); timers.clear(); },
   };
@@ -267,6 +274,7 @@ test("wiring waits for DOMContentLoaded while deferred scripts still run", () =>
   document._handlers.DOMContentLoaded();
   assert.equal(wired.size, 4);
   assert.equal(listeners.filter((l) => l.type === "click" && l.capture === true).length, 1, "ONE capture-phase listener on #pausemenu");
+  assert.equal(listeners.filter((l) => l.type === "pointerdown" && l.capture === true).length, 1, "ONE capture-phase pointerdown on #pausemenu");
   assert.equal(listeners.filter((l) => l.type === "pointerup" && l.capture === true).length, 1, "ONE capture-phase pointerup on #pausemenu");
 });
 
@@ -441,6 +449,64 @@ test("QF: tap 2 handled after a >5 s stall but only 400 ms after tap 1 confirms 
   h.advance(6000);
   h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
   h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+function flushConfirmTimers(h) {
+  for (const t of [...h.timers.values()]) if (t.ms === 0) t.fn();
+}
+
+test("stalled flush: a 401 ms pointerdown gap confirms when click stamps collapse and the second click never arrives", () => {
+  const h = load();
+  const T = 155326;
+  h.pointerDown(h.quit, { timeStamp: T });
+  h.advance(2);
+  h.pointerDown(h.quit, { timeStamp: T + 401 });
+  h.advance(2);
+  h.pointerUp(h.quit, { timeStamp: T + 1994 });
+  h.advance(1);
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: T + 1994 });
+  h.advance(4);
+  h.pointerUp(h.quit, { timeStamp: T + 1995 });
+  assert.deepEqual(h.handled, [], "the missing native click has not quit yet");
+  assert.equal(h.quit.textContent, "QUIT TO MENU", "pointerup disarms while it waits for the click");
+  flushConfirmTimers(h);
+  assert.deepEqual(h.handled, ["pm-quit"], "the fallback click quits once");
+  flushConfirmTimers(h);
+  assert.deepEqual(h.handled, ["pm-quit"], "the fallback does not quit twice");
+});
+
+test("stalled flush: a 200 ms pointerdown gap stays a ghost when the wall clock collapses", () => {
+  const h = load();
+  const T = 155326;
+  h.pointerDown(h.quit, { timeStamp: T });
+  h.advance(2);
+  h.pointerDown(h.quit, { timeStamp: T + 200 });
+  h.advance(2);
+  h.pointerUp(h.quit, { timeStamp: T + 1994 });
+  h.advance(1);
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: T + 1994 });
+  h.advance(4);
+  h.pointerUp(h.quit, { timeStamp: T + 200 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: T + 200 });
+  flushConfirmTimers(h);
+  assert.deepEqual(h.handled, []);
+  assert.ok(h.M.isArmed("pm-quit"));
+  assert.equal(h.quit.textContent, "TAP AGAIN");
+});
+
+test("pointerdown clocks: 400 ms confirms on the trusted click and the fallback timer does not second-quit", () => {
+  const h = load();
+  const T = 10000;
+  h.pointerDown(h.quit, { timeStamp: T });
+  h.pointerUp(h.quit, { timeStamp: T });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: T });
+  h.advance(400);
+  h.pointerDown(h.quit, { timeStamp: T + 400 });
+  h.pointerUp(h.quit, { timeStamp: T + 400 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: T + 400 });
+  assert.deepEqual(h.handled, ["pm-quit"]);
+  flushConfirmTimers(h);
   assert.deepEqual(h.handled, ["pm-quit"]);
 });
 
