@@ -9,7 +9,7 @@
 // the warm list (tlx.js _LATE_LIT / _LATE_FX, the #3640 pattern) can pre-mint it. Read NAMES and COUNTS: build ms on
 // Lavapipe are not a phone's.
 //
-//   node tools/perf/first-race-census.mjs [--track monza] [--tod day] [--lap 100] [--cam helmet] [--no-lavapipe] [--go] [--cpu]
+//   node tools/perf/first-race-census.mjs [--track monza] [--tod day] [--lap 100] [--cam helmet] [--no-lavapipe] [--go] [--cpu] [--wx-flip rain]
 //        [--ls "apex26.k=v ..."] [--json artifacts/perf/first-race-census.json]
 //
 // Output: `= first-race-census track=… api=… warm=… pre=N post=M sync=S misses=K dist=…m docs=D navigations=N` and one line per pipeline built
@@ -24,7 +24,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export function parseArgs(argv) {
-  const o = { track: "monza", tod: null, lap: 100, cam: "helmet", lavapipe: true, go: false, cpu: false, ls: [], json: "artifacts/perf/first-race-census.json" };
+  const o = { track: "monza", tod: null, lap: 100, cam: "helmet", lavapipe: true, go: false, cpu: false, wxFlip: null, ls: [], json: "artifacts/perf/first-race-census.json" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], v = argv[i + 1];
     if (a === "--track") { o.track = String(v); i++; }
@@ -34,6 +34,7 @@ export function parseArgs(argv) {
     else if (a === "--no-lavapipe") o.lavapipe = false;
     else if (a === "--go") o.go = true;
     else if (a === "--cpu") o.cpu = true;
+    else if (a === "--wx-flip") { o.wxFlip = String(v); i++; }
     else if (a === "--ls") { o.ls = String(v || "").split(/\s+/).filter(Boolean).map((kv) => { const k = kv.indexOf("="); return k > 0 ? [kv.slice(0, k), kv.slice(k + 1)] : null; }).filter(Boolean); i++; }
     else if (a === "--json") { o.json = String(v); i++; }
     else throw new Error("unknown flag: " + a);
@@ -130,6 +131,7 @@ export function summarize(r, o) {
     ` docs=${docs.length} navigations=${navs}` +
     // matMiss / matEvict deltas over the lap: an evicted warm material is re-minted as a NEW identity, so its pipelines build again.
     (r.pre && r.pre.mat && post.mat ? ` matMiss=+${post.mat[1] - r.pre.mat[1]} matEvict=+${post.mat[2] - r.pre.mat[2]} (pre ${r.pre.mat.join("/")})` : ""));
+  if (r.wxFlipAt != null) lines.push(`  wx-flip ${o.wxFlip} at ${r.wxFlipAt}ms: ${late.filter((p) => p.at >= r.wxFlipAt).length} pipelines built at or after it`);
   if (hookLost) lines.push("  hookLost: the final read found no window.__frc (the document was replaced and the hook did not re-install); navigations: " +
     JSON.stringify(r.navigations || []));
   for (const p of groups) lines.push(`  +${((p.at - (p.lightsAt || p.at)) / 1000).toFixed(1)}s x${p.n} ${p.state} key=${p.key || "-"} ${p.obj} ${p.mat} ` +
@@ -193,6 +195,12 @@ async function run(o) {
     out.pre = await page.evaluate(() => { let ms = null; try { ms = GLX.__tlx.memState(); } catch (_) { /* none */ }
       return { matMissKeys: ms && ms.matMissKeys, mat: ms && [ms.matHit, ms.matMiss, ms.matEvict], warm: ms && ms.warm }; });
     await page.evaluate(() => window.__lfDrive.start());
+    // --wx-flip <weather>: drive half the distance in the entry weather, flip live (__apex.weather), drive the rest.
+    // Every pipeline stamped at or after out.wxFlipAt is one the first wet (or dry) frames compiled mid-race.
+    if (o.wxFlip) {
+      await page.waitForFunction((m) => window.__lfDrive.dist >= m, o.lap * 25, { polling: 2000, timeout: o.lap * 3000 }).catch(() => {});
+      out.wxFlipAt = await page.evaluate((w) => { const t = Math.round(performance.now()); window.__apex.weather(w); return t; }, o.wxFlip);
+    }
     await page.waitForFunction((m) => window.__lfDrive.dist >= m, o.lap * 50, { polling: 2000, timeout: o.lap * 6000 }).catch(() => {});
     await page.evaluate(() => window.__lfDrive.stop());
     if (o.cpu) { mkdirSync("artifacts/profiles", { recursive: true });
