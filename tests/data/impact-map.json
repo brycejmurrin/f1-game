@@ -14563,6 +14563,9 @@
       "setAuto": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "setFollow": [
+        "tests/unit/real-replay-vm.test.mjs"
+      ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",
