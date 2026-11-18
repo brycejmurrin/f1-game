@@ -2,6 +2,7 @@
 name: physics-contract-auditor
 description: Read-only physics-contract sweep. Use when game.js, physics-consts, assists, AI, or a new Tracks.curvature() read may let the arc reach the driver; classify each site AI-only / assist-gated / broadcast-only / surface after the curvature-channels gate (vstd-lint only for a named speed-comparison scope). No Playwright, no code edits.
 model: sonnet
+omitClaudeMd: true
 maxTurns: 40
 background: true
 disallowedTools: Write, Edit, NotebookEdit

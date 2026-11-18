@@ -794,7 +794,13 @@ export class Lsp {
       if (line > count) throw Error(`${f} has ${count} line${count === 1 ? "" : "s"}; line ${line} is out of range`);
       const len = lines[line - 1].replace(/\r$/, "").length;
       if ((column || 1) > len + 1) throw Error(`line ${line} of ${f} has ${len} character${len === 1 ? "" : "s"}; column ${column} is past its end`);
-      return { cands: [{ file: f, line0: line - 1, col0: (column || 1) - 1 }], parts: [] };
+      // Snap to the identifier's first character: a column inside a name (or one past its end) asks about that
+      // name. Without it the zero notes cut the name from the column ("ineCells") and lost the text-match warning.
+      const ln = lines[line - 1], word = (ch) => /[\w$]/.test(ch || "");
+      let col0 = Math.max(0, (column || 1) - 1);
+      if (!word(ln[col0]) && word(ln[col0 - 1])) col0--;
+      while (col0 > 0 && word(ln[col0]) && word(ln[col0 - 1])) col0--;
+      return { cands: [{ file: f, line0: line - 1, col0 }], parts: [] };
     }
     if (!symbol) throw Error("pass symbol (Name or Head.member) or file+line[+column]");
     const parts = symbol.split("."), name = parts.at(-1), cands = [];
