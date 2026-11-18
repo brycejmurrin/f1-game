@@ -50,10 +50,14 @@ test('wide numeric trees and huge property names remain bounded', () => {
   assert.ok(JSON.stringify(summarizeOutput(exhausted, { level: 'diagnostic' })).length < 25000);
 });
 
-test('full MCP preserves exact result identity while compact mirrors artifact envelope in text', (t) => {
+test('full MCP keeps the result untouched plus its artifact receipt while compact mirrors artifact envelope in text', (t) => {
   const root = fixture(t);
   const result = { content: [{ type: 'text', text: JSON.stringify({ status: 'failed', error: 'broken', count: 999, rows: Array(1000).fill('r') }) }, { type: 'image', mimeType: 'image/png', data: 'BASE64'.repeat(100000) }], structuredContent: { verdict: 'unknown' }, isError: true, custom: 'kept in artifact' };
-  assert.equal(presentMcpResult(result, { root, level: 'full' }), result);
+  const { _meta, ...full } = presentMcpResult(result, { root, level: 'full' });
+  assert.deepEqual(full, result);
+  assert.equal(full.content, result.content);
+  assert.equal(_meta['apex/agent-output'].outputLevel, 'full');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, _meta['apex/agent-output'].artifact.path))), result);
   const compact = presentMcpResult(result, { root, tool: 'probe' });
   assert.equal(compact.isError, true);
   assert.deepEqual(JSON.parse(compact.content[0].text), compact.structuredContent);
