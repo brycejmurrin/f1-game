@@ -1697,15 +1697,15 @@
       "track": "madrid",
       "name": "Monumental Stands",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.759723,
+      "frac": 0.460588,
       "target": [
-        -154.36,
-        12.25,
-        -80
+        422.15,
+        18.53,
+        871.12
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 28.1,
-      "viewDistanceM": 28.1,
+      "nearestRoadDistanceM": 36.3,
+      "viewDistanceM": 36.3,
       "source": "tests/data/landmarks/madrid.json; js/circuits/scenery/madrid.js"
     },
     {

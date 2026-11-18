@@ -23,7 +23,7 @@ Bright, dry Spanish midday — hard sun, crisp shadows, minimal fog (a faint dus
 - Barriers/concrete: pale grey `[0.74, 0.75, 0.77]`
 
 ## 3. Elevation
-~26 m total change. Generally rolling; the urban mid-section climbs and dips ("El Búnker": ~8% rise then a sharp ~5% drop into a right). High point around the elevated urban sector near **s≈0.35–0.45**; the steepest drop follows just after (**s≈0.45–0.55**). The banked Monumental loop sits lower and flatter at the northern end (**s≈0.70–0.85**).
+~26 m total change. Generally rolling; the urban mid-section climbs and dips ("El Búnker": ~8% rise then a sharp ~5% drop into a right). High point around the elevated urban sector near **s≈0.35–0.45**; the steepest drop follows just after (**s≈0.45–0.55**). La Monumental (Curve 12) is built at **s≈0.42–0.50**, straight after the Curve 10/11 chicane, on the descent from that high point.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Dist | Landmark — box-modelling note |
@@ -33,10 +33,10 @@ Bright, dry Spanish midday — hard sun, crisp shadows, minimal fog (a faint dus
 | 0.08 | both | mid | T1 chicane + **motorway overpass** — pale concrete portal deck cars pass under |
 | 0.20 | L | far | Dry plains scrub — flat straw-tan ground plane, sparse olive shrub cubes |
 | 0.35 | both | close | Elevated urban sector — grey concrete deck/wall boxes, ramp up |
-| 0.50 | R | close | El Búnker drop — tall grey retaining-wall boxes + bunker-slot band |
+| 0.38 | R | close | El Búnker — tall grey retaining-wall boxes + bunker-slot band (built 0.35–0.405, ends at the chicane) |
 | 0.62 | L | far | Sierra de Guadarrama — hazy blue-grey ridge boxes on the horizon |
-| 0.75 | both | close | **La Monumental** banked curve — continuous white nested bowl + flood ring |
-| 0.80 | both | mid | Monumental flood masts — tall dual-arm cool-white poles on the rim |
+| 0.46 | both | close | **La Monumental** (Curve 12) banked right — continuous white nested bowl + flood ring; hero stand inside (+1) |
+| 0.42–0.50 | both | mid | Monumental flood masts — tall dual-arm cool-white poles on the rim |
 | 0.84 | both | mid | **Valdebebas pelouse** — open straw runoff gap (no city facade) post-bowl |
 | 0.90 | R | mid | Modern IFEMA grandstands — stepped grey seating boxes, white canopy roofs |
 | 0.96 | L | mid | Valdebebas plains edge — straw-tan ground, low scrub, fence-line boxes |
@@ -107,3 +107,20 @@ Metropolitano (~3 km south) stays off the skyline — too far.
 - https://www.motorsportmagazine.com/articles/single-seaters/f1/madrings-la-monumental-the-banked-corner-thats-unlike-anything-else-in-f1/
 - https://www.tracksideseats.com/f1/guides/madring-grandstand-guide (grandstand numbering — UNCERTAIN vs turns)
 - https://www.ifema.es/en (IFEMA pavilion campus identity)
+
+## Placement fix 2026-11-18 (#5316 CIRC2-02)
+
+La Monumental, its 13.5° (24 %) bank and the whole bowl dressing stood on an
+ordinary 67° LEFT at s≈0.75 (built 3920–4025 m). madring.com/en/circuit puts
+Curve 12 (547.82 m, 24 %) straight after the Curve 10 (right) / 11 (left)
+chicane and before Curve 13, a slow ~84° corner braked from 300 km/h;
+formula1.com's guide says the same ("a chicane paves the way for La
+Monumental"). On this trace that sequence is the right at 0.378, the left at
+0.398, the 207° right built 2246–2666 m (0.4205–0.4991) and the 82° left at
+0.572 after a 344 m run, so the bowl is now there (`bankZones[0]` frac 0.456,
+widthM 548; inside = side +1). The engine paints the bank as a cosine window:
+13.5° mid-arc, about 9–11° at the arc's quarter points. Left for later: the
+`turns` list still splits Curve 12 into two apexes (T10 0.433 / T11 0.447) and
+numbers the corners after it one low; the 18 m elevation hump peaks at 0.40,
+not at Curve 7.
+
