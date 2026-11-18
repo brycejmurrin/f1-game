@@ -352,9 +352,8 @@ test("two PRs each at the assert-match ceiling alone are over it on the merge re
     for (const rel of [`${UNIT}/assert-match-ratchet.test.mjs`, "tools/check/ratchets.mjs"]) write(W, rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
     write(W, "tests/data/ratchets.json", JSON.stringify({ files: {}, tree: { assertPins: 3 } }) + "\n");
     write(W, `${UNIT}/base.test.mjs`, pins(2));
-    // This fixture isolates ratchet composition; provide a valid scenery catalog for the preceding gen row.
-    write(W, "tools/shot/scenery-source-hash.cjs", `module.exports = { scenerySourceDigest: () => "${"a".repeat(64)}" };\n`);
-    write(W, "tools/shot/scenery-locations.json", JSON.stringify({ sourceDigest: "a".repeat(64) }));
+    // This fixture isolates ratchet composition; a scenery catalog build that succeeds stands in for the preceding gen row.
+    write(W, "tools/gen/ensure-built.mjs", "process.exit(0);\n");
     git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base: 2 pins, ceiling 3"); git(W, "push", "-q", "origin", "deploy-x");
     for (const [name, file] of [["pr1", "one.test.mjs"], ["pr2", "two.test.mjs"]]) {   // each adds one pin: 3 of 3 alone
       git(W, "checkout", "-q", "-b", name, "deploy-x"); write(W, `${UNIT}/${file}`, pins(1));
@@ -802,8 +801,19 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
   assert.deepEqual(jobsWhere(writes), ["post", "retry", "sweep"]);
-  assert.deepEqual(jobsWhere(usesSecret), ["post"], "LAND_TOKEN lives in post alone (the sync job left with AUTO-SYNC, 2026-11-03)");
-  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
+  assert.deepEqual(jobsWhere(usesSecret), ["post", "train"], "LAND_TOKEN lives in post and the merge train (the sync job left with AUTO-SYNC, 2026-11-03)");
+  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate", "train"], "only the read-only legs and the train check out or run code");
+  // The merge train holds LAND_TOKEN, so it runs only the DEPLOY branch's gate closure (protected paths): no PR
+  // checkout, no install, one node script. Car heads are fetched as git objects and folded with merge-tree.
+  const train = LAND.jobs.train;
+  assert.deepEqual(train.permissions, { contents: "read", issues: "read" }, "the train writes only through LAND_TOKEN");
+  const checkout = train.steps.find((st) => /actions\/checkout@/.test(st.uses || ""));
+  assert.equal(checkout.with?.ref, "${{ env.DEPLOY_BRANCH }}");
+  assert.equal(checkout.with?.["persist-credentials"], false);
+  const script = train.steps.map((st) => st.run || "").join("\n");
+  assert.deepEqual(script.split(/\s+/).filter((w) => w === "npm" || w === "npx"), [], "no install: the gate closure needs node builtins only");
+  assert.deepEqual(script.match(/\bnode\s+\S+/g), ["node tools/ci/merge-train.mjs"]);
+  assert.ok(isProtectedConfigPath("tools/ci/merge-train.mjs"), "the code the token meets is a protected path");
   const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
   assert.deepEqual(LAND.jobs["land-gate"].permissions, readOnly);
   assert.deepEqual(LAND.jobs["trusted-rows"].permissions, readOnly);
