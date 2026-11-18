@@ -394,7 +394,9 @@
         lampCells.push({ min: bk.mn.slice(), max: bk.mx.slice(), gx, gz });
         const mk = ChunkBins.key(Math.floor(gx / mergeK), Math.floor(gz / mergeK));
         let m = merged.get(mk);
-        if (!m) { m = { parts: [], n: 0, mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity], gx, gz }; merged.set(mk, m); }
+        if (!m) { m = { parts: [], cells: [], n: 0, mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity], gx, gz }; merged.set(mk, m); }
+        // MIRROR FINE CULL (fineCells below): where this cell's indices sit in the block's index, with the cell's own box.
+        m.cells.push({ o: m.n, n: bk.idx.length, min: lampCells[lampCells.length - 1].min, max: lampCells[lampCells.length - 1].max });
         m.parts.push(bk.idx); m.n += bk.idx.length;
         for (let a = 0; a < 3; a++) { if (bk.mn[a] < m.mn[a]) m.mn[a] = bk.mn[a]; if (bk.mx[a] > m.mx[a]) m.mx[a] = bk.mx[a]; }
       }
@@ -403,7 +405,7 @@
         const idx = new IndexArray(m.n);
         let o = 0;
         for (const part of m.parts) for (let i = 0; i < part.length; i++) { if ((i & 8191) === 0) yield; idx[o++] = part[i]; }
-        buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz });
+        buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz, cells: m.cells.length > 1 ? m.cells : null });
       }
     }
     // DUST MERGE (needs mergeK > 1, so tlxChunkMerge=1 is its off-switch too). Centroid binning leaves cells
@@ -504,7 +506,9 @@
         for (let i = 0; i < idx.length; i++) { if ((i & 8191) === 0) yield; idx[i] = bk.idx[i]; }
       }
       count += idx.length;
-      chunks.push({ idx, min: bk.mn, max: bk.mx, gx: bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz: bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key) });
+      const out = { idx, min: bk.mn, max: bk.mx, gx: bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz: bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key) };
+      if (bk.cells && idx === bk.idx) out.cells = bk.cells;   // a block the dust merge left alone (a dust group has no cells: <= 384 triangles)
+      chunks.push(out);
       yield;
     }
     return { version: 1, config, attributes, chunks, lampCells, cellSize: cell, count };
@@ -574,7 +578,7 @@
         if (!prepared.chunks) return { __tlx: true, chunked: true, geo: makeGeo(prepared.idx), chunks: null, count: prepared.count };
         const chunks = prepared.chunks.map(c => {
           const geo = makeGeo(c.idx, c.min, c.max);
-          return { geo, count: c.idx.length, min: c.min, max: c.max, gx: c.gx, gz: c.gz, wrap: { __tlx: true, geo } };
+          return { geo, count: c.idx.length, min: c.min, max: c.max, gx: c.gx, gz: c.gz, cells: c.cells || null, wrap: { __tlx: true, geo } };
         });
         if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
         if (!data._keepPositions) data.pos = data.idx = null;
@@ -629,7 +633,7 @@
       const g = s.geo || (s.geo = new THREE.BufferGeometry());
       if (!g.boundingSphere) {
         g.boundingSphere = new THREE.Sphere();
-        const src = vis[0].geo;
+        const src = mesh.attrs || vis[0].geo;   // fineCells: a cell's geometry carries its index only
         for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
       }
       let tot = mesh._tlxIdxTotal;
@@ -725,6 +729,31 @@
       ct.x = cx; ct.y = cy; ct.z = cz;
       bs.radius = Math.hypot(x1 - cx, y1 - cy, z1 - cz) || 0;
       return g;
+    }
+    // MIRROR FINE CULL (docs/notes/RENDER-FRAME-COST-2026-11-18.md). A draw chunk is a k x k block of cells, culled
+    // on the block's box: one cell inside the mirror's draw-distance cap drew the whole block (monaco, phone tier:
+    // 96,079 mirror triangles into 138x39, 24,510 when each cell is culled on its own box). fineCells(mesh) is the
+    // same record as its cells: a list cull() and mergeVisible() take in place of mesh.chunks, built on first use.
+    // Each cell's index is a VIEW of its block's index (no copy) on a geometry that is never drawn itself: only
+    // mergeVisible reads it, so it holds no GPU buffer and no RenderObject, and needs no dispose. A record whose
+    // blocks carry no cells (merge factor 1, a prepared build from before this field) returns null.
+    function fineCells(mesh) {
+      if (!mesh || !mesh.chunks) return null;
+      if (mesh._tlxFine !== undefined) return mesh._tlxFine;
+      let any = false;
+      const list = [];
+      for (let i = 0; i < mesh.chunks.length; i++) {
+        const ch = mesh.chunks[i], cs = ch.cells, ix = ch.geo && ch.geo.index;
+        // An uncelled block rides as its own entry (not the chunk object: mergeVisible stamps _tlxCi per list).
+        if (!cs || !ix || !ix.array || ix.array.length < ch.count) { list.push({ geo: ch.geo, count: ch.count, min: ch.min, max: ch.max }); continue; }
+        any = true;
+        for (let k = 0; k < cs.length; k++) {
+          const c = cs[k], geo = new THREE.BufferGeometry();
+          geo.setIndex(new THREE.BufferAttribute(ix.array.subarray(c.o, c.o + c.n), 1));
+          list.push({ geo, count: c.n, min: c.min, max: c.max });
+        }
+      }
+      return (mesh._tlxFine = any ? { chunks: list, _tlxMv: null, _tlxIdxTotal: 0, attrs: mesh.chunks[0].geo } : null);
     }
     function cull(mesh, vp, eye, cullDist, fog) {
       const chunks = mesh && mesh.chunks;
@@ -855,7 +884,10 @@
         releaseGeometry(g);
         if (!freedGeos) owned.push(g);   // batched: tlx.js flushChunkedOwnership disposes the whole batch
       };
-      const mv = mesh._tlxMv;
+      const fine = mesh._tlxFine;   // fineCells' list: its merge slots are freed like the record's own
+      mesh._tlxFine = undefined;
+      const mv = fine && fine._tlxMv ? (mesh._tlxMv || []).concat(fine._tlxMv) : mesh._tlxMv;
+      if (fine) { fine._tlxMv = null; fine.chunks = null; fine.attrs = null; }
       if (mv) {
         mesh._tlxMv = null;
         for (let i = 0; i < mv.length; i++) {
@@ -884,7 +916,7 @@
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
-    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free, disposeShared, mergeVisible };
+    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free, disposeShared, mergeVisible, fineCells };
   }
 
   // THE ROAD SPLIT (B·H10, docs/notes/LIVE-FRAME-H10-2026-10-20.md). TLX draws the road as ONE mesh

@@ -2665,17 +2665,22 @@ jobs:
     # LANES (2026-10-15): on a PULL REQUEST every leg joins one of LANES
     # (tools/ci/select-specs.mjs) fleet-wide concurrency groups with
     # `queue: max`, so at most that many selected legs run at once across every
-    # ready PR and the rest wait FIFO without holding a runner or being
+    # ready PR and the rest wait without holding a runner or being
     # cancelled (the workflow-level per-PR cancel still replaces a superseded
-    # run's queued legs). A run's own legs cycle through the lanes from a start
+    # run's queued legs). The docs order a queue by when each job started
+    # waiting and add "ordering is not guaranteed": plan on no order (#5536). A run's own legs cycle through the lanes from a start
     # rotated by run number (laneBase), so they never queue behind each other
     # and runs spread over every lane. The train, the nightly and a dispatch get
     # a group of their own per leg (`run_id` + job index): a gate never waits
-    # behind PR legs. `queue: max` cannot be combined with cancel-in-progress
+    # behind PR legs. So does every leg of a SMALL PR plan (#5536, 2026-11-18):
+    # select-specs gives a plan of at most SMALL_RUN_LEGS (2) legs lane -1, so a
+    # one-leg fix pays the runner queue, not the wide runs filling every lane
+    # (measured: 1-2-leg runs, 0.7 % of leg-minutes, waited p90 62.6 min).
+    # `queue: max` cannot be combined with cancel-in-progress
     # in one block, and none is set here.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
     concurrency:
-      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
+      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '' && matrix.lane >= 0) && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
       queue: max
     timeout-minutes: ${{ matrix.timeout }}
     # playwright.config.js's 45-min CI globalTimeout must never undercut the plan's own per-shard cap (nightly shards run 60).

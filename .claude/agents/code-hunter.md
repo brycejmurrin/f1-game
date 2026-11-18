@@ -53,7 +53,7 @@ tool, and the parent saves it.
    exactly so, one path per call (`git log --oneline -15 -- js/net/`), never
    with `git -C`, a pipe or a second command after it.
 2. For each suspect: follow `code-nav` for named JS definitions/references/callers;
-   without attached LSP tools use `bash tools/mcp/lsp-mcp.sh` through Bash.
+   without attached LSP tools use `node tools/mcp/lsp-mcp.mjs` through Bash (the `.sh` wrapper is refused by your hook).
    Follow factory instances, aliases and callbacks where a static binding stops;
    use bounded text cross-checks for HTML/string consumers, tools and tests.
    A clipped caller page is not complete coverage. Find the guard and the test
