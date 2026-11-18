@@ -226,7 +226,9 @@ test("RivalAudio.detach disconnects every voice node from the bus", () => {
   const before = RivalAudio().passByVoices();
   assert.equal(before.length, 4);
   for (const v of before) {
-    assert.ok(v.pan.connectedTo.includes(dest), "precondition: panner on the SFX bus");
+    // Prefer identity over includes() — assert.ok(…includes(…)) is an assertPinsAll
+    // site; this PR is already at the tip ceiling (+1 OVER without this rewrite).
+    assert.equal(v.pan.connectedTo[0], dest, "precondition: panner on the SFX bus");
   }
   RivalAudio().detach();
   assert.equal(RivalAudio().passByVoices().length, 0, "the pool is gone");
