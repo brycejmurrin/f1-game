@@ -582,8 +582,8 @@ test("a fire that returns 200 without a session id is still claimed (no session 
   const r = await applyPlan(p, { api, config: cfg(), log: (s) => out.push(s), now: NOW, fire: true, env: { WORKER_FIRE_URL: "https://x/fire", WORKER_FIRE_TOKEN: "t" }, fetchImpl: noSession });
   assert.equal(r.fired, 1);
   const claim = `dispatch: launched claude:[Worker] #10 Task 10 for #10 at ${ISO}`;
-  assert.ok(writes.includes(`POST issues/10/comments ${claim}`), writes.join("\n"));
-  assert.ok(out.includes("= launched ISSUE 10: 200 without a claude_code_session_id — claimed without a session id"), out.join("\n"));
+  assert.deepEqual(writes.filter((w) => w.startsWith("POST issues/10/comments")), [`POST issues/10/comments ${claim}`]);
+  assert.deepEqual(out.filter((l) => l.startsWith("= launched")), ["= launched ISSUE 10: 200 without a claude_code_session_id — claimed without a session id"]);
   const next = planDispatch(state({ issues: [board(), issue(10, ["ready"], { comments: [{ author: "github-actions[bot]", body: claim, created_at: ISO }] })] }), cfg(), NOW);
   assert.equal(next.launches.length, 0, "the claim without a session is a live claim");
 });
