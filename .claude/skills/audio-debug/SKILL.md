@@ -36,7 +36,7 @@ GameAudio.centroidHz()              // spectral centroid of live engine
 ```sh
 node tools/ci/pick-tests.mjs js/audio/engine.js   # the groups an audio edit needs (the PR runs them)
 node --test tests/unit/audio-tune.test.mjs        # one Node file locally; CI runs the whole `npm run test:audio-unit`
-node tools/ci/remote-group.mjs ui                 # on the PUSHED branch: the browser group holding the audio specs (`test:ui`)
+# the audio specs are browser group `ui` (`test:ui`): the PR's own CI runs them; a whole group is Bryce's opt-in
 ```
 
 No local browser runs (AGENTS.md rule 5): the audio specs (`tests/specs/audio-smoke.spec.js`,

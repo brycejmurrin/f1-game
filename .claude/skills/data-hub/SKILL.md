@@ -61,6 +61,6 @@ Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,
 `data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The browser proof is
 `tests/specs/data-lifecycle.spec.js` / `telemetry-compare.spec.js`, which ride the `hooks` group: never run them
-locally — the PR shard runs them, or `node tools/ci/remote-group.mjs hooks` on the pushed branch.
+locally — the PR shard runs them (a whole group, `remote-group.mjs hooks`, is Bryce's opt-in).
 `node tools/ci/pick-tests.mjs <paths>` names the rest (its `lifecycle-unit` is not the hub spec: see
 `tests/groups.json` `test:lifecycle-unit`).
