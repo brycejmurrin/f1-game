@@ -191,15 +191,30 @@ function captureConsole(page) {
 }
 
 const pwTest = base.extend({
-  context: async ({ context }, use, testInfo) => {
-    await installMocks(context, shippedDefaults(testInfo));
-    context.on("page", captureConsole);
-    for (const p of context.pages()) captureConsole(p);
-    if (COVERAGE) {
-      context.on("page", (p) => { startCoverage(p); });
-      for (const p of context.pages()) await startCoverage(p);
+  // OWN BROWSER PER TEST (#5599): `test.use({ ownBrowser: true })` gives each test a Chromium of its own, launched
+  // through the worker's `playwright` (which applies the project's context options to every newContext) with the
+  // project's launchOptions, and closed at teardown. Why: a page closed while its GPU work is still in flight (a TLX
+  // race closed at the results screen) leaves the BROWSER's GPU process busy finishing it, and the next page's first
+  // synchronous GPU call (requestAdapter, getContext) blocks its main thread until it does: measured 18-20 s on one
+  // local core (llvmpipe), ~70 s on CI, where boot() then ran out of BOOT_MS with every timer frozen. Closing the
+  // browser kills that GPU process instead (283 ms close + 52 ms launch, next boot 4.9 s). The shared-browser context
+  // below is still created, idle, as the dependency chain needs it.
+  ownBrowser: [false, { option: true }],
+  context: async ({ context: shared, ownBrowser, playwright, browserName, launchOptions }, use, testInfo) => {
+    const own = ownBrowser ? await playwright[browserName].launch(launchOptions) : null;
+    const context = own ? await own.newContext() : shared;
+    try {
+      await installMocks(context, shippedDefaults(testInfo));
+      context.on("page", captureConsole);
+      for (const p of context.pages()) captureConsole(p);
+      if (COVERAGE) {
+        context.on("page", (p) => { startCoverage(p); });
+        for (const p of context.pages()) await startCoverage(p);
+      }
+      await use(context);
+    } finally {
+      if (own) await own.close().catch(() => {});
     }
-    await use(context);
   },
 
   /**
