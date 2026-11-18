@@ -275,6 +275,82 @@ test('audit: asset evidence identifies redirects and the final resource', async 
   assert.equal(r.results[0].requestedUrl,'http://localhost/initial.js');assert.equal(r.results[0].redirected,true);
 });
 
+test('audit: checkAssets caps response bodies and diagnose keeps page identity when inspect fails', async () => {
+  let cancelled = 0;
+  const oversized = {
+    url: 'http://localhost/huge.js', redirected: false, ok: true, status: 200,
+    // No Content-Length: prove the streamed byte cap, not only the header short-circuit.
+    headers: { get() { return null; } },
+    body: {
+      getReader() {
+        return {
+          async read() { return { done: false, value: new Uint8Array(2048) }; },
+          async cancel() { cancelled++; },
+          releaseLock() {},
+        };
+      },
+      async cancel() { cancelled++; },
+    },
+    arrayBuffer: async () => { throw new Error('must not buffer an oversized body'); },
+  };
+  const ctx = vm.createContext({
+    globalThis: null, window: null, URL, AbortController, setTimeout, clearTimeout, performance, crypto: webcrypto,
+    location: { href: 'http://localhost/page' },
+    document: { visibilityState: 'visible', readyState: 'interactive', querySelector() { return null; } },
+    fetch: async () => oversized,
+    __apex: {
+      agentHelp() { return { hooks: ['info'] }; },
+      info() { throw new Error('boot incomplete'); },
+      camera() { return { mode: 'chase', modes: ['chase'] }; },
+      cameraState() { return {}; }, camState() { return {}; }, viewState() { return {}; },
+      diag() { return { env: {}, gl: {} }; }, gpuTimer() { return {}; },
+    },
+  });
+  ctx.globalThis = ctx; ctx.window = ctx;
+  vm.runInContext(source, ctx, { filename: path.join(root, 'plugins/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js') });
+  const capped = await ctx.F1Dev.checkAssets(['/huge.js'], { maxBytes: 4096 });
+  assert.equal(capped.results[0].error, 'too_big');
+  assert.equal(capped.results[0].maxBytes, 4096);
+  assert.ok(cancelled >= 1, 'oversized bodies must cancel the stream');
+  await assert.rejects(ctx.F1Dev.checkAssets(['/huge.js'], { maxBytes: 100 }), /maxBytes/);
+
+  const diagnostic = ctx.F1Dev.diagnose();
+  assert.equal(diagnostic.page.url, 'http://localhost/page');
+  assert.equal(diagnostic.inspection.unavailable, 'boot incomplete');
+  assert.equal(diagnostic.manifest.hooks[0], 'info');
+});
+
+test('audit: restore bounds a hung race() start with timeoutMs', async () => {
+  const g = await createGame({ track: 'monza', carMeshes: false });
+  let releaseHang;
+  try {
+    vm.runInContext(source, g.ctx);
+    g.apex.go(); g.apex.jump(0.2, 60, 0);
+    const scene = plain(g.ctx.F1Dev.capture());
+    const hang = new Promise((resolve) => { releaseHang = resolve; });
+    g.apex.race = () => hang;
+    g.apex.info = () => ({ track: 'spa', state: 'title' });
+    // game-vm queues setTimeout and does not auto-fire; flush all so withTimeout can reject.
+    // Attach rejection handling before flushTimers so the test runner does not see an unhandledRejection.
+    let restoreError = null;
+    let restoreOk = false;
+    const pending = g.ctx.F1Dev.restore(scene, { timeoutMs: 100 }).then(
+      () => { restoreOk = true; },
+      (error) => { restoreError = error; },
+    );
+    for (let i = 0; i < 40 && !restoreOk && !restoreError; i++) {
+      g.flushTimers();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    await pending;
+    assert.equal(restoreError && restoreError.message, 'Scene race() timed out before the grid was ready.');
+    assert.equal(restoreOk, false);
+  } finally {
+    if (releaseHang) releaseHang();
+    g.close();
+  }
+});
+
 test('audit: design lab skips invalid entries, derives counts and retains existing cards on load-more', async () => {
   class Element {
     constructor(){this.children=[];this.listeners={};this.classList={add(){},toggle(){}};this.dataset={};}
