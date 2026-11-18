@@ -1,1 +1,0 @@
-Fixed: In rain, the sharp sun highlight on puddles now follows the raindrop ripples on the default renderer (and the opt-in WebGPU one), matching the WebGL2 fallback. It is a subtle sparkle; the broad sun reflection on puddles already rippled (#5777).
