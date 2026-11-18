@@ -128,6 +128,16 @@ test("1.0 s is not 'less than one second', and a closed detection (SC, low grip)
   }
 });
 
+test("a missing gap (null/NaN) does not earn — null < 1 is true in JS", () => {
+  const { OM } = load();
+  const t = track();
+  for (const gap of [null, undefined, NaN]) {
+    const c = car({ s: 4490 }); OM.reset(c); OM.lines(c, t, gap, true);
+    c.s = 4510; OM.lines(c, t, gap, true);
+    assert.equal(c.otEarned, false, `gap ${gap} must not earn`);
+  }
+});
+
 test("a car shoved back over the line and re-crossing is neither re-granted nor stripped", () => {
   const { OM } = load();
   const t = track(), c = car({ s: 4490, lap: 4 });
