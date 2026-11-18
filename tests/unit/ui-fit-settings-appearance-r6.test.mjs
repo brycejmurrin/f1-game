@@ -126,5 +126,6 @@ test("mobile-ui: Settings sheet-w is 1020; wide compact-at is 620", () => {
   const settings = fs.readFileSync(path.join(ROOT, "css/settings.css"), "utf8");
   const sRules = cssRules(settings);
   assert.equal(decl(sRules, "#pmsettings", "--sheet-w"), "1020px");
-  assert.equal(decl(sRules, '#pmsettings-inner:not([data-shape="tall"])', "--compact-at"), "620px");
+  assert.equal(decl(sRules, 'body:not(.desktop) #pmsettings-inner:not([data-shape="tall"])', "--compact-at"), "620px");
+  assert.equal(decl(sRules, '#pmsettings-inner:not([data-shape="tall"])', "--compact-at"), null, "desktop keeps the 480 compact-at");
 });

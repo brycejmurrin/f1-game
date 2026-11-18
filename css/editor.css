@@ -729,9 +729,10 @@
   #trackdesigner [data-role="workspace-status"] .td-msg { min-width: 0; }
 }
 @media (max-width: 760px) and (orientation: portrait) {
-  /* Bias height to the inspector: map 1.3fr left SHAPE / CORNERS under the
-     SAVE·RACE·TIME TRIAL foot on 393×852 (measured hunt editor-photo). */
-  #trackdesigner .td-body { grid-template-rows: auto minmax(0, 1fr) minmax(0, 1.35fr); }
+  /* Map keeps 1.3fr: a 1fr map left the profile canvas overhanging .td-stage at
+     390x844 (track-designer.spec "profile must fit its stage"). The rail's
+     scroll-padding-bottom keeps the last chips clear of the foot instead. */
+  #trackdesigner .td-body { grid-template-rows: auto minmax(0, 1.3fr) minmax(0, 1fr); }
 }
 
 /* Preserve useful canvas and inspector space on short or enlarged interfaces.

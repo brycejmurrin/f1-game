@@ -21,7 +21,9 @@
 /* Phone landscape own-px height sits ~560 at UI 70% (393/0.7). 480 left it on
    "normal" so the short-wide 3-up door index never fired and Progress/About
    sat under the fold. 620 still leaves a roomy desktop sheet on "normal". */
-#pmsettings-inner:not([data-shape="tall"]) { --fit-at: 220px; --compact-at: 620px; }
+#pmsettings-inner:not([data-shape="tall"]) { --fit-at: 220px; }
+/* Touch only: desktop keeps 480. */
+body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 620px; }
 /* UI SIZE 200%: breadcrumb/title band must wrap inside the zoomed sheet, not
    clip under overflow:hidden on #pmsettings (survey #3253). */
 #pmsettings-inner > .sheet-head {
