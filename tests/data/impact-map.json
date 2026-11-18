@@ -9880,6 +9880,15 @@
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
+      "layout": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
+      "layoutPreset": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
+      "normaliseLayout": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
       "paintHud": [
         "tests/unit/phone-pad.test.mjs"
       ],

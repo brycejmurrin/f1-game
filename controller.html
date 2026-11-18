@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-Wxfah3tXog1BivJ4fF+VeEs7298qCmsAGvdrZ2XtpnI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-8QFPswVnZfSwuu5eiLajMKwqFIqHnMSX2u8HlMstII0=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -172,7 +172,7 @@
      NOT good (data-state from phone-pad-page.js onHealth). The age line is a
      diagnostic: written, not shown. */
   #phone-input-options { display: flex; align-items: stretch; gap: 8px; height: 44px; min-width: 0; flex: none; font-size: 11px; letter-spacing: .08em; }
-  #b-center { flex: 1 1 0; min-width: 0; padding: 0 8px; font-weight: 800; font-size: 13px; letter-spacing: .1em; color: var(--dim); border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #b-center { flex: 1 1 0; min-width: 64px; padding: 0 8px; font-weight: 800; font-size: 13px; letter-spacing: .1em; color: var(--dim); border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #phone-input-options label { flex: none; display: flex; align-items: center; }
   /* 16px: iOS zooms the page on a focused control under 16px. Unlayered, so it beats the coarse-pointer --tap-paint height. */
   #steering-mode { height: 44px; min-height: 44px; padding: 0 6px; font: 700 16px/1 var(--font-ui); color: var(--text); background: var(--plate-opaque); border: 1px solid var(--plate-line); border-radius: 10px; }
@@ -185,6 +185,33 @@
   #input-health:is([data-state="reconnecting"], [data-state="disconnected"])::before { background: var(--bad); }
   #input-health:not([data-state="good"]) ~ #link { display: none; }   /* the warning takes the chip */
   #input-age { display: none; }
+  /* WHEEL LAYOUT (#5801, PhonePadPage.layout): any face key can sit under
+     either thumb. A grip's .grip-keys strip (top of the grip) takes the keys
+     moved there, in a row that wraps; empty, it is gone. MIRRORED swaps the
+     grips by grid order. The gear in the pad bar opens the sheet. */
+  .grip-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(52px, 1fr)); gap: 8px; flex: none; }
+  .grip-keys:empty { display: none; }
+  body[data-swap] #left { order: 3; }  body[data-swap] #face { order: 2; }  body[data-swap] #right { order: 1; }
+  body[data-swap] #steering-strip { order: 4; }
+  #b-layout { flex: none; width: 44px; padding: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  #b-layout svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  #layout-sheet { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+                  display: flex; flex-direction: column; gap: 10px; background: var(--bg);
+                  padding: calc(10px + var(--sat)) calc(14px + var(--sar)) calc(12px + var(--sab)) calc(14px + var(--sal)); }
+  #layout-sheet[hidden] { display: none; }
+  #layout-sheet * { touch-action: manipulation; }
+  #lay-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #lay-head h2 { margin: 0; font: italic 800 var(--fs-5, 18px)/1 var(--font-ui); letter-spacing: var(--ls-2); }
+  #lay-head .bigbtn { margin: 0; width: auto; min-width: 120px; min-height: 44px; }
+  #lay-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  #lay-presets button, #lay-rows button, #lay-swap { min-height: 44px; font-weight: 800; letter-spacing: .08em; font-size: 13px; }
+  #lay-presets button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  #lay-presets small { font-size: 10px; font-weight: 600; letter-spacing: .04em; color: var(--dim); }
+  #lay-rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 6px 16px; }
+  .lay-row { display: grid; grid-template-columns: 64px repeat(3, 1fr); align-items: center; gap: 6px; }
+  .lay-row span { font-weight: 800; font-size: 13px; letter-spacing: .08em; }
+  .lay-row button { padding: 0 4px; font-size: 11px; }
+  #layout-sheet button[aria-pressed="true"] { border-color: var(--red); background: color-mix(in oklab, var(--red) 22%, var(--plate-opaque)); color: var(--text); }
   /* TOUCH STRIP steering: its own row under the wheel only while chosen ([hidden] otherwise, so no row and no gap). */
   #steering-strip { grid-column: 1 / -1; height: 44px; line-height: 42px; text-align: center; font-size: 11px; letter-spacing: .08em;
                     border: 1px solid var(--team-c); border-radius: 8px; background: var(--plate-opaque); position: relative; z-index: 1; }
@@ -336,9 +363,9 @@
      taller phone gets taller keys, never smaller than a 48px tap target.
      16vh (62px at 390) since the pad bar gave back its row (#5801). */
   #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  #keys button { padding: 0; min-height: clamp(48px, 16vh, 88px); font-weight: 800; font-size: clamp(12px, 3.6vh, 20px); letter-spacing: .08em; border-radius: 14px;
+  .grip-keys button, #keys button { padding: 0; min-height: clamp(48px, 16vh, 88px); font-weight: 800; font-size: clamp(12px, 3.6vh, 20px); letter-spacing: .08em; border-radius: 14px;
                  background: var(--plate-opaque); border: 1px solid var(--plate-line); color: var(--text); }
-  #keys button.on, #b-center.on { border-color: var(--team-c); color: var(--team-c); }
+  .grip-keys button.on, #keys button.on, #b-center.on { border-color: var(--team-c); color: var(--team-c); }
   #link { min-width: 0; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* touch-action is NOT inherited: body's `none` does not reach the pedal
      divs, and Safari decides double-tap zoom on the touched element. Every
@@ -444,6 +471,7 @@
        the gears (UP over DN) and, with gears on AUTO, the taps instead; the
        RIGHT thumb has the pedals, BRAKE over GAS. -->
   <div id="left" class="grip">
+    <div id="left-keys" class="grip-keys"></div>
     <button id="b-shiftUp" class="shift" type="button" aria-label="Shift up">&#9650;<small>UP</small></button>
     <button id="b-shiftDown" class="shift" type="button" aria-label="Shift down">&#9660;<small>DN</small></button>
     <button id="b-ot-big" class="tap" type="button" aria-label="Overtake">OT</button>
@@ -469,16 +497,29 @@
     </div>
     <div id="phone-input-options">
       <button id="b-center" type="button">CENTRE TILT</button>
+      <button id="b-layout" type="button" aria-label="Wheel layout" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
       <label><select id="steering-mode" aria-label="Phone steering mode"><option value="tilt">TILT</option><option value="touch">TOUCH</option></select></label>
       <div id="pad-status"><span id="input-health" data-state="waiting" role="status" aria-live="polite">WAITING FOR INPUT ACK</span><span id="input-age" aria-live="off"></span><span id="link" role="status"></span></div>
     </div>
   </div>
   <div id="right" class="grip">
+    <div id="right-keys" class="grip-keys"></div>
     <div id="brake" class="pedal" role="button" tabindex="0" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" tabindex="0" aria-label="Gas">GAS<small>AUTO</small></div>
   </div>
   <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
 </section>
+<div id="layout-sheet" role="dialog" aria-modal="true" aria-labelledby="lay-title" hidden>
+  <div id="lay-head"><h2 id="lay-title">WHEEL LAYOUT</h2><button id="lay-done" class="bigbtn" type="button">DONE</button></div>
+  <div id="lay-presets" role="group" aria-label="Layout presets">
+    <button type="button" data-preset="classic">CLASSIC</button>
+    <button type="button" data-preset="right">RIGHT THUMB<small>OT · BOOST · AERO by the pedals</small></button>
+    <button type="button" data-preset="left">LEFT THUMB<small>OT · BOOST · AERO by the paddles</small></button>
+    <button type="button" data-preset="mirror">MIRRORED<small>pedals left, paddles right</small></button>
+  </div>
+  <div id="lay-rows" role="group" aria-label="Where each button sits"></div>
+  <button id="lay-swap" type="button">SWAP PEDALS AND PADDLES</button>
+</div>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/dev-flags.js?v=dev"></script>
@@ -531,7 +572,17 @@ window.addEventListener("DOMContentLoaded", function () {
     },
     onClose: function () { $("link").textContent = "LINK CLOSED"; },
   });
-  window.__apexPad = ctl;   // the console/test handle, mirroring window.__apex on the game
+  window.__apexPad = ctl;
+  // WHEEL LAYOUT: which thumb each face key sits under, saved on this phone.
+  try {
+    window.__apexPadLayout = PhonePadPage.layout({
+      body: document.body, home: $("keys"), grips: { L: $("left-keys"), R: $("right-keys") },
+      keys: { overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
+              look: $("b-look"), recover: $("b-recover"), pause: $("b-pause") },
+      sheet: $("layout-sheet"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"),
+      presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
+    }, { store: (function () { try { return window.localStorage; } catch (e) { return null; } })() });
+  } catch (e) { /* the wheel works in its default layout */ }   // the console/test handle, mirroring window.__apex on the game
   // LANDSCAPE LOCK where the platform has one. Android needs fullscreen before
   // screen.orientation.lock, and both need a user gesture, so they ride the
   // CONNECT tap. iOS has neither: the #rotate card above is what it gets.

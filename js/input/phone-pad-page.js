@@ -679,6 +679,85 @@ const PhonePadPage = (function () {
     };
   }
 
-  return { HELD, DASH, paintHud, pad };
+  // ── phone: WHEEL LAYOUT (#5801) ───────────────────────────────────────────
+  // Which thumb each wheel-face key sits under: L (the grip on the left of the
+  // screen), C (the face, under the dash) or R. `swap` mirrors the grips, so
+  // paddles go right and pedals left. Saved on the phone as apex26.padLayout;
+  // everything else about the wheel is unchanged, and a moved button is the
+  // same element (its listeners move with it).
+  const LAYOUT_KEYS = Object.freeze(["overtake", "boost", "aero", "camera", "radio", "look", "recover", "pause"]);
+  const LAYOUT_LABEL = Object.freeze({ overtake: "OT", boost: "BOOST", aero: "AERO", camera: "CAM", radio: "RADIO", look: "LOOK", recover: "RESET", pause: "PAUSE" });
+  const LAYOUT_KEY = "apex26.padLayout";
+  const zonesWith = (side, keys) => Object.fromEntries(LAYOUT_KEYS.map((k) => [k, keys.includes(k) ? side : "C"]));
+  const LAYOUT_PRESETS = Object.freeze({
+    classic: { zone: zonesWith("C", []), swap: false },
+    right: { zone: zonesWith("R", ["overtake", "boost", "aero"]), swap: false },   // OT/BOOST/AERO by the pedals
+    left: { zone: zonesWith("L", ["overtake", "boost", "aero"]), swap: false },    // ... by the paddles
+    mirror: { zone: zonesWith("C", []), swap: true },
+  });
+  function normaliseLayout(raw) {
+    const r = raw && typeof raw === "object" ? raw : {}, z = r.zone && typeof r.zone === "object" ? r.zone : {};
+    return { zone: Object.fromEntries(LAYOUT_KEYS.map((k) => [k, z[k] === "L" || z[k] === "R" ? z[k] : "C"])), swap: r.swap === true };
+  }
+  /** The preset a layout equals, or "custom". */
+  function layoutPreset(lay) {
+    const n = normaliseLayout(lay);
+    return Object.keys(LAYOUT_PRESETS).find((id) => JSON.stringify(LAYOUT_PRESETS[id]) === JSON.stringify(n)) || "custom";
+  }
+  /** Moves the keys into their zones. dom: { body, keys: {name: el}, home (#keys), grips: { L, R } (the
+   *  key strips of the paddle grip and the pedal grip, in that order) }. */
+  function applyLayout(dom, lay) {
+    const n = normaliseLayout(lay), g = dom.grips || {};
+    const box = { C: dom.home, L: n.swap ? g.R : g.L, R: n.swap ? g.L : g.R };
+    for (const k of LAYOUT_KEYS) {
+      const el = dom.keys && dom.keys[k], to = box[n.zone[k]];
+      if (el && to && to.appendChild) to.appendChild(el);   // canonical order: appended in LAYOUT_KEYS order
+    }
+    const b = dom.body && dom.body.dataset;
+    if (b) { if (n.swap) b.swap = "1"; else delete b.swap; }   // gears AUTO keeps its big OT/BOOST tiles on the paddle grip wherever the small keys went
+    return n;
+  }
+  /** The editor sheet. dom adds: sheet, open, done, rows (container), presets ([el with data-preset]),
+   *  swapBtn, doc (document, to build the per-key rows), store (localStorage-like). */
+  function layout(dom, opts) {
+    const store = (opts && opts.store) || null;
+    let cur;
+    try { cur = normaliseLayout(store && JSON.parse(store.getItem(LAYOUT_KEY) || "null")); } catch (e) { cur = normaliseLayout(null); }
+    const picks = {};
+    if (dom.rows && dom.doc) {
+      for (const k of LAYOUT_KEYS) {
+        const row = dom.doc.createElement("div"); row.className = "lay-row";
+        const name = dom.doc.createElement("span"); name.textContent = LAYOUT_LABEL[k]; row.appendChild(name);
+        picks[k] = {};
+        for (const [z, txt] of [["L", "LEFT"], ["C", "MID"], ["R", "RIGHT"]]) {
+          const b = dom.doc.createElement("button"); b.type = "button"; b.textContent = txt;
+          b.setAttribute("aria-label", LAYOUT_LABEL[k] + " " + (z === "C" ? "under the dash" : txt.toLowerCase() + " grip"));
+          b.addEventListener("click", () => set({ zone: Object.assign({}, cur.zone, { [k]: z }), swap: cur.swap }));
+          picks[k][z] = b; row.appendChild(b);
+        }
+        dom.rows.appendChild(row);
+      }
+    }
+    function paint() {
+      const p = layoutPreset(cur);
+      for (const el of dom.presets || []) el.setAttribute("aria-pressed", String(el.dataset.preset === p));
+      for (const k of LAYOUT_KEYS) for (const z of ["L", "C", "R"]) if (picks[k]) picks[k][z].setAttribute("aria-pressed", String(cur.zone[k] === z));
+      if (dom.swapBtn) dom.swapBtn.setAttribute("aria-pressed", String(cur.swap));
+    }
+    function set(lay) {
+      cur = applyLayout(dom, lay);
+      try { if (store) store.setItem(LAYOUT_KEY, JSON.stringify(cur)); } catch (e) { /* storage blocked: this session keeps it */ }
+      paint();
+    }
+    for (const el of dom.presets || []) el.addEventListener("click", () => set(LAYOUT_PRESETS[el.dataset.preset] || LAYOUT_PRESETS.classic));
+    if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set({ zone: cur.zone, swap: !cur.swap }));
+    const show = (on) => { if (dom.sheet) dom.sheet.hidden = !on; if (on && dom.done && dom.done.focus) dom.done.focus(); else if (!on && dom.open && dom.open.focus) dom.open.focus(); };
+    if (dom.open) dom.open.addEventListener("click", () => show(true));
+    if (dom.done) dom.done.addEventListener("click", () => show(false));
+    cur = applyLayout(dom, cur); paint();
+    return { get: () => normaliseLayout(cur), set, show };
+  }
+
+  return { HELD, DASH, paintHud, pad, LAYOUT_KEYS, LAYOUT_PRESETS, normaliseLayout, layoutPreset, applyLayout, layout };
 })();
 Object.freeze(PhonePadPage);
