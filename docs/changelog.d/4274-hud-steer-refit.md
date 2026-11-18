@@ -1,0 +1,1 @@
+Fixed: With BUTTON SIZE above the pedal column's cap at a value that is not exact to three decimals (143 % paints 1.4325), the race HUD re-ran its whole layout fit on every HUD tick for the entire race; it now fits once and settles, which removes about 18 ms of layout work per frame on a phone-class CPU (#4274).
