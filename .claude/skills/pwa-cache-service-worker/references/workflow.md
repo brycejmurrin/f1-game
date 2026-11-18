@@ -92,7 +92,7 @@ logged once as `precache: N of M optional assets not cached`. The seed is the
 `@gen-shell:sw-optional` block, from `swOptionalFiles()` in `gen-shell.mjs`
 (`DEFERRED` + `LAZY_*`). Unit pins: seed presence = `load-order.test.mjs`;
 optional-miss tolerance = `service-worker.test.mjs`. Install VM tests also pin GLX promotion and stamped lazy-group keys;
-`tools/check/offline-precache-check.cjs` is native offline boot evidence (Chromium; no npm script or CI group runs it: parent only). Node checks: `node --test tests/unit/load-order.test.mjs`,
+`tools/check/offline-precache-check.cjs` is native offline boot evidence (Chromium; browser group `test:offline-precache` runs it on CI, never pre-push). Node checks: `node --test tests/unit/load-order.test.mjs`,
 `node tools/gen/gen-shell.mjs --check`. Verdict to record: seed present + check
 clean = precache list is fine; a remaining miss is a stamping/timeout
 (`OPTIONAL_ASSET_MS`) issue, verified only by the browser check.
