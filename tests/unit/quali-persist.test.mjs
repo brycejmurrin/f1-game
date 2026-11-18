@@ -729,3 +729,53 @@ test("a mid-weekend career save keeps the qualifying it drove when the model cha
   const redrawn = b.q.begin();
   assert.ok(redrawn.every((r) => Math.abs(r.t - today) < today * 0.05), "so a reload draws it from today's model: " + redrawn.map((r) => r.t.toFixed(1)).join(" "));
 });
+
+// The field's lap is QUALI_CENTRE x the circuit's generated factor x the integrated lap (#5786). A circuit the
+// calibration never measured (a TRACK DESIGNER layout, any id) takes the calendar median, never 1 and never a
+// property of Object.prototype.
+test("carLap: a calendar circuit reads its own factor, an unmeasured one the calendar median", async () => {
+  const { factors } = await import("../../tools/gen/gen-quali-calib.mjs");
+  const f = factors();
+  const { q, G } = loadQuali();
+  const c = G.cars[1];
+  const mk = (id, extra) => ({ n: 80, total: 4000, def: Object.assign({ id }, extra) });
+  const near = (a, b, m) => assert.ok(Math.abs(a / b - 1) < 1e-12, `${m}: ${a} vs ${b}`);
+  const monza = mk("monza");
+  near(q.carLap(c, monza, 1), 0.993 * +f.by.monza * q.carLap(c, monza, 1, true), "monza takes its row");
+  for (const t of [mk("d7f3a1c2", { custom: true }), mk("constructor"), mk("__proto__"), { n: 80, total: 4000 }]) {
+    const lap = q.carLap(c, t, 1);
+    near(lap, 0.993 * +f.def * q.carLap(c, t, 1, true), "an unmeasured circuit takes the default");
+    assert.ok(Number.isFinite(lap) && lap > 0);
+  }
+  G.track = mk("d7f3a1c2", { custom: true });
+  const sheet = q.preview(0).map((r) => r.t);
+  assert.ok(sheet.length === G.cars.length && sheet.every((t) => Number.isFinite(t) && t > 0), "a designer circuit's sheet is whole");
+  const raw = q.carLap(c, G.track, 1, true);
+  assert.ok(sheet.every((t) => t > raw * 0.85 && t < raw * 1.05), "and sits where a calendar circuit's would: " + sheet.map((t) => (t / raw).toFixed(3)));
+});
+
+// The wing term is the AI's (#5786): AiDrive.aeroGrip is what the driven AI's lateral grip carries. A human's
+// simulated time must not move with their own wing level (they pay for wing on track; a free wing on the sheet
+// would be a setup exploit, in VS FRIEND too), and the AI rows must not move with the human's setup.
+test("carLap: an AI car reads its wing level, a human's car the neutral wing", () => {
+  const { q, G, ctx } = loadQuali();
+  ctx.AiDrive = { aeroGrip: (load) => 1 + ((load != null ? load : 0.5) - 0.5) * 0.16 };
+  const me = G.cars[0], ai = G.cars[1];
+  ctx.Tracks.curvature = () => 0.02;                     // tight enough that the corner cap, not vTop, sets the lap
+  G.track = { n: 80, total: 4000, def: { id: "wing" } };
+  me.human = true;
+  const at = (c, load) => { c.aeroLoad = load; return q.carLap(c, G.track, 1); };
+  const neutral = at(me, 0.5);
+  assert.equal(at(me, 0), neutral, "minimum wing: the human's simulated lap does not move");
+  assert.equal(at(me, 1), neutral, "maximum wing: nor here");
+  delete me.aeroLoad;
+  assert.equal(q.carLap(me, G.track, 1), neutral, "no wing level at all reads neutral");
+  assert.ok(at(ai, 1) < at(ai, 0.5) && at(ai, 0.5) < at(ai, 0), "an AI car is quicker with more wing");
+  assert.equal(at(ai, 0.5), neutral, "and at the neutral wing it is the same lap (same tier and skill here)");
+  ai.aeroLoad = 0.8;
+  const sheetAt = (load) => { me.aeroLoad = load; return q.preview(0).map((r) => r.t); };
+  assert.deepEqual(sheetAt(0), sheetAt(1), "the whole sheet, AI rows included, is the same whatever the human's wing");
+  me.human = false;
+  assert.ok(at(me, 1) < neutral, "the same car driven by the AI (the calibration and the parity test) does read it");
+});
+

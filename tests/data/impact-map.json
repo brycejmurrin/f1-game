@@ -13934,6 +13934,7 @@
         "tests/unit/quali-persist.test.mjs"
       ],
       "rows": [
+        "tests/unit/generated-docs.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
       ],

@@ -51,13 +51,45 @@ const Quali = (function () {
   // Re-measure whenever the driving model changes: the absolute parity test's
   // diagnostics, or the calendar script in docs/notes/QUALI-REFIT-2026-11-18.md.
   //
-  // The sheet's P1-P22 SPREAD is NOT this fit's: the driven field splits by the
-  // team's wing level as much as by tierV·skill (AiDrive scales lateral grip by
-  // 1 + (aeroLoad - 0.5)·0.16: Gasly and Ocon, same car tier and skill, 3.8 s apart
-  // alone at Monza, and swapping aeroLoad swaps their laps), and the model reads
-  // only tierV·skill.
+  // QUALI_TRIM and this fit now place only referencePole (the time-trial medal
+  // target: neutral wing, no circuit factor). The FIELD's lap is carLap, below.
+  // The driven field splits by the team's wing level as much as by tierV·skill
+  // (Gasly and Ocon, same car tier and skill, 3.8 s apart alone at Monza; swapping
+  // aeroLoad swaps their laps), so carLap reads the wing as well.
   const QUALI_TRIM = 0.92;
   const PACE_CORNER = 1.15;
+
+  // THE FIELD'S LAP (carLap; referencePole keeps QUALI_TRIM and a neutral wing) is
+  // QUALI_CENTRE x the circuit's measured factor x the integrated lap, and the corner
+  // cap also takes the car's wing as the driven AI is charged it (AiDrive.aeroGrip).
+  // CALIB[id] is driven / integrated: the median, over a thinned clear-air AI field
+  // at easy, normal and hard, of each car's best driven lap over this model's
+  // uncalibrated lap for the same car. GENERATED from tests/data/quali-calibration.json
+  // by tools/gen/gen-quali-calib.mjs (`npm run gen`); the measurement itself is a tool
+  // run, `node tools/check/quali-calibrate.mjs --update` (about half an hour of CPU; never in CI,
+  // and not in tools/lib/generated-paths.mjs GENERATED_PATHS, which a merge regenerates).
+  // RE-MEASURE when the AI's driving changes: tests/unit/quali-absolute-parity-vm.test.mjs
+  // fails, the tool is re-run and the block regenerated. A circuit with no row (a
+  // TRACK DESIGNER layout) takes CALIB_DEFAULT, the calendar median.
+  // @gen-quali-calib start
+  const CALIB = {
+    abudhabi: 0.9500, albert_park: 0.9490, anderstorp: 0.9634, bahrain: 0.9652, baku: 0.9623, brands_hatch: 0.9619,
+    buddh: 0.9597, buenos_aires: 0.9576, catalunya: 0.9588, cota: 0.9393, dijon: 0.9501, donington: 0.9707,
+    estoril: 0.9616, fuji: 0.9592, hockenheim: 0.9689, hungaroring: 0.9512, imola: 0.9792, indianapolis: 0.9519,
+    interlagos: 0.9536, istanbul: 0.9571, jacarepagua: 0.9573, jeddah: 0.9629, jerez: 0.9622, korea: 0.9526,
+    kyalami: 0.9725, madrid: 0.9520, magny_cours: 0.9665, mexico: 0.9517, miami: 0.9467, monaco: 0.9687,
+    mont_tremblant: 0.9712, montreal: 0.9632, monza: 0.9496, mosport: 0.9375, mugello: 0.9374, nurburgring: 0.9567,
+    okayama: 0.9650, paul_ricard: 0.9367, portimao: 0.9739, qatar: 0.9735, redbull: 0.9558, sepang: 0.9684,
+    shanghai: 0.9470, silverstone: 0.9339, singapore: 0.9632, sochi: 0.9688, spa: 0.9527, suzuka: 0.9447,
+    vegas: 0.9483, watkins_glen: 0.9654, zandvoort: 0.9623, zolder: 0.9669,
+  };
+  const CALIB_DEFAULT = 0.9590;
+  // @gen-quali-calib end
+  // Where the field sits against its own clear-air race laps (tyre wear off, the lap
+  // CALIB is measured on): the same driver's qualifying lap is 0.2-1.2 % quicker, all
+  // of it the flying start, and within 0.35 % of that whether tyre wear is on or off.
+  // Measured: docs/notes/QUALI-CALIBRATION-2026-11-18.md §Yardstick.
+  const QUALI_CENTRE = 0.993;
 
   const EXEC_SPREAD = 0.012;
   const QUALI_BIAS = 0.003;
@@ -184,6 +216,16 @@ const Quali = (function () {
     // times skill times the level's `corner` (AiDrive's ctx.diffCorner). A stub
     // row without `corner` reads 1.
     function cornerFor(skill) { const dc = diffRow().corner; return skill * (dc > 0 ? dc : 1); }
+    // ...and the car's wing: AiDrive scales lateral grip by aeroGrip(aeroLoad) (planner and
+    // actuator, js/physics/ai-drive.js lateralScale / brakeTarget), so corner speed goes with its root.
+    // A HUMAN's car (the player, a VS FRIEND rival) reads the NEUTRAL wing, factor 1: on track a human pays for
+    // wing in top speed (mods.speed / mods.accel) and the AI does not (#5791), so a simulated human time must not
+    // move with a setup slider — maximum wing, SIMULATE, then race on any wing would buy grid places.
+    function wingFor(c) { return !c.human && typeof AiDrive !== "undefined" && AiDrive.aeroGrip ? Math.sqrt(AiDrive.aeroGrip(c.aeroLoad)) : 1; }
+    function calibFor(track) {
+      const id = track && track.def && track.def.id;
+      return id != null && Object.prototype.hasOwnProperty.call(CALIB, id) ? CALIB[id] : CALIB_DEFAULT;
+    }
 
     // The flying lap of a car whose free pace is `free` and corner authority
     // `corner`: integrated at the current PACE on the car's own drag curve, then
@@ -192,7 +234,12 @@ const Quali = (function () {
       const p = paceNow();
       return QUALI_TRIM * lapTime(track, free, grip, { pace: p, free, corner: PACE_CORNER * corner });
     }
-    function carLap(c, track, grip) { return paceLap(track, freeFor(c.tierV, c.skill), grip, cornerFor(c.skill)); }
+    // `raw`: the integrated lap alone (what tools/check/quali-calibrate.mjs measures the factor against).
+    function carLap(c, track, grip, raw) {
+      const free = freeFor(c.tierV, c.skill);
+      const t = lapTime(track, free, grip, { pace: paceNow(), free, corner: PACE_CORNER * cornerFor(c.skill) * wingFor(c) });
+      return raw ? t : QUALI_CENTRE * calibFor(track) * t;
+    }
 
     // The reference POLE a time-trial medal is measured against: a top-rated
     // driver (skill 1) in the tier-0 car on a flying lap — the same model
