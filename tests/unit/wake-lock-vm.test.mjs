@@ -4,8 +4,9 @@
  * js/game.js and PlatformSession) with the SAME mock, the same
  * sequences and the same expected logs as the browser spec.
  *
- * Ported: all 13 tests, plus the visible-release re-arm (also in the browser
- * spec, isolated from the race path so the twin count stays 14-for-14).
+ * Ported: the race-path cases plus the isolated RaceWakeLock cases (release
+ * failure, visible-release re-arm, coalesce-after-refusal). Twin count must
+ * match tests/specs/wake-lock.spec.js.
  * Not portable: none of the ported tests — every assertion reads the mock's
  * `__wakeLog` (a JSON array) and two of them the page-error record.
  *
@@ -73,6 +74,55 @@ for (const late of [false, true]) {
     });
   }
 }
+
+test("a hold coalesced onto a rejecting request is retried once the refusal settles", async () => {
+  const outcomes = ["reject", "resolve"];
+  let step = 0;
+  const requests = [];
+  const ctx = vm.createContext({
+    navigator: { wakeLock: { request: () => {
+      const i = step++;
+      requests.push(i);
+      if (outcomes[i] === "reject") return Promise.reject(new Error("NotAllowedError"));
+      return Promise.resolve({
+        addEventListener() {},
+        release: () => Promise.resolve(),
+      });
+    } } },
+    document: { hidden: false },
+    Log: { info() {} },
+    Promise,
+    setTimeout: (fn) => setTimeout(fn, 0),
+  });
+  vm.runInContext(readFileSync(new URL("../../js/core/wake-lock.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/core/wake-lock.js") });
+  const owner = vm.runInContext("RaceWakeLock.create()", ctx);
+  owner.hold();
+  owner.hold(); // coalesces onto the in-flight request that will reject
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setImmediate(r));
+  assert.equal(requests.length, 2, "coalesced hold must issue a fresh request after the refusal");
+  assert.equal(owner.wanted(), true);
+});
+
+test("a lone rejecting request does not spin a retry loop", async () => {
+  let requests = 0;
+  const ctx = vm.createContext({
+    navigator: { wakeLock: { request: () => { requests++; return Promise.reject(new Error("NotAllowedError")); } } },
+    document: { hidden: false },
+    Log: { info() {} },
+    Promise,
+    setTimeout: (fn) => setTimeout(fn, 0),
+  });
+  vm.runInContext(readFileSync(new URL("../../js/core/wake-lock.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/core/wake-lock.js") });
+  const owner = vm.runInContext("RaceWakeLock.create()", ctx);
+  owner.hold();
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setImmediate(r));
+  assert.equal(requests, 1, "permanent denial must not re-arm hold()");
+  assert.equal(owner.wanted(), true);
+});
 
 test("a visible UA release with no visibilitychange re-acquires; drop and hidden do not", async () => {
   const requests = [];
