@@ -30,7 +30,7 @@ A red with only ~120 s timeouts goes to step 1.
 the browser couldn't even boot a context. Cross-check the sibling shards on the
 same `head_sha` and the spec's usual duration (`tests/data/spec-timings.json`).
 → A re-run is the next push's PR run, or a whole group with `remote-group.mjs <group>`, which
-dispatches only with Bryce's opt-in (a green run of the same sha is reused without one). PASS there =
+dispatches only with Bryce's opt-in (a green run of the same sha is reused without one). A passing re-run =
 contention, but a pass that needed the retry is still a red (rule 9). FAIL again
 = real; bisect. A local solo re-run (`test-solo.mjs`) is for a Bryce-attended
 session on his explicit grant only.

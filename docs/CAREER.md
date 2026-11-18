@@ -1103,7 +1103,7 @@ guide, hub and offers sheet in both orientations.
 
 Agents do not run these locally (AGENTS.md rule 5): a pushed PR gets the
 change-aware selected browser legs on CI (`tools/ci/select-specs.mjs` maps
-`js/career/` edits onto these specs; `car` after anything that touches the garage). A
+`js/career/` edits onto these specs; a garage edit also selects the `car` specs). A
 whole-group run (`remote-group.mjs modes`) is Bryce's opt-in.
 
 ## Upgrade parts — the catalog
