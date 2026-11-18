@@ -2401,6 +2401,9 @@
       ]
     },
     "js/camera/replay-buf.js": {
+      "adjacentFrame": [
+        "tests/unit/replay-buf.test.mjs"
+      ],
       "apply": [
         "tests/unit/replay-buf.test.mjs",
         "tests/unit/results-cam.test.mjs",
