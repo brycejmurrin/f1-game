@@ -18730,6 +18730,9 @@
       ]
     },
     "js/ui/hud-skin.js": {
+      "skinAccent": [
+        "tests/unit/hud-skin-ink.test.mjs"
+      ],
       "*": [
         "tests/unit/hud-feel.test.mjs"
       ]
