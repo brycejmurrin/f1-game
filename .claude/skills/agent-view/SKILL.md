@@ -34,8 +34,7 @@ driving policy → [references/surface.md](references/surface.md). Design notes:
 **Entry routes** (cost differs — details in surface.md): CLI VM or browser boot,
 `apex-eval.mjs` multi-call one boot, or live `page.evaluate` after staging
 (`race` → `go` → `jump` + frames). Browser boots are serialized by AGENTS.md rules 5 and 10; use the Node VM for numeric batches.
-In a subagent bash-guard refuses `agent.mjs`/`apex-eval.mjs` (`--vm` included) and mcp-browser-guard refuses
-`apex_agent`/`apex_eval` (`vm:true` included):
+In a subagent a browser cannot boot (bash-guard and mcp-browser-guard refuse it; `launchChromium` refuses under `APEX_SUBAGENT=1`); the Node VM routes (`--vm`, `apex_eval {vm:true}`) need no browser and stay available:
 use a `scratch/` `createGame` script (track-geometry.md §Whole-lap recipe) or report the probe unverified.
 
 **Vocab:** `frac` = lap 0→1; `s` = metres along centreline; `lateralM` = +right.

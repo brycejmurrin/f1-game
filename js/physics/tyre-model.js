@@ -63,10 +63,10 @@ const TyreModel = (function () {
   // easy part; the WIDTH of the plateau past the peak and the STEEPNESS of the
   // fall after it are what make a tyre feel real and drivable.
   //
-  // Three regions, in units where every CS_* constant keeps its meaning: sin(x) up to the peak at x = π/2 (slope 1 at 0, peak force exactly
+  // FRONT, in units where every CS_* constant keeps its meaning: sin(x·k) up to the peak at x = CURVE_PEAK_X_F ≈ 1.272 (peak force exactly
   // mu), then a Gaussian fall from 1 to CURVE_FLOOR of width CURVE_FALL_W:
-  // ≥ 0.97 of peak out to x ≈ 2.1 (the "limit zone" a driver leans on), 0.85 at
-  // x = 3, the floor by x ≈ 5. Never oscillates, never negative, C¹ at the peak
+  // ≥ 0.97 of peak out to x ≈ 1.8 (the "limit zone" a driver leans on), 0.80 at
+  // x = 3, the floor by x ≈ 4; the REAR peaks at π/2, holds to CURVE_HOLD_R and falls more gently (below). Never oscillates, never negative, C¹ at the peak
   // — a Magic Formula with a sharpening E goes NEGATIVE at spin-sized slip
   // angles, which this model reaches every time a car goes round. The floor is
   // the "forgiving" end of the range shipped titles use (0.73 relative in
@@ -74,9 +74,9 @@ const TyreModel = (function () {
   // overdriving costs a quarter of the grip, enough to make smooth inputs
   // faster than flicks without turning the limit into a cliff on a keyboard.
   const CURVE_PEAK_X = Math.PI / 2;
-  // Front-only peak abscissa (x = cs·α/μ). The exported CURVE_PEAK_X stays π/2
-  // so frontUtil/rearUtil keep 1.0 = at the curve's nominal peak; the front
-  // path reaches |F| = μ here earlier in α (~8° vs ~10.5° at CS_FRONT 130).
+  // Front-only peak abscissa (x = cs·α/μ). The exported CURVE_PEAK_X stays π/2 (the
+  // rear's peak); frontUtil is measured against CURVE_PEAK_X_F (player-forces.js), so 1.0 = at
+  // the front curve's peak, which |F| = μ reaches earlier in α (~8° vs ~10.5° at CS_FRONT 130).
   const CURVE_PEAK_X_F = (Math.PI / 2) * (8.5 / 10.5); // ~8.4° peak slip at CS_FRONT 130 (was ~10.5°)
   const CURVE_FLOOR = 0.75;
   const CURVE_FALL_W = 1.4;

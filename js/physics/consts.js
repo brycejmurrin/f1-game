@@ -9,7 +9,7 @@
 window.PhysicsConsts = {
   REVISION: "2026-09-ai-mistakes-1", // increment when comparable lap physics changes
   VMAX: 72,            // m/s base (~259 km/h) — F1 race pace; scales all speeds
-                       //   (PACE and the vTop()/vStd() normalisers live in game.js)
+                       //   (PACE and the vTop()/vStd() normalisers live in js/race/pace-math.js)
   ACCEL: 7,            // m/s^2 at low speed
   BRAKE: 22,
   BB_REF: 0.56,        // brake bias (% front / 100) at which the friction-ellipse split is 1/1 — see SetupTune
@@ -67,8 +67,8 @@ window.PhysicsConsts = {
   // AERODYNAMIC DOWNFORCE. Aero load rises with v², so a real F1 car pulls
   // roughly 2 g in a slow corner and 5 g in a fast one; a grip taper that FALLS
   // with speed (an arcade understeer model) makes quick corners vague and slow
-  // ones sharp. Lateral grip is 1 + DOWNFORCE·(v/VMAX)², so high-speed
-  // cornering firms up the way it should.
+  // ones sharp. Lateral grip is 1 + DOWNFORCE·aeroDf·min(1,(v/vTopNow)²), vTopNow
+  // the pace-scaled vTop() (VMAX only at PACE 1); see js/physics/player-forces.js.
   DOWNFORCE: 0.65,     // extra grip fraction at VMAX (0 = no wings)
 
   X_VMAX_GAIN_LO: 0.055,  // top-speed gain at full X-mode, smallest wing
@@ -126,9 +126,9 @@ window.PhysicsConsts = {
 
   // Road grip in the wet, by TYRE TREAD CLASS: [slick, intermediate, full wet],
   // indexed by the fitted compound's `wetTread` in the Parts catalog. Read by
-  // gripMult(c) in game.js: a car with tread == null — every AI car except the
-  // MY TEAM teammate, WHEN TYRE WEAR IS OFF (no pit plan, so no way to change
-  // tyres) — takes the FULL-WET column, "the field fitted the right tyre".
+  // gripMult(c) in game.js: tread == null → treadFor(weather, lap-mean wetness)
+  // picks slick, inter or full wet (TyreModel.treadOf); wxFollow cars use their
+  // fitted set. With wear off, AI without a pit plan stay on that weather tread.
   // With wear on an AI carries its fitted set's tread (TyreModel.applyCompound)
   // and pits for the weather. gripMult() with no car is the slick column. Dry, overcast and
   // fog have no row,

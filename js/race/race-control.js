@@ -1,4 +1,4 @@
-/* Apex 26 — RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … */
+/* Apex 26 — RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car / red flag, and the one rule that reads off it (whether OVERTAKE is … */
 const RaceControl = (function () {
   "use strict";
 

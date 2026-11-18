@@ -4,10 +4,10 @@
    parked on the racing line never raised a flag. scan() lists every car that is
    unfinished, below STOP_V, inside the road's half-width and out of the pit lane
    — retired, crashed or stalled, human or AI alike — as plain { id, frac, sector }
-   rows; RaceControl's machine owns the timers (yellow, then VSC, then marshalled).
+   rows; StoppedCars.create() owns per-car stop timers and returns the flag
+   picture; RaceControl only polls it and folds it into the caution level.
    retireCar pushes a retirement past the verge where there is room, so most
-   retirements are off the road and stay GREEN. Same "stopped" reading as
-   AiDrive.stoppedHazard (PR #5336): the box and the pit lane are not the road.
+   retirements are off the road and stay GREEN. Same "stopped" reading as AiDrive.stoppedHazard (PR #5336): the box and the pit lane are not the road.
    LAZY_RACE_SESSION: RaceControl's adapter typeof-guards it. */
 var StoppedCars = (function () {
   "use strict";

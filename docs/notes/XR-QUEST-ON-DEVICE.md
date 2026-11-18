@@ -35,14 +35,15 @@ Setup: https://developers.meta.com/horizon/documentation/web/browser-remote-debu
 3. `adb reverse tcp:8080 tcp:8080` → Quest Browser → `http://localhost:8080/`.
 4. Force WebGL2 VR path if needed (Application → Local Storage):
    `apex26.tlxForceGL=1`, `apex26.gfxBackend=three`.
-5. Optional experimental WebGPU XR: `apex26.xrBackend=webgpu` (falls back when
-   `webgpu` is absent from `session.enabledFeatures`).
+5. VR attaches on WebGL2 today. `apex26.xrBackend=webgpu` only records a preference;
+   `ATTACH_WEBGPU` is false in `js/xr/xr-session.js`, so the session never requests
+   the `webgpu` feature (flips when an XRGPUBinding attach lands).
 
 ### Functional
 
 - [ ] Page loads over HTTPS (Pages) and via `localhost` (adb reverse); **ENTER VR** appears; session starts from a user gesture.
 - [ ] Both eyes render correct stereo; no per-eye offset; no right-eye projection glitches.
-- [ ] Controller mapping: right trigger throttle, left brake, thumbstick X steer, A/X recenter, B/Y pause; squeeze look-back hold.
+- [ ] Controller mapping: right trigger throttle, left brake, thumbstick X steer, A/X recenter, B/Y pause; squeeze intentionally unmapped (must not snap seated gaze — `js/xr/xr-input.js`).
 - [ ] Controller lost/regained; system menu (`visible-blurred`) then resume; Meta-button recenter.
 - [ ] Comfort: car/track scale, cockpit height (local-floor), no unwanted mono camera shake/roll while presenting.
 - [ ] After **EXIT VR**, flat (non-XR) play still works.
@@ -62,7 +63,7 @@ XrBoot.setFoveation(1)   // max fixed foveation
 - [ ] Log `XrBoot.diag().draw.calls` / `.triangles` and compare foveation 0 vs 1 and `setFramebufferScaleFactor` if enabled later.
 - [ ] Optional: `ovrgpuprofiler` vertex-vs-fragment check if under budget.
 - [ ] Thermals: 10+ minute session.
-- [ ] WebGPU experimental: enable Quest Browser flags if any, request with `webgpu` optional, confirm `XrSession.enabledFeatures()` contains `webgpu`, compare frame time to WebGL2, confirm fallback when flags are off.
+- [ ] `apex26.xrBackend=webgpu` preference only: confirm `XrBoot.diag().backend` stays WebGL2 while presenting; `ATTACH_WEBGPU` is false until XRGPUBinding attach ships — no `webgpu` in `enabledFeatures` today.
 - [ ] Re-test after Quest Browser updates (Chromium milestone changes).
 
 Perf tools: https://developers.meta.com/horizon/documentation/web/webxr-perf-tools/

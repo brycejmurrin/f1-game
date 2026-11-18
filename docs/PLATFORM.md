@@ -15,7 +15,7 @@ one before debugging anything that reproduces on one device and not another.
 ## Everything here runs on a static host
 
 The whole game is script-tag IIFE modules, no build step, no server code, so
-GitHub Pages serves it verbatim. The only hard requirement is **HTTPS**, which
+GitHub Pages serves the staged output: deploy (`tools/desktop/stage.mjs`) minifies js, css and index.html and stamps `?v=` content hashes, so the repo tree is not served byte-for-byte. The only hard requirement is **HTTPS**, which
 Pages provides — `DeviceOrientationEvent.requestPermission()` (tilt) and the
 Web Audio context both need a secure context. Cache-busting is the deploy's job:
 the committed shell reads `?v=dev` on every `<script>`/`<link>`, and `pages.yml`

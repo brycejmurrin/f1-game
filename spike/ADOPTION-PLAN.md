@@ -2,9 +2,11 @@
 
 > **Status (2026-08):** Phase A shipped (`js/render/three/`, opt-in); TLX has
 > since grown its own chunked/shadow/post path; Phase D (flip + delete GLX/WGX)
-> has not happened. R0–R1 shipped as `js/game/debrisworld.js` (default-on), the
-> R2 takeover layer as `js/game/incidentsim.js`, and Part 3's B1 as
-> `js/game/racecontrol.js`.
+> has not happened. R0–R1 shipped as `js/physics/debris-world.js` (default-on then; debris ships off today), the
+> R2 takeover layer as `js/physics/incident-sim.js`, and Part 3's B1 as
+> `js/race/race-control.js` (paths as of 2026-11; they were under `js/game/`).
+> **Update 2026-11:** TLX is now the default renderer; GLX remains the fallback
+> and WGX is opt-in, so the delete half of Phase D still has not happened.
 
 Written after the evaluation spikes (see `spike/README.md` criteria table and
 `spike/physics/README.md`). This is the working plan for what comes next; the

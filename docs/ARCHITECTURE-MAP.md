@@ -24,14 +24,16 @@ assets/pack/        baked PBR material arrays (ships ON; failures degrade)
 
 1. Browser loads `index.html`. Script tags follow `tools/manifest.cjs` (asserted
    by `tests/unit/load-order.test.mjs`). `js/core/log.js` is first.
-2. `js/game.js` runs, builds the **`G` façade** (live getters over its closure
-   state), and calls `Module.create(G)` on extracted subsystems. Modules must
-   not reach into `game.js` internals — only through `G`.
-   Boot injection and payload retries live in `ScriptLoader` and `LazyBundles`
-   (`js/core/`); `RendererBoot` owns renderer selection and fallback. `TitleFlow`
-   and `PlatformSession` own menu entry and platform/phone lifecycle wiring.
-3. Renderer pick (`js/render/gfx.js`): default **TLX** (three.js), explicit
-   WebGL2 **GLX**, opt-in **WGX** (WebGPU). All three are **DEFERRED** — injected
+2. `js/game.js` runs: it first creates `RendererBoot` and awaits
+   `RendererBoot.start()` (renderer pick and backend init), then builds the **`G`
+   façade** (live getters over its closure state), and calls `Module.create(G)` on
+   extracted subsystems. Modules must not reach into `game.js` internals — only
+   through `G`. Boot injection and payload retries live in `ScriptLoader` and
+   `LazyBundles` (`js/core/`). `TitleFlow` and `PlatformSession` own menu entry
+   and platform/phone lifecycle wiring.
+3. Renderer pick (`js/render/renderer-boot.js`, `RendererBoot`): default **TLX**
+   (three.js), explicit WebGL2 **GLX**, opt-in **WGX** (WebGPU);
+   `js/render/gfx.js` is only the `Gfx.create` factory. All three are **DEFERRED** — injected
    at boot for the resolved choice, never tagged.
 4. First race builds a circuit: `js/circuits/<id>.js` data +
    `js/circuits/scenery/<id>.js` (lazy) through the track engine in `js/track/`.
@@ -204,8 +206,9 @@ the flow C PR "a start that finds the season finished".)
 
 ### Entering a session
 
-Every start ends in `startRace()` → `SessionEntry.begin("race", key, prepare, commit, valid,
-recover)` → `startRaceBody`. `key` is `entrySettings()` (track, flow, session, weather, laps,
+Every start ends in `startRace()` → `RaceEntryProfile.runSession(sessionEntry, key, …)`
+(`js/perf/race-entry-profile.js`), which wraps `SessionEntry.begin("race", key, prepare, commit, valid,
+recover)` → `startRaceBody` (qualifying calls `sessionEntry.begin` directly). `key` is `entrySettings()` (track, flow, session, weather, laps,
 team, grid, season round…).
 
 - **superseded** (a newer start, or `quitToMenu` → `sessionEntry.cancel()`): the old request

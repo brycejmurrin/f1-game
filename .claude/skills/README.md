@@ -71,6 +71,6 @@ already red?"), **ci-red-triage** (a red ci.yml / pages.yml run: which test, ass
 red), **deploy-research** (public web / live `version.json`), **track-surveyor** (one circuit's def + scenery pair),
 **physics-contract-auditor** (curvature columns), **surface-reviewer** (cross-file claims of the agent surface).
 Historical folds: `docs/notes/SKILL-REVIEW-2026-10-28.md` and the 2026-11-03 reset
-(`docs/plans/2026-11-03-agent-surface-reset.md` §4.5: `worker` and `ship` folded into `steward`, `orchestrate` deleted).
+(`docs/plans/2026-11-03-agent-surface-reset.md` §4.5: the old worker lane skill folded into `steward`; `ship` survives as a thin user-only skill; `worker` is a subagent card; `orchestrate` deleted).
 
 See individual `SKILL.md` files under this directory for full workflows.

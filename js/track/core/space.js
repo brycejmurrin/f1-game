@@ -74,7 +74,7 @@ const TrackSpace = (function () {
   //
   // THE SHIFT IS NOT `startFrac - sceneryStartFrac`. That looks right and is
   // wrong, because the two live in different spaces: `startFrac` is a
-  // CONTROL-POINT INDEX fraction (resolve() uses it as
+  // CONTROL-POINT INDEX fraction (`fromRaw()` in core/def.js uses it as
   // `round(startFrac * points.length)`) while an authored scenery fraction is
   // an ARC-LENGTH fraction of the lap — and the control points are nowhere near
   // arc-uniform (Monaco's run 21 m apart, Baku's 70 m). Subtracting one from
@@ -124,7 +124,7 @@ const TrackSpace = (function () {
 
   // The range twin of sceneryFrac. Every SCENERY call site must use this and
   // never range() directly. range() keeps its explicit space parameter because
-  // resolve()'s hwZones remap genuinely is source-space by convention, and that
+  // `fromRaw()` in core/def.js hwZones remap is source-space by convention, and that
   // call has nothing to do with what a def says about its scenery.
   function sceneryRange(def, s0, s1) {
     // THE ENTIRE LAP IS THE ENTIRE LAP IN EVERY FRAME — mirror, reverse and

@@ -7,8 +7,8 @@
    only through this surface. Depends on nothing in game.js by name: state
    comes through the G façade (gfx / store / cars / raceT / camEye / camMode /
    dbgCam / state / raceTimeOfDay / track / teamIdx / driverIdx / headlessMode /
-   frame), the six helpers that could not leave game.js through deps (resolveLivery,
-   partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali). */
+   frame), the seven helpers that could not leave game.js through deps (resolveLivery,
+   factoryLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali). */
 "use strict";
 
 const CarDraw = (function () {

@@ -4,8 +4,7 @@ Native wrappers around the site GitHub Pages publishes, staged by the same
 `tools/desktop/stage.mjs` (`stageSiteMinified`) the Pages deploy runs. There is
 no second gameplay codebase and no build step for the game itself. Neither
 wrapper has ever been released: no Windows, macOS, Android or iOS package has
-been built or run by CI (desktop CI to date is Ubuntu pull-request pack-smoke
-only; nothing in CI builds `mobile/`).
+been built or run by CI (desktop CI: Ubuntu pull-request pack-smoke plus a weekly Wednesday pack-smoke on Ubuntu, Windows and macOS; tag and `workflow_dispatch` runs use the three OSes too — `.github/workflows/desktop.yml`; nothing in CI builds `mobile/`).
 
 The staged `js/` is byte-identical to Pages only when terser is installed at the
 repo root (`npm ci`). A missing terser fails a release build (`APEX_RELEASE_BUILD=1`,

@@ -7,14 +7,14 @@ Since the 2026-09-03 move window the engine is split: `core/` is the road
 itself (spline, mesh, geom, space, surface), `scenery/` is everything placed
 beside it (the emitter split, graph, models, themes, kits, the generic
 tables, and `build-props.js` orchestration), and `tracks.js` at the root is
-the registry — `LIST`, `resolve`, `build`, palettes.
+`LIST`, `build`/`buildPaced`, hydrate, pit helpers; palettes+def in core/def.js (`fromRaw`). No `resolve`.
 
 - **The def is the single home of a circuit's data.** `path` (real
   centreline), `sectors`/`turns` (curated markings), `barrier`, `furniture`,
   `kit`, `standSet`, `cityStyle` are all keys of `js/circuits/<id>.js`; this
   directory holds only the GENERIC fallbacks (`FURN_DEF`,
   `THEME_DEF`, `STAND_SET_DEF` in scenery/data.js). Never add an id-keyed
-  table here — read the key off the BUILT def (copied in tracks.js `LIST`;
+  table here — read the key off the BUILT def (copied in core/def.js `fromRaw`;
   `tests/unit/circuit-def-fields.test.mjs` pins the copy).
 
 - **Coordinates**: +Y up, metres, radians, arc `s` in metres, lateral `x`

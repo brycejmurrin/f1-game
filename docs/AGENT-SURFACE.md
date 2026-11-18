@@ -325,7 +325,7 @@ the tool when the 3D frame behind the HUD matters.
 accept (tracks, cams, tods, shot presets, HUD devices/cams, job kinds, UI screens
 and viewports) in one read, sourced from the tools' own schemas so it cannot drift.
 30 → 31 on 2026-10-16 for `apex_profile_query` (`perf/query.mjs`: summarise or compare saved profile artifacts, tree kind). The profiler run itself is `apex_job_start` kind `profile` (`perf/profile.mjs`, a browser job behind the already-guarded job door).
-31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
+31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `.claude/hooks/mcp_browser_rules.py` for the browser-tool set); it returns a jobId and holds the browser lock until the job exits.
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
 33 → 34 on 2026-10-18 for `apex_help`; `tools/list` now publishes a compact form (71.5 → ~51 KB).

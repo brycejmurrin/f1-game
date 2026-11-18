@@ -10,7 +10,7 @@ const IncidentSim = (function () {
 
   let G = null;             // game.js ctx façade (live getters + trackFrom/worldFromTrack helpers)
 
-  // flags (all DEFAULT ON, each its own disable flag)
+  // R2/R3/C1 sub-flags default ON; takeover needs debris on (apex26.debris) + Rapier — active().
   let _r2 = true;           // apex26.r2Airborne — R2 airborne / rollover
   let _r3 = true;           // apex26.r3Contact — R3/C3 car-car contact resolution
   let _c1 = true;           // apex26.c1Pileup  — C1 multi-car pile-ups
