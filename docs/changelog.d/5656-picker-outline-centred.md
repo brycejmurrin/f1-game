@@ -1,0 +1,1 @@
+Fixed: Circuit picker (Time Trial, Race, Practice — every filter): the track outline on the preview card is centred between the circuit name and the TURNS / CIRCUIT LENGTH row instead of hugging the top edge under the title, and tall layouts such as Monaco no longer run into the name on desktop or portrait (#5656).
