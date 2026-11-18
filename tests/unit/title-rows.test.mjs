@@ -36,13 +36,12 @@ test("the door roster each row is built from", () => {
 });
 
 test("the look: italic slanted doors, and the quiet restyle stays off the short landscape screen", () => {
-  // Phone look + MOTION:REDUCED keeps the resting skew (no un-skew on press).
-  assert.match(block, /font-style: italic; font-weight: 700;[^}]*transform: skewX\(-6deg\); border-radius[\s\S]*:root\[data-motion="reduce"\] body\[data-shape="wide"\]:not\(\[hidden\]\) #overlay #menu-buttons \.bigbtn:active \{ transform: skewX\(-6deg\); \}/);
+  assert.match(block, /font-style: italic; font-weight: 700;[^}]*transform: skewX\(-6deg\); border-radius/);
   const quiet = css.slice(css.indexOf("Destination presentation: one quiet control family"), css.indexOf("At comfortable heights"));
-  // Quiet media: transform:none, data-motion kills scale(.98), utility wrap folded
-  // in (was a third duplicate @media); only dense-home + quiet remain.
+  // Quiet media opens with transform:none; utility-row wrap folded into it (was a
+  // third duplicate of this same @media). Blocking-CSS ceiling forbids a third.
   assert.ok(
-    /@media \(min-height: 520px\), \(max-aspect-ratio: 1\/1\) \{\n#overlay #menu-buttons \.bigbtn \{\n  transform: none;[\s\S]*:root\[data-motion="reduce"\] #overlay #menu-buttons \.bigbtn:active \{ transform: none; \}[\s\S]*#menu-secondary > \.bigbtn \{[\s\S]*?text-wrap: balance/.test(quiet)
+    /@media \(min-height: 520px\), \(max-aspect-ratio: 1\/1\) \{\n#overlay #menu-buttons \.bigbtn \{\n  transform: none;[\s\S]*#menu-secondary > \.bigbtn \{[\s\S]*?text-wrap: balance/.test(quiet)
       && [...css.matchAll(/@media \(min-height: 520px\), \(max-aspect-ratio: 1\/1\)/g)].length === 2,
     "quiet restyle + folded utility wrap; no third copy of the dense-home media");
 });

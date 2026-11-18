@@ -29,10 +29,7 @@
 @media (hover: hover) and (pointer: fine) {
   .watch-transport button:hover { border-color: var(--red); background: var(--plate-on); }
 }
-/* Same inset ring as css/tokens.css :focus-visible — an outset 2px ring here
-   out-specified the house floor (max(2px, 2px/--ui-scale)) and revived the
-   outset clip the tokens audit removed. Bar is HUD chrome (no .sheet zoom),
-   so the scale floor still matters at UI SIZE < 100%. */
+/* Inset ring + ui-scale floor (tokens.css). Was outset 2px and out-specified the house ring. */
 .watch-transport :is(button, select, input):focus-visible {
   outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
   outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
@@ -147,11 +144,7 @@ body:has(> .screen:not([hidden])) .watch-transport, body.photo-mode .watch-trans
   .watch-transport [data-wt="caption"] { gap: calc(var(--gap) / 3); }
   .watch-transport [data-wt="director"] { display: none; }
 }
-/* Short + narrow ONLY — below the phone-bar min-width (600px). The old
-   `(max-height: 520px) and (max-width: 740px)` restated wrap AFTER the phone
-   bar's nowrap, so every 600–740×≤520 window (PHONE_BAR in
-   js/ui/watch-transport.js, UI contract §4.10) lost the one-row layout the
-   ⋯ dock assumes. Cap at 599 so the band's nowrap wins. */
+/* Below PHONE_BAR min-width only. Was max-width:740 and undid phone-bar nowrap on 600–740×≤520. */
 @media (max-height: 520px) and (max-width: 599px) {
   .watch-transport [data-wt="controls"] { flex-wrap: wrap; }
 }

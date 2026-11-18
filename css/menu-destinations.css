@@ -313,18 +313,8 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 #overlay #menu-buttons #mb-career .mb-sub { color: inherit; }
 #overlay #menu-buttons .bigbtn::before { background: none; }
 #overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
-/* MOTION: REDUCED twin — scoped inside this quiet @media so it cannot cancel
-   the phone-landscape resting skew (skewX(-6deg) under max-height 519).
-   responsive.css zeroes transition-duration on #overlay *, but scale(.98) is
-   not a transition. */
-:root[data-motion="reduce"] #overlay #menu-buttons .bigbtn:active { transform: none; }
-/* Was a third copy of this same @media (utility-row wrap). Folded here so
-   the dense-home / quiet-restyle / utility ladder shares one condition. */
 body #overlay #menu-buttons #menu-secondary > .bigbtn {
-  overflow-wrap: normal;
-  word-break: normal;
-  text-wrap: balance;
-  line-height: 1.1;
+  overflow-wrap: normal; word-break: normal; text-wrap: balance; line-height: 1.1;
 }
 }
 /* At comfortable heights the destinations retain their groups instead of
@@ -492,9 +482,5 @@ body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="5"] #menu-explore
 }
 @media (max-height: 519px) and (min-aspect-ratio: 1/1) and (prefers-reduced-motion: reduce) {
   body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn:active { transform: skewX(-6deg); }
-}
-/* In-game MOTION: REDUCED — keep the resting skew on press (no scale pop). */
-@media (max-height: 519px) and (min-aspect-ratio: 1/1) {
-  :root[data-motion="reduce"] body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn:active { transform: skewX(-6deg); }
 }
 }
