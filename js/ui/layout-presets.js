@@ -220,6 +220,57 @@ const LayoutPresets = (function () {
     return true;
   }
 
+  // ── PORTRAIT & LANDSCAPE (#4529 part 1) ─────────────────────────────────
+  // SHARED (shipped) is apex26.appearanceShapes absent: one set of values for
+  // both orientations, exactly as before this row existed; any other stored
+  // value, the reverted #4897's {v:1} included, reads SHARED. SEPARATE is
+  // {v:2, mode:"separate", live, park}: the live keys always hold the CURRENT
+  // orientation's values, so every owner keeps reading its own key, and `park`
+  // holds the other orientation's SHAPE_KEYS (null until it has its own).
+  // AppearanceStudio (eager) calls syncShape(now) only after SheetShape's ICB
+  // classifier (body[data-shape]) has settled on `now` with the tab visible.
+  // Colours, text, units, the home scene and titleLayout ({v:2, wide, tall}
+  // itself) stay device-wide. SHARED again keeps the current values for both.
+  const SHAPES_KEY = "appearanceShapes";
+  const SHAPE_KEYS = Object.freeze(["uiScale", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudMetricsLayout", "hudMapVis", "hudGapsVis",
+    "pauseLayout", "pauseSide", "pauseDim", "lookPause", "lookDatahub", "lookSelect", "lookRace", "lookCareer", "lookGarage", "lookPopups", "lookDesigner"]);
+  const studio = () => (typeof AppearanceStudio !== "undefined" && AppearanceStudio) || null;
+  const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  const pick = (v) => { const o = {}; for (const k of SHAPE_KEYS) o[k] = v[k] === undefined ? null : v[k]; return o; };
+  /** Any stored value -> {separate, live, park}; park is clamped like the live keys (a missing key reads shipped). */
+  function normalizeShapes(raw) {
+    const ok = isObj(raw) && raw.v === 2 && raw.mode === "separate", a = studio();
+    return { separate: ok, live: ok && (raw.live === "wide" || raw.live === "tall") ? raw.live : null,
+      park: ok && isObj(raw.park) && a ? pick(a.normalizeSnapshot(pick(raw.park))) : null };
+  }
+  const shapes = () => normalizeShapes(store() ? store().get(SHAPES_KEY, null) : null);
+  /** SEPARATE only: the settled orientation is `now`. Park the outgoing values
+   *  and apply the parked ones. True when values were swapped. */
+  function syncShape(now) {
+    const st = shapes(), a = studio(), s = store();
+    if (!a || !s || !st.separate || (now !== "wide" && now !== "tall") || st.live === now) return false;
+    const cur = a.snapshot(), out = pick(cur), park = st.park;
+    s.set(SHAPES_KEY, { v: 2, mode: "separate", live: now, park: out });
+    if (!park || JSON.stringify(park) === JSON.stringify(out)) return false;
+    if (undoSnap) undoSnap = null;   // its snapshot is the other orientation's
+    a.applySnapshot(Object.assign(cur, park), { history: false });
+    paint();
+    return true;
+  }
+  /** "separate" starts from the current values in both orientations; "shared" removes the key. */
+  function setShapeMode(mode) {
+    const s = store(), a = studio();
+    if (!s) return false;
+    if (mode !== "separate") { s.set(SHAPES_KEY, null); return true; }
+    if (shapes().separate) return true;
+    const now = a && a.shapeNow ? a.shapeNow() : null;
+    s.set(SHAPES_KEY, { v: 2, mode: "separate", live: now, park: null });
+    return true;
+  }
+  const ORIENT_ROW = "pm-orientation";
+  const ORIENT_VALUES = [["shared", "SHARED"], ["separate", "SEPARATE"]];
+  const orientNow = () => (shapes().separate ? "separate" : "shared");
+
   // ── the row ──────────────────────────────────────────────────────────────
   const values = () => PRESETS.map((p) => [p.id, p.name]).concat([["custom", "CUSTOM", true]]);
   let ui = null;
@@ -277,9 +328,21 @@ const LayoutPresets = (function () {
       : help && help.tagName === "P" ? panel.children[1] || null : (panel.children && panel.children[0]) || null;
     panel.insertBefore(box, anchor);
     ui = { row: built.row, note, undo: undoBtn, box };
+    const orient = SettingRow.build(ORIENT_ROW, "PORTRAIT & LANDSCAPE", ORIENT_VALUES);
+    const orientNote = doc.createElement("p");
+    orientNote.id = ORIENT_ROW + "-note";
+    orientNote.className = "adv-help";
+    orientNote.textContent = "SHARED: one set of sizes and screen looks for both orientations. SEPARATE: portrait and landscape each keep their own UI and HUD sizes, pause menu and screen looks on this device, starting from your current ones. Colours and text stay shared.";
+    box.appendChild(orient.row);
+    box.appendChild(orientNote);
+    SettingRow.wire(orient.row, { values: ORIENT_VALUES, read: orientNow, write: (v) => { setShapeMode(v); } });
     SettingRow.wire(built.row, { values: values(), read: current, write: (v) => { apply(v); } });
     const st = store();
-    if (st && st.subscribe) st.subscribe((c) => { if (managed(c && c.key)) queuePaint(); });
+    if (st && st.subscribe) st.subscribe((c) => {
+      if (managed(c && c.key)) queuePaint();
+      if (c && c.key === SHAPES_KEY) SettingRow.paint(orient.row, orientNow());
+    });
+    SettingRow.paint(orient.row, orientNow());
     paint();
     return built.row;
   }
@@ -292,5 +355,6 @@ const LayoutPresets = (function () {
   }
 
   return Object.freeze({ KEY, PRESETS, PAUSE_KNOBS, apply, undo, current, matches, expected, mount, snapshot,
+    SHAPES_KEY, SHAPE_KEYS, shapes, normalizeShapes, syncShape, setShapeMode,
     get canUndo() { return !!undoSnap; } });
 })();
