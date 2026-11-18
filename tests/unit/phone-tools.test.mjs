@@ -23,11 +23,12 @@ test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/
   assert.equal(p.contextOptions.isMobile && p.contextOptions.hasTouch, true);
   assert.match(p.contextOptions.userAgent, /iPhone/);
   assert.equal(p.profile.file, OWNER_EXPORT);
-  assert.equal(OWNER_EXPORT, "tests/data/settings-live-export-2026-11-09.json");
-  assert.equal(p.localStorage["apex26.uiScale"], "61", "his UI SIZE is 61 %, stored as a percent (what js/ui/scale.js reads)");
-  assert.equal(p.uiScale, 61);
+  assert.equal(OWNER_EXPORT, "tests/data/settings-live-export-2026-11-10.json", "his CURRENT export (#5218)");
+  assert.equal(p.localStorage["apex26.uiScale"], "70", "his UI SIZE is 70 %, stored as a percent (what js/ui/scale.js reads)");
+  assert.equal(p.uiScale, 70);
+  assert.equal(p.localStorage["apex26.hudBtnScale"], "143.25", "his BUTTON SIZE is 143.25 %");
   assert.equal(p.localStorage["apex26.textSize"], JSON.stringify("large"), "a store.set key is JSON");
-  for (const k of ["hudScale", "hudBtnScale", "hudBtnOpacity"]) assert.equal("apex26." + k in p.localStorage, false, `${k} is unset on his phone (the default)`);
+  for (const k of ["hudScale", "hudBtnOpacity"]) assert.equal("apex26." + k in p.localStorage, false, `${k} is unset on his phone (the default)`);
   assert.equal(JSON.parse(p.localStorage["apex26.hudElements"]).speed, "off");
   assert.equal(brycePhone({ uiScale: 51 }).localStorage["apex26.uiScale"], "51", "--ui-scale overrides the export, in percent");
   assert.deepEqual(brycePhone({ profile: false }).localStorage, {});
@@ -57,7 +58,8 @@ test("ownerStore splits the export into the json and raw lanes and drops unset k
 test("mismatches: [] when the page reports the preset, one line per difference otherwise", () => {
   const p = brycePhone({ profile: "legacy" });
   const got = { viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, insets: { top: 0, left: 59, bottom: 21, right: 59 }, coarse: true, stored: { hudBtnScale: "245", uiScale: null } };
-  assert.deepEqual(mismatches(brycePhone(), got), ["stored uiScale = null, seeded 61"], "the live profile seeds UI SIZE 61");
+  assert.deepEqual(mismatches(brycePhone(), got), ["stored uiScale = null, seeded 70", "stored hudBtnScale = 245, seeded 143.25"],
+    "the live profile seeds UI SIZE 70 and BUTTON SIZE 143.25");
   assert.deepEqual(mismatches(p, got), []);
   const bad = mismatches(p, { ...got, viewport: { width: 844, height: 390 }, insets: { top: 0, left: 0, bottom: 0, right: 0 }, stored: { hudBtnScale: "100" } });
   assert.equal(bad.length, 5, bad.join(" | "));

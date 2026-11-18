@@ -22,10 +22,10 @@
 // Two contexts on his phone (tools/lib/bryce-phone.mjs: descriptor + CDP env() insets): one clean, one seeded with
 // the export the way a boot reads it. Rects are getBoundingClientRect; a box may differ by 1 px (zoom rounding).
 import { test, expect } from "@playwright/test";
-import { openBrycePhone, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
+import { OWNER_EXPORT, openBrycePhone, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
 import { settleInPage } from "../helpers/title-fit.mjs";
 
-const EXPORT_FILE = "tests/data/settings-live-export-2026-11-10.json";
+const EXPORT_FILE = OWNER_EXPORT;   // his 2026-11-10 export: tools/lib/bryce-phone.mjs `live` (#5218)
 const BOOT = 60000;
 /** Per screen: how a player opens it from the title, and the boxes compared. */
 const MENUS = [

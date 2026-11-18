@@ -53,7 +53,7 @@ export const VIEWPORTS = [
     "iPhone 13 full-screen geometry, 844x390 CSS; browser toolbar excluded",
     ins(PW.w844)],
   // THE OWNER'S PHONE (tools/lib/bryce-phone.mjs, issue #5262). Named `bryce-*` so an `ios-*` glob never picks them
-  // up. The 5th element marks the cell: seedOwnerProfile() then boots it on his live settings export (UI SIZE 61 %),
+  // up. The 5th element marks the cell: seedOwnerProfile() then boots it on his live settings export (UI SIZE 70 %),
   // and layout-audit sets real env() insets and prints the PAINTED sizes (tools/lib/paint-floor.mjs).
   ...["standalone", "safari"].map((w) => {
     const p = brycePhone({ window: w, dpr: 2, profile: false });
