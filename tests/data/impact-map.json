@@ -20278,6 +20278,9 @@
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
+      "inflate": [
+        "tests/unit/bitmap-decode-worker.test.mjs"
+      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"

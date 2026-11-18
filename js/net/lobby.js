@@ -9,6 +9,7 @@ const NetLobby = (function () {
     const $ = (id) => document.getElementById(id);
     const transports = new Map();
     let transport = null;                  // the pending one, mid-handshake
+    let raceHeld = false, tearingDown = false; // stop("local") after finishStart ≠ peer leave
     let nextGuestId = 0;
     let codeRoom = null;
     // The room code we closed while a guest's answer negotiates, and must
@@ -225,7 +226,7 @@ const NetLobby = (function () {
         return null;
       }
       const id = pendingId;
-      transport.onClose(() => {
+      transport.onClose((why) => {
         // Belt and braces: the transport that emitted close has already
         // released itself, but close it BEFORE the map delete so a future
         // close-emitter that does not self-release cannot leak past
@@ -244,8 +245,9 @@ const NetLobby = (function () {
         clashDrop(id);
         // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
-        Log.info("net", "peer leave " + id);
         if (hostEvictingIds.has(id)) hostEvictingIds.delete(id);
+        if (tearingDown) return;
+        Log.info("net", "peer leave " + id + (why ? " " + why : ""));
         session = [...sessions.values()][0] || null;
         // OCCUPANCY IS TRANSPORTS, NOT LOBBY SESSIONS. finishStart() hands the
         // sessions map to NetPlay and clears it, but leaves transports up for
@@ -264,6 +266,8 @@ const NetLobby = (function () {
           // roomState().peers and would wait forever for a lap the gone host
           // can no longer relay (2p never saw it — no relayed roster).
           _peers.clear(); _ready.clear(); selfReady = false; clashClear();
+          if (raceHeld && !racing && why === "local") { raceHeld = false; return; } // quit: onStop restores
+          raceHeld = false;
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
           } else if (wasHostEvict && role === "host") {
@@ -358,9 +362,9 @@ const NetLobby = (function () {
     }
 
     function teardown() {
+      tearingDown = true; raceHeld = false;
       consumeHandledInvite(); stopPoll();
-      clearInterval(pumpTimer);
-      pumpTimer = null;
+      clearInterval(pumpTimer); pumpTimer = null;
       for (const timer of rosterTimers.values()) clearTimeout(timer);
       rosterTimers.clear();
       settingsAccepted = true; settingsNeedsReady = false; settingsRevision = 0; settingsFingerprint = null;
@@ -371,15 +375,11 @@ const NetLobby = (function () {
       codeReopen = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       for (const s of sessions.values()) { try { s.close(); } catch (e) { /* already gone */ } }
-      sessions.clear();
-      session = null;
+      sessions.clear(); session = null;
       for (const t of transports.values()) { try { t.close(); } catch (e) { /* already gone */ } }
       transports.clear(); _verify.clear(); _verified.clear();
       if (transport) { try { transport.close(); } catch (e) { /* already gone */ } }
-      transport = null;
-      pendingId = null;
-      nextGuestId = 0;
-      hostRemovedMe = false;
+      transport = null; pendingId = null; nextGuestId = 0; hostRemovedMe = false; tearingDown = false;
     }
 
     // "It didn't work" is not an answer a player can act on, and the two ways
@@ -564,7 +564,7 @@ const NetLobby = (function () {
         _verify.set(id, v); _verified.delete(id);   // unticked: READY waits for CODES MATCH (#5313)
         say("Connected. Check both screens show code " + v + ", then tap CODES MATCH.");
         if (selfReady) setReady(false); else renderRoom();
-      });
+      }).catch((e) => { Log.warn("net", "verify code failed:", e && e.message); });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
       reopenRoom(transports.size < MAX_GUESTS);
       session = [...sessions.values()][0];
@@ -1434,13 +1434,13 @@ const NetLobby = (function () {
       session = null;                    // owned by NetPlay now
       sessions.clear();
       if (!started.ok) {
-        say(started.message || "Could not start the session.", true);
+        raceHeld = false; say(started.message || "Could not start the session.", true);
         // q-go already cleared qualiNetDone, so quitToMenu would not cancel.
         cancel();
         if (G.quitToMenu) G.quitToMenu();
         return;
       }
-      if (role === "host") G.netPlay.hostStart();
+      raceHeld = true; if (role === "host") G.netPlay.hostStart();
       close();
     }
 
