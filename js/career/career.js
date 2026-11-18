@@ -294,6 +294,7 @@ function save(options) {
   return career;
 }
 function saveStatus() { return Object.assign({}, lastSave); }
+const saveKept = () => lastSave.ok !== false && lastSave.durable !== false;
 // Wipes the LIVE slot only. The other five are untouched — deleting one career
 // must never be a way to lose the others.
 function clear() {
@@ -971,7 +972,12 @@ function research(opt) {
   career.money -= cost;
   career.owned.push(key);
   save();
-  return true;
+  // A refused or non-durable write must not leave a purchase the save does not hold (#5575).
+  if (saveKept()) return true;
+  career.money += cost;
+  const at = career.owned.lastIndexOf(key);
+  if (at >= 0) career.owned.splice(at, 1);
+  return false;
 }
 // Raise the fitted-cost cap one rung of BUDGET_MULT (the RAISE THE CAP card).
 // Deliberately a different sink from the factory: the factory cuts what FUTURE
@@ -983,7 +989,10 @@ function upgradeBudget() {
   career.money -= cost;
   career.budgetLvl++;
   save();
-  return true;
+  if (saveKept()) return true;
+  career.money += cost;
+  career.budgetLvl--;
+  return false;
 }
 
 const SPONSOR_KINDS = [
@@ -1284,7 +1293,9 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
                  + clamp((craft - CRAFT_BASE) * CRAFT_REP, CRAFT_REP_MIN, CRAFT_REP_MAX);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
-  const matePts = mate && scored(mate) ? (table[order.indexOf(mate)] || 0) : 0;
+  // paid(), not scored(): a DSQ mate can still be classified, and the sponsor
+  // "double" means both cars banked points — the same gate as matePrize.
+  const matePts = mate && paid(mate) ? (table[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
   const cleanRun = !player.retired && !player.dsq && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
@@ -1695,7 +1706,7 @@ function rollover() {
   const original = JSON.parse(JSON.stringify(career));
   const seasonRef = career.season;
   const result = rolloverApply();
-  if (lastSave && lastSave.ok) return result;
+  if (lastSave && lastSave.ok && lastSave.durable) return result;
   const reason = (lastSave && lastSave.reason) || "conflict";
   const replace = (target, source) => {
     for (const key of Object.keys(target)) if (!Object.prototype.hasOwnProperty.call(source, key)) delete target[key];
@@ -1847,7 +1858,10 @@ function rolloverApply() {
   career.obj = null;
   career.objPick = null;
   career.paidSponsors = [];
-  save();
+  // Season boundary is one-way: a quota-refused session-only write must not
+  // leave year++ / winter transfers that vanish on reload (adoption uses the
+  // same requireDurable gate).
+  save({ requireDurable: true });
   return { year: career.year, champion: entry.champion, summary: entry,
            offers: career.offers, history: career.history, moves: career.moves };
 }

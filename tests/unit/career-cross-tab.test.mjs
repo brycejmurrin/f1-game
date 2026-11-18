@@ -172,8 +172,9 @@ test("remapPoints sanitises the per-round and finish records, not only pts", () 
       roundPts: { "haas:0": [25, "18", -4, null], bogus: "x" },
       finishes: { "haas:0": [1, "2", 0.5, -1] } },
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(c.season.roundPts)), { "haas:0": [25, 0, 0, 0] });
-  assert.deepEqual(JSON.parse(JSON.stringify(c.season.finishes)), { "haas:0": [1, 0, 0, 0] });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.season.roundPts)), { "haas:0": [25, 18, 0, 0] },
+    "digit strings coerce like scoreMap; junk and negatives still zero");
+  assert.deepEqual(JSON.parse(JSON.stringify(c.season.finishes)), { "haas:0": [1, 2, 0, 0] });
   const bare = SaveMigrate.migrateCareer({ v: 1, season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} } });
   assert.deepEqual(JSON.parse(JSON.stringify(bare.season.roundPts)), {});
   assert.deepEqual(JSON.parse(JSON.stringify(bare.season.finishes)), {});
@@ -1150,4 +1151,39 @@ test("a COMMITTED stake the balance cannot cover is a disabled, labelled button;
   assert.deepEqual(f.calls.stake, [false]); assert.equal(f.calls.rebuild, 1);
   const funded = planningUiFixture();
   assert.equal(funded.button("Committed · 50 cr stake", funded.objective).disabled, false);
+});
+
+const BUDGET_COST = (Career) => Career.state().budgetCost;
+// #5575 finding 4: research() / upgradeBudget() deducted the credits, mutated the
+// career in memory, ignored what save() said and returned true. A refused or
+// non-durable write then showed a purchase the save did not hold until the reload.
+// (A conflict or a lost writer lock is already refused up front by blocked(); the
+// write that can still fail after the mutation is the storage one, pinned here.)
+test("research and RAISE THE CAP refuse and roll back a non-durable write (#5575)", () => {
+  let full = false;
+  const disk = new Map([
+    ["apex26.career.driver.0", JSON.stringify(save(1, 1e7))],
+    ["apex26.careerSlot", JSON.stringify("driver:0")],
+  ]);
+  const { Career, ctx } = load({ disk, setItem(k, v, d) {
+    if (full) { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; }
+    d.set(k, v);
+  } });
+  // A works car under the catalogue cap, so RAISE THE CAP has a rung to sell.
+  vm.runInContext(`Parts.getCost = () => 1000;
+    Parts.CATALOG = [1, 2, 3].map((i) => ({ id: "c" + i, options: [{ id: "o" + i, cost: 5000 }] }));`, ctx);
+  Career.load(); Career.engage(true);
+  // The control: with storage healthy the same purchase succeeds and is kept.
+  assert.equal(Career.research({ id: "floor", cost: 1 }), true);
+  assert.equal(Career.data().owned.indexOf("floor") >= 0, true);
+  const money = Career.data().money, lvl = Career.data().budgetLvl, owned = Career.data().owned.slice();
+  full = true;
+  assert.equal(Career.research({ id: "wing", cost: 1 }), false);
+  assert.equal(Career.saveStatus().durable, false);
+  assert.equal(Career.data().money, money);
+  assert.deepEqual(Career.data().owned.slice(), owned);
+  assert.notEqual(BUDGET_COST(Career), null, "the harness must offer a cap rung, or this proves nothing");
+  assert.equal(Career.upgradeBudget(), false);
+  assert.equal(Career.data().money, money);
+  assert.equal(Career.data().budgetLvl, lvl);
 });

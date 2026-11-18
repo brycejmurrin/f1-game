@@ -29,7 +29,7 @@ PR's tiers run the groups `pick-tests` names; a whole group (`remote-group.mjs <
 node tools/ci/pick-tests.mjs                 # GROUPS, vs the branch point + working tree
 node tools/ci/pick-tests.mjs --staged
 node tools/ci/pick-tests.mjs js/car/parts.js # explicit paths
-node tools/ci/pick-tests.mjs --bg            # only the remote-group.mjs commands, one per browser group
+node tools/ci/pick-tests.mjs --bg            # only the remote-group.mjs commands, one per browser group (dispatch: Bryce's opt-in)
 node tools/ci/select-specs.mjs --since <ref>              # SPECS, one per line, under a time budget
 node tools/ci/select-specs.mjs --since <ref> --budget-min 15
 ```
@@ -72,17 +72,20 @@ Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
 The full tiers run on the PR: every draft push gets the fast tier plus the
 `selected` legs under a 5-min budget with no overflow — one leg for a typical
 diff; a wide diff still fans out, because `select-specs` never drops a routed
-spec (its `Structural guards` A–D run the full `tooling-fast`, the check
-`ready-gate` reads), the full tier runs once the PR is ready (a ready flip
+spec (its `Structural guards` A–D run `tooling-fast`, the check `ready-gate`
+reads: the whole floor, except on a PR whose diff touches none of `tools/`,
+`tests/`, `.github/` or `package.json`, where they run `--changed`; guardsScope
+in `tools/ci/tooling-fast.mjs`, ci.yml "Guards scope"), the full tier runs once the PR is ready (a ready flip
 skips the `selected` legs when the newest run on the same head passed them on
 its first attempt with the same plan, on a base that is still the deploy tip:
 `tools/ci/reuse-draft-selected.mjs`), and
 `land.yml`'s `gate` check judges the merge result. A ready plan that DROPS a
 routed spec (the over-budget pool is full) is red unless every dropped spec ran
 green in a `remote-group.mjs <group>` run on the same head and base, first
-attempt, llvmpipe (`tools/ci/dropped-group-runs.mjs`, #5480): run the group
-BEFORE the ready flip (the verdict waits at most 7 min for a running one);
-after the red, run it and flip draft and back. A worker ends its turn at
+attempt, llvmpipe (`tools/ci/dropped-group-runs.mjs`, #5480). That dispatch is
+Bryce's opt-in (`APEX_GH_OWNER_WRITE=1`), so an agent asks for it with `needs-decision`
+BEFORE the ready flip (the verdict waits at most 7 min for a running one); after
+the red, once the group is green, flip draft and back. A worker ends its turn at
 `land` (skill `steward` §Land).
 
 ## 4. The gate is a ladder, and the rungs are not the same size

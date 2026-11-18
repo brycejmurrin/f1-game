@@ -61,7 +61,7 @@ Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`
 
 Browser proof is CI's, not a local run (AGENTS.md rule 5): `node tools/ci/pick-tests.mjs` names the groups for the
 tree — a player-path edit maps to `physics-core` (holds `physics-characterization.spec.js`); `understeer-cue.spec.js` is
-in `aero`. On the pushed branch request one with `node tools/ci/remote-group.mjs physics-core` (or `aero`).
+in `aero`. The PR's own CI runs the browser shard; a whole group (`remote-group.mjs`) is Bryce's opt-in.
 
 No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop for an A/B):
 

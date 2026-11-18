@@ -237,7 +237,7 @@
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/ui-resize.spec.js",
-        "tests/unit/capture-tools-regressions.test.mjs",
+        "tests/unit/capture-tools-replay.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/cdmcp-measure.test.mjs",
@@ -1486,6 +1486,7 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
@@ -2139,12 +2140,14 @@
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "cycleCam": [
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "refreshCamBtn": [
@@ -2155,6 +2158,7 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
@@ -2189,6 +2193,9 @@
       "comfortGet": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "comfortGetScoped": [
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "comfortSet": [
         "tests/unit/camera-defaults.test.mjs"
@@ -2273,6 +2280,7 @@
       "load": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/light-grid.test.mjs"
       ],
       "loadCar": [
@@ -2404,6 +2412,9 @@
       "beginScrub": [
         "tests/unit/replay-buf.test.mjs",
         "tests/unit/rival-audio.test.mjs"
+      ],
+      "boxU": [
+        "tests/unit/replay-buf.test.mjs"
       ],
       "breakTimeline": [
         "tests/unit/replay-buf.test.mjs"
@@ -3869,7 +3880,7 @@
       ],
       "*": [
         "tests/unit/ai-strategy.test.mjs",
-        "tests/unit/apex-tools-mcp.test.mjs",
+        "tests/unit/apex-tools-mcp-contract.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
@@ -4179,6 +4190,9 @@
       "armedRevision": [
         "tests/unit/career-backup.test.mjs"
       ],
+      "blocked": [
+        "tests/unit/career-cross-tab.test.mjs"
+      ],
       "budget": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -4206,6 +4220,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -4571,6 +4586,7 @@
         "tests/unit/season-calendar-default.test.mjs"
       ],
       "upgradeBudget": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "upgradeFacility": [
@@ -4774,6 +4790,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4923,6 +4940,7 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "scored": [
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
       "setConfig": [
@@ -4994,11 +5012,6 @@
     "js/circuits/albert_park.js": {
       "*": [
         "tests/unit/pick-unit-slices.test.mjs"
-      ]
-    },
-    "js/circuits/bahrain.js": {
-      "*": [
-        "tests/unit/track-shot-survey.test.mjs"
       ]
     },
     "js/circuits/cota.js": {
@@ -5084,8 +5097,7 @@
     },
     "js/circuits/scenery/bahrain.js": {
       "*": [
-        "tests/unit/circuit-corner-anchors.test.mjs",
-        "tests/unit/track-shot-survey.test.mjs"
+        "tests/unit/circuit-corner-anchors.test.mjs"
       ]
     },
     "js/circuits/scenery/baku.js": {
@@ -5931,12 +5943,15 @@
     },
     "js/core/wake-lock.js": {
       "create": [
+        "tests/specs/wake-lock.spec.js",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
       "drop": [
+        "tests/specs/wake-lock.spec.js",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
       "hold": [
+        "tests/specs/wake-lock.spec.js",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
       "*": [
@@ -6030,6 +6045,7 @@
       ],
       "*": [
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/pick-tests-named-specs.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -6373,7 +6389,8 @@
         "tests/unit/data-standings.test.mjs"
       ],
       "*": [
-        "tests/unit/css-tokens.test.mjs"
+        "tests/unit/css-tokens.test.mjs",
+        "tests/unit/pick-tests-named-specs.test.mjs"
       ]
     },
     "js/data/tab-utils.js": {
@@ -7723,6 +7740,7 @@
         "tests/specs/ui-button-touch.spec.js"
       ],
       "otEnabled": [
+        "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
@@ -8061,6 +8079,7 @@
         "tests/specs/steering.spec.js",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
+        "tests/unit/boost-press-census.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
@@ -12830,7 +12849,8 @@
       ],
       "lateralCurve": [
         "tests/unit/grip-steer.test.mjs",
-        "tests/unit/tyre-peak-slip.test.mjs"
+        "tests/unit/tyre-peak-slip.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
       ],
       "lifeLaps": [
         "tests/unit/ai-strategy.test.mjs",
@@ -12927,8 +12947,7 @@
       "*": [
         "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs",
-        "tests/unit/wheel-state.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/physics/vehicle.js": {
@@ -13022,6 +13041,7 @@
       ],
       "create": [
         "tests/unit/director.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-render.test.mjs",
         "tests/unit/real-race-script.test.mjs",
@@ -13039,6 +13059,9 @@
       ],
       "pipPick": [
         "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "refresh": [
+        "tests/unit/extra-rigs.test.mjs"
       ],
       "resetTiming": [
         "tests/unit/real-replay-broadcast.test.mjs"
@@ -13067,6 +13090,7 @@
       ],
       "tick": [
         "tests/unit/director.test.mjs",
+        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
@@ -15946,6 +15970,9 @@
       "disposeShared": [
         "tests/unit/tlx-r187-contracts.test.mjs"
       ],
+      "fineCells": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
       "free": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
@@ -16712,7 +16739,8 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/validation-cli-check.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {
@@ -17355,6 +17383,9 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
+      "cold": [
+        "tests/unit/build-worker.test.mjs"
+      ],
       "drop": [
         "tests/unit/build-client-drop.test.mjs"
       ],
@@ -17500,8 +17531,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
-        "tests/unit/scenery-api-contract.test.mjs",
-        "tests/unit/track-shot-survey.test.mjs"
+        "tests/unit/scenery-api-contract.test.mjs"
       ]
     },
     "js/track/core/hidden-faces.js": {
@@ -18874,7 +18904,7 @@
       "*": [
         "tests/specs/hud-mirror.spec.js",
         "tests/unit/a11y-opts.test.mjs",
-        "tests/unit/apex-tools-mcp.test.mjs",
+        "tests/unit/apex-tools-mcp-occupancy.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
@@ -19224,6 +19254,7 @@
     },
     "js/ui/pause-opts.js": {
       "apply": [
+        "tests/specs/wake-lock.spec.js",
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/pause-opts.test.mjs"
       ],
@@ -19235,7 +19266,6 @@
       ],
       "*": [
         "tests/specs/custom-team.spec.js",
-        "tests/specs/wake-lock.spec.js",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
@@ -20103,6 +20133,7 @@
         "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "vars": [
+        "tests/unit/appearance-opts.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "*": [
@@ -20254,6 +20285,9 @@
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
+      "inflate": [
+        "tests/unit/bitmap-decode-worker.test.mjs"
+      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"

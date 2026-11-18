@@ -49,6 +49,7 @@ import fs from "node:fs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -582,7 +583,8 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
 // in the PR body): the APPEARANCE page is a block, not a 2-column grid; the studio is one column with the preview on
 // top; preset tiles are 4-up at UI 100 and 3-up at 130 with names at 14–20.8 painted px; `--kb: 180px` pads the
 // <dialog> 180 px in every cell (it was 29 / 8); C at UI 130 caps the sheet at 1.214 and holds it across 277–289.
-const OWNER_EXPORT = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+// the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
+const LEGACY_PROFILE = readProfile("legacy");
 const CONTRACT_WINDOWS = [
   { name: "A-home-screen-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
   // C carries the fit-band cell: at UI 130 its 267 px safe box caps the 220-own settings sheet (1.214), the only
@@ -644,7 +646,7 @@ async function settledSettingsCell(page) {
 async function bootOnExport(page, v) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), OWNER_EXPORT);
+  const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), LEGACY_PROFILE);
   expect(imp.ok && !imp.failed, "the export seeds the store " + JSON.stringify(imp)).toBe(true);
   await page.reload();
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
@@ -731,7 +733,7 @@ test.describe("UI contract boot cell — a stale portrait inner* at a landscape 
   test("innerWidth/innerHeight 393x852 while the ICB is 852x393 on the export: body wide + compact, the probe shows the disagreement", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), OWNER_EXPORT);
+    const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), LEGACY_PROFILE);
     expect(imp.ok && !imp.failed, "the export seeds the store " + JSON.stringify(imp)).toBe(true);
     await page.addInitScript(() => {
       Object.defineProperty(window, "innerWidth", { configurable: true, get() { return 393; } });
@@ -754,10 +756,10 @@ test.describe("UI contract boot cell — a stale portrait inner* at a landscape 
   });
 });
 
-// UI contract cells (#5153 gap 10; PR D of #5153 — `OWNER_EXPORT` is PR B's constant above, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.3;
+// UI contract cells (#5153 gap 10; PR D of #5153 — `LEGACY_PROFILE` is PR B's constant above, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.3;
 // measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pause card in the owner's three
 // windows — A the iOS Home Screen app (852x393, insets 59/21/59), C the Safari tab (852x283,
-// insets 59/0/59), D the spec phone (844x390) — seeded from Bryce's own export (TEXT large,
+// insets 59/0/59), D the spec phone (844x390) — seeded from the legacy export (TEXT large,
 // UI 109 %, PAUSE look btn 115 / w 130). ONE phone card for every stored layout: nothing in the
 // card scrolls, every door is on screen, every tray label fits its tile. Before the fix each of
 // LIST / COMPACT / WIDE / SIDEBAR swapped in the 420 card and put QUIT 221-420 own px past the sheet.
@@ -771,7 +773,7 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
   test("one phone card for every stored layout: no scroll, every door on screen, labels fit", async ({ page }) => {
     await page.goto("/?inspector=0");
     await waitReady(page);
-    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
     expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
     await page.reload();
     await waitReady(page);
@@ -835,8 +837,10 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
   test("RESUME is the first, focused, painted door in every mode and UI SIZE, and the card never scrolls", async ({ page }) => {
     await page.goto("/?inspector=0");
     await waitReady(page);
-    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
     expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    // #5543: music is live in every cell, so the NOW PLAYING line is part of the card the questions below measure.
+    await page.evaluate(() => { localStorage.setItem("apex26.sound", "true"); localStorage.setItem("apex26.music", "true"); });
     await page.reload();
     await waitReady(page);
     await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
@@ -861,7 +865,10 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
           const all = doors.map(rect);
           const resume = document.getElementById("pm-resume"), rr = resume.getBoundingClientRect();
           const hit = document.elementFromPoint(rr.x + rr.width / 2, rr.y + rr.height / 2);
-          return { short: document.body.hasAttribute("data-pause-short"), density: document.body.dataset.density, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+          const card = document.getElementById("pm-now-card"), cr = card.getBoundingClientRect(), title = document.getElementById("pm-now").getBoundingClientRect();
+          return { now: { shown: shown(card), inSheet: cr.top >= sr.top - 0.5 && cr.bottom <= sr.bottom + 0.5 && cr.left >= sr.left - 0.5 && cr.right <= sr.right + 0.5, titleW: Math.round(title.width),
+              transport: ["pm-prev", "pm-play", "pm-skip"].filter((id) => { const el = document.getElementById(id), r = el.getBoundingClientRect(); return shown(el) && !el.disabled && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el; }) },
+            short: document.body.hasAttribute("data-pause-short"), density: document.body.dataset.density, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
             bodyScroll: sb.scrollHeight - sb.clientHeight, sheetScroll: sheet.scrollHeight - sheet.clientHeight,
             sheet: { x: Math.round(sr.x), y: Math.round(sr.y), w: Math.round(sr.width), h: Math.round(sr.height), inScreen: sr.top >= 0 && sr.left >= 0 && sr.bottom <= document.documentElement.clientHeight + 0.5 && sr.right <= document.documentElement.clientWidth + 0.5 },
             firstDoor: all[0].id, focus: document.activeElement && document.activeElement.id, hit: hit && hit.id, resumePosition: getComputedStyle(resume).position,
@@ -881,6 +888,8 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
         expect(cell.resume.area, tag + "no door on the card is larger than RESUME (QUIT may tie it; RESUME alone carries the primary fill)").toBeGreaterThanOrEqual(cell.maxOther * 0.99);
         expect(cell.outside, tag + "every door ends inside the sheet").toEqual([]);
         expect(cell.small, tag + "every door paints the 44 px floor").toEqual([]);
+        expect(cell.now, tag + "NOW PLAYING is on the card with its title and a tappable prev / play / next (#5543)").toMatchObject({ shown: true, inSheet: true, transport: ["pm-prev", "pm-play", "pm-skip"] });
+        expect(cell.now.titleW, tag + "the song title is painted").toBeGreaterThan(0);
         expect(cell.sheet.w, tag + "the card uses the width (the 420 card was 214 px here)").toBeGreaterThanOrEqual(600);
         await page.evaluate(() => document.getElementById("pm-resume").click());
         await page.waitForFunction(() => document.getElementById("pausemenu").hidden, null, { polling: 50, timeout: 8_000 });
@@ -902,7 +911,7 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract select + race cells 
   test("the picker's hero never scrolls and race settings keep START RACE fixed", async ({ page }) => {
     await page.goto("/?inspector=0");
     await waitReady(page);
-    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
     expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
     await page.reload();
     await waitReady(page);

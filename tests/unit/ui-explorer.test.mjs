@@ -806,3 +806,12 @@ test('focus assertion retains sampled evidence and disposes handles without swal
   await assert.rejects(() => performAction(session, { type: 'assert', oracle }), /Replay assertion failed:.*stability-not-observed/);
   session.focusWitnesses.set('before', witness); unexpected = true; await assert.rejects(() => checkFocus(session, oracle), /Execution context was destroyed/); assert.equal(disposed, 6); assert.equal(witnessDisposed, 5);
 });
+
+// The help says an invalid invocation exits 2; `brief` without --url threw and exited 1 (#5712).
+test("brief without --url or with an unknown mission is an invalid invocation (2)", async () => {
+  const err = console.error; console.error = () => {};
+  try {
+    assert.equal(await main(["brief"]), 2);
+    assert.equal(await main(["brief", "--url", "https://preview.example", "--mission", "no-such-mission"]), 2);
+  } finally { console.error = err; }
+});

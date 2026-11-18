@@ -1,0 +1,1 @@
+Fixed: on a landscape phone the UPDATE READY chip no longer sits on top of the title's last menu row — at 844x390 it covered SAVES & DATA and half of HOW TO PLAY for as long as an update was pending, and a tap meant for them reloaded the game. The title now ends one row higher while the chip shows.
