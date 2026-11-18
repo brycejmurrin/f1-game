@@ -4456,6 +4456,11 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tlx-mem.js",
+      "global": "TLXShaders",
+      "roster": "DEFERRED:three"
+    },
+    {
       "path": "js/render/three/tlx-post.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"

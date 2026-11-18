@@ -7,6 +7,19 @@
 (function () {
   const GR_MAX_LIGHTS = 6;   // the march and the CPU fill are both bounded at 6
 
+  // LAB ?lab=fxaaSub50 / fxaaSub25 / fxaaSub0 (D-027: URL only, read once at graph build, default OFF): the FXAA
+  // sub-pixel blend as a percentage. On a phone FXAA is the last pass at the scaled size and the browser magnifies
+  // its blend ~2.7x, so a phone A/B is two page opens. No lab (or no location): the shipped 0.75, the same constant
+  // in the graph, so nothing compiles differently.
+  function labFxaaSubpix(search) {
+    try {
+      const v = new URLSearchParams(search === undefined ? location.search : search).get("lab");
+      const m = v && v.split(",").map((s) => /^fxaaSub(\d{1,2})$/.exec(s.trim())).find(Boolean);
+      if (m) return Math.min(75, +m[1]) / 100;
+    } catch (_) { /* no location (node harness) or a bad query: no lab */ }
+    return 0.75;
+  }
+
   function post(THREE, TSL, ctx) {
     const {
       Fn, If, Loop, Break, Continue, uniform, uniformArray, texture,
@@ -1036,7 +1049,7 @@
     const fxaaU = { texel: uniform(new THREE.Vector2()), mir: uniform(0) };
     const fxLuma = (cc) => dot(cc, vec3(0.299, 0.587, 0.114));
     const FXAA_STEP = [1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0];
-    const FXAA_SUBPIX = 0.75;
+    const FXAA_SUBPIX = labFxaaSubpix();
     const fxaa = {
       tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex,
       mat: passMaterial(Fn(() => {
@@ -1271,5 +1284,5 @@
              ssao, godray, composite, fxaa, sgsr, blit, mirror };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { post });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { post, labFxaaSubpix });
 })();
