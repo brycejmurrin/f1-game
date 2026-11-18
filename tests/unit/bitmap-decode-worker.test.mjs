@@ -41,6 +41,42 @@ test("bitmap-decode-worker strip error does not throw out of onmessage", async (
   assert.match(posted[0].message, /missing blob/);
 });
 
+test("inflate cancels the stream once it has the requested rows", async () => {
+  // A strip PNG is taller than the layers we ask for; keep reading past `needed`
+  // used to inflate the unused IDAT on the worker for nothing.
+  let cancelled = false, aborted = false, reads = 0;
+  class FakeReader {
+    async read() {
+      if (cancelled) return { done: true, value: undefined };
+      reads++;
+      return { done: false, value: new Uint8Array(10).fill(1) };
+    }
+    async cancel() { cancelled = true; }
+  }
+  class FakeWriter {
+    async write() {}
+    async close() {}
+    async abort() { aborted = true; }
+  }
+  const ctx = vm.createContext({
+    DecompressionStream: class {
+      constructor() {
+        this.writable = { getWriter: () => new FakeWriter() };
+        this.readable = { getReader: () => new FakeReader() };
+      }
+    },
+    Uint8Array, Promise,
+  });
+  // inflate stays module-local (PngStrip exports only decode); run a copy.
+  const body = read(WORKER).match(/async function inflate\([\s\S]*?\n  \}\n\n  \/\/ Rows/)[0].replace(/\n\n  \/\/ Rows$/, "");
+  const inflate = vm.runInContext("(" + body + ")", ctx, { filename: absSrc(WORKER) });
+  const out = await inflate([new Uint8Array([1])], 15); // two 10-byte chunks fill 15
+  assert.equal(out.length, 15);
+  assert.equal(cancelled, true, "reader cancelled after needed bytes");
+  assert.equal(aborted, true, "writer aborted so the rest of the IDAT is not forced through");
+  assert.equal(reads, 2, "a third chunk is never pulled once needed is met");
+});
+
 test("BitmapDecode exports only strip / stripEnabled / drop", () => {
   const ctx = vm.createContext({
     URL, location: { href: "http://x/" }, window: {},
@@ -93,6 +129,19 @@ test("client strip deadline retires its worker and lets a later strip respawn", 
   const next = h.api.strip({}, 1, [1]);
   h.worker.onmessage({ data: { type: "strip", seq: h.worker.request.seq, pix: new Uint8Array([1, 2, 3, 4]), stride: 4 } });
   assert.deepEqual(Array.from((await next)[0]), [1, 2, 3, 4]);
+});
+
+test("a finished strip retires the worker so pack decode is not a page-lifetime thread", async () => {
+  const h = stripClient();
+  const pending = h.api.strip({}, 1, [1]);
+  const w = h.worker;
+  w.onmessage({ data: { type: "strip", seq: w.request.seq, pix: new Uint8Array([1, 2, 3, 4]), stride: 4 } });
+  assert.deepEqual(Array.from((await pending)[0]), [1, 2, 3, 4]);
+  assert.equal(w.dead, true, "worker terminates once the strip queue is empty");
+  const next = h.api.strip({}, 1, [1]);
+  assert.notEqual(h.worker, w, "a later strip respawns");
+  h.worker.onmessage({ data: { type: "strip", seq: h.worker.request.seq, pix: new Uint8Array([5, 6, 7, 8]), stride: 4 } });
+  assert.deepEqual(Array.from((await next)[0]), [5, 6, 7, 8]);
 });
 
 test("BitmapDecode prefers ScriptLoader.url for the worker cache key (audit4 I3 B6)", async () => {

@@ -2194,6 +2194,9 @@
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
+      "comfortGetScoped": [
+        "tests/unit/camera-tuner-a11y.test.mjs"
+      ],
       "comfortSet": [
         "tests/unit/camera-defaults.test.mjs"
       ],
@@ -4187,6 +4190,9 @@
       "armedRevision": [
         "tests/unit/career-backup.test.mjs"
       ],
+      "blocked": [
+        "tests/unit/career-cross-tab.test.mjs"
+      ],
       "budget": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -4579,6 +4585,7 @@
         "tests/unit/season-calendar-default.test.mjs"
       ],
       "upgradeBudget": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "upgradeFacility": [
@@ -5004,11 +5011,6 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
-    "js/circuits/bahrain.js": {
-      "*": [
-        "tests/unit/track-shot-survey.test.mjs"
-      ]
-    },
     "js/circuits/cota.js": {
       "*": [
         "tests/unit/changed-files.test.mjs",
@@ -5092,8 +5094,7 @@
     },
     "js/circuits/scenery/bahrain.js": {
       "*": [
-        "tests/unit/circuit-corner-anchors.test.mjs",
-        "tests/unit/track-shot-survey.test.mjs"
+        "tests/unit/circuit-corner-anchors.test.mjs"
       ]
     },
     "js/circuits/scenery/baku.js": {
@@ -5939,12 +5940,15 @@
     },
     "js/core/wake-lock.js": {
       "create": [
+        "tests/specs/wake-lock.spec.js",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
       "drop": [
+        "tests/specs/wake-lock.spec.js",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
       "hold": [
+        "tests/specs/wake-lock.spec.js",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
       "*": [
@@ -8070,6 +8074,7 @@
         "tests/specs/steering.spec.js",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
+        "tests/unit/boost-press-census.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
@@ -12847,7 +12852,8 @@
       ],
       "lateralCurve": [
         "tests/unit/grip-steer.test.mjs",
-        "tests/unit/tyre-peak-slip.test.mjs"
+        "tests/unit/tyre-peak-slip.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
       ],
       "lifeLaps": [
         "tests/unit/ai-strategy.test.mjs",
@@ -12944,8 +12950,7 @@
       "*": [
         "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs",
-        "tests/unit/wheel-state.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/physics/vehicle.js": {
@@ -17522,8 +17527,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
-        "tests/unit/scenery-api-contract.test.mjs",
-        "tests/unit/track-shot-survey.test.mjs"
+        "tests/unit/scenery-api-contract.test.mjs"
       ]
     },
     "js/track/core/hidden-faces.js": {
@@ -19246,6 +19250,7 @@
     },
     "js/ui/pause-opts.js": {
       "apply": [
+        "tests/specs/wake-lock.spec.js",
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/pause-opts.test.mjs"
       ],
@@ -19257,7 +19262,6 @@
       ],
       "*": [
         "tests/specs/custom-team.spec.js",
-        "tests/specs/wake-lock.spec.js",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
@@ -20276,6 +20280,9 @@
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
+      "inflate": [
+        "tests/unit/bitmap-decode-worker.test.mjs"
+      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"

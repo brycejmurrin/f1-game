@@ -2575,6 +2575,13 @@ test("root view-transition fades the old snapshot out before the new fades in", 
   assert.equal(decl(tokens, "::view-transition-new(root)", "mix-blend-mode"), "normal");
   assert.equal(decl(tokens, "::view-transition-new(root)", "animation-fill-mode"), "both");
   assert.equal(decl(tokens, "::view-transition", "background-color"), "var(--bg)");
+  assert.equal(decl(tokens, "::view-transition", "pointer-events"), "none",
+    "the root snapshot overlay must not take the click");
+  assert.ok(declares(tokens, /::view-transition-group\(\*\)/, "pointer-events", "none"),
+    "pointer-events is not inherited; the group snapshot must be click-through");
+  assert.ok(declares(tokens, /::view-transition-old\(\*\)/, "pointer-events", "none"));
+  assert.ok(declares(tokens, /::view-transition-new\(\*\)/, "pointer-events", "none"));
+  assert.ok(declares(tokens, /::view-transition-image-pair\(\*\)/, "pointer-events", "none"));
   assert.match(decl(tokens, "::view-transition-old(root)", "animation-name") || "", /apex-vt-fade-out/);
   assert.match(decl(tokens, "::view-transition-new(root)", "animation-name") || "", /apex-vt-fade-in/);
   // Reduced-motion still cancels the UA snapshots (prefers-reduced-motion + MOTION: REDUCED).
