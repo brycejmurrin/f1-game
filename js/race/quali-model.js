@@ -4,72 +4,57 @@ const Quali = (function () {
 
   const STEP = 4;
 
-  // The one calibration constant: it scales the straight-line ceiling the model
-  // integrates against, so it sets where the simulated field sits relative to a lap
-  // actually driven in this game.
+  // CALIBRATION: two constants, fitted at the PACE the game SHIPS (#5783 Q1).
   //
-  // MEASURED, and the guess it replaced was 27% out. This shipped at 1.035, reasoned
-  // from "a flying lap is a few percent quicker than a race stint" — but a
-  // quasi-steady model drives the theoretical friction limit, and the AI does not: it
-  // carries margin, brakes early, and does not take the optimal line. That gap is
-  // what this closes, and it is far larger than the quali-versus-race delta the
-  // original figure was reasoning about.
+  // A quasi-steady model drives the theoretical friction limit and the AI does not:
+  // it carries margin, brakes early and does not take the optimal line. A ratio near
+  // 0.97 (model lap / the same car's driven lap) is the target: the simulated pole
+  // sits just inside the best lap the AI actually manages, so a player matching AI
+  // pace qualifies mid-field and pole is achievable but has to be earned. Above 1.0
+  // would hand out free poles — and that is what this file shipped until the refit.
   //
-  // Calibrated by letting the game's own AI race and comparing its BEST CLEAN LAP
-  // (best of several — any single lap may be traffic-affected, and a qualifying lap
-  // has no traffic) against what this model predicted for that same car:
+  // HISTORY. A straight-line trim (0.75 of the car's cap) was fitted at PACE 1 and
+  // carried to other paces by a shape ratio (R3-RACE-INTEGRITY-1). At the shipped
+  // PACE 0.84 it ran 0.9 % (Monaco) to 15 % (one-third of the calendar over 1.08)
+  // SLOWER than the AI drives: Monza hard, sheet pole 132.2 s against the same cars'
+  // best laps of 118.6-122.6 s, and time-trial gold a lap the AI beat by 6 %. Two
+  // causes: the trim was fitted at another pace and on an older driving model, and
+  // the corner caps ignored what the driven AI is charged in a corner — skill times
+  // the level's `corner` (AiDrive ctx.diffCorner), so normal and easy read 1-3 %
+  // off hard.
   //
-  //     1.035 -> model at 0.83 of the driven lap    (17% optimistic: pole unreachable)
-  //     0.89  -> 0.895
-  //     0.82  -> 0.930
-  //     0.75  -> 0.976   <- here, and the fit now agrees with itself
+  // NOW the lap is integrated at the CURRENT PACE on the car's own drag curve
+  // (updateCar pulls ACCEL·PACE·(1 - v/vmax), so the distance a car needs to near
+  // its top speed grows with PACE), to the car's own free pace, with corner caps
+  // sqrt(latMax/k) · PACE_CORNER · skill · dd.corner; QUALI_TRIM scales the result.
+  // PACE_CORNER scales the flat corner cap for what it leaves out (the AI's
+  // downforce and kerb use); an explicit aero term, and brake or accel scales,
+  // fitted no better.
   //
-  // A ratio near 0.97 is the target: the simulated pole sits just inside the best lap
-  // the AI actually manages, so a player matching AI pace qualifies mid-field and
-  // pole is achievable but has to be earned. Above 1.0 would hand out free poles.
+  // FITTED (VM, scratch/quali-refit/ on the refit branch): every circuit of the
+  // calendar at easy / normal / hard, PACE 0.8396, each AI car's BEST of three laps
+  // in clear air (thinned field), QUALI_TRIM solved so the median circuit sits on
+  // 0.97. Per-circuit median model/driven, 52 circuits x 3 levels:
   //
-  // The spread across circuits is sd 0.012-0.03, and THAT is the load-bearing result:
-  // the model's shape is right — it reads track character on its own — so one
-  // constant calibrates every circuit rather than each needing a reference lap.
+  //                         min     median   max      level medians e/n/h
+  //     shipped trim       0.993   1.080    1.230    1.093 / 1.083 / 1.062
+  //     corner 1.15, no dd 0.924   0.974    1.015    0.965 / 0.972 / 0.986
+  //     corner 1.15 · dd   0.930   0.970    1.005    0.972 / 0.970 / 0.969   <- here
   //
-  // The response is sublinear (much of a lap is cornering-limited by
-  // sqrt(latMax/k), which this does not scale), so do not solve for it
-  // algebraically. Re-measure whenever the driving model changes: drive a clean
-  // lap, compare against qualiSim()'s field times, and trim this constant until
-  // pole sits just ahead of a good driven lap.
-  const QUALI_TRIM = 0.75;
-
-  // ...BUT ONLY AT PACE 1, which is where it was fitted (R3-RACE-INTEGRITY-1). The
-  // trim throttles the straight-line cap, and how much of a lap that cap governs
-  // moves with OVERALL SPEED: corners are absolute (sqrt(latMax/k)), the cap and
-  // ACCEL are pace-scaled. Model lap / the same AI car's driven lap, medians:
+  // dd.corner is what puts the three levels on one line. CORNER 1.15 with skill
+  // (~0.97 for most of the grid) is the PACE-1 shape fit's 1.1 for a median driver.
+  // tests/unit/quali-absolute-parity-vm.test.mjs holds the band at the shipped PACE;
+  // tests/unit/quali-pace-parity-vm.test.mjs holds 0.44 / 1.34 against PACE 1.
   //
-  //     PACE        0.44    1.0    1.34
-  //     monza      1.215  0.994  0.936     (a free pole at 0.44: TT gold
-  //     monaco     1.058  0.904  0.933      needed 244 s, the AI drove 186 s)
+  // Re-measure whenever the driving model changes: scratch/quali-refit/measure.cjs
+  // and fit.cjs on the refit branch, or the absolute parity test's diagnostics.
   //
-  // The missing term is the car's own drag curve: updateCar pulls
-  // ACCEL·PACE·(1 - v/vmax), so the distance a car needs to near its top speed
-  // grows with PACE, while this model pulled a flat ACCEL right up to the cap.
-  // So the PACE-1 calibration stays the ANCHOR and the pace dependence comes from
-  // a model that carries that curve (no straight trim; the car runs to its own
-  // free pace) — paceLap() below: lap(PACE) = trimmed lap at PACE 1 ·
-  // shape(PACE) / shape(1). PACE 1 is today's model to the bit.
-  //
-  // Fitted (grid search against each AI car's first clean racing lap, VM,
-  // AI-only field) over monza, monaco, spa, silverstone, hungaroring, suzuka
-  // and bahrain at PACE 0.44 / 0.7 / 1.34; model/driven relative to that
-  // circuit's own PACE-1 value:
-  //
-  //     shape            worst     (monza 0.44 / 1.34, monaco 0.44 / 1.34)
-  //     none (trim only)  26.2 %   1.222 / 0.942, 1.170 / 1.032
-  //     CORNER 1.0         5.3 %
-  //     CORNER 1.1         3.0 %   1.000 / 0.993, 0.972 / 1.030
-  //
-  // CORNER scales the flat corner cap for what it leaves out (the AI's
-  // downforce and kerb use); an explicit aero term fitted worse than it.
-  // tests/unit/quali-pace-parity-vm.test.mjs holds the result.
-  const PACE_CORNER = 1.1;
+  // The sheet's P1-P22 SPREAD is NOT this fit's: the driven field splits by the
+  // ERS deploy setting and racecraft axes as much as by tierV·skill (Gasly and Ocon,
+  // same car and skill, 3.8 s apart alone at Monza), and the model reads only
+  // tierV·skill.
+  const QUALI_TRIM = 0.92;
+  const PACE_CORNER = 1.15;
 
   const EXEC_SPREAD = 0.012;
   const QUALI_BIAS = 0.003;
@@ -188,25 +173,23 @@ const Quali = (function () {
     // A stub without VMAX (unit VMs) reads as PACE 1: today's model.
     function paceNow() { const vm = PhysicsConsts.VMAX; return vm > 0 ? G.vTop() / vm : 1; }
 
+    // The difficulty row the driven AI reads (game.js falls back to normal the same way).
+    function diffRow() { return PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal; }
     // A car's free pace (the AI's own top speed) at the current PACE.
-    function freeFor(tierV, skill) {
-      const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
-      return G.vTop() * tierV * skill * dd.ai;
-    }
-    function capFor(c) { return freeFor(c.tierV, c.skill) * QUALI_TRIM; }
+    function freeFor(tierV, skill) { return G.vTop() * tierV * skill * diffRow().ai; }
+    // Its corner authority, as the driven AI is charged it: the corner envelope
+    // times skill times the level's `corner` (AiDrive's ctx.diffCorner). A stub
+    // row without `corner` reads 1.
+    function cornerFor(skill) { const dc = diffRow().corner; return skill * (dc > 0 ? dc : 1); }
 
-    // The flying lap of a car whose free pace is `free`: the QUALI_TRIM lap at
-    // PACE 1, carried to the current PACE by the shape model (see PACE_CORNER).
-    function paceLap(track, free, grip) {
+    // The flying lap of a car whose free pace is `free` and corner authority
+    // `corner`: integrated at the current PACE on the car's own drag curve, then
+    // QUALI_TRIM (see above).
+    function paceLap(track, free, grip, corner) {
       const p = paceNow();
-      const free1 = free / p;
-      // The anchor: today's trimmed model, evaluated at PACE 1.
-      const anchor = lapTime(track, free1 * QUALI_TRIM, grip, { pace: 1, free: 0, corner: 1 });
-      if (p === 1) return anchor;
-      const shape = (q) => lapTime(track, free1 * q, grip, { pace: q, free: free1 * q, corner: PACE_CORNER });
-      return anchor * shape(p) / shape(1);
+      return QUALI_TRIM * lapTime(track, free, grip, { pace: p, free, corner: PACE_CORNER * corner });
     }
-    function carLap(c, track, grip) { return paceLap(track, freeFor(c.tierV, c.skill), grip); }
+    function carLap(c, track, grip) { return paceLap(track, freeFor(c.tierV, c.skill), grip, cornerFor(c.skill)); }
 
     // The reference POLE a time-trial medal is measured against: a top-rated
     // driver (skill 1) in the tier-0 car on a flying lap — the same model
@@ -224,7 +207,7 @@ const Quali = (function () {
     function referencePole() {
       const track = G.track;
       if (!track || !track.n) return 0;
-      return paceLap(track, freeFor(Teams.TIER_V[0], 1), referenceGrip());
+      return paceLap(track, freeFor(Teams.TIER_V[0], 1), referenceGrip(), cornerFor(1));
     }
 
     // One car's qualifying lap. Deterministic for a given (seed, round, car).
@@ -480,7 +463,7 @@ const Quali = (function () {
       return classification ? classification.map(({ car, ...row }) => row) : null;
     }
 
-    // forgetOrder / lapTime / capFor stay create()-local — begin() and the
+    // forgetOrder / lapTime / paceLap stay create()-local — begin() and the
     // pace helpers call them; no quali.forgetOrder / .lapTime / .capFor reader.
     return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole };
   }

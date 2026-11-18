@@ -13887,10 +13887,12 @@
     },
     "js/race/quali-model.js": {
       "begin": [
+        "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs"
       ],
       "carLap": [
         "tests/unit/flying-start.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs"
       ],
@@ -13906,10 +13908,14 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/flying-start.test.mjs",
+        "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
+      ],
+      "medalFor": [
+        "tests/unit/quali-pace-parity-vm.test.mjs"
       ],
       "order": [
         "tests/specs/quali.spec.js",

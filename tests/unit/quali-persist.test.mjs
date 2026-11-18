@@ -700,3 +700,32 @@ test("quali bias (#1566): a one-lap specialist is quicker on Saturday, zero-mean
   assert.ok(Math.abs(quick / flat - 0.997) < 2e-5, `at most 0.3 % of the lap (${quick} / ${flat})`);
   assert.equal(lap(30, true), lap(30, false), "the same driver simulates the same lap whichever car is the player (career.spec grid isolation)");
 });
+
+// A MODEL REFIT DOES NOT REACH INTO A WEEKEND ALREADY QUALIFIED (#5783 Q1). A career
+// save with qualifying DRIVEN and the race not yet run carries the whole sheet — the
+// player's lap and the rivals' times as they were simulated THEN. Reloaded on a build
+// whose model is quicker, it is restored as stored: the order and every time, even
+// where today's model would now put the rival ahead. A qualifying that was only
+// SIMULATED was never stored (see "simulate(0) does not persist"), so that one is
+// redrawn from today's model on reload — the same grid seed, shorter times.
+test("a mid-weekend career save keeps the qualifying it drove when the model changes; a simulated-only one is redrawn", () => {
+  const stored = [
+    { id: "p1", t: 131.2, human: true },    // the player's driven lap, pole on the old sheet
+    { id: "p2", t: 132.4, human: false },   // the rival as the OLD model timed it
+  ];
+  const a = loadQuali({ inCareer: true, season: { round: 3, qualiOrder: stored.map((r) => ({ ...r })), qualiTrack: "monza", qualiMode: "career:driver:0" } });
+  a.ctx.Career.slot = () => ({ flavour: "driver", i: 0 });
+  const today = a.q.carLap(a.G.cars[1], a.G.track, 1);
+  assert.ok(today < 131.2 * 0.9, `the precondition: today's model laps this circuit far quicker than the stored sheet (${today.toFixed(1)} s)`);
+  const rows = a.q.begin();
+  assert.deepEqual(rows.map((r) => [r.code, r.t]), [["VER", 131.2], ["HAM", 132.4]], "the stored order and times, not a re-simulation");
+  assert.deepEqual(a.G.season.qualiOrder.map((r) => r.t), [131.2, 132.4], "and the save is not rewritten");
+  assert.equal(a.q.order(a.G.cars).map((c) => c.code).join(" "), "VER HAM", "the race grids from it");
+
+  const b = loadQuali({ inCareer: true, season: { round: 3 } });
+  b.ctx.Career.slot = () => ({ flavour: "driver", i: 0 });
+  b.q.simulate(0);
+  assert.equal(b.G.season.qualiOrder, undefined, "a simulated-only sheet is not in the save");
+  const redrawn = b.q.begin();
+  assert.ok(redrawn.every((r) => Math.abs(r.t - today) < today * 0.05), "so a reload draws it from today's model: " + redrawn.map((r) => r.t.toFixed(1)).join(" "));
+});
