@@ -71,9 +71,11 @@
    "moves": [
     "#btn-steer-left"
    ],
+   "//still": "#5256 D: BUTTON SIZE resizes neither band; the gear row's size is kept (apex26.hudBotKeep) and the tower's cap no longer reads the dock",
    "still": [
     "#hud-gearbox",
-    "#hud-speed"
+    "#hud-speed",
+    "#hud-box-pos"
    ]
   },
   {

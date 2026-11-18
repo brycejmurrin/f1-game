@@ -133,7 +133,8 @@ const UiScale = (() => {
     const cssWas = {};   // prop -> last value written here
     const rowFor = (key) => sizeRow(key, scalePct(key), { min: minFor(key), max: maxFor(key), step: SCALE_STEP }, fitCaps(), sheetCap(), phoneUi());
     // Moving one slider pins the OTHER's wish to what it paints: freed room never grows it.
-    const pinPainted = (key) => { const r = rowFor(key); if (typeof store.get(key, null) === "number" && r.value < scalePct(key)) store.set(key, r.value); };
+    const isSet = (key) => typeof store.get(key, null) === "number";
+    const pinPainted = (key) => { const r = rowFor(key); if (isSet(key) && r.value < scalePct(key)) store.set(key, r.value); };
     const fromSlider = (key, v) => { const r = rowFor(key); return Math.max(r.min, Math.min(r.max, scaleSnap(+v || scaleDefaultFor(key), key))); };
     let uiRowAgain = 0;
     const applyUiRow = () => applyScale("uiScale", "--ui-scale", "pm-uiscale");
@@ -181,7 +182,13 @@ const UiScale = (() => {
         try { if (els.select && !els.select.hidden) G.updateTrackPreview(); } catch { /* menus not ready */ }
       });
     }
-    function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
+    // The gear row's remembered size (#5256 D): a BUTTON SIZE move takes it while HUD SIZE holds that row under its
+    // number, so freed room never grows it; it lapses once HUD SIZE changes by any route. fitHud reads --hud-bot-keep.
+    function applyHudScale() {
+      applyScale("hudScale", "--hud-scale", "pm-hudscale");
+      const k = store.get("hudBotKeep", null), z = k && k.hud === scalePct("hudScale") && isSet("hudScale") ? String(k.bot / 100) : "";
+      if (cssWas.keep !== z) { cssWas.keep = z; const r = document.documentElement; if (z) r.style.setProperty("--hud-bot-keep", z); else r.style.removeProperty("--hud-bot-keep"); }
+    }
     // The touch dock keeps its own fixed default and explicit override.
     function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
     // fitHud publishes --hud-cap on its own schedule: both race rows follow <html>'s inline style.
@@ -240,6 +247,7 @@ const UiScale = (() => {
     const hudEl = $("pm-hudscale");
     if (hudEl) hudEl.oninput = (e) => {
       pinPainted("hudBtnScale");
+      store.set("hudBotKeep", null);
       store.set("hudScale", fromSlider("hudScale", e.target.value));
       refreshFit();
     };
@@ -247,6 +255,8 @@ const UiScale = (() => {
     applyPanelOpacity();
     const btnEl = $("pm-btnscale");
     if (btnEl) btnEl.oninput = (e) => {
+      const h = rowFor("hudScale"), c = fitCaps(), k = store.get("hudBotKeep", null), b = c ? Math.min(h.value, Math.ceil(c.bot * 100 - 1e-6)) : h.value;
+      if (!(k && k.hud === h.value) && isSet("hudScale")) store.set("hudBotKeep", b < h.value - 0.5 ? { hud: h.value, bot: b } : null);
       pinPainted("hudScale");
       store.set("hudBtnScale", fromSlider("hudBtnScale", e.target.value));
       refreshFit();
