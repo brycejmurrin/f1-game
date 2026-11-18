@@ -5020,10 +5020,10 @@
     "js/career/team-identity.js": {
       "capture": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
       "*": [
-        "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-save-kept.test.mjs"
       ]
     },
