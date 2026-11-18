@@ -2438,6 +2438,7 @@ const TrackDesigner = (function () {
     if (!r.ok) return false;
     const idx = custom.select(r.id);
     if (idx < 0) { message("That circuit is not in the list any more", true); return false; }
+    if (at !== sel) span = -1;                         // a drive from another point leaves the range behind (#5743 D3)
     sel = at;
     const s = builtS(at), back = { id: r.id, sel: at, span, s };
     if (custom.armReturn) custom.armReturn(back);
