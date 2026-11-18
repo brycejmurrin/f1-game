@@ -757,7 +757,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **ci/worker-prompt.md** | `ci/dispatch.mjs`, `tests/unit/dispatch.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |
-| **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
+| **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp-occupancy.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-transport.test.mjs` |
 | **perf/baselines/hot-bench.json** | `perf/hot-bench.mjs`, `tests/unit/perf-hot-bench.test.mjs` |
 | **perf/baselines/vm-alloc.json** | `perf/vm-alloc-census.mjs`, `tests/unit/perf-vm-alloc-budget.test.mjs` |
