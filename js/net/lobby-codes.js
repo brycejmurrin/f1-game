@@ -146,7 +146,13 @@ const LobbyCodes = (function () {
         return kind === "invite" ? makeAnswer(code) : acceptAnswer(code);
       };
       const code = resolveCode(text);
-      return typeof code === "string" ? apply(code) : code.then(apply);
+      if (typeof code === "string") return apply(code);
+      return code.then(apply).catch((e) => {
+        // decodeCode itself never rejects, but apply (makeAnswer/acceptAnswer)
+        // can throw; an uncaught then() is an unhandledrejection on paste/scan.
+        Log.warn("net", "lobby code deliver failed:", e && e.message);
+        return cancelledResult();
+      });
     }
 
     let scanner = null;

@@ -18,7 +18,7 @@ const GarageArrival = (function () {
   }
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix",
     shots: Object.freeze(["left", "right", "right"]), height: 0, door: DOOR_S, hold: null, carSpeed: 1, endBeat: 0,
-    afterRace: true, homeCrew: "auto", result: "win",
+    raceStart: true, pitIn: true, pitOut: true, afterRace: true, homeCrew: "auto", result: "win",
     move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false, rearLight: "auto", slowmo: 0, sound: true, cue: "none", homeCue: "auto",
     race: "dry" });
   /* THE CAMERAS (bay metres, the car parked at the origin nose to the door at
@@ -237,7 +237,7 @@ const GarageArrival = (function () {
       // HOLD BEAT: null keeps each sequence's own (0.4 s in, 1.1 s out).
       hold: typeof v.hold === "number" && Number.isFinite(v.hold) ? Math.max(0, Math.min(3, v.hold)) : null,
       carSpeed: number("carSpeed", 0.5, 2), endBeat: number("endBeat", 0, 3),
-      afterRace: v.afterRace !== false,
+      raceStart: v.raceStart !== false, pitIn: v.pitIn !== false, pitOut: v.pitOut !== false, afterRace: v.afterRace !== false,
       homeCrew: v.homeCrew === "auto" || crewIds("in", true).includes(v.homeCrew) ? v.homeCrew : DEFAULT.homeCrew,
       result: RESULTS[v.result] ? v.result : DEFAULT.result,
       move: MOVES.includes(v.move) ? v.move : DEFAULT.move, sway: number("sway", 0, 2), zoom: number("zoom", 0, 20),
@@ -251,6 +251,10 @@ const GarageArrival = (function () {
       homeCue: v.homeCue === "auto" || v.homeCue === "none" || cueIds().includes(v.homeCue) ? v.homeCue : DEFAULT.homeCue,
       race: RACES.includes(v.race) ? v.race : DEFAULT.race };
   }
+  /* EACH MOMENT (#4745 A2): PLAY ANIMATIONS is the master; the four shows each have their own switch under it.
+   * Previews ignore both. */
+  const MOMENT = Object.freeze({ in: "pitIn", out: "pitOut", home: "afterRace" });
+  const plays = (config, moment) => !!config && config.enabled !== false && config[moment] !== false;
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
    *  one was playing (js/garage/setup-camera.js startArrivalPreview).
@@ -305,6 +309,11 @@ const GarageArrival = (function () {
     ["ga-sway", "HANDHELD", [["0", "OFF · LOCKED OFF"], ["0.5", "LIGHT"], ["1", "NORMAL"], ["2", "HEAVY"]]],
     ["ga-zoom", "FINAL SHOT ZOOM", [["0", "NONE"], ["6", "SLIGHT · 6°"], ["12", "TIGHT · 12°"], ["20", "CLOSE · 20°"]]],
   ];
+  const AFTER_ON = [
+    "EACH MOMENT: switch one show off and keep the others. PLAY ANIMATIONS off stops all four.",
+    ["ga-start", "RACE START · DRIVE-OUT", "check"], ["ga-pit-in", "PIT IN · ARRIVAL", "check"],
+    ["ga-pit-out", "PIT OUT · RELEASE", "check"], ["ga-after", "RACE END · BACK TO THE GARAGE", "check"],
+  ];
   const AFTER_FOV = [
     "SHOT LENGTHS. SHUTTER SHOT is how long the door takes to open, HOLD BEAT the pause before the car moves (coming in: once it stops in the lane), CAR SPEED how fast it drives or is pushed, END BEAT how long the last shot lingers. PLAYBACK SPEED scales all of it.",
     ["ga-door", "SHUTTER SHOT", [["1", "QUICK · 1 S"], ["1.8", "NORMAL · 1.8 S"], ["2.5", "SLOW · 2.5 S"], ["3.5", "LONG · 3.5 S"]]],
@@ -321,7 +330,6 @@ const GarageArrival = (function () {
     ["ga-captions", "CAPTIONS", "check"],
     ["ga-bars", "CINEMA BARS", "check"],
     "AFTER THE RACE: a winner idles up the lane to a welcome and a longer hold, a podium or points finish gets its own caption and beat, a retired car is pushed in by the crew with the engine off.",
-    ["ga-after", "PLAY AFTER A RACE", "check"],
     ["ga-crew-home", "AFTER-RACE CREW", crewOpts(["auto", "BY RESULT"])],
     ["ga-light-home", "AFTER-RACE LIGHTING", () => [["auto", "BY RESULT"], ["asset", "AS THE GARAGE"]].concat(moodOpts())],
     ["ga-cue-home", "AFTER-RACE LIGHT CUE", () => [["auto", "BY RESULT"], ["none", "NONE"]].concat(cueOpts())],
@@ -359,8 +367,9 @@ const GarageArrival = (function () {
     };
     after(angle.closest(".set-row"), AFTER_ANGLE);
     after(fov.closest(".set-row"), AFTER_FOV);
-    // STYLE: the quick-picks head the rows, before PLAY ANIMATIONS.
+    // STYLE: the quick-picks head the rows, before PLAY ANIMATIONS; EACH MOMENT follows it.
     const first = $("ga-enabled") && $("ga-enabled").closest ? $("ga-enabled").closest(".set-row") : null;
+    after(first, AFTER_ON);
     if (first && first.parentNode) {
       const bar = make("div", "ga-styles");
       bar.id = "ga-styles"; bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Style");
@@ -388,14 +397,14 @@ const GarageArrival = (function () {
     buildRows($);
     const fields = { enabled: $("ga-enabled"), speed: $("ga-speed"), angle: $("ga-angle"), fov: $("ga-fov"),
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out"), height: $("ga-height"), door: $("ga-door"), hold: $("ga-hold"),
-      carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result"),
+      carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), raceStart: $("ga-start"), pitIn: $("ga-pit-in"), pitOut: $("ga-pit-out"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result"),
       move: $("ga-move"), sway: $("ga-sway"), zoom: $("ga-zoom"), light: $("ga-light"), swell: $("ga-swell"),
       captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear"), slowmo: $("ga-slowmo"), sound: $("ga-sound"), cue: $("ga-cue"), homeCue: $("ga-cue-home"),
       race: $("ga-race") };
     const shotEls = [$("ga-shot1"), $("ga-shot2"), $("ga-shot3")];
     // STYLE quick-picks: one tap lays a look over the saved settings (save() is below; a click comes after).
     for (const id of Object.keys(STYLES)) { const b = $("ga-style-" + id); if (b) b.onclick = () => save(applyStyle(read(), id)); }
-    const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell", "slowmo"], CHECK = ["enabled", "afterRace", "captions", "bars", "sound"];
+    const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell", "slowmo"], CHECK = ["enabled", "raceStart", "pitIn", "pitOut", "afterRace", "captions", "bars", "sound"];
     // MIX and the Blender crews (GarageCrewChoreo) join each crew picker from
     // their own table, once: the static five stay index.html's.
     const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; return o; };
@@ -856,7 +865,7 @@ const GarageArrival = (function () {
         driver: typeof home.driver === "string" ? home.driver : "", fastest: !!home.fastest, race: home.wet ? "wet" : home.night ? "night" : "dry",
         grid: Number.isFinite(home.grid) && home.grid > 0 ? home.grid | 0 : null, sprint: !!home.sprint });
       time = 0; last = 0; state = posed(0, config, false, into());   // seeded at the first step: the entry frame's own cost is not show time
-      if (!config.enabled || reducedMotion()) { finish(); return; }
+      if (!plays(config, MOMENT[dir]) || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
       skip.textContent = dir === "out" ? "SKIP TO RACE" : "SKIP TO WORK";
       label.hidden = !config.captions;   // CAPTIONS off: SKIP stays, the words go
@@ -930,5 +939,5 @@ const GarageArrival = (function () {
     return m === "auto" && !!wet;
   }
   return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
-    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, homeTitle, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
+    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, homeTitle, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, plays, bindSettings });
 })();

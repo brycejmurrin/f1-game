@@ -113,8 +113,21 @@ unchanged, by Bryce's call (2026-11-11): an open question, not a change.
 GPU objects: C moves an existing menu-field model during the pre-race flyby; A plays in the bay, which is resident
 during a stop. None of them builds an object during a lap (perf-idle-pipeline-churn).
 
-## Slice D — pit in, track-side beat (not built)
+## Slice D — pit in, track-side beat (built, #5483)
 
 Options for Bryce (issue comment): 1 none (the bay arrival stays the whole show); 2 a broadcast camera cut at the
 pit-entry line while the car runs the lane (camera only, no physics, ~2 s, tap skips); 3 a short approach shot held
-in the bay before the back-in (bay-local, uses the existing authored entrance). Pick: 2.
+in the bay before the back-in (bay-local, uses the existing authored entrance). Pick: 2. The lane is driven, so a
+fixed cut would take the driver's view while they still have control; Bryce chose (2026-11-11 ~09:10Z) the
+tracking variant: a camera at the entry line that follows the car on the entry road only, never takes control, and
+ends on a tap, brake, steer or CAM. Shipped by #5483 (`72f55e20`) as `js/camera/extra-rigs.js` PIT-ENTRY SHOT, with its
+own switch (`pitEntryShot`, FEEL); reduced motion and automation skip it.
+
+## Slice A2 — a switch per moment (#4745)
+
+`garageArrival` gains `raceStart`, `pitIn` and `pitOut` beside the existing `afterRace` (RACE END); absent = on, so
+a save from before A2 keeps all four. `GarageArrival.plays(cfg, moment)` is the one gate: PLAY ANIMATIONS
+(`enabled`) still stops all four, and each moment's own switch stops only it (`startDriveOut`, `create().start`,
+`startPitOut`, `startHome`). Previews ignore both. The four rows (EACH MOMENT) are built from the `AFTER_ON` table
+right under PLAY ANIMATIONS; no new file, no new boot script. Eager boot bytes, measured before the change: 311 tags,
+7,996,801 raw against the 8,018,484 cap (21,683 B of room). The pit-entry shot keeps its own FEEL switch.

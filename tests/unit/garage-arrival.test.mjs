@@ -116,7 +116,7 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   const out = cam.slice(cam.indexOf('function startDriveOut()'), cam.indexOf('function driveOutLeft()'));
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
   assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play, motion: \{ eye: \[0, 0, 0\], aim: \[0, 0, 0\] \} \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.wallSeconds\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed, SLOW-MO included');
-  assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
+  assert.match(out, /if \(!GarageArrival\.plays\(cfg, "raceStart"\)\) return 0;/, 'only the tuner (PLAY ANIMATIONS or RACE START) can turn it off for a player');
   // Player pace: speed 1 (the default) → OUT_DURATION, ~10.6 s, never trimmed.
   assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 10600) <= 400, 'the default drive-out is the tuned ~10.6 s');
   // Automation (the harness) skips it through the ONE shared gate, nothing else.
@@ -1535,6 +1535,7 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
   const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
   const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
+  row('ga-enabled', 'input').type = 'checkbox';
   const angle = row('ga-angle', 'select');
   for (const v of ['cut', 'left', 'right']) add(angle, 'option').value = v;
   row('ga-crew-in', 'select'); row('ga-fov', 'input'); row('ga-crew-out', 'select');
@@ -1552,7 +1553,9 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   assert.equal(shots.hidden, true, 'CUSTOM\'s pickers start hidden');
   assert.deepEqual(shots.querySelectorAll('select').map((e) => e.id), ['ga-shot1', 'ga-shot2', 'ga-shot3']);
   assert.deepEqual($('ga-shot2').children.map((o) => o.value), [...A.CAM_IDS]);
-  assert.equal($('ga-after').type, 'checkbox');
+  assert.deepEqual(['ga-enabled', 'ga-start', 'ga-pit-in', 'ga-pit-out', 'ga-after'].map(at).map((i, k, a) => k === 0 || i > a[k - 1]), [true, true, true, true, true], 'EACH MOMENT follows PLAY ANIMATIONS: ' + order.join(' '));
+  assert.ok(at('ga-after') < at('ga-angle'), 'the four moments sit together, above GARAGE ANGLE');
+  for (const id of ['ga-start', 'ga-pit-in', 'ga-pit-out', 'ga-after']) assert.equal($(id).type, 'checkbox', id);
   assert.deepEqual($('ga-light').children.map((o) => o.textContent), ['AS THE GARAGE', 'STANDARD', 'GOLDEN HOUR', 'NIGHT'], 'the garage\'s own moods');
   assert.deepEqual($('ga-light-home').children.map((o) => o.value).slice(0, 2), ['auto', 'asset']);
   for (const id of ['ga-move', 'ga-sway', 'ga-zoom', 'ga-swell']) assert.equal($(id).tagName, 'SELECT', id);
@@ -2032,5 +2035,55 @@ test('#5066: the ADVANCED VISUALS tools hide and give back VISUAL STUDIO, never 
     const src = readFileSync(new URL('../../' + file, import.meta.url), 'utf8');
     assert.equal(src.includes('"pm-panel-display"'), false, file + ' touches the HUD & CAMERA page');
     assert.equal(src.includes('$("pm-panel-visual")'), true, file + ' hides and restores VISUAL STUDIO');
+  }
+});
+
+// ── EACH MOMENT (#4745 A2): one switch per show under PLAY ANIMATIONS ──
+test('EACH MOMENT: every show has its own switch, PLAY ANIMATIONS still stops all four, old saves keep all on', () => {
+  const MOMENTS = ['raceStart', 'pitIn', 'pitOut', 'afterRace'];
+  const on = (v) => MOMENTS.map((m) => Arrival.plays(Arrival.settings(v), m));
+  assert.deepEqual(on(null), [true, true, true, true], 'shipped: all four play');
+  assert.deepEqual(on({ enabled: true, speed: 2 }), [true, true, true, true], 'a save from before A2 (no moment keys) keeps them all');
+  assert.deepEqual(on({ enabled: false }), [false, false, false, false], 'the master stops every one');
+  MOMENTS.forEach((m, i) => assert.deepEqual(on({ [m]: false }), MOMENTS.map((_, k) => k !== i), m + ' alone'));
+  assert.equal(Arrival.settings({ pitIn: 0 }).pitIn, true, 'only an explicit false turns one off');
+  // The player: a plain start() is PIT IN, { out } PIT OUT, { home } RACE END; each reads its own switch.
+  let saved = null;
+  const { $ } = harness();
+  const arrival = Arrival.create($, () => false, () => saved);
+  const plays = (opts) => { arrival.start(opts); const a = arrival.state.active; arrival.cancel(); return a; };
+  const all = () => [plays(), plays({ out: true }), plays({ home: { result: 'win', pos: 1 } })];
+  assert.deepEqual(all(), [true, true, true]);
+  saved = { pitIn: false }; assert.deepEqual(all(), [false, true, true]);
+  saved = { pitOut: false }; assert.deepEqual(all(), [true, false, true]);
+  saved = { afterRace: false }; assert.deepEqual(all(), [true, true, false]);
+  saved = { raceStart: false }; assert.deepEqual(all(), [true, true, true], 'RACE START is the drive-out, not this player');
+});
+test('EACH MOMENT: the tuner binds the four switches and RESET turns them all back on', () => {
+  const { $ } = harness();
+  let saved = null;
+  const read = Arrival.bindSettings($, { get: () => saved, set: (_, v) => { saved = v; } });
+  for (const [id, key] of [['ga-start', 'raceStart'], ['ga-pit-in', 'pitIn'], ['ga-pit-out', 'pitOut'], ['ga-after', 'afterRace']]) {
+    assert.equal($(id).checked, true, id + ' starts on');
+    $(id).checked = false; $(id).onchange();
+    assert.equal(read()[key], false, key);
+  }
+  assert.equal(read().enabled, true, 'the master is untouched');
+  $('ga-reset').onclick();
+  assert.deepEqual([read().raceStart, read().pitIn, read().pitOut, read().afterRace], [true, true, true, true]);
+});
+test('EACH MOMENT: PIT OUT plays unless its own switch or the master is off, and hands back once either way', () => {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('// PIT OUT (#4745)'), cam.indexOf('function skipPitOut'));
+  let saved = null;
+  const started = [];
+  const c = vm.createContext({ GarageArrival: Arrival, G: { store: { get: () => saved } }, endHome() {}, reducedMotion: () => false,
+    LoadingScreen: { isAutomation: () => false }, arrival: { start: (o) => started.push(o) } });
+  vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
+  const out = vm.runInContext('startPitOut', c);
+  for (const [v, want] of [[null, true], [{ pitOut: false }, false], [{ enabled: false }, false], [{ pitIn: false, raceStart: false, afterRace: false }, true]]) {
+    saved = v; let done = 0; started.length = 0;
+    assert.equal(out(() => done++), want, JSON.stringify(v));
+    assert.deepEqual([started.length, done], want ? [1, 0] : [0, 1], 'plays, or hands straight back: ' + JSON.stringify(v));
   }
 });

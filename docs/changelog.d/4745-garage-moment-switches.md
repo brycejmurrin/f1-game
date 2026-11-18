@@ -1,0 +1,1 @@
+New: Garage animations: RACE START, PIT IN, PIT OUT and RACE END each have their own on/off switch under PLAY ANIMATIONS (VISUAL STUDIO › GARAGE ENTER & LEAVE), so one show can be turned off and the others kept (#4745).

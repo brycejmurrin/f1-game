@@ -305,9 +305,11 @@ Other in-race roots are:
   editor, and resume/quit close it.
 - `#garrival` — the GARAGE ENTER & LEAVE tuner dock (`#pm-garrival` on VISUAL
   STUDIO; `js/garage/arrival.js`). Opens outside a race too; DONE or
-  Escape returns to Settings. Three sequences: PIT STOP (WORK ON CAR), RACE START
-  (the START RACE drive-out) and AFTER THE RACE (the next non-pit garage visit after a
-  race, flavoured by `#ga-result`'s WIN / PODIUM / POINTS / FINISHED / RETIRED).
+  Escape returns to Settings. Four moments: RACE START (the START RACE drive-out),
+  PIT IN (WORK ON CAR), PIT OUT (the stop's release) and RACE END (the next non-pit
+  garage visit after a race, flavoured by `#ga-result`'s WIN / PODIUM / POINTS /
+  FINISHED / RETIRED). Each has its own switch (`#ga-start`, `#ga-pit-in`,
+  `#ga-pit-out`, `#ga-after`) under PLAY ANIMATIONS (`#ga-enabled`, the master).
   GARAGE ANGLE picks a camera or a preset (DIRECTOR, or CUSTOM's `#ga-shots-row`
   per-shot pickers); CAMERA HEIGHT, CAMERA MOVE (still / push in / pull out /
   drift), HANDHELD and FINAL SHOT ZOOM shape the shots; SHUTTER SHOT, HOLD BEAT,
