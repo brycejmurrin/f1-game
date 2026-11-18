@@ -208,7 +208,16 @@ const NetSession = (function () {
       return true;
     }
 
-    transport.onMessage((channel, data, at) => {
+    // One session binder per endpoint. onMessage only pushes, so a second
+    // create on the same transport used to stack decode handlers (double fire).
+    // autoPong and probes still push; only the marked session handler is replaced.
+    if (transport._handlers && Array.isArray(transport._handlers.message)) {
+      const list = transport._handlers.message;
+      for (let i = list.length - 1; i >= 0; i--) {
+        if (list[i] && list[i]._netSessionMsg) list.splice(i, 1);
+      }
+    }
+    const onSessionMessage = (channel, data, at) => {
       // Prefer the transport's ARRIVAL stamp (rtc supplies it; loopback does
       // not — its wire time is epoch-relative, a different clock domain).
       // Pump-time stamping put up to a frame of scheduling into every RTT
@@ -217,7 +226,9 @@ const NetSession = (function () {
       const valid = channel === CH_STATE ? onStateBytes(data, t)
         : channel === CH_EVENT ? onEventJson(data) : false;
       if (valid) lastHeardAt = t;
-    });
+    };
+    onSessionMessage._netSessionMsg = true;
+    transport.onMessage(onSessionMessage);
     // `released` latches "the transport is closed" SEPARATELY from `alive`
     // ("this session's bookkeeping is over"). Conflating them was the leak
     // class this file keeps re-finding: any path that flipped `alive` first

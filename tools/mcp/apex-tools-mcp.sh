@@ -6,6 +6,9 @@
 # Cloud without auto-loaded .mcp.json: ./tools/mcp/apex-tools-mcp.sh call …
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# Cloud agents may spawn the wrapper with cwd=/agent (multi-root). Always run
+# from the repo so relative child paths and scratch/artifacts resolve.
+cd "$ROOT"
 # Bounded wait for the SessionStart `npm install` (stderr only; stdout is JSON-RPC).
 . "$ROOT/tools/mcp/mcp-preflight.sh"
 mcp_preflight

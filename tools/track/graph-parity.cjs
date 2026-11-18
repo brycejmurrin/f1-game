@@ -12,7 +12,7 @@
  * Usage:
  *   node tools/track/graph-parity.cjs <trackId> [...]     # named tracks
  *   node tools/track/graph-parity.cjs --all
- *   BASE=<ref> node tools/track/graph-parity.cjs --all    # baseline ref (default HEAD)
+ *   BASE=<ref> node tools/track/graph-parity.cjs --all    # baseline ref (REQUIRED: HEAD vs itself passes vacuously)
  *
  * Exit 1 on any parity failure. Tolerance is on POSITION only, and tight
  * (1e-6 m): replaying a model through a composed basis reassociates the same

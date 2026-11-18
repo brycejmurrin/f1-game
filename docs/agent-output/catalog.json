@@ -334,6 +334,15 @@
       ]
     },
     {
+      "path": "tools/check/ai-solo.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/check/ai-strategy-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -1002,6 +1011,15 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json",
+        "--quiet"
+      ]
+    },
+    {
+      "path": "tools/ci/merge-train.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
         "--quiet"
       ]
     },
