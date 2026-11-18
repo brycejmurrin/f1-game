@@ -11,7 +11,10 @@
 export const RACE_DIRECTION_OVERRIDES = {
   "mc-1929": "CW",   // Monaco
   "fr-1969": "CW",   // Paul Ricard
-  "za-1961": "CW",   // Kyalami
+  // Kyalami races ANTI-clockwise (SRO/IGTC 2023 Kyalami 9 Hour briefing notes
+  // p. 8; Crowthorne a left). This row said "CW" until #5316 CIRC2-05 and so
+  // agreed with the game's backwards lap; pinned now so neither can drift back.
+  "za-1961": "CCW",  // Kyalami
   // Marina Bay races ANTI-clockwise, and this reference line does not: of the
   // eleven circuits here that are anti-clockwise in reality, ten compute
   // anti-clockwise and sg-2008 alone computes clockwise. Sourced away from the
