@@ -1827,7 +1827,7 @@ function create(G) {
       // draftFrom alone so BACK still works.
       if (!Career.start(draft)) {   // draft.slot, when the picker set one
         const full = draft.slot == null && Career.firstFree(draft.flavour) < 0;
-        // Never durably written: stay on the form, no hub on a career a reload loses (#5657).
+        // Refused (another tab wrote the save): stay on the form, no hub on a career a reload loses (#5657).
         if (!full && saveRefused()) return;
         openSlots(slotsOrigin);
         if (full) announce("ALL THREE SLOTS ARE IN USE — DELETE ONE TO START A NEW CAREER");

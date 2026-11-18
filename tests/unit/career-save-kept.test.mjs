@@ -6,7 +6,9 @@
  * reported a signing, hire or purchase as done after a refused write, and the
  * player lost it at the next reload (a revision conflict did it silently). Each
  * now goes through Career's commit(): write with requireDurable, restore the
- * career in place on refusal, answer falsy.
+ * career in place on refusal, answer falsy. start() is the one exception on a
+ * FULL store: the new career plays session-only under the "Saving unavailable"
+ * banner (persistence-dom.spec); a REFUSED write still opens no hub.
  *
  * The guard runs every decision twice on the REAL GameStore (js/core/store.js):
  * healthy storage proves the call changes the save (or the refusal half proves
@@ -62,7 +64,12 @@ function boot(disk, state) {
   const write = store.write.bind(store);
   // Every career-slot write, with the options it asked for.
   const writes = [];
-  store.write = (k, v, o) => { if (String(k).startsWith("career.")) writes.push({ k, o: o || {} }); return write(k, v, o); };
+  store.write = (k, v, o) => {
+    if (!String(k).startsWith("career.")) return write(k, v, o);
+    writes.push({ k, o: o || {} });
+    // state.refuse: the store refuses the career write outright, as a revision conflict does.
+    return state.refuse ? { ok: false, durable: false, reason: "conflict" } : write(k, v, o);
+  };
   return { Career: vm.runInContext("Career", ctx), store, writes };
 }
 
@@ -134,22 +141,35 @@ test("acceptOffer refused: the old contract and the offers stay on the table (#5
   assert.equal(h.Career.data().offers.length, 1);
 });
 
-test("start refused: no new career, the one being left and its slot pointer come back (#5657)", () => {
+test("start on full storage plays on session-only under the Saving unavailable banner; disk keeps the old career", () => {
+  // persistence-dom.spec pins this: with storage full the career still exists for the
+  // session, and RETRY SAVE / the recovery EXPORT keep it. The save on disk is untouched.
   const h = harness("driver");
-  const ram = snap(h.Career), was = reloaded(h);
-  const slot = JSON.stringify(h.Career.slot());
-  const disk = JSON.stringify([...h.disk]);
+  const was = reloaded(h), disk = JSON.stringify([...h.disk]);
   h.state.full = true;
-  assert.equal(h.Career.start({ flavour: "myteam", teamId: "custom", seed: 9 }), null);
+  assert.ok(h.Career.start({ flavour: "myteam", teamId: "custom", seed: 9 }));
+  assert.equal(h.Career.data().flavour, "myteam");
   assert.equal(h.Career.saveStatus().durable, false);
-  assert.equal(JSON.stringify(h.Career.slot()), slot);
-  assert.equal(snap(h.Career), ram, "Career.active() is the career on disk, not the unsaved new one");
+  assert.equal(h.store.writeFailed(), "QuotaExceededError", "the banner (RETRY SAVE, EXPORT) is up");
   assert.equal(JSON.stringify([...h.disk]), disk);
   assert.equal(reloaded(h), was);
 });
 
+test("start refused by the store: no hub career, the one being left and its slot pointer come back (#5657)", () => {
+  const h = harness("driver");
+  const ram = snap(h.Career), was = reloaded(h);
+  const slot = JSON.stringify(h.Career.slot());
+  h.state.refuse = true;
+  assert.equal(h.Career.start({ flavour: "myteam", teamId: "custom", seed: 9 }), null);
+  assert.equal(h.Career.saveStatus().reason, "conflict");
+  assert.equal(JSON.stringify(h.Career.slot()), slot);
+  assert.equal(snap(h.Career), ram, "Career.active() is the career on disk, not the unsaved new one");
+  h.state.refuse = false;
+  assert.equal(reloaded(h), was);
+});
+
 test("start refused with no career loaded leaves none active (#5657)", () => {
-  const disk = new Map(), state = { full: true };
+  const disk = new Map(), state = { refuse: true };
   const { Career } = boot(disk, state);
   assert.equal(Career.start({ flavour: "driver", teamId: "haas", seed: 7 }), null);
   assert.equal(Career.active(), false);

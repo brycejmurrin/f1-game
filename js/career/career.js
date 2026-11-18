@@ -516,10 +516,12 @@ function start(opts) {
   applyRegs();
   career.deal = newDeal(team, 1);
   Log.info("game", `Career.start flavour=${flavour} team=${teamId}`);
-  save({ requireDurable: true });
-  if (saveKept()) return career;
-  // NEVER DURABLY WRITTEN: a hub opened on it would be gone after the reload.
-  // Put the career being left and the slot pointer back, and answer null.
+  // STORAGE FULL plays on session-only: the "Saving unavailable" banner, RETRY SAVE and
+  // the recovery EXPORT are up (persistence-dom.spec pins it). A REFUSED write (another
+  // tab, the writer lock) never opens a hub on a career a reload loses (#5657): put the
+  // career being left and the slot pointer back, and answer null.
+  save();
+  if (lastSave.ok !== false) return career;
   const refused = lastSave;
   career = left.career; slotFlavour = left.flavour; slotIdx = left.idx; calendarProtection = left.protection;
   setLive();
