@@ -89,8 +89,8 @@ WGX implement it. Skill `asset-pack`.
 
 ## Git branch & deploy
 Work on the branch you were assigned (`claude/*` in a cloud session), else `cursor/<topic>-<hash>`. The deploy branch `claude/f1-game-project-26h3ng` is protected by the
-ruleset "Deploy-reset" (one required check, `gate`; it binds admins): work lands only through a PR. A path in an
-open PR's diff belongs to that PR until it merges or closes. A red, a sync, a conflict, opening, flipping ready,
+ruleset "Deploy-reset" (one required check, `gate`; it binds admins): work lands only through a PR. Paths shared
+with an open PR are fine: work in parallel (D-033). A red, a sync, a conflict, opening, flipping ready,
 `land`: skill `steward`. "Is it live?": skill `check`.
 
 ## Coordination
