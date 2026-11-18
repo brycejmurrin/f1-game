@@ -8,7 +8,8 @@
       "codeLines": -2
     },
     "js/ui/hud.js": {
-      "lines": 3
+      "codeLines": 2,
+      "lines": 2
     }
   }
 }
