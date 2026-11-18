@@ -65,6 +65,11 @@ const require = createRequire(import.meta.url);
 // whole, so qatar draws 51 green verges the base dropped. Sochi's plaza strips are draped groundPatches
 // (6 columns of cells and skirts) instead of flat road-frame boxes. Measured, not widened:
 // qatar 193250 -> 194966 (+0.89 %), sochi 199785 -> 202847 (+1.53 %).
+// 2026-11-18 (#5652, PR #5696): hungaroring 213167 -> 215237 (+0.97 %). Measured per edit on the
+// merged tree: the tip with neither file changed is 214232; the six bank zones re-anchored onto
+// T2-T14 ({ turn: N }) add +465 (props drape on the banked edges); the T1 tyre wall moved to the
+// outside of the hairpin, the T11 terrace and the T5 gravel moved onto their corners add +540.
+// Measured, not widened.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 
