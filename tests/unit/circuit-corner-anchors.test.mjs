@@ -132,6 +132,35 @@ test("Jeddah starts on the pit straight after T27 and numbers its turns as the F
   assert.equal(def.pit.side, -1, "the pit lane is on the left of the straight (OSM way 1121870473)");
 });
 
+test("Kyalami runs anticlockwise with the SRO turns, line and infield pits", () => {
+  // SRO/IGTC 2023 Kyalami 9 Hour briefing notes p. 8-9 (#5316 CIRC2-05): 16
+  // turns, T1 The Kink a flat right a few hundred metres after S/F, T2
+  // Crowthorne the left hairpin, T16 Ingwe the slow left onto the straight,
+  // pit lane on the infield. The clockwise def had Crowthorne as T1, a right.
+  const { def, track, corner } = circuit("kyalami");
+  const L = track.total, ds = L / track.n;
+  let turning = 0;
+  for (let k = 0; k < track.n; k++) turning += track.curv[k] * ds;
+  assert.ok(Math.abs(turning - 2 * Math.PI) < 0.05, `net turning ${turning.toFixed(3)} rad: +2π is anticlockwise`);
+  assert.equal(def.turns.length, 16);
+  const kink = corner(1), crowthorne = corner(2), ingwe = corner(16);
+  assert.ok(kink.curvature < 0 && kink.curvature > -0.004, "T1 The Kink: a gentle right");
+  assert.ok(kink.fraction * L > 200 && kink.fraction * L < 320, "The Kink 200-320 m after the line");
+  assert.ok(crowthorne.curvature > 0.03 && Math.hypot(crowthorne.x + 733, crowthorne.z - 216) < 25,
+    "T2 Crowthorne: the left hairpin at the trace's west end");
+  assert.ok(ingwe.curvature > 0.03 && (1 - ingwe.fraction) * L > 200 && (1 - ingwe.fraction) * L < 350,
+    "T16 Ingwe: a left hairpin 200-350 m before the line");
+  // The pit side (engine -1, the driver's left) points INTO the loop.
+  assert.equal(def.pit.side, -1);
+  const probe = [track.px[0] - track.rx[0] * 100, track.pz[0] - track.rz[0] * 100];
+  let inside = false;
+  for (let i = 0, j = track.n - 1; i < track.n; j = i++) {
+    const [xi, zi, xj, zj] = [track.px[i], track.pz[i], track.px[j], track.pz[j]];
+    if ((zi > probe[1]) !== (zj > probe[1]) && probe[0] < (xj - xi) * (probe[1] - zi) / (zj - zi) + xi) inside = !inside;
+  }
+  assert.ok(inside, "a point 100 m to the driver's left of the line is on the infield");
+});
+
 test("Bahrain scenery landmarks track the current arc-length origin", () => {
   const { def, track } = circuit("bahrain");
   const source = readFileSync(new URL("../../js/circuits/scenery/bahrain.js", import.meta.url), "utf8");

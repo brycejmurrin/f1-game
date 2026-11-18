@@ -4220,6 +4220,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -4789,6 +4790,7 @@
       "conflicted": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4938,6 +4940,7 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "scored": [
+        "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
       "setConfig": [
@@ -8589,7 +8592,8 @@
         "tests/unit/title-warm.test.mjs"
       ],
       "stop": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/title-warm.test.mjs"
       ],
       "tick": [
         "tests/unit/garage-arrival.test.mjs",
@@ -11817,6 +11821,9 @@
       "poll": [
         "tests/unit/title-warm.test.mjs"
       ],
+      "stop": [
+        "tests/unit/title-warm.test.mjs"
+      ],
       "*": [
         "tests/specs/race-cycle-memory.spec.js"
       ]
@@ -14707,6 +14714,7 @@
         "tests/unit/session-records-assists.test.mjs"
       ],
       "*": [
+        "tests/unit/ghost.test.mjs",
         "tests/unit/global-registry.test.mjs"
       ]
     },
