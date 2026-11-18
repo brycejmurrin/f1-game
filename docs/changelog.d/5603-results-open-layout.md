@@ -1,1 +1,1 @@
-Fixed: Results sheet: on a slow phone the sheet could paint for a frame or two before its layout settled, with your row drawn over the row entering the bottom of the list; it now lays out before it shows (#5603).
+Fixed: Results sheet: with Reduce Motion on, the sheet painted its first frame or two on the previous layout, with your row drawn over the winner's at the top of the list; its layout is now instant (#5603).
