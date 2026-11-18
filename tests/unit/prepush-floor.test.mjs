@@ -130,7 +130,7 @@ test("syncMergeScope: names what the MERGE decided — both-sides paths and non-
 });
 
 test("selectSyncMerge: impure paths add only their own tests; a run-all impure path still widens", () => {
-  const gen = selectSyncMerge(["a", "tools/shot/scenery-locations.json"], { allFiles: ALL, scripts: {}, pinIndex: new Map(), impure: ["tools/shot/scenery-locations.json"] });
+  const gen = selectSyncMerge(["a", "docs/agent-index.json"], { allFiles: ALL, scripts: {}, pinIndex: new Map(), impure: ["docs/agent-index.json"] });
   assert.equal(gen.reason, "sync-merge+generated-only");
   assert.equal(gen.genCheck, true);
   assert.equal(gen.changed, 2);
