@@ -20120,6 +20120,7 @@
         "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "vars": [
+        "tests/unit/appearance-opts.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "*": [
