@@ -64,6 +64,10 @@ test("LoAF is feature-detected: unsupported env reports supported:false, no thro
   assert.equal(ps.loaf().entries.length, 0);
 });
 
+test("LoAF ring uses a fixed buffer, not Array.shift on overflow (perf hunt)", () => {
+  assert.equal(/loafBuf\[loafHead\][\s\S]*loafHead = \(loafHead \+ 1\) % LOAF_CAP/.test(src), true);
+});
+
 test("__apex.perf() on the booted game: ai/collide spans fill from step()", async () => {
   const { createGame } = require("../../tools/lib/game-vm.cjs");
   const g = await createGame({ track: "monza" });

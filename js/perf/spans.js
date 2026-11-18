@@ -32,7 +32,11 @@ const PerfSpans = (() => {
     const now = clock || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     const spans = Object.create(null);
     let on = false, measure = false;
-    let loafObs = null, loafSupported = null, loaf = [];
+    let loafObs = null, loafSupported = null;
+    // Fixed LoAF ring: shifting the array on every overflow was O(LOAF_CAP) and
+    // the observer callback already allocates the scripts array; keep writes O(1).
+    const loafBuf = new Array(LOAF_CAP);
+    let loafHead = 0, loafLen = 0;
 
     function slot(name) {
       return spans[name] || (spans[name] = { buf: new Float64Array(RING), n: 0, head: 0, max: 0, sum: 0, count: 0, t0: -1, measures: 0 });
@@ -77,12 +81,19 @@ const PerfSpans = (() => {
             const scripts = (e.scripts || []).map((x) => ({
               sourceURL: x.sourceURL || "", sourceFunctionName: x.sourceFunctionName || "", duration: Math.round(x.duration * 10) / 10,
             })).sort((a, b) => b.duration - a.duration).slice(0, LOAF_SCRIPTS);
-            loaf.push({ start: Math.round(e.startTime), duration: Math.round(e.duration * 10) / 10, blockingDuration: Math.round((e.blockingDuration || 0) * 10) / 10, scripts });
-            if (loaf.length > LOAF_CAP) loaf.shift();
+            loafBuf[loafHead] = { start: Math.round(e.startTime), duration: Math.round(e.duration * 10) / 10, blockingDuration: Math.round((e.blockingDuration || 0) * 10) / 10, scripts };
+            loafHead = (loafHead + 1) % LOAF_CAP;
+            if (loafLen < LOAF_CAP) loafLen++;
           }
         });
         loafObs.observe({ type: "long-animation-frame", buffered: false });
       } catch (_) { loafSupported = false; loafObs = null; }
+    }
+    function loafEntries() {
+      const out = [];
+      const start = loafLen < LOAF_CAP ? 0 : loafHead;
+      for (let i = 0; i < loafLen; i++) out.push(loafBuf[(start + i) % LOAF_CAP]);
+      return out;
     }
 
     function pct(sorted, q) {
@@ -104,7 +115,7 @@ const PerfSpans = (() => {
     function reset() {
       clearMeasured();
       for (const name of Object.keys(spans)) delete spans[name];
-      loaf = [];
+      loafHead = 0; loafLen = 0;
     }
     function setOn(v) {
       on = !!v;
@@ -121,8 +132,8 @@ const PerfSpans = (() => {
       isOn: () => on,
       on: setOn,
       measure: (v) => { if (v !== undefined) { measure = !!v; if (!measure) clearMeasured(); } return measure; },
-      loaf: () => ({ supported: loafSupported, entries: loaf.slice() }),
-      report: () => ({ on, measure, unit: "ms", ring: RING, spans: stats(), loaf: { supported: loafSupported, entries: loaf.slice() } }),
+      loaf: () => ({ supported: loafSupported, entries: loafEntries() }),
+      report: () => ({ on, measure, unit: "ms", ring: RING, spans: stats(), loaf: { supported: loafSupported, entries: loafEntries() } }),
     };
   }
   return create();
