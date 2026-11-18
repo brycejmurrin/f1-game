@@ -832,6 +832,15 @@ test("AI pace calibration terms (#5330): the wing's drag, the scripted trim, bou
   assert.equal(down, 1 - (1 - Math.exp(-2.5)));
   assert.equal(A.laneClear(undefined, false, 1), 0);
   assert.equal(A.laneClear(1, true, 1), 1);
+  // A crawling running car (spun, stalled, a braked car reversing) holds every clear-road line off.
+  assert.equal(A.SLOW_V_FRAC, 0.25);
+  assert.equal(A.slowHazard({ speed: -5 }, 72), true, "reversing at 5 m/s is a crawl");
+  assert.equal(A.slowHazard({ speed: 17.9 }, 72), true);
+  assert.equal(A.slowHazard({ speed: 18 }, 72), false, "a quarter of top speed is racing");
+  assert.equal(A.slowHazard({ speed: 0, retired: true }, 72), false, "a retirement is the parked list's");
+  assert.equal(A.slowHazard({ speed: 0, finished: true }, 72), false);
+  assert.equal(A.slowHazard({ speed: 0, inPitLane: true }, 72), false);
+  assert.equal(A.slowHazard(null, 72), false);
 });
 
 test("ERS map and wantX: harvest banks, attack opens X", () => {

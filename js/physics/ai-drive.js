@@ -1044,6 +1044,16 @@ const AiDrive = (function () {
     return frac < HAZARD_V_FRAC;
   }
   function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
+  // A CRAWLING CAR HOLDS THE CLEAR-ROAD LINE OFF (#5330). laneClear lifts a lone car onto the baked line, which can
+  // run straight through a car crawling, spun or reversing on it (a braked parked car backs up at 5 m/s, over the
+  // stoppedHazard floor) — and the blocker box sees it only once it is in the car's lane, too late at 42 m/s. Any
+  // running car under SLOW_V_FRAC of the top speed, within hazardReach ahead, keeps the car in its lane (as before
+  // #5330). A share of the top speed, so PACE-scaled.
+  const SLOW_V_FRAC = 0.25;
+  function slowHazard(o, vTop) {
+    if (!o || o.retired || o.finished || o.inPit || o.inPitLane) return false;
+    return Math.abs(o.speed || 0) / (vTop > 0 ? vTop : 72) < SLOW_V_FRAC;
+  }
   // THE GAP ROUND A STATIC BODY (#5539): a street's minLatGap (2.2 m at Monaco) leaves 0.2 m to a
   // 2.0 m car. Fine beside a moving neighbour, who gives; a parked retirement or a stopped car
   // does not, and the lane change onto that aim overshoots it (measured 0.35 m at 59 m/s): a
@@ -1762,7 +1772,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, aeroDragMul, paceTrim, laneClear, aiErs, AERO_LOAD_GRIP, X_GAIN_LO, X_GAIN_HI, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, aeroDragMul, paceTrim, laneClear, slowHazard, SLOW_V_FRAC, aiErs, AERO_LOAD_GRIP, X_GAIN_LO, X_GAIN_HI, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,

@@ -12176,6 +12176,9 @@
       "sideYieldsA": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "slowHazard": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "softPairEdgeN": [
         "tests/unit/ai-pass-complete.test.mjs"
       ],
@@ -12287,6 +12290,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "*": [
+        "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/collide-yawed-fx.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/duel.test.mjs",
