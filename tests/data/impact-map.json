@@ -5011,11 +5011,6 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
-    "js/circuits/bahrain.js": {
-      "*": [
-        "tests/unit/track-shot-survey.test.mjs"
-      ]
-    },
     "js/circuits/cota.js": {
       "*": [
         "tests/unit/changed-files.test.mjs",
@@ -5099,8 +5094,7 @@
     },
     "js/circuits/scenery/bahrain.js": {
       "*": [
-        "tests/unit/circuit-corner-anchors.test.mjs",
-        "tests/unit/track-shot-survey.test.mjs"
+        "tests/unit/circuit-corner-anchors.test.mjs"
       ]
     },
     "js/circuits/scenery/baku.js": {
@@ -12849,7 +12843,8 @@
       ],
       "lateralCurve": [
         "tests/unit/grip-steer.test.mjs",
-        "tests/unit/tyre-peak-slip.test.mjs"
+        "tests/unit/tyre-peak-slip.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
       ],
       "lifeLaps": [
         "tests/unit/ai-strategy.test.mjs",
@@ -12946,8 +12941,7 @@
       "*": [
         "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs",
-        "tests/unit/wheel-state.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/physics/vehicle.js": {
@@ -17524,8 +17518,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
-        "tests/unit/scenery-api-contract.test.mjs",
-        "tests/unit/track-shot-survey.test.mjs"
+        "tests/unit/scenery-api-contract.test.mjs"
       ]
     },
     "js/track/core/hidden-faces.js": {
@@ -20278,6 +20271,9 @@
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
+      "inflate": [
+        "tests/unit/bitmap-decode-worker.test.mjs"
+      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
