@@ -115,10 +115,26 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   // 3. An agent's label on a routine-only diff passes, and says so.
   assert.deepEqual(configVerdict(routine, L, [agent(T1)]),
     { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/dispatch.mjs` });
-  // ci.yml decides what green means: protected (Bryce, 2026-11-11 "Protect ci.yml").
-  assert.equal(configVerdict([".github/workflows/ci.yml", "js/a.js"], L, [agent(T1)]).ok, false, "an agent's label on ci.yml is refused");
-  assert.match(configVerdict([".github/workflows/ci.yml"], L, [agent(T1)]).evidence, /protected path\(s\) \.github\/workflows\/ci\.yml/);
-  assert.equal(configVerdict([".github/workflows/ci.yml"], L, [ev("config-ok", T1)]).ok, true, "his own tap on ci.yml passes");
+  // D-034 (Bryce 2026-11-18 ~10:33Z "Shrink the list"): ci.yml, pick-tests and preflip-probe are ROUTINE, superseding
+  // the 2026-11-11 "Protect ci.yml" call; still config paths, so they still need a config-ok, but an agent's counts.
+  for (const p of [".github/workflows/ci.yml", "tools/ci/pick-tests.mjs", "tools/ci/preflip-probe.mjs"]) {
+    assert.equal(isConfigPath(p), true, `${p} is still a config path`);
+    assert.equal(isProtectedConfigPath(p), false, `${p} is routine (D-034)`);
+    assert.deepEqual(configVerdict([p], L, [agent(T1)]),
+      { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers ${p}` });
+    assert.equal(configVerdict([p], [], []).ok, false, `${p} with no config-ok at all still fails`);
+  }
+  // The kept set, exactly: the gate's own modules, land.yml, every host's hooks and settings.
+  for (const p of ["tools/ci/merge-gate.mjs", "tools/ci/lib/provenance.mjs", "tools/ci/lib/deploy-tip.mjs", "tools/ci/ready-gate.mjs",
+    "tools/ci/github-api.mjs", "tools/ci/github-token.mjs", "tools/gen/gen-test-groups.mjs", "tools/lib/changed-files.mjs",
+    "tools/lib/cli-args.mjs", "tools/lib/gate-receipt.mjs", "tools/lib/work-tree-id.mjs", ".github/workflows/land.yml",
+    ".claude/hooks/bash-guard.sh", ".claude/settings.json", ".claude/settings.local.json", "tools/hooks/readonly-bash.sh",
+    ".githooks/pre-commit", ".cursor/hooks.json", ".codex/hooks.json"]) {
+    assert.equal(isProtectedConfigPath(p), true, `${p} stays protected (D-034)`);
+    assert.match(configVerdict([p], L, [agent(T1)]).evidence, new RegExp(`^needs config-ok from brycejmurrin himself: .* protected path\\(s\\) ${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+  }
+  for (const p of ["tools/ci/dispatch.mjs", "tools/ci/tooling-fast.mjs", "tools/ci/sync-pr.mjs", ".github/workflows/dispatch.yml", ".github/workflows/pages.yml"])
+    assert.equal(isProtectedConfigPath(p), false, `${p} is routine`);
   for (const p of [".github/workflows/pages.yml", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".mcp.json", "tools/mcp/apex-extras.mjs", "tools/lib/generated-paths.mjs", ".github/actions/setup/action.yml", ".github/ISSUE_TEMPLATE/task.yml"])
     assert.equal(configVerdict([p], L, [agent(T1)]).ok, true, `${p} is routine`);
   // 4. An agent's label older than the last config push is refused (the same timing rule as Bryce's).
