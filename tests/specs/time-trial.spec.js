@@ -561,7 +561,10 @@ test.describe("Time Trial — results panel", () => {
       Ghost.finishLap(75);
       window.__apex.finishRace();
     });
+    // Arm-then-confirm (#5672): the first tap only arms; the second clears.
     await page.getByRole("button", { name: "✕ CLEAR GHOST" }).click();
+    await expect(page.locator("#res-ghost-clear")).toHaveText("TAP AGAIN TO CLEAR");
+    await page.locator("#res-ghost-clear").click();
     expect(await page.evaluate(() => GameStore.ttBoard("monza",null).length)).toBe(1);
     await page.locator("#res-next").click();
     await page.evaluate(() => window.__apex.park(0.1));

@@ -118,9 +118,10 @@ var SessionRecords = (function () {
       laps.push(lapTime);
       const c = G.player;
       GameStore.ttBoardAdd(G.track.def.id, { t: lapTime, teamId: c.team.id, code: c.code, name: c.name, ts: Date.now(), context: key });
-      const medal = Quali.medalFor(lapTime, pole), held = Ghost.medal();
+      const medal = Quali.medalFor(lapTime, pole), held = Ghost.medal(), prev = Ghost.bestTime();
+      // prevBest: the PB this lap replaced, so YOUR PB can show the gain (it read +0.000 on every record, #5672).
       const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
-        pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
+        pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather, prevBest: isFinite(prev) ? prev : null });
       if (typeof InputGhost !== "undefined") {
         InputGhost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
           pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
