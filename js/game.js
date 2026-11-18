@@ -5115,7 +5115,7 @@ function updateCar(c, dt, ranked) {
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
-                      : (c.otArmed && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // the AI spends it on a car it can attack
+                      : (c.otArmed && raceCtl.level < 2 && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // on a car it can attack; never under a VSC (#5715: held to the delta, it buys nothing; the human still may)
                           _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
                           _aiOtFire.gapAhead = gapAhead * (c.speed || 1),
                           _aiOtFire.roomL = roomL, _aiOtFire.roomR = roomR, _aiOtFire.speed = c.speed, _aiOtFire.vTop = vT,

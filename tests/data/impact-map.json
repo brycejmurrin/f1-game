@@ -7735,6 +7735,7 @@
         "tests/specs/ui-button-touch.spec.js"
       ],
       "otEnabled": [
+        "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",

@@ -337,6 +337,46 @@ test("a stuck hazard cannot neutralise the race forever", () => {
   assert.equal(rc.info().level, 3, "after the hold, a persistent hazard re-raises");
 });
 
+test("the hard cap counts the EPISODE, not the level: a flag flipping SC<->VSC still caps (#5715)", () => {
+  // Hunt 2026-11-18 (5): every level change reset sinceT, so hazards hovering
+  // at SC_MIN held the race neutralised 599.7 of 600 s and it never went green.
+  // The episode clock resets only on GREEN (or a new peak), so the SC_MAX cap
+  // fires at its designed ~90 s however the level flips underneath it.
+  for (const period of [7, 8, 20]) {
+    let t = 0;
+    const rc = load({ active: () => true, hazards: () => hazards(Math.floor(t / period) % 2 ? 6 : 10, 2) })
+      .create(makeCtx());
+    let firstGreen = null, neutral = 0, levels = new Set();
+    for (let i = 0; i < 600 * 60; i++) {
+      t = i / 60;
+      rc.update(1 / 60);
+      const lv = rc.info().level;
+      levels.add(lv);
+      if (lv) neutral += 1 / 60;
+      else if (firstGreen === null && t > 1) firstGreen = t;
+    }
+    assert.ok(levels.has(2) && levels.has(3), `period ${period}: the flag really flipped SC<->VSC`);
+    assert.ok(firstGreen !== null && firstGreen > 85 && firstGreen < 100,
+      `period ${period}: capped at the designed ~90 s (first green ${firstGreen})`);
+    assert.ok(neutral < 450, `period ${period}: the race goes green between episodes (${neutral.toFixed(1)} s neutralised)`);
+  }
+});
+
+test("a de-escalation stays one episode, while an escalation above its peak gets a fresh cap", () => {
+  let hz = hazards(0, 3);          // local YELLOW
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+  run(rc, 25);
+  assert.equal(rc.info().level, 1);
+  hz = hazards(10, 2);             // a real pile: SC, above the yellow peak
+  run(rc, 60);
+  assert.equal(rc.info().level, 3, "the SC gets its own SC_MAX, not the yellow's 30 s remainder");
+  hz = hazards(6, 2);              // steps down to a VSC: the same episode
+  run(rc, 25);
+  assert.equal(rc.info().level, 2, "stepped down to VSC");
+  run(rc, 10);                     // > 90 s since the SC was raised
+  assert.equal(rc.info().level, 0, "the SC's cap still runs through the step-down");
+});
+
 test("the cap's re-arm hold never masks an ESCALATION", () => {
   // The hold exists to stop the SAME stale picture instantly re-flagging. It
   // must not also swallow a genuinely worse incident: a local yellow that
