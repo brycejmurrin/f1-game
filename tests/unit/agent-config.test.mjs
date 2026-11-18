@@ -583,8 +583,7 @@ test("the always-on instruction surface stays inside its budget", () => {
     // user-only skills (disable-model-invocation) are not in context: see the budgets file comment
     descWords += parsed["disable-model-invocation"] === true ? 0 : description.split(/\s+/).filter(Boolean).length;
   }
-  // Raised 1600 -> 1700 on 2026-10-16 (Bryce: "Raise the skill budget"): 40 skills left
-  // ~0 slack, so every skill edit traded routing recall (skill-hint-hook floor) for budget.
+  // Budget history: tests/data/agent-config-budgets.json _comment.
   assert.ok(descWords <= BUDGET.skillDescriptionWords,
     `${skills.length} skill descriptions cost ~${descWords} always-on words (budget ${BUDGET.skillDescriptionWords}) — tighten one, or retire a skill`);
 });
@@ -645,8 +644,7 @@ test("skill descriptions: a char budget, every arrow resolves", () => {
     for (const m of desc.matchAll(/(?:→|->)\s*(?:agent\s+)?\**`?([a-z0-9][a-z0-9-]*)/g))
       assert.ok(skills.includes(m[1]) || agents.includes(m[1]), `${name}: "→ ${m[1]}" names no skill or agent`);
   }
-  // 11,986 chars on 2026-10-14, rounded up to the next 100. Raised to 12,800 on 2026-10-16
-  // (Bryce: "Raise the skill budget") for the same reason as the word budget. Trim one to add one.
+  // Budget history: tests/data/agent-config-budgets.json _comment.
   assert.ok(chars <= BUDGET.skillDescriptionChars, `${skills.length} skill descriptions are ${chars} chars (budget ${BUDGET.skillDescriptionChars})`);
 });
 
