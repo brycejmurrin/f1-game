@@ -1,1 +1,1 @@
-Fixed: In rain, the sun glint on wet track now ripples with the raindrop rings on the default renderer (and on the opt-in WebGPU one), as it already did on the WebGL2 fallback; it used to stay flat (#5777).
+Fixed: In rain, the sharp sun highlight on puddles now follows the raindrop ripples on the default renderer (and the opt-in WebGPU one), matching the WebGL2 fallback. It is a subtle sparkle; the broad sun reflection on puddles already rippled (#5777).
