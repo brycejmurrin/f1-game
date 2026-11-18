@@ -8,6 +8,22 @@ Rendering lane A3, PR #5781. **Nothing shipped: the shaders are unchanged.** "Be
 9261395b; "after" is that tip plus the patch at the end of this note. **Evidence class of every number here: `software`** (this container, SwiftShader, no
 GPU). Nothing here was measured on a phone or a real GPU.
 
+## Read this first: the TLX frames here took TLX's software fallbacks
+
+Every TLX capture in this note ran on three's WebGL2 backend on SwiftShader (`apex26.tlxForceGL=1`) with no
+`apex26.tlxForceHw` pin. On a software adapter TLX swaps content paths for budget, not correctness
+(`softContent(part)`, `tlx.js:913`): `sky` (a zenith-only fallback sky), `env` (a cleared env probe), `shadow`
+(shrunk maps) and `chunked`. Which of them were active was NOT recorded in these captures
+(`GLX.__tlx.skyState().fallback` would say); by the code, all four were. So:
+
+- The cross-backend numbers (TLX against GLX, including "the larger finding" below) are **not evidence about a real
+  GPU**. A darker, less blue wet road is what a fallback sky and a cleared env probe would produce. Repeat with
+  `--ls apex26.tlxForceHw=env,sky` (or on real hardware) before reading anything into that gap.
+- "The broad sun patch already ripples via the env reflection" was observed on those software frames and on WGX and
+  GLX; the source order (the env reflection reads the rippled normal on all three) does not depend on the fallback.
+- The withdraw decision rests on before-versus-after on the SAME backend and path, which the fallback does not
+  affect.
+
 ## What was wrong, exactly
 
 GLX tilts the normal for rain ripples and re-dots the sun-specular terms against it (`keySpecNoL/NoV/NoH`). TLX and
