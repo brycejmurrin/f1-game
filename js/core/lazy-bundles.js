@@ -17,7 +17,7 @@ const AGENT_EDGES = ApexRoster.LAZY_EDGES;
 const isGarageData = (f) => /^js\/garage\/|^js\/data\/garage-/.test(f);   // incl. the optional authored entrance motion
 const RACE_FILES = ApexRoster.LAZY_RACE.filter((f) => !isGarageData(f));
 const GARAGE_FILES = ApexRoster.LAZY_RACE.filter(isGarageData);
-// LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
+// LAZY_RACE_SESSION — pit / radio / coach / reliability (~380 KB). Title boots
 // the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
 // does not pay the whole fetch on the critical path.
 const RACE_SESSION_FILES = ApexRoster.LAZY_RACE_SESSION || [];
@@ -46,6 +46,7 @@ const RACE_SESSION_READY = {
   "js/race/marshal-panels.js": () => typeof MarshalPanels !== "undefined" && !!MarshalPanels && !MarshalPanels._stub,
   "js/race/flying-start.js": () => typeof FlyingStart !== "undefined" && !!FlyingStart && !FlyingStart._stub,
   "js/race/jump-start-penalty.js": () => typeof JumpStartPenalty !== "undefined" && !!JumpStartPenalty && !JumpStartPenalty._stub,
+  "js/race/driving-coach.js": () => typeof DrivingCoachBody !== "undefined",   // the DrivingCoach façade creates it on its next call
 };
 // Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
 // idiom): a retry loads only the rest. The hook runs once, on the transition to complete.

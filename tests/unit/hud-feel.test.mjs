@@ -563,7 +563,7 @@ test("coach and practice keep their own channel and priority, and practice is it
   const pri = g.match(/const ANN_PRI = \{([^}]*)\}/)[1];
   assert.match(pri, /practice: 2/);
   assert.match(pri, /coach: 1/, "a coach tip still yields to everything else");
-  for (const file of ["js/race/race-insights.js", "js/race/driving-coach.js"])
+  for (const file of ["js/race/race-insights.js", "js/race/driving-coach.js", "js/race/driving-coach-boot.js"])
     assert.doesNotMatch(read(file), /G\.announce\([^)]*"info"\)/, file + " routes its messages to the practice tier");
 });
 

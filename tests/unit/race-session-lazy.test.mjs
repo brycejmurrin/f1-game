@@ -19,7 +19,10 @@ test("manifest keeps session-stub on FULL and pit-lane in LAZY_RACE_SESSION", ()
   assert.ok(!m.FULL.includes("js/race/pit-lane.js"));
   assert.ok(m.LAZY_RACE_SESSION.includes("js/race/pit-lane.js"));
   assert.ok(m.LAZY_RACE_SESSION.includes("js/race/race-radio.js"));
-  assert.ok(m.FULL.includes("js/race/driving-coach.js"), "coach stays FULL for UiExperience");
+  // #4748: the coach body is LAZY_RACE_SESSION; its FULL façade keeps DrivingCoach.create(G) for UiExperience.
+  const coach = (list) => list.filter((f) => f.startsWith("js/race/driving-coach"));
+  assert.deepEqual([coach(m.FULL), coach(m.LAZY_RACE_SESSION)], [["js/race/driving-coach-boot.js"], ["js/race/driving-coach.js"]],
+    "the coach façade stays FULL for UiExperience; its body loads with the race session");
 });
 
 test("session stub installs PitLane/Reliability and create() is inert", () => {
