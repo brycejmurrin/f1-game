@@ -1,0 +1,1 @@
+Fixed: Opt-in WHEEL LOCK & ABS model (OFF by default): each axle again uses its own tyre curve, so the rear keeps its grip plateau under wheelspin — a fix from the 2026-11-09 audit that a later re-land had overwritten (#5330).

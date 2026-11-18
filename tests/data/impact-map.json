@@ -12843,7 +12843,8 @@
       ],
       "lateralCurve": [
         "tests/unit/grip-steer.test.mjs",
-        "tests/unit/tyre-peak-slip.test.mjs"
+        "tests/unit/tyre-peak-slip.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
       ],
       "lifeLaps": [
         "tests/unit/ai-strategy.test.mjs",
@@ -12940,8 +12941,7 @@
       "*": [
         "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs",
-        "tests/unit/wheel-state.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/physics/vehicle.js": {
