@@ -22,8 +22,15 @@ const PngStrip = (function () {
       if (done) break;
       const take = Math.min(value.length, needed - n);
       if (take > 0) { out.set(value.subarray(0, take), n); n += take; }
+      // A strip PNG is taller than the layers we asked for: stop once we have
+      // those rows instead of inflating the rest of the IDAT on this worker.
+      if (n >= needed) {
+        try { await r.cancel(); } catch (_) { /* reader already closed */ }
+        try { await w.abort(); } catch (_) { /* writer already closed */ }
+        break;
+      }
     }
-    await wrote;
+    if (n < needed) await wrote;
     return n === needed ? out : out.subarray(0, n);
   }
 

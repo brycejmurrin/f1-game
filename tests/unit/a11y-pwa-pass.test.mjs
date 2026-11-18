@@ -553,6 +553,24 @@ test("UPDATE READY and INSTALL APP stand down over the select, career and garage
   for (const id of ["select", "career", "carsetup"]) assert.match(html, new RegExp(`\\n<div id="${id}" class="screen"`), `#${id} is a <body> child, so the :has(> …) scope matches`);
 });
 
+// #5328: on the title the chip (fixed bottom-right, z 9000) sat ON the last menu
+// row. Measured at 844x390 with the owner's 2026-11-10 export (UI SIZE 70): chip
+// 610..836 x 338..382 over SAVES & DATA (685..828 x 336..371) and half of HOW TO
+// PLAY; SETTINGS too under the longer refused-load text. While it shows, #overlay
+// ends one chip row plus a gap higher (last row then 298..330).
+test("the title makes room for UPDATE READY instead of sitting under it", () => {
+  const rules = cssRules(read("css/overlays.css"));
+  assert.equal(decl(rules, "body:has(> #update-chip:not([hidden])) #overlay", "padding-bottom"), "calc(var(--sab) + var(--tap) + var(--gap) * 2)");
+  assert.equal(decl(rules, "#update-chip", "bottom"), "calc(var(--sab) + var(--gap))");
+  assert.equal(decl(rules, "#update-chip", "min-height"), "var(--tap)");
+  // The same sums in px at 844x390 (--tap 44, --gap 8, no bottom inset).
+  const sab = 0, tap = 44, gap = 8, H = 390;
+  const chipTop = H - (sab + gap) - tap, contentBottom = H - (sab + tap + gap * 2);
+  assert.equal(chipTop, 338);
+  assert.equal(contentBottom, 330);
+  assert.equal(chipTop - contentBottom, gap, "one gap of air between the last row and the chip");
+});
+
 // Ports are private to the queried controller; replacements and a worker that
 // restarts at the same URL cannot reuse an earlier generation answer.
 function generationHarness() {

@@ -334,6 +334,15 @@
       ]
     },
     {
+      "path": "tools/check/ai-solo.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/check/ai-strategy-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
