@@ -215,3 +215,27 @@ test("publisher tick expires a silent overlay so a crashed tab stops the publish
   pub.tick();
   assert.deepEqual(j(peers), [1, 0]);
 });
+
+test("publisher tick holds the tower when field() returns ok:false (no empty wipe)", () => {
+  const { FakeChannel } = bus();
+  const { Bridge, Pub } = load();
+  const host = Bridge.host({ BroadcastChannel: FakeChannel, onPeers() {} });
+  const got = [];
+  Bridge.subscribe((f) => got.push(f), { BroadcastChannel: FakeChannel, timers: timers(), id: "ov" });
+  let n = 0;
+  const apex = {
+    field: () => (++n === 1
+      ? FIELD
+      : { ok: false, error: "NoTrackError", message: "no track is loaded" }),
+    info: () => ({ state: "race", track: "monza" }),
+    sectorState: () => null,
+  };
+  const pub = Pub.start({ bridge: host, apex: () => apex, document: null, teams: TEAMS, timers: timers() });
+  const first = pub.tick();
+  const held = pub.tick();
+  assert.deepEqual(
+    { full: !!first?.full, rows: got.at(-1)?.rows?.length, held, frames: got.length },
+    { full: true, rows: FIELD.positions.length, held: null, frames: 1 },
+  );
+  pub.stop();
+});
