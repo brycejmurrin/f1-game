@@ -42,8 +42,10 @@ const Log = (function () {
   let seq = 0;
 
   function parseLevel(name) {
-    const level = LEVELS[String(name).trim().toLowerCase()];
-    return level === undefined ? null : level;
+    // Own keys only: `constructor`, `toString`, `__proto__` are inherited
+    // from Object.prototype and would parse as a (non-number) level.
+    const key = String(name).trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(LEVELS, key) ? LEVELS[key] : null;
   }
 
   function wipe(table) { for (const k in table) delete table[k]; }

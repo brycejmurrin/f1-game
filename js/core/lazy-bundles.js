@@ -128,13 +128,14 @@ function circuitResident(def) {
   return !!(typeof Tracks !== "undefined" && Tracks.circuitPayloadResident && Tracks.circuitPayloadResident(def));
 }
 function ensureCircuit(idx) {
-  if (lightFailed) ensureLightPresets();   // a race start (or a circuit pick) after a failed presets fetch: try again
+  if (lightFailed) ensureLightPresets().catch(() => {});   // a race start (or a circuit pick) after a failed presets fetch: try again
   const def = Tracks.LIST[idx];
   if (!def || circuitResident(def) || def.custom) return Promise.resolve();
   let p = _circuitLoads.get(def.id);
   if (!p) {
+    // The memo is cleared on settle (.finally), so a REJECTED load is retried
+    // by the next ask instead of pinning that circuit until reload.
     p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], [], { transientRetry: false }).then((ok) => {
-      _circuitLoads.delete(def.id);
       if (!ok) {
         Log.warn("track", "circuit payload failed to load: " + def.id);
         return false;
@@ -152,7 +153,7 @@ function ensureCircuit(idx) {
         return false;
       }
       return Tracks.hydrate(raw);
-    });
+    }).finally(() => { _circuitLoads.delete(def.id); });
     _circuitLoads.set(def.id, p);
   }
   // Reject when hydrate/load fails so ensureScenery / startRace never build a
@@ -943,7 +944,10 @@ function ensureLightPresets() {
     lightLoad = null;
     lightFailed = !window.LightPresets;
     if (lightFailed) { Log.warn("game", "the lighting presets did not load — the next race start asks again"); return false; }
-    deps.applyLightTuneIfReady();
+    // The presets ARE resident: a throwing tune hook must not reject this
+    // promise (ensureCircuit fires it and forgets — the rejection overlay).
+    try { deps.applyLightTuneIfReady(); }
+    catch (e) { Log.warn("game", "applyLightTuneIfReady threw after the presets loaded: " + ((e && e.message) || e)); }
     return true;
   });
   return lightLoad;
