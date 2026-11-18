@@ -6049,6 +6049,7 @@
       ],
       "*": [
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/pick-tests-named-specs.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -6392,7 +6393,8 @@
         "tests/unit/data-standings.test.mjs"
       ],
       "*": [
-        "tests/unit/css-tokens.test.mjs"
+        "tests/unit/css-tokens.test.mjs",
+        "tests/unit/pick-tests-named-specs.test.mjs"
       ]
     },
     "js/data/tab-utils.js": {

@@ -32,7 +32,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV, WEBGPU_CENSUS_ARM, adapterMismatch, readWebgpuAdapter } from "../lib/harness.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
-import { parkKey, parkPasses, baselineCell, uboFlat, compareParkBaseline, PARK_MEMORY_REPORTED } from "./pass-census-lib.mjs";
+import { parkKey, parkPasses, baselineCell, uboFlat, compareParkBaseline, staleParkNotice, PARK_MEMORY_REPORTED } from "./pass-census-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -293,6 +293,10 @@ async function main() {
       console.log("memory " + JSON.stringify(cell.memory) + " reported " + JSON.stringify(Object.fromEntries(PARK_MEMORY_REPORTED.map((k) => [k, mem1 ? mem1[k] : null]))) + (ubo.length ? "   <- UNIFORM BUFFERS NOT FLAT: " + ubo.join("; ") : "   (uniform buffers flat over the window)"));
       console.log("baseline " + (BASELINE || "(none asked)") + ": " + cmp.status);
       for (const d of cmp.diffs) console.error("  " + d);
+      // #5535: the job is continue-on-error, so a diff must read as a failure on the check page, not only in the log.
+      const stale = staleParkNotice(baseline, key, cmp, { run: process.env.GITHUB_RUN_ID, sha: process.env.GITHUB_SHA });
+      if (stale) { console.error(stale); if (process.env.GITHUB_ACTIONS) console.log("::error title=Stale park or regression (" + key + ")::" + stale); }
+      if (stale) cmp.notice = stale;
       summary.park = { key, at: PARK_AT, ls: LS, camera: camStill, cell, renders: Object.fromEntries(Object.keys(passes).map((k) => [k, passes[k].renders])), memoryStart: mem0, memoryEnd: mem1, uboFlat: ubo.length === 0, uboFails: ubo, baseline: cmp };
       if (ubo.length || cmp.status === "diff" || cmp.status === "no-cell" || (camStill && !camStill.still)) process.exitCode = 1;
     } else if (Object.keys(LS).length) summary.ls = LS;

@@ -1,0 +1,1 @@
+Fixed: on a phone at small UI SIZE the Settings ‹ › arrows (Graphics, Accessibility, Controls, Driving, HUD & camera) and the title SOUND button were smaller than a fingertip; they now paint at the full touch size.
