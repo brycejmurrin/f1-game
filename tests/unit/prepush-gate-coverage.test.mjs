@@ -74,6 +74,8 @@ const SWEEPS_ONLY = new Map([
   ["road-under-floor.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-grounding.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-ground-audit.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["footprint-rejected-baseline.test.mjs", "test:sweeps — per-circuit geometry (never-landing modelGroup ratchet)"],
+  ["stand-curve-gap-fleet.test.mjs", "test:sweeps — per-circuit geometry (#2204 curved-stand joints, every stand circuit)"],
   ["shared-track-foundation-characterization.test.cjs", "test:sweeps — per-circuit geometry"],
   ["track-validate-fleet.test.mjs", "test:sweeps — per-circuit geometry (the designer's validator judged on all 52 centrelines)"],
   ["track-themes-build.test.mjs", "test:sweeps — per-circuit geometry (eight theme presets × two seeds, full custom-circuit builds)"],

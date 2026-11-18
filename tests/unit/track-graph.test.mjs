@@ -708,3 +708,22 @@ test("a whole model with one culled op plants nothing (#2178)", () => {
     assert.equal(g.stats().dropped, 1);
   }
 });
+
+test("stats().matInherit counts nodes whose inline replay inherited a non-zero out._mat", () => {
+  // The instanced canonical mesh bakes an unstamped op as mat 0; inline it takes
+  // the register. graph-parity.cjs fails a circuit with any such node.
+  const g = TrackGraph.create({ raw: RAW });
+  const out = buf();
+  const place = { o: [0, 0, 0], r: [1, 0, 0], u: [0, 1, 0], t: [0, 0, 1] };
+  const bare = (rec) => rec.box([0, 0, 0], [1, 1, 1], [0.5, 0.5, 0.5]);
+  const stamped = (rec) => { rec.mat(3); bare(rec); };
+  out._mat = 0;
+  g.instance("bare", place, bare, { kind: "a" }, emitter(), out);       // register 0: agrees
+  assert.equal(g.stats().matInherit.nodes, 0);
+  out._mat = 2;
+  g.instance("bare", place, bare, { kind: "a" }, emitter(), out);       // inherits 2: mismatch
+  g.instance("stamped", place, stamped, { kind: "b" }, emitter(), out); // stamps 3: agrees
+  const mi = plain(g.stats().matInherit);
+  assert.equal(mi.nodes, 1);
+  assert.deepEqual(mi.byModel, { bare: 1 });
+});
