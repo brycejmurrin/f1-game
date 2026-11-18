@@ -257,7 +257,7 @@ const HudArrange = (() => {
       for (const [id, , sel] of ELEMENTS) {
         const el = document.querySelector(sel);
         if (!visible(el)) continue;
-        const r = el.getBoundingClientRect();
+        const r = HudLayout.maxRect ? HudLayout.maxRect(id, el) : el.getBoundingClientRect();   // at its widest race content: SECTORS "--" grows at S1 (#5678)
         out.push({ id, l: r.left, t: r.top, r: r.right, b: r.bottom });
       }
       const ctl = document.querySelectorAll("#hud-dock .touchbtn:not([hidden]), #pausebtn, #btn-cam");

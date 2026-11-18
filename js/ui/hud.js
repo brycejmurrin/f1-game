@@ -363,11 +363,7 @@ let _gapTight = null, _gapDrop = null;
 // screen. fitHud needs BOTH to answer its two questions without feeding its own
 // output back in — see the rung comment there.
 const _gapW = [0, 0];
-// The gap is distance ÷ the PLAYER'S OWN speed, so under braking the divisor
-// halves within a second and the tenths jumped 2x between ticks (10 Hz) with
-// the rival not having moved relative to the car. Smooth the displayed
-// seconds (EMA, ~0.3 s at 10 Hz) per slot; a neighbour change resets the
-// slot so a new rival never inherits the old one's lag.
+// A time gap at a timing line (HudReadouts.gapClock; distance ÷ own speed until both cross one), EMA-smoothed per slot.
 const _gapSm = [NaN, NaN], _gapWho = [null, null];
 function gapDecimals(sec) {
   // Shared with REL / tower via HudReadouts: two decimals under ~10 s on every
@@ -426,8 +422,9 @@ function gapForm() {
 function gapText(slot, gap, arrow, o, dist, vFloor) {
   const n = _ro && G.track ? _ro.lapsApart(dist, G.track.total) : 0;
   if (n) { _gapWho[slot] = null; return _ro.lapGapText(arrow, o.code, slot ? -n : n, gap === _gapFormShort); }
-  return gap(arrow, o.code, gapSec(slot, o, dist / vFloor));
-}
+  const t = _gapClk ? (slot ? _gapClk.gap(G.player, o) : _gapClk.gap(o, G.player)) : NaN;   // a time gap at a line (#5678)
+  return gap(arrow, o.code, gapSec(slot, o, t >= 0 ? t : dist / vFloor));
+} const _gapClk = _ro && _ro.gapClock ? _ro.gapClock() : null;
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
 // per call for two constant formats.
 const _gapFormShort = (arrow, code, t) => arrow + " " + t;
@@ -1901,7 +1898,8 @@ function updateHud(force, dtMs) {
   }
   _holdPrev = player.lastLap;
   if (_holdOn && !(player.lapTime < 3)) _holdOn = false;
-  hText(els.time, G.fmtTime(_holdOn ? player.lastLap : player.lapTime));
+  // LAP 0 (grid to line) is off the lap clock, as for DELTA and every recorded lap: TIME reads 0, not a run-up that rewinds (#5678).
+  hText(els.time, G.fmtTime(_holdOn ? player.lastLap : sess === "race" && lapN < 1 ? 0 : player.lapTime));
   hData(els.time, "hold", _holdOn ? (player.lastLap <= player.best ? "pb" : "lap") : null);
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
@@ -2129,6 +2127,7 @@ function updateHud(force, dtMs) {
     // of the envelope at low OVERALL SPEED and understated slow-corner gaps.
     // 0.26 × vTop ≈ 25 m/s at default pace.
     const vFloor = Math.max(player.speed, G.vTop() * 0.26);
+    if (_gapClk && G.track) for (const c of cars) _gapClk.sample(c, c.prog, G.raceT, G.track.total);
     hText(els.gapA, a ? gapText(0, gap, "▲", a, a.prog - player.prog, vFloor) : "");
     hText(els.gapB, b ? gapText(1, gap, "▼", b, player.prog - b.prog, vFloor) : "");
     // WHO: the neighbour's team colour as the chip's left bar (css/hud.css).
@@ -2290,7 +2289,7 @@ function resetRace() {
   if (typeof HudInputs !== "undefined" && HudInputs.reset) HudInputs.reset();
   if (typeof Captions !== "undefined") Captions.clear();   // the last spotter call: #captions sits outside #hud
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
-  _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
+  _holdLap = 0; _holdPrev = 0; _holdOn = false; if (_gapClk) _gapClk.reset(); _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
   // THE GAP CHIPS CARRY STATE ACROSS SESSIONS: a time trial paints the ghost
   // delta's colour inline, a race the neighbour's team bar, the tow halo and
