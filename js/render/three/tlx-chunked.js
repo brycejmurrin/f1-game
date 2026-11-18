@@ -147,6 +147,14 @@
     let ok = src && src.length === len;
     // W2: only a 3-wide 8/16-bit or a 1-wide 16-bit result misses 4 bytes (itemSize 2 of 16 bits is 4 B).
     const pad = fmt24 === false && padding && (itemSize === 3 || itemSize === 1);
+    // TLX3-05: NO HALF ATTRIBUTE ON THE WEBGPU LEG. three r187's WebGPU
+    // createAttribute widens a non-normalized Float16BufferAttribute's
+    // Uint16Array to a Uint32Array yet still names the format float16xN, so
+    // the GPU reads two halves out of every 32-bit lane: garbage. Nothing in
+    // the shipped roster reaches a half under fmt24 today (1- and 3-wide
+    // channels lose their kind below), so this guards a future 2/4-wide
+    // channel: it keeps Float32, the exact source values.
+    const halfOk = fmt24 !== true;
     if (fmt24 && itemSize === 3 && ok && kind === "unit") {
       // Validate and pack in one source pass: no padded Float32 temporary
       // (16 bytes/vertex). fround preserves that temporary's conversion of
@@ -184,8 +192,9 @@
     // So the normal is free at 16 bits and the colour is not free at any width
     // tried. Eight bits costs ~6 % of the frame; three's Float16BufferAttribute
     // costs MORE (~14 %) than the byte does, which is backwards on precision
-    // grounds and says the fault is in how three hands that array to the
-    // WebGPU backend rather than in the encoding — unexplained, so not shipped.
+    // grounds: the fault is in how three hands that array to the WebGPU
+    // backend (r187 widens it to Uint32 under a float16xN format, TLX3-05 at
+    // `halfOk` above), not in the encoding, so it is not shipped.
     // Colour therefore stays float32x3 here and the channel keeps its 12 bytes.
     //
     // Two things fall out of this worth someone's time. The WebGL2 leg DOES
@@ -237,7 +246,7 @@
       // half-float's 11-bit mantissa is worth about +/-2.6 m and road
       // markings need far better. Non-finite data keeps Float32 as well —
       // half would turn a stray Infinity into a different wrong number.
-      if (finite && THREE.Float16BufferAttribute && (kind === "unorm" || kind === "id")) {
+      if (halfOk && finite && THREE.Float16BufferAttribute && (kind === "unorm" || kind === "id")) {
         packStats.half++;
         const h = new Uint16Array(len);
         for (let i = 0; i < len; i++) { if ((i & 8191) === 0) yield; h[i] = _toHalf(src[i]); }
@@ -284,6 +293,10 @@
       // every id exactly (integers to 2048), is a FLOAT format on both
       // backends, and still halves the 4-byte source; the same path the
       // out-of-range branch above already takes.
+      if (!halfOk) {
+        packStats.wide++;
+        return new THREE.BufferAttribute(yield* f32Steps(src), itemSize);
+      }
       packStats.half++;
       const h = new Uint16Array(len);
       for (let i = 0; i < len; i++) { if ((i & 8191) === 0) yield; h[i] = _toHalf(src[i]); }
@@ -557,7 +570,11 @@
         delete prepared.workerPacking;
       }
       const attributes = {};
+      const webgpu = fmt24();
       for (const [name, a] of Object.entries(prepared.attributes)) {
+        // TLX3-05 (packAttrSteps `halfOk`): a half payload never reaches the
+        // WebGPU leg; decode it (a half is exact in f32) rather than draw garbage.
+        if (a.half && webgpu) { attributes[name] = new THREE.BufferAttribute(Float32Array.from(a.array, _fromHalf), a.itemSize); continue; }
         attributes[name] = a.half ? new THREE.Float16BufferAttribute(a.array, a.itemSize)
           : new THREE.BufferAttribute(a.array, a.itemSize, a.normalized);
       }
