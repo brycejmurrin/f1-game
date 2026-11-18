@@ -63,8 +63,8 @@ var RivalAudio = (() => {
   function passByPan(lat, arc) {
     return PAN_MAX * Math.max(-1, Math.min(1, (+lat || 0) / Math.max(3, Math.abs(+arc || 0) + 3)));
   }
-  // URL labs (?lab=a,b): opt-in switches for Bryce's listening passes, read once
-  // at module eval. No store key. Absent/garbled → false (the shipped behaviour).
+  // URL labs (?lab=a,b): read once at module eval. No store key.
+  // Absent/garbled → false. Used for the OFF switch below (noRivalEps).
   function labOn(name) {
     try {
       if (typeof location === "undefined" || !location) return false;
@@ -72,14 +72,15 @@ var RivalAudio = (() => {
       return !!v && v.split(",").some((s) => s.trim() === name);
     } catch (e) { return false; }
   }
-  // LAB rivalEps (OFF by default; perf hunt 7 measured 9.2 → ~1.3 calls/frame).
-  // Try: https://brycejmurrin.github.io/f1-game/?lab=rivalEps
-  // A slow drift re-aimed every param every frame. With the lab on, applyPassBy
-  // re-aims only when the target moved past a per-param threshold below
-  // audibility. The cache holds the LAST ISSUED target, so drift accumulates
-  // until it crosses (error bounded by the threshold), and a large step issues
-  // at once. A target of exactly 0 always lands (a voice going silent).
-  const EPS_ON = labOn("rivalEps");
+  // Pass-by aim epsilon — ON BY DEFAULT (was the opt-in LAB rivalEps; perf hunt
+  // 7/9 measured 639 → 26 setTargetAtTime over 600 drift frames, ~9.2 → ~1.3
+  // calls/frame). Thresholds sit under the level / pitch / image JNDs below.
+  // Off switch for one release: ?lab=noRivalEps
+  // A slow drift re-aims only when the target moved past a per-param threshold.
+  // The cache holds the LAST ISSUED target, so drift accumulates until it
+  // crosses (error bounded by the threshold), and a large step issues at once.
+  // A target of exactly 0 always lands (a voice going silent).
+  const EPS_ON = !labOn("noRivalEps");
   // gain: 3 % relative ≈ 0.26 dB, well under the ~1 dB level JND; the 5e-4 floor
   // is -66 dBFS, inaudible under the engine (GAIN_PEAK 0.07 ≈ -23 dBFS).
   const EPS_GAIN = { abs: 5e-4, rel: 0.03 };
@@ -112,10 +113,14 @@ var RivalAudio = (() => {
   const slots = Array.from({ length: SLOTS },
     () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, relativeSpeed: 0, dist: 0, voice: "", slot: 0, car: null }));
   const _wScratch = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  // Reused [x, z] — callers copy the numbers before the next collect()/emitFieldSfx.
+  const _xzOut = [0, 0];
   function worldXZ(track, s, x) {
     if (!track || s == null || typeof Tracks === "undefined" || !Tracks.sample) return null;
     Tracks.sample(track, s, _wScratch);
-    return [_wScratch.p[0] + _wScratch.r[0] * (x || 0), _wScratch.p[2] + _wScratch.r[2] * (x || 0)];
+    _xzOut[0] = _wScratch.p[0] + _wScratch.r[0] * (x || 0);
+    _xzOut[1] = _wScratch.p[2] + _wScratch.r[2] * (x || 0);
+    return _xzOut;
   }
   const out = [];
 
@@ -220,6 +225,13 @@ var RivalAudio = (() => {
       const v = voices[i];
       try { if (v.gain.gain) v.gain.gain.setTargetAtTime(0, t, 0.06); } catch (e) { /* gone */ }
       try { v.src.stop(t + 0.3); } catch (e) { /* already stopped */ }
+      // Disconnect now (CrowdAudio.detach shape). stop() alone leaves the
+      // panner wired into the bus until GC; a closed/suspended context may
+      // never fire onended, and a rebuild must not leave dead whoosh nodes
+      // rendering into the old focus bus.
+      for (const n of [v.src, v.filt, v.gain, v.pan]) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) { /* closed ctx */ }
+      }
     }
     voices = null;
     actx = null;

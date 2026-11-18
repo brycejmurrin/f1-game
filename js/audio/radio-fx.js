@@ -140,6 +140,9 @@ var GameAudioRadioFx = (function () {
         osc.start(t);
         osc.stop(t + secs + 0.04);
         osc.onended = () => { osc.disconnect(); g.disconnect(); };
+        // Chain on the source so radioStingStop can tear the gain down too —
+        // keep[] only held the oscillator, and disconnect(osc) left g on the bus.
+        osc._apexChain = [osc, g];
         if (keep) keep.push(osc);
         t += secs;
       }
@@ -161,7 +164,15 @@ var GameAudioRadioFx = (function () {
       src.start(at, off);
       src.stop(at + decay + 0.1);
       src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
+      src._apexChain = [src, hp, lp, g];
       return src;
+    }
+
+    function dropChain(head) {
+      const nodes = (head && head._apexChain) || (head ? [head] : []);
+      for (const n of nodes) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) { /* closed or already gone */ }
+      }
     }
 
     /** Cut a transmission short — the card was hidden, the game was paused, or
@@ -180,6 +191,13 @@ var GameAudioRadioFx = (function () {
       // The figure and the squelch tail are scheduled ahead: stopping only the
       // bed left the squelch to fire seconds later, over the pause menu.
       for (const x of b.extra || []) { try { x.stop(t); } catch (e) { /* already ended */ } }
+      // Disconnect the bed + extras now. onended may never run on a closed or
+      // suspended context; a Gain still wired into the SFX bus keeps rendering
+      // (same contract as voice-chain M8 / the preempt live.size pin).
+      for (const n of b.nodes || []) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) { /* closed or already gone */ }
+      }
+      for (const x of b.extra || []) dropChain(x);
     }
 
     /** One transmission: key-up, a hiss bed held for `seconds`, then squelch.
@@ -202,8 +220,9 @@ var GameAudioRadioFx = (function () {
       // KEY, THEN THE FIGURE, THEN THE LINE — the order the ear expects: the mic
       // opens (a click, which is a noise burst and not an oscillator), and the
       // courtesy figure follows a hair later rather than landing on top of it.
-      radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
       const extra = [];
+      const click = radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
+      if (click) extra.push(click);   // so radioStingStop tears the click chain too
       const tuneS = 0.03 + radioTune(ch.tune, ch.toneAmp * radioFx, t0 + 0.03, extra);
       // THE BED MUST OUTLAST THE FIGURE. `seconds` is the card's life, and a short
       // card is shorter than four notes — scheduling the squelch tail off that
@@ -225,7 +244,9 @@ var GameAudioRadioFx = (function () {
       src.start(t0, Math.random() * (signal.noisePoolSeconds - 0.5));
       src.stop(t0 + hold + 0.2);
       src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
-      radioBed = { src, gain: g, extra };
+      // `nodes` so radioStingStop can disconnect without waiting on onended
+      // (closed / suspended contexts never fire it).
+      radioBed = { src, gain: g, extra, nodes: [src, hp, lp, g] };
       // The tail is the single most recognisable part of a two-way radio: the
       // burst you hear AFTER the talking stops, when the mic un-keys.
       if (ch.tail > 0) { const tail = radioBurst(ch.tail * radioFx, 0.07, ch.hi, t0 + hold); if (tail) extra.push(tail); }
