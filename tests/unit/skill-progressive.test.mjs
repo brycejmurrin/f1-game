@@ -408,7 +408,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
     assert.match(fm.description, /Use (when|it when|proactively)/);
     assert.ok(text.split("\n").length <= 180, `${name} SKILL.md must stay a thin index`);
   }
-  // 2026-11-03: a whole group runs on the pushed branch (`remote-group.mjs <group>`), never `test-bg.mjs <group>` locally.
+  // A whole group is `remote-group.mjs <group>` on the pushed branch (Bryce's opt-in since #5524), never `test-bg.mjs <group>` locally.
   const input = fs.readFileSync(path.join(SKILLS, "input-controls/SKILL.md"), "utf8");
   assert.match(input, /remote-group\.mjs input/);
   assert.match(input, /tune-physics/);

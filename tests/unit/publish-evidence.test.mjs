@@ -7,7 +7,7 @@ import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { inspectEvidence, prepareEvidence, publishEvidence, STORAGE_ANCHOR } from "../../tools/shot/publish-evidence.mjs";
+import { inspectEvidence, prepareEvidence, publishEvidence, STORAGE_ANCHOR, main, OWNER_WRITE_REFUSAL } from "../../tools/shot/publish-evidence.mjs";
 import { exportHistoryEvidence, validateHistorySelection } from "../../tools/shot/export-history-evidence.mjs";
 
 function fixture(t) {
@@ -206,4 +206,13 @@ test("direct assets cannot select missing or non-image files", (t) => {
   const f = fixture(t);
   assert.throws(() => prepareEvidence({ ...f, linkableFiles: ["index.html"] }), /selected images/);
   assert.throws(() => prepareEvidence({ ...f, linkableFiles: ["../secret.png"] }), /selected images/);
+});
+
+test("--publish is an owner write: main refuses it before any work unless the owner's opt-in is set", () => {
+  const refusal = (argv, env) => { try { main(argv, env); return null; } catch (e) { return e.message; } };
+  for (const env of [{}, { APEX_GH_OWNER_WRITE: "0" }, { APEX_GH_OWNER_WRITE: "yes" }]) {
+    assert.equal(refusal(["--dir", "artifacts/none", "--label", "x", "--publish"], env), OWNER_WRITE_REFUSAL);
+    assert.equal(refusal(["--receipt", "artifacts/none/receipt.json", "--publish"], env), OWNER_WRITE_REFUSAL);
+  }
+  assert.notEqual(refusal(["--receipt", "artifacts/none/receipt.json", "--publish"], { APEX_GH_OWNER_WRITE: "1" }), OWNER_WRITE_REFUSAL, "the opt-in passes the gate");
 });

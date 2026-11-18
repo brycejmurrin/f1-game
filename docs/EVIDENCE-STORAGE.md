@@ -9,7 +9,8 @@ remain supported; do not rewrite or delete their history as part of this workflo
 
 Use **Actions → Archive evidence → Run workflow**. Select the completed capture's
 run ID, its exact artifact name, and a short label such as `monza-survey`. Once this
-workflow has merged into the default branch, it can also be dispatched with:
+workflow has merged into the default branch, it can also be dispatched with the lines below. They are for
+Bryce's own shell: an agent dispatches through the GitHub MCP `actions_run_trigger` (never `gh workflow run`: a gh write is recorded as Bryce's own act and `bash-guard.sh` refuses it).
 
 ```sh
 gh workflow run archive-evidence.yml --repo brycejmurrin/f1-game \
@@ -96,7 +97,8 @@ node tools/shot/publish-evidence.mjs --dir artifacts/track-survey/monza --label 
 # Package locally; tar must be installed. Nothing uploads by default.
 node tools/shot/publish-evidence.mjs --dir artifacts/track-survey/monza --label monza-survey
 
-# Package and upload. Push code first when its source link must be accessible.
+# Package and upload: Bryce's own shell only (APEX_GH_OWNER_WRITE=1; the release is a gh-token write, refused
+# for an agent). Push code first when its source link must be accessible.
 node tools/shot/publish-evidence.mjs --dir artifacts/track-survey/monza --label monza-survey --publish
 ```
 

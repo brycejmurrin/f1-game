@@ -61,7 +61,7 @@ Load from the SKILL.md index when the task needs this detail.
 6. **Use hooks to inspect the exact layer:** the SKILL.md Hooks table (`carAt(i).otEnabled` confirms overtake gating under cautions).
 
 7. **Verify narrowly; browser coverage runs on CI.**
-   - Commands: SKILL.md Commands (race-control and incident-gate unit tests; the browser specs via `remote-group.mjs physics-core` on the pushed branch).
+   - Commands: SKILL.md Commands (race-control and incident-gate unit tests; the browser specs run in the PR's own CI, group `physics-core`).
    - `race-control.spec.js` and
      `debris.spec.js` do NOT exercise IncidentSim; `collisions-deep.spec.js` /
      `collisions-deep-vm.test.mjs` switch every takeover OFF via
@@ -148,7 +148,7 @@ Browser first: `__apex.caution()` then read `level`, `sinceT`, `cause`. `held` i
   overtake; the speed cap is game.js's (Workflow step 4).
 - Using wall-clock time or global random sources, breaking seeded determinism.
 - Reporting a timeout-shaped CI browser failure as logic before checking load
-  (AGENTS.md rule 7) and re-requesting the group with `remote-group.mjs`.
+  (AGENTS.md rule 7) and re-dispatching the group yourself (`remote-group.mjs` is Bryce's opt-in).
 - Trusting a clean `incident({reset:true})` return: see "Incident reset is a no-op after handback" above.
 
 ## Fresh reset evidence

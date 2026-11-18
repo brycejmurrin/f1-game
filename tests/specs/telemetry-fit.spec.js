@@ -4,13 +4,13 @@
 // the trace takes the free width, and the whole body scrolls as ONE column so
 // the last row (map key, legend toggles) is reachable above the bottom edge.
 // Notch insets are injected (headless reports env(safe-area-inset-*) as 0).
-import { readFileSync } from "node:fs";
+import { readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
-// The owner's LOAD SETTINGS export (TEXT large, UI 109 %): the UI scaling
-// contract (PR #5154, on the deploy tip) measures at it.
-const OWNER = JSON.parse(readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+// The legacy LOAD SETTINGS export (TEXT large): the UI scaling contract (PR #5154) measures at it.
+// It is the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
+const LEGACY_PROFILE = readProfile("legacy");
 
 const VIEWS = [
   { name: "landscape-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
@@ -142,7 +142,7 @@ async function openHubAtExport(page, v) {
   }, `:root{--sal:${v.sal}px!important;--sat:${v.sat}px!important;--sar:${v.sar}px!important;--sab:${v.sab}px!important}`);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  const imp = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER);
+  const imp = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
   expect(imp.ok, "owner export imports: " + JSON.stringify(imp)).toBe(true);
   await page.reload();
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });

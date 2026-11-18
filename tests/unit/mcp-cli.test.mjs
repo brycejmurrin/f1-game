@@ -267,3 +267,19 @@ print("ok")
   const r = spawnSync("python3", ["-c", script], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
   assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout.trim(), "ok");
 });
+
+// chrome-devtools-mcp 1.11 routes by page: a page tool without `pageId` is an
+// input-validation error, so `probe` failed right after a good new_page. The
+// fake server REQUIRES the id; the batch must carry the one new_page reported (#5712).
+test("mcp-cli probe fills pageId from new_page for page-routed tools", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-page-"));
+  const log = path.join(dir, "calls.jsonl");
+  const r = spawnSync("node", [MCP_CLI, "probe", "--backend", "webgl2", "--wait", "0", "--console"], {
+    encoding: "utf8", timeout: 20000,
+    env: { ...process.env, MCP_FAKE_LOG: log, APEX_MCP_WRAPPER: path.join(ROOT, "tests/fixtures/mcp-page-routed-server.mjs") } });
+  const calls = fs.readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(calls.map((c) => [c.name, c.pageId]), [["new_page", null], ["evaluate_script", 7],
+    ["navigate_page", 7], ["evaluate_script", 7], ["list_console_messages", 7]]);
+});

@@ -744,7 +744,7 @@ const CATALOG = [
   {
     name: "apex_select_specs",
     week: 3,
-    description: "Tree — which SPECS a change needs, ranked and fit to the CI budget: since a git ref, or for files you name (a hypothetical edit, any tree). `floor` is AGENTS.md rule 3's ONE pre-push spec, or null with floorReason. Never starts tests. Skill: check-changes.",
+    description: "Tree — which SPECS a change needs, ranked and fit to the CI budget: since a git ref, or for files you name (a hypothetical edit, any tree). `floor` is the one cheapest routed spec (CI runs it; the local pre-push floor is AGENTS.md rule 3's tooling-fast --changed), or null with floorReason. Never starts tests. Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2974,7 +2974,7 @@ export const ROUTES = [
   "apex-tools: local CLI wraps (apex_*); the tools/ CLIs do the work, this server pins safe flags. Map: docs/AGENT-SURFACE.md.",
   "VENDOR READS ONLY — Cursor agent list/status/transcript: apex_cursor_agents; Claude CLI auth and local sessions: apex_claude_agents. " +
     "Neither sends, launches or steers an agent; GitHub (PR body, labels, comments) is the bus.",
-  "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the ONE pre-push spec); " +
+  "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the one cheapest routed spec; the local floor is tooling-fast --changed); " +
     "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; flyby framing: apex_frame_report; " +
     "one __apex expr without a browser: apex_eval {vm:true}; ?v= hashes: apex_bump_cache_check; TrackGraph parity: apex_graph_parity; " +
     "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor; offline viewer page: apex_viewer. " +
