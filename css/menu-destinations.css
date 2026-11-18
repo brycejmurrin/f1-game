@@ -392,7 +392,7 @@ body[data-shape="wide"]:not([hidden]) #overlay {
 }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-brand {
   grid-column: 1; grid-row: 1; align-self: start; align-items: flex-start; text-align: start;
-  width: 100%; margin-top: calc(1 * var(--vhz)); padding: 0; background: transparent;
+  width: 100%; margin-top: calc(4 * var(--vhz)); padding: 0; background: transparent;
   /* The same base zoom with or without a stored layout, at either density and
      at ANY UI SIZE (it was --ui-scale under html[data-title-layout] and
      min(--ui-scale, 1) without: a stored TITLE SIZE 100 painted the brand 9 %
@@ -426,8 +426,7 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons {
 :root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-column: 1; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-primary, #menu-garage) { display: contents; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-explore, #menu-create, #menu-secondary) { grid-column: 1 / -1; grid-row: auto; width: 100%; min-height: 0; align-self: auto; justify-self: auto; }
-body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-retention, #menu-secondary) { display: flex; flex-flow: row nowrap; gap: var(--home-g); width: 100%; }
-body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-explore, #menu-create) { display: flex; flex-flow: row wrap; gap: var(--home-g); width: 100%; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { display: flex; flex-flow: row nowrap; gap: var(--home-g); width: 100%; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-hero { flex-direction: column; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn {
   --home-row: 31px;
@@ -451,16 +450,12 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-retention .bi
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .mb-sub { display: none; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#mb-career, #menu-retention) .mb-sub {
   display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: calc(var(--fs-micro) * .62 * var(--ui-compact-text, 1)); line-height: 1.1; letter-spacing: .04em;
-}
-body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-explore, #menu-create)::before {
-  content: attr(aria-label); flex: 0 0 100%; color: var(--steel); font-weight: 700; line-height: 1;
-  font-size: calc(var(--fs-micro) * .55 * var(--ui-compact-text, 1)); letter-spacing: var(--ls-2);
+  font-size: calc(var(--fs-micro) * .62 * var(--ui-compact-text, 1)); line-height: 1.1; letter-spacing: .06em;
 }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-create .bigbtn { font-size: calc(var(--fs-micro) * .74 * var(--ui-compact-text, 1)); padding-inline: calc(var(--gap) / 3); }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-secondary .bigbtn {
-  --home-row: 28px; font-size: calc(var(--fs-micro) * .7 * var(--ui-compact-text, 1)); line-height: 1.05;
-  padding: calc(var(--gap) / 8) calc(var(--gap) / 4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  --home-row: 28px; font-size: calc(var(--fs-micro) * .64 * var(--ui-compact-text, 1)); line-height: 1.05;
+  padding: calc(var(--gap) / 8) calc(var(--gap) / 4);
 }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-create, #menu-secondary) .btn-ico { display: none; }
 /* LAYOUT: STACK is one door per line, ROW the six play doors on one line. */
