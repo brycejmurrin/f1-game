@@ -1,0 +1,1 @@
+Fixed: Career garage on a phone: locked R&D rows put the RESEARCH price on its own line instead of squeezing the part text into a 47 px column (rows were up to 1,177 px tall and the price sat under RETURN TO CAREER), and the livery editor's area tabs and CANCEL / SAVE & FIT paint the 44 px touch floor at UI SIZE 70 (#5672).
