@@ -99,8 +99,8 @@ floating tree and not reach the line that places it.
   than launching a browser or running a group.
 - Never flip a curvature sign yourself (+k = LEFT-hand turn): you cannot run
   the rendered lap that proves it, so report the suspect sign to the parent.
-- Scenery edits stale the generated `tools/shot/scenery-locations.json`; leave
-  it — the PARENT regenerates it after merging (`survey-track` §Hand-back); never run its generator.
+- `tools/shot/scenery-locations.json` is built on demand and gitignored: commit nothing for it and never
+  run its generator; its next reader (and the merge gate) rebuilds it.
 - Hand-back: commit your pair on your worktree branch when `verify-track` is
   clean; do not push (the parent merges the LOCAL branch; the PR branch
   and the deploy branch are never yours to push). Put the branch name, the
