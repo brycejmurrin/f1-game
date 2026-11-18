@@ -321,6 +321,16 @@ test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
   }
 });
 
+test("GLX soft-present: _awaitFrame timeout guards indexOf === -1 (no splice(-1))", () => {
+  // A bare splice(_frameWaiters.indexOf(w), 1) with a missing waiter drops the
+  // LAST unrelated entry. Match TLX's awaitSoftPresent timeout guard.
+  const soft = read("js/render/glx/soft.js");
+  const at = soft.indexOf("function _awaitFrame(ms)");
+  assert.ok(at >= 0, "_awaitFrame still exists");
+  const body = soft.slice(at, soft.indexOf("function awaitSoftPresent", at));
+  assert.match(body, /const i = _frameWaiters\.indexOf\(w\);\s*if \(i >= 0\) _frameWaiters\.splice\(i, 1\)/);
+});
+
 test("GLX soft-present: a timed-out waiter is really removed (the real soft.js, run)", async () => {
   // The pins above read the TEXT of the timeout path; this runs it. A waiter
   // left on the list after its timeout keeps blitIfDue() reading back the
