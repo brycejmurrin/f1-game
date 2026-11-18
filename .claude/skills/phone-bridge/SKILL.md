@@ -11,6 +11,8 @@ comments and answers each with an ` ```apex-result ` comment. Routes ruled out, 
 
 ## 1. Link (Bryce does this on the phone)
 
+0. More than one session wants the phone: [`references/many-lanes.md`](references/many-lanes.md) first (one named
+   driver, the queue, the badge count Bryce waits for).
 1. Use the open bridge issue, or create one ("Phone bridge <date>", body: what you will run). The repo is public:
    say so in the body.
 2. Ask Bryce (AskUserQuestion in an attended session; `needs-decision` otherwise) to open
