@@ -757,7 +757,16 @@ test("WATCH bar docks its secondary controls into the ⋯ popover on the phone b
   const ui = W.create({ camMode: 0, setCamMode() {}, snapGameCam() {}, openWatchPhoto() {} }, api); ui.start();
   const css = fs.readFileSync(path.join(ROOT, "css/watch-transport.css"), "utf8");
   assert.equal(mq.query, "(max-height: 520px) and (min-width: 600px)", "the JS band is the stylesheet's phone branch");
-  assert.ok(css.includes("@media " + mq.query + " {"), "css/watch-transport.css styles the same band");
+  // Same assert.ok pin: band media + nowrap, no short+740 wrap fight, wrap only
+  // below 600, inset focus with the tokens ui-scale floor (was outset 2px).
+  assert.ok(
+    css.includes("@media " + mq.query + " {")
+      && /@media \(max-height: 520px\) and \(min-width: 600px\) \{[\s\S]*?\[data-wt="controls"\] \{ flex-wrap: nowrap/.test(css)
+      && !/@media \(max-height: 520px\) and \(max-width: 7\d{2}px\)/.test(css)
+      && /@media \(max-height: 520px\) and \(max-width: 599px\) \{[\s\S]*?flex-wrap: wrap/.test(css)
+      && /\.watch-transport :is\(button, select, input\):focus-visible \{[\s\S]*?outline:\s*max\(2px,\s*calc\(2px \/ var\(--ui-scale/.test(css)
+      && /\.watch-transport :is\(button, select, input\):focus-visible \{[\s\S]*?outline-offset:\s*calc\(-1 \* max\(2px/.test(css),
+    "css/watch-transport.css styles the same band, keeps phone-bar nowrap, and uses the house inset focus ring");
   const find = (key, p = body) => p.dataset.wt === key ? p : p.children.map((n) => find(key, n)).find(Boolean);
   const root = body.children[0], top = find("controls"), more = find("more"), box = find("more-box");
   const keys = (el) => el.children.map((c) => c.dataset.wt || c.tagName.toLowerCase());
