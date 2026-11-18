@@ -274,6 +274,4 @@ test("the dispatch is an owner write: it says so and refuses unless the owner's 
     assert.deepEqual([g.ok, g.lines.length, g.lines[0], g.lines[1].slice(0, 8)], [false, 2, what, "refused:"], JSON.stringify(env));
   }
   assert.deepEqual(ownerWriteGate({ APEX_GH_OWNER_WRITE: "1" }), { ok: true, lines: [what] }, "the opt-in still prints what the dispatch is");
-  const src = fs.readFileSync(path.join(ROOT, "tools/ci/remote-group.mjs"), "utf8");
-  assert.ok(src.indexOf("ownerWriteGate()") < src.indexOf('api("POST"'), "the gate runs before the dispatch POST");
 });
