@@ -560,7 +560,7 @@ const CATALOG = [
   {
     name: "apex_eval",
     week: 2,
-    description: "Browser (lock first) — boot harness Chromium and evaluate one __apex expression; `backend` pins three|webgl2|webgpu (a `GLX.*` expr under the default answers for TLX); `vm: true` runs the same expr in the Node VM instead (no browser, no pixels, ~4 s). Local only, no --url. Skill: playwright-probe.",
+    description: "Browser (lock first; `vm: true` takes no lock) — boot harness Chromium and evaluate one __apex expression; `backend` pins three|webgl2|webgpu (a `GLX.*` expr under the default answers for TLX); `vm: true` runs the same expr in the Node VM instead (no browser, no lock, runs beside another browser tool, no pixels, ~4 s); `raw: true` prints arrays in full. Local only, no --url. Skill: playwright-probe.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2065,7 +2065,7 @@ function mockSuccess(name, argv, env = {}) {
   });
 }
 
-function statusNext(lock, playwright, loadavg) {
+export function statusNext(lock, playwright, loadavg) {
   const load = Array.isArray(loadavg) ? loadavg[0] : 0;
   if (lock?.held) {
     return {
@@ -2095,7 +2095,9 @@ function statusNext(lock, playwright, loadavg) {
     action: "ready",
     tool: "apex_shot_survey",
     reason: "lock free; occupancy clear",
-    hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
+    hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[]. Main session only: "
+      + "this server cannot see who calls it, and a subagent never starts a browser (AGENTS.md rule 10).",
+    subagentTool: "apex_eval {vm:true}",
   };
 }
 /** apex_help: the uncompacted description + inputSchema that tools/list shortens (see compactTool). */
@@ -2610,6 +2612,9 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   }
 
   const kind = toolKind(known);
+  // apex_eval {vm:true} boots the Node VM, never Chromium: no browser lock, no occupancy refusal (#5674), the same
+  // verdict mcp-browser-guard and chat-gateway give it. Its other args keep the browser gate (local only, no url).
+  const locks = kind === "browser" && !(name === "apex_eval" && args.vm === true);
   const gated = kind === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
   if (gated) return gated;
 
@@ -2626,7 +2631,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const env = extraEnv(name, args);
 
   if (args.dryRun) {
-    if (kind === "browser" && !mockMode()) {
+    if (locks && !mockMode()) {
       const busy = occupancyRefuse();
       if (busy) return busy;
     }
@@ -2652,6 +2657,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     return runSpawn(argv, { timeoutMs: HUD_TIMEOUT_MS(name, args), env, signal })
       .then((r) => (name === "apex_hud_mock" ? hudMockResult(r, args) : hudResult(name, r, args))).finally(releaseLock);
   }
+  if (kind === "browser" && !locks) return runSpawn(argv, { timeoutMs: browserTimeoutMs(name, args), env, signal });
   if (kind === "browser") {
     const took = acquireLock(name);
     if (took) return took;

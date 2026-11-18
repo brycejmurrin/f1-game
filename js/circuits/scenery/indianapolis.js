@@ -534,9 +534,12 @@
           { wall: h < 0.6 ? [0.62, 0.44, 0.36] : [0.80, 0.78, 0.74] });
       });
 
-      // Turn 1 outside viewing — bleachers instead of grandstandEx so
-      // crowdBank/rejBox on the banked bend cannot suppress the whole stand
-      // (Stand H / J sector per indymotorspeedway.com road-course seating).
+      // Infield viewing on the run from T2 into T3: built window 0.190-0.232
+      // is the right-hand curve between the T2 left (0.1684) and the T3 right
+      // (0.2419), side +1 = the infield (the inside of that curve), 40 m
+      // short of the T3 apex. Bleachers, not grandstandEx, so crowdBank/rejBox
+      // cannot suppress the whole stand. (Was labelled "Turn 1 outside", 184 m
+      // past the T1 apex 0.1449 and on its inside; corner-frames 2026-11-18.)
       bleacher(0.190, 0.210, 1, 18, {
         rows: 8, step: 9, density: 0.42,
         plankCol: [0.72, 0.72, 0.74], frameCol: [0.58, 0.59, 0.62],
