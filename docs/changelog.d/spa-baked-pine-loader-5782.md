@@ -1,0 +1,1 @@
+Fixed: Spa's forest now uses the single baked pine model the circuit asks for, which the game never actually downloaded — the trees look the same from the road, cost fewer draw calls, and lose the small per-tree differences (thinner and leaning trees, slight size variation) the stand-in trees had.
