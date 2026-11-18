@@ -3480,11 +3480,11 @@
       "track": "watkins_glen",
       "name": "Pit Terrace",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.97491,
+      "frac": 0.974909,
       "target": [
         309.71,
-        0.54,
-        379.59
+        0.83,
+        379.58
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 37.5,
@@ -3499,9 +3499,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.189668,
       "target": [
-        -137.75,
-        -10.74,
-        489.51
+        -137.73,
+        6.11,
+        489.53
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 35.5,
