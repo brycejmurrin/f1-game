@@ -16384,6 +16384,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs"
       ],
+      "casterRefused": [
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
+      ],
       "casterSources": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"

@@ -2152,6 +2152,8 @@ const TLX = (function () {
       // regrew it 17 -> 334 twice a frame (young-gen garbage, perf hunt A5).
       const drawList = _recPool;    // {geo, matrix, material} in submission order
       drawList.n = 0;
+      // UNGUARDED ON PURPOSE: callers index the record this wrote. A position-only shadow caster (geo.__tlxCasterOnly)
+      // is refused by every ENTRY that takes a mesh instead; a new lit entry point must refuse it too (casterRefused).
       function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
         let r = _recPool[drawList.n];
         if (!r) r = _recPool[drawList.n] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null, split: null };

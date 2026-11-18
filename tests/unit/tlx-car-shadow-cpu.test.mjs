@@ -85,18 +85,27 @@ function casterRig() {
   const THREE = { BufferGeometry, BufferAttribute: function (array, itemSize) { return A(array, itemSize); } };
   const TLXShaders = { packIndex: (T, idx, verts) => A(verts > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1) };
   const pk = (T, src, n, size) => A(new Float32Array(n), size);
-  const draw = "function " + lift(tlx.replace("        draw(mesh, model, opts) {", "function drawLit(mesh, model, opts) {"), "drawLit").slice(9);
+  // A renderer METHOD (`name(args) {` in the returned object), lifted as a function of the same body.
+  const method = (sig) => lift(tlx.replace("        " + sig + " {", "function m_" + sig + " {"), "m_" + sig.slice(0, sig.indexOf("(")));
   const h = new Function("THREE", "TLXShaders", "_pk", "Log", "recs", `
     const renderer = { backend: { isWebGPUBackend: true } }, _regGeo = (g) => g;
-    const _capture = null, _captureRec = () => {}, _coOn = true, _drawMatMode = 0, vizMat = null, lit = {}, skipBatches = () => false, poolModelMat = (m) => m;
-    const materialFor = () => "lit", drawEm = () => 0, drawAl = () => 1, fxFor = () => false;
+    let _capture = null, _casterWarned = false, _mirGlass = 0, _mirGlassSeen = false;
+    const _coOn = true, _drawMatMode = 0, vizMat = null, lit = {}, skipBatches = () => false, poolModelMat = (m) => m;
+    const materialFor = () => "lit", drawEm = () => 0, drawAl = () => 1, fxFor = () => false, chunkedSys = null;
+    const _mirActive = false, _mirDead = false, mirRT = { texture: {} }, _mirRenders = 1, _mirFlip = true;
+    const fx = { mirrorGlassMaterial: () => "glass", decalMaterialFor: () => "decal" }, _fxFrame = { decals: 0 };
+    const _decalAppend = () => false, fxMatFor = (m) => m;
     const pushRec = (geo) => { recs.push(geo); };
     ${lift(tlx, "buildGeometry")}
-    let _casterWarned = false;
-    ${lift(tlx, "casterRefused")}
+    ${tlx.includes("function casterRefused(") ? lift(tlx, "casterRefused") : "function casterRefused() { return false; }"}
     ${lift(tlx, "_coAppend")}
-    ${draw}
-    return { build: buildGeometry, draw: drawLit };`)(THREE, TLXShaders, pk, { warn: (...a) => warns.push(a) }, recs);
+    ${lift(tlx, "_captureRec")}
+    ${method("draw(mesh, model, opts)")}
+    ${method("drawChunked(mesh, model, opts)")}
+    ${method("drawMirrorGlass(mesh, model, opts)")}
+    ${method("drawDecal(mesh, modelMat, tex, opts)")}
+    return { build: buildGeometry, draw: m_draw, drawChunked: m_drawChunked, drawMirrorGlass: m_drawMirrorGlass, drawDecal: m_drawDecal,
+      coAppend: _coAppend, captureRec: _captureRec, capture: (on) => (_capture = on ? [] : null) };`)(THREE, TLXShaders, pk, { warn: (...a) => warns.push(a) }, recs);
   return { ...h, warns, recs };
 }
 const TRI = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], mat: [61, 61, 61], idx: [0, 1, 2] };
@@ -114,16 +123,29 @@ test("a caster-only build is exactly position + index; an ordinary build keeps t
   assert.ok(g.__tlxCasterOnly === true, "marked for the lit guard");
 });
 
-test("a lit draw of a caster-only geometry draws nothing and warns once", () => {
-  const r = casterRig();
+// pushRec is unguarded on purpose (callers index the record it wrote), so every ENTRY that takes a mesh refuses.
+test("no renderer entry point records a caster-only geometry, and all of them together warn once", () => {
+  const r = casterRig(), W = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], tex = { tex: {} };
   const caster = { __tlx: true, geo: r.build({ ...TRI, _casterOnly: true }) }, body = { __tlx: true, geo: r.build({ ...TRI }) };
-  const W = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-  r.draw(caster, W, {}); r.draw(caster, W, { coalesce: true }); r.draw(caster, W, {});
-  assert.equal(r.recs.length, 0, "no draw record for a position-only geometry");
-  assert.equal(r.warns.length, 1, "one Log.warn, not one per frame");
+  r.draw(caster, W, {}); r.draw(caster, W, {});
+  r.draw(caster, W, { coalesce: true });
+  assert.ok(r.coAppend(caster.geo, W, {}) === false, "_coAppend: no coalesced run takes it (draw() then refuses it)");
+  r.drawChunked(caster, W, {});
+  assert.ok(r.drawMirrorGlass(caster, W, {}) === false, "drawMirrorGlass refuses it");
+  r.drawDecal(caster, W, tex, {});
+  const cap = r.capture(true);
+  r.draw(caster, W, {}); r.captureRec(caster, W, {});
+  assert.equal(cap.length, 0, "_captureRec: the rig warm compiles no lit program for it");
+  r.capture(false);
+  assert.equal(r.recs.length, 0, "draw, drawChunked, _coAppend, drawMirrorGlass, drawDecal: no draw record");
+  assert.equal(r.warns.length, 1, "one Log.warn across every entry, not one per frame");
   assert.match(String(r.warns[0][1]), /position-only shadow caster/);
-  r.draw(body, null, {});
-  assert.ok(r.recs.length === 1 && r.recs[0] === body.geo, "an ordinary mesh still draws");
+  // The same entries with an ordinary mesh reach pushRec: the stubs above do not hide a refusal.
+  r.draw(body, W, {}); r.drawChunked(body, W, {}); r.drawDecal(body, W, tex, {});
+  assert.ok(r.recs.length === 3 && r.recs.every((g) => g === body.geo), "an ordinary mesh still draws through each");
+  const cap2 = r.capture(true);
+  r.draw(body, W, {});
+  assert.equal(cap2.length, 1, "and is captured for the warm");
   assert.equal(r.warns.length, 1);
 });
 
