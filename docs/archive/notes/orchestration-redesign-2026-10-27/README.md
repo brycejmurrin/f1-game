@@ -1,6 +1,6 @@
 # Orchestration redesign evidence (2026-10-27)
 
-Read-only reviews that feed [`docs/plans/2026-10-27-orchestration-redesign.md`](../../plans/2026-10-27-orchestration-redesign.md).
+Read-only reviews that feed [`docs/plans/2026-10-27-orchestration-redesign.md`](../../../plans/2026-10-27-orchestration-redesign.md).
 Each was produced by one reviewer agent from primary sources (the bus branch, the tools, the prose, GitHub, the session
 API, the vendor docs); numbers are theirs, dated 2026-10-27 unless the file says otherwise.
 

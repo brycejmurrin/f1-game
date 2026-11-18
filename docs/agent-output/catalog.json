@@ -1042,6 +1042,12 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/pages-rearm.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/pages-reuse-verdict.sh",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only",
@@ -3457,11 +3463,6 @@
       "nativeOutputFlagMentions": [
         "--out"
       ]
-    },
-    {
-      "path": "tools/shot/scenery-locations.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/shot/scenery-source-hash.cjs",

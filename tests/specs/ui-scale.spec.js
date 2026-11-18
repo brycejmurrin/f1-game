@@ -587,12 +587,22 @@ test.describe("UI scale", () => {
           const scrollY = menu ? menu.scrollHeight - menu.clientHeight : NaN;
           const scrollX = menu ? menu.scrollWidth - menu.clientWidth : NaN;
           const fitLanded = !fitted || (scrollY <= 1 && scrollX <= 1);
-          return { density, anims, brandZoom, scrollY, scrollX,
+          // ...and "does not scroll" is not "the fit has run" (#5578): the five-row touch cluster at the new zoom
+          // overflows the VIEWPORT without scrolling, so frame 0 read ok with the 100 % --tf still on it (CI run
+          // 43989398592: fit 0.971 at zoom 1.49, six doors off screen). That only waited before because every label
+          // lagged its door by a frame under reduced motion. The fit lands by the third frame after a change
+          // (ResizeObserver in one frame, its rAF in the next, read in the one after), so a fit cell is settled
+          // once the cluster's fit and extents have stood still for QUIET frames in a row.
+          const key = menu ? [menu.style.getPropertyValue("--tf"), menu.getAttribute("data-home-rows"), menu.getAttribute("data-home-floor"),
+            getComputedStyle(menu).zoom, scrollY, scrollX, density].join("|") : "";
+          return { density, anims, brandZoom, scrollY, scrollX, key,
             ok: density === "compact" && anims.length === 0 && Math.abs(brandZoom - 1) < 0.001 && fitLanded };
         };
-        let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, s = snap();
+        const QUIET = fitted ? 3 : 0;
+        let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, quiet = 0, s = snap();
         if (s.density === "compact") compactAt = 0;
-        while (!s.ok && n < frames) {
+        while (!(s.ok && quiet >= QUIET) && n < frames + QUIET) {
+          const before = s.key;
           const asked = performance.now();
           let timer = 0;
           const framed = await Promise.race([
@@ -604,9 +614,10 @@ test.describe("UI scale", () => {
           if (!framed) { starved = true; break; }
           n++;
           s = snap();
+          quiet = s.key === before ? quiet + 1 : 0;
           if (compactAt < 0 && s.density === "compact") compactAt = n;
         }
-        return { ...s, frames: n, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
+        return { ...s, frames: n, quiet, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
           uiScale: document.documentElement.style.getPropertyValue("--ui-scale") };
       }, { frames: SETTLE_FRAMES, capMs: BOOT_MS, fitted: contract === "fit" });
       const settleDump = JSON.stringify(settle);

@@ -31,7 +31,9 @@ after at least one job concluded `failure`, or green only on `run_attempt` > 1 a
 and merge-gate's own retest window still names a tip merge the head lacks. The row's evidence says "sync-pr.mjs and
 push", and `sync-pr` now runs for it without `--force-clean-behind`. It stays `no` when that status sits on an older
 head, when a newer re-gate replaced it (a `plan` or `hold` refusal from the trusted rows hides the retest row: fix
-that row first), or when no tip merge is left in the window (a sync cannot help).
+that row first), or when no tip merge is left in the window (a sync cannot help). The row re-runs only the unit
+files BOTH the newer tip merges and the PR select, plus the touched `tests/unit` files (#5597), so "too broad to re-test
+at merge" now means the two sides really share that much; one PR's own wide selection no longer refuses it.
 
 The fixer is never held, and needs no click from Bryce: branch from the red tip (or `sync-pr --onto-red-tip`) so the
 head CONTAINS the red commit, add `deploy:red` to the PR, then flip ready and add `land` in that order. `base` passes

@@ -111,6 +111,7 @@
     "tests/unit/body-attitude.test.mjs",
     "// Livery BODY styles: concept chassis builds, nose/cover/pod anchors move, flap floor holds. ~3 s.",
     "tests/unit/body-styles.test.mjs",
+    "tests/unit/boost-press-census.test.mjs",
     "// ...and the DIFF[difficulty] family, one door further out: three readers",
     "// that took a stored index or object on trust. Executes the shipped source",
     "// (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.",
