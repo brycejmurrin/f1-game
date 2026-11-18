@@ -239,3 +239,11 @@ test('WHEEL LAYOUT (#5801): presets and per-key picks move the face keys between
   emit(e2.dom.stripBtn, 'click');
   assert.deepEqual([e2.dom.body.dataset.strip, L.layoutPreset(e2.api.get()), plain(L.normaliseLayout({ pedals: 'x', strip: 1 })).pedals], ['row', 'custom', 'stack'], 'a toggle edits one field; junk normalises');
 });
+test('MOVE & SIZE (#5801): placements normalise, keep the 44px touch floor, and a preset clears them', () => {
+  const h = boot(), L = vm.runInContext('PhonePadPage', h.ctx);
+  assert.deepEqual(plain(L.normaliseLayout({ place: { gas: { x: -7.1234, y: 300, s: 999 }, brake: { x: 0, y: 0, s: 100 }, 'bad id!': { x: 5 } } }).place),
+    { gas: { x: -7.1, y: 90, s: 250 } }, 'clamped, rounded, a no-op or junk id dropped');
+  assert.deepEqual([L.minScale(88, 200, 100), L.minScale(176, 300, 200), L.minScale(400, 400, 100)], [50, 50, 40], 'a 44px floor on the shorter side, never under 40%');
+  assert.equal(L.layoutPreset({ zone: {}, place: { gas: { x: 4, y: 0, s: 100 } } }), 'custom', 'a moved control is CUSTOM');
+  assert.deepEqual(plain(L.LAYOUT_PRESETS.phone.place), {}, 'presets carry no placements, so picking one puts every control back');
+});

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-IPlfQk0gH+8jTiv05Tb1knv0LrHzDJuMoSbWUiQq+/s=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-ythJjfRrXWl+2hj9vNtyGobV+7IBRmpEt28Izdmwnes=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -220,7 +220,7 @@
   #lay-head h2 { margin: 0; font: italic 800 var(--fs-5, 18px)/1 var(--font-ui); letter-spacing: var(--ls-2); }
   #lay-head .bigbtn { margin: 0; width: auto; min-width: 120px; min-height: 44px; }
   #lay-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-  #lay-toggles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+  #lay-toggles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
   #lay-presets button, #lay-rows button, #lay-toggles button { min-height: 44px; font-weight: 800; letter-spacing: .08em; font-size: 13px; }
   #lay-presets button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
   #lay-presets small { font-size: 10px; font-weight: 600; letter-spacing: .04em; color: var(--dim); }
@@ -229,6 +229,23 @@
   .lay-row span { font-weight: 800; font-size: 13px; letter-spacing: .08em; }
   .lay-row button { padding: 0 4px; font-size: 11px; }
   #layout-sheet button[aria-pressed="true"] { border-color: var(--red); background: color-mix(in oklab, var(--red) 22%, var(--plate-opaque)); color: var(--text); }
+  /* MOVE & SIZE (PhonePadPage.layout arrange): a placed control is offset by
+     `translate` and sized by `scale` (inline, from apex26.padLayout place) on
+     top of its grid slot. While arranging every control is outlined, a drag
+     moves it, a pinch or the bar's − / + sizes it (never under 44px), and the
+     pad sends nothing: the stage swallows the pointers in the capture phase. */
+  .placed { position: relative; z-index: 2; }
+  body.arranging :is(#ctl button, #ctl .pedal, #screen) { outline: 2px dashed color-mix(in oklab, var(--text) 45%, transparent); outline-offset: -2px; }
+  body.arranging .clash { outline: 3px solid var(--bad); background-color: color-mix(in oklab, var(--bad) 18%, var(--plate-opaque)); }
+  body.arranging .picked { outline: 3px solid var(--red) !important; z-index: 3; }
+  body.arranging #ctl { touch-action: none; }
+  #arrange-bar { position: absolute; z-index: 6; top: calc(4px + var(--sat)); left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 6px;
+                 padding: 4px; border-radius: 12px; background: var(--plate-opaque); border: 1px solid var(--plate-line); box-shadow: 0 6px 20px rgba(0,0,0,.5); max-width: calc(100vw - 16px); }
+  #arrange-bar[hidden] { display: none; }
+  #arrange-bar button { min-width: 44px; min-height: 44px; padding: 0 10px; font-weight: 800; letter-spacing: .06em; font-size: 13px; }
+  #arrange-bar .bigbtn { margin: 0; width: auto; }
+  #arr-name { min-width: 0; padding: 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lay-arrange { border-color: var(--red); }
   /* TOUCH STRIP steering: its own row under the wheel only while chosen ([hidden] otherwise, so no row and no gap). */
   #steering-strip { grid-column: 1 / -1; height: 44px; line-height: 42px; text-align: center; font-size: 11px; letter-spacing: .08em;
                     border: 1px solid var(--team-c); border-radius: 8px; background: var(--plate-opaque); position: relative; z-index: 1; }
@@ -540,7 +557,16 @@
     <button id="lay-pedals" type="button">PEDALS SIDE BY SIDE</button>
     <button id="lay-strip" type="button">MOVED BUTTONS IN A COLUMN</button>
     <button id="lay-swap" type="button">SWAP PEDALS AND PADDLES</button>
+    <button id="lay-arrange" type="button">MOVE &amp; SIZE BUTTONS</button>
   </div>
+</div>
+<div id="arrange-bar" role="toolbar" aria-label="Move and size buttons" hidden>
+  <span id="arr-name" role="status">TAP A CONTROL</span>
+  <button id="arr-minus" type="button" aria-label="Smaller">&minus;</button>
+  <button id="arr-plus" type="button" aria-label="Bigger">+</button>
+  <button id="arr-reset" type="button">RESET</button>
+  <button id="arr-reset-all" type="button">RESET ALL</button>
+  <button id="arr-done" class="bigbtn" type="button">DONE</button>
 </div>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
@@ -603,6 +629,11 @@ window.addEventListener("DOMContentLoaded", function () {
               look: $("b-look"), recover: $("b-recover"), pause: $("b-pause") },
       sheet: $("layout-sheet"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"),
       presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
+      stage: $("ctl"), arrangeBtn: $("lay-arrange"), bar: $("arrange-bar"), barName: $("arr-name"), minus: $("arr-minus"), plus: $("arr-plus"),
+      resetOne: $("arr-reset"), resetAll: $("arr-reset-all"), arrangeDone: $("arr-done"),
+      arrange: { screen: $("screen"), shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), otBig: $("b-ot-big"), boostBig: $("b-boost-big"),
+                 overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"), look: $("b-look"),
+                 recover: $("b-recover"), pause: $("b-pause"), brake: $("brake"), gas: $("gas") },
     }, { store: (function () { try { return window.localStorage; } catch (e) { return null; } })() });
   } catch (e) { /* the wheel works in its default layout */ }   // the console/test handle, mirroring window.__apex on the game
   // LANDSCAPE LOCK where the platform has one. Android needs fullscreen before
