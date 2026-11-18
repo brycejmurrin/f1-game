@@ -6,7 +6,7 @@
 //   node tools/check/ratchets.mjs --update [--absolute]   # snap ceilings to the current values: ratchets.json on the deploy branch, a ratchets.d delta on a topic branch (after an extraction,
 //                                      #   or on a merged tree — the deploy-merge rule)
 //   node tools/check/ratchets.mjs --fold     # sum tests/data/ratchets.d/*.json into ratchets.json, delete them
-//   node tools/check/ratchets.mjs --auto-raise[=40]   # the commit hook's form: on a topic branch it writes
+//   node tools/check/ratchets.mjs --auto-raise[=N]   # the commit hook's form (bare = a flat 20; =N keeps N): on a topic branch it writes
 //                                      #   tests/data/ratchets.d/<branch>.json (a delta), never ratchets.json
 //   node tools/check/ratchets.mjs --update --fragment --reason="<why>"   # a deliberate tree-metric raise as this branch's delta
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
