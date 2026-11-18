@@ -161,13 +161,33 @@
      phone's roll; the controls stay put under the thumbs. */
   #ctl { position: absolute; inset: 0; display: none; perspective: 900px;
          padding: calc(6px + var(--sat)) calc(6px + var(--sar)) calc(6px + var(--sab)) calc(6px + var(--sal));
-         grid-template-columns: minmax(84px, 1fr) minmax(200px, 2.4fr) minmax(84px, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
+         grid-template-columns: minmax(84px, 1fr) minmax(200px, 2.4fr) minmax(84px, 1fr); grid-template-rows: minmax(0, 1fr); gap: 8px; }
   body.linked #ctl { display: grid; }
-  #phone-input-options { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 12px; font-size: 11px; text-align: center; }
-  #phone-input-options label { display: flex; align-items: center; gap: 6px; }
-  #steering-mode { min-height: 32px; color: var(--text); background: var(--plate-opaque); border: 1px solid var(--plate-line); border-radius: 4px; }
-  #input-age { color: var(--dim); font-variant-numeric: tabular-nums; }
-  #steering-strip { flex-basis: 100%; height: 44px; line-height: 42px; border: 1px solid var(--team-c); border-radius: 8px; background: var(--plate-opaque); }
+  /* THE PAD BAR — one slim strip under the keys, never a row of its own
+     (#5801: a full-width CENTRE TILT bar, a LINKED line and a STEERING +
+     "INPUT GOOD 100 ms since acknowledged sample" row took ~150 of the 390px a
+     landscape phone has, and the dash clipped its gear digit to pay for it).
+     CENTRE TILT stays one thumb away mid-drive; the steering pick is a 44px
+     select; the link health is a dot that spells itself out only when it is
+     NOT good (data-state from phone-pad-page.js onHealth). The age line is a
+     diagnostic: written, not shown. */
+  #phone-input-options { display: flex; align-items: stretch; gap: 8px; height: 44px; min-width: 0; flex: none; font-size: 11px; letter-spacing: .08em; }
+  #b-center { flex: 1 1 0; min-width: 0; padding: 0 8px; font-weight: 800; font-size: 13px; letter-spacing: .1em; color: var(--dim); border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #phone-input-options label { flex: none; display: flex; align-items: center; }
+  /* 16px: iOS zooms the page on a focused control under 16px. Unlayered, so it beats the coarse-pointer --tap-paint height. */
+  #steering-mode { height: 44px; min-height: 44px; padding: 0 6px; font: 700 16px/1 var(--font-ui); color: var(--text); background: var(--plate-opaque); border: 1px solid var(--plate-line); border-radius: 10px; }
+  #pad-status { flex: 0 1 34%; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 10px; line-height: 1.15; overflow: hidden; }
+  #input-health { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--warn); font-weight: 700; }
+  #input-health::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--warn); }
+  #input-health[data-state="good"] { font-size: 0; }   /* the dot alone; the words stay for a screen reader */
+  #input-health[data-state="good"]::before { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  #input-health:is([data-state="reconnecting"], [data-state="disconnected"]) { color: var(--bad); }
+  #input-health:is([data-state="reconnecting"], [data-state="disconnected"])::before { background: var(--bad); }
+  #input-health:not([data-state="good"]) ~ #link { display: none; }   /* the warning takes the chip */
+  #input-age { display: none; }
+  /* TOUCH STRIP steering: its own row under the wheel only while chosen ([hidden] otherwise, so no row and no gap). */
+  #steering-strip { grid-column: 1 / -1; height: 44px; line-height: 42px; text-align: center; font-size: 11px; letter-spacing: .08em;
+                    border: 1px solid var(--team-c); border-radius: 8px; background: var(--plate-opaque); position: relative; z-index: 1; }
   #steering-strip:focus-visible { outline: 2px solid var(--team-c); outline-offset: 1px; }
   /* The rim sits BEHIND opaque controls and shows only in the gaps, so its
      turn reads as the wheel moving, never as the face bending. */
@@ -204,7 +224,7 @@
   body.gears-auto .shift { display: none; }
   body.gears-auto .tap { display: flex; }
   body.gears-auto #keys #b-overtake, body.gears-auto #keys #b-boost { display: none; }   /* on the grip instead */
-  body.throttle-auto #gas { pointer-events: none; flex-direction: column; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
+  body.throttle-auto #gas { pointer-events: none; flex-direction: column; align-items: center; justify-content: flex-end; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
   body.throttle-auto #gas::before { border-color: var(--card-line); }
   body.throttle-auto #gas small { display: block; color: color-mix(in oklab, var(--dim) 55%, transparent); }
   body.aero-auto #b-aero, body.aero-none #b-aero { pointer-events: none; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
@@ -285,20 +305,22 @@
   #leds span:nth-child(n+11).on { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
   #screen.redline ~ #leds span { animation: strobe .12s steps(2) infinite; }
   @keyframes strobe { to { opacity: .25; } }
+  /* container-type: the digits below cap themselves on the screen's own
+     height (cqh), so a short screen shrinks the gear instead of clipping it. */
   #screen { flex: 1 1 0; min-height: 0; border-radius: 12px; border: 3px solid var(--card-line); background: #05060a;
             box-shadow: inset 0 0 24px rgba(0,0,0,.9), 0 0 0 1px #000; padding: 6px 10px;
-            display: grid; grid-template-rows: auto 1fr auto auto; gap: 2px; overflow: hidden;
-            font-family: var(--font-hud); }
+            display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 2px; overflow: hidden;
+            container-type: size; font-family: var(--font-hud); }
   #screen .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
   #screen .top span { font-size: 13px; font-weight: 700; letter-spacing: .08em; color: var(--team-c); white-space: nowrap; }
   #h-flag { color: var(--dim); }
   #screen.caution #h-flag { color: var(--warn); background: rgba(246,210,0,.14); padding: 0 6px; border-radius: 4px; animation: strobe .5s steps(2) infinite; }
   #screen .mid { justify-content: center; gap: 6%; }
-  #h-gear { font-size: clamp(48px, 22vh, 120px); line-height: .9; font-weight: 800; color: #fff; min-width: 1ch; text-align: center;
+  #h-gear { font-size: min(clamp(48px, 22vh, 120px), 50cqh); line-height: .9; font-weight: 800; color: #fff; min-width: 1ch; text-align: center;
             text-shadow: 0 0 18px rgba(255,255,255,.25); }
   #screen.redline #h-gear { color: var(--bad); }
   .spd { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
-  #h-speed { font-size: clamp(28px, 11vh, 60px); font-weight: 700; font-variant-numeric: tabular-nums; }
+  #h-speed { font-size: min(clamp(28px, 11vh, 60px), 30cqh); font-weight: 700; font-variant-numeric: tabular-nums; }
   .spd small { font-size: 11px; letter-spacing: .14em; color: var(--dim); }
   #screen .bot span { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--dim); white-space: nowrap; }
   #screen.ot-ready #h-ot { color: var(--ok); }  #screen.ot-on #h-ot { color: #fff; background: var(--ok); padding: 0 6px; border-radius: 4px; }
@@ -311,13 +333,13 @@
   /* THE KEYS ARE THUMB-SIZED, the screen takes what is left. They sat at 40px
      under a screen that ate the face; on a phone that was a strip of slivers
      under two thumbs' worth of gear digit. Sized on the viewport height so a
-     taller phone gets taller keys, never smaller than a 48px tap target. */
+     taller phone gets taller keys, never smaller than a 48px tap target.
+     16vh (62px at 390) since the pad bar gave back its row (#5801). */
   #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  #keys button { padding: 0; min-height: clamp(48px, 14vh, 80px); font-weight: 800; font-size: clamp(12px, 3.2vh, 18px); letter-spacing: .08em; border-radius: 14px;
+  #keys button { padding: 0; min-height: clamp(48px, 16vh, 88px); font-weight: 800; font-size: clamp(12px, 3.6vh, 20px); letter-spacing: .08em; border-radius: 14px;
                  background: var(--plate-opaque); border: 1px solid var(--plate-line); color: var(--text); }
-  #keys button.on { border-color: var(--team-c); color: var(--team-c); }
-  #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: clamp(36px, 9vh, 52px); font-size: clamp(11px, 2.6vh, 14px); color: var(--dim); }
-  #link { font-size: 10px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
+  #keys button.on, #b-center.on { border-color: var(--team-c); color: var(--team-c); }
+  #link { min-width: 0; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* touch-action is NOT inherited: body's `none` does not reach the pedal
      divs, and Safari decides double-tap zoom on the touched element. Every
      part of the wheel owns its touches. */
@@ -444,19 +466,18 @@
       <button id="b-look" type="button">LOOK</button>
       <button id="b-recover" type="button">RESET</button>
       <button id="b-pause" type="button">PAUSE</button>
-      <button id="b-center" type="button" class="wide">CENTRE TILT</button>
     </div>
-    <div id="link" role="status"></div>
+    <div id="phone-input-options">
+      <button id="b-center" type="button">CENTRE TILT</button>
+      <label><select id="steering-mode" aria-label="Phone steering mode"><option value="tilt">TILT</option><option value="touch">TOUCH</option></select></label>
+      <div id="pad-status"><span id="input-health" data-state="waiting" role="status" aria-live="polite">WAITING FOR INPUT ACK</span><span id="input-age" aria-live="off"></span><span id="link" role="status"></span></div>
+    </div>
   </div>
   <div id="right" class="grip">
     <div id="brake" class="pedal" role="button" tabindex="0" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" tabindex="0" aria-label="Gas">GAS<small>AUTO</small></div>
   </div>
-  <div id="phone-input-options">
-    <label>STEERING <select id="steering-mode" aria-label="Phone steering mode"><option value="tilt">TILT</option><option value="touch">TOUCH STRIP</option></select></label>
-    <div><span id="input-health" role="status" aria-live="polite">WAITING FOR INPUT ACK</span> <span id="input-age" aria-live="off"></span></div>
-    <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
-  </div>
+  <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
 </section>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>

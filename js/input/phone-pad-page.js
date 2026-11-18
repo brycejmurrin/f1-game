@@ -570,12 +570,13 @@ const PhonePadPage = (function () {
           onHealth: (h) => {
             const text = h.state === "unavailable" ? "INPUT AGE UNAVAILABLE · UPDATE GAME" : h.state === "waiting" ? "WAITING FOR INPUT ACK" : h.state === "reconnecting" ? "INPUT NOT ACKNOWLEDGED" : "INPUT " + h.state.toUpperCase();
             if (dom.health && dom.health.textContent !== text) dom.health.textContent = text;
+            if (dom.health && dom.health.dataset && dom.health.dataset.state !== h.state) dom.health.dataset.state = h.state;   // the pad bar's dot (controller.html)
             if (dom.healthAge) { const age = h.ageMs == null ? "" : Math.round(h.ageMs / 100) * 100 + " ms since acknowledged sample"; if (dom.healthAge.textContent !== age) dom.healthAge.textContent = age; }
           },
           onClose: (why) => {
             if (attempt !== owner || gen !== bindGen) return;   // a cancel, or a session rebind() replaced
             bound = null; listen.stopped = true;
-            steer = 0; steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.health) dom.health.textContent = "INPUT DISCONNECTED"; if (dom.steer) dom.steer.hidden = true;
+            steer = 0; steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.health) { dom.health.textContent = "INPUT DISCONNECTED"; if (dom.health.dataset) dom.health.dataset.state = "disconnected"; } if (dom.steer) dom.steer.hidden = true;
             attempt = null; owner.cancelled = true; connecting = false;
             session = null;
             dropWake(); releaseAll();
