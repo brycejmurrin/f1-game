@@ -17,6 +17,19 @@ test("a phone hides both tables behind one hint until a key or a pad is seen", (
   assert.equal($("pm-pad-section").hidden, false, "gamepadconnected reveals CONTROLLER");
 });
 
+// hunt2 ui-menus: desktop create shows KEYBOARD without a keydown; rerender
+// must unhook the one-shot reveal listener (source pin — counting window
+// listeners forced a helpers edit that widens tooling-fast to the full suite).
+test("desktop create shows KEYBOARD and rerender unhooks the reveal keydown", () => {
+  const phone = bootUi(false);
+  assert.equal(phone.$("pm-keys-section").hidden, true, "phone waits for a key");
+  const desk = bootUi(true);
+  assert.equal(desk.$("pm-keys-section").hidden, false, "desktop shows KEYBOARD at create");
+  const src = read("js/ui/key-binds.js");
+  assert.match(src, /if \(reveal && keys && !keys\.hidden\(\)\) window\.removeEventListener\("keydown", reveal\)/,
+    "rerender drops the reveal listener once the table is visible");
+});
+
 test("an armed slot left behind (BACK / CLOSE / RESUME) never captures the next key in the race", () => {
   // Bug hunt 2026-09-22: nothing disarmed a slot when the page hid, so the
   // first key pressed in the race was swallowed and rebound.

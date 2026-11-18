@@ -365,16 +365,21 @@ function create(G) {
   // Input.init (which sets the latch) is wired AFTER this create, so its
   // listener runs after this one for the same keydown: the check is deferred
   // past the dispatch. Once the table is showing there is nothing left to
-  // reveal and the listener unhooks.
+  // reveal and the listener unhooks — including when a desktop/pointer-kind
+  // flip shows it via rerender without a keydown (hunt2 ui-menus).
+  let reveal = null;
   if (keys) {
-    const reveal = () => setTimeout(() => { if (keys.hidden() && Input.keyboardSeen()) keys.render(); if (!keys.hidden()) window.removeEventListener("keydown", reveal); }, 0);
+    reveal = () => setTimeout(() => { if (keys.hidden() && Input.keyboardSeen()) keys.render(); if (!keys.hidden()) window.removeEventListener("keydown", reveal); }, 0);
     window.addEventListener("keydown", reveal);
   }
   // body.desktop is written by game.js's syncPointerKind() AFTER this create
   // (and again whenever the pointer kind flips at runtime), so the tables'
   // first render above ran with no verdict: re-render once the shell has
   // settled and on every later flip.
-  const rerender = () => { for (const s of sections) s.render(); };
+  const rerender = () => {
+    for (const s of sections) s.render();
+    if (reveal && keys && !keys.hidden()) window.removeEventListener("keydown", reveal);
+  };
   if (Input.onPointerKindChange) Input.onPointerKindChange(rerender);
   // `hidden` is the shell's source of truth for dialog visibility. The
   // observer keeps Help's first disclosure aligned with the source the player
