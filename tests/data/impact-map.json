@@ -237,7 +237,7 @@
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/ui-resize.spec.js",
-        "tests/unit/capture-tools-regressions.test.mjs",
+        "tests/unit/capture-tools-replay.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/cdmcp-measure.test.mjs",
@@ -3880,7 +3880,7 @@
       ],
       "*": [
         "tests/unit/ai-strategy.test.mjs",
-        "tests/unit/apex-tools-mcp.test.mjs",
+        "tests/unit/apex-tools-mcp-contract.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
@@ -6042,6 +6042,7 @@
       ],
       "*": [
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/pick-tests-named-specs.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -6385,7 +6386,8 @@
         "tests/unit/data-standings.test.mjs"
       ],
       "*": [
-        "tests/unit/css-tokens.test.mjs"
+        "tests/unit/css-tokens.test.mjs",
+        "tests/unit/pick-tests-named-specs.test.mjs"
       ]
     },
     "js/data/tab-utils.js": {
@@ -7735,6 +7737,7 @@
         "tests/specs/ui-button-touch.spec.js"
       ],
       "otEnabled": [
+        "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
@@ -12843,7 +12846,8 @@
       ],
       "lateralCurve": [
         "tests/unit/grip-steer.test.mjs",
-        "tests/unit/tyre-peak-slip.test.mjs"
+        "tests/unit/tyre-peak-slip.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
       ],
       "lifeLaps": [
         "tests/unit/ai-strategy.test.mjs",
@@ -12940,8 +12944,7 @@
       "*": [
         "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs",
-        "tests/unit/wheel-state.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
     "js/physics/vehicle.js": {
@@ -15964,6 +15967,9 @@
       "disposeShared": [
         "tests/unit/tlx-r187-contracts.test.mjs"
       ],
+      "fineCells": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
       "free": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
@@ -16730,7 +16736,8 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/validation-cli-check.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {
@@ -17372,6 +17379,9 @@
         "tests/unit/build-worker.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
+      "cold": [
+        "tests/unit/build-worker.test.mjs"
       ],
       "drop": [
         "tests/unit/build-client-drop.test.mjs"
@@ -18894,7 +18904,7 @@
       "*": [
         "tests/specs/hud-mirror.spec.js",
         "tests/unit/a11y-opts.test.mjs",
-        "tests/unit/apex-tools-mcp.test.mjs",
+        "tests/unit/apex-tools-mcp-occupancy.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
@@ -20123,6 +20133,7 @@
         "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "vars": [
+        "tests/unit/appearance-opts.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "*": [
@@ -20274,6 +20285,9 @@
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
+      "inflate": [
+        "tests/unit/bitmap-decode-worker.test.mjs"
+      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"

@@ -16,6 +16,10 @@ A quoted string or a heredoc fed to anything but a shell is data: mentioning a r
   3. the commit gate stays reachable: no `git commit --no-verify` / `-n`, no core.hooksPath write or `-c` override.
   4. no `gh run cancel`, `gh pr merge`, `gh pr ready` (global flags such as `-R` included) or their REST / GraphQL
      forms through `gh api`.
+  5. no GitHub write from a shell (owner decision 2026-11-11): a write on the gh token is recorded as Bryce's own act,
+     with no app marker, so agents write through the GitHub MCP tools. Refused: every gh subcommand that is not a
+     known read (an alias or extension too), `gh api` with a non-GET method or with fields / --input and no explicit
+     GET, a GraphQL mutation, a curl / wget write to api.github.com, and an agent setting APEX_GH_OWNER_WRITE.
 
 A command the tokeniser cannot parse is refused (fail closed). These rules catch accidents; they are not a security
 boundary: a verb built at run time, a script file, or a path outside this list passes, and the server-side ruleset
@@ -364,6 +368,180 @@ def rule_gh(cmds):
             refuse("cancelling an Actions run through the API (…/actions/runs/<id>/cancel): never (AGENTS.md §Coordination). Bryce cancels in the UI.")
 
 
+# --- 5. no GitHub write from a shell with the owner's token ---------------------------------------------------
+# A write made with the gh token is recorded as the owner's own act (no app marker); the GitHub MCP tools carry the
+# app marker, so an agent's label or comment can be told from Bryce's own click (owner decision 2026-11-11).
+GH_ANY = {"auth", "browse", "completion", "config", "help", "licenses", "search", "status", "version", "preview", "co"}
+GH_READS = {
+    "pr": {"view", "list", "diff", "checks", "status", "checkout"},
+    "issue": {"view", "list", "status"},
+    "run": {"view", "list", "watch", "download"},
+    "workflow": {"view", "list"},
+    "release": {"view", "list", "download", "verify", "verify-asset"},
+    "repo": {"view", "list", "clone", "set-default", "gitignore", "license"},
+    "label": {"list"}, "secret": {"list"}, "variable": {"list", "get"}, "cache": {"list"},
+    "ruleset": {"view", "list", "check"}, "gist": {"view", "list", "clone"},
+    "project": {"view", "list", "field-list", "item-list"}, "org": {"list"},
+    "codespace": {"list", "view", "logs"}, "ssh-key": {"list"}, "gpg-key": {"list"},
+    "attestation": {"verify", "download", "inspect", "trusted-root"}, "agent-task": {"list", "view"},
+    "extension": {"list", "search", "browse"}, "alias": {"list"},
+}
+GH_NESTED = {("repo", "autolink"), ("repo", "deploy-key")}   # `gh repo autolink list` reads, the rest write
+MCP_FOR = {
+    "label": "labels: issue_write with the live label list (issue_read get_labels) plus or minus ONE name; the list "
+             "replaces the labels and github-mcp-guard refuses any other list (skill steward references/labels.md)",
+    "comment": "a comment: add_issue_comment (issue or PR), add_reply_to_pull_request_comment, update_issue_comment",
+    "pr": "a PR: create_pull_request / update_pull_request (draft, body, title); a review: pull_request_review_write",
+    "issue": "an issue: issue_write (create / update / close; labels: the live list plus or minus one name) or add_issue_comment",
+    "run": "starting, re-running or dispatching a workflow is the owner's call: say so on the PR (needs-decision), never from a shell",
+}
+GH_HOW = ("Write to GitHub through the GitHub MCP tools, which mark the write as the app's; a gh write is recorded as "
+          "Bryce's own click (AGENTS.md §Coordination). Reads stay open: gh api GETs (also -X GET with -f), gh pr "
+          "view|list|diff|checks, gh run view|list, gh auth status.")
+OWNER_OPT_IN = "APEX_GH_OWNER_WRITE"
+API_VALUE_FLAGS = {"-X", "--method", "-H", "--header", "-f", "--raw-field", "-F", "--field", "--input", "-q", "--jq",
+                   "-t", "--template", "--cache", "--hostname", "-p", "--preview"}
+
+
+def gh_refuse(what, kind):
+    refuse("%s writes to GitHub with the owner's gh token. %s Instead, %s." % (what, GH_HOW, MCP_FOR.get(kind, MCP_FOR["pr"])))
+
+
+def gh_api_parse(argv_after_api):
+    """(endpoint, explicit method or None, fields as (flag, 'k=v'), input file or None) of a `gh api` call."""
+    endpoint, method, fields, inp, i, a = None, None, [], None, 0, argv_after_api
+    while i < len(a):
+        x = a[i]
+        name, eq, val = x.partition("=") if x.startswith("--") else (x, "", "")
+        if x.startswith("--") and eq and name in API_VALUE_FLAGS:
+            v = val
+            i += 1
+        elif x in API_VALUE_FLAGS:
+            name, v = x, (a[i + 1] if i + 1 < len(a) else "")
+            i += 2
+        elif re.match(r"^-[XfFHqtp].", x):
+            name, v = x[:2], x[2:]
+            i += 1
+        else:
+            if not x.startswith("-") and endpoint is None:
+                endpoint = x
+            i += 1
+            continue
+        if name in ("-X", "--method"):
+            method = v.upper()
+        elif name in ("-f", "--raw-field", "-F", "--field"):
+            fields.append((name, v))
+        elif name == "--input":
+            inp = v
+    return endpoint, method, fields, inp
+
+
+def graphql_text(fields, inp):
+    """The query text of a gh api graphql call, or None when it cannot be read (a file that is not there, stdin)."""
+    parts = []
+    for flag, kv in fields:
+        k, _, v = kv.partition("=")
+        if flag in ("-F", "--field") and v.startswith("@"):
+            try:
+                v = open(v[1:], encoding="utf8").read()
+            except OSError:
+                return None
+        parts.append(v)
+    if inp is not None:
+        try:
+            parts.append(open(inp, encoding="utf8").read())
+        except OSError:
+            return None
+    return "\n".join(parts)
+
+
+def gh_write(c):
+    """Refuse when this gh argv writes to GitHub."""
+    w = gh_split(c.argv)
+    if not w or has_help(w) or w[0] in GH_ANY or w[0].startswith("-"):
+        return
+    group = w[0]
+    if group == "api":
+        endpoint, method, fields, inp = gh_api_parse(c.argv[c.argv.index("api") + 1:])
+        if endpoint == "graphql":
+            text = graphql_text(fields, inp)
+            if text is None:
+                gh_refuse("gh api graphql with a query this guard cannot read (a missing file or stdin)", "pr")
+            if re.search(r"(^|[^\w])mutation\b", text):
+                gh_refuse("a GraphQL mutation through gh api", "pr")
+            return
+        eff = method or ("POST" if fields or inp is not None else "GET")
+        if eff not in ("GET", "HEAD"):
+            path = endpoint or ""
+            kind = "label" if re.search(r"/labels\b", path) else "comment" if re.search(r"/comments\b", path) else \
+                "run" if re.search(r"/actions/", path) else "issue" if re.search(r"/issues/", path) else "pr"
+            gh_refuse("gh api %s %s" % (eff, path or "<no endpoint>"), kind)
+        return
+    verb = w[1] if len(w) > 1 else ""
+    if (group, verb) in GH_NESTED:
+        if (w[2] if len(w) > 2 else "") != "list":
+            gh_refuse("gh %s %s %s" % (group, verb, w[2] if len(w) > 2 else ""), "pr")
+        return
+    reads = GH_READS.get(group)
+    if reads is not None and (verb in reads or not verb):
+        return                               # a read, or a bare group that prints its usage
+    if reads is None:
+        gh_refuse("gh %s (not a known read; an alias or an extension can write, so it is judged a write)" % group, "pr")
+    kind = "label" if group == "label" or any(x.startswith(("--add-label", "--remove-label")) for x in c.argv) else \
+        "comment" if verb in ("comment",) else "run" if group in ("run", "workflow") else group
+    gh_refuse("gh %s %s" % (group, verb or "(no subcommand)"), kind)
+
+
+CURL_DATA = {"-d", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--data-ascii", "--json", "-F", "--form",
+             "--form-string", "-T", "--upload-file"}
+
+
+def http_write(c):
+    """Refuse a curl / wget write to api.github.com or uploads.github.com."""
+    a = c.argv
+    if not any(re.search(r"(^|//|@)(api|uploads)\.github\.com(/|$|:)", x) for x in a[1:]):
+        return
+    method = None
+    if c.prog == "curl":
+        data = get = False
+        for i, x in enumerate(a[1:], 1):
+            if x in ("-X", "--request") and i + 1 < len(a):
+                method = a[i + 1].upper()
+            elif x.startswith("--request="):
+                method = x.split("=", 1)[1].upper()
+            elif x.startswith("-X") and len(x) > 2:
+                method = x[2:].upper()
+            elif x in CURL_DATA or x.split("=", 1)[0] in CURL_DATA or re.match(r"^-[dFT].", x):
+                data = True
+            elif x in ("-G", "--get"):
+                get = True
+        method = method or ("POST" if data and not get else "GET")
+    elif c.prog == "wget":
+        for x in a[1:]:
+            if x.startswith("--method="):
+                method = x.split("=", 1)[1].upper()
+            elif x.startswith(("--post-data", "--post-file", "--body-data", "--body-file")):
+                method = method or "POST"
+        method = method or "GET"
+    else:
+        return
+    if method not in ("GET", "HEAD"):
+        gh_refuse("%s %s to the GitHub API" % (c.prog, method), "pr")
+
+
+def rule_gh_write(cmds):
+    for c in cmds:
+        if any(x.startswith(OWNER_OPT_IN + "=") for x in c.assigns) or \
+                (c.prog in ("export", "declare", "typeset", "local", "readonly", "set") and any(x.startswith(OWNER_OPT_IN + "=") for x in c.argv[1:])):
+            refuse("%s is the owner's opt-in for a tool that writes to GitHub as him (tools/ci/remote-group.mjs): only "
+                   "Bryce sets it, in his own shell or the environment's settings. An agent never sets it; ask on the PR "
+                   "with needs-decision instead." % OWNER_OPT_IN)
+        if c.prog == "gh":
+            gh_write(c)
+        elif c.prog in ("curl", "wget"):
+            http_write(c)
+
+
 def marker(ti, cmds):
     """updatedInput that exports APEX_SUBAGENT=1 ahead of a subagent's command, when it runs a program that could
     reach tools/lib/harness.mjs (node, npm & co, a shell or a script). None when nothing needs it."""
@@ -403,6 +581,7 @@ def main():
         rule_subagent(cmds)
     rule_commit(cmds)
     rule_gh(cmds)
+    rule_gh_write(cmds)
     if sub:
         upd = marker(ti or {}, cmds)
         if upd is not None:

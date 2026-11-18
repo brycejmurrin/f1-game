@@ -277,6 +277,15 @@ const RaceControl = (function () {
     let stopQueryT = 0, stopPic = null, stopOwned = false;
     let capHoldT = 0;       // remaining re-arm suppression after a cap-forced drop
     let capHoldLevel = 0;   // the level that capped; escalations ABOVE it still fly
+    // The hard cap's EPISODE clock (#5715): time under any flag since the last
+    // GREEN. `sinceT` resets on every level change, so a picture hovering at a
+    // threshold (SC<->VSC, VSC<->YELLOW) restarted the cap each flip and held
+    // the race neutralised for good. Resets only on green, or on an escalation
+    // above the episode's peak (a real pile-up gets its own full cap).
+    let flagAgeT = 0, flagPeak = 0;
+    function episode(level) {
+      if (level > flagPeak) { flagPeak = level; flagAgeT = 0; }
+    }
     let replayOwned = false;   // recorded flags are pictures, not live race-control procedures
     let restartWanted = false;   // one-shot: the red procedure has run its course
     // OVERTAKE after a neutralisation (Art. B7.2.2c): disabled while the Safety
@@ -317,6 +326,7 @@ const RaceControl = (function () {
       if (port.stoppedReset) port.stoppedReset();
       stopQueryT = 0; stopPic = null; stopOwned = false;
       capHoldT = 0; capHoldLevel = 0;
+      flagAgeT = 0; flagPeak = 0;
       restartWanted = false;
       otHoldLap = null;
       lowGripNoted = false;   // update() only runs in a race, so its not-in-race clear never fired: RACE AGAIN in the wet lost the note
@@ -366,6 +376,7 @@ const RaceControl = (function () {
       const prev = caution.level;
       caution.level = 0; caution.sector = -1; caution.frac = 0;
       caution.cause = ""; caution.sinceT = 0; caution.phase = "";
+      flagAgeT = 0; flagPeak = 0;
       stopOwned = false;
       flag(prev, 0);
     }
@@ -375,9 +386,11 @@ const RaceControl = (function () {
     // freeze path. Returns true when the flag just dropped to GREEN.
     function capDropIfExpired() {
       if (caution.level === 0 || caution.level === 4) return false;   // red runs its own procedure
-      const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
-      if (caution.sinceT < cap) return false;
-      capHoldLevel = caution.level;   // what capped — see the re-raise gate below
+      // The episode's PEAK sets the cap: an SC stepping down to a VSC is still
+      // one neutralisation, capped at SC_MAX from when it was raised.
+      const cap = Math.max(flagPeak, caution.level) >= 2 ? SC_MAX : YELLOW_MAX;
+      if (Math.max(flagAgeT, caution.sinceT) < cap) return false;
+      capHoldLevel = Math.max(flagPeak, caution.level);   // the episode's peak capped — see the re-raise gate below
       dropToGreen();
       capHoldT = CAP_REARM_HOLD;
       publish();
@@ -421,10 +434,11 @@ const RaceControl = (function () {
         const prev = caution.level;
         caution.level = held; caution.sector = -1; caution.frac = 0;
         caution.cause = heldCause; caution.sinceT = 0; caution.phase = "";
+        episode(held);
         flag(prev, held);
         publish();
       }
-      if (caution.level !== 0) caution.sinceT += dt;
+      if (caution.level !== 0) { caution.sinceT += dt; flagAgeT += dt; }
       // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS: apply() can land
       // one with CAUTIONS off, and a red that never ages never restarts.
       if (caution.level === 4) {
@@ -505,6 +519,7 @@ const RaceControl = (function () {
         caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
         caution.cause = dcause; caution.sinceT = 0;
         caution.phase = desired === 4 ? "stopping" : "";
+        episode(desired);
         stopOwned = fromStop;
         flag(prev, desired);
       } else if (desired < caution.level) {
@@ -541,6 +556,11 @@ const RaceControl = (function () {
       if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice(0, 3).map(num);
       caution.sinceT = Math.max(0, num(d.sinceT));
       caution.phase = typeof d.phase === "string" ? d.phase.slice(0, 16) : "";
+      // The episode clock off the wire: at least the host's time at this level
+      // (a guest that takes race control over keeps capping from there).
+      if (caution.level === 0 || prev === 0) { flagAgeT = 0; flagPeak = 0; }
+      if (caution.level > flagPeak) flagPeak = caution.level;
+      flagAgeT = Math.max(flagAgeT, caution.sinceT);
       flag(prev, caution.level);
       return true;
     }
